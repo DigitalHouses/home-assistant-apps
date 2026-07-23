@@ -1,0 +1,40 @@
+name: Validate repository
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install validation dependencies
+        run: python -m pip install --disable-pip-version-check PyYAML
+
+      - name: Validate YAML and repository structure
+        run: python scripts/validate_repository.py
+
+      - name: Compile Python sources
+        run: |
+          python -m py_compile \
+            digitalhouses_speedtest/rootfs/app/core.py \
+            digitalhouses_speedtest/rootfs/app/app.py
+
+      - name: Run unit tests
+        run: python -m unittest discover -s digitalhouses_speedtest/tests -v
+
+      - name: Check shell syntax
+        run: bash -n digitalhouses_speedtest/rootfs/run.sh
