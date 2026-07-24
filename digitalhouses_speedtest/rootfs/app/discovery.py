@@ -389,6 +389,25 @@ def build_discovery_payload(
             "entity_category": "config",
             "availability": app_availability,
         },
+        "periodic_interval": {
+            "platform": "number",
+            "name": "Periodic test interval",
+            "unique_id": f"{DEVICE_ID}_periodic_interval",
+            "default_entity_id": "number.internet_speed_periodic_interval",
+            "state_topic": topics["schedule"],
+            "value_template": (
+                "{{ value_json.periodic_test_interval_minutes }}"
+            ),
+            "command_topic": topics["periodic_interval_command"],
+            "unit_of_measurement": "min",
+            "min": 5,
+            "max": 720,
+            "step": 5,
+            "mode": "box",
+            "icon": "mdi:timer-cog-outline",
+            "entity_category": "config",
+            "availability": app_availability,
+        },
         "low_download": {
             "platform": "binary_sensor",
             "name": "Low download speed",

@@ -13,6 +13,7 @@ tests using the official Ookla Speedtest CLI.
 - ISP, public IP, selected server, server ID and result URL
 - Manual speed-test button
 - Periodic tests every 5–720 minutes; default **30 minutes**
+- Live periodic-interval Number with immediate rescheduling
 - Independent connectivity checks to `8.8.8.8` and `1.1.1.1`
 - Preferred Ookla server IDs with automatic fallback
 - Nearby-server discovery
@@ -56,6 +57,26 @@ log_level: info
 
 `recent_results_limit` accepts values from 5 to 50. Only successful tests are
 stored.
+
+### Periodic test interval
+
+Version 1.1.1 adds:
+
+- `number.internet_speed_periodic_interval`
+
+The Number accepts 5–720 minutes with a 5-minute UI step. Changing it in Home
+Assistant immediately restarts the countdown to the next automatic test; the
+App does not need to restart.
+
+The existing `periodic_test_interval_minutes` App option remains supported for
+backward compatibility. On the first 1.1.1 start it initializes the Number.
+Later Number changes persist in `/data/schedule.json`. If the App option is
+explicitly changed and the App is restarted, that new App-option value is
+adopted and published back to the Number.
+
+`periodic_test_enabled` remains the master enable/disable option. The Number
+can be changed while periodic tests are disabled, but no automatic tests run
+until the App option is enabled.
 
 ### Performance thresholds
 
@@ -141,6 +162,7 @@ Main entities:
 - Low download speed, Low upload speed and High ping
 - Internet performance problem
 - Run speed test
+- Periodic test interval
 - Minimum download, Minimum upload and Maximum ping
 
 Diagnostic entities include jitter, packet loss, provider, external IP,
@@ -149,9 +171,8 @@ results.
 
 ### Screenshots
 
-The verified 1.0.0 screenshots are retained for the initial 1.1.0 release. They
-will be replaced only after the 1.1.0 update is installed and field-tested in
-Home Assistant.
+The screenshots are retained until the new runtime interval control is
+field-tested in Home Assistant and replacement screenshots are prepared.
 
 ![Internet Speedtest sensors and controls](images/home-assistant-device-overview.png)
 
@@ -171,7 +192,8 @@ to:
 /config/packages/internet_speedtest_package.yaml
 ```
 
-The package records measurements, thresholds and problem sensors.
+The package records measurements, thresholds, the periodic interval and
+problem sensors.
 `sensor.internet_speed_recent_results` is intentionally excluded because its
 large `results` attribute would unnecessarily increase the Recorder database.
 
@@ -227,6 +249,7 @@ policy.
 - Провайдер, внешний IP, сервер, ID сервера и URL результата
 - Ручной запуск Speedtest
 - Периодические тесты раз в 5–720 минут; по умолчанию **30 минут**
+- Изменение интервала через Number с немедленным перепланированием
 - Независимые проверки `8.8.8.8` и `1.1.1.1`
 - Приоритетные server ID и автоматический fallback
 - Получение списка ближайших серверов
@@ -270,6 +293,26 @@ log_level: info
 
 `recent_results_limit` принимает значения от 5 до 50. В историю попадают только
 успешные тесты.
+
+### Интервал периодических тестов
+
+Версия 1.1.1 добавляет:
+
+- `number.internet_speed_periodic_interval`
+
+Number принимает значения 5–720 минут с шагом интерфейса 5 минут. После
+изменения в Home Assistant отсчёт до следующего автоматического теста сразу
+начинается заново. Перезапуск приложения не требуется.
+
+Старая App-опция `periodic_test_interval_minutes` сохранена для обратной
+совместимости. При первом запуске 1.1.1 она инициализирует Number. Последующие
+изменения Number сохраняются в `/data/schedule.json`. Если пользователь явно
+изменит App-опцию и перезапустит приложение, новое значение App-опции будет
+принято и опубликовано обратно в Number.
+
+`periodic_test_enabled` остаётся главным выключателем автоматических тестов.
+Интервал можно менять и при выключенном расписании, но тесты не запускаются,
+пока App-опция не включена.
 
 ### Пороги качества
 
@@ -326,9 +369,8 @@ problem entities становятся `unavailable` до нового успеш
 
 ### Скриншоты
 
-Для первого релиза 1.1.0 сохранены проверенные скриншоты версии 1.0.0. Они
-будут заменены только после установки обновления 1.1.0 и полевого теста в
-Home Assistant.
+Скриншоты сохраняются до полевой проверки нового регулятора интервала и
+подготовки обновлённых изображений.
 
 ![Сенсоры и управление Internet Speedtest](images/home-assistant-device-overview.png)
 
@@ -348,7 +390,7 @@ examples/packages/internet_speedtest_package.yaml
 /config/packages/internet_speedtest_package.yaml
 ```
 
-Threshold numbers и problem sensors включены.
+Threshold numbers, periodic interval Number и problem sensors включены.
 `sensor.internet_speed_recent_results` намеренно исключён, чтобы массив
 атрибутов не раздувал базу Recorder.
 

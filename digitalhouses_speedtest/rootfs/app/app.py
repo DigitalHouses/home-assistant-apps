@@ -36,7 +36,7 @@ from core import (
 )
 from discovery import build_discovery_payload
 
-APP_VERSION = os.getenv("APP_VERSION", "1.1.0-local")
+APP_VERSION = os.getenv("APP_VERSION", "1.1.1-local")
 
 DATA_DIR = Path("/data")
 OPTIONS_FILE = DATA_DIR / "options.json"
@@ -44,6 +44,7 @@ STATE_FILE = DATA_DIR / "state.json"
 SERVERS_FILE = DATA_DIR / "servers.json"
 THRESHOLDS_FILE = DATA_DIR / "thresholds.json"
 RECENT_RESULTS_FILE = DATA_DIR / "recent_results.json"
+SCHEDULE_FILE = DATA_DIR / "schedule.json"
 
 MQTT_BASE_TOPIC = "DigitalHouses/Global/speedtest"
 DISCOVERY_PREFIX = "homeassistant"
@@ -58,10 +59,12 @@ SERVERS_TOPIC = f"{MQTT_BASE_TOPIC}/servers"
 THRESHOLDS_TOPIC = f"{MQTT_BASE_TOPIC}/thresholds"
 PROBLEMS_TOPIC = f"{MQTT_BASE_TOPIC}/problems"
 RECENT_RESULTS_TOPIC = f"{MQTT_BASE_TOPIC}/recent_results"
+SCHEDULE_TOPIC = f"{MQTT_BASE_TOPIC}/schedule"
 
 MINIMUM_DOWNLOAD_COMMAND_TOPIC = f"{THRESHOLDS_TOPIC}/minimum_download/set"
 MINIMUM_UPLOAD_COMMAND_TOPIC = f"{THRESHOLDS_TOPIC}/minimum_upload/set"
 MAXIMUM_PING_COMMAND_TOPIC = f"{THRESHOLDS_TOPIC}/maximum_ping/set"
+PERIODIC_INTERVAL_COMMAND_TOPIC = f"{SCHEDULE_TOPIC}/periodic_interval/set"
 
 DISCOVERY_TOPIC = f"{DISCOVERY_PREFIX}/device/{DEVICE_ID}/config"
 
@@ -212,6 +215,43 @@ class SpeedtestApp:
         self.thresholds = normalize_thresholds(load_json(THRESHOLDS_FILE, {}))
         atomic_write_json(THRESHOLDS_FILE, self.thresholds)
 
+        self.schedule_lock = threading.RLock()
+        stored_schedule = load_json(SCHEDULE_FILE, {})
+        if not isinstance(stored_schedule, dict):
+            stored_schedule = {}
+        option_interval = self.options["periodic_test_interval_minutes"]
+        stored_option_interval = stored_schedule.get(
+            "app_option_interval_minutes"
+        )
+        stored_interval = _bounded_int(
+            stored_schedule.get("periodic_test_interval_minutes"),
+            5,
+            720,
+            option_interval,
+        )
+
+        # The MQTT Number is the live runtime control. The legacy App option
+        # remains supported on restart: when it changes, it becomes the new
+        # interval and the Number state follows it. Otherwise the persisted
+        # Number value wins across restarts.
+        if (
+            stored_option_interval is not None
+            and _bounded_int(
+                stored_option_interval,
+                5,
+                720,
+                option_interval,
+            )
+            != option_interval
+        ):
+            stored_interval = option_interval
+        self.schedule = {
+            "periodic_test_interval_minutes": stored_interval,
+            "app_option_interval_minutes": option_interval,
+        }
+        atomic_write_json(SCHEDULE_FILE, self.schedule)
+        self.periodic_schedule_changed = threading.Event()
+
         self.recent_results_lock = threading.RLock()
         self.recent_results = migrate_recent_results(
             load_json(RECENT_RESULTS_FILE, default_recent_results()),
@@ -253,9 +293,11 @@ class SpeedtestApp:
             "thresholds": THRESHOLDS_TOPIC,
             "problems": PROBLEMS_TOPIC,
             "recent_results": RECENT_RESULTS_TOPIC,
+            "schedule": SCHEDULE_TOPIC,
             "minimum_download_command": MINIMUM_DOWNLOAD_COMMAND_TOPIC,
             "minimum_upload_command": MINIMUM_UPLOAD_COMMAND_TOPIC,
             "maximum_ping_command": MAXIMUM_PING_COMMAND_TOPIC,
+            "periodic_interval_command": PERIODIC_INTERVAL_COMMAND_TOPIC,
         }
 
     def _create_mqtt_client(self) -> mqtt.Client:
@@ -303,6 +345,7 @@ class SpeedtestApp:
         client.subscribe(MINIMUM_DOWNLOAD_COMMAND_TOPIC, qos=1)
         client.subscribe(MINIMUM_UPLOAD_COMMAND_TOPIC, qos=1)
         client.subscribe(MAXIMUM_PING_COMMAND_TOPIC, qos=1)
+        client.subscribe(PERIODIC_INTERVAL_COMMAND_TOPIC, qos=1)
 
         # Publish all retained data while global availability is still offline.
         # This prevents stale values briefly appearing as current after restart.
@@ -311,6 +354,7 @@ class SpeedtestApp:
         self.publish_connectivity()
         self.publish_servers()
         self.publish_thresholds()
+        self.publish_schedule()
         self.publish_recent_results()
         self.publish_evaluation(force_availability=True)
         self.publish_text(APP_AVAILABILITY_TOPIC, "online", retain=True)
@@ -344,6 +388,10 @@ class SpeedtestApp:
             MAXIMUM_PING_COMMAND_TOPIC,
         }:
             self.handle_threshold_command(message.topic, message.payload)
+            return
+
+        if message.topic == PERIODIC_INTERVAL_COMMAND_TOPIC:
+            self.handle_periodic_interval_command(message.payload)
             return
 
         command = (
@@ -456,6 +504,15 @@ class SpeedtestApp:
         with self.thresholds_lock:
             payload = dict(self.thresholds)
         self.publish_json(THRESHOLDS_TOPIC, payload)
+
+    def publish_schedule(self) -> None:
+        with self.schedule_lock:
+            payload = {
+                "periodic_test_interval_minutes": self.schedule[
+                    "periodic_test_interval_minutes"
+                ]
+            }
+        self.publish_json(SCHEDULE_TOPIC, payload)
 
     def publish_recent_results(self) -> None:
         with self.recent_results_lock:
@@ -586,6 +643,53 @@ class SpeedtestApp:
         # Historical Recent Results are deliberately not rewritten.
         self.publish_evaluation(force_availability=True)
 
+    def handle_periodic_interval_command(self, payload: bytes | str) -> None:
+        raw = (
+            payload.decode("utf-8", errors="replace")
+            if isinstance(payload, bytes)
+            else str(payload)
+        ).strip()
+
+        try:
+            numeric = float(raw)
+        except ValueError:
+            self.log.warning(
+                "Ignoring invalid periodic interval payload: %r",
+                raw,
+            )
+            self.publish_schedule()
+            return
+
+        if not numeric.is_integer():
+            self.log.warning(
+                "Ignoring non-integer periodic interval: %s",
+                raw,
+            )
+            self.publish_schedule()
+            return
+
+        interval = int(numeric)
+        if not 5 <= interval <= 720:
+            self.log.warning(
+                "Ignoring out-of-range periodic interval: %s",
+                interval,
+            )
+            self.publish_schedule()
+            return
+
+        with self.schedule_lock:
+            previous = self.schedule["periodic_test_interval_minutes"]
+            self.schedule["periodic_test_interval_minutes"] = interval
+            atomic_write_json(SCHEDULE_FILE, self.schedule)
+
+        self.publish_schedule()
+        if interval != previous:
+            self.log.info(
+                "Periodic test interval changed: %s minutes",
+                interval,
+            )
+            self.periodic_schedule_changed.set()
+
     def _ping(self, target: str) -> bool:
         settings = self.options["connectivity_check"]
         attempts = settings["attempts"]
@@ -676,19 +780,42 @@ class SpeedtestApp:
             self.log.info("Periodic speed tests are disabled")
             return
 
-        interval = self.options["periodic_test_interval_minutes"] * 60
+        with self.schedule_lock:
+            interval_minutes = self.schedule[
+                "periodic_test_interval_minutes"
+            ]
+        interval = interval_minutes * 60
         self.log.info(
             "Periodic speed tests are enabled every %s minutes",
-            self.options["periodic_test_interval_minutes"],
+            interval_minutes,
         )
 
         next_run = time.monotonic() + interval
         while not self.stop_event.is_set():
             remaining = max(0.0, next_run - time.monotonic())
-            if self.stop_event.wait(min(remaining, 1.0)):
+            if self.periodic_schedule_changed.wait(min(remaining, 1.0)):
+                self.periodic_schedule_changed.clear()
+                if self.stop_event.is_set():
+                    break
+                with self.schedule_lock:
+                    interval_minutes = self.schedule[
+                        "periodic_test_interval_minutes"
+                    ]
+                interval = interval_minutes * 60
+                next_run = time.monotonic() + interval
+                self.log.info(
+                    "Next periodic speed test rescheduled for %s minutes",
+                    interval_minutes,
+                )
+                continue
+            if self.stop_event.is_set():
                 break
             if time.monotonic() >= next_run:
                 self.enqueue("RUN")
+                with self.schedule_lock:
+                    interval = (
+                        self.schedule["periodic_test_interval_minutes"] * 60
+                    )
                 next_run = time.monotonic() + interval
 
     def run_speedtest_candidate(
@@ -999,6 +1126,10 @@ class SpeedtestApp:
             self.thresholds["minimum_upload_mbps"],
             self.thresholds["maximum_ping_ms"],
         )
+        self.log.info(
+            "Periodic interval: %s minutes",
+            self.schedule["periodic_test_interval_minutes"],
+        )
 
         self.mqtt.loop_start()
 
@@ -1025,6 +1156,7 @@ class SpeedtestApp:
 
         self.log.info("Stopping DigitalHouses Speedtest")
         self.stop_event.set()
+        self.periodic_schedule_changed.set()
 
         if self.connected_event.is_set():
             self.publish_text(

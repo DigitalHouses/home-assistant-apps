@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.1.1
+
+- Added `number.internet_speed_periodic_interval` for changing the automatic
+  Speedtest interval directly in Home Assistant.
+- Added a 5–720 minute range, 5-minute UI step and box input mode.
+- Changing the Number now immediately restarts the countdown to the next
+  scheduled test without restarting the App.
+- Added persistent `/data/schedule.json` storage.
+- Preserved `periodic_test_interval_minutes` as a backward-compatible App
+  option; an explicit option change is adopted on the next App restart.
+- Added MQTT schedule state and command topics.
+- Added Recorder and Lovelace entries for the new Number.
+- Expanded runtime, discovery and repository validation tests.
+
 ## 1.1.0
 
 - Changed the default periodic test interval for new configurations to 30 minutes.

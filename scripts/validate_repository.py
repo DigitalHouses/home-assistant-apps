@@ -32,7 +32,7 @@ REQUIRED_FILES = [
     ROOT / "examples/lovelace/internet_speedtest_dashboard.yaml",
 ]
 
-EXPECTED_VERSION = "1.1.0"
+EXPECTED_VERSION = "1.1.1"
 EXPECTED_TOPIC = "DigitalHouses/Global/speedtest"
 EXPECTED_DEVICE_ID = "digitalhouses_global_speedtest"
 
@@ -100,6 +100,7 @@ def main() -> None:
         'STATE_FILE = DATA_DIR / "state.json"',
         'THRESHOLDS_FILE = DATA_DIR / "thresholds.json"',
         'RECENT_RESULTS_FILE = DATA_DIR / "recent_results.json"',
+        'SCHEDULE_FILE = DATA_DIR / "schedule.json"',
     ):
         if expected not in app_source:
             fail(f"Missing persistence contract: {expected}")
@@ -118,6 +119,7 @@ def main() -> None:
         "thresholds": f"{EXPECTED_TOPIC}/thresholds",
         "problems": f"{EXPECTED_TOPIC}/problems",
         "recent_results": f"{EXPECTED_TOPIC}/recent_results",
+        "schedule": f"{EXPECTED_TOPIC}/schedule",
         "minimum_download_command": (
             f"{EXPECTED_TOPIC}/thresholds/minimum_download/set"
         ),
@@ -126,6 +128,9 @@ def main() -> None:
         ),
         "maximum_ping_command": (
             f"{EXPECTED_TOPIC}/thresholds/maximum_ping/set"
+        ),
+        "periodic_interval_command": (
+            f"{EXPECTED_TOPIC}/schedule/periodic_interval/set"
         ),
     }
     payload = discovery.build_discovery_payload(
@@ -155,6 +160,7 @@ def main() -> None:
             "binary_sensor.internet_speed_performance_problem"
         ),
         "recent_results": "sensor.internet_speed_recent_results",
+        "periodic_interval": "number.internet_speed_periodic_interval",
     }
     for key, entity_id in expected_new.items():
         component = components.get(key)
@@ -177,6 +183,7 @@ def main() -> None:
         "number.internet_speed_minimum_download",
         "number.internet_speed_minimum_upload",
         "number.internet_speed_maximum_ping",
+        "number.internet_speed_periodic_interval",
         "binary_sensor.internet_speed_low_download",
         "binary_sensor.internet_speed_low_upload",
         "binary_sensor.internet_speed_high_ping",
@@ -192,8 +199,8 @@ def main() -> None:
         fail("Lovelace dashboard has no views")
 
     changelog = (APP / "CHANGELOG.md").read_text(encoding="utf-8")
-    if "## 1.1.0" not in changelog:
-        fail("CHANGELOG has no 1.1.0 section")
+    if "## 1.1.1" not in changelog:
+        fail("CHANGELOG has no 1.1.1 section")
 
     print("Repository validation passed")
     print(f"Version: {EXPECTED_VERSION}")

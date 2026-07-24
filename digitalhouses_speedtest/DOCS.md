@@ -36,6 +36,7 @@ All 1.0.0 entity unique IDs and default entity IDs remain unchanged.
 /data/servers.json
 /data/thresholds.json
 /data/recent_results.json
+/data/schedule.json
 ```
 
 `thresholds.json` defaults to:
@@ -59,6 +60,20 @@ All 1.0.0 entity unique IDs and default entity IDs remain unchanged.
 ```
 
 There is deliberately no backfill from the 1.0.0 retained state.
+
+`schedule.json` stores the live periodic interval and the last App-option
+interval observed at startup:
+
+```json
+{
+  "periodic_test_interval_minutes": 30,
+  "app_option_interval_minutes": 30
+}
+```
+
+The second field is internal migration metadata. It lets the MQTT Number
+persist across restarts while still allowing an explicit App-option change to
+take effect on the next restart.
 
 ## MQTT topics
 
@@ -84,6 +99,43 @@ DigitalHouses/Global/speedtest/thresholds/minimum_download/set
 DigitalHouses/Global/speedtest/thresholds/minimum_upload/set
 DigitalHouses/Global/speedtest/thresholds/maximum_ping/set
 ```
+
+New 1.1.1 schedule topics:
+
+```text
+DigitalHouses/Global/speedtest/schedule
+DigitalHouses/Global/speedtest/schedule/periodic_interval/set
+```
+
+## Periodic interval control
+
+`number.internet_speed_periodic_interval` is the live scheduler control.
+
+```text
+Range: 5–720 minutes
+UI step: 5 minutes
+MQTT payload: whole integer minutes
+```
+
+When the Number changes:
+
+1. validate and persist the new interval;
+2. publish the retained Number state;
+3. wake the scheduler thread;
+4. restart the countdown from the time of the change.
+
+The change is processed directly in the MQTT callback and is not queued behind
+an Ookla run. A currently running test is not interrupted.
+
+The legacy `periodic_test_interval_minutes` App option remains supported:
+
+- if `/data/schedule.json` does not exist, the App option initializes it;
+- Number changes then persist across restarts;
+- if the App option is later changed, the new App-option value overrides the
+  persisted Number value on the next App restart.
+
+`periodic_test_enabled` remains the master switch. When disabled, the interval
+can still be changed and stored, but the scheduler does not enqueue tests.
 
 ## Threshold semantics
 
@@ -154,7 +206,7 @@ measurements.
 Processing order after MQTT reconnect:
 
 1. publish discovery;
-2. publish retained state, thresholds, Recent results and evaluation;
+2. publish retained state, thresholds, schedule, Recent results and evaluation;
 3. publish result freshness;
 4. publish App availability `online`.
 
@@ -241,20 +293,24 @@ bash -n digitalhouses_speedtest/rootfs/run.sh
 
 The test suite covers strict threshold boundaries, aggregate logic, immediate
 recalculation, immutable historical thresholds, failed/no-connectivity
-semantics, expiration, packet-loss null handling, limits, persistence,
-discovery payload and preservation of every 1.0.0 identity.
+semantics, expiration, packet-loss null handling, limits, threshold and
+schedule persistence, App-option migration, discovery payload and preservation
+of every 1.0.0 identity.
 
 ## Field verification checklist
 
 Before updating screenshots:
 
-1. Install 1.1.0 from GitHub over 1.0.0.
+1. Install 1.1.1 from GitHub over 1.1.0.
 2. Confirm all old entity IDs and Recorder history remain.
 3. Run a manual test.
-4. Verify a scheduled test at the configured interval.
-5. Change all three threshold Numbers and confirm immediate recalculation.
-6. Force low/high thresholds and verify strict equality.
-7. Restart the App and confirm thresholds and Recent results persist.
-8. Test no-connectivity and failed Ookla execution.
-9. Test expiration with a temporarily short `expire_after_seconds`.
-10. Inspect MQTT discovery and App logs.
+4. Change Periodic test interval and confirm the log reports immediate
+   rescheduling without an App restart.
+5. Restart the App and confirm the interval persists.
+6. Change the legacy App option, restart and confirm the Number follows it.
+7. Change all three threshold Numbers and confirm immediate recalculation.
+8. Force low/high thresholds and verify strict equality.
+9. Restart the App and confirm thresholds and Recent results persist.
+10. Test no-connectivity and failed Ookla execution.
+11. Test expiration with a temporarily short `expire_after_seconds`.
+12. Inspect MQTT discovery and App logs.

@@ -1,5 +1,5 @@
 name: DigitalHouses Speedtest
-version: 1.1.0
+version: 1.1.1
 slug: digitalhouses_speedtest
 description: Internet connectivity monitoring and official Ookla Speedtest CLI results through MQTT Discovery.
 url: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_speedtest

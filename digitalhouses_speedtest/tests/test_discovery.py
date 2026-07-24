@@ -24,6 +24,7 @@ TOPICS = {
     "thresholds": "DigitalHouses/Global/speedtest/thresholds",
     "problems": "DigitalHouses/Global/speedtest/problems",
     "recent_results": "DigitalHouses/Global/speedtest/recent_results",
+    "schedule": "DigitalHouses/Global/speedtest/schedule",
     "minimum_download_command": (
         "DigitalHouses/Global/speedtest/thresholds/minimum_download/set"
     ),
@@ -33,13 +34,16 @@ TOPICS = {
     "maximum_ping_command": (
         "DigitalHouses/Global/speedtest/thresholds/maximum_ping/set"
     ),
+    "periodic_interval_command": (
+        "DigitalHouses/Global/speedtest/schedule/periodic_interval/set"
+    ),
 }
 
 
 class DiscoveryTests(unittest.TestCase):
     def setUp(self) -> None:
         self.payload = build_discovery_payload(
-            app_version="1.1.0",
+            app_version="1.1.1",
             expire_after_seconds=14400,
             topics=TOPICS,
         )
@@ -66,6 +70,18 @@ class DiscoveryTests(unittest.TestCase):
         self.assertEqual(self.components["minimum_upload"]["step"], 1)
         self.assertEqual(self.components["maximum_ping"]["max"], 1000)
         self.assertEqual(self.components["maximum_ping"]["mode"], "box")
+
+    def test_periodic_interval_number_has_expected_contract(self) -> None:
+        component = self.components["periodic_interval"]
+        self.assertEqual(component["platform"], "number")
+        self.assertEqual(
+            component["default_entity_id"],
+            "number.internet_speed_periodic_interval",
+        )
+        self.assertEqual(component["min"], 5)
+        self.assertEqual(component["max"], 720)
+        self.assertEqual(component["step"], 5)
+        self.assertEqual(component["mode"], "box")
 
     def test_problem_sensors_use_problem_device_class(self) -> None:
         for key in (

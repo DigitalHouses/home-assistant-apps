@@ -35,9 +35,11 @@ views:
               action: toggle
 
       - type: entities
-        title: Performance thresholds
+        title: Runtime controls
         show_header_toggle: false
         entities:
+          - entity: number.internet_speed_periodic_interval
+            name: Periodic test interval
           - entity: number.internet_speed_minimum_download
           - entity: number.internet_speed_minimum_upload
           - entity: number.internet_speed_maximum_ping
@@ -93,7 +95,7 @@ views:
         content: >-
           {% set results = state_attr('sensor.internet_speed_recent_results', 'results') or [] %}
           {% if results | count == 0 %}
-          No successful tests have been recorded by version 1.1.0 yet.
+          No successful tests have been recorded yet.
           {% else %}
           {% for item in results %}
           {% set reasons = item.problem_reasons or [] %}
