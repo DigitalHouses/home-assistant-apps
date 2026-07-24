@@ -214,6 +214,16 @@ performance thresholds, diagnostics and test controls.
   </a>
 </p>
 
+<p align="center">
+  <a href="images/home-assistant-servers-history.png">
+    <img
+      src="images/home-assistant-servers-history.png"
+      alt="Internet Speedtest UI tests"
+      width="300"
+    >
+  </a>
+</p>
+
 
 ### Recorder package
 
