@@ -129,6 +129,7 @@ class RuntimeTests(unittest.TestCase):
             ("SERVERS_FILE", "servers.json"),
             ("THRESHOLDS_FILE", "thresholds.json"),
             ("RECENT_RESULTS_FILE", "recent_results.json"),
+            ("SCHEDULE_FILE", "schedule.json"),
         ):
             value = data if not filename else data / filename
             patcher = patch.object(runtime, name, value)
@@ -224,6 +225,93 @@ class RuntimeTests(unittest.TestCase):
         )
         restarted = runtime.SpeedtestApp()
         self.assertEqual(restarted.thresholds["minimum_download_mbps"], 55)
+
+    def test_periodic_interval_starts_from_app_option(self) -> None:
+        self.assertEqual(
+            self.app.schedule["periodic_test_interval_minutes"],
+            30,
+        )
+
+    def test_periodic_interval_command_persists_and_signals_reschedule(self) -> None:
+        self.assertFalse(self.app.periodic_schedule_changed.is_set())
+        self.app.handle_periodic_interval_command(b"45")
+
+        self.assertEqual(
+            self.app.schedule["periodic_test_interval_minutes"],
+            45,
+        )
+        self.assertTrue(self.app.periodic_schedule_changed.is_set())
+        self.assertEqual(
+            self.published_json(runtime.SCHEDULE_TOPIC)[
+                "periodic_test_interval_minutes"
+            ],
+            45,
+        )
+
+        restarted = runtime.SpeedtestApp()
+        self.assertEqual(
+            restarted.schedule["periodic_test_interval_minutes"],
+            45,
+        )
+
+    def test_invalid_periodic_interval_is_rejected(self) -> None:
+        self.app.handle_periodic_interval_command(b"4")
+        self.assertEqual(
+            self.app.schedule["periodic_test_interval_minutes"],
+            30,
+        )
+        self.app.handle_periodic_interval_command(b"15.5")
+        self.assertEqual(
+            self.app.schedule["periodic_test_interval_minutes"],
+            30,
+        )
+
+    def test_changed_app_option_overrides_persisted_number_on_restart(self) -> None:
+        self.app.handle_periodic_interval_command(b"45")
+        runtime.atomic_write_json(
+            runtime.OPTIONS_FILE,
+            {"periodic_test_interval_minutes": 60},
+        )
+
+        restarted = runtime.SpeedtestApp()
+        self.assertEqual(
+            restarted.schedule["periodic_test_interval_minutes"],
+            60,
+        )
+
+    def test_periodic_loop_restarts_countdown_after_interval_change(self) -> None:
+        app = self.app
+
+        class ScheduleEvent:
+            def __init__(self) -> None:
+                self.calls = 0
+
+            def wait(self, timeout: float) -> bool:
+                del timeout
+                self.calls += 1
+                if self.calls == 1:
+                    with app.schedule_lock:
+                        app.schedule["periodic_test_interval_minutes"] = 45
+                    return True
+                app.stop_event.set()
+                return False
+
+            def clear(self) -> None:
+                return None
+
+            def set(self) -> None:
+                return None
+
+        app.periodic_schedule_changed = ScheduleEvent()
+        with self.assertLogs("digitalhouses_speedtest", level="INFO") as logs:
+            app.periodic_loop()
+
+        self.assertTrue(
+            any(
+                "rescheduled for 45 minutes" in message
+                for message in logs.output
+            )
+        )
 
     def test_recent_results_persist_across_restart(self) -> None:
         record = build_recent_record(

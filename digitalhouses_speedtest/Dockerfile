@@ -1,6 +1,6 @@
 FROM ghcr.io/home-assistant/base:latest
 
-ARG BUILD_VERSION="1.1.0"
+ARG BUILD_VERSION="1.1.1"
 ARG BUILD_ARCH
 ARG OOKLA_VERSION="1.2.0"
 

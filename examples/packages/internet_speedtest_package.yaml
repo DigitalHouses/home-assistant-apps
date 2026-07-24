@@ -46,6 +46,9 @@ recorder:
       - number.internet_speed_minimum_upload
       - number.internet_speed_maximum_ping
 
+      # Runtime schedule control
+      - number.internet_speed_periodic_interval
+
       # Performance interpretation
       - binary_sensor.internet_speed_low_download
       - binary_sensor.internet_speed_low_upload

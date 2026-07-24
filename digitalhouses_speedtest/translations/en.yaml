@@ -4,7 +4,7 @@ configuration:
     description: Run Ookla Speedtest automatically on a schedule.
   periodic_test_interval_minutes:
     name: Periodic test interval
-    description: Minutes between scheduled tests.
+    description: Startup and compatibility value in minutes. The live interval can also be changed through the Home Assistant Number entity.
   server_ids:
     name: Preferred server IDs
     description: Ookla server IDs in priority order. Leave empty for automatic selection.

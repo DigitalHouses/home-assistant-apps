@@ -30,6 +30,7 @@ Key features:
 - download, upload, ping, jitter and packet loss;
 - internet connectivity checks;
 - manual and periodic tests;
+- live periodic-interval control from Home Assistant;
 - preferred Ookla server selection;
 - configurable performance thresholds;
 - problem binary sensors;
@@ -71,6 +72,7 @@ Confirmed bugs and feature requests belong in
 - download, upload, ping, jitter и packet loss;
 - независимые проверки доступности интернета;
 - ручные и периодические тесты;
+- изменение интервала периодических тестов прямо в Home Assistant;
 - приоритетные серверы Ookla;
 - регулируемые пороги качества;
 - problem binary sensors;
