@@ -8,6 +8,8 @@ Repository URL:
 https://github.com/DigitalHouses/home-assistant-apps
 ```
 
+
+
 ## English
 
 ### Installation
@@ -49,6 +51,18 @@ Questions and user experience belong in
 [GitHub Discussions](https://github.com/DigitalHouses/home-assistant-apps/discussions).
 Confirmed bugs and feature requests belong in
 [GitHub Issues](https://github.com/DigitalHouses/home-assistant-apps/issues).
+
+
+
+## Support the project
+
+DigitalHouses projects are developed independently and provided free of charge.
+
+If this project is useful to you, you can support its continued development, testing, maintenance, and documentation:
+
+[![Support DigitalHouses on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/digitalhouses)
+
+Support is entirely optional. All public features remain available to everyone.
 
 ## Русский
 
