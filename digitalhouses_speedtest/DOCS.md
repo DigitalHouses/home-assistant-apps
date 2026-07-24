@@ -1,346 +1,260 @@
-# DigitalHouses Speedtest documentation
+# DigitalHouses Speedtest — Technical documentation
 
-## English
+## Architecture
 
-### Installation from the DigitalHouses repository
+The App is one long-running Python process based on the Home Assistant Alpine
+base image. It uses:
 
-1. Confirm that an MQTT broker App is installed and running.
-2. Open **Settings → Apps → App store**.
-3. Open the upper-right menu and select **Repositories**.
-4. Add:
+- Home Assistant Supervisor MQTT service;
+- Home Assistant MQTT Device Discovery;
+- official Ookla Speedtest CLI 1.2.0;
+- retained MQTT state;
+- atomic JSON persistence under `/data`;
+- no systemd and no external host or LXC.
 
-   ```text
-   https://github.com/DigitalHouses/home-assistant-apps
-   ```
-
-5. Install **DigitalHouses Speedtest**.
-6. Review and save the configuration.
-7. Start the App.
-8. Open the App log and confirm the MQTT connection and connectivity checks.
-
-For migration from the LXC prototype, stop the LXC services before starting
-this App because both implementations use the same MQTT contract.
-
-### Configuration
-
-#### `periodic_test_enabled`
-
-Enables automatic tests. Manual tests and connectivity checks remain available
-when this option is disabled.
-
-#### `periodic_test_interval_minutes`
-
-Automatic test interval from 5 to 720 minutes. The first automatic test runs
-one full interval after App startup. Use the MQTT button for an immediate test.
-
-#### `server_ids`
-
-Preferred Ookla server IDs in priority order. An empty list enables automatic
-selection immediately.
-
-Example:
-
-```yaml
-server_ids:
-  - 38516
-  - 70668
-```
-
-Use **Refresh server list** in the MQTT device, then inspect the attributes of
-**Available Speedtest servers** to find IDs, providers and locations.
-
-#### `automatic_server_fallback`
-
-When enabled, automatic Ookla server selection is attempted after every
-configured server ID fails.
-
-#### `speedtest_timeout_seconds`
-
-Maximum runtime of each individual Ookla test attempt.
-
-#### `connectivity_check.interval_seconds`
-
-Interval between ICMP checks. Connectivity checks run independently from speed
-tests.
-
-#### `connectivity_check.attempts`
-
-Number of ICMP echo requests sent to each target during one check.
-
-#### `connectivity_check.timeout_seconds`
-
-Timeout of each ICMP echo request.
-
-#### `expire_after_seconds`
-
-Controls when download, upload, ping, jitter and packet loss become unavailable
-without a new test. Set to `0` to disable measurement expiry.
-
-#### `log_level`
-
-Supported values: `debug`, `info`, `warning`, `error`.
-
-### MQTT contract
-
-Base topic:
+Environment:
 
 ```text
-DigitalHouses/Global/speedtest
+HOME=/data
+XDG_CONFIG_HOME=/data/.config
 ```
 
-Topics:
+Stable compatibility contract:
 
 ```text
-DigitalHouses/Global/speedtest/state
-DigitalHouses/Global/speedtest/connectivity
-DigitalHouses/Global/speedtest/servers
-DigitalHouses/Global/speedtest/command
-DigitalHouses/Global/speedtest/availability
+MQTT base topic: DigitalHouses/Global/speedtest
+Device ID:       digitalhouses_global_speedtest
+Device name:     Internet Speedtest
 ```
 
-Commands:
+All 1.0.0 entity unique IDs and default entity IDs remain unchanged.
 
-```text
-RUN
-REFRESH_SERVERS
-```
-
-### Connectivity policy
-
-The App publishes separate connectivity binary sensors for:
-
-- Google Public DNS: `8.8.8.8`
-- Cloudflare DNS: `1.1.1.1`
-
-A Speedtest runs when at least one target responds. When both targets are
-unreachable, the test is skipped, the status changes to `No connectivity`, and
-previous measurements are preserved.
-
-ICMP reachability is a practical availability signal but is not a complete test
-of DNS resolution, HTTP access, or every possible internet route.
-
-### Recorder package
-
-Copy:
-
-```text
-examples/packages/internet_speedtest_package.yaml
-```
-
-to:
-
-```text
-/config/packages/internet_speedtest_package.yaml
-```
-
-Confirm that `/config/configuration.yaml` contains a packages loader, for
-example:
-
-```yaml
-homeassistant:
-  packages: !include_dir_named packages
-```
-
-Do not create a second `homeassistant:` key if one already exists.
-
-### Persistent files
+## Data files
 
 ```text
 /data/state.json
 /data/servers.json
-/data/.config/
+/data/thresholds.json
+/data/recent_results.json
 ```
 
-### Troubleshooting
+`thresholds.json` defaults to:
 
-#### MQTT service information is incomplete
-
-Confirm that an MQTT broker App is installed, running, and exposes the Home
-Assistant MQTT service.
-
-#### Both connectivity sensors are off
-
-Check routing, firewall rules and whether ICMP traffic to both public DNS
-addresses is blocked.
-
-#### A configured server fails
-
-Enable automatic fallback or refresh the nearby server list and replace the
-server ID.
-
-#### Existing entities show old names
-
-Home Assistant preserves user-customized entity names. The App keeps the same
-unique IDs for migration, so previously renamed entities are not overwritten.
-
----
-
-## Русский
-
-### Установка из репозитория DigitalHouses
-
-1. Убедитесь, что MQTT broker установлен и работает.
-2. Откройте **Настройки → Дополнения → Магазин дополнений**.
-3. Откройте меню в правом верхнем углу и выберите **Репозитории**.
-4. Добавьте:
-
-   ```text
-   https://github.com/DigitalHouses/home-assistant-apps
-   ```
-
-5. Установите **DigitalHouses Speedtest**.
-6. Проверьте и сохраните конфигурацию.
-7. Запустите приложение.
-8. Откройте журнал и убедитесь, что MQTT подключён, а проверки доступности работают.
-
-При миграции с LXC-прототипа сначала остановите LXC-сервисы, поскольку обе
-реализации используют одинаковый MQTT-контракт.
-
-### Настройки
-
-#### `periodic_test_enabled`
-
-Включает автоматические замеры. Ручной запуск и проверки доступности работают
-даже при выключенном параметре.
-
-#### `periodic_test_interval_minutes`
-
-Период автоматических тестов от 5 до 720 минут. Первый автоматический тест
-выполняется через полный интервал после запуска приложения. Для немедленного
-теста используйте MQTT-кнопку.
-
-#### `server_ids`
-
-Предпочтительные ID серверов Ookla в порядке приоритета. Пустой список означает
-автоматический выбор сервера.
-
-Пример:
-
-```yaml
-server_ids:
-  - 38516
-  - 70668
+```json
+{
+  "minimum_download_mbps": 10,
+  "minimum_upload_mbps": 10,
+  "maximum_ping_ms": 200
+}
 ```
 
-Нажмите **Refresh server list** в MQTT-устройстве, затем откройте атрибуты
-**Available Speedtest servers** и скопируйте нужные ID.
+`recent_results.json` schema:
 
-#### `automatic_server_fallback`
-
-После отказа всех указанных серверов разрешает автоматический выбор Ookla.
-
-#### `speedtest_timeout_seconds`
-
-Максимальное время одной попытки Ookla Speedtest.
-
-#### `connectivity_check.interval_seconds`
-
-Интервал между ICMP-проверками. Они выполняются независимо от замеров скорости.
-
-#### `connectivity_check.attempts`
-
-Количество ICMP-запросов к каждому адресу за одну проверку.
-
-#### `connectivity_check.timeout_seconds`
-
-Тайм-аут одного ICMP-запроса.
-
-#### `expire_after_seconds`
-
-Через сколько секунд без нового теста сущности скорости становятся unavailable.
-Значение `0` отключает срок действия.
-
-#### `log_level`
-
-Допустимые значения: `debug`, `info`, `warning`, `error`.
-
-### MQTT-контракт
-
-Базовый topic:
-
-```text
-DigitalHouses/Global/speedtest
+```json
+{
+  "schema_version": 1,
+  "updated_at": "2026-07-24T09:18:00Z",
+  "results": []
+}
 ```
 
-Topics:
+There is deliberately no backfill from the 1.0.0 retained state.
+
+## MQTT topics
+
+Existing topics remain unchanged:
 
 ```text
 DigitalHouses/Global/speedtest/state
-DigitalHouses/Global/speedtest/connectivity
-DigitalHouses/Global/speedtest/servers
 DigitalHouses/Global/speedtest/command
 DigitalHouses/Global/speedtest/availability
+DigitalHouses/Global/speedtest/connectivity
+DigitalHouses/Global/speedtest/servers
 ```
 
-Команды:
+New 1.1.0 topics:
 
 ```text
-RUN
-REFRESH_SERVERS
+DigitalHouses/Global/speedtest/result_availability
+DigitalHouses/Global/speedtest/thresholds
+DigitalHouses/Global/speedtest/problems
+DigitalHouses/Global/speedtest/recent_results
+
+DigitalHouses/Global/speedtest/thresholds/minimum_download/set
+DigitalHouses/Global/speedtest/thresholds/minimum_upload/set
+DigitalHouses/Global/speedtest/thresholds/maximum_ping/set
 ```
 
-### Логика доступности интернета
+## Threshold semantics
 
-Публикуются два отдельных binary sensor:
-
-- Google Public DNS: `8.8.8.8`
-- Cloudflare DNS: `1.1.1.1`
-
-Speedtest запускается, если отвечает хотя бы один адрес. Если недоступны оба,
-тест пропускается, статус становится `No connectivity`, а предыдущие результаты
-сохраняются.
-
-ICMP-доступность — практический индикатор, но она не проверяет DNS-разрешение,
-HTTP-доступ и все возможные интернет-маршруты.
-
-### Пакет Recorder
-
-Скопируйте:
+The threshold is the boundary where a problem begins.
 
 ```text
-examples/packages/internet_speedtest_package.yaml
+low_download = download_mbps < minimum_download_mbps
+low_upload   = upload_mbps < minimum_upload_mbps
+high_ping    = ping_ms > maximum_ping_ms
+low_speed    = low_download OR low_upload
+problem      = low_download OR low_upload OR high_ping
 ```
 
-в:
+Equality is normal.
 
-```text
-/config/packages/internet_speedtest_package.yaml
-```
+Threshold command processing is not queued behind Ookla execution. The MQTT
+callback validates and persists the number, republishes the Number state and
+immediately recalculates current problem sensors from the latest successful
+result.
 
-Убедитесь, что в `/config/configuration.yaml` подключена папка packages,
-например:
+Old Recent results are immutable and never recalculated.
+
+## Problem attributes
+
+Metric problem sensors publish:
 
 ```yaml
-homeassistant:
-  packages: !include_dir_named packages
+current_value: 34.0
+threshold: 50
+unit: Mbit/s
+comparison: less_than
+difference: -16.0
+evaluated_at: "..."
+result_timestamp: "..."
+server: "OBIT — Almaty, Kazakhstan"
+server_id: 56519
 ```
 
-Если раздел `homeassistant:` уже существует, второй раздел создавать нельзя.
+The aggregate sensor publishes:
 
-### Постоянные файлы
-
-```text
-/data/state.json
-/data/servers.json
-/data/.config/
+```yaml
+low_download: true
+low_upload: false
+high_ping: false
+low_speed: true
+problem_reasons:
+  - low_download
+evaluated_at: "..."
+result_timestamp: "..."
+server: "..."
+server_id: 56519
 ```
 
-### Диагностика
+## Availability model
 
-#### Не получены параметры MQTT
+Two retained availability topics are used:
 
-Убедитесь, что MQTT broker установлен, запущен и предоставляет MQTT-сервис
-Home Assistant Supervisor.
+- App availability: process/MQTT health;
+- Result availability: freshness of the last successful test.
 
-#### Оба connectivity sensor выключены
+Measurement and performance problem entities require both to be `online`.
+Other controls and diagnostics require only App availability.
 
-Проверьте маршрутизацию, firewall и доступность ICMP к обоим публичным DNS.
+This avoids the old failure mode where publishing a status update on the shared
+state topic restarted Home Assistant's `expire_after` timer for old
+measurements.
 
-#### Указанный сервер не работает
+Processing order after MQTT reconnect:
 
-Включите automatic fallback либо обновите список ближайших серверов и замените ID.
+1. publish discovery;
+2. publish retained state, thresholds, Recent results and evaluation;
+3. publish result freshness;
+4. publish App availability `online`.
 
-#### Сущности показывают старые названия
+This prevents stale values appearing briefly as valid after restart.
 
-Home Assistant сохраняет пользовательские названия. Приложение использует те же
-unique ID для миграции и не перезаписывает ранее изменённые имена.
+## Runtime transitions
+
+### Successful test
+
+1. Parse and validate Ookla JSON.
+2. Atomically save current state.
+3. Snapshot current thresholds.
+4. Build and persist one Recent result.
+5. Publish Recent results.
+6. Recalculate and publish problem sensors.
+7. Mark result availability online.
+
+### Failed test
+
+- Keep the previous successful measurements.
+- Set status to `Error`.
+- Do not append Recent results.
+- Do not interpret the failure as low speed.
+- Keep previous evaluation until it expires.
+
+### No connectivity
+
+- Skip Ookla execution.
+- Set status to `No connectivity`.
+- Keep previous successful measurements and evaluation.
+- Connectivity binary sensors report the outage.
+- Do not append Recent results.
+
+### Expiration
+
+When the age of `last_success` exceeds `expire_after_seconds`,
+result availability becomes `offline`. Measurement and performance problem
+entities become `unavailable`.
+
+A new successful test restores them.
+
+## Recent result record
+
+```json
+{
+  "timestamp": "2026-07-24T09:18:00Z",
+  "server": "OBIT — Almaty, Kazakhstan",
+  "server_id": 56519,
+  "download_mbps": 197.8,
+  "upload_mbps": 198.0,
+  "ping_ms": 2.1,
+  "jitter_ms": 0.5,
+  "packet_loss": null,
+  "result_url": "https://www.speedtest.net/result/c/...",
+  "minimum_download_mbps": 10,
+  "minimum_upload_mbps": 10,
+  "maximum_ping_ms": 200,
+  "low_download": false,
+  "low_upload": false,
+  "high_ping": false,
+  "low_speed": false,
+  "performance_problem": false,
+  "problem_reasons": []
+}
+```
+
+External IP is excluded. Results are stored newest-first and deduplicated by
+result URL, with timestamp plus server ID as fallback.
+
+## Tests
+
+Run locally:
+
+```bash
+python3 -m py_compile \
+  digitalhouses_speedtest/rootfs/app/core.py \
+  digitalhouses_speedtest/rootfs/app/discovery.py \
+  digitalhouses_speedtest/rootfs/app/app.py
+
+python3 -m unittest discover -s digitalhouses_speedtest/tests -v
+python3 scripts/validate_repository.py
+bash -n digitalhouses_speedtest/rootfs/run.sh
+```
+
+The test suite covers strict threshold boundaries, aggregate logic, immediate
+recalculation, immutable historical thresholds, failed/no-connectivity
+semantics, expiration, packet-loss null handling, limits, persistence,
+discovery payload and preservation of every 1.0.0 identity.
+
+## Field verification checklist
+
+Before updating screenshots:
+
+1. Install 1.1.0 from GitHub over 1.0.0.
+2. Confirm all old entity IDs and Recorder history remain.
+3. Run a manual test.
+4. Verify a scheduled test at the configured interval.
+5. Change all three threshold Numbers and confirm immediate recalculation.
+6. Force low/high thresholds and verify strict equality.
+7. Restart the App and confirm thresholds and Recent results persist.
+8. Test no-connectivity and failed Ookla execution.
+9. Test expiration with a temporarily short `expire_after_seconds`.
+10. Inspect MQTT discovery and App logs.

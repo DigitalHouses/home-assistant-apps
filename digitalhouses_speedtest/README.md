@@ -1,6 +1,7 @@
 # DigitalHouses Speedtest
 
-Home Assistant App for internet availability monitoring and scheduled speed tests using the official Ookla Speedtest CLI.
+Home Assistant App for internet availability monitoring and scheduled speed
+tests using the official Ookla Speedtest CLI.
 
 ## English
 
@@ -9,41 +10,38 @@ Home Assistant App for internet availability monitoring and scheduled speed test
 - Download and upload speed
 - Ping and jitter
 - Packet loss when returned by Ookla
-- ISP and public IP
-- Selected server name and server ID
-- Ookla result URL
+- ISP, public IP, selected server, server ID and result URL
 - Manual speed-test button
-- Optional periodic tests every 5 to 720 minutes
-- Connectivity checks to `8.8.8.8` and `1.1.1.1`
-- Separate connectivity binary sensors
-- Speedtest suppression when both connectivity targets are unavailable
+- Periodic tests every 5–720 minutes; default **30 minutes**
+- Independent connectivity checks to `8.8.8.8` and `1.1.1.1`
 - Preferred Ookla server IDs with automatic fallback
-- Nearby-server discovery with provider, location and server ID
-- Persistent state
-- Home Assistant MQTT Discovery
-- Automatic MQTT configuration through Home Assistant Supervisor
+- Nearby-server discovery
+- MQTT numbers for performance thresholds
+- Problem binary sensors with immediate recalculation
+- Persistent Recent results for successful tests
+- Home Assistant MQTT Device Discovery
+- Persistent state in `/data`
 
 ### Requirements
 
-- Home Assistant OS or a supervised Home Assistant installation with Apps support
+- Home Assistant OS or supervised Home Assistant with Apps support
 - MQTT broker exposed through Home Assistant Supervisor
 - `amd64` architecture
 
 ### Installation
 
 1. Open **Settings → Apps → App store**.
-2. Open the menu in the upper-right corner.
-3. Select **Repositories**.
-4. Add `https://github.com/DigitalHouses/home-assistant-apps`.
-5. Find **DigitalHouses Speedtest** and install it.
-6. Review the configuration and start the App.
-7. Enable **Start on boot** and **Watchdog** after the first successful run.
+2. Open the menu and select **Repositories**.
+3. Add `https://github.com/DigitalHouses/home-assistant-apps`.
+4. Install **DigitalHouses Speedtest**.
+5. Review the configuration and start the App.
+6. Enable Start on boot and Watchdog after the first successful run.
 
 ### Configuration example
 
 ```yaml
 periodic_test_enabled: true
-periodic_test_interval_minutes: 180
+periodic_test_interval_minutes: 30
 server_ids: []
 automatic_server_fallback: true
 speedtest_timeout_seconds: 240
@@ -52,18 +50,77 @@ connectivity_check:
   attempts: 3
   timeout_seconds: 2
 expire_after_seconds: 14400
+recent_results_limit: 20
 log_level: info
 ```
 
+`recent_results_limit` accepts values from 5 to 50. Only successful tests are
+stored.
+
+### Performance thresholds
+
+Version 1.1.0 adds three MQTT Number entities:
+
+- `number.internet_speed_minimum_download` — default 10 Mbit/s
+- `number.internet_speed_minimum_upload` — default 10 Mbit/s
+- `number.internet_speed_maximum_ping` — default 200 ms
+
+The values can be changed directly in Home Assistant without restarting the
+App. Problem sensors are recalculated immediately using the last successful,
+non-expired measurement.
+
+Strict comparison rules:
+
+```text
+Low download speed = ON when download < minimum download
+Low upload speed   = ON when upload < minimum upload
+High ping          = ON when ping > maximum ping
+```
+
+Equality is normal and produces `OFF`.
+
+The aggregate
+`binary_sensor.internet_speed_performance_problem` is `ON` when any of the
+three problems is active.
+
+### Freshness and failures
+
+A failed test or missing connectivity does not replace the last measurements,
+does not add a Recent result and does not create a false speed problem.
+
+The previous performance evaluation remains valid until
+`expire_after_seconds`. After expiration, measurement and performance problem
+entities become `unavailable` until the next successful test.
+
+### Recent results
+
+`sensor.internet_speed_recent_results` stores the configured number of newest
+successful tests in `/data/recent_results.json`.
+
+Its state is the number of stored entries. Attributes include:
+
+- `updated_at`
+- `count`
+- `limit`
+- `results`
+
+Each result contains measured values, selected server, result URL, thresholds
+that were active at test time and ready-to-use problem flags. External IP is
+not copied into history.
+
+Changing thresholds later recalculates current problem sensors but never
+rewrites historical entries. Version 1.0.0 results are not backfilled; history
+starts with successful tests performed by 1.1.0.
+
 ### Server selection
 
-Leave `server_ids` empty to use automatic server selection:
+Leave `server_ids` empty for automatic selection:
 
 ```yaml
 server_ids: []
 ```
 
-To use preferred servers, list their IDs in priority order:
+To use preferred servers, list IDs in priority order:
 
 ```yaml
 server_ids:
@@ -71,72 +128,92 @@ server_ids:
   - 70668
 ```
 
-Use **Refresh server list** in the Home Assistant device and inspect the attributes of **Available Speedtest servers** to find nearby IDs, providers and locations.
+Use **Refresh server list** and inspect the attributes of
+`sensor.internet_speed_available_servers`.
 
 ### What appears in Home Assistant
 
 The App creates one MQTT device named **Internet Speedtest**.
 
-The device page contains:
+Main entities:
 
-- **Sensors** — Download, Upload, Ping and Status
-- **Controls** — Run speed test and Refresh server list
-- **Diagnostics** — connectivity, jitter, packet loss, ISP, external IP, server, server ID, result URL and timestamps
+- Download, Upload and Ping
+- Low download speed, Low upload speed and High ping
+- Internet performance problem
+- Run speed test
+- Minimum download, Minimum upload and Maximum ping
+
+Diagnostic entities include jitter, packet loss, provider, external IP,
+server, server ID, result URL, timestamps, connectivity, server list and Recent
+results.
+
+### Screenshots
+
+The verified 1.0.0 screenshots are retained for the initial 1.1.0 release. They
+will be replaced only after the 1.1.0 update is installed and field-tested in
+Home Assistant.
 
 ![Internet Speedtest sensors and controls](images/home-assistant-device-overview.png)
 
 ![Internet Speedtest diagnostics](images/home-assistant-device-diagnostics.png)
 
-Home Assistant may translate section names and some state values according to the selected interface language.
-
-### Connectivity logic
-
-The App checks `8.8.8.8` and `1.1.1.1`.
-
-A speed test runs when at least one target is reachable. When both targets are unavailable, the test is skipped, the status changes to `No connectivity`, and previous speed results are preserved.
-
 ### Recorder package
 
-The repository includes an optional Recorder package:
+Copy:
 
-`examples/packages/internet_speedtest_package.yaml`
-
-Copy it to:
-
-`/config/packages/internet_speedtest_package.yaml`
-
-Ensure `/config/configuration.yaml` contains:
-
-```yaml
-homeassistant:
-  packages: !include_dir_named packages
+```text
+examples/packages/internet_speedtest_package.yaml
 ```
 
-Do not create a second `homeassistant:` section if one already exists.
+to:
+
+```text
+/config/packages/internet_speedtest_package.yaml
+```
+
+The package records measurements, thresholds and problem sensors.
+`sensor.internet_speed_recent_results` is intentionally excluded because its
+large `results` attribute would unnecessarily increase the Recorder database.
+
+### Lovelace dashboard
+
+A dashboard using only built-in Home Assistant cards is available at:
+
+```text
+examples/lovelace/internet_speedtest_dashboard.yaml
+```
 
 ### Troubleshooting
 
-**The App cannot connect to MQTT**
-
-Confirm that the MQTT broker is installed, running and exposed as a Supervisor MQTT service.
-
-**Both connectivity sensors are off**
-
-Check internet access, routing, firewall rules and ICMP access to both public DNS addresses.
-
-**A configured server fails**
-
-Enable automatic fallback or refresh the nearby-server list and replace the server ID.
-
 **Packet loss is `unknown`**
 
-Some Ookla servers or test sessions do not return packet-loss data. `unknown` means the metric was not provided; it does not mean `0%`.
+Some Ookla servers do not return packet-loss data. `unknown` means no value was
+provided; it does not mean `0%`.
+
+**Problem sensors are unavailable**
+
+No successful test exists yet, or the last successful result is older than
+`expire_after_seconds`. Run a new test.
+
+**A threshold changed but history did not**
+
+This is intentional. Current problem sensors are recalculated immediately;
+old Recent results retain the thresholds that were active at test time.
+
+### Feedback
+
+- Questions and experience: [Discussions](https://github.com/DigitalHouses/home-assistant-apps/discussions)
+- Confirmed bugs and feature requests: [Issues](https://github.com/DigitalHouses/home-assistant-apps/issues)
+
+Do not publish passwords, MQTT credentials, access tokens, external IP
+addresses or unique Ookla result URLs.
 
 ### License
 
-DigitalHouses source code is licensed under the MIT License.
-
-This App downloads and runs the official proprietary Ookla Speedtest CLI. Users are responsible for reviewing and complying with Ookla's license, terms of use and privacy policy.
+DigitalHouses source code is licensed under the MIT License. This App downloads
+and runs the official proprietary Ookla Speedtest CLI. Users are responsible
+for reviewing and complying with Ookla's license, terms of use and privacy
+policy.
 
 ---
 
@@ -144,44 +221,41 @@ This App downloads and runs the official proprietary Ookla Speedtest CLI. Users 
 
 ### Возможности
 
-- скорость скачивания и отдачи;
-- ping и jitter;
-- packet loss, если Ookla возвращает этот показатель;
-- провайдер и внешний IP;
-- название и ID выбранного сервера;
-- URL результата Ookla;
-- кнопка ручного запуска;
-- периодические тесты с интервалом от 5 до 720 минут;
-- проверки доступности `8.8.8.8` и `1.1.1.1`;
-- отдельные binary sensor доступности;
-- запрет Speedtest, когда недоступны оба контрольных адреса;
-- предпочтительные серверы Ookla с автоматическим fallback;
-- список ближайших серверов с провайдером, городом и ID;
-- постоянное хранение состояния;
-- Home Assistant MQTT Discovery;
-- автоматическое получение настроек MQTT через Supervisor.
+- Скорость скачивания и отдачи
+- Ping и jitter
+- Packet loss, когда показатель возвращён Ookla
+- Провайдер, внешний IP, сервер, ID сервера и URL результата
+- Ручной запуск Speedtest
+- Периодические тесты раз в 5–720 минут; по умолчанию **30 минут**
+- Независимые проверки `8.8.8.8` и `1.1.1.1`
+- Приоритетные server ID и автоматический fallback
+- Получение списка ближайших серверов
+- Регулируемые пороги прямо в Home Assistant
+- Problem binary sensors с немедленным пересчётом
+- Постоянная история последних успешных тестов
+- Home Assistant MQTT Device Discovery
+- Хранение данных в `/data`
 
 ### Требования
 
-- Home Assistant OS либо supervised-установка Home Assistant с поддержкой Apps;
-- MQTT broker, предоставленный через Home Assistant Supervisor;
-- архитектура `amd64`.
+- Home Assistant OS или supervised Home Assistant с поддержкой Apps
+- MQTT broker, предоставленный через Supervisor
+- Архитектура `amd64`
 
 ### Установка
 
 1. Откройте **Настройки → Дополнения → Магазин дополнений**.
-2. Откройте меню в правом верхнем углу.
-3. Выберите **Репозитории**.
-4. Добавьте `https://github.com/DigitalHouses/home-assistant-apps`.
-5. Найдите **DigitalHouses Speedtest** и установите приложение.
-6. Проверьте конфигурацию и запустите приложение.
-7. После успешного запуска включите **Запуск при загрузке** и **Watchdog**.
+2. Откройте меню и выберите **Репозитории**.
+3. Добавьте `https://github.com/DigitalHouses/home-assistant-apps`.
+4. Установите **DigitalHouses Speedtest**.
+5. Проверьте конфигурацию и запустите приложение.
+6. После первого успешного запуска включите автозапуск и Watchdog.
 
 ### Пример конфигурации
 
 ```yaml
 periodic_test_enabled: true
-periodic_test_interval_minutes: 180
+periodic_test_interval_minutes: 30
 server_ids: []
 automatic_server_fallback: true
 speedtest_timeout_seconds: 240
@@ -190,88 +264,112 @@ connectivity_check:
   attempts: 3
   timeout_seconds: 2
 expire_after_seconds: 14400
+recent_results_limit: 20
 log_level: info
 ```
 
-### Выбор сервера
+`recent_results_limit` принимает значения от 5 до 50. В историю попадают только
+успешные тесты.
 
-Оставьте `server_ids` пустым для автоматического выбора:
+### Пороги качества
 
-```yaml
-server_ids: []
+Версия 1.1.0 добавляет:
+
+- `number.internet_speed_minimum_download` — 10 Mbit/s по умолчанию;
+- `number.internet_speed_minimum_upload` — 10 Mbit/s по умолчанию;
+- `number.internet_speed_maximum_ping` — 200 ms по умолчанию.
+
+Пороги меняются прямо в Home Assistant. Перезапуск приложения не нужен:
+problem sensors сразу пересчитываются по последнему успешному и неустаревшему
+измерению.
+
+Логика строгая:
+
+```text
+Low download speed = ON, если download < minimum download
+Low upload speed   = ON, если upload < minimum upload
+High ping          = ON, если ping > maximum ping
 ```
 
-Для предпочтительных серверов укажите ID в порядке приоритета:
+Равенство считается нормой и даёт `OFF`.
 
-```yaml
-server_ids:
-  - 38516
-  - 70668
-```
+Общий `binary_sensor.internet_speed_performance_problem` включается при любой
+из трёх проблем.
 
-Нажмите **Refresh server list** в устройстве Home Assistant и откройте атрибуты **Available Speedtest servers**. Там отображаются ID, провайдеры и расположение ближайших серверов.
+### Ошибки и устаревание
 
-### Что появится в Home Assistant
+Ошибка теста или отсутствие connectivity:
 
-Приложение создаёт одно MQTT-устройство **Internet Speedtest**.
+- не заменяет предыдущие измерения;
+- не создаёт Recent result;
+- не считается автоматически плохой скоростью;
+- не переключает problem sensors в ложный `OFF`.
 
-На странице устройства отображаются:
+Предыдущая оценка действует до `expire_after_seconds`. Затем измерительные и
+problem entities становятся `unavailable` до нового успешного теста.
 
-- **Сенсоры** — Download, Upload, Ping и Status
-- **Настройки** — Run speed test и Refresh server list
-- **Диагностика** — доступность, jitter, packet loss, провайдер, внешний IP, сервер, ID сервера, URL результата и временные метки
+### Recent results
 
-![Сенсоры и кнопки Internet Speedtest](images/home-assistant-device-overview.png)
+`sensor.internet_speed_recent_results` хранит последние успешные тесты в
+`/data/recent_results.json`.
+
+Состояние сенсора — количество записей. В атрибутах находятся `updated_at`,
+`count`, `limit` и `results`.
+
+Каждая запись содержит результат, сервер, действовавшие в момент теста пороги,
+`low_download`, `low_upload`, `high_ping`, `low_speed`,
+`performance_problem` и `problem_reasons`. Внешний IP в историю не копируется.
+
+Изменение порога пересчитывает текущие problem sensors, но не переписывает
+старые записи. Данные версии 1.0.0 не мигрируются: история начинается с
+успешных тестов 1.1.0.
+
+### Скриншоты
+
+Для первого релиза 1.1.0 сохранены проверенные скриншоты версии 1.0.0. Они
+будут заменены только после установки обновления 1.1.0 и полевого теста в
+Home Assistant.
+
+![Сенсоры и управление Internet Speedtest](images/home-assistant-device-overview.png)
 
 ![Диагностика Internet Speedtest](images/home-assistant-device-diagnostics.png)
 
-Home Assistant может переводить названия разделов и некоторые значения состояний в соответствии с языком интерфейса.
+### Recorder
 
-### Логика контроля доступности
+Пакет:
 
-Приложение проверяет `8.8.8.8` и `1.1.1.1`.
-
-Speedtest запускается, если отвечает хотя бы один адрес. Если недоступны оба, тест пропускается, статус становится `No connectivity`, а предыдущие результаты сохраняются.
-
-### Пакет Recorder
-
-В репозитории находится дополнительный пакет:
-
-`examples/packages/internet_speedtest_package.yaml`
-
-Скопируйте его в:
-
-`/config/packages/internet_speedtest_package.yaml`
-
-Убедитесь, что `/config/configuration.yaml` содержит:
-
-```yaml
-homeassistant:
-  packages: !include_dir_named packages
+```text
+examples/packages/internet_speedtest_package.yaml
 ```
 
-Если раздел `homeassistant:` уже существует, второй создавать нельзя.
+нужно скопировать в:
 
-### Диагностика
+```text
+/config/packages/internet_speedtest_package.yaml
+```
 
-**Приложение не подключается к MQTT**
+Threshold numbers и problem sensors включены.
+`sensor.internet_speed_recent_results` намеренно исключён, чтобы массив
+атрибутов не раздувал базу Recorder.
 
-Убедитесь, что MQTT broker установлен, запущен и предоставлен как MQTT-сервис Supervisor.
+### Lovelace
 
-**Оба connectivity sensor выключены**
+Готовая панель без HACS:
 
-Проверьте интернет, маршрутизацию, firewall и доступность ICMP к обоим публичным DNS-адресам.
+```text
+examples/lovelace/internet_speedtest_dashboard.yaml
+```
 
-**Указанный сервер не работает**
+### Обратная связь
 
-Включите automatic fallback либо обновите список ближайших серверов и замените ID.
+- Вопросы и опыт: [Discussions](https://github.com/DigitalHouses/home-assistant-apps/discussions)
+- Подтверждённые ошибки и запросы функций: [Issues](https://github.com/DigitalHouses/home-assistant-apps/issues)
 
-**Packet loss показывает `unknown`**
-
-Некоторые серверы Ookla или отдельные тесты не возвращают packet-loss. `unknown` означает отсутствие измерения, а не `0%`.
+Не публикуйте пароли, MQTT credentials, access tokens, внешний IP и уникальные
+Ookla result URLs.
 
 ### Лицензия
 
-Исходный код DigitalHouses распространяется по лицензии MIT.
-
-Приложение загружает и запускает официальный проприетарный Ookla Speedtest CLI. Пользователь самостоятельно отвечает за соблюдение лицензии, условий использования и политики конфиденциальности Ookla.
+Исходный код DigitalHouses распространяется по MIT License. Приложение
+загружает и запускает официальный проприетарный Ookla Speedtest CLI.
+Пользователь самостоятельно отвечает за соблюдение условий Ookla.

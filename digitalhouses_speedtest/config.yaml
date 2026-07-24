@@ -1,20 +1,20 @@
 name: DigitalHouses Speedtest
-version: 1.0.0
+version: 1.1.0
 slug: digitalhouses_speedtest
 description: Internet connectivity monitoring and official Ookla Speedtest CLI results through MQTT Discovery.
 url: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_speedtest
 arch:
-- amd64
+  - amd64
 startup: application
 boot: auto
 init: false
 stage: stable
 backup: hot
 services:
-- mqtt:need
+  - mqtt:need
 options:
   periodic_test_enabled: true
-  periodic_test_interval_minutes: 180
+  periodic_test_interval_minutes: 30
   server_ids: []
   automatic_server_fallback: true
   speedtest_timeout_seconds: 240
@@ -23,12 +23,13 @@ options:
     attempts: 3
     timeout_seconds: 2
   expire_after_seconds: 14400
+  recent_results_limit: 20
   log_level: info
 schema:
   periodic_test_enabled: bool
   periodic_test_interval_minutes: int(5,720)
   server_ids:
-  - int
+    - int
   automatic_server_fallback: bool
   speedtest_timeout_seconds: int(30,600)
   connectivity_check:
@@ -36,4 +37,5 @@ schema:
     attempts: int(1,10)
     timeout_seconds: int(1,30)
   expire_after_seconds: int(0,86400)
+  recent_results_limit: int(5,50)
   log_level: list(debug|info|warning|error)

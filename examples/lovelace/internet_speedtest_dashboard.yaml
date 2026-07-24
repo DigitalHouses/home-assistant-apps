@@ -1,0 +1,131 @@
+title: Internet Speedtest
+views:
+  - title: Internet
+    path: internet-speedtest
+    icon: mdi:speedometer
+    cards:
+      - type: entities
+        title: Internet performance
+        show_header_toggle: false
+        entities:
+          - entity: binary_sensor.internet_speed_performance_problem
+            name: Internet performance problem
+          - entity: sensor.internet_speed_status
+          - entity: sensor.internet_speed_last_test
+          - type: divider
+          - entity: sensor.internet_speed_download
+          - entity: sensor.internet_speed_upload
+          - entity: sensor.internet_speed_ping
+          - entity: sensor.internet_speed_jitter
+          - entity: sensor.internet_speed_packet_loss
+
+      - type: horizontal-stack
+        cards:
+          - type: button
+            entity: button.internet_speed_run
+            name: Run speed test
+            icon: mdi:play-speed
+            tap_action:
+              action: toggle
+          - type: button
+            entity: button.internet_speed_refresh_servers
+            name: Refresh servers
+            icon: mdi:refresh
+            tap_action:
+              action: toggle
+
+      - type: entities
+        title: Performance thresholds
+        show_header_toggle: false
+        entities:
+          - entity: number.internet_speed_minimum_download
+          - entity: number.internet_speed_minimum_upload
+          - entity: number.internet_speed_maximum_ping
+
+      - type: entities
+        title: Problem sensors
+        show_header_toggle: false
+        entities:
+          - entity: binary_sensor.internet_speed_low_download
+          - entity: binary_sensor.internet_speed_low_upload
+          - entity: binary_sensor.internet_speed_high_ping
+          - entity: binary_sensor.internet_speed_performance_problem
+
+      - type: statistics-graph
+        title: Download and upload statistics
+        days_to_show: 7
+        chart_type: line
+        stat_types:
+          - min
+          - mean
+          - max
+        entities:
+          - sensor.internet_speed_download
+          - sensor.internet_speed_upload
+
+      - type: statistics-graph
+        title: Ping and jitter statistics
+        days_to_show: 7
+        chart_type: line
+        stat_types:
+          - min
+          - mean
+          - max
+        entities:
+          - sensor.internet_speed_ping
+          - sensor.internet_speed_jitter
+
+      - type: history-graph
+        title: Internet connectivity history
+        hours_to_show: 48
+        entities:
+          - binary_sensor.internet_google_dns_connectivity
+          - binary_sensor.internet_cloudflare_dns_connectivity
+
+      - type: history-graph
+        title: Ookla server selection history
+        hours_to_show: 168
+        entities:
+          - sensor.internet_speed_server
+
+      - type: markdown
+        title: Recent Speedtest results
+        content: >-
+          {% set results = state_attr('sensor.internet_speed_recent_results', 'results') or [] %}
+          {% if results | count == 0 %}
+          No successful tests have been recorded by version 1.1.0 yet.
+          {% else %}
+          {% for item in results %}
+          {% set reasons = item.problem_reasons or [] %}
+          {% if item.performance_problem %}🔴{% else %}🟢{% endif %}
+          **{{ item.timestamp }} · {{ item.server or 'Unknown server' }}**
+
+          {% if reasons | count == 0 %}
+          **Performance OK**
+          {% else %}
+          **{% if 'low_download' in reasons %}Low download{% endif %}{% if 'low_upload' in reasons %}{% if 'low_download' in reasons %} · {% endif %}Low upload{% endif %}{% if 'high_ping' in reasons %}{% if 'low_download' in reasons or 'low_upload' in reasons %} · {% endif %}High ping{% endif %}**
+          {% endif %}
+
+          ↓ {{ item.download_mbps }} / min {{ item.minimum_download_mbps }} Mbit/s  
+          ↑ {{ item.upload_mbps }} / min {{ item.minimum_upload_mbps }} Mbit/s  
+          Ping {{ item.ping_ms }} / max {{ item.maximum_ping_ms }} ms  
+          Jitter {{ item.jitter_ms }} ms
+
+          {% if not loop.last %}---{% endif %}
+          {% endfor %}
+          {% endif %}
+
+      - type: entities
+        title: Connectivity and server diagnostics
+        show_header_toggle: false
+        entities:
+          - binary_sensor.internet_google_dns_connectivity
+          - binary_sensor.internet_cloudflare_dns_connectivity
+          - sensor.internet_speed_provider
+          - sensor.internet_speed_external_ip
+          - sensor.internet_speed_server
+          - sensor.internet_speed_server_id
+          - sensor.internet_speed_result_url
+          - sensor.internet_speed_available_servers
+          - sensor.internet_speed_server_list_updated
+          - sensor.internet_speed_recent_results

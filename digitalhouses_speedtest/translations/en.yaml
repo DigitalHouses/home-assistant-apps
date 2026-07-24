@@ -1,40 +1,37 @@
 configuration:
   periodic_test_enabled:
-    name: Periodic tests
-    description: Enable automatic speed tests.
+    name: Periodic speed tests
+    description: Run Ookla Speedtest automatically on a schedule.
   periodic_test_interval_minutes:
     name: Periodic test interval
-    description: Minutes between automatic tests, from 5 minutes to 12 hours.
+    description: Minutes between scheduled tests.
   server_ids:
     name: Preferred server IDs
-    description: >-
-      Ookla server IDs in priority order. Leave the list empty to use automatic
-      selection. Use the Refresh server list button to discover nearby IDs.
+    description: Ookla server IDs in priority order. Leave empty for automatic selection.
   automatic_server_fallback:
     name: Automatic server fallback
-    description: >-
-      Use Ookla automatic server selection if every configured server ID fails.
+    description: Try automatic server selection after preferred servers fail.
   speedtest_timeout_seconds:
     name: Speedtest timeout
-    description: Maximum runtime of one Ookla test attempt in seconds.
+    description: Maximum runtime of one Ookla Speedtest attempt.
   connectivity_check:
-    name: Connectivity checks
-    description: ICMP checks used to determine whether a speed test can run.
-    fields:
-      interval_seconds:
-        name: Check interval
-        description: Seconds between connectivity checks.
-      attempts:
-        name: Attempts
-        description: ICMP echo requests sent to each target per check.
-      timeout_seconds:
-        name: Attempt timeout
-        description: Timeout of each ICMP attempt in seconds.
+    name: Connectivity check
+    description: Independent checks of 8.8.8.8 and 1.1.1.1.
+  connectivity_check.interval_seconds:
+    name: Connectivity check interval
+    description: Seconds between connectivity checks.
+  connectivity_check.attempts:
+    name: Connectivity attempts
+    description: ICMP attempts per target.
+  connectivity_check.timeout_seconds:
+    name: Connectivity timeout
+    description: Timeout in seconds for each ICMP attempt.
   expire_after_seconds:
-    name: Measurement expiry
-    description: >-
-      Seconds before speed measurements become unavailable without a new test.
-      Set to 0 to disable expiry.
+    name: Result expiration
+    description: Age after which measurements and performance evaluation become unavailable. Use 0 to disable expiration.
+  recent_results_limit:
+    name: Recent results limit
+    description: Number of successful tests retained in the diagnostic Recent results sensor.
   log_level:
     name: Log level
-    description: Amount of information written to the App log.
+    description: Application logging verbosity.
