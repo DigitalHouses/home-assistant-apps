@@ -174,9 +174,11 @@ results.
 The screenshots are retained until the new runtime interval control is
 field-tested in Home Assistant and replacement screenshots are prepared.
 
-![Internet Speedtest sensors and controls](images/home-assistant-device-overview.png)
+![Internet Speedtest sensors and controls](images/home-assistant-sensors.png)
 
-![Internet Speedtest diagnostics](images/home-assistant-device-diagnostics.png)
+![Internet Speedtest diagnostics](images/home-assistant-thresholds.png)
+
+![Internet Speedtest diagnostics](images/home-assistant-diag.png)
 
 ![Internet Speedtest UI tests](images/home-assistant-ui-tests.png)
 
