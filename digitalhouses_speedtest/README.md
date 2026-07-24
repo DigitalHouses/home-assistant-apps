@@ -179,7 +179,7 @@ performance thresholds, diagnostics and test controls.
     <img
       src="images/home-assistant-sensors.png"
       alt="Internet Speedtest sensors and controls"
-      width="300"
+      width="400"
     >
   </a>
 </p>
@@ -189,7 +189,7 @@ performance thresholds, diagnostics and test controls.
     <img
       src="images/home-assistant-thresholds.png"
       alt="Internet Speedtest thresholds"
-      width="300"
+      width="400"
     >
   </a>
 </p>
@@ -199,7 +199,7 @@ performance thresholds, diagnostics and test controls.
     <img
       src="images/home-assistant-diag.png"
       alt="Internet Speedtest diagnostics"
-      width="300"
+      width="400"
     >
   </a>
 </p>
@@ -209,7 +209,7 @@ performance thresholds, diagnostics and test controls.
     <img
       src="images/home-assistant-ui-tests.png"
       alt="Internet Speedtest UI tests"
-      width="300"
+      width="400"
     >
   </a>
 </p>
@@ -219,7 +219,7 @@ performance thresholds, diagnostics and test controls.
     <img
       src="images/home-assistant-servers-history.png"
       alt="Internet Speedtest UI tests"
-      width="300"
+      width="400"
     >
   </a>
 </p>
@@ -424,7 +424,7 @@ problem entities становятся `unavailable` до нового успеш
     <img
       src="images/home-assistant-sensors.png"
       alt="Internet Speedtest sensors and controls"
-      width="300"
+      width="400"
     >
   </a>
 </p>
@@ -434,7 +434,7 @@ problem entities становятся `unavailable` до нового успеш
     <img
       src="images/home-assistant-thresholds.png"
       alt="Internet Speedtest thresholds"
-      width="300"
+      width="400"
     >
   </a>
 </p>
@@ -444,7 +444,7 @@ problem entities становятся `unavailable` до нового успеш
     <img
       src="images/home-assistant-diag.png"
       alt="Internet Speedtest diagnostics"
-      width="300"
+      width="400"
     >
   </a>
 </p>
@@ -454,7 +454,17 @@ problem entities становятся `unavailable` до нового успеш
     <img
       src="images/home-assistant-ui-tests.png"
       alt="Internet Speedtest UI tests"
-      width="300"
+      width="400"
+    >
+  </a>
+</p>
+
+<p align="center">
+  <a href="images/home-assistant-servers-history.png">
+    <img
+      src="images/home-assistant-servers-history.png"
+      alt="Internet Speedtest UI tests"
+      width="400"
     >
   </a>
 </p>
