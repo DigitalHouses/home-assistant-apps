@@ -171,9 +171,8 @@ results.
 
 ### Screenshots
 
-The screenshots are retained until the new runtime interval control is
-field-tested in Home Assistant and replacement screenshots are prepared.
-
+The screenshots below show the current Home Assistant device entities,
+performance thresholds, diagnostics and test controls.
 
 <p align="center">
   <a href="images/home-assistant-sensors.png">
@@ -407,8 +406,8 @@ problem entities становятся `unavailable` до нового успеш
 
 ### Скриншоты
 
-Скриншоты сохраняются до полевой проверки нового регулятора интервала и
-подготовки обновлённых изображений.
+Ниже показаны текущие сущности устройства Home Assistant,
+пороги качества, диагностика и управление тестами.
 
 <p align="center">
   <a href="images/home-assistant-sensors.png">
