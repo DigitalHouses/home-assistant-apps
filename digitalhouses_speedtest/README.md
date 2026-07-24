@@ -252,6 +252,7 @@ A dashboard using only built-in Home Assistant cards is available at:
 examples/lovelace/internet_speedtest_dashboard.yaml
 ```
 
+
 ### Troubleshooting
 
 **Packet loss is `unknown`**
@@ -269,6 +270,7 @@ No successful test exists yet, or the last successful result is older than
 This is intentional. Current problem sensors are recalculated immediately;
 old Recent results retain the thresholds that were active at test time.
 
+
 ### Feedback
 
 - Questions and experience: [Discussions](https://github.com/DigitalHouses/home-assistant-apps/discussions)
@@ -276,6 +278,7 @@ old Recent results retain the thresholds that were active at test time.
 
 Do not publish passwords, MQTT credentials, access tokens, external IP
 addresses or unique Ookla result URLs.
+
 
 ## Support the project
 
@@ -286,6 +289,7 @@ If this project is useful to you, you can support its continued development, tes
 [![Support DigitalHouses on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/digitalhouses)
 
 Support is entirely optional. All public features remain available to everyone.
+
 
 ### License
 
