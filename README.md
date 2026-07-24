@@ -1,4 +1,3 @@
-[README.md](https://github.com/user-attachments/files/30324986/README.md)
 # DigitalHouses Home Assistant Apps
 
 A collection of Home Assistant Apps maintained by DigitalHouses.
@@ -16,12 +15,7 @@ https://github.com/DigitalHouses/home-assistant-apps
 1. Open **Settings → Apps → App store** in Home Assistant.
 2. Open the menu in the upper-right corner.
 3. Select **Repositories**.
-4. Add:
-
-   ```text
-   https://github.com/DigitalHouses/home-assistant-apps
-   ```
-
+4. Add the repository URL shown above.
 5. Close the repository dialog.
 6. Find the required DigitalHouses App and install it.
 
@@ -31,55 +25,38 @@ https://github.com/DigitalHouses/home-assistant-apps
 
 Internet availability monitoring and scheduled speed tests using the official Ookla Speedtest CLI.
 
-Features include:
+Key features:
 
-- download, upload, ping and jitter;
+- download, upload, ping, jitter and packet loss;
 - internet connectivity checks;
 - manual and periodic tests;
 - preferred Ookla server selection;
+- configurable performance thresholds;
+- problem binary sensors;
+- persistent recent successful results;
 - Home Assistant MQTT Discovery;
-- optional Recorder package for history and analysis.
+- optional Recorder and Lovelace examples.
 
 Documentation:
 
 - [DigitalHouses Speedtest README](digitalhouses_speedtest/README.md)
 - [DigitalHouses Speedtest documentation](digitalhouses_speedtest/DOCS.md)
-- [Recorder package example](examples/packages/internet_speedtest_package.yaml)
+- [Recorder package](examples/packages/internet_speedtest_package.yaml)
+- [Lovelace dashboard](examples/lovelace/internet_speedtest_dashboard.yaml)
 
-### Repository structure
-
-This repository can contain multiple Home Assistant Apps. Each App is stored in its own folder.
-
-```text
-home-assistant-apps/
-├── repository.yaml
-├── README.md
-├── digitalhouses_speedtest/
-├── examples/
-└── ...
-```
-
-### License
-
-DigitalHouses source code is licensed under the MIT License.
-
-Third-party software used by individual Apps retains its own license terms.
-
----
+Questions and user experience belong in
+[GitHub Discussions](https://github.com/DigitalHouses/home-assistant-apps/discussions).
+Confirmed bugs and feature requests belong in
+[GitHub Issues](https://github.com/DigitalHouses/home-assistant-apps/issues).
 
 ## Русский
 
 ### Установка
 
-1. Откройте в Home Assistant **Настройки → Дополнения → Магазин дополнений**.
+1. Откройте **Настройки → Дополнения → Магазин дополнений**.
 2. Откройте меню в правом верхнем углу.
 3. Выберите **Репозитории**.
-4. Добавьте:
-
-   ```text
-   https://github.com/DigitalHouses/home-assistant-apps
-   ```
-
+4. Добавьте URL репозитория, указанный выше.
 5. Закройте окно репозиториев.
 6. Найдите нужное приложение DigitalHouses и установите его.
 
@@ -87,26 +64,33 @@ Third-party software used by individual Apps retains its own license terms.
 
 #### DigitalHouses Speedtest
 
-Контроль доступности интернета и периодические замеры скорости с использованием официального Ookla Speedtest CLI.
+Контроль доступности интернета и периодические измерения с официальным Ookla Speedtest CLI.
 
 Основные возможности:
 
-- download, upload, ping и jitter;
-- проверки доступности интернета;
+- download, upload, ping, jitter и packet loss;
+- независимые проверки доступности интернета;
 - ручные и периодические тесты;
-- выбор предпочтительных серверов Ookla;
+- приоритетные серверы Ookla;
+- регулируемые пороги качества;
+- problem binary sensors;
+- постоянная история последних успешных тестов;
 - Home Assistant MQTT Discovery;
-- дополнительный пакет Recorder для истории и анализа.
+- примеры Recorder и Lovelace.
 
 Документация:
 
 - [README DigitalHouses Speedtest](digitalhouses_speedtest/README.md)
-- [Документация DigitalHouses Speedtest](digitalhouses_speedtest/DOCS.md)
-- [Пример пакета Recorder](examples/packages/internet_speedtest_package.yaml)
+- [Подробная документация](digitalhouses_speedtest/DOCS.md)
+- [Пакет Recorder](examples/packages/internet_speedtest_package.yaml)
+- [Панель Lovelace](examples/lovelace/internet_speedtest_dashboard.yaml)
 
-### Структура репозитория
+Вопросы и пользовательский опыт публикуйте в
+[GitHub Discussions](https://github.com/DigitalHouses/home-assistant-apps/discussions).
+Подтверждённые ошибки и запросы функций — в
+[GitHub Issues](https://github.com/DigitalHouses/home-assistant-apps/issues).
 
-В одном репозитории можно размещать несколько приложений Home Assistant. Каждое приложение находится в своей папке.
+## Repository structure
 
 ```text
 home-assistant-apps/
@@ -114,11 +98,10 @@ home-assistant-apps/
 ├── README.md
 ├── digitalhouses_speedtest/
 ├── examples/
-└── ...
+└── scripts/
 ```
 
-### Лицензия
+## License
 
-Исходный код DigitalHouses распространяется по лицензии MIT.
-
-Стороннее программное обеспечение, используемое отдельными приложениями, сохраняет собственные лицензионные условия.
+DigitalHouses source code is licensed under the MIT License.
+Third-party software retains its own license terms.

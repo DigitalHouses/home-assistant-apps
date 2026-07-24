@@ -3,66 +3,54 @@
 # ==============================================================================
 #
 # Recommended path:
-#   /config/packages/internet_speedtest_package.yaml
+# /config/packages/internet_speedtest_package.yaml
 #
-# Expected configuration.yaml entry:
+# Required configuration.yaml entry:
 #
 # homeassistant:
 #   packages: !include_dir_named packages
 #
-# Purpose:
-#   Explicitly include all DigitalHouses Speedtest entities in Recorder so their
-#   history is available for diagnostics, comparisons, charts, and later analysis.
-#
-# Notes:
-#   - Numeric Speedtest sensors provide long-term statistics through state_class.
-#   - Connectivity binary sensors preserve internet availability history.
-#   - Button entities are recorded to identify manual test/server-refresh actions.
-#   - The available-server sensor stores the latest server list in its attributes.
-#
+# Recent results is intentionally NOT recorded because the large results
+# attribute would unnecessarily increase Recorder storage.
 # ==============================================================================
 
 recorder:
   include:
     entities:
-      # ------------------------------------------------------------------------
-      # Speed measurements
-      # ------------------------------------------------------------------------
+      # Measurements
       - sensor.internet_speed_download
       - sensor.internet_speed_upload
       - sensor.internet_speed_ping
       - sensor.internet_speed_jitter
       - sensor.internet_speed_packet_loss
 
-      # ------------------------------------------------------------------------
-      # Test state and timestamps
-      # ------------------------------------------------------------------------
+      # Current status and test context
       - sensor.internet_speed_status
       - sensor.internet_speed_last_test
-
-      # ------------------------------------------------------------------------
-      # Test context
-      # ------------------------------------------------------------------------
       - sensor.internet_speed_provider
       - sensor.internet_speed_external_ip
       - sensor.internet_speed_server
       - sensor.internet_speed_server_id
       - sensor.internet_speed_result_url
 
-      # ------------------------------------------------------------------------
-      # Connectivity monitoring
-      # ------------------------------------------------------------------------
+      # Connectivity
       - binary_sensor.internet_google_dns_connectivity
       - binary_sensor.internet_cloudflare_dns_connectivity
 
-      # ------------------------------------------------------------------------
-      # Available Ookla servers
-      # ------------------------------------------------------------------------
+      # Server diagnostics
       - sensor.internet_speed_available_servers
       - sensor.internet_speed_server_list_updated
 
-      # ------------------------------------------------------------------------
-      # Manual actions
-      # ------------------------------------------------------------------------
-      - button.internet_speed_run
-      - button.internet_speed_refresh_servers
+      # Threshold controls
+      - number.internet_speed_minimum_download
+      - number.internet_speed_minimum_upload
+      - number.internet_speed_maximum_ping
+
+      # Performance interpretation
+      - binary_sensor.internet_speed_low_download
+      - binary_sensor.internet_speed_low_upload
+      - binary_sensor.internet_speed_high_ping
+      - binary_sensor.internet_speed_performance_problem
+
+      # Deliberately excluded:
+      # - sensor.internet_speed_recent_results
