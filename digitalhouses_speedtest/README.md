@@ -277,6 +277,16 @@ old Recent results retain the thresholds that were active at test time.
 Do not publish passwords, MQTT credentials, access tokens, external IP
 addresses or unique Ookla result URLs.
 
+## Support the project
+
+DigitalHouses projects are developed independently and provided free of charge.
+
+If this project is useful to you, you can support its continued development, testing, maintenance, and documentation:
+
+[![Support DigitalHouses on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/digitalhouses)
+
+Support is entirely optional. All public features remain available to everyone.
+
 ### License
 
 DigitalHouses source code is licensed under the MIT License. This App downloads
