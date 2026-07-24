@@ -381,7 +381,7 @@ problem entities становятся `unavailable` до нового успеш
     <img
       src="images/home-assistant-sensors.png"
       alt="Internet Speedtest sensors and controls"
-      width="600"
+      width="400"
     >
   </a>
 </p>
@@ -391,7 +391,7 @@ problem entities становятся `unavailable` до нового успеш
     <img
       src="images/home-assistant-thresholds.png"
       alt="Internet Speedtest thresholds"
-      width="600"
+      width="400"
     >
   </a>
 </p>
@@ -401,7 +401,7 @@ problem entities становятся `unavailable` до нового успеш
     <img
       src="images/home-assistant-diag.png"
       alt="Internet Speedtest diagnostics"
-      width="600"
+      width="400"
     >
   </a>
 </p>
@@ -411,7 +411,7 @@ problem entities становятся `unavailable` до нового успеш
     <img
       src="images/home-assistant-ui-tests.png"
       alt="Internet Speedtest UI tests"
-      width="600"
+      width="400"
     >
   </a>
 </p>
