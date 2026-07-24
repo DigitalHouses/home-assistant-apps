@@ -178,6 +178,8 @@ field-tested in Home Assistant and replacement screenshots are prepared.
 
 ![Internet Speedtest diagnostics](images/home-assistant-device-diagnostics.png)
 
+![Internet Speedtest UI tests](images/home-assistant-ui-tests.png)
+
 ### Recorder package
 
 Copy:
