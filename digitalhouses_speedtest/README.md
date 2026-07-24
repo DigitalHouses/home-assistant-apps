@@ -376,13 +376,46 @@ problem entities становятся `unavailable` до нового успеш
 Скриншоты сохраняются до полевой проверки нового регулятора интервала и
 подготовки обновлённых изображений.
 
-![Internet Speedtest sensors and controls](images/home-assistant-sensors.png)
+<p align="center">
+  <a href="images/home-assistant-sensors.png">
+    <img
+      src="images/home-assistant-sensors.png"
+      alt="Internet Speedtest sensors and controls"
+      width="600"
+    >
+  </a>
+</p>
 
-![Internet Speedtest diagnostics](images/home-assistant-thresholds.png)
+<p align="center">
+  <a href="images/home-assistant-thresholds.png">
+    <img
+      src="images/home-assistant-thresholds.png"
+      alt="Internet Speedtest thresholds"
+      width="600"
+    >
+  </a>
+</p>
 
-![Internet Speedtest diagnostics](images/home-assistant-diag.png)
+<p align="center">
+  <a href="images/home-assistant-diag.png">
+    <img
+      src="images/home-assistant-diag.png"
+      alt="Internet Speedtest diagnostics"
+      width="600"
+    >
+  </a>
+</p>
 
-![Internet Speedtest UI tests](images/home-assistant-ui-tests.png)
+<p align="center">
+  <a href="images/home-assistant-ui-tests.png">
+    <img
+      src="images/home-assistant-ui-tests.png"
+      alt="Internet Speedtest UI tests"
+      width="600"
+    >
+  </a>
+</p>
+
 
 ### Recorder
 
