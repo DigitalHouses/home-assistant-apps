@@ -205,9 +205,9 @@ performance thresholds, diagnostics and test controls.
 </p>
 
 <p align="center">
-  <a href="images/home-assistant-ui-tests.png">
+  <a href="images/Internet-page.png">
     <img
-      src="images/home-assistant-ui-tests.png"
+      src="images/Internet-page.png"
       alt="Internet Speedtest UI tests"
       width="400"
     >
