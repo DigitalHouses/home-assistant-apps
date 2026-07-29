@@ -204,25 +204,8 @@ performance thresholds, diagnostics and test controls.
   </a>
 </p>
 
-<p align="center">
-  <a href="images/Internet-page.png">
-    <img
-      src="images/Internet-page.png"
-      alt="Internet Speedtest UI tests"
-      width="800"
-    >
-  </a>
-</p>
 
-<p align="center">
-  <a href="images/home-assistant-servers-history.png">
-    <img
-      src="images/home-assistant-servers-history.png"
-      alt="Internet Speedtest UI tests"
-      width="400"
-    >
-  </a>
-</p>
+![Internet Page](images/Internet-page.png)
 
 
 ### Recorder package
