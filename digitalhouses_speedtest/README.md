@@ -209,7 +209,7 @@ performance thresholds, diagnostics and test controls.
     <img
       src="images/Internet-page.png"
       alt="Internet Speedtest UI tests"
-      width="400"
+      width="800"
     >
   </a>
 </p>
