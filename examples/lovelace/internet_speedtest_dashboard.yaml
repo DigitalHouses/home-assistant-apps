@@ -171,7 +171,7 @@ views:
           - type: markdown
             title: Recent Speedtests
             content: >
-              | Date | ⬇️ Mbps | ⬆️ Mbps | 📶 ms | Сервер | Статус |
+              | Date | ⬇️ Mbps | ⬆️ Mbps | 📶 ms | Server | Status |
 
               | :--- | :---: | :---: | :---: | :--- | :--- |
 
