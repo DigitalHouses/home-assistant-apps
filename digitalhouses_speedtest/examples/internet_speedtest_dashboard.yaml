@@ -1,0 +1,842 @@
+title: Internet
+path: internet
+icon: mdi:web
+type: sections
+max_columns: 4
+sections:
+  - type: grid
+    cards:
+      - type: heading
+        heading: Internet Status
+        heading_style: title
+        icon: mdi:web
+      - type: custom:mushroom-template-card
+        entity: binary_sensor.internet_status
+        primary: |-
+          {% if is_state('binary_sensor.internet_status','on') %}
+            Internet Connected
+          {% elif is_state('binary_sensor.internet_status','off') %}
+            Internet Unavailable
+          {% else %}
+            Internet Status Unknown
+          {% endif %}
+        secondary: >-
+          {{ states('sensor.internet_speed_provider') }} · {{
+          states('sensor.internet_speed_external_ip') }}
+        icon: |-
+          {% if is_state('binary_sensor.internet_status','on') %}
+            mdi:check-network
+          {% else %}
+            mdi:network-off
+          {% endif %}
+        icon_color: |-
+          {% if is_state('binary_sensor.internet_status','on') %}
+            green
+          {% elif is_state('binary_sensor.internet_status','off') %}
+            red
+          {% else %}
+            grey
+          {% endif %}
+        multiline_secondary: true
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: 12
+      - type: custom:mushroom-chips-card
+        alignment: justify
+        chips:
+          - type: template
+            entity: binary_sensor.internet_google_dns_connectivity
+            icon: mdi:google
+            content: Google DNS
+            icon_color: >-
+              {% if is_state('binary_sensor.internet_google_dns_connectivity','on') %}
+                green
+              {% elif is_state('binary_sensor.internet_google_dns_connectivity','off') %}
+                red
+              {% else %}
+                grey
+              {% endif %}
+            tap_action:
+              action: more-info
+          - type: template
+            entity: binary_sensor.internet_cloudflare_dns_connectivity
+            icon: mdi:cloud-check
+            content: Cloudflare DNS
+            icon_color: >-
+              {% if is_state('binary_sensor.internet_cloudflare_dns_connectivity','on') %}
+                green
+              {% elif is_state('binary_sensor.internet_cloudflare_dns_connectivity','off') %}
+                red
+              {% else %}
+                grey
+              {% endif %}
+            tap_action:
+              action: more-info
+          - type: template
+            entity: sensor.internet_speed_status
+            icon: mdi:speedometer
+            content: "{{ states('sensor.internet_speed_status') }}"
+            icon_color: >-
+              {% if states('sensor.internet_speed_status') | lower == 'success' %}
+                green
+              {% elif states('sensor.internet_speed_status') in ['unknown','unavailable'] %}
+                grey
+              {% else %}
+                orange
+              {% endif %}
+            tap_action:
+              action: more-info
+      - type: heading
+        heading: Current Performance
+        heading_style: subtitle
+        icon: mdi:speedometer
+      - type: custom:mushroom-template-card
+        entity: sensor.internet_speed_download
+        primary: Download
+        secondary: >-
+          {{ states('sensor.internet_speed_download') }} {{
+          state_attr('sensor.internet_speed_download','unit_of_measurement') or
+          'Mbit/s' }}
+        icon: mdi:download-network
+        icon_color: |-
+          {% if is_state('binary_sensor.internet_speed_low_download','on') %}
+            red
+          {% else %}
+            blue
+          {% endif %}
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: 6
+      - type: custom:mushroom-template-card
+        entity: sensor.internet_speed_upload
+        primary: Upload
+        secondary: >-
+          {{ states('sensor.internet_speed_upload') }} {{
+          state_attr('sensor.internet_speed_upload','unit_of_measurement') or
+          'Mbit/s' }}
+        icon: mdi:upload-network
+        icon_color: |-
+          {% if is_state('binary_sensor.internet_speed_low_upload','on') %}
+            red
+          {% else %}
+            blue
+          {% endif %}
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: 6
+      - type: custom:mushroom-template-card
+        entity: sensor.internet_speed_ping
+        primary: Ping
+        secondary: >-
+          {{ states('sensor.internet_speed_ping') }} {{
+          state_attr('sensor.internet_speed_ping','unit_of_measurement') or 'ms' }}
+        icon: mdi:timer-outline
+        icon_color: |-
+          {% if is_state('binary_sensor.internet_speed_high_ping','on') %}
+            red
+          {% else %}
+            green
+          {% endif %}
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: 6
+      - type: custom:mushroom-template-card
+        entity: sensor.internet_speed_jitter
+        primary: Jitter
+        secondary: >-
+          {{ states('sensor.internet_speed_jitter') }} {{
+          state_attr('sensor.internet_speed_jitter','unit_of_measurement') or 'ms' }}
+        icon: mdi:pulse
+        icon_color: blue
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: 6
+      - type: custom:mushroom-template-card
+        entity: sensor.internet_speed_packet_loss
+        primary: Packet Loss
+        secondary: >-
+          {{ states('sensor.internet_speed_packet_loss') }} {{
+          state_attr('sensor.internet_speed_packet_loss','unit_of_measurement') or '%' }}
+        icon: mdi:package-variant-closed-remove
+        icon_color: |-
+          {% if states('sensor.internet_speed_packet_loss') | float(0) > 0 %}
+            orange
+          {% else %}
+            green
+          {% endif %}
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: 6
+      - type: custom:mushroom-template-card
+        entity: sensor.internet_speed_last_test
+        primary: Last Speedtest
+        secondary: >-
+          {% set v = states('sensor.internet_speed_last_test') %} {% set dt =
+          as_datetime(v) %} {{ as_local(dt).strftime('%d.%m.%Y %H:%M:%S') if dt
+          else v }}
+        icon: mdi:clock-check-outline
+        icon_color: green
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: 6
+      - type: custom:mushroom-template-card
+        entity: sensor.internet_speed_server
+        primary: Speedtest Server
+        secondary: "{{ states('sensor.internet_speed_server') }}"
+        icon: mdi:server-network
+        icon_color: blue
+        multiline_secondary: true
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: 12
+      - type: heading
+        heading: Speedtest Control
+        heading_style: subtitle
+        icon: mdi:cog-play-outline
+      - type: custom:mushroom-template-card
+        entity: button.internet_speed_run
+        primary: Run Speedtest
+        secondary: Run test now
+        icon: mdi:speedometer
+        icon_color: blue
+        tap_action:
+          action: perform-action
+          perform_action: button.press
+          target:
+            entity_id: button.internet_speed_run
+        grid_options:
+          columns: 6
+      - type: custom:mushroom-template-card
+        entity: button.internet_speed_refresh_servers
+        primary: Refresh Servers
+        secondary: Update server list
+        icon: mdi:server-refresh
+        icon_color: blue
+        tap_action:
+          action: perform-action
+          perform_action: button.press
+          target:
+            entity_id: button.internet_speed_refresh_servers
+        grid_options:
+          columns: 6
+      - type: custom:mushroom-number-card
+        entity: number.internet_speed_periodic_interval
+        name: Automatic Test Interval
+        icon: mdi:timer-sync-outline
+        display_mode: buttons
+        fill_container: true
+        grid_options:
+          columns: 12
+
+  - type: grid
+    cards:
+      - type: heading
+        heading: Quality
+        heading_style: title
+        icon: mdi:tune-variant
+      - type: custom:mushroom-template-card
+        entity: binary_sensor.internet_speed_performance_problem
+        primary: >-
+          {% if is_state('binary_sensor.internet_speed_performance_problem','on') %}
+            Performance Problem
+          {% elif is_state('binary_sensor.internet_speed_performance_problem','off') %}
+            Connection Quality OK
+          {% else %}
+            Quality Status Unknown
+          {% endif %}
+        secondary: >-
+          ↓ {{ states('number.internet_speed_minimum_download') }} Mbit/s · ↑ {{
+          states('number.internet_speed_minimum_upload') }} Mbit/s · Ping ≤ {{
+          states('number.internet_speed_maximum_ping') }} ms
+        icon: >-
+          {% if is_state('binary_sensor.internet_speed_performance_problem','on') %}
+            mdi:alert-circle
+          {% elif is_state('binary_sensor.internet_speed_performance_problem','off') %}
+            mdi:check-circle
+          {% else %}
+            mdi:help-circle
+          {% endif %}
+        icon_color: >-
+          {% if is_state('binary_sensor.internet_speed_performance_problem','on') %}
+            red
+          {% elif is_state('binary_sensor.internet_speed_performance_problem','off') %}
+            green
+          {% else %}
+            grey
+          {% endif %}
+        multiline_secondary: true
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: 12
+      - type: custom:mushroom-chips-card
+        alignment: justify
+        chips:
+          - type: template
+            entity: number.internet_speed_minimum_download
+            icon: mdi:download-network
+            content: ↓ {{ states('number.internet_speed_minimum_download') }} Mbit/s
+            icon_color: blue
+            tap_action:
+              action: more-info
+          - type: template
+            entity: number.internet_speed_minimum_upload
+            icon: mdi:upload-network
+            content: ↑ {{ states('number.internet_speed_minimum_upload') }} Mbit/s
+            icon_color: blue
+            tap_action:
+              action: more-info
+          - type: template
+            entity: number.internet_speed_maximum_ping
+            icon: mdi:timer-outline
+            content: ≤ {{ states('number.internet_speed_maximum_ping') }} ms
+            icon_color: blue
+            tap_action:
+              action: more-info
+      - type: heading
+        heading: Performance Issues
+        heading_style: subtitle
+        icon: mdi:alert-circle-outline
+      - type: custom:mushroom-template-card
+        entity: binary_sensor.internet_speed_low_download
+        primary: Download
+        secondary: >-
+          {{ states('sensor.internet_speed_download') }} Mbit/s · limit {{
+          states('number.internet_speed_minimum_download') }}
+        icon: mdi:download-network
+        icon_color: |-
+          {% if is_state('binary_sensor.internet_speed_low_download','on') %}
+            red
+          {% else %}
+            green
+          {% endif %}
+        badge_icon: |-
+          {% if is_state('binary_sensor.internet_speed_low_download','on') %}
+            mdi:alert
+          {% else %}
+            mdi:check
+          {% endif %}
+        badge_color: |-
+          {% if is_state('binary_sensor.internet_speed_low_download','on') %}
+            red
+          {% else %}
+            green
+          {% endif %}
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: 6
+      - type: custom:mushroom-template-card
+        entity: binary_sensor.internet_speed_low_upload
+        primary: Upload
+        secondary: >-
+          {{ states('sensor.internet_speed_upload') }} Mbit/s · limit {{
+          states('number.internet_speed_minimum_upload') }}
+        icon: mdi:upload-network
+        icon_color: |-
+          {% if is_state('binary_sensor.internet_speed_low_upload','on') %}
+            red
+          {% else %}
+            green
+          {% endif %}
+        badge_icon: |-
+          {% if is_state('binary_sensor.internet_speed_low_upload','on') %}
+            mdi:alert
+          {% else %}
+            mdi:check
+          {% endif %}
+        badge_color: |-
+          {% if is_state('binary_sensor.internet_speed_low_upload','on') %}
+            red
+          {% else %}
+            green
+          {% endif %}
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: 6
+      - type: custom:mushroom-template-card
+        entity: binary_sensor.internet_speed_high_ping
+        primary: Ping
+        secondary: >-
+          {{ states('sensor.internet_speed_ping') }} ms · limit {{
+          states('number.internet_speed_maximum_ping') }}
+        icon: mdi:timer-outline
+        icon_color: |-
+          {% if is_state('binary_sensor.internet_speed_high_ping','on') %}
+            red
+          {% else %}
+            green
+          {% endif %}
+        badge_icon: |-
+          {% if is_state('binary_sensor.internet_speed_high_ping','on') %}
+            mdi:alert
+          {% else %}
+            mdi:check
+          {% endif %}
+        badge_color: |-
+          {% if is_state('binary_sensor.internet_speed_high_ping','on') %}
+            red
+          {% else %}
+            green
+          {% endif %}
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: 12
+      - type: heading
+        heading: Speed History
+        heading_style: subtitle
+        icon: mdi:chart-line
+      - type: custom:mini-graph-card
+        name: Download
+        icon: mdi:download-network
+        entities:
+          - entity: sensor.internet_speed_download
+        hours_to_show: 24
+        points_per_hour: 2
+        line_width: 2
+        height: 100
+        decimals: 0
+        show:
+          name: true
+          icon: true
+          state: true
+          graph: line
+          fill: true
+          points: false
+          labels: false
+          extrema: true
+        grid_options:
+          columns: 6
+      - type: custom:mini-graph-card
+        name: Upload
+        icon: mdi:upload-network
+        entities:
+          - entity: sensor.internet_speed_upload
+        hours_to_show: 24
+        points_per_hour: 2
+        line_width: 2
+        height: 100
+        decimals: 0
+        show:
+          name: true
+          icon: true
+          state: true
+          graph: line
+          fill: true
+          points: false
+          labels: false
+          extrema: true
+        grid_options:
+          columns: 6
+      - type: heading
+        heading: Monthly Statistics
+        heading_style: subtitle
+        icon: mdi:chart-donut
+      - type: custom:mushroom-template-card
+        entity: sensor.internet_online_month
+        primary: Internet ONLINE
+        secondary: "{{ states('sensor.internet_online_month') }}"
+        icon: mdi:check-network-outline
+        icon_color: green
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: 6
+      - type: custom:mushroom-template-card
+        entity: sensor.internet_offline_month
+        primary: Internet OFFLINE
+        secondary: "{{ states('sensor.internet_offline_month') }}"
+        icon: mdi:network-off-outline
+        icon_color: >-
+          {% if state_attr('sensor.internet_offline_month','seconds') | float(0) > 0 %}
+            red
+          {% else %}
+            green
+          {% endif %}
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: 6
+      - type: custom:mushroom-template-card
+        entity: sensor.internet_availability_month
+        primary: Availability
+        secondary: "{{ states('sensor.internet_availability_month') }} %"
+        icon: mdi:percent-circle-outline
+        icon_color: >-
+          {% set v = states('sensor.internet_availability_month') | float(0) %}
+          {% if v >= 99.9 %}
+            green
+          {% elif v >= 99 %}
+            amber
+          {% else %}
+            red
+          {% endif %}
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: 6
+      - type: custom:mushroom-template-card
+        entity: sensor.internet_statistics_period_start
+        primary: Period
+        secondary: >-
+          {% set v = states('sensor.internet_statistics_period_start') %} {% set
+          dt = as_datetime(v) %} {{ as_local(dt).strftime('%B %Y') if dt else v }}
+        icon: mdi:calendar-month
+        icon_color: blue
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: 6
+      - type: heading
+        heading: Last Outage
+        heading_style: subtitle
+        icon: mdi:history
+      - type: custom:mushroom-template-card
+        entity: sensor.internet_last_outage_duration
+        primary: >-
+          {% set s = states('sensor.internet_last_outage_duration') %} {% if s
+          not in ['unknown','unavailable','none',''] %}
+            Outage · {{ s }}
+          {% else %}
+            No Recorded Outage
+          {% endif %}
+        secondary: >-
+          {% set f = states('sensor.internet_last_failure') %} {% set r =
+          states('sensor.internet_last_restore') %} {% set fd = as_datetime(f)
+          %} {% set rd = as_datetime(r) %} {% if fd and rd %}
+            {{ as_local(fd).strftime('%d.%m %H:%M:%S') }}
+            → {{ as_local(rd).strftime('%H:%M:%S') }}
+          {% else %}
+            No completed outage recorded
+          {% endif %}
+        icon: |-
+          {% if states('sensor.internet_last_outage_duration') not in ['unknown','unavailable','none',''] %}
+            mdi:timer-alert-outline
+          {% else %}
+            mdi:check-circle-outline
+          {% endif %}
+        icon_color: |-
+          {% if states('sensor.internet_last_outage_duration') not in ['unknown','unavailable','none',''] %}
+            orange
+          {% else %}
+            green
+          {% endif %}
+        multiline_secondary: true
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: 12
+
+  - type: grid
+    cards:
+      - type: heading
+        heading: Recent Speedtests
+        heading_style: title
+        icon: mdi:history
+      - type: custom:mushroom-template-card
+        entity: sensor.internet_speed_recent_results
+        primary: Recent Results
+        secondary: >-
+          {% set results = state_attr('sensor.internet_speed_recent_results','results') or [] %}
+          {{ results | count }} tests stored
+        icon: mdi:speedometer-medium
+        icon_color: blue
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: 12
+      - type: markdown
+        title: Recent Speedtests
+        content: >
+          {% set results = state_attr('sensor.internet_speed_recent_results', 'results')
+          or [] %}
+
+
+          | Date | ⬇️ Mbps | ⬆️ Mbps | 📶 ms | Server | Status |
+
+          | :--- | :---: | :---: | :---: | :--- | :--- |
+
+          {%- for r in results[:10] %}
+
+          | {{ as_datetime(r.timestamp).strftime('%d.%m %H:%M') }} | {{ r.download_mbps
+          | round(0) }} | {{ r.upload_mbps | round(0) }} | {{ r.ping_ms | round(1) }} |
+          {{ r.server | replace('|', '&#124;') }} | {% if r.performance_problem %}❌ {{
+          r.problem_reasons | join(', ') | replace('|', '&#124;') }}{% else %}✅ OK{%
+          endif %} |
+
+          {%- endfor %}
+      - type: markdown
+        title: Available Speedtest Servers
+        content: >
+          {% set servers = state_attr('sensor.internet_speed_available_servers',
+          'servers') %}
+
+
+          {% if servers %}
+
+          **Updated:** {{
+          as_datetime(state_attr('sensor.internet_speed_available_servers',
+          'updated_at')).strftime('%d.%m.%Y %H:%M') }}
+
+
+          | № | Provider | ID | Location |
+
+          | :---: | :--- | :---: | :--- |
+
+          {%- for s in servers %}
+
+          | {{ loop.index }} | **{{ s.provider | replace('|', '&#124;') }}** | {{ s.id
+          }} | {{ s.location | replace('|', '&#124;') }}, {{ s.country | replace('|',
+          '&#124;') }} |
+
+          {%- endfor %}
+
+
+          ---
+
+          **Total:** {{ servers | count }} servers
+
+
+          {% else %}
+
+          No servers available.
+
+          {% endif %}
+
+  - type: grid
+    cards:
+      - type: heading
+        heading: Recovery Control
+        heading_style: title
+        icon: mdi:auto-fix
+      - type: custom:mushroom-template-card
+        primary: >-
+          {% set ont = is_state('input_boolean.ib_internet_auto_reboot_ont_enabled','on') %}
+          {% set router = is_state('input_boolean.ib_internet_auto_reboot_router_enabled','on') %}
+          {% set together = is_state('input_boolean.ib_internet_reboot_mode_simultaneous','on') %}
+          {% if not ont and not router %}
+            Automatic Recovery Disabled
+          {% elif ont and router and together %}
+            Simultaneous Recovery
+          {% elif ont and router %}
+            Sequential Recovery
+          {% elif ont %}
+            ONT Recovery Only
+          {% else %}
+            Router Recovery Only
+          {% endif %}
+        secondary: >-
+          {% set ont = is_state('input_boolean.ib_internet_auto_reboot_ont_enabled','on') %}
+          {% set router = is_state('input_boolean.ib_internet_auto_reboot_router_enabled','on') %}
+          {% set together = is_state('input_boolean.ib_internet_reboot_mode_simultaneous','on') %}
+          {% set n = states('input_number.internet_ont_reboot_every_n_attempts') | int(0) %}
+          {% set interval = states('input_number.internet_reboot_interval_min') | int(0) %}
+          {% if not ont and not router %}
+            No devices will be rebooted automatically
+          {% elif ont and router and together %}
+            After {{ interval }} min offline → reboot ONT + Router
+          {% elif ont and router %}
+            After {{ interval }} min offline → reboot ONT · Router every {{ n }} ONT cycles
+          {% elif ont %}
+            After {{ interval }} min offline → reboot ONT
+          {% else %}
+            After {{ interval }} min offline → reboot Router
+          {% endif %}
+        icon: >-
+          {% if not is_state('input_boolean.ib_internet_auto_reboot_ont_enabled','on')
+                and not is_state('input_boolean.ib_internet_auto_reboot_router_enabled','on') %}
+            mdi:autorenew-off
+          {% elif is_state('input_boolean.ib_internet_reboot_mode_simultaneous','on') %}
+            mdi:sync
+          {% else %}
+            mdi:debug-step-over
+          {% endif %}
+        icon_color: >-
+          {% if not is_state('input_boolean.ib_internet_auto_reboot_ont_enabled','on')
+                and not is_state('input_boolean.ib_internet_auto_reboot_router_enabled','on') %}
+            grey
+          {% else %}
+            blue
+          {% endif %}
+        multiline_secondary: true
+        grid_options:
+          columns: 12
+      - type: heading
+        heading: Recovery Devices
+        heading_style: subtitle
+        icon: mdi:power-cycle
+      - type: custom:mushroom-template-card
+        entity: input_boolean.ib_internet_auto_reboot_ont_enabled
+        primary: ONT / Modem
+        secondary: >-
+          {% if is_state('input_boolean.ib_internet_auto_reboot_ont_enabled','on') %}
+            Automatic reboot enabled
+          {% else %}
+            Automatic reboot disabled
+          {% endif %}
+        icon: mdi:access-point-network
+        icon_color: >-
+          {% if is_state('input_boolean.ib_internet_auto_reboot_ont_enabled','on') %}
+            blue
+          {% else %}
+            grey
+          {% endif %}
+        tap_action:
+          action: toggle
+        grid_options:
+          columns: 6
+      - type: custom:mushroom-template-card
+        entity: input_boolean.ib_internet_auto_reboot_router_enabled
+        primary: Router
+        secondary: >-
+          {% if is_state('input_boolean.ib_internet_auto_reboot_router_enabled','on') %}
+            Automatic reboot enabled
+          {% else %}
+            Automatic reboot disabled
+          {% endif %}
+        icon: mdi:router-wireless
+        icon_color: >-
+          {% if is_state('input_boolean.ib_internet_auto_reboot_router_enabled','on') %}
+            blue
+          {% else %}
+            grey
+          {% endif %}
+        tap_action:
+          action: toggle
+        grid_options:
+          columns: 6
+      - type: heading
+        heading: Recovery Strategy
+        heading_style: subtitle
+        icon: mdi:source-branch
+      - type: custom:mushroom-template-card
+        entity: input_boolean.ib_internet_reboot_mode_simultaneous
+        primary: >-
+          {% if is_state('input_boolean.ib_internet_reboot_mode_simultaneous','on') %}
+            Simultaneous
+          {% else %}
+            Sequential
+          {% endif %}
+        secondary: >-
+          {% if is_state('input_boolean.ib_internet_reboot_mode_simultaneous','on') %}
+            Reboot ONT and Router together
+          {% else %}
+            ONT first · Router after N ONT cycles
+          {% endif %}
+        icon: >-
+          {% if is_state('input_boolean.ib_internet_reboot_mode_simultaneous','on') %}
+            mdi:sync
+          {% else %}
+            mdi:debug-step-over
+          {% endif %}
+        icon_color: blue
+        tap_action:
+          action: toggle
+        grid_options:
+          columns: 12
+      - type: custom:mushroom-number-card
+        entity: input_number.internet_reboot_interval_min
+        name: Offline Before Recovery
+        icon: mdi:timer-outline
+        display_mode: buttons
+        fill_container: true
+        grid_options:
+          columns: 6
+      - type: custom:mushroom-number-card
+        entity: input_number.internet_ont_reboot_every_n_attempts
+        name: ONT Cycles Before Router
+        icon: mdi:counter
+        display_mode: buttons
+        fill_container: true
+        grid_options:
+          columns: 6
+      - type: heading
+        heading: Last Outage Recovery
+        heading_style: subtitle
+        icon: mdi:counter
+      - type: custom:mushroom-chips-card
+        alignment: justify
+        chips:
+          - type: template
+            entity: counter.internet_reboot_attempt_count
+            icon: mdi:restart-alert
+            content: Attempts {{ states('counter.internet_reboot_attempt_count') }}
+            icon_color: >-
+              {% if states('counter.internet_reboot_attempt_count') | int(0) > 0 %}
+                orange
+              {% else %}
+                green
+              {% endif %}
+            tap_action:
+              action: more-info
+          - type: template
+            entity: counter.internet_modem_restart_count
+            icon: mdi:access-point-network
+            content: ONT {{ states('counter.internet_modem_restart_count') }}
+            icon_color: >-
+              {% if states('counter.internet_modem_restart_count') | int(0) > 0 %}
+                orange
+              {% else %}
+                green
+              {% endif %}
+            tap_action:
+              action: more-info
+          - type: template
+            entity: counter.internet_router_restart_count
+            icon: mdi:router-wireless
+            content: Router {{ states('counter.internet_router_restart_count') }}
+            icon_color: >-
+              {% if states('counter.internet_router_restart_count') | int(0) > 0 %}
+                orange
+              {% else %}
+                green
+              {% endif %}
+            tap_action:
+              action: more-info
+      - type: heading
+        heading: Manual Recovery
+        heading_style: subtitle
+        icon: mdi:restart
+      - type: custom:mushroom-template-card
+        primary: Reboot ONT
+        secondary: Manual power cycle
+        icon: mdi:access-point-network
+        icon_color: red
+        tap_action:
+          action: perform-action
+          perform_action: script.internet_reboot_ont
+        hold_action:
+          action: none
+        grid_options:
+          columns: 6
+      - type: custom:mushroom-template-card
+        primary: Reboot Router
+        secondary: Manual power cycle
+        icon: mdi:router-wireless
+        icon_color: red
+        tap_action:
+          action: perform-action
+          perform_action: script.internet_reboot_router
+        hold_action:
+          action: none
+        grid_options:
+          columns: 6
+      - type: heading
+        heading: Internet Availability History
+        heading_style: subtitle
+        icon: mdi:timeline-clock-outline
+      - type: logbook
+        entities:
+          - binary_sensor.internet_status
+        hours_to_show: 24
+cards: []
