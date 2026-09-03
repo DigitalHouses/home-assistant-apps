@@ -1,0 +1,38 @@
+# ==============================================================================
+# DIGITAL HOUSES — INTERNET SETTINGS PASSPORT
+# Version: 1.0.0
+# Updated: 2026-09-03
+#
+# USER ACTION:
+# Edit ONLY the four values under USER SETTINGS.
+# Leave switch entity IDs empty if hardware recovery is not used.
+# ==============================================================================
+
+internet_settings_passport_package:
+  template:
+    - binary_sensor:
+        - name: "bs_internet_passport"
+          default_entity_id: binary_sensor.bs_internet_passport
+          unique_id: bs_internet_passport_id
+          icon: mdi:shield-check
+          state: "{{ true }}"
+          attributes:
+            passport_kind: "internet_settings_passport"
+            passport_version: "1.0"
+
+            # ==================================================================
+            # USER SETTINGS — EDIT THESE FOUR VALUES ONLY
+            # ==================================================================
+            power_ont_modem_switch_entity_id: ""
+            pause_ont_s: 10
+
+            power_router_switch_entity_id: ""
+            pause_router_s: 10
+            # ==================================================================
+
+            reasons: []
+
+  recorder:
+    include:
+      entities:
+        - binary_sensor.bs_internet_passport
