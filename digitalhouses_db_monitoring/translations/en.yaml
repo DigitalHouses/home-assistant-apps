@@ -1,0 +1,64 @@
+configuration:
+  database_type:
+    name: Database type
+    description: Recorder database engine used by Home Assistant.
+  postgresql:
+    name: PostgreSQL
+    description: Manual PostgreSQL Recorder database connection.
+  postgresql.host:
+    name: Host
+    description: PostgreSQL server hostname or IP address.
+  postgresql.port:
+    name: Port
+    description: PostgreSQL server port.
+  postgresql.database:
+    name: Database
+    description: Recorder database name.
+  postgresql.username:
+    name: Username
+    description: PostgreSQL username.
+  postgresql.password:
+    name: Password
+    description: PostgreSQL password.
+  mariadb:
+    name: MariaDB
+    description: MariaDB Recorder database connection.
+  mariadb.connection:
+    name: Connection mode
+    description: Use the Supervisor MySQL service or a manual MariaDB connection.
+  mariadb.host:
+    name: Host
+    description: MariaDB server hostname or IP address for manual mode.
+  mariadb.port:
+    name: Port
+    description: MariaDB server port for manual mode.
+  mariadb.database:
+    name: Database
+    description: Recorder database name.
+  mariadb.username:
+    name: Username
+    description: MariaDB username for manual mode.
+  mariadb.password:
+    name: Password
+    description: MariaDB password for manual mode.
+  poll:
+    name: Polling
+    description: Metric collection intervals.
+  poll.fast_seconds:
+    name: Fast interval
+    description: Seconds between Recorder health checks.
+  poll.medium_seconds:
+    name: Medium interval
+    description: Seconds between database size and hourly write-rate checks.
+  poll.slow_seconds:
+    name: Slow interval
+    description: Seconds between history depth and total row-count checks.
+  recorder_stale_seconds:
+    name: Recorder stale threshold
+    description: Maximum age in seconds of the newest state before Recorder writing is reported as off.
+  timezone:
+    name: Timezone
+    description: Optional IANA timezone for previous-day boundaries, for example Asia/Almaty. Leave empty to use the container timezone or UTC fallback.
+  log_level:
+    name: Log level
+    description: Application logging verbosity.

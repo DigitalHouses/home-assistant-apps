@@ -1,0 +1,64 @@
+configuration:
+  database_type:
+    name: Тип базы данных
+    description: Движок базы данных Recorder, используемый Home Assistant.
+  postgresql:
+    name: PostgreSQL
+    description: Ручные параметры подключения к PostgreSQL Recorder.
+  postgresql.host:
+    name: Хост
+    description: Имя хоста или IP-адрес PostgreSQL.
+  postgresql.port:
+    name: Порт
+    description: Порт PostgreSQL.
+  postgresql.database:
+    name: База данных
+    description: Имя базы данных Recorder.
+  postgresql.username:
+    name: Пользователь
+    description: Пользователь PostgreSQL.
+  postgresql.password:
+    name: Пароль
+    description: Пароль PostgreSQL.
+  mariadb:
+    name: MariaDB
+    description: Подключение к базе данных MariaDB Recorder.
+  mariadb.connection:
+    name: Режим подключения
+    description: Использовать сервис MySQL Supervisor или ручные параметры MariaDB.
+  mariadb.host:
+    name: Хост
+    description: Имя хоста или IP-адрес MariaDB для ручного режима.
+  mariadb.port:
+    name: Порт
+    description: Порт MariaDB для ручного режима.
+  mariadb.database:
+    name: База данных
+    description: Имя базы данных Recorder.
+  mariadb.username:
+    name: Пользователь
+    description: Пользователь MariaDB для ручного режима.
+  mariadb.password:
+    name: Пароль
+    description: Пароль MariaDB для ручного режима.
+  poll:
+    name: Опрос
+    description: Интервалы сбора метрик.
+  poll.fast_seconds:
+    name: Быстрый интервал
+    description: Интервал проверки состояния Recorder в секундах.
+  poll.medium_seconds:
+    name: Средний интервал
+    description: Интервал проверки размера БД и скорости записи в секундах.
+  poll.slow_seconds:
+    name: Медленный интервал
+    description: Интервал проверки глубины истории и общего количества записей в секундах.
+  recorder_stale_seconds:
+    name: Порог остановки Recorder
+    description: Максимальный возраст последней записи states, после которого Recorder writing выключается.
+  timezone:
+    name: Часовой пояс
+    description: Часовой пояс IANA для границ предыдущего дня, например Asia/Almaty. Пустое значение использует timezone контейнера или UTC.
+  log_level:
+    name: Уровень логов
+    description: Подробность логирования приложения.

@@ -1,0 +1,60 @@
+name: DigitalHouses DB Monitoring
+version: 0.1.0
+slug: digitalhouses_db_monitoring
+description: Monitor Home Assistant Recorder database health and key metrics through MQTT Discovery.
+url: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_db_monitoring
+arch:
+  - amd64
+  - aarch64
+startup: application
+boot: auto
+init: false
+stage: experimental
+backup: hot
+services:
+  - mqtt:need
+  - mysql:want
+options:
+  database_type: postgresql
+  postgresql:
+    host: ""
+    port: 5432
+    database: homeassistant
+    username: ""
+    password: ""
+  mariadb:
+    connection: supervisor
+    host: ""
+    port: 3306
+    database: homeassistant
+    username: ""
+    password: ""
+  poll:
+    fast_seconds: 60
+    medium_seconds: 300
+    slow_seconds: 3600
+  recorder_stale_seconds: 300
+  timezone: ""
+  log_level: info
+schema:
+  database_type: list(postgresql|mariadb)
+  postgresql:
+    host: str
+    port: port
+    database: str
+    username: str
+    password: password
+  mariadb:
+    connection: list(supervisor|manual)
+    host: str
+    port: port
+    database: str
+    username: str
+    password: password
+  poll:
+    fast_seconds: int(10,3600)
+    medium_seconds: int(30,86400)
+    slow_seconds: int(60,86400)
+  recorder_stale_seconds: int(30,86400)
+  timezone: str
+  log_level: list(debug|info|warning|error)
