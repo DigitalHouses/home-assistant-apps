@@ -27,12 +27,13 @@ For external databases, choose `SSH` and configure a Linux user on the database 
 
 `SSH host` can be left empty to reuse the database host.
 
-`Filesystem path` can also be left empty. The App detects the data directory with:
+`Filesystem path` is optional and acts as a manual override. If it is empty, the App resolves a usable storage path automatically:
 
-- PostgreSQL: `SHOW data_directory`
-- MariaDB: `SELECT @@datadir`
+1. It first asks the database for its data directory (`SHOW data_directory` for PostgreSQL or `SELECT @@datadir` for MariaDB).
+2. If the DB user cannot read that setting, it detects the database path over SSH (`pg_lsclusters` and common PostgreSQL paths, or common MariaDB data paths).
+3. If no database-specific path can be detected, it falls back to `/`.
 
-The first SSH host key is stored in `/data/ssh_known_hosts` and is checked on later connections.
+The resolved path is written to the App log. The first SSH host key is stored in `/data/ssh_known_hosts` and is checked on later connections.
 
 ### Disabled
 

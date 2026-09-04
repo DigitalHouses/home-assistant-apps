@@ -91,3 +91,84 @@ class StorageCollectorTests(unittest.TestCase):
             collector.collect(),
             {'db_disk_free': 18.8, 'db_disk_used_percentage': 34.7},
         )
+
+
+class PermissionDeniedAdapter:
+    def __init__(self):
+        self.calls = 0
+
+    def data_directory(self):
+        self.calls += 1
+        raise PermissionError('permission denied to examine data_directory')
+
+
+class ManualPathAdapter:
+    def __init__(self):
+        self.calls = 0
+
+    def data_directory(self):
+        self.calls += 1
+        raise AssertionError('data_directory must not be called for manual path')
+
+
+class StoragePathResolutionTests(unittest.TestCase):
+    def test_manual_path_has_priority_over_auto_detection(self):
+        from storage import StorageCollector
+
+        seen_paths = []
+        detector_calls = []
+        collector = StorageCollector(
+            FakeStorageConfig('ssh', path='/srv/postgres'),
+            ManualPathAdapter(),
+            ssh_fetcher=lambda _config, path: seen_paths.append(path) or (
+                'Filesystem 1-blocks Used Available Capacity Mounted on\n'
+                '/dev/x 100 20 80 20% /srv/postgres\n'
+            ),
+            ssh_path_detector=lambda _config, _engine: detector_calls.append(True) or '/',
+        )
+
+        collector.collect()
+        self.assertEqual(seen_paths, ['/srv/postgres'])
+        self.assertEqual(detector_calls, [])
+
+    def test_permission_denied_from_database_falls_back_to_ssh_detection(self):
+        from storage import StorageCollector
+
+        adapter = PermissionDeniedAdapter()
+        seen_paths = []
+        collector = StorageCollector(
+            FakeStorageConfig('ssh'),
+            adapter,
+            ssh_fetcher=lambda _config, path: seen_paths.append(path) or (
+                'Filesystem 1-blocks Used Available Capacity Mounted on\n'
+                '/dev/x 100 20 80 20% /\n'
+            ),
+            ssh_path_detector=lambda _config, engine: (
+                '/var/lib/postgresql/17/main' if engine == 'postgresql' else '/'
+            ),
+        )
+        collector.adapter.config = type('DB', (), {'engine': 'postgresql'})()
+
+        collector.collect()
+        self.assertEqual(seen_paths, ['/var/lib/postgresql/17/main'])
+        self.assertEqual(adapter.calls, 1)
+        self.assertEqual(collector.resolved_path, '/var/lib/postgresql/17/main')
+
+    def test_empty_ssh_detection_falls_back_to_root(self):
+        from storage import StorageCollector
+
+        adapter = PermissionDeniedAdapter()
+        seen_paths = []
+        collector = StorageCollector(
+            FakeStorageConfig('ssh'),
+            adapter,
+            ssh_fetcher=lambda _config, path: seen_paths.append(path) or (
+                'Filesystem 1-blocks Used Available Capacity Mounted on\n'
+                '/dev/x 100 20 80 20% /\n'
+            ),
+            ssh_path_detector=lambda _config, _engine: '',
+        )
+        collector.adapter.config = type('DB', (), {'engine': 'postgresql'})()
+
+        collector.collect()
+        self.assertEqual(seen_paths, ['/'])

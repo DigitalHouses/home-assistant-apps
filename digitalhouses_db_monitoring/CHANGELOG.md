@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.4
+
+- Made `Filesystem path` a true optional override for SSH storage monitoring.
+- Added SSH-side PostgreSQL/MariaDB storage path auto-detection when the DB user cannot read the server data directory.
+- Added `/` as a safe final fallback and log output showing the resolved storage path.
+
 ## 0.1.3
 
 - Added `sensor.dh_db_disk_free`.

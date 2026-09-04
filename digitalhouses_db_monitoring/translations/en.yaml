@@ -61,7 +61,7 @@ configuration:
     description: Password for the Linux SSH user.
   storage.path:
     name: Filesystem path
-    description: Optional path used for disk usage. Leave empty to detect the PostgreSQL or MariaDB data directory automatically.
+    description: Optional manual path override. Leave empty and the App will detect an accessible database storage path automatically over SQL/SSH, with / as the final fallback.
   publish_interval_minutes:
     name: Publish interval, min
     description: Interval in minutes between MQTT state publications and Recorder health checks.

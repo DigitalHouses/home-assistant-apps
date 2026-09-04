@@ -64,6 +64,7 @@ class DatabaseMonitorApp:
         self.mqtt_connected = threading.Event()
         self.db_available = False
         self.storage_available = False
+        self._logged_storage_path = ''
         self.client = self._build_mqtt_client()
 
     def _build_mqtt_client(self) -> mqtt.Client:
@@ -159,6 +160,11 @@ class DatabaseMonitorApp:
             return
         try:
             self.update_state(self.storage.collect())
+            if self.config.storage.source == 'ssh':
+                resolved_path = self.storage.resolved_path
+                if resolved_path and resolved_path != self._logged_storage_path:
+                    self.log.info('Storage filesystem path: %s', resolved_path)
+                    self._logged_storage_path = resolved_path
             self.set_storage_available(True)
         except Exception as exc:
             self.log.warning('Storage query failed: %s', exc)
