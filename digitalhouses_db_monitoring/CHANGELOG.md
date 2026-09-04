@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.6
+
+- Added `sensor.dh_db_top_entities_24h` with Top 10 Recorder entities for the last 24 hours.
+- Added `sensor.dh_db_top_entities_all_time` with Top 10 Recorder entities across retained history.
+- Added `top_entity`, `top_records`, `generated_at`, `period` and `top_10` attributes.
+- Refresh the 24-hour ranking once per hour and the all-time ranking once per day.
+- Ranking failures keep the previous successful MQTT state and do not interrupt core database monitoring.
+- Publish rankings on dedicated retained MQTT topics only when recalculated, avoiding minute-by-minute Recorder churn.
+
 ## 0.1.5
 
 - Fix PostgreSQL storage autodetection when multiple clusters are installed.

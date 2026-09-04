@@ -22,5 +22,9 @@ class DatabaseAdapter(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def top_entities(self, since_ts: float | None) -> list[tuple[str, int]]:
+        raise NotImplementedError
+
+    @abstractmethod
     def data_directory(self) -> str:
         raise NotImplementedError

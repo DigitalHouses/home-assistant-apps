@@ -6,6 +6,8 @@ DEVICE_ID = "digitalhouses_db_monitoring"
 DEVICE_NAME = "DH Recorder"
 BASE_TOPIC = "DigitalHouses/Global/db_monitoring"
 STATE_TOPIC = f"{BASE_TOPIC}/state"
+TOP_ENTITIES_24H_TOPIC = f"{BASE_TOPIC}/top_entities_24h"
+TOP_ENTITIES_ALL_TIME_TOPIC = f"{BASE_TOPIC}/top_entities_all_time"
 APP_AVAILABILITY_TOPIC = f"{BASE_TOPIC}/availability"
 DB_AVAILABILITY_TOPIC = f"{BASE_TOPIC}/database_availability"
 STORAGE_AVAILABILITY_TOPIC = f"{BASE_TOPIC}/storage_availability"
@@ -39,12 +41,13 @@ def _component(
         availability.append(_availability(DB_AVAILABILITY_TOPIC))
     if storage_required:
         availability.append(_availability(STORAGE_AVAILABILITY_TOPIC))
+    state_topic = extra.pop("state_topic", STATE_TOPIC)
     payload: dict[str, Any] = {
         "platform": platform,
         "name": name,
         "unique_id": f"{DEVICE_ID}_{unique_suffix}",
         "default_entity_id": entity_id,
-        "state_topic": STATE_TOPIC,
+        "state_topic": state_topic,
         "value_template": value_template,
         "availability": availability,
         "availability_mode": "all",
@@ -122,6 +125,22 @@ def build_discovery_payload(app_version: str, include_storage: bool = False) -> 
             "{{ value_json.db_last_age }}", diagnostic=True,
             device_class="duration", state_class="measurement", unit_of_measurement="s",
             icon="mdi:timer-sand",
+        ),
+        "db_top_entities_24h": _component(
+            "sensor", "DB top entities 24h", "db_top_entities_24h", "sensor.dh_db_top_entities_24h",
+            "{{ value_json.top_records }}", diagnostic=True,
+            state_topic=TOP_ENTITIES_24H_TOPIC,
+            state_class="measurement", unit_of_measurement="records", icon="mdi:format-list-numbered",
+            json_attributes_topic=TOP_ENTITIES_24H_TOPIC,
+            json_attributes_template="{{ value_json | tojson }}",
+        ),
+        "db_top_entities_all_time": _component(
+            "sensor", "DB top entities all time", "db_top_entities_all_time", "sensor.dh_db_top_entities_all_time",
+            "{{ value_json.top_records }}", diagnostic=True,
+            state_topic=TOP_ENTITIES_ALL_TIME_TOPIC,
+            state_class="measurement", unit_of_measurement="records", icon="mdi:format-list-numbered",
+            json_attributes_topic=TOP_ENTITIES_ALL_TIME_TOPIC,
+            json_attributes_template="{{ value_json | tojson }}",
         ),
     }
     if include_storage:

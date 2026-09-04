@@ -1,6 +1,6 @@
 FROM ghcr.io/home-assistant/base:latest
 
-ARG BUILD_VERSION="0.1.3"
+ARG BUILD_VERSION="0.1.6"
 ARG BUILD_ARCH
 
 ENV APP_VERSION="${BUILD_VERSION}" \
@@ -27,6 +27,7 @@ RUN chmod a+x /run.sh \
         /app/config.py \
         /app/discovery.py \
         /app/metrics.py \
+        /app/rankings.py \
         /app/storage.py \
         /app/db/__init__.py \
         /app/db/base.py \

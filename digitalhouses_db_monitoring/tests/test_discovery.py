@@ -23,7 +23,7 @@ class DiscoveryTests(unittest.TestCase):
         self.assertEqual(payload['components']['db_yesterday_records']['name'], 'DB inserted yesterday')
         self.assertEqual(payload['components']['recorder_writing']['name'], 'DB recorder writing')
         self.assertEqual(payload['components']['db_last_age']['name'], 'DB last age')
-        self.assertEqual(len(payload['components']), 13)
+        self.assertEqual(len(payload['components']), 15)
         self.assertTrue(STATE_RETAIN)
 
 
@@ -47,3 +47,19 @@ class StorageDiscoveryTests(unittest.TestCase):
         payload = build_discovery_payload('0.1.3', include_storage=False)
         self.assertNotIn('db_disk_free', payload['components'])
         self.assertNotIn('db_disk_used_percentage', payload['components'])
+
+class RankingDiscoveryTests(unittest.TestCase):
+    def test_ranking_entities_include_json_attributes(self):
+        payload = build_discovery_payload('0.1.6')
+        components = payload['components']
+
+        for key, entity_id in (
+            ('db_top_entities_24h', 'sensor.dh_db_top_entities_24h'),
+            ('db_top_entities_all_time', 'sensor.dh_db_top_entities_all_time'),
+        ):
+            component = components[key]
+            self.assertEqual(component['default_entity_id'], entity_id)
+            self.assertEqual(component['state_topic'], component['json_attributes_topic'])
+            self.assertNotEqual(component['state_topic'], 'DigitalHouses/Global/db_monitoring/state')
+            self.assertEqual(component['value_template'], '{{ value_json.top_records }}')
+            self.assertEqual(component['json_attributes_template'], '{{ value_json | tojson }}')

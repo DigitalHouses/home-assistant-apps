@@ -36,6 +36,15 @@ class MariaDBAdapter(DatabaseAdapter):
         finally:
             connection.close()
 
+    def _rows(self, sql: str, params: tuple[Any, ...] = ()) -> list[tuple[Any, ...]]:
+        connection = self._connect()
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute(sql, params)
+                return list(cursor.fetchall())
+        finally:
+            connection.close()
+
     def fast_metrics(self, hour_cutoff: float | None = None) -> dict[str, Any]:
         del hour_cutoff
         return {'db_last_ts': self._one('SELECT MAX(last_updated_ts) FROM states')}
@@ -68,6 +77,24 @@ class MariaDBAdapter(DatabaseAdapter):
             'db_user': self._one('SELECT CURRENT_USER()'),
             'db_version': self._one('SELECT VERSION()'),
         }
+
+    def top_entities(self, since_ts: float | None) -> list[tuple[str, int]]:
+        where = ''
+        params: tuple[Any, ...] = ()
+        if since_ts is not None:
+            where = ' WHERE s.last_updated_ts >= %s'
+            params = (since_ts,)
+        rows = self._rows(
+            'SELECT sm.entity_id, COUNT(*) AS records '
+            'FROM states AS s '
+            'JOIN states_meta AS sm ON sm.metadata_id = s.metadata_id'
+            + where +
+            ' GROUP BY sm.entity_id '
+            'ORDER BY records DESC, sm.entity_id ASC '
+            'LIMIT 10',
+            params,
+        )
+        return [(str(entity_id), int(records)) for entity_id, records in rows]
 
     def data_directory(self) -> str:
         return str(self._one('SELECT @@datadir'))

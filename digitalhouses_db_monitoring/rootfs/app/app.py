@@ -21,9 +21,16 @@ from discovery import (
     HA_STATUS_TOPIC,
     STATE_RETAIN,
     STATE_TOPIC,
+    TOP_ENTITIES_24H_TOPIC,
+    TOP_ENTITIES_ALL_TIME_TOPIC,
     build_discovery_payload,
 )
 from storage import StorageCollector
+from rankings import (
+    TOP_ENTITIES_24H_INTERVAL_SECONDS,
+    TOP_ENTITIES_ALL_TIME_INTERVAL_SECONDS,
+    build_top_entities_snapshot,
+)
 from metrics import (
     db_depth_days,
     iso_from_epoch,
@@ -33,7 +40,7 @@ from metrics import (
     yesterday_bounds_epoch,
 )
 
-APP_VERSION = os.getenv('APP_VERSION', '0.1.3-local')
+APP_VERSION = os.getenv('APP_VERSION', '0.1.6-local')
 MEDIUM_INTERVAL_SECONDS = 300
 SLOW_INTERVAL_SECONDS = 3600
 STORAGE_INTERVAL_SECONDS = 300
@@ -65,6 +72,7 @@ class DatabaseMonitorApp:
         self.db_available = False
         self.storage_available = False
         self._logged_storage_path = ''
+        self.ranking_state: dict[str, dict[str, Any]] = {}
         self.client = self._build_mqtt_client()
 
     def _build_mqtt_client(self) -> mqtt.Client:
@@ -99,6 +107,7 @@ class DatabaseMonitorApp:
             retain=True,
         )
         self.publish_state()
+        self.publish_rankings()
         self.log.info('MQTT connected; discovery published')
 
     def _on_disconnect(self, client, userdata, return_code) -> None:
@@ -119,6 +128,7 @@ class DatabaseMonitorApp:
                 retain=True,
             )
             self.publish_state()
+            self.publish_rankings()
 
     def publish_text(self, topic: str, payload: str, retain: bool) -> None:
         if not self.mqtt_connected.is_set():
@@ -138,6 +148,18 @@ class DatabaseMonitorApp:
         with self.state_lock:
             payload = dict(self.state)
         self.publish_json(STATE_TOPIC, payload, retain=STATE_RETAIN)
+
+    def publish_rankings(self) -> None:
+        topics = {
+            '24h': TOP_ENTITIES_24H_TOPIC,
+            'all_time': TOP_ENTITIES_ALL_TIME_TOPIC,
+        }
+        with self.state_lock:
+            snapshots = dict(self.ranking_state)
+        for period, snapshot in snapshots.items():
+            topic = topics.get(period)
+            if topic:
+                self.publish_json(topic, snapshot, retain=True)
 
     def update_state(self, values: dict[str, Any]) -> None:
         with self.state_lock:
@@ -226,6 +248,21 @@ class DatabaseMonitorApp:
         except Exception as exc:
             self.log.warning('Static database query failed: %s', exc)
 
+    def collect_top_entities(self, period: str) -> None:
+        generated_ts = time.time()
+        since_ts = generated_ts - 86400 if period == '24h' else None
+        try:
+            rows = self.adapter.top_entities(since_ts)
+            snapshot = build_top_entities_snapshot(
+                rows, period, generated_ts, self.config.timezone
+            )
+            with self.state_lock:
+                self.ranking_state[period] = snapshot
+            topic = TOP_ENTITIES_24H_TOPIC if period == '24h' else TOP_ENTITIES_ALL_TIME_TOPIC
+            self.publish_json(topic, snapshot, retain=True)
+        except Exception as exc:
+            self.log.warning('Top entities %s query failed: %s', period, exc)
+
     def run(self) -> None:
         db = self.config.database
         publish_interval_seconds = self.config.publish_interval_minutes * 60
@@ -243,6 +280,7 @@ class DatabaseMonitorApp:
         self.client.loop_start()
 
         next_publish = next_medium = next_slow = next_storage = 0.0
+        next_top_24h = next_top_all_time = 0.0
         static_loaded = False
         try:
             while not self.stop_event.is_set():
@@ -259,6 +297,12 @@ class DatabaseMonitorApp:
                         if now_mono >= next_slow:
                             self.collect_slow()
                             next_slow = now_mono + SLOW_INTERVAL_SECONDS
+                        if now_mono >= next_top_24h:
+                            self.collect_top_entities('24h')
+                            next_top_24h = now_mono + TOP_ENTITIES_24H_INTERVAL_SECONDS
+                        if now_mono >= next_top_all_time:
+                            self.collect_top_entities('all_time')
+                            next_top_all_time = now_mono + TOP_ENTITIES_ALL_TIME_INTERVAL_SECONDS
                     if self.storage.enabled and now_mono >= next_storage:
                         self.collect_storage()
                         next_storage = now_mono + STORAGE_INTERVAL_SECONDS
