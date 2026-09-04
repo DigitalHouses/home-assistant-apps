@@ -41,21 +41,12 @@ configuration:
   mariadb.password:
     name: Password
     description: MariaDB password for manual mode.
-  poll:
-    name: Polling
-    description: Metric collection intervals.
-  poll.fast_seconds:
-    name: Fast interval
-    description: Seconds between Recorder health checks.
-  poll.medium_seconds:
-    name: Medium interval
-    description: Seconds between database size and hourly write-rate checks.
-  poll.slow_seconds:
-    name: Slow interval
-    description: Seconds between history depth and total row-count checks.
+  publish_interval_minutes:
+    name: Publish interval, min
+    description: Interval in minutes between MQTT state publications and Recorder health checks.
   recorder_stale_seconds:
     name: Recorder stale threshold
-    description: Maximum age in seconds of the newest state before Recorder writing is reported as off.
+    description: Maximum age in seconds of the newest state before DB recorder writing is reported as off.
   timezone:
     name: Timezone
     description: Optional IANA timezone for previous-day boundaries, for example Asia/Almaty. Leave empty to use the container timezone or UTC fallback.

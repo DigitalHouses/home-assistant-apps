@@ -29,7 +29,9 @@ from metrics import (
     yesterday_bounds_epoch,
 )
 
-APP_VERSION = os.getenv('APP_VERSION', '0.1.0-local')
+APP_VERSION = os.getenv('APP_VERSION', '0.1.1-local')
+MEDIUM_INTERVAL_SECONDS = 300
+SLOW_INTERVAL_SECONDS = 3600
 
 
 class DatabaseMonitorApp:
@@ -119,7 +121,6 @@ class DatabaseMonitorApp:
     def update_state(self, values: dict[str, Any]) -> None:
         with self.state_lock:
             self.state.update(values)
-        self.publish_state()
 
     def set_db_available(self, available: bool) -> None:
         self.db_available = available
@@ -182,32 +183,38 @@ class DatabaseMonitorApp:
 
     def run(self) -> None:
         db = self.config.database
+        publish_interval_seconds = self.config.publish_interval_minutes * 60
+
         self.log.info('Starting DigitalHouses DB Monitoring %s', APP_VERSION)
         self.log.info('Database engine: %s', db.engine)
         self.log.info('Database target: %s@%s:%s/%s', db.username, db.host, db.port, db.database)
         self.log.info('Timezone: %s', self.config.timezone)
+        self.log.info('Publish interval: %s minute(s)', self.config.publish_interval_minutes)
 
         host = os.environ['MQTT_HOST']
         port = int(os.getenv('MQTT_PORT', '1883'))
         self.client.connect_async(host, port, keepalive=60)
         self.client.loop_start()
 
-        next_fast = next_medium = next_slow = 0.0
+        next_publish = next_medium = next_slow = 0.0
         static_loaded = False
         try:
             while not self.stop_event.is_set():
                 now_mono = time.monotonic()
-                if now_mono >= next_fast:
-                    if self.collect_fast() and not static_loaded:
-                        self.collect_static()
-                        static_loaded = True
-                    next_fast = now_mono + self.config.poll.fast_seconds
-                if now_mono >= next_medium:
-                    self.collect_medium()
-                    next_medium = now_mono + self.config.poll.medium_seconds
-                if now_mono >= next_slow:
-                    self.collect_slow()
-                    next_slow = now_mono + self.config.poll.slow_seconds
+                if now_mono >= next_publish:
+                    db_ok = self.collect_fast()
+                    if db_ok:
+                        if not static_loaded:
+                            self.collect_static()
+                            static_loaded = True
+                        if now_mono >= next_medium:
+                            self.collect_medium()
+                            next_medium = now_mono + MEDIUM_INTERVAL_SECONDS
+                        if now_mono >= next_slow:
+                            self.collect_slow()
+                            next_slow = now_mono + SLOW_INTERVAL_SECONDS
+                    self.publish_state()
+                    next_publish = now_mono + publish_interval_seconds
                 self.stop_event.wait(1.0)
         finally:
             self.publish_text(APP_AVAILABILITY_TOPIC, 'offline', retain=True)

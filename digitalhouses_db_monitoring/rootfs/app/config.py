@@ -20,16 +20,9 @@ class DatabaseConfig:
 
 
 @dataclass(frozen=True)
-class PollConfig:
-    fast_seconds: int
-    medium_seconds: int
-    slow_seconds: int
-
-
-@dataclass(frozen=True)
 class AppConfig:
     database: DatabaseConfig
-    poll: PollConfig
+    publish_interval_minutes: int
     recorder_stale_seconds: int
     log_level: str
     timezone: str
@@ -61,9 +54,6 @@ def _required(value: Any, label: str) -> str:
 def load_config(path: Path = OPTIONS_FILE) -> AppConfig:
     options = _read_options(path)
     engine = str(options.get('database_type', 'postgresql')).lower()
-    poll_raw = options.get('poll') or {}
-    if not isinstance(poll_raw, dict):
-        poll_raw = {}
 
     if engine == 'postgresql':
         raw = options.get('postgresql') or {}
@@ -113,10 +103,8 @@ def load_config(path: Path = OPTIONS_FILE) -> AppConfig:
 
     return AppConfig(
         database=db,
-        poll=PollConfig(
-            fast_seconds=_bounded_int(poll_raw.get('fast_seconds'), 10, 3600, 60),
-            medium_seconds=_bounded_int(poll_raw.get('medium_seconds'), 30, 86400, 300),
-            slow_seconds=_bounded_int(poll_raw.get('slow_seconds'), 60, 86400, 3600),
+        publish_interval_minutes=_bounded_int(
+            options.get('publish_interval_minutes'), 1, 60, 1
         ),
         recorder_stale_seconds=_bounded_int(options.get('recorder_stale_seconds'), 30, 86400, 300),
         log_level=log_level,

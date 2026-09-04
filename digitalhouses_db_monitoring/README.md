@@ -60,7 +60,7 @@ The initial version exposes the following entities:
 | `sensor.dh_db_name`                 | Current Recorder database name                           |
 | `sensor.dh_db_user`                 | Database user used by the monitor                        |
 | `binary_sensor.dh_db_connected`     | Database connection status                               |
-| `binary_sensor.dh_recorder_writing` | Indicates whether Recorder is currently writing data     |
+| `binary_sensor.dh_db_recorder_writing` | Indicates whether Recorder is currently writing data     |
 | `sensor.dh_db_last_age`             | Time elapsed since the latest Recorder state was written |
 
 All entities are grouped under a single Home Assistant device:
@@ -151,7 +151,7 @@ mariadb:
 One of the most useful entities is:
 
 ```text
-binary_sensor.dh_recorder_writing
+binary_sensor.dh_db_recorder_writing
 ```
 
 The App compares the latest Recorder state timestamp with the current time.

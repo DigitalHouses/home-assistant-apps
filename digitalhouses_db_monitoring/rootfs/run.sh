@@ -4,6 +4,14 @@ set -Eeuo pipefail
 
 bashio::log.info "Starting DigitalHouses DB Monitoring ${APP_VERSION:-unknown}"
 
+# Remove the legacy 0.1.0 polling group after upgrade. Internal medium/slow
+# query cadences are no longer exposed in the user configuration.
+OPTIONS_JSON="$(bashio::addon.options)"
+if bashio::jq.exists "${OPTIONS_JSON}" '.poll'; then
+    bashio::log.info "Removing legacy 'poll' configuration option."
+    bashio::addon.option 'poll'
+fi
+
 export MQTT_HOST="$(bashio::services mqtt host)"
 export MQTT_PORT="$(bashio::services mqtt port)"
 export MQTT_USER="$(bashio::services mqtt username)"

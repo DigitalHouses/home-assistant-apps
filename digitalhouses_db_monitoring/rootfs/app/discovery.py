@@ -53,66 +53,67 @@ def _component(
 def build_discovery_payload(app_version: str) -> dict[str, Any]:
     components = {
         "db_start": _component(
-            "sensor", "Database start", "db_start", "sensor.dh_db_start",
+            "sensor", "DB start", "db_start", "sensor.dh_db_start",
             "{{ value_json.db_start }}", diagnostic=True,
             device_class="timestamp", icon="mdi:database-clock-outline",
         ),
         "db_last": _component(
-            "sensor", "Database last record", "db_last", "sensor.dh_db_last",
+            "sensor", "DB last record", "db_last", "sensor.dh_db_last",
             "{{ value_json.db_last }}", diagnostic=True,
             device_class="timestamp", icon="mdi:database-clock",
         ),
         "db_depth": _component(
-            "sensor", "Database history depth", "db_depth", "sensor.dh_db_depth",
+            "sensor", "DB history depth", "db_depth", "sensor.dh_db_depth",
             "{{ value_json.db_depth }}", diagnostic=True,
             device_class="duration", state_class="measurement",
             unit_of_measurement="d", icon="mdi:calendar-range",
         ),
         "db_records_per_hour": _component(
-            "sensor", "Records per hour", "db_records_per_hour", "sensor.dh_db_records_per_hour",
+            "sensor", "DB records per hour", "db_records_per_hour", "sensor.dh_db_records_per_hour",
             "{{ value_json.db_records_per_hour }}", diagnostic=True,
             state_class="measurement", unit_of_measurement="k rec/h", icon="mdi:database-arrow-down",
         ),
         "db_records": _component(
-            "sensor", "Database records", "db_records", "sensor.dh_db_records",
+            "sensor", "DB records", "db_records", "sensor.dh_db_records",
             "{{ value_json.db_records }}", diagnostic=True,
             state_class="measurement", unit_of_measurement="k records", icon="mdi:database-marker",
         ),
         "db_size": _component(
-            "sensor", "Database size", "db_size", "sensor.dh_db_size",
+            "sensor", "DB size", "db_size", "sensor.dh_db_size",
             "{{ value_json.db_size }}", diagnostic=True,
             device_class="data_size", state_class="measurement",
             unit_of_measurement="MiB", suggested_display_precision=1, icon="mdi:database",
         ),
         "db_version": _component(
-            "sensor", "Database version", "db_version", "sensor.dh_db_version",
+            "sensor", "DB version", "db_version", "sensor.dh_db_version",
             "{{ value_json.db_version }}", diagnostic=True, icon="mdi:database-cog",
         ),
         "db_yesterday_records": _component(
-            "sensor", "Yesterday records", "db_yesterday_records", "sensor.dh_db_yesterday_records",
+            "sensor", "DB inserted yesterday", "db_yesterday_records", "sensor.dh_db_yesterday_records",
             "{{ value_json.db_yesterday_records }}", diagnostic=True,
             state_class="measurement", unit_of_measurement="records", icon="mdi:calendar-arrow-left",
         ),
         "db_name": _component(
-            "sensor", "Database name", "db_name", "sensor.dh_db_name",
+            "sensor", "DB name", "db_name", "sensor.dh_db_name",
             "{{ value_json.db_name }}", diagnostic=True, icon="mdi:database-settings",
         ),
         "db_user": _component(
-            "sensor", "Database user", "db_user", "sensor.dh_db_user",
+            "sensor", "DB user", "db_user", "sensor.dh_db_user",
             "{{ value_json.db_user }}", diagnostic=True, icon="mdi:account-key",
         ),
         "db_connected": _component(
-            "binary_sensor", "Database connected", "db_connected", "binary_sensor.dh_db_connected",
+            "binary_sensor", "DB connected", "db_connected", "binary_sensor.dh_db_connected",
             "{{ 'ON' if value_json.db_connected else 'OFF' }}", diagnostic=True, db_required=False,
             device_class="connectivity",
         ),
+        # Keep the unique suffix stable so existing installations do not get a duplicate entity.
         "recorder_writing": _component(
-            "binary_sensor", "Recorder writing", "recorder_writing", "binary_sensor.dh_recorder_writing",
+            "binary_sensor", "DB recorder writing", "recorder_writing", "binary_sensor.dh_db_recorder_writing",
             "{{ 'ON' if value_json.recorder_writing else 'OFF' }}", diagnostic=True, db_required=False,
             icon="mdi:database-edit",
         ),
         "db_last_age": _component(
-            "sensor", "Last record age", "db_last_age", "sensor.dh_db_last_age",
+            "sensor", "DB last age", "db_last_age", "sensor.dh_db_last_age",
             "{{ value_json.db_last_age }}", diagnostic=True,
             device_class="duration", state_class="measurement", unit_of_measurement="s",
             icon="mdi:timer-sand",

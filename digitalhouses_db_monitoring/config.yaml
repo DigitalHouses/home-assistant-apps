@@ -1,5 +1,5 @@
 name: DigitalHouses DB Monitoring
-version: 0.1.0
+version: 0.1.1
 slug: digitalhouses_db_monitoring
 description: Monitor Home Assistant Recorder database health and key metrics through MQTT Discovery.
 url: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_db_monitoring
@@ -29,10 +29,7 @@ options:
     database: homeassistant
     username: ""
     password: ""
-  poll:
-    fast_seconds: 60
-    medium_seconds: 300
-    slow_seconds: 3600
+  publish_interval_minutes: 1
   recorder_stale_seconds: 300
   timezone: ""
   log_level: info
@@ -51,10 +48,7 @@ schema:
     database: str
     username: str
     password: password
-  poll:
-    fast_seconds: int(10,3600)
-    medium_seconds: int(30,86400)
-    slow_seconds: int(60,86400)
+  publish_interval_minutes: int(1,60)
   recorder_stale_seconds: int(30,86400)
   timezone: str
   log_level: list(debug|info|warning|error)

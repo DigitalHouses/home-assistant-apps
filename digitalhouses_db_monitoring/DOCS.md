@@ -11,11 +11,12 @@ Example:
 ```yaml
 database_type: postgresql
 postgresql:
-  host: 192.168.11.32
+  host: 192.168.11.31
   port: 5432
-  database: hassio
+  database: homeassistant
   username: hauser
   password: your_password
+publish_interval_minutes: 1
 ```
 
 ## MariaDB
@@ -27,6 +28,7 @@ database_type: mariadb
 mariadb:
   connection: supervisor
   database: homeassistant
+publish_interval_minutes: 1
 ```
 
 The App obtains host, port, username and password from Supervisor automatically.
@@ -39,17 +41,15 @@ MQTT connection details are obtained automatically from the Supervisor `mqtt` se
 
 ## Metrics
 
-The App creates one MQTT device named **DH Recorder Database** with `dh_*` entities for database size, history depth, row counts, newest/oldest Recorder records, database metadata, connection state and Recorder write activity.
+The App creates one MQTT device named **DH Recorder Database**. All Home Assistant entity IDs use the `dh_db_*` prefix.
 
-## Polling
+## Publication interval
 
-Default intervals:
+`publish_interval_minutes` controls how often the App checks Recorder health and publishes the combined MQTT state payload. The default is 1 minute.
 
-- fast metrics: 60 seconds;
-- medium metrics: 300 seconds;
-- slow metrics: 3600 seconds.
+Database size and hourly write-rate queries are internally limited to every 5 minutes. Expensive history-depth and total-row-count queries are internally limited to every 60 minutes.
 
-`recorder_stale_seconds` controls how old the newest `states` record may be before `binary_sensor.dh_recorder_writing` turns off.
+`recorder_stale_seconds` controls how old the newest `states` record may be before `binary_sensor.dh_db_recorder_writing` turns off.
 
 ## Timezone
 

@@ -41,21 +41,12 @@ configuration:
   mariadb.password:
     name: Пароль
     description: Пароль MariaDB для ручного режима.
-  poll:
-    name: Опрос
-    description: Интервалы сбора метрик.
-  poll.fast_seconds:
-    name: Быстрый интервал
-    description: Интервал проверки состояния Recorder в секундах.
-  poll.medium_seconds:
-    name: Средний интервал
-    description: Интервал проверки размера БД и скорости записи в секундах.
-  poll.slow_seconds:
-    name: Медленный интервал
-    description: Интервал проверки глубины истории и общего количества записей в секундах.
+  publish_interval_minutes:
+    name: Интервал публикации, мин
+    description: Интервал в минутах между публикациями состояния MQTT и проверками Recorder.
   recorder_stale_seconds:
     name: Порог остановки Recorder
-    description: Максимальный возраст последней записи states, после которого Recorder writing выключается.
+    description: Максимальный возраст последней записи states, после которого DB recorder writing выключается.
   timezone:
     name: Часовой пояс
     description: Часовой пояс IANA для границ предыдущего дня, например Asia/Almaty. Пустое значение использует timezone контейнера или UTC.
