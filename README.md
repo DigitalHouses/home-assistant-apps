@@ -1,241 +1,123 @@
-# DH Recorder Database Monitor
+# DigitalHouses Home Assistant Apps
 
-**DH Recorder Database Monitor** is a Home Assistant OS App for monitoring the main Home Assistant Recorder database parameters.
+A collection of Home Assistant Apps maintained by DigitalHouses.
 
-The App connects to the database used by Home Assistant Recorder, collects key database and Recorder metrics, and publishes them to Home Assistant through MQTT Discovery.
-
-The main goal is to provide a simple and reusable way to monitor the health, size, history depth, and write activity of the Home Assistant database without creating multiple SQL sensors manually in `configuration.yaml`.
-
-![DH Recorder Database Monitor](images/dh_db_monitor.png)
-
-## Purpose
-
-Home Assistant Recorder stores entity history and statistics in a database. On installations with long retention periods or a large number of entities, this database becomes an important part of the system.
-
-DH Recorder Database Monitor provides visibility into the main Recorder database parameters directly from Home Assistant.
-
-Typical use cases include:
-
-- checking whether Recorder is actively writing data;
-- monitoring database growth;
-- checking the available history depth;
-- monitoring the number of stored state records;
-- detecting database connection problems;
-- verifying the timestamp of the latest Recorder entry;
-- monitoring Recorder activity over time.
-
-## Supported Databases
-
-The App is designed to support:
-
-- PostgreSQL
-- MariaDB
-
-PostgreSQL connections are configured manually.
-
-When MariaDB is installed as a Home Assistant OS App and exposes the Supervisor `mysql` service, DH Recorder Database Monitor can use that connection automatically.
-
-## MQTT Integration
-
-MQTT is obtained automatically through the Home Assistant Supervisor service discovery mechanism.
-
-No MQTT host, username, or password needs to be entered manually when a compatible MQTT service is available in Home Assistant OS.
-
-The App publishes one MQTT device containing all Recorder database monitoring entities.
-
-## Home Assistant Entities
-
-The initial version exposes the following entities:
-
-| Entity ID | Description |
-|---|---|
-| `sensor.dh_db_start` | Timestamp of the earliest state stored in the database |
-| `sensor.dh_db_last` | Timestamp of the latest state stored in the database |
-| `sensor.dh_db_depth` | Recorder history depth in days |
-| `sensor.dh_db_records_per_hour` | Number of state records written during the last hour |
-| `sensor.dh_db_records` | Total number of rows in the `states` table |
-| `sensor.dh_db_size` | Current database size |
-| `sensor.dh_db_version` | Database server version |
-| `sensor.dh_db_yesterday_records` | Number of state records written during the previous day |
-| `sensor.dh_db_name` | Current Recorder database name |
-| `sensor.dh_db_user` | Database user used by the monitor |
-| `binary_sensor.dh_db_connected` | Database connection status |
-| `binary_sensor.dh_recorder_writing` | Indicates whether Recorder is currently writing data |
-| `sensor.dh_db_last_age` | Time elapsed since the latest Recorder state was written |
-
-All entities are grouped under a single Home Assistant device:
-
-**DH Recorder Database**
-
-## How It Works
+Repository URL:
 
 ```text
-Home Assistant Recorder
-        │
-        ▼
-PostgreSQL / MariaDB
-        │
-        ▼
-DH Recorder Database Monitor
-        │
-        ▼
-MQTT Discovery
-        │
-        ▼
-Home Assistant
+https://github.com/DigitalHouses/home-assistant-apps
 ```
 
-The App periodically queries the Recorder database using different polling intervals.
 
-Frequently changing health metrics are collected more often, while expensive database queries such as total row counts are executed less frequently.
 
-This reduces unnecessary load on large Recorder databases.
+## English
 
-## Polling Strategy
+### Installation
 
-Default polling intervals:
+1. Open **Settings → Apps → App store** in Home Assistant.
+2. Open the menu in the upper-right corner.
+3. Select **Repositories**.
+4. Add the repository URL shown above.
+5. Close the repository dialog.
+6. Find the required DigitalHouses App and install it.
 
-| Metric group | Interval |
-|---|---:|
-| Recorder health and latest state | 60 seconds |
-| Database size and hourly activity | 5 minutes |
-| History depth and total records | 1 hour |
-| Static database information | On startup / reconnect |
+### Available Apps
 
-Polling intervals can be adjusted in the App configuration.
+#### DigitalHouses Speedtest
 
-## PostgreSQL Configuration
+Internet availability monitoring and scheduled speed tests using the official Ookla Speedtest CLI.
 
-Example:
+Key features:
 
-```yaml
-database_type: postgresql
+- download, upload, ping, jitter and packet loss;
+- internet connectivity checks;
+- manual and periodic tests;
+- live periodic-interval control from Home Assistant;
+- preferred Ookla server selection;
+- configurable performance thresholds;
+- problem binary sensors;
+- persistent recent successful results;
+- Home Assistant MQTT Discovery;
+- optional Recorder and Lovelace examples.
 
-postgresql:
-  host: 192.168.11.32
-  port: 5432
-  database: hassio
-  username: hauser
-  password: your_password
-```
+Documentation:
 
-The PostgreSQL account only needs permission to read the required Recorder tables and database metadata.
+- [DigitalHouses Speedtest README](digitalhouses_speedtest/README.md)
+- [DigitalHouses Speedtest documentation](digitalhouses_speedtest/DOCS.md)
+- [Recorder package](examples/packages/internet_speedtest_package.yaml)
+- [Lovelace dashboard](examples/lovelace/internet_speedtest_dashboard.yaml)
 
-## MariaDB Configuration
+Questions and user experience belong in
+[GitHub Discussions](https://github.com/DigitalHouses/home-assistant-apps/discussions).
+Confirmed bugs and feature requests belong in
+[GitHub Issues](https://github.com/DigitalHouses/home-assistant-apps/issues).
 
-When the Home Assistant MariaDB App exposes the Supervisor MySQL service:
 
-```yaml
-database_type: mariadb
 
-mariadb:
-  connection: supervisor
-```
+## Support the project
 
-A manual MariaDB connection can also be used:
+DigitalHouses projects are developed independently and provided free of charge.
 
-```yaml
-database_type: mariadb
+If this project is useful to you, you can support its continued development, testing, maintenance, and documentation:
 
-mariadb:
-  connection: manual
-  host: 192.168.11.32
-  port: 3306
-  database: homeassistant
-  username: hauser
-  password: your_password
-```
+[![Support DigitalHouses on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/digitalhouses)
 
-## Recorder Health Monitoring
+Support is entirely optional. All public features remain available to everyone.
 
-One of the most useful entities is:
+## Русский
+
+### Установка
+
+1. Откройте **Настройки → Дополнения → Магазин дополнений**.
+2. Откройте меню в правом верхнем углу.
+3. Выберите **Репозитории**.
+4. Добавьте URL репозитория, указанный выше.
+5. Закройте окно репозиториев.
+6. Найдите нужное приложение DigitalHouses и установите его.
+
+### Доступные приложения
+
+#### DigitalHouses Speedtest
+
+Контроль доступности интернета и периодические измерения с официальным Ookla Speedtest CLI.
+
+Основные возможности:
+
+- download, upload, ping, jitter и packet loss;
+- независимые проверки доступности интернета;
+- ручные и периодические тесты;
+- изменение интервала периодических тестов прямо в Home Assistant;
+- приоритетные серверы Ookla;
+- регулируемые пороги качества;
+- problem binary sensors;
+- постоянная история последних успешных тестов;
+- Home Assistant MQTT Discovery;
+- примеры Recorder и Lovelace.
+
+Документация:
+
+- [README DigitalHouses Speedtest](digitalhouses_speedtest/README.md)
+- [Подробная документация](digitalhouses_speedtest/DOCS.md)
+- [Пакет Recorder](examples/packages/internet_speedtest_package.yaml)
+- [Панель Lovelace](examples/lovelace/internet_speedtest_dashboard.yaml)
+
+Вопросы и пользовательский опыт публикуйте в
+[GitHub Discussions](https://github.com/DigitalHouses/home-assistant-apps/discussions).
+Подтверждённые ошибки и запросы функций — в
+[GitHub Issues](https://github.com/DigitalHouses/home-assistant-apps/issues).
+
+## Repository structure
 
 ```text
-binary_sensor.dh_recorder_writing
+home-assistant-apps/
+├── repository.yaml
+├── README.md
+├── digitalhouses_speedtest/
+├── examples/
+└── scripts/
 ```
-
-The App compares the latest Recorder state timestamp with the current time.
-
-If no new state has been written within the configured threshold, the Recorder can be reported as not writing.
-
-The default threshold is planned to be:
-
-```text
-300 seconds
-```
-
-This makes it possible to detect problems where Home Assistant is running normally but Recorder has stopped writing history to the database.
-
-## Why Use This App
-
-Without DH Recorder Database Monitor, similar monitoring usually requires multiple SQL sensors in Home Assistant configuration.
-
-For example:
-
-```yaml
-sensor:
-  - platform: sql
-    queries:
-      ...
-```
-
-This becomes difficult to maintain across multiple Home Assistant installations.
-
-DH Recorder Database Monitor moves the database monitoring logic into a reusable Home Assistant OS App and automatically creates all required entities through MQTT Discovery.
-
-This provides:
-
-- one installation method;
-- one configuration interface;
-- consistent `dh_*` entity IDs;
-- PostgreSQL and MariaDB support;
-- no manual SQL sensors;
-- no cron jobs;
-- no overlapping shell scripts;
-- centralized database monitoring logic.
-
-## Security
-
-The App does not modify the Home Assistant Recorder database.
-
-It is intended to use read-only database access wherever possible.
-
-The App does not require:
-
-- privileged container access;
-- Docker socket access;
-- Home Assistant configuration directory access;
-- access to `secrets.yaml`;
-- Home Assistant API tokens.
-
-Database credentials are stored in the Home Assistant App configuration and are never published to MQTT.
-
-## Project Status
-
-Current status:
-
-**Initial development / V1**
-
-The first release focuses on the main Home Assistant Recorder database metrics and reliable MQTT Discovery integration.
-
-Additional PostgreSQL and MariaDB diagnostics may be added in future versions.
-
-## Future Metrics
-
-Possible future additions include:
-
-- `states` table size;
-- `statistics` table size;
-- `statistics_short_term` table size;
-- active database connections;
-- maximum database connections;
-- database uptime;
-- cache hit ratio;
-- deadlocks;
-- transaction rollbacks;
-- database growth per day;
-- Recorder write rate trends.
 
 ## License
 
-License information will be added before the first public release.
+DigitalHouses source code is licensed under the MIT License.
+Third-party software retains its own license terms.
