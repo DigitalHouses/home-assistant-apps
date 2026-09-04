@@ -9,7 +9,7 @@ arch:
 startup: application
 boot: auto
 init: false
-stage: experimental
+stage: stable
 backup: hot
 services:
   - mqtt:need
