@@ -95,13 +95,33 @@ def fetch_ssh_df_output(config: StorageConfig, path: str) -> str:
     return _run_ssh_command(config, f'df -P -B1 {shlex.quote(path)}')
 
 
-def detect_ssh_database_path(config: StorageConfig, engine: str) -> str:
+def select_postgres_cluster_path(output: str, database_port: int) -> str:
+    for line in output.splitlines():
+        fields = line.split()
+        if len(fields) < 6:
+            continue
+        try:
+            port = int(fields[2])
+        except ValueError:
+            continue
+        status = fields[3].lower()
+        if port == database_port and status == 'online':
+            return fields[5]
+    return ''
+
+
+def detect_ssh_database_path(config: StorageConfig, engine: str, database_port: int) -> str:
     if engine == 'postgresql':
+        clusters = _run_ssh_command(
+            config,
+            "pg_lsclusters --no-header 2>/dev/null || true",
+        )
+        path = select_postgres_cluster_path(clusters, database_port)
+        if path:
+            return path
         command = r'''\
-if command -v pg_lsclusters >/dev/null 2>&1; then
-  p="$(pg_lsclusters --no-header 2>/dev/null | awk 'NR==1 {print $6}')"
-  if [ -n "$p" ] && [ -d "$p" ]; then printf '%s\n' "$p"; exit 0; fi
-fi
+p="$(ps -eo args 2>/dev/null | sed -n 's#.*postgres[^ ]* -D \([^ ]*\).*#\1#p' | head -n 1)"
+if [ -n "$p" ] && [ -d "$p" ]; then printf '%s\n' "$p"; exit 0; fi
 for p in /var/lib/postgresql/*/main /var/lib/pgsql/data /var/lib/postgres/data /var/lib/postgresql /var/lib/pgsql /var/lib/postgres; do
   if [ -d "$p" ]; then printf '%s\n' "$p"; exit 0; fi
 done
@@ -134,7 +154,7 @@ class StorageCollector:
         adapter: DatabaseAdapter,
         supervisor_fetcher: Callable[[], dict[str, Any]] = fetch_supervisor_host_payload,
         ssh_fetcher: Callable[[StorageConfig, str], str] = fetch_ssh_df_output,
-        ssh_path_detector: Callable[[StorageConfig, str], str] = detect_ssh_database_path,
+        ssh_path_detector: Callable[[StorageConfig, str, int], str] = detect_ssh_database_path,
     ) -> None:
         self.config = config
         self.adapter = adapter
@@ -162,9 +182,13 @@ class StorageCollector:
                 except Exception:
                     path = ''
                 if not path:
-                    engine = str(getattr(getattr(self.adapter, 'config', None), 'engine', ''))
+                    adapter_config = getattr(self.adapter, 'config', None)
+                    engine = str(getattr(adapter_config, 'engine', ''))
+                    database_port = int(getattr(adapter_config, 'port', 0) or 0)
                     try:
-                        path = str(self.ssh_path_detector(self.config, engine) or '').strip()
+                        path = str(
+                            self.ssh_path_detector(self.config, engine, database_port) or ''
+                        ).strip()
                     except Exception:
                         path = ''
                 self._detected_path = path or '/'

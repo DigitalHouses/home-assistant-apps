@@ -42,3 +42,7 @@ Choose `Disabled` to omit the two storage entities.
 ## Publishing
 
 `Publish interval, min` controls how often Recorder health/state is refreshed and MQTT state is published. More expensive database queries and storage checks are internally rate-limited.
+
+### PostgreSQL cluster selection
+
+When the SSH storage path is left empty, the App checks installed PostgreSQL clusters and selects the **online** cluster whose port matches the configured Recorder database port. Stopped clusters are ignored. If no matching cluster can be identified, the normal fallback detection is used.

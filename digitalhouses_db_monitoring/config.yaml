@@ -1,5 +1,5 @@
 name: DigitalHouses DB Monitoring
-version: 0.1.4
+version: 0.1.5
 slug: digitalhouses_db_monitoring
 description: Monitor Home Assistant Recorder database health and key metrics through MQTT Discovery.
 url: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_db_monitoring

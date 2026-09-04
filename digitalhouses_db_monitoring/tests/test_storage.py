@@ -124,7 +124,7 @@ class StoragePathResolutionTests(unittest.TestCase):
                 'Filesystem 1-blocks Used Available Capacity Mounted on\n'
                 '/dev/x 100 20 80 20% /srv/postgres\n'
             ),
-            ssh_path_detector=lambda _config, _engine: detector_calls.append(True) or '/',
+            ssh_path_detector=lambda _config, _engine, _port: detector_calls.append(True) or '/',
         )
 
         collector.collect()
@@ -143,7 +143,7 @@ class StoragePathResolutionTests(unittest.TestCase):
                 'Filesystem 1-blocks Used Available Capacity Mounted on\n'
                 '/dev/x 100 20 80 20% /\n'
             ),
-            ssh_path_detector=lambda _config, engine: (
+            ssh_path_detector=lambda _config, engine, _port: (
                 '/var/lib/postgresql/17/main' if engine == 'postgresql' else '/'
             ),
         )
@@ -166,9 +166,31 @@ class StoragePathResolutionTests(unittest.TestCase):
                 'Filesystem 1-blocks Used Available Capacity Mounted on\n'
                 '/dev/x 100 20 80 20% /\n'
             ),
-            ssh_path_detector=lambda _config, _engine: '',
+            ssh_path_detector=lambda _config, _engine, _port: '',
         )
         collector.adapter.config = type('DB', (), {'engine': 'postgresql'})()
 
         collector.collect()
         self.assertEqual(seen_paths, ['/'])
+
+class PostgresClusterSelectionTests(unittest.TestCase):
+    def test_selects_online_cluster_matching_database_port(self):
+        from storage import select_postgres_cluster_path
+
+        output = (
+            '16 main 5433 down postgres /var/lib/postgresql/16/main /var/log/postgresql/postgresql-16-main.log\n'
+            '17 main 5432 online postgres /var/lib/postgresql/17/main /var/log/postgresql/postgresql-17-main.log\n'
+        )
+        self.assertEqual(
+            select_postgres_cluster_path(output, 5432),
+            '/var/lib/postgresql/17/main',
+        )
+
+    def test_ignores_down_cluster_even_when_port_matches(self):
+        from storage import select_postgres_cluster_path
+
+        output = (
+            '16 main 5432 down postgres /var/lib/postgresql/16/main /var/log/postgresql/postgresql-16-main.log\n'
+            '17 main 5433 online postgres /var/lib/postgresql/17/main /var/log/postgresql/postgresql-17-main.log\n'
+        )
+        self.assertEqual(select_postgres_cluster_path(output, 5432), '')

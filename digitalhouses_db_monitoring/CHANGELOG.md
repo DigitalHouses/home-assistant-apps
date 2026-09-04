@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.5
+
+- Fix PostgreSQL storage autodetection when multiple clusters are installed.
+- Select only the online PostgreSQL cluster matching the configured database port.
+- Ignore stopped clusters on other ports.
+
 ## 0.1.4
 
 - Made `Filesystem path` a true optional override for SSH storage monitoring.
