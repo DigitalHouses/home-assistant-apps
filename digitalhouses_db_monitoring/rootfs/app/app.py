@@ -18,6 +18,7 @@ from discovery import (
     DB_AVAILABILITY_TOPIC,
     DISCOVERY_TOPIC,
     HA_STATUS_TOPIC,
+    STATE_RETAIN,
     STATE_TOPIC,
     build_discovery_payload,
 )
@@ -26,10 +27,11 @@ from metrics import (
     iso_from_epoch,
     last_age_seconds,
     records_k,
+    short_db_version,
     yesterday_bounds_epoch,
 )
 
-APP_VERSION = os.getenv('APP_VERSION', '0.1.1-local')
+APP_VERSION = os.getenv('APP_VERSION', '0.1.2-local')
 MEDIUM_INTERVAL_SECONDS = 300
 SLOW_INTERVAL_SECONDS = 3600
 
@@ -116,7 +118,7 @@ class DatabaseMonitorApp:
     def publish_state(self) -> None:
         with self.state_lock:
             payload = dict(self.state)
-        self.publish_json(STATE_TOPIC, payload, retain=False)
+        self.publish_json(STATE_TOPIC, payload, retain=STATE_RETAIN)
 
     def update_state(self, values: dict[str, Any]) -> None:
         with self.state_lock:
@@ -177,6 +179,7 @@ class DatabaseMonitorApp:
     def collect_static(self) -> None:
         try:
             raw = self.adapter.static_metrics()
+            raw['db_version'] = short_db_version(raw.get('db_version'), self.config.database.engine)
             self.update_state(raw)
         except Exception as exc:
             self.log.warning('Static database query failed: %s', exc)

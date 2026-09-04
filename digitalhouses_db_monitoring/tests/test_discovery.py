@@ -4,13 +4,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'rootfs' / 'app'))
 
-from discovery import build_discovery_payload
+from discovery import STATE_RETAIN, build_discovery_payload
 
 
 class DiscoveryTests(unittest.TestCase):
     def test_device_discovery_contains_expected_entities(self):
-        payload = build_discovery_payload('0.1.1')
+        payload = build_discovery_payload('0.1.2')
         self.assertEqual(payload['device']['identifiers'], ['digitalhouses_db_monitoring'])
+        self.assertEqual(payload['device']['name'], 'DH Recorder')
         self.assertEqual(payload['origin']['name'], 'DigitalHouses DB Monitoring')
         self.assertEqual(payload['components']['db_start']['default_entity_id'], 'sensor.dh_db_start')
         self.assertEqual(payload['components']['db_connected']['default_entity_id'], 'binary_sensor.dh_db_connected')
@@ -23,6 +24,7 @@ class DiscoveryTests(unittest.TestCase):
         self.assertEqual(payload['components']['recorder_writing']['name'], 'DB recorder writing')
         self.assertEqual(payload['components']['db_last_age']['name'], 'DB last age')
         self.assertEqual(len(payload['components']), 13)
+        self.assertTrue(STATE_RETAIN)
 
 
 if __name__ == '__main__':

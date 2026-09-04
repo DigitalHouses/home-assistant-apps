@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+import re
 from zoneinfo import ZoneInfo
 
 
@@ -37,3 +38,13 @@ def yesterday_bounds_epoch(now_ts: float, timezone_name: str) -> tuple[float, fl
     today_start = datetime.combine(now_local.date(), datetime.min.time(), tzinfo=tz)
     yesterday_start = today_start - timedelta(days=1)
     return yesterday_start.timestamp(), today_start.timestamp()
+
+
+def short_db_version(raw: str | None, engine: str) -> str | None:
+    if raw is None:
+        return None
+    match = re.search(r"(\d+)\.(\d+)", str(raw))
+    if not match:
+        return str(raw)
+    prefix = "PostgreSQL" if engine == "postgresql" else "MariaDB"
+    return f"{prefix} {match.group(1)}.{match.group(2)}"

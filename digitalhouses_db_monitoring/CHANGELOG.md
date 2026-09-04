@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.2
+
+- Rename the MQTT device to `DH Recorder`.
+- Shorten the database version to `PostgreSQL major.minor` or `MariaDB major.minor`.
+
 ## 0.1.1
 
 - Standardized entity names with the `DB` prefix.

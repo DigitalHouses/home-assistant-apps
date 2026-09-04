@@ -41,7 +41,7 @@ MQTT connection details are obtained automatically from the Supervisor `mqtt` se
 
 ## Metrics
 
-The App creates one MQTT device named **DH Recorder Database**. All Home Assistant entity IDs use the `dh_db_*` prefix.
+The App creates one MQTT device named **DH Recorder**. All Home Assistant entity IDs use the `dh_db_*` prefix.
 
 ## Publication interval
 

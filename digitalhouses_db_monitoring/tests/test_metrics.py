@@ -30,3 +30,18 @@ class MetricsTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+class VersionTests(unittest.TestCase):
+    def test_short_postgresql_version(self):
+        from metrics import short_db_version
+        self.assertEqual(
+            short_db_version('PostgreSQL 17.5 (Debian 17.5-1.pgdg120+1) on x86_64-pc-linux-gnu', 'postgresql'),
+            'PostgreSQL 17.5',
+        )
+
+    def test_short_mariadb_version(self):
+        from metrics import short_db_version
+        self.assertEqual(
+            short_db_version('11.4.5-MariaDB-ubu2404', 'mariadb'),
+            'MariaDB 11.4',
+        )

@@ -1,18 +1,18 @@
-# DH Recorder Database Monitor
+# DH Recorder Monitor
 
-**DH Recorder Database Monitor** is a Home Assistant OS App for monitoring the main Home Assistant Recorder database parameters.
+**DH Recorder Monitor** is a Home Assistant OS App for monitoring the main Home Assistant Recorder database parameters.
 
 The App connects to the database used by Home Assistant Recorder, collects key database and Recorder metrics, and publishes them to Home Assistant through MQTT Discovery.
 
 The main goal is to provide a simple and reusable way to monitor the health, size, history depth, and write activity of the Home Assistant database without creating multiple SQL sensors manually in `configuration.yaml`.
 
-![DH Recorder Database Monitor](images/dh_db_monitor.png)
+![DH Recorder Monitor](images/dh_db_monitor.png)
 
 ## Purpose
 
 Home Assistant Recorder stores entity history and statistics in a database. On installations with long retention periods or a large number of entities, this database becomes an important part of the system.
 
-DH Recorder Database Monitor provides visibility into the main Recorder database parameters directly from Home Assistant.
+DH Recorder Monitor provides visibility into the main Recorder database parameters directly from Home Assistant.
 
 Typical use cases include:
 
@@ -33,7 +33,7 @@ The App is designed to support:
 
 PostgreSQL connections are configured manually.
 
-When MariaDB is installed as a Home Assistant OS App and exposes the Supervisor `mysql` service, DH Recorder Database Monitor can use that connection automatically.
+When MariaDB is installed as a Home Assistant OS App and exposes the Supervisor `mysql` service, DH Recorder Monitor can use that connection automatically.
 
 ## MQTT Integration
 
@@ -65,7 +65,7 @@ The initial version exposes the following entities:
 
 All entities are grouped under a single Home Assistant device:
 
-**DH Recorder Database**
+**DH Recorder**
 
 ## How It Works
 
@@ -76,7 +76,7 @@ Home Assistant Recorder
 PostgreSQL / MariaDB
         │
         ▼
-DH Recorder Database Monitor
+DH Recorder Monitor
         │
         ▼
 MQTT Discovery
@@ -168,7 +168,7 @@ This makes it possible to detect problems where Home Assistant is running normal
 
 ## Why Use This App
 
-Without DH Recorder Database Monitor, similar monitoring usually requires multiple SQL sensors in Home Assistant configuration.
+Without DH Recorder Monitor, similar monitoring usually requires multiple SQL sensors in Home Assistant configuration.
 
 For example:
 
@@ -181,7 +181,7 @@ sensor:
 
 This becomes difficult to maintain across multiple Home Assistant installations.
 
-DH Recorder Database Monitor moves the database monitoring logic into a reusable Home Assistant OS App and automatically creates all required entities through MQTT Discovery.
+DH Recorder Monitor moves the database monitoring logic into a reusable Home Assistant OS App and automatically creates all required entities through MQTT Discovery.
 
 This provides:
 

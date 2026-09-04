@@ -3,13 +3,14 @@ from __future__ import annotations
 from typing import Any
 
 DEVICE_ID = "digitalhouses_db_monitoring"
-DEVICE_NAME = "DH Recorder Database"
+DEVICE_NAME = "DH Recorder"
 BASE_TOPIC = "DigitalHouses/Global/db_monitoring"
 STATE_TOPIC = f"{BASE_TOPIC}/state"
 APP_AVAILABILITY_TOPIC = f"{BASE_TOPIC}/availability"
 DB_AVAILABILITY_TOPIC = f"{BASE_TOPIC}/database_availability"
 DISCOVERY_TOPIC = f"homeassistant/device/{DEVICE_ID}/config"
 HA_STATUS_TOPIC = "homeassistant/status"
+STATE_RETAIN = True
 
 
 def _availability(topic: str) -> dict[str, str]:
