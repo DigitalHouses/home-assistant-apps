@@ -20,8 +20,19 @@ class DatabaseConfig:
 
 
 @dataclass(frozen=True)
+class StorageConfig:
+    source: str
+    host: str
+    port: int
+    username: str
+    password: str
+    path: str
+
+
+@dataclass(frozen=True)
 class AppConfig:
     database: DatabaseConfig
+    storage: StorageConfig
     publish_interval_minutes: int
     recorder_stale_seconds: int
     log_level: str
@@ -54,6 +65,7 @@ def _required(value: Any, label: str) -> str:
 def load_config(path: Path = OPTIONS_FILE) -> AppConfig:
     options = _read_options(path)
     engine = str(options.get('database_type', 'postgresql')).lower()
+    mariadb_connection = ''
 
     if engine == 'postgresql':
         raw = options.get('postgresql') or {}
@@ -71,8 +83,8 @@ def load_config(path: Path = OPTIONS_FILE) -> AppConfig:
         raw = options.get('mariadb') or {}
         if not isinstance(raw, dict):
             raw = {}
-        connection = str(raw.get('connection', 'supervisor')).lower()
-        if connection == 'supervisor':
+        mariadb_connection = str(raw.get('connection', 'supervisor')).lower()
+        if mariadb_connection == 'supervisor':
             db = DatabaseConfig(
                 engine='mariadb',
                 host=_required(os.getenv('MYSQL_SERVICE_HOST'), 'Supervisor MySQL service host'),
@@ -81,7 +93,7 @@ def load_config(path: Path = OPTIONS_FILE) -> AppConfig:
                 username=_required(os.getenv('MYSQL_SERVICE_USER'), 'Supervisor MySQL service username'),
                 password=_required(os.getenv('MYSQL_SERVICE_PASSWORD'), 'Supervisor MySQL service password'),
             )
-        elif connection == 'manual':
+        elif mariadb_connection == 'manual':
             db = DatabaseConfig(
                 engine='mariadb',
                 host=_required(raw.get('host'), 'MariaDB host'),
@@ -95,6 +107,39 @@ def load_config(path: Path = OPTIONS_FILE) -> AppConfig:
     else:
         raise ValueError("database_type must be 'postgresql' or 'mariadb'")
 
+    storage_raw = options.get('storage') or {}
+    if not isinstance(storage_raw, dict):
+        storage_raw = {}
+    requested_storage = str(storage_raw.get('source', 'automatic')).lower()
+    if requested_storage not in {'automatic', 'ssh', 'disabled'}:
+        raise ValueError("Storage source must be 'automatic', 'ssh' or 'disabled'")
+
+    ssh_host = str(storage_raw.get('ssh_host') or '').strip() or db.host
+    ssh_port = _bounded_int(storage_raw.get('ssh_port'), 1, 65535, 22)
+    ssh_username = str(storage_raw.get('ssh_username') or '').strip()
+    ssh_password = str(storage_raw.get('ssh_password') or '')
+    storage_path = str(storage_raw.get('path') or '').strip()
+
+    if requested_storage == 'disabled':
+        storage_source = 'disabled'
+    elif requested_storage == 'automatic' and engine == 'mariadb' and mariadb_connection == 'supervisor':
+        storage_source = 'supervisor'
+    elif requested_storage == 'automatic':
+        storage_source = 'ssh' if ssh_username and ssh_password else 'disabled'
+    else:
+        storage_source = 'ssh'
+        ssh_username = _required(ssh_username, 'Storage SSH username')
+        ssh_password = _required(ssh_password, 'Storage SSH password')
+
+    storage = StorageConfig(
+        source=storage_source,
+        host=ssh_host,
+        port=ssh_port,
+        username=ssh_username,
+        password=ssh_password,
+        path=storage_path,
+    )
+
     log_level = str(options.get('log_level', 'info')).lower()
     if log_level not in {'debug', 'info', 'warning', 'error'}:
         log_level = 'info'
@@ -103,6 +148,7 @@ def load_config(path: Path = OPTIONS_FILE) -> AppConfig:
 
     return AppConfig(
         database=db,
+        storage=storage,
         publish_interval_minutes=_bounded_int(
             options.get('publish_interval_minutes'), 1, 60, 1
         ),

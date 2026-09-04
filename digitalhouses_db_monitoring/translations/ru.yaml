@@ -1,16 +1,16 @@
 configuration:
   database_type:
     name: Тип базы данных
-    description: Движок базы данных Recorder, используемый Home Assistant.
+    description: Тип базы данных Recorder, используемой Home Assistant.
   postgresql:
     name: PostgreSQL
-    description: Ручные параметры подключения к PostgreSQL Recorder.
+    description: Ручное подключение к базе Recorder PostgreSQL.
   postgresql.host:
     name: Хост
-    description: Имя хоста или IP-адрес PostgreSQL.
+    description: Имя хоста или IP-адрес сервера PostgreSQL.
   postgresql.port:
     name: Порт
-    description: Порт PostgreSQL.
+    description: Порт сервера PostgreSQL.
   postgresql.database:
     name: База данных
     description: Имя базы данных Recorder.
@@ -22,16 +22,16 @@ configuration:
     description: Пароль PostgreSQL.
   mariadb:
     name: MariaDB
-    description: Подключение к базе данных MariaDB Recorder.
+    description: Подключение к базе Recorder MariaDB.
   mariadb.connection:
     name: Режим подключения
-    description: Использовать сервис MySQL Supervisor или ручные параметры MariaDB.
+    description: Использовать сервис MySQL Supervisor или ручное подключение MariaDB.
   mariadb.host:
     name: Хост
     description: Имя хоста или IP-адрес MariaDB для ручного режима.
   mariadb.port:
     name: Порт
-    description: Порт MariaDB для ручного режима.
+    description: Порт сервера MariaDB.
   mariadb.database:
     name: База данных
     description: Имя базы данных Recorder.
@@ -41,15 +41,36 @@ configuration:
   mariadb.password:
     name: Пароль
     description: Пароль MariaDB для ручного режима.
+  storage:
+    name: Мониторинг диска
+    description: Контроль свободного места и использования диска базы Recorder.
+  storage.source:
+    name: Источник данных диска
+    description: Автоматически использует диск HAOS для MariaDB Supervisor и SSH для внешней БД при заполненных SSH-реквизитах. SSH включает удалённый мониторинг принудительно. Отключено выключает мониторинг диска.
+  storage.ssh_host:
+    name: SSH хост
+    description: Необязательный SSH-хост или IP. Если пусто, используется хост базы данных.
+  storage.ssh_port:
+    name: SSH порт
+    description: Порт SSH-сервера.
+  storage.ssh_username:
+    name: SSH пользователь
+    description: Linux-пользователь на внешнем сервере базы данных. Права sudo не требуются.
+  storage.ssh_password:
+    name: SSH пароль
+    description: Пароль Linux-пользователя SSH.
+  storage.path:
+    name: Путь файловой системы
+    description: Необязательный путь для проверки диска. Если пусто, каталог данных PostgreSQL или MariaDB определяется автоматически.
   publish_interval_minutes:
     name: Интервал публикации, мин
-    description: Интервал в минутах между публикациями состояния MQTT и проверками Recorder.
+    description: Интервал в минутах между публикациями MQTT и проверками состояния Recorder.
   recorder_stale_seconds:
     name: Порог остановки Recorder
-    description: Максимальный возраст последней записи states, после которого DB recorder writing выключается.
+    description: Максимальный возраст последней записи в секундах, после которого DB recorder writing переключается в off.
   timezone:
     name: Часовой пояс
-    description: Часовой пояс IANA для границ предыдущего дня, например Asia/Almaty. Пустое значение использует timezone контейнера или UTC.
+    description: Необязательный IANA timezone для границ предыдущего дня, например Asia/Almaty. Если пусто, используется timezone контейнера или UTC.
   log_level:
-    name: Уровень логов
-    description: Подробность логирования приложения.
+    name: Уровень логирования
+    description: Детальность журнала приложения.

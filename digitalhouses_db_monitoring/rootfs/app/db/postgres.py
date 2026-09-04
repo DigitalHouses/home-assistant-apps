@@ -66,3 +66,6 @@ class PostgresAdapter(DatabaseAdapter):
             'db_user': self._one('SELECT current_user'),
             'db_version': self._one("SELECT substring(version() from 1 for 80)"),
         }
+
+    def data_directory(self) -> str:
+        return str(self._one('SHOW data_directory'))

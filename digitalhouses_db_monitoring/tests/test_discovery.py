@@ -29,3 +29,21 @@ class DiscoveryTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+class StorageDiscoveryTests(unittest.TestCase):
+    def test_storage_entities_are_included_when_enabled(self):
+        payload = build_discovery_payload('0.1.3', include_storage=True)
+        components = payload['components']
+        self.assertEqual(
+            components['db_disk_free']['default_entity_id'],
+            'sensor.dh_db_disk_free',
+        )
+        self.assertEqual(
+            components['db_disk_used_percentage']['default_entity_id'],
+            'sensor.dh_db_disk_used_percentage',
+        )
+
+    def test_storage_entities_are_omitted_when_disabled(self):
+        payload = build_discovery_payload('0.1.3', include_storage=False)
+        self.assertNotIn('db_disk_free', payload['components'])
+        self.assertNotIn('db_disk_used_percentage', payload['components'])

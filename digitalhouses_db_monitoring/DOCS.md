@@ -1,56 +1,43 @@
 # DigitalHouses DB Monitoring
 
-Monitors the Home Assistant Recorder database and exposes the main database and write-health metrics through MQTT Discovery.
+DigitalHouses DB Monitoring publishes Home Assistant Recorder database health and storage metrics through MQTT Discovery.
 
-## PostgreSQL
+## Database support
 
-Select `postgresql` and configure the Recorder database connection manually.
+- PostgreSQL: manual database connection.
+- MariaDB Supervisor App: automatic MySQL service discovery.
+- External MariaDB: manual database connection.
 
-Example:
+## Storage monitoring
 
-```yaml
-database_type: postgresql
-postgresql:
-  host: 192.168.11.31
-  port: 5432
-  database: homeassistant
-  username: hauser
-  password: your_password
-publish_interval_minutes: 1
-```
+The App can publish:
 
-## MariaDB
+- `sensor.dh_db_disk_free` — free space on the filesystem that stores the Recorder database, in GB.
+- `sensor.dh_db_disk_used_percentage` — used disk percentage.
 
-When the official Home Assistant MariaDB App provides the Supervisor `mysql` service, use:
+### Automatic
 
-```yaml
-database_type: mariadb
-mariadb:
-  connection: supervisor
-  database: homeassistant
-publish_interval_minutes: 1
-```
+For MariaDB running as a Home Assistant OS App, `Automatic` reads the HAOS data disk metrics from the Supervisor Host API. No SSH configuration is required.
 
-The App obtains host, port, username and password from Supervisor automatically.
+For an external PostgreSQL or MariaDB server, `Automatic` enables SSH storage monitoring when an SSH username and password are configured. If SSH credentials are empty, database monitoring continues normally and storage sensors are not created.
 
-For an external MariaDB server, select `manual` and provide all connection fields.
+### SSH
 
-## MQTT
+For external databases, choose `SSH` and configure a Linux user on the database server. The user only needs permission to log in and run `df`; sudo/root access is not required.
 
-MQTT connection details are obtained automatically from the Supervisor `mqtt` service. No MQTT credentials are configured in this App.
+`SSH host` can be left empty to reuse the database host.
 
-## Metrics
+`Filesystem path` can also be left empty. The App detects the data directory with:
 
-The App creates one MQTT device named **DH Recorder**. All Home Assistant entity IDs use the `dh_db_*` prefix.
+- PostgreSQL: `SHOW data_directory`
+- MariaDB: `SELECT @@datadir`
 
-## Publication interval
+The first SSH host key is stored in `/data/ssh_known_hosts` and is checked on later connections.
 
-`publish_interval_minutes` controls how often the App checks Recorder health and publishes the combined MQTT state payload. The default is 1 minute.
+### Disabled
 
-Database size and hourly write-rate queries are internally limited to every 5 minutes. Expensive history-depth and total-row-count queries are internally limited to every 60 minutes.
+Choose `Disabled` to omit the two storage entities.
 
-`recorder_stale_seconds` controls how old the newest `states` record may be before `binary_sensor.dh_db_recorder_writing` turns off.
+## Publishing
 
-## Timezone
-
-Leave `timezone` empty to use the container timezone when available. Set an explicit IANA timezone such as `Asia/Almaty` if required.
+`Publish interval, min` controls how often Recorder health/state is refreshed and MQTT state is published. More expensive database queries and storage checks are internally rate-limited.

@@ -16,12 +16,14 @@ from db import create_adapter
 from discovery import (
     APP_AVAILABILITY_TOPIC,
     DB_AVAILABILITY_TOPIC,
+    STORAGE_AVAILABILITY_TOPIC,
     DISCOVERY_TOPIC,
     HA_STATUS_TOPIC,
     STATE_RETAIN,
     STATE_TOPIC,
     build_discovery_payload,
 )
+from storage import StorageCollector
 from metrics import (
     db_depth_days,
     iso_from_epoch,
@@ -31,9 +33,10 @@ from metrics import (
     yesterday_bounds_epoch,
 )
 
-APP_VERSION = os.getenv('APP_VERSION', '0.1.2-local')
+APP_VERSION = os.getenv('APP_VERSION', '0.1.3-local')
 MEDIUM_INTERVAL_SECONDS = 300
 SLOW_INTERVAL_SECONDS = 3600
+STORAGE_INTERVAL_SECONDS = 300
 
 
 class DatabaseMonitorApp:
@@ -51,6 +54,7 @@ class DatabaseMonitorApp:
         )
         self.log = logging.getLogger('digitalhouses_db_monitoring')
         self.adapter = create_adapter(self.config.database)
+        self.storage = StorageCollector(self.config.storage, self.adapter)
         self.state: dict[str, Any] = {
             'db_connected': False,
             'recorder_writing': False,
@@ -59,6 +63,7 @@ class DatabaseMonitorApp:
         self.stop_event = threading.Event()
         self.mqtt_connected = threading.Event()
         self.db_available = False
+        self.storage_available = False
         self.client = self._build_mqtt_client()
 
     def _build_mqtt_client(self) -> mqtt.Client:
@@ -80,9 +85,18 @@ class DatabaseMonitorApp:
             return
         self.mqtt_connected.set()
         client.subscribe(HA_STATUS_TOPIC, qos=1)
-        self.publish_json(DISCOVERY_TOPIC, build_discovery_payload(APP_VERSION), retain=True)
+        self.publish_json(
+            DISCOVERY_TOPIC,
+            build_discovery_payload(APP_VERSION, include_storage=self.storage.enabled),
+            retain=True,
+        )
         self.publish_text(APP_AVAILABILITY_TOPIC, 'online', retain=True)
         self.publish_text(DB_AVAILABILITY_TOPIC, 'online' if self.db_available else 'offline', retain=True)
+        self.publish_text(
+            STORAGE_AVAILABILITY_TOPIC,
+            'online' if self.storage_available else 'offline',
+            retain=True,
+        )
         self.publish_state()
         self.log.info('MQTT connected; discovery published')
 
@@ -98,7 +112,11 @@ class DatabaseMonitorApp:
             return
         payload = message.payload.decode('utf-8', errors='replace').strip().lower()
         if payload == 'online':
-            self.publish_json(DISCOVERY_TOPIC, build_discovery_payload(APP_VERSION), retain=True)
+            self.publish_json(
+                DISCOVERY_TOPIC,
+                build_discovery_payload(APP_VERSION, include_storage=self.storage.enabled),
+                retain=True,
+            )
             self.publish_state()
 
     def publish_text(self, topic: str, payload: str, retain: bool) -> None:
@@ -127,6 +145,24 @@ class DatabaseMonitorApp:
     def set_db_available(self, available: bool) -> None:
         self.db_available = available
         self.publish_text(DB_AVAILABILITY_TOPIC, 'online' if available else 'offline', retain=True)
+
+    def set_storage_available(self, available: bool) -> None:
+        self.storage_available = available
+        self.publish_text(
+            STORAGE_AVAILABILITY_TOPIC,
+            'online' if available else 'offline',
+            retain=True,
+        )
+
+    def collect_storage(self) -> None:
+        if not self.storage.enabled:
+            return
+        try:
+            self.update_state(self.storage.collect())
+            self.set_storage_available(True)
+        except Exception as exc:
+            self.log.warning('Storage query failed: %s', exc)
+            self.set_storage_available(False)
 
     def collect_fast(self) -> bool:
         now = time.time()
@@ -193,13 +229,14 @@ class DatabaseMonitorApp:
         self.log.info('Database target: %s@%s:%s/%s', db.username, db.host, db.port, db.database)
         self.log.info('Timezone: %s', self.config.timezone)
         self.log.info('Publish interval: %s minute(s)', self.config.publish_interval_minutes)
+        self.log.info('Storage monitoring source: %s', self.config.storage.source)
 
         host = os.environ['MQTT_HOST']
         port = int(os.getenv('MQTT_PORT', '1883'))
         self.client.connect_async(host, port, keepalive=60)
         self.client.loop_start()
 
-        next_publish = next_medium = next_slow = 0.0
+        next_publish = next_medium = next_slow = next_storage = 0.0
         static_loaded = False
         try:
             while not self.stop_event.is_set():
@@ -216,6 +253,9 @@ class DatabaseMonitorApp:
                         if now_mono >= next_slow:
                             self.collect_slow()
                             next_slow = now_mono + SLOW_INTERVAL_SECONDS
+                    if self.storage.enabled and now_mono >= next_storage:
+                        self.collect_storage()
+                        next_storage = now_mono + STORAGE_INTERVAL_SECONDS
                     self.publish_state()
                     next_publish = now_mono + publish_interval_seconds
                 self.stop_event.wait(1.0)

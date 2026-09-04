@@ -41,6 +41,27 @@ configuration:
   mariadb.password:
     name: Password
     description: MariaDB password for manual mode.
+  storage:
+    name: Storage monitoring
+    description: Monitor free disk space and disk usage for the Recorder database storage.
+  storage.source:
+    name: Storage source
+    description: Automatic uses the HAOS data disk for Supervisor MariaDB and SSH when external DB SSH credentials are supplied. SSH forces remote monitoring. Disabled turns storage monitoring off.
+  storage.ssh_host:
+    name: SSH host
+    description: Optional SSH hostname or IP address. Leave empty to use the database host.
+  storage.ssh_port:
+    name: SSH port
+    description: SSH server port.
+  storage.ssh_username:
+    name: SSH username
+    description: Linux user on the external database host. No sudo access is required.
+  storage.ssh_password:
+    name: SSH password
+    description: Password for the Linux SSH user.
+  storage.path:
+    name: Filesystem path
+    description: Optional path used for disk usage. Leave empty to detect the PostgreSQL or MariaDB data directory automatically.
   publish_interval_minutes:
     name: Publish interval, min
     description: Interval in minutes between MQTT state publications and Recorder health checks.

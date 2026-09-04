@@ -68,3 +68,6 @@ class MariaDBAdapter(DatabaseAdapter):
             'db_user': self._one('SELECT CURRENT_USER()'),
             'db_version': self._one('SELECT VERSION()'),
         }
+
+    def data_directory(self) -> str:
+        return str(self._one('SELECT @@datadir'))

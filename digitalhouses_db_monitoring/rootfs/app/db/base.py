@@ -20,3 +20,7 @@ class DatabaseAdapter(ABC):
     @abstractmethod
     def static_metrics(self) -> dict[str, Any]:
         raise NotImplementedError
+
+    @abstractmethod
+    def data_directory(self) -> str:
+        raise NotImplementedError

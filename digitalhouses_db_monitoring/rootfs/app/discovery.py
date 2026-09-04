@@ -8,6 +8,7 @@ BASE_TOPIC = "DigitalHouses/Global/db_monitoring"
 STATE_TOPIC = f"{BASE_TOPIC}/state"
 APP_AVAILABILITY_TOPIC = f"{BASE_TOPIC}/availability"
 DB_AVAILABILITY_TOPIC = f"{BASE_TOPIC}/database_availability"
+STORAGE_AVAILABILITY_TOPIC = f"{BASE_TOPIC}/storage_availability"
 DISCOVERY_TOPIC = f"homeassistant/device/{DEVICE_ID}/config"
 HA_STATUS_TOPIC = "homeassistant/status"
 STATE_RETAIN = True
@@ -30,11 +31,14 @@ def _component(
     *,
     diagnostic: bool = False,
     db_required: bool = True,
+    storage_required: bool = False,
     **extra: Any,
 ) -> dict[str, Any]:
     availability = [_availability(APP_AVAILABILITY_TOPIC)]
     if db_required:
         availability.append(_availability(DB_AVAILABILITY_TOPIC))
+    if storage_required:
+        availability.append(_availability(STORAGE_AVAILABILITY_TOPIC))
     payload: dict[str, Any] = {
         "platform": platform,
         "name": name,
@@ -51,7 +55,7 @@ def _component(
     return payload
 
 
-def build_discovery_payload(app_version: str) -> dict[str, Any]:
+def build_discovery_payload(app_version: str, include_storage: bool = False) -> dict[str, Any]:
     components = {
         "db_start": _component(
             "sensor", "DB start", "db_start", "sensor.dh_db_start",
@@ -120,6 +124,19 @@ def build_discovery_payload(app_version: str) -> dict[str, Any]:
             icon="mdi:timer-sand",
         ),
     }
+    if include_storage:
+        components["db_disk_free"] = _component(
+            "sensor", "DB disk free", "db_disk_free", "sensor.dh_db_disk_free",
+            "{{ value_json.db_disk_free }}", diagnostic=True, db_required=False, storage_required=True,
+            device_class="data_size", state_class="measurement", unit_of_measurement="GB",
+            suggested_display_precision=1, icon="mdi:harddisk",
+        )
+        components["db_disk_used_percentage"] = _component(
+            "sensor", "DB disk used", "db_disk_used_percentage", "sensor.dh_db_disk_used_percentage",
+            "{{ value_json.db_disk_used_percentage }}", diagnostic=True, db_required=False, storage_required=True,
+            state_class="measurement", unit_of_measurement="%", suggested_display_precision=1,
+            icon="mdi:harddisk",
+        )
     return {
         "device": {
             "identifiers": [DEVICE_ID],
