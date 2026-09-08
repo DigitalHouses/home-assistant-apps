@@ -9,6 +9,15 @@ https://github.com/DigitalHouses/home-assistant-apps
 ```
 
 
+## Development standard / Стандарт разработки
+
+All `digitalhouses_*` applications in this repository are governed by the
+[DigitalHouses Application Standard v1](docs/DIGITALHOUSES_APP_STANDARD.md).
+
+Все приложения семейства `digitalhouses_*` в этом репозитории разрабатываются по
+[DigitalHouses Application Standard v1](docs/DIGITALHOUSES_APP_STANDARD.md).
+
+
 
 ## English
 
