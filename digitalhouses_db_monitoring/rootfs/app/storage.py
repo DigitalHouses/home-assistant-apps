@@ -7,7 +7,6 @@ import urllib.request
 from pathlib import Path
 from typing import Any, Callable
 
-
 from config import StorageConfig
 from db.base import DatabaseAdapter
 
@@ -22,13 +21,19 @@ def parse_df_output(output: str) -> dict[str, float]:
     fields = lines[-1].split()
     if len(fields) < 6:
         raise ValueError('Unexpected df output fields')
+    total_bytes = float(fields[-5])
+    used_bytes = float(fields[-4])
     available_bytes = float(fields[-3])
     capacity = fields[-2]
+    if total_bytes <= 0:
+        raise ValueError('Filesystem total size must be greater than zero')
     if not capacity.endswith('%'):
         raise ValueError('Unexpected df capacity value')
     used_percentage = float(capacity[:-1])
     return {
         'db_disk_free': round(available_bytes / 1_000_000_000, 1),
+        'db_disk_used': round(used_bytes / 1_000_000_000, 1),
+        'db_disk_total': round(total_bytes / 1_000_000_000, 1),
         'db_disk_used_percentage': round(used_percentage, 1),
     }
 
@@ -44,6 +49,8 @@ def parse_supervisor_host_payload(payload: dict[str, Any]) -> dict[str, float]:
         raise ValueError('Supervisor disk_total must be greater than zero')
     return {
         'db_disk_free': round(free, 1),
+        'db_disk_used': round(used, 1),
+        'db_disk_total': round(total, 1),
         'db_disk_used_percentage': round(used / total * 100.0, 1),
     }
 
@@ -62,7 +69,6 @@ def fetch_supervisor_host_payload() -> dict[str, Any]:
 
 def _run_ssh_command(config: StorageConfig, command: str) -> str:
     import paramiko
-
     client = paramiko.SSHClient()
     if KNOWN_HOSTS_FILE.exists():
         client.load_host_keys(str(KNOWN_HOSTS_FILE))
@@ -138,7 +144,6 @@ printf '/\n'
 '''
     else:
         return '/'
-
     output = _run_ssh_command(config, command)
     for line in output.splitlines():
         path = line.strip()

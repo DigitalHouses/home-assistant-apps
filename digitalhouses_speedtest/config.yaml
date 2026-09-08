@@ -1,41 +1,70 @@
-name: DigitalHouses Speedtest
-version: 1.1.1
-slug: digitalhouses_speedtest
-description: Internet connectivity monitoring and official Ookla Speedtest CLI results through MQTT Discovery.
-url: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_speedtest
+name: DigitalHouses DB Monitoring
+version: 0.1.8
+slug: digitalhouses_db_monitoring
+description: Monitor Home Assistant Recorder database health and key metrics through MQTT Discovery.
+url: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_db_monitoring
 arch:
   - amd64
+  - aarch64
 startup: application
 boot: auto
 init: false
 stage: stable
 backup: hot
+hassio_api: true
+hassio_role: default
 services:
   - mqtt:need
+  - mysql:want
 options:
-  periodic_test_enabled: true
-  periodic_test_interval_minutes: 30
-  server_ids: []
-  automatic_server_fallback: true
-  speedtest_timeout_seconds: 240
-  connectivity_check:
-    interval_seconds: 60
-    attempts: 3
-    timeout_seconds: 2
-  expire_after_seconds: 14400
-  recent_results_limit: 20
+  database_type: postgresql
+  postgresql:
+    host: ""
+    port: 5432
+    database: homeassistant
+    username: ""
+    password: ""
+  mariadb:
+    connection: supervisor
+    host: ""
+    port: 3306
+    database: homeassistant
+    username: ""
+    password: ""
+  storage:
+    source: automatic
+    ssh_host: ""
+    ssh_port: 22
+    ssh_username: ""
+    ssh_password: ""
+    path: ""
+  publish_interval_minutes: 1
+  recorder_stale_seconds: 300
+  timezone: ""
   log_level: info
 schema:
-  periodic_test_enabled: bool
-  periodic_test_interval_minutes: int(5,720)
-  server_ids:
-    - int
-  automatic_server_fallback: bool
-  speedtest_timeout_seconds: int(30,600)
-  connectivity_check:
-    interval_seconds: int(10,3600)
-    attempts: int(1,10)
-    timeout_seconds: int(1,30)
-  expire_after_seconds: int(0,86400)
-  recent_results_limit: int(5,50)
+  database_type: list(postgresql|mariadb)
+  postgresql:
+    host: str
+    port: port
+    database: str
+    username: str
+    password: password
+  mariadb:
+    connection: list(supervisor|manual)
+    host: str
+    port: port
+    database: str
+    username: str
+    password: password
+  storage:
+    source: list(automatic|ssh|disabled)
+    ssh_host: str
+    ssh_port: port
+    ssh_username: str
+    ssh_password: password
+    path: str
+  publish_interval_minutes: int(1,60)
+  recorder_stale_seconds: int(30,86400)
+  timezone: str
   log_level: list(debug|info|warning|error)

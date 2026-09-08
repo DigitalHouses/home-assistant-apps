@@ -1,56 +1,55 @@
 # Changelog
+## 0.1.8
+- Added `sensor.dh_db_last_refresh` with the timestamp of the last successful manual full refresh.
+- Added `sensor.dh_db_disk_used` and `sensor.dh_db_disk_total`.
+- Storage collection now publishes free, used, total, and used-percentage values for both Supervisor and SSH sources.
+- A manual refresh updates `db_last_refresh` only when all enabled refresh groups complete successfully.
 
-## 1.1.1
+## 0.1.7
+- Added diagnostic `button.dh_db_refresh` for an on-demand full refresh of DB Monitoring data.
+- A manual refresh immediately recollects fast, medium, slow, static, storage, Top Recorder 24h, and Top Recorder all-time data.
+- Manual refresh requests are executed by the main application loop so expensive database queries do not block the MQTT callback thread.
+- Duplicate refresh requests are ignored while a refresh is already pending or running.
+- Existing background polling intervals remain unchanged and are not reset by a manual refresh.
 
-- Added `number.internet_speed_periodic_interval` for changing the automatic
-  Speedtest interval directly in Home Assistant.
-- Added a 5–720 minute range, 5-minute UI step and box input mode.
-- Changing the Number now immediately restarts the countdown to the next
-  scheduled test without restarting the App.
-- Added persistent `/data/schedule.json` storage.
-- Preserved `periodic_test_interval_minutes` as a backward-compatible App
-  option; an explicit option change is adopted on the next App restart.
-- Added MQTT schedule state and command topics.
-- Added Recorder and Lovelace entries for the new Number.
-- Expanded runtime, discovery and repository validation tests.
+## 0.1.6
+- Added `sensor.dh_db_top_entities_24h` with Top 10 Recorder entities for the last 24 hours.
+- Added `sensor.dh_db_top_entities_all_time` with Top 10 Recorder entities across retained history.
+- Added `top_entity`, `top_records`, `generated_at`, `period` and `top_10` attributes.
+- Refresh the 24-hour ranking once per hour and the all-time ranking once per day.
+- Ranking failures keep the previous successful MQTT state and do not interrupt core database monitoring.
+- Publish rankings on dedicated retained MQTT topics only when recalculated, avoiding minute-by-minute Recorder churn.
+## 0.1.5
 
-## 1.1.0
+- Fix PostgreSQL storage autodetection when multiple clusters are installed.
+- Select only the online PostgreSQL cluster matching the configured database port.
+- Ignore stopped clusters on other ports.
 
-- Changed the default periodic test interval for new configurations to 30 minutes.
-- Added persistent MQTT Number thresholds:
-  - Minimum download speed, default 10 Mbit/s;
-  - Minimum upload speed, default 10 Mbit/s;
-  - Maximum ping, default 200 ms.
-- Added problem binary sensors:
-  - Low download speed;
-  - Low upload speed;
-  - High ping;
-  - Internet performance problem.
-- Implemented strict comparison semantics: speed below minimum and ping above maximum are problems; equality is normal.
-- Added immediate problem-sensor recalculation when a threshold changes.
-- Added diagnostic Recent results with persistent storage, immutable historical thresholds, server context and prepared problem reasons.
-- Added `recent_results_limit` option with range 5–50 and default 20.
-- Added `/data/thresholds.json` and `/data/recent_results.json`.
-- Added dedicated result-freshness availability so stale measurements and performance evaluations become unavailable reliably.
-- Preserved previous measurements and evaluation after failed tests or missing connectivity.
-- Kept packet-loss `null` as Home Assistant `unknown`.
-- Preserved all 1.0.0 MQTT topics, device identifier, unique IDs and default entity IDs.
-- Added Recorder and built-in Lovelace examples for the new entities.
-- Excluded Recent results from Recorder to avoid storing the large result-array attribute.
-- Expanded unit and discovery regression tests.
-- Updated English and Russian documentation and feedback links.
+## 0.1.4
 
-## 1.0.0
+- Made `Filesystem path` a true optional override for SSH storage monitoring.
+- Added SSH-side PostgreSQL/MariaDB storage path auto-detection when the DB user cannot read the server data directory.
+- Added `/` as a safe final fallback and log output showing the resolved storage path.
+## 0.1.3
 
-- Published the first stable DigitalHouses Speedtest App.
-- Verified installation and operation on Home Assistant OS `amd64`.
-- Added official Ookla Speedtest CLI 1.2.0.
-- Preserved the LXC prototype MQTT topics and existing entity unique IDs.
-- Added manual and optional periodic speed tests.
-- Added Google DNS and Cloudflare DNS connectivity binary sensors.
-- Added suppression of speed tests when both connectivity targets are down.
-- Added preferred server IDs and automatic server fallback.
-- Added nearby Ookla server discovery with MQTT sensor attributes.
-- Added persistent test state and server-list cache.
-- Added an optional Recorder package.
-- Added English and Russian documentation.
+- Added `sensor.dh_db_disk_free`.
+- Added `sensor.dh_db_disk_used_percentage`.
+- Added automatic HAOS data disk monitoring for Supervisor MariaDB.
+- Added SSH disk monitoring for external PostgreSQL and MariaDB databases.
+- Added automatic PostgreSQL/MariaDB data directory detection for SSH storage checks.
+- Added separate MQTT storage availability tracking.
+## 0.1.2
+
+- Renamed the MQTT device to `DH Recorder`.
+- Shortened database version values, for example `PostgreSQL 17.5`.
+- Retained MQTT state so entities recover immediately after Home Assistant or App restart.
+
+## 0.1.1
+
+- Standardized entity IDs with the `dh_db_*` prefix.
+- Improved entity names with the `DB` prefix.
+- Replaced technical polling controls with a single publish interval in minutes.
+
+## 0.1.0
+
+- Initial PostgreSQL and MariaDB Recorder monitoring release.

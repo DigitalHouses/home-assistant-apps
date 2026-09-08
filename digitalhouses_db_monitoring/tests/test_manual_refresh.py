@@ -65,12 +65,13 @@ class ManualRefreshTests(unittest.TestCase):
         app.refresh_in_progress = threading.Event()
         app.storage = types.SimpleNamespace(enabled=True)
         app.collect_fast = Mock(return_value=True)
-        app.collect_static = Mock()
-        app.collect_medium = Mock()
-        app.collect_slow = Mock()
-        app.collect_top_entities = Mock()
-        app.collect_storage = Mock()
+        app.collect_static = Mock(return_value=True)
+        app.collect_medium = Mock(return_value=True)
+        app.collect_slow = Mock(return_value=True)
+        app.collect_top_entities = Mock(return_value=True)
+        app.collect_storage = Mock(return_value=True)
         app.publish_state = Mock()
+        app.update_state = Mock()
         return app
 
     def test_refresh_command_queues_manual_refresh(self):
@@ -140,6 +141,26 @@ class ManualRefreshTests(unittest.TestCase):
         self.assertEqual(app.collect_top_entities.call_count, 2)
         app.collect_storage.assert_called_once_with()
         app.publish_state.assert_called_once_with()
+
+    def test_successful_manual_refresh_updates_last_refresh_timestamp(self):
+        app = self.make_app()
+
+        with patch('app.time.time', return_value=1788876000), patch(
+            'app.iso_from_epoch', return_value='2026-09-08T12:00:00+00:00'
+        ):
+            app.manual_refresh()
+
+        app.update_state.assert_called_once_with({
+            'db_last_refresh': '2026-09-08T12:00:00+00:00'
+        })
+
+    def test_failed_manual_refresh_does_not_update_last_refresh_timestamp(self):
+        app = self.make_app()
+        app.collect_slow.return_value = False
+
+        app.manual_refresh()
+
+        app.update_state.assert_not_called()
 
 
 if __name__ == '__main__':

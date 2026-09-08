@@ -39,7 +39,7 @@ from metrics import (
     short_db_version,
     yesterday_bounds_epoch,
 )
-APP_VERSION = os.getenv('APP_VERSION', '0.1.7-local')
+APP_VERSION = os.getenv('APP_VERSION', '0.1.8-local')
 MEDIUM_INTERVAL_SECONDS = 300
 SLOW_INTERVAL_SECONDS = 3600
 STORAGE_INTERVAL_SECONDS = 300
@@ -186,9 +186,9 @@ class DatabaseMonitorApp:
             retain=True,
         )
 
-    def collect_storage(self) -> None:
+    def collect_storage(self) -> bool:
         if not self.storage.enabled:
-            return
+            return True
         try:
             self.update_state(self.storage.collect())
             if self.config.storage.source == 'ssh':
@@ -197,9 +197,11 @@ class DatabaseMonitorApp:
                     self.log.info('Storage filesystem path: %s', resolved_path)
                     self._logged_storage_path = resolved_path
             self.set_storage_available(True)
+            return True
         except Exception as exc:
             self.log.warning('Storage query failed: %s', exc)
             self.set_storage_available(False)
+            return False
 
     def collect_fast(self) -> bool:
         now = time.time()
@@ -222,7 +224,7 @@ class DatabaseMonitorApp:
             self.set_db_available(False)
             return False
 
-    def collect_medium(self) -> None:
+    def collect_medium(self) -> bool:
         now = time.time()
         try:
             raw = self.adapter.medium_metrics(now - 3600)
@@ -231,10 +233,12 @@ class DatabaseMonitorApp:
                 'db_records_per_hour': records_k(raw.get('records_last_hour')),
                 'db_size': round(float(size) / 1024 / 1024, 1) if size is not None else None,
             })
+            return True
         except Exception as exc:
             self.log.warning('Medium database query failed: %s', exc)
+            return False
 
-    def collect_slow(self) -> None:
+    def collect_slow(self) -> bool:
         now = time.time()
         start_yesterday, start_today = yesterday_bounds_epoch(now, self.config.timezone)
         try:
@@ -246,18 +250,22 @@ class DatabaseMonitorApp:
                 'db_records': records_k(raw.get('records_total')),
                 'db_yesterday_records': raw.get('records_yesterday'),
             })
+            return True
         except Exception as exc:
             self.log.warning('Slow database query failed: %s', exc)
+            return False
 
-    def collect_static(self) -> None:
+    def collect_static(self) -> bool:
         try:
             raw = self.adapter.static_metrics()
             raw['db_version'] = short_db_version(raw.get('db_version'), self.config.database.engine)
             self.update_state(raw)
+            return True
         except Exception as exc:
             self.log.warning('Static database query failed: %s', exc)
+            return False
 
-    def collect_top_entities(self, period: str) -> None:
+    def collect_top_entities(self, period: str) -> bool:
         generated_ts = time.time()
         since_ts = generated_ts - 86400 if period == '24h' else None
         try:
@@ -269,8 +277,10 @@ class DatabaseMonitorApp:
                 self.ranking_state[period] = snapshot
             topic = TOP_ENTITIES_24H_TOPIC if period == '24h' else TOP_ENTITIES_ALL_TIME_TOPIC
             self.publish_json(topic, snapshot, retain=True)
+            return True
         except Exception as exc:
             self.log.warning('Top entities %s query failed: %s', period, exc)
+            return False
 
     def manual_refresh(self) -> None:
         if self.refresh_in_progress.is_set():
@@ -280,16 +290,25 @@ class DatabaseMonitorApp:
         self.log.info('Manual full refresh started')
         try:
             db_ok = self.collect_fast()
+            refresh_results: list[bool] = [db_ok]
             if db_ok:
-                self.collect_static()
-                self.collect_medium()
-                self.collect_slow()
-                self.collect_top_entities('24h')
-                self.collect_top_entities('all_time')
+                refresh_results.extend([
+                    self.collect_static(),
+                    self.collect_medium(),
+                    self.collect_slow(),
+                    self.collect_top_entities('24h'),
+                    self.collect_top_entities('all_time'),
+                ])
             if self.storage.enabled:
-                self.collect_storage()
+                refresh_results.append(self.collect_storage())
+            full_success = all(refresh_results)
+            if full_success:
+                self.update_state({'db_last_refresh': iso_from_epoch(time.time())})
             self.publish_state()
-            self.log.info('Manual full refresh completed')
+            if full_success:
+                self.log.info('Manual full refresh completed')
+            else:
+                self.log.warning('Manual full refresh completed with errors')
         finally:
             self.refresh_in_progress.clear()
 

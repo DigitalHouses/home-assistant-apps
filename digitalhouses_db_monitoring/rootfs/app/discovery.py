@@ -94,6 +94,11 @@ def build_discovery_payload(app_version: str, include_storage: bool = False) -> 
             "{{ value_json.db_last }}", diagnostic=True,
             device_class="timestamp", icon="mdi:database-clock",
         ),
+        "db_last_refresh": _component(
+            "sensor", "DB last refresh", "db_last_refresh", "sensor.dh_db_last_refresh",
+            "{{ value_json.db_last_refresh }}", diagnostic=True, db_required=False,
+            device_class="timestamp", icon="mdi:database-sync",
+        ),
         "db_depth": _component(
             "sensor", "DB history depth", "db_depth", "sensor.dh_db_depth",
             "{{ value_json.db_depth }}", diagnostic=True,
@@ -175,6 +180,18 @@ def build_discovery_payload(app_version: str, include_storage: bool = False) -> 
         components["db_disk_free"] = _component(
             "sensor", "DB disk free", "db_disk_free", "sensor.dh_db_disk_free",
             "{{ value_json.db_disk_free }}", diagnostic=True, db_required=False, storage_required=True,
+            device_class="data_size", state_class="measurement", unit_of_measurement="GB",
+            suggested_display_precision=1, icon="mdi:harddisk",
+        )
+        components["db_disk_used"] = _component(
+            "sensor", "DB disk used", "db_disk_used", "sensor.dh_db_disk_used",
+            "{{ value_json.db_disk_used }}", diagnostic=True, db_required=False, storage_required=True,
+            device_class="data_size", state_class="measurement", unit_of_measurement="GB",
+            suggested_display_precision=1, icon="mdi:harddisk",
+        )
+        components["db_disk_total"] = _component(
+            "sensor", "DB disk total", "db_disk_total", "sensor.dh_db_disk_total",
+            "{{ value_json.db_disk_total }}", diagnostic=True, db_required=False, storage_required=True,
             device_class="data_size", state_class="measurement", unit_of_measurement="GB",
             suggested_display_precision=1, icon="mdi:harddisk",
         )
