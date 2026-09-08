@@ -1,0 +1,1334 @@
+# ==============================================================================
+# DIGITAL HOUSES — SPEEDTEST + INTERNET GLOBAL PACKAGE
+# Version: 2.2.0
+# Date: 2026-09-08
+#
+# Description:
+# - Global Internet/Speedtest package, identical on every DigitalHouses site.
+# - Provides Internet status, availability/outage statistics, Speedtest derived
+#   logic, vendor-neutral Router abstraction, monthly traffic accounting and
+#   optional fail-safe ONT/Router recovery.
+# - Emits neutral `digitalhouses_internet` events; contains no local notification
+#   or site-specific notification dependencies.
+#
+# Dependencies — required:
+# - Home Assistant package support.
+# - dh_app_speedtest MQTT entities (DNS connectivity, Speedtest sensors, numbers
+#   and buttons).
+# - binary_sensor.bs_internet_passport from:
+#   dh_app_internet_settings_passport_local_package.yaml
+# - Home Assistant: Template, Group, Utility Meter and Recorder integrations.
+#
+# Dependencies — optional:
+# - Router/ONT source entities configured in the local passport.
+# - Router/ONT recovery configured in the local passport via switch, button or
+#   site-local script adapter.
+#
+# Scope:
+# - GLOBAL = common logic for all houses/sites.
+# - Must not contain vendor-specific entity IDs or site-specific notifications.
+# ==============================================================================
+dh_app_speedtest_internet_global_package:
+  binary_sensor:
+  - platform: group
+    name: Internet status
+    unique_id: internet_status_id
+    device_class: connectivity
+    all: false
+    entities:
+    - binary_sensor.internet_google_dns_connectivity
+    - binary_sensor.internet_cloudflare_dns_connectivity
+  input_number:
+    internet_reboot_interval_min:
+      name: Internet reboot interval (min)
+      icon: mdi:timer-outline
+      min: 1
+      max: 60
+      step: 1
+    internet_ont_reboot_every_n_attempts:
+      name: Internet modem cycles before router (N)
+      icon: mdi:counter
+      min: 1
+      max: 20
+      step: 1
+  input_boolean:
+    ib_internet_auto_reboot_ont_enabled:
+      name: Internet auto reboot modem (ONT)
+      icon: mdi:cellphone-wireless
+    ib_internet_auto_reboot_router_enabled:
+      name: Internet auto reboot router
+      icon: mdi:router-wireless
+    ib_internet_reboot_mode_simultaneous:
+      name: Internet reboot mode simultaneous
+      icon: mdi:shuffle-variant
+    ib_internet_statistics_v4_initialized:
+      name: Internet statistics v4 initialized
+      icon: mdi:database-check-outline
+  input_datetime:
+    dt_internet_online_total:
+      name: Internet online total
+      has_date: true
+      has_time: true
+    dt_internet_offline_total:
+      name: Internet offline total
+      has_date: true
+      has_time: true
+    dt_internet_last_failure:
+      name: Internet last failure
+      has_date: true
+      has_time: true
+    dt_internet_last_restore:
+      name: Internet last restore
+      has_date: true
+      has_time: true
+  counter:
+    internet_failure_count:
+      name: Internet failures (month)
+      icon: mdi:alert-decagram-outline
+    internet_reboot_attempt_count:
+      name: Internet reboot attempts (current outage)
+      icon: mdi:restart-alert
+    internet_modem_restart_count:
+      name: Internet modem restarts (current outage)
+      icon: mdi:cellphone-wireless
+    internet_router_restart_count:
+      name: Internet router restarts (current outage)
+      icon: mdi:router-wireless
+  template:
+  - sensor:
+    - name: Internet last failure
+      unique_id: internet_last_failure_sensor_id
+      icon: mdi:clock-alert-outline
+      device_class: timestamp
+      state: '{% set ts = state_attr(''input_datetime.dt_internet_last_failure'', ''timestamp'') %} {{ as_local(as_datetime(ts)).isoformat() if ts is number else none }}'
+      availability: '{% set failure = state_attr(''input_datetime.dt_internet_last_failure'', ''timestamp'') %} {% set restore = state_attr(''input_datetime.dt_internet_last_restore'', ''timestamp'') %} {{ failure is number and restore is number and (failure - restore) | abs > 1 }}'
+    - name: Internet last restore
+      unique_id: internet_last_restore_sensor_id
+      icon: mdi:clock-check-outline
+      device_class: timestamp
+      state: '{% set ts = state_attr(''input_datetime.dt_internet_last_restore'', ''timestamp'') %} {{ as_local(as_datetime(ts)).isoformat() if ts is number else none }}'
+      availability: '{% set failure = state_attr(''input_datetime.dt_internet_last_failure'', ''timestamp'') %} {% set restore = state_attr(''input_datetime.dt_internet_last_restore'', ''timestamp'') %} {{ failure is number and restore is number and (failure - restore) | abs > 1 }}'
+    - name: Internet statistics period start
+      unique_id: internet_statistics_period_start_sensor_id
+      icon: mdi:calendar-start
+      device_class: timestamp
+      state: '{{ now().replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat() }}'
+    - name: Internet online month
+      unique_id: internet_online_month_id
+      icon: mdi:timer-check-outline
+      state: "{% set month_start = as_timestamp(\n  now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)\n) %} {% set total = state_attr('input_datetime.dt_internet_online_total', 'timestamp') %} {% set failure = state_attr('input_datetime.dt_internet_last_failure', 'timestamp') %} {% set restore = state_attr('input_datetime.dt_internet_last_restore', 'timestamp') %} {% if total is not number or failure is not number or restore is not number %}\n  {{ none }}\n{% else %}\n  {% set online = restore > failure %}\n  {% set closed = [total - month_start, 0] | max %}\n  {% set active = 0 %}\n  {% if online %}\n    {% set active_start = [restore, month_start] | max %}\n    {% set active = [now().timestamp() - active_start, 0] | max %}\n  {% endif %}\n  {% set sec = [closed + active, 0] | max | int %}\n  {% set d = sec // 86400 %}\n  {% set h = (sec % 86400) // 3600 %}\n  {% set m = (sec % 3600) // 60 %}\n  {% set s = sec % 60 %}\n  {{ (d ~ ' д. ' if d > 0 else '') ~ ('%02d:%02d:%02d' | format(h,m,s)) }}\n{% endif %}"
+      availability: "{{\n  state_attr('input_datetime.dt_internet_online_total', 'timestamp') is number\n  and state_attr('input_datetime.dt_internet_last_failure', 'timestamp') is number\n  and state_attr('input_datetime.dt_internet_last_restore', 'timestamp') is number\n}}"
+      attributes:
+        seconds: "{% set month_start = as_timestamp(\n  now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)\n) %} {% set total = state_attr('input_datetime.dt_internet_online_total', 'timestamp') %} {% set failure = state_attr('input_datetime.dt_internet_last_failure', 'timestamp') %} {% set restore = state_attr('input_datetime.dt_internet_last_restore', 'timestamp') %} {% if total is not number or failure is not number or restore is not number %}\n  {{ none }}\n{% else %}\n  {% set closed = [total - month_start, 0] | max %}\n  {% set active = 0 %}\n  {% if restore > failure %}\n    {% set active_start = [restore, month_start] | max %}\n    {% set active = [now().timestamp() - active_start, 0] | max %}\n  {% endif %}\n  {{ [closed + active, 0] | max | round(0) }}\n{% endif %}"
+    - name: Internet offline month
+      unique_id: internet_offline_month_id
+      icon: mdi:timer-alert-outline
+      state: "{% set month_start = as_timestamp(\n  now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)\n) %} {% set total = state_attr('input_datetime.dt_internet_offline_total', 'timestamp') %} {% set failure = state_attr('input_datetime.dt_internet_last_failure', 'timestamp') %} {% set restore = state_attr('input_datetime.dt_internet_last_restore', 'timestamp') %} {% if total is not number or failure is not number or restore is not number %}\n  {{ none }}\n{% else %}\n  {% set offline = failure > restore %}\n  {% set closed = [total - month_start, 0] | max %}\n  {% set active = 0 %}\n  {% if offline %}\n    {% set active_start = [failure, month_start] | max %}\n    {% set active = [now().timestamp() - active_start, 0] | max %}\n  {% endif %}\n  {% set sec = [closed + active, 0] | max | int %}\n  {% set d = sec // 86400 %}\n  {% set h = (sec % 86400) // 3600 %}\n  {% set m = (sec % 3600) // 60 %}\n  {% set s = sec % 60 %}\n  {{ (d ~ ' д. ' if d > 0 else '') ~ ('%02d:%02d:%02d' | format(h,m,s)) }}\n{% endif %}"
+      availability: "{{\n  state_attr('input_datetime.dt_internet_offline_total', 'timestamp') is number\n  and state_attr('input_datetime.dt_internet_last_failure', 'timestamp') is number\n  and state_attr('input_datetime.dt_internet_last_restore', 'timestamp') is number\n}}"
+      attributes:
+        seconds: "{% set month_start = as_timestamp(\n  now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)\n) %} {% set total = state_attr('input_datetime.dt_internet_offline_total', 'timestamp') %} {% set failure = state_attr('input_datetime.dt_internet_last_failure', 'timestamp') %} {% set restore = state_attr('input_datetime.dt_internet_last_restore', 'timestamp') %} {% if total is not number or failure is not number or restore is not number %}\n  {{ none }}\n{% else %}\n  {% set closed = [total - month_start, 0] | max %}\n  {% set active = 0 %}\n  {% if failure > restore %}\n    {% set active_start = [failure, month_start] | max %}\n    {% set active = [now().timestamp() - active_start, 0] | max %}\n  {% endif %}\n  {{ [closed + active, 0] | max | round(0) }}\n{% endif %}"
+    - name: Internet availability month
+      unique_id: internet_availability_month_id
+      icon: mdi:percent-circle-outline
+      unit_of_measurement: '%'
+      state_class: measurement
+      state: "{% set online = state_attr('sensor.internet_online_month', 'seconds') %} {% set offline = state_attr('sensor.internet_offline_month', 'seconds') %} {% if online is not number or offline is not number %}\n  {{ none }}\n{% else %}\n  {% set total = online + offline %}\n  {{ ((online / total) * 100) | round(2) if total > 0 else none }}\n{% endif %}"
+      availability: "{{\n  state_attr('sensor.internet_online_month', 'seconds') is number\n  and state_attr('sensor.internet_offline_month', 'seconds') is number\n  and (\n    state_attr('sensor.internet_online_month', 'seconds')\n    + state_attr('sensor.internet_offline_month', 'seconds')\n  ) > 0\n}}"
+    - name: Internet last outage duration
+      unique_id: internet_last_outage_duration_id
+      icon: mdi:timer-outline
+      state: "{% set failure = state_attr('input_datetime.dt_internet_last_failure', 'timestamp') %} {% set restore = state_attr('input_datetime.dt_internet_last_restore', 'timestamp') %} {% if failure is not number or restore is not number or restore < failure %}\n  {{ none }}\n{% else %}\n  {% set sec = [restore - failure, 0] | max | int %}\n  {% set d = sec // 86400 %}\n  {% set h = (sec % 86400) // 3600 %}\n  {% set m = (sec % 3600) // 60 %}\n  {% set s = sec % 60 %}\n  {{ (d ~ ' д. ' if d > 0 else '') ~ ('%02d:%02d:%02d' | format(h,m,s)) }}\n{% endif %}"
+      availability: '{% set failure = state_attr(''input_datetime.dt_internet_last_failure'', ''timestamp'') %} {% set restore = state_attr(''input_datetime.dt_internet_last_restore'', ''timestamp'') %} {{ failure is number and restore is number and restore > failure and (restore - failure) > 1 }}'
+    - name: Internet downtime
+      unique_id: internet_downtime_sensor_id
+      icon: mdi:timer-alert-outline
+      state: '{{ states(''sensor.internet_last_outage_duration'') }}'
+      availability: '{{ states(''sensor.internet_last_outage_duration'') not in [''unknown'',''unavailable'',''none'',''''] }}'
+  - binary_sensor:
+    - name: Internet package ready
+      unique_id: internet_package_ready_id
+      icon: mdi:check-network-outline
+      state: '{{ states(''binary_sensor.internet_status'') in [''on'', ''off''] }}'
+      delay_on: 00:00:30
+  - binary_sensor:
+    - name: Internet passport valid
+      default_entity_id: binary_sensor.internet_passport_valid
+      unique_id: internet_passport_valid_id
+      icon: mdi:shield-check-outline
+      state: >-
+        {% set p = 'binary_sensor.bs_internet_passport' %}
+        {% set ns = namespace(valid=true) %}
+        {% if states(p) != 'on' %}
+          {% set ns.valid = false %}
+        {% endif %}
+        {% for attr in ['site_name', 'router_model', 'router_ip'] %}
+          {% set v = state_attr(p, attr) %}
+          {% if v is none or v | string | trim == '' %}
+            {% set ns.valid = false %}
+          {% endif %}
+        {% endfor %}
+        {% set required = [('router_ping_entity_id', 'binary_sensor.')] %}
+        {% set optional = [
+          ('router_wan_status_entity_id', 'binary_sensor.'),
+          ('router_wan_state_entity_id', 'sensor.'),
+          ('router_external_ip_entity_id', 'sensor.'),
+          ('router_traffic_download_total_entity_id', 'sensor.'),
+          ('router_traffic_upload_total_entity_id', 'sensor.'),
+          ('router_download_speed_entity_id', 'sensor.'),
+          ('router_upload_speed_entity_id', 'sensor.'),
+          ('router_uptime_entity_id', 'sensor.'),
+          ('router_last_boot_entity_id', 'sensor.'),
+          ('router_devices_connected_entity_id', 'sensor.'),
+          ('router_cpu_temperature_entity_id', 'sensor.'),
+          ('ont_ping_entity_id', 'binary_sensor.')
+        ] %}
+        {% for attr, domain in required %}
+          {% set eid = state_attr(p, attr) %}
+          {% if eid is none or eid | string | trim == '' or not (eid | string).startswith(domain) or entity_name(eid) is none %}
+            {% set ns.valid = false %}
+          {% endif %}
+        {% endfor %}
+        {% for attr, domain in optional %}
+          {% set eid = state_attr(p, attr) %}
+          {% if eid is not none and eid | string | trim != '' %}
+            {% if not (eid | string).startswith(domain) or entity_name(eid) is none %}
+              {% set ns.valid = false %}
+            {% endif %}
+          {% endif %}
+        {% endfor %}
+        {% for prefix in ['ont', 'router'] %}
+          {% set method = state_attr(p, prefix ~ '_recovery_method') | default('none', true) | string | lower | trim %}
+          {% set eid = state_attr(p, prefix ~ '_recovery_entity_id') %}
+          {% set power_off_s = state_attr(p, prefix ~ '_recovery_power_off_s') %}
+          {% if method not in ['none', 'switch', 'button', 'script'] %}
+            {% set ns.valid = false %}
+          {% elif method == 'none' %}
+            {% if eid is not none and eid | string | trim != '' %}
+              {% set ns.valid = false %}
+            {% endif %}
+          {% else %}
+            {% if eid is none or eid | string | trim == '' or not (eid | string).startswith(method ~ '.') or entity_name(eid) is none %}
+              {% set ns.valid = false %}
+            {% elif method == 'switch' and states(eid) not in ['on', 'off'] %}
+              {% set ns.valid = false %}
+            {% elif method in ['button', 'script'] and states(eid) == 'unavailable' %}
+              {% set ns.valid = false %}
+            {% endif %}
+            {% if method == 'script' and eid in ['script.internet_reboot_ont', 'script.internet_reboot_router'] %}
+              {% set ns.valid = false %}
+            {% endif %}
+            {% if method == 'switch' and (power_off_s is none or not is_number(power_off_s) or power_off_s | int <= 0) %}
+              {% set ns.valid = false %}
+            {% endif %}
+          {% endif %}
+        {% endfor %}
+        {{ ns.valid }}
+      attributes:
+        reasons: >-
+          {% set p = 'binary_sensor.bs_internet_passport' %}
+          {% set ns = namespace(r=[]) %}
+          {% if states(p) != 'on' %}
+            {% set ns.r = ns.r + ['passport_entity_missing_or_off'] %}
+          {% endif %}
+          {% for attr in ['site_name', 'router_model', 'router_ip'] %}
+            {% set v = state_attr(p, attr) %}
+            {% if v is none or v | string | trim == '' %}
+              {% set ns.r = ns.r + [attr ~ '_not_set'] %}
+            {% endif %}
+          {% endfor %}
+          {% set required = [('router_ping_entity_id', 'binary_sensor.')] %}
+          {% set optional = [
+            ('router_wan_status_entity_id', 'binary_sensor.'),
+            ('router_wan_state_entity_id', 'sensor.'),
+            ('router_external_ip_entity_id', 'sensor.'),
+            ('router_traffic_download_total_entity_id', 'sensor.'),
+            ('router_traffic_upload_total_entity_id', 'sensor.'),
+            ('router_download_speed_entity_id', 'sensor.'),
+            ('router_upload_speed_entity_id', 'sensor.'),
+            ('router_uptime_entity_id', 'sensor.'),
+            ('router_last_boot_entity_id', 'sensor.'),
+            ('router_devices_connected_entity_id', 'sensor.'),
+            ('router_cpu_temperature_entity_id', 'sensor.'),
+            ('ont_ping_entity_id', 'binary_sensor.')
+          ] %}
+          {% for attr, domain in required %}
+            {% set eid = state_attr(p, attr) %}
+            {% if eid is none or eid | string | trim == '' %}
+              {% set ns.r = ns.r + [attr ~ '_not_set'] %}
+            {% elif not (eid | string).startswith(domain) %}
+              {% set ns.r = ns.r + [attr ~ '_wrong_domain'] %}
+            {% elif entity_name(eid) is none %}
+              {% set ns.r = ns.r + [attr ~ '_missing'] %}
+            {% endif %}
+          {% endfor %}
+          {% for attr, domain in optional %}
+            {% set eid = state_attr(p, attr) %}
+            {% if eid is not none and eid | string | trim != '' %}
+              {% if not (eid | string).startswith(domain) %}
+                {% set ns.r = ns.r + [attr ~ '_wrong_domain'] %}
+              {% elif entity_name(eid) is none %}
+                {% set ns.r = ns.r + [attr ~ '_missing'] %}
+              {% endif %}
+            {% endif %}
+          {% endfor %}
+          {% for prefix in ['ont', 'router'] %}
+            {% set method = state_attr(p, prefix ~ '_recovery_method') | default('none', true) | string | lower | trim %}
+            {% set eid = state_attr(p, prefix ~ '_recovery_entity_id') %}
+            {% set power_off_s = state_attr(p, prefix ~ '_recovery_power_off_s') %}
+            {% if method not in ['none', 'switch', 'button', 'script'] %}
+              {% set ns.r = ns.r + [prefix ~ '_recovery_method_invalid'] %}
+            {% elif method == 'none' %}
+              {% if eid is not none and eid | string | trim != '' %}
+                {% set ns.r = ns.r + [prefix ~ '_recovery_entity_set_with_none_method'] %}
+              {% endif %}
+            {% else %}
+              {% if eid is none or eid | string | trim == '' %}
+                {% set ns.r = ns.r + [prefix ~ '_recovery_entity_not_set'] %}
+              {% elif not (eid | string).startswith(method ~ '.') %}
+                {% set ns.r = ns.r + [prefix ~ '_recovery_entity_wrong_domain'] %}
+              {% elif entity_name(eid) is none %}
+                {% set ns.r = ns.r + [prefix ~ '_recovery_entity_missing'] %}
+              {% elif method == 'switch' and states(eid) not in ['on', 'off'] %}
+                {% set ns.r = ns.r + [prefix ~ '_recovery_entity_unavailable'] %}
+              {% elif method in ['button', 'script'] and states(eid) == 'unavailable' %}
+                {% set ns.r = ns.r + [prefix ~ '_recovery_entity_unavailable'] %}
+              {% endif %}
+              {% if method == 'script' and eid in ['script.internet_reboot_ont', 'script.internet_reboot_router'] %}
+                {% set ns.r = ns.r + [prefix ~ '_recovery_script_recursive'] %}
+              {% endif %}
+              {% if method == 'switch' and (power_off_s is none or not is_number(power_off_s) or power_off_s | int <= 0) %}
+                {% set ns.r = ns.r + [prefix ~ '_recovery_power_off_s_invalid'] %}
+              {% endif %}
+            {% endif %}
+          {% endfor %}
+          {{ ns.r }}
+
+    - name: bs_router_ping_effective
+      default_entity_id: binary_sensor.bs_router_ping_effective
+      unique_id: bs_router_ping_effective_id
+      device_class: connectivity
+      state: >-
+        {% set eid = state_attr('binary_sensor.bs_internet_passport', 'router_ping_entity_id') %}
+        {{ is_state(eid, 'on') if eid else false }}
+      availability: >-
+        {% set eid = state_attr('binary_sensor.bs_internet_passport', 'router_ping_entity_id') %}
+        {{ is_state('binary_sensor.internet_passport_valid', 'on') and eid and states(eid) in ['on', 'off'] }}
+
+    - name: Router is on
+      default_entity_id: binary_sensor.router_is_on
+      unique_id: router_is_on_id
+      device_class: connectivity
+      state: "{{ is_state('binary_sensor.bs_router_ping_effective', 'on') }}"
+      availability: "{{ states('binary_sensor.bs_router_ping_effective') in ['on', 'off'] }}"
+
+    - name: bs_router_wan_effective
+      default_entity_id: binary_sensor.bs_router_wan_effective
+      unique_id: bs_router_wan_effective_id
+      device_class: connectivity
+      state: >-
+        {% set eid = state_attr('binary_sensor.bs_internet_passport', 'router_wan_status_entity_id') %}
+        {{ is_state(eid, 'on') if eid else false }}
+      availability: >-
+        {% set eid = state_attr('binary_sensor.bs_internet_passport', 'router_wan_status_entity_id') %}
+        {{ is_state('binary_sensor.internet_passport_valid', 'on') and eid and states(eid) in ['on', 'off'] }}
+
+    - name: Internet ONT recovery available
+      default_entity_id: binary_sensor.internet_recovery_ont_available
+      unique_id: internet_recovery_ont_available_id
+      device_class: connectivity
+      state: >-
+        {% set method = state_attr('binary_sensor.bs_internet_passport', 'ont_recovery_method') | default('none', true) | string | lower | trim %}
+        {% set entity_id = state_attr('binary_sensor.bs_internet_passport', 'ont_recovery_entity_id') %}
+        {% set exists = entity_id and entity_name(entity_id) is not none %}
+        {% set usable =
+          (method == 'switch' and exists and states(entity_id) in ['on', 'off'])
+          or (method in ['button', 'script'] and exists and states(entity_id) != 'unavailable')
+        %}
+        {{ is_state('binary_sensor.internet_passport_valid', 'on') and method != 'none' and usable }}
+      attributes:
+        recovery_method: "{{ state_attr('binary_sensor.bs_internet_passport', 'ont_recovery_method') or 'none' }}"
+        recovery_entity_id: "{{ state_attr('binary_sensor.bs_internet_passport', 'ont_recovery_entity_id') or '' }}"
+        power_off_s: "{{ state_attr('binary_sensor.bs_internet_passport', 'ont_recovery_power_off_s') or '' }}"
+
+    - name: Internet router recovery available
+      default_entity_id: binary_sensor.internet_recovery_router_available
+      unique_id: internet_recovery_router_available_id
+      device_class: connectivity
+      state: >-
+        {% set method = state_attr('binary_sensor.bs_internet_passport', 'router_recovery_method') | default('none', true) | string | lower | trim %}
+        {% set entity_id = state_attr('binary_sensor.bs_internet_passport', 'router_recovery_entity_id') %}
+        {% set exists = entity_id and entity_name(entity_id) is not none %}
+        {% set usable =
+          (method == 'switch' and exists and states(entity_id) in ['on', 'off'])
+          or (method in ['button', 'script'] and exists and states(entity_id) != 'unavailable')
+        %}
+        {{ is_state('binary_sensor.internet_passport_valid', 'on') and method != 'none' and usable }}
+      attributes:
+        recovery_method: "{{ state_attr('binary_sensor.bs_internet_passport', 'router_recovery_method') or 'none' }}"
+        recovery_entity_id: "{{ state_attr('binary_sensor.bs_internet_passport', 'router_recovery_entity_id') or '' }}"
+        power_off_s: "{{ state_attr('binary_sensor.bs_internet_passport', 'router_recovery_power_off_s') or '' }}"
+
+    - name: Internet recovery available
+      default_entity_id: binary_sensor.internet_recovery_available
+      unique_id: internet_recovery_available_id
+      device_class: connectivity
+      state: >-
+        {{ is_state('binary_sensor.internet_recovery_ont_available', 'on') or is_state('binary_sensor.internet_recovery_router_available', 'on') }}
+
+    sensor:
+    - name: Router WAN status effective
+      default_entity_id: sensor.router_wan_status_effective
+      unique_id: router_wan_status_effective_id
+      state: >-
+        {% set eid = state_attr('binary_sensor.bs_internet_passport', 'router_wan_state_entity_id') %}
+        {{ states(eid) if eid and states(eid) not in ['unknown', 'unavailable'] else none }}
+      availability: >-
+        {% set eid = state_attr('binary_sensor.bs_internet_passport', 'router_wan_state_entity_id') %}
+        {{ is_state('binary_sensor.internet_passport_valid', 'on') and eid and has_value(eid) }}
+
+    - name: Router external IP effective
+      default_entity_id: sensor.router_external_ip_effective
+      unique_id: router_external_ip_effective_id
+      icon: mdi:ip-network-outline
+      state: >-
+        {% set eid = state_attr('binary_sensor.bs_internet_passport', 'router_external_ip_entity_id') %}
+        {{ states(eid) if eid and has_value(eid) else none }}
+      availability: >-
+        {% set eid = state_attr('binary_sensor.bs_internet_passport', 'router_external_ip_entity_id') %}
+        {{ is_state('binary_sensor.internet_passport_valid', 'on') and eid and has_value(eid) }}
+
+    - name: router_traffic_download_effective
+      default_entity_id: sensor.router_traffic_download_effective
+      unique_id: router_traffic_download_effective_id
+      device_class: data_size
+      unit_of_measurement: GB
+      state_class: total_increasing
+      state: >-
+        {% set eid = state_attr('binary_sensor.bs_internet_passport', 'router_traffic_download_total_entity_id') %}
+        {% set v = states(eid) if eid else 'unknown' %}
+        {% set u = state_attr(eid, 'unit_of_measurement') if eid else none %}
+        {% if is_number(v) %}
+          {% set n = v | float %}
+          {% if u in ['B', 'byte', 'bytes'] %}{{ (n / 1000000000) | round(6) }}
+          {% elif u in ['kB', 'KB'] %}{{ (n / 1000000) | round(6) }}
+          {% elif u == 'KiB' %}{{ (n * 1024 / 1000000000) | round(6) }}
+          {% elif u == 'MB' %}{{ (n / 1000) | round(6) }}
+          {% elif u == 'MiB' %}{{ (n * 1048576 / 1000000000) | round(6) }}
+          {% elif u == 'GB' %}{{ n | round(6) }}
+          {% elif u == 'GiB' %}{{ (n * 1073741824 / 1000000000) | round(6) }}
+          {% elif u == 'TB' %}{{ (n * 1000) | round(6) }}
+          {% elif u == 'TiB' %}{{ (n * 1099511627776 / 1000000000) | round(6) }}
+          {% else %}{{ none }}{% endif %}
+        {% else %}{{ none }}{% endif %}
+      availability: >-
+        {% set eid = state_attr('binary_sensor.bs_internet_passport', 'router_traffic_download_total_entity_id') %}
+        {% set u = state_attr(eid, 'unit_of_measurement') if eid else none %}
+        {{ is_state('binary_sensor.internet_passport_valid', 'on') and eid and is_number(states(eid)) and u in ['B','byte','bytes','kB','KB','KiB','MB','MiB','GB','GiB','TB','TiB'] }}
+
+    - name: router_traffic_upload_effective
+      default_entity_id: sensor.router_traffic_upload_effective
+      unique_id: router_traffic_upload_effective_id
+      device_class: data_size
+      unit_of_measurement: GB
+      state_class: total_increasing
+      state: >-
+        {% set eid = state_attr('binary_sensor.bs_internet_passport', 'router_traffic_upload_total_entity_id') %}
+        {% set v = states(eid) if eid else 'unknown' %}
+        {% set u = state_attr(eid, 'unit_of_measurement') if eid else none %}
+        {% if is_number(v) %}
+          {% set n = v | float %}
+          {% if u in ['B', 'byte', 'bytes'] %}{{ (n / 1000000000) | round(6) }}
+          {% elif u in ['kB', 'KB'] %}{{ (n / 1000000) | round(6) }}
+          {% elif u == 'KiB' %}{{ (n * 1024 / 1000000000) | round(6) }}
+          {% elif u == 'MB' %}{{ (n / 1000) | round(6) }}
+          {% elif u == 'MiB' %}{{ (n * 1048576 / 1000000000) | round(6) }}
+          {% elif u == 'GB' %}{{ n | round(6) }}
+          {% elif u == 'GiB' %}{{ (n * 1073741824 / 1000000000) | round(6) }}
+          {% elif u == 'TB' %}{{ (n * 1000) | round(6) }}
+          {% elif u == 'TiB' %}{{ (n * 1099511627776 / 1000000000) | round(6) }}
+          {% else %}{{ none }}{% endif %}
+        {% else %}{{ none }}{% endif %}
+      availability: >-
+        {% set eid = state_attr('binary_sensor.bs_internet_passport', 'router_traffic_upload_total_entity_id') %}
+        {% set u = state_attr(eid, 'unit_of_measurement') if eid else none %}
+        {{ is_state('binary_sensor.internet_passport_valid', 'on') and eid and is_number(states(eid)) and u in ['B','byte','bytes','kB','KB','KiB','MB','MiB','GB','GiB','TB','TiB'] }}
+
+    - name: Router download speed effective
+      default_entity_id: sensor.router_download_speed_effective
+      unique_id: router_download_speed_effective_id
+      device_class: data_rate
+      unit_of_measurement: Mbit/s
+      state_class: measurement
+      state: >-
+        {% set eid = state_attr('binary_sensor.bs_internet_passport', 'router_download_speed_entity_id') %}
+        {% set v = states(eid) if eid else 'unknown' %}
+        {% set u = state_attr(eid, 'unit_of_measurement') if eid else none %}
+        {% if is_number(v) %}
+          {% set n = v | float %}
+          {% if u in ['B/s', 'byte/s', 'bytes/s'] %}{{ (n * 8 / 1000000) | round(3) }}
+          {% elif u in ['kB/s', 'KB/s'] %}{{ (n * 8 / 1000) | round(3) }}
+          {% elif u == 'KiB/s' %}{{ (n * 1024 * 8 / 1000000) | round(3) }}
+          {% elif u == 'MB/s' %}{{ (n * 8) | round(3) }}
+          {% elif u == 'MiB/s' %}{{ (n * 1048576 * 8 / 1000000) | round(3) }}
+          {% elif u in ['bit/s', 'bit/s'] %}{{ (n / 1000000) | round(3) }}
+          {% elif u in ['kbit/s', 'Kbit/s'] %}{{ (n / 1000) | round(3) }}
+          {% elif u == 'Kibit/s' %}{{ (n * 1024 / 1000000) | round(3) }}
+          {% elif u == 'Mbit/s' %}{{ n | round(3) }}
+          {% else %}{{ none }}{% endif %}
+        {% else %}{{ none }}{% endif %}
+      availability: >-
+        {% set eid = state_attr('binary_sensor.bs_internet_passport', 'router_download_speed_entity_id') %}
+        {% set u = state_attr(eid, 'unit_of_measurement') if eid else none %}
+        {{ is_state('binary_sensor.internet_passport_valid', 'on') and eid and is_number(states(eid)) and u in ['B/s','byte/s','bytes/s','kB/s','KB/s','KiB/s','MB/s','MiB/s','bit/s','kbit/s','Kbit/s','Kibit/s','Mbit/s'] }}
+
+    - name: Router upload speed effective
+      default_entity_id: sensor.router_upload_speed_effective
+      unique_id: router_upload_speed_effective_id
+      device_class: data_rate
+      unit_of_measurement: Mbit/s
+      state_class: measurement
+      state: >-
+        {% set eid = state_attr('binary_sensor.bs_internet_passport', 'router_upload_speed_entity_id') %}
+        {% set v = states(eid) if eid else 'unknown' %}
+        {% set u = state_attr(eid, 'unit_of_measurement') if eid else none %}
+        {% if is_number(v) %}
+          {% set n = v | float %}
+          {% if u in ['B/s', 'byte/s', 'bytes/s'] %}{{ (n * 8 / 1000000) | round(3) }}
+          {% elif u in ['kB/s', 'KB/s'] %}{{ (n * 8 / 1000) | round(3) }}
+          {% elif u == 'KiB/s' %}{{ (n * 1024 * 8 / 1000000) | round(3) }}
+          {% elif u == 'MB/s' %}{{ (n * 8) | round(3) }}
+          {% elif u == 'MiB/s' %}{{ (n * 1048576 * 8 / 1000000) | round(3) }}
+          {% elif u == 'bit/s' %}{{ (n / 1000000) | round(3) }}
+          {% elif u in ['kbit/s', 'Kbit/s'] %}{{ (n / 1000) | round(3) }}
+          {% elif u == 'Kibit/s' %}{{ (n * 1024 / 1000000) | round(3) }}
+          {% elif u == 'Mbit/s' %}{{ n | round(3) }}
+          {% else %}{{ none }}{% endif %}
+        {% else %}{{ none }}{% endif %}
+      availability: >-
+        {% set eid = state_attr('binary_sensor.bs_internet_passport', 'router_upload_speed_entity_id') %}
+        {% set u = state_attr(eid, 'unit_of_measurement') if eid else none %}
+        {{ is_state('binary_sensor.internet_passport_valid', 'on') and eid and is_number(states(eid)) and u in ['B/s','byte/s','bytes/s','kB/s','KB/s','KiB/s','MB/s','MiB/s','bit/s','kbit/s','Kbit/s','Kibit/s','Mbit/s'] }}
+
+    - name: Router uptime effective
+      default_entity_id: sensor.router_uptime_effective
+      unique_id: router_uptime_effective_id
+      device_class: duration
+      unit_of_measurement: s
+      state_class: measurement
+      state: >-
+        {% set eid = state_attr('binary_sensor.bs_internet_passport', 'router_uptime_entity_id') %}
+        {% set v = states(eid) if eid else 'unknown' %}
+        {% set u = state_attr(eid, 'unit_of_measurement') if eid else none %}
+        {% if is_number(v) %}
+          {% set n = v | float %}
+          {% if u in ['s', 'sec', 'second', 'seconds'] %}{{ n | round(0) }}
+          {% elif u in ['min', 'minute', 'minutes'] %}{{ (n * 60) | round(0) }}
+          {% elif u in ['h', 'hour', 'hours'] %}{{ (n * 3600) | round(0) }}
+          {% elif u in ['d', 'day', 'days'] %}{{ (n * 86400) | round(0) }}
+          {% else %}{{ none }}{% endif %}
+        {% else %}{{ none }}{% endif %}
+      availability: >-
+        {% set eid = state_attr('binary_sensor.bs_internet_passport', 'router_uptime_entity_id') %}
+        {% set u = state_attr(eid, 'unit_of_measurement') if eid else none %}
+        {{ is_state('binary_sensor.internet_passport_valid', 'on') and eid and is_number(states(eid)) and u in ['s','sec','second','seconds','min','minute','minutes','h','hour','hours','d','day','days'] }}
+
+    - name: router_last_boot_effective
+      default_entity_id: sensor.router_last_boot_effective
+      unique_id: router_last_boot_effective_id
+      device_class: timestamp
+      state: >-
+        {% set eid = state_attr('binary_sensor.bs_internet_passport', 'router_last_boot_entity_id') %}
+        {% set v = states(eid) if eid else 'unknown' %}
+        {{ as_datetime(v).isoformat() if eid and as_datetime(v) else none }}
+      availability: >-
+        {% set eid = state_attr('binary_sensor.bs_internet_passport', 'router_last_boot_entity_id') %}
+        {{ is_state('binary_sensor.internet_passport_valid', 'on') and eid and as_datetime(states(eid)) is not none }}
+
+    - name: router_devices_connected_effective
+      default_entity_id: sensor.router_devices_connected_effective
+      unique_id: router_devices_connected_effective_id
+      state_class: measurement
+      state: >-
+        {% set eid = state_attr('binary_sensor.bs_internet_passport', 'router_devices_connected_entity_id') %}
+        {% set v = states(eid) if eid else 'unknown' %}
+        {{ v | int if is_number(v) else none }}
+      availability: >-
+        {% set eid = state_attr('binary_sensor.bs_internet_passport', 'router_devices_connected_entity_id') %}
+        {{ is_state('binary_sensor.internet_passport_valid', 'on') and eid and is_number(states(eid)) }}
+
+    - name: router_cpu_temperature_effective
+      default_entity_id: sensor.router_cpu_temperature_effective
+      unique_id: router_cpu_temperature_effective_id
+      device_class: temperature
+      unit_of_measurement: °C
+      state_class: measurement
+      state: >-
+        {% set eid = state_attr('binary_sensor.bs_internet_passport', 'router_cpu_temperature_entity_id') %}
+        {% set v = states(eid) if eid else 'unknown' %}
+        {% set u = state_attr(eid, 'unit_of_measurement') if eid else none %}
+        {% if is_number(v) %}
+          {% set n = v | float %}
+          {% if u in ['°C', 'C', 'celsius'] %}{{ n | round(1) }}
+          {% elif u in ['°F', 'F', 'fahrenheit'] %}{{ ((n - 32) * 5 / 9) | round(1) }}
+          {% else %}{{ none }}{% endif %}
+        {% else %}{{ none }}{% endif %}
+      availability: >-
+        {% set eid = state_attr('binary_sensor.bs_internet_passport', 'router_cpu_temperature_entity_id') %}
+        {% set u = state_attr(eid, 'unit_of_measurement') if eid else none %}
+        {{ is_state('binary_sensor.internet_passport_valid', 'on') and eid and is_number(states(eid)) and u in ['°C','C','celsius','°F','F','fahrenheit'] }}
+
+  script:
+    internet_reboot_ont:
+      alias: _[internet_global_package] - recover modem (ONT)
+      mode: single
+      sequence:
+      - variables:
+          method: "{{ state_attr('binary_sensor.bs_internet_passport', 'ont_recovery_method') | default('none', true) | string | lower | trim }}"
+          entity_id: "{{ state_attr('binary_sensor.bs_internet_passport', 'ont_recovery_entity_id') or '' }}"
+          power_off_s: "{{ state_attr('binary_sensor.bs_internet_passport', 'ont_recovery_power_off_s') }}"
+          reasons: "{{ state_attr('binary_sensor.internet_passport_valid', 'reasons') }}"
+      - choose:
+        - conditions:
+          - condition: template
+            value_template: "{{ not is_state('binary_sensor.internet_passport_valid', 'on') }}"
+          sequence:
+          - event: digitalhouses_internet
+            event_data:
+              event: recovery_config_error
+              title: ⚠️ ONT recovery недоступен
+              message: ⚠️ Internet passport invalid. reasons={{ reasons if reasons is not none else 'N/A' }}
+        - conditions:
+          - condition: template
+            value_template: "{{ method == 'none' }}"
+          sequence:
+          - event: digitalhouses_internet
+            event_data:
+              event: recovery_config_error
+              title: ⚠️ ONT recovery недоступен
+              message: ⚠️ В паспорте ONT recovery method = none.
+        - conditions:
+          - condition: template
+            value_template: >-
+              {{ method not in ['switch', 'button', 'script']
+                 or not entity_id
+                 or not entity_id.startswith(method ~ '.')
+                 or entity_name(entity_id) is none
+                 or (method == 'switch' and states(entity_id) not in ['on', 'off'])
+                 or (method in ['button', 'script'] and states(entity_id) == 'unavailable')
+                 or (method == 'script' and entity_id in ['script.internet_reboot_ont', 'script.internet_reboot_router']) }}
+          sequence:
+          - event: digitalhouses_internet
+            event_data:
+              event: recovery_config_error
+              title: ⚠️ ONT recovery недоступен
+              message: 'Некорректный ONT recovery: method={{ method }}, entity={{ entity_id }}'
+        - conditions:
+          - condition: template
+            value_template: "{{ method == 'switch' and (power_off_s is none or not is_number(power_off_s) or power_off_s | int <= 0) }}"
+          sequence:
+          - event: digitalhouses_internet
+            event_data:
+              event: recovery_config_error
+              title: ⚠️ ONT recovery недоступен
+              message: ⚠️ Некорректный ont_recovery_power_off_s.
+        default:
+        - choose:
+          - conditions:
+            - condition: template
+              value_template: "{{ method == 'switch' }}"
+            sequence:
+            - action: switch.turn_off
+              target:
+                entity_id: '{{ entity_id }}'
+            - delay:
+                seconds: '{{ power_off_s | int }}'
+            - action: switch.turn_on
+              target:
+                entity_id: '{{ entity_id }}'
+          - conditions:
+            - condition: template
+              value_template: "{{ method == 'button' }}"
+            sequence:
+            - action: button.press
+              target:
+                entity_id: '{{ entity_id }}'
+          - conditions:
+            - condition: template
+              value_template: "{{ method == 'script' }}"
+            sequence:
+            - action: "{{ entity_id }}"
+        - action: counter.increment
+          target:
+            entity_id: counter.internet_modem_restart_count
+        - event: digitalhouses_internet
+          event_data:
+            event: recovery_ont
+            title: 🔄 ONT recovery выполнен
+            message: "ONT recovery выполнен. Method: {{ method }}. Счётчик: {{ states('counter.internet_modem_restart_count') }}"
+
+    internet_reboot_router:
+      alias: _[internet_global_package] - recover router
+      mode: single
+      sequence:
+      - variables:
+          method: "{{ state_attr('binary_sensor.bs_internet_passport', 'router_recovery_method') | default('none', true) | string | lower | trim }}"
+          entity_id: "{{ state_attr('binary_sensor.bs_internet_passport', 'router_recovery_entity_id') or '' }}"
+          power_off_s: "{{ state_attr('binary_sensor.bs_internet_passport', 'router_recovery_power_off_s') }}"
+          reasons: "{{ state_attr('binary_sensor.internet_passport_valid', 'reasons') }}"
+      - choose:
+        - conditions:
+          - condition: template
+            value_template: "{{ not is_state('binary_sensor.internet_passport_valid', 'on') }}"
+          sequence:
+          - event: digitalhouses_internet
+            event_data:
+              event: recovery_config_error
+              title: ⚠️ Router recovery недоступен
+              message: ⚠️ Internet passport invalid. reasons={{ reasons if reasons is not none else 'N/A' }}
+        - conditions:
+          - condition: template
+            value_template: "{{ method == 'none' }}"
+          sequence:
+          - event: digitalhouses_internet
+            event_data:
+              event: recovery_config_error
+              title: ⚠️ Router recovery недоступен
+              message: ⚠️ В паспорте Router recovery method = none.
+        - conditions:
+          - condition: template
+            value_template: >-
+              {{ method not in ['switch', 'button', 'script']
+                 or not entity_id
+                 or not entity_id.startswith(method ~ '.')
+                 or entity_name(entity_id) is none
+                 or (method == 'switch' and states(entity_id) not in ['on', 'off'])
+                 or (method in ['button', 'script'] and states(entity_id) == 'unavailable')
+                 or (method == 'script' and entity_id in ['script.internet_reboot_ont', 'script.internet_reboot_router']) }}
+          sequence:
+          - event: digitalhouses_internet
+            event_data:
+              event: recovery_config_error
+              title: ⚠️ Router recovery недоступен
+              message: 'Некорректный Router recovery: method={{ method }}, entity={{ entity_id }}'
+        - conditions:
+          - condition: template
+            value_template: "{{ method == 'switch' and (power_off_s is none or not is_number(power_off_s) or power_off_s | int <= 0) }}"
+          sequence:
+          - event: digitalhouses_internet
+            event_data:
+              event: recovery_config_error
+              title: ⚠️ Router recovery недоступен
+              message: ⚠️ Некорректный router_recovery_power_off_s.
+        default:
+        - choose:
+          - conditions:
+            - condition: template
+              value_template: "{{ method == 'switch' }}"
+            sequence:
+            - action: switch.turn_off
+              target:
+                entity_id: '{{ entity_id }}'
+            - delay:
+                seconds: '{{ power_off_s | int }}'
+            - action: switch.turn_on
+              target:
+                entity_id: '{{ entity_id }}'
+          - conditions:
+            - condition: template
+              value_template: "{{ method == 'button' }}"
+            sequence:
+            - action: button.press
+              target:
+                entity_id: '{{ entity_id }}'
+          - conditions:
+            - condition: template
+              value_template: "{{ method == 'script' }}"
+            sequence:
+            - action: "{{ entity_id }}"
+        - action: counter.increment
+          target:
+            entity_id: counter.internet_router_restart_count
+        - event: digitalhouses_internet
+          event_data:
+            event: recovery_router
+            title: 🔄 Router recovery выполнен
+            message: "Router recovery выполнен. Method: {{ method }}. Счётчик: {{ states('counter.internet_router_restart_count') }}"
+  automation:
+  - id: internet_global_package__performance_edges
+    alias: _[internet_global_package] - internet performance edges
+    description: Publishes neutral DigitalHouses Internet events from Speedtest performance edges
+    trigger:
+    - platform: state
+      entity_id: binary_sensor.internet_speed_low_download
+      to: 'on'
+      from: 'off'
+      id: download_low
+    - platform: state
+      entity_id: binary_sensor.internet_speed_low_download
+      to: 'off'
+      from: 'on'
+      id: download_normal
+    - platform: state
+      entity_id: binary_sensor.internet_speed_low_upload
+      to: 'on'
+      from: 'off'
+      id: upload_low
+    - platform: state
+      entity_id: binary_sensor.internet_speed_low_upload
+      to: 'off'
+      from: 'on'
+      id: upload_normal
+    - platform: state
+      entity_id: binary_sensor.internet_speed_high_ping
+      to: 'on'
+      from: 'off'
+      id: ping_high
+    - platform: state
+      entity_id: binary_sensor.internet_speed_high_ping
+      to: 'off'
+      from: 'on'
+      id: ping_normal
+    condition:
+    - condition: state
+      entity_id: binary_sensor.internet_package_ready
+      state: 'on'
+    variables:
+      download: "{{ states('sensor.internet_speed_download')\n   if states('sensor.internet_speed_download') not in ['unknown','unavailable','none','']\n   else 'неизвестно' }}"
+      upload: "{{ states('sensor.internet_speed_upload')\n   if states('sensor.internet_speed_upload') not in ['unknown','unavailable','none','']\n   else 'неизвестно' }}"
+      ping: "{{ states('sensor.internet_speed_ping')\n   if states('sensor.internet_speed_ping') not in ['unknown','unavailable','none','']\n   else 'неизвестно' }}"
+      minimum_download: "{{ states('number.internet_speed_minimum_download')\n   if states('number.internet_speed_minimum_download') not in ['unknown','unavailable','none','']\n   else 'неизвестно' }}"
+      minimum_upload: "{{ states('number.internet_speed_minimum_upload')\n   if states('number.internet_speed_minimum_upload') not in ['unknown','unavailable','none','']\n   else 'неизвестно' }}"
+      maximum_ping: "{{ states('number.internet_speed_maximum_ping')\n   if states('number.internet_speed_maximum_ping') not in ['unknown','unavailable','none','']\n   else 'неизвестно' }}"
+      provider: "{{ states('sensor.internet_speed_provider')\n   if states('sensor.internet_speed_provider') not in ['unknown','unavailable','none','']\n   else 'неизвестно' }}"
+    action:
+    - choose:
+      - conditions:
+        - condition: trigger
+          id: download_low
+        sequence:
+        - event: digitalhouses_internet
+          event_data:
+            event: performance_download_low
+            title: 📉 Скорость загрузки уменьшилась
+            message: '🐌 Скорость загрузки уменьшилась — {{ download }} Mbit/с. Порог: {{ minimum_download }} Mbit/с. Провайдер: {{ provider }}'
+      - conditions:
+        - condition: trigger
+          id: download_normal
+        sequence:
+        - event: digitalhouses_internet
+          event_data:
+            event: performance_download_normal
+            title: 📈 Скорость загрузки нормализовалась
+            message: '🚀 Скорость загрузки нормализовалась — {{ download }} Mbit/с. Провайдер: {{ provider }}'
+      - conditions:
+        - condition: trigger
+          id: upload_low
+        sequence:
+        - event: digitalhouses_internet
+          event_data:
+            event: performance_upload_low
+            title: 📉 Скорость передачи уменьшилась
+            message: '🐌 Скорость передачи уменьшилась — {{ upload }} Mbit/с. Порог: {{ minimum_upload }} Mbit/с. Провайдер: {{ provider }}'
+      - conditions:
+        - condition: trigger
+          id: upload_normal
+        sequence:
+        - event: digitalhouses_internet
+          event_data:
+            event: performance_upload_normal
+            title: 📈 Скорость передачи нормализовалась
+            message: '🚀 Скорость передачи нормализовалась — {{ upload }} Mbit/с. Провайдер: {{ provider }}'
+      - conditions:
+        - condition: trigger
+          id: ping_high
+        sequence:
+        - event: digitalhouses_internet
+          event_data:
+            event: performance_ping_high
+            title: 📉 Пинг увеличился
+            message: '🐌 Пинг увеличился — {{ ping }} мс. Порог: {{ maximum_ping }} мс. Провайдер: {{ provider }}'
+      - conditions:
+        - condition: trigger
+          id: ping_normal
+        sequence:
+        - event: digitalhouses_internet
+          event_data:
+            event: performance_ping_normal
+            title: 📈 Пинг нормализовался
+            message: '🚀 Пинг нормализовался — {{ ping }} мс. Провайдер: {{ provider }}'
+    mode: queued
+    max: 10
+  - id: internet_global_package__statistics_engine
+    alias: _[internet_global_package] - internet statistics engine
+    description: Datetime accounting with fixed monthly base and confirmed state sequence
+    trigger:
+    - platform: state
+      entity_id: binary_sensor.internet_package_ready
+      to: 'on'
+      id: initialize
+    - platform: time
+      at: 00:00:01
+      id: month_guard
+    - platform: state
+      entity_id: binary_sensor.internet_status
+      to: 'on'
+      from: 'off'
+      for: 00:00:05
+      id: internet_on
+    - platform: state
+      entity_id: binary_sensor.internet_status
+      to: 'off'
+      from: 'on'
+      for: 00:00:15
+      id: internet_off
+    condition:
+    - condition: state
+      entity_id: binary_sensor.internet_package_ready
+      state: 'on'
+    variables:
+      current_ts: '{{ now().timestamp() | int }}'
+      event_ts: "{{\n  (as_timestamp(trigger.to_state.last_changed) | int)\n  if trigger.id in ['internet_on', 'internet_off']\n  else (now().timestamp() | int)\n}}"
+      month_start_ts: "{{\n  as_timestamp(\n    now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)\n  ) | int\n}}"
+      current_month: '{{ now().strftime(''%Y-%m'') }}'
+      online_total_ts_before: '{{ state_attr(''input_datetime.dt_internet_online_total'', ''timestamp'') }}'
+      offline_total_ts_before: '{{ state_attr(''input_datetime.dt_internet_offline_total'', ''timestamp'') }}'
+      failure_ts_before: '{{ state_attr(''input_datetime.dt_internet_last_failure'', ''timestamp'') }}'
+      restore_ts_before: '{{ state_attr(''input_datetime.dt_internet_last_restore'', ''timestamp'') }}'
+      initialized_v4_before: '{{ is_state(''input_boolean.ib_internet_statistics_v4_initialized'', ''on'') }}'
+      online_total_month_before: "{{\n  as_local(as_datetime(online_total_ts_before)).strftime('%Y-%m')\n  if online_total_ts_before is number\n  else none\n}}"
+      offline_total_month_before: "{{\n  as_local(as_datetime(offline_total_ts_before)).strftime('%Y-%m')\n  if offline_total_ts_before is number\n  else none\n}}"
+      base_helpers_valid: "{{\n  online_total_ts_before is number\n  and offline_total_ts_before is number\n  and failure_ts_before is number\n  and restore_ts_before is number\n  and online_total_ts_before >= 946684800\n  and offline_total_ts_before >= 946684800\n  and failure_ts_before >= 946684800\n  and restore_ts_before >= 946684800\n  and online_total_ts_before <= current_ts + 60\n  and offline_total_ts_before <= current_ts + 60\n  and failure_ts_before <= current_ts + 60\n  and restore_ts_before <= current_ts + 60\n  and states('binary_sensor.internet_status') in ['on', 'off']\n}}"
+      totals_current_month: "{{\n  base_helpers_valid | bool\n  and online_total_month_before == current_month\n  and offline_total_month_before == current_month\n}}"
+      accounting_online_before: "{{\n  base_helpers_valid | bool\n  and restore_ts_before > failure_ts_before\n}}"
+      accounting_offline_before: "{{\n  base_helpers_valid | bool\n  and failure_ts_before > restore_ts_before\n}}"
+      closed_online_before: "{{\n  [online_total_ts_before - month_start_ts, 0] | max\n  if totals_current_month | bool\n  else 0\n}}"
+      closed_offline_before: "{{\n  [offline_total_ts_before - month_start_ts, 0] | max\n  if totals_current_month | bool\n  else 0\n}}"
+      active_interval_before: "{% if accounting_online_before | bool %}\n  {{ [current_ts - [restore_ts_before, month_start_ts] | max, 0] | max }}\n{% elif accounting_offline_before | bool %}\n  {{ [current_ts - [failure_ts_before, month_start_ts] | max, 0] | max }}\n{% else %}\n  0\n{% endif %}"
+      accounted_seconds_before: '{{ closed_online_before + closed_offline_before + active_interval_before }}'
+      elapsed_seconds_month: '{{ [current_ts - month_start_ts, 0] | max }}'
+      accounting_balance_valid: "{{\n  totals_current_month | bool\n  and (accounting_online_before | bool or accounting_offline_before | bool)\n  and (accounted_seconds_before - elapsed_seconds_month) | abs <= 65\n}}"
+    action:
+    - if:
+      - condition: template
+        value_template: '{{ not (initialized_v4_before | bool) or not (base_helpers_valid | bool) }}'
+      then:
+      - choose:
+        - conditions:
+          - condition: state
+            entity_id: binary_sensor.internet_status
+            state: 'on'
+          sequence:
+          - action: input_datetime.set_datetime
+            target:
+              entity_id: input_datetime.dt_internet_online_total
+            data:
+              timestamp: '{{ current_ts }}'
+          - action: input_datetime.set_datetime
+            target:
+              entity_id: input_datetime.dt_internet_offline_total
+            data:
+              timestamp: '{{ month_start_ts }}'
+          - action: input_datetime.set_datetime
+            target:
+              entity_id: input_datetime.dt_internet_last_failure
+            data:
+              timestamp: '{{ current_ts - 1 }}'
+          - action: input_datetime.set_datetime
+            target:
+              entity_id: input_datetime.dt_internet_last_restore
+            data:
+              timestamp: '{{ current_ts }}'
+        - conditions:
+          - condition: state
+            entity_id: binary_sensor.internet_status
+            state: 'off'
+          sequence:
+          - action: input_datetime.set_datetime
+            target:
+              entity_id: input_datetime.dt_internet_online_total
+            data:
+              timestamp: '{{ month_start_ts }}'
+          - action: input_datetime.set_datetime
+            target:
+              entity_id: input_datetime.dt_internet_offline_total
+            data:
+              timestamp: '{{ current_ts }}'
+          - action: input_datetime.set_datetime
+            target:
+              entity_id: input_datetime.dt_internet_last_restore
+            data:
+              timestamp: '{{ current_ts - 1 }}'
+          - action: input_datetime.set_datetime
+            target:
+              entity_id: input_datetime.dt_internet_last_failure
+            data:
+              timestamp: '{{ current_ts }}'
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.ib_internet_statistics_v4_initialized
+      - action: counter.reset
+        target:
+          entity_id: counter.internet_failure_count
+    - variables:
+        online_total_ts_1: '{{ state_attr(''input_datetime.dt_internet_online_total'', ''timestamp'') }}'
+        offline_total_ts_1: '{{ state_attr(''input_datetime.dt_internet_offline_total'', ''timestamp'') }}'
+        failure_ts_1: '{{ state_attr(''input_datetime.dt_internet_last_failure'', ''timestamp'') }}'
+        restore_ts_1: '{{ state_attr(''input_datetime.dt_internet_last_restore'', ''timestamp'') }}'
+        online_total_month_1: '{{ as_local(as_datetime(online_total_ts_1)).strftime(''%Y-%m'') if online_total_ts_1 is number else none }}'
+        offline_total_month_1: '{{ as_local(as_datetime(offline_total_ts_1)).strftime(''%Y-%m'') if offline_total_ts_1 is number else none }}'
+    - if:
+      - condition: template
+        value_template: "{{\n  online_total_month_1 != current_month\n  or offline_total_month_1 != current_month\n}}"
+      then:
+      - action: input_datetime.set_datetime
+        target:
+          entity_id:
+          - input_datetime.dt_internet_online_total
+          - input_datetime.dt_internet_offline_total
+        data:
+          timestamp: '{{ month_start_ts }}'
+      - action: counter.reset
+        target:
+          entity_id: counter.internet_failure_count
+    - variables:
+        online_total_ts: '{{ state_attr(''input_datetime.dt_internet_online_total'', ''timestamp'') }}'
+        offline_total_ts: '{{ state_attr(''input_datetime.dt_internet_offline_total'', ''timestamp'') }}'
+        failure_ts: '{{ state_attr(''input_datetime.dt_internet_last_failure'', ''timestamp'') }}'
+        restore_ts: '{{ state_attr(''input_datetime.dt_internet_last_restore'', ''timestamp'') }}'
+        accounting_online: '{{ restore_ts is number and failure_ts is number and restore_ts > failure_ts }}'
+        accounting_offline: '{{ restore_ts is number and failure_ts is number and failure_ts > restore_ts }}'
+    - choose:
+      - conditions:
+        - condition: trigger
+          id: internet_off
+        - condition: template
+          value_template: '{{ accounting_online | bool }}'
+        sequence:
+        - variables:
+            online_closed_s: '{{ [online_total_ts - month_start_ts, 0] | max }}'
+            online_interval_start_ts: '{{ [restore_ts, month_start_ts] | max }}'
+            online_interval_s: '{{ [event_ts - online_interval_start_ts, 0] | max }}'
+            online_total_new_ts: '{{ month_start_ts + online_closed_s + online_interval_s }}'
+        - action: input_datetime.set_datetime
+          target:
+            entity_id: input_datetime.dt_internet_online_total
+          data:
+            timestamp: '{{ online_total_new_ts }}'
+        - action: input_datetime.set_datetime
+          target:
+            entity_id: input_datetime.dt_internet_last_failure
+          data:
+            timestamp: '{{ event_ts }}'
+        - action: counter.increment
+          target:
+            entity_id: counter.internet_failure_count
+        - action: counter.reset
+          target:
+            entity_id:
+            - counter.internet_reboot_attempt_count
+            - counter.internet_modem_restart_count
+            - counter.internet_router_restart_count
+        - event: digitalhouses_internet
+          event_data:
+            event: connection_lost
+            title: 🚫 Интернет соединение потеряно
+            message: 🚫 Интернет соединение потеряно в {{ as_local(as_datetime(event_ts)).strftime('%d.%m.%Y %H:%M:%S') }}.
+      - conditions:
+        - condition: trigger
+          id: internet_on
+        - condition: template
+          value_template: '{{ accounting_offline | bool }}'
+        sequence:
+        - variables:
+            offline_closed_s: '{{ [offline_total_ts - month_start_ts, 0] | max }}'
+            offline_interval_start_ts: '{{ [failure_ts, month_start_ts] | max }}'
+            offline_interval_s: '{{ [event_ts - offline_interval_start_ts, 0] | max }}'
+            offline_total_new_ts: '{{ month_start_ts + offline_closed_s + offline_interval_s }}'
+            outage_text: '{% set sec = [event_ts - failure_ts, 0] | max | int %} {% set d = sec // 86400 %} {% set h = (sec % 86400) // 3600 %} {% set m = (sec % 3600) // 60 %} {% set s = sec % 60 %} {{ (d ~ '' д. '' if d > 0 else '''') ~ (''%02d:%02d:%02d'' | format(h,m,s)) }}'
+        - action: input_datetime.set_datetime
+          target:
+            entity_id: input_datetime.dt_internet_offline_total
+          data:
+            timestamp: '{{ offline_total_new_ts }}'
+        - action: input_datetime.set_datetime
+          target:
+            entity_id: input_datetime.dt_internet_last_restore
+          data:
+            timestamp: '{{ event_ts }}'
+        - event: digitalhouses_internet
+          event_data:
+            event: connection_restored
+            title: 📶 Интернет соединение установлено
+            message: '📶 Сбой начался: {{ as_local(as_datetime(failure_ts)).strftime(''%d.%m.%Y %H:%M:%S'') }}. Восстановлен: {{ as_local(as_datetime(event_ts)).strftime(''%d.%m.%Y %H:%M:%S'') }}. Offline: {{ outage_text }}.'
+    - if:
+      - condition: template
+        value_template: "{{\n  initialized_v4_before | bool\n  and trigger.id in ['initialize', 'month_guard']\n  and totals_current_month | bool\n  and not (accounting_balance_valid | bool)\n}}"
+      then:
+      - choose:
+        - conditions:
+          - condition: state
+            entity_id: binary_sensor.internet_status
+            state: 'on'
+          sequence:
+          - action: input_datetime.set_datetime
+            target:
+              entity_id: input_datetime.dt_internet_online_total
+            data:
+              timestamp: '{{ current_ts }}'
+          - action: input_datetime.set_datetime
+            target:
+              entity_id: input_datetime.dt_internet_offline_total
+            data:
+              timestamp: '{{ month_start_ts }}'
+          - action: input_datetime.set_datetime
+            target:
+              entity_id: input_datetime.dt_internet_last_failure
+            data:
+              timestamp: '{{ current_ts - 1 }}'
+          - action: input_datetime.set_datetime
+            target:
+              entity_id: input_datetime.dt_internet_last_restore
+            data:
+              timestamp: '{{ current_ts }}'
+        - conditions:
+          - condition: state
+            entity_id: binary_sensor.internet_status
+            state: 'off'
+          sequence:
+          - action: input_datetime.set_datetime
+            target:
+              entity_id: input_datetime.dt_internet_online_total
+            data:
+              timestamp: '{{ month_start_ts }}'
+          - action: input_datetime.set_datetime
+            target:
+              entity_id: input_datetime.dt_internet_offline_total
+            data:
+              timestamp: '{{ current_ts }}'
+          - action: input_datetime.set_datetime
+            target:
+              entity_id: input_datetime.dt_internet_last_restore
+            data:
+              timestamp: '{{ current_ts - 1 }}'
+          - action: input_datetime.set_datetime
+            target:
+              entity_id: input_datetime.dt_internet_last_failure
+            data:
+              timestamp: '{{ current_ts }}'
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.ib_internet_statistics_v4_initialized
+      - action: counter.reset
+        target:
+          entity_id: counter.internet_failure_count
+    mode: queued
+    max: 50
+  - id: internet_global_package__internet_on_off_reaction
+    alias: _[internet_global_package] - Internet On/Off Reaction
+    description: 'Internet package: optional power-cycle recovery; hardware-gated by passport'
+    trigger:
+    - platform: state
+      entity_id: binary_sensor.internet_status
+      to: on
+      from: off
+      for: 00:00:05
+      id: internet_on
+    - platform: state
+      entity_id: binary_sensor.internet_status
+      to: off
+      from: on
+      for: 00:00:15
+      id: internet_off
+    condition:
+    - condition: state
+      entity_id: binary_sensor.internet_package_ready
+      state: on
+    variables:
+      reboot_interval_raw: "{{ states('input_number.internet_reboot_interval_min') }}"
+      reboot_interval: >-
+        {% if reboot_interval_raw in ['unknown','unavailable','none',''] or not is_number(reboot_interval_raw) %}
+          {{ none }}
+        {% else %}
+          {{ reboot_interval_raw | int }}
+        {% endif %}
+      timeout_str: >-
+        {% if reboot_interval is none %}
+          {{ none }}
+        {% else %}
+          00:{{ '%02d:00' % (reboot_interval | int) }}
+        {% endif %}
+      modem_cycles_raw: "{{ states('input_number.internet_ont_reboot_every_n_attempts') }}"
+      modem_cycles: >-
+        {% if modem_cycles_raw in ['unknown','unavailable','none',''] or not is_number(modem_cycles_raw) %}
+          {{ none }}
+        {% else %}
+          {{ modem_cycles_raw | int }}
+        {% endif %}
+      reboot_mode_simultaneous: "{{ is_state('input_boolean.ib_internet_reboot_mode_simultaneous','on') }}"
+      ont_enabled: >-
+        {{ is_state('input_boolean.ib_internet_auto_reboot_ont_enabled','on')
+           and is_state('binary_sensor.internet_recovery_ont_available','on') }}
+      router_enabled: >-
+        {{ is_state('input_boolean.ib_internet_auto_reboot_router_enabled','on')
+           and is_state('binary_sensor.internet_recovery_router_available','on') }}
+      recovery_enabled: '{{ ont_enabled | bool or router_enabled | bool }}'
+    action:
+    - choose:
+      - conditions:
+        - condition: trigger
+          id: internet_on
+        sequence: []
+      - conditions:
+        - condition: trigger
+          id: internet_off
+        sequence:
+        - choose:
+          - conditions:
+            - condition: template
+              value_template: '{{ reboot_interval is none or timeout_str is none }}'
+            sequence:
+            - stop: reboot_interval_not_ready
+          - conditions:
+            - condition: template
+              value_template: '{{ not (recovery_enabled | bool) }}'
+            sequence:
+            - stop: recovery_hardware_not_configured_or_disabled
+        - repeat:
+            while:
+            - condition: state
+              entity_id: binary_sensor.internet_status
+              state: off
+            sequence:
+            - wait_template: "{{ is_state('binary_sensor.internet_status', 'on') }}"
+              timeout: '{{ timeout_str }}'
+              continue_on_timeout: true
+            - if:
+              - condition: state
+                entity_id: binary_sensor.internet_status
+                state: off
+              then:
+              - action: counter.increment
+                target:
+                  entity_id: counter.internet_reboot_attempt_count
+              - if:
+                - condition: template
+                  value_template: '{{ reboot_mode_simultaneous }}'
+                then:
+                - if:
+                  - condition: template
+                    value_template: '{{ ont_enabled | bool }}'
+                  then:
+                  - action: script.internet_reboot_ont
+                - if:
+                  - condition: template
+                    value_template: '{{ router_enabled | bool }}'
+                  then:
+                  - action: script.internet_reboot_router
+                else:
+                - choose:
+                  - conditions:
+                    - condition: template
+                      value_template: '{{ ont_enabled | bool }}'
+                    sequence:
+                    - action: script.internet_reboot_ont
+                    - if:
+                      - condition: template
+                        value_template: >-
+                          {% set n = modem_cycles | int(0) %}
+                          {% set m = states('counter.internet_modem_restart_count') | int(0) %}
+                          {{ router_enabled | bool and n > 0 and m > 0 and (m % n == 0) }}
+                      then:
+                      - action: script.internet_reboot_router
+                  - conditions:
+                    - condition: template
+                      value_template: '{{ not (ont_enabled | bool) and router_enabled | bool }}'
+                    sequence:
+                    - action: script.internet_reboot_router
+    mode: restart
+    max: 100
+  recorder:
+    include:
+      entities:
+      - binary_sensor.internet_status
+      - binary_sensor.internet_google_dns_connectivity
+      - binary_sensor.internet_cloudflare_dns_connectivity
+      - sensor.internet_speed_download
+      - sensor.internet_speed_upload
+      - sensor.internet_speed_ping
+      - sensor.internet_speed_jitter
+      - sensor.internet_speed_packet_loss
+      - sensor.internet_speed_external_ip
+      - sensor.internet_speed_provider
+      - sensor.internet_speed_server
+      - sensor.internet_speed_last_test
+      - sensor.internet_speed_status
+      - number.internet_speed_minimum_download
+      - number.internet_speed_minimum_upload
+      - number.internet_speed_maximum_ping
+      - number.internet_speed_periodic_interval
+      - binary_sensor.internet_speed_low_download
+      - binary_sensor.internet_speed_low_upload
+      - binary_sensor.internet_speed_high_ping
+      - binary_sensor.internet_speed_performance_problem
+      - binary_sensor.bs_internet_passport
+      - sensor.internet_last_failure
+      - sensor.internet_last_restore
+      - sensor.internet_downtime
+      - sensor.internet_statistics_period_start
+      # - sensor.internet_online_month
+      # - sensor.internet_offline_month
+      - sensor.internet_availability_month
+      - sensor.internet_last_outage_duration
+      - input_number.internet_reboot_interval_min
+      - input_number.internet_ont_reboot_every_n_attempts
+      - input_boolean.ib_internet_auto_reboot_ont_enabled
+      - input_boolean.ib_internet_auto_reboot_router_enabled
+      - input_boolean.ib_internet_reboot_mode_simultaneous
+      - input_boolean.ib_internet_statistics_v4_initialized
+      - input_datetime.dt_internet_online_total
+      - input_datetime.dt_internet_offline_total
+      - input_datetime.dt_internet_last_failure
+      - input_datetime.dt_internet_last_restore
+      - counter.internet_failure_count
+      - counter.internet_reboot_attempt_count
+      - counter.internet_modem_restart_count
+      - counter.internet_router_restart_count
+      - sensor.internet_speed_server_id
+      - sensor.internet_speed_result_url
+      - sensor.internet_speed_available_servers
+      - sensor.internet_speed_server_list_updated
+      - button.internet_speed_run
+      - button.internet_speed_refresh_servers
+      - binary_sensor.internet_package_ready
+      - binary_sensor.internet_passport_valid
+      - binary_sensor.bs_router_ping_effective
+      - binary_sensor.router_is_on
+      - binary_sensor.bs_router_wan_effective
+      - binary_sensor.internet_recovery_ont_available
+      - binary_sensor.internet_recovery_router_available
+      - binary_sensor.internet_recovery_available
+      - sensor.router_wan_status_effective
+      - sensor.router_external_ip_effective
+      - sensor.router_traffic_download_effective
+      - sensor.router_traffic_upload_effective
+      - sensor.router_download_speed_effective
+      - sensor.router_upload_speed_effective
+      - sensor.router_uptime_effective
+      - sensor.router_last_boot_effective
+      - sensor.router_devices_connected_effective
+      - sensor.router_cpu_temperature_effective
+      - sensor.router_traffic_download_month
+      - sensor.router_traffic_upload_month
+  utility_meter:
+    router_traffic_download_month:
+      source: sensor.router_traffic_download_effective
+      name: Router traffic download month
+      unique_id: router_traffic_download_month_id
+      cycle: monthly
+      periodically_resetting: true
+    router_traffic_upload_month:
+      source: sensor.router_traffic_upload_effective
+      name: Router traffic upload month
+      unique_id: router_traffic_upload_month_id
+      cycle: monthly
+      periodically_resetting: true

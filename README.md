@@ -44,8 +44,8 @@ Documentation:
 
 - [DigitalHouses Speedtest README](digitalhouses_speedtest/README.md)
 - [DigitalHouses Speedtest documentation](digitalhouses_speedtest/DOCS.md)
-- [Recorder package](examples/packages/internet_speedtest_package.yaml)
-- [Lovelace dashboard](examples/lovelace/internet_speedtest_dashboard.yaml)
+- [Internet global package](digitalhouses_speedtest/examples/packages/dh_app_speedtest_internet_global_package.yaml)
+- [Lovelace dashboard](digitalhouses_speedtest/examples/lovelace/dh_app_speedtest_dashboard.yaml)
 
 Questions and user experience belong in
 [GitHub Discussions](https://github.com/DigitalHouses/home-assistant-apps/discussions).
@@ -98,8 +98,8 @@ Support is entirely optional. All public features remain available to everyone.
 
 - [README DigitalHouses Speedtest](digitalhouses_speedtest/README.md)
 - [Подробная документация](digitalhouses_speedtest/DOCS.md)
-- [Пакет Recorder](examples/packages/internet_speedtest_package.yaml)
-- [Панель Lovelace](examples/lovelace/internet_speedtest_dashboard.yaml)
+- [Глобальный Internet package](digitalhouses_speedtest/examples/packages/dh_app_speedtest_internet_global_package.yaml)
+- [Панель Lovelace](digitalhouses_speedtest/examples/lovelace/dh_app_speedtest_dashboard.yaml)
 
 Вопросы и пользовательский опыт публикуйте в
 [GitHub Discussions](https://github.com/DigitalHouses/home-assistant-apps/discussions).

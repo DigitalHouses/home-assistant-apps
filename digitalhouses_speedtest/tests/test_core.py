@@ -305,7 +305,7 @@ class ParsingAndPersistenceTests(unittest.TestCase):
 
     def test_server_list_parser(self) -> None:
         output = (
-            "38516  Kazakhtelecom  Almaty  Kazakhstan\n"
+            "38516  ExampleNet  TestCity  Testland\n"
             "70668  Hoster.KZ  Almaty  Kazakhstan\n"
         )
         servers = parse_server_list(output)

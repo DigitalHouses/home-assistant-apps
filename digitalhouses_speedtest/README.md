@@ -13,32 +13,24 @@ The repository example is designed so a new user can install it and reproduce th
 3. Copy both files to your Home Assistant packages directory:
 
 ```text
-examples/packages/internet_global_package.yaml
-examples/packages/internet_settings_passport.yaml
+examples/packages/dh_app_speedtest_internet_global_package.yaml
+examples/packages/dh_app_internet_settings_passport_local_package.yaml
 ```
 
-4. Open `internet_settings_passport.yaml` and edit only these four values:
+4. Open `dh_app_internet_settings_passport_local_package.yaml` and edit the `USER CONFIGURATION` block. At minimum configure:
 
 ```yaml
-power_ont_modem_switch_entity_id: ""
-pause_ont_s: 10
-power_router_switch_entity_id: ""
-pause_router_s: 10
+site_name: "CHANGE_ME"
+router_manufacturer: "CHANGE_ME"
+router_model: "CHANGE_ME"
+router_ip: "192.168.1.1"
+router_ping_entity_id: "CHANGE_ME"
 ```
 
-Example with controllable power relays:
-
-```yaml
-power_ont_modem_switch_entity_id: "switch.ont_power"
-pause_ont_s: 10
-power_router_switch_entity_id: "switch.router_power"
-pause_router_s: 10
-```
-
-If hardware recovery is not required, leave both switch IDs empty. Speedtest, connectivity, monthly statistics, outage history and the dashboard still work.
+Router telemetry and ONT fields are optional. Recovery is disabled by default with `none`. To enable recovery, select `switch`, `button` or `script` and configure the matching recovery entity.
 
 5. Restart Home Assistant.
-6. Import `examples/lovelace/internet_speedtest_dashboard.yaml` into a new dashboard/view.
+6. Import `examples/lovelace/dh_app_speedtest_dashboard.yaml` into a new dashboard/view.
 
 The dashboard includes current Internet/DNS state, Download/Upload/Ping/Jitter/Packet Loss, quality thresholds, 24-hour Speedtest graphs, monthly availability, recent results, available Ookla servers and Recovery controls.
 
@@ -67,7 +59,7 @@ The public package is fail-safe: an empty, malformed, missing or unavailable pow
 
 ### Notifications/events
 
-The public package does not require `script.write2log`, Telegram or any DigitalHouses-private boot helper. It fires Home Assistant events of type:
+The public package does not require Telegram, private notification scripts or site-specific boot helpers. It fires Home Assistant events of type:
 
 ```text
 digitalhouses_internet
@@ -88,23 +80,24 @@ Event data includes an `event`, `title` and `message`. Typical event values are 
 3. Скопируйте два файла:
 
 ```text
-examples/packages/internet_global_package.yaml
-examples/packages/internet_settings_passport.yaml
+examples/packages/dh_app_speedtest_internet_global_package.yaml
+examples/packages/dh_app_internet_settings_passport_local_package.yaml
 ```
 
-4. В `internet_settings_passport.yaml` измените только четыре значения:
+4. В `dh_app_internet_settings_passport_local_package.yaml` отредактируйте блок `USER CONFIGURATION`. Минимально необходимо указать:
 
 ```yaml
-power_ont_modem_switch_entity_id: ""
-pause_ont_s: 10
-power_router_switch_entity_id: ""
-pause_router_s: 10
+site_name: "CHANGE_ME"
+router_manufacturer: "CHANGE_ME"
+router_model: "CHANGE_ME"
+router_ip: "192.168.1.1"
+router_ping_entity_id: "CHANGE_ME"
 ```
 
-Если аппаратная перезагрузка не нужна, оставьте ID реле пустыми. Остальной мониторинг работает без них.
+Телеметрия роутера и параметры ONT опциональны. Recovery по умолчанию отключён методом `none`. Для восстановления можно выбрать `switch`, `button` или `script` и указать соответствующую entity.
 
 5. Перезапустите Home Assistant.
-6. Импортируйте `examples/lovelace/internet_speedtest_dashboard.yaml` в новую панель/представление.
+6. Импортируйте `examples/lovelace/dh_app_speedtest_dashboard.yaml` в новую панель/представление.
 
 В результате пользователь получает панель как на скриншоте: статус Internet/DNS, Speedtest, пороги качества, графики Download/Upload, месячную доступность, историю сбоев, последние тесты, серверы Ookla и Recovery controls.
 
@@ -114,12 +107,12 @@ pause_router_s: 10
 PUBLIC / GitHub
 DigitalHouses Speedtest App
   + internet_global_package.yaml
-  + internet_settings_passport.yaml
-  + internet_speedtest_dashboard.yaml
+  + dh_app_internet_settings_passport_local_package.yaml
+  + dh_app_speedtest_dashboard.yaml
 
 LOCAL / private
-internet_local_extensions_package.yaml   # write2log / local notifications
+site-local notification package          # private; not published
 dh_router_package.yaml                   # router traffic / Router dashboard
 ```
 
-Телеметрия конкретного роутера и `write2log` больше не являются зависимостями публичного Internet package.
+Телеметрия конкретного роутера и локальные скрипты уведомлений не являются зависимостями публичного Internet package.

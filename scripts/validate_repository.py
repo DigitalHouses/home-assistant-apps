@@ -27,8 +27,9 @@ REQUIRED_FILES = [
     APP / "tests/test_core.py",
     APP / "tests/test_discovery.py",
     APP / "tests/test_runtime.py",
-    ROOT / "examples/packages/internet_speedtest_package.yaml",
-    ROOT / "examples/lovelace/internet_speedtest_dashboard.yaml",
+    APP / "examples/packages/dh_app_speedtest_internet_global_package.yaml",
+    APP / "examples/packages/dh_app_internet_settings_passport_local_package.yaml",
+    APP / "examples/lovelace/dh_app_speedtest_dashboard.yaml",
 ]
 
 EXPECTED_VERSION = "1.1.1"
@@ -191,16 +192,51 @@ def main() -> None:
             fail(f"Unexpected default_entity_id for {key}")
 
     package = load_yaml(
-        ROOT / "examples/packages/internet_speedtest_package.yaml"
+        APP / "examples/packages/dh_app_speedtest_internet_global_package.yaml"
     )
     if not isinstance(package, dict):
-        fail("Internet Speedtest package must be a YAML mapping")
+        fail("Speedtest Internet global package must be a YAML mapping")
+
+    if "dh_app_speedtest_internet_global_package" not in package:
+        fail(
+            "Speedtest Internet global package has unexpected top-level key"
+        )
+
+    passport = load_yaml(
+        APP
+        / "examples/packages/"
+        "dh_app_internet_settings_passport_local_package.yaml"
+    )
+    if not isinstance(passport, dict):
+        fail("Internet settings passport must be a YAML mapping")
+
+    if "dh_app_internet_settings_passport_local_package" not in passport:
+        fail(
+            "Internet settings passport has unexpected top-level key"
+        )
 
     dashboard = load_yaml(
-        ROOT / "examples/lovelace/internet_speedtest_dashboard.yaml"
+        APP / "examples/lovelace/dh_app_speedtest_dashboard.yaml"
     )
-    if not isinstance(dashboard, dict) or not dashboard.get("views"):
-        fail("Lovelace dashboard has no views")
+    if not isinstance(dashboard, dict):
+        fail("Lovelace dashboard must be a YAML mapping")
+
+    if dashboard.get("type") == "sections":
+        sections = dashboard.get("sections")
+    elif isinstance(dashboard.get("views"), list):
+        section_views = [
+            view
+            for view in dashboard["views"]
+            if isinstance(view, dict) and view.get("type") == "sections"
+        ]
+        if not section_views:
+            fail("Lovelace dashboard has no Sections view")
+        sections = section_views[0].get("sections")
+    else:
+        fail("Lovelace dashboard must use Sections view")
+
+    if not isinstance(sections, list) or not sections:
+        fail("Lovelace dashboard has no sections")
 
     changelog = (APP / "CHANGELOG.md").read_text(encoding="utf-8")
     if "## 1.1.1" not in changelog:

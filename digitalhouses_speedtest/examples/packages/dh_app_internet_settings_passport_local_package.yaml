@@ -1,0 +1,115 @@
+# ==============================================================================
+# DIGITAL HOUSES — INTERNET SETTINGS PASSPORT (LOCAL)
+# Version: 2.1.0-example
+# Date: 2026-09-09
+#
+# DESCRIPTION
+# - Example site-specific Internet / Router / ONT passport.
+# - This is the ONLY file that should contain hardware-specific entity mapping.
+# - The global package and dashboard consume only the normalized contract exposed
+#   through binary_sensor.bs_internet_passport.
+# - Copy this file to the target Home Assistant instance and edit only the
+#   USER CONFIGURATION block below.
+#
+# DEPENDENCIES — REQUIRED
+# - dh_app_speedtest_internet_global_package.yaml
+# - A router reachability entity (normally a Ping binary_sensor)
+#
+# DEPENDENCIES — OPTIONAL
+# - Router integration entities for WAN status, traffic, rates, uptime, etc.
+# - ONT reachability entity
+# - Recovery entity when recovery_method is switch, button or script
+#
+# SCOPE
+# - local = site-specific configuration
+# - global = identical logic shared by all DigitalHouses sites
+#
+# RECOVERY METHODS
+# - none   : recovery unavailable
+# - switch : physical power-cycle via switch entity
+# - button : native integration reboot button via button.press
+# - script : local adapter script for vendor/integration-specific recovery
+# ==============================================================================
+
+dh_app_internet_settings_passport_local_package:
+
+  template:
+    - binary_sensor:
+        - name: "bs_internet_passport"
+          default_entity_id: binary_sensor.bs_internet_passport
+          unique_id: bs_internet_passport_id
+          icon: mdi:shield-home-outline
+
+          # Presence marker. Validation and source normalization are implemented
+          # only in dh_app_speedtest_internet_global_package.yaml.
+          state: "{{ true }}"
+
+          attributes:
+            # ==================================================================
+            # USER CONFIGURATION — EDIT THIS SECTION ONLY
+            # ==================================================================
+
+            passport_kind: "internet_settings_passport"
+            passport_version: "2.1"
+            site_name: "CHANGE_ME"
+
+            # ------------------------------------------------------------------
+            # ROUTER — REQUIRED BASE INFORMATION
+            # ------------------------------------------------------------------
+            router_manufacturer: "CHANGE_ME"
+            router_model: "CHANGE_ME"
+            router_firmware: ""
+            router_integration: ""
+            router_ip: "192.168.1.1"
+
+            # Required router reachability source.
+            # Example: binary_sensor.192_168_1_1
+            router_ping_entity_id: "CHANGE_ME"
+
+            # ------------------------------------------------------------------
+            # ROUTER — OPTIONAL TELEMETRY SOURCES
+            # Leave unsupported entities empty.
+            # ------------------------------------------------------------------
+            router_wan_status_entity_id: ""
+            router_wan_state_entity_id: ""
+            router_external_ip_entity_id: ""
+
+            # Monotonic/cumulative traffic counters. The global package
+            # normalizes units and builds monthly utility meters.
+            router_traffic_download_total_entity_id: ""
+            router_traffic_upload_total_entity_id: ""
+
+            # Instantaneous rates.
+            router_download_speed_entity_id: ""
+            router_upload_speed_entity_id: ""
+
+            # Uptime / diagnostics.
+            router_uptime_entity_id: ""
+            router_last_boot_entity_id: ""
+            router_devices_connected_entity_id: ""
+            router_cpu_temperature_entity_id: ""
+
+            # ------------------------------------------------------------------
+            # ONT — OPTIONAL
+            # ------------------------------------------------------------------
+            ont_manufacturer: ""
+            ont_model: ""
+            ont_ip: ""
+            ont_ping_entity_id: ""
+
+            # ------------------------------------------------------------------
+            # RECOVERY — OPTIONAL
+            # Supported methods: none | switch | button | script
+            # ------------------------------------------------------------------
+            ont_recovery_method: "none"
+            ont_recovery_entity_id: ""
+            ont_recovery_power_off_s: 10
+
+            router_recovery_method: "none"
+            router_recovery_entity_id: ""
+            router_recovery_power_off_s: 10
+
+            # ==================================================================
+            # END USER CONFIGURATION
+            # DO NOT ADD NORMALIZATION / AUTOMATIONS / RECORDER BELOW.
+            # ==================================================================

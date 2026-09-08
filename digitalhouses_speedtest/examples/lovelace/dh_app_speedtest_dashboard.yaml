@@ -1,3 +1,25 @@
+# ==============================================================================
+# DIGITAL HOUSES — SPEEDTEST + INTERNET DASHBOARD
+# Version: 2.2.0
+# Date: 2026-09-09
+#
+# DESCRIPTION
+# - Public Lovelace Sections view for Internet, Speedtest, Router telemetry,
+#   availability history and optional recovery controls.
+# - Uses only normalized/public entities. No site-specific router entities are
+#   referenced directly by the dashboard.
+#
+# DEPENDENCIES — REQUIRED
+# - dh_app_speedtest Internet MQTT entities
+# - dh_app_speedtest_internet_global_package.yaml
+# - dh_app_internet_settings_passport_local_package.yaml
+# - Home Assistant Sections dashboard support
+# - All custom Lovelace cards referenced by this YAML
+#
+# SCOPE
+# - Public / reusable dashboard example
+# ==============================================================================
+
 title: Internet
 path: internet
 icon: mdi:web
@@ -50,9 +72,12 @@ sections:
             icon: mdi:google
             content: Google DNS
             icon_color: >-
-              {% if is_state('binary_sensor.internet_google_dns_connectivity','on') %}
+              {% if
+              is_state('binary_sensor.internet_google_dns_connectivity','on') %}
                 green
-              {% elif is_state('binary_sensor.internet_google_dns_connectivity','off') %}
+              {% elif
+              is_state('binary_sensor.internet_google_dns_connectivity','off')
+              %}
                 red
               {% else %}
                 grey
@@ -64,9 +89,13 @@ sections:
             icon: mdi:cloud-check
             content: Cloudflare DNS
             icon_color: >-
-              {% if is_state('binary_sensor.internet_cloudflare_dns_connectivity','on') %}
+              {% if
+              is_state('binary_sensor.internet_cloudflare_dns_connectivity','on')
+              %}
                 green
-              {% elif is_state('binary_sensor.internet_cloudflare_dns_connectivity','off') %}
+              {% elif
+              is_state('binary_sensor.internet_cloudflare_dns_connectivity','off')
+              %}
                 red
               {% else %}
                 grey
@@ -76,11 +105,13 @@ sections:
           - type: template
             entity: sensor.internet_speed_status
             icon: mdi:speedometer
-            content: "{{ states('sensor.internet_speed_status') }}"
+            content: '{{ states(''sensor.internet_speed_status'') }}'
             icon_color: >-
-              {% if states('sensor.internet_speed_status') | lower == 'success' %}
+              {% if states('sensor.internet_speed_status') | lower == 'success'
+              %}
                 green
-              {% elif states('sensor.internet_speed_status') in ['unknown','unavailable'] %}
+              {% elif states('sensor.internet_speed_status') in
+              ['unknown','unavailable'] %}
                 grey
               {% else %}
                 orange
@@ -132,7 +163,8 @@ sections:
         primary: Ping
         secondary: >-
           {{ states('sensor.internet_speed_ping') }} {{
-          state_attr('sensor.internet_speed_ping','unit_of_measurement') or 'ms' }}
+          state_attr('sensor.internet_speed_ping','unit_of_measurement') or 'ms'
+          }}
         icon: mdi:timer-outline
         icon_color: |-
           {% if is_state('binary_sensor.internet_speed_high_ping','on') %}
@@ -149,7 +181,8 @@ sections:
         primary: Jitter
         secondary: >-
           {{ states('sensor.internet_speed_jitter') }} {{
-          state_attr('sensor.internet_speed_jitter','unit_of_measurement') or 'ms' }}
+          state_attr('sensor.internet_speed_jitter','unit_of_measurement') or
+          'ms' }}
         icon: mdi:pulse
         icon_color: blue
         tap_action:
@@ -161,7 +194,8 @@ sections:
         primary: Packet Loss
         secondary: >-
           {{ states('sensor.internet_speed_packet_loss') }} {{
-          state_attr('sensor.internet_speed_packet_loss','unit_of_measurement') or '%' }}
+          state_attr('sensor.internet_speed_packet_loss','unit_of_measurement')
+          or '%' }}
         icon: mdi:package-variant-closed-remove
         icon_color: |-
           {% if states('sensor.internet_speed_packet_loss') | float(0) > 0 %}
@@ -189,7 +223,7 @@ sections:
       - type: custom:mushroom-template-card
         entity: sensor.internet_speed_server
         primary: Speedtest Server
-        secondary: "{{ states('sensor.internet_speed_server') }}"
+        secondary: '{{ states(''sensor.internet_speed_server'') }}'
         icon: mdi:server-network
         icon_color: blue
         multiline_secondary: true
@@ -235,7 +269,6 @@ sections:
         fill_container: true
         grid_options:
           columns: 12
-
   - type: grid
     cards:
       - type: heading
@@ -245,9 +278,11 @@ sections:
       - type: custom:mushroom-template-card
         entity: binary_sensor.internet_speed_performance_problem
         primary: >-
-          {% if is_state('binary_sensor.internet_speed_performance_problem','on') %}
+          {% if
+          is_state('binary_sensor.internet_speed_performance_problem','on') %}
             Performance Problem
-          {% elif is_state('binary_sensor.internet_speed_performance_problem','off') %}
+          {% elif
+          is_state('binary_sensor.internet_speed_performance_problem','off') %}
             Connection Quality OK
           {% else %}
             Quality Status Unknown
@@ -257,17 +292,21 @@ sections:
           states('number.internet_speed_minimum_upload') }} Mbit/s · Ping ≤ {{
           states('number.internet_speed_maximum_ping') }} ms
         icon: >-
-          {% if is_state('binary_sensor.internet_speed_performance_problem','on') %}
+          {% if
+          is_state('binary_sensor.internet_speed_performance_problem','on') %}
             mdi:alert-circle
-          {% elif is_state('binary_sensor.internet_speed_performance_problem','off') %}
+          {% elif
+          is_state('binary_sensor.internet_speed_performance_problem','off') %}
             mdi:check-circle
           {% else %}
             mdi:help-circle
           {% endif %}
         icon_color: >-
-          {% if is_state('binary_sensor.internet_speed_performance_problem','on') %}
+          {% if
+          is_state('binary_sensor.internet_speed_performance_problem','on') %}
             red
-          {% elif is_state('binary_sensor.internet_speed_performance_problem','off') %}
+          {% elif
+          is_state('binary_sensor.internet_speed_performance_problem','off') %}
             green
           {% else %}
             grey
@@ -445,7 +484,7 @@ sections:
       - type: custom:mushroom-template-card
         entity: sensor.internet_online_month
         primary: Internet ONLINE
-        secondary: "{{ states('sensor.internet_online_month') }}"
+        secondary: '{{ states(''sensor.internet_online_month'') }}'
         icon: mdi:check-network-outline
         icon_color: green
         tap_action:
@@ -455,10 +494,11 @@ sections:
       - type: custom:mushroom-template-card
         entity: sensor.internet_offline_month
         primary: Internet OFFLINE
-        secondary: "{{ states('sensor.internet_offline_month') }}"
+        secondary: '{{ states(''sensor.internet_offline_month'') }}'
         icon: mdi:network-off-outline
         icon_color: >-
-          {% if state_attr('sensor.internet_offline_month','seconds') | float(0) > 0 %}
+          {% if state_attr('sensor.internet_offline_month','seconds') | float(0)
+          > 0 %}
             red
           {% else %}
             green
@@ -470,7 +510,7 @@ sections:
       - type: custom:mushroom-template-card
         entity: sensor.internet_availability_month
         primary: Availability
-        secondary: "{{ states('sensor.internet_availability_month') }} %"
+        secondary: '{{ states(''sensor.internet_availability_month'') }} %'
         icon: mdi:percent-circle-outline
         icon_color: >-
           {% set v = states('sensor.internet_availability_month') | float(0) %}
@@ -490,7 +530,8 @@ sections:
         primary: Period
         secondary: >-
           {% set v = states('sensor.internet_statistics_period_start') %} {% set
-          dt = as_datetime(v) %} {{ as_local(dt).strftime('%B %Y') if dt else v }}
+          dt = as_datetime(v) %} {{ as_local(dt).strftime('%B %Y') if dt else v
+          }}
         icon: mdi:calendar-month
         icon_color: blue
         tap_action:
@@ -519,14 +560,16 @@ sections:
           {% else %}
             No completed outage recorded
           {% endif %}
-        icon: |-
-          {% if states('sensor.internet_last_outage_duration') not in ['unknown','unavailable','none',''] %}
+        icon: >-
+          {% if states('sensor.internet_last_outage_duration') not in
+          ['unknown','unavailable','none',''] %}
             mdi:timer-alert-outline
           {% else %}
             mdi:check-circle-outline
           {% endif %}
-        icon_color: |-
-          {% if states('sensor.internet_last_outage_duration') not in ['unknown','unavailable','none',''] %}
+        icon_color: >-
+          {% if states('sensor.internet_last_outage_duration') not in
+          ['unknown','unavailable','none',''] %}
             orange
           {% else %}
             green
@@ -536,7 +579,6 @@ sections:
           action: more-info
         grid_options:
           columns: 12
-
   - type: grid
     cards:
       - type: heading
@@ -547,7 +589,8 @@ sections:
         entity: sensor.internet_speed_recent_results
         primary: Recent Results
         secondary: >-
-          {% set results = state_attr('sensor.internet_speed_recent_results','results') or [] %}
+          {% set results =
+          state_attr('sensor.internet_speed_recent_results','results') or [] %}
           {{ results | count }} tests stored
         icon: mdi:speedometer-medium
         icon_color: blue
@@ -558,8 +601,8 @@ sections:
       - type: markdown
         title: Recent Speedtests
         content: >
-          {% set results = state_attr('sensor.internet_speed_recent_results', 'results')
-          or [] %}
+          {% set results = state_attr('sensor.internet_speed_recent_results',
+          'results') or [] %}
 
 
           | Date | ⬇️ Mbps | ⬆️ Mbps | 📶 ms | Server | Status |
@@ -568,11 +611,11 @@ sections:
 
           {%- for r in results[:10] %}
 
-          | {{ as_datetime(r.timestamp).strftime('%d.%m %H:%M') }} | {{ r.download_mbps
-          | round(0) }} | {{ r.upload_mbps | round(0) }} | {{ r.ping_ms | round(1) }} |
-          {{ r.server | replace('|', '&#124;') }} | {% if r.performance_problem %}❌ {{
-          r.problem_reasons | join(', ') | replace('|', '&#124;') }}{% else %}✅ OK{%
-          endif %} |
+          | {{ as_datetime(r.timestamp).strftime('%d.%m %H:%M') }} | {{
+          r.download_mbps | round(0) }} | {{ r.upload_mbps | round(0) }} | {{
+          r.ping_ms | round(1) }} | {{ r.server | replace('|', '&#124;') }} | {%
+          if r.performance_problem %}❌ {{ r.problem_reasons | join(', ') |
+          replace('|', '&#124;') }}{% else %}✅ OK{% endif %} |
 
           {%- endfor %}
       - type: markdown
@@ -595,9 +638,9 @@ sections:
 
           {%- for s in servers %}
 
-          | {{ loop.index }} | **{{ s.provider | replace('|', '&#124;') }}** | {{ s.id
-          }} | {{ s.location | replace('|', '&#124;') }}, {{ s.country | replace('|',
-          '&#124;') }} |
+          | {{ loop.index }} | **{{ s.provider | replace('|', '&#124;') }}** |
+          {{ s.id }} | {{ s.location | replace('|', '&#124;') }}, {{ s.country |
+          replace('|', '&#124;') }} |
 
           {%- endfor %}
 
@@ -612,7 +655,6 @@ sections:
           No servers available.
 
           {% endif %}
-
   - type: grid
     cards:
       - type: heading
@@ -621,9 +663,12 @@ sections:
         icon: mdi:auto-fix
       - type: custom:mushroom-template-card
         primary: >-
-          {% set ont = is_state('input_boolean.ib_internet_auto_reboot_ont_enabled','on') %}
-          {% set router = is_state('input_boolean.ib_internet_auto_reboot_router_enabled','on') %}
-          {% set together = is_state('input_boolean.ib_internet_reboot_mode_simultaneous','on') %}
+          {% set ont =
+          is_state('input_boolean.ib_internet_auto_reboot_ont_enabled','on') %}
+          {% set router =
+          is_state('input_boolean.ib_internet_auto_reboot_router_enabled','on')
+          %} {% set together =
+          is_state('input_boolean.ib_internet_reboot_mode_simultaneous','on') %}
           {% if not ont and not router %}
             Automatic Recovery Disabled
           {% elif ont and router and together %}
@@ -636,12 +681,16 @@ sections:
             Router Recovery Only
           {% endif %}
         secondary: >-
-          {% set ont = is_state('input_boolean.ib_internet_auto_reboot_ont_enabled','on') %}
-          {% set router = is_state('input_boolean.ib_internet_auto_reboot_router_enabled','on') %}
-          {% set together = is_state('input_boolean.ib_internet_reboot_mode_simultaneous','on') %}
-          {% set n = states('input_number.internet_ont_reboot_every_n_attempts') | int(0) %}
-          {% set interval = states('input_number.internet_reboot_interval_min') | int(0) %}
-          {% if not ont and not router %}
+          {% set ont =
+          is_state('input_boolean.ib_internet_auto_reboot_ont_enabled','on') %}
+          {% set router =
+          is_state('input_boolean.ib_internet_auto_reboot_router_enabled','on')
+          %} {% set together =
+          is_state('input_boolean.ib_internet_reboot_mode_simultaneous','on') %}
+          {% set n = states('input_number.internet_ont_reboot_every_n_attempts')
+          | int(0) %} {% set interval =
+          states('input_number.internet_reboot_interval_min') | int(0) %} {% if
+          not ont and not router %}
             No devices will be rebooted automatically
           {% elif ont and router and together %}
             After {{ interval }} min offline → reboot ONT + Router
@@ -653,16 +702,19 @@ sections:
             After {{ interval }} min offline → reboot Router
           {% endif %}
         icon: >-
-          {% if not is_state('input_boolean.ib_internet_auto_reboot_ont_enabled','on')
+          {% if not
+          is_state('input_boolean.ib_internet_auto_reboot_ont_enabled','on')
                 and not is_state('input_boolean.ib_internet_auto_reboot_router_enabled','on') %}
             mdi:autorenew-off
-          {% elif is_state('input_boolean.ib_internet_reboot_mode_simultaneous','on') %}
+          {% elif
+          is_state('input_boolean.ib_internet_reboot_mode_simultaneous','on') %}
             mdi:sync
           {% else %}
             mdi:debug-step-over
           {% endif %}
         icon_color: >-
-          {% if not is_state('input_boolean.ib_internet_auto_reboot_ont_enabled','on')
+          {% if not
+          is_state('input_boolean.ib_internet_auto_reboot_ont_enabled','on')
                 and not is_state('input_boolean.ib_internet_auto_reboot_router_enabled','on') %}
             grey
           {% else %}
@@ -679,14 +731,16 @@ sections:
         entity: input_boolean.ib_internet_auto_reboot_ont_enabled
         primary: ONT / Modem
         secondary: >-
-          {% if is_state('input_boolean.ib_internet_auto_reboot_ont_enabled','on') %}
+          {% if
+          is_state('input_boolean.ib_internet_auto_reboot_ont_enabled','on') %}
             Automatic reboot enabled
           {% else %}
             Automatic reboot disabled
           {% endif %}
         icon: mdi:access-point-network
         icon_color: >-
-          {% if is_state('input_boolean.ib_internet_auto_reboot_ont_enabled','on') %}
+          {% if
+          is_state('input_boolean.ib_internet_auto_reboot_ont_enabled','on') %}
             blue
           {% else %}
             grey
@@ -699,14 +753,18 @@ sections:
         entity: input_boolean.ib_internet_auto_reboot_router_enabled
         primary: Router
         secondary: >-
-          {% if is_state('input_boolean.ib_internet_auto_reboot_router_enabled','on') %}
+          {% if
+          is_state('input_boolean.ib_internet_auto_reboot_router_enabled','on')
+          %}
             Automatic reboot enabled
           {% else %}
             Automatic reboot disabled
           {% endif %}
         icon: mdi:router-wireless
         icon_color: >-
-          {% if is_state('input_boolean.ib_internet_auto_reboot_router_enabled','on') %}
+          {% if
+          is_state('input_boolean.ib_internet_auto_reboot_router_enabled','on')
+          %}
             blue
           {% else %}
             grey
@@ -722,19 +780,22 @@ sections:
       - type: custom:mushroom-template-card
         entity: input_boolean.ib_internet_reboot_mode_simultaneous
         primary: >-
-          {% if is_state('input_boolean.ib_internet_reboot_mode_simultaneous','on') %}
+          {% if
+          is_state('input_boolean.ib_internet_reboot_mode_simultaneous','on') %}
             Simultaneous
           {% else %}
             Sequential
           {% endif %}
         secondary: >-
-          {% if is_state('input_boolean.ib_internet_reboot_mode_simultaneous','on') %}
+          {% if
+          is_state('input_boolean.ib_internet_reboot_mode_simultaneous','on') %}
             Reboot ONT and Router together
           {% else %}
             ONT first · Router after N ONT cycles
           {% endif %}
         icon: >-
-          {% if is_state('input_boolean.ib_internet_reboot_mode_simultaneous','on') %}
+          {% if
+          is_state('input_boolean.ib_internet_reboot_mode_simultaneous','on') %}
             mdi:sync
           {% else %}
             mdi:debug-step-over
@@ -772,7 +833,8 @@ sections:
             icon: mdi:restart-alert
             content: Attempts {{ states('counter.internet_reboot_attempt_count') }}
             icon_color: >-
-              {% if states('counter.internet_reboot_attempt_count') | int(0) > 0 %}
+              {% if states('counter.internet_reboot_attempt_count') | int(0) > 0
+              %}
                 orange
               {% else %}
                 green
@@ -784,7 +846,8 @@ sections:
             icon: mdi:access-point-network
             content: ONT {{ states('counter.internet_modem_restart_count') }}
             icon_color: >-
-              {% if states('counter.internet_modem_restart_count') | int(0) > 0 %}
+              {% if states('counter.internet_modem_restart_count') | int(0) > 0
+              %}
                 orange
               {% else %}
                 green
@@ -796,7 +859,8 @@ sections:
             icon: mdi:router-wireless
             content: Router {{ states('counter.internet_router_restart_count') }}
             icon_color: >-
-              {% if states('counter.internet_router_restart_count') | int(0) > 0 %}
+              {% if states('counter.internet_router_restart_count') | int(0) > 0
+              %}
                 orange
               {% else %}
                 green
