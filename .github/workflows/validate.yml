@@ -9,7 +9,8 @@ permissions:
   contents: read
 
 jobs:
-  validate:
+  repository-contract:
+    name: Repository contract
     runs-on: ubuntu-latest
 
     steps:
@@ -24,18 +25,58 @@ jobs:
       - name: Install validation dependency
         run: python -m pip install --disable-pip-version-check PyYAML
 
+      - name: Run validator unit tests
+        run: python -m unittest discover -s scripts/tests -v
+
       - name: Validate repository contract
         run: python scripts/validate_repository.py
 
+  speedtest:
+    name: Speedtest
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
       - name: Compile Python
         run: |
-          python -m py_compile \
-            digitalhouses_speedtest/rootfs/app/core.py \
-            digitalhouses_speedtest/rootfs/app/discovery.py \
-            digitalhouses_speedtest/rootfs/app/app.py
+          python -m compileall -q \
+            digitalhouses_speedtest/rootfs/app \
+            digitalhouses_speedtest/tests
 
       - name: Run unit tests
         run: python -m unittest discover -s digitalhouses_speedtest/tests -v
 
       - name: Check shell syntax
         run: bash -n digitalhouses_speedtest/rootfs/run.sh
+
+  db-monitoring:
+    name: DB Monitoring
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Compile Python
+        run: |
+          python -m compileall -q \
+            digitalhouses_db_monitoring/rootfs/app \
+            digitalhouses_db_monitoring/tests
+
+      - name: Run unit tests
+        run: python -m unittest discover -s digitalhouses_db_monitoring/tests -v
+
+      - name: Check shell syntax
+        run: bash -n digitalhouses_db_monitoring/rootfs/run.sh

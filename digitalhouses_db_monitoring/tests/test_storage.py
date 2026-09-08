@@ -89,7 +89,12 @@ class StorageCollectorTests(unittest.TestCase):
         )
         self.assertEqual(
             collector.collect(),
-            {'db_disk_free': 18.8, 'db_disk_used_percentage': 34.7},
+            {
+                'db_disk_free': 18.8,
+                'db_disk_used': 10.7,
+                'db_disk_total': 30.8,
+                'db_disk_used_percentage': 34.7,
+            },
         )
 
 

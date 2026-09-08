@@ -1,3 +1,4 @@
+import importlib.util
 import logging
 import sys
 import threading
@@ -9,46 +10,67 @@ from unittest.mock import Mock, patch
 APP_DIR = Path(__file__).resolve().parents[1] / 'rootfs' / 'app'
 sys.path.insert(0, str(APP_DIR))
 
-# Minimal dependency stubs so app.py can be imported without runtime packages.
-paho = types.ModuleType('paho')
-paho_mqtt = types.ModuleType('paho.mqtt')
-paho_client = types.ModuleType('paho.mqtt.client')
-paho_client.Client = object
-paho_client.MQTT_ERR_SUCCESS = 0
-sys.modules.setdefault('paho', paho)
-sys.modules.setdefault('paho.mqtt', paho_mqtt)
-sys.modules.setdefault('paho.mqtt.client', paho_client)
-
-config = types.ModuleType('config')
-config.AppConfig = object
-config.load_config = lambda: None
-sys.modules.setdefault('config', config)
-
-db = types.ModuleType('db')
-db.create_adapter = lambda *_args, **_kwargs: None
-sys.modules.setdefault('db', db)
-
-storage = types.ModuleType('storage')
-storage.StorageCollector = object
-sys.modules.setdefault('storage', storage)
-
-rankings = types.ModuleType('rankings')
-rankings.TOP_ENTITIES_24H_INTERVAL_SECONDS = 3600
-rankings.TOP_ENTITIES_ALL_TIME_INTERVAL_SECONDS = 86400
-rankings.build_top_entities_snapshot = lambda *args, **kwargs: {}
-sys.modules.setdefault('rankings', rankings)
-
-metrics = types.ModuleType('metrics')
-metrics.db_depth_days = lambda *args, **kwargs: None
-metrics.iso_from_epoch = lambda *args, **kwargs: None
-metrics.last_age_seconds = lambda *args, **kwargs: None
-metrics.records_k = lambda *args, **kwargs: None
-metrics.short_db_version = lambda *args, **kwargs: None
-metrics.yesterday_bounds_epoch = lambda *args, **kwargs: (0, 0)
-sys.modules.setdefault('metrics', metrics)
-
 from discovery import REFRESH_COMMAND_TOPIC
-from app import DatabaseMonitorApp
+
+
+def load_app_module():
+    paho = types.ModuleType('paho')
+    paho_mqtt = types.ModuleType('paho.mqtt')
+    paho_client = types.ModuleType('paho.mqtt.client')
+    paho_client.Client = object
+    paho_client.MQTT_ERR_SUCCESS = 0
+    paho.mqtt = paho_mqtt
+    paho_mqtt.client = paho_client
+
+    config = types.ModuleType('config')
+    config.AppConfig = object
+    config.load_config = lambda: None
+
+    db = types.ModuleType('db')
+    db.create_adapter = lambda *_args, **_kwargs: None
+
+    storage = types.ModuleType('storage')
+    storage.StorageCollector = object
+
+    rankings = types.ModuleType('rankings')
+    rankings.TOP_ENTITIES_24H_INTERVAL_SECONDS = 3600
+    rankings.TOP_ENTITIES_ALL_TIME_INTERVAL_SECONDS = 86400
+    rankings.build_top_entities_snapshot = lambda *args, **kwargs: {}
+
+    metrics = types.ModuleType('metrics')
+    metrics.db_depth_days = lambda *args, **kwargs: None
+    metrics.iso_from_epoch = lambda *args, **kwargs: None
+    metrics.last_age_seconds = lambda *args, **kwargs: None
+    metrics.records_k = lambda *args, **kwargs: None
+    metrics.short_db_version = lambda *args, **kwargs: None
+    metrics.yesterday_bounds_epoch = lambda *args, **kwargs: (0, 0)
+
+    stubs = {
+        'paho': paho,
+        'paho.mqtt': paho_mqtt,
+        'paho.mqtt.client': paho_client,
+        'config': config,
+        'db': db,
+        'storage': storage,
+        'rankings': rankings,
+        'metrics': metrics,
+    }
+
+    spec = importlib.util.spec_from_file_location(
+        'digitalhouses_db_monitoring_app_manual_refresh_test',
+        APP_DIR / 'app.py',
+    )
+    if spec is None or spec.loader is None:
+        raise RuntimeError('Unable to load app.py for test')
+    module = importlib.util.module_from_spec(spec)
+
+    with patch.dict(sys.modules, stubs):
+        spec.loader.exec_module(module)
+    return module
+
+
+APP_MODULE = load_app_module()
+DatabaseMonitorApp = APP_MODULE.DatabaseMonitorApp
 
 
 class Message:
@@ -89,7 +111,6 @@ class ManualRefreshTests(unittest.TestCase):
 
         self.assertFalse(app.refresh_requested.is_set())
 
-
     def test_on_connect_subscribes_to_refresh_command_topic(self):
         app = self.make_app()
         app.mqtt_connected = threading.Event()
@@ -109,7 +130,11 @@ class ManualRefreshTests(unittest.TestCase):
         app = self.make_app()
         app.config = types.SimpleNamespace(
             database=types.SimpleNamespace(
-                engine='postgresql', username='user', host='db', port=5432, database='ha'
+                engine='postgresql',
+                username='user',
+                host='db',
+                port=5432,
+                database='ha',
             ),
             publish_interval_minutes=1,
             timezone='Asia/Almaty',
@@ -145,8 +170,8 @@ class ManualRefreshTests(unittest.TestCase):
     def test_successful_manual_refresh_updates_last_refresh_timestamp(self):
         app = self.make_app()
 
-        with patch('app.time.time', return_value=1788876000), patch(
-            'app.iso_from_epoch', return_value='2026-09-08T12:00:00+00:00'
+        with patch.object(APP_MODULE.time, 'time', return_value=1788876000), patch.object(
+            APP_MODULE, 'iso_from_epoch', return_value='2026-09-08T12:00:00+00:00'
         ):
             app.manual_refresh()
 

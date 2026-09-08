@@ -1,21 +1,9 @@
 import sys
-import types
 import unittest
 from pathlib import Path
 
 APP_DIR = Path(__file__).resolve().parents[1] / 'rootfs' / 'app'
 sys.path.insert(0, str(APP_DIR))
-
-config = sys.modules.get('config') or types.ModuleType('config')
-config.StorageConfig = object
-sys.modules['config'] = config
-
-db = sys.modules.get('db') or types.ModuleType('db')
-db_base = types.ModuleType('db.base')
-db_base.DatabaseAdapter = object
-sys.modules['db'] = db
-sys.modules['db.base'] = db_base
-sys.modules.pop('storage', None)
 
 from storage import parse_df_output, parse_supervisor_host_payload
 

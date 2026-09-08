@@ -1,11 +1,40 @@
+import importlib.util
 import sys
+import types
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'rootfs' / 'app'))
+APP_DIR = Path(__file__).resolve().parents[1] / 'rootfs' / 'app'
+sys.path.insert(0, str(APP_DIR))
 
-from db.postgres import PostgresAdapter
-from db.mariadb import MariaDBAdapter
+
+def load_adapter_module(module_name, relative_path, dependency_name):
+    dependency = types.ModuleType(dependency_name)
+    spec = importlib.util.spec_from_file_location(
+        module_name,
+        APP_DIR / relative_path,
+    )
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f'Unable to load {relative_path}')
+    module = importlib.util.module_from_spec(spec)
+    with patch.dict(sys.modules, {dependency_name: dependency}):
+        spec.loader.exec_module(module)
+    return module
+
+
+POSTGRES_MODULE = load_adapter_module(
+    'digitalhouses_db_monitoring_postgres_ranking_test',
+    'db/postgres.py',
+    'psycopg2',
+)
+MARIADB_MODULE = load_adapter_module(
+    'digitalhouses_db_monitoring_mariadb_ranking_test',
+    'db/mariadb.py',
+    'pymysql',
+)
+PostgresAdapter = POSTGRES_MODULE.PostgresAdapter
+MariaDBAdapter = MARIADB_MODULE.MariaDBAdapter
 
 
 class RankingAdapterTests(unittest.TestCase):

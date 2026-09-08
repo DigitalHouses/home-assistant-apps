@@ -1,0 +1,37 @@
+configuration:
+  periodic_test_enabled:
+    name: Периодические тесты скорости
+    description: Автоматически запускать Ookla Speedtest по расписанию.
+  periodic_test_interval_minutes:
+    name: Интервал периодических тестов
+    description: Начальное и совместимое значение интервала в минутах. Текущий интервал также можно изменить через сущность Number в Home Assistant.
+  server_ids:
+    name: Предпочтительные ID серверов
+    description: ID серверов Ookla в порядке приоритета. Оставьте пустым для автоматического выбора.
+  automatic_server_fallback:
+    name: Автоматический резервный выбор сервера
+    description: После неудачи предпочтительных серверов попробовать автоматический выбор.
+  speedtest_timeout_seconds:
+    name: Тайм-аут Speedtest
+    description: Максимальная длительность одной попытки Ookla Speedtest.
+  connectivity_check:
+    name: Проверка доступности
+    description: Независимые проверки доступности 8.8.8.8 и 1.1.1.1.
+  connectivity_check.interval_seconds:
+    name: Интервал проверки доступности
+    description: Количество секунд между проверками доступности.
+  connectivity_check.attempts:
+    name: Количество попыток
+    description: Количество ICMP-попыток для каждой цели.
+  connectivity_check.timeout_seconds:
+    name: Тайм-аут проверки доступности
+    description: Тайм-аут в секундах для каждой ICMP-попытки.
+  expire_after_seconds:
+    name: Срок актуальности результата
+    description: Возраст результата, после которого измерения и оценка качества становятся недоступны. Укажите 0, чтобы отключить срок актуальности.
+  recent_results_limit:
+    name: Лимит последних результатов
+    description: Количество успешных тестов, сохраняемых в диагностическом сенсоре Recent results.
+  log_level:
+    name: Уровень логирования
+    description: Подробность журналирования приложения.
