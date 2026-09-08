@@ -1,0 +1,23 @@
+[Unit]
+Description=DigitalHouses Plex Monitoring
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=digitalhouses_plex_monitoring
+Group=digitalhouses_plex_monitoring
+WorkingDirectory=/opt/digitalhouses/digitalhouses_plex_monitoring
+ExecStart=/opt/digitalhouses/digitalhouses_plex_monitoring/.venv/bin/python -m app.app --config /etc/digitalhouses_plex_monitoring/digitalhouses_plex_monitoring.conf
+Restart=on-failure
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/digitalhouses_plex_monitoring
+
+[Install]
+WantedBy=multi-user.target

@@ -6,6 +6,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from validators.apps.db_monitoring import validate_db_monitoring
+from validators.apps.plex_monitoring import validate_plex_monitoring
 from validators.apps.speedtest import validate_speedtest
 from validators.common import (
     ValidationError,
@@ -27,6 +28,7 @@ TYPE_VALIDATORS = {
 APP_VALIDATORS = {
     "digitalhouses_speedtest": validate_speedtest,
     "digitalhouses_db_monitoring": validate_db_monitoring,
+    "digitalhouses_plex_monitoring": validate_plex_monitoring,
 }
 
 

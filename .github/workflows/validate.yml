@@ -80,3 +80,45 @@ jobs:
 
       - name: Check shell syntax
         run: bash -n digitalhouses_db_monitoring/rootfs/run.sh
+
+  plex-monitoring:
+    name: Plex Monitoring
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install runtime dependencies
+        run: |
+          python -m pip install --disable-pip-version-check \
+            -r digitalhouses_plex_monitoring/requirements.txt
+
+      - name: Compile Python
+        run: |
+          python -m compileall -q \
+            digitalhouses_plex_monitoring/app \
+            digitalhouses_plex_monitoring/tests
+
+      - name: Run unit tests
+        run: python -m unittest discover -s digitalhouses_plex_monitoring/tests -v
+
+      - name: Check installer syntax
+        run: bash -n digitalhouses_plex_monitoring/install.sh
+
+      - name: Prepare systemd verification path
+        run: |
+          sudo install -d \
+            /opt/digitalhouses/digitalhouses_plex_monitoring/.venv/bin
+          sudo ln -sf "$(command -v python)" \
+            /opt/digitalhouses/digitalhouses_plex_monitoring/.venv/bin/python
+
+      - name: Validate systemd unit
+        run: |
+          systemd-analyze verify \
+            digitalhouses_plex_monitoring/systemd/*.service

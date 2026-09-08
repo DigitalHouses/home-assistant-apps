@@ -1238,7 +1238,7 @@ All tests must pass together in one suite; test modules may not pollute one anot
 
 ## 42. `digitalhouses_plex_monitoring`
 
-**Status:** Planned — first `linux_agent` reference implementation.
+**Status:** Active — first `linux_agent` reference implementation.
 
 Type:
 

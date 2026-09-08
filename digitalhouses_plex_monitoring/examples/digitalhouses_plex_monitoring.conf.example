@@ -1,0 +1,20 @@
+[general]
+instance_id = plex
+instance_name = DH Plex
+poll_interval_seconds = 10
+cpu_window_seconds = 60
+log_level = info
+
+[telemetry]
+cpu_change_threshold = 5
+high_load_threshold = 80
+high_load_publish_interval_seconds = 60
+
+[mqtt]
+host =
+port = 1883
+username =
+password =
+topic_prefix = DigitalHouses/Global/plex_monitoring
+discovery_prefix = homeassistant
+keepalive_seconds = 60
