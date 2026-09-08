@@ -10,7 +10,6 @@ from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import paho.mqtt.client as mqtt
-
 from config import AppConfig, load_config
 from db import create_adapter
 from discovery import (
@@ -19,6 +18,7 @@ from discovery import (
     STORAGE_AVAILABILITY_TOPIC,
     DISCOVERY_TOPIC,
     HA_STATUS_TOPIC,
+    REFRESH_COMMAND_TOPIC,
     STATE_RETAIN,
     STATE_TOPIC,
     TOP_ENTITIES_24H_TOPIC,
@@ -39,8 +39,7 @@ from metrics import (
     short_db_version,
     yesterday_bounds_epoch,
 )
-
-APP_VERSION = os.getenv('APP_VERSION', '0.1.6-local')
+APP_VERSION = os.getenv('APP_VERSION', '0.1.7-local')
 MEDIUM_INTERVAL_SECONDS = 300
 SLOW_INTERVAL_SECONDS = 3600
 STORAGE_INTERVAL_SECONDS = 300
@@ -53,7 +52,6 @@ class DatabaseMonitorApp:
             ZoneInfo(self.config.timezone)
         except ZoneInfoNotFoundError as exc:
             raise ValueError(f'Unknown timezone: {self.config.timezone}') from exc
-
         logging.basicConfig(
             level=getattr(logging, self.config.log_level.upper()),
             format='%(asctime)s %(levelname)s %(message)s',
@@ -69,6 +67,8 @@ class DatabaseMonitorApp:
         self.state_lock = threading.RLock()
         self.stop_event = threading.Event()
         self.mqtt_connected = threading.Event()
+        self.refresh_requested = threading.Event()
+        self.refresh_in_progress = threading.Event()
         self.db_available = False
         self.storage_available = False
         self._logged_storage_path = ''
@@ -94,6 +94,8 @@ class DatabaseMonitorApp:
             return
         self.mqtt_connected.set()
         client.subscribe(HA_STATUS_TOPIC, qos=1)
+        client.subscribe(REFRESH_COMMAND_TOPIC, qos=1)
+        client.subscribe(REFRESH_COMMAND_TOPIC, qos=1)
         self.publish_json(
             DISCOVERY_TOPIC,
             build_discovery_payload(APP_VERSION, include_storage=self.storage.enabled),
@@ -118,6 +120,13 @@ class DatabaseMonitorApp:
 
     def _on_message(self, client, userdata, message) -> None:
         del client, userdata
+        if message.topic == REFRESH_COMMAND_TOPIC:
+            if self.refresh_requested.is_set() or self.refresh_in_progress.is_set():
+                self.log.debug('Manual full refresh already pending or running; duplicate request ignored')
+                return
+            self.refresh_requested.set()
+            self.log.info('Manual full refresh requested')
+            return
         if message.topic != HA_STATUS_TOPIC:
             return
         payload = message.payload.decode('utf-8', errors='replace').strip().lower()
@@ -263,28 +272,48 @@ class DatabaseMonitorApp:
         except Exception as exc:
             self.log.warning('Top entities %s query failed: %s', period, exc)
 
+    def manual_refresh(self) -> None:
+        if self.refresh_in_progress.is_set():
+            return
+        self.refresh_in_progress.set()
+        self.refresh_requested.clear()
+        self.log.info('Manual full refresh started')
+        try:
+            db_ok = self.collect_fast()
+            if db_ok:
+                self.collect_static()
+                self.collect_medium()
+                self.collect_slow()
+                self.collect_top_entities('24h')
+                self.collect_top_entities('all_time')
+            if self.storage.enabled:
+                self.collect_storage()
+            self.publish_state()
+            self.log.info('Manual full refresh completed')
+        finally:
+            self.refresh_in_progress.clear()
+
     def run(self) -> None:
         db = self.config.database
         publish_interval_seconds = self.config.publish_interval_minutes * 60
-
         self.log.info('Starting DigitalHouses DB Monitoring %s', APP_VERSION)
         self.log.info('Database engine: %s', db.engine)
         self.log.info('Database target: %s@%s:%s/%s', db.username, db.host, db.port, db.database)
         self.log.info('Timezone: %s', self.config.timezone)
         self.log.info('Publish interval: %s minute(s)', self.config.publish_interval_minutes)
         self.log.info('Storage monitoring source: %s', self.config.storage.source)
-
         host = os.environ['MQTT_HOST']
         port = int(os.getenv('MQTT_PORT', '1883'))
         self.client.connect_async(host, port, keepalive=60)
         self.client.loop_start()
-
         next_publish = next_medium = next_slow = next_storage = 0.0
         next_top_24h = next_top_all_time = 0.0
         static_loaded = False
         try:
             while not self.stop_event.is_set():
                 now_mono = time.monotonic()
+                if self.refresh_requested.is_set():
+                    self.manual_refresh()
                 if now_mono >= next_publish:
                     db_ok = self.collect_fast()
                     if db_ok:

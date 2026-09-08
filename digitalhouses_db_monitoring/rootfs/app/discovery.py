@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from typing import Any
-
 DEVICE_ID = "digitalhouses_db_monitoring"
 DEVICE_NAME = "DH Recorder"
 BASE_TOPIC = "DigitalHouses/Global/db_monitoring"
@@ -13,8 +12,8 @@ DB_AVAILABILITY_TOPIC = f"{BASE_TOPIC}/database_availability"
 STORAGE_AVAILABILITY_TOPIC = f"{BASE_TOPIC}/storage_availability"
 DISCOVERY_TOPIC = f"homeassistant/device/{DEVICE_ID}/config"
 HA_STATUS_TOPIC = "homeassistant/status"
+REFRESH_COMMAND_TOPIC = f"{BASE_TOPIC}/refresh"
 STATE_RETAIN = True
-
 
 def _availability(topic: str) -> dict[str, str]:
     return {
@@ -22,7 +21,6 @@ def _availability(topic: str) -> dict[str, str]:
         "payload_available": "online",
         "payload_not_available": "offline",
     }
-
 
 def _component(
     platform: str,
@@ -57,6 +55,32 @@ def _component(
     payload.update(extra)
     return payload
 
+
+def _button_component(
+    name: str,
+    unique_suffix: str,
+    entity_id: str,
+    command_topic: str,
+    *,
+    diagnostic: bool = False,
+    payload_press: str = "PRESS",
+    icon: str | None = None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "platform": "button",
+        "name": name,
+        "unique_id": f"{DEVICE_ID}_{unique_suffix}",
+        "default_entity_id": entity_id,
+        "command_topic": command_topic,
+        "payload_press": payload_press,
+        "availability": [_availability(APP_AVAILABILITY_TOPIC)],
+        "availability_mode": "all",
+    }
+    if diagnostic:
+        payload["entity_category"] = "diagnostic"
+    if icon:
+        payload["icon"] = icon
+    return payload
 
 def build_discovery_payload(app_version: str, include_storage: bool = False) -> dict[str, Any]:
     components = {
@@ -141,6 +165,10 @@ def build_discovery_payload(app_version: str, include_storage: bool = False) -> 
             state_class="measurement", unit_of_measurement="records", icon="mdi:format-list-numbered",
             json_attributes_topic=TOP_ENTITIES_ALL_TIME_TOPIC,
             json_attributes_template="{{ value_json | tojson }}",
+        ),
+        "db_refresh": _button_component(
+            "DB refresh", "db_refresh", "button.dh_db_refresh", REFRESH_COMMAND_TOPIC,
+            diagnostic=True, icon="mdi:refresh",
         ),
     }
     if include_storage:

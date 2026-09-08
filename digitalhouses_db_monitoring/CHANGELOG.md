@@ -1,14 +1,18 @@
 # Changelog
+## 0.1.7
+- Added diagnostic `button.dh_db_refresh` for an on-demand full refresh of DB Monitoring data.
+- A manual refresh immediately recollects fast, medium, slow, static, storage, Top Recorder 24h, and Top Recorder all-time data.
+- Manual refresh requests are executed by the main application loop so expensive database queries do not block the MQTT callback thread.
+- Duplicate refresh requests are ignored while a refresh is already pending or running.
+- Existing background polling intervals remain unchanged and are not reset by a manual refresh.
 
 ## 0.1.6
-
 - Added `sensor.dh_db_top_entities_24h` with Top 10 Recorder entities for the last 24 hours.
 - Added `sensor.dh_db_top_entities_all_time` with Top 10 Recorder entities across retained history.
 - Added `top_entity`, `top_records`, `generated_at`, `period` and `top_10` attributes.
 - Refresh the 24-hour ranking once per hour and the all-time ranking once per day.
 - Ranking failures keep the previous successful MQTT state and do not interrupt core database monitoring.
 - Publish rankings on dedicated retained MQTT topics only when recalculated, avoiding minute-by-minute Recorder churn.
-
 ## 0.1.5
 
 - Fix PostgreSQL storage autodetection when multiple clusters are installed.
@@ -20,7 +24,6 @@
 - Made `Filesystem path` a true optional override for SSH storage monitoring.
 - Added SSH-side PostgreSQL/MariaDB storage path auto-detection when the DB user cannot read the server data directory.
 - Added `/` as a safe final fallback and log output showing the resolved storage path.
-
 ## 0.1.3
 
 - Added `sensor.dh_db_disk_free`.
@@ -29,7 +32,6 @@
 - Added SSH disk monitoring for external PostgreSQL and MariaDB databases.
 - Added automatic PostgreSQL/MariaDB data directory detection for SSH storage checks.
 - Added separate MQTT storage availability tracking.
-
 ## 0.1.2
 
 - Renamed the MQTT device to `DH Recorder`.
