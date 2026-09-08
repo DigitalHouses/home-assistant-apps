@@ -1,4 +1,10 @@
 # Changelog
+## 0.1.8
+- Added `sensor.dh_db_last_refresh` with the timestamp of the last successful manual full refresh.
+- Added `sensor.dh_db_disk_used` and `sensor.dh_db_disk_total`.
+- Storage collection now publishes free, used, total, and used-percentage values for both Supervisor and SSH sources.
+- A manual refresh updates `db_last_refresh` only when all enabled refresh groups complete successfully.
+
 ## 0.1.7
 - Added diagnostic `button.dh_db_refresh` for an on-demand full refresh of DB Monitoring data.
 - A manual refresh immediately recollects fast, medium, slow, static, storage, Top Recorder 24h, and Top Recorder all-time data.
