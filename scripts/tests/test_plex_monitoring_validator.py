@@ -17,7 +17,8 @@ class PlexMonitoringValidatorTests(unittest.TestCase):
         validate_common(ROOT, app, metadata)
         context = validate_linux_agent(ROOT, app)
         validate_plex_monitoring(ROOT, app, context)
-        self.assertEqual(context["version"], "0.1.0")
+        expected_version = (app / "VERSION").read_text(encoding="utf-8").strip()
+        self.assertEqual(context["version"], expected_version)
 
 
 if __name__ == "__main__":
