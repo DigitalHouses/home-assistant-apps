@@ -126,9 +126,9 @@ sections:
         entity: sensor.internet_speed_download
         primary: Download
         secondary: >-
-          {{ states('sensor.internet_speed_download') }} {{
-          state_attr('sensor.internet_speed_download','unit_of_measurement') or
-          'Mbit/s' }}
+          {{ states('sensor.internet_speed_download') | float(0) | round(1) }}
+          {{ state_attr('sensor.internet_speed_download','unit_of_measurement')
+          or 'Mbit/s' }}
         icon: mdi:download-network
         icon_color: |-
           {% if is_state('binary_sensor.internet_speed_low_download','on') %}
@@ -144,7 +144,7 @@ sections:
         entity: sensor.internet_speed_upload
         primary: Upload
         secondary: >-
-          {{ states('sensor.internet_speed_upload') }} {{
+          {{ states('sensor.internet_speed_upload') | float(0) | round(1) }} {{
           state_attr('sensor.internet_speed_upload','unit_of_measurement') or
           'Mbit/s' }}
         icon: mdi:upload-network
@@ -162,7 +162,7 @@ sections:
         entity: sensor.internet_speed_ping
         primary: Ping
         secondary: >-
-          {{ states('sensor.internet_speed_ping') }} {{
+          {{ states('sensor.internet_speed_ping') | float(0) | round(1) }} {{
           state_attr('sensor.internet_speed_ping','unit_of_measurement') or 'ms'
           }}
         icon: mdi:timer-outline
@@ -180,7 +180,7 @@ sections:
         entity: sensor.internet_speed_jitter
         primary: Jitter
         secondary: >-
-          {{ states('sensor.internet_speed_jitter') }} {{
+          {{ states('sensor.internet_speed_jitter') | float(0) | round(1) }} {{
           state_attr('sensor.internet_speed_jitter','unit_of_measurement') or
           'ms' }}
         icon: mdi:pulse
@@ -269,6 +269,140 @@ sections:
         fill_container: true
         grid_options:
           columns: 12
+      - type: heading
+        heading: Router
+        heading_style: subtitle
+        icon: mdi:router-network-wireless
+      - type: custom:mushroom-chips-card
+        alignment: justify
+        chips:
+          - type: template
+            entity: binary_sensor.bs_router_wan_effective
+            icon: mdi:wan
+            content: |-
+              {% if is_state('binary_sensor.bs_router_wan_effective','on') %}
+                WAN Connected
+              {% elif is_state('binary_sensor.bs_router_wan_effective','off') %}
+                WAN Offline
+              {% else %}
+                WAN Unknown
+              {% endif %}
+            icon_color: |-
+              {% if is_state('binary_sensor.bs_router_wan_effective','on') %}
+                green
+              {% elif is_state('binary_sensor.bs_router_wan_effective','off') %}
+                red
+              {% else %}
+                grey
+              {% endif %}
+            tap_action:
+              action: more-info
+          - type: template
+            entity: sensor.router_external_ip_effective
+            icon: mdi:ip-network-outline
+            content: >-
+              {% set v = states('sensor.router_external_ip_effective') %} {{ v
+              if v not in ['unknown','unavailable','none',''] else 'No IP' }}
+            icon_color: blue
+            tap_action:
+              action: more-info
+          - type: template
+            entity: sensor.router_uptime_effective
+            icon: mdi:clock-outline
+            content: >-
+              {% set v = states('sensor.router_uptime_effective') %} {% if v not
+              in ['unknown','unavailable','none',''] %}
+                {% set s = v | int(0) %}
+                {% set d = s // 86400 %}
+                {% set h = (s % 86400) // 3600 %}
+                {% set m = (s % 3600) // 60 %}
+                {% if d > 0 %}
+                  {{ d }}d {{ h }}h
+                {% elif h > 0 %}
+                  {{ h }}h {{ m }}m
+                {% else %}
+                  {{ m }}m
+                {% endif %}
+              {% else %}
+                Uptime N/A
+              {% endif %}
+            icon_color: blue
+            tap_action:
+              action: more-info
+      - type: custom:mushroom-template-card
+        entity: sensor.router_download_speed_effective
+        primary: Router Download
+        secondary: >-
+          {% set v = states('sensor.router_download_speed_effective') %} {% if v
+          not in ['unknown','unavailable','none',''] %}
+            {{ v | float(0) | round(1) }} Mbit/s
+          {% else %}
+            Unavailable
+          {% endif %}
+        icon: mdi:download-network
+        icon_color: blue
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: 6
+      - type: custom:mushroom-template-card
+        entity: sensor.router_upload_speed_effective
+        primary: Router Upload
+        secondary: >-
+          {% set v = states('sensor.router_upload_speed_effective') %} {% if v
+          not in ['unknown','unavailable','none',''] %}
+            {{ v | float(0) | round(1) }} Mbit/s
+          {% else %}
+            Unavailable
+          {% endif %}
+        icon: mdi:upload-network
+        icon_color: blue
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: 6
+      - type: custom:mini-graph-card
+        name: Download This Month
+        icon: mdi:download-network-outline
+        entities:
+          - entity: sensor.router_traffic_download_month
+        hours_to_show: 744
+        points_per_hour: 0.5
+        line_width: 2
+        height: 80
+        decimals: 1
+        show:
+          name: true
+          icon: true
+          state: true
+          graph: line
+          fill: true
+          points: false
+          labels: false
+          extrema: false
+        grid_options:
+          columns: 6
+      - type: custom:mini-graph-card
+        name: Upload This Month
+        icon: mdi:upload-network-outline
+        entities:
+          - entity: sensor.router_traffic_upload_month
+        hours_to_show: 744
+        points_per_hour: 0.5
+        line_width: 2
+        height: 80
+        decimals: 1
+        show:
+          name: true
+          icon: true
+          state: true
+          graph: line
+          fill: true
+          points: false
+          labels: false
+          extrema: false
+        grid_options:
+          columns: 6
   - type: grid
     cards:
       - type: heading
@@ -348,8 +482,9 @@ sections:
         entity: binary_sensor.internet_speed_low_download
         primary: Download
         secondary: >-
-          {{ states('sensor.internet_speed_download') }} Mbit/s · limit {{
-          states('number.internet_speed_minimum_download') }}
+          {{ states('sensor.internet_speed_download') | float(0) | round(1) }} ·
+          limit {{ states('number.internet_speed_minimum_download') | float(0) |
+          round(1) }}
         icon: mdi:download-network
         icon_color: |-
           {% if is_state('binary_sensor.internet_speed_low_download','on') %}
@@ -377,8 +512,9 @@ sections:
         entity: binary_sensor.internet_speed_low_upload
         primary: Upload
         secondary: >-
-          {{ states('sensor.internet_speed_upload') }} Mbit/s · limit {{
-          states('number.internet_speed_minimum_upload') }}
+          {{ states('sensor.internet_speed_upload') | float(0) | round(1) }} ·
+          limit {{ states('number.internet_speed_minimum_upload') | float(0) |
+          round(1) }}
         icon: mdi:upload-network
         icon_color: |-
           {% if is_state('binary_sensor.internet_speed_low_upload','on') %}
@@ -444,7 +580,7 @@ sections:
         points_per_hour: 2
         line_width: 2
         height: 100
-        decimals: 0
+        decimals: 1
         show:
           name: true
           icon: true
@@ -465,7 +601,7 @@ sections:
         points_per_hour: 2
         line_width: 2
         height: 100
-        decimals: 0
+        decimals: 1
         show:
           name: true
           icon: true
@@ -542,43 +678,48 @@ sections:
         heading: Last Outage
         heading_style: subtitle
         icon: mdi:history
-      - type: custom:mushroom-template-card
-        entity: sensor.internet_last_outage_duration
-        primary: >-
-          {% set s = states('sensor.internet_last_outage_duration') %} {% if s
-          not in ['unknown','unavailable','none',''] %}
-            Outage · {{ s }}
-          {% else %}
-            No Recorded Outage
-          {% endif %}
-        secondary: >-
-          {% set f = states('sensor.internet_last_failure') %} {% set r =
-          states('sensor.internet_last_restore') %} {% set fd = as_datetime(f)
-          %} {% set rd = as_datetime(r) %} {% if fd and rd %}
-            {{ as_local(fd).strftime('%d.%m %H:%M:%S') }}
-            → {{ as_local(rd).strftime('%H:%M:%S') }}
-          {% else %}
-            No completed outage recorded
-          {% endif %}
-        icon: >-
-          {% if states('sensor.internet_last_outage_duration') not in
-          ['unknown','unavailable','none',''] %}
-            mdi:timer-alert-outline
-          {% else %}
-            mdi:check-circle-outline
-          {% endif %}
-        icon_color: >-
-          {% if states('sensor.internet_last_outage_duration') not in
-          ['unknown','unavailable','none',''] %}
-            orange
-          {% else %}
-            green
-          {% endif %}
-        multiline_secondary: true
-        tap_action:
-          action: more-info
-        grid_options:
-          columns: 12
+      - type: markdown
+        content: >
+          {% set outages = state_attr('sensor.internet_outages_month',
+          'outages') or [] %}
+
+          {% set month = state_attr('sensor.internet_outages_month', 'month') or
+          '' %}
+
+          {% set months = {
+            '01': 'January',
+            '02': 'February',
+            '03': 'March',
+            '04': 'April',
+            '05': 'May',
+            '06': 'June',
+            '07': 'July',
+            '08': 'August',
+            '09': 'September',
+            '10': 'October',
+            '11': 'November',
+            '12': 'December'
+          } %}
+
+          ## Internet outages in {{ months.get(month[5:7], month) }}
+
+
+          | From | To | Duration |
+
+          | :--- | :--- | :---: |
+
+          {%- for r in outages %}
+
+          | {{ r['from'] }} | {{ r['to'] }} | **{{ r['duration'] }}** |
+
+          {%- endfor %}
+
+
+          ---
+
+          **Total:** {{ states('sensor.internet_outages_month') }} outages ·
+          **{{ state_attr('sensor.internet_outages_month', 'total_duration') or
+          '00:00' }}**
   - type: grid
     cards:
       - type: heading
@@ -663,62 +804,56 @@ sections:
         icon: mdi:auto-fix
       - type: custom:mushroom-template-card
         primary: >-
-          {% set ont =
+          {% set ont_available =
+          is_state('binary_sensor.internet_recovery_ont_available','on') %} {%
+          set router_available =
+          is_state('binary_sensor.internet_recovery_router_available','on') %}
+          {% set ont_enabled = ont_available and
           is_state('input_boolean.ib_internet_auto_reboot_ont_enabled','on') %}
-          {% set router =
+          {% set router_enabled = router_available and
           is_state('input_boolean.ib_internet_auto_reboot_router_enabled','on')
           %} {% set together =
           is_state('input_boolean.ib_internet_reboot_mode_simultaneous','on') %}
-          {% if not ont and not router %}
+
+          {% if not ont_available and not router_available %}
+            Automatic Recovery Unavailable
+          {% elif not ont_enabled and not router_enabled %}
             Automatic Recovery Disabled
-          {% elif ont and router and together %}
+          {% elif ont_enabled and router_enabled and together %}
             Simultaneous Recovery
-          {% elif ont and router %}
+          {% elif ont_enabled and router_enabled %}
             Sequential Recovery
-          {% elif ont %}
+          {% elif ont_enabled %}
             ONT Recovery Only
           {% else %}
             Router Recovery Only
           {% endif %}
         secondary: >-
           {% set ont =
-          is_state('input_boolean.ib_internet_auto_reboot_ont_enabled','on') %}
-          {% set router =
-          is_state('input_boolean.ib_internet_auto_reboot_router_enabled','on')
-          %} {% set together =
-          is_state('input_boolean.ib_internet_reboot_mode_simultaneous','on') %}
-          {% set n = states('input_number.internet_ont_reboot_every_n_attempts')
-          | int(0) %} {% set interval =
-          states('input_number.internet_reboot_interval_min') | int(0) %} {% if
-          not ont and not router %}
-            No devices will be rebooted automatically
-          {% elif ont and router and together %}
-            After {{ interval }} min offline → reboot ONT + Router
+          is_state('binary_sensor.internet_recovery_ont_available','on') %} {%
+          set router =
+          is_state('binary_sensor.internet_recovery_router_available','on') %}
+
+          {% if not ont and not router %}
+            No recovery method configured in Internet passport
           {% elif ont and router %}
-            After {{ interval }} min offline → reboot ONT · Router every {{ n }} ONT cycles
+            ONT and Router recovery available
           {% elif ont %}
-            After {{ interval }} min offline → reboot ONT
+            ONT recovery available · Router not configured
           {% else %}
-            After {{ interval }} min offline → reboot Router
+            Router recovery available · ONT not configured
           {% endif %}
-        icon: >-
-          {% if not
-          is_state('input_boolean.ib_internet_auto_reboot_ont_enabled','on')
-                and not is_state('input_boolean.ib_internet_auto_reboot_router_enabled','on') %}
+        icon: |-
+          {% if is_state('binary_sensor.internet_recovery_available','on') %}
+            mdi:auto-fix
+          {% else %}
             mdi:autorenew-off
-          {% elif
-          is_state('input_boolean.ib_internet_reboot_mode_simultaneous','on') %}
-            mdi:sync
-          {% else %}
-            mdi:debug-step-over
           {% endif %}
-        icon_color: >-
-          {% if not
-          is_state('input_boolean.ib_internet_auto_reboot_ont_enabled','on')
-                and not is_state('input_boolean.ib_internet_auto_reboot_router_enabled','on') %}
-            grey
-          {% else %}
+        icon_color: |-
+          {% if is_state('binary_sensor.internet_recovery_available','on') %}
             blue
+          {% else %}
+            grey
           {% endif %}
         multiline_secondary: true
         grid_options:
@@ -731,15 +866,21 @@ sections:
         entity: input_boolean.ib_internet_auto_reboot_ont_enabled
         primary: ONT / Modem
         secondary: >-
-          {% if
+          {% if not
+          is_state('binary_sensor.internet_recovery_ont_available','on') %}
+            Recovery not configured
+          {% elif
           is_state('input_boolean.ib_internet_auto_reboot_ont_enabled','on') %}
-            Automatic reboot enabled
+            Automatic recovery enabled
           {% else %}
-            Automatic reboot disabled
+            Automatic recovery disabled
           {% endif %}
         icon: mdi:access-point-network
         icon_color: >-
-          {% if
+          {% if not
+          is_state('binary_sensor.internet_recovery_ont_available','on') %}
+            grey
+          {% elif
           is_state('input_boolean.ib_internet_auto_reboot_ont_enabled','on') %}
             blue
           {% else %}
@@ -753,16 +894,22 @@ sections:
         entity: input_boolean.ib_internet_auto_reboot_router_enabled
         primary: Router
         secondary: >-
-          {% if
+          {% if not
+          is_state('binary_sensor.internet_recovery_router_available','on') %}
+            Recovery not configured
+          {% elif
           is_state('input_boolean.ib_internet_auto_reboot_router_enabled','on')
           %}
-            Automatic reboot enabled
+            Automatic recovery enabled
           {% else %}
-            Automatic reboot disabled
+            Automatic recovery disabled
           {% endif %}
         icon: mdi:router-wireless
         icon_color: >-
-          {% if
+          {% if not
+          is_state('binary_sensor.internet_recovery_router_available','on') %}
+            grey
+          {% elif
           is_state('input_boolean.ib_internet_auto_reboot_router_enabled','on')
           %}
             blue
@@ -777,6 +924,13 @@ sections:
         heading: Recovery Strategy
         heading_style: subtitle
         icon: mdi:source-branch
+        visibility:
+          - condition: state
+            entity: binary_sensor.internet_recovery_ont_available
+            state: 'on'
+          - condition: state
+            entity: binary_sensor.internet_recovery_router_available
+            state: 'on'
       - type: custom:mushroom-template-card
         entity: input_boolean.ib_internet_reboot_mode_simultaneous
         primary: >-
@@ -789,7 +943,7 @@ sections:
         secondary: >-
           {% if
           is_state('input_boolean.ib_internet_reboot_mode_simultaneous','on') %}
-            Reboot ONT and Router together
+            Recover ONT and Router together
           {% else %}
             ONT first · Router after N ONT cycles
           {% endif %}
@@ -805,6 +959,13 @@ sections:
           action: toggle
         grid_options:
           columns: 12
+        visibility:
+          - condition: state
+            entity: binary_sensor.internet_recovery_ont_available
+            state: 'on'
+          - condition: state
+            entity: binary_sensor.internet_recovery_router_available
+            state: 'on'
       - type: custom:mushroom-number-card
         entity: input_number.internet_reboot_interval_min
         name: Offline Before Recovery
@@ -812,7 +973,11 @@ sections:
         display_mode: buttons
         fill_container: true
         grid_options:
-          columns: 6
+          columns: 12
+        visibility:
+          - condition: state
+            entity: binary_sensor.internet_recovery_available
+            state: 'on'
       - type: custom:mushroom-number-card
         entity: input_number.internet_ont_reboot_every_n_attempts
         name: ONT Cycles Before Router
@@ -820,7 +985,17 @@ sections:
         display_mode: buttons
         fill_container: true
         grid_options:
-          columns: 6
+          columns: 12
+        visibility:
+          - condition: state
+            entity: binary_sensor.internet_recovery_ont_available
+            state: 'on'
+          - condition: state
+            entity: binary_sensor.internet_recovery_router_available
+            state: 'on'
+          - condition: state
+            entity: input_boolean.ib_internet_reboot_mode_simultaneous
+            state: 'off'
       - type: heading
         heading: Last Outage Recovery
         heading_style: subtitle
@@ -871,9 +1046,13 @@ sections:
         heading: Manual Recovery
         heading_style: subtitle
         icon: mdi:restart
+        visibility:
+          - condition: state
+            entity: binary_sensor.internet_recovery_available
+            state: 'on'
       - type: custom:mushroom-template-card
         primary: Reboot ONT
-        secondary: Manual power cycle
+        secondary: Manual recovery
         icon: mdi:access-point-network
         icon_color: red
         tap_action:
@@ -883,9 +1062,13 @@ sections:
           action: none
         grid_options:
           columns: 6
+        visibility:
+          - condition: state
+            entity: binary_sensor.internet_recovery_ont_available
+            state: 'on'
       - type: custom:mushroom-template-card
         primary: Reboot Router
-        secondary: Manual power cycle
+        secondary: Manual recovery
         icon: mdi:router-wireless
         icon_color: red
         tap_action:
@@ -895,6 +1078,10 @@ sections:
           action: none
         grid_options:
           columns: 6
+        visibility:
+          - condition: state
+            entity: binary_sensor.internet_recovery_router_available
+            state: 'on'
       - type: heading
         heading: Internet Availability History
         heading_style: subtitle
