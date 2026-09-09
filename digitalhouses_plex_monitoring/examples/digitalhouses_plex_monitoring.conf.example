@@ -10,6 +10,12 @@ cpu_change_threshold = 5
 high_load_threshold = 80
 high_load_publish_interval_seconds = 60
 
+[plex_api]
+enabled = true
+base_url = http://127.0.0.1:32400
+timeout_seconds = 3
+library_refresh_seconds = 3600
+
 [mqtt]
 host =
 port = 1883

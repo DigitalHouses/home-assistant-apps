@@ -5,6 +5,7 @@ from typing import Any
 
 from .config import AppConfig, entity_prefix
 from .models import BuildInfo
+from .plex_api import LibraryInfo
 
 
 @dataclass(frozen=True)
@@ -13,6 +14,7 @@ class Topics:
     state: str
     app_availability: str
     collector_availability: str
+    plex_api_availability: str
     refresh: str
     discovery: str
     ha_status: str
@@ -29,6 +31,7 @@ def build_topics(config: AppConfig) -> Topics:
         state=f"{base}/state",
         app_availability=f"{base}/availability",
         collector_availability=f"{base}/collector_availability",
+        plex_api_availability=f"{base}/plex_api_availability",
         refresh=f"{base}/refresh",
         discovery=(
             f"{config.mqtt.discovery_prefix.strip('/')}/device/{device_id}/config"
@@ -56,12 +59,15 @@ def _component(
     value_template: str,
     app_availability: str,
     collector_availability: str | None = None,
+    plex_api_availability: str | None = None,
     diagnostic: bool = False,
     **extra: Any,
 ) -> dict[str, Any]:
     availability = [_availability(app_availability)]
     if collector_availability is not None:
         availability.append(_availability(collector_availability))
+    if plex_api_availability is not None:
+        availability.append(_availability(plex_api_availability))
     payload: dict[str, Any] = {
         "platform": platform,
         "name": name,
@@ -81,6 +87,7 @@ def _component(
 def build_discovery_payload(
     config: AppConfig,
     build: BuildInfo,
+    libraries: tuple[LibraryInfo, ...] = (),
 ) -> dict[str, Any]:
     topics = build_topics(config)
     prefix = entity_prefix(config.general.instance_id)
@@ -95,6 +102,7 @@ def build_discovery_payload(
         *,
         diagnostic: bool = False,
         collector: bool = True,
+        plex_api: bool = False,
         entity_suffix: str | None = None,
         **extra: Any,
     ) -> dict[str, Any]:
@@ -110,6 +118,9 @@ def build_discovery_payload(
             collector_availability=(
                 topics.collector_availability if collector else None
             ),
+            plex_api_availability=(
+                topics.plex_api_availability if plex_api else None
+            ),
             diagnostic=diagnostic,
             **extra,
         )
@@ -119,6 +130,9 @@ def build_discovery_payload(
         name: str,
         field: str,
         icon: str,
+        *,
+        collector: bool = True,
+        plex_api: bool = False,
     ) -> dict[str, Any]:
         return _component(
             platform="binary_sensor",
@@ -130,7 +144,12 @@ def build_discovery_payload(
                 f"{{{{ 'ON' if value_json.{field} else 'OFF' }}}}"
             ),
             app_availability=topics.app_availability,
-            collector_availability=topics.collector_availability,
+            collector_availability=(
+                topics.collector_availability if collector else None
+            ),
+            plex_api_availability=(
+                topics.plex_api_availability if plex_api else None
+            ),
             icon=icon,
         )
 
@@ -240,7 +259,85 @@ def build_discovery_payload(
             diagnostic=True, collector=True, device_class="timestamp",
             icon="mdi:refresh",
         ),
+        "playback_count": sensor(
+            "playback_count", "Plex playback count", "playback_count",
+            collector=False, plex_api=True, icon="mdi:play-network",
+            state_class="measurement",
+        ),
+        "playback_sessions": sensor(
+            "playback_sessions", "Plex playback sessions",
+            "playback_sessions_state", collector=False, plex_api=True,
+            icon="mdi:play-box-multiple",
+            json_attributes_topic=topics.state,
+            json_attributes_template=(
+                "{{ dict("
+                "count=value_json.playback_count, "
+                "video_count=value_json.video_playback_count, "
+                "audio_count=value_json.audio_playback_count, "
+                "sessions=value_json.playback_sessions"
+                ") | tojson }}"
+            ),
+        ),
+        "playback_active": binary(
+            "playback_active", "Plex playback active", "playback_active",
+            "mdi:play-circle", collector=False, plex_api=True,
+        ),
+        "video_playback_active": binary(
+            "video_playback_active", "Plex video playback active",
+            "video_playback_active", "mdi:movie-play",
+            collector=False, plex_api=True,
+        ),
+        "audio_playback_active": binary(
+            "audio_playback_active", "Plex audio playback active",
+            "audio_playback_active", "mdi:music-circle",
+            collector=False, plex_api=True,
+        ),
+        "libraries": sensor(
+            "libraries", "Plex libraries", "library_count",
+            collector=False, plex_api=True, icon="mdi:folder-multiple-play",
+            json_attributes_topic=topics.state,
+            json_attributes_template=(
+                "{{ dict(count=value_json.library_count, "
+                "libraries=value_json.libraries) | tojson }}"
+            ),
+        ),
+        "api_status": sensor(
+            "api_status", "Plex API status", "plex_api_status",
+            diagnostic=True, collector=False, plex_api=False,
+            icon="mdi:api",
+        ),
     }
+
+    for library in libraries:
+        component = f"library_{library.section_id}"
+        icon = (
+            "mdi:music-box-multiple"
+            if library.content_type == "audio"
+            else "mdi:filmstrip-box-multiple"
+        )
+        library_id = library.section_id.replace("'", "")
+        components[component] = _component(
+            platform="sensor",
+            name=f"Plex library · {library.title}",
+            key=uid(component),
+            entity_id=f"sensor.{prefix}_{component}",
+            state_topic=topics.state,
+            value_template=(
+                "{{ value_json.libraries_by_id['"
+                + library_id
+                + "'].item_count }}"
+            ),
+            app_availability=topics.app_availability,
+            plex_api_availability=topics.plex_api_availability,
+            icon=icon,
+            state_class="measurement",
+            json_attributes_topic=topics.state,
+            json_attributes_template=(
+                "{{ value_json.libraries_by_id['"
+                + library_id
+                + "'] | tojson }}"
+            ),
+        )
 
     components["build"] = _component(
         platform="sensor",
@@ -279,7 +376,7 @@ def build_discovery_payload(
             "identifiers": [topics.device_id],
             "name": config.general.instance_name,
             "manufacturer": "DigitalHouses",
-            "model": "Linux Plex Workload Monitor",
+            "model": "Linux Plex Workload + Playback Monitor",
             "sw_version": build.version,
         },
         "origin": {

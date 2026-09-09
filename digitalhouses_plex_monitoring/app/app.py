@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .activity_classifier import classify_activity
+from .api_runtime import PlexApiRuntime
 from .build_info import load_build_info
 from .config import AppConfig, load_config
 from .discovery import build_discovery_payload, build_topics
@@ -89,6 +90,7 @@ def run(config: AppConfig) -> int:
     verify_proc_visibility()
 
     topics = build_topics(config)
+    api_runtime = PlexApiRuntime(config.plex_api)
     discovery = build_discovery_payload(config, build)
     mqtt = MqttBridge(config, topics, discovery)
     sampler = CpuSampler()
@@ -111,13 +113,14 @@ def run(config: AppConfig) -> int:
 
     log.info(
         "Starting DigitalHouses Plex Monitoring %s | source=%s commit=%s "
-        "instance=%s poll=%.1fs cpu_window=%.1fs",
+        "instance=%s poll=%.1fs cpu_window=%.1fs plex_api=%s",
         build.version,
         build.source,
         build.commit[:12] if build.commit != "unknown" else "unknown",
         config.general.instance_id,
         config.general.poll_interval_seconds,
         config.general.cpu_window_seconds,
+        "enabled" if config.plex_api.enabled else "disabled",
     )
 
     mqtt.start()
@@ -145,15 +148,28 @@ def run(config: AppConfig) -> int:
                 mqtt.republish_requested.clear()
                 if mqtt.connected.is_set():
                     mqtt.publish_discovery()
-                    if collector_failed:
-                        mqtt.set_collector_available(False, force=True)
-                    elif last_snapshot is not None:
-                        mqtt.set_collector_available(True, force=True)
+                    mqtt.set_collector_available(
+                        not collector_failed and last_snapshot is not None,
+                        force=True,
+                    )
+                    mqtt.set_plex_api_available(
+                        api_runtime.status == "ok",
+                        force=True,
+                    )
 
             should_collect = due or refresh or last_snapshot is None
             recovered = False
+            process_failure_transition = False
+            api_changed = False
+            api_recovered = False
+            api_failure_transition = False
 
             if should_collect:
+                previous_scanner_running = (
+                    last_snapshot.activity.scanner_running
+                    if last_snapshot is not None
+                    else False
+                )
                 was_failed = collector_failed
                 try:
                     raw = collect_raw_processes()
@@ -208,44 +224,88 @@ def run(config: AppConfig) -> int:
                             exc_info=True,
                         )
                     collector_failed = True
+                    process_failure_transition = not was_failed
                     if mqtt.connected.is_set():
                         mqtt.set_collector_available(
                             False,
-                            force=republish or not was_failed,
+                            force=republish or process_failure_transition,
                         )
-                        if not was_failed:
-                            error_state = _error_snapshot(last_snapshot)
-                            if mqtt.publish_state(
-                                build_state_payload(error_state, build)
-                            ):
-                                policy.mark_published(
-                                    error_state,
-                                    time.monotonic(),
-                                )
                     next_poll = (
                         time.monotonic()
                         + config.general.poll_interval_seconds
                     )
 
+                scanner_finished = bool(
+                    previous_scanner_running
+                    and not collector_failed
+                    and last_snapshot is not None
+                    and not last_snapshot.activity.scanner_running
+                )
+                api_result = api_runtime.collect(
+                    now=time.monotonic(),
+                    refresh=refresh,
+                    scanner_finished=scanner_finished,
+                )
+                api_changed = api_result.changed
+                api_recovered = api_result.recovered
+                api_failure_transition = api_result.failure_transition
+
+                if api_failure_transition:
+                    log.warning(
+                        "Plex API collector failed: %s",
+                        api_runtime.last_error or "unknown error",
+                    )
+                elif api_recovered:
+                    log.info("Plex API collector recovered")
+
+                if mqtt.connected.is_set():
+                    mqtt.set_plex_api_available(
+                        api_runtime.status == "ok",
+                        force=(
+                            republish
+                            or api_recovered
+                            or api_failure_transition
+                        ),
+                    )
+
+                if api_result.libraries_changed:
+                    discovery = build_discovery_payload(
+                        config,
+                        build,
+                        api_runtime.libraries,
+                    )
+                    mqtt.set_discovery_payload(discovery)
+                    if mqtt.connected.is_set():
+                        mqtt.publish_discovery()
+
             if refresh:
                 mqtt.refresh_requested.clear()
 
-            if (
-                last_snapshot is not None
-                and mqtt.connected.is_set()
-                and not collector_failed
-            ):
-                force_publish = refresh or republish or recovered
+            state_snapshot: MonitorSnapshot | None
+            if collector_failed:
+                state_snapshot = _error_snapshot(last_snapshot)
+            else:
+                state_snapshot = last_snapshot
+
+            if state_snapshot is not None and mqtt.connected.is_set():
+                force_publish = (
+                    refresh
+                    or republish
+                    or recovered
+                    or process_failure_transition
+                    or api_changed
+                )
                 decision = policy.evaluate(
-                    last_snapshot,
+                    state_snapshot,
                     time.monotonic(),
                     force=force_publish,
                 )
                 if decision.publish:
-                    payload = build_state_payload(last_snapshot, build)
+                    payload = build_state_payload(state_snapshot, build)
+                    payload.update(api_runtime.payload())
                     if mqtt.publish_state(payload):
                         policy.mark_published(
-                            last_snapshot,
+                            state_snapshot,
                             time.monotonic(),
                         )
                         reasons = list(decision.reasons)
@@ -255,6 +315,14 @@ def run(config: AppConfig) -> int:
                             reasons.append("republish")
                         if recovered:
                             reasons.append("collector_recovery")
+                        if process_failure_transition:
+                            reasons.append("collector_failure")
+                        if api_changed:
+                            reasons.append("plex_api_change")
+                        if api_recovered:
+                            reasons.append("plex_api_recovery")
+                        if api_failure_transition:
+                            reasons.append("plex_api_failure")
                         log.info(
                             "Published Plex state (%s)",
                             ",".join(dict.fromkeys(reasons)),
@@ -265,6 +333,7 @@ def run(config: AppConfig) -> int:
         log.info("DigitalHouses Plex Monitoring stopped")
 
     return 0
+
 
 def main() -> int:
     parser = argparse.ArgumentParser()

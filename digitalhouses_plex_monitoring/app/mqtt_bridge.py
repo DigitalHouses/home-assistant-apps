@@ -28,6 +28,7 @@ class MqttBridge:
         self.wake_requested = threading.Event()
         self.connected = threading.Event()
         self._collector_available: bool | None = None
+        self._plex_api_available: bool | None = None
 
         self.client = mqtt.Client(
             mqtt.CallbackAPIVersion.VERSION2,
@@ -121,6 +122,9 @@ class MqttBridge:
         finally:
             self.client.loop_stop()
 
+    def set_discovery_payload(self, payload: dict[str, Any]) -> None:
+        self.discovery_payload = payload
+
     def publish_discovery(self) -> bool:
         info = self.client.publish(
             self.topics.discovery,
@@ -163,5 +167,24 @@ class MqttBridge:
         )
         if info.rc == mqtt.MQTT_ERR_SUCCESS:
             self._collector_available = available
+            return True
+        return False
+
+    def set_plex_api_available(
+        self,
+        available: bool,
+        *,
+        force: bool = False,
+    ) -> bool:
+        if not force and self._plex_api_available is available:
+            return True
+        info = self.client.publish(
+            self.topics.plex_api_availability,
+            payload="online" if available else "offline",
+            qos=0,
+            retain=True,
+        )
+        if info.rc == mqtt.MQTT_ERR_SUCCESS:
+            self._plex_api_available = available
             return True
         return False

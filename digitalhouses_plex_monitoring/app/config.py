@@ -7,6 +7,10 @@ from pathlib import Path
 
 INSTANCE_ID_RE = re.compile(r"^[a-z0-9][a-z0-9_]*$")
 LOG_LEVELS = {"debug", "info", "warning", "error"}
+DEFAULT_LOCAL_ADMIN_TOKEN_FILE = Path(
+    "/var/lib/plexmediaserver/Library/Application Support/"
+    "Plex Media Server/.LocalAdminToken"
+)
 
 
 class ConfigError(ValueError):
@@ -30,6 +34,15 @@ class TelemetryConfig:
 
 
 @dataclass(frozen=True)
+class PlexApiConfig:
+    enabled: bool
+    base_url: str
+    token_file: Path
+    timeout_seconds: float
+    library_refresh_seconds: float
+
+
+@dataclass(frozen=True)
 class MqttConfig:
     host: str
     port: int
@@ -44,6 +57,7 @@ class MqttConfig:
 class AppConfig:
     general: GeneralConfig
     telemetry: TelemetryConfig
+    plex_api: PlexApiConfig
     mqtt: MqttConfig
 
 
@@ -75,6 +89,19 @@ def _get_int(
         return int(raw)
     except ValueError as exc:
         raise ConfigError(f"{section}.{key} must be integer, got {raw!r}") from exc
+
+
+def _get_bool(
+    parser: configparser.ConfigParser,
+    section: str,
+    key: str,
+    default: bool,
+) -> bool:
+    try:
+        return parser.getboolean(section, key, fallback=default)
+    except ValueError as exc:
+        raw = parser.get(section, key, fallback="").strip()
+        raise ConfigError(f"{section}.{key} must be boolean, got {raw!r}") from exc
 
 
 def load_config(path: Path) -> AppConfig:
@@ -129,6 +156,28 @@ def load_config(path: Path) -> AppConfig:
             "telemetry.high_load_publish_interval_seconds must be >= poll interval"
         )
 
+    plex_api_enabled = _get_bool(parser, "plex_api", "enabled", True)
+    plex_api_base_url = parser.get(
+        "plex_api", "base_url", fallback="http://127.0.0.1:32400"
+    ).strip().rstrip("/")
+    plex_api_token_file_raw = parser.get(
+        "plex_api",
+        "token_file",
+        fallback=str(DEFAULT_LOCAL_ADMIN_TOKEN_FILE),
+    ).strip()
+    plex_api_timeout = _get_float(parser, "plex_api", "timeout_seconds", 3.0)
+    library_refresh = _get_float(
+        parser, "plex_api", "library_refresh_seconds", 3600.0
+    )
+    if plex_api_enabled and not plex_api_base_url:
+        raise ConfigError("plex_api.base_url must not be empty when enabled")
+    if not 0.5 <= plex_api_timeout <= 30.0:
+        raise ConfigError("plex_api.timeout_seconds must be between 0.5 and 30")
+    if not 60.0 <= library_refresh <= 86400.0:
+        raise ConfigError(
+            "plex_api.library_refresh_seconds must be between 60 and 86400"
+        )
+
     host = parser.get("mqtt", "host", fallback="").strip()
     if not host:
         raise ConfigError("mqtt.host is required")
@@ -166,6 +215,13 @@ def load_config(path: Path) -> AppConfig:
             cpu_change_threshold=cpu_change,
             high_load_threshold=high_load,
             high_load_publish_interval_seconds=high_interval,
+        ),
+        plex_api=PlexApiConfig(
+            enabled=plex_api_enabled,
+            base_url=plex_api_base_url,
+            token_file=Path(plex_api_token_file_raw),
+            timeout_seconds=plex_api_timeout,
+            library_refresh_seconds=library_refresh,
         ),
         mqtt=MqttConfig(
             host=host,

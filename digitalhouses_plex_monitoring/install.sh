@@ -13,6 +13,9 @@ CONFIG_DIR="/etc/${APP_NAME}"
 CONFIG_FILE="${CONFIG_DIR}/${APP_NAME}.conf"
 STATE_DIR="/var/lib/${APP_NAME}"
 UNIT_FILE="/etc/systemd/system/${SERVICE_NAME}"
+PLEX_LOCAL_ADMIN_TOKEN="/var/lib/plexmediaserver/Library/Application Support/Plex Media Server/.LocalAdminToken"
+TOKEN_DROPIN_DIR="/etc/systemd/system/${SERVICE_NAME}.d"
+TOKEN_DROPIN_FILE="${TOKEN_DROPIN_DIR}/plex-local-token.conf"
 
 if [[ "${EUID}" -ne 0 ]]; then
     echo "This installer must run as root."
@@ -128,6 +131,12 @@ if [[ ! -f "${CONFIG_FILE}" ]]; then
         printf '%s\n' "high_load_threshold = 80"
         printf '%s\n' "high_load_publish_interval_seconds = 60"
         printf '\n'
+        printf '%s\n' "[plex_api]"
+        printf '%s\n' "enabled = true"
+        printf '%s\n' "base_url = http://127.0.0.1:32400"
+        printf '%s\n' "timeout_seconds = 3"
+        printf '%s\n' "library_refresh_seconds = 3600"
+        printf '\n'
         printf '%s\n' "[mqtt]"
         printf 'host = %s\n' "${mqtt_host}"
         printf 'port = %s\n' "${mqtt_port}"
@@ -170,6 +179,18 @@ chmod 0644 "${APP_DIR}/BUILD_INFO"
 install -o root -g root -m 0644 \
     "${APP_DIR}/systemd/${SERVICE_NAME}" \
     "${UNIT_FILE}"
+
+if [[ -f "${PLEX_LOCAL_ADMIN_TOKEN}" ]]; then
+    install -d -o root -g root -m 0755 "${TOKEN_DROPIN_DIR}"
+    {
+        printf '%s\n' "[Service]"
+        printf 'LoadCredential="plex_local_admin_token:%s"\n' "${PLEX_LOCAL_ADMIN_TOKEN}"
+    } >"${TOKEN_DROPIN_FILE}"
+    chown root:root "${TOKEN_DROPIN_FILE}"
+    chmod 0644 "${TOKEN_DROPIN_FILE}"
+else
+    rm -f "${TOKEN_DROPIN_FILE}"
+fi
 
 systemctl daemon-reload
 systemctl enable "${SERVICE_NAME}" >/dev/null
