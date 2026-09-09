@@ -311,6 +311,12 @@ def _compact_dict(value: object) -> dict[str, object]:
     return {key: item for key, item in raw.items() if item is not None}
 
 
+def _playback_dict(session: PlaybackSession) -> dict[str, object]:
+    payload = _compact_dict(session)
+    payload.pop("session_id", None)
+    return payload
+
+
 def playback_fingerprint(sessions: tuple[PlaybackSession, ...]) -> tuple[tuple[object, ...], ...]:
     keys = []
     for s in sessions:
@@ -390,7 +396,7 @@ def build_plex_api_payload(
         "audio_playback_count": audio_count,
         "video_playback_active": video_count > 0,
         "audio_playback_active": audio_count > 0,
-        "playback_sessions": [_compact_dict(session) for session in sessions],
+        "playback_sessions": [_playback_dict(session) for session in sessions],
         "library_count": len(libraries),
         "libraries": serialized_libraries,
         "libraries_by_id": {

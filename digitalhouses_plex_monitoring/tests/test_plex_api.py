@@ -134,6 +134,14 @@ class PlexApiTests(unittest.TestCase):
         self.assertEqual(payload["playback_sessions"][0]["content_type"], "video")
         self.assertEqual(payload["playback_sessions"][1]["content_type"], "audio")
 
+    def test_payload_hides_internal_session_id(self):
+        sessions = parse_sessions_xml(DIRECT_PLAY_XML)
+        payload = build_plex_api_payload(sessions, (), "ok")
+        self.assertEqual(sessions[0].session_id, "video-session")
+        self.assertEqual(sessions[1].session_id, "audio-session")
+        for session in payload["playback_sessions"]:
+            self.assertNotIn("session_id", session)
+
     def test_fingerprint_ignores_bandwidth_changes(self):
         first = parse_sessions_xml(DIRECT_PLAY_XML)
         changed = tuple(

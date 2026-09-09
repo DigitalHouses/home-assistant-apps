@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.2
+
+- Keep Plex playback session identifiers internal for change detection and omit them from MQTT/Home Assistant playback attributes.
+
 ## 0.2.1
 
 - Replace the systemd `LoadCredential=` token handoff with a protected `/etc/digitalhouses_plex_monitoring/plex_local_admin_token` copy.
