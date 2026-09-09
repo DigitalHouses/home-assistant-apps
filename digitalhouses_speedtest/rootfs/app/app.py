@@ -41,7 +41,7 @@ from core import (
 )
 from discovery import build_discovery_payload
 
-APP_VERSION = os.getenv("APP_VERSION", "1.2.0-local")
+APP_VERSION = os.getenv("APP_VERSION", "1.2.1-local")
 
 DATA_DIR = Path("/data")
 OPTIONS_FILE = DATA_DIR / "options.json"

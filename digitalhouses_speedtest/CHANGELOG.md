@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.1
+
+- Enabled Supervisor API access required by `bashio::supervisor.timezone`.
+- Fixed local timezone propagation used by monthly Internet outage accounting.
+
 ## 1.2.0
 
 - Added `sensor.internet_outages_month` through MQTT Discovery.
