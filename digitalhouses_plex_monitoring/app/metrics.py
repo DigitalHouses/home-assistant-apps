@@ -4,6 +4,7 @@ from collections import deque
 from typing import Sequence
 
 from .models import CpuGroupMetrics, CpuMetrics, ProcessSample
+from .process_identity import process_role
 
 
 def group_current_cpu(
@@ -13,13 +14,13 @@ def group_current_cpu(
     scanner = 0.0
     transcoder = 0.0
     for process in processes:
-        name = process.name.casefold()
-        if not name.startswith("plex"):
+        if not process.name.casefold().startswith("plex"):
             continue
         total += process.cpu_percent
-        if "media scanner" in name:
+        role = process_role(process)
+        if role == "scanner":
             scanner += process.cpu_percent
-        if "transcoder" in name:
+        if role == "transcoder":
             transcoder += process.cpu_percent
     return total, scanner, transcoder
 

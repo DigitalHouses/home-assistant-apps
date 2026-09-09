@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Sequence
 
 from .models import ActivityState, ProcessSample
+from .process_identity import process_role
 
 MEDIA_EXTENSIONS = {
     ".mkv", ".mp4", ".m4v", ".avi", ".mov", ".ts", ".m2ts",
@@ -115,11 +116,11 @@ def classify_activity(
     current_item: str | None = None
 
     for process in processes:
-        name = process.name.casefold()
-        if "media server" in name and "scanner" not in name:
+        role = process_role(process)
+        if role == "server":
             server_running = True
 
-        if "media scanner" in name:
+        if role == "scanner":
             scanner_running = True
             process_actions = extract_server_actions(process.cmdline)
             for action in process_actions:
@@ -135,7 +136,7 @@ def classify_activity(
             if current_item is None:
                 current_item = extract_current_item(process.cmdline)
 
-        if "transcoder" in name:
+        if role == "transcoder":
             transcoder = True
             if current_item is None:
                 current_item = extract_current_item(process.cmdline)

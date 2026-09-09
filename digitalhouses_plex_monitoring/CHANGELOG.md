@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.2
+
+- Detect Plex Server, Scanner and Transcoder reliably when Linux truncates process names or Plex splits the executable name across argv.
+- Use the same process-role detection for activity classification and CPU grouping.
+
+
 ## 0.1.1
 
 - Use flat default MQTT namespace `DigitalHouses/Global/plex_monitoring`.
