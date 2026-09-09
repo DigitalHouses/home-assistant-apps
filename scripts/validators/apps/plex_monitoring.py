@@ -20,6 +20,7 @@ EXPECTED_ENTITY_IDS = {
     "intro_detection": "binary_sensor.dh_plex_intro_detection",
     "thumbnail_generation": "binary_sensor.dh_plex_thumbnail_generation",
     "transcoder_running": "binary_sensor.dh_plex_transcoder_running",
+    "transcoder_count": "sensor.dh_plex_transcoder_count",
     "cpu": "sensor.dh_plex_cpu",
     "cpu_avg": "sensor.dh_plex_cpu_avg",
     "cpu_max": "sensor.dh_plex_cpu_max",

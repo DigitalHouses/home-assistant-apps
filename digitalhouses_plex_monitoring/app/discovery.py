@@ -147,7 +147,17 @@ def build_discovery_payload(
         ),
         "current_item": sensor(
             "current_item", "Plex current item", "current_item",
-            diagnostic=True, icon="mdi:movie-open",
+            diagnostic=True,
+            icon="mdi:movie-open",
+            json_attributes_topic=topics.state,
+            json_attributes_template=(
+                "{{ dict("
+                "count=value_json.current_item_count, "
+                "items=value_json.current_items, "
+                "transcoder_count=value_json.transcoder_count, "
+                "scanner_count=value_json.scanner_count"
+                ") | tojson }}"
+            ),
         ),
         "server_running": binary(
             "server_running", "Plex server running", "server_running",
@@ -172,6 +182,10 @@ def build_discovery_payload(
         "transcoder_running": binary(
             "transcoder_running", "Plex transcoder running",
             "transcoder_running", "mdi:movie-cog",
+        ),
+        "transcoder_count": sensor(
+            "transcoder_count", "Plex transcoder count",
+            "transcoder_count", icon="mdi:movie-cog",
         ),
         "cpu": sensor(
             "cpu", "Plex CPU", "cpu", icon="mdi:cpu-64-bit", **cpu_extra

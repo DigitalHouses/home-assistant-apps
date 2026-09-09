@@ -38,6 +38,10 @@ class PublishPolicy:
             a.transcoder_running,
             a.activity,
             a.scanner_actions,
+            a.current_item,
+            a.current_items,
+            a.transcoder_count,
+            a.scanner_count,
             snapshot.collector_status,
         )
 

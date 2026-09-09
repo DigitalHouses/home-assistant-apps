@@ -63,13 +63,13 @@ The process namespace is sampled every 10 seconds, but MQTT is not published eve
 A full state is published:
 - at startup/reconnect/Home Assistant birth;
 - on manual Refresh;
-- when Plex activity changes;
+- when Plex activity, active media items, or process-role counts change;
 - when current total/scanner/transcoder CPU changes by at least 5 percentage points;
 - on 0 ↔ non-zero CPU transitions;
 - immediately when current total Plex CPU crosses 80% up or down;
 - at least once per minute while current total Plex CPU remains >=80%.
 
-`current_item` and `process_count` do not independently trigger a publication, preventing fast scans from flooding Home Assistant Recorder.
+`process_count` alone does not trigger a publication. Changes to active media items do trigger publication so Home Assistant history reflects workload transitions.
 
 ## Main entities
 
@@ -103,6 +103,15 @@ sensor.dh_plex_build
 sensor.dh_plex_last_refresh
 button.dh_plex_refresh
 ```
+
+`sensor.dh_plex_current_item` exposes attributes intended for dashboards:
+
+- `count` - number of unique active media items;
+- `items` - active media basenames;
+- `transcoder_count` - number of Plex Transcoder processes;
+- `scanner_count` - number of Plex Media Scanner processes.
+
+With multiple active items its state is `N active items`; the full list remains in attributes.
 
 ## Activity classification
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.3
+
+- Detect Plex Transcoder input media from `-i` and ignore ffmpeg output formats such as `-f dash`.
+- Remove opaque Plex item and section IDs from `current_item`.
+- Support multiple simultaneous active media items.
+- Add active-item attributes and `sensor.dh_plex_transcoder_count`.
+- Publish immediately when the active media workload changes.
+
 ## 0.1.2
 
 - Detect Plex Server, Scanner and Transcoder reliably when Linux truncates process names or Plex splits the executable name across argv.

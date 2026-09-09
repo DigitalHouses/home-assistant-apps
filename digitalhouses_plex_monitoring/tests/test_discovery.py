@@ -53,6 +53,30 @@ class DiscoveryTests(unittest.TestCase):
                 entity_id,
             )
 
+    def test_current_item_attributes_and_transcoder_count(self):
+        config = self.config()
+        payload = build_discovery_payload(
+            config,
+            BuildInfo("0.1.3", "main", "abcdef123456"),
+        )
+        components = payload["components"]
+
+        self.assertIn("transcoder_count", components)
+        self.assertEqual(
+            components["transcoder_count"]["default_entity_id"],
+            "sensor.dh_plex_transcoder_count",
+        )
+
+        current = components["current_item"]
+        self.assertEqual(
+            current.get("json_attributes_topic"),
+            build_topics(config).state,
+        )
+        template = current.get("json_attributes_template", "")
+        self.assertIn("current_items", template)
+        self.assertIn("transcoder_count", template)
+        self.assertIn("scanner_count", template)
+
     def test_second_instance_entity_ids(self):
         payload = build_discovery_payload(
             self.config("plex_guest"),

@@ -136,15 +136,59 @@ class ActivityClassifierTests(unittest.TestCase):
     def test_no_plex_processes(self):
         self.assertEqual(classify_activity([]).activity, "plex_not_running")
 
-    def test_item_fallbacks(self):
-        self.assertEqual(
-            extract_current_item(("--item", "1234")),
-            "item 1234",
+    def test_transcoder_input_file_beats_output_format(self):
+        cmd = (
+            "/usr/lib/plexmediaserver/Plex Transcoder",
+            "-i",
+            "/mnt/truenas/data/plex/movies/X-Men. The Last Stand (2006) 4K.mkv",
+            "-f",
+            "dash",
+            "dash",
         )
         self.assertEqual(
-            extract_current_item(("--section", "5")),
-            "section 5",
+            extract_current_item(cmd),
+            "X-Men. The Last Stand (2006) 4K.mkv",
         )
+
+    def test_internal_item_ids_are_not_current_items(self):
+        self.assertIsNone(
+            extract_current_item(("Plex Media Scanner", "--item", "30"))
+        )
+        self.assertIsNone(
+            extract_current_item(("Plex Media Scanner", "--section", "5"))
+        )
+
+    def test_parallel_transcoders_are_exposed(self):
+        state = classify_activity([
+            p("Plex Media Server"),
+            p(
+                "Plex Transcoder",
+                (
+                    "/usr/lib/plexmediaserver/Plex Transcoder",
+                    "-i",
+                    "/media/X-Men.mkv",
+                    "-f",
+                    "dash",
+                ),
+            ),
+            p(
+                "Plex Transcoder",
+                (
+                    "/usr/lib/plexmediaserver/Plex Transcoder",
+                    "-i",
+                    "/media/Avatar.mkv",
+                    "-f",
+                    "ssegment",
+                ),
+            ),
+        ])
+        self.assertEqual(state.activity, "transcoding")
+        self.assertEqual(
+            getattr(state, "current_items", None),
+            ("X-Men.mkv", "Avatar.mkv"),
+        )
+        self.assertEqual(getattr(state, "transcoder_count", None), 2)
+        self.assertEqual(getattr(state, "scanner_count", None), 0)
 
 
 if __name__ == "__main__":

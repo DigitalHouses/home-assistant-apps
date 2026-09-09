@@ -61,10 +61,11 @@ class PublishPolicyTests(unittest.TestCase):
         self.assertTrue(decision.publish)
         self.assertIn("startup", decision.reasons)
 
-    def test_item_only_does_not_publish(self):
+    def test_item_change_publishes(self):
         self.publish(snapshot(item="a.mkv"), 0)
         decision = self.policy.evaluate(snapshot(item="b.mkv"), 10)
-        self.assertFalse(decision.publish)
+        self.assertTrue(decision.publish)
+        self.assertIn("activity_change", decision.reasons)
 
     def test_process_count_only_does_not_publish(self):
         self.publish(snapshot(process_count=1), 0)

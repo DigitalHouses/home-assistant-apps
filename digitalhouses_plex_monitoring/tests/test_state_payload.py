@@ -60,12 +60,20 @@ class StatePayloadTests(unittest.TestCase):
         )
         self.assertEqual(payload["cpu"], 106.0)
         self.assertEqual(payload["current_item"], "movie.ts")
+        self.assertEqual(payload.get("current_items"), ["movie.ts"])
+        self.assertEqual(payload.get("current_item_count"), 1)
+        self.assertEqual(payload.get("transcoder_count"), 0)
+        self.assertEqual(payload.get("scanner_count"), 0)
         self.assertEqual(payload["scanner_actions"], "credits")
         self.assertEqual(payload["build_commit_short"], "0123456789ab")
         expected = {
             "collected_at",
             "activity",
             "current_item",
+            "current_items",
+            "current_item_count",
+            "transcoder_count",
+            "scanner_count",
             "server_running",
             "scanner_running",
             "credits_detection",

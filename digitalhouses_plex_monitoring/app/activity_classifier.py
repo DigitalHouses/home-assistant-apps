@@ -45,32 +45,32 @@ def _argument_value(
 
 
 def extract_current_item(cmdline: Sequence[str]) -> str | None:
-    # Strong explicit file/directory arguments first.
-    explicit = _argument_value(
-        cmdline,
-        {"--file", "-f", "--directory", "-d"},
-    )
+    # Plex Transcoder uses -i for the real input media.
+    explicit = _argument_value(cmdline, {"-i"})
+    if not explicit:
+        explicit = _argument_value(
+            cmdline,
+            {"--file", "--directory"},
+        )
+
     if explicit:
         candidate = Path(explicit).name
-        if candidate and not candidate.casefold().startswith("plexcreditsdetection-"):
+        if (
+            candidate
+            and not candidate.casefold().startswith(
+                "plexcreditsdetection-"
+            )
+        ):
             return candidate
 
-    # Then any recognizable media path in the command line.
+    # Fall back only to recognizable media paths.
+    # Short ffmpeg options such as -f are deliberately ignored.
     for token in reversed(tuple(cmdline)):
         path = Path(token)
         if path.suffix.casefold() in MEDIA_EXTENSIONS:
             return path.name
 
-    item = _argument_value(cmdline, {"--item", "-o"})
-    if item:
-        return f"item {item}"
-
-    section = _argument_value(cmdline, {"--section", "-c"})
-    if section:
-        return f"section {section}"
-
     return None
-
 
 def _contains_token(cmdline: Sequence[str], target: str) -> bool:
     target = target.casefold()
@@ -107,39 +107,58 @@ def classify_activity(
     processes: Sequence[ProcessSample],
 ) -> ActivityState:
     server_running = False
-    scanner_running = False
+    scanner_count = 0
     credits = False
     intro = False
     thumbnails = False
-    transcoder = False
+    transcoder_count = 0
     actions: list[str] = []
-    current_item: str | None = None
+    items: list[str] = []
 
     for process in processes:
         role = process_role(process)
+
         if role == "server":
             server_running = True
 
         if role == "scanner":
-            scanner_running = True
+            scanner_count += 1
             process_actions = extract_server_actions(process.cmdline)
+
             for action in process_actions:
                 if action not in actions:
                     actions.append(action)
+
             credits = credits or _credits_signature(
-                process.cmdline, process_actions
+                process.cmdline,
+                process_actions,
             )
             intro = intro or _intro_signature(process_actions)
             thumbnails = thumbnails or _thumbnail_signature(
-                process.cmdline, process_actions
+                process.cmdline,
+                process_actions,
             )
-            if current_item is None:
-                current_item = extract_current_item(process.cmdline)
+
+            item = extract_current_item(process.cmdline)
+            if item and item not in items:
+                items.append(item)
 
         if role == "transcoder":
-            transcoder = True
-            if current_item is None:
-                current_item = extract_current_item(process.cmdline)
+            transcoder_count += 1
+
+            item = extract_current_item(process.cmdline)
+            if item and item not in items:
+                items.append(item)
+
+    scanner_running = scanner_count > 0
+    transcoder = transcoder_count > 0
+
+    if len(items) == 1:
+        current_item = items[0]
+    elif len(items) > 1:
+        current_item = f"{len(items)} active items"
+    else:
+        current_item = None
 
     specific = [credits, intro, thumbnails, transcoder]
 
@@ -172,4 +191,7 @@ def classify_activity(
         activity=activity,
         scanner_actions=tuple(actions),
         current_item=current_item,
+        current_items=tuple(items),
+        transcoder_count=transcoder_count,
+        scanner_count=scanner_count,
     )

@@ -32,6 +32,9 @@ class ActivityState:
     activity: str
     scanner_actions: tuple[str, ...]
     current_item: str | None
+    current_items: tuple[str, ...] = ()
+    transcoder_count: int = 0
+    scanner_count: int = 0
 
 
 @dataclass(frozen=True)
@@ -78,10 +81,26 @@ def build_state_payload(
     build: BuildInfo,
 ) -> dict[str, object]:
     activity = snapshot.activity
+
+    current_items = activity.current_items
+    if not current_items and activity.current_item:
+        current_items = (activity.current_item,)
+
+    current_item = activity.current_item
+    if current_item is None:
+        if len(current_items) == 1:
+            current_item = current_items[0]
+        elif len(current_items) > 1:
+            current_item = f"{len(current_items)} active items"
+
     return {
         "collected_at": snapshot.collected_at,
         "activity": activity.activity,
-        "current_item": activity.current_item or "none",
+        "current_item": current_item or "none",
+        "current_items": list(current_items),
+        "current_item_count": len(current_items),
+        "transcoder_count": activity.transcoder_count,
+        "scanner_count": activity.scanner_count,
         "server_running": activity.plex_server_running,
         "scanner_running": activity.scanner_running,
         "credits_detection": activity.credits_detection,
