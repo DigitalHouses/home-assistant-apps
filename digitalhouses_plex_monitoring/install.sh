@@ -14,6 +14,7 @@ CONFIG_FILE="${CONFIG_DIR}/${APP_NAME}.conf"
 STATE_DIR="/var/lib/${APP_NAME}"
 UNIT_FILE="/etc/systemd/system/${SERVICE_NAME}"
 PLEX_LOCAL_ADMIN_TOKEN="/var/lib/plexmediaserver/Library/Application Support/Plex Media Server/.LocalAdminToken"
+PLEX_API_TOKEN_FILE="${CONFIG_DIR}/plex_local_admin_token"
 TOKEN_DROPIN_DIR="/etc/systemd/system/${SERVICE_NAME}.d"
 TOKEN_DROPIN_FILE="${TOKEN_DROPIN_DIR}/plex-local-token.conf"
 
@@ -134,6 +135,7 @@ if [[ ! -f "${CONFIG_FILE}" ]]; then
         printf '%s\n' "[plex_api]"
         printf '%s\n' "enabled = true"
         printf '%s\n' "base_url = http://127.0.0.1:32400"
+        printf 'token_file = %s\n' "${PLEX_API_TOKEN_FILE}"
         printf '%s\n' "timeout_seconds = 3"
         printf '%s\n' "library_refresh_seconds = 3600"
         printf '\n'
@@ -151,6 +153,13 @@ fi
 
 chown root:"${SERVICE_GROUP}" "${CONFIG_FILE}"
 chmod 0640 "${CONFIG_FILE}"
+
+if [[ -f "${PLEX_LOCAL_ADMIN_TOKEN}" ]]; then
+    install -o root -g "${SERVICE_GROUP}" -m 0640 \
+        "${PLEX_LOCAL_ADMIN_TOKEN}" "${PLEX_API_TOKEN_FILE}"
+elif [[ ! -f "${PLEX_API_TOKEN_FILE}" ]]; then
+    echo "Warning: Plex .LocalAdminToken was not found; Plex API monitoring will remain unavailable."
+fi
 
 if [[ ! -x "${APP_DIR}/.venv/bin/python" ]]; then
     python3 -m venv "${APP_DIR}/.venv"
@@ -180,17 +189,9 @@ install -o root -g root -m 0644 \
     "${APP_DIR}/systemd/${SERVICE_NAME}" \
     "${UNIT_FILE}"
 
-if [[ -f "${PLEX_LOCAL_ADMIN_TOKEN}" ]]; then
-    install -d -o root -g root -m 0755 "${TOKEN_DROPIN_DIR}"
-    {
-        printf '%s\n' "[Service]"
-        printf 'LoadCredential="plex_local_admin_token:%s"\n' "${PLEX_LOCAL_ADMIN_TOKEN}"
-    } >"${TOKEN_DROPIN_FILE}"
-    chown root:root "${TOKEN_DROPIN_FILE}"
-    chmod 0644 "${TOKEN_DROPIN_FILE}"
-else
-    rm -f "${TOKEN_DROPIN_FILE}"
-fi
+# 0.2.0 used a systemd LoadCredential drop-in. Remove it during upgrade.
+rm -f "${TOKEN_DROPIN_FILE}"
+rmdir "${TOKEN_DROPIN_DIR}" 2>/dev/null || true
 
 systemctl daemon-reload
 systemctl enable "${SERVICE_NAME}" >/dev/null

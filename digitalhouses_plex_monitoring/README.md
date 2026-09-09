@@ -42,7 +42,13 @@ On a standard Linux Plex installation the installer detects:
 /var/lib/plexmediaserver/Library/Application Support/Plex Media Server/.LocalAdminToken
 ```
 
-The token is passed to the unprivileged monitoring service with a systemd `LoadCredential=` drop-in. It is not copied into the app configuration, MQTT state, logs, or repository.
+The installer copies the token to a protected service-readable file:
+
+```text
+/etc/digitalhouses_plex_monitoring/plex_local_admin_token
+```
+
+The copy is owned by `root:digitalhouses_plex_monitoring` with mode `0640` and is refreshed on install/update when Plex provides `.LocalAdminToken`. The original Plex token permissions are not changed. The token is not stored in MQTT state, logs, or the repository.
 
 The API collector connects by default only to:
 
@@ -76,6 +82,7 @@ high_load_publish_interval_seconds = 60
 [plex_api]
 enabled = true
 base_url = http://127.0.0.1:32400
+token_file = /etc/digitalhouses_plex_monitoring/plex_local_admin_token
 timeout_seconds = 3
 library_refresh_seconds = 3600
 ```
@@ -195,7 +202,7 @@ The two collectors fail independently:
 
 A Plex API failure does not stop Linux workload monitoring. A process-visibility failure does not prevent successful API playback/library updates.
 
-The Home Assistant Plex integration is not required for playback count or library counters in version 0.2.0.
+The Home Assistant Plex integration is not required for playback count or library counters since version 0.2.0.
 
 ## Activity classification
 
@@ -221,7 +228,7 @@ journalctl -u digitalhouses_plex_monitoring -f
 ```text
 /opt/digitalhouses/digitalhouses_plex_monitoring/
 /etc/digitalhouses_plex_monitoring/digitalhouses_plex_monitoring.conf
+/etc/digitalhouses_plex_monitoring/plex_local_admin_token
 /var/lib/digitalhouses_plex_monitoring/
-/etc/systemd/system/digitalhouses_plex_monitoring.service.d/plex-local-token.conf
 journald
 ```

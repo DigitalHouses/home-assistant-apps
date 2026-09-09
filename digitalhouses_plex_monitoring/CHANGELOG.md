@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.1
+
+- Replace the systemd `LoadCredential=` token handoff with a protected `/etc/digitalhouses_plex_monitoring/plex_local_admin_token` copy.
+- Keep the service unprivileged and preserve the original Plex `.LocalAdminToken` permissions.
+- Remove the legacy 0.2.0 credential drop-in automatically during update.
+
 ## 0.2.0
 
 - Add local Plex API playback monitoring without requiring the Home Assistant Plex integration.

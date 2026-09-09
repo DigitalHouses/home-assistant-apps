@@ -224,6 +224,7 @@ def validate_plex_monitoring(
         "[plex_api]",
         "enabled = true",
         "base_url = http://127.0.0.1:32400",
+        "token_file = /etc/digitalhouses_plex_monitoring/plex_local_admin_token",
         "library_refresh_seconds = 3600",
         "topic_prefix = DigitalHouses/Global/plex_monitoring",
     ):
@@ -256,7 +257,12 @@ def validate_plex_monitoring(
         'if [[ ! -f "${CONFIG_FILE}" ]]; then',
         'SOURCE_SHA="$(git -C "${tmp_dir}/repo" rev-parse HEAD)"',
         '} >"${APP_DIR}/BUILD_INFO"',
-        'LoadCredential="plex_local_admin_token:%s"',
+        'PLEX_API_TOKEN_FILE="${CONFIG_DIR}/plex_local_admin_token"',
+        'install -o root -g "${SERVICE_GROUP}" -m 0640',
+        'rm -f "${TOKEN_DROPIN_FILE}"',
     ):
         if expected not in installer:
             fail(f"Plex Monitoring installer contract changed: {expected}")
+
+    if "LoadCredential=" in installer:
+        fail("Plex Monitoring installer must not install a systemd credential drop-in")

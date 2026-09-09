@@ -13,6 +13,7 @@ high_load_publish_interval_seconds = 60
 [plex_api]
 enabled = true
 base_url = http://127.0.0.1:32400
+token_file = /etc/digitalhouses_plex_monitoring/plex_local_admin_token
 timeout_seconds = 3
 library_refresh_seconds = 3600
 
