@@ -6,7 +6,7 @@ import json
 import os
 import re
 import tempfile
-from datetime import datetime, timezone
+from datetime import datetime, timezone, tzinfo
 from pathlib import Path
 from typing import Any
 
@@ -219,6 +219,243 @@ def parse_timestamp(value: Any) -> datetime | None:
     except (TypeError, ValueError):
         return None
 
+
+
+OUTAGE_SCHEMA_VERSION = 1
+OUTAGE_HISTORY_LIMIT = 10
+
+
+def _outage_timezone(local_tz: tzinfo | None = None) -> tzinfo:
+    """Return the App local timezone, or an explicit timezone for tests."""
+    return local_tz or datetime.now().astimezone().tzinfo or timezone.utc
+
+
+def _outage_datetime(value: Any = None) -> datetime:
+    """Normalize an outage timestamp to aware UTC."""
+    if isinstance(value, datetime):
+        parsed = value
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)
+
+    if value is not None:
+        parsed = parse_timestamp(value)
+        if parsed is not None:
+            return parsed
+
+    return datetime.now(timezone.utc)
+
+
+def _outage_iso(value: datetime) -> str:
+    return (
+        value.astimezone(timezone.utc)
+        .replace(microsecond=0)
+        .isoformat()
+        .replace("+00:00", "Z")
+    )
+
+
+def _outage_month(value: datetime, local_tz: tzinfo) -> str:
+    return value.astimezone(local_tz).strftime("%Y-%m")
+
+
+def _outage_month_start_utc(value: datetime, local_tz: tzinfo) -> datetime:
+    local = value.astimezone(local_tz)
+    local_start = local.replace(
+        day=1,
+        hour=0,
+        minute=0,
+        second=0,
+        microsecond=0,
+    )
+    return local_start.astimezone(timezone.utc)
+
+
+def _duration_mmss(seconds: int) -> str:
+    seconds = max(int(seconds), 0)
+    minutes = seconds // 60
+    remaining_seconds = seconds % 60
+    return f"{minutes:02d}:{remaining_seconds:02d}"
+
+
+def default_outages(
+    now: datetime | str | None = None,
+    *,
+    local_tz: tzinfo | None = None,
+) -> dict[str, Any]:
+    current = _outage_datetime(now)
+    tz = _outage_timezone(local_tz)
+    return {
+        "schema_version": OUTAGE_SCHEMA_VERSION,
+        "month": _outage_month(current, tz),
+        "last_available": None,
+        "pending_start": None,
+        "count": 0,
+        "total_duration_seconds": 0,
+        "outages": [],
+        "updated_at": _outage_iso(current),
+    }
+
+
+def _normalize_outage_record(raw: Any) -> dict[str, Any] | None:
+    if not isinstance(raw, dict):
+        return None
+    started = parse_timestamp(raw.get("from"))
+    ended = parse_timestamp(raw.get("to"))
+    if started is None or ended is None or ended < started:
+        return None
+    duration_seconds = max(int((ended - started).total_seconds()), 0)
+    return {
+        "from": _outage_iso(started),
+        "to": _outage_iso(ended),
+        "duration_seconds": duration_seconds,
+    }
+
+
+def migrate_outages(
+    raw: Any,
+    limit: int = OUTAGE_HISTORY_LIMIT,
+    *,
+    now: datetime | str | None = None,
+    local_tz: tzinfo | None = None,
+) -> dict[str, Any]:
+    """Normalize persisted outage state and roll statistics at local month boundary."""
+    current = _outage_datetime(now)
+    tz = _outage_timezone(local_tz)
+    limit = max(int(limit), 1)
+    store = default_outages(current, local_tz=tz)
+
+    if not isinstance(raw, dict):
+        return store
+
+    last_available = raw.get("last_available")
+    if isinstance(last_available, bool):
+        store["last_available"] = last_available
+
+    pending_start = parse_timestamp(raw.get("pending_start"))
+    same_month = str(raw.get("month", "")) == store["month"]
+
+    if same_month:
+        if pending_start is not None:
+            store["pending_start"] = _outage_iso(pending_start)
+        try:
+            store["count"] = max(int(raw.get("count", 0)), 0)
+        except (TypeError, ValueError):
+            store["count"] = 0
+        try:
+            store["total_duration_seconds"] = max(
+                int(raw.get("total_duration_seconds", 0)), 0
+            )
+        except (TypeError, ValueError):
+            store["total_duration_seconds"] = 0
+
+        outages = raw.get("outages")
+        if isinstance(outages, list):
+            normalized = []
+            for item in outages:
+                record = _normalize_outage_record(item)
+                if record is not None:
+                    normalized.append(record)
+            store["outages"] = normalized[:limit]
+
+        updated_at = parse_timestamp(raw.get("updated_at"))
+        if updated_at is not None:
+            store["updated_at"] = _outage_iso(updated_at)
+        return store
+
+    # New local calendar month. Keep an active outage, but charge the new
+    # month only from 00:00 local time.
+    if pending_start is not None:
+        month_start = _outage_month_start_utc(current, tz)
+        store["pending_start"] = _outage_iso(max(pending_start, month_start))
+
+    return store
+
+
+def record_connectivity_for_outages(
+    raw: Any,
+    available: bool,
+    checked_at: datetime | str | None = None,
+    *,
+    limit: int = OUTAGE_HISTORY_LIMIT,
+    local_tz: tzinfo | None = None,
+) -> dict[str, Any]:
+    """Apply one connectivity observation to persisted monthly outage state."""
+    checked = _outage_datetime(checked_at)
+    source = raw if isinstance(raw, dict) else {}
+    store = migrate_outages(
+        source,
+        limit,
+        now=checked,
+        local_tz=local_tz,
+    )
+    changed = store != source
+    pending_start = parse_timestamp(store.get("pending_start"))
+
+    if available:
+        if pending_start is not None:
+            duration_seconds = max(int((checked - pending_start).total_seconds()), 0)
+            if duration_seconds > 0:
+                record = {
+                    "from": _outage_iso(pending_start),
+                    "to": _outage_iso(checked),
+                    "duration_seconds": duration_seconds,
+                }
+                store["count"] += 1
+                store["total_duration_seconds"] += duration_seconds
+                store["outages"] = [record, *store["outages"]][:limit]
+            store["pending_start"] = None
+            changed = True
+    elif pending_start is None:
+        store["pending_start"] = _outage_iso(checked)
+        changed = True
+
+    available = bool(available)
+    if store.get("last_available") is not available:
+        store["last_available"] = available
+        changed = True
+
+    if changed:
+        store["updated_at"] = _outage_iso(checked)
+    return store
+
+
+def outages_payload(
+    raw: Any,
+    limit: int = OUTAGE_HISTORY_LIMIT,
+    *,
+    now: datetime | str | None = None,
+    local_tz: tzinfo | None = None,
+) -> dict[str, Any]:
+    """Build the retained MQTT state/attributes for the monthly outage sensor."""
+    current = _outage_datetime(now)
+    tz = _outage_timezone(local_tz)
+    store = migrate_outages(raw, limit, now=current, local_tz=tz)
+    outages: list[dict[str, Any]] = []
+
+    for record in store["outages"]:
+        started = parse_timestamp(record.get("from"))
+        ended = parse_timestamp(record.get("to"))
+        if started is None or ended is None:
+            continue
+        duration_seconds = max(int(record.get("duration_seconds", 0)), 0)
+        outages.append(
+            {
+                "from": started.astimezone(tz).strftime("%d.%m %H:%M:%S"),
+                "to": ended.astimezone(tz).strftime("%d.%m %H:%M:%S"),
+                "duration": _duration_mmss(duration_seconds),
+                "duration_seconds": duration_seconds,
+            }
+        )
+
+    total_duration_seconds = max(int(store["total_duration_seconds"]), 0)
+    return {
+        "state": max(int(store["count"]), 0),
+        "month": store["month"],
+        "outages": outages,
+        "total_duration": _duration_mmss(total_duration_seconds),
+        "total_duration_seconds": total_duration_seconds,
+    }
 
 def is_result_fresh(
     last_success: Any,

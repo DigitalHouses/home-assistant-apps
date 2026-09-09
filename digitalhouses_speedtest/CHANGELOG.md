@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.2.0
+
+- Added `sensor.internet_outages_month` through MQTT Discovery.
+- Added persistent monthly Internet outage history in `/data/outages.json`.
+- Sensor state contains the number of completed outages in the current local calendar month.
+- Sensor attributes contain the latest 10 outages with start, end and duration.
+- Added monthly total outage duration in `total_duration` and `total_duration_seconds`.
+- Outages spanning a month boundary are counted in the new month from local midnight.
+- Added Supervisor timezone propagation to the App runtime.
+- Added outage persistence, month rollover, MQTT Discovery and runtime regression tests.
+
 ## 1.1.1
 
 - Added `number.internet_speed_periodic_interval` for changing the automatic

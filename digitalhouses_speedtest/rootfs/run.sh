@@ -4,6 +4,8 @@ set -Eeuo pipefail
 
 bashio::log.info "Starting DigitalHouses Speedtest ${APP_VERSION:-unknown}"
 
+export TZ="$(bashio::supervisor.timezone)"
+
 export MQTT_HOST="$(bashio::services mqtt host)"
 export MQTT_PORT="$(bashio::services mqtt port)"
 export MQTT_USER="$(bashio::services mqtt username)"

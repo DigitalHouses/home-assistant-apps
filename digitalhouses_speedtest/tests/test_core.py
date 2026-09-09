@@ -4,7 +4,7 @@ import json
 import sys
 import tempfile
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 APP_DIR = Path(__file__).resolve().parents[1] / "rootfs" / "app"
@@ -15,6 +15,7 @@ from core import (  # noqa: E402
     atomic_write_json,
     build_recent_record,
     build_success_state,
+    default_outages,
     default_recent_results,
     default_state,
     evaluate_performance,
@@ -22,8 +23,10 @@ from core import (  # noqa: E402
     load_json,
     migrate_recent_results,
     normalize_thresholds,
+    outages_payload,
     parse_server_list,
     recent_results_payload,
+    record_connectivity_for_outages,
     update_runtime_status,
 )
 
@@ -227,6 +230,104 @@ class RecentResultsTests(unittest.TestCase):
         migrated = migrate_recent_results(None, 20)
         self.assertEqual(migrated, default_recent_results())
 
+
+
+class OutageHistoryTests(unittest.TestCase):
+    LOCAL_TZ = timezone(timedelta(hours=5))
+
+    def test_completed_outage_is_recorded(self) -> None:
+        store = default_outages(
+            "2026-09-09T09:00:00Z",
+            local_tz=self.LOCAL_TZ,
+        )
+        store = record_connectivity_for_outages(
+            store,
+            False,
+            "2026-09-09T09:32:10Z",
+            local_tz=self.LOCAL_TZ,
+        )
+        store = record_connectivity_for_outages(
+            store,
+            True,
+            "2026-09-09T09:34:27Z",
+            local_tz=self.LOCAL_TZ,
+        )
+        payload = outages_payload(
+            store,
+            local_tz=self.LOCAL_TZ,
+            now="2026-09-09T09:34:27Z",
+        )
+        self.assertEqual(payload["state"], 1)
+        self.assertEqual(payload["month"], "2026-09")
+        self.assertEqual(payload["total_duration_seconds"], 137)
+        self.assertEqual(payload["total_duration"], "02:17")
+        outage = payload["outages"][0]
+        self.assertEqual(outage["from"], "09.09 14:32:10")
+        self.assertEqual(outage["to"], "09.09 14:34:27")
+        self.assertEqual(outage["duration"], "02:17")
+
+    def test_only_last_ten_outages_are_kept(self) -> None:
+        store = default_outages(
+            "2026-09-01T00:00:00Z",
+            local_tz=self.LOCAL_TZ,
+        )
+        for index in range(12):
+            minute = index * 2
+            store = record_connectivity_for_outages(
+                store,
+                False,
+                f"2026-09-01T00:{minute:02d}:00Z",
+                local_tz=self.LOCAL_TZ,
+            )
+            store = record_connectivity_for_outages(
+                store,
+                True,
+                f"2026-09-01T00:{minute:02d}:10Z",
+                local_tz=self.LOCAL_TZ,
+            )
+        payload = outages_payload(
+            store,
+            local_tz=self.LOCAL_TZ,
+            now="2026-09-01T01:00:00Z",
+        )
+        self.assertEqual(payload["state"], 12)
+        self.assertEqual(len(payload["outages"]), 10)
+        self.assertEqual(payload["total_duration_seconds"], 120)
+        self.assertEqual(payload["total_duration"], "02:00")
+
+    def test_month_rollover_resets_statistics(self) -> None:
+        store = default_outages(
+            "2026-08-31T18:00:00Z",
+            local_tz=self.LOCAL_TZ,
+        )
+        store = record_connectivity_for_outages(
+            store,
+            False,
+            "2026-08-31T18:58:00Z",
+            local_tz=self.LOCAL_TZ,
+        )
+        store = record_connectivity_for_outages(
+            store,
+            False,
+            "2026-08-31T19:01:00Z",
+            local_tz=self.LOCAL_TZ,
+        )
+        store = record_connectivity_for_outages(
+            store,
+            True,
+            "2026-08-31T19:03:00Z",
+            local_tz=self.LOCAL_TZ,
+        )
+        payload = outages_payload(
+            store,
+            local_tz=self.LOCAL_TZ,
+            now="2026-08-31T19:03:00Z",
+        )
+        self.assertEqual(payload["month"], "2026-09")
+        self.assertEqual(payload["state"], 1)
+        self.assertEqual(payload["outages"][0]["from"], "01.09 00:00:00")
+        self.assertEqual(payload["outages"][0]["to"], "01.09 00:03:00")
+        self.assertEqual(payload["total_duration_seconds"], 180)
 
 class FreshnessAndFailureTests(unittest.TestCase):
     def test_no_connectivity_preserves_last_measurement(self) -> None:

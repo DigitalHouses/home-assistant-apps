@@ -17,26 +17,31 @@ from typing import Any
 import paho.mqtt.client as mqtt
 
 from core import (
+    OUTAGE_HISTORY_LIMIT,
     append_recent_result,
     atomic_write_json,
     build_recent_record,
     build_success_state,
+    default_outages,
     default_recent_results,
     default_state,
     evaluate_performance,
     is_result_fresh,
     load_json,
+    migrate_outages,
     migrate_recent_results,
     migrate_state,
     normalize_thresholds,
+    outages_payload,
     parse_server_list,
     recent_results_payload,
+    record_connectivity_for_outages,
     update_runtime_status,
     utc_now,
 )
 from discovery import build_discovery_payload
 
-APP_VERSION = os.getenv("APP_VERSION", "1.1.1-local")
+APP_VERSION = os.getenv("APP_VERSION", "1.2.0-local")
 
 DATA_DIR = Path("/data")
 OPTIONS_FILE = DATA_DIR / "options.json"
@@ -44,6 +49,7 @@ STATE_FILE = DATA_DIR / "state.json"
 SERVERS_FILE = DATA_DIR / "servers.json"
 THRESHOLDS_FILE = DATA_DIR / "thresholds.json"
 RECENT_RESULTS_FILE = DATA_DIR / "recent_results.json"
+OUTAGES_FILE = DATA_DIR / "outages.json"
 SCHEDULE_FILE = DATA_DIR / "schedule.json"
 
 MQTT_BASE_TOPIC = "DigitalHouses/Global/speedtest"
@@ -59,6 +65,7 @@ SERVERS_TOPIC = f"{MQTT_BASE_TOPIC}/servers"
 THRESHOLDS_TOPIC = f"{MQTT_BASE_TOPIC}/thresholds"
 PROBLEMS_TOPIC = f"{MQTT_BASE_TOPIC}/problems"
 RECENT_RESULTS_TOPIC = f"{MQTT_BASE_TOPIC}/recent_results"
+OUTAGES_TOPIC = f"{MQTT_BASE_TOPIC}/outages"
 SCHEDULE_TOPIC = f"{MQTT_BASE_TOPIC}/schedule"
 
 MINIMUM_DOWNLOAD_COMMAND_TOPIC = f"{THRESHOLDS_TOPIC}/minimum_download/set"
@@ -259,6 +266,13 @@ class SpeedtestApp:
         )
         atomic_write_json(RECENT_RESULTS_FILE, self.recent_results)
 
+        self.outages_lock = threading.RLock()
+        self.outages = migrate_outages(
+            load_json(OUTAGES_FILE, default_outages()),
+            OUTAGE_HISTORY_LIMIT,
+        )
+        atomic_write_json(OUTAGES_FILE, self.outages)
+
         self.connectivity_lock = threading.RLock()
         self.connectivity_check_lock = threading.Lock()
         self.connectivity = {
@@ -293,6 +307,7 @@ class SpeedtestApp:
             "thresholds": THRESHOLDS_TOPIC,
             "problems": PROBLEMS_TOPIC,
             "recent_results": RECENT_RESULTS_TOPIC,
+            "outages": OUTAGES_TOPIC,
             "schedule": SCHEDULE_TOPIC,
             "minimum_download_command": MINIMUM_DOWNLOAD_COMMAND_TOPIC,
             "minimum_upload_command": MINIMUM_UPLOAD_COMMAND_TOPIC,
@@ -356,6 +371,7 @@ class SpeedtestApp:
         self.publish_thresholds()
         self.publish_schedule()
         self.publish_recent_results()
+        self.publish_outages()
         self.publish_evaluation(force_availability=True)
         self.publish_text(APP_AVAILABILITY_TOPIC, "online", retain=True)
 
@@ -521,6 +537,42 @@ class SpeedtestApp:
                 self.options["recent_results_limit"],
             )
         self.publish_json(RECENT_RESULTS_TOPIC, payload)
+
+    def publish_outages(self) -> None:
+        with self.outages_lock:
+            payload = outages_payload(
+                self.outages,
+                OUTAGE_HISTORY_LIMIT,
+            )
+        self.publish_json(OUTAGES_TOPIC, payload)
+
+    def update_outages(
+        self,
+        available: bool,
+        checked_at: str,
+    ) -> None:
+        with self.outages_lock:
+            previous = self.outages
+            updated = record_connectivity_for_outages(
+                previous,
+                available,
+                checked_at,
+                limit=OUTAGE_HISTORY_LIMIT,
+            )
+            changed = updated != previous
+            if changed:
+                self.outages = updated
+                atomic_write_json(OUTAGES_FILE, self.outages)
+                payload = outages_payload(
+                    self.outages,
+                    OUTAGE_HISTORY_LIMIT,
+                    now=checked_at,
+                )
+            else:
+                payload = None
+
+        if payload is not None:
+            self.publish_json(OUTAGES_TOPIC, payload)
 
     def current_result_is_fresh(self) -> bool:
         with self.state_lock:
@@ -742,6 +794,10 @@ class SpeedtestApp:
 
             current_any = bool(
                 result["google_dns"] or result["cloudflare_dns"]
+            )
+            self.update_outages(
+                current_any,
+                result["checked_at"],
             )
             if current_any != previous_any:
                 self.log.info(

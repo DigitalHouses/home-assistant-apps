@@ -476,6 +476,25 @@ def build_discovery_payload(
             "availability": result_availability,
             "availability_mode": "all",
         },
+        "outages_month": {
+            "platform": "sensor",
+            "name": "Internet outages this month",
+            "unique_id": f"{DEVICE_ID}_outages_month",
+            "default_entity_id": "sensor.internet_outages_month",
+            "state_topic": topics["outages"],
+            "value_template": "{{ value_json.state }}",
+            "unit_of_measurement": "outages",
+            "json_attributes_topic": topics["outages"],
+            "json_attributes_template": (
+                "{{ {'month': value_json.month, "
+                "'outages': value_json.outages, "
+                "'total_duration': value_json.total_duration, "
+                "'total_duration_seconds': value_json.total_duration_seconds} | tojson }}"
+            ),
+            "icon": "mdi:network-off-outline",
+            "entity_category": "diagnostic",
+            "availability": app_availability,
+        },
         "recent_results": {
             "platform": "sensor",
             "name": "Recent results",

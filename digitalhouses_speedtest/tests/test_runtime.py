@@ -129,6 +129,7 @@ class RuntimeTests(unittest.TestCase):
             ("SERVERS_FILE", "servers.json"),
             ("THRESHOLDS_FILE", "thresholds.json"),
             ("RECENT_RESULTS_FILE", "recent_results.json"),
+            ("OUTAGES_FILE", "outages.json"),
             ("SCHEDULE_FILE", "schedule.json"),
         ):
             value = data if not filename else data / filename
@@ -143,6 +144,7 @@ class RuntimeTests(unittest.TestCase):
                 "MQTT_PORT": "1883",
                 "MQTT_USER": "user",
                 "MQTT_PASSWORD": "password",
+                "TZ": "Asia/Almaty",
             },
             clear=False,
         )
@@ -397,6 +399,34 @@ class RuntimeTests(unittest.TestCase):
             if topic == runtime.RESULT_AVAILABILITY_TOPIC
         ]
         self.assertEqual(messages[-1], "offline")
+
+
+    def test_connectivity_transition_updates_outages(self) -> None:
+        with (
+            patch.object(self.app, "_ping", return_value=False),
+            patch.object(
+                runtime,
+                "utc_now",
+                return_value="2026-09-09T09:32:10Z",
+            ),
+        ):
+            self.app.check_connectivity_once()
+
+        with (
+            patch.object(self.app, "_ping", return_value=True),
+            patch.object(
+                runtime,
+                "utc_now",
+                return_value="2026-09-09T09:34:27Z",
+            ),
+        ):
+            self.app.check_connectivity_once()
+
+        payload = self.published_json(runtime.OUTAGES_TOPIC)
+        self.assertEqual(payload["state"], 1)
+        self.assertEqual(payload["total_duration_seconds"], 137)
+        self.assertEqual(payload["outages"][0]["duration"], "02:17")
+
 
 
 if __name__ == "__main__":

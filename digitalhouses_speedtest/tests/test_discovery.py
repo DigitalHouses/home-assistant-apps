@@ -24,6 +24,7 @@ TOPICS = {
     "thresholds": "DigitalHouses/Global/speedtest/thresholds",
     "problems": "DigitalHouses/Global/speedtest/problems",
     "recent_results": "DigitalHouses/Global/speedtest/recent_results",
+    "outages": "DigitalHouses/Global/speedtest/outages",
     "schedule": "DigitalHouses/Global/speedtest/schedule",
     "minimum_download_command": (
         "DigitalHouses/Global/speedtest/thresholds/minimum_download/set"
@@ -118,6 +119,18 @@ class DiscoveryTests(unittest.TestCase):
             component["default_entity_id"],
             "sensor.internet_speed_recent_results",
         )
+
+
+    def test_monthly_outages_sensor_contract(self) -> None:
+        component = self.components["outages_month"]
+        self.assertEqual(component["platform"], "sensor")
+        self.assertEqual(
+            component["default_entity_id"],
+            "sensor.internet_outages_month",
+        )
+        self.assertEqual(component["state_topic"], TOPICS["outages"])
+        self.assertEqual(component["unit_of_measurement"], "outages")
+
 
 
 if __name__ == "__main__":

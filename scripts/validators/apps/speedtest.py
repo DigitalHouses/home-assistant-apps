@@ -63,6 +63,7 @@ def validate_speedtest(root: Path, app: Path, context: dict[str, Any]) -> None:
         'THRESHOLDS_FILE = DATA_DIR / "thresholds.json"',
         'RECENT_RESULTS_FILE = DATA_DIR / "recent_results.json"',
         'SCHEDULE_FILE = DATA_DIR / "schedule.json"',
+        'OUTAGES_FILE = DATA_DIR / "outages.json"',
     ):
         if expected not in app_source:
             fail(f"Speedtest missing persistence contract: {expected}")
@@ -82,6 +83,7 @@ def validate_speedtest(root: Path, app: Path, context: dict[str, Any]) -> None:
         "problems": f"{EXPECTED_TOPIC}/problems",
         "recent_results": f"{EXPECTED_TOPIC}/recent_results",
         "schedule": f"{EXPECTED_TOPIC}/schedule",
+        "outages": f"{EXPECTED_TOPIC}/outages",
         "minimum_download_command": f"{EXPECTED_TOPIC}/thresholds/minimum_download/set",
         "minimum_upload_command": f"{EXPECTED_TOPIC}/thresholds/minimum_upload/set",
         "maximum_ping_command": f"{EXPECTED_TOPIC}/thresholds/maximum_ping/set",
@@ -114,6 +116,7 @@ def validate_speedtest(root: Path, app: Path, context: dict[str, Any]) -> None:
         "performance_problem": "binary_sensor.internet_speed_performance_problem",
         "recent_results": "sensor.internet_speed_recent_results",
         "periodic_interval": "number.internet_speed_periodic_interval",
+        "outages_month": "sensor.internet_outages_month",
     }
     for key, entity_id in expected_new.items():
         component = components.get(key)
