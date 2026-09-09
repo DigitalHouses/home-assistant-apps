@@ -65,6 +65,10 @@ class MonitorSnapshot:
     last_refresh: str | None
 
 
+def next_last_refresh(previous: str | None, refresh: bool, collected_at: str) -> str | None:
+    return collected_at if refresh else previous
+
+
 def _r(value: float) -> float:
     return round(float(value), 1)
 

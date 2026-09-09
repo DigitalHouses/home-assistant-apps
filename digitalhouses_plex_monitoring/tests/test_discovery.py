@@ -28,7 +28,7 @@ class DiscoveryTests(unittest.TestCase):
         topics = build_topics(self.config())
         self.assertEqual(
             topics.state,
-            "DigitalHouses/Global/plex_monitoring/plex/state",
+            "DigitalHouses/Global/plex_monitoring/state",
         )
         self.assertEqual(
             topics.discovery,
@@ -59,6 +59,11 @@ class DiscoveryTests(unittest.TestCase):
             BuildInfo("0.1.0", "main", "abcdef"),
         )
         components = payload["components"]
+        topics = build_topics(self.config("plex_guest"))
+        self.assertEqual(
+            topics.state,
+            "DigitalHouses/Global/plex_monitoring/plex_guest/state",
+        )
         self.assertEqual(
             components["activity"]["default_entity_id"],
             "sensor.dh_plex_guest_activity",

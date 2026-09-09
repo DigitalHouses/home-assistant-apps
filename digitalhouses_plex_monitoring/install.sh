@@ -90,20 +90,12 @@ if [[ ! -f "${CONFIG_FILE}" ]]; then
         exit 1
     fi
 
-    instance_id="plex"
-    instance_name="DH Plex"
+    instance_id="${DIGITALHOUSES_INSTANCE_ID:-plex}"
+    instance_name="${DIGITALHOUSES_INSTANCE_NAME:-$(hostname -s)}"
     mqtt_port="1883"
     mqtt_host=""
     mqtt_user=""
     mqtt_password=""
-
-    printf "Instance ID [plex]: " >/dev/tty
-    IFS= read -r answer </dev/tty
-    [[ -n "${answer}" ]] && instance_id="${answer}"
-
-    printf "Instance name [DH Plex]: " >/dev/tty
-    IFS= read -r answer </dev/tty
-    [[ -n "${answer}" ]] && instance_name="${answer}"
 
     while [[ -z "${mqtt_host}" ]]; do
         printf "MQTT host: " >/dev/tty
@@ -121,6 +113,7 @@ if [[ ! -f "${CONFIG_FILE}" ]]; then
     IFS= read -r -s mqtt_password </dev/tty
     printf "\n" >/dev/tty
 
+    previous_umask="$(umask)"
     umask 0027
     {
         printf '%s\n' "[general]"
@@ -144,6 +137,7 @@ if [[ ! -f "${CONFIG_FILE}" ]]; then
         printf '%s\n' "discovery_prefix = homeassistant"
         printf '%s\n' "keepalive_seconds = 60"
     } >"${CONFIG_FILE}"
+    umask "${previous_umask}"
 fi
 
 chown root:"${SERVICE_GROUP}" "${CONFIG_FILE}"
@@ -158,6 +152,7 @@ fi
 "${APP_DIR}/.venv/bin/python" -m pip install \
     --disable-pip-version-check \
     -r "${APP_DIR}/requirements.txt"
+chmod -R a+rX "${APP_DIR}/.venv"
 
 PYTHONPATH="${APP_DIR}" "${APP_DIR}/.venv/bin/python" -c \
     'from pathlib import Path; from app.config import load_config; load_config(Path("'"${CONFIG_FILE}"'"))'

@@ -132,7 +132,7 @@ def validate_plex_monitoring(
     )
 
     topics = discovery_module.build_topics(config)
-    expected_base = f"{EXPECTED_TOPIC_PREFIX}/{EXPECTED_INSTANCE_ID}"
+    expected_base = EXPECTED_TOPIC_PREFIX
     expected_topics = {
         "base": expected_base,
         "state": f"{expected_base}/state",

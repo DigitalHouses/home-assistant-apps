@@ -12,10 +12,32 @@ from app.models import (
     CpuMetrics,
     MonitorSnapshot,
     build_state_payload,
+    next_last_refresh,
 )
 
 
 class StatePayloadTests(unittest.TestCase):
+    def test_last_refresh_changes_only_on_manual_refresh(self):
+        self.assertIsNone(
+            next_last_refresh(None, False, "2026-09-09T00:00:00+00:00")
+        )
+        self.assertEqual(
+            next_last_refresh(
+                None,
+                True,
+                "2026-09-09T00:01:00+00:00",
+            ),
+            "2026-09-09T00:01:00+00:00",
+        )
+        self.assertEqual(
+            next_last_refresh(
+                "2026-09-09T00:01:00+00:00",
+                False,
+                "2026-09-09T00:02:00+00:00",
+            ),
+            "2026-09-09T00:01:00+00:00",
+        )
+
     def test_payload(self):
         snapshot = MonitorSnapshot(
             "2026-09-09T00:00:00+00:00",

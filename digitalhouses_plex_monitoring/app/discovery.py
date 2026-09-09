@@ -22,7 +22,8 @@ class Topics:
 def build_topics(config: AppConfig) -> Topics:
     instance = config.general.instance_id
     device_id = f"digitalhouses_plex_monitoring_{instance}"
-    base = f"{config.mqtt.topic_prefix.rstrip('/')}/{instance}"
+    topic_prefix = config.mqtt.topic_prefix.rstrip(chr(47))
+    base = topic_prefix if instance == "plex" else f"{topic_prefix}/{instance}"
     return Topics(
         base=base,
         state=f"{base}/state",

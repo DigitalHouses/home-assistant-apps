@@ -20,6 +20,7 @@ from .models import (
     CpuMetrics,
     MonitorSnapshot,
     build_state_payload,
+    next_last_refresh,
 )
 from .mqtt_bridge import MqttBridge
 from .process_collector import (
@@ -167,10 +168,15 @@ def run(config: AppConfig) -> int:
                         transcoder,
                     )
                     collected_at = _utc_now()
-                    if refresh or last_snapshot is None:
-                        last_refresh = collected_at
-                    else:
-                        last_refresh = last_snapshot.last_refresh
+                    last_refresh = next_last_refresh(
+                        (
+                            last_snapshot.last_refresh
+                            if last_snapshot is not None
+                            else None
+                        ),
+                        refresh,
+                        collected_at,
+                    )
 
                     last_snapshot = MonitorSnapshot(
                         collected_at=collected_at,
