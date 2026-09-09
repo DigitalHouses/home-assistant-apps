@@ -10,6 +10,10 @@ The agent answers a specific historical question:
 
 It runs beside Plex in the same VM, LXC, or Debian/Ubuntu Linux host and inspects local Plex processes. No Plex token and no Proxmox API are required.
 
+## Dashboard
+
+![Plex Monitoring dashboard](images/plex-dashboard.png)
+
 ## Install / update
 
 From a root shell:
