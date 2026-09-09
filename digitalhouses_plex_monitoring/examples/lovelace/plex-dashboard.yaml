@@ -1,0 +1,388 @@
+type: sections
+max_columns: 4
+title: Plex
+path: plex
+icon: mdi:plex
+sections:
+  - type: grid
+    cards:
+      - type: heading
+        heading: Plex Media Server
+        heading_style: title
+        icon: mdi:plex
+      - type: custom:mushroom-template-card
+        entity: binary_sensor.dh_plex_server_running
+        primary: Plex Media Server
+        secondary: |-
+          {% if is_state('binary_sensor.dh_plex_server_running', 'on') %}
+            Работает
+          {% else %}
+            Остановлен
+          {% endif %}
+        icon: mdi:plex
+        icon_color: |-
+          {% if is_state('binary_sensor.dh_plex_server_running', 'on') %}
+            green
+          {% else %}
+            red
+          {% endif %}
+        tap_action:
+          action: more-info
+      - type: custom:mushroom-template-card
+        entity: sensor.plex_vm
+        primary: Сейчас смотрят
+        secondary: >-
+          {{ states('sensor.plex_vm') }} {{ state_attr('sensor.plex_vm',
+          'unit_of_measurement') or '' }}
+        icon: mdi:play-network
+        icon_color: |-
+          {% if states('sensor.plex_vm') | int(0) > 0 %}
+            green
+          {% else %}
+            grey
+          {% endif %}
+        tap_action:
+          action: more-info
+      - type: custom:mushroom-template-card
+        entity: sensor.dh_plex_activity
+        primary: Активность
+        secondary: |-
+          {% set s = states('sensor.dh_plex_activity') %} {% set names = {
+            'idle': 'Ожидание',
+            'scanner': 'Сканирование',
+            'credits_detection': 'Поиск титров',
+            'intro_detection': 'Поиск заставок',
+            'thumbnail_generation': 'Создание миниатюр',
+            'transcoding': 'Транскодирование',
+            'multiple': 'Несколько задач',
+            'plex_not_running': 'Plex не запущен'
+          } %} {{ names.get(s, s) }}
+        icon: |-
+          {% set s = states('sensor.dh_plex_activity') %} {% if s == 'idle' %}
+            mdi:sleep
+          {% elif s == 'scanner' %}
+            mdi:magnify-scan
+          {% elif s == 'credits_detection' %}
+            mdi:movie-open-outline
+          {% elif s == 'intro_detection' %}
+            mdi:movie-filter
+          {% elif s == 'thumbnail_generation' %}
+            mdi:image-multiple
+          {% elif s == 'transcoding' %}
+            mdi:movie-cog
+          {% elif s == 'multiple' %}
+            mdi:cog-sync
+          {% else %}
+            mdi:plex
+          {% endif %}
+        icon_color: >-
+          {% set s = states('sensor.dh_plex_activity') %} {% if s == 'idle' %}
+            green
+          {% elif s in ['scanner', 'credits_detection', 'intro_detection',
+          'thumbnail_generation'] %}
+            blue
+          {% elif s == 'transcoding' %}
+            orange
+          {% elif s == 'multiple' %}
+            red
+          {% else %}
+            grey
+          {% endif %}
+        tap_action:
+          action: more-info
+      - type: custom:mushroom-template-card
+        entity: sensor.dh_plex_current_item
+        primary: Текущий объект
+        secondary: >-
+          {% set item = states('sensor.dh_plex_current_item') %} {% if item in
+          ['none', 'unknown', 'unavailable', ''] %}
+            Нет активного объекта
+          {% else %}
+            {{ item }}
+          {% endif %}
+        icon: mdi:movie-open
+        icon_color: >-
+          {% if states('sensor.dh_plex_current_item') not in ['none', 'unknown',
+          'unavailable', ''] %}
+            blue
+          {% else %}
+            grey
+          {% endif %}
+        multiline_secondary: true
+        tap_action:
+          action: more-info
+      - type: custom:mushroom-template-card
+        entity: button.dh_plex_refresh
+        primary: Обновить
+        secondary: >-
+          {% set v = states('sensor.dh_plex_last_refresh') %} {% if v in
+          ['unknown', 'unavailable', 'none', ''] %}
+            Ещё не выполнялось
+          {% else %}
+            {{ as_timestamp(v) | timestamp_custom('%d.%m.%Y %H:%M:%S', true) }}
+          {% endif %}
+        icon: mdi:refresh
+        icon_color: blue
+        tap_action:
+          action: perform-action
+          perform_action: button.press
+          target:
+            entity_id: button.dh_plex_refresh
+        grid_options:
+          columns: 12
+          rows: 1
+      - type: markdown
+        title: Plex — активная работа
+        content: >
+          {% set items = state_attr('sensor.dh_plex_current_item', 'items') or
+          [] %}
+
+          {% set transcoder = states('sensor.dh_plex_transcoder_count') | int(0)
+          %}
+
+          {% set scanner = state_attr('sensor.dh_plex_current_item',
+          'scanner_count') | int(0) %}
+
+          {% set watching = states('sensor.plex_vm') | int(0) %}
+
+          {% set activity = states('sensor.dh_plex_activity') %}
+
+
+          <table>
+
+          <tr>
+            <td>👁 <b>Watching:</b> {{ watching }}</td>
+            <td>🎬 <b>Activity:</b> {{ activity }}</td>
+          </tr>
+
+          <tr>
+            <td>⚙️ <b>Transcoder:</b> {{ transcoder }}</td>
+            <td>🔎 <b>Scanner:</b> {{ scanner }}</td>
+          </tr>
+
+          </table>
+
+
+          **Active files**
+
+
+          | # | Media |
+
+          | :---: | :--- |
+
+          {%- for item in items %}
+
+          | {{ loop.index }} | {{ item | replace('|', '&#124;') }} |
+
+          {%- endfor %}
+
+          {%- if items | count == 0 %}
+
+          | — | No active media processing |
+
+          {%- endif %}
+      - type: heading
+        heading: Activity history
+        heading_style: title
+        icon: mdi:plex
+      - type: logbook
+        title: Plex Activity History
+        hours_to_show: 6
+        entities:
+          - sensor.dh_plex_activity
+  - type: grid
+    cards:
+      - type: heading
+        heading: CPU Plex
+        heading_style: title
+        icon: mdi:cpu-64-bit
+      - type: custom:mini-graph-card
+        name: Plex CPU
+        icon: mdi:cpu-64-bit
+        entities:
+          - entity: sensor.dh_plex_cpu
+            name: Current
+          - entity: sensor.dh_plex_cpu_avg
+            name: Avg
+        hours_to_show: 6
+        points_per_hour: 6
+        line_width: 2
+        height: 75
+        show:
+          labels: true
+          points: false
+          legend: true
+          extrema: true
+          fill: fade
+      - type: custom:mini-graph-card
+        name: Scanner CPU
+        icon: mdi:magnify-scan
+        entities:
+          - entity: sensor.dh_plex_scanner_cpu
+            name: Current
+          - entity: sensor.dh_plex_scanner_cpu_avg
+            name: Avg
+        hours_to_show: 6
+        points_per_hour: 6
+        line_width: 2
+        height: 75
+        show:
+          labels: true
+          points: false
+          legend: true
+          extrema: true
+          fill: fade
+      - type: custom:mini-graph-card
+        name: Transcoder CPU
+        icon: mdi:movie-cog
+        entities:
+          - entity: sensor.dh_plex_transcoder_cpu
+            name: Current
+          - entity: sensor.dh_plex_transcoder_cpu_avg
+            name: Avg
+        hours_to_show: 6
+        points_per_hour: 6
+        line_width: 2
+        height: 75
+        show:
+          labels: true
+          points: false
+          legend: true
+          extrema: true
+          fill: fade
+  - type: grid
+    cards:
+      - type: heading
+        heading: Активность
+        heading_style: title
+        icon: mdi:cog-play
+      - type: entities
+        state_color: true
+        show_header_toggle: false
+        entities:
+          - entity: binary_sensor.dh_plex_scanner_running
+            name: Media Scanner
+          - entity: binary_sensor.dh_plex_credits_detection
+            name: Credits Detection
+          - entity: binary_sensor.dh_plex_intro_detection
+            name: Intro Detection
+          - entity: binary_sensor.dh_plex_thumbnail_generation
+            name: Thumbnail Generation
+          - entity: binary_sensor.dh_plex_transcoder_running
+            name: Transcoder
+      - type: history-graph
+        title: История активности
+        hours_to_show: 6
+        entities:
+          - entity: binary_sensor.dh_plex_scanner_running
+            name: Scanner
+          - entity: binary_sensor.dh_plex_credits_detection
+            name: Credits
+          - entity: binary_sensor.dh_plex_intro_detection
+            name: Intro
+          - entity: binary_sensor.dh_plex_thumbnail_generation
+            name: Thumbnails
+          - entity: binary_sensor.dh_plex_transcoder_running
+            name: Transcoder
+      - type: entities
+        title: Process Details
+        show_header_toggle: false
+        entities:
+          - entity: sensor.dh_plex_scanner_actions
+            name: Scanner Actions
+          - entity: sensor.dh_plex_process_count
+            name: Plex Processes
+      - type: entities
+        title: Активные процессы
+        state_color: true
+        show_header_toggle: false
+        entities:
+          - entity: binary_sensor.dh_plex_scanner_running
+            name: Media Scanner
+          - entity: binary_sensor.dh_plex_credits_detection
+            name: Credits Detection
+          - entity: binary_sensor.dh_plex_intro_detection
+            name: Intro Detection
+          - entity: binary_sensor.dh_plex_thumbnail_generation
+            name: Thumbnail Generation
+          - entity: binary_sensor.dh_plex_transcoder_running
+            name: Transcoder
+  - type: grid
+    cards:
+      - type: heading
+        heading: Библиотеки
+        heading_style: title
+        icon: mdi:folder-multiple-play
+      - type: custom:auto-entities
+        card:
+          type: entities
+          state_color: true
+          title: Библиотеки Plex TrueNAS
+          show_header_toggle: false
+        filter:
+          include:
+            - entity_id: sensor.plex_vm_library_*
+              options:
+                secondary_info: last-changed
+        sort:
+          method: state
+          numeric: true
+          reverse: true
+        show_empty: true
+      - type: heading
+        heading: Диагностика
+        heading_style: title
+        icon: mdi:stethoscope
+      - type: entities
+        show_header_toggle: false
+        state_color: true
+        entities:
+          - entity: sensor.dh_plex_collector_status
+            name: Collector
+          - entity: sensor.dh_plex_build
+            name: Build
+          - entity: sensor.dh_plex_last_refresh
+            name: Последний Refresh
+      - type: heading
+        heading_style: title
+        icon: mdi:stethoscope
+        heading: Нагрузка за минуту
+      - type: entities
+        title: CPU Peaks
+        entities:
+          - entity: sensor.dh_plex_cpu_max
+            name: Plex max / 60 s
+          - entity: sensor.dh_plex_scanner_cpu_max
+            name: Scanner max / 60 s
+          - entity: sensor.dh_plex_transcoder_cpu_max
+            name: Transcoder max / 60 s
+badges:
+  - type: entity
+    entity: binary_sensor.dh_plex_server_running
+    name: Plex
+    show_name: true
+    show_state: true
+    show_icon: true
+  - type: entity
+    entity: sensor.plex_vm
+    name: Watching
+    show_name: true
+    show_state: true
+    show_icon: true
+  - type: entity
+    entity: sensor.dh_plex_cpu
+    name: CPU
+    show_name: true
+    show_state: true
+    show_icon: true
+  - type: entity
+    entity: update.plex_vm_update
+    show_name: true
+    show_state: true
+    show_icon: true
+header:
+  card:
+    type: markdown
+    text_only: true
+    content: '# Plex media server'
+cards: []
