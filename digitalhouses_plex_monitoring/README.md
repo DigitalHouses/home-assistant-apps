@@ -14,6 +14,8 @@ It runs beside Plex in the same VM, LXC, or Debian/Ubuntu Linux host and inspect
 
 ![Plex Monitoring dashboard](images/plex-dashboard.png)
 
+Lovelace example: [plex-dashboard.yaml](examples/lovelace/plex-dashboard.yaml)
+
 ## Install / update
 
 From a root shell:
