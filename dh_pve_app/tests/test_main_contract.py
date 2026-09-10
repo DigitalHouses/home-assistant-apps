@@ -14,3 +14,19 @@ def test_main_uses_event_driven_runtime_without_state_heartbeat():
     assert "runtime.process_events()" in text
     assert "runtime.tick(time.monotonic())" in text
     assert "heartbeat" not in text.casefold()
+
+
+def test_main_wires_shared_topology_and_lightweight_guest_status_polling():
+    text = (ROOT / "app" / "main.py").read_text()
+    assert "GuestAwareProductionCollectors" in text
+    assert "TopologyManager" in text
+    assert 'scheduler.add("guests", interval_seconds=10.0' in text
+    assert 'scheduler.add("topology"' not in text
+
+
+def test_guest_aware_full_collection_orders_topology_before_dependents():
+    text = (ROOT / "app" / "production_guest.py").read_text()
+    mapping = text[text.index("def mapping(self):"):]
+    assert mapping.index('"topology": self.topology_inventory') < mapping.index('"smart": self.smart')
+    assert mapping.index('"topology": self.topology_inventory') < mapping.index('"gpu": self.gpu')
+    assert mapping.index('"guests": self.guests') < mapping.index('"smart": self.smart')
