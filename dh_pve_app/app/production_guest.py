@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import platform
+import re
 from dataclasses import asdict
 
 from . import production as base_production
@@ -21,15 +22,52 @@ def _metric(value: object, policy: str) -> MetricValue:
     return MetricValue(value=value, policy=policy)
 
 
+def _pci_object_id(pci: str) -> str:
+    return "pci_" + re.sub(r"[^a-z0-9]+", "_", pci.lower()).strip("_")
+
+
 class GuestAwareProductionCollectors(ResilientProductionCollectors):
     """Production collectors backed by one shared guest/passthrough topology."""
 
     def topology_inventory(self) -> CollectorSample:
         if self.topology is None:
-            return CollectorSample(data={"revision": None}, metrics={})
+            return CollectorSample(data={"revision": None, "assignments": {}}, metrics={})
         snapshot = self.topology.full_scan()
+        assignments: dict[str, dict[str, object]] = {}
+        for pci, assignment in sorted(snapshot.pci.items()):
+            device = assignment.device
+            assignments[_pci_object_id(pci)] = {
+                "connection": "passthrough_pci",
+                "owner_kind": assignment.owner_kind,
+                "owner_id": assignment.owner_id,
+                "owner_name": assignment.owner_name,
+                "config_key": device.config_key,
+                "pci_address": device.pci_address,
+                "pci_class": device.pci_class,
+                "class_name": device.class_name,
+                "model": device.model,
+            }
+
+        # Preserve the legacy shared /dev/dri -> LXC mapping as topology too.
+        # It is not hostpci and therefore does not exist in snapshot.pci.
+        for pci, owner in sorted(snapshot.gpu_owners.items()):
+            if owner.source_type != "lxc" or _pci_object_id(pci) in assignments:
+                continue
+            assignments[_pci_object_id(pci)] = {
+                "connection": owner.connection,
+                "owner_kind": "lxc",
+                "owner_id": owner.source_id or "unknown",
+                "owner_name": owner.source_name or "Unknown",
+                "config_key": ",".join(owner.dri_devices) if owner.dri_devices else "dri",
+                "pci_address": pci,
+                "pci_class": "03",
+                "class_name": "Graphics controller",
+                "model": pci,
+            }
+
+        data = {"revision": snapshot.revision, "assignments": assignments}
         return CollectorSample(
-            data={"revision": snapshot.revision},
+            data=data,
             metrics={"revision": _metric(snapshot.revision, "discrete")},
         )
 
