@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import json
+import logging
 import queue
 import threading
 from dataclasses import dataclass
+from typing import Any
 
-from .runtime_settings import RuntimeSettings
+from .config import MqttConfig
+from .runtime_settings import RuntimeSettingError, RuntimeSettings
 from .topics import Topics
 
 
@@ -23,12 +27,7 @@ class SettingUpdate:
 
 
 def build_lwt(topics: Topics) -> WillMessage:
-    return WillMessage(
-        topic=topics.availability,
-        payload="offline",
-        qos=1,
-        retain=True,
-    )
+    return WillMessage(topics.availability, "offline", 1, True)
 
 
 class MqttEvents:
@@ -45,7 +44,6 @@ class MqttEvents:
                 self.refresh_requested.set()
                 return True
             return False
-
         prefix = f"{self.topics.settings_prefix}/"
         suffix = "/set"
         if topic.startswith(prefix) and topic.endswith(suffix):
@@ -54,5 +52,133 @@ class MqttEvents:
             value = self.settings.apply(key, raw)
             self.setting_updates.put(SettingUpdate(key=key, value=value))
             return True
-
         return False
+
+
+class MqttBridge(MqttEvents):
+    def __init__(
+        self,
+        config: MqttConfig,
+        topics: Topics,
+        settings: RuntimeSettings,
+        discovery_payload: dict[str, Any],
+        *,
+        client: Any | None = None,
+        publish_timeout_seconds: float = 5.0,
+    ) -> None:
+        super().__init__(topics, settings)
+        self.config = config
+        self.discovery_payload = discovery_payload
+        self.publish_timeout_seconds = publish_timeout_seconds
+        self.log = logging.getLogger(__name__)
+        self.connected = threading.Event()
+        self.wake_requested = threading.Event()
+        if client is None:
+            import paho.mqtt.client as mqtt
+            client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=topics.device_id)
+        self.client = client
+        if config.username:
+            self.client.username_pw_set(config.username, config.password)
+        will = build_lwt(topics)
+        self.client.will_set(will.topic, payload=will.payload, qos=will.qos, retain=will.retain)
+        self.client.on_connect = self._on_connect
+        self.client.on_disconnect = self._on_disconnect
+        self.client.on_message = self._on_message
+
+    def _on_connect(self, client, userdata, flags, reason_code, properties) -> None:
+        if getattr(reason_code, "is_failure", False):
+            self.log.error("MQTT connection rejected: %s", reason_code)
+            return
+        self.connected.set()
+        client.subscribe(self.topics.ha_status, qos=1)
+        client.subscribe(self.topics.refresh, qos=1)
+        client.subscribe(f"{self.topics.settings_prefix}/+/set", qos=1)
+        client.publish(self.topics.availability, payload="online", qos=1, retain=True)
+        self.reconnect_requested.set()
+        self.wake_requested.set()
+
+    def _on_disconnect(self, client, userdata, disconnect_flags, reason_code, properties) -> None:
+        self.connected.clear()
+        self.wake_requested.set()
+
+    def _setting_key(self, topic: str) -> str | None:
+        prefix = f"{self.topics.settings_prefix}/"
+        suffix = "/set"
+        if topic.startswith(prefix) and topic.endswith(suffix):
+            return topic[len(prefix):-len(suffix)]
+        return None
+
+    def _on_message(self, client, userdata, message) -> None:
+        payload = bytes(message.payload)
+        text = payload.decode("utf-8", errors="replace").strip()
+        if message.topic == self.topics.ha_status and text.casefold() == "online":
+            self.reconnect_requested.set()
+            self.wake_requested.set()
+            return
+        try:
+            handled = self.handle_message(message.topic, payload)
+        except RuntimeSettingError as exc:
+            key = self._setting_key(message.topic)
+            self.log.warning("Rejected MQTT runtime setting: %s", exc)
+            if key is not None:
+                try:
+                    self.publish_setting_value(key, self.settings.get(key))
+                except RuntimeSettingError:
+                    pass
+            return
+        if handled:
+            self.wake_requested.set()
+
+    def start(self) -> None:
+        self.client.connect_async(self.config.host, self.config.port, self.config.keepalive_seconds)
+        self.client.loop_start()
+
+    def wait_connected(self, timeout: float) -> bool:
+        return self.connected.wait(timeout)
+
+    def stop(self) -> None:
+        try:
+            if self.connected.is_set():
+                self._publish(self.topics.availability, "offline", retain=True)
+                self.client.disconnect()
+        finally:
+            self.connected.clear()
+            self.client.loop_stop()
+
+    def set_discovery_payload(self, payload: dict[str, Any]) -> None:
+        self.discovery_payload = payload
+
+    def _publish(self, topic: str, payload: str, *, retain: bool) -> bool:
+        if not self.connected.is_set():
+            return False
+        try:
+            info = self.client.publish(topic, payload=payload, qos=1, retain=retain)
+            if getattr(info, "rc", 1) != 0:
+                return False
+            info.wait_for_publish(timeout=self.publish_timeout_seconds)
+            is_published = getattr(info, "is_published", None)
+            return bool(is_published()) if callable(is_published) else True
+        except Exception:
+            self.log.exception("MQTT publish failed: %s", topic)
+            return False
+
+    def publish_discovery(self) -> bool:
+        return self._publish(
+            self.topics.discovery,
+            json.dumps(self.discovery_payload, ensure_ascii=False, separators=(",", ":")),
+            retain=True,
+        )
+
+    def publish_state(self, payload: dict[str, object]) -> bool:
+        return self._publish(
+            self.topics.state,
+            json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+            retain=True,
+        )
+
+    def publish_setting_value(self, key: str, value: float) -> bool:
+        return self._publish(
+            f"{self.topics.settings_prefix}/{key}/state",
+            f"{value:g}",
+            retain=True,
+        )
