@@ -1,0 +1,18 @@
+{
+  "shahristan": {
+    "sys_vendor": "AZW",
+    "product_name": "MINI S",
+    "product_version": "Default string",
+    "board_vendor": "AZW",
+    "board_name": "MINI S",
+    "board_version": "Default string"
+  },
+  "legacy_i3": {
+    "sys_vendor": "To Be Filled By O.E.M.",
+    "product_name": "To Be Filled By O.E.M.",
+    "product_version": "To Be Filled By O.E.M.",
+    "board_vendor": "ASRock",
+    "board_name": "H110M-DVS R3.0",
+    "board_version": ""
+  }
+}
