@@ -79,6 +79,25 @@ class ResilientProductionCollectors(ProductionCollectors):
             metrics["primary_ip"] = _metric(primary_ip, "discrete")
         return CollectorSample(data=data, metrics=metrics)
 
+    def fans(self) -> CollectorSample:
+        sample = super().fans()
+        if not isinstance(sample.data, Mapping):
+            return sample
+
+        fan_items = dict(sample.data)
+        count = len(fan_items)
+        detected = count > 0
+        data: dict[str, object] = {
+            "detected": detected,
+            "count": count,
+            "status": "Detected" if detected else "Not detected",
+            **fan_items,
+        }
+        metrics = dict(sample.metrics)
+        metrics["detected"] = _metric(detected, "discrete")
+        metrics["count"] = _metric(count, "discrete")
+        return CollectorSample(data=data, metrics=metrics)
+
     def _smart_scan(self) -> tuple[tuple[str, ...], ...]:
         text = _run(["smartctl", "--scan-open"], timeout=20)
         return self._smart_scan_entries(text)
