@@ -30,6 +30,31 @@ class MemorySnapshot:
 
 
 @dataclass(frozen=True)
+class MemoryModule:
+    locator: str | None
+    bank_locator: str | None
+    size_gib: float
+    form_factor: str | None
+    memory_type: str | None
+    speed_mt_s: int | None
+    configured_speed_mt_s: int | None
+    manufacturer: str | None
+    part_number: str | None
+
+
+@dataclass(frozen=True)
+class MemoryInventory:
+    total_slots: int
+    populated_slots: int
+    total_gib: float
+    memory_type: str | None
+    form_factor: str | None
+    speed_mt_s: int | None
+    configured_speed_mt_s: int | None
+    modules: tuple[MemoryModule, ...]
+
+
+@dataclass(frozen=True)
 class CpuTopology:
     model: str | None
     cores: int

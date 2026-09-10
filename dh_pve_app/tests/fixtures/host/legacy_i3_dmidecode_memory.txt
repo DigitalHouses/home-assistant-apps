@@ -1,0 +1,17 @@
+        Error Correction Type: None
+Memory Device
+        Size: 8 GB
+        Form Factor: DIMM
+        Locator: ChannelA-DIMM0
+        Bank Locator: BANK 0
+        Type: DDR4
+        Speed: 2133 MT/s
+        Manufacturer: 1315
+        Part Number: CT8G4DFS8213.C8FBR1
+        Configured Memory Speed: 2133 MT/s
+Memory Device
+        Size: No Module Installed
+        Form Factor: DIMM
+        Locator: ChannelB-DIMM0
+        Bank Locator: BANK 2
+        Type: Unknown
