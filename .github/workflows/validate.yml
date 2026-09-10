@@ -122,3 +122,42 @@ jobs:
         run: |
           systemd-analyze verify \
             digitalhouses_plex_monitoring/systemd/*.service
+
+  dh-pve-app:
+    name: DH PVE App
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install test and runtime dependencies
+        run: |
+          python -m pip install --disable-pip-version-check pytest \
+            -r dh_pve_app/requirements.txt
+
+      - name: Compile Python
+        run: |
+          python -m compileall -q \
+            dh_pve_app/app \
+            dh_pve_app/tests
+
+      - name: Run unit tests
+        run: python -m pytest dh_pve_app/tests -q
+
+      - name: Check installer syntax
+        run: bash -n dh_pve_app/install.sh
+
+      - name: Prepare systemd verification path
+        run: |
+          sudo install -d /opt/digitalhouses/dh_pve_app/.venv/bin
+          sudo ln -sf "$(command -v python)" \
+            /opt/digitalhouses/dh_pve_app/.venv/bin/python
+
+      - name: Validate systemd unit
+        run: systemd-analyze verify dh_pve_app/systemd/*.service
