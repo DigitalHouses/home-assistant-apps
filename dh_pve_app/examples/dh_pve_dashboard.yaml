@@ -1,8 +1,8 @@
 # DH PVE production Lovelace view
-# Requires: Mushroom, auto-entities, mini-graph-card
-# Dynamic storage/disk/GPU/fan/diagnostic cards are selected by semantic
+# Requires: Mushroom, auto-entities, mini-graph-card, Entity Progress Card
+# Layout: four continuous columns. Dynamic entities are selected by semantic
 # proxmox_* attributes published by dh_pve_app.
-# Health states are produced by Python: HEALTHY, WARNING, CRITICAL.
+# Infrastructure health is produced by Python: HEALTHY, WARNING, CRITICAL.
 
 title: Proxmox
 path: proxmox
@@ -15,20 +15,19 @@ sections:
   - type: grid
     cards:
       - type: heading
-        heading: System
+        heading: Хост
         heading_style: title
         icon: mdi:server
 
       - type: custom:mushroom-template-card
         entity: sensor.dh_pve_system
         primary: >-
-          {{ state_attr(entity, 'manufacturer') }} {{ state_attr(entity, 'model') }}
-        secondary: >-
-          {{ state_attr(entity, 'cpu_model') }} ·
-          {{ state_attr(entity, 'cpu_cores') }}C/{{ state_attr(entity, 'cpu_threads') }}T ·
-          {{ state_attr(entity, 'memory_type') }} {{ state_attr(entity, 'memory_form_factor') }}
-          {{ state_attr(entity, 'memory_speed_mt_s') }} MT/s ·
-          RAM slots {{ state_attr(entity, 'memory_slots_populated') }}/{{ state_attr(entity, 'memory_slots_total') }}
+          {{ state_attr(entity, 'manufacturer') | default('—', true) }}
+          {{ state_attr(entity, 'model') | default('—', true) }}
+        secondary: |-
+          CPU: {{ state_attr(entity, 'cpu_model') | default('—', true) }} · {{ state_attr(entity, 'cpu_cores') | default('—', true) }}C/{{ state_attr(entity, 'cpu_threads') | default('—', true) }}T{% if states('sensor.dh_pve_cpu_frequency') not in ['unknown', 'unavailable'] %} · {{ states('sensor.dh_pve_cpu_frequency') }} MHz{% endif %}
+          MB: {{ state_attr(entity, 'board_vendor') | default('—', true) }} {{ state_attr(entity, 'board_model') | default('—', true) }}
+          RAM: {{ state_attr(entity, 'memory_type') | default('—', true) }} {{ state_attr(entity, 'memory_form_factor') | default('', true) }}{% if state_attr(entity, 'memory_speed_mt_s') is not none %} · {{ state_attr(entity, 'memory_speed_mt_s') }} MT/s{% endif %} · slots {{ state_attr(entity, 'memory_slots_populated') | default('—', true) }}/{{ state_attr(entity, 'memory_slots_total') | default('—', true) }}
         icon: mdi:server
         multiline_secondary: true
         tap_action:
@@ -37,32 +36,35 @@ sections:
       - type: custom:mushroom-template-card
         entity: sensor.dh_pve_system
         primary: >-
-          Proxmox {{ state_attr(entity, 'proxmox_version') }} · Kernel {{ state_attr(entity, 'kernel_version') }}
+          Proxmox {{ state_attr(entity, 'proxmox_version') | default('—', true) }}
         secondary: >-
-          {{ states(entity) }} · {{ state_attr(entity, 'primary_ip') }}
+          Kernel {{ state_attr(entity, 'kernel_version') | default('—', true) }}
+          · IP {{ state_attr(entity, 'primary_ip') | default('—', true) }}
         icon: mdi:server-network
         tap_action:
           action: more-info
 
+      - type: heading
+        heading: Состояние Proxmox
+        heading_style: subtitle
+        icon: mdi:shield-check
+
       - type: custom:mushroom-template-card
-        entity: sensor.dh_pve_last_boot
-        primary: Last boot
-        secondary: >-
-          {% if states(entity) not in ['unknown', 'unavailable'] %}
-            {{ as_timestamp(states(entity)) | timestamp_custom('%d.%m.%Y %H:%M:%S', true) }}
+        entity: binary_sensor.dh_pve_host_collector
+        primary: >-
+          {% if is_state(entity, 'on') %}
+            Мониторинг Proxmox активен
           {% else %}
-            Unknown
+            Мониторинг Proxmox недоступен
           {% endif %}
-        icon: mdi:restart
+        secondary: >-
+          Состояние компонентов ниже берётся из готовых фактов dh_pve_app
+        icon: >-
+          {{ 'mdi:shield-check' if is_state(entity, 'on') else 'mdi:shield-alert' }}
+        icon_color: >-
+          {{ 'green' if is_state(entity, 'on') else 'red' }}
         tap_action:
           action: more-info
-
-  - type: grid
-    cards:
-      - type: heading
-        heading: Status
-        heading_style: title
-        icon: mdi:shield-check
 
       - type: custom:auto-entities
         show_empty: false
@@ -80,10 +82,12 @@ sections:
               state: WARNING
               options:
                 type: custom:mushroom-template-card
-                primary: >-
-                  {{ state_attr(entity, 'proxmox_display_name') }}
+                primary: "{{ state_attr(entity, 'proxmox_display_name') }}"
                 secondary: >-
-                  WARNING · {{ state_attr(entity, 'health_reasons') | join(', ') }}
+                  WARNING
+                  {% if state_attr(entity, 'health_reasons') %}
+                    · {{ state_attr(entity, 'health_reasons') | join(', ') }}
+                  {% endif %}
                 icon: mdi:harddisk-alert
                 icon_color: orange
                 tap_action:
@@ -95,10 +99,12 @@ sections:
               state: CRITICAL
               options:
                 type: custom:mushroom-template-card
-                primary: >-
-                  {{ state_attr(entity, 'proxmox_display_name') }}
+                primary: "{{ state_attr(entity, 'proxmox_display_name') }}"
                 secondary: >-
-                  CRITICAL · {{ state_attr(entity, 'health_reasons') | join(', ') }}
+                  CRITICAL
+                  {% if state_attr(entity, 'health_reasons') %}
+                    · {{ state_attr(entity, 'health_reasons') | join(', ') }}
+                  {% endif %}
                 icon: mdi:harddisk-alert
                 icon_color: red
                 tap_action:
@@ -108,7 +114,7 @@ sections:
               options:
                 type: custom:mushroom-template-card
                 primary: CPU throttling
-                secondary: Active
+                secondary: Активен
                 icon: mdi:speedometer-slow
                 icon_color: red
                 tap_action:
@@ -120,8 +126,7 @@ sections:
               state: "off"
               options:
                 type: custom:mushroom-template-card
-                primary: >-
-                  {{ state_attr(entity, 'proxmox_display_name') }} collector
+                primary: "{{ state_attr(entity, 'proxmox_display_name') }}"
                 secondary: Collector unavailable
                 icon: mdi:alert-circle
                 icon_color: red
@@ -131,47 +136,73 @@ sections:
           method: attribute
           attribute: proxmox_sort_key
 
-  - type: grid
-    cards:
       - type: heading
-        heading: Performance
-        heading_style: title
+        heading: Производительность
+        heading_style: subtitle
         icon: mdi:chart-line
 
-      - type: custom:mushroom-template-card
-        entity: sensor.dh_pve_cpu_usage
-        primary: CPU
-        secondary: >-
-          {{ states(entity) }}% · {{ states('sensor.dh_pve_cpu_temperature') }}°C ·
-          {{ states('sensor.dh_pve_cpu_frequency') }} MHz
-        icon: mdi:cpu-64-bit
-        tap_action:
-          action: more-info
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: custom:mini-graph-card
+            name: CPU
+            entities:
+              - sensor.dh_pve_cpu_usage
+            hours_to_show: 6
+            points_per_hour: 6
+            line_width: 2
+            height: 55
+            show:
+              extrema: true
+              fill: fade
+          - type: custom:mini-graph-card
+            name: RAM
+            entities:
+              - sensor.dh_pve_memory_usage
+            hours_to_show: 6
+            points_per_hour: 6
+            line_width: 2
+            height: 55
+            show:
+              extrema: true
+              fill: fade
 
-      - type: custom:mushroom-template-card
-        entity: sensor.dh_pve_memory_usage
-        primary: RAM
-        secondary: >-
-          {{ state_attr(entity, 'used_gib') }} / {{ state_attr(entity, 'total_gib') }} GiB ·
-          {{ states(entity) }}%
-        icon: mdi:memory
-        tap_action:
-          action: more-info
-
-      - type: custom:mushroom-template-card
-        entity: sensor.dh_pve_swap_usage
-        primary: Swap
-        secondary: "{{ states(entity) }}%"
-        icon: mdi:swap-horizontal
-        tap_action:
-          action: more-info
-
-  - type: grid
-    cards:
       - type: heading
-        heading: Storage
-        heading_style: title
-        icon: mdi:database
+        heading: Система
+        heading_style: subtitle
+        icon: mdi:information-outline
+
+      - type: entities
+        show_header_toggle: false
+        entities:
+          - entity: sensor.dh_pve_last_boot
+            name: Последняя загрузка
+          - entity: sensor.dh_pve_cpu_temperature
+            name: Температура CPU
+          - entity: sensor.dh_pve_cpu_frequency
+            name: Частота CPU
+          - entity: binary_sensor.dh_pve_cpu_throttling
+            name: CPU throttling
+          - entity: sensor.dh_pve_last_refresh
+            name: Последнее обновление
+
+      - type: heading
+        heading: Диагностика дисков
+        heading_style: subtitle
+        icon: mdi:harddisk-check
+
+      - type: custom:mushroom-template-card
+        entity: binary_sensor.dh_pve_smart_collector
+        primary: SMART collector
+        secondary: >-
+          {{ 'Доступен' if is_state(entity, 'on') else 'Недоступен' }}
+        icon: >-
+          {{ 'mdi:harddisk-check' if is_state(entity, 'on') else 'mdi:harddisk-alert' }}
+        icon_color: >-
+          {{ 'green' if is_state(entity, 'on') else 'red' }}
+        tap_action:
+          action: more-info
 
       - type: custom:auto-entities
         show_empty: false
@@ -184,15 +215,22 @@ sections:
           include:
             - attributes:
                 proxmox_integration: dh_pve_app
-                proxmox_section: storage
+                proxmox_section: disk
+                proxmox_metric: health
               options:
                 type: custom:mushroom-template-card
-                primary: >-
-                  {{ state_attr(entity, 'proxmox_display_name') }}
+                primary: "{{ state_attr(entity, 'proxmox_display_name') }}"
                 secondary: >-
-                  {{ state_attr(entity, 'used_gib') }} / {{ state_attr(entity, 'total_gib') }} GiB ·
-                  {{ states(entity) }}% · {{ state_attr(entity, 'storage_type') }}
-                icon: mdi:database
+                  {{ states(entity) }}
+                  {% if state_attr(entity, 'recommendation') %}
+                    · {{ state_attr(entity, 'recommendation') }}
+                  {% endif %}
+                icon: mdi:harddisk
+                icon_color: >-
+                  {% if is_state(entity, 'CRITICAL') %}red
+                  {% elif is_state(entity, 'WARNING') %}orange
+                  {% elif is_state(entity, 'HEALTHY') %}green
+                  {% else %}grey{% endif %}
                 tap_action:
                   action: more-info
         sort:
@@ -202,8 +240,13 @@ sections:
   - type: grid
     cards:
       - type: heading
-        heading: Physical disks
+        heading: Диски и хранилища
         heading_style: title
+        icon: mdi:database
+
+      - type: heading
+        heading: Физические диски
+        heading_style: subtitle
         icon: mdi:harddisk
 
       - type: custom:auto-entities
@@ -221,17 +264,25 @@ sections:
                 proxmox_metric: health
               options:
                 type: custom:mushroom-template-card
-                primary: >-
-                  {{ state_attr(entity, 'proxmox_display_name') }}
+                primary: "{{ state_attr(entity, 'proxmox_display_name') }}"
                 secondary: >-
                   {% set base = entity | replace('_health', '') %}
                   {% set temp = base ~ '_temperature' %}
                   {% set wear = base ~ '_wear' %}
                   {% set smart = 'binary_sensor.' ~ base.split('.')[1] ~ '_smart_problem' %}
-                  {{ state_attr(entity, 'disk_type') }} ·
-                  {% if states(temp) not in ['unknown', 'unavailable'] %}{{ states(temp) }}°C · {% endif %}
-                  {% if states(wear) not in ['unknown', 'unavailable'] %}wear {{ states(wear) }}% · {% endif %}
-                  {{ states(entity) }} · SMART {{ 'ERROR' if is_state(smart, 'on') else 'OK' }}
+                  {{ state_attr(entity, 'disk_type') | default('Disk', true) }}
+                  {% if states(temp) not in ['unknown', 'unavailable'] %}
+                    · {{ states(temp) }}°C
+                  {% endif %}
+                  {% if states(wear) not in ['unknown', 'unavailable'] %}
+                    · wear {{ states(wear) }}%
+                  {% endif %}
+                  · {{ states(entity) }}
+                  {% if is_state(smart, 'on') %}
+                    · SMART ERROR
+                  {% elif is_state(smart, 'off') %}
+                    · SMART OK
+                  {% endif %}
                 icon: mdi:harddisk
                 icon_color: >-
                   {% if is_state(entity, 'CRITICAL') %}red
@@ -245,12 +296,10 @@ sections:
           method: attribute
           attribute: proxmox_sort_key
 
-  - type: grid
-    cards:
       - type: heading
-        heading: Graphics
-        heading_style: title
-        icon: mdi:expansion-card
+        heading: Хранилища Proxmox
+        heading_style: subtitle
+        icon: mdi:database
 
       - type: custom:auto-entities
         show_empty: false
@@ -263,22 +312,19 @@ sections:
           include:
             - attributes:
                 proxmox_integration: dh_pve_app
-                proxmox_section: graphics
-                proxmox_metric: owner
+                proxmox_section: storage
+                proxmox_metric: usage
               options:
-                type: custom:mushroom-template-card
-                primary: >-
-                  {{ state_attr(entity, 'proxmox_display_name') }}
+                type: custom:entity-progress-card-template
+                name: "{{ state_attr(entity, 'proxmox_display_name') }}"
+                icon: mdi:database
                 secondary: >-
-                  {% set base = entity | replace('_owner', '') %}
-                  {% set transcode = base ~ '_transcoding' %}
-                  {% set temperature = base ~ '_temperature' %}
-                  {{ states(entity) }} · {{ state_attr(entity, 'source_name') }} ·
-                  {{ state_attr(entity, 'connection') }}
-                  {% if states(transcode) not in ['unknown', 'unavailable'] %} · transcoding {{ states(transcode) }}%{% endif %}
-                  {% if states(temperature) not in ['unknown', 'unavailable'] %} · {{ states(temperature) }}°C{% endif %}
-                icon: mdi:expansion-card
-                multiline_secondary: true
+                  {{ state_attr(entity, 'used_gib') }} / {{ state_attr(entity, 'total_gib') }} GiB
+                  · {{ state_attr(entity, 'storage_type') | default('storage', true) }}
+                percent: "{{ states(entity) | float(0) }}"
+                color: blue
+                bar_size: small
+                bar_effect: radius
                 tap_action:
                   action: more-info
         sort:
@@ -286,17 +332,141 @@ sections:
           attribute: proxmox_sort_key
 
       - type: heading
-        heading: Cooling
+        heading: Настройки мониторинга
+        heading_style: subtitle
+        icon: mdi:tune
+
+      - type: custom:mushroom-template-card
+        entity: button.dh_pve_refresh
+        primary: Обновить сейчас
+        secondary: >-
+          {% if states('sensor.dh_pve_last_refresh') not in ['unknown', 'unavailable'] %}
+            Последнее: {{ as_timestamp(states('sensor.dh_pve_last_refresh')) | timestamp_custom('%d.%m.%Y %H:%M:%S', true) }}
+          {% else %}
+            Ручное обновление ещё не выполнялось
+          {% endif %}
+        icon: mdi:refresh
+        tap_action:
+          action: perform-action
+          perform_action: button.press
+          target:
+            entity_id: button.dh_pve_refresh
+
+      - type: custom:auto-entities
+        show_empty: false
+        card:
+          type: grid
+          columns: 1
+          square: false
+        card_param: cards
+        filter:
+          include:
+            - domain: number
+              attributes:
+                proxmox_integration: dh_pve_app
+                proxmox_section: settings
+                proxmox_subject: setting
+              options:
+                type: custom:mushroom-number-card
+                display_mode: buttons
+        sort:
+          method: attribute
+          attribute: proxmox_sort_key
+
+  - type: grid
+    cards:
+      - type: heading
+        heading: Оборудование
+        heading_style: title
+        icon: mdi:chip
+
+      - type: heading
+        heading: CPU / RAM / Swap
+        heading_style: subtitle
+        icon: mdi:gauge
+
+      - type: custom:entity-progress-card-template
+        entity: sensor.dh_pve_cpu_usage
+        name: CPU
+        icon: mdi:cpu-64-bit
+        secondary: >-
+          {{ states(entity) }}%
+          {% if states('sensor.dh_pve_cpu_temperature') not in ['unknown', 'unavailable'] %}
+            · {{ states('sensor.dh_pve_cpu_temperature') }}°C
+          {% endif %}
+        percent: "{{ states(entity) | float(0) }}"
+        color: blue
+        bar_size: small
+        bar_effect: radius
+        tap_action:
+          action: more-info
+
+      - type: custom:entity-progress-card-template
+        entity: sensor.dh_pve_memory_usage
+        name: RAM
+        icon: mdi:memory
+        secondary: >-
+          {{ state_attr(entity, 'used_gib') }} / {{ state_attr(entity, 'total_gib') }} GiB · {{ states(entity) }}%
+        percent: "{{ states(entity) | float(0) }}"
+        color: blue
+        bar_size: small
+        bar_effect: radius
+        tap_action:
+          action: more-info
+
+      - type: custom:entity-progress-card-template
+        entity: sensor.dh_pve_swap_usage
+        name: Swap
+        icon: mdi:swap-horizontal
+        secondary: "{{ states(entity) }}%"
+        percent: "{{ states(entity) | float(0) }}"
+        color: blue
+        bar_size: small
+        bar_effect: radius
+        tap_action:
+          action: more-info
+
+      - type: heading
+        heading: CPU & Throttling
+        heading_style: subtitle
+        icon: mdi:cpu-64-bit
+
+      - type: custom:mushroom-template-card
+        entity: sensor.dh_pve_cpu_temperature
+        primary: Температура CPU
+        secondary: >-
+          {{ states(entity) }}°C · {{ states('sensor.dh_pve_cpu_frequency') }} MHz
+        icon: mdi:thermometer
+        tap_action:
+          action: more-info
+
+      - type: custom:mushroom-template-card
+        entity: binary_sensor.dh_pve_cpu_throttling
+        primary: CPU throttling
+        secondary: >-
+          {{ 'Обнаружен' if is_state(entity, 'on') else 'Не обнаружен' }}
+        icon: >-
+          {{ 'mdi:speedometer-slow' if is_state(entity, 'on') else 'mdi:speedometer' }}
+        icon_color: >-
+          {{ 'red' if is_state(entity, 'on') else 'green' }}
+        tap_action:
+          action: more-info
+
+      - type: heading
+        heading: Охлаждение
         heading_style: subtitle
         icon: mdi:fan
 
       - type: custom:mushroom-template-card
         entity: sensor.dh_pve_fans
-        primary: Fans
+        primary: Вентиляторы
         secondary: >-
-          {{ states(entity) }} · count {{ state_attr(entity, 'count') }}
+          {{ states(entity) }}
+          {% if state_attr(entity, 'detected') %}
+            · {{ state_attr(entity, 'count') }}
+          {% endif %}
         icon: >-
-          {% if is_state_attr(entity, 'detected', true) %}mdi:fan{% else %}mdi:fan-off{% endif %}
+          {{ 'mdi:fan' if state_attr(entity, 'detected') else 'mdi:fan-off' }}
         tap_action:
           action: more-info
 
@@ -315,8 +485,7 @@ sections:
                 proxmox_metric: rpm
               options:
                 type: custom:mushroom-template-card
-                primary: >-
-                  {{ state_attr(entity, 'proxmox_display_name') }}
+                primary: "{{ state_attr(entity, 'proxmox_display_name') }}"
                 secondary: "{{ states(entity) }} rpm"
                 icon: mdi:fan
                 tap_action:
@@ -325,52 +494,174 @@ sections:
           method: attribute
           attribute: proxmox_sort_key
 
-  - type: grid
-    cards:
       - type: heading
-        heading: Control
-        heading_style: title
-        icon: mdi:tune
-
-      - type: custom:mushroom-template-card
-        entity: button.dh_pve_refresh
-        primary: Refresh
-        secondary: >-
-          Last: {% if states('sensor.dh_pve_last_refresh') not in ['unknown', 'unavailable'] %}
-            {{ as_timestamp(states('sensor.dh_pve_last_refresh')) | timestamp_custom('%d.%m.%Y %H:%M:%S', true) }}
-          {% else %}never{% endif %}
-        icon: mdi:refresh
-        tap_action:
-          action: perform-action
-          perform_action: button.press
-          target:
-            entity_id: button.dh_pve_refresh
-
-      - type: heading
-        heading: Runtime settings
+        heading: Графика
         heading_style: subtitle
-        icon: mdi:tune-variant
+        icon: mdi:expansion-card
 
       - type: custom:auto-entities
         show_empty: false
         card:
-          type: entities
-          title: Runtime settings
+          type: grid
+          columns: 1
+          square: false
+        card_param: cards
         filter:
           include:
             - attributes:
                 proxmox_integration: dh_pve_app
-                proxmox_section: settings
-                proxmox_subject: setting
+                proxmox_section: graphics
+                proxmox_metric: owner
+              options:
+                type: custom:mushroom-template-card
+                primary: "{{ state_attr(entity, 'proxmox_display_name') }}"
+                secondary: >-
+                  {{ states(entity) }}
+                  {% if state_attr(entity, 'source_name') %}
+                    · {{ state_attr(entity, 'source_name') }}
+                  {% endif %}
+                  {% if state_attr(entity, 'connection') %}
+                    · {{ state_attr(entity, 'connection') }}
+                  {% endif %}
+                icon: mdi:expansion-card
+                multiline_secondary: true
+                tap_action:
+                  action: more-info
         sort:
           method: attribute
           attribute: proxmox_sort_key
 
-  - type: grid
-    cards:
+      - type: custom:auto-entities
+        show_empty: false
+        card:
+          type: grid
+          columns: 1
+          square: false
+        card_param: cards
+        filter:
+          include:
+            - attributes:
+                proxmox_integration: dh_pve_app
+                proxmox_section: graphics
+                proxmox_metric: transcoding
+              options:
+                type: custom:entity-progress-card-template
+                name: >-
+                  {{ state_attr(entity, 'proxmox_display_name') }} transcoding
+                icon: mdi:video
+                secondary: "{{ states(entity) }}%"
+                percent: "{{ states(entity) | float(0) }}"
+                color: blue
+                bar_size: small
+                bar_effect: radius
+                tap_action:
+                  action: more-info
+        sort:
+          method: attribute
+          attribute: proxmox_sort_key
+
       - type: heading
-        heading: Diagnostics
-        heading_style: title
+        heading: VM / LXC
+        heading_style: subtitle
+        icon: mdi:server-multiple
+
+      - type: custom:mushroom-template-card
+        entity: sensor.dh_pve_vms
+        primary: >-
+          VMs · {{ states(entity) }} / {{ state_attr(entity, 'total') | default(0, true) }} running
+        secondary: >-
+          paused {{ state_attr(entity, 'paused') | default(0, true) }} ·
+          stopped {{ state_attr(entity, 'stopped') | default(0, true) }} ·
+          unknown {{ state_attr(entity, 'unknown') | default(0, true) }}
+        icon: mdi:server-multiple
+        tap_action:
+          action: more-info
+
+      - type: custom:auto-entities
+        show_empty: false
+        card:
+          type: grid
+          columns: 1
+          square: false
+        card_param: cards
+        filter:
+          include:
+            - attributes:
+                proxmox_integration: dh_pve_app
+                proxmox_section: guests
+                proxmox_subject: vm
+                proxmox_metric: status
+              options:
+                type: custom:mushroom-template-card
+                primary: >-
+                  VM {{ state_attr(entity, 'guest_id') }} · {{ state_attr(entity, 'proxmox_display_name') }}
+                secondary: >-
+                  {{ states(entity) }}
+                  {% if state_attr(entity, 'passthrough_count') | int(0) > 0 %}
+                    · passthrough {{ state_attr(entity, 'passthrough_count') }}
+                  {% endif %}
+                  {% if state_attr(entity, 'qemu_agent') not in [none, 'not_applicable'] %}
+                    · QGA {{ state_attr(entity, 'qemu_agent') }}
+                  {% endif %}
+                icon: mdi:server
+                icon_color: >-
+                  {% if is_state(entity, 'running') %}green
+                  {% elif is_state(entity, 'paused') %}orange
+                  {% elif is_state(entity, 'stopped') %}grey
+                  {% else %}red{% endif %}
+                multiline_secondary: true
+                tap_action:
+                  action: more-info
+        sort:
+          method: attribute
+          attribute: proxmox_sort_key
+
+      - type: custom:mushroom-template-card
+        entity: sensor.dh_pve_lxcs
+        primary: >-
+          LXCs · {{ states(entity) }} / {{ state_attr(entity, 'total') | default(0, true) }} running
+        secondary: >-
+          paused {{ state_attr(entity, 'paused') | default(0, true) }} ·
+          stopped {{ state_attr(entity, 'stopped') | default(0, true) }} ·
+          unknown {{ state_attr(entity, 'unknown') | default(0, true) }}
+        icon: mdi:package-variant
+        tap_action:
+          action: more-info
+
+      - type: custom:auto-entities
+        show_empty: false
+        card:
+          type: grid
+          columns: 1
+          square: false
+        card_param: cards
+        filter:
+          include:
+            - attributes:
+                proxmox_integration: dh_pve_app
+                proxmox_section: guests
+                proxmox_subject: lxc
+                proxmox_metric: status
+              options:
+                type: custom:mushroom-template-card
+                primary: >-
+                  LXC {{ state_attr(entity, 'guest_id') }} · {{ state_attr(entity, 'proxmox_display_name') }}
+                secondary: "{{ states(entity) }}"
+                icon: mdi:package-variant-closed
+                icon_color: >-
+                  {% if is_state(entity, 'running') %}green
+                  {% elif is_state(entity, 'paused') %}orange
+                  {% elif is_state(entity, 'stopped') %}grey
+                  {% else %}red{% endif %}
+                tap_action:
+                  action: more-info
+        sort:
+          method: attribute
+          attribute: proxmox_sort_key
+
+      - type: heading
+        heading: Диагностика
+        heading_style: subtitle
         icon: mdi:stethoscope
 
       - type: custom:auto-entities
@@ -388,8 +679,7 @@ sections:
                 proxmox_subject: collector
               options:
                 type: custom:mushroom-template-card
-                primary: >-
-                  {{ state_attr(entity, 'proxmox_display_name') }}
+                primary: "{{ state_attr(entity, 'proxmox_display_name') }}"
                 secondary: >-
                   {{ 'OK' if is_state(entity, 'on') else 'Unavailable' }}
                 icon: >-
@@ -405,54 +695,111 @@ sections:
   - type: grid
     cards:
       - type: heading
-        heading: History
+        heading: История
         heading_style: title
         icon: mdi:chart-timeline-variant
 
+      - type: heading
+        heading: Температуры · 24 часа
+        heading_style: subtitle
+        icon: mdi:thermometer
+
+      - type: custom:auto-entities
+        show_empty: false
+        card:
+          type: custom:mini-graph-card
+          name: Температуры
+          hours_to_show: 24
+          points_per_hour: 4
+          line_width: 2
+          height: 70
+          show:
+            extrema: true
+            fill: fade
+        card_param: entities
+        filter:
+          include:
+            - entity_id: sensor.dh_pve_cpu_temperature
+            - attributes:
+                proxmox_integration: dh_pve_app
+                proxmox_section: disk
+                proxmox_metric: temperature
+            - attributes:
+                proxmox_integration: dh_pve_app
+                proxmox_section: graphics
+                proxmox_metric: temperature
+        sort:
+          method: attribute
+          attribute: proxmox_sort_key
+
+      - type: heading
+        heading: CPU / RAM / Swap · 24 часа
+        heading_style: subtitle
+        icon: mdi:chart-line
+
       - type: custom:mini-graph-card
-        name: CPU usage
+        name: CPU / RAM / Swap
         entities:
-          - sensor.dh_pve_cpu_usage
+          - entity: sensor.dh_pve_cpu_usage
+            name: CPU
+          - entity: sensor.dh_pve_memory_usage
+            name: RAM
+          - entity: sensor.dh_pve_swap_usage
+            name: Swap
         hours_to_show: 24
         points_per_hour: 4
         line_width: 2
-        height: 60
+        height: 70
+        show:
+          legend: true
+          extrema: true
+          fill: fade
+
+      - type: heading
+        heading: Частота CPU · 24 часа
+        heading_style: subtitle
+        icon: mdi:speedometer
+
+      - type: custom:mini-graph-card
+        name: Частота CPU
+        entities:
+          - sensor.dh_pve_cpu_frequency
+        hours_to_show: 24
+        points_per_hour: 4
+        line_width: 2
+        height: 70
         show:
           extrema: true
           fill: fade
 
-      - type: custom:mini-graph-card
-        name: CPU temperature
-        entities:
-          - sensor.dh_pve_cpu_temperature
-        hours_to_show: 24
-        points_per_hour: 4
-        line_width: 2
-        height: 60
-        show:
-          extrema: true
-          fill: fade
+      - type: heading
+        heading: Использование хранилищ · 7 дней
+        heading_style: subtitle
+        icon: mdi:database-clock
 
-      - type: custom:mini-graph-card
-        name: RAM usage
-        entities:
-          - sensor.dh_pve_memory_usage
-        hours_to_show: 24
-        points_per_hour: 4
-        line_width: 2
-        height: 60
-        show:
-          extrema: true
-          fill: fade
+      - type: custom:auto-entities
+        show_empty: false
+        card:
+          type: custom:mini-graph-card
+          name: Хранилища
+          hours_to_show: 168
+          points_per_hour: 1
+          line_width: 2
+          height: 80
+          show:
+            legend: true
+            extrema: true
+            fill: fade
+        card_param: entities
+        filter:
+          include:
+            - attributes:
+                proxmox_integration: dh_pve_app
+                proxmox_section: storage
+                proxmox_metric: usage
+        sort:
+          method: attribute
+          attribute: proxmox_sort_key
 
-      - type: custom:mini-graph-card
-        name: Swap usage
-        entities:
-          - sensor.dh_pve_swap_usage
-        hours_to_show: 24
-        points_per_hour: 4
-        line_width: 2
-        height: 60
-        show:
-          extrema: true
-          fill: fade
+cards: []
+badges: []
