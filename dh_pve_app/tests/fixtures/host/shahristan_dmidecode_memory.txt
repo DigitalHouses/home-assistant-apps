@@ -1,0 +1,21 @@
+        Error Correction Type: None
+Memory Device
+        Size: 16 GB
+        Form Factor: SODIMM
+        Locator: Controller0-ChannelA-DIMM0
+        Bank Locator: BANK 0
+        Type: DDR4
+        Speed: 3200 MT/s
+        Manufacturer: 0x0000
+        Part Number:
+        Configured Memory Speed: 3200 MT/s
+        Non-Volatile Size: None
+        Volatile Size: 16 GB
+        Cache Size: None
+        Logical Size: None
+Memory Device
+        Size: No Module Installed
+        Form Factor: Unknown
+        Locator: Controller1-ChannelA-DIMM0
+        Bank Locator: BANK 0
+        Type: Unknown
