@@ -8,13 +8,13 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .app import DhPveRuntime
 from .config import AppConfig, load_config
-from .discovery import build_discovery_payload
+from .discovery_metrics import build_full_discovery_payload
 from .identity import resolve_identity
 from .mqtt_bridge import MqttBridge
-from .production import ProductionCollectors
+from .production_v1 import ResilientProductionCollectors
 from .publish_policy import PublishPolicy
+from .runtime_dynamic import DynamicDiscoveryRuntime
 from .runtime_settings import RuntimeSettings
 from .scheduler import Scheduler
 from .state_store import StateStore
@@ -62,10 +62,21 @@ def build_runtime(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR):
     topics = build_topics(config.mqtt, identity)
     runtime_store = StateStore(state_dir / "runtime.json")
     settings = _initial_settings(runtime_store)
-    discovery = build_discovery_payload(config, identity, version=_version())
-    bridge = MqttBridge(config.mqtt, topics, settings, discovery)
 
-    production = ProductionCollectors(
+    discovery_builder = lambda inventory: build_full_discovery_payload(
+        config,
+        identity,
+        version=_version(),
+        inventory=inventory,
+    )
+    bridge = MqttBridge(
+        config.mqtt,
+        topics,
+        settings,
+        discovery_builder({}),
+    )
+
+    production = ResilientProductionCollectors(
         node_name=identity.node_name,
         disk_state_store=StateStore(state_dir / "disks.json"),
     )
@@ -81,7 +92,7 @@ def build_runtime(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR):
     scheduler.add("storage", interval_seconds=60.0, now=now)
     scheduler.add("host", interval_seconds=86400.0, now=now)
 
-    runtime = DhPveRuntime(
+    runtime = DynamicDiscoveryRuntime(
         collectors=collectors,
         bridge=bridge,
         settings=settings,
@@ -89,6 +100,7 @@ def build_runtime(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR):
         state_store=runtime_store,
         scheduler=scheduler,
         now_iso=_now_iso,
+        discovery_builder=discovery_builder,
         setting_tasks={
             "fast_poll_interval_seconds": ("cpu", "memory", "gpu", "fans"),
             "disk_poll_interval_seconds": ("smart",),
