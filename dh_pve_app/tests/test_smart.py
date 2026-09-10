@@ -40,12 +40,15 @@ def test_parse_real_seagate_hdd():
     assert snap.crc_errors == 0
 
 
-def test_ata_ssd_wear_uses_existing_bash_compatible_life_remaining_rule():
+def test_parse_real_patrot_burst_elite_ssd():
     snap = parse_smart_json(load("ata_ssd_partial.json"), "/dev/sda")
+    assert snap.model == "Patriot Burst Elite 240GB"
+    assert snap.serial == "PBEABBB23042500582"
     assert snap.disk_type == "SSD"
     assert snap.wear_used_percent == 0.0
     assert snap.program_failures == 0
     assert snap.erase_failures == 0
+    assert snap.smart_passed is True
 
 
 def test_stable_id_prefers_wwn_then_serial_then_fallback():
