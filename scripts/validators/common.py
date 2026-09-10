@@ -6,6 +6,7 @@ from typing import Any
 import yaml
 
 SUPPORTED_APP_TYPES = {"haos_addon", "linux_agent"}
+COMPACT_APPLICATION_NAMES = {"dh_pve_app"}
 
 
 class ValidationError(RuntimeError):
@@ -76,19 +77,25 @@ def parse_application_metadata(path: Path) -> dict[str, str]:
     return metadata
 
 
+def is_application_directory_name(name: str) -> bool:
+    if name in COMPACT_APPLICATION_NAMES:
+        return True
+    return name.startswith("digitalhouses_") and name != "digitalhouses_"
+
+
 def discover_applications(root: Path) -> list[Path]:
     apps = sorted(
         path
         for path in root.iterdir()
-        if path.is_dir() and path.name.startswith("digitalhouses_")
+        if path.is_dir() and is_application_directory_name(path.name)
     )
     if not apps:
-        fail("No digitalhouses_* applications found")
+        fail("No DigitalHouses applications found")
     return apps
 
 
 def validate_common(root: Path, app: Path, metadata: dict[str, str]) -> None:
-    if not app.name.startswith("digitalhouses_") or app.name == "digitalhouses_":
+    if not is_application_directory_name(app.name):
         fail(f"Invalid application directory name: {app.name}")
 
     require_files(
