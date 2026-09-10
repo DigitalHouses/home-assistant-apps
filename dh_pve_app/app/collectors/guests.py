@@ -89,6 +89,42 @@ def parse_pct_list(text: str) -> dict[str, GuestRecord]:
     return result
 
 
+def parse_cluster_resources(text: str) -> tuple[dict[str, GuestRecord], dict[str, GuestRecord]]:
+    """Parse one `/cluster/resources --type vm` response into VM and LXC maps."""
+    payload = json.loads(text)
+    if not isinstance(payload, list):
+        raise ValueError("cluster resources JSON must be an array")
+
+    vms: dict[str, GuestRecord] = {}
+    lxcs: dict[str, GuestRecord] = {}
+    for raw in payload:
+        if not isinstance(raw, Mapping):
+            continue
+        raw_type = str(raw.get("type") or "").strip().lower()
+        if raw_type not in {"qemu", "lxc"}:
+            continue
+        vmid = raw.get("vmid")
+        if isinstance(vmid, bool) or not isinstance(vmid, (int, str)):
+            continue
+        guest_id = str(vmid).strip()
+        if not guest_id.isdigit():
+            continue
+        kind = "vm" if raw_type == "qemu" else "lxc"
+        default_name = f"VM {guest_id}" if kind == "vm" else f"LXC {guest_id}"
+        name = str(raw.get("name") or default_name).strip() or default_name
+        # Some Proxmox endpoints expose the QEMU run state separately. Prefer
+        # it when present so a paused VM does not collapse into `running`.
+        qmpstatus = raw.get("qmpstatus")
+        status_value = qmpstatus if isinstance(qmpstatus, str) and qmpstatus else raw.get("status")
+        status = _normalize_status(str(status_value or "unknown"))
+        record = GuestRecord(kind, guest_id, name, status)
+        if kind == "vm":
+            vms[guest_id] = record
+        else:
+            lxcs[guest_id] = record
+    return vms, lxcs
+
+
 def parse_lspci_catalog(text: str) -> dict[str, dict[str, str]]:
     result: dict[str, dict[str, str]] = {}
     for raw in text.splitlines():
