@@ -7,7 +7,7 @@
 
 ## 1. Purpose
 
-Extend `dh_pve_app` with a shared guest/topology layer so Proxmox VM/LXC state, PCI passthrough ownership, guest-derived SMART data, and existing guest-derived GPU telemetry use one consistent source of truth.
+Extend `dh_pve_app` with a shared guest/topology layer so Proxmox VM/LXC state, passthrough ownership, guest-derived SMART data, and existing guest-derived GPU telemetry use one consistent source of truth.
 
 The current Python implementation already discovers GPU ownership from Proxmox configuration and can execute `intel_gpu_top` inside a running VM through QEMU Guest Agent. The missing parity is storage passthrough: a physical disk behind a PCI SATA controller passed to a VM is intentionally invisible to host `lsblk`/`smartctl` and therefore must be collected from inside that VM.
 
@@ -40,7 +40,8 @@ Full topology discovery
     ├─ VM inventory
     ├─ LXC inventory
     ├─ qm/pct config
-    ├─ hostpci / device passthrough mapping
+    ├─ VM hostpci mapping
+    ├─ LXC shared-device mapping where resolvable
     ├─ guest-agent capability
     └─ collector source map
 
@@ -73,7 +74,7 @@ guest_id      numeric VMID/CTID
 name          Proxmox guest name
 status        running | paused | stopped | unknown
 agent_enabled true | false | unknown       # VM only where applicable
-hostpci       normalized passthrough list
+passthrough   normalized passthrough list
 ```
 
 The runtime view is read-only in this phase. The application must not expose Start, Stop, Shutdown, Reboot, Pause, Resume, or Reset actions.
@@ -114,6 +115,7 @@ proxmox_display_name: TrueNAS
 guest_id: 700
 guest_kind: vm
 passthrough_count: N
+passthrough_summary: <short human-readable string when useful>
 qemu_agent: available | unavailable | disabled | unknown
 proxmox_sort_key: ...
 ```
@@ -139,21 +141,31 @@ No large guest inventory arrays should be duplicated in summary entity attribute
 
 ## 5. Passthrough topology inventory
 
-At full topology discovery, inspect Proxmox guest configuration and build an internal mapping of host devices to owners.
+At full topology discovery, inspect Proxmox guest configuration and build an internal mapping of host/shared devices to owners.
 
-At minimum support QEMU `hostpciN` assignments. Preserve enough raw information to identify:
+V1 must support:
+
+```text
+QEMU VM: hostpciN PCI assignments
+LXC:     existing /dev/dri shared-device mapping used by GPU detection
+```
+
+Arbitrary LXC mount/device passthrough beyond the existing DRI pattern is deferred unless required by a concrete monitored subsystem.
+
+Preserve enough normalized information to identify:
 
 ```text
 owner kind
 owner guest ID
 owner guest name
-hostpci key
-PCI address / configured device expression
+connection type
+hostpci key or shared-device node
+PCI address when resolvable
 runtime guest status
-QEMU Guest Agent capability
+QEMU Guest Agent capability for VMs
 ```
 
-The mapping is shared infrastructure for collectors; GPU and SMART must not independently re-parse guest configuration on every poll.
+The mapping is shared infrastructure for collectors; GPU and SMART must not independently re-parse all guest configuration on every poll.
 
 A topology scan occurs:
 
@@ -270,6 +282,7 @@ owner ID
 owner name
 connection type
 runtime status
+shared DRI nodes where applicable
 ```
 
 The GPU collector remains responsible for GPU-specific telemetry such as temperature and Intel transcoding load.
@@ -279,6 +292,8 @@ For the reference Plex VM:
 ```text
 Intel UHD → VM 501 plex-vm → running → QEMU Guest Agent → intel_gpu_top
 ```
+
+For LXC, preserve the existing ability to associate `/dev/dri/card*` / `renderD*` nodes with their PCI GPU and LXC owner(s).
 
 This refactor must not regress existing `sensor.dh_pve_gpu_*_owner` or transcoding entities.
 
@@ -336,8 +351,8 @@ Preferred presentation:
 ```text
 VMs  2 / 3 running
 110 · HAOS      · stopped
-501 · plex-vm   · running
-700 · TrueNAS   · running
+501 · plex-vm   · running · GPU 00:02.0
+700 · TrueNAS   · running · PCI 00:17.0
 
 LXCs 1 / 1 running
 500 · recorder  · running
@@ -357,6 +372,7 @@ HA automations that manage guest lifecycle
 Proxmox API tokens / remote cluster monitoring
 continuous full topology scans
 manual site-specific passthrough VM lists as the primary mechanism
+arbitrary LXC mount/device passthrough beyond current monitored needs
 UPS/NUT support
 notification package redesign
 ```
@@ -375,6 +391,7 @@ Implementation is accepted when all of the following are true:
 8. Stable disk identity uses WWN/serial and does not depend on guest `/dev/sdX` path.
 9. Stopping VM 700 makes only guest-derived SMART telemetry unavailable; it does not remove the disk immediately or break local SMART.
 10. Existing VM 501 Intel GPU owner/transcoding monitoring continues to work.
-11. Dashboard can list VM/LXC states dynamically and shows both physical Samsung disks when available.
-12. No VM/LXC control actions are published.
-13. Existing Phase-1 tests remain green and new guest/topology/guest-SMART cases have regression coverage.
+11. Existing LXC DRI GPU ownership detection continues to work through the shared topology layer.
+12. Dashboard can list VM/LXC states dynamically and shows compact passthrough hints where available.
+13. No VM/LXC control actions are published.
+14. Existing Phase-1 tests remain green and new guest/topology/guest-SMART cases have regression coverage.
