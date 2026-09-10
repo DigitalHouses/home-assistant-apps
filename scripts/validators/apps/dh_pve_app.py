@@ -31,8 +31,12 @@ def validate_dh_pve_app(
             app / "app/topics.py",
             app / "app/discovery.py",
             app / "app/discovery_metrics.py",
+            app / "app/discovery_guest.py",
             app / "app/runtime_dynamic.py",
+            app / "app/collectors/guests.py",
+            app / "app/topology.py",
             app / "app/production_v1.py",
+            app / "app/production_guest.py",
             app / "app/main.py",
             app / "examples/dh_pve_app.conf.example",
             app / "systemd/dh_pve_app.service",
@@ -75,6 +79,17 @@ def validate_dh_pve_app(
         ),
         "metric Discovery",
     )
+    _require_text(
+        app / "app/discovery_guest.py",
+        (
+            'entity_id=f"sensor.dh_pve_{kind}_{_slug(guest_id)}_status"',
+            'entity_id="sensor.dh_pve_vms" if kind == "vm" else "sensor.dh_pve_lxcs"',
+            'entity_id=f"sensor.dh_pve_passthrough_{slug}"',
+            'section="guests"',
+            'subject="passthrough"',
+        ),
+        "guest Discovery",
+    )
 
     discovery_metrics = (app / "app/discovery_metrics.py").read_text(
         encoding="utf-8"
@@ -88,17 +103,31 @@ def validate_dh_pve_app(
             "MISSING_CONFIRMATIONS = 3",
             'item["available"] = False',
             '"disk missing from authoritative SMART inventory"',
+            '"source_type": "guest"',
             'data["primary_ip"] = primary_ip',
             'data["boot_time"] = boot_time_iso',
         ),
         "resilient collector",
     )
     _require_text(
+        app / "app/production_guest.py",
+        (
+            "class GuestAwareProductionCollectors",
+            '"topology": self.topology_inventory',
+            '"guests": self.guests',
+            '"smart": self.smart',
+            '"gpu": self.gpu',
+        ),
+        "guest-aware collectors",
+    )
+    _require_text(
         app / "app/main.py",
         (
             "DynamicDiscoveryRuntime(",
-            "ResilientProductionCollectors(",
-            "build_full_discovery_payload(",
+            "GuestAwareProductionCollectors(",
+            "TopologyManager(runner=_run)",
+            "build_guest_aware_discovery_payload(",
+            'scheduler.add("guests", interval_seconds=10.0',
             'scheduler.add("host", interval_seconds=86400.0',
         ),
         "runtime",
