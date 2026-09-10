@@ -78,7 +78,7 @@ def build_runtime(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR):
         discovery_builder({}),
     )
 
-    topology = TopologyManager(runner=_run)
+    topology = TopologyManager(runner=_run, node_name=identity.node_name)
     production = GuestAwareProductionCollectors(
         node_name=identity.node_name,
         disk_state_store=StateStore(state_dir / "disks.json"),
@@ -90,10 +90,11 @@ def build_runtime(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR):
     now = time.monotonic()
     fast = settings.get("fast_poll_interval_seconds")
     disk = settings.get("disk_poll_interval_seconds")
-    # Guest state is deliberately lightweight and independent of the full
-    # topology scan. Full topology is startup/manual-refresh/transition driven.
-    scheduler.add("guests", interval_seconds=10.0, now=now)
-    for name in ("cpu", "memory", "gpu", "fans"):
+    # qm/pct/pvesh and QGA helpers are Perl-heavy on PVE. Keep cheap host
+    # metrics fast, but poll guest inventory and guest GPU telemetry at 30 s.
+    scheduler.add("guests", interval_seconds=30.0, now=now)
+    scheduler.add("gpu", interval_seconds=30.0, now=now)
+    for name in ("cpu", "memory", "fans"):
         scheduler.add(name, interval_seconds=fast, now=now)
     scheduler.add("smart", interval_seconds=disk, now=now)
     scheduler.add("storage", interval_seconds=60.0, now=now)
@@ -109,7 +110,7 @@ def build_runtime(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR):
         now_iso=_now_iso,
         discovery_builder=discovery_builder,
         setting_tasks={
-            "fast_poll_interval_seconds": ("cpu", "memory", "gpu", "fans"),
+            "fast_poll_interval_seconds": ("cpu", "memory", "fans"),
             "disk_poll_interval_seconds": ("smart",),
         },
     )
