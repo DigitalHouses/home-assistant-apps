@@ -86,7 +86,7 @@ def validate_dh_pve_app(
         app / "app/production_v1.py",
         (
             "MISSING_CONFIRMATIONS = 3",
-            '"available": False',
+            'item["available"] = False',
             '"disk missing from authoritative SMART scan"',
             'data["primary_ip"] = primary_ip',
             'data["boot_time"] = boot_time_iso',
