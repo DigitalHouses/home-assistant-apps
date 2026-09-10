@@ -33,7 +33,7 @@ SETTING_SPECS: dict[str, SettingSpec] = {
     ),
     "disk_poll_interval_seconds": SettingSpec(
         key="disk_poll_interval_seconds",
-        default=30.0,
+        default=60.0,
         minimum=10.0,
         maximum=300.0,
         step=5.0,
