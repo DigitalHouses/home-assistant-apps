@@ -1,0 +1,10 @@
+Architecture:             x86_64
+CPU(s):                   4
+Vendor ID:                GenuineIntel
+Model name:               Intel(R) N100
+Thread(s) per core:       1
+Core(s) per socket:       4
+Socket(s):                1
+CPU(s) scaling MHz:       85%
+CPU max MHz:              3400.0000
+CPU min MHz:              700.0000
