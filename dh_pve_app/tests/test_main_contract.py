@@ -16,12 +16,20 @@ def test_main_uses_event_driven_runtime_without_state_heartbeat():
     assert "heartbeat" not in text.casefold()
 
 
-def test_main_wires_shared_topology_and_lightweight_guest_status_polling():
+def test_main_wires_shared_topology_and_low_cost_guest_gpu_polling():
     text = (ROOT / "app" / "main.py").read_text()
     assert "GuestAwareProductionCollectors" in text
     assert "TopologyManager" in text
-    assert 'scheduler.add("guests", interval_seconds=10.0' in text
+    assert 'scheduler.add("guests", interval_seconds=30.0' in text
+    assert 'scheduler.add("gpu", interval_seconds=30.0' in text
     assert 'scheduler.add("topology"' not in text
+    assert 'for name in ("cpu", "memory", "fans")' in text
+
+
+def test_default_smart_poll_interval_is_one_minute():
+    text = (ROOT / "app" / "runtime_settings.py").read_text()
+    block = text[text.index('"disk_poll_interval_seconds"'):text.index('"cpu_publish_delta"')]
+    assert "default=60.0" in block
 
 
 def test_guest_aware_full_collection_orders_topology_before_dependents():
