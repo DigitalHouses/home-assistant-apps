@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .config import AppConfig, load_config
-from .discovery_metrics import build_full_discovery_payload
+from .discovery_guest import build_guest_aware_discovery_payload
 from .identity import resolve_identity
 from .mqtt_bridge import MqttBridge
 from .production import _run
@@ -65,7 +65,7 @@ def build_runtime(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR):
     runtime_store = StateStore(state_dir / "runtime.json")
     settings = _initial_settings(runtime_store)
 
-    discovery_builder = lambda inventory: build_full_discovery_payload(
+    discovery_builder = lambda inventory: build_guest_aware_discovery_payload(
         config,
         identity,
         version=_version(),
