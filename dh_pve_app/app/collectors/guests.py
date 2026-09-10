@@ -105,7 +105,12 @@ def parse_cluster_resources(
         if not isinstance(raw, Mapping):
             continue
         raw_node = raw.get("node")
-        if node_name and isinstance(raw_node, str) and raw_node and raw_node != node_name:
+        if (
+            node_name
+            and isinstance(raw_node, str)
+            and raw_node
+            and raw_node.casefold() != node_name.casefold()
+        ):
             continue
         raw_type = str(raw.get("type") or "").strip().lower()
         if raw_type not in {"qemu", "lxc"}:
