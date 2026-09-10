@@ -6,10 +6,14 @@
 - Define the separate `DH PVE` MQTT device and `DigitalHouses/Global/dh_pve_app/<instance>` namespace.
 - Add host, CPU, memory, storage, SMART/disk-health, GPU/transcoding, and fan collectors.
 - Add autonomous VM/LXC inventory plus a shared passthrough topology cache.
-- Add lightweight VM/LXC status polling and targeted guest rescans when a guest transitions to `running`.
+- Add VM/LXC status polling and targeted guest rescans when a guest transitions to `running`.
+- Collapse VM/LXC status polling to one Proxmox `/cluster/resources` query every 30 seconds instead of separate `qm list` and `pct list` calls every 10 seconds.
+- Read guest configuration directly from pmxcfs under `/etc/pve` on the normal path, keeping `qm config` / `pct config` only as fallbacks.
+- Move expensive guest GPU telemetry to a 30-second schedule while retaining fast polling for cheap CPU/memory/fan collectors.
+- Set the new-install SMART polling default to 60 seconds.
 - Detect VM `hostpciN` passthrough and preserve LXC shared `/dev/dri` GPU ownership support without site-specific VM lists.
 - Add guest physical-disk SMART collection through QEMU Guest Agent and reuse the existing stable disk ID, health, and daily-statistics pipeline.
-- Move guest GPU ownership/telemetry onto the shared topology cache so fast GPU polling does not repeatedly reparse all guest configurations.
+- Move guest GPU ownership/telemetry onto the shared topology cache so GPU polling does not repeatedly reparse all guest configurations.
 - Add read-only MQTT Discovery entities for VM/LXC status and summaries plus passthrough diagnostics.
 - Add event-driven MQTT publishing with no synthetic state heartbeat and retained LWT availability.
 - Add bounded Home Assistant runtime controls plus `button.dh_pve_refresh` and `sensor.dh_pve_last_refresh`.
