@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shlex
 from dataclasses import asdict
 from datetime import datetime, timezone
 from typing import Mapping
@@ -51,10 +52,25 @@ def _metric(value: object, policy: str) -> MetricValue:
 class ResilientProductionCollectors(ProductionCollectors):
     """Phase-1 collectors with per-disk SMART fault isolation.
 
-    An authoritative smartctl scan may remove a disk only after three
+    An authoritative local/guest SMART scan may remove a disk only after three
     consecutive missing scans. A failed SMART read keeps the last successful
     disk payload but marks only that disk unavailable.
     """
+
+    def __init__(
+        self,
+        *,
+        node_name: str,
+        disk_state_store,
+        topology=None,
+        **kwargs,
+    ) -> None:
+        super().__init__(
+            node_name=node_name,
+            disk_state_store=disk_state_store,
+            **kwargs,
+        )
+        self.topology = topology
 
     def host(self) -> CollectorSample:
         sample = super().host()
@@ -104,6 +120,30 @@ class ResilientProductionCollectors(ProductionCollectors):
 
     def _smart_read(self, entry: tuple[str, ...]) -> str:
         return _run(["smartctl", "-a", "-j", *entry], timeout=25)
+
+    def _guest_smart_read(self, source) -> str:
+        command = f"smartctl -a -j {shlex.quote(source.device_path)}"
+        guest_exec = getattr(self.topology, "guest_exec", None)
+        if callable(guest_exec):
+            return guest_exec(source.guest_id, command, timeout=30.0)
+
+        outer_text = _run(
+            [
+                "qm", "guest", "exec", source.guest_id,
+                "--", "/bin/sh", "-c", command,
+            ],
+            timeout=35,
+        )
+        outer = json.loads(outer_text)
+        if not isinstance(outer, Mapping):
+            raise ValueError("QEMU guest exec SMART result is not an object")
+        exitcode = outer.get("exitcode")
+        if not isinstance(exitcode, int) or isinstance(exitcode, bool) or exitcode != 0:
+            raise ValueError(f"guest smartctl failed: exitcode={exitcode!r}")
+        raw = outer.get("out-data")
+        if not isinstance(raw, str) or not raw.strip():
+            raise ValueError("guest smartctl returned no data")
+        return raw
 
     @staticmethod
     def _daily_from_mapping(value: object) -> DailyDiskStats | None:
@@ -178,6 +218,63 @@ class ResilientProductionCollectors(ProductionCollectors):
         scan_paths: set[str] = set()
         present_ids: set[str] = set()
 
+        def record_snapshot(
+            snapshot: SmartSnapshot,
+            source_key: str,
+            source_attrs: Mapping[str, object] | None = None,
+        ) -> str:
+            disk_id = stable_disk_id(
+                wwn=snapshot.wwn,
+                serial=snapshot.serial,
+                path=snapshot.device_path,
+                model=snapshot.model,
+                size_bytes=snapshot.capacity_bytes,
+            )
+            prior = checkpoints.get(disk_id)
+            prior = dict(prior) if isinstance(prior, Mapping) else None
+            health = evaluate_disk_health(snapshot, prior)
+            current_daily = self._daily_from_mapping(daily.get(disk_id))
+            daily_stats, _completed = update_daily_stats(
+                current_daily, snapshot, datetime.now().astimezone()
+            )
+            item: dict[str, object] = {
+                **asdict(snapshot),
+                "disk_id": disk_id,
+                "available": True,
+                "error": None,
+                "health_state": health.state.value,
+                "health_reasons": list(health.reasons),
+                "recommendation": health.recommendation,
+                "daily": asdict(daily_stats),
+            }
+            if source_attrs:
+                item.update(dict(source_attrs))
+            output[disk_id] = item
+            metrics.update(self._metrics_for_disk(disk_id, item, snapshot))
+            checkpoints[disk_id] = _checkpoint(snapshot)
+            daily[disk_id] = asdict(daily_stats)
+            path_map[source_key] = disk_id
+            inventory[disk_id] = {
+                "path": source_key,
+                **({"source_type": source_attrs.get("source_type")} if source_attrs else {}),
+            }
+            last_data[disk_id] = dict(item)
+            missing_counts[disk_id] = 0
+            present_ids.add(disk_id)
+            return disk_id
+
+        def mark_unavailable(source_key: str, error: str) -> None:
+            disk_id = path_map.get(source_key)
+            previous_item = last_data.get(disk_id) if isinstance(disk_id, str) else None
+            if isinstance(disk_id, str) and isinstance(previous_item, Mapping):
+                item = dict(previous_item)
+                item["available"] = False
+                item["error"] = error
+                output[disk_id] = item
+                metrics.update(self._metrics_for_disk(disk_id, item, None))
+                missing_counts[disk_id] = 0
+                present_ids.add(disk_id)
+
         for entry in entries:
             device = entry[0]
             scan_paths.add(device)
@@ -185,57 +282,47 @@ class ResilientProductionCollectors(ProductionCollectors):
             try:
                 raw = self._smart_read(entry)
                 snapshot = parse_smart_json(json.loads(raw), device)
-                disk_id = stable_disk_id(
-                    wwn=snapshot.wwn,
-                    serial=snapshot.serial,
-                    path=device,
-                    model=snapshot.model,
-                    size_bytes=snapshot.capacity_bytes,
-                )
-                prior = checkpoints.get(disk_id)
-                prior = dict(prior) if isinstance(prior, Mapping) else None
-                health = evaluate_disk_health(snapshot, prior)
-                current_daily = self._daily_from_mapping(daily.get(disk_id))
-                daily_stats, _completed = update_daily_stats(
-                    current_daily, snapshot, datetime.now().astimezone()
-                )
-                item: dict[str, object] = {
-                    **asdict(snapshot),
-                    "disk_id": disk_id,
-                    "available": True,
-                    "error": None,
-                    "health_state": health.state.value,
-                    "health_reasons": list(health.reasons),
-                    "recommendation": health.recommendation,
-                    "daily": asdict(daily_stats),
-                }
-                output[disk_id] = item
-                metrics.update(self._metrics_for_disk(disk_id, item, snapshot))
-
-                checkpoints[disk_id] = _checkpoint(snapshot)
-                daily[disk_id] = asdict(daily_stats)
-                path_map[device] = disk_id
-                inventory[disk_id] = {"path": device}
-                last_data[disk_id] = dict(item)
-                missing_counts[disk_id] = 0
-                present_ids.add(disk_id)
-
+                disk_id = record_snapshot(snapshot, device)
                 if isinstance(prior_id, str) and prior_id != disk_id:
                     path_map = {
                         key: value for key, value in path_map.items()
                         if value != prior_id or key == device
                     }
             except Exception as exc:
-                disk_id = prior_id if isinstance(prior_id, str) else None
-                previous_item = last_data.get(disk_id) if disk_id else None
-                if disk_id and isinstance(previous_item, Mapping):
-                    item = dict(previous_item)
-                    item["available"] = False
-                    item["error"] = f"{type(exc).__name__}: {exc}"
-                    output[disk_id] = item
-                    metrics.update(self._metrics_for_disk(disk_id, item, None))
-                    missing_counts[disk_id] = 0
-                    present_ids.add(disk_id)
+                mark_unavailable(device, f"{type(exc).__name__}: {exc}")
+
+        if self.topology is not None:
+            try:
+                guest_sources = tuple(self.topology.vm_storage_sources())
+            except Exception:
+                guest_sources = ()
+            for source in guest_sources:
+                source_key = f"guest:{source.guest_id}:{source.device_path}"
+                scan_paths.add(source_key)
+                status = self.topology.guest_status(source.guest_id)
+                qga = self.topology.qga_state(source.guest_id)
+                if status != "running":
+                    mark_unavailable(source_key, f"guest VM {source.guest_id} is {status}")
+                    continue
+                if qga != "available":
+                    mark_unavailable(source_key, f"QEMU Guest Agent is {qga}")
+                    continue
+                try:
+                    raw = self._guest_smart_read(source)
+                    snapshot = parse_smart_json(json.loads(raw), source.device_path)
+                    record_snapshot(
+                        snapshot,
+                        source_key,
+                        {
+                            "source_type": "guest",
+                            "source_guest_id": source.guest_id,
+                            "source_guest_name": source.guest_name,
+                            "source_device_path": source.device_path,
+                            "passthrough_hostpci": source.passthrough_hostpci,
+                        },
+                    )
+                except Exception as exc:
+                    mark_unavailable(source_key, f"{type(exc).__name__}: {exc}")
 
         for disk_id, raw_inventory in list(inventory.items()):
             if disk_id in present_ids:
@@ -256,7 +343,7 @@ class ResilientProductionCollectors(ProductionCollectors):
                 if isinstance(previous_item, Mapping):
                     item = dict(previous_item)
                     item["available"] = False
-                    item["error"] = "disk missing from authoritative SMART scan"
+                    item["error"] = "disk missing from authoritative SMART inventory"
                     output[str(disk_id)] = item
                     metrics.update(
                         self._metrics_for_disk(str(disk_id), item, None)
