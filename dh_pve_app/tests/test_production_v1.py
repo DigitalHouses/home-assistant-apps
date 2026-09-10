@@ -7,14 +7,17 @@ from app.production_v1 import (
     parse_primary_ip,
 )
 from app.state_store import StateStore
+from app.topology import GuestStorageSource
 
 FIX = Path(__file__).parent / "fixtures" / "disks"
+GUEST_FIX = Path(__file__).parent / "fixtures" / "guests"
 
 
-def _collector(tmp_path):
+def _collector(tmp_path, topology=None):
     return ResilientProductionCollectors(
         node_name="PVE",
         disk_state_store=StateStore(tmp_path / "disks.json"),
+        topology=topology,
     )
 
 
@@ -78,3 +81,80 @@ def test_resilient_smart_state_is_json_serializable(tmp_path, monkeypatch):
     sample = collector.smart()
     json.dumps(sample.data)
     json.dumps({key: metric.value for key, metric in sample.metrics.items()})
+
+
+class FakeTopology:
+    def __init__(self):
+        self.status = "running"
+        self.source = GuestStorageSource(
+            guest_id="700",
+            guest_name="TrueNAS",
+            guest_status="running",
+            device_path="/dev/sdb",
+            model="Samsung SSD 850 EVO 1TB",
+            serial="S2PWNX0H603177N",
+            wwn="0x5002538d41046527",
+            size_bytes=1000204886016,
+            transport="sata",
+            passthrough_hostpci="hostpci0",
+        )
+
+    def vm_storage_sources(self):
+        source = self.source
+        if source.guest_status == self.status:
+            return (source,)
+        return (GuestStorageSource(**{**source.__dict__, "guest_status": self.status}),)
+
+    def guest_status(self, guest_id):
+        assert guest_id == "700"
+        return self.status
+
+    def qga_state(self, guest_id):
+        return "available" if self.status == "running" else "unavailable"
+
+    def guest_exec(self, guest_id, command, *, timeout=12.0):
+        assert guest_id == "700"
+        if self.status != "running":
+            raise RuntimeError("guest is not running")
+        assert "smartctl -a -j /dev/sdb" in command
+        return (GUEST_FIX / "samsung_850_evo_smart.json").read_text()
+
+
+def _find_serial(sample, serial):
+    return next(value for value in sample.data.values() if value.get("serial") == serial)
+
+
+def test_smart_merges_local_nvme_and_vm700_passthrough_ssd(tmp_path, monkeypatch):
+    topology = FakeTopology()
+    collector = _collector(tmp_path, topology=topology)
+    local_raw = (FIX / "nvme_samsung_990_evo.json").read_text()
+    monkeypatch.setattr(collector, "_smart_scan", lambda: (("/dev/nvme0", "-d", "nvme"),))
+    monkeypatch.setattr(collector, "_smart_read", lambda entry: local_raw)
+
+    sample = collector.smart()
+    local = _find_serial(sample, "S7M3NL0Y413841D")
+    guest = _find_serial(sample, "S2PWNX0H603177N")
+    assert local["available"] is True
+    assert guest["model"] == "Samsung SSD 850 EVO 1TB"
+    assert guest["available"] is True
+    assert guest["source_type"] == "guest"
+    assert guest["source_guest_id"] == "700"
+    assert guest["source_guest_name"] == "TrueNAS"
+    assert guest["source_device_path"] == "/dev/sdb"
+    assert guest["passthrough_hostpci"] == "hostpci0"
+
+
+def test_stopped_vm_marks_guest_disk_unavailable_without_removing_local_disk(tmp_path, monkeypatch):
+    topology = FakeTopology()
+    collector = _collector(tmp_path, topology=topology)
+    local_raw = (FIX / "nvme_samsung_990_evo.json").read_text()
+    monkeypatch.setattr(collector, "_smart_scan", lambda: (("/dev/nvme0", "-d", "nvme"),))
+    monkeypatch.setattr(collector, "_smart_read", lambda entry: local_raw)
+
+    first = collector.smart()
+    assert _find_serial(first, "S2PWNX0H603177N")["available"] is True
+
+    topology.status = "stopped"
+    second = collector.smart()
+    assert _find_serial(second, "S2PWNX0H603177N")["available"] is False
+    assert _find_serial(second, "S7M3NL0Y413841D")["available"] is True
