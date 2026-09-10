@@ -1,4 +1,5 @@
 from app.config import AppConfig, GeneralConfig, MqttConfig
+from app.discovery_guest import build_guest_aware_discovery_payload
 from app.discovery_metrics import build_full_discovery_payload
 from app.identity import HostIdentity
 
@@ -59,6 +60,59 @@ def _inventory():
                 "chip": "nct6798", "rpm": 1240,
             }
         },
+        "guests": {
+            "vms": {
+                "110": {
+                    "kind": "vm", "guest_id": "110", "name": "haos", "status": "stopped",
+                    "agent_enabled": True, "qemu_agent": "unavailable", "passthrough_count": 0,
+                },
+                "501": {
+                    "kind": "vm", "guest_id": "501", "name": "plex-vm", "status": "running",
+                    "agent_enabled": True, "qemu_agent": "available", "passthrough_count": 1,
+                },
+                "700": {
+                    "kind": "vm", "guest_id": "700", "name": "TrueNAS", "status": "running",
+                    "agent_enabled": True, "qemu_agent": "available", "passthrough_count": 1,
+                },
+            },
+            "lxcs": {
+                "500": {
+                    "kind": "lxc", "guest_id": "500", "name": "recorder", "status": "running",
+                    "agent_enabled": None, "qemu_agent": "not_applicable", "passthrough_count": 0,
+                }
+            },
+            "summary": {
+                "vms": {"total": 3, "running": 2, "paused": 0, "stopped": 1, "unknown": 0},
+                "lxcs": {"total": 1, "running": 1, "paused": 0, "stopped": 0, "unknown": 0},
+            },
+        },
+        "topology": {
+            "revision": "abc123",
+            "assignments": {
+                "pci_0000_00_17_0": {
+                    "connection": "passthrough_pci",
+                    "owner_kind": "vm",
+                    "owner_id": "700",
+                    "owner_name": "TrueNAS",
+                    "config_key": "hostpci0",
+                    "pci_address": "0000:00:17.0",
+                    "pci_class": "0106",
+                    "class_name": "SATA controller",
+                    "model": "Intel Corporation Device",
+                },
+                "pci_0000_00_02_0": {
+                    "connection": "passthrough_pci",
+                    "owner_kind": "vm",
+                    "owner_id": "501",
+                    "owner_name": "plex-vm",
+                    "config_key": "hostpci0",
+                    "pci_address": "0000:00:02.0",
+                    "pci_class": "0300",
+                    "class_name": "VGA compatible controller",
+                    "model": "Intel Alder Lake-N UHD Graphics",
+                },
+            },
+        },
     }
 
 
@@ -107,3 +161,33 @@ def test_subsystem_entities_use_two_level_availability():
     assert len(cpu["availability"]) == 2
     assert cpu["availability_mode"] == "all"
     assert "subsystems.cpu.available" in cpu["availability"][1]["value_template"]
+
+
+def test_guest_discovery_exposes_read_only_vm_lxc_and_summaries():
+    c = build_guest_aware_discovery_payload(
+        _config(), _identity(), version="0.1.0", inventory=_inventory()
+    )["components"]
+    vm = c["vm_700_status"]
+    assert vm["default_entity_id"] == "sensor.dh_pve_vm_700_status"
+    assert "subsystems.guests.data.vms" in vm["value_template"]
+    assert "['700']" in vm["value_template"] or '["700"]' in vm["value_template"]
+    assert '"guest_id"' in vm["json_attributes_template"]
+    assert '"qemu_agent"' in vm["json_attributes_template"]
+    assert c["lxc_500_status"]["default_entity_id"] == "sensor.dh_pve_lxc_500_status"
+    assert c["vms_summary"]["default_entity_id"] == "sensor.dh_pve_vms"
+    assert c["lxcs_summary"]["default_entity_id"] == "sensor.dh_pve_lxcs"
+    guest_components = [item for key, item in c.items() if key.startswith(("vm_", "lxc_", "vms_", "lxcs_"))]
+    assert all("command_topic" not in item for item in guest_components)
+
+
+def test_passthrough_discovery_exposes_owner_and_pci_metadata_read_only():
+    c = build_guest_aware_discovery_payload(
+        _config(), _identity(), version="0.1.0", inventory=_inventory()
+    )["components"]
+    item = c["passthrough_pci_0000_00_17_0"]
+    assert item["default_entity_id"] == "sensor.dh_pve_passthrough_pci_0000_00_17_0"
+    assert "VM 700" in item["value_template"]
+    attrs = item["json_attributes_template"]
+    for key in ("pci_address", "pci_class", "class_name", "model", "config_key", "owner_id", "owner_name"):
+        assert key in attrs
+    assert "command_topic" not in item
