@@ -89,7 +89,11 @@ def parse_pct_list(text: str) -> dict[str, GuestRecord]:
     return result
 
 
-def parse_cluster_resources(text: str) -> tuple[dict[str, GuestRecord], dict[str, GuestRecord]]:
+def parse_cluster_resources(
+    text: str,
+    *,
+    node_name: str | None = None,
+) -> tuple[dict[str, GuestRecord], dict[str, GuestRecord]]:
     """Parse one `/cluster/resources --type vm` response into VM and LXC maps."""
     payload = json.loads(text)
     if not isinstance(payload, list):
@@ -99,6 +103,9 @@ def parse_cluster_resources(text: str) -> tuple[dict[str, GuestRecord], dict[str
     lxcs: dict[str, GuestRecord] = {}
     for raw in payload:
         if not isinstance(raw, Mapping):
+            continue
+        raw_node = raw.get("node")
+        if node_name and isinstance(raw_node, str) and raw_node and raw_node != node_name:
             continue
         raw_type = str(raw.get("type") or "").strip().lower()
         if raw_type not in {"qemu", "lxc"}:
