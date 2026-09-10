@@ -256,14 +256,24 @@ def build_full_discovery_payload(
     for key, item in static:
         components[key] = item
 
+    collector_names = {
+        "host": "Host",
+        "cpu": "CPU",
+        "memory": "Memory",
+        "storage": "Storage",
+        "smart": "SMART",
+        "gpu": "GPU",
+        "fans": "Fans",
+    }
     for subsystem in ("host", "cpu", "memory", "storage", "smart", "gpu", "fans"):
+        display = collector_names[subsystem]
         key, item = _binary(
             uid=uid, state_topic=topics.state, app_topic=topics.availability,
-            key=f"collector_{subsystem}", name=f"{subsystem.title()} collector",
+            key=f"collector_{subsystem}", name=f"{display} collector",
             entity_id=f"binary_sensor.dh_pve_{subsystem}_collector",
             expression="'ON' if value_json.subsystems." + subsystem + ".available | default(false) else 'OFF'",
             subsystem=None, section="diagnostic", subject="collector", metric="availability",
-            object_id=subsystem, display_name=subsystem, sort_key=f"900_{subsystem}",
+            object_id=subsystem, display_name=display, sort_key=f"900_{subsystem}",
             device_class="connectivity", entity_category="diagnostic",
         )
         components[key] = item
