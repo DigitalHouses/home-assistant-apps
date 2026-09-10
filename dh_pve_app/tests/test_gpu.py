@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from app.collectors.gpu import (
+    GpuOwner,
     GuestInfo,
     build_gpu_snapshots,
     parse_intel_gpu_top_json,
@@ -11,6 +12,8 @@ from app.collectors.gpu import (
     read_dri_pci_map,
     read_gpu_temperature,
 )
+from app.production_v1 import ResilientProductionCollectors
+from app.state_store import StateStore
 
 FIX = Path(__file__).parent / "fixtures" / "gpu"
 
@@ -146,3 +149,70 @@ def test_dri_to_pci_mapping_uses_sysfs_device_symlink(tmp_path: Path):
         "card0": "0000:00:02.0",
         "renderD128": "0000:00:02.0",
     }
+
+
+class CachedGpuTopology:
+    def __init__(self):
+        self.guest_exec_calls = 0
+
+    def gpu_owners(self):
+        return {
+            "0000:00:02.0": GpuOwner(
+                connection="passthrough_pci",
+                source_type="vm",
+                source_id="501",
+                source_name="plex-vm",
+                source_status="running",
+                config="hostpci0: 0000:00:02.0",
+            )
+        }
+
+    def guest_status(self, guest_id):
+        assert guest_id == "501"
+        return "running"
+
+    def qga_state(self, guest_id):
+        assert guest_id == "501"
+        return "available"
+
+    def guest_exec(self, guest_id, command, *, timeout=12.0):
+        assert guest_id == "501"
+        assert "intel_gpu_top" in command
+        self.guest_exec_calls += 1
+        return (FIX / "intel_gpu_top.jsonstream").read_text()
+
+
+def test_gpu_uses_cached_topology_and_keeps_vm501_transcoding(tmp_path, monkeypatch):
+    import app.production as production
+    import app.production_v1 as production_v1
+
+    topology = CachedGpuTopology()
+    calls = []
+
+    def fake_run(argv, *, timeout=20.0, check=True):
+        calls.append(tuple(argv))
+        if tuple(argv) == ("lspci", "-Dnnk"):
+            return (FIX / "shahristan_lspci.txt").read_text()
+        if argv and argv[0] in {"qm", "pct"}:
+            return ""
+        raise AssertionError(f"unexpected command: {argv}")
+
+    monkeypatch.setattr(production, "_run", fake_run)
+    monkeypatch.setattr(production_v1, "_run", fake_run)
+
+    collector = ResilientProductionCollectors(
+        node_name="PVE",
+        disk_state_store=StateStore(tmp_path / "disks.json"),
+        topology=topology,
+        sys_root=tmp_path / "sys",
+        pve_root=tmp_path / "pve",
+    )
+    first = collector.gpu()
+    second = collector.gpu()
+    gpu = first.data["pci_0000_00_02_0"]
+    assert gpu["owner"] == "VM 501"
+    assert gpu["source_name"] == "plex-vm"
+    assert gpu["transcoding_load_percent"] == 71.3
+    assert topology.guest_exec_calls == 2
+    assert not any(call and call[0] in {"qm", "pct"} for call in calls)
+    assert second.data["pci_0000_00_02_0"]["owner"] == "VM 501"
