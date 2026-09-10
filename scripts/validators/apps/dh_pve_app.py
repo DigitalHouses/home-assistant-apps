@@ -87,7 +87,7 @@ def validate_dh_pve_app(
         (
             "MISSING_CONFIRMATIONS = 3",
             'item["available"] = False',
-            '"disk missing from authoritative SMART scan"',
+            '"disk missing from authoritative SMART inventory"',
             'data["primary_ip"] = primary_ip',
             'data["boot_time"] = boot_time_iso',
         ),
