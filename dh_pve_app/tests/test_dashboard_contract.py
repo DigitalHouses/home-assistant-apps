@@ -1,0 +1,52 @@
+from pathlib import Path
+
+ROOT = Path(__file__).parents[1]
+DASHBOARD = ROOT / "examples" / "dh_pve_dashboard.yaml"
+
+
+def _text() -> str:
+    return DASHBOARD.read_text(encoding="utf-8")
+
+
+def test_dashboard_file_exists_and_uses_required_cards():
+    assert DASHBOARD.exists()
+    text = _text()
+    assert "type: sections" in text
+    assert "custom:mushroom-template-card" in text
+    assert "custom:auto-entities" in text
+    assert "custom:mini-graph-card" in text
+
+
+def test_dashboard_uses_new_dh_pve_contract_only():
+    text = _text()
+    assert "sensor.dh_pve_cpu_usage" in text
+    assert "sensor.dh_pve_memory_usage" in text
+    assert "button.dh_pve_refresh" in text
+    assert "proxmox_integration: dh_pve_app" in text
+    assert "digitalhouses_proxmox_" not in text
+
+
+def test_dashboard_dynamic_sections_use_semantic_attributes():
+    text = _text()
+    for section in ("storage", "disk", "graphics", "cooling", "diagnostic"):
+        assert f"proxmox_section: {section}" in text
+    assert "proxmox_sort_key" in text
+    assert "proxmox_metric: health" in text
+    assert "proxmox_metric: owner" in text
+
+
+def test_dashboard_storage_is_used_total_not_free_space():
+    text = _text()
+    assert "used_gib" in text
+    assert "total_gib" in text
+    assert "available_gib" not in text
+    assert "disk_free" not in text
+
+
+def test_dashboard_health_and_cooling_use_python_results():
+    text = _text()
+    assert "sensor.dh_pve_fans" in text
+    assert "HEALTHY" in text
+    assert "WARNING" in text
+    assert "CRITICAL" in text
+    assert "| count" not in text
