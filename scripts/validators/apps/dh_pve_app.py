@@ -121,13 +121,23 @@ def validate_dh_pve_app(
         "guest-aware collectors",
     )
     _require_text(
+        app / "app/topology.py",
+        (
+            '"pvesh", "get", "/cluster/resources"',
+            'path = self.pve_root / directory / f"{guest_id}.conf"',
+            'current_vms, current_lxcs = self._guest_lists()',
+        ),
+        "low-cost topology",
+    )
+    _require_text(
         app / "app/main.py",
         (
             "DynamicDiscoveryRuntime(",
             "GuestAwareProductionCollectors(",
-            "TopologyManager(runner=_run)",
+            "TopologyManager(runner=_run, node_name=identity.node_name)",
             "build_guest_aware_discovery_payload(",
-            'scheduler.add("guests", interval_seconds=10.0',
+            'scheduler.add("guests", interval_seconds=30.0',
+            'scheduler.add("gpu", interval_seconds=30.0',
             'scheduler.add("host", interval_seconds=86400.0',
         ),
         "runtime",
