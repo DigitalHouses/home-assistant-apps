@@ -1,0 +1,4 @@
+ VMID NAME                 STATUS     MEM(MB)    BOOTDISK(GB) PID
+  110 haos                 stopped       4096              32 0
+  501 plex-vm              running       1024              32 1234
+  700 TrueNAS              running       4096              32 2345
