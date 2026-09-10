@@ -704,13 +704,14 @@ sections:
           ## Internet outages in {{ months.get(month[5:7], month) }}
 
 
-          | From | To | Duration |
+          | № | From | To | Duration |
 
-          | :--- | :--- | :---: |
+          | :---: | :--- | :--- | :---: |
 
           {%- for r in outages %}
 
-          | {{ r['from'] }} | {{ r['to'] }} | **{{ r['duration'] }}** |
+          | {{ (outages | count) - loop.index0 }} | {{ r['from'] }} | {{ r['to']
+          }} | **{{ r['duration'] }}** |
 
           {%- endfor %}
 
