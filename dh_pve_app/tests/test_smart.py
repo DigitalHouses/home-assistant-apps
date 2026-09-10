@@ -40,7 +40,7 @@ def test_parse_real_seagate_hdd():
     assert snap.crc_errors == 0
 
 
-def test_parse_real_patrot_burst_elite_ssd():
+def test_parse_real_patriot_burst_elite_ssd():
     snap = parse_smart_json(load("ata_ssd_partial.json"), "/dev/sda")
     assert snap.model == "Patriot Burst Elite 240GB"
     assert snap.serial == "PBEABBB23042500582"
