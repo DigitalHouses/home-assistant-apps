@@ -2,17 +2,19 @@ from __future__ import annotations
 
 import hashlib
 import json
+import platform
 import re
 import time
 from dataclasses import dataclass, replace
+from pathlib import Path
 from typing import Callable, Mapping
 
 from .collectors.gpu import GpuOwner, GuestInfo, parse_lxc_gpu_owners, read_dri_pci_map
 from .collectors.guests import (
-    GuestBlockDevice,
     GuestRecord,
     PassthroughDevice,
     is_physical_guest_disk,
+    parse_cluster_resources,
     parse_hostpci,
     parse_lspci_catalog,
     parse_pct_list,
@@ -21,6 +23,7 @@ from .collectors.guests import (
 )
 
 Runner = Callable[..., str]
+ConfigReader = Callable[[str, str], str]
 
 
 @dataclass(frozen=True)
@@ -99,10 +102,16 @@ class TopologyManager:
         runner: Runner,
         dri_to_pci: Mapping[str, str] | None = None,
         now_monotonic: Callable[[], float] = time.monotonic,
+        config_reader: ConfigReader | None = None,
+        pve_root: Path = Path("/etc/pve"),
+        node_name: str | None = None,
     ) -> None:
         self.runner = runner
         self._fixed_dri_to_pci = dict(dri_to_pci) if dri_to_pci is not None else None
         self.now_monotonic = now_monotonic
+        self.config_reader = config_reader
+        self.pve_root = pve_root
+        self.node_name = node_name or platform.node()
         self._snapshot: TopologySnapshot | None = None
         self._vm_configs: dict[str, str] = {}
         self._lxc_configs: dict[str, str] = {}
@@ -116,6 +125,36 @@ class TopologyManager:
 
     def _run(self, argv: list[str], *, timeout: float = 20.0, check: bool = True) -> str:
         return self.runner(argv, timeout=timeout, check=check)
+
+    def _guest_lists(self) -> tuple[dict[str, GuestRecord], dict[str, GuestRecord]]:
+        """Get all local VM/LXC states with one Proxmox API process when possible."""
+        try:
+            raw = self._run(
+                ["pvesh", "get", "/cluster/resources", "--type", "vm", "--output-format", "json"],
+                timeout=10,
+            )
+            return parse_cluster_resources(raw, node_name=self.node_name)
+        except Exception:
+            # Compatibility fallback for environments where pvesh is unavailable.
+            vms = parse_qm_list(self._run(["qm", "list"], timeout=10))
+            lxcs = parse_pct_list(self._run(["pct", "list"], timeout=10))
+            return vms, lxcs
+
+    def _read_config(self, kind: str, guest_id: str) -> str:
+        if self.config_reader is not None:
+            return self.config_reader(kind, guest_id)
+
+        directory = "qemu-server" if kind == "vm" else "lxc"
+        path = self.pve_root / directory / f"{guest_id}.conf"
+        try:
+            return path.read_text(encoding="utf-8")
+        except OSError:
+            # Direct pmxcfs reads are the normal fast path; CLI is only fallback.
+            command = "qm" if kind == "vm" else "pct"
+            try:
+                return self._run([command, "config", guest_id], timeout=10)
+            except Exception:
+                return ""
 
     def _qga_state(self, guest: GuestRecord, config: str, *, force: bool = False) -> str:
         if not _agent_enabled(config):
@@ -178,9 +217,6 @@ class TopologyManager:
                 passthrough_hostpci=hostpci,
             )
 
-        # An authoritative successful guest inventory may remove paths that no
-        # longer exist inside this guest. Offline/QGA failures never reach here
-        # and therefore preserve the last known physical source.
         for key in list(self._storage_sources):
             if key[0] == guest.guest_id and key not in seen:
                 self._storage_sources.pop(key, None)
@@ -280,23 +316,11 @@ class TopologyManager:
         )
 
     def full_scan(self) -> TopologySnapshot:
-        vms = parse_qm_list(self._run(["qm", "list"], timeout=10))
-        lxcs = parse_pct_list(self._run(["pct", "list"], timeout=10))
+        vms, lxcs = self._guest_lists()
         self._pci_catalog = parse_lspci_catalog(self._run(["lspci", "-Dnn"], timeout=10))
 
-        self._vm_configs = {}
-        for guest_id in vms:
-            try:
-                self._vm_configs[guest_id] = self._run(["qm", "config", guest_id], timeout=10)
-            except Exception:
-                self._vm_configs[guest_id] = ""
-
-        self._lxc_configs = {}
-        for guest_id in lxcs:
-            try:
-                self._lxc_configs[guest_id] = self._run(["pct", "config", guest_id], timeout=10)
-            except Exception:
-                self._lxc_configs[guest_id] = ""
+        self._vm_configs = {guest_id: self._read_config("vm", guest_id) for guest_id in vms}
+        self._lxc_configs = {guest_id: self._read_config("lxc", guest_id) for guest_id in lxcs}
 
         qga: dict[str, str] = {}
         for guest_id, guest in vms.items():
@@ -322,9 +346,8 @@ class TopologyManager:
             guest = vms.get(guest_id)
             if guest is None:
                 return
-            try:
-                config = self._run(["qm", "config", guest_id], timeout=10)
-            except Exception:
+            config = self._read_config("vm", guest_id)
+            if not config:
                 config = self._vm_configs.get(guest_id, "")
             self._vm_configs[guest_id] = config
             qga[guest_id] = self._qga_state(guest, config, force=True)
@@ -334,16 +357,14 @@ class TopologyManager:
             guest = lxcs.get(guest_id)
             if guest is None:
                 return
-            try:
-                self._lxc_configs[guest_id] = self._run(["pct", "config", guest_id], timeout=10)
-            except Exception:
-                pass
+            config = self._read_config("lxc", guest_id)
+            if config:
+                self._lxc_configs[guest_id] = config
 
         self._snapshot = self._compose_snapshot(vms, lxcs, qga)
 
     def poll_guest_status(self) -> GuestStatusSnapshot:
-        current_vms = parse_qm_list(self._run(["qm", "list"], timeout=10))
-        current_lxcs = parse_pct_list(self._run(["pct", "list"], timeout=10))
+        current_vms, current_lxcs = self._guest_lists()
         if self._snapshot is None:
             self.full_scan()
             assert self._snapshot is not None
