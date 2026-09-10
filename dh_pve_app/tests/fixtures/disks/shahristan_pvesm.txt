@@ -1,0 +1,6 @@
+Name                   Type     Status           Total            Used       Available        %
+local                   dir     active        98497780        28807380        64640852   29.25%
+local-lvm           lvmthin     active       832888832       376215885       456672946   45.17%
+truenas_backups         nfs     active       351343104       166381568       184961536   47.36%
+truenas_data            nfs     active       197522944        12561408       184961536    6.36%
+truenas_media           nfs     active       185095680          134144       184961536    0.07%
