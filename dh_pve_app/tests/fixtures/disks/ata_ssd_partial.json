@@ -1,6 +1,11 @@
 {
   "smartctl": {"exit_status": 0},
   "device": {"name": "/dev/sda", "type": "sat", "protocol": "ATA"},
+  "model_name": "Patriot Burst Elite 240GB",
+  "serial_number": "PBEABBB23042500582",
+  "firmware_version": "W0220A0",
+  "user_capacity": {"bytes": 240057409536},
+  "rotation_rate": 0,
   "smart_support": {"available": true, "enabled": true},
   "smart_status": {"passed": true},
   "ata_smart_attributes": {
