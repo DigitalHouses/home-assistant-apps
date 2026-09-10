@@ -4,7 +4,7 @@ from app.config import AppConfig, GeneralConfig, MqttConfig
 from app.discovery import build_discovery_payload
 from app.discovery_metrics import build_full_discovery_payload
 from app.identity import HostIdentity
-from app.production import ProductionCollectors
+from app.production_v1 import ResilientProductionCollectors
 from app.state_store import StateStore
 
 
@@ -61,8 +61,8 @@ def test_collector_names_preserve_known_acronyms():
     assert components["collector_host"]["name"] == "Host collector"
 
 
-def test_python_fan_collector_emits_normalized_summary_when_no_fan_exists(tmp_path: Path):
-    collectors = ProductionCollectors(
+def _collectors(tmp_path: Path) -> ResilientProductionCollectors:
+    return ResilientProductionCollectors(
         node_name="PVE",
         disk_state_store=StateStore(tmp_path / "disks.json"),
         sys_root=tmp_path / "sys",
@@ -70,39 +70,38 @@ def test_python_fan_collector_emits_normalized_summary_when_no_fan_exists(tmp_pa
         pve_root=tmp_path / "pve",
     )
 
-    sample = collectors.fans()
+
+def test_python_fan_collector_emits_normalized_summary_when_no_fan_exists(tmp_path: Path):
+    sample = _collectors(tmp_path).fans()
 
     assert sample.data == {
         "detected": False,
         "count": 0,
         "status": "Not detected",
-        "items": {},
     }
     assert sample.metrics["detected"].value is False
     assert sample.metrics["count"].value == 0
 
 
-def test_python_fan_collector_emits_items_and_detected_summary(tmp_path: Path):
+def test_python_fan_collector_emits_fans_and_detected_summary(tmp_path: Path):
     hwmon = tmp_path / "sys" / "class" / "hwmon" / "hwmon4"
     hwmon.mkdir(parents=True)
     (hwmon / "name").write_text("nct6798\n", encoding="utf-8")
     (hwmon / "fan1_input").write_text("1240\n", encoding="utf-8")
     (hwmon / "fan1_label").write_text("CPU Fan\n", encoding="utf-8")
 
-    collectors = ProductionCollectors(
-        node_name="PVE",
-        disk_state_store=StateStore(tmp_path / "disks.json"),
-        sys_root=tmp_path / "sys",
-        proc_root=tmp_path / "proc",
-        pve_root=tmp_path / "pve",
-    )
-    sample = collectors.fans()
+    sample = _collectors(tmp_path).fans()
 
     assert sample.data["detected"] is True
     assert sample.data["count"] == 1
     assert sample.data["status"] == "Detected"
-    assert len(sample.data["items"]) == 1
-    fan = next(iter(sample.data["items"].values()))
+    fan_items = {
+        key: value
+        for key, value in sample.data.items()
+        if isinstance(value, dict)
+    }
+    assert len(fan_items) == 1
+    fan = next(iter(fan_items.values()))
     assert fan["rpm"] == 1240
     assert sample.metrics["detected"].value is True
     assert sample.metrics["count"].value == 1
@@ -114,7 +113,6 @@ def test_full_discovery_exposes_fan_status_without_template_counting():
             "detected": False,
             "count": 0,
             "status": "Not detected",
-            "items": {},
         }
     }
     components = build_full_discovery_payload(
