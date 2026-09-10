@@ -1,0 +1,23 @@
+[Unit]
+Description=DigitalHouses DH PVE MQTT Monitoring
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Root is intentional: SMART, /etc/pve guest configuration, passthrough
+# inspection, and future NUT diagnostics require host-level read access.
+User=root
+Group=root
+WorkingDirectory=/opt/digitalhouses/dh_pve_app
+ExecStart=/opt/digitalhouses/dh_pve_app/.venv/bin/python -m app.main --config /etc/dh_pve_app/dh_pve_app.conf --state-dir /var/lib/dh_pve_app
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=20
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target
