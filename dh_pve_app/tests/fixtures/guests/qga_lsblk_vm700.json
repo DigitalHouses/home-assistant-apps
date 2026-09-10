@@ -1,0 +1,5 @@
+{
+  "exitcode": 0,
+  "exited": 1,
+  "out-data": "{\n  \"blockdevices\": [\n    {\"name\":\"sda\",\"path\":\"/dev/sda\",\"type\":\"disk\",\"size\":34359738368,\"model\":\"QEMU HARDDISK\",\"serial\":\"drive-scsi0\",\"wwn\":null,\"tran\":null,\"rota\":true},\n    {\"name\":\"sdb\",\"path\":\"/dev/sdb\",\"type\":\"disk\",\"size\":1000204886016,\"model\":\"Samsung SSD 850 EVO 1TB\",\"serial\":\"S2PWNX0H603177N\",\"wwn\":\"0x5002538d41046527\",\"tran\":\"sata\",\"rota\":false}\n  ]\n}\n"
+}
