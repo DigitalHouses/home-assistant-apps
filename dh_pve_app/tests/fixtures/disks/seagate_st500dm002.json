@@ -1,0 +1,31 @@
+{
+  "smartctl": {"exit_status": 0},
+  "device": {"name": "/dev/sdb", "type": "sat", "protocol": "ATA"},
+  "model_family": "Seagate Barracuda 7200.14 (AF)",
+  "model_name": "ST500DM002-1BD142",
+  "serial_number": "Z3TT2FMD",
+  "wwn": {"naa": 5, "oui": 3152, "id": 1697946515},
+  "firmware_version": "KC48",
+  "user_capacity": {"bytes": 500107862016},
+  "logical_block_size": 512,
+  "rotation_rate": 7200,
+  "smart_support": {"available": true, "enabled": true},
+  "smart_status": {"passed": true},
+  "ata_smart_attributes": {
+    "table": [
+      {"id": 5, "name": "Reallocated_Sector_Ct", "value": 100, "raw": {"value": 0, "string": "0"}},
+      {"id": 9, "name": "Power_On_Hours", "value": 76, "raw": {"value": 21310, "string": "21310"}},
+      {"id": 12, "name": "Power_Cycle_Count", "value": 99, "raw": {"value": 1905, "string": "1905"}},
+      {"id": 187, "name": "Reported_Uncorrect", "value": 100, "raw": {"value": 0, "string": "0"}},
+      {"id": 194, "name": "Temperature_Celsius", "value": 33, "raw": {"value": 47244640289, "string": "33 (0 11 0 0 0)"}},
+      {"id": 197, "name": "Current_Pending_Sector", "value": 100, "raw": {"value": 0, "string": "0"}},
+      {"id": 198, "name": "Offline_Uncorrectable", "value": 100, "raw": {"value": 0, "string": "0"}},
+      {"id": 199, "name": "UDMA_CRC_Error_Count", "value": 200, "raw": {"value": 0, "string": "0"}},
+      {"id": 241, "name": "Total_LBAs_Written", "value": 100, "raw": {"value": 421196291, "string": "421196291"}}
+    ]
+  },
+  "power_on_time": {"hours": 21310},
+  "power_cycle_count": 1905,
+  "temperature": {"current": 33},
+  "ata_smart_error_log": {"summary": {"revision": 1, "count": 0}}
+}
