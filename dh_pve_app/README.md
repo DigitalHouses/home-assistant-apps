@@ -47,6 +47,18 @@ Home Assistant exposes:
 
 A manual refresh runs all enabled collectors and forces a state publication. `last_refresh` advances only after a successful full refresh.
 
+## Dashboard
+
+A production Lovelace view is provided at:
+
+```text
+dh_pve_app/examples/dh_pve_dashboard.yaml
+```
+
+It requires the HACS cards **Mushroom**, **auto-entities**, and **mini-graph-card**. Dynamic storage, physical disks, GPU, fans, runtime settings, and collector diagnostics are selected through the `proxmox_*` semantic attributes emitted by MQTT Discovery rather than hard-coded hardware entity IDs.
+
+The dashboard uses the Python agent's normalized values directly. Storage is rendered as `used / total`, disk health remains the Python-produced `HEALTHY/WARNING/CRITICAL` state, and Home Assistant does not recompute infrastructure health.
+
 ## Installation
 
 Run on the Proxmox host as `root`:
