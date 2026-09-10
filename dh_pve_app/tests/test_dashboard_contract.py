@@ -50,3 +50,9 @@ def test_dashboard_health_and_cooling_use_python_results():
     assert "WARNING" in text
     assert "CRITICAL" in text
     assert "| count" not in text
+
+
+def test_dashboard_does_not_recompute_infrastructure_health_in_ha():
+    text = _text()
+    assert "selectattr(" not in text
+    assert "Overall" not in text
