@@ -1,0 +1,1 @@
+"""Proxmox host telemetry collectors."""
