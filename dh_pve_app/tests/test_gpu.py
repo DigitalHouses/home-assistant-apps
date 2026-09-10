@@ -12,7 +12,7 @@ from app.collectors.gpu import (
     read_dri_pci_map,
     read_gpu_temperature,
 )
-from app.production_v1 import ResilientProductionCollectors
+from app.production_guest import GuestAwareProductionCollectors
 from app.state_store import StateStore
 
 FIX = Path(__file__).parent / "fixtures" / "gpu"
@@ -184,7 +184,6 @@ class CachedGpuTopology:
 
 def test_gpu_uses_cached_topology_and_keeps_vm501_transcoding(tmp_path, monkeypatch):
     import app.production as production
-    import app.production_v1 as production_v1
 
     topology = CachedGpuTopology()
     calls = []
@@ -198,9 +197,8 @@ def test_gpu_uses_cached_topology_and_keeps_vm501_transcoding(tmp_path, monkeypa
         raise AssertionError(f"unexpected command: {argv}")
 
     monkeypatch.setattr(production, "_run", fake_run)
-    monkeypatch.setattr(production_v1, "_run", fake_run)
 
-    collector = ResilientProductionCollectors(
+    collector = GuestAwareProductionCollectors(
         node_name="PVE",
         disk_state_store=StateStore(tmp_path / "disks.json"),
         topology=topology,
