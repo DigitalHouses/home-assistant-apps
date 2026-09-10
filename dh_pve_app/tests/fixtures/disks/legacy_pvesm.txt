@@ -1,0 +1,5 @@
+Name                Type     Status           Total            Used       Available        %
+TrueNAS25           cifs     active       384629760        23310080       361319680    6.06%
+local                dir     active        67276168        18982660        44830340   28.22%
+local-lvm        lvmthin     active       147390464       127345360        20045103   86.40%
+truenas_data         nfs     active       439821312        78501376       361319936   17.85%
