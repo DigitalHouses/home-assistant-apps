@@ -12,13 +12,15 @@ from .config import AppConfig, load_config
 from .discovery_metrics import build_full_discovery_payload
 from .identity import resolve_identity
 from .mqtt_bridge import MqttBridge
-from .production_v1 import ResilientProductionCollectors
+from .production import _run
+from .production_guest import GuestAwareProductionCollectors
 from .publish_policy import PublishPolicy
 from .runtime_dynamic import DynamicDiscoveryRuntime
 from .runtime_settings import RuntimeSettings
 from .scheduler import Scheduler
 from .state_store import StateStore
 from .topics import build_topics
+from .topology import TopologyManager
 
 APP_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG = Path("/etc/dh_pve_app/dh_pve_app.conf")
@@ -76,9 +78,11 @@ def build_runtime(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR):
         discovery_builder({}),
     )
 
-    production = ResilientProductionCollectors(
+    topology = TopologyManager(runner=_run)
+    production = GuestAwareProductionCollectors(
         node_name=identity.node_name,
         disk_state_store=StateStore(state_dir / "disks.json"),
+        topology=topology,
     )
     collectors = production.mapping()
 
@@ -86,6 +90,9 @@ def build_runtime(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR):
     now = time.monotonic()
     fast = settings.get("fast_poll_interval_seconds")
     disk = settings.get("disk_poll_interval_seconds")
+    # Guest state is deliberately lightweight and independent of the full
+    # topology scan. Full topology is startup/manual-refresh/transition driven.
+    scheduler.add("guests", interval_seconds=10.0, now=now)
     for name in ("cpu", "memory", "gpu", "fans"):
         scheduler.add(name, interval_seconds=fast, now=now)
     scheduler.add("smart", interval_seconds=disk, now=now)
