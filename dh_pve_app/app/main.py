@@ -78,7 +78,10 @@ def build_runtime(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR):
         discovery_builder({}),
     )
 
-    topology = TopologyManager(runner=_run, node_name=identity.node_name)
+    # Topology must follow the actual PVE host node name, not the configurable
+    # display/node label used in MQTT identity. TopologyManager defaults to
+    # platform.node(), which matches the Proxmox API `node` field.
+    topology = TopologyManager(runner=_run)
     production = GuestAwareProductionCollectors(
         node_name=identity.node_name,
         disk_state_store=StateStore(state_dir / "disks.json"),
