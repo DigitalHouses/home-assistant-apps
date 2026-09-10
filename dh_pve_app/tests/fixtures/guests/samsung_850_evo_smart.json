@@ -1,0 +1,27 @@
+{
+  "smartctl": {"version": [7, 3], "exit_status": 0},
+  "device": {"name": "/dev/sdb", "info_name": "/dev/sdb", "type": "sat", "protocol": "ATA"},
+  "model_name": "Samsung SSD 850 EVO 1TB",
+  "serial_number": "S2PWNX0H603177N",
+  "wwn": "0x5002538d41046527",
+  "firmware_version": "EMT03B6Q",
+  "user_capacity": {"bytes": 1000204886016},
+  "logical_block_size": 512,
+  "rotation_rate": 0,
+  "smart_support": {"available": true, "enabled": true},
+  "smart_status": {"passed": true},
+  "temperature": {"current": 49},
+  "power_on_time": {"hours": 18250},
+  "power_cycle_count": 540,
+  "ata_smart_error_log": {"summary": {"count": 0}},
+  "ata_smart_attributes": {
+    "table": [
+      {"name": "Percent_Lifetime_Remain", "value": 99, "raw": {"value": 99}},
+      {"name": "Reallocated_Sector_Ct", "value": 100, "raw": {"value": 0}},
+      {"name": "Current_Pending_Sector", "value": 100, "raw": {"value": 0}},
+      {"name": "Offline_Uncorrectable", "value": 100, "raw": {"value": 0}},
+      {"name": "UDMA_CRC_Error_Count", "value": 100, "raw": {"value": 0}},
+      {"name": "Total_LBAs_Written", "value": 99, "raw": {"value": 21474836480}}
+    ]
+  }
+}
