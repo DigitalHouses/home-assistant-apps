@@ -24,6 +24,8 @@ A failure in one collector does not make unrelated subsystems unavailable. SMART
 
 Runtime polling/publish parameters can be adjusted from Home Assistant within application-defined hard limits. SMART/disk-health policy is version-controlled in the app and cannot be changed from Home Assistant.
 
+Expensive Proxmox helper processes are deliberately kept out of the fast loop. Cheap CPU/memory/fan sampling may run at the fast interval, while VM/LXC status and guest GPU telemetry use a 30-second cadence. New installations use a 60-second SMART polling default.
+
 ## Guest and passthrough topology
 
 The app discovers Proxmox guests automatically; no site-specific `disk_vms`, `gpu_vms`, or passthrough VM lists are required.
@@ -31,7 +33,8 @@ The app discovers Proxmox guests automatically; no site-specific `disk_vms`, `gp
 Topology behavior is deliberately split into a heavy and a lightweight path:
 
 - A full topology scan runs at app startup and on `button.dh_pve_refresh`.
-- VM/LXC status is polled independently with a lightweight 10-second guest-state collector.
+- VM/LXC status is polled independently every 30 seconds through one `/cluster/resources` query instead of separate `qm list` and `pct list` processes.
+- Guest configuration is normally read directly from pmxcfs under `/etc/pve/qemu-server` and `/etc/pve/lxc`; `qm config` / `pct config` are fallback paths only.
 - A guest transition from non-running to `running` triggers a targeted rescan of that guest rather than a full topology rebuild.
 - VM `hostpciN` PCI passthrough is detected and cached.
 - Existing LXC shared `/dev/dri` GPU ownership remains supported.
@@ -39,7 +42,7 @@ Topology behavior is deliberately split into a heavy and a lightweight path:
 
 For storage-class PCI passthrough, a running VM with a working QEMU Guest Agent (QGA) is inspected with `lsblk`. Eligible physical disks are then queried through guest `smartctl -a -j` and fed into the same stable-ID, SMART parser, health engine, daily statistics, and MQTT Discovery pipeline as host-local disks. A stopped guest or unavailable QGA marks the guest-derived disk telemetry unavailable without immediately deleting the disk from inventory.
 
-GPU ownership also uses the shared topology cache, so fast GPU polling does not repeatedly reparse every Proxmox guest configuration. Guest-side Intel GPU telemetry continues to use QGA when the GPU is assigned to a VM.
+GPU ownership also uses the shared topology cache. Guest-side Intel GPU telemetry continues to use QGA when the GPU is assigned to a VM, but the expensive guest telemetry command is scheduled at 30 seconds rather than in the fast CPU/memory loop.
 
 ## Storage semantics
 
