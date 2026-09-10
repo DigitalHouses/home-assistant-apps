@@ -2,6 +2,7 @@
 # Requires: Mushroom, auto-entities, mini-graph-card
 # Dynamic storage/disk/GPU/fan/diagnostic cards are selected by semantic
 # proxmox_* attributes published by dh_pve_app.
+# Health states are produced by Python: HEALTHY, WARNING, CRITICAL.
 
 title: Proxmox
 path: proxmox
@@ -130,38 +131,6 @@ sections:
           method: attribute
           attribute: proxmox_sort_key
 
-      - type: custom:mushroom-template-card
-        entity: binary_sensor.dh_pve_cpu_throttling
-        primary: Overall
-        secondary: >-
-          {% set critical = states.sensor
-             | selectattr('attributes.proxmox_integration', 'eq', 'dh_pve_app')
-             | selectattr('attributes.proxmox_metric', 'eq', 'health')
-             | selectattr('state', 'eq', 'CRITICAL') | list %}
-          {% set warning = states.sensor
-             | selectattr('attributes.proxmox_integration', 'eq', 'dh_pve_app')
-             | selectattr('attributes.proxmox_metric', 'eq', 'health')
-             | selectattr('state', 'eq', 'WARNING') | list %}
-          {% set collectors = states.binary_sensor
-             | selectattr('attributes.proxmox_integration', 'eq', 'dh_pve_app')
-             | selectattr('attributes.proxmox_subject', 'eq', 'collector')
-             | selectattr('state', 'eq', 'off') | list %}
-          {% if critical or is_state('binary_sensor.dh_pve_cpu_throttling', 'on') %}
-            CRITICAL
-          {% elif warning or collectors %}
-            WARNING
-          {% else %}
-            HEALTHY
-          {% endif %}
-        icon: >-
-          {% if is_state('binary_sensor.dh_pve_cpu_throttling', 'on') %}
-            mdi:alert-circle
-          {% else %}
-            mdi:shield-check
-          {% endif %}
-        icon_color: >-
-          {% if is_state('binary_sensor.dh_pve_cpu_throttling', 'on') %}red{% else %}green{% endif %}
-
   - type: grid
     cards:
       - type: heading
@@ -255,11 +224,10 @@ sections:
                 primary: >-
                   {{ state_attr(entity, 'proxmox_display_name') }}
                 secondary: >-
-                  {% set object_id = state_attr(entity, 'proxmox_object_id') %}
-                  {% set slug = object_id | lower | regex_replace('[^a-z0-9]+', '_') | regex_replace('_+', '_') | trim('_') %}
-                  {% set temp = 'sensor.dh_pve_disk_' ~ slug ~ '_temperature' %}
-                  {% set wear = 'sensor.dh_pve_disk_' ~ slug ~ '_wear' %}
-                  {% set smart = 'binary_sensor.dh_pve_disk_' ~ slug ~ '_smart_problem' %}
+                  {% set base = entity | replace('_health', '') %}
+                  {% set temp = base ~ '_temperature' %}
+                  {% set wear = base ~ '_wear' %}
+                  {% set smart = 'binary_sensor.' ~ base.split('.')[1] ~ '_smart_problem' %}
                   {{ state_attr(entity, 'disk_type') }} ·
                   {% if states(temp) not in ['unknown', 'unavailable'] %}{{ states(temp) }}°C · {% endif %}
                   {% if states(wear) not in ['unknown', 'unavailable'] %}wear {{ states(wear) }}% · {% endif %}
@@ -268,7 +236,8 @@ sections:
                 icon_color: >-
                   {% if is_state(entity, 'CRITICAL') %}red
                   {% elif is_state(entity, 'WARNING') %}orange
-                  {% else %}green{% endif %}
+                  {% elif is_state(entity, 'HEALTHY') %}green
+                  {% else %}grey{% endif %}
                 multiline_secondary: true
                 tap_action:
                   action: more-info
