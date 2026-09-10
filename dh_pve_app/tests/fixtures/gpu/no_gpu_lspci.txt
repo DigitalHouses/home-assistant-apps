@@ -1,0 +1,2 @@
+0000:00:14.0 USB controller [0c03]: Intel Corporation Device [8086:54ed] (rev 01)
+	Kernel driver in use: xhci_hcd

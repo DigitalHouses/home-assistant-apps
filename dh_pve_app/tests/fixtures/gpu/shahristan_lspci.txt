@@ -1,0 +1,4 @@
+0000:00:02.0 VGA compatible controller [0300]: Intel Corporation Alder Lake-N [UHD Graphics] [8086:46d1]
+	Subsystem: Device [1f66:3002]
+	Kernel driver in use: vfio-pci
+	Kernel modules: i915

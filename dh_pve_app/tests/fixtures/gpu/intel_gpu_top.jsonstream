@@ -1,0 +1,22 @@
+{
+  "period": {"duration": 150},
+  "engines": {"Video/0": {"busy": 99.0}}
+},
+{
+  "period": {"duration": 1000},
+  "engines": {
+    "Render/3D/0": {"busy": 12.34},
+    "Video/0": {"busy": 71.26},
+    "VideoEnhance/0": {"busy": 8.88}
+  },
+  "rc6": {"value": 21.24}
+},
+{
+  "period": {"duration": 1000},
+  "engines": {
+    "Render/3D/0": {"busy": 18.01},
+    "Video/0": {"busy": 64.0},
+    "VideoEnhance/0": {"busy": 10.02}
+  },
+  "rc6": {"value": 25.55}
+}

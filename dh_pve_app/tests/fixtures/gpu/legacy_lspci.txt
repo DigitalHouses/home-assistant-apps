@@ -1,0 +1,4 @@
+0000:01:00.0 VGA compatible controller [0300]: NVIDIA Corporation GK208B [GeForce GT 730] [10de:1287] (rev a1)
+	Subsystem: NVIDIA Corporation Device [10de:1287]
+	Kernel driver in use: nouveau
+	Kernel modules: nouveau
