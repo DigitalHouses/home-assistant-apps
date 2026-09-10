@@ -51,7 +51,8 @@ def test_dashboard_is_exactly_four_continuous_columns_with_v7_headings():
 def test_dashboard_uses_new_dh_pve_entities_and_semantics_only():
     text = _text()
     assert "sensor.dh_pve_cpu_usage" in text
-    assert "sensor.dh_pve_memory_usage" in text
+    assert "section == 'memory'" in text
+    assert "subject == 'memory'" in text
     assert "sensor.dh_pve_cpu_temperature" in text
     assert "sensor.dh_pve_cpu_frequency" in text
     assert "binary_sensor.dh_pve_cpu_throttling" in text
@@ -145,8 +146,8 @@ def test_dynamic_sections_use_new_semantic_attributes_and_guest_inventory_is_rea
     assert "proxmox_sort_key" in text
     assert "sensor.dh_pve_vms" in text
     assert "sensor.dh_pve_lxcs" in text
-    assert "proxmox_subject: vm" in text
-    assert "proxmox_subject: lxc" in text
+    assert "proxmox_subject') in ['vm', 'lxc']" in text
+    assert "proxmox_metric') == 'status'" in text
     assert "switch.dh_pve_vm_" not in text
     assert "button.dh_pve_vm_" not in text
 
