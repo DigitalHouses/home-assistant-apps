@@ -1,0 +1,30 @@
+[general]
+# Stable instance identity. Use "auto" to derive it from /etc/machine-id.
+instance_id = auto
+# Short display label for this Proxmox node in Home Assistant.
+display_name = PVE
+
+[mqtt]
+host = 192.168.11.33
+port = 1883
+username = digitalhouses
+password = change_me
+discovery_prefix = homeassistant
+topic_prefix = DigitalHouses/Global/dh_pve_app
+
+[polling]
+fast_interval_seconds = 10
+disk_interval_seconds = 30
+storage_interval_seconds = 60
+smart_interval_seconds = 60
+smart_extended_interval_seconds = 3600
+inventory_interval_seconds = 86400
+
+[publish]
+cpu_delta_percent = 5
+memory_delta_percent = 1
+temperature_delta_c = 1
+frequency_delta_mhz = 100
+storage_delta_percent = 0.5
+gpu_delta_percent = 5
+fan_delta_rpm = 100
