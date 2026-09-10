@@ -134,7 +134,7 @@ def validate_dh_pve_app(
         (
             "DynamicDiscoveryRuntime(",
             "GuestAwareProductionCollectors(",
-            "TopologyManager(runner=_run, node_name=identity.node_name)",
+            "TopologyManager(runner=_run)",
             "build_guest_aware_discovery_payload(",
             'scheduler.add("guests", interval_seconds=30.0',
             'scheduler.add("gpu", interval_seconds=30.0',
