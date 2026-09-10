@@ -148,6 +148,8 @@ jobs:
             dh_pve_app/tests
 
       - name: Run unit tests
+        env:
+          PYTHONPATH: dh_pve_app
         run: python -m pytest dh_pve_app/tests -q
 
       - name: Check installer syntax
