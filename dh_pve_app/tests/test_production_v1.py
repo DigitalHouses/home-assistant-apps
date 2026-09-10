@@ -19,7 +19,7 @@ def _collector(tmp_path):
 
 
 def test_host_helpers_return_ready_to_publish_values():
-    assert boot_time_iso(1788813522).startswith("2026-09-08T")
+    assert boot_time_iso(1788813522) == "2026-09-07T20:38:42+00:00"
     assert parse_primary_ip(
         '[{"dst":"1.1.1.1","gateway":"192.168.11.1","prefsrc":"192.168.11.30","dev":"vmbr0"}]'
     ) == "192.168.11.30"
