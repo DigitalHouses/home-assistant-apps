@@ -82,14 +82,15 @@ def test_dashboard_preserves_notification_threshold_controls_as_ui_only():
     text = _text()
     assert "UI/notification thresholds only" in text
     for entity_id in (
-        "input_number.dh_proxmox_storage_usage_threshold",
-        "input_number.dh_proxmox_cpu_temperature_threshold",
-        "input_number.dh_proxmox_hdd_temperature_threshold",
-        "input_number.dh_proxmox_ssd_temperature_threshold",
-        "input_number.dh_proxmox_nvme_temperature_threshold",
-        "input_number.dh_proxmox_gpu_temperature_threshold",
+        "input_number.dh_pve_storage_usage_threshold",
+        "input_number.dh_pve_cpu_temperature_threshold",
+        "input_number.dh_pve_hdd_temperature_threshold",
+        "input_number.dh_pve_ssd_temperature_threshold",
+        "input_number.dh_pve_nvme_temperature_threshold",
+        "input_number.dh_pve_gpu_temperature_threshold",
     ):
         assert entity_id in text
+    assert "input_number.dh_proxmox_" not in text
     for fallback in ("else 80", "else 90", "else 45", "else 75", "else 85"):
         assert fallback in text
 
@@ -138,7 +139,7 @@ def test_storage_cards_keep_v7_progress_and_red_green_logic_using_used_total():
 def test_cpu_temperature_and_throttling_keep_v7_visual_logic():
     text = _text()
     assert "CPU & Throttling" in text
-    assert "input_number.dh_proxmox_cpu_temperature_threshold" in text
+    assert "input_number.dh_pve_cpu_temperature_threshold" in text
     assert "temp_percent" in text
     assert "mdi:thermometer-alert" in text
     assert "mdi:thermometer-check" in text
