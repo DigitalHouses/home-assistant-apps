@@ -111,6 +111,15 @@ def test_physical_disk_cards_keep_v7_type_icons_but_color_from_python_health():
     assert "health.state == 'HEALTHY'" in text
 
 
+def test_physical_disk_tap_opens_temperature_history_with_health_fallback():
+    text = _text()
+    assert "temp_entity=none" in text
+    assert "{% set related.temp_entity = s.entity_id %}" in text
+    assert "{% set card_entity = related.temp_entity if related.temp_entity else health.entity_id %}" in text
+    assert "'entity': card_entity" in text
+    assert "'tap_action': {'action': 'more-info'}" in text
+
+
 def test_storage_cards_keep_v7_progress_and_red_green_logic_using_used_total():
     text = _text()
     assert "custom:entity-progress-card-template" in text
