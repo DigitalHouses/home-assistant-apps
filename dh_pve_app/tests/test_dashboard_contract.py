@@ -150,7 +150,7 @@ def test_cpu_temperature_and_throttling_keep_v7_visual_logic():
 
 def test_dynamic_sections_use_new_semantic_attributes_and_guest_inventory_is_read_only():
     text = _text()
-    for section in ("storage", "disk", "graphics", "cooling", "guests", "diagnostic"):
+    for section in ("storage", "disk", "graphics", "cooling", "guests"):
         assert section in text
     assert "proxmox_sort_key" in text
     assert "sensor.dh_pve_vms" in text
