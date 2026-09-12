@@ -289,7 +289,12 @@ def _service_state(
     return text or "unknown"
 
 
-def _validate_static_helper(path: Path) -> None:
+def _validate_static_helper(
+    path: Path,
+    *,
+    expected_uid: int,
+    expected_gid: int,
+) -> None:
     try:
         info = path.stat()
     except OSError as exc:
@@ -299,6 +304,12 @@ def _validate_static_helper(path: Path) -> None:
     if not path.is_file() or not os.access(path, os.X_OK):
         raise PolicyApplyError(
             f"Статический helper политики UPS не является исполняемым: {path}."
+        )
+    if info.st_uid != expected_uid or info.st_gid != expected_gid:
+        raise PolicyApplyError(
+            "Статический helper политики UPS имеет недоверенного владельца: "
+            f"uid={info.st_uid}, gid={info.st_gid}; "
+            f"ожидается uid={expected_uid}, gid={expected_gid}."
         )
     mode = stat.S_IMODE(info.st_mode)
     if mode & 0o022:
@@ -317,11 +328,15 @@ class UpsPolicyApplier:
         ups_name: str,
         runner: Callable[..., subprocess.CompletedProcess[str]],
         effective_restart_delay_reader: Callable[[], int],
+        helper_expected_uid: int = 0,
+        helper_expected_gid: int = 0,
     ) -> None:
         self.paths = paths
         self.ups_name = ups_name
         self.runner = runner
         self.effective_restart_delay_reader = effective_restart_delay_reader
+        self.helper_expected_uid = helper_expected_uid
+        self.helper_expected_gid = helper_expected_gid
 
     def _rollback(
         self,
@@ -382,7 +397,11 @@ class UpsPolicyApplier:
     ) -> PolicyApplyResult:
         try:
             validate_policy(draft, facts)
-            _validate_static_helper(self.paths.command_script)
+            _validate_static_helper(
+                self.paths.command_script,
+                expected_uid=self.helper_expected_uid,
+                expected_gid=self.helper_expected_gid,
+            )
             snapshots = {
                 path: _snapshot(path)
                 for path in (
