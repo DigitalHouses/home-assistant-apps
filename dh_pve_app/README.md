@@ -55,7 +55,9 @@ DigitalHouses/Global/dh_pve_app/<instance>/ups/refresh
 homeassistant/device/dh_ups_<instance>/config
 ```
 
-Discovery is capability-driven. Only variables actually reported by NUT are exposed. Supported normalized facts include UPS status, battery charge/runtime/voltage, load, input/output voltage, nominal real power, estimated real power, warning/low thresholds, test result and beeper status. NUT status tokens such as `OL`, `OB` and `LB` are parsed in Python into understandable states and binary sensors; the raw NUT status is retained as an attribute.
+Discovery is capability-driven. Only variables actually reported by NUT are exposed. Supported normalized facts include UPS status, battery charge/runtime/voltage, load, input/output voltage, nominal real power, warning/low thresholds, test result and beeper status. NUT status tokens such as `OL`, `OB` and `LB` are parsed in Python into understandable states and binary sensors; the raw NUT status is retained as an attribute.
+
+The app deliberately does **not** derive active power from `ups.load × ups.realpower.nominal`: live validation showed that some UPS models quantize low load heavily enough for such a derived value to be misleading. `sensor.dh_ups_nominal_real_power` remains a diagnostic hardware fact when NUT reports it.
 
 UPS telemetry is polled independently from PVE telemetry. Discrete power-state changes publish immediately; numeric state uses version-controlled deltas (1 percentage point, 1 V, 60 s runtime). A NUT read failure makes only `DH UPS` unavailable and does not interrupt `DH PVE` monitoring.
 
@@ -113,17 +115,25 @@ UPS refresh is independent and advances its timestamp only after a successful NU
 
 ## Dashboard
 
-A production Lovelace view is provided at:
+The production PVE Lovelace view is provided at:
 
 ```text
 dh_pve_app/examples/dh_pve_dashboard.yaml
 ```
 
-It requires the HACS cards **Mushroom**, **auto-entities**, **mini-graph-card**, and **Entity Progress Card**.
+A compact standalone UPS view for alpha validation is provided at:
 
-The dashboard uses Python-normalized values directly. Storage progress uses `usage_percent` plus `used_gib / total_gib`, disk health remains the Python-produced `HEALTHY/WARNING/CRITICAL` state, and Home Assistant does not calculate infrastructure health.
+```text
+dh_pve_app/examples/dh_ups_dashboard.yaml
+```
 
-UPS dashboard and notifications are deferred until live alpha telemetry has been validated on real hardware.
+The UPS view keeps operational facts prominent (`status`, battery, runtime, load and input/output voltage), surfaces only actionable UPS fault flags as warning cards, and moves service facts such as NUT availability, battery voltage, nominal power, configured NUT thresholds, test result and refresh timestamp into a secondary service block. It never uses estimated active power.
+
+The PVE dashboard requires the HACS cards **Mushroom**, **auto-entities**, **mini-graph-card**, and **Entity Progress Card**. The compact UPS view requires **Mushroom**.
+
+The dashboards use Python-normalized values directly. Storage progress uses `usage_percent` plus `used_gib / total_gib`, disk health remains the Python-produced `HEALTHY/WARNING/CRITICAL` state, and Home Assistant does not calculate infrastructure health.
+
+Notifications remain deferred until shutdown/power-loss behavior can be tested on a physically accessible site.
 
 ## Installation
 
@@ -166,4 +176,4 @@ Expected alpha behavior is a separate `DH UPS` MQTT device, capability-driven en
 
 ## Status
 
-Version `0.2.0-alpha` is a validation build for read-only NUT-backed UPS telemetry. Shutdown/FSD policy, LAN NUT clients, notifications and UPS dashboard work remain separate later phases.
+Version `0.2.0-alpha` is a validation build for read-only NUT-backed UPS telemetry and compact HA visualization. Shutdown/FSD policy, LAN NUT clients and notifications remain separate later phases.
