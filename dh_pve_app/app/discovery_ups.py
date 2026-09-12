@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .config import AppConfig
+from .config import AppConfig, MqttConfig
 from .identity import HostIdentity
 from .topics import build_topics, build_ups_topics
 from .ups_nut import UpsSnapshot
@@ -26,14 +26,15 @@ def _nut_availability(state_topic: str) -> dict[str, str]:
 
 
 def build_ups_discovery_payload(
-    config: AppConfig,
+    config: AppConfig | MqttConfig,
     identity: HostIdentity,
     *,
     version: str,
     snapshot: UpsSnapshot | None,
 ) -> dict[str, Any]:
-    pve_topics = build_topics(config.mqtt, identity)
-    topics = build_ups_topics(config.mqtt, identity)
+    mqtt = config.mqtt if isinstance(config, AppConfig) else config
+    pve_topics = build_topics(mqtt, identity)
+    topics = build_ups_topics(mqtt, identity)
 
     def uid(component: str) -> str:
         return f"{topics.device_id}_{component}"
