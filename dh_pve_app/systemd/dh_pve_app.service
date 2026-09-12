@@ -19,7 +19,8 @@ PrivateTmp=true
 ProtectHome=true
 ProtectSystem=full
 # Keep the host filesystem protected; only NUT configuration is writable.
-# App-owned helper scripts and metadata live under /var/lib/dh_pve_app.
+# The FSD helper is immutable application code under /opt; policy metadata
+# remains app-owned state under /var/lib/dh_pve_app.
 ReadWritePaths=/etc/nut
 
 [Install]
