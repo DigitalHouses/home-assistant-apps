@@ -91,12 +91,15 @@ def next_scheduled_test(
     return _local_at(target_day, preferred, anchor.tzinfo)
 
 
-def _eligible_now(
+def is_test_eligible_now(
     *,
     now: datetime,
     schedule: TestSchedule,
     anchor: datetime,
 ) -> bool:
+    """Return whether an overdue test is inside today's preferred one-hour window."""
+    _require_aware(now)
+    _require_aware(anchor)
     due = next_scheduled_test(schedule, anchor)
     if due is None or now < due:
         return False
@@ -123,12 +126,12 @@ def choose_scheduled_test(
     if not safe_to_test:
         return None
 
-    deep_due = _eligible_now(
+    deep_due = is_test_eligible_now(
         now=now,
         schedule=deep_schedule,
         anchor=deep_anchor,
     )
-    quick_due = _eligible_now(
+    quick_due = is_test_eligible_now(
         now=now,
         schedule=quick_schedule,
         anchor=quick_anchor,
