@@ -28,7 +28,9 @@ class ManagedNutPaths:
     upsmon: Path = Path("/etc/nut/upsmon.conf")
     upssched: Path = Path("/etc/nut/upssched.conf")
     ups_conf: Path = Path("/etc/nut/ups.conf")
-    command_script: Path = Path("/var/lib/dh_pve_app/dh-pve-ups-policy-cmd")
+    command_script: Path = Path(
+        "/opt/digitalhouses/dh_pve_app/bin/dh-pve-ups-policy-cmd"
+    )
     metadata: Path = Path("/var/lib/dh_pve_app/ups_policy_active.json")
 
 
@@ -37,7 +39,6 @@ class ManagedPolicyTarget:
     upsmon_text: str
     upssched_text: str
     ups_conf_text: str
-    command_script_text: str
 
 
 @dataclass(frozen=True)
@@ -172,20 +173,6 @@ def _render_upssched(delay_seconds: int, command_script_path: Path) -> str:
     )
 
 
-def _render_command_script() -> str:
-    return "\n".join(
-        [
-            "#!/bin/sh",
-            "set -eu",
-            'case "${1:-}" in',
-            '  "dh-pve-ups-shutdown") exec /sbin/upsmon -c fsd ;;',
-            "  *) exit 64 ;;",
-            "esac",
-            "",
-        ]
-    )
-
-
 def render_managed_policy(
     draft: UpsPolicyDraft,
     upsmon_text: str,
@@ -205,7 +192,6 @@ def render_managed_policy(
             ups_name,
             validation.power_restore_delay_seconds,
         ),
-        command_script_text=_render_command_script(),
     )
 
 
@@ -292,6 +278,24 @@ def _service_state(
     return text or "unknown"
 
 
+def _validate_static_helper(path: Path) -> None:
+    try:
+        info = path.stat()
+    except OSError as exc:
+        raise PolicyApplyError(
+            f"Статический helper политики UPS недоступен: {path}."
+        ) from exc
+    if not path.is_file() or not os.access(path, os.X_OK):
+        raise PolicyApplyError(
+            f"Статический helper политики UPS не является исполняемым: {path}."
+        )
+    mode = stat.S_IMODE(info.st_mode)
+    if mode & 0o022:
+        raise PolicyApplyError(
+            f"Статический helper политики UPS доступен на запись группе/остальным: {path}."
+        )
+
+
 class UpsPolicyApplier:
     """Transactional writer for the approved DigitalHouses NUT policy surface."""
 
@@ -319,7 +323,6 @@ class UpsPolicyApplier:
             self.paths.upsmon: 0o640,
             self.paths.upssched: 0o640,
             self.paths.ups_conf: 0o640,
-            self.paths.command_script: 0o750,
             self.paths.metadata: 0o600,
         }
         for path, snapshot in snapshots.items():
@@ -368,13 +371,13 @@ class UpsPolicyApplier:
     ) -> PolicyApplyResult:
         try:
             validate_policy(draft, facts)
+            _validate_static_helper(self.paths.command_script)
             snapshots = {
                 path: _snapshot(path)
                 for path in (
                     self.paths.upsmon,
                     self.paths.upssched,
                     self.paths.ups_conf,
-                    self.paths.command_script,
                     self.paths.metadata,
                 )
             }
@@ -396,11 +399,6 @@ class UpsPolicyApplier:
             _atomic_write(self.paths.upsmon, target.upsmon_text.encode("utf-8"), 0o640)
             _atomic_write(self.paths.upssched, target.upssched_text.encode("utf-8"), 0o640)
             _atomic_write(self.paths.ups_conf, target.ups_conf_text.encode("utf-8"), 0o640)
-            _atomic_write(
-                self.paths.command_script,
-                target.command_script_text.encode("utf-8"),
-                0o750,
-            )
 
             if self.paths.upsmon.read_text(encoding="utf-8") != target.upsmon_text:
                 raise PolicyApplyError("Проверка upsmon.conf после записи не прошла.")
