@@ -11,6 +11,11 @@ from .config import MqttConfig
 from .runtime_settings import RuntimeSettingError, RuntimeSettings
 from .topics import Topics, UpsTopics
 from .ups_policy import PolicyValidationError, parse_policy_value
+from .ups_test_schedule import (
+    TestScheduleError,
+    parse_interval_days_payload,
+    parse_time_command_payload,
+)
 
 
 @dataclass(frozen=True)
@@ -33,6 +38,13 @@ class PolicyDraftUpdate:
     value: int
 
 
+@dataclass(frozen=True)
+class TestScheduleUpdate:
+    test_type: str
+    field: str
+    value: int | str
+
+
 def build_lwt(topics: Topics) -> WillMessage:
     return WillMessage(topics.availability, "offline", 1, True)
 
@@ -53,6 +65,7 @@ class MqttEvents:
         self.ups_reconnect_requested = threading.Event()
         self.setting_updates: queue.SimpleQueue[SettingUpdate] = queue.SimpleQueue()
         self.ups_policy_updates: queue.SimpleQueue[PolicyDraftUpdate] = queue.SimpleQueue()
+        self.ups_test_schedule_updates: queue.SimpleQueue[TestScheduleUpdate] = queue.SimpleQueue()
 
     def configure_ups(self, topics: UpsTopics) -> None:
         self.ups_topics = topics
@@ -95,6 +108,37 @@ class MqttEvents:
                 return True
             return False
         if self.ups_topics is not None:
+            schedule_topics = {
+                self.ups_topics.test_quick_interval_days_set: (
+                    "quick",
+                    "interval_days",
+                    parse_interval_days_payload,
+                ),
+                self.ups_topics.test_quick_time_set: (
+                    "quick",
+                    "preferred_time",
+                    parse_time_command_payload,
+                ),
+                self.ups_topics.test_deep_interval_days_set: (
+                    "deep",
+                    "interval_days",
+                    parse_interval_days_payload,
+                ),
+                self.ups_topics.test_deep_time_set: (
+                    "deep",
+                    "preferred_time",
+                    parse_time_command_payload,
+                ),
+            }
+            schedule_target = schedule_topics.get(topic)
+            if schedule_target is not None:
+                test_type, field, parser = schedule_target
+                value = parser(text)
+                self.ups_test_schedule_updates.put(
+                    TestScheduleUpdate(test_type=test_type, field=field, value=value)
+                )
+                return True
+
             policy_topics = {
                 self.ups_topics.policy_on_battery_delay_set: "on_battery_delay_minutes",
                 self.ups_topics.policy_power_restore_delay_set: (
@@ -168,6 +212,10 @@ class MqttBridge(MqttEvents):
         client.subscribe(f"{self.topics.base}/ups/test/quick", qos=1)
         client.subscribe(f"{self.topics.base}/ups/test/deep", qos=1)
         client.subscribe(f"{self.topics.base}/ups/test/stop", qos=1)
+        client.subscribe(f"{self.topics.base}/ups/test/schedule/quick/interval_days/set", qos=1)
+        client.subscribe(f"{self.topics.base}/ups/test/schedule/quick/time/set", qos=1)
+        client.subscribe(f"{self.topics.base}/ups/test/schedule/deep/interval_days/set", qos=1)
+        client.subscribe(f"{self.topics.base}/ups/test/schedule/deep/time/set", qos=1)
         client.subscribe(f"{self.topics.base}/ups/policy/on_battery_delay/set", qos=1)
         client.subscribe(f"{self.topics.base}/ups/policy/power_restore_delay/set", qos=1)
         client.subscribe(f"{self.topics.base}/ups/policy/apply", qos=1)
@@ -214,6 +262,9 @@ class MqttBridge(MqttEvents):
             return
         except PolicyValidationError as exc:
             self.log.warning("Отклонено значение черновика политики UPS: %s", exc)
+            return
+        except TestScheduleError as exc:
+            self.log.warning("Отклонено значение расписания тестов UPS: %s", exc)
             return
         if handled:
             self.wake_requested.set()
