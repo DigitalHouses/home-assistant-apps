@@ -218,6 +218,7 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
 
                 if ups_runtime is not None and not ups_startup_attempted:
                     bridge.ups_reconnect_requested.clear()
+                    bridge.clear_legacy_ups_discovery()
                     ups_ok = ups_runtime.startup()
                     ups_startup_attempted = True
                     if ups_ok:
