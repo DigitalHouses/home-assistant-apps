@@ -68,6 +68,29 @@ def test_discovery_only_creates_supported_factual_entities():
     assert "unsupported_temperature" not in components
 
 
+def test_frequency_entities_are_capability_driven_and_primary():
+    snapshot = parse_upsc_output(
+        "ups.status: OL\n"
+        "input.frequency: 50.0\n"
+        "output.frequency: 49.9\n"
+    )
+    components = build_ups_discovery_payload(
+        _mqtt(), _identity(), version="0.2.0-alpha", snapshot=snapshot
+    )["components"]
+
+    input_frequency = components["input_frequency"]
+    output_frequency = components["output_frequency"]
+
+    assert input_frequency["default_entity_id"] == "sensor.dh_pve_ups_input_frequency"
+    assert output_frequency["default_entity_id"] == "sensor.dh_pve_ups_output_frequency"
+    assert input_frequency["unit_of_measurement"] == "Hz"
+    assert output_frequency["unit_of_measurement"] == "Hz"
+    assert input_frequency["device_class"] == "frequency"
+    assert output_frequency["device_class"] == "frequency"
+    assert input_frequency.get("entity_category") is None
+    assert output_frequency.get("entity_category") is None
+
+
 def test_problems_sensor_remains_available_when_nut_read_fails():
     payload = build_ups_discovery_payload(
         _mqtt(), _identity(), version="0.2.0-alpha", snapshot=None
@@ -143,6 +166,8 @@ def test_discovery_omits_capability_not_reported_by_ups():
     assert "battery_runtime_minutes" not in components
     assert "battery_runtime" not in components
     assert "input_voltage" not in components
+    assert "input_frequency" not in components
+    assert "output_frequency" not in components
 
 
 def test_ups_device_metadata_uses_real_hardware_identity():
