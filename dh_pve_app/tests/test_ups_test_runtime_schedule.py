@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 from app.config import MqttConfig, UpsConfig
 from app.identity import HostIdentity
-from app.mqtt_bridge import TestScheduleUpdate
+from app.mqtt_bridge import TestScheduleUpdate as ScheduleUpdate
 from app.state_store import StateStore
 from app.ups_control import UpsCapabilities
 from app.ups_nut import parse_upsc_output
@@ -173,7 +173,7 @@ def test_schedule_update_resets_anchor_and_persists(tmp_path):
     bridge, runtime, store, _, _ = _runtime(tmp_path, clock=clock)
     runtime.startup()
     bridge.ups_test_schedule_updates.put(
-        TestScheduleUpdate(test_type="quick", field="interval_days", value=7)
+        ScheduleUpdate(test_type="quick", field="interval_days", value=7)
     )
 
     assert runtime.process_events() is True
@@ -290,3 +290,15 @@ def test_manual_test_history_is_capped_to_ten_and_survives_restart(tmp_path):
 
     _, restarted, _, _, _ = _runtime(tmp_path, clock=clock, persisted=store.load())
     assert restarted.test_history == history
+
+
+def test_internal_test_correlation_field_is_not_published(tmp_path):
+    clock = {"local": datetime(2026, 9, 13, 15, 0, tzinfo=TZ), "mono": 100.0}
+    bridge, runtime, store, _, _ = _runtime(tmp_path, clock=clock)
+    runtime.startup()
+
+    bridge.ups_test_quick_requested.set()
+    assert runtime.process_events() is True
+
+    assert "nut_result_before" in store.load()["test_history"][-1]
+    assert "nut_result_before" not in bridge.states[-1]["test_history"][-1]
