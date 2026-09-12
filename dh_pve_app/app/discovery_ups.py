@@ -49,7 +49,7 @@ def build_ups_discovery_payload(
             "platform": "sensor",
             "name": "Status",
             "unique_id": uid("status"),
-            "default_entity_id": "sensor.dh_ups_status",
+            "default_entity_id": "sensor.dh_pve_ups_status",
             "state_topic": topics.state,
             "value_template": "{{ value_json.status | default('Unknown') }}",
             "availability": telemetry_availability,
@@ -65,7 +65,7 @@ def build_ups_discovery_payload(
             "platform": "sensor",
             "name": "Problems",
             "unique_id": uid("problems"),
-            "default_entity_id": "sensor.dh_ups_problems",
+            "default_entity_id": "sensor.dh_pve_ups_problems",
             "state_topic": topics.state,
             "value_template": "{{ value_json.problems_count | default(0) }}",
             "availability": [app_availability],
@@ -82,7 +82,7 @@ def build_ups_discovery_payload(
             "platform": "binary_sensor",
             "name": "NUT data available",
             "unique_id": uid("available"),
-            "default_entity_id": "binary_sensor.dh_ups_available",
+            "default_entity_id": "binary_sensor.dh_pve_ups_available",
             "state_topic": topics.state,
             "value_template": "{{ 'ON' if value_json.available | default(false) else 'OFF' }}",
             "payload_on": "ON",
@@ -96,7 +96,7 @@ def build_ups_discovery_payload(
             "platform": "sensor",
             "name": "Last refresh",
             "unique_id": uid("last_refresh"),
-            "default_entity_id": "sensor.dh_ups_last_refresh",
+            "default_entity_id": "sensor.dh_pve_ups_last_refresh",
             "state_topic": topics.state,
             "value_template": "{{ value_json.last_refresh | default(none) }}",
             "availability": [app_availability],
@@ -109,7 +109,7 @@ def build_ups_discovery_payload(
             "platform": "button",
             "name": "Refresh",
             "unique_id": uid("refresh"),
-            "default_entity_id": "button.dh_ups_refresh",
+            "default_entity_id": "button.dh_pve_ups_refresh",
             "command_topic": topics.refresh,
             "payload_press": "PRESS",
             "availability": [app_availability],
@@ -179,106 +179,106 @@ def build_ups_discovery_payload(
     if snapshot is not None:
         if snapshot.battery_charge_percent is not None:
             add_sensor(
-                "battery_charge", "Battery charge", "sensor.dh_ups_battery_charge",
+                "battery_charge", "Battery charge", "sensor.dh_pve_ups_battery_charge",
                 "battery_charge_percent", unit="%", device_class="battery",
             )
         if snapshot.runtime_seconds is not None:
             add_sensor(
                 "battery_runtime_minutes", "Battery runtime",
-                "sensor.dh_ups_battery_runtime_minutes", "battery_runtime_minutes",
+                "sensor.dh_pve_ups_battery_runtime_minutes", "battery_runtime_minutes",
                 unit="min", device_class="duration",
             )
             add_sensor(
                 "battery_runtime", "Battery runtime (seconds)",
-                "sensor.dh_ups_battery_runtime", "runtime_seconds",
+                "sensor.dh_pve_ups_battery_runtime", "runtime_seconds",
                 unit="s", device_class="duration", entity_category="diagnostic",
             )
         if snapshot.battery_voltage_v is not None:
             add_sensor(
-                "battery_voltage", "Battery voltage", "sensor.dh_ups_battery_voltage",
+                "battery_voltage", "Battery voltage", "sensor.dh_pve_ups_battery_voltage",
                 "battery_voltage_v", unit="V", device_class="voltage",
                 entity_category="diagnostic",
             )
         if snapshot.load_percent is not None:
-            add_sensor("load", "Load", "sensor.dh_ups_load", "load_percent", unit="%")
+            add_sensor("load", "Load", "sensor.dh_pve_ups_load", "load_percent", unit="%")
         if snapshot.nominal_real_power_w is not None:
             add_sensor(
                 "nominal_real_power", "Nominal real power",
-                "sensor.dh_ups_nominal_real_power", "nominal_real_power_w",
+                "sensor.dh_pve_ups_nominal_real_power", "nominal_real_power_w",
                 unit="W", device_class="power", entity_category="diagnostic",
             )
         if snapshot.input_voltage_v is not None:
             add_sensor(
-                "input_voltage", "Input voltage", "sensor.dh_ups_input_voltage",
+                "input_voltage", "Input voltage", "sensor.dh_pve_ups_input_voltage",
                 "input_voltage_v", unit="V", device_class="voltage",
             )
         if snapshot.output_voltage_v is not None:
             add_sensor(
-                "output_voltage", "Output voltage", "sensor.dh_ups_output_voltage",
+                "output_voltage", "Output voltage", "sensor.dh_pve_ups_output_voltage",
                 "output_voltage_v", unit="V", device_class="voltage",
             )
         if snapshot.warning_charge_percent is not None:
             add_sensor(
                 "battery_charge_warning", "Battery warning threshold",
-                "sensor.dh_ups_battery_charge_warning", "warning_charge_percent",
+                "sensor.dh_pve_ups_battery_charge_warning", "warning_charge_percent",
                 unit="%", entity_category="diagnostic",
             )
         if snapshot.low_charge_percent is not None:
             add_sensor(
                 "battery_charge_low", "Battery low threshold",
-                "sensor.dh_ups_battery_charge_low", "low_charge_percent",
+                "sensor.dh_pve_ups_battery_charge_low", "low_charge_percent",
                 unit="%", entity_category="diagnostic",
             )
         if snapshot.low_runtime_seconds is not None:
             add_sensor(
                 "battery_runtime_low", "Low runtime threshold",
-                "sensor.dh_ups_battery_runtime_low", "low_runtime_seconds",
+                "sensor.dh_pve_ups_battery_runtime_low", "low_runtime_seconds",
                 unit="s", device_class="duration", entity_category="diagnostic",
             )
         if snapshot.test_result is not None:
             add_sensor(
-                "test_result", "Last test result", "sensor.dh_ups_test_result",
+                "test_result", "Last test result", "sensor.dh_pve_ups_test_result",
                 "test_result", entity_category="diagnostic", icon="mdi:clipboard-check-outline",
             )
         if snapshot.beeper_status is not None:
             add_sensor(
-                "beeper_status", "Beeper status", "sensor.dh_ups_beeper_status",
+                "beeper_status", "Beeper status", "sensor.dh_pve_ups_beeper_status",
                 "beeper_status", entity_category="diagnostic", icon="mdi:volume-high",
             )
 
         if "ups.status" in snapshot.raw:
             add_binary(
-                "on_battery", "On battery", "binary_sensor.dh_ups_on_battery",
+                "on_battery", "On battery", "binary_sensor.dh_pve_ups_on_battery",
                 "on_battery", "mdi:battery-arrow-down",
             )
             add_binary(
-                "low_battery", "Low battery", "binary_sensor.dh_ups_low_battery",
+                "low_battery", "Low battery", "binary_sensor.dh_pve_ups_low_battery",
                 "low_battery", "mdi:battery-alert",
             )
             add_binary(
-                "replace_battery", "Replace battery", "binary_sensor.dh_ups_replace_battery",
+                "replace_battery", "Replace battery", "binary_sensor.dh_pve_ups_replace_battery",
                 "replace_battery", "mdi:battery-sync-outline",
             )
             add_binary(
-                "overload", "Overload", "binary_sensor.dh_ups_overload",
+                "overload", "Overload", "binary_sensor.dh_pve_ups_overload",
                 "overload", "mdi:alert-octagon-outline",
             )
             add_binary(
-                "bypass", "Bypass", "binary_sensor.dh_ups_bypass",
+                "bypass", "Bypass", "binary_sensor.dh_pve_ups_bypass",
                 "bypass", "mdi:transit-connection-variant",
             )
             add_binary(
-                "charging", "Charging", "binary_sensor.dh_ups_charging",
+                "charging", "Charging", "binary_sensor.dh_pve_ups_charging",
                 "charging", "mdi:battery-charging", entity_category="diagnostic",
             )
             add_binary(
-                "discharging", "Discharging", "binary_sensor.dh_ups_discharging",
+                "discharging", "Discharging", "binary_sensor.dh_pve_ups_discharging",
                 "discharging", "mdi:battery-minus", entity_category="diagnostic",
             )
 
     device: dict[str, Any] = {
         "identifiers": [topics.device_id],
-        "name": "DH UPS",
+        "name": "DH PVE UPS",
         "manufacturer": (snapshot.manufacturer if snapshot and snapshot.manufacturer else "DigitalHouses"),
         "model": (snapshot.model if snapshot and snapshot.model else "NUT UPS"),
         "sw_version": version,
