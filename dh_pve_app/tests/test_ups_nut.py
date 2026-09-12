@@ -24,7 +24,7 @@ def test_parse_remote_cyberpower_sample():
     assert snapshot.battery_voltage_v == 27.2
     assert snapshot.load_percent == 8.0
     assert snapshot.nominal_real_power_w == 1320.0
-    assert snapshot.estimated_real_power_w == pytest.approx(105.6)
+    assert not hasattr(snapshot, "estimated_real_power_w")
     assert snapshot.input_voltage_v == 221.0
     assert snapshot.output_voltage_v == 221.0
     assert snapshot.warning_charge_percent == 20.0
@@ -63,7 +63,7 @@ def test_missing_and_malformed_optional_values_do_not_break_snapshot():
     assert snapshot.model == "Demo"
     assert snapshot.battery_charge_percent is None
     assert snapshot.load_percent is None
-    assert snapshot.estimated_real_power_w is None
+    assert not hasattr(snapshot, "estimated_real_power_w")
 
 
 def test_ups_metrics_use_expected_publish_policies():
