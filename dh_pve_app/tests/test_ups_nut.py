@@ -34,6 +34,21 @@ def test_parse_remote_cyberpower_sample():
     assert snapshot.input_transfer_low_v is None
 
 
+def test_parse_frequency_capabilities():
+    snapshot = parse_upsc_output(
+        "ups.status: OL\n"
+        "input.frequency: 50.0\n"
+        "output.frequency: 49.9\n"
+    )
+
+    assert snapshot.input_frequency_hz == 50.0
+    assert snapshot.output_frequency_hz == 49.9
+
+    metrics = ups_metrics(snapshot)
+    assert metrics["input_frequency_hz"].policy == "ups_frequency_online"
+    assert metrics["output_frequency_hz"].policy == "ups_frequency_online"
+
+
 def test_multi_token_status_is_normalized():
     snapshot = parse_upsc_output("ups.status: OB LB DISCHRG\n")
 
