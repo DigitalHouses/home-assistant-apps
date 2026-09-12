@@ -5,7 +5,9 @@ from typing import Any
 from .config import MqttConfig
 from .identity import HostIdentity
 from .topics import build_topics, build_ups_topics
+from .ups_control import UpsCapabilities
 from .ups_nut import UpsSnapshot
+from .ups_shutdown_policy import UpsShutdownPolicy
 
 
 def _availability(topic: str) -> dict[str, str]:
@@ -31,6 +33,8 @@ def build_ups_discovery_payload(
     *,
     version: str,
     snapshot: UpsSnapshot | None,
+    capabilities: UpsCapabilities | None = None,
+    shutdown_policy: UpsShutdownPolicy | None = None,
 ) -> dict[str, Any]:
     pve_topics = build_topics(config, identity)
     topics = build_ups_topics(config, identity)
@@ -117,6 +121,60 @@ def build_ups_discovery_payload(
             "entity_category": "diagnostic",
             "icon": "mdi:refresh",
         },
+        "capabilities": {
+            "platform": "sensor",
+            "name": "Capabilities",
+            "unique_id": uid("capabilities"),
+            "default_entity_id": "sensor.dh_pve_ups_capabilities",
+            "state_topic": topics.state,
+            "value_template": (
+                "{{ (value_json.capabilities.count | default(0) | string) ~ ' commands' "
+                "if value_json.capabilities.available | default(false) else 'Unavailable' }}"
+            ),
+            "availability": [app_availability],
+            "availability_mode": "all",
+            "entity_category": "diagnostic",
+            "icon": "mdi:application-cog-outline",
+            "json_attributes_topic": topics.state,
+            "json_attributes_template": (
+                "{{ {'commands': value_json.capabilities.commands | default([]), "
+                "'battery_tests': value_json.capabilities.battery_tests | default([]), "
+                "'beeper_control': value_json.capabilities.beeper_control | default(false), "
+                "'load_control': value_json.capabilities.load_control | default(false), "
+                "'shutdown_control': value_json.capabilities.shutdown_control | default(false), "
+                "'supported_features': value_json.capabilities.supported_features | default([])} | tojson }}"
+            ),
+        },
+        "shutdown_policy": {
+            "platform": "sensor",
+            "name": "Shutdown policy",
+            "unique_id": uid("shutdown_policy"),
+            "default_entity_id": "sensor.dh_pve_ups_shutdown_policy",
+            "state_topic": topics.state,
+            "value_template": "{{ value_json.shutdown_policy.state | default('Unknown') }}",
+            "availability": [app_availability],
+            "availability_mode": "all",
+            "entity_category": "diagnostic",
+            "icon": "mdi:power-settings",
+            "json_attributes_topic": topics.state,
+            "json_attributes_template": (
+                "{{ {'role': value_json.shutdown_policy.role | default('unknown'), "
+                "'nut_monitor': value_json.shutdown_policy.nut_monitor | default('unknown'), "
+                "'shutdown_enabled': value_json.shutdown_policy.shutdown_enabled | default(false), "
+                "'shutdown_command': value_json.shutdown_policy.shutdown_command | default(none), "
+                "'minsuppplies': value_json.shutdown_policy.minsuppplies | default(none), "
+                "'pollfreq_seconds': value_json.shutdown_policy.pollfreq_seconds | default(none), "
+                "'pollfreqalert_seconds': value_json.shutdown_policy.pollfreqalert_seconds | default(none), "
+                "'deadtime_seconds': value_json.shutdown_policy.deadtime_seconds | default(none), "
+                "'hostsync_seconds': value_json.shutdown_policy.hostsync_seconds | default(none), "
+                "'finaldelay_seconds': value_json.shutdown_policy.finaldelay_seconds | default(none), "
+                "'upssched_present': value_json.shutdown_policy.upssched_present | default(false), "
+                "'upssched_rules': value_json.shutdown_policy.upssched_rules | default(0), "
+                "'upssched_active': value_json.shutdown_policy.upssched_active | default(false), "
+                "'guest_shutdown_budget_seconds': value_json.shutdown_policy.guest_shutdown_budget_seconds | default(none), "
+                "'power_restore_behavior': value_json.shutdown_policy.power_restore_behavior | default('Not configured')} | tojson }}"
+            ),
+        },
     }
 
     def add_sensor(
@@ -175,6 +233,36 @@ def build_ups_discovery_payload(
         if entity_category is not None:
             component["entity_category"] = entity_category
         components[key] = component
+
+    def add_button(key: str, name: str, entity_id: str, command_topic: str, icon: str) -> None:
+        components[key] = {
+            "platform": "button",
+            "name": name,
+            "unique_id": uid(key),
+            "default_entity_id": entity_id,
+            "command_topic": command_topic,
+            "payload_press": "PRESS",
+            "availability": telemetry_availability,
+            "availability_mode": "all",
+            "icon": icon,
+        }
+
+    if capabilities is not None:
+        if capabilities.supports_test("quick"):
+            add_button(
+                "test_quick", "Quick battery test", "button.dh_pve_ups_test_quick",
+                topics.test_quick, "mdi:battery-sync",
+            )
+        if capabilities.supports_test("deep"):
+            add_button(
+                "test_deep", "Deep battery test", "button.dh_pve_ups_test_deep",
+                topics.test_deep, "mdi:battery-heart-variant",
+            )
+        if capabilities.supports_test("stop"):
+            add_button(
+                "test_stop", "Stop battery test", "button.dh_pve_ups_test_stop",
+                topics.test_stop, "mdi:stop-circle-outline",
+            )
 
     if snapshot is not None:
         if snapshot.battery_charge_percent is not None:
