@@ -51,6 +51,12 @@ class PolicyValidationResult:
     recommended_emergency_runtime_reserve_seconds: int
 
 
+@dataclass(frozen=True)
+class PolicyApplyResult:
+    success: bool
+    message: str
+
+
 _POLICY_RANGES: dict[str, tuple[int, int, int]] = {
     "on_battery_delay_minutes": (5, 60, 5),
     "emergency_runtime_reserve_minutes": (10, 30, 1),
