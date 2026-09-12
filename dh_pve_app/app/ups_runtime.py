@@ -132,6 +132,8 @@ class UpsRuntime:
     def _snapshot_data(self, snapshot: UpsSnapshot) -> dict[str, object]:
         data = dataclasses.asdict(snapshot)
         data["status_tokens"] = list(snapshot.status_tokens)
+        if snapshot.runtime_seconds is not None:
+            data["battery_runtime_minutes"] = round(snapshot.runtime_seconds / 60.0, 1)
         return data
 
     @staticmethod
