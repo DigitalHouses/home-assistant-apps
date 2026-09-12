@@ -26,6 +26,9 @@ class UpsTopics:
     state: str
     availability: str
     refresh: str
+    test_quick: str
+    test_deep: str
+    test_stop: str
     discovery: str
     legacy_discovery: str
     device_id: str
@@ -59,6 +62,9 @@ def build_ups_topics(mqtt: MqttConfig, identity: HostIdentity) -> UpsTopics:
         state=f"{pve.base}/ups/state",
         availability=f"{pve.base}/ups/availability",
         refresh=f"{pve.base}/ups/refresh",
+        test_quick=f"{pve.base}/ups/test/quick",
+        test_deep=f"{pve.base}/ups/test/deep",
+        test_stop=f"{pve.base}/ups/test/stop",
         discovery=f"{discovery_prefix}/device/{device_id}/config",
         legacy_discovery=f"{discovery_prefix}/device/{legacy_device_id}/config",
         device_id=device_id,
