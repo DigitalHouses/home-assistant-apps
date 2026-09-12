@@ -128,6 +128,40 @@ def parse_upsc_output(text: str) -> UpsSnapshot:
     )
 
 
+def _nut_read_error(exc: BaseException) -> NutReadError:
+    if isinstance(exc, FileNotFoundError):
+        return NutReadError("Команда upsc не найдена")
+    if isinstance(exc, subprocess.TimeoutExpired):
+        return NutReadError("Истекло время ожидания ответа NUT")
+    if isinstance(exc, subprocess.CalledProcessError):
+        detail = (exc.stderr or "").strip()
+        if detail:
+            return NutReadError(f"NUT вернул ошибку: {detail}")
+        return NutReadError("NUT вернул ошибку чтения UPS")
+    return NutReadError(f"Не удалось запустить upsc: {exc}")
+
+
+def list_ups(
+    config: UpsConfig,
+    *,
+    runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+) -> tuple[str, ...]:
+    """List UPS names exposed by the configured NUT server, read-only."""
+    command = ["upsc", "-l", f"{config.host}:{config.port}"]
+    try:
+        completed = runner(
+            command,
+            capture_output=True,
+            text=True,
+            timeout=config.command_timeout_seconds,
+            check=True,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired, subprocess.CalledProcessError, OSError) as exc:
+        raise _nut_read_error(exc) from exc
+
+    return tuple(line.strip() for line in completed.stdout.splitlines() if line.strip())
+
+
 def read_ups(
     config: UpsConfig,
     *,
@@ -142,17 +176,8 @@ def read_ups(
             timeout=config.command_timeout_seconds,
             check=True,
         )
-    except FileNotFoundError as exc:
-        raise NutReadError("Команда upsc не найдена") from exc
-    except subprocess.TimeoutExpired as exc:
-        raise NutReadError("Истекло время ожидания ответа NUT") from exc
-    except subprocess.CalledProcessError as exc:
-        detail = (exc.stderr or "").strip()
-        if detail:
-            raise NutReadError(f"NUT вернул ошибку: {detail}") from exc
-        raise NutReadError("NUT вернул ошибку чтения UPS") from exc
-    except OSError as exc:
-        raise NutReadError(f"Не удалось запустить upsc: {exc}") from exc
+    except (FileNotFoundError, subprocess.TimeoutExpired, subprocess.CalledProcessError, OSError) as exc:
+        raise _nut_read_error(exc) from exc
 
     return parse_upsc_output(completed.stdout)
 
@@ -175,15 +200,9 @@ def ups_metrics(snapshot: UpsSnapshot) -> dict[str, MetricValue]:
         "discharging": _metric(snapshot.discharging, "discrete"),
     }
 
-    # Read NUT frequently, but publish telemetry more sparsely while the UPS is
-    # online. Battery mode automatically switches to tighter deltas.
     mode = "battery" if snapshot.on_battery else "online"
     numeric = (
-        (
-            "battery_charge_percent",
-            snapshot.battery_charge_percent,
-            f"ups_charge_{mode}",
-        ),
+        ("battery_charge_percent", snapshot.battery_charge_percent, f"ups_charge_{mode}"),
         ("load_percent", snapshot.load_percent, f"ups_load_{mode}"),
         ("runtime_seconds", snapshot.runtime_seconds, f"ups_runtime_{mode}"),
         ("battery_voltage_v", snapshot.battery_voltage_v, f"ups_voltage_{mode}"),
@@ -194,8 +213,6 @@ def ups_metrics(snapshot: UpsSnapshot) -> dict[str, MetricValue]:
         if value is not None:
             metrics[key] = _metric(value, policy)
 
-    # Service/capability facts rarely change, so they cost nothing in steady
-    # state but must trigger an immediate MQTT update if they do change.
     discrete_facts = (
         ("manufacturer", snapshot.manufacturer),
         ("model", snapshot.model),
