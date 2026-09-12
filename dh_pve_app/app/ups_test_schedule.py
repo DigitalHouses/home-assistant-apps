@@ -8,8 +8,11 @@ from datetime import datetime, time, timedelta
 class TestScheduleError(ValueError):
     """Raised when a battery-test schedule is invalid."""
 
+    __test__ = False
+
 
 _TIME_RE = re.compile(r"^(\d{2}):(\d{2})$")
+_TIME_COMMAND_RE = re.compile(r"^(\d{2}):(\d{2})(?::(\d{2}))?$")
 _ELIGIBLE_WINDOW = timedelta(hours=1)
 
 
@@ -24,16 +27,44 @@ def parse_preferred_time(value: str) -> time:
     return time(hour=hour, minute=minute)
 
 
+def parse_time_command_payload(value: str) -> str:
+    """Normalize an MQTT Time command payload to the app's minute precision."""
+    match = _TIME_COMMAND_RE.fullmatch(value.strip()) if isinstance(value, str) else None
+    if match is None:
+        raise TestScheduleError("Время теста должно быть в формате HH:MM или HH:MM:SS.")
+    hour = int(match.group(1))
+    minute = int(match.group(2))
+    second = int(match.group(3) or "0")
+    if hour > 23 or minute > 59 or second > 59:
+        raise TestScheduleError("Некорректное локальное время теста.")
+    return f"{hour:02d}:{minute:02d}"
+
+
+def parse_interval_days_payload(value: str) -> int:
+    try:
+        numeric = float(value.strip())
+    except (AttributeError, TypeError, ValueError) as exc:
+        raise TestScheduleError("Периодичность теста должна быть целым числом дней.") from exc
+    if not numeric.is_integer():
+        raise TestScheduleError("Периодичность теста должна быть целым числом дней.")
+    days = int(numeric)
+    if days < 0 or days > 3650:
+        raise TestScheduleError("Периодичность теста должна быть от 0 до 3650 дней.")
+    return days
+
+
 @dataclass(frozen=True)
 class TestSchedule:
+    __test__ = False
+
     interval_days: int
     preferred_time: str
 
     def __post_init__(self) -> None:
         if isinstance(self.interval_days, bool) or not isinstance(self.interval_days, int):
             raise TestScheduleError("Периодичность теста должна быть целым числом дней.")
-        if self.interval_days < 0:
-            raise TestScheduleError("Периодичность теста не может быть отрицательной.")
+        if self.interval_days < 0 or self.interval_days > 3650:
+            raise TestScheduleError("Периодичность теста должна быть от 0 до 3650 дней.")
         parsed = parse_preferred_time(self.preferred_time)
         object.__setattr__(self, "preferred_time", parsed.strftime("%H:%M"))
 
@@ -51,12 +82,7 @@ def next_scheduled_test(
     schedule: TestSchedule,
     anchor: datetime,
 ) -> datetime | None:
-    """Return the first scheduled local run after the persisted anchor.
-
-    The anchor is the last accepted scheduled run, or the initial schedule anchor
-    created when automatic testing is first configured. A zero-day interval
-    disables automatic execution.
-    """
+    """Return the first scheduled local run after the persisted anchor."""
     _require_aware(anchor)
     if schedule.interval_days == 0:
         return None
@@ -90,12 +116,7 @@ def choose_scheduled_test(
     deep_anchor: datetime,
     safe_to_test: bool,
 ) -> str | None:
-    """Return the battery test eligible to start in the current local window.
-
-    Deep has priority whenever both test types are eligible. The function is
-    intentionally pure and never advances anchors; callers advance an anchor
-    only after an accepted scheduled execution.
-    """
+    """Return the battery test eligible to start in the current local window."""
     _require_aware(now)
     _require_aware(quick_anchor)
     _require_aware(deep_anchor)
