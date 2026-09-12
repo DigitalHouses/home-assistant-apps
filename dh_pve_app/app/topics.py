@@ -29,6 +29,10 @@ class UpsTopics:
     test_quick: str
     test_deep: str
     test_stop: str
+    test_quick_interval_days_set: str
+    test_quick_time_set: str
+    test_deep_interval_days_set: str
+    test_deep_time_set: str
     policy_on_battery_delay_set: str
     policy_power_restore_delay_set: str
     policy_apply: str
@@ -62,6 +66,7 @@ def build_ups_topics(mqtt: MqttConfig, identity: HostIdentity) -> UpsTopics:
     legacy_device_id = f"dh_ups_{identity.instance_id}"
     discovery_prefix = mqtt.discovery_prefix.strip("/")
     policy_base = f"{pve.base}/ups/policy"
+    test_schedule_base = f"{pve.base}/ups/test/schedule"
     return UpsTopics(
         state=f"{pve.base}/ups/state",
         availability=f"{pve.base}/ups/availability",
@@ -69,6 +74,10 @@ def build_ups_topics(mqtt: MqttConfig, identity: HostIdentity) -> UpsTopics:
         test_quick=f"{pve.base}/ups/test/quick",
         test_deep=f"{pve.base}/ups/test/deep",
         test_stop=f"{pve.base}/ups/test/stop",
+        test_quick_interval_days_set=f"{test_schedule_base}/quick/interval_days/set",
+        test_quick_time_set=f"{test_schedule_base}/quick/time/set",
+        test_deep_interval_days_set=f"{test_schedule_base}/deep/interval_days/set",
+        test_deep_time_set=f"{test_schedule_base}/deep/time/set",
         policy_on_battery_delay_set=f"{policy_base}/on_battery_delay/set",
         policy_power_restore_delay_set=f"{policy_base}/power_restore_delay/set",
         policy_apply=f"{policy_base}/apply",
