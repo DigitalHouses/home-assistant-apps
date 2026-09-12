@@ -21,9 +21,20 @@ class PublishDecision:
 class PublishPolicy:
     _FIXED_THRESHOLDS = {
         "frequency_mhz": 100.0,
+        # Legacy/general UPS policies kept for compatibility with existing callers/tests.
         "ups_percent": 1.0,
         "ups_voltage": 1.0,
         "ups_runtime_seconds": 60.0,
+        # UPS normal line-power mode: deliberately sparse MQTT publication.
+        "ups_charge_online": 2.0,
+        "ups_load_online": 5.0,
+        "ups_voltage_online": 3.0,
+        "ups_runtime_online": 300.0,
+        # UPS battery mode: tighter thresholds while preserving 5 s collection.
+        "ups_charge_battery": 1.0,
+        "ups_load_battery": 2.0,
+        "ups_voltage_battery": 2.0,
+        "ups_runtime_battery": 60.0,
     }
     _SETTING_THRESHOLDS = {
         "cpu_percent": "cpu_publish_delta",
