@@ -109,9 +109,6 @@ class MqttBridge(MqttEvents):
 
     def configure_ups(self, topics: UpsTopics) -> None:
         super().configure_ups(topics)
-        if self.connected.is_set():
-            self.client.subscribe(topics.refresh, qos=1)
-            self.publish_ups_availability(True)
 
     def _on_connect(self, client, userdata, flags, reason_code, properties) -> None:
         if getattr(reason_code, "is_failure", False):
@@ -121,9 +118,9 @@ class MqttBridge(MqttEvents):
         client.subscribe(self.topics.ha_status, qos=1)
         client.subscribe(self.topics.refresh, qos=1)
         client.subscribe(self.topics.ups_scan, qos=1)
+        client.subscribe(f"{self.topics.base}/ups/refresh", qos=1)
         client.subscribe(f"{self.topics.settings_prefix}/+/set", qos=1)
         if self.ups_topics is not None:
-            client.subscribe(self.ups_topics.refresh, qos=1)
             client.publish(
                 self.ups_topics.availability,
                 payload="online",
