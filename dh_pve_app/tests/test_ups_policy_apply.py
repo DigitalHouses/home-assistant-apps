@@ -113,6 +113,18 @@ def test_rendered_driver_policy_raises_too_small_offdelay_to_60():
     assert "offdelay = 60" in target.ups_conf_text
 
 
+def test_render_rejects_existing_ignorelb_flag_without_equals():
+    with pytest.raises(PolicyApplyError, match="ignorelb"):
+        render_managed_policy(
+            _draft(),
+            UPSMON_COMMISSIONING,
+            UPS_CONF.replace('    port = "auto"\n', '    port = "auto"\n    ignorelb\n'),
+            command_script_path=Path(
+                "/opt/digitalhouses/dh_pve_app/bin/dh-pve-ups-policy-cmd"
+            ),
+        )
+
+
 class FakeRunner:
     def __init__(self, *, fail_contains: str | None = None):
         self.commands = []
