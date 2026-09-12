@@ -1,9 +1,16 @@
-import inspect
+import subprocess
 
-from app.config import MqttConfig
+from app.config import MqttConfig, UpsConfig
 from app.discovery_ups import build_ups_discovery_payload
 from app.identity import HostIdentity
-from app.ups_control import parse_upscmd_list_output
+from app.ups_control import list_ups_commands
+
+
+COMMANDS = (
+    "test.battery.start.quick - Start quick test\n"
+    "test.battery.start.deep - Start deep test\n"
+    "test.battery.stop - Stop test\n"
+)
 
 
 def _mqtt():
@@ -27,34 +34,42 @@ def _identity():
     )
 
 
+def _runner(command, **kwargs):
+    return subprocess.CompletedProcess(command, 0, stdout=COMMANDS, stderr="")
+
+
 def test_battery_test_buttons_require_both_capability_and_command_credentials():
-    assert "controls_enabled" in inspect.signature(build_ups_discovery_payload).parameters
-    caps = parse_upscmd_list_output(
-        "test.battery.start.quick - Start quick test\n"
-        "test.battery.start.deep - Start deep test\n"
-        "test.battery.stop - Stop test\n"
+    without_credentials = list_ups_commands(
+        UpsConfig(name="ups"),
+        runner=_runner,
     )
-
-    without_credentials = build_ups_discovery_payload(
+    components = build_ups_discovery_payload(
         _mqtt(),
         _identity(),
         version="0.2.0-alpha",
         snapshot=None,
-        capabilities=caps,
+        capabilities=without_credentials,
     )["components"]
-    assert "capabilities" in without_credentials
-    assert "test_quick" not in without_credentials
-    assert "test_deep" not in without_credentials
-    assert "test_stop" not in without_credentials
+    assert "capabilities" in components
+    assert "test_quick" not in components
+    assert "test_deep" not in components
+    assert "test_stop" not in components
 
-    with_credentials = build_ups_discovery_payload(
+    with_credentials = list_ups_commands(
+        UpsConfig(
+            name="ups",
+            command_username="dh_pve_app",
+            command_password="secret",
+        ),
+        runner=_runner,
+    )
+    components = build_ups_discovery_payload(
         _mqtt(),
         _identity(),
         version="0.2.0-alpha",
         snapshot=None,
-        capabilities=caps,
-        controls_enabled=True,
+        capabilities=with_credentials,
     )["components"]
-    assert "test_quick" in with_credentials
-    assert "test_deep" in with_credentials
-    assert "test_stop" in with_credentials
+    assert "test_quick" in components
+    assert "test_deep" in components
+    assert "test_stop" in components
