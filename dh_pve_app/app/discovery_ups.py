@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from .config import MqttConfig
+from .discovery_ups_test_schedule import build_test_schedule_components
 from .identity import HostIdentity
 from .topics import build_topics, build_ups_topics
 from .ups_control import UpsCapabilities
@@ -260,6 +261,14 @@ def build_ups_discovery_payload(
             ),
         },
     }
+
+    components.update(
+        build_test_schedule_components(
+            topics,
+            uid=uid,
+            app_availability=app_availability,
+        )
+    )
 
     def add_sensor(
         key: str,
