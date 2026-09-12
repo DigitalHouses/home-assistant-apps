@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 from app.ups_policy import PolicySafetyFacts, UpsPolicyDraft
@@ -82,6 +83,8 @@ def test_applier_never_rewrites_static_helper(tmp_path):
         ups_name="ups",
         runner=Runner(),
         effective_restart_delay_reader=lambda: 180,
+        helper_expected_uid=os.getuid(),
+        helper_expected_gid=os.getgid(),
     )
     result = applier.apply(
         UpsPolicyDraft(
