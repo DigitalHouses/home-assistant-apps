@@ -17,6 +17,8 @@ class Topics:
     discovery: str
     ha_status: str
     device_id: str
+    ups_scan: str
+    ups_scan_state: str
 
 
 @dataclass(frozen=True)
@@ -25,6 +27,7 @@ class UpsTopics:
     availability: str
     refresh: str
     discovery: str
+    legacy_discovery: str
     device_id: str
 
 
@@ -42,17 +45,21 @@ def build_topics(mqtt: MqttConfig, identity: HostIdentity) -> Topics:
         discovery=f"{discovery_prefix}/device/{device_id}/config",
         ha_status=f"{discovery_prefix}/status",
         device_id=device_id,
+        ups_scan=f"{base}/ups/scan",
+        ups_scan_state=f"{base}/ups/scan/state",
     )
 
 
 def build_ups_topics(mqtt: MqttConfig, identity: HostIdentity) -> UpsTopics:
     pve = build_topics(mqtt, identity)
-    device_id = f"dh_ups_{identity.instance_id}"
+    device_id = f"dh_pve_ups_{identity.instance_id}"
+    legacy_device_id = f"dh_ups_{identity.instance_id}"
     discovery_prefix = mqtt.discovery_prefix.strip("/")
     return UpsTopics(
         state=f"{pve.base}/ups/state",
         availability=f"{pve.base}/ups/availability",
         refresh=f"{pve.base}/ups/refresh",
         discovery=f"{discovery_prefix}/device/{device_id}/config",
+        legacy_discovery=f"{discovery_prefix}/device/{legacy_device_id}/config",
         device_id=device_id,
     )
