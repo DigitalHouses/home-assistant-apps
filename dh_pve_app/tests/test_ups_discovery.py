@@ -51,6 +51,7 @@ def test_discovery_only_creates_supported_factual_entities():
     components = payload["components"]
 
     assert "status" in components
+    assert "problems" in components
     assert "available" in components
     assert "refresh" in components
     assert "last_refresh" in components
@@ -65,6 +66,21 @@ def test_discovery_only_creates_supported_factual_entities():
     assert "unsupported_temperature" not in components
 
 
+def test_problems_sensor_remains_available_when_nut_read_fails():
+    payload = build_ups_discovery_payload(
+        _mqtt(), _identity(), version="0.2.0-alpha", snapshot=None
+    )
+    problems = payload["components"]["problems"]
+
+    assert problems["default_entity_id"] == "sensor.dh_ups_problems"
+    assert problems["value_template"] == "{{ value_json.problems_count | default(0) }}"
+    assert len(problems["availability"]) == 1
+    assert "value_json.available" not in str(problems["availability"])
+    assert "problems_severity" in problems["json_attributes_template"]
+    assert "problems_details" in problems["json_attributes_template"]
+    assert "problems" in problems["json_attributes_template"]
+
+
 def test_primary_ups_entities_stay_out_of_diagnostics():
     snapshot = parse_upsc_output(FIX.read_text(encoding="utf-8"))
     components = build_ups_discovery_payload(
@@ -73,6 +89,7 @@ def test_primary_ups_entities_stay_out_of_diagnostics():
 
     for key in (
         "status",
+        "problems",
         "battery_charge",
         "battery_runtime",
         "load",
@@ -118,6 +135,7 @@ def test_discovery_omits_capability_not_reported_by_ups():
     components = payload["components"]
 
     assert "status" in components
+    assert "problems" in components
     assert "battery_charge" not in components
     assert "battery_runtime" not in components
     assert "input_voltage" not in components
