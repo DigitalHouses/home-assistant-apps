@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import signal
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .config import AppConfig, load_config
+from .config import AppConfig, UpsConfig, load_config
 from .discovery_guest import build_guest_aware_discovery_payload
 from .identity import resolve_identity
 from .mqtt_bridge import MqttBridge
@@ -23,6 +25,11 @@ from .state_store import StateStore
 from .topics import build_topics, build_ups_topics
 from .topology import TopologyManager
 from .ups_policy_host import read_policy_safety_facts
+from .ups_policy_preflight import (
+    PreflightCheck,
+    UpsPolicyPreflight,
+    read_policy_preflight,
+)
 from .ups_runtime import UpsRuntime
 from .ups_scan import UpsScanner
 
@@ -161,6 +168,31 @@ def build_ups_scanner(
     )
 
 
+def build_ups_policy_preflight(
+    config: AppConfig,
+    *,
+    state_dir: Path = DEFAULT_STATE_DIR,
+    preflight_reader: Callable[[UpsConfig], UpsPolicyPreflight] = read_policy_preflight,
+) -> UpsPolicyPreflight:
+    scanner = build_ups_scanner(config, state_dir=state_dir)
+    selected_name = scanner.selected_name()
+    if not selected_name:
+        return UpsPolicyPreflight(
+            state="Blocked",
+            ready=False,
+            checks=(
+                PreflightCheck(
+                    "ups_selected",
+                    False,
+                    "UPS еще не выбран; сначала выполните безопасное сканирование UPS.",
+                ),
+            ),
+            guest_shutdown_budget_seconds=None,
+        )
+    runtime_config = replace(config.ups, enabled=True, name=selected_name)
+    return preflight_reader(runtime_config)
+
+
 def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
     log = logging.getLogger("dh_pve_app")
     bridge, runtime = build_runtime(config, state_dir=state_dir)
@@ -257,12 +289,21 @@ def main() -> int:
         action="store_true",
         help="Validate configuration and exit.",
     )
+    parser.add_argument(
+        "--ups-policy-preflight",
+        action="store_true",
+        help="Read UPS/NUT/PVE commissioning state, print JSON, and exit without MQTT.",
+    )
     args = parser.parse_args()
 
     config = load_config(args.config)
     if args.check_config:
         resolve_identity(config.general)
         return 0
+    if args.ups_policy_preflight:
+        report = build_ups_policy_preflight(config, state_dir=args.state_dir)
+        print(json.dumps(report.as_dict(), ensure_ascii=False, indent=2))
+        return 0 if report.ready else 2
 
     _configure_logging(config.general.log_level)
     return run(config, state_dir=args.state_dir)
