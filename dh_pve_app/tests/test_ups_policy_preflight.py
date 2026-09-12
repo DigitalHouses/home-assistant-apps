@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 from app.config import UpsConfig
@@ -73,6 +74,14 @@ def _seed(tmp_path):
     return ups_conf, helper
 
 
+def _preflight_kwargs(helper):
+    return {
+        "helper_path": helper,
+        "helper_expected_uid": os.getuid(),
+        "helper_expected_gid": os.getgid(),
+    }
+
+
 def test_preflight_ready_is_read_only_and_requires_safe_commissioning_state(tmp_path):
     ups_conf, helper = _seed(tmp_path)
     runner = Runner()
@@ -84,8 +93,8 @@ def test_preflight_ready_is_read_only_and_requires_safe_commissioning_state(tmp_
         shutdown_policy_reader=_commissioning_policy,
         facts_reader=lambda config: _facts(),
         ups_conf_path=ups_conf,
-        helper_path=helper,
         killpower_path=tmp_path / "killpower",
+        **_preflight_kwargs(helper),
     )
 
     assert report.state == "Ready"
@@ -116,8 +125,8 @@ def test_preflight_blocks_if_monitor_is_already_live_or_shutdown_is_enabled(tmp_
         shutdown_policy_reader=lambda: policy,
         facts_reader=lambda config: _facts(),
         ups_conf_path=ups_conf,
-        helper_path=helper,
         killpower_path=tmp_path / "killpower",
+        **_preflight_kwargs(helper),
     )
 
     assert report.state == "Blocked"
@@ -141,8 +150,8 @@ def test_preflight_blocks_for_hardware_low_battery_override(tmp_path):
         shutdown_policy_reader=_commissioning_policy,
         facts_reader=lambda config: _facts(),
         ups_conf_path=ups_conf,
-        helper_path=helper,
         killpower_path=tmp_path / "killpower",
+        **_preflight_kwargs(helper),
     )
 
     failed = {check.key: check.detail for check in report.checks if not check.ok}
@@ -162,8 +171,8 @@ def test_preflight_blocks_when_killpower_flag_exists(tmp_path):
         shutdown_policy_reader=_commissioning_policy,
         facts_reader=lambda config: _facts(),
         ups_conf_path=ups_conf,
-        helper_path=helper,
         killpower_path=killpower,
+        **_preflight_kwargs(helper),
     )
 
     failed = {check.key for check in report.checks if not check.ok}
