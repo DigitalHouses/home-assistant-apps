@@ -41,6 +41,8 @@ class UpsConfig:
     port: int = 3493
     poll_interval_seconds: float = 5.0
     command_timeout_seconds: float = 3.0
+    command_username: str = ""
+    command_password: str = ""
 
 
 @dataclass(frozen=True)
@@ -151,6 +153,8 @@ def load_config(path: Path) -> AppConfig:
     ups_port = _get_int(parser, "ups", "port", 3493)
     ups_poll_interval = _get_float(parser, "ups", "poll_interval_seconds", 5.0)
     ups_timeout = _get_float(parser, "ups", "command_timeout_seconds", 3.0)
+    ups_command_username = _get(parser, "ups", "command_username", "").strip()
+    ups_command_password = _get(parser, "ups", "command_password", "")
 
     if not ups_name:
         raise ConfigError("ups.name must not be empty")
@@ -185,5 +189,7 @@ def load_config(path: Path) -> AppConfig:
             port=ups_port,
             poll_interval_seconds=ups_poll_interval,
             command_timeout_seconds=ups_timeout,
+            command_username=ups_command_username,
+            command_password=ups_command_password,
         ),
     )
