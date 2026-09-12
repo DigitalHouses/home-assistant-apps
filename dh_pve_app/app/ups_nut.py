@@ -37,7 +37,6 @@ class UpsSnapshot:
     battery_nominal_voltage_v: float | None
     load_percent: float | None
     nominal_real_power_w: float | None
-    estimated_real_power_w: float | None
     input_voltage_v: float | None
     input_nominal_voltage_v: float | None
     output_voltage_v: float | None
@@ -92,12 +91,6 @@ def parse_upsc_output(text: str) -> UpsSnapshot:
     status_tokens = tuple(token for token in status_raw.split() if token)
     token_set = set(status_tokens)
 
-    load_percent = _optional_float(raw, "ups.load")
-    nominal_real_power_w = _optional_float(raw, "ups.realpower.nominal")
-    estimated_real_power_w: float | None = None
-    if load_percent is not None and nominal_real_power_w is not None:
-        estimated_real_power_w = nominal_real_power_w * load_percent / 100.0
-
     return UpsSnapshot(
         raw=raw,
         manufacturer=_optional_text(raw, "device.mfr", "ups.mfr"),
@@ -120,9 +113,8 @@ def parse_upsc_output(text: str) -> UpsSnapshot:
         runtime_seconds=_optional_float(raw, "battery.runtime"),
         battery_voltage_v=_optional_float(raw, "battery.voltage"),
         battery_nominal_voltage_v=_optional_float(raw, "battery.voltage.nominal"),
-        load_percent=load_percent,
-        nominal_real_power_w=nominal_real_power_w,
-        estimated_real_power_w=estimated_real_power_w,
+        load_percent=_optional_float(raw, "ups.load"),
+        nominal_real_power_w=_optional_float(raw, "ups.realpower.nominal"),
         input_voltage_v=_optional_float(raw, "input.voltage"),
         input_nominal_voltage_v=_optional_float(raw, "input.voltage.nominal"),
         output_voltage_v=_optional_float(raw, "output.voltage"),
