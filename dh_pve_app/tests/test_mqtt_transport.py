@@ -117,6 +117,17 @@ def test_configure_ups_after_connect_subscribes_refresh_immediately():
     assert (ups.availability, "online", 1, True) in client.published
 
 
+def test_legacy_ups_discovery_cleanup_is_empty_retained_publish():
+    bridge, client, _, _, config, identity = _bridge()
+    bridge.connected.set()
+    ups = build_ups_topics(config, identity)
+    bridge.configure_ups(ups)
+    client.published.clear()
+
+    assert bridge.clear_legacy_ups_discovery() is True
+    assert (ups.legacy_discovery, "", 1, True) in client.published
+
+
 def test_state_and_discovery_are_retained_qos1_json():
     bridge, client, topics, _, _, _ = _bridge()
     bridge.connected.set()
