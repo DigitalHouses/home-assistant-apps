@@ -26,14 +26,14 @@ def _nut_availability(state_topic: str) -> dict[str, str]:
 
 
 def build_ups_discovery_payload(
-    mqtt_config: MqttConfig,
+    config: MqttConfig,
     identity: HostIdentity,
     *,
     version: str,
     snapshot: UpsSnapshot | None,
 ) -> dict[str, Any]:
-    pve_topics = build_topics(mqtt_config, identity)
-    topics = build_ups_topics(mqtt_config, identity)
+    pve_topics = build_topics(config, identity)
+    topics = build_ups_topics(config, identity)
 
     def uid(component: str) -> str:
         return f"{topics.device_id}_{component}"
