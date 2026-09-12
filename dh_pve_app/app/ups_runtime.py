@@ -15,6 +15,11 @@ from .state_store import StateStore
 from .ups_nut import UpsSnapshot, read_ups, ups_metrics
 
 
+_LEGACY_DISCOVERY_REMOVALS = {
+    "estimated_real_power": "sensor",
+}
+
+
 class UpsRuntime:
     """Independent read-only NUT runtime for the auxiliary DH UPS device."""
 
@@ -50,6 +55,18 @@ class UpsRuntime:
         persisted = state_store.load()
         last_refresh = persisted.get("last_refresh")
         self.last_refresh = last_refresh if isinstance(last_refresh, str) else None
+
+        persisted_components = persisted.get("discovery_components")
+        if isinstance(persisted_components, dict):
+            self._discovery_components = {
+                str(key): str(value)
+                for key, value in persisted_components.items()
+                if isinstance(key, str) and isinstance(value, str)
+            }
+        else:
+            self._discovery_components = {}
+        self._discovery_cleanup_v1 = persisted.get("discovery_cleanup_v1") is True
+
         self.last_snapshot: UpsSnapshot | None = None
         self.last_discovery_payload: dict[str, object] | None = None
         self._discovery_fingerprint: str | None = None
@@ -76,7 +93,40 @@ class UpsRuntime:
         return "Unknown"
 
     def _persist(self) -> None:
-        self.state_store.save({"last_refresh": self.last_refresh})
+        self.state_store.save(
+            {
+                "last_refresh": self.last_refresh,
+                "discovery_components": dict(sorted(self._discovery_components.items())),
+                "discovery_cleanup_v1": self._discovery_cleanup_v1,
+            }
+        )
+
+    @staticmethod
+    def _component_platforms(payload: dict[str, object]) -> dict[str, str]:
+        raw_components = payload.get("components")
+        if not isinstance(raw_components, dict):
+            return {}
+        result: dict[str, str] = {}
+        for key, component in raw_components.items():
+            if not isinstance(key, str) or not isinstance(component, dict):
+                continue
+            platform = component.get("platform")
+            if isinstance(platform, str) and platform:
+                result[key] = platform
+        return result
+
+    @staticmethod
+    def _with_tombstones(
+        payload: dict[str, object],
+        removed: dict[str, str],
+    ) -> dict[str, object]:
+        tombstone_payload = dict(payload)
+        raw_components = payload.get("components")
+        components = dict(raw_components) if isinstance(raw_components, dict) else {}
+        for key, platform in removed.items():
+            components[key] = {"platform": platform}
+        tombstone_payload["components"] = components
+        return tombstone_payload
 
     def _snapshot_data(self, snapshot: UpsSnapshot) -> dict[str, object]:
         data = dataclasses.asdict(snapshot)
@@ -134,11 +184,38 @@ class UpsRuntime:
             separators=(",", ":"),
         )
         self.last_discovery_payload = payload
-        if not force and fingerprint == self._discovery_fingerprint:
+
+        desired_components = self._component_platforms(payload)
+        removed = {
+            key: platform
+            for key, platform in self._discovery_components.items()
+            if key not in desired_components
+        }
+        if not self._discovery_cleanup_v1:
+            for key, platform in _LEGACY_DISCOVERY_REMOVALS.items():
+                if key not in desired_components:
+                    removed.setdefault(key, platform)
+
+        if (
+            not force
+            and fingerprint == self._discovery_fingerprint
+            and not removed
+            and self._discovery_cleanup_v1
+        ):
             return True
+
+        if removed:
+            if not self.bridge.publish_ups_discovery(
+                self._with_tombstones(payload, removed)
+            ):
+                return False
+
         ok = self.bridge.publish_ups_discovery(payload)
         if ok:
             self._discovery_fingerprint = fingerprint
+            self._discovery_components = desired_components
+            self._discovery_cleanup_v1 = True
+            self._persist()
         return ok
 
     def _collect(self, *, force: bool = False, manual_refresh: bool = False) -> bool:
