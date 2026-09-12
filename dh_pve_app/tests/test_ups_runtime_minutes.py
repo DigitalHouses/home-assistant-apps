@@ -84,13 +84,13 @@ def test_discovery_exposes_minutes_and_keeps_seconds_as_diagnostic():
     )["components"]
 
     minutes = components["battery_runtime_minutes"]
-    assert minutes["default_entity_id"] == "sensor.dh_ups_battery_runtime_minutes"
+    assert minutes["default_entity_id"] == "sensor.dh_pve_ups_battery_runtime_minutes"
     assert minutes["value_template"] == "{{ value_json.battery_runtime_minutes }}"
     assert minutes["unit_of_measurement"] == "min"
     assert minutes["device_class"] == "duration"
     assert minutes.get("entity_category") is None
 
     seconds = components["battery_runtime"]
-    assert seconds["default_entity_id"] == "sensor.dh_ups_battery_runtime"
+    assert seconds["default_entity_id"] == "sensor.dh_pve_ups_battery_runtime"
     assert seconds["unit_of_measurement"] == "s"
     assert seconds["entity_category"] == "diagnostic"
