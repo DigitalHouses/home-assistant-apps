@@ -56,6 +56,7 @@ def test_discovery_only_creates_supported_factual_entities():
     assert "refresh" in components
     assert "last_refresh" in components
     assert "battery_charge" in components
+    assert "battery_runtime_minutes" in components
     assert "battery_runtime" in components
     assert "battery_voltage" in components
     assert "load" in components
@@ -91,7 +92,7 @@ def test_primary_ups_entities_stay_out_of_diagnostics():
         "status",
         "problems",
         "battery_charge",
-        "battery_runtime",
+        "battery_runtime_minutes",
         "load",
         "input_voltage",
         "output_voltage",
@@ -114,6 +115,7 @@ def test_service_ups_entities_are_diagnostic():
         "available",
         "last_refresh",
         "refresh",
+        "battery_runtime",
         "battery_voltage",
         "nominal_real_power",
         "battery_charge_warning",
@@ -137,6 +139,7 @@ def test_discovery_omits_capability_not_reported_by_ups():
     assert "status" in components
     assert "problems" in components
     assert "battery_charge" not in components
+    assert "battery_runtime_minutes" not in components
     assert "battery_runtime" not in components
     assert "input_voltage" not in components
 
