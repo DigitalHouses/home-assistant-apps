@@ -72,10 +72,12 @@ def test_ups_metrics_use_expected_publish_policies():
 
     assert metrics["status"].policy == "discrete"
     assert metrics["on_battery"].policy == "discrete"
-    assert metrics["battery_charge_percent"].policy == "ups_percent"
-    assert metrics["load_percent"].policy == "ups_percent"
-    assert metrics["runtime_seconds"].policy == "ups_runtime_seconds"
-    assert metrics["input_voltage_v"].policy == "ups_voltage"
+    assert metrics["battery_charge_percent"].policy == "ups_charge_online"
+    assert metrics["load_percent"].policy == "ups_load_online"
+    assert metrics["runtime_seconds"].policy == "ups_runtime_online"
+    assert metrics["input_voltage_v"].policy == "ups_voltage_online"
+    assert metrics["beeper_status"].policy == "discrete"
+    assert metrics["test_result"].policy == "discrete"
 
 
 def test_read_ups_calls_only_upsc_with_bounded_timeout():
