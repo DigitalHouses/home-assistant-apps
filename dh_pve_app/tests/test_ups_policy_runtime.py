@@ -112,15 +112,14 @@ def test_commissioning_starts_with_safe_draft_and_no_active_policy(tmp_path):
     assert policy["status"] == "Commissioning"
     assert policy["draft"] == {
         "on_battery_delay_minutes": 30,
-        "emergency_runtime_reserve_minutes": 15,
         "power_restore_delay_seconds": 120,
     }
     assert policy["active"] is None
     assert policy["last_applied"] is None
     assert policy["policy_revision"] == 0
     assert policy["policy_hash"] is None
-    assert policy["minimum_emergency_runtime_reserve_seconds"] == 585
-    assert policy["recommended_emergency_runtime_reserve_seconds"] == 900
+    assert "minimum_emergency_runtime_reserve_seconds" not in policy
+    assert "recommended_emergency_runtime_reserve_seconds" not in policy
 
 
 def test_draft_change_sets_pending_and_never_calls_applier(tmp_path):
@@ -165,7 +164,7 @@ def test_successful_apply_promotes_snapshot_and_sets_timestamp_revision_hash(tmp
 
     assert runtime.process_events() is True
 
-    expected = UpsPolicyDraft(35, 15, 120)
+    expected = UpsPolicyDraft(35, 120)
     assert captured == [expected]
     assert runtime.policy_active == expected
     assert runtime.policy_draft == expected
@@ -210,11 +209,11 @@ def test_validation_failure_keeps_active_and_timestamp_and_reverts_draft(tmp_pat
     first_hash = runtime.policy_hash
 
     bridge.ups_policy_updates.put(
-        PolicyDraftUpdate(key="emergency_runtime_reserve_minutes", value=10)
+        PolicyDraftUpdate(key="on_battery_delay_minutes", value=35)
     )
     runtime.process_events()
     facts["value"] = PolicySafetyFacts(
-        guest_shutdown_budget_seconds=400,
+        guest_shutdown_budget_seconds=-1,
         hostsync_seconds=120,
         finaldelay_seconds=5,
         host_shutdown_reserve_seconds=60,
@@ -230,7 +229,7 @@ def test_validation_failure_keeps_active_and_timestamp_and_reverts_draft(tmp_pat
     assert runtime.policy_active == first_active
     assert runtime.policy_draft == first_active
     assert runtime.policy_status == "Validation failed"
-    assert "резерв" in runtime.policy_apply_result.lower()
+    assert "guest_shutdown_budget_seconds" in runtime.policy_apply_result
     assert runtime.policy_last_applied == first_time
     assert runtime.policy_revision == 1
     assert runtime.policy_hash == first_hash
@@ -296,9 +295,39 @@ def test_persisted_active_policy_survives_runtime_restart_and_reconnect(tmp_path
     assert policy["status"] == "Active"
     assert policy["active"] == {
         "on_battery_delay_minutes": 30,
-        "emergency_runtime_reserve_minutes": 15,
         "power_restore_delay_seconds": 120,
     }
     assert policy["policy_revision"] == 1
     assert policy["policy_hash"] is not None
     assert policy["last_applied"] is not None
+
+
+def test_legacy_persisted_policy_with_runtime_reserve_is_migrated_read_only(tmp_path):
+    path = tmp_path / "ups.json"
+    store = StateStore(path)
+    store.save(
+        {
+            "policy_active": {
+                "on_battery_delay_minutes": 30,
+                "emergency_runtime_reserve_minutes": 15,
+                "power_restore_delay_seconds": 120,
+            },
+            "policy_draft": {
+                "on_battery_delay_minutes": 35,
+                "emergency_runtime_reserve_minutes": 20,
+                "power_restore_delay_seconds": 150,
+            },
+            "policy_status": "Pending changes",
+            "policy_revision": 2,
+        }
+    )
+
+    _bridge, runtime, _clock, _store = _runtime(
+        tmp_path,
+        applier=lambda draft, facts: PolicyApplyResult(True, "unused"),
+        state_path=path,
+    )
+
+    assert runtime.policy_active == UpsPolicyDraft(30, 120)
+    assert runtime.policy_draft == UpsPolicyDraft(35, 150)
+    assert "emergency_runtime_reserve_minutes" not in runtime.policy_draft.as_dict()
