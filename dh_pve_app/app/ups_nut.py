@@ -175,15 +175,47 @@ def ups_metrics(snapshot: UpsSnapshot) -> dict[str, MetricValue]:
         "discharging": _metric(snapshot.discharging, "discrete"),
     }
 
+    # Read NUT frequently, but publish telemetry more sparsely while the UPS is
+    # online. Battery mode automatically switches to tighter deltas.
+    mode = "battery" if snapshot.on_battery else "online"
     numeric = (
-        ("battery_charge_percent", snapshot.battery_charge_percent, "ups_percent"),
-        ("load_percent", snapshot.load_percent, "ups_percent"),
-        ("runtime_seconds", snapshot.runtime_seconds, "ups_runtime_seconds"),
-        ("battery_voltage_v", snapshot.battery_voltage_v, "ups_voltage"),
-        ("input_voltage_v", snapshot.input_voltage_v, "ups_voltage"),
-        ("output_voltage_v", snapshot.output_voltage_v, "ups_voltage"),
+        (
+            "battery_charge_percent",
+            snapshot.battery_charge_percent,
+            f"ups_charge_{mode}",
+        ),
+        ("load_percent", snapshot.load_percent, f"ups_load_{mode}"),
+        ("runtime_seconds", snapshot.runtime_seconds, f"ups_runtime_{mode}"),
+        ("battery_voltage_v", snapshot.battery_voltage_v, f"ups_voltage_{mode}"),
+        ("input_voltage_v", snapshot.input_voltage_v, f"ups_voltage_{mode}"),
+        ("output_voltage_v", snapshot.output_voltage_v, f"ups_voltage_{mode}"),
     )
     for key, value, policy in numeric:
         if value is not None:
             metrics[key] = _metric(value, policy)
+
+    # Service/capability facts rarely change, so they cost nothing in steady
+    # state but must trigger an immediate MQTT update if they do change.
+    discrete_facts = (
+        ("manufacturer", snapshot.manufacturer),
+        ("model", snapshot.model),
+        ("serial", snapshot.serial),
+        ("driver_name", snapshot.driver_name),
+        ("driver_version", snapshot.driver_version),
+        ("driver_data", snapshot.driver_data),
+        ("battery_nominal_voltage_v", snapshot.battery_nominal_voltage_v),
+        ("nominal_real_power_w", snapshot.nominal_real_power_w),
+        ("input_nominal_voltage_v", snapshot.input_nominal_voltage_v),
+        ("input_transfer_high_v", snapshot.input_transfer_high_v),
+        ("input_transfer_low_v", snapshot.input_transfer_low_v),
+        ("warning_charge_percent", snapshot.warning_charge_percent),
+        ("low_charge_percent", snapshot.low_charge_percent),
+        ("low_runtime_seconds", snapshot.low_runtime_seconds),
+        ("test_result", snapshot.test_result),
+        ("beeper_status", snapshot.beeper_status),
+    )
+    for key, value in discrete_facts:
+        if value is not None:
+            metrics[key] = _metric(value, "discrete")
+
     return metrics
