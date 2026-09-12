@@ -43,6 +43,7 @@ class UpsConfig:
     command_timeout_seconds: float = 3.0
     command_username: str = ""
     command_password: str = ""
+    policy_apply_enabled: bool = False
 
 
 @dataclass(frozen=True)
@@ -155,6 +156,9 @@ def load_config(path: Path) -> AppConfig:
     ups_timeout = _get_float(parser, "ups", "command_timeout_seconds", 3.0)
     ups_command_username = _get(parser, "ups", "command_username", "").strip()
     ups_command_password = _get(parser, "ups", "command_password", "")
+    ups_policy_apply_enabled = _get_bool(
+        parser, "ups", "policy_apply_enabled", False
+    )
 
     if not ups_name:
         raise ConfigError("ups.name must not be empty")
@@ -191,5 +195,6 @@ def load_config(path: Path) -> AppConfig:
             command_timeout_seconds=ups_timeout,
             command_username=ups_command_username,
             command_password=ups_command_password,
+            policy_apply_enabled=ups_policy_apply_enabled,
         ),
     )
