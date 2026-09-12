@@ -70,4 +70,5 @@ def test_main_orchestration_processes_scan_before_optional_ups_runtime():
     assert "scanner.selected_name()" in text
     assert "outcome.selection_changed" in text
     assert "ups_runtime = build_ups_runtime" in text
+    assert "bridge.clear_legacy_ups_discovery()" in text
     assert "initialized = ups_runtime.startup()" not in text
