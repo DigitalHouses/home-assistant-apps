@@ -217,6 +217,16 @@ def build_ups_discovery_payload(
                 "output_voltage", "Output voltage", "sensor.dh_pve_ups_output_voltage",
                 "output_voltage_v", unit="V", device_class="voltage",
             )
+        if snapshot.input_frequency_hz is not None:
+            add_sensor(
+                "input_frequency", "Input frequency", "sensor.dh_pve_ups_input_frequency",
+                "input_frequency_hz", unit="Hz", device_class="frequency",
+            )
+        if snapshot.output_frequency_hz is not None:
+            add_sensor(
+                "output_frequency", "Output frequency", "sensor.dh_pve_ups_output_frequency",
+                "output_frequency_hz", unit="Hz", device_class="frequency",
+            )
         if snapshot.warning_charge_percent is not None:
             add_sensor(
                 "battery_charge_warning", "Battery warning threshold",
