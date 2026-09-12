@@ -25,7 +25,7 @@ def _identity():
     )
 
 
-def test_policy_discovery_exposes_three_draft_numbers_and_apply_button():
+def test_policy_discovery_exposes_two_draft_numbers_and_apply_button():
     topics = build_ups_topics(_mqtt(), _identity())
     components = build_ups_discovery_payload(
         _mqtt(), _identity(), version="0.2.0-alpha", snapshot=None
@@ -43,14 +43,7 @@ def test_policy_discovery_exposes_three_draft_numbers_and_apply_button():
     assert on_battery["unit_of_measurement"] == "min"
     assert on_battery["mode"] == "slider"
 
-    reserve = components["policy_emergency_runtime_reserve"]
-    assert reserve["platform"] == "number"
-    assert reserve["default_entity_id"] == "number.dh_pve_ups_policy_emergency_runtime_reserve"
-    assert reserve["command_topic"] == topics.policy_emergency_runtime_reserve_set
-    assert reserve["min"] == 10
-    assert reserve["max"] == 30
-    assert reserve["step"] == 1
-    assert reserve["unit_of_measurement"] == "min"
+    assert "policy_emergency_runtime_reserve" not in components
 
     restore = components["policy_power_restore_delay"]
     assert restore["platform"] == "number"
@@ -96,7 +89,6 @@ def test_policy_controls_depend_on_app_availability_not_nut_telemetry():
 
     for key in (
         "policy_on_battery_delay",
-        "policy_emergency_runtime_reserve",
         "policy_power_restore_delay",
         "policy_apply",
         "policy_status",
