@@ -124,17 +124,28 @@ def _render_ups_conf(existing: str, ups_name: str, restore_delay: int) -> str:
     kept: list[str] = []
     for line in body:
         stripped = line.strip()
-        if not stripped or stripped.startswith("#") or "=" not in stripped:
+        if not stripped or stripped.startswith("#"):
             kept.append(line)
             continue
-        key, value = stripped.split("=", 1)
-        normalized = key.strip().casefold()
-        raw_value = value.strip().strip('"').strip("'")
+
+        key_text = (
+            stripped.split("=", 1)[0].strip()
+            if "=" in stripped
+            else stripped.split(None, 1)[0].strip()
+        )
+        normalized = key_text.casefold()
         if normalized in _FORBIDDEN_UPS_DIRECTIVES:
             raise PolicyApplyError(
                 f"В [{ups_name}] найден несовместимый параметр {normalized}; "
                 "аппаратный Low Battery должен оставаться нативным."
             )
+
+        if "=" not in stripped:
+            kept.append(line)
+            continue
+
+        _, value = stripped.split("=", 1)
+        raw_value = value.strip().strip('"').strip("'")
         if normalized == "offdelay":
             try:
                 offdelay = int(float(raw_value))
