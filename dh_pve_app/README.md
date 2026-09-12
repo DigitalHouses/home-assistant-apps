@@ -1,16 +1,16 @@
 # DH PVE App
 
-`dh_pve_app` is a native DigitalHouses Linux agent for Proxmox VE. It collects host, CPU, memory, storage, physical-disk/SMART, GPU/transcoding, fan, VM/LXC, and passthrough topology telemetry and publishes normalized Home Assistant entities through MQTT Discovery.
+`dh_pve_app` is a native DigitalHouses Linux agent for Proxmox VE. It collects host, CPU, memory, storage, physical-disk/SMART, GPU/transcoding, fan, VM/LXC, passthrough topology, and optional UPS telemetry and publishes normalized Home Assistant entities through MQTT Discovery.
 
-Phase 1 intentionally runs alongside the legacy Bash Proxmox-to-MQTT script. The new app uses its own MQTT namespace and Home Assistant entity IDs, so both implementations can be compared before cutover. Version `0.2.0-alpha` adds optional read-only UPS monitoring through NUT for validation.
+Phase 1 intentionally runs alongside the legacy Bash Proxmox-to-MQTT script. Version `0.2.0-alpha` adds optional read-only UPS monitoring through NUT for validation on real hardware.
 
 ## Public identity
 
 - Home Assistant MQTT device: `DH PVE`
-- Optional UPS MQTT device: `DH UPS`
+- Optional UPS MQTT device: `DH PVE UPS`
 - MQTT base namespace: `DigitalHouses/Global/dh_pve_app/<instance>`
 - PVE entity prefix: `dh_pve_`
-- UPS entity prefix: `dh_ups_`
+- UPS entity prefix: `dh_pve_ups_`
 - Service: `dh_pve_app.service`
 - Install directory: `/opt/digitalhouses/dh_pve_app/`
 - Config: `/etc/dh_pve_app/dh_pve_app.conf`
@@ -30,38 +30,70 @@ Expensive Proxmox helper processes are deliberately kept out of the fast loop. C
 
 ## UPS / NUT monitoring alpha
 
-UPS monitoring is optional and strictly read-only in `0.2.0-alpha`. NUT remains the hardware authority: the app never accesses the UPS over USB and never configures NUT. The first backend reads one UPS with `upsc` from an existing NUT server, normally on the same Proxmox host.
+UPS monitoring is optional and strictly read-only in `0.2.0-alpha`. NUT remains the hardware authority: the app never accesses the UPS over USB and never configures NUT. The backend reads UPS data from an existing NUT server with `upsc`, normally on the same Proxmox host.
 
-Enable it with an optional config section:
+The default NUT endpoint is:
+
+```text
+127.0.0.1:3493
+```
+
+The `[ups]` config section is optional and is only needed to override backend parameters such as host, port, poll interval, or command timeout. Manual model/manufacturer/serial configuration is not required.
+
+Example:
 
 ```ini
 [ups]
-enabled = true
-name = ups
 host = 127.0.0.1
 port = 3493
 poll_interval_seconds = 5
 command_timeout_seconds = 3
 ```
 
-Existing configurations without `[ups]` remain valid and keep UPS monitoring disabled.
+### UPS discovery / provisioning
 
-When enabled, the same process and MQTT client publish a separate Home Assistant device named `DH UPS`. Its MQTT namespace is subordinate to the PVE app instance:
+`DH PVE` always exposes:
+
+- `button.dh_pve_scan_ups`
+- `sensor.dh_pve_ups_scan_result`
+- `sensor.dh_pve_ups_last_scan`
+
+Pressing **Сканировать UPS** performs a read-only `upsc -l` query against the configured NUT endpoint.
+
+Behavior:
+
+- 0 UPS found -> report `UPS не найден`; do not create a new UPS device and do not delete an existing selection.
+- 1 UPS found -> persist the NUT UPS name and create/update `DH PVE UPS`.
+- More than 1 UPS found -> report `Обнаружено несколько UPS`; do not auto-select or replace an existing selection.
+- NUT read failure -> report `NUT недоступен`; preserve any existing selection.
+
+The selected UPS name is stored under `/var/lib/dh_pve_app/` and survives app restarts. Normal polling never deletes Discovery because of a transient NUT/USB failure.
+
+When an UPS is selected, the same process and MQTT connection publish the second logical Home Assistant device:
+
+```text
+DH PVE
+DH PVE UPS
+```
+
+UPS MQTT topics are subordinate to the same app instance:
 
 ```text
 DigitalHouses/Global/dh_pve_app/<instance>/ups/state
 DigitalHouses/Global/dh_pve_app/<instance>/ups/availability
 DigitalHouses/Global/dh_pve_app/<instance>/ups/refresh
-homeassistant/device/dh_ups_<instance>/config
+homeassistant/device/dh_pve_ups_<instance>/config
 ```
 
-Discovery is capability-driven. Only variables actually reported by NUT are exposed. Supported normalized facts include UPS status, battery charge/runtime/voltage, load, input/output voltage, nominal real power, warning/low thresholds, test result and beeper status. NUT status tokens such as `OL`, `OB` and `LB` are parsed in Python into understandable states and binary sensors; the raw NUT status is retained as an attribute.
+During migration from the earlier alpha identity, the app clears the old retained `homeassistant/device/dh_ups_<instance>/config` Discovery topic so Home Assistant does not retain a duplicate `DH UPS` device.
 
-The app deliberately does **not** derive active power from `ups.load × ups.realpower.nominal`: live validation showed that some UPS models quantize low load heavily enough for such a derived value to be misleading. `sensor.dh_ups_nominal_real_power` remains a diagnostic hardware fact when NUT reports it.
+Discovery is capability-driven. Only variables actually reported by NUT are exposed. Supported normalized facts include UPS status, battery charge/runtime/voltage, load, input/output voltage, nominal real power, warning/low thresholds, test result, and beeper status. NUT status tokens such as `OL`, `OB`, and `LB` are parsed in Python into understandable states and binary sensors; the raw NUT status is retained as an attribute.
 
-UPS telemetry is polled independently from PVE telemetry. Discrete power-state changes publish immediately; numeric state uses version-controlled deltas (1 percentage point, 1 V, 60 s runtime). A NUT read failure makes only `DH UPS` unavailable and does not interrupt `DH PVE` monitoring.
+The app deliberately does **not** derive active power from `ups.load × ups.realpower.nominal`: live validation showed that some UPS models quantize low load heavily enough for such a derived value to be misleading. `sensor.dh_pve_ups_nominal_real_power` remains a diagnostic hardware fact when NUT reports it.
 
-This alpha contains **no** UPS power-control path: it does not enable or control `upsmon`, FSD, Proxmox shutdown, guest shutdown, battery tests, beeper control or outlet control. Shutdown coordination is intentionally deferred until physical testing on a locally accessible site.
+UPS collection and MQTT publication are separate. NUT is polled frequently, but numeric telemetry is published sparsely on line power and with tighter thresholds while running on battery. Discrete power-state changes publish immediately. A NUT read failure affects only `DH PVE UPS`; `DH PVE` continues operating normally.
+
+This alpha contains **no** UPS power-control path: it does not enable or control `upsmon`, FSD, Proxmox shutdown, guest shutdown, battery tests, beeper control, outlet control, `upscmd`, or `upsrw`. Shutdown coordination is a separate later phase after physical testing.
 
 ## Guest and passthrough topology
 
@@ -106,32 +138,42 @@ Home Assistant exposes:
 
 A manual PVE refresh runs the full topology scan first, then all enabled PVE collectors, and forces a state publication. `last_refresh` advances only after a successful full refresh.
 
-When UPS monitoring is enabled, it additionally exposes:
+When an UPS has been selected, `DH PVE UPS` additionally exposes:
 
-- `button.dh_ups_refresh`
-- `sensor.dh_ups_last_refresh`
+- `button.dh_pve_ups_refresh`
+- `sensor.dh_pve_ups_last_refresh`
 
-UPS refresh is independent and advances its timestamp only after a successful NUT read.
+UPS refresh is independent and advances its timestamp only after a successful NUT read. If the UPS is selected for the first time after MQTT is already connected, the app subscribes its refresh topic immediately; no MQTT reconnect is required.
+
+## Home Assistant package
+
+The example package is:
+
+```text
+dh_pve_app/examples/packages/dh_app_pve_package.yaml
+```
+
+One package is used for the whole application. Because UPS entities use the `dh_pve_ups_*` namespace, existing Recorder globs such as `sensor.dh_pve_*` and `binary_sensor.dh_pve_*` naturally include both PVE and UPS telemetry. A separate `dh_app_ups_package.yaml` is not required.
 
 ## Dashboard
 
-The production PVE Lovelace view is provided at:
+The PVE Lovelace view is provided at:
 
 ```text
 dh_pve_app/examples/dh_pve_dashboard.yaml
 ```
 
-A compact standalone UPS view for alpha validation is provided at:
+The separate UPS view is provided at:
 
 ```text
-dh_pve_app/examples/dh_ups_dashboard.yaml
+dh_pve_app/examples/dh_pve_ups_dashboard.yaml
 ```
 
-The UPS view keeps operational facts prominent (`status`, battery, runtime, load and input/output voltage), surfaces only actionable UPS fault flags as warning cards, and moves service facts such as NUT availability, battery voltage, nominal power, configured NUT thresholds, test result and refresh timestamp into a secondary service block. It never uses estimated active power.
+The UPS view keeps operational facts prominent (`status`, battery, runtime, load and input/output voltage) and moves service facts such as NUT availability, battery voltage, nominal power, configured NUT thresholds, test result and refresh timestamp into secondary diagnostics. It never uses estimated active power.
 
-The PVE dashboard requires the HACS cards **Mushroom**, **auto-entities**, **mini-graph-card**, and **Entity Progress Card**. The compact UPS view requires **Mushroom**.
+The PVE dashboard requires the HACS cards **Mushroom**, **auto-entities**, **mini-graph-card**, and **Entity Progress Card**. The UPS view requires **Mushroom** and **mini-graph-card**.
 
-The dashboards use Python-normalized values directly. Storage progress uses `usage_percent` plus `used_gib / total_gib`, disk health remains the Python-produced `HEALTHY/WARNING/CRITICAL` state, and Home Assistant does not calculate infrastructure health.
+The dashboards use Python-normalized values directly. Home Assistant does not recalculate infrastructure health or UPS telemetry.
 
 Notifications remain deferred until shutdown/power-loss behavior can be tested on a physically accessible site.
 
@@ -151,9 +193,9 @@ If configuration validation fails, the installer does not overwrite the file and
 nano /etc/dh_pve_app/dh_pve_app.conf
 ```
 
-The installer does not install/configure NUT, edit `/etc/nut/*`, or enable `nut-monitor`. UPS support simply reports unavailable if the configured read-only `upsc` backend cannot be reached.
+The installer does not install/configure NUT, edit `/etc/nut/*`, or enable `nut-monitor`. Current UPS functionality remains read-only.
 
-The service intentionally runs as root because SMART, `/etc/pve` guest configuration and passthrough inspection require host-level read access.
+The service intentionally runs as root because SMART, `/etc/pve` guest configuration, passthrough inspection, and future host-level diagnostics require host access.
 
 ## Validation
 
@@ -166,14 +208,15 @@ systemctl status dh_pve_app --no-pager
 journalctl -u dh_pve_app -n 100 --no-pager
 ```
 
-For UPS alpha validation, also verify the NUT source independently:
+For UPS validation, verify the local NUT source independently:
 
 ```bash
+upsc -l 127.0.0.1:3493
 upsc ups@127.0.0.1:3493
 ```
 
-Expected alpha behavior is a separate `DH UPS` MQTT device, capability-driven entities matching the actual UPS, and uninterrupted `DH PVE` operation if NUT becomes unavailable.
+Expected behavior is `DH PVE` plus an optional `DH PVE UPS` device only after a successful single-UPS scan, capability-driven entities matching the actual UPS, and uninterrupted PVE monitoring if NUT becomes unavailable.
 
 ## Status
 
-Version `0.2.0-alpha` is a validation build for read-only NUT-backed UPS telemetry and compact HA visualization. Shutdown/FSD policy, LAN NUT clients and notifications remain separate later phases.
+Version `0.2.0-alpha` is a validation build for read-only NUT-backed UPS telemetry, manual UPS discovery, and HA visualization. NUT bootstrap, coordinated shutdown/FSD policy, automatic LAN secondary provisioning, and notifications remain separate later phases.
