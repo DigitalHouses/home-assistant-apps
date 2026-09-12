@@ -2,11 +2,11 @@ from app.config import MqttConfig
 from app.identity import HostIdentity
 from app.mqtt_bridge import MqttEvents, build_lwt
 from app.runtime_settings import RuntimeSettings
-from app.topics import build_topics
+from app.topics import build_topics, build_ups_topics
 
 
-def _topics():
-    mqtt = MqttConfig(
+def _mqtt():
+    return MqttConfig(
         host="mqtt",
         port=1883,
         username="",
@@ -15,13 +15,19 @@ def _topics():
         discovery_prefix="homeassistant",
         keepalive_seconds=60,
     )
-    identity = HostIdentity(
+
+
+def _identity():
+    return HostIdentity(
         machine_id="0123456789abcdef0123456789abcdef",
         instance_id="node_a",
         hostname="pve",
         node_name="PVE",
     )
-    return build_topics(mqtt, identity)
+
+
+def _topics():
+    return build_topics(_mqtt(), _identity())
 
 
 def test_lwt_is_retained_offline_availability():
@@ -59,3 +65,24 @@ def test_unknown_topic_is_ignored():
     events = MqttEvents(_topics(), RuntimeSettings())
 
     assert events.handle_message("some/other/topic", b"x") is False
+
+
+def test_ups_refresh_uses_separate_event():
+    events = MqttEvents(_topics(), RuntimeSettings())
+    ups = build_ups_topics(_mqtt(), _identity())
+    events.configure_ups(ups)
+
+    assert events.handle_message(ups.refresh, b"PRESS") is True
+    assert events.ups_refresh_requested.is_set()
+    assert not events.refresh_requested.is_set()
+
+
+def test_ha_online_sets_pve_and_ups_reconnect_events():
+    events = MqttEvents(_topics(), RuntimeSettings())
+    ups = build_ups_topics(_mqtt(), _identity())
+    events.configure_ups(ups)
+
+    events.handle_ha_online()
+
+    assert events.reconnect_requested.is_set()
+    assert events.ups_reconnect_requested.is_set()
