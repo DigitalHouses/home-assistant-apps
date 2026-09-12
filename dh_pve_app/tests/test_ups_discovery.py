@@ -51,7 +51,7 @@ def test_ups_topics_are_separate_from_pve_topics():
     assert pve.discovery != ups.discovery
 
 
-def test_discovery_only_creates_supported_numeric_entities():
+def test_discovery_only_creates_supported_factual_entities():
     snapshot = parse_upsc_output(FIX.read_text(encoding="utf-8"))
     payload = build_ups_discovery_payload(
         _config(), _identity(), version="0.2.0-alpha", snapshot=snapshot
@@ -67,10 +67,55 @@ def test_discovery_only_creates_supported_numeric_entities():
     assert "battery_voltage" in components
     assert "load" in components
     assert "nominal_real_power" in components
-    assert "estimated_real_power" in components
+    assert "estimated_real_power" not in components
     assert "input_voltage" in components
     assert "output_voltage" in components
     assert "unsupported_temperature" not in components
+
+
+def test_primary_ups_entities_stay_out_of_diagnostics():
+    snapshot = parse_upsc_output(FIX.read_text(encoding="utf-8"))
+    components = build_ups_discovery_payload(
+        _config(), _identity(), version="0.2.0-alpha", snapshot=snapshot
+    )["components"]
+
+    for key in (
+        "status",
+        "battery_charge",
+        "battery_runtime",
+        "load",
+        "input_voltage",
+        "output_voltage",
+        "on_battery",
+        "low_battery",
+        "replace_battery",
+        "overload",
+        "bypass",
+    ):
+        assert components[key].get("entity_category") is None
+
+
+def test_service_ups_entities_are_diagnostic():
+    snapshot = parse_upsc_output(FIX.read_text(encoding="utf-8"))
+    components = build_ups_discovery_payload(
+        _config(), _identity(), version="0.2.0-alpha", snapshot=snapshot
+    )["components"]
+
+    for key in (
+        "available",
+        "last_refresh",
+        "refresh",
+        "battery_voltage",
+        "nominal_real_power",
+        "battery_charge_warning",
+        "battery_charge_low",
+        "battery_runtime_low",
+        "test_result",
+        "beeper_status",
+        "charging",
+        "discharging",
+    ):
+        assert components[key]["entity_category"] == "diagnostic"
 
 
 def test_discovery_omits_capability_not_reported_by_ups():
