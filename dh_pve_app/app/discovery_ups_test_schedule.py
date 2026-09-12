@@ -86,8 +86,8 @@ def build_test_schedule_components(
             "icon": "mdi:battery-check-outline",
             "json_attributes_topic": topics.state,
             "json_attributes_template": (
-                "{{ {'last_time': value_json.test_schedule."
-                f"{test_type}.last_time | default(none) }}}} | tojson }}}}"
+                "{{ {'last_time': value_json.test_schedule.%s.last_time | default(none)} | tojson }}"
+                % test_type
             ),
         }
 
