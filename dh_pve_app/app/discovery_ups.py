@@ -417,6 +417,18 @@ def build_ups_discovery_payload(
                 "sensor.dh_pve_ups_battery_runtime_low", "low_runtime_seconds",
                 unit="s", device_class="duration", entity_category="diagnostic",
             )
+        if snapshot.ups_shutdown_delay_seconds is not None:
+            add_sensor(
+                "ups_shutdown_delay", "UPS output shutdown delay",
+                "sensor.dh_pve_ups_shutdown_delay", "ups_shutdown_delay_seconds",
+                unit="s", device_class="duration", entity_category="diagnostic",
+            )
+        if snapshot.ups_start_delay_seconds is not None:
+            add_sensor(
+                "ups_start_delay", "UPS output restore delay",
+                "sensor.dh_pve_ups_start_delay", "ups_start_delay_seconds",
+                unit="s", device_class="duration", entity_category="diagnostic",
+            )
         if snapshot.test_result is not None:
             add_sensor(
                 "test_result", "Last test result", "sensor.dh_pve_ups_test_result",
