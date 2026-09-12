@@ -3,6 +3,7 @@ from __future__ import annotations
 import dataclasses
 import json
 import logging
+import queue
 from collections.abc import Callable
 
 from .config import MqttConfig, UpsConfig
@@ -15,6 +16,16 @@ from .state_store import StateStore
 from .ups_control import UpsCapabilities, list_ups_commands, run_ups_battery_test
 from .ups_health import summarize_ups_problems
 from .ups_nut import UpsSnapshot, read_ups, ups_metrics
+from .ups_policy import (
+    PolicyApplyResult,
+    PolicySafetyFacts,
+    PolicyValidationError,
+    PolicyValidationResult,
+    UpsPolicyDraft,
+    parse_policy_value,
+    policy_hash,
+    validate_policy,
+)
 from .ups_shutdown_policy import UpsShutdownPolicy, read_shutdown_policy
 
 
@@ -22,9 +33,50 @@ _LEGACY_DISCOVERY_REMOVALS = {
     "estimated_real_power": "sensor",
 }
 
+_DEFAULT_POLICY_DRAFT = UpsPolicyDraft(
+    on_battery_delay_minutes=30,
+    emergency_runtime_reserve_minutes=15,
+    power_restore_delay_seconds=120,
+)
+
+_POLICY_STATUSES = {
+    "Active",
+    "Pending changes",
+    "Validation failed",
+    "Apply failed",
+    "Commissioning",
+    "Unknown",
+}
+
+
+def _policy_from_mapping(value: object) -> UpsPolicyDraft | None:
+    if not isinstance(value, dict):
+        return None
+    try:
+        draft = UpsPolicyDraft(
+            on_battery_delay_minutes=int(value["on_battery_delay_minutes"]),
+            emergency_runtime_reserve_minutes=int(
+                value["emergency_runtime_reserve_minutes"]
+            ),
+            power_restore_delay_seconds=int(value["power_restore_delay_seconds"]),
+        )
+        parse_policy_value(
+            "on_battery_delay_minutes", str(draft.on_battery_delay_minutes)
+        )
+        parse_policy_value(
+            "emergency_runtime_reserve_minutes",
+            str(draft.emergency_runtime_reserve_minutes),
+        )
+        parse_policy_value(
+            "power_restore_delay_seconds", str(draft.power_restore_delay_seconds)
+        )
+        return draft
+    except (KeyError, TypeError, ValueError, PolicyValidationError):
+        return None
+
 
 class UpsRuntime:
-    """NUT runtime for UPS telemetry plus explicitly allowed battery-test controls."""
+    """NUT runtime for UPS telemetry, battery tests, and managed policy state."""
 
     def __init__(
         self,
@@ -40,6 +92,10 @@ class UpsRuntime:
         capability_reader: Callable[[UpsConfig], UpsCapabilities] = list_ups_commands,
         command_executor: Callable[[UpsConfig, str], None] = run_ups_battery_test,
         shutdown_policy_reader: Callable[[], UpsShutdownPolicy] = read_shutdown_policy,
+        policy_facts_reader: Callable[[], PolicySafetyFacts] | None = None,
+        policy_applier: Callable[
+            [UpsPolicyDraft, PolicySafetyFacts], PolicyApplyResult
+        ] | None = None,
     ) -> None:
         self.config = config
         self.mqtt_config = mqtt_config
@@ -53,6 +109,8 @@ class UpsRuntime:
         self.capability_reader = capability_reader
         self.command_executor = command_executor
         self.shutdown_policy_reader = shutdown_policy_reader
+        self.policy_facts_reader = policy_facts_reader
+        self.policy_applier = policy_applier
         self.log = logging.getLogger(__name__)
         self.policy = PublishPolicy(RuntimeSettings())
         self.scheduler = Scheduler()
@@ -75,6 +133,44 @@ class UpsRuntime:
         else:
             self._discovery_components = {}
         self._discovery_cleanup_v1 = persisted.get("discovery_cleanup_v1") is True
+
+        self.policy_active = _policy_from_mapping(persisted.get("policy_active"))
+        self.policy_draft = (
+            _policy_from_mapping(persisted.get("policy_draft"))
+            or self.policy_active
+            or _DEFAULT_POLICY_DRAFT
+        )
+        persisted_status = persisted.get("policy_status")
+        if isinstance(persisted_status, str) and persisted_status in _POLICY_STATUSES:
+            self.policy_status = persisted_status
+        elif self.policy_active is not None:
+            self.policy_status = "Active"
+        else:
+            self.policy_status = "Commissioning"
+        persisted_result = persisted.get("policy_apply_result")
+        self.policy_apply_result = (
+            persisted_result if isinstance(persisted_result, str) else "Not applied"
+        )
+        persisted_applied = persisted.get("policy_last_applied")
+        self.policy_last_applied = (
+            persisted_applied if isinstance(persisted_applied, str) else None
+        )
+        persisted_revision = persisted.get("policy_revision")
+        self.policy_revision = (
+            persisted_revision
+            if isinstance(persisted_revision, int) and persisted_revision >= 0
+            else 0
+        )
+        persisted_hash = persisted.get("policy_hash")
+        self.policy_hash = persisted_hash if isinstance(persisted_hash, str) else None
+        if self.policy_active is None:
+            self.policy_revision = 0
+            self.policy_hash = None
+            self.policy_last_applied = None
+        elif self.policy_hash is None:
+            self.policy_hash = policy_hash(self.policy_active)
+
+        self.policy_validation: PolicyValidationResult | None = None
 
         self.last_snapshot: UpsSnapshot | None = None
         self.capabilities: UpsCapabilities | None = None
@@ -109,6 +205,15 @@ class UpsRuntime:
                 "last_refresh": self.last_refresh,
                 "discovery_components": dict(sorted(self._discovery_components.items())),
                 "discovery_cleanup_v1": self._discovery_cleanup_v1,
+                "policy_active": (
+                    self.policy_active.as_dict() if self.policy_active is not None else None
+                ),
+                "policy_draft": self.policy_draft.as_dict(),
+                "policy_status": self.policy_status,
+                "policy_apply_result": self.policy_apply_result,
+                "policy_last_applied": self.policy_last_applied,
+                "policy_revision": self.policy_revision,
+                "policy_hash": self.policy_hash,
             }
         )
 
@@ -182,7 +287,7 @@ class UpsRuntime:
                 "nut_monitor": "unknown",
                 "shutdown_enabled": False,
                 "shutdown_command": None,
-                "minsuppplies": None,
+                "min_supplies": None,
                 "pollfreq_seconds": None,
                 "pollfreqalert_seconds": None,
                 "deadtime_seconds": None,
@@ -196,10 +301,35 @@ class UpsRuntime:
             }
         return self.shutdown_policy.as_dict()
 
+    def _policy_payload(self) -> dict[str, object]:
+        validation = self.policy_validation
+        return {
+            "draft": self.policy_draft.as_dict(),
+            "active": (
+                self.policy_active.as_dict() if self.policy_active is not None else None
+            ),
+            "status": self.policy_status,
+            "apply_result": self.policy_apply_result,
+            "last_applied": self.policy_last_applied,
+            "policy_revision": self.policy_revision,
+            "policy_hash": self.policy_hash,
+            "minimum_emergency_runtime_reserve_seconds": (
+                validation.minimum_emergency_runtime_reserve_seconds
+                if validation is not None
+                else None
+            ),
+            "recommended_emergency_runtime_reserve_seconds": (
+                validation.recommended_emergency_runtime_reserve_seconds
+                if validation is not None
+                else None
+            ),
+        }
+
     def _auxiliary_fields(self) -> dict[str, object]:
         return {
             "capabilities": self._capabilities_payload(),
             "shutdown_policy": self._shutdown_policy_payload(),
+            "policy": self._policy_payload(),
         }
 
     def _success_payload(
@@ -262,6 +392,16 @@ class UpsRuntime:
         except Exception as exc:
             self.shutdown_policy = None
             self.log.warning("Не удалось прочитать политику shutdown NUT/PVE: %s", exc)
+
+    def _refresh_policy_validation(self) -> None:
+        if self.policy_facts_reader is None:
+            self.policy_validation = None
+            return
+        try:
+            facts = self.policy_facts_reader()
+            self.policy_validation = validate_policy(self.policy_draft, facts)
+        except Exception:
+            self.policy_validation = None
 
     def sync_discovery(self, *, force: bool = False) -> bool:
         payload = self._build_discovery()
@@ -343,6 +483,7 @@ class UpsRuntime:
 
     def startup(self) -> bool:
         self._refresh_auxiliary()
+        self._refresh_policy_validation()
         availability_ok = self.bridge.publish_ups_availability(True)
         collection_ok = self._collect(force=True)
         return bool(availability_ok and collection_ok)
@@ -357,6 +498,7 @@ class UpsRuntime:
 
     def manual_refresh(self) -> bool:
         self._refresh_auxiliary()
+        self._refresh_policy_validation()
         return self._collect(force=True, manual_refresh=True)
 
     def _run_battery_test(self, action: str) -> bool:
@@ -373,10 +515,108 @@ class UpsRuntime:
         self.manual_refresh()
         return True
 
+    def _rollback_draft_to_active(self) -> None:
+        self.policy_draft = self.policy_active or _DEFAULT_POLICY_DRAFT
+        self._refresh_policy_validation()
+
+    def _apply_policy(self) -> None:
+        draft = UpsPolicyDraft(**self.policy_draft.as_dict())
+        try:
+            if self.policy_facts_reader is None:
+                raise PolicyValidationError(
+                    "Расчет безопасности политики на этом хосте еще не настроен."
+                )
+            facts = self.policy_facts_reader()
+            validation = validate_policy(draft, facts)
+        except PolicyValidationError as exc:
+            self.policy_status = "Validation failed"
+            self.policy_apply_result = str(exc)
+            self._rollback_draft_to_active()
+            self._persist()
+            return
+        except Exception as exc:
+            self.log.warning(
+                "Не удалось проверить политику UPS: %s", type(exc).__name__
+            )
+            self.policy_status = "Validation failed"
+            self.policy_apply_result = "Не удалось проверить безопасность политики."
+            self._rollback_draft_to_active()
+            self._persist()
+            return
+
+        if self.policy_applier is None:
+            result = PolicyApplyResult(
+                False,
+                "Применение политики на этом хосте еще не настроено.",
+            )
+        else:
+            try:
+                result = self.policy_applier(draft, facts)
+            except Exception as exc:
+                self.log.warning(
+                    "Не удалось применить политику UPS: %s", type(exc).__name__
+                )
+                result = PolicyApplyResult(False, "Не удалось применить политику.")
+
+        if not result.success:
+            self.policy_status = "Apply failed"
+            self.policy_apply_result = result.message
+            self._rollback_draft_to_active()
+            self._persist()
+            return
+
+        self.policy_active = draft
+        self.policy_draft = draft
+        self.policy_status = "Active"
+        self.policy_apply_result = result.message
+        self.policy_last_applied = self.now_iso()
+        self.policy_revision += 1
+        self.policy_hash = policy_hash(draft)
+        self.policy_validation = validation
+        self._persist()
+
+    def _process_policy_events(self) -> bool:
+        changed = False
+        updates = getattr(self.bridge, "ups_policy_updates", None)
+        if updates is not None:
+            while True:
+                try:
+                    update = updates.get_nowait()
+                except queue.Empty:
+                    break
+                current = dataclasses.replace(
+                    self.policy_draft,
+                    **{update.key: update.value},
+                )
+                if current == self.policy_draft:
+                    continue
+                self.policy_draft = current
+                if self.policy_active is not None and current == self.policy_active:
+                    self.policy_status = "Active"
+                elif self.policy_active is None and current == _DEFAULT_POLICY_DRAFT:
+                    self.policy_status = "Commissioning"
+                else:
+                    self.policy_status = "Pending changes"
+                    self.policy_apply_result = "Есть непримененные изменения."
+                self._refresh_policy_validation()
+                self._persist()
+                changed = True
+
+        apply_event = getattr(self.bridge, "ups_policy_apply_requested", None)
+        if apply_event is not None and apply_event.is_set():
+            apply_event.clear()
+            self._apply_policy()
+            changed = True
+
+        if changed:
+            self._collect(force=True)
+        return changed
+
     def republish_after_reconnect(self) -> bool:
         availability_ok = self.bridge.publish_ups_availability(True)
         if self.last_snapshot is None and self._last_state_payload is None:
             self._refresh_auxiliary()
+            self._refresh_policy_validation()
             return bool(availability_ok and self._collect(force=True))
         discovery_ok = self.sync_discovery(force=True)
         state = self._last_state_payload
@@ -404,4 +644,7 @@ class UpsRuntime:
                 event.clear()
                 self._run_battery_test(action)
                 handled = True
+
+        if self._process_policy_events():
+            handled = True
         return handled
