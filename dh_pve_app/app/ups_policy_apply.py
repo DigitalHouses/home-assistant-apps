@@ -28,7 +28,7 @@ class ManagedNutPaths:
     upsmon: Path = Path("/etc/nut/upsmon.conf")
     upssched: Path = Path("/etc/nut/upssched.conf")
     ups_conf: Path = Path("/etc/nut/ups.conf")
-    command_script: Path = Path("/usr/local/sbin/dh-pve-ups-policy-cmd")
+    command_script: Path = Path("/var/lib/dh_pve_app/dh-pve-ups-policy-cmd")
     metadata: Path = Path("/var/lib/dh_pve_app/ups_policy_active.json")
 
 
