@@ -12,7 +12,7 @@ def test_ups_dashboard_example_exists_and_uses_real_entities():
         "sensor.dh_ups_problems",
         "sensor.dh_ups_status",
         "sensor.dh_ups_battery_charge",
-        "sensor.dh_ups_battery_runtime",
+        "sensor.dh_ups_battery_runtime_minutes",
         "sensor.dh_ups_load",
         "sensor.dh_ups_input_voltage",
         "sensor.dh_ups_output_voltage",
@@ -33,6 +33,14 @@ def test_ups_dashboard_uses_python_problem_summary_for_top_status():
     assert "state_attr('sensor.dh_ups_problems', 'details')" in text
     assert "Проблем не обнаружено" not in text
     assert "type: conditional" not in text
+
+
+def test_dashboard_uses_python_runtime_minutes_without_template_conversion():
+    text = DASHBOARD.read_text(encoding="utf-8")
+
+    assert "entity: sensor.dh_ups_battery_runtime_minutes" in text
+    assert "name: Прогноз работы от батареи" in text
+    assert "/ 60" not in text
 
 
 def test_fault_binary_sensors_are_kept_only_for_event_log_visibility():
