@@ -1,8 +1,8 @@
-from pathlib import Path
-
-from app.config import MqttConfig
+import app.main as main_module
+from app.config import MqttConfig, UpsConfig
 from app.identity import HostIdentity
 from app.topics import build_ups_topics
+from app.ups_nut import parse_upsc_output
 
 
 def _mqtt():
@@ -26,11 +26,53 @@ def _identity():
     )
 
 
-def test_production_main_does_not_wire_policy_applier_before_live_commissioning():
-    source = Path("dh_pve_app/app/main.py").read_text(encoding="utf-8")
+def _ups(*, policy_apply_enabled: bool):
+    return UpsConfig(
+        enabled=True,
+        name="ups",
+        host="127.0.0.1",
+        port=3493,
+        poll_interval_seconds=5.0,
+        command_timeout_seconds=3.0,
+        policy_apply_enabled=policy_apply_enabled,
+    )
 
-    assert "UpsPolicyApplier" not in source
-    assert "policy_applier=" not in source
+
+def test_local_gate_blocks_policy_writer_construction_when_disabled():
+    assert hasattr(main_module, "build_ups_policy_applier")
+    factory_calls = []
+
+    result = main_module.build_ups_policy_applier(
+        _ups(policy_apply_enabled=False),
+        applier_factory=lambda **kwargs: factory_calls.append(kwargs),
+        ups_reader=lambda config: (_ for _ in ()).throw(AssertionError("must not read UPS")),
+    )
+
+    assert result is None
+    assert factory_calls == []
+
+
+def test_local_gate_builds_policy_writer_only_when_explicitly_enabled():
+    assert hasattr(main_module, "build_ups_policy_applier")
+    captured = {}
+
+    class FakeApplier:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+        def apply(self, draft, facts):
+            return draft, facts
+
+    snapshot = parse_upsc_output("ups.delay.start: 180\nups.status: OL\n")
+    writer = main_module.build_ups_policy_applier(
+        _ups(policy_apply_enabled=True),
+        applier_factory=FakeApplier,
+        ups_reader=lambda config: snapshot,
+    )
+
+    assert callable(writer)
+    assert captured["ups_name"] == "ups"
+    assert captured["effective_restart_delay_reader"]() == 180
 
 
 def test_mqtt_ups_surface_has_no_shutdown_fsd_load_off_or_generic_command_topic():
