@@ -84,21 +84,61 @@ These are host facts, not universal defaults.
 
 ## Apply Policy safety boundary
 
-Apply Policy may manage only the configuration required for the approved two-value policy and the standard NUT shutdown chain.
+Apply Policy may manage only the mutable configuration required for the approved two-value policy and the standard NUT shutdown chain.
 
-It may manage:
+Mutable Apply-owned state is limited to:
 
 - owned directives in `/etc/nut/upsmon.conf`;
 - owned rules in `/etc/nut/upssched.conf`;
-- the owned local `upssched` command script;
-- the UPS restart delay when the selected driver/device supports and verifies the target value;
-- application policy metadata under the app state directory.
+- `offdelay`/`ondelay` in the selected UPS section when the selected driver/device supports and verifies them;
+- application policy metadata under `/var/lib/dh_pve_app`.
 
-It must not manage hardware LB thresholds.
+The FSD timer helper is **not** runtime-managed state. It is immutable, versioned application code installed as:
+
+`/opt/digitalhouses/dh_pve_app/bin/dh-pve-ups-policy-cmd`
+
+Requirements for the helper:
+
+- installed `root:root` and executable by the NUT/upssched runtime user;
+- not writable by group or others;
+- `/opt/digitalhouses/dh_pve_app` remains read-only to the running service through `ProtectSystem=full`;
+- Apply Policy only validates the helper and references it through `CMDSCRIPT`; it never creates, edits, replaces, or rolls it back;
+- the helper accepts only the owned timer token `dh-pve-ups-shutdown` and maps only that token to local `upsmon -c fsd`;
+- arbitrary arguments, shell fragments, MQTT payloads, generic NUT commands, and load control must not pass through the helper.
+
+Apply Policy must not manage hardware LB thresholds. Existing `ignorelb`, `override.battery.runtime.low`, or `override.battery.charge.low` in the selected UPS section are commissioning blockers, including flag-style directives without `=`.
 
 The transaction still requires validation, backups, atomic writes, bounded service actions, reread verification, rollback on failure, and active-policy persistence only after successful verification.
 
 Commissioning safety remains unchanged until a separately reviewed live deployment: current host has `nut-monitor` inactive and `SHUTDOWNCMD "/bin/true"`.
+
+## Read-only commissioning preflight
+
+Before wiring `UpsPolicyApplier` into production runtime or performing any live policy apply, `dh_pve_app` must be able to produce a read-only commissioning preflight report.
+
+A `Ready` report requires at least:
+
+- selected UPS is reachable through NUT;
+- `nut-driver@<ups>.service` is active;
+- `nut-server.service` is active;
+- local `upsmon` role is `primary`;
+- commissioning state is still safe: `nut-monitor` inactive;
+- commissioning shutdown command is still `/bin/true` and therefore not live;
+- `/etc/killpower` is absent;
+- immutable FSD helper exists, is executable, and is not group/other writable;
+- selected UPS section does not contain `ignorelb` or Low Battery overrides;
+- Proxmox guest shutdown budget can be calculated.
+
+Preflight is strictly read-only. It may read files, query NUT, and call status-only commands such as `systemctl is-active`. It must not:
+
+- start, stop, restart, enable, or disable any service;
+- write `/etc/nut` or application state;
+- invoke `upsmon -c fsd`;
+- invoke generic `upscmd`;
+- change UPS output or test state;
+- create/remove `/etc/killpower`.
+
+A failed check produces `Blocked`; preflight never repairs the host automatically.
 
 ## Policy validation after simplification
 
@@ -216,7 +256,10 @@ Tests must prove at least:
 - the emergency-runtime-reserve MQTT topic/entity no longer exists;
 - policy parsing/hash/lifecycle use only the two approved writable values;
 - Apply Policy never writes `battery.runtime.low`, `battery.charge.low`, or enables `ignorelb`;
+- flag-form `ignorelb` without `=` is detected and rejected;
 - target NUT configuration preserves native LB handling;
+- immutable FSD helper is not writable by Apply Policy and its path is not added to the service writable sandbox;
+- commissioning preflight is read-only and blocks if the host is already live, `/etc/killpower` exists, hardware LB is overridden, helper is unsafe, NUT services are unavailable, or shutdown budget cannot be calculated;
 - read-only UPS hardware thresholds are published when present;
 - Quick/Deep interval and time settings persist;
 - overdue tests do not start outside their preferred local-time window;
