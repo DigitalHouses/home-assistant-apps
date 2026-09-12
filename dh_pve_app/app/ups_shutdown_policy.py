@@ -14,7 +14,7 @@ class UpsShutdownPolicy:
     nut_monitor: str
     shutdown_enabled: bool
     shutdown_command: str | None
-    minsupplies: int | None
+    min_supplies: int | None
     pollfreq_seconds: int | None
     pollfreqalert_seconds: int | None
     deadtime_seconds: int | None
@@ -33,7 +33,7 @@ class UpsShutdownPolicy:
             "nut_monitor": self.nut_monitor,
             "shutdown_enabled": self.shutdown_enabled,
             "shutdown_command": self.shutdown_command,
-            "minsuppplies": self.minsupplies,
+            "min_supplies": self.min_supplies,
             "pollfreq_seconds": self.pollfreq_seconds,
             "pollfreqalert_seconds": self.pollfreqalert_seconds,
             "deadtime_seconds": self.deadtime_seconds,
@@ -136,7 +136,7 @@ def parse_shutdown_policy(
         nut_monitor=monitor_state,
         shutdown_enabled=shutdown_enabled,
         shutdown_command=shutdown_command,
-        minsupplies=_first_int(directives, "MINSUPPLIES"),
+        min_supplies=_first_int(directives, "MINSUPPLIES"),
         pollfreq_seconds=_first_int(directives, "POLLFREQ"),
         pollfreqalert_seconds=_first_int(directives, "POLLFREQALERT"),
         deadtime_seconds=_first_int(directives, "DEADTIME"),
