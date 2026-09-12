@@ -30,7 +30,6 @@ class UpsTopics:
     test_deep: str
     test_stop: str
     policy_on_battery_delay_set: str
-    policy_emergency_runtime_reserve_set: str
     policy_power_restore_delay_set: str
     policy_apply: str
     discovery: str
@@ -71,9 +70,6 @@ def build_ups_topics(mqtt: MqttConfig, identity: HostIdentity) -> UpsTopics:
         test_deep=f"{pve.base}/ups/test/deep",
         test_stop=f"{pve.base}/ups/test/stop",
         policy_on_battery_delay_set=f"{policy_base}/on_battery_delay/set",
-        policy_emergency_runtime_reserve_set=(
-            f"{policy_base}/emergency_runtime_reserve/set"
-        ),
         policy_power_restore_delay_set=f"{policy_base}/power_restore_delay/set",
         policy_apply=f"{policy_base}/apply",
         discovery=f"{discovery_prefix}/device/{device_id}/config",
