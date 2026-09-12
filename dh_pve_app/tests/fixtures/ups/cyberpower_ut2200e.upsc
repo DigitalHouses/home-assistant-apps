@@ -1,0 +1,41 @@
+battery.charge: 100
+battery.charge.low: 10
+battery.charge.warning: 20
+battery.mfr.date: CPS
+battery.runtime: 2160
+battery.runtime.low: 300
+battery.type: PbAcid
+battery.voltage: 27.2
+battery.voltage.nominal: 24
+device.mfr: CPS
+device.model: UT2200E   
+device.type: ups
+driver.name: usbhid-ups
+driver.parameter.pollfreq: 30
+driver.parameter.pollinterval: 2
+driver.parameter.port: auto
+driver.parameter.productid: 0501
+driver.parameter.synchronous: auto
+driver.parameter.vendorid: 0764
+driver.version: 2.8.0
+driver.version.data: CyberPower HID 0.6
+driver.version.internal: 0.47
+driver.version.usb: libusb-1.0.26 (API: 0x1000109)
+input.transfer.high: 0
+input.transfer.low: 0
+input.voltage: 221.0
+input.voltage.nominal: 230
+output.voltage: 221.0
+ups.beeper.status: enabled
+ups.delay.shutdown: 20
+ups.delay.start: 30
+ups.load: 8
+ups.mfr: CPS
+ups.model: UT2200E   
+ups.productid: 0501
+ups.realpower.nominal: 1320
+ups.status: OL
+ups.test.result: No test initiated
+ups.timer.shutdown: -60
+ups.timer.start: -60
+ups.vendorid: 0764
