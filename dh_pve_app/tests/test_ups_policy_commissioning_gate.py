@@ -1,5 +1,5 @@
 import app.main as main_module
-from app.config import MqttConfig, UpsConfig
+from app.config import AppConfig, GeneralConfig, MqttConfig, UpsConfig
 from app.identity import HostIdentity
 from app.topics import build_ups_topics
 from app.ups_nut import parse_upsc_output
@@ -38,6 +38,26 @@ def _ups(*, policy_apply_enabled: bool):
     )
 
 
+def _app_config(*, policy_apply_enabled: bool):
+    return AppConfig(
+        general=GeneralConfig(
+            instance_id="node_a",
+            node_name="PVE",
+            log_level="info",
+        ),
+        mqtt=_mqtt(),
+        ups=_ups(policy_apply_enabled=policy_apply_enabled),
+    )
+
+
+class Bridge:
+    def __init__(self):
+        self.ups_topics = None
+
+    def configure_ups(self, topics):
+        self.ups_topics = topics
+
+
 def test_local_gate_blocks_policy_writer_construction_when_disabled():
     assert hasattr(main_module, "build_ups_policy_applier")
     factory_calls = []
@@ -73,6 +93,30 @@ def test_local_gate_builds_policy_writer_only_when_explicitly_enabled():
     assert callable(writer)
     assert captured["ups_name"] == "ups"
     assert captured["effective_restart_delay_reader"]() == 180
+
+
+def test_build_ups_runtime_receives_only_the_locally_gated_writer(tmp_path, monkeypatch):
+    sentinel_writer = lambda draft, facts: (draft, facts)
+    seen = []
+    monkeypatch.setattr(main_module, "resolve_identity", lambda general: _identity())
+    monkeypatch.setattr(
+        main_module,
+        "build_ups_policy_applier",
+        lambda config: seen.append(config) or sentinel_writer,
+        raising=False,
+    )
+    bridge = Bridge()
+
+    runtime = main_module.build_ups_runtime(
+        _app_config(policy_apply_enabled=True),
+        bridge,
+        selected_name="ups",
+        state_dir=tmp_path,
+    )
+
+    assert runtime is not None
+    assert seen and seen[0].name == "ups"
+    assert runtime.policy_applier is sentinel_writer
 
 
 def test_mqtt_ups_surface_has_no_shutdown_fsd_load_off_or_generic_command_topic():
