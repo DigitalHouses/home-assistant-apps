@@ -130,3 +130,15 @@ def test_ups_numeric_thresholds():
         "runtime": MetricValue(2100.0, "ups_runtime_seconds"),
     }
     assert policy.evaluate(runtime_changed).publish is True
+
+
+def test_ups_frequency_threshold_suppresses_small_jitter():
+    policy = _policy()
+    policy.mark_published({"frequency": MetricValue(50.0, "ups_frequency_online")})
+
+    assert policy.evaluate({
+        "frequency": MetricValue(49.9, "ups_frequency_online")
+    }).publish is False
+    assert policy.evaluate({
+        "frequency": MetricValue(49.8, "ups_frequency_online")
+    }).publish is True
