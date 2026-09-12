@@ -12,6 +12,7 @@ from .publish_policy import MetricValue, PublishPolicy
 from .runtime_settings import RuntimeSettings
 from .scheduler import Scheduler
 from .state_store import StateStore
+from .ups_health import summarize_ups_problems
 from .ups_nut import UpsSnapshot, read_ups, ups_metrics
 
 
@@ -133,6 +134,20 @@ class UpsRuntime:
         data["status_tokens"] = list(snapshot.status_tokens)
         return data
 
+    @staticmethod
+    def _problem_fields(
+        snapshot: UpsSnapshot | None,
+        *,
+        nut_available: bool,
+    ) -> dict[str, object]:
+        summary = summarize_ups_problems(snapshot, nut_available=nut_available)
+        return {
+            "problems_count": summary.count,
+            "problems_severity": summary.severity,
+            "problems": list(summary.problems),
+            "problems_details": summary.details,
+        }
+
     def _success_payload(
         self,
         snapshot: UpsSnapshot,
@@ -149,6 +164,7 @@ class UpsRuntime:
             "data": data,
         }
         payload.update(data)
+        payload.update(self._problem_fields(snapshot, nut_available=True))
         return payload
 
     def _failure_payload(self, *, collected_at: str, error: str) -> dict[str, object]:
@@ -165,6 +181,7 @@ class UpsRuntime:
         payload["available"] = False
         payload["status"] = "Unavailable"
         payload["error"] = error
+        payload.update(self._problem_fields(None, nut_available=False))
         return payload
 
     def _build_discovery(self) -> dict[str, object]:
