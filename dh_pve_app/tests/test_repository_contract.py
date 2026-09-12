@@ -21,9 +21,10 @@ def test_required_root_files_exist():
 def test_public_identity_contract():
     assert (ROOT / "digitalhouses.app").read_text().strip() == "type = linux_agent"
     version = (ROOT / "VERSION").read_text().strip()
-    assert re.fullmatch(r"\d+\.\d+\.\d+", version)
-    assert version == "0.1.0"
+    assert re.fullmatch(r"\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?", version)
+    assert version == "0.2.0-alpha"
 
     readme = (ROOT / "README.md").read_text()
     assert "DigitalHouses/Global/dh_pve_app" in readme
     assert "DH PVE" in readme
+    assert "DH UPS" in readme
