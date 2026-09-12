@@ -13,8 +13,8 @@ discovery_prefix = homeassistant
 topic_prefix = DigitalHouses/Global/dh_pve_app
 
 [ups]
-enabled = false
-name = ups
+# Read-only NUT endpoint used by the "Сканировать UPS" button.
+# The UPS name and hardware identity are discovered from NUT; do not enter them here.
 host = 127.0.0.1
 port = 3493
 poll_interval_seconds = 5
