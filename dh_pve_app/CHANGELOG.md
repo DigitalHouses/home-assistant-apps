@@ -3,21 +3,27 @@
 ## 0.2.0-alpha
 
 - Add optional read-only UPS monitoring through an existing NUT server using `upsc`.
-- Add separate Home Assistant MQTT device `DH UPS` while retaining one `dh_pve_app` process and one MQTT connection.
-- Add UPS-specific MQTT state, availability, refresh and Device Discovery topics without changing the existing `DH PVE` topic contract.
+- Keep one `dh_pve_app` process and one MQTT connection while exposing two logical Home Assistant devices: `DH PVE` and optional `DH PVE UPS`.
+- Scope UPS entity IDs under the application namespace as `dh_pve_ups_*` and use the stable Discovery device ID `dh_pve_ups_<instance>`.
+- Add `button.dh_pve_scan_ups`, `sensor.dh_pve_ups_scan_result`, and `sensor.dh_pve_ups_last_scan` to the `DH PVE` device.
+- Add read-only NUT UPS enumeration with `upsc -l`; one discovered UPS is persisted as the selected UPS, while zero/multiple/error scan results preserve any existing selection.
+- Do not create `DH PVE UPS` until an UPS has been selected; transient NUT/USB failures never delete the existing UPS device or persisted selection.
+- Subscribe the UPS refresh command dynamically when an UPS is first selected after MQTT is already connected.
+- Remove the previous retained `DH UPS` Discovery topic during migration so Home Assistant does not keep a duplicate legacy device.
+- Add UPS-specific MQTT state, availability, refresh and Device Discovery topics without changing the existing `DH PVE` state topic contract.
 - Add vendor-neutral parsing of NUT status tokens and normalized battery, runtime, voltage, load and nominal-power telemetry.
 - Add capability-driven UPS Discovery so unsupported variables are not exposed as entities.
 - Keep HA telemetry factual: do not derive active power from load percentage and nominal real power, because live validation showed coarse low-load quantization on the CyberPower/CPS UT2200E.
 - Classify service-only UPS facts as Home Assistant diagnostic entities while keeping status, battery, runtime, load, input/output voltage and actionable fault flags primary.
-- Add fixed meaningful-change publication thresholds for UPS percentages, voltages and runtime, with immediate publication for discrete power-state changes.
+- Add adaptive meaningful-change publication thresholds: sparse numeric publication on line power and tighter publication while running on battery, with immediate publication for discrete power-state changes.
 - Add independent UPS refresh/reconnect handling and persistent last-successful manual refresh timestamp.
 - Isolate NUT read failures from PVE monitoring; failed UPS reads do not stop or degrade the `DH PVE` runtime.
 - Preserve the last valid UPS capability inventory across transient NUT read failures.
 - Add CyberPower/CPS UT2200E fixture coverage based on live `upsc` output from the remote validation site.
-- Add compact `examples/dh_ups_dashboard.yaml` for alpha validation using only normalized NUT facts and actionable UPS fault flags.
+- Rename the compact UPS dashboard example to `examples/dh_pve_ups_dashboard.yaml` and use only `dh_pve_ups_*` entities.
 - Keep UPS alpha strictly read-only: no `upsmon`, FSD, shutdown, battery-test, beeper, outlet, `upscmd`, or `upsrw` control paths.
 - Keep NUT installation and `/etc/nut/*` configuration outside `dh_pve_app`; the installer does not enable or modify `nut-monitor`.
-- Defer coordinated shutdown, LAN NUT clients and notifications until physical local testing.
+- Defer coordinated shutdown, LAN NUT client provisioning and notifications until physical local testing.
 
 ## 0.1.0
 
@@ -45,4 +51,4 @@
 - Dashboard dependencies are Mushroom, auto-entities, mini-graph-card, and Entity Progress Card; infrastructure health remains Python-owned rather than HA-template calculated.
 - Add autonomous Proxmox installer, root-documented systemd service, persistent runtime state, repository validator, and CI coverage.
 - Preserve the legacy Bash Proxmox-to-MQTT cron job during Phase 1 side-by-side validation.
-- Reserve UPS/NUT monitoring for Phase 2 as a separate `DH UPS` MQTT device.
+- Reserve UPS/NUT monitoring for Phase 2 as a separate logical MQTT device owned by `dh_pve_app`.
