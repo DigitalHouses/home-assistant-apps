@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .config import AppConfig, MqttConfig
+from .config import MqttConfig
 from .identity import HostIdentity
 from .topics import build_topics, build_ups_topics
 from .ups_nut import UpsSnapshot
@@ -26,15 +26,14 @@ def _nut_availability(state_topic: str) -> dict[str, str]:
 
 
 def build_ups_discovery_payload(
-    config: AppConfig | MqttConfig,
+    mqtt_config: MqttConfig,
     identity: HostIdentity,
     *,
     version: str,
     snapshot: UpsSnapshot | None,
 ) -> dict[str, Any]:
-    mqtt = config.mqtt if isinstance(config, AppConfig) else config
-    pve_topics = build_topics(mqtt, identity)
-    topics = build_ups_topics(mqtt, identity)
+    pve_topics = build_topics(mqtt_config, identity)
+    topics = build_ups_topics(mqtt_config, identity)
 
     def uid(component: str) -> str:
         return f"{topics.device_id}_{component}"
@@ -134,8 +133,16 @@ def build_ups_discovery_payload(
             component["icon"] = icon
         components[key] = component
 
-    def add_binary(key: str, name: str, entity_id: str, field: str, icon: str) -> None:
-        components[key] = {
+    def add_binary(
+        key: str,
+        name: str,
+        entity_id: str,
+        field: str,
+        icon: str,
+        *,
+        entity_category: str | None = None,
+    ) -> None:
+        component: dict[str, Any] = {
             "platform": "binary_sensor",
             "name": name,
             "unique_id": uid(key),
@@ -148,6 +155,9 @@ def build_ups_discovery_payload(
             "availability_mode": "all",
             "icon": icon,
         }
+        if entity_category is not None:
+            component["entity_category"] = entity_category
+        components[key] = component
 
     if snapshot is not None:
         if snapshot.battery_charge_percent is not None:
@@ -164,6 +174,7 @@ def build_ups_discovery_payload(
             add_sensor(
                 "battery_voltage", "Battery voltage", "sensor.dh_ups_battery_voltage",
                 "battery_voltage_v", unit="V", device_class="voltage",
+                entity_category="diagnostic",
             )
         if snapshot.load_percent is not None:
             add_sensor("load", "Load", "sensor.dh_ups_load", "load_percent", unit="%")
@@ -172,12 +183,6 @@ def build_ups_discovery_payload(
                 "nominal_real_power", "Nominal real power",
                 "sensor.dh_ups_nominal_real_power", "nominal_real_power_w",
                 unit="W", device_class="power", entity_category="diagnostic",
-            )
-        if snapshot.estimated_real_power_w is not None:
-            add_sensor(
-                "estimated_real_power", "Estimated real power",
-                "sensor.dh_ups_estimated_real_power", "estimated_real_power_w",
-                unit="W", device_class="power", icon="mdi:flash-outline",
             )
         if snapshot.input_voltage_v is not None:
             add_sensor(
@@ -241,11 +246,11 @@ def build_ups_discovery_payload(
             )
             add_binary(
                 "charging", "Charging", "binary_sensor.dh_ups_charging",
-                "charging", "mdi:battery-charging",
+                "charging", "mdi:battery-charging", entity_category="diagnostic",
             )
             add_binary(
                 "discharging", "Discharging", "binary_sensor.dh_ups_discharging",
-                "discharging", "mdi:battery-minus",
+                "discharging", "mdi:battery-minus", entity_category="diagnostic",
             )
 
     device: dict[str, Any] = {
