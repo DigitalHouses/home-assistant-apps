@@ -97,9 +97,6 @@ class MqttEvents:
         if self.ups_topics is not None:
             policy_topics = {
                 self.ups_topics.policy_on_battery_delay_set: "on_battery_delay_minutes",
-                self.ups_topics.policy_emergency_runtime_reserve_set: (
-                    "emergency_runtime_reserve_minutes"
-                ),
                 self.ups_topics.policy_power_restore_delay_set: (
                     "power_restore_delay_seconds"
                 ),
@@ -172,9 +169,6 @@ class MqttBridge(MqttEvents):
         client.subscribe(f"{self.topics.base}/ups/test/deep", qos=1)
         client.subscribe(f"{self.topics.base}/ups/test/stop", qos=1)
         client.subscribe(f"{self.topics.base}/ups/policy/on_battery_delay/set", qos=1)
-        client.subscribe(
-            f"{self.topics.base}/ups/policy/emergency_runtime_reserve/set", qos=1
-        )
         client.subscribe(f"{self.topics.base}/ups/policy/power_restore_delay/set", qos=1)
         client.subscribe(f"{self.topics.base}/ups/policy/apply", qos=1)
         client.subscribe(f"{self.topics.settings_prefix}/+/set", qos=1)
