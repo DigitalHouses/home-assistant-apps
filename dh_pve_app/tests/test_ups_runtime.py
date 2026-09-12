@@ -143,18 +143,18 @@ def test_unchanged_poll_suppressed_but_ol_to_ob_publishes(tmp_path):
     assert bridge.states[-1]["on_battery"] is True
 
 
-def test_runtime_drift_threshold_is_sixty_seconds(tmp_path):
+def test_runtime_drift_threshold_is_five_minutes_while_online(tmp_path):
     current = {"snapshot": parse_upsc_output("ups.status: OL\nbattery.runtime: 2160\n")}
     bridge, runtime, clock = _runtime(tmp_path, lambda config: current["snapshot"])
     runtime.startup()
     bridge.states.clear()
 
-    current["snapshot"] = parse_upsc_output("ups.status: OL\nbattery.runtime: 2130\n")
+    current["snapshot"] = parse_upsc_output("ups.status: OL\nbattery.runtime: 2100\n")
     clock["mono"] = 105.0
     runtime.tick(clock["mono"])
     assert bridge.states == []
 
-    current["snapshot"] = parse_upsc_output("ups.status: OL\nbattery.runtime: 2100\n")
+    current["snapshot"] = parse_upsc_output("ups.status: OL\nbattery.runtime: 1860\n")
     clock["mono"] = 110.0
     runtime.tick(clock["mono"])
     assert len(bridge.states) == 1
