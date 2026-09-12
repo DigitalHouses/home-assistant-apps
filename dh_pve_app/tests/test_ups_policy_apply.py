@@ -32,6 +32,14 @@ UPS_CONF = '''[ups]
     ondelay = 120
 '''
 
+HELPER = '''#!/bin/sh
+set -eu
+case "${1:-}" in
+  "dh-pve-ups-shutdown") exec /sbin/upsmon -c fsd ;;
+  *) exit 64 ;;
+esac
+'''
+
 
 def _draft():
     return UpsPolicyDraft(
@@ -54,7 +62,7 @@ def test_rendered_policy_uses_cancellable_onbatt_timer_and_native_lb():
         _draft(),
         UPSMON_COMMISSIONING,
         UPS_CONF,
-        command_script_path=Path("/usr/local/sbin/dh-pve-ups-policy-cmd"),
+        command_script_path=Path("/opt/digitalhouses/dh_pve_app/bin/dh-pve-ups-policy-cmd"),
     )
 
     assert 'SHUTDOWNCMD "/sbin/shutdown -h now"' in target.upsmon_text
@@ -63,15 +71,14 @@ def test_rendered_policy_uses_cancellable_onbatt_timer_and_native_lb():
     assert "NOTIFYFLAG ONBATT SYSLOG+EXEC" in target.upsmon_text
     assert "NOTIFYFLAG ONLINE SYSLOG+EXEC" in target.upsmon_text
 
-    assert "CMDSCRIPT /usr/local/sbin/dh-pve-ups-policy-cmd" in target.upssched_text
+    assert (
+        "CMDSCRIPT /opt/digitalhouses/dh_pve_app/bin/dh-pve-ups-policy-cmd"
+        in target.upssched_text
+    )
     assert "PIPEFN /run/nut/upssched.pipe" in target.upssched_text
     assert "LOCKFN /run/nut/upssched.lock" in target.upssched_text
     assert "AT ONBATT * START-TIMER dh-pve-ups-shutdown 1800" in target.upssched_text
     assert "AT ONLINE * CANCEL-TIMER dh-pve-ups-shutdown" in target.upssched_text
-
-    assert "dh-pve-ups-shutdown" in target.command_script_text
-    assert "upsmon -c fsd" in target.command_script_text
-    assert "case" in target.command_script_text
 
     combined = "\n".join(
         (target.upsmon_text, target.upssched_text, target.ups_conf_text)
@@ -87,7 +94,7 @@ def test_rendered_driver_policy_changes_restore_delay_but_preserves_safe_offdela
         _draft(),
         UPSMON_COMMISSIONING,
         UPS_CONF,
-        command_script_path=Path("/usr/local/sbin/dh-pve-ups-policy-cmd"),
+        command_script_path=Path("/opt/digitalhouses/dh_pve_app/bin/dh-pve-ups-policy-cmd"),
     )
 
     assert "offdelay = 60" in target.ups_conf_text
@@ -100,24 +107,10 @@ def test_rendered_driver_policy_raises_too_small_offdelay_to_60():
         _draft(),
         UPSMON_COMMISSIONING,
         UPS_CONF.replace("offdelay = 60", "offdelay = 30"),
-        command_script_path=Path("/usr/local/sbin/dh-pve-ups-policy-cmd"),
+        command_script_path=Path("/opt/digitalhouses/dh_pve_app/bin/dh-pve-ups-policy-cmd"),
     )
 
     assert "offdelay = 60" in target.ups_conf_text
-
-
-def test_owned_command_script_rejects_arbitrary_tokens():
-    target = render_managed_policy(
-        _draft(),
-        UPSMON_COMMISSIONING,
-        UPS_CONF,
-        command_script_path=Path("/usr/local/sbin/dh-pve-ups-policy-cmd"),
-    )
-
-    assert '"dh-pve-ups-shutdown")' in target.command_script_text
-    assert "*) exit 64" in target.command_script_text
-    assert "$@" not in target.command_script_text
-    assert "eval" not in target.command_script_text
 
 
 class FakeRunner:
@@ -142,7 +135,7 @@ def _paths(tmp_path):
         upsmon=tmp_path / "upsmon.conf",
         upssched=tmp_path / "upssched.conf",
         ups_conf=tmp_path / "ups.conf",
-        command_script=tmp_path / "dh-pve-ups-policy-cmd",
+        command_script=tmp_path / "bin" / "dh-pve-ups-policy-cmd",
         metadata=tmp_path / "policy.json",
     )
 
@@ -150,11 +143,15 @@ def _paths(tmp_path):
 def _seed(paths):
     paths.upsmon.write_text(UPSMON_COMMISSIONING, encoding="utf-8")
     paths.ups_conf.write_text(UPS_CONF, encoding="utf-8")
+    paths.command_script.parent.mkdir(parents=True, exist_ok=True)
+    paths.command_script.write_text(HELPER, encoding="utf-8")
+    paths.command_script.chmod(0o755)
 
 
-def test_apply_writes_only_whitelisted_files_and_verifies_before_success(tmp_path):
+def test_apply_writes_only_mutable_policy_files_and_verifies_before_success(tmp_path):
     paths = _paths(tmp_path)
     _seed(paths)
+    helper_before = paths.command_script.read_text(encoding="utf-8")
     runner = FakeRunner()
 
     applier = UpsPolicyApplier(
@@ -168,17 +165,34 @@ def test_apply_writes_only_whitelisted_files_and_verifies_before_success(tmp_pat
     assert result.success is True
     assert "применена" in result.message.lower()
     assert paths.upssched.exists()
-    assert paths.command_script.exists()
+    assert paths.command_script.read_text(encoding="utf-8") == helper_before
     assert paths.metadata.exists()
     assert "ondelay = 180" in paths.ups_conf.read_text(encoding="utf-8")
     assert "battery.runtime.low" not in paths.ups_conf.read_text(encoding="utf-8")
 
 
-def test_apply_rolls_back_all_managed_files_when_service_action_fails(tmp_path):
+def test_apply_fails_closed_when_static_helper_is_missing(tmp_path):
+    paths = _paths(tmp_path)
+    paths.upsmon.write_text(UPSMON_COMMISSIONING, encoding="utf-8")
+    paths.ups_conf.write_text(UPS_CONF, encoding="utf-8")
+
+    result = UpsPolicyApplier(
+        paths=paths,
+        ups_name="ups",
+        runner=FakeRunner(),
+        effective_restart_delay_reader=lambda: 180,
+    ).apply(_draft(), _facts())
+
+    assert result.success is False
+    assert "helper" in result.message.lower() or "скрипт" in result.message.lower()
+
+
+def test_apply_rolls_back_all_mutable_files_when_service_action_fails(tmp_path):
     paths = _paths(tmp_path)
     _seed(paths)
     before_upsmon = paths.upsmon.read_text(encoding="utf-8")
     before_ups_conf = paths.ups_conf.read_text(encoding="utf-8")
+    helper_before = paths.command_script.read_text(encoding="utf-8")
     runner = FakeRunner(fail_contains="nut-driver@ups.service")
 
     applier = UpsPolicyApplier(
@@ -193,7 +207,7 @@ def test_apply_rolls_back_all_managed_files_when_service_action_fails(tmp_path):
     assert paths.upsmon.read_text(encoding="utf-8") == before_upsmon
     assert paths.ups_conf.read_text(encoding="utf-8") == before_ups_conf
     assert not paths.upssched.exists()
-    assert not paths.command_script.exists()
+    assert paths.command_script.read_text(encoding="utf-8") == helper_before
     assert not paths.metadata.exists()
 
 
@@ -220,6 +234,8 @@ def test_render_rejects_missing_selected_ups_section():
             _draft(),
             UPSMON_COMMISSIONING,
             "[other]\ndriver = dummy-ups\n",
-            command_script_path=Path("/usr/local/sbin/dh-pve-ups-policy-cmd"),
+            command_script_path=Path(
+                "/opt/digitalhouses/dh_pve_app/bin/dh-pve-ups-policy-cmd"
+            ),
             ups_name="ups",
         )
