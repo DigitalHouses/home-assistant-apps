@@ -61,6 +61,23 @@ def build_ups_discovery_payload(
                 "'status_tokens': value_json.status_tokens | default([])} | tojson }}"
             ),
         },
+        "problems": {
+            "platform": "sensor",
+            "name": "Problems",
+            "unique_id": uid("problems"),
+            "default_entity_id": "sensor.dh_ups_problems",
+            "state_topic": topics.state,
+            "value_template": "{{ value_json.problems_count | default(0) }}",
+            "availability": [app_availability],
+            "availability_mode": "all",
+            "icon": "mdi:alert-circle-check-outline",
+            "json_attributes_topic": topics.state,
+            "json_attributes_template": (
+                "{{ {'severity': value_json.problems_severity | default('ok'), "
+                "'details': value_json.problems_details | default(''), "
+                "'problems': value_json.problems | default([])} | tojson }}"
+            ),
+        },
         "available": {
             "platform": "binary_sensor",
             "name": "NUT data available",
