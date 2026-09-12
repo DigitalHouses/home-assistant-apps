@@ -34,9 +34,20 @@ class MqttConfig:
 
 
 @dataclass(frozen=True)
+class UpsConfig:
+    enabled: bool
+    name: str
+    host: str
+    port: int
+    poll_interval_seconds: float
+    command_timeout_seconds: float
+
+
+@dataclass(frozen=True)
 class AppConfig:
     general: GeneralConfig
     mqtt: MqttConfig
+    ups: UpsConfig
 
 
 def _get(parser: configparser.ConfigParser, section: str, key: str, default: str) -> str:
@@ -56,6 +67,33 @@ def _get_int(
         return int(raw)
     except ValueError as exc:
         raise ConfigError(f"{section}.{key} must be integer") from exc
+
+
+def _get_float(
+    parser: configparser.ConfigParser,
+    section: str,
+    key: str,
+    default: float,
+) -> float:
+    raw = _get(parser, section, key, str(default)).strip()
+    try:
+        return float(raw)
+    except ValueError as exc:
+        raise ConfigError(f"{section}.{key} must be numeric") from exc
+
+
+def _get_bool(
+    parser: configparser.ConfigParser,
+    section: str,
+    key: str,
+    default: bool,
+) -> bool:
+    raw = _get(parser, section, key, "true" if default else "false").strip().lower()
+    if raw == "true":
+        return True
+    if raw == "false":
+        return False
+    raise ConfigError(f"{section}.{key} must be true or false")
 
 
 def load_config(path: Path) -> AppConfig:
@@ -107,6 +145,24 @@ def load_config(path: Path) -> AppConfig:
     if not 10 <= keepalive_seconds <= 3600:
         raise ConfigError("mqtt.keepalive_seconds must be between 10 and 3600")
 
+    ups_enabled = _get_bool(parser, "ups", "enabled", False)
+    ups_name = _get(parser, "ups", "name", "ups").strip()
+    ups_host = _get(parser, "ups", "host", "127.0.0.1").strip()
+    ups_port = _get_int(parser, "ups", "port", 3493)
+    ups_poll_interval = _get_float(parser, "ups", "poll_interval_seconds", 5.0)
+    ups_timeout = _get_float(parser, "ups", "command_timeout_seconds", 3.0)
+
+    if not ups_name:
+        raise ConfigError("ups.name must not be empty")
+    if not ups_host:
+        raise ConfigError("ups.host must not be empty")
+    if not 1 <= ups_port <= 65535:
+        raise ConfigError("ups.port must be between 1 and 65535")
+    if not 1.0 <= ups_poll_interval <= 300.0:
+        raise ConfigError("ups.poll_interval_seconds must be between 1 and 300")
+    if not 1.0 <= ups_timeout <= 30.0:
+        raise ConfigError("ups.command_timeout_seconds must be between 1 and 30")
+
     return AppConfig(
         general=GeneralConfig(
             instance_id=instance_id,
@@ -121,5 +177,13 @@ def load_config(path: Path) -> AppConfig:
             topic_prefix=topic_prefix,
             discovery_prefix=discovery_prefix,
             keepalive_seconds=keepalive_seconds,
+        ),
+        ups=UpsConfig(
+            enabled=ups_enabled,
+            name=ups_name,
+            host=ups_host,
+            port=ups_port,
+            poll_interval_seconds=ups_poll_interval,
+            command_timeout_seconds=ups_timeout,
         ),
     )
