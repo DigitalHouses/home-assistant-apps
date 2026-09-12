@@ -40,6 +40,8 @@ class UpsSnapshot:
     input_voltage_v: float | None
     input_nominal_voltage_v: float | None
     output_voltage_v: float | None
+    input_frequency_hz: float | None
+    output_frequency_hz: float | None
     input_transfer_high_v: float | None
     input_transfer_low_v: float | None
     warning_charge_percent: float | None
@@ -118,6 +120,8 @@ def parse_upsc_output(text: str) -> UpsSnapshot:
         input_voltage_v=_optional_float(raw, "input.voltage"),
         input_nominal_voltage_v=_optional_float(raw, "input.voltage.nominal"),
         output_voltage_v=_optional_float(raw, "output.voltage"),
+        input_frequency_hz=_optional_float(raw, "input.frequency"),
+        output_frequency_hz=_optional_float(raw, "output.frequency"),
         input_transfer_high_v=_positive_float(raw, "input.transfer.high"),
         input_transfer_low_v=_positive_float(raw, "input.transfer.low"),
         warning_charge_percent=_optional_float(raw, "battery.charge.warning"),
@@ -208,6 +212,8 @@ def ups_metrics(snapshot: UpsSnapshot) -> dict[str, MetricValue]:
         ("battery_voltage_v", snapshot.battery_voltage_v, f"ups_voltage_{mode}"),
         ("input_voltage_v", snapshot.input_voltage_v, f"ups_voltage_{mode}"),
         ("output_voltage_v", snapshot.output_voltage_v, f"ups_voltage_{mode}"),
+        ("input_frequency_hz", snapshot.input_frequency_hz, f"ups_frequency_{mode}"),
+        ("output_frequency_hz", snapshot.output_frequency_hz, f"ups_frequency_{mode}"),
     )
     for key, value, policy in numeric:
         if value is not None:
