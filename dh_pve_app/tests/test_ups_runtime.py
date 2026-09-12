@@ -4,7 +4,6 @@ import threading
 from app.config import MqttConfig, UpsConfig
 from app.identity import HostIdentity
 from app.state_store import StateStore
-from app.topics import build_ups_topics
 from app.ups_nut import NutReadError, parse_upsc_output
 from app.ups_runtime import UpsRuntime
 
@@ -89,12 +88,41 @@ def test_startup_publishes_discovery_availability_and_state(tmp_path):
 
     assert runtime.startup() is True
     assert bridge.availability == [True]
-    assert len(bridge.discovery) == 1
+    assert len(bridge.discovery) == 2
     assert len(bridge.states) == 1
     assert bridge.states[-1]["available"] is True
     assert bridge.states[-1]["status"] == "Online"
     assert bridge.states[-1]["status_raw"] == "OL"
     assert bridge.states[-1]["battery_charge_percent"] == 100.0
+
+
+def test_startup_removes_legacy_estimated_power_then_publishes_clean_discovery(tmp_path):
+    snapshot = parse_upsc_output("ups.status: OL\nbattery.charge: 100\n")
+    bridge, runtime, _ = _runtime(tmp_path, lambda config: snapshot)
+
+    assert runtime.startup() is True
+    assert bridge.discovery[0]["components"]["estimated_real_power"] == {"platform": "sensor"}
+    assert "estimated_real_power" not in bridge.discovery[1]["components"]
+
+    persisted = runtime.state_store.load()
+    assert persisted["discovery_cleanup_v1"] is True
+    assert "estimated_real_power" not in persisted["discovery_components"]
+    assert persisted["discovery_components"]["battery_charge"] == "sensor"
+
+
+def test_disappearing_capability_is_tombstoned_then_removed(tmp_path):
+    current = {"snapshot": parse_upsc_output("ups.status: OL\nbattery.charge: 100\n")}
+    bridge, runtime, clock = _runtime(tmp_path, lambda config: current["snapshot"])
+    assert runtime.startup() is True
+    bridge.discovery.clear()
+
+    current["snapshot"] = parse_upsc_output("ups.status: OL\n")
+    clock["mono"] = 105.0
+    runtime.tick(clock["mono"])
+
+    assert len(bridge.discovery) == 2
+    assert bridge.discovery[0]["components"]["battery_charge"] == {"platform": "sensor"}
+    assert "battery_charge" not in bridge.discovery[1]["components"]
 
 
 def test_unchanged_poll_suppressed_but_ol_to_ob_publishes(tmp_path):
