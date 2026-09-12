@@ -33,3 +33,50 @@ def test_load_config_validates_explicit_instance_id(tmp_path: Path):
     path = write_config(tmp_path, "[general]\ninstance_id = Bad-ID\n[mqtt]\nhost = broker\n")
     with pytest.raises(ConfigError, match="general.instance_id"):
         load_config(path)
+
+
+def test_ups_defaults_to_disabled_for_existing_config(tmp_path: Path):
+    path = write_config(tmp_path, "[mqtt]\nhost = broker\n")
+    config = load_config(path)
+    assert config.ups.enabled is False
+    assert config.ups.name == "ups"
+    assert config.ups.host == "127.0.0.1"
+    assert config.ups.port == 3493
+    assert config.ups.poll_interval_seconds == 5.0
+    assert config.ups.command_timeout_seconds == 3.0
+
+
+def test_ups_section_is_parsed(tmp_path: Path):
+    path = write_config(
+        tmp_path,
+        """[mqtt]
+host = broker
+[ups]
+enabled = true
+name = rackups
+host = 127.0.0.1
+port = 3493
+poll_interval_seconds = 7
+command_timeout_seconds = 2
+""",
+    )
+    config = load_config(path)
+    assert config.ups.enabled is True
+    assert config.ups.name == "rackups"
+    assert config.ups.host == "127.0.0.1"
+    assert config.ups.port == 3493
+    assert config.ups.poll_interval_seconds == 7.0
+    assert config.ups.command_timeout_seconds == 2.0
+
+
+def test_ups_config_validation(tmp_path: Path):
+    bad = write_config(
+        tmp_path,
+        """[mqtt]
+host = broker
+[ups]
+enabled = maybe
+""",
+    )
+    with pytest.raises(ConfigError, match="ups.enabled"):
+        load_config(bad)
