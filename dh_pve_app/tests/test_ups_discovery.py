@@ -37,8 +37,9 @@ def test_ups_topics_are_separate_from_pve_topics():
     assert ups.state == f"{pve.base}/ups/state"
     assert ups.availability == f"{pve.base}/ups/availability"
     assert ups.refresh == f"{pve.base}/ups/refresh"
-    assert ups.discovery == "homeassistant/device/dh_ups_node_a/config"
-    assert ups.device_id == "dh_ups_node_a"
+    assert ups.discovery == "homeassistant/device/dh_pve_ups_node_a/config"
+    assert ups.legacy_discovery == "homeassistant/device/dh_ups_node_a/config"
+    assert ups.device_id == "dh_pve_ups_node_a"
     assert pve.state != ups.state
     assert pve.discovery != ups.discovery
 
@@ -73,7 +74,7 @@ def test_problems_sensor_remains_available_when_nut_read_fails():
     )
     problems = payload["components"]["problems"]
 
-    assert problems["default_entity_id"] == "sensor.dh_ups_problems"
+    assert problems["default_entity_id"] == "sensor.dh_pve_ups_problems"
     assert problems["value_template"] == "{{ value_json.problems_count | default(0) }}"
     assert len(problems["availability"]) == 1
     assert "value_json.available" not in str(problems["availability"])
@@ -150,8 +151,8 @@ def test_ups_device_metadata_uses_real_hardware_identity():
         _mqtt(), _identity(), version="0.2.0-alpha", snapshot=snapshot
     )
 
-    assert payload["device"]["identifiers"] == ["dh_ups_node_a"]
-    assert payload["device"]["name"] == "DH UPS"
+    assert payload["device"]["identifiers"] == ["dh_pve_ups_node_a"]
+    assert payload["device"]["name"] == "DH PVE UPS"
     assert payload["device"]["manufacturer"] == "CPS"
     assert payload["device"]["model"] == "UT2200E"
     assert payload["origin"]["name"] == "DigitalHouses DH PVE App"
