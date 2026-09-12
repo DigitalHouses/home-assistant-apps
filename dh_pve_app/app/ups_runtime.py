@@ -35,7 +35,6 @@ _LEGACY_DISCOVERY_REMOVALS = {
 
 _DEFAULT_POLICY_DRAFT = UpsPolicyDraft(
     on_battery_delay_minutes=30,
-    emergency_runtime_reserve_minutes=15,
     power_restore_delay_seconds=120,
 )
 
@@ -55,17 +54,10 @@ def _policy_from_mapping(value: object) -> UpsPolicyDraft | None:
     try:
         draft = UpsPolicyDraft(
             on_battery_delay_minutes=int(value["on_battery_delay_minutes"]),
-            emergency_runtime_reserve_minutes=int(
-                value["emergency_runtime_reserve_minutes"]
-            ),
             power_restore_delay_seconds=int(value["power_restore_delay_seconds"]),
         )
         parse_policy_value(
             "on_battery_delay_minutes", str(draft.on_battery_delay_minutes)
-        )
-        parse_policy_value(
-            "emergency_runtime_reserve_minutes",
-            str(draft.emergency_runtime_reserve_minutes),
         )
         parse_policy_value(
             "power_restore_delay_seconds", str(draft.power_restore_delay_seconds)
@@ -302,7 +294,6 @@ class UpsRuntime:
         return self.shutdown_policy.as_dict()
 
     def _policy_payload(self) -> dict[str, object]:
-        validation = self.policy_validation
         return {
             "draft": self.policy_draft.as_dict(),
             "active": (
@@ -313,16 +304,6 @@ class UpsRuntime:
             "last_applied": self.policy_last_applied,
             "policy_revision": self.policy_revision,
             "policy_hash": self.policy_hash,
-            "minimum_emergency_runtime_reserve_seconds": (
-                validation.minimum_emergency_runtime_reserve_seconds
-                if validation is not None
-                else None
-            ),
-            "recommended_emergency_runtime_reserve_seconds": (
-                validation.recommended_emergency_runtime_reserve_seconds
-                if validation is not None
-                else None
-            ),
         }
 
     def _auxiliary_fields(self) -> dict[str, object]:
