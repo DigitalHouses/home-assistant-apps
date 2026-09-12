@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from app.config import AppConfig, GeneralConfig, MqttConfig, UpsConfig
+from app.config import MqttConfig
 from app.discovery_ups import build_ups_discovery_payload
 from app.identity import HostIdentity
 from app.topics import build_topics, build_ups_topics
@@ -30,14 +30,6 @@ def _identity():
     )
 
 
-def _config():
-    return AppConfig(
-        general=GeneralConfig(instance_id="", node_name="PVE", log_level="info"),
-        mqtt=_mqtt(),
-        ups=UpsConfig(enabled=True),
-    )
-
-
 def test_ups_topics_are_separate_from_pve_topics():
     pve = build_topics(_mqtt(), _identity())
     ups = build_ups_topics(_mqtt(), _identity())
@@ -54,7 +46,7 @@ def test_ups_topics_are_separate_from_pve_topics():
 def test_discovery_only_creates_supported_factual_entities():
     snapshot = parse_upsc_output(FIX.read_text(encoding="utf-8"))
     payload = build_ups_discovery_payload(
-        _config(), _identity(), version="0.2.0-alpha", snapshot=snapshot
+        _mqtt(), _identity(), version="0.2.0-alpha", snapshot=snapshot
     )
     components = payload["components"]
 
@@ -76,7 +68,7 @@ def test_discovery_only_creates_supported_factual_entities():
 def test_primary_ups_entities_stay_out_of_diagnostics():
     snapshot = parse_upsc_output(FIX.read_text(encoding="utf-8"))
     components = build_ups_discovery_payload(
-        _config(), _identity(), version="0.2.0-alpha", snapshot=snapshot
+        _mqtt(), _identity(), version="0.2.0-alpha", snapshot=snapshot
     )["components"]
 
     for key in (
@@ -98,7 +90,7 @@ def test_primary_ups_entities_stay_out_of_diagnostics():
 def test_service_ups_entities_are_diagnostic():
     snapshot = parse_upsc_output(FIX.read_text(encoding="utf-8"))
     components = build_ups_discovery_payload(
-        _config(), _identity(), version="0.2.0-alpha", snapshot=snapshot
+        _mqtt(), _identity(), version="0.2.0-alpha", snapshot=snapshot
     )["components"]
 
     for key in (
@@ -121,7 +113,7 @@ def test_service_ups_entities_are_diagnostic():
 def test_discovery_omits_capability_not_reported_by_ups():
     snapshot = parse_upsc_output("ups.status: OL\ndevice.model: Minimal\n")
     payload = build_ups_discovery_payload(
-        _config(), _identity(), version="0.2.0-alpha", snapshot=snapshot
+        _mqtt(), _identity(), version="0.2.0-alpha", snapshot=snapshot
     )
     components = payload["components"]
 
@@ -134,7 +126,7 @@ def test_discovery_omits_capability_not_reported_by_ups():
 def test_ups_device_metadata_uses_real_hardware_identity():
     snapshot = parse_upsc_output(FIX.read_text(encoding="utf-8"))
     payload = build_ups_discovery_payload(
-        _config(), _identity(), version="0.2.0-alpha", snapshot=snapshot
+        _mqtt(), _identity(), version="0.2.0-alpha", snapshot=snapshot
     )
 
     assert payload["device"]["identifiers"] == ["dh_ups_node_a"]
@@ -147,7 +139,7 @@ def test_ups_device_metadata_uses_real_hardware_identity():
 def test_ups_telemetry_uses_app_and_nut_availability_without_nut_abbreviations():
     snapshot = parse_upsc_output(FIX.read_text(encoding="utf-8"))
     payload = build_ups_discovery_payload(
-        _config(), _identity(), version="0.2.0-alpha", snapshot=snapshot
+        _mqtt(), _identity(), version="0.2.0-alpha", snapshot=snapshot
     )
     status = payload["components"]["status"]
     available = payload["components"]["available"]
