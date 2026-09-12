@@ -26,6 +26,7 @@ from .state_store import StateStore
 from .topics import build_topics, build_ups_topics
 from .topology import TopologyManager
 from .ups_nut import read_ups
+from .ups_policy import PolicyApplyResult
 from .ups_policy_apply import ManagedNutPaths, PolicyApplyError, UpsPolicyApplier
 from .ups_policy_host import read_policy_safety_facts
 from .ups_policy_preflight import (
@@ -35,6 +36,7 @@ from .ups_policy_preflight import (
 )
 from .ups_runtime import UpsRuntime
 from .ups_scan import UpsScanner
+from .ups_test_history import normalize_test_result
 
 APP_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG = Path("/etc/dh_pve_app/dh_pve_app.conf")
@@ -157,7 +159,29 @@ def build_ups_policy_applier(
         runner=subprocess.run,
         effective_restart_delay_reader=effective_restart_delay_reader,
     )
-    return applier.apply
+
+    def guarded_apply(draft, facts):
+        snapshot = ups_reader(config)
+        if normalize_test_result(snapshot.test_result) == "Running":
+            return PolicyApplyResult(
+                False,
+                "Применение политики UPS запрещено во время теста батареи.",
+            )
+        if (
+            not snapshot.line_power
+            or snapshot.on_battery
+            or snapshot.low_battery
+            or snapshot.discharging
+        ):
+            status = snapshot.status_raw or "unknown"
+            return PolicyApplyResult(
+                False,
+                "Применение политики UPS разрешено только при стабильном "
+                f"питании от сети (OL); текущий статус: {status}.",
+            )
+        return applier.apply(draft, facts)
+
+    return guarded_apply
 
 
 def build_ups_runtime(
