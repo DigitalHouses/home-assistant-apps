@@ -14,13 +14,11 @@ class PolicyValidationError(ValueError):
 @dataclass(frozen=True)
 class UpsPolicyDraft:
     on_battery_delay_minutes: int
-    emergency_runtime_reserve_minutes: int
     power_restore_delay_seconds: int
 
     def as_dict(self) -> dict[str, int]:
         return {
             "on_battery_delay_minutes": self.on_battery_delay_minutes,
-            "emergency_runtime_reserve_minutes": self.emergency_runtime_reserve_minutes,
             "power_restore_delay_seconds": self.power_restore_delay_seconds,
         }
 
@@ -45,10 +43,7 @@ class PolicySafetyFacts:
 @dataclass(frozen=True)
 class PolicyValidationResult:
     on_battery_delay_seconds: int
-    emergency_runtime_reserve_seconds: int
     power_restore_delay_seconds: int
-    minimum_emergency_runtime_reserve_seconds: int
-    recommended_emergency_runtime_reserve_seconds: int
 
 
 @dataclass(frozen=True)
@@ -59,7 +54,6 @@ class PolicyApplyResult:
 
 _POLICY_RANGES: dict[str, tuple[int, int, int]] = {
     "on_battery_delay_minutes": (5, 60, 5),
-    "emergency_runtime_reserve_minutes": (10, 30, 1),
     "power_restore_delay_seconds": (60, 300, 30),
 }
 
@@ -70,10 +64,6 @@ def _validate_value(key: str, value: int) -> int:
         raise PolicyValidationError(f"Неизвестный параметр политики: {key}")
     minimum, maximum, step = limits
     if value < minimum or value > maximum:
-        if key == "emergency_runtime_reserve_minutes":
-            raise PolicyValidationError(
-                f"Аварийный резерв должен быть от {minimum} до {maximum} мин."
-            )
         raise PolicyValidationError(
             f"Параметр {key} должен быть от {minimum} до {maximum}."
         )
@@ -139,51 +129,30 @@ def calculate_guest_shutdown_budget(
 
 def validate_policy(
     draft: UpsPolicyDraft,
-    facts: PolicySafetyFacts,
+    facts: PolicySafetyFacts | None = None,
 ) -> PolicyValidationResult:
     on_battery = _validate_value(
         "on_battery_delay_minutes", draft.on_battery_delay_minutes
-    )
-    reserve_minutes = _validate_value(
-        "emergency_runtime_reserve_minutes",
-        draft.emergency_runtime_reserve_minutes,
     )
     restore_delay = _validate_value(
         "power_restore_delay_seconds", draft.power_restore_delay_seconds
     )
 
-    for name, value in (
-        ("guest_shutdown_budget_seconds", facts.guest_shutdown_budget_seconds),
-        ("hostsync_seconds", facts.hostsync_seconds),
-        ("finaldelay_seconds", facts.finaldelay_seconds),
-        ("host_shutdown_reserve_seconds", facts.host_shutdown_reserve_seconds),
-        ("ups_poweroff_delay_seconds", facts.ups_poweroff_delay_seconds),
-        ("safety_margin_seconds", facts.safety_margin_seconds),
-    ):
-        if value < 0:
-            raise PolicyValidationError(f"Некорректный расчетный параметр политики: {name}.")
+    if facts is not None:
+        for name, value in (
+            ("guest_shutdown_budget_seconds", facts.guest_shutdown_budget_seconds),
+            ("hostsync_seconds", facts.hostsync_seconds),
+            ("finaldelay_seconds", facts.finaldelay_seconds),
+            ("host_shutdown_reserve_seconds", facts.host_shutdown_reserve_seconds),
+            ("ups_poweroff_delay_seconds", facts.ups_poweroff_delay_seconds),
+            ("safety_margin_seconds", facts.safety_margin_seconds),
+        ):
+            if value < 0:
+                raise PolicyValidationError(
+                    f"Некорректный расчетный параметр политики: {name}."
+                )
 
-    minimum_reserve = (
-        facts.guest_shutdown_budget_seconds
-        + facts.hostsync_seconds
-        + facts.finaldelay_seconds
-        + facts.host_shutdown_reserve_seconds
-        + facts.ups_poweroff_delay_seconds
-        + facts.safety_margin_seconds
-    )
-    reserve_seconds = reserve_minutes * 60
-    if reserve_seconds < minimum_reserve:
-        minimum_minutes = math.ceil(minimum_reserve / 60)
-        raise PolicyValidationError(
-            "Аварийный резерв недостаточен: "
-            f"нужно не менее {minimum_minutes} мин. для корректного выключения."
-        )
-
-    recommended = math.ceil((minimum_reserve + 300) / 60) * 60
     return PolicyValidationResult(
         on_battery_delay_seconds=on_battery * 60,
-        emergency_runtime_reserve_seconds=reserve_seconds,
         power_restore_delay_seconds=restore_delay,
-        minimum_emergency_runtime_reserve_seconds=minimum_reserve,
-        recommended_emergency_runtime_reserve_seconds=recommended,
     )
