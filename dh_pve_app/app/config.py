@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import configparser
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 INSTANCE_ID_RE = re.compile(r"^[a-z0-9][a-z0-9_]*$")
@@ -35,19 +35,19 @@ class MqttConfig:
 
 @dataclass(frozen=True)
 class UpsConfig:
-    enabled: bool
-    name: str
-    host: str
-    port: int
-    poll_interval_seconds: float
-    command_timeout_seconds: float
+    enabled: bool = False
+    name: str = "ups"
+    host: str = "127.0.0.1"
+    port: int = 3493
+    poll_interval_seconds: float = 5.0
+    command_timeout_seconds: float = 3.0
 
 
 @dataclass(frozen=True)
 class AppConfig:
     general: GeneralConfig
     mqtt: MqttConfig
-    ups: UpsConfig
+    ups: UpsConfig = field(default_factory=UpsConfig)
 
 
 def _get(parser: configparser.ConfigParser, section: str, key: str, default: str) -> str:
