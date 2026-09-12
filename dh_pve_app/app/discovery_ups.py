@@ -184,8 +184,14 @@ def build_ups_discovery_payload(
             )
         if snapshot.runtime_seconds is not None:
             add_sensor(
-                "battery_runtime", "Battery runtime", "sensor.dh_ups_battery_runtime",
-                "runtime_seconds", unit="s", device_class="duration",
+                "battery_runtime_minutes", "Battery runtime",
+                "sensor.dh_ups_battery_runtime_minutes", "battery_runtime_minutes",
+                unit="min", device_class="duration",
+            )
+            add_sensor(
+                "battery_runtime", "Battery runtime (seconds)",
+                "sensor.dh_ups_battery_runtime", "runtime_seconds",
+                unit="s", device_class="duration", entity_category="diagnostic",
             )
         if snapshot.battery_voltage_v is not None:
             add_sensor(
