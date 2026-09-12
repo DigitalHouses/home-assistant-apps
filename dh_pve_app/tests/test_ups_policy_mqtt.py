@@ -34,23 +34,15 @@ def test_policy_topics_are_under_selected_ups_namespace():
     ups = build_ups_topics(_mqtt(), _identity())
 
     assert ups.policy_on_battery_delay_set == f"{pve.base}/ups/policy/on_battery_delay/set"
-    assert ups.policy_emergency_runtime_reserve_set == (
-        f"{pve.base}/ups/policy/emergency_runtime_reserve/set"
-    )
     assert ups.policy_power_restore_delay_set == f"{pve.base}/ups/policy/power_restore_delay/set"
     assert ups.policy_apply == f"{pve.base}/ups/policy/apply"
+    assert not hasattr(ups, "policy_emergency_runtime_reserve_set")
 
 
 @pytest.mark.parametrize(
     ("topic_attr", "payload", "expected_key", "expected_value"),
     (
         ("policy_on_battery_delay_set", b"30", "on_battery_delay_minutes", 30),
-        (
-            "policy_emergency_runtime_reserve_set",
-            b"15",
-            "emergency_runtime_reserve_minutes",
-            15,
-        ),
         ("policy_power_restore_delay_set", b"120", "power_restore_delay_seconds", 120),
     ),
 )
@@ -72,7 +64,6 @@ def test_policy_number_commands_are_validated_and_queued(
     ("topic_attr", "payload"),
     (
         ("policy_on_battery_delay_set", b"31"),
-        ("policy_emergency_runtime_reserve_set", b"9"),
         ("policy_power_restore_delay_set", b"125"),
         ("policy_power_restore_delay_set", b"not-a-number"),
     ),
@@ -84,6 +75,17 @@ def test_policy_number_commands_reject_invalid_direct_mqtt_values(topic_attr, pa
 
     with pytest.raises(PolicyValidationError):
         events.handle_message(getattr(ups, topic_attr), payload)
+
+
+def test_removed_runtime_reserve_topic_is_not_handled():
+    events = MqttEvents(build_topics(_mqtt(), _identity()), RuntimeSettings())
+    ups = build_ups_topics(_mqtt(), _identity())
+    events.configure_ups(ups)
+    pve = build_topics(_mqtt(), _identity())
+
+    assert events.handle_message(
+        f"{pve.base}/ups/policy/emergency_runtime_reserve/set", b"15"
+    ) is False
 
 
 def test_apply_policy_press_sets_dedicated_event():
@@ -145,6 +147,6 @@ def test_policy_command_topics_are_subscribed_statically_on_connect():
 
     subscribed = {topic for topic, _qos in client.subscriptions}
     assert ups.policy_on_battery_delay_set in subscribed
-    assert ups.policy_emergency_runtime_reserve_set in subscribed
     assert ups.policy_power_restore_delay_set in subscribed
     assert ups.policy_apply in subscribed
+    assert f"{pve.base}/ups/policy/emergency_runtime_reserve/set" not in subscribed
