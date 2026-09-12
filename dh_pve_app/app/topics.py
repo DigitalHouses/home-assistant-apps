@@ -29,6 +29,10 @@ class UpsTopics:
     test_quick: str
     test_deep: str
     test_stop: str
+    policy_on_battery_delay_set: str
+    policy_emergency_runtime_reserve_set: str
+    policy_power_restore_delay_set: str
+    policy_apply: str
     discovery: str
     legacy_discovery: str
     device_id: str
@@ -58,6 +62,7 @@ def build_ups_topics(mqtt: MqttConfig, identity: HostIdentity) -> UpsTopics:
     device_id = f"dh_pve_ups_{identity.instance_id}"
     legacy_device_id = f"dh_ups_{identity.instance_id}"
     discovery_prefix = mqtt.discovery_prefix.strip("/")
+    policy_base = f"{pve.base}/ups/policy"
     return UpsTopics(
         state=f"{pve.base}/ups/state",
         availability=f"{pve.base}/ups/availability",
@@ -65,6 +70,12 @@ def build_ups_topics(mqtt: MqttConfig, identity: HostIdentity) -> UpsTopics:
         test_quick=f"{pve.base}/ups/test/quick",
         test_deep=f"{pve.base}/ups/test/deep",
         test_stop=f"{pve.base}/ups/test/stop",
+        policy_on_battery_delay_set=f"{policy_base}/on_battery_delay/set",
+        policy_emergency_runtime_reserve_set=(
+            f"{policy_base}/emergency_runtime_reserve/set"
+        ),
+        policy_power_restore_delay_set=f"{policy_base}/power_restore_delay/set",
+        policy_apply=f"{policy_base}/apply",
         discovery=f"{discovery_prefix}/device/{device_id}/config",
         legacy_discovery=f"{discovery_prefix}/device/{legacy_device_id}/config",
         device_id=device_id,
