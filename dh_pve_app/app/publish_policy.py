@@ -29,11 +29,13 @@ class PublishPolicy:
         "ups_charge_online": 2.0,
         "ups_load_online": 5.0,
         "ups_voltage_online": 3.0,
+        "ups_frequency_online": 0.2,
         "ups_runtime_online": 300.0,
         # UPS battery mode: tighter thresholds while preserving 5 s collection.
         "ups_charge_battery": 1.0,
         "ups_load_battery": 2.0,
         "ups_voltage_battery": 2.0,
+        "ups_frequency_battery": 0.2,
         "ups_runtime_battery": 60.0,
     }
     _SETTING_THRESHOLDS = {
