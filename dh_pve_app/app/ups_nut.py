@@ -61,6 +61,8 @@ class UpsSnapshot:
     low_runtime_seconds: float | None
     test_result: str | None
     beeper_status: str | None
+    ups_shutdown_delay_seconds: float | None = None
+    ups_start_delay_seconds: float | None = None
 
 
 def _optional_text(raw: dict[str, str], *keys: str) -> str | None:
@@ -141,6 +143,8 @@ def parse_upsc_output(text: str) -> UpsSnapshot:
         low_runtime_seconds=_optional_float(raw, "battery.runtime.low"),
         test_result=_optional_text(raw, "ups.test.result"),
         beeper_status=_optional_text(raw, "ups.beeper.status"),
+        ups_shutdown_delay_seconds=_optional_float(raw, "ups.delay.shutdown"),
+        ups_start_delay_seconds=_optional_float(raw, "ups.delay.start"),
     )
 
 
@@ -246,6 +250,8 @@ def ups_metrics(snapshot: UpsSnapshot) -> dict[str, MetricValue]:
         ("warning_charge_percent", snapshot.warning_charge_percent),
         ("low_charge_percent", snapshot.low_charge_percent),
         ("low_runtime_seconds", snapshot.low_runtime_seconds),
+        ("ups_shutdown_delay_seconds", snapshot.ups_shutdown_delay_seconds),
+        ("ups_start_delay_seconds", snapshot.ups_start_delay_seconds),
         ("test_result", snapshot.test_result),
         ("beeper_status", snapshot.beeper_status),
     )
