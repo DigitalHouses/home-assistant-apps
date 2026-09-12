@@ -4,6 +4,7 @@ import argparse
 import json
 import logging
 import signal
+import subprocess
 import threading
 import time
 from collections.abc import Callable
@@ -24,6 +25,8 @@ from .scheduler import Scheduler
 from .state_store import StateStore
 from .topics import build_topics, build_ups_topics
 from .topology import TopologyManager
+from .ups_nut import read_ups
+from .ups_policy_apply import ManagedNutPaths, PolicyApplyError, UpsPolicyApplier
 from .ups_policy_host import read_policy_safety_facts
 from .ups_policy_preflight import (
     PreflightCheck,
@@ -130,6 +133,33 @@ def build_runtime(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR):
     return bridge, runtime
 
 
+def build_ups_policy_applier(
+    config: UpsConfig,
+    *,
+    applier_factory=UpsPolicyApplier,
+    ups_reader=read_ups,
+):
+    if not config.policy_apply_enabled:
+        return None
+
+    def effective_restart_delay_reader() -> int:
+        snapshot = ups_reader(config)
+        value = snapshot.ups_start_delay_seconds
+        if value is None or value < 0 or not float(value).is_integer():
+            raise PolicyApplyError(
+                "UPS не сообщил корректную задержку восстановления питания."
+            )
+        return int(value)
+
+    applier = applier_factory(
+        paths=ManagedNutPaths(),
+        ups_name=config.name,
+        runner=subprocess.run,
+        effective_restart_delay_reader=effective_restart_delay_reader,
+    )
+    return applier.apply
+
+
 def build_ups_runtime(
     config: AppConfig,
     bridge,
@@ -153,6 +183,7 @@ def build_ups_runtime(
         now_local=_now_local,
         now_monotonic=time.monotonic,
         policy_facts_reader=lambda: read_policy_safety_facts(runtime_config),
+        policy_applier=build_ups_policy_applier(runtime_config),
     )
 
 
