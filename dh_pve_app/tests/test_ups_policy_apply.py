@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import pytest
@@ -55,6 +56,13 @@ def _facts():
         finaldelay_seconds=5,
         ups_poweroff_delay_seconds=60,
     )
+
+
+def _helper_owner_kwargs():
+    return {
+        "helper_expected_uid": os.getuid(),
+        "helper_expected_gid": os.getgid(),
+    }
 
 
 def test_rendered_policy_uses_cancellable_onbatt_timer_and_native_lb():
@@ -171,6 +179,7 @@ def test_apply_writes_only_mutable_policy_files_and_verifies_before_success(tmp_
         ups_name="ups",
         runner=runner,
         effective_restart_delay_reader=lambda: 180,
+        **_helper_owner_kwargs(),
     )
     result = applier.apply(_draft(), _facts())
 
@@ -193,6 +202,7 @@ def test_apply_fails_closed_when_static_helper_is_missing(tmp_path):
         ups_name="ups",
         runner=FakeRunner(),
         effective_restart_delay_reader=lambda: 180,
+        **_helper_owner_kwargs(),
     ).apply(_draft(), _facts())
 
     assert result.success is False
@@ -212,6 +222,7 @@ def test_apply_rolls_back_all_mutable_files_when_service_action_fails(tmp_path):
         ups_name="ups",
         runner=runner,
         effective_restart_delay_reader=lambda: 180,
+        **_helper_owner_kwargs(),
     )
     result = applier.apply(_draft(), _facts())
 
@@ -233,6 +244,7 @@ def test_apply_rolls_back_when_effective_restart_delay_does_not_match(tmp_path):
         ups_name="ups",
         runner=FakeRunner(),
         effective_restart_delay_reader=lambda: 120,
+        **_helper_owner_kwargs(),
     )
     result = applier.apply(_draft(), _facts())
 
