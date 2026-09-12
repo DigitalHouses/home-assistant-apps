@@ -12,7 +12,7 @@ from .publish_policy import MetricValue, PublishPolicy
 from .runtime_settings import RuntimeSettings
 from .scheduler import Scheduler
 from .state_store import StateStore
-from .ups_nut import NutReadError, UpsSnapshot, read_ups, ups_metrics
+from .ups_nut import UpsSnapshot, read_ups, ups_metrics
 
 
 class UpsRuntime:
@@ -119,7 +119,7 @@ class UpsRuntime:
 
     def _build_discovery(self) -> dict[str, object]:
         return build_ups_discovery_payload(
-            config=type("_Config", (), {"mqtt": self.mqtt_config})(),
+            config=self.mqtt_config,
             identity=self.identity,
             version=self.version,
             snapshot=self.last_snapshot,
