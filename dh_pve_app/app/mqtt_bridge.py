@@ -10,6 +10,7 @@ from typing import Any
 from .config import MqttConfig
 from .runtime_settings import RuntimeSettingError, RuntimeSettings
 from .topics import Topics, UpsTopics
+from .ups_policy import PolicyValidationError, parse_policy_value
 
 
 @dataclass(frozen=True)
@@ -24,6 +25,12 @@ class WillMessage:
 class SettingUpdate:
     key: str
     value: float
+
+
+@dataclass(frozen=True)
+class PolicyDraftUpdate:
+    key: str
+    value: int
 
 
 def build_lwt(topics: Topics) -> WillMessage:
@@ -42,8 +49,10 @@ class MqttEvents:
         self.ups_test_quick_requested = threading.Event()
         self.ups_test_deep_requested = threading.Event()
         self.ups_test_stop_requested = threading.Event()
+        self.ups_policy_apply_requested = threading.Event()
         self.ups_reconnect_requested = threading.Event()
         self.setting_updates: queue.SimpleQueue[SettingUpdate] = queue.SimpleQueue()
+        self.ups_policy_updates: queue.SimpleQueue[PolicyDraftUpdate] = queue.SimpleQueue()
 
     def configure_ups(self, topics: UpsTopics) -> None:
         self.ups_topics = topics
@@ -85,6 +94,28 @@ class MqttEvents:
                 self.ups_test_stop_requested.set()
                 return True
             return False
+        if self.ups_topics is not None:
+            policy_topics = {
+                self.ups_topics.policy_on_battery_delay_set: "on_battery_delay_minutes",
+                self.ups_topics.policy_emergency_runtime_reserve_set: (
+                    "emergency_runtime_reserve_minutes"
+                ),
+                self.ups_topics.policy_power_restore_delay_set: (
+                    "power_restore_delay_seconds"
+                ),
+            }
+            policy_key = policy_topics.get(topic)
+            if policy_key is not None:
+                value = parse_policy_value(policy_key, text)
+                self.ups_policy_updates.put(
+                    PolicyDraftUpdate(key=policy_key, value=value)
+                )
+                return True
+            if topic == self.ups_topics.policy_apply:
+                if text.upper() == "PRESS":
+                    self.ups_policy_apply_requested.set()
+                    return True
+                return False
         prefix = f"{self.topics.settings_prefix}/"
         suffix = "/set"
         if topic.startswith(prefix) and topic.endswith(suffix):
@@ -140,6 +171,12 @@ class MqttBridge(MqttEvents):
         client.subscribe(f"{self.topics.base}/ups/test/quick", qos=1)
         client.subscribe(f"{self.topics.base}/ups/test/deep", qos=1)
         client.subscribe(f"{self.topics.base}/ups/test/stop", qos=1)
+        client.subscribe(f"{self.topics.base}/ups/policy/on_battery_delay/set", qos=1)
+        client.subscribe(
+            f"{self.topics.base}/ups/policy/emergency_runtime_reserve/set", qos=1
+        )
+        client.subscribe(f"{self.topics.base}/ups/policy/power_restore_delay/set", qos=1)
+        client.subscribe(f"{self.topics.base}/ups/policy/apply", qos=1)
         client.subscribe(f"{self.topics.settings_prefix}/+/set", qos=1)
         if self.ups_topics is not None:
             client.publish(
@@ -180,6 +217,9 @@ class MqttBridge(MqttEvents):
                     self.publish_setting_value(key, self.settings.get(key))
                 except RuntimeSettingError:
                     pass
+            return
+        except PolicyValidationError as exc:
+            self.log.warning("Отклонено значение черновика политики UPS: %s", exc)
             return
         if handled:
             self.wake_requested.set()
