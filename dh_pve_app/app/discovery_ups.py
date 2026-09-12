@@ -162,7 +162,7 @@ def build_ups_discovery_payload(
                 "'nut_monitor': value_json.shutdown_policy.nut_monitor | default('unknown'), "
                 "'shutdown_enabled': value_json.shutdown_policy.shutdown_enabled | default(false), "
                 "'shutdown_command': value_json.shutdown_policy.shutdown_command | default(none), "
-                "'minsuppplies': value_json.shutdown_policy.minsuppplies | default(none), "
+                "'min_supplies': value_json.shutdown_policy.min_supplies | default(none), "
                 "'pollfreq_seconds': value_json.shutdown_policy.pollfreq_seconds | default(none), "
                 "'pollfreqalert_seconds': value_json.shutdown_policy.pollfreqalert_seconds | default(none), "
                 "'deadtime_seconds': value_json.shutdown_policy.deadtime_seconds | default(none), "
