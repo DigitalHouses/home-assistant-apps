@@ -21,6 +21,9 @@ class PublishDecision:
 class PublishPolicy:
     _FIXED_THRESHOLDS = {
         "frequency_mhz": 100.0,
+        "ups_percent": 1.0,
+        "ups_voltage": 1.0,
+        "ups_runtime_seconds": 60.0,
     }
     _SETTING_THRESHOLDS = {
         "cpu_percent": "cpu_publish_delta",
