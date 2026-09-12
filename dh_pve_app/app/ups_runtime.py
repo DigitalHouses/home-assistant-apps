@@ -12,8 +12,10 @@ from .publish_policy import MetricValue, PublishPolicy
 from .runtime_settings import RuntimeSettings
 from .scheduler import Scheduler
 from .state_store import StateStore
+from .ups_control import UpsCapabilities, list_ups_commands, run_ups_battery_test
 from .ups_health import summarize_ups_problems
 from .ups_nut import UpsSnapshot, read_ups, ups_metrics
+from .ups_shutdown_policy import UpsShutdownPolicy, read_shutdown_policy
 
 
 _LEGACY_DISCOVERY_REMOVALS = {
@@ -22,7 +24,7 @@ _LEGACY_DISCOVERY_REMOVALS = {
 
 
 class UpsRuntime:
-    """Independent read-only NUT runtime for the auxiliary DH UPS device."""
+    """NUT runtime for UPS telemetry plus explicitly allowed battery-test controls."""
 
     def __init__(
         self,
@@ -35,6 +37,9 @@ class UpsRuntime:
         now_iso: Callable[[], str],
         now_monotonic: Callable[[], float],
         reader: Callable[[UpsConfig], UpsSnapshot] = read_ups,
+        capability_reader: Callable[[UpsConfig], UpsCapabilities] = list_ups_commands,
+        command_executor: Callable[[UpsConfig, str], None] = run_ups_battery_test,
+        shutdown_policy_reader: Callable[[], UpsShutdownPolicy] = read_shutdown_policy,
     ) -> None:
         self.config = config
         self.mqtt_config = mqtt_config
@@ -45,6 +50,9 @@ class UpsRuntime:
         self.now_iso = now_iso
         self.now_monotonic = now_monotonic
         self.reader = reader
+        self.capability_reader = capability_reader
+        self.command_executor = command_executor
+        self.shutdown_policy_reader = shutdown_policy_reader
         self.log = logging.getLogger(__name__)
         self.policy = PublishPolicy(RuntimeSettings())
         self.scheduler = Scheduler()
@@ -69,6 +77,8 @@ class UpsRuntime:
         self._discovery_cleanup_v1 = persisted.get("discovery_cleanup_v1") is True
 
         self.last_snapshot: UpsSnapshot | None = None
+        self.capabilities: UpsCapabilities | None = None
+        self.shutdown_policy: UpsShutdownPolicy | None = None
         self.last_discovery_payload: dict[str, object] | None = None
         self._discovery_fingerprint: str | None = None
         self._last_state_payload: dict[str, object] | None = None
@@ -150,6 +160,48 @@ class UpsRuntime:
             "problems_details": summary.details,
         }
 
+    def _capabilities_payload(self) -> dict[str, object]:
+        if self.capabilities is None:
+            return {
+                "available": False,
+                "count": 0,
+                "commands": [],
+                "battery_tests": [],
+                "beeper_control": False,
+                "load_control": False,
+                "shutdown_control": False,
+                "supported_features": [],
+            }
+        return self.capabilities.as_dict()
+
+    def _shutdown_policy_payload(self) -> dict[str, object]:
+        if self.shutdown_policy is None:
+            return {
+                "state": "Unknown",
+                "role": "unknown",
+                "nut_monitor": "unknown",
+                "shutdown_enabled": False,
+                "shutdown_command": None,
+                "minsuppplies": None,
+                "pollfreq_seconds": None,
+                "pollfreqalert_seconds": None,
+                "deadtime_seconds": None,
+                "hostsync_seconds": None,
+                "finaldelay_seconds": None,
+                "upssched_present": False,
+                "upssched_rules": 0,
+                "upssched_active": False,
+                "guest_shutdown_budget_seconds": None,
+                "power_restore_behavior": "Not configured",
+            }
+        return self.shutdown_policy.as_dict()
+
+    def _auxiliary_fields(self) -> dict[str, object]:
+        return {
+            "capabilities": self._capabilities_payload(),
+            "shutdown_policy": self._shutdown_policy_payload(),
+        }
+
     def _success_payload(
         self,
         snapshot: UpsSnapshot,
@@ -167,6 +219,7 @@ class UpsRuntime:
         }
         payload.update(data)
         payload.update(self._problem_fields(snapshot, nut_available=True))
+        payload.update(self._auxiliary_fields())
         return payload
 
     def _failure_payload(self, *, collected_at: str, error: str) -> dict[str, object]:
@@ -184,6 +237,7 @@ class UpsRuntime:
         payload["status"] = "Unavailable"
         payload["error"] = error
         payload.update(self._problem_fields(None, nut_available=False))
+        payload.update(self._auxiliary_fields())
         return payload
 
     def _build_discovery(self) -> dict[str, object]:
@@ -192,7 +246,22 @@ class UpsRuntime:
             identity=self.identity,
             version=self.version,
             snapshot=self.last_snapshot,
+            capabilities=self.capabilities,
+            shutdown_policy=self.shutdown_policy,
         )
+
+    def _refresh_auxiliary(self) -> None:
+        try:
+            self.capabilities = self.capability_reader(self.config)
+        except Exception as exc:
+            self.capabilities = None
+            self.log.warning("Не удалось получить возможности UPS через NUT: %s", exc)
+
+        try:
+            self.shutdown_policy = self.shutdown_policy_reader()
+        except Exception as exc:
+            self.shutdown_policy = None
+            self.log.warning("Не удалось прочитать политику shutdown NUT/PVE: %s", exc)
 
     def sync_discovery(self, *, force: bool = False) -> bool:
         payload = self._build_discovery()
@@ -273,6 +342,7 @@ class UpsRuntime:
         return bool(discovery_ok and state_ok)
 
     def startup(self) -> bool:
+        self._refresh_auxiliary()
         availability_ok = self.bridge.publish_ups_availability(True)
         collection_ok = self._collect(force=True)
         return bool(availability_ok and collection_ok)
@@ -286,11 +356,27 @@ class UpsRuntime:
             self.scheduler.mark_run("ups", now=now)
 
     def manual_refresh(self) -> bool:
+        self._refresh_auxiliary()
         return self._collect(force=True, manual_refresh=True)
+
+    def _run_battery_test(self, action: str) -> bool:
+        if self.capabilities is None or not self.capabilities.supports_test(action):
+            self.log.warning("UPS не поддерживает тест батареи: %s", action)
+            return False
+        try:
+            self.command_executor(self.config, action)
+        except Exception as exc:
+            self.log.warning("Не удалось выполнить тест UPS %s: %s", action, exc)
+            self.manual_refresh()
+            return False
+        self.log.info("Команда теста UPS выполнена: %s", action)
+        self.manual_refresh()
+        return True
 
     def republish_after_reconnect(self) -> bool:
         availability_ok = self.bridge.publish_ups_availability(True)
         if self.last_snapshot is None and self._last_state_payload is None:
+            self._refresh_auxiliary()
             return bool(availability_ok and self._collect(force=True))
         discovery_ok = self.sync_discovery(force=True)
         state = self._last_state_payload
@@ -307,4 +393,15 @@ class UpsRuntime:
             self.bridge.ups_refresh_requested.clear()
             self.manual_refresh()
             handled = True
+
+        for action, attr in (
+            ("quick", "ups_test_quick_requested"),
+            ("deep", "ups_test_deep_requested"),
+            ("stop", "ups_test_stop_requested"),
+        ):
+            event = getattr(self.bridge, attr, None)
+            if event is not None and event.is_set():
+                event.clear()
+                self._run_battery_test(action)
+                handled = True
         return handled
