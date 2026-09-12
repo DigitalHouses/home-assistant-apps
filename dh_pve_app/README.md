@@ -2,13 +2,15 @@
 
 `dh_pve_app` is a native DigitalHouses Linux agent for Proxmox VE. It collects host, CPU, memory, storage, physical-disk/SMART, GPU/transcoding, fan, VM/LXC, and passthrough topology telemetry and publishes normalized Home Assistant entities through MQTT Discovery.
 
-Phase 1 intentionally runs alongside the legacy Bash Proxmox-to-MQTT script. The new app uses its own MQTT namespace and Home Assistant entity IDs, so both implementations can be compared before cutover.
+Phase 1 intentionally runs alongside the legacy Bash Proxmox-to-MQTT script. The new app uses its own MQTT namespace and Home Assistant entity IDs, so both implementations can be compared before cutover. Version `0.2.0-alpha` adds optional read-only UPS monitoring through NUT for validation.
 
 ## Public identity
 
 - Home Assistant MQTT device: `DH PVE`
+- Optional UPS MQTT device: `DH UPS`
 - MQTT base namespace: `DigitalHouses/Global/dh_pve_app/<instance>`
-- Home Assistant entity prefix: `dh_pve_`
+- PVE entity prefix: `dh_pve_`
+- UPS entity prefix: `dh_ups_`
 - Service: `dh_pve_app.service`
 - Install directory: `/opt/digitalhouses/dh_pve_app/`
 - Config: `/etc/dh_pve_app/dh_pve_app.conf`
@@ -25,6 +27,39 @@ A failure in one collector does not make unrelated subsystems unavailable. SMART
 Runtime polling/publish parameters can be adjusted from Home Assistant within application-defined hard limits. SMART/disk-health policy is version-controlled in the app and cannot be changed from Home Assistant.
 
 Expensive Proxmox helper processes are deliberately kept out of the fast loop. Cheap CPU/memory/fan sampling may run at the fast interval, while VM/LXC status and guest GPU telemetry use a 30-second cadence. New installations use a 60-second SMART polling default.
+
+## UPS / NUT monitoring alpha
+
+UPS monitoring is optional and strictly read-only in `0.2.0-alpha`. NUT remains the hardware authority: the app never accesses the UPS over USB and never configures NUT. The first backend reads one UPS with `upsc` from an existing NUT server, normally on the same Proxmox host.
+
+Enable it with an optional config section:
+
+```ini
+[ups]
+enabled = true
+name = ups
+host = 127.0.0.1
+port = 3493
+poll_interval_seconds = 5
+command_timeout_seconds = 3
+```
+
+Existing configurations without `[ups]` remain valid and keep UPS monitoring disabled.
+
+When enabled, the same process and MQTT client publish a separate Home Assistant device named `DH UPS`. Its MQTT namespace is subordinate to the PVE app instance:
+
+```text
+DigitalHouses/Global/dh_pve_app/<instance>/ups/state
+DigitalHouses/Global/dh_pve_app/<instance>/ups/availability
+DigitalHouses/Global/dh_pve_app/<instance>/ups/refresh
+homeassistant/device/dh_ups_<instance>/config
+```
+
+Discovery is capability-driven. Only variables actually reported by NUT are exposed. Supported normalized facts include UPS status, battery charge/runtime/voltage, load, input/output voltage, nominal real power, estimated real power, warning/low thresholds, test result and beeper status. NUT status tokens such as `OL`, `OB` and `LB` are parsed in Python into understandable states and binary sensors; the raw NUT status is retained as an attribute.
+
+UPS telemetry is polled independently from PVE telemetry. Discrete power-state changes publish immediately; numeric state uses version-controlled deltas (1 percentage point, 1 V, 60 s runtime). A NUT read failure makes only `DH UPS` unavailable and does not interrupt `DH PVE` monitoring.
+
+This alpha contains **no** UPS power-control path: it does not enable or control `upsmon`, FSD, Proxmox shutdown, guest shutdown, battery tests, beeper control or outlet control. Shutdown coordination is intentionally deferred until physical testing on a locally accessible site.
 
 ## Guest and passthrough topology
 
@@ -67,7 +102,14 @@ Home Assistant exposes:
 - `button.dh_pve_refresh`
 - `sensor.dh_pve_last_refresh`
 
-A manual refresh runs the full topology scan first, then all enabled collectors, and forces a state publication. `last_refresh` advances only after a successful full refresh.
+A manual PVE refresh runs the full topology scan first, then all enabled PVE collectors, and forces a state publication. `last_refresh` advances only after a successful full refresh.
+
+When UPS monitoring is enabled, it additionally exposes:
+
+- `button.dh_ups_refresh`
+- `sensor.dh_ups_last_refresh`
+
+UPS refresh is independent and advances its timestamp only after a successful NUT read.
 
 ## Dashboard
 
@@ -79,16 +121,9 @@ dh_pve_app/examples/dh_pve_dashboard.yaml
 
 It requires the HACS cards **Mushroom**, **auto-entities**, **mini-graph-card**, and **Entity Progress Card**.
 
-The production view is intentionally built as four continuous desktop columns rather than many independent Sections:
-
-1. Host → Proxmox state → performance → system → disk diagnostics.
-2. Physical disks → Proxmox storage → monitoring/runtime settings.
-3. CPU/RAM/Swap → CPU/throttling → cooling → graphics → VM/LXC → collector diagnostics.
-4. History.
-
-Dynamic storage, physical disks, GPU, fans, VM/LXC, runtime settings, and collector diagnostics are selected through the `proxmox_*` semantic attributes emitted by MQTT Discovery rather than hard-coded hardware entity IDs. Guest-derived physical disks therefore appear in the same disk list automatically.
-
 The dashboard uses Python-normalized values directly. Storage progress uses `usage_percent` plus `used_gib / total_gib`, disk health remains the Python-produced `HEALTHY/WARNING/CRITICAL` state, and Home Assistant does not calculate infrastructure health.
+
+UPS dashboard and notifications are deferred until live alpha telemetry has been validated on real hardware.
 
 ## Installation
 
@@ -106,11 +141,13 @@ If configuration validation fails, the installer does not overwrite the file and
 nano /etc/dh_pve_app/dh_pve_app.conf
 ```
 
-The service intentionally runs as root because SMART, `/etc/pve` guest configuration, passthrough inspection, and future NUT diagnostics require host-level read access.
+The installer does not install/configure NUT, edit `/etc/nut/*`, or enable `nut-monitor`. UPS support simply reports unavailable if the configured read-only `upsc` backend cannot be reached.
 
-## Phase 1 validation
+The service intentionally runs as root because SMART, `/etc/pve` guest configuration and passthrough inspection require host-level read access.
 
-The installer does **not** disable, edit, or remove the legacy `digitalhouses-proxmox-mqtt.sh` cron job. After installation, compare the new `DH PVE` device against the legacy entities before any cutover.
+## Validation
+
+The installer does **not** disable, edit, or remove the legacy `digitalhouses-proxmox-mqtt.sh` cron job. Compare the new `DH PVE` device against legacy entities before any cutover.
 
 Basic service diagnostics:
 
@@ -119,30 +156,14 @@ systemctl status dh_pve_app --no-pager
 journalctl -u dh_pve_app -n 100 --no-pager
 ```
 
-Guest/topology checks on Proxmox:
+For UPS alpha validation, also verify the NUT source independently:
 
 ```bash
-qm list
-pct list
-qm config 700 | grep -E '^(name|agent|hostpci)'
-qm config 501 | grep -E '^(name|agent|hostpci)'
-qm agent 700 ping
-qm agent 501 ping
+upsc ups@127.0.0.1:3493
 ```
 
-For the current validation host, acceptance is:
-
-- `sensor.dh_pve_vm_700_status` shows the TrueNAS VM state.
-- `sensor.dh_pve_vm_501_status` shows the Plex VM state.
-- `sensor.dh_pve_vms` / `sensor.dh_pve_lxcs` expose running counts and total/paused/stopped/unknown attributes.
-- VM 700 storage passthrough is detected from `hostpci` and the Samsung SSD 850 EVO 1TB appears alongside the host-local Samsung SSD 990 EVO 1TB when QGA/SMART are available.
-- The Samsung SSD 850 EVO reports WWN `0x5002538d41046527`, serial `S2PWNX0H603177N`, and Python-produced disk health.
-- VM 501 keeps Intel GPU ownership and transcoding telemetry through the shared topology cache.
-- Pressing `button.dh_pve_refresh` rebuilds topology and updates `sensor.dh_pve_last_refresh`.
-- `examples/dh_pve_dashboard.yaml` renders as four continuous columns on a desktop-width view.
-
-Do not retire the legacy Bash agent until side-by-side parity is accepted on the live host.
+Expected alpha behavior is a separate `DH UPS` MQTT device, capability-driven entities matching the actual UPS, and uninterrupted `DH PVE` operation if NUT becomes unavailable.
 
 ## Status
 
-Version `0.1.0` is the initial Phase 1 implementation. UPS/NUT support is reserved for Phase 2 and will use a separate `DH UPS` MQTT device.
+Version `0.2.0-alpha` is a validation build for read-only NUT-backed UPS telemetry. Shutdown/FSD policy, LAN NUT clients, notifications and UPS dashboard work remain separate later phases.
