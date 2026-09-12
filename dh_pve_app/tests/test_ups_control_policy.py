@@ -185,7 +185,7 @@ def test_shutdown_policy_parses_current_commissioning_state():
     assert policy.nut_monitor == "inactive"
     assert policy.shutdown_enabled is False
     assert policy.shutdown_command == "/bin/true"
-    assert policy.minsupplies == 1
+    assert policy.min_supplies == 1
     assert policy.pollfreq_seconds == 5
     assert policy.pollfreqalert_seconds == 5
     assert policy.deadtime_seconds == 15
@@ -196,6 +196,9 @@ def test_shutdown_policy_parses_current_commissioning_state():
     assert policy.upssched_active is False
     assert policy.guest_shutdown_budget_seconds is None
     assert policy.power_restore_behavior == "Not configured"
+    policy_dict = policy.as_dict()
+    assert policy_dict["min_supplies"] == 1
+    assert "minsuppplies" not in policy_dict
 
 
 def test_shutdown_policy_counts_active_upssched_rules_and_enabled_state():
