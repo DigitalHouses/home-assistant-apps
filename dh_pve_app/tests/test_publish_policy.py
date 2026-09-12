@@ -93,3 +93,40 @@ def test_force_publishes_without_change():
     decision = policy.evaluate(snapshot, force=True)
     assert decision.publish is True
     assert "force" in decision.reasons
+
+
+def test_ups_numeric_thresholds():
+    policy = _policy()
+    policy.mark_published({
+        "charge": MetricValue(100.0, "ups_percent"),
+        "voltage": MetricValue(221.0, "ups_voltage"),
+        "runtime": MetricValue(2160.0, "ups_runtime_seconds"),
+    })
+
+    small = {
+        "charge": MetricValue(99.5, "ups_percent"),
+        "voltage": MetricValue(221.5, "ups_voltage"),
+        "runtime": MetricValue(2130.0, "ups_runtime_seconds"),
+    }
+    assert policy.evaluate(small).publish is False
+
+    charge_changed = {
+        "charge": MetricValue(99.0, "ups_percent"),
+        "voltage": MetricValue(221.0, "ups_voltage"),
+        "runtime": MetricValue(2160.0, "ups_runtime_seconds"),
+    }
+    assert policy.evaluate(charge_changed).publish is True
+
+    voltage_changed = {
+        "charge": MetricValue(100.0, "ups_percent"),
+        "voltage": MetricValue(222.0, "ups_voltage"),
+        "runtime": MetricValue(2160.0, "ups_runtime_seconds"),
+    }
+    assert policy.evaluate(voltage_changed).publish is True
+
+    runtime_changed = {
+        "charge": MetricValue(100.0, "ups_percent"),
+        "voltage": MetricValue(221.0, "ups_voltage"),
+        "runtime": MetricValue(2100.0, "ups_runtime_seconds"),
+    }
+    assert policy.evaluate(runtime_changed).publish is True
