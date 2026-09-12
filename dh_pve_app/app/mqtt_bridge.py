@@ -107,6 +107,12 @@ class MqttBridge(MqttEvents):
         self.client.on_disconnect = self._on_disconnect
         self.client.on_message = self._on_message
 
+    def configure_ups(self, topics: UpsTopics) -> None:
+        super().configure_ups(topics)
+        if self.connected.is_set():
+            self.client.subscribe(topics.refresh, qos=1)
+            self.publish_ups_availability(True)
+
     def _on_connect(self, client, userdata, flags, reason_code, properties) -> None:
         if getattr(reason_code, "is_failure", False):
             self.log.error("MQTT connection rejected: %s", reason_code)
