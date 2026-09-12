@@ -57,7 +57,7 @@ def _mqtt():
     )
 
 
-def _config(*, policy_apply_enabled=False):
+def _config():
     return UpsConfig(
         enabled=True,
         name="ups",
@@ -65,7 +65,6 @@ def _config(*, policy_apply_enabled=False):
         port=3493,
         poll_interval_seconds=5.0,
         command_timeout_seconds=3.0,
-        policy_apply_enabled=policy_apply_enabled,
     )
 
 
@@ -80,20 +79,13 @@ def _facts():
     )
 
 
-def _runtime(
-    tmp_path,
-    *,
-    applier,
-    facts_reader=_facts,
-    state_path=None,
-    policy_apply_enabled=False,
-):
+def _runtime(tmp_path, *, applier, facts_reader=_facts, state_path=None):
     bridge = Bridge()
     clock = {"iso": "2026-09-13T00:30:00+05:00", "mono": 100.0}
     snapshot = parse_upsc_output("ups.status: OL\nbattery.charge: 100\n")
     store = StateStore(state_path or (tmp_path / "ups.json"))
     runtime = UpsRuntime(
-        config=_config(policy_apply_enabled=policy_apply_enabled),
+        config=_config(),
         mqtt_config=_mqtt(),
         bridge=bridge,
         identity=_identity(),
@@ -118,7 +110,6 @@ def test_commissioning_starts_with_safe_draft_and_no_active_policy(tmp_path):
     policy = bridge.states[-1]["policy"]
 
     assert policy["status"] == "Commissioning"
-    assert policy["apply_enabled"] is False
     assert policy["draft"] == {
         "on_battery_delay_minutes": 30,
         "power_restore_delay_seconds": 120,
@@ -129,18 +120,6 @@ def test_commissioning_starts_with_safe_draft_and_no_active_policy(tmp_path):
     assert policy["policy_hash"] is None
     assert "minimum_emergency_runtime_reserve_seconds" not in policy
     assert "recommended_emergency_runtime_reserve_seconds" not in policy
-
-
-def test_policy_payload_reports_when_local_apply_gate_is_enabled(tmp_path):
-    bridge, runtime, _clock, _store = _runtime(
-        tmp_path,
-        applier=lambda draft, facts: PolicyApplyResult(True, "unused"),
-        policy_apply_enabled=True,
-    )
-
-    runtime.startup()
-
-    assert bridge.states[-1]["policy"]["apply_enabled"] is True
 
 
 def test_draft_change_sets_pending_and_never_calls_applier(tmp_path):
