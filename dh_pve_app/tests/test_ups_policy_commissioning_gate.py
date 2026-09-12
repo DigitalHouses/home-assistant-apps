@@ -3,6 +3,7 @@ from app.config import AppConfig, GeneralConfig, MqttConfig, UpsConfig
 from app.identity import HostIdentity
 from app.topics import build_ups_topics
 from app.ups_nut import parse_upsc_output
+from app.ups_policy import PolicySafetyFacts, UpsPolicyDraft
 
 
 def _mqtt():
@@ -50,6 +51,24 @@ def _app_config(*, policy_apply_enabled: bool):
     )
 
 
+def _draft():
+    return UpsPolicyDraft(
+        on_battery_delay_minutes=30,
+        power_restore_delay_seconds=120,
+    )
+
+
+def _facts():
+    return PolicySafetyFacts(
+        guest_shutdown_budget_seconds=280,
+        hostsync_seconds=120,
+        finaldelay_seconds=5,
+        host_shutdown_reserve_seconds=60,
+        ups_poweroff_delay_seconds=60,
+        safety_margin_seconds=60,
+    )
+
+
 class Bridge:
     def __init__(self):
         self.ups_topics = None
@@ -93,6 +112,61 @@ def test_local_gate_builds_policy_writer_only_when_explicitly_enabled():
     assert callable(writer)
     assert captured["ups_name"] == "ups"
     assert captured["effective_restart_delay_reader"]() == 180
+    assert writer(_draft(), _facts()) == (_draft(), _facts())
+
+
+def test_policy_writer_refuses_apply_when_ups_is_on_battery():
+    calls = []
+
+    class FakeApplier:
+        def __init__(self, **kwargs):
+            pass
+
+        def apply(self, draft, facts):
+            calls.append((draft, facts))
+            raise AssertionError("must not apply while UPS is on battery")
+
+    snapshot = parse_upsc_output(
+        "ups.status: OB DISCHRG\nups.delay.start: 120\nups.test.result: No test initiated\n"
+    )
+    writer = main_module.build_ups_policy_applier(
+        _ups(policy_apply_enabled=True),
+        applier_factory=FakeApplier,
+        ups_reader=lambda config: snapshot,
+    )
+
+    result = writer(_draft(), _facts())
+
+    assert result.success is False
+    assert "OL" in result.message
+    assert calls == []
+
+
+def test_policy_writer_refuses_apply_during_battery_test():
+    calls = []
+
+    class FakeApplier:
+        def __init__(self, **kwargs):
+            pass
+
+        def apply(self, draft, facts):
+            calls.append((draft, facts))
+            raise AssertionError("must not apply during battery test")
+
+    snapshot = parse_upsc_output(
+        "ups.status: OL DISCHRG\nups.delay.start: 120\nups.test.result: In progress\n"
+    )
+    writer = main_module.build_ups_policy_applier(
+        _ups(policy_apply_enabled=True),
+        applier_factory=FakeApplier,
+        ups_reader=lambda config: snapshot,
+    )
+
+    result = writer(_draft(), _facts())
+
+    assert result.success is False
+    assert "тест" in result.message.casefold()
+    assert calls == []
 
 
 def test_build_ups_runtime_receives_only_the_locally_gated_writer(tmp_path, monkeypatch):
