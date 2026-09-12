@@ -1,181 +1,214 @@
-# DH UPS compact Lovelace view
-# Requires Mushroom. Uses only normalized dh_pve_app/NUT facts; no UPS health
-# thresholds or estimated power are calculated in Home Assistant.
+# DH UPS Lovelace view
+# Requires Mushroom and mini-graph-card.
+# UPS health/problem classification is computed by dh_pve_app Python code.
+# Home Assistant only renders the normalized state and attributes.
 
-title: UPS
-path: ups
-icon: mdi:power-plug-battery
+title: Электропитание
+path: ups-monitor
+icon: mdi:power-plug-battery-outline
 type: sections
-max_columns: 2
+max_columns: 3
 
 sections:
   - type: grid
     cards:
       - type: heading
-        heading: Состояние UPS
+        icon: mdi:heart-pulse
         heading_style: title
-        icon: mdi:power-plug-battery
+        heading: Состояние ИБП
 
       - type: custom:mushroom-template-card
-        entity: sensor.dh_ups_status
-        primary: >-
-          {% if is_state('binary_sensor.dh_ups_available', 'off') %}
-            UPS: данные недоступны
-          {% elif is_state('binary_sensor.dh_ups_low_battery', 'on') %}
-            UPS: низкий заряд батареи
-          {% elif is_state('binary_sensor.dh_ups_overload', 'on') %}
-            UPS: перегрузка
-          {% elif is_state('binary_sensor.dh_ups_replace_battery', 'on') %}
-            UPS: требуется замена батареи
-          {% elif is_state('binary_sensor.dh_ups_bypass', 'on') %}
-            UPS: bypass
-          {% elif is_state('binary_sensor.dh_ups_on_battery', 'on') %}
-            UPS: работа от батареи
-          {% else %}
-            UPS: {{ states('sensor.dh_ups_status') }}
-          {% endif %}
+        entity: sensor.dh_ups_problems
+        primary: Состояние ИБП
         secondary: >-
-          Заряд {{ states('sensor.dh_ups_battery_charge') }}% ·
-          Нагрузка {{ states('sensor.dh_ups_load') }}% ·
-          Runtime {{ states('sensor.dh_ups_battery_runtime') }} s
+          {{ state_attr('sensor.dh_ups_problems', 'details') or 'Нет данных' }}
         icon: >-
-          {% if is_state('binary_sensor.dh_ups_available', 'off') %}
-            mdi:lan-disconnect
-          {% elif is_state('binary_sensor.dh_ups_low_battery', 'on')
-             or is_state('binary_sensor.dh_ups_overload', 'on')
-             or is_state('binary_sensor.dh_ups_replace_battery', 'on') %}
-            mdi:alert-circle
-          {% elif is_state('binary_sensor.dh_ups_on_battery', 'on') %}
-            mdi:battery-arrow-down
+          {% set severity = state_attr('sensor.dh_ups_problems', 'severity') %}
+          {% if severity == 'critical' %}
+            mdi:alert-octagon
+          {% elif severity == 'warning' %}
+            mdi:alert
+          {% elif severity == 'ok' %}
+            mdi:check-circle
           {% else %}
-            mdi:power-plug-battery
+            mdi:help-circle-outline
           {% endif %}
         icon_color: >-
-          {% if is_state('binary_sensor.dh_ups_available', 'off')
-             or is_state('binary_sensor.dh_ups_low_battery', 'on')
-             or is_state('binary_sensor.dh_ups_overload', 'on')
-             or is_state('binary_sensor.dh_ups_replace_battery', 'on') %}
+          {% set severity = state_attr('sensor.dh_ups_problems', 'severity') %}
+          {% if severity == 'critical' %}
             red
-          {% elif is_state('binary_sensor.dh_ups_on_battery', 'on')
-             or is_state('binary_sensor.dh_ups_bypass', 'on') %}
-            amber
-          {% else %}
+          {% elif severity == 'warning' %}
+            orange
+          {% elif severity == 'ok' %}
             green
+          {% else %}
+            grey
           {% endif %}
         multiline_secondary: true
         fill_container: true
-
-      - type: custom:mushroom-chips-card
-        chips:
-          - type: entity
-            entity: sensor.dh_ups_battery_charge
-            icon: mdi:battery
-            content_info: state
-          - type: entity
-            entity: sensor.dh_ups_battery_runtime
-            icon: mdi:timer-outline
-            content_info: state
-          - type: entity
-            entity: sensor.dh_ups_load
-            icon: mdi:gauge
-            content_info: state
-          - type: entity
-            entity: binary_sensor.dh_ups_available
-            icon: mdi:lan-connect
-            content_info: state
-
-      - type: conditional
-        conditions:
-          - condition: state
-            entity: binary_sensor.dh_ups_on_battery
-            state: "on"
-        card:
-          type: custom:mushroom-template-card
-          primary: Питание от батареи
-          secondary: UPS сообщает On Battery
-          icon: mdi:battery-arrow-down
-          icon_color: amber
-
-      - type: conditional
-        conditions:
-          - condition: state
-            entity: binary_sensor.dh_ups_low_battery
-            state: "on"
-        card:
-          type: custom:mushroom-template-card
-          primary: Низкий заряд батареи
-          secondary: UPS сообщает Low Battery
-          icon: mdi:battery-alert
-          icon_color: red
-
-      - type: conditional
-        conditions:
-          - condition: state
-            entity: binary_sensor.dh_ups_overload
-            state: "on"
-        card:
-          type: custom:mushroom-template-card
-          primary: Перегрузка UPS
-          secondary: UPS сообщает Overload
-          icon: mdi:alert-octagon-outline
-          icon_color: red
-
-      - type: conditional
-        conditions:
-          - condition: state
-            entity: binary_sensor.dh_ups_replace_battery
-            state: "on"
-        card:
-          type: custom:mushroom-template-card
-          primary: Требуется замена батареи
-          secondary: UPS сообщает Replace Battery
-          icon: mdi:battery-sync-outline
-          icon_color: red
-
-      - type: conditional
-        conditions:
-          - condition: state
-            entity: binary_sensor.dh_ups_bypass
-            state: "on"
-        card:
-          type: custom:mushroom-template-card
-          primary: UPS работает в bypass
-          secondary: Нагрузка питается через обходной путь
-          icon: mdi:transit-connection-variant
-          icon_color: amber
-
-  - type: grid
-    cards:
-      - type: heading
-        heading: Электропитание
-        heading_style: title
-        icon: mdi:transmission-tower
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: 12
+          rows: 2
 
       - type: grid
         columns: 2
         square: false
         cards:
-          - type: custom:mushroom-entity-card
-            entity: sensor.dh_ups_input_voltage
-            name: Вход
-            icon: mdi:transmission-tower-import
-          - type: custom:mushroom-entity-card
-            entity: sensor.dh_ups_output_voltage
-            name: Выход
-            icon: mdi:transmission-tower-export
-          - type: custom:mushroom-entity-card
+          - type: custom:mushroom-template-card
             entity: sensor.dh_ups_battery_charge
-            name: Батарея
-            icon: mdi:battery
+            primary: Батарея
+            secondary: >-
+              {% set s = states(entity) %}
+              {% if s in ['unknown', 'unavailable', 'none', ''] %}
+                Нет данных
+              {% else %}
+                {{ s }}%
+              {% endif %}
+            layout: vertical
+            icon: >-
+              {% set s = states(entity) %}
+              {% if s in ['unknown', 'unavailable', 'none', ''] %}
+                mdi:battery-unknown
+              {% else %}
+                {% set charge = s | int %}
+                {% if charge > 90 %} mdi:battery-high
+                {% elif charge > 50 %} mdi:battery-medium
+                {% elif charge > 20 %} mdi:battery-low
+                {% else %} mdi:battery-alert
+                {% endif %}
+              {% endif %}
+            icon_color: >-
+              {% set s = states(entity) %}
+              {% if s in ['unknown', 'unavailable', 'none', ''] %}
+                grey
+              {% else %}
+                {% set charge = s | int %}
+                {% if charge > 50 %} green
+                {% elif charge > 20 %} orange
+                {% else %} red
+                {% endif %}
+              {% endif %}
+
           - type: custom:mushroom-entity-card
             entity: sensor.dh_ups_load
+            primary_info: name
+            secondary_info: state
             name: Нагрузка
-            icon: mdi:gauge
+            icon: mdi:speedometer
+            icon_color: blue
+            layout: vertical
+
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: custom:mushroom-template-card
+            entity: sensor.dh_ups_battery_runtime
+            primary: Прогноз работы
+            secondary: >-
+              {% set s = states(entity) %}
+              {% if s in ['unknown', 'unavailable', 'none', ''] %}
+                Нет данных
+              {% else %}
+                {{ (s | float(0) / 60) | round(0) }} мин
+              {% endif %}
+            icon: mdi:timer-sand
+            icon_color: purple
+
+          - type: custom:mushroom-entity-card
+            entity: sensor.dh_ups_status
+            name: Режим
+            icon: mdi:power-plug-battery
+            icon_color: green
+
+          - type: custom:mushroom-entity-card
+            entity: sensor.dh_ups_input_voltage
+            name: Входное напряжение
+            icon: mdi:transmission-tower-import
+            icon_color: orange
+
+          - type: custom:mushroom-entity-card
+            entity: sensor.dh_ups_output_voltage
+            name: Выходное напряжение
+            icon: mdi:transmission-tower-export
+            icon_color: green
 
       - type: heading
-        heading: Сервисные параметры
+        heading: Управление
+        icon: mdi:refresh
         heading_style: subtitle
-        icon: mdi:wrench-clock
+
+      - type: custom:mushroom-template-card
+        entity: button.dh_ups_refresh
+        primary: Обновить данные
+        secondary: >-
+          {% set v = states('sensor.dh_ups_last_refresh') %}
+          {% if v in ['unknown', 'unavailable', 'none', ''] %}
+            Ещё не выполнялось
+          {% else %}
+            {{ as_timestamp(v) | timestamp_custom('%d.%m.%Y %H:%M:%S', true) }}
+          {% endif %}
+        icon: mdi:refresh
+        icon_color: blue
+        tap_action:
+          action: perform-action
+          perform_action: button.press
+          target:
+            entity_id: button.dh_ups_refresh
+        grid_options:
+          columns: 12
+          rows: 1
+
+  - type: grid
+    cards:
+      - type: heading
+        heading: История (24ч)
+        icon: mdi:chart-timeline-variant
+        heading_style: title
+
+      - type: custom:mini-graph-card
+        entities:
+          - entity: sensor.dh_ups_input_voltage
+            name: Вход
+          - entity: sensor.dh_ups_output_voltage
+            name: Выход
+        name: Напряжение
+        hours_to_show: 24
+        points_per_hour: 4
+        line_width: 2
+        font_size: 75
+        animate: true
+        show:
+          labels: true
+          points: false
+          fill: false
+          legend: true
+
+      - type: custom:mini-graph-card
+        name: Нагрузка и батарея
+        hours_to_show: 24
+        points_per_hour: 4
+        line_width: 2
+        font_size: 75
+        animate: true
+        show:
+          labels: true
+          points: false
+          legend: true
+        entities:
+          - entity: sensor.dh_ups_battery_charge
+            name: Заряд (%)
+            show_fill: true
+          - entity: sensor.dh_ups_load
+            name: Нагрузка (%)
+            show_fill: false
+
+      - type: heading
+        heading: Параметры ИБП
+        icon: mdi:information-outline
+        heading_style: subtitle
 
       - type: entities
         show_header_toggle: false
@@ -183,20 +216,38 @@ sections:
           - entity: sensor.dh_ups_battery_voltage
             name: Напряжение батареи
           - entity: sensor.dh_ups_nominal_real_power
-            name: Номинальная активная мощность
+            name: Номинальная мощность
           - entity: sensor.dh_ups_battery_charge_warning
-            name: Порог предупреждения батареи
+            name: Предупреждение по заряду
           - entity: sensor.dh_ups_battery_charge_low
-            name: Порог низкого заряда
+            name: Низкий заряд
           - entity: sensor.dh_ups_battery_runtime_low
-            name: Порог малого runtime
+            name: Минимальный runtime
           - entity: sensor.dh_ups_beeper_status
             name: Зуммер
           - entity: sensor.dh_ups_test_result
-            name: Последний тест UPS
+            name: Последний тест ИБП
           - entity: binary_sensor.dh_ups_available
             name: Данные NUT доступны
-          - entity: sensor.dh_ups_last_refresh
-            name: Последнее ручное обновление
-          - entity: button.dh_ups_refresh
-            name: Обновить сейчас
+
+  - type: grid
+    cards:
+      - type: heading
+        heading: Журнал событий
+        icon: mdi:book-clock-outline
+        heading_style: title
+
+      - type: logbook
+        title: Переключения ИБП
+        hours_to_show: 48
+        entities:
+          - sensor.dh_ups_problems
+          - binary_sensor.dh_ups_on_battery
+          - binary_sensor.dh_ups_low_battery
+          - binary_sensor.dh_ups_overload
+          - binary_sensor.dh_ups_replace_battery
+          - binary_sensor.dh_ups_bypass
+          - binary_sensor.dh_ups_charging
+          - binary_sensor.dh_ups_discharging
+
+cards: []
