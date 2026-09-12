@@ -4,7 +4,7 @@ from app.config import MqttConfig
 from app.identity import HostIdentity
 from app.mqtt_bridge import MqttBridge
 from app.runtime_settings import RuntimeSettings
-from app.topics import build_topics
+from app.topics import build_topics, build_ups_topics
 
 
 class _Info:
@@ -89,22 +89,36 @@ def _bridge():
         {"device": {"name": "DH PVE"}},
         client=client,
     )
-    return bridge, client, topics, settings
+    return bridge, client, topics, settings, config, identity
 
 
 def test_transport_uses_retained_qos1_lwt_and_subscriptions():
-    bridge, client, topics, _ = _bridge()
+    bridge, client, topics, _, _, _ = _bridge()
     assert client.will == (topics.availability, "offline", 1, True)
     bridge._on_connect(client, None, None, _Reason(), None)
     assert (topics.ha_status, 1) in client.subscriptions
     assert (topics.refresh, 1) in client.subscriptions
+    assert (topics.ups_scan, 1) in client.subscriptions
     assert (f"{topics.settings_prefix}/+/set", 1) in client.subscriptions
     assert (topics.availability, "online", 1, True) in client.published
     assert bridge.reconnect_requested.is_set()
 
 
+def test_configure_ups_after_connect_subscribes_refresh_immediately():
+    bridge, client, _, _, config, identity = _bridge()
+    bridge._on_connect(client, None, None, _Reason(), None)
+    client.subscriptions.clear()
+    client.published.clear()
+    ups = build_ups_topics(config, identity)
+
+    bridge.configure_ups(ups)
+
+    assert (ups.refresh, 1) in client.subscriptions
+    assert (ups.availability, "online", 1, True) in client.published
+
+
 def test_state_and_discovery_are_retained_qos1_json():
-    bridge, client, topics, _ = _bridge()
+    bridge, client, topics, _, _, _ = _bridge()
     bridge.connected.set()
     assert bridge.publish_discovery() is True
     assert bridge.publish_state({"cpu": 12.5}) is True
@@ -116,7 +130,7 @@ def test_state_and_discovery_are_retained_qos1_json():
 
 
 def test_invalid_runtime_setting_republishes_effective_value():
-    bridge, client, topics, settings = _bridge()
+    bridge, client, topics, settings, _, _ = _bridge()
     bridge.connected.set()
     topic = f"{topics.settings_prefix}/cpu_publish_delta/set"
     bridge._on_message(client, None, _Message(topic, b"999"))
@@ -130,7 +144,7 @@ def test_invalid_runtime_setting_republishes_effective_value():
 
 
 def test_ha_online_requests_full_republish():
-    bridge, client, topics, _ = _bridge()
+    bridge, client, topics, _, _, _ = _bridge()
     bridge._on_message(client, None, _Message(topics.ha_status, b"online"))
     assert bridge.reconnect_requested.is_set()
     assert bridge.wake_requested.is_set()
