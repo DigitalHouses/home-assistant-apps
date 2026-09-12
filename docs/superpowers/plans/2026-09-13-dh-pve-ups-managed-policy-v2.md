@@ -2,7 +2,7 @@
 
 > Supersedes the policy-surface and Task 5/6 portions of `2026-09-13-dh-pve-ups-managed-policy.md`.
 
-**Goal:** finish the managed NUT/Proxmox shutdown policy without overriding hardware Low Battery, simplify Home Assistant to two writable policy values, expose UPS hardware thresholds read-only, and add persistent scheduled Quick/Deep battery testing with last-10 history.
+**Goal:** finish the managed NUT/Proxmox shutdown policy without overriding hardware Low Battery, simplify Home Assistant to two writable policy values, expose UPS hardware thresholds read-only, add persistent scheduled Quick/Deep battery testing with last-10 history, and require a read-only commissioning preflight before any live shutdown wiring.
 
 **Architecture:** PVE/NUT owns shutdown. Normal prolonged outage uses `ONBATT -> upssched timer -> local FSD`. Emergency shutdown uses the UPS-native `LB` signal through `upsmon`. Home Assistant edits draft policy only and never decides shutdown. Battery testing is a separate local PVE scheduler.
 
@@ -17,6 +17,7 @@
 - Do not write `battery.runtime.low` or `battery.charge.low` from policy code.
 - Preserve existing commissioning state on the live host until a separately reviewed deployment.
 - Hardware values are read-only telemetry; no UPS-model-specific correction logic.
+- `UpsPolicyApplier` remains unwired in `main.py` until the read-only commissioning preflight has been reviewed on the target PVE.
 
 ## Completed work retained from v1
 
@@ -59,9 +60,10 @@ Run full DH PVE tests and repository CI green.
 
 **Files:**
 - create `dh_pve_app/app/ups_policy_apply.py`
-- create `dh_pve_app/tests/test_ups_policy_apply.py`
-- modify `dh_pve_app/app/main.py`
-- modify `dh_pve_app/app/ups_shutdown_policy.py`
+- create `dh_pve_app/bin/dh-pve-ups-policy-cmd`
+- create/modify policy apply and sandbox tests
+- modify installer/systemd comments as required
+- do **not** wire the applier into `main.py` yet
 
 ### RED tests
 
@@ -76,14 +78,23 @@ Prove generated target semantics:
 - `offdelay` remains at least the device/driver-safe minimum;
 - `ondelay` matches the validated restore delay and is reread/verified;
 - generated configuration does **not** contain `ignorelb`;
+- existing flag-form `ignorelb` without `=` is rejected;
 - Apply never writes `battery.runtime.low`, `battery.charge.low`, or an override for either;
 - post-write verification must match target values before success;
-- every mutation stage has rollback coverage;
+- every mutable-file mutation stage has rollback coverage;
 - no HA-exposed path can execute FSD/arbitrary NUT command/arbitrary shell.
+
+### Immutable helper rule
+
+The FSD timer helper is versioned application code at:
+
+`/opt/digitalhouses/dh_pve_app/bin/dh-pve-ups-policy-cmd`
+
+It must be installed `root:root`, executable, not group/other writable, and protected by `ProtectSystem=full`. The runtime applier validates and references it but never creates, edits, replaces, or rolls it back. Only the exact timer token `dh-pve-ups-shutdown` may invoke `upsmon -c fsd`.
 
 ### GREEN implementation
 
-Implement explicit-path atomic backup/write/verify/rollback with injected command execution for tests. Wire the applier only after tests are green. Do not run the transaction on the live PVE host in this task.
+Implement explicit-path atomic backup/write/verify/rollback for mutable policy files with injected command execution for tests. Keep the applier disconnected from production runtime until Task 10 preflight is complete. Do not run the transaction on the live PVE host in this task.
 
 ## Task 6 — Read-only effective UPS configuration
 
@@ -144,7 +155,7 @@ No subprocess/MQTT/filesystem operations in the pure scheduling module.
 
 Expose writable schedule settings and read-only next/last/current/history state.
 
-Because Home Assistant MQTT has no assumption in this plan about a native time-of-day entity, choose a transport only after confirming the project-supported HA MQTT Discovery platform. The backend representation remains strict local `HH:MM` regardless of UI transport.
+Backend representation remains strict local `HH:MM`; Home Assistant MQTT Discovery uses the supported time entity transport.
 
 Required semantics:
 
@@ -190,7 +201,31 @@ History record fields where available:
 
 History keeps newest 10 only.
 
-## Task 10 — Documentation/dashboard contract and final verification
+## Task 10 — Read-only commissioning preflight
+
+**Files:**
+- create `dh_pve_app/app/ups_policy_preflight.py`
+- create `dh_pve_app/tests/test_ups_policy_preflight.py`
+- optionally expose a read-only CLI/report surface after the pure reader is green
+
+The preflight must return `Ready` only when all required commissioning conditions are true:
+
+- selected UPS reachable through NUT;
+- `nut-driver@<ups>` active;
+- `nut-server` active;
+- local upsmon role `primary`;
+- `nut-monitor` still inactive;
+- current `SHUTDOWNCMD` still `/bin/true`;
+- `/etc/killpower` absent;
+- immutable helper exists, is executable, and is not group/other writable;
+- selected UPS section contains no `ignorelb`/LB override;
+- Proxmox guest shutdown budget is readable.
+
+The reader may issue only read/status operations. Tests must prove it does not call service mutation commands, `upsmon -c fsd`, generic `upscmd`, or any write path.
+
+If any check fails, state is `Blocked`; the preflight never repairs the host automatically.
+
+## Task 11 — Documentation/dashboard contract and final verification
 
 Update README/CHANGELOG/dashboard contract after backend is green.
 
@@ -201,8 +236,18 @@ UI sections:
 3. read-only UPS protection/settings;
 4. PVE emergency shutdown policy with two writable values and Apply button;
 5. battery testing: schedules, manual controls, current test, last 10 history;
-6. diagnostics.
+6. commissioning/preflight diagnostics;
+7. general diagnostics.
 
 Run complete DH PVE tests and repository CI. Then use verification/code-review workflow before claiming completion.
 
-Live commissioning remains a separate explicit step: deploy branch, verify MQTT/draft-only behavior, inspect exact generated NUT diff, and only then consider enabling real `nut-monitor`/shutdown path. Never use `upsmon -c fsd` as a casual live test.
+## Separate live commissioning gate
+
+Live commissioning remains a separate explicit step after repository verification:
+
+1. deploy the reviewed feature branch while keeping `UpsPolicyApplier` unwired;
+2. run/read the commissioning preflight on the actual PVE;
+3. verify MQTT remains draft-only and cannot execute FSD;
+4. inspect the exact generated NUT diff from the target host facts;
+5. only after explicit review wire/enable the real apply path;
+6. never use `upsmon -c fsd` as a casual live test.
