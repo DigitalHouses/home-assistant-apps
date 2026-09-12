@@ -1,0 +1,202 @@
+# DH UPS compact Lovelace view
+# Requires Mushroom. Uses only normalized dh_pve_app/NUT facts; no UPS health
+# thresholds or estimated power are calculated in Home Assistant.
+
+title: UPS
+path: ups
+icon: mdi:power-plug-battery
+type: sections
+max_columns: 2
+
+sections:
+  - type: grid
+    cards:
+      - type: heading
+        heading: Состояние UPS
+        heading_style: title
+        icon: mdi:power-plug-battery
+
+      - type: custom:mushroom-template-card
+        entity: sensor.dh_ups_status
+        primary: >-
+          {% if is_state('binary_sensor.dh_ups_available', 'off') %}
+            UPS: данные недоступны
+          {% elif is_state('binary_sensor.dh_ups_low_battery', 'on') %}
+            UPS: низкий заряд батареи
+          {% elif is_state('binary_sensor.dh_ups_overload', 'on') %}
+            UPS: перегрузка
+          {% elif is_state('binary_sensor.dh_ups_replace_battery', 'on') %}
+            UPS: требуется замена батареи
+          {% elif is_state('binary_sensor.dh_ups_bypass', 'on') %}
+            UPS: bypass
+          {% elif is_state('binary_sensor.dh_ups_on_battery', 'on') %}
+            UPS: работа от батареи
+          {% else %}
+            UPS: {{ states('sensor.dh_ups_status') }}
+          {% endif %}
+        secondary: >-
+          Заряд {{ states('sensor.dh_ups_battery_charge') }}% ·
+          Нагрузка {{ states('sensor.dh_ups_load') }}% ·
+          Runtime {{ states('sensor.dh_ups_battery_runtime') }} s
+        icon: >-
+          {% if is_state('binary_sensor.dh_ups_available', 'off') %}
+            mdi:lan-disconnect
+          {% elif is_state('binary_sensor.dh_ups_low_battery', 'on')
+             or is_state('binary_sensor.dh_ups_overload', 'on')
+             or is_state('binary_sensor.dh_ups_replace_battery', 'on') %}
+            mdi:alert-circle
+          {% elif is_state('binary_sensor.dh_ups_on_battery', 'on') %}
+            mdi:battery-arrow-down
+          {% else %}
+            mdi:power-plug-battery
+          {% endif %}
+        icon_color: >-
+          {% if is_state('binary_sensor.dh_ups_available', 'off')
+             or is_state('binary_sensor.dh_ups_low_battery', 'on')
+             or is_state('binary_sensor.dh_ups_overload', 'on')
+             or is_state('binary_sensor.dh_ups_replace_battery', 'on') %}
+            red
+          {% elif is_state('binary_sensor.dh_ups_on_battery', 'on')
+             or is_state('binary_sensor.dh_ups_bypass', 'on') %}
+            amber
+          {% else %}
+            green
+          {% endif %}
+        multiline_secondary: true
+        fill_container: true
+
+      - type: custom:mushroom-chips-card
+        chips:
+          - type: entity
+            entity: sensor.dh_ups_battery_charge
+            icon: mdi:battery
+            content_info: state
+          - type: entity
+            entity: sensor.dh_ups_battery_runtime
+            icon: mdi:timer-outline
+            content_info: state
+          - type: entity
+            entity: sensor.dh_ups_load
+            icon: mdi:gauge
+            content_info: state
+          - type: entity
+            entity: binary_sensor.dh_ups_available
+            icon: mdi:lan-connect
+            content_info: state
+
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: binary_sensor.dh_ups_on_battery
+            state: "on"
+        card:
+          type: custom:mushroom-template-card
+          primary: Питание от батареи
+          secondary: UPS сообщает On Battery
+          icon: mdi:battery-arrow-down
+          icon_color: amber
+
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: binary_sensor.dh_ups_low_battery
+            state: "on"
+        card:
+          type: custom:mushroom-template-card
+          primary: Низкий заряд батареи
+          secondary: UPS сообщает Low Battery
+          icon: mdi:battery-alert
+          icon_color: red
+
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: binary_sensor.dh_ups_overload
+            state: "on"
+        card:
+          type: custom:mushroom-template-card
+          primary: Перегрузка UPS
+          secondary: UPS сообщает Overload
+          icon: mdi:alert-octagon-outline
+          icon_color: red
+
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: binary_sensor.dh_ups_replace_battery
+            state: "on"
+        card:
+          type: custom:mushroom-template-card
+          primary: Требуется замена батареи
+          secondary: UPS сообщает Replace Battery
+          icon: mdi:battery-sync-outline
+          icon_color: red
+
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: binary_sensor.dh_ups_bypass
+            state: "on"
+        card:
+          type: custom:mushroom-template-card
+          primary: UPS работает в bypass
+          secondary: Нагрузка питается через обходной путь
+          icon: mdi:transit-connection-variant
+          icon_color: amber
+
+  - type: grid
+    cards:
+      - type: heading
+        heading: Электропитание
+        heading_style: title
+        icon: mdi:transmission-tower
+
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: custom:mushroom-entity-card
+            entity: sensor.dh_ups_input_voltage
+            name: Вход
+            icon: mdi:transmission-tower-import
+          - type: custom:mushroom-entity-card
+            entity: sensor.dh_ups_output_voltage
+            name: Выход
+            icon: mdi:transmission-tower-export
+          - type: custom:mushroom-entity-card
+            entity: sensor.dh_ups_battery_charge
+            name: Батарея
+            icon: mdi:battery
+          - type: custom:mushroom-entity-card
+            entity: sensor.dh_ups_load
+            name: Нагрузка
+            icon: mdi:gauge
+
+      - type: heading
+        heading: Сервисные параметры
+        heading_style: subtitle
+        icon: mdi:wrench-clock
+
+      - type: entities
+        show_header_toggle: false
+        entities:
+          - entity: sensor.dh_ups_battery_voltage
+            name: Напряжение батареи
+          - entity: sensor.dh_ups_nominal_real_power
+            name: Номинальная активная мощность
+          - entity: sensor.dh_ups_battery_charge_warning
+            name: Порог предупреждения батареи
+          - entity: sensor.dh_ups_battery_charge_low
+            name: Порог низкого заряда
+          - entity: sensor.dh_ups_battery_runtime_low
+            name: Порог малого runtime
+          - entity: sensor.dh_ups_beeper_status
+            name: Зуммер
+          - entity: sensor.dh_ups_test_result
+            name: Последний тест UPS
+          - entity: binary_sensor.dh_ups_available
+            name: Данные NUT доступны
+          - entity: sensor.dh_ups_last_refresh
+            name: Последнее ручное обновление
+          - entity: button.dh_ups_refresh
+            name: Обновить сейчас
