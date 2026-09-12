@@ -64,6 +64,56 @@ def build_test_schedule_components(
             "icon": "mdi:clock-outline",
         }
 
+    def last_test_component(
+        key: str,
+        name: str,
+        entity_id: str,
+        test_type: str,
+    ) -> dict[str, Any]:
+        return {
+            "platform": "sensor",
+            "name": name,
+            "unique_id": uid(key),
+            "default_entity_id": entity_id,
+            "state_topic": topics.state,
+            "value_template": (
+                "{{ value_json.test_schedule."
+                f"{test_type}.last_result | default('Unknown', true) }}}}"
+            ),
+            "availability": availability,
+            "availability_mode": "all",
+            "entity_category": "diagnostic",
+            "icon": "mdi:battery-check-outline",
+            "json_attributes_topic": topics.state,
+            "json_attributes_template": (
+                "{{ {'last_time': value_json.test_schedule."
+                f"{test_type}.last_time | default(none) }}}} | tojson }}}}"
+            ),
+        }
+
+    def next_test_component(
+        key: str,
+        name: str,
+        entity_id: str,
+        test_type: str,
+    ) -> dict[str, Any]:
+        return {
+            "platform": "sensor",
+            "name": name,
+            "unique_id": uid(key),
+            "default_entity_id": entity_id,
+            "state_topic": topics.state,
+            "value_template": (
+                "{{ value_json.test_schedule."
+                f"{test_type}.next_due | default(none) }}}}"
+            ),
+            "device_class": "timestamp",
+            "availability": availability,
+            "availability_mode": "all",
+            "entity_category": "diagnostic",
+            "icon": "mdi:calendar-clock-outline",
+        }
+
     return {
         "test_quick_interval_days": interval_component(
             "test_quick_interval_days",
@@ -93,4 +143,63 @@ def build_test_schedule_components(
             "deep",
             topics.test_deep_time_set,
         ),
+        "test_state": {
+            "platform": "sensor",
+            "name": "Battery test state",
+            "unique_id": uid("test_state"),
+            "default_entity_id": "sensor.dh_pve_ups_test_state",
+            "state_topic": topics.state,
+            "value_template": (
+                "{{ value_json.test_schedule.current_state | default('Idle') }}"
+            ),
+            "availability": availability,
+            "availability_mode": "all",
+            "entity_category": "diagnostic",
+            "icon": "mdi:battery-sync-outline",
+            "json_attributes_topic": topics.state,
+            "json_attributes_template": (
+                "{{ {'last_decision': value_json.test_schedule.last_decision "
+                "| default(none)} | tojson }}"
+            ),
+        },
+        "last_quick_test": last_test_component(
+            "last_quick_test",
+            "Last Quick test",
+            "sensor.dh_pve_ups_last_quick_test",
+            "quick",
+        ),
+        "next_quick_test": next_test_component(
+            "next_quick_test",
+            "Next Quick test",
+            "sensor.dh_pve_ups_next_quick_test",
+            "quick",
+        ),
+        "last_deep_test": last_test_component(
+            "last_deep_test",
+            "Last Deep test",
+            "sensor.dh_pve_ups_last_deep_test",
+            "deep",
+        ),
+        "next_deep_test": next_test_component(
+            "next_deep_test",
+            "Next Deep test",
+            "sensor.dh_pve_ups_next_deep_test",
+            "deep",
+        ),
+        "test_history": {
+            "platform": "sensor",
+            "name": "Battery test history",
+            "unique_id": uid("test_history"),
+            "default_entity_id": "sensor.dh_pve_ups_test_history",
+            "state_topic": topics.state,
+            "value_template": "{{ value_json.test_history | default([]) | count }}",
+            "availability": availability,
+            "availability_mode": "all",
+            "entity_category": "diagnostic",
+            "icon": "mdi:history",
+            "json_attributes_topic": topics.state,
+            "json_attributes_template": (
+                "{{ {'history': value_json.test_history | default([])} | tojson }}"
+            ),
+        },
     }
