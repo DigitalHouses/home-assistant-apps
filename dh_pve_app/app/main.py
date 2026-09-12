@@ -42,6 +42,10 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _now_local() -> datetime:
+    return datetime.now().astimezone()
+
+
 def _configure_logging(level: str) -> None:
     logging.basicConfig(
         level=getattr(logging, level.upper()),
@@ -139,6 +143,7 @@ def build_ups_runtime(
         version=_version(),
         state_store=StateStore(state_dir / "ups_runtime.json"),
         now_iso=_now_iso,
+        now_local=_now_local,
         now_monotonic=time.monotonic,
         policy_facts_reader=lambda: read_policy_safety_facts(runtime_config),
     )
