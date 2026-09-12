@@ -441,12 +441,16 @@ class UpsRuntime:
         return result
 
     def _auxiliary_fields(self) -> dict[str, object]:
+        public_history = [
+            {key: value for key, value in record.items() if key != "nut_result_before"}
+            for record in self.test_history
+        ]
         return {
             "capabilities": self._capabilities_payload(),
             "shutdown_policy": self._shutdown_policy_payload(),
             "policy": self._policy_payload(),
             "test_schedule": self._test_schedule_payload(),
-            "test_history": list(self.test_history),
+            "test_history": public_history,
         }
 
     def _success_payload(
