@@ -113,7 +113,12 @@ def _hardware_lb_check(path: Path, ups_name: str) -> tuple[bool, str]:
     return True, "Hardware Low Battery остается нативным."
 
 
-def _helper_check(path: Path) -> tuple[bool, str]:
+def _helper_check(
+    path: Path,
+    *,
+    expected_uid: int,
+    expected_gid: int,
+) -> tuple[bool, str]:
     try:
         info = path.stat()
     except OSError as exc:
@@ -123,9 +128,19 @@ def _helper_check(path: Path) -> tuple[bool, str]:
         return False, f"Helper не является обычным файлом: {path}."
     if mode & 0o111 == 0:
         return False, f"Helper не исполняемый: {path}."
+    if info.st_uid != expected_uid or info.st_gid != expected_gid:
+        return (
+            False,
+            "Helper имеет недоверенного владельца: "
+            f"uid={info.st_uid}, gid={info.st_gid}; "
+            f"ожидается uid={expected_uid}, gid={expected_gid}.",
+        )
     if mode & 0o022:
         return False, f"Helper доступен на запись группе/остальным: {path}."
-    return True, f"Helper безопасен: {path}, mode {mode:04o}."
+    return True, (
+        f"Helper безопасен: {path}, uid={info.st_uid}, gid={info.st_gid}, "
+        f"mode {mode:04o}."
+    )
 
 
 def read_policy_preflight(
@@ -139,6 +154,8 @@ def read_policy_preflight(
     helper_path: Path = Path(
         "/opt/digitalhouses/dh_pve_app/bin/dh-pve-ups-policy-cmd"
     ),
+    helper_expected_uid: int = 0,
+    helper_expected_gid: int = 0,
     killpower_path: Path = Path("/etc/killpower"),
 ) -> UpsPolicyPreflight:
     checks: list[PreflightCheck] = []
@@ -207,19 +224,24 @@ def read_policy_preflight(
             )
         )
 
+    killpower_exists = killpower_path.exists()
     checks.append(
         PreflightCheck(
             "killpower_absent",
-            not killpower_path.exists(),
+            not killpower_exists,
             (
                 f"POWERDOWNFLAG отсутствует: {killpower_path}."
-                if not killpower_path.exists()
+                if not killpower_exists
                 else f"Обнаружен POWERDOWNFLAG: {killpower_path}."
             ),
         )
     )
 
-    helper_ok, helper_detail = _helper_check(helper_path)
+    helper_ok, helper_detail = _helper_check(
+        helper_path,
+        expected_uid=helper_expected_uid,
+        expected_gid=helper_expected_gid,
+    )
     checks.append(PreflightCheck("helper_secure", helper_ok, helper_detail))
 
     lb_ok, lb_detail = _hardware_lb_check(ups_conf_path, config.name)
