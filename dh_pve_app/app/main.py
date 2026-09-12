@@ -5,6 +5,7 @@ import logging
 import signal
 import threading
 import time
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -22,6 +23,7 @@ from .state_store import StateStore
 from .topics import build_topics, build_ups_topics
 from .topology import TopologyManager
 from .ups_runtime import UpsRuntime
+from .ups_scan import UpsScanner
 
 APP_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG = Path("/etc/dh_pve_app/dh_pve_app.conf")
@@ -79,9 +81,6 @@ def build_runtime(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR):
         discovery_builder({}),
     )
 
-    # Topology must follow the actual PVE host node name, not the configurable
-    # display/node label used in MQTT identity. TopologyManager defaults to
-    # platform.node(), which matches the Proxmox API `node` field.
     topology = TopologyManager(runner=_run)
     production = GuestAwareProductionCollectors(
         node_name=identity.node_name,
@@ -94,8 +93,6 @@ def build_runtime(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR):
     now = time.monotonic()
     fast = settings.get("fast_poll_interval_seconds")
     disk = settings.get("disk_poll_interval_seconds")
-    # qm/pct/pvesh and QGA helpers are Perl-heavy on PVE. Keep cheap host
-    # metrics fast, but poll guest inventory and guest GPU telemetry at 30 s.
     scheduler.add("guests", interval_seconds=30.0, now=now)
     scheduler.add("gpu", interval_seconds=30.0, now=now)
     for name in ("cpu", "memory", "fans"):
@@ -125,14 +122,16 @@ def build_ups_runtime(
     config: AppConfig,
     bridge,
     *,
+    selected_name: str | None,
     state_dir: Path = DEFAULT_STATE_DIR,
 ) -> UpsRuntime | None:
-    if not config.ups.enabled:
+    if not selected_name:
         return None
     identity = resolve_identity(config.general)
     bridge.configure_ups(build_ups_topics(config.mqtt, identity))
+    runtime_config = replace(config.ups, enabled=True, name=selected_name)
     return UpsRuntime(
-        config=config.ups,
+        config=runtime_config,
         mqtt_config=config.mqtt,
         bridge=bridge,
         identity=identity,
@@ -143,10 +142,28 @@ def build_ups_runtime(
     )
 
 
+def build_ups_scanner(
+    config: AppConfig,
+    *,
+    state_dir: Path = DEFAULT_STATE_DIR,
+) -> UpsScanner:
+    return UpsScanner(
+        config.ups,
+        StateStore(state_dir / "ups_selection.json"),
+        now_iso=_now_iso,
+    )
+
+
 def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
     log = logging.getLogger("dh_pve_app")
     bridge, runtime = build_runtime(config, state_dir=state_dir)
-    ups_runtime = build_ups_runtime(config, bridge, state_dir=state_dir)
+    scanner = build_ups_scanner(config, state_dir=state_dir)
+    ups_runtime = build_ups_runtime(
+        config,
+        bridge,
+        selected_name=scanner.selected_name(),
+        state_dir=state_dir,
+    )
     stop_event = threading.Event()
     initialized = False
     ups_startup_attempted = False
@@ -161,7 +178,7 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
 
     log.info("Запуск DH PVE App %s", _version())
     if ups_runtime is not None:
-        log.info("Мониторинг UPS через NUT включен")
+        log.info("Найден сохраненный UPS %s", ups_runtime.config.name)
     bridge.start()
 
     try:
@@ -177,21 +194,40 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
                         "будет повторена после следующего MQTT reconnect"
                     )
 
-            if initialized and ups_runtime is not None and not ups_startup_attempted:
-                bridge.ups_reconnect_requested.clear()
-                ups_ok = ups_runtime.startup()
-                ups_startup_attempted = True
-                if ups_ok:
-                    log.info("Первичная публикация DH UPS завершена")
-                else:
-                    log.warning(
-                        "UPS через NUT пока недоступен; мониторинг PVE продолжает работать"
-                    )
-
             if initialized:
                 runtime.process_events()
                 runtime.tick(time.monotonic())
-                if ups_runtime is not None:
+
+                if bridge.ups_scan_requested.is_set():
+                    bridge.ups_scan_requested.clear()
+                    outcome = scanner.scan()
+                    bridge.publish_ups_scan_state(outcome.payload())
+                    log.info("Сканирование UPS: %s", outcome.result)
+
+                    if outcome.selected_name is not None:
+                        if ups_runtime is None or outcome.selection_changed:
+                            ups_runtime = build_ups_runtime(
+                                config,
+                                bridge,
+                                selected_name=outcome.selected_name,
+                                state_dir=state_dir,
+                            )
+                            ups_startup_attempted = False
+                        elif outcome.count == 1:
+                            ups_runtime.manual_refresh()
+
+                if ups_runtime is not None and not ups_startup_attempted:
+                    bridge.ups_reconnect_requested.clear()
+                    ups_ok = ups_runtime.startup()
+                    ups_startup_attempted = True
+                    if ups_ok:
+                        log.info("Первичная публикация DH PVE UPS завершена")
+                    else:
+                        log.warning(
+                            "UPS через NUT пока недоступен; мониторинг PVE продолжает работать"
+                        )
+
+                if ups_runtime is not None and ups_startup_attempted:
                     ups_runtime.process_events()
                     ups_runtime.tick(time.monotonic())
 
