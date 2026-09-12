@@ -12,6 +12,14 @@ password = change_me
 discovery_prefix = homeassistant
 topic_prefix = DigitalHouses/Global/dh_pve_app
 
+[ups]
+enabled = false
+name = ups
+host = 127.0.0.1
+port = 3493
+poll_interval_seconds = 5
+command_timeout_seconds = 3
+
 [polling]
 fast_interval_seconds = 10
 disk_interval_seconds = 30
