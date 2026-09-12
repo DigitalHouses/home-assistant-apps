@@ -6,6 +6,18 @@ from typing import Callable
 
 from .config import UpsConfig
 from .publish_policy import MetricValue
+from .ups_control import (
+    NutControlError,
+    UpsCapabilities,
+    list_ups_commands,
+    parse_upscmd_list_output,
+    run_ups_battery_test,
+)
+from .ups_shutdown_policy import (
+    UpsShutdownPolicy,
+    parse_shutdown_policy,
+    read_shutdown_policy,
+)
 
 
 class NutReadError(RuntimeError):
