@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Callable
 
 from .config import UpsConfig
@@ -26,9 +26,10 @@ class UpsCapabilities:
     load_control: bool
     shutdown_control: bool
     supported_features: tuple[str, ...]
+    controls_enabled: bool = True
 
     def supports_test(self, action: str) -> bool:
-        return action in self.battery_tests
+        return self.controls_enabled and action in self.battery_tests
 
     def as_dict(self) -> dict[str, object]:
         return {
@@ -40,6 +41,7 @@ class UpsCapabilities:
             "load_control": self.load_control,
             "shutdown_control": self.shutdown_control,
             "supported_features": list(self.supported_features),
+            "test_controls_enabled": self.controls_enabled,
         }
 
 
@@ -106,7 +108,10 @@ def list_ups_commands(
         raise NutControlError(detail or "NUT не вернул список команд UPS") from exc
     except OSError as exc:
         raise NutControlError(f"Не удалось запустить upscmd: {exc}") from exc
-    return parse_upscmd_list_output(completed.stdout)
+
+    capabilities = parse_upscmd_list_output(completed.stdout)
+    controls_enabled = bool(config.command_username and config.command_password)
+    return replace(capabilities, controls_enabled=controls_enabled)
 
 
 def _sanitize_detail(detail: str, config: UpsConfig) -> str:
