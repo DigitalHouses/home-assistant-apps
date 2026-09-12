@@ -104,16 +104,9 @@ sections:
         columns: 2
         square: false
         cards:
-          - type: custom:mushroom-template-card
-            entity: sensor.dh_ups_battery_runtime
-            primary: Прогноз работы
-            secondary: >-
-              {% set s = states(entity) %}
-              {% if s in ['unknown', 'unavailable', 'none', ''] %}
-                Нет данных
-              {% else %}
-                {{ (s | float(0) / 60) | round(0) }} мин
-              {% endif %}
+          - type: custom:mushroom-entity-card
+            entity: sensor.dh_ups_battery_runtime_minutes
+            name: Прогноз работы
             icon: mdi:timer-sand
             icon_color: purple
 
@@ -204,6 +197,24 @@ sections:
           - entity: sensor.dh_ups_load
             name: Нагрузка (%)
             show_fill: false
+
+      - type: custom:mini-graph-card
+        name: Прогноз работы от батареи
+        icon: mdi:timer-sand
+        entities:
+          - entity: sensor.dh_ups_battery_runtime_minutes
+            name: Runtime
+        hours_to_show: 24
+        points_per_hour: 6
+        line_width: 2
+        height: 90
+        animate: true
+        show:
+          labels: true
+          points: false
+          legend: false
+          extrema: true
+          fill: fade
 
       - type: heading
         heading: Параметры ИБП
