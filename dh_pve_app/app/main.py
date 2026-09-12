@@ -22,6 +22,7 @@ from .scheduler import Scheduler
 from .state_store import StateStore
 from .topics import build_topics, build_ups_topics
 from .topology import TopologyManager
+from .ups_policy_host import read_policy_safety_facts
 from .ups_runtime import UpsRuntime
 from .ups_scan import UpsScanner
 
@@ -139,6 +140,7 @@ def build_ups_runtime(
         state_store=StateStore(state_dir / "ups_runtime.json"),
         now_iso=_now_iso,
         now_monotonic=time.monotonic,
+        policy_facts_reader=lambda: read_policy_safety_facts(runtime_config),
     )
 
 
