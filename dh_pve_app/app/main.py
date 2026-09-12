@@ -19,8 +19,9 @@ from .runtime_dynamic import DynamicDiscoveryRuntime
 from .runtime_settings import RuntimeSettings
 from .scheduler import Scheduler
 from .state_store import StateStore
-from .topics import build_topics
+from .topics import build_topics, build_ups_topics
 from .topology import TopologyManager
+from .ups_runtime import UpsRuntime
 
 APP_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG = Path("/etc/dh_pve_app/dh_pve_app.conf")
@@ -120,11 +121,35 @@ def build_runtime(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR):
     return bridge, runtime
 
 
+def build_ups_runtime(
+    config: AppConfig,
+    bridge,
+    *,
+    state_dir: Path = DEFAULT_STATE_DIR,
+) -> UpsRuntime | None:
+    if not config.ups.enabled:
+        return None
+    identity = resolve_identity(config.general)
+    bridge.configure_ups(build_ups_topics(config.mqtt, identity))
+    return UpsRuntime(
+        config=config.ups,
+        mqtt_config=config.mqtt,
+        bridge=bridge,
+        identity=identity,
+        version=_version(),
+        state_store=StateStore(state_dir / "ups_runtime.json"),
+        now_iso=_now_iso,
+        now_monotonic=time.monotonic,
+    )
+
+
 def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
     log = logging.getLogger("dh_pve_app")
     bridge, runtime = build_runtime(config, state_dir=state_dir)
+    ups_runtime = build_ups_runtime(config, bridge, state_dir=state_dir)
     stop_event = threading.Event()
     initialized = False
+    ups_startup_attempted = False
 
     def stop(signum: int, frame: object) -> None:
         log.info("Получен сигнал остановки %s", signum)
@@ -135,6 +160,8 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
     signal.signal(signal.SIGINT, stop)
 
     log.info("Запуск DH PVE App %s", _version())
+    if ups_runtime is not None:
+        log.info("Мониторинг UPS через NUT включен")
     bridge.start()
 
     try:
@@ -150,9 +177,23 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
                         "будет повторена после следующего MQTT reconnect"
                     )
 
+            if initialized and ups_runtime is not None and not ups_startup_attempted:
+                bridge.ups_reconnect_requested.clear()
+                ups_ok = ups_runtime.startup()
+                ups_startup_attempted = True
+                if ups_ok:
+                    log.info("Первичная публикация DH UPS завершена")
+                else:
+                    log.warning(
+                        "UPS через NUT пока недоступен; мониторинг PVE продолжает работать"
+                    )
+
             if initialized:
                 runtime.process_events()
                 runtime.tick(time.monotonic())
+                if ups_runtime is not None:
+                    ups_runtime.process_events()
+                    ups_runtime.tick(time.monotonic())
 
             bridge.wake_requested.wait(1.0)
             bridge.wake_requested.clear()
