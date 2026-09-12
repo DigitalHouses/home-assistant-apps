@@ -99,12 +99,13 @@ def test_transport_uses_retained_qos1_lwt_and_subscriptions():
     assert (topics.ha_status, 1) in client.subscriptions
     assert (topics.refresh, 1) in client.subscriptions
     assert (topics.ups_scan, 1) in client.subscriptions
+    assert (f"{topics.base}/ups/refresh", 1) in client.subscriptions
     assert (f"{topics.settings_prefix}/+/set", 1) in client.subscriptions
     assert (topics.availability, "online", 1, True) in client.published
     assert bridge.reconnect_requested.is_set()
 
 
-def test_configure_ups_after_connect_subscribes_refresh_immediately():
+def test_configure_ups_after_connect_has_no_transport_side_effects():
     bridge, client, _, _, config, identity = _bridge()
     bridge._on_connect(client, None, None, _Reason(), None)
     client.subscriptions.clear()
@@ -113,8 +114,9 @@ def test_configure_ups_after_connect_subscribes_refresh_immediately():
 
     bridge.configure_ups(ups)
 
-    assert (ups.refresh, 1) in client.subscriptions
-    assert (ups.availability, "online", 1, True) in client.published
+    assert client.subscriptions == []
+    assert client.published == []
+    assert bridge.ups_topics == ups
 
 
 def test_legacy_ups_discovery_cleanup_is_empty_retained_publish():
