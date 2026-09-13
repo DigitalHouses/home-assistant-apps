@@ -16,6 +16,8 @@ def test_ups_dashboard_example_exists_and_uses_real_entities():
         "sensor.dh_pve_ups_load",
         "sensor.dh_pve_ups_input_voltage",
         "sensor.dh_pve_ups_output_voltage",
+        "sensor.dh_pve_ups_shutdown_readiness",
+        "sensor.dh_pve_ups_guest_shutdown_budget",
         "button.dh_pve_ups_refresh",
     )
     for entity_id in required:
@@ -67,3 +69,18 @@ def test_shutdown_policy_is_read_only_in_home_assistant_dashboard():
     assert "button.dh_pve_ups_apply_policy" not in text
     assert "number.dh_pve_ups_policy_on_battery_delay" not in text
     assert "number.dh_pve_ups_policy_power_restore_delay" not in text
+
+
+def test_shutdown_readiness_uses_dedicated_backend_entities_and_status_colors():
+    text = DASHBOARD.read_text(encoding="utf-8")
+
+    assert "heading: Готовность аварийного shutdown" in text
+    assert "entity: sensor.dh_pve_ups_shutdown_readiness" in text
+    assert "entity: sensor.dh_pve_ups_guest_shutdown_budget" in text
+    assert "state_attr(entity, 'issues')" in text
+    assert "is_state(entity, 'ok')" in text
+    assert "is_state(entity, 'warning')" in text
+    assert "mdi:shield-check" in text
+    assert "mdi:shield-alert" in text
+    assert "VM/LXC budget" in text
+    assert "state_attr(entity, 'guest_shutdown_budget_seconds')" not in text
