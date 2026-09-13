@@ -273,8 +273,8 @@ def classify_previous_shutdown(
     if clean_shutdown is True:
         return "normal", fsd_reason or "shutdown"
     if clean_shutdown is False:
-        return "unclean", fsd_reason or "no_clean_shutdown"
-    return "unknown", fsd_reason or "insufficient_evidence"
+        return "unclean", fsd_reason or "unknown"
+    return "unknown", fsd_reason or "unknown"
 
 
 def evaluate_shutdown_readiness(
