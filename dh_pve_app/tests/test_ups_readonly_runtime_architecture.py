@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from app.config import load_config
+from app.config import MqttConfig, load_config
 from app.discovery_ups import build_ups_discovery_payload
 from app.identity import HostIdentity
 from app.mqtt_bridge import MqttEvents
@@ -8,7 +8,6 @@ from app.runtime_settings import RuntimeSettings
 from app.topics import build_topics, build_ups_topics
 from app.ups_policy_apply import _atomic_write
 from app.ups_shutdown_policy import parse_shutdown_policy
-from app.config import MqttConfig
 
 
 def _mqtt():
@@ -37,8 +36,8 @@ def test_policy_discovery_is_read_only():
         _mqtt(), _identity(), version="0.2.0-alpha", snapshot=None
     )["components"]
 
-    on_battery = components["policy_on_battery_delay"]
-    restore = components["policy_power_restore_delay"]
+    on_battery = components["policy_on_battery_delay_observed"]
+    restore = components["policy_power_restore_delay_observed"]
 
     assert on_battery["platform"] == "sensor"
     assert restore["platform"] == "sensor"
