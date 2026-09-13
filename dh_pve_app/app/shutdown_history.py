@@ -262,6 +262,13 @@ def evaluate_shutdown_readiness(
     if guest_shutdown_budget_seconds is None:
         issues.append("shutdown_budget_unavailable")
 
+    if (
+        isinstance(previous_shutdown, Mapping)
+        and previous_shutdown.get("shutdown_class") == "ups_power"
+        and previous_shutdown.get("shutdown_clean") is False
+    ):
+        issues.append("previous_host_shutdown_unclean")
+
     guests = previous_shutdown.get("guests") if isinstance(previous_shutdown, Mapping) else None
     if isinstance(guests, Mapping):
         for kind in ("vm", "lxc"):
@@ -365,8 +372,9 @@ class ShutdownHistoryTracker:
 
         journal = self.previous_boot_journal_reader()
         parsed = parse_guest_shutdown_journal(journal)
+        shutdown_clean = bool(parsed["clean_shutdown"])
         shutdown_class, shutdown_reason = classify_previous_shutdown(
-            clean_shutdown=bool(parsed["clean_shutdown"]),
+            clean_shutdown=shutdown_clean,
             fsd_reason=(
                 str(current.get("fsd_reason"))
                 if isinstance(current.get("fsd_reason"), str)
@@ -384,6 +392,7 @@ class ShutdownHistoryTracker:
             "shutdown_at": shutdown_at,
             "shutdown_class": shutdown_class,
             "shutdown_reason": shutdown_reason,
+            "shutdown_clean": shutdown_clean,
             "uptime_seconds": _duration_between(current.get("boot_at"), shutdown_at),
             "downtime_seconds": _duration_between(shutdown_at, boot_at),
             "outage_started_at": outage_started_at,
