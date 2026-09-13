@@ -47,6 +47,8 @@ class _FileSnapshot:
     existed: bool
     content: bytes
     mode: int | None
+    uid: int | None
+    gid: int | None
 
 
 _OWNED_UPSMON_SINGLETONS = {"SHUTDOWNCMD", "POWERDOWNFLAG", "NOTIFYCMD"}
@@ -214,15 +216,34 @@ def _snapshot(path: Path) -> _FileSnapshot:
             existed=True,
             content=path.read_bytes(),
             mode=stat.S_IMODE(info.st_mode),
+            uid=info.st_uid,
+            gid=info.st_gid,
         )
     except FileNotFoundError:
-        return _FileSnapshot(existed=False, content=b"", mode=None)
+        return _FileSnapshot(
+            existed=False,
+            content=b"",
+            mode=None,
+            uid=None,
+            gid=None,
+        )
     except OSError as exc:
         raise PolicyApplyError(f"Не удалось прочитать {path}.") from exc
 
 
-def _atomic_write(path: Path, content: bytes, mode: int) -> None:
+def _atomic_write(
+    path: Path,
+    content: bytes,
+    mode: int,
+    *,
+    uid: int | None = None,
+    gid: int | None = None,
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+    parent_info = path.parent.stat()
+    target_uid = parent_info.st_uid if uid is None else uid
+    target_gid = parent_info.st_gid if gid is None else gid
+
     fd, temp_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
     temp = Path(temp_name)
     try:
@@ -232,6 +253,7 @@ def _atomic_write(path: Path, content: bytes, mode: int) -> None:
             os.fsync(handle.fileno())
         os.chmod(temp, mode)
         os.replace(temp, path)
+        os.chown(path, target_uid, target_gid)
     finally:
         try:
             temp.unlink()
@@ -245,6 +267,8 @@ def _restore(path: Path, snapshot: _FileSnapshot, default_mode: int) -> None:
             path,
             snapshot.content,
             snapshot.mode if snapshot.mode is not None else default_mode,
+            uid=snapshot.uid,
+            gid=snapshot.gid,
         )
     else:
         try:
@@ -320,7 +344,7 @@ def _validate_static_helper(
 
 
 class UpsPolicyApplier:
-    """Transactional writer for the approved DigitalHouses NUT policy surface."""
+    """Transactional writer used only by explicit UPS commissioning."""
 
     def __init__(
         self,
