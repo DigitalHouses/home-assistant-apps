@@ -24,10 +24,11 @@
 - Keep the static `dh-pve-ups-policy-cmd` helper restricted to the owned `dh-pve-ups-shutdown` timer token and `upsmon -c fsd` action.
 - Keep native hardware Low Battery authoritative; do not install `ignorelb` or battery threshold overrides.
 - Add persistent PVE boot/shutdown history keyed by the kernel `boot_id`, so restarting or upgrading `dh_pve_app` does not create a false host boot event.
-- Classify the previous shutdown as `normal`, `unclean`, or `ups_power`, preserve a more specific dry reason, and keep the host `shutdown_clean` result separate from the shutdown cause.
+- Classify the previous shutdown as `normal`, `unclean`, `ups_power`, or `unknown`, preserve a more specific dry reason, and keep the host `shutdown_clean` result separate from the shutdown cause.
+- Treat missing previous-boot journal evidence as `unknown` and never invent a shutdown timestamp from an arbitrary last log line.
 - Capture confirmed UPS/FSD facts and outage/FSD/guest/host timing intervals without assuming that every unclean boot was caused by a power failure.
 - Read each VM/LXC effective shutdown timeout/order/onboot state and retain the previous shutdown duration, timeout ratio, result and forced/timeout state; use the Proxmox 180-second effective default when `down` is absent.
-- Add dedicated `sensor.dh_pve_ups_guest_shutdown_budget` and `sensor.dh_pve_ups_shutdown_readiness` diagnostics. Readiness warns on forced/timeout/near-timeout guests, unavailable budget, a broken production NUT shutdown path, or an UPS-triggered host shutdown that did not complete cleanly.
+- Add dedicated `sensor.dh_pve_ups_guest_shutdown_budget` and `sensor.dh_pve_ups_shutdown_readiness` diagnostics. Readiness warns on forced/timeout/near-timeout guests, unavailable budget, a broken production NUT shutdown path, or a UPS-triggered host shutdown whose clean/unclean result failed or is unknown.
 - Keep guest shutdown diagnostics read-only; `dh_pve_app` never rewrites VM/LXC `startup` or `down` configuration.
 - Add the reusable `examples/dh_pve_shutdown_readiness_card.yaml` for previous host shutdown, timing chain, UPS readiness/budget and dynamic per-guest shutdown diagnostics.
 - Add an advanced UPS dashboard with live state, effective shutdown-policy diagnostics, battery-test controls/scheduler, 24-hour graphs and a 72-hour event log.
