@@ -4,7 +4,6 @@ import re
 from collections.abc import Mapping
 
 from .app import CollectorSample
-from .discovery_ups import build_ups_discovery_payload
 from .publish_policy import MetricValue
 from .production_guest import GuestAwareProductionCollectors
 from .shutdown_discovery import build_shutdown_aware_ups_discovery_payload
@@ -120,11 +119,14 @@ class ShutdownAwareUpsRuntime(UpsRuntime):
         return fields
 
     def _build_discovery(self) -> dict[str, object]:
+        capabilities = self.capabilities
+        if capabilities is not None and not hasattr(capabilities, "supports_test"):
+            capabilities = None
         return build_shutdown_aware_ups_discovery_payload(
             config=self.mqtt_config,
             identity=self.identity,
             version=self.version,
             snapshot=self.last_snapshot,
-            capabilities=self.capabilities,
+            capabilities=capabilities,
             shutdown_policy=self.shutdown_policy,
         )
