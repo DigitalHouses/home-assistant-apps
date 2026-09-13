@@ -24,7 +24,7 @@
 - Keep the static `dh-pve-ups-policy-cmd` helper restricted to the owned `dh-pve-ups-shutdown` timer token and `upsmon -c fsd` action.
 - Keep native hardware Low Battery authoritative; do not install `ignorelb` or battery threshold overrides.
 - Add persistent PVE boot/shutdown history keyed by the kernel `boot_id`, so restarting or upgrading `dh_pve_app` does not create a false host boot event.
-- Classify the previous shutdown as `normal`, `unclean`, `ups_power`, or `unknown`, preserve a more specific dry reason, and keep the host `shutdown_clean` result separate from the shutdown cause.
+- Classify the previous shutdown as `normal`, `unclean`, `ups_power`, or `unknown`, keep `shutdown_reason` strictly as the observed cause, and keep the host `shutdown_clean` result separate from that cause. If no cause is known, `shutdown_reason` is `unknown`; clean/unclean/insufficient-evidence states are never encoded as causes.
 - Treat missing previous-boot journal evidence as `unknown` and never invent a shutdown timestamp from an arbitrary last log line.
 - Capture confirmed UPS/FSD facts and outage/FSD/guest/host timing intervals without assuming that every unclean boot was caused by a power failure.
 - Read each VM/LXC effective shutdown timeout/order/onboot state and retain the previous shutdown duration, timeout ratio, result and forced/timeout state; use the Proxmox 180-second effective default when `down` is absent.
