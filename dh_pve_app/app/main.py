@@ -4,7 +4,6 @@ import argparse
 import json
 import logging
 import signal
-import subprocess
 import threading
 import time
 from collections.abc import Callable
@@ -25,9 +24,7 @@ from .scheduler import Scheduler
 from .state_store import StateStore
 from .topics import build_topics, build_ups_topics
 from .topology import TopologyManager
-from .ups_nut import read_ups
-from .ups_policy import PolicyApplyResult
-from .ups_policy_apply import ManagedNutPaths, PolicyApplyError, UpsPolicyApplier
+from .ups_commission import commission_ups_policy
 from .ups_policy_host import read_policy_safety_facts
 from .ups_policy_preflight import (
     PreflightCheck,
@@ -36,7 +33,7 @@ from .ups_policy_preflight import (
 )
 from .ups_runtime import UpsRuntime
 from .ups_scan import UpsScanner
-from .ups_test_history import normalize_test_result
+from .ups_shutdown_policy import read_shutdown_policy
 
 APP_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG = Path("/etc/dh_pve_app/dh_pve_app.conf")
@@ -135,55 +132,6 @@ def build_runtime(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR):
     return bridge, runtime
 
 
-def build_ups_policy_applier(
-    config: UpsConfig,
-    *,
-    applier_factory=UpsPolicyApplier,
-    ups_reader=read_ups,
-):
-    if not config.policy_apply_enabled:
-        return None
-
-    def effective_restart_delay_reader() -> int:
-        snapshot = ups_reader(config)
-        value = snapshot.ups_start_delay_seconds
-        if value is None or value < 0 or not float(value).is_integer():
-            raise PolicyApplyError(
-                "UPS не сообщил корректную задержку восстановления питания."
-            )
-        return int(value)
-
-    applier = applier_factory(
-        paths=ManagedNutPaths(),
-        ups_name=config.name,
-        runner=subprocess.run,
-        effective_restart_delay_reader=effective_restart_delay_reader,
-    )
-
-    def guarded_apply(draft, facts):
-        snapshot = ups_reader(config)
-        if normalize_test_result(snapshot.test_result) == "Running":
-            return PolicyApplyResult(
-                False,
-                "Применение политики UPS запрещено во время теста батареи.",
-            )
-        if (
-            not snapshot.line_power
-            or snapshot.on_battery
-            or snapshot.low_battery
-            or snapshot.discharging
-        ):
-            status = snapshot.status_raw or "unknown"
-            return PolicyApplyResult(
-                False,
-                "Применение политики UPS разрешено только при стабильном "
-                f"питании от сети (OL); текущий статус: {status}.",
-            )
-        return applier.apply(draft, facts)
-
-    return guarded_apply
-
-
 def build_ups_runtime(
     config: AppConfig,
     bridge,
@@ -196,6 +144,20 @@ def build_ups_runtime(
     identity = resolve_identity(config.general)
     bridge.configure_ups(build_ups_topics(config.mqtt, identity))
     runtime_config = replace(config.ups, enabled=True, name=selected_name)
+
+    def observed_shutdown_policy():
+        budget: int | None = None
+        try:
+            budget = read_policy_safety_facts(
+                runtime_config
+            ).guest_shutdown_budget_seconds
+        except Exception:
+            pass
+        return read_shutdown_policy(
+            ups_name=runtime_config.name,
+            guest_shutdown_budget_seconds=budget,
+        )
+
     return UpsRuntime(
         config=runtime_config,
         mqtt_config=config.mqtt,
@@ -206,8 +168,7 @@ def build_ups_runtime(
         now_iso=_now_iso,
         now_local=_now_local,
         now_monotonic=time.monotonic,
-        policy_facts_reader=lambda: read_policy_safety_facts(runtime_config),
-        policy_applier=build_ups_policy_applier(runtime_config),
+        shutdown_policy_reader=observed_shutdown_policy,
     )
 
 
@@ -246,6 +207,39 @@ def build_ups_policy_preflight(
         )
     runtime_config = replace(config.ups, enabled=True, name=selected_name)
     return preflight_reader(runtime_config)
+
+
+def commission_selected_ups_policy(
+    config: AppConfig,
+    *,
+    state_dir: Path,
+    on_battery_delay_minutes: int,
+    power_restore_delay_seconds: int,
+):
+    scanner = build_ups_scanner(config, state_dir=state_dir)
+    selected_name = scanner.selected_name()
+    if not selected_name:
+        return {
+            "success": False,
+            "message": (
+                "UPS еще не выбран; сначала выполните безопасное сканирование UPS."
+            ),
+            "policy": None,
+        }
+    runtime_config = replace(config.ups, enabled=True, name=selected_name)
+    result = commission_ups_policy(
+        runtime_config,
+        on_battery_delay_minutes=on_battery_delay_minutes,
+        power_restore_delay_seconds=power_restore_delay_seconds,
+    )
+    return {
+        "success": result.success,
+        "message": result.message,
+        "policy": {
+            "on_battery_delay_minutes": on_battery_delay_minutes,
+            "power_restore_delay_seconds": power_restore_delay_seconds,
+        },
+    }
 
 
 def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
@@ -349,6 +343,23 @@ def main() -> int:
         action="store_true",
         help="Read UPS/NUT/PVE commissioning state, print JSON, and exit without MQTT.",
     )
+    parser.add_argument(
+        "--ups-policy-commission",
+        action="store_true",
+        help="Explicitly configure and verify NUT shutdown policy, then exit.",
+    )
+    parser.add_argument(
+        "--on-battery-delay-minutes",
+        type=int,
+        default=30,
+        help="Commissioning ONBATT wait before FSD (default: 30 min).",
+    )
+    parser.add_argument(
+        "--power-restore-delay-seconds",
+        type=int,
+        default=120,
+        help="Commissioning UPS output restore delay (default: 120 s).",
+    )
     args = parser.parse_args()
 
     config = load_config(args.config)
@@ -359,6 +370,15 @@ def main() -> int:
         report = build_ups_policy_preflight(config, state_dir=args.state_dir)
         print(json.dumps(report.as_dict(), ensure_ascii=False, indent=2))
         return 0 if report.ready else 2
+    if args.ups_policy_commission:
+        result = commission_selected_ups_policy(
+            config,
+            state_dir=args.state_dir,
+            on_battery_delay_minutes=args.on_battery_delay_minutes,
+            power_restore_delay_seconds=args.power_restore_delay_seconds,
+        )
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0 if result["success"] else 2
 
     _configure_logging(config.general.log_level)
     return run(config, state_dir=args.state_dir)
