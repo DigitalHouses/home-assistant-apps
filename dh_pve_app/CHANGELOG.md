@@ -23,6 +23,13 @@
 - After restarting the UPS driver during commissioning, wait up to 10 seconds for the exact effective hardware restore delay instead of performing a race-prone one-shot read.
 - Keep the static `dh-pve-ups-policy-cmd` helper restricted to the owned `dh-pve-ups-shutdown` timer token and `upsmon -c fsd` action.
 - Keep native hardware Low Battery authoritative; do not install `ignorelb` or battery threshold overrides.
+- Add persistent PVE boot/shutdown history keyed by the kernel `boot_id`, so restarting or upgrading `dh_pve_app` does not create a false host boot event.
+- Classify the previous shutdown as `normal`, `unclean`, or `ups_power`, preserve a more specific dry reason, and keep the host `shutdown_clean` result separate from the shutdown cause.
+- Capture confirmed UPS/FSD facts and outage/FSD/guest/host timing intervals without assuming that every unclean boot was caused by a power failure.
+- Read each VM/LXC effective shutdown timeout/order/onboot state and retain the previous shutdown duration, timeout ratio, result and forced/timeout state; use the Proxmox 180-second effective default when `down` is absent.
+- Add dedicated `sensor.dh_pve_ups_guest_shutdown_budget` and `sensor.dh_pve_ups_shutdown_readiness` diagnostics. Readiness warns on forced/timeout/near-timeout guests, unavailable budget, a broken production NUT shutdown path, or an UPS-triggered host shutdown that did not complete cleanly.
+- Keep guest shutdown diagnostics read-only; `dh_pve_app` never rewrites VM/LXC `startup` or `down` configuration.
+- Add the reusable `examples/dh_pve_shutdown_readiness_card.yaml` for previous host shutdown, timing chain, UPS readiness/budget and dynamic per-guest shutdown diagnostics.
 - Add an advanced UPS dashboard with live state, effective shutdown-policy diagnostics, battery-test controls/scheduler, 24-hour graphs and a 72-hour event log.
 - Update the shared HA package so Recorder includes all `sensor.dh_pve_*` / `binary_sensor.dh_pve_*` state plus UPS battery-test scheduler `number` / `time` entities.
 - Keep full FSD/shutdown validation deferred until all intended NUT SECONDARY clients are configured and verified.
@@ -35,7 +42,7 @@
 - Add autonomous VM/LXC inventory plus a shared passthrough topology cache.
 - Add VM/LXC status polling and targeted guest rescans when a guest transitions to `running`.
 - Collapse VM/LXC status polling to one Proxmox `/cluster/resources` query every 30 seconds instead of separate `qm list` and `pct list` calls every 10 seconds.
-- Read guest configuration directly from pmxcfs under `/etc/pve` on the normal path, keeping `qm config` / `pct config` only as fallbacks.
+- Read guest configuration directly from pmxcfs under `/etc/pve/qemu-server` and `/etc/pve/lxc` on the normal path, keeping `qm config` / `pct config` only as fallbacks.
 - Move expensive guest GPU telemetry to a 30-second schedule while retaining fast polling for cheap CPU/memory/fan collectors.
 - Set the new-install SMART polling default to 60 seconds.
 - Detect VM `hostpciN` passthrough and preserve LXC shared `/dev/dri` GPU ownership support without site-specific VM lists.
