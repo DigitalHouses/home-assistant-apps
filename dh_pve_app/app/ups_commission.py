@@ -3,12 +3,14 @@ from __future__ import annotations
 import os
 import subprocess
 from collections.abc import Callable
+from pathlib import Path
 
 from .config import UpsConfig
 from .ups_nut import UpsSnapshot, read_ups
 from .ups_policy import PolicyApplyResult, UpsPolicyDraft
 from .ups_policy_apply import ManagedNutPaths, PolicyApplyError, UpsPolicyApplier
 from .ups_policy_host import read_policy_safety_facts
+from .ups_shutdown_policy import UpsShutdownPolicy, read_shutdown_policy
 from .ups_test_history import normalize_test_result
 
 
@@ -19,6 +21,8 @@ def commission_ups_policy(
     power_restore_delay_seconds: int,
     runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
     ups_reader: Callable[[UpsConfig], UpsSnapshot] = read_ups,
+    shutdown_policy_reader: Callable[[], UpsShutdownPolicy] | None = None,
+    killpower_path: Path = Path("/etc/killpower"),
     geteuid: Callable[[], int] = os.geteuid,
     applier_factory=UpsPolicyApplier,
 ) -> PolicyApplyResult:
@@ -53,6 +57,29 @@ def commission_ups_policy(
             False,
             "Commissioning UPS/NUT разрешен только при стабильном питании "
             f"от сети (OL); текущий статус: {status}.",
+        )
+
+    if killpower_path.exists():
+        return PolicyApplyResult(
+            False,
+            f"Commissioning UPS/NUT запрещен: обнаружен POWERDOWNFLAG {killpower_path}.",
+        )
+
+    try:
+        policy_reader = shutdown_policy_reader or (
+            lambda: read_shutdown_policy(ups_name=config.name)
+        )
+        current_policy = policy_reader()
+    except Exception as exc:
+        return PolicyApplyResult(
+            False,
+            f"Не удалось прочитать текущую NUT policy: {type(exc).__name__}.",
+        )
+    if current_policy.role != "primary":
+        return PolicyApplyResult(
+            False,
+            "Commissioning UPS/NUT разрешен только для upsmon PRIMARY; "
+            f"текущая роль: {current_policy.role}.",
         )
 
     try:
