@@ -2,28 +2,30 @@
 
 ## 0.2.0-alpha
 
-- Add optional read-only UPS monitoring through an existing NUT server using `upsc`.
-- Keep one `dh_pve_app` process and one MQTT connection while exposing two logical Home Assistant devices: `DH PVE` and optional `DH PVE UPS`.
-- Scope UPS entity IDs under the application namespace as `dh_pve_ups_*` and use the stable Discovery device ID `dh_pve_ups_<instance>`.
-- Add `button.dh_pve_scan_ups`, `sensor.dh_pve_ups_scan_result`, and `sensor.dh_pve_ups_last_scan` to the `DH PVE` device.
-- Add read-only NUT UPS enumeration with `upsc -l`; one discovered UPS is persisted as the selected UPS, while zero/multiple/error scan results preserve any existing selection.
-- Do not create `DH PVE UPS` until an UPS has been selected; transient NUT/USB failures never delete the existing UPS device or persisted selection.
-- Subscribe the UPS refresh command dynamically when an UPS is first selected after MQTT is already connected.
-- Remove the previous retained `DH UPS` Discovery topic during migration so Home Assistant does not keep a duplicate legacy device.
-- Add UPS-specific MQTT state, availability, refresh and Device Discovery topics without changing the existing `DH PVE` state topic contract.
-- Add vendor-neutral parsing of NUT status tokens and normalized battery, runtime, voltage, load and nominal-power telemetry.
-- Add capability-driven UPS Discovery so unsupported variables are not exposed as entities.
-- Keep HA telemetry factual: do not derive active power from load percentage and nominal real power, because live validation showed coarse low-load quantization on the CyberPower/CPS UT2200E.
-- Classify service-only UPS facts as Home Assistant diagnostic entities while keeping status, battery, runtime, load, input/output voltage and actionable fault flags primary.
-- Add adaptive meaningful-change publication thresholds: sparse numeric publication on line power and tighter publication while running on battery, with immediate publication for discrete power-state changes.
-- Add independent UPS refresh/reconnect handling and persistent last-successful manual refresh timestamp.
-- Isolate NUT read failures from PVE monitoring; failed UPS reads do not stop or degrade the `DH PVE` runtime.
-- Preserve the last valid UPS capability inventory across transient NUT read failures.
-- Add CyberPower/CPS UT2200E fixture coverage based on live `upsc` output from the remote validation site.
-- Rename the compact UPS dashboard example to `examples/dh_pve_ups_dashboard.yaml` and use only `dh_pve_ups_*` entities.
-- Keep UPS alpha strictly read-only: no `upsmon`, FSD, shutdown, battery-test, beeper, outlet, `upscmd`, or `upsrw` control paths.
-- Keep NUT installation and `/etc/nut/*` configuration outside `dh_pve_app`; the installer does not enable or modify `nut-monitor`.
-- Defer coordinated shutdown, LAN NUT client provisioning and notifications until physical local testing.
+- Add optional NUT-backed UPS monitoring as a second logical MQTT device, `DH PVE UPS`, while keeping one `dh_pve_app` process and MQTT connection.
+- Scope UPS entity IDs under `dh_pve_ups_*` and use the stable Discovery device ID `dh_pve_ups_<instance>`.
+- Add read-only UPS scan/selection with `button.dh_pve_scan_ups`; one discovered UPS is persisted while zero/multiple/error scans preserve any existing selection.
+- Add capability-driven UPS telemetry for status, battery charge/runtime/voltage, load, input/output voltage/frequency, nominal power, hardware thresholds, test result, beeper and actionable status flags.
+- Keep telemetry factual: do not derive active watts from load percentage and nominal real power.
+- Add adaptive meaningful-change publication thresholds with tighter behavior while running on battery and immediate publication for discrete power-state changes.
+- Isolate NUT failures from the main PVE monitoring runtime and preserve the last valid UPS capability inventory across transient failures.
+- Add independent UPS refresh/reconnect handling and persistent last-successful refresh timestamp.
+- Add capability-driven Quick/Deep/Stop battery-test controls with a local-time scheduler, safety gate and persistent test history.
+- Default scheduled tests to Quick every 30 days at 12:00 and Deep every 180 days at 13:00, with Deep priority when both are due.
+- Add NUT shutdown-policy preflight with PVE guest-shutdown budget calculation and native hardware Low Battery validation.
+- Add explicit root-only `--ups-policy-commission` for rare administrative configuration of the Proxmox NUT PRIMARY shutdown policy.
+- Keep the long-running `dh_pve_app.service` strictly read-only with respect to `/etc/nut`; systemd no longer grants `ReadWritePaths=/etc/nut`.
+- Remove Home Assistant/MQTT shutdown-policy Apply controls and editable policy number entities. HA now observes the effective host policy only.
+- Publish observed ONBATT wait and UPS restore delay as read-only sensors parsed from the actual NUT configuration.
+- Preserve upgrade compatibility by ignoring the legacy `ups.policy_apply_enabled` config key without granting any runtime capability.
+- Reuse the transactional NUT policy renderer/applier only from explicit commissioning, never from the daemon or MQTT event path.
+- Make commissioning atomic writes preserve the owner/group contract of `/etc/nut` (normally `root:nut`) and mode `0640`; rollback restores content, mode, UID and GID.
+- After restarting the UPS driver during commissioning, wait up to 10 seconds for the exact effective hardware restore delay instead of performing a race-prone one-shot read.
+- Keep the static `dh-pve-ups-policy-cmd` helper restricted to the owned `dh-pve-ups-shutdown` timer token and `upsmon -c fsd` action.
+- Keep native hardware Low Battery authoritative; do not install `ignorelb` or battery threshold overrides.
+- Add an advanced UPS dashboard with live state, effective shutdown-policy diagnostics, battery-test controls/scheduler, 24-hour graphs and a 72-hour event log.
+- Update the shared HA package so Recorder includes all `sensor.dh_pve_*` / `binary_sensor.dh_pve_*` state plus UPS battery-test scheduler `number` / `time` entities.
+- Keep full FSD/shutdown validation deferred until all intended NUT SECONDARY clients are configured and verified.
 
 ## 0.1.0
 
