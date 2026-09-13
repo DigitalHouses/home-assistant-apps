@@ -160,13 +160,13 @@ The app keeps dry facts about Proxmox shutdowns; notification wording remains a 
 Shutdown history is persisted in `/var/lib/dh_pve_app/shutdown_history.json`. Up to 50 cycles are retained locally and the most recent 10 are exposed through MQTT. For the previous boot the app publishes:
 
 - `shutdown_class`: `normal`, `unclean`, `ups_power`, or `unknown`;
-- `shutdown_reason`: a more specific dry cause such as `shutdown`, `no_clean_shutdown`, `on_battery_fsd`, `low_battery_fsd`, or `insufficient_evidence`;
+- `shutdown_reason`: the observed cause only, such as `shutdown`, `on_battery_fsd`, `low_battery_fsd`, `manual_or_external_fsd`, or `unknown` when no cause is established;
 - `shutdown_clean`: `true`, `false`, or unknown when previous-boot journal evidence is insufficient; this result is kept separate from the cause;
 - outage/FSD/guest/host timestamps and derived timing intervals only when the required evidence exists;
 - UPS status, battery charge/runtime and load captured when FSD is first observed;
 - per-VM/LXC shutdown start/end, duration, timeout, timeout ratio, result and forced/timeout state.
 
-An unclean boot is never automatically called a power failure. `ups_power` requires confirmed UPS/FSD evidence; a manual/external FSD while the UPS remains on line power is kept distinct. If the previous boot journal contains no usable evidence, the class is `unknown` rather than inventing an `unclean` result or a shutdown timestamp from an arbitrary last log line.
+`shutdown_reason` never encodes the shutdown result or evidence quality: an unclean shutdown is represented by `shutdown_clean=false`, and insufficient journal evidence by an unknown `shutdown_clean`, while an unknown cause remains `shutdown_reason=unknown`. An unclean boot is never automatically called a power failure. `ups_power` requires confirmed UPS/FSD evidence; a manual/external FSD while the UPS remains on line power is kept distinct. If the previous boot journal contains no usable evidence, the class is `unknown` rather than inventing an `unclean` result or a shutdown timestamp from an arbitrary last log line.
 
 Home Assistant entities include:
 
