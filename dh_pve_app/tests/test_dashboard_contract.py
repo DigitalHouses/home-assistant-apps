@@ -39,7 +39,6 @@ def test_dashboard_is_exactly_four_continuous_columns_with_v7_headings():
         "Охлаждение",
         "Графика",
         "VM / LXC",
-        "Завершение VM / LXC",
         "История",
         "Температуры · 24 часа",
         "CPU / RAM / Swap · 24 часа",
@@ -151,28 +150,6 @@ def test_dynamic_sections_use_new_semantic_attributes_and_guest_inventory_is_rea
     assert "proxmox_metric') == 'status'" in text
     assert "switch.dh_pve_vm_" not in text
     assert "button.dh_pve_vm_" not in text
-
-
-def test_shutdown_readiness_section_shows_previous_shutdown_and_dynamic_guest_results():
-    text = _text()
-    assert "sensor.dh_pve_previous_shutdown" in text
-    assert "sensor.dh_pve_shutdown_history" in text
-    assert "proxmox_metric') == 'shutdown_duration'" in text
-    for attribute in (
-        "shutdown_timeout_seconds",
-        "last_shutdown_duration_seconds",
-        "last_shutdown_timeout_seconds",
-        "last_shutdown_timeout_ratio",
-        "last_shutdown_result",
-        "last_shutdown_forced",
-    ):
-        assert attribute in text
-    assert "result in ['timeout', 'forced']" in text
-    assert "ratio >= 0.8" in text
-    assert "color = 'red'" in text
-    assert "color = 'orange'" in text
-    assert "color = 'green'" in text
-    assert "color = 'grey'" in text
 
 
 def test_history_keeps_v7_combined_graphs_and_time_windows():
