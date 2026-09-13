@@ -42,6 +42,7 @@ def validate_dh_pve_app(
             app / "app/shutdown_discovery.py",
             app / "app/main.py",
             app / "examples/dh_pve_app.conf.example",
+            app / "examples/dh_pve_shutdown_readiness_card.yaml",
             app / "systemd/dh_pve_app.service",
         ],
     )
@@ -104,6 +105,19 @@ def validate_dh_pve_app(
         ),
         "shutdown Discovery",
     )
+    _require_text(
+        app / "examples/dh_pve_shutdown_readiness_card.yaml",
+        (
+            "sensor.dh_pve_previous_shutdown",
+            "sensor.dh_pve_shutdown_history",
+            "sensor.dh_pve_ups_shutdown_readiness",
+            "sensor.dh_pve_ups_guest_shutdown_budget",
+            "proxmox_metric') == 'shutdown_duration'",
+            "result in ['timeout', 'forced']",
+            "ratio >= 0.8",
+        ),
+        "shutdown readiness card",
+    )
 
     discovery_metrics = (app / "app/discovery_metrics.py").read_text(
         encoding="utf-8"
@@ -151,6 +165,7 @@ def validate_dh_pve_app(
             "class ShutdownAwareUpsRuntime",
             '"shutdown_timeout_seconds": timeout',
             'fields["shutdown_readiness"]',
+            "shutdown_policy_issues(",
         ),
         "shutdown runtime",
     )
