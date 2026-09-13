@@ -37,6 +37,26 @@ def test_parse_guest_shutdown_journal_captures_duration_timeout_and_total():
     assert parsed["all_guests_stopped_at"] == "2026-09-13T23:07:23.098426+05:00"
     assert parsed["guest_shutdown_total_seconds"] == 140
     assert parsed["clean_shutdown"] is True
+    assert parsed["shutdown_at"] == "2026-09-13T23:09:09.088265+05:00"
+    assert parsed["last_journal_at"] == "2026-09-13T23:09:09.088265+05:00"
+
+
+def test_parse_unclean_journal_does_not_invent_shutdown_time():
+    parsed = parse_guest_shutdown_journal(
+        "2026-09-13T23:59:59.000000+05:00 pve kernel: last message before reset\n"
+    )
+
+    assert parsed["clean_shutdown"] is False
+    assert parsed["shutdown_at"] is None
+    assert parsed["last_journal_at"] == "2026-09-13T23:59:59+05:00"
+
+
+def test_parse_empty_journal_has_unknown_shutdown_result():
+    parsed = parse_guest_shutdown_journal("")
+
+    assert parsed["clean_shutdown"] is None
+    assert parsed["shutdown_at"] is None
+    assert parsed["last_journal_at"] is None
 
 
 def test_tracker_classifies_previous_boot_as_ups_power_and_keeps_history(tmp_path):
@@ -107,6 +127,35 @@ def test_tracker_marks_unclean_boot_without_clean_shutdown_marker(tmp_path):
     assert previous["shutdown_class"] == "unclean"
     assert previous["shutdown_reason"] == "no_clean_shutdown"
     assert previous["shutdown_clean"] is False
+    assert previous["shutdown_at"] is None
+    assert previous["last_journal_at"] == "2026-09-13T23:59:59+05:00"
+    assert previous["downtime_seconds"] is None
+
+
+def test_tracker_marks_missing_journal_evidence_unknown(tmp_path):
+    store = StateStore(tmp_path / "shutdown.json")
+    store.save(
+        {
+            "current_boot": {
+                "boot_id": "old-boot",
+                "boot_at": "2026-09-13T01:00:00+05:00",
+            },
+            "history": [],
+        }
+    )
+    tracker = ShutdownHistoryTracker(
+        state_store=store,
+        boot_id_reader=lambda: "new-boot",
+        boot_time_reader=lambda: "2026-09-14T01:00:00+05:00",
+        previous_boot_journal_reader=lambda: "",
+    )
+
+    previous = tracker.startup()["previous_shutdown"]
+
+    assert previous["shutdown_class"] == "unknown"
+    assert previous["shutdown_reason"] == "insufficient_evidence"
+    assert previous["shutdown_clean"] is None
+    assert previous["shutdown_at"] is None
 
 
 def test_tracker_records_on_battery_and_fsd_facts(tmp_path):
@@ -180,6 +229,21 @@ def test_readiness_warns_if_ups_power_shutdown_did_not_finish_cleanly():
 
     assert warning["status"] == "warning"
     assert "previous_host_shutdown_unclean" in warning["issues"]
+
+
+def test_readiness_warns_if_ups_power_shutdown_result_is_unknown():
+    warning = evaluate_shutdown_readiness(
+        ups_present=True,
+        guest_shutdown_budget_seconds=420,
+        previous_shutdown={
+            "shutdown_class": "ups_power",
+            "shutdown_clean": None,
+            "guests": {"vm": {}, "lxc": {}},
+        },
+    )
+
+    assert warning["status"] == "warning"
+    assert "previous_host_shutdown_unknown" in warning["issues"]
 
 
 def test_readiness_ok_for_clean_fast_guests():
