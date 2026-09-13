@@ -6,6 +6,7 @@ import re
 import stat
 import subprocess
 import tempfile
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -330,6 +331,10 @@ class UpsPolicyApplier:
         effective_restart_delay_reader: Callable[[], int],
         helper_expected_uid: int = 0,
         helper_expected_gid: int = 0,
+        effective_delay_timeout_seconds: float = 10.0,
+        effective_delay_retry_interval_seconds: float = 0.5,
+        monotonic: Callable[[], float] = time.monotonic,
+        sleeper: Callable[[float], None] = time.sleep,
     ) -> None:
         self.paths = paths
         self.ups_name = ups_name
@@ -337,6 +342,31 @@ class UpsPolicyApplier:
         self.effective_restart_delay_reader = effective_restart_delay_reader
         self.helper_expected_uid = helper_expected_uid
         self.helper_expected_gid = helper_expected_gid
+        self.effective_delay_timeout_seconds = effective_delay_timeout_seconds
+        self.effective_delay_retry_interval_seconds = effective_delay_retry_interval_seconds
+        self.monotonic = monotonic
+        self.sleeper = sleeper
+
+    def _wait_for_effective_restart_delay(self, expected_delay: int) -> None:
+        deadline = self.monotonic() + self.effective_delay_timeout_seconds
+        while True:
+            try:
+                effective_delay = self.effective_restart_delay_reader()
+            except Exception:
+                effective_delay = None
+
+            if effective_delay == expected_delay:
+                return
+
+            now = self.monotonic()
+            if now >= deadline:
+                raise PolicyApplyError(
+                    "UPS не подтвердил заданную задержку восстановления питания."
+                )
+
+            self.sleeper(
+                min(self.effective_delay_retry_interval_seconds, deadline - now)
+            )
 
     def _rollback(
         self,
@@ -442,11 +472,9 @@ class UpsPolicyApplier:
                 ["systemctl", "restart", f"nut-driver@{self.ups_name}.service"],
             )
 
-            effective_delay = int(self.effective_restart_delay_reader())
-            if effective_delay != draft.power_restore_delay_seconds:
-                raise PolicyApplyError(
-                    "UPS не подтвердил заданную задержку восстановления питания."
-                )
+            self._wait_for_effective_restart_delay(
+                draft.power_restore_delay_seconds
+            )
 
             if monitor_active_before == "active":
                 _run(self.runner, ["systemctl", "restart", "nut-monitor.service"])
