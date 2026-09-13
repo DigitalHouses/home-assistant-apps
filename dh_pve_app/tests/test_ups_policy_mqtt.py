@@ -1,11 +1,8 @@
-import pytest
-
 from app.config import MqttConfig
 from app.identity import HostIdentity
 from app.mqtt_bridge import MqttBridge, MqttEvents
 from app.runtime_settings import RuntimeSettings
 from app.topics import build_topics, build_ups_topics
-from app.ups_policy import PolicyValidationError
 
 
 def _mqtt():
@@ -29,73 +26,16 @@ def _identity():
     )
 
 
-def test_policy_topics_are_under_selected_ups_namespace():
-    pve = build_topics(_mqtt(), _identity())
-    ups = build_ups_topics(_mqtt(), _identity())
-
-    assert ups.policy_on_battery_delay_set == f"{pve.base}/ups/policy/on_battery_delay/set"
-    assert ups.policy_power_restore_delay_set == f"{pve.base}/ups/policy/power_restore_delay/set"
-    assert ups.policy_apply == f"{pve.base}/ups/policy/apply"
-    assert not hasattr(ups, "policy_emergency_runtime_reserve_set")
-
-
-@pytest.mark.parametrize(
-    ("topic_attr", "payload", "expected_key", "expected_value"),
-    (
-        ("policy_on_battery_delay_set", b"30", "on_battery_delay_minutes", 30),
-        ("policy_power_restore_delay_set", b"120", "power_restore_delay_seconds", 120),
-    ),
-)
-def test_policy_number_commands_are_validated_and_queued(
-    topic_attr, payload, expected_key, expected_value
-):
+def test_legacy_policy_command_topics_are_not_handled():
     events = MqttEvents(build_topics(_mqtt(), _identity()), RuntimeSettings())
     ups = build_ups_topics(_mqtt(), _identity())
     events.configure_ups(ups)
 
-    assert events.handle_message(getattr(ups, topic_attr), payload) is True
-    update = events.ups_policy_updates.get_nowait()
-
-    assert update.key == expected_key
-    assert update.value == expected_value
-
-
-@pytest.mark.parametrize(
-    ("topic_attr", "payload"),
-    (
-        ("policy_on_battery_delay_set", b"31"),
-        ("policy_power_restore_delay_set", b"125"),
-        ("policy_power_restore_delay_set", b"not-a-number"),
-    ),
-)
-def test_policy_number_commands_reject_invalid_direct_mqtt_values(topic_attr, payload):
-    events = MqttEvents(build_topics(_mqtt(), _identity()), RuntimeSettings())
-    ups = build_ups_topics(_mqtt(), _identity())
-    events.configure_ups(ups)
-
-    with pytest.raises(PolicyValidationError):
-        events.handle_message(getattr(ups, topic_attr), payload)
-
-
-def test_removed_runtime_reserve_topic_is_not_handled():
-    events = MqttEvents(build_topics(_mqtt(), _identity()), RuntimeSettings())
-    ups = build_ups_topics(_mqtt(), _identity())
-    events.configure_ups(ups)
-    pve = build_topics(_mqtt(), _identity())
-
-    assert events.handle_message(
-        f"{pve.base}/ups/policy/emergency_runtime_reserve/set", b"15"
-    ) is False
-
-
-def test_apply_policy_press_sets_dedicated_event():
-    events = MqttEvents(build_topics(_mqtt(), _identity()), RuntimeSettings())
-    ups = build_ups_topics(_mqtt(), _identity())
-    events.configure_ups(ups)
-
-    assert events.handle_message(ups.policy_apply, b"PRESS") is True
-    assert events.ups_policy_apply_requested.is_set()
-    assert events.handle_message(ups.policy_apply, b"anything-else") is False
+    assert events.handle_message(ups.policy_on_battery_delay_set, b"30") is False
+    assert events.handle_message(ups.policy_power_restore_delay_set, b"120") is False
+    assert events.handle_message(ups.policy_apply, b"PRESS") is False
+    assert not hasattr(events, "ups_policy_updates")
+    assert not hasattr(events, "ups_policy_apply_requested")
 
 
 class _PublishInfo:
@@ -128,7 +68,7 @@ class _Client:
         return _PublishInfo()
 
 
-def test_policy_command_topics_are_subscribed_statically_on_connect():
+def test_policy_command_topics_are_not_subscribed_on_connect():
     mqtt = _mqtt()
     identity = _identity()
     pve = build_topics(mqtt, identity)
@@ -146,7 +86,11 @@ def test_policy_command_topics_are_subscribed_statically_on_connect():
     bridge._on_connect(client, None, None, 0, None)
 
     subscribed = {topic for topic, _qos in client.subscriptions}
-    assert ups.policy_on_battery_delay_set in subscribed
-    assert ups.policy_power_restore_delay_set in subscribed
-    assert ups.policy_apply in subscribed
-    assert f"{pve.base}/ups/policy/emergency_runtime_reserve/set" not in subscribed
+    assert ups.policy_on_battery_delay_set not in subscribed
+    assert ups.policy_power_restore_delay_set not in subscribed
+    assert ups.policy_apply not in subscribed
+
+    assert ups.test_quick_interval_days_set in subscribed
+    assert ups.test_quick_time_set in subscribed
+    assert ups.test_deep_interval_days_set in subscribed
+    assert ups.test_deep_time_set in subscribed
