@@ -27,4 +27,4 @@ def test_public_identity_contract():
     readme = (ROOT / "README.md").read_text()
     assert "DigitalHouses/Global/dh_pve_app" in readme
     assert "DH PVE" in readme
-    assert "DH UPS" in readme
+    assert "DH PVE UPS" in readme
