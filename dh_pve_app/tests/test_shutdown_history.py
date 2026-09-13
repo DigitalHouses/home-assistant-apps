@@ -41,6 +41,31 @@ def test_parse_guest_shutdown_journal_captures_duration_timeout_and_total():
     assert parsed["last_journal_at"] == "2026-09-13T23:09:09.088265+05:00"
 
 
+def test_parse_real_proxmox_sigterm_marks_single_active_vm_forced():
+    parsed = parse_guest_shutdown_journal(
+        "2026-09-13T23:05:03.000000+05:00 pve pve-guests[1]: Stopping VM 110 (timeout = 60 seconds)\n"
+        "2026-09-13T23:06:03.000000+05:00 pve pvedaemon[2]: VM quit/powerdown failed - terminating now with SIGTERM\n"
+        "2026-09-13T23:06:05.000000+05:00 pve pvedaemon[1]: end task UPID:pve:0001:0001:0001:0001:qmshutdown:110:root@pam: OK\n"
+    )
+
+    guest = parsed["guests"]["vm"]["110"]
+    assert guest["duration_seconds"] == 62
+    assert guest["result"] == "forced"
+    assert guest["forced"] is True
+
+
+def test_parse_real_proxmox_end_task_timeout_is_not_clean():
+    parsed = parse_guest_shutdown_journal(
+        "2026-09-13T23:05:03.000000+05:00 pve pve-guests[1]: Stopping VM 110 (timeout = 60 seconds)\n"
+        "2026-09-13T23:06:03.000000+05:00 pve pvedaemon[1]: end task UPID:pve:0001:0001:0001:0001:qmshutdown:110:root@pam: VM quit/powerdown failed - got timeout\n"
+    )
+
+    guest = parsed["guests"]["vm"]["110"]
+    assert guest["duration_seconds"] == 60
+    assert guest["result"] == "timeout"
+    assert guest["forced"] is False
+
+
 def test_parse_unclean_journal_does_not_invent_shutdown_time():
     parsed = parse_guest_shutdown_journal(
         "2026-09-13T23:59:59.000000+05:00 pve kernel: last message before reset\n"
