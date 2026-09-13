@@ -159,14 +159,14 @@ The app keeps dry facts about Proxmox shutdowns; notification wording remains a 
 
 Shutdown history is persisted in `/var/lib/dh_pve_app/shutdown_history.json`. Up to 50 cycles are retained locally and the most recent 10 are exposed through MQTT. For the previous boot the app publishes:
 
-- `shutdown_class`: `normal`, `unclean`, or `ups_power`;
-- `shutdown_reason`: a more specific dry cause such as `shutdown`, `no_clean_shutdown`, `on_battery_fsd`, or `low_battery_fsd`;
-- `shutdown_clean`: whether a clean host shutdown marker was actually observed, kept separate from the cause;
-- outage/FSD/guest/host timestamps and derived timing intervals when available;
+- `shutdown_class`: `normal`, `unclean`, `ups_power`, or `unknown`;
+- `shutdown_reason`: a more specific dry cause such as `shutdown`, `no_clean_shutdown`, `on_battery_fsd`, `low_battery_fsd`, or `insufficient_evidence`;
+- `shutdown_clean`: `true`, `false`, or unknown when previous-boot journal evidence is insufficient; this result is kept separate from the cause;
+- outage/FSD/guest/host timestamps and derived timing intervals only when the required evidence exists;
 - UPS status, battery charge/runtime and load captured when FSD is first observed;
 - per-VM/LXC shutdown start/end, duration, timeout, timeout ratio, result and forced/timeout state.
 
-An unclean boot is never automatically called a power failure. `ups_power` requires confirmed UPS/FSD evidence; a manual/external FSD while the UPS remains on line power is kept distinct.
+An unclean boot is never automatically called a power failure. `ups_power` requires confirmed UPS/FSD evidence; a manual/external FSD while the UPS remains on line power is kept distinct. If the previous boot journal contains no usable evidence, the class is `unknown` rather than inventing an `unclean` result or a shutdown timestamp from an arbitrary last log line.
 
 Home Assistant entities include:
 
@@ -179,7 +179,7 @@ Home Assistant entities include:
 
 Guest configuration is diagnostic-only. The app reads `onboot`, `startup.order` and `startup.down`; when `down` is absent, the effective Proxmox timeout is treated as 180 seconds. It never rewrites VM/LXC startup or shutdown settings.
 
-UPS shutdown readiness checks the production NUT path as well as guest history. It warns on a forced/timeout guest, a guest that consumed at least 80% of its previous timeout, an unavailable shutdown budget, a broken NUT PRIMARY/upssched path, or an UPS-triggered shutdown that did not reach a clean PVE shutdown. Hosts without a selected UPS report readiness as `skip` rather than an error.
+UPS shutdown readiness checks the production NUT path as well as guest history. It warns on a forced/timeout guest, a guest that consumed at least 80% of its previous timeout, an unavailable shutdown budget, a broken NUT PRIMARY/upssched path, or a UPS-triggered shutdown whose host shutdown result is unclean or unknown. Hosts without a selected UPS report readiness as `skip` rather than an error.
 
 ## Battery tests
 
