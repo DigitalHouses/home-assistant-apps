@@ -44,7 +44,7 @@ def test_ups_defaults_to_disabled_for_existing_config(tmp_path: Path):
     assert config.ups.port == 3493
     assert config.ups.poll_interval_seconds == 5.0
     assert config.ups.command_timeout_seconds == 3.0
-    assert config.ups.policy_apply_enabled is False
+    assert not hasattr(config.ups, "policy_apply_enabled")
 
 
 def test_ups_section_is_parsed(tmp_path: Path):
@@ -59,7 +59,6 @@ host = 127.0.0.1
 port = 3493
 poll_interval_seconds = 7
 command_timeout_seconds = 2
-policy_apply_enabled = true
 """,
     )
     config = load_config(path)
@@ -69,7 +68,6 @@ policy_apply_enabled = true
     assert config.ups.port == 3493
     assert config.ups.poll_interval_seconds == 7.0
     assert config.ups.command_timeout_seconds == 2.0
-    assert config.ups.policy_apply_enabled is True
 
 
 def test_ups_config_validation(tmp_path: Path):
@@ -85,8 +83,8 @@ enabled = maybe
         load_config(bad)
 
 
-def test_ups_policy_apply_gate_requires_boolean(tmp_path: Path):
-    bad = write_config(
+def test_legacy_policy_apply_gate_is_ignored_for_upgrade_compatibility(tmp_path: Path):
+    path = write_config(
         tmp_path,
         """[mqtt]
 host = broker
@@ -94,5 +92,5 @@ host = broker
 policy_apply_enabled = maybe
 """,
     )
-    with pytest.raises(ConfigError, match="ups.policy_apply_enabled"):
-        load_config(bad)
+    config = load_config(path)
+    assert not hasattr(config.ups, "policy_apply_enabled")
