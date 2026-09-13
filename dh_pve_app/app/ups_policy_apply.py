@@ -252,8 +252,8 @@ def _atomic_write(
             handle.flush()
             os.fsync(handle.fileno())
         os.chmod(temp, mode)
+        os.chown(temp, target_uid, target_gid)
         os.replace(temp, path)
-        os.chown(path, target_uid, target_gid)
     finally:
         try:
             temp.unlink()
