@@ -74,6 +74,7 @@ def parse_guest_shutdown_journal(text: str) -> dict[str, Any]:
     records: dict[tuple[str, str], dict[str, Any]] = {}
     first_started: datetime | None = None
     last_timestamp: datetime | None = None
+    clean_shutdown_at: datetime | None = None
     all_stopped_at: datetime | None = None
     clean_shutdown = False
 
@@ -88,6 +89,8 @@ def parse_guest_shutdown_journal(text: str) -> dict[str, Any]:
         lowered = line.casefold()
         if any(marker in lowered for marker in _CLEAN_MARKERS):
             clean_shutdown = True
+            if timestamp is not None:
+                clean_shutdown_at = timestamp
 
         start = _START_RE.search(line)
         if start is not None:
@@ -224,7 +227,7 @@ def parse_guest_shutdown_journal(text: str) -> dict[str, Any]:
         "all_guests_stopped_at": _iso(all_stopped_at),
         "guest_shutdown_total_seconds": total,
         "clean_shutdown": clean_shutdown,
-        "shutdown_at": _iso(last_timestamp),
+        "shutdown_at": _iso(clean_shutdown_at or last_timestamp),
     }
 
 
@@ -369,23 +372,41 @@ class ShutdownHistoryTracker:
                 else None
             ),
         )
+        shutdown_at = parsed.get("shutdown_at")
+        all_guests_stopped_at = parsed.get("all_guests_stopped_at")
+        outage_started_at = current.get("outage_started_at")
+        fsd_at = current.get("fsd_at")
 
         previous = {
             "boot_id": current.get("boot_id"),
             "boot_at": current.get("boot_at"),
-            "shutdown_at": parsed.get("shutdown_at"),
+            "shutdown_at": shutdown_at,
             "shutdown_class": shutdown_class,
             "shutdown_reason": shutdown_reason,
-            "uptime_seconds": _duration_between(current.get("boot_at"), parsed.get("shutdown_at")),
-            "downtime_seconds": _duration_between(parsed.get("shutdown_at"), boot_at),
-            "outage_started_at": current.get("outage_started_at"),
-            "fsd_at": current.get("fsd_at"),
+            "uptime_seconds": _duration_between(current.get("boot_at"), shutdown_at),
+            "downtime_seconds": _duration_between(shutdown_at, boot_at),
+            "outage_started_at": outage_started_at,
+            "fsd_at": fsd_at,
             "ups_status_at_fsd": current.get("ups_status_at_fsd"),
             "battery_charge_at_fsd": current.get("battery_charge_at_fsd"),
             "battery_runtime_at_fsd": current.get("battery_runtime_at_fsd"),
             "ups_load_at_fsd": current.get("ups_load_at_fsd"),
-            "all_guests_stopped_at": parsed.get("all_guests_stopped_at"),
+            "all_guests_stopped_at": all_guests_stopped_at,
             "guest_shutdown_total_seconds": parsed.get("guest_shutdown_total_seconds"),
+            "outage_to_fsd_seconds": _duration_between(outage_started_at, fsd_at),
+            "fsd_to_all_guests_stopped_seconds": _duration_between(
+                fsd_at,
+                all_guests_stopped_at,
+            ),
+            "fsd_to_shutdown_seconds": _duration_between(fsd_at, shutdown_at),
+            "all_guests_stopped_to_shutdown_seconds": _duration_between(
+                all_guests_stopped_at,
+                shutdown_at,
+            ),
+            "outage_to_shutdown_seconds": _duration_between(
+                outage_started_at,
+                shutdown_at,
+            ),
             "guests": parsed.get("guests"),
         }
 
