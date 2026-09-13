@@ -248,6 +248,7 @@ def evaluate_shutdown_readiness(
     ups_present: bool,
     guest_shutdown_budget_seconds: int | None,
     previous_shutdown: Mapping[str, Any] | None,
+    additional_issues: list[str] | tuple[str, ...] = (),
 ) -> dict[str, Any]:
     if not ups_present:
         return {
@@ -257,7 +258,7 @@ def evaluate_shutdown_readiness(
             "history_available": previous_shutdown is not None,
         }
 
-    issues: list[str] = []
+    issues = [str(issue) for issue in additional_issues if str(issue)]
     if guest_shutdown_budget_seconds is None:
         issues.append("shutdown_budget_unavailable")
 
