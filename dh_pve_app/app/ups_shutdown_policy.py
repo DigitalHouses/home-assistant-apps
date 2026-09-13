@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import shlex
 import subprocess
 from dataclasses import dataclass
@@ -25,6 +26,8 @@ class UpsShutdownPolicy:
     upssched_active: bool
     guest_shutdown_budget_seconds: int | None
     power_restore_behavior: str
+    on_battery_delay_minutes: int | None = None
+    power_restore_delay_seconds: int | None = None
 
     def as_dict(self) -> dict[str, object]:
         return {
@@ -44,6 +47,8 @@ class UpsShutdownPolicy:
             "upssched_active": self.upssched_active,
             "guest_shutdown_budget_seconds": self.guest_shutdown_budget_seconds,
             "power_restore_behavior": self.power_restore_behavior,
+            "on_battery_delay_minutes": self.on_battery_delay_minutes,
+            "power_restore_delay_seconds": self.power_restore_delay_seconds,
         }
 
 
@@ -82,10 +87,72 @@ def _first_int(directives: dict[str, list[list[str]]], key: str) -> int | None:
         return None
 
 
+def _on_battery_delay_minutes(upssched_text: str | None) -> int | None:
+    for line in _active_lines(upssched_text):
+        try:
+            parts = shlex.split(line, comments=True, posix=True)
+        except ValueError:
+            continue
+        if len(parts) < 6:
+            continue
+        if (
+            parts[0].upper() != "AT"
+            or parts[1].upper() != "ONBATT"
+            or parts[3].upper() != "START-TIMER"
+            or parts[4] != "dh-pve-ups-shutdown"
+        ):
+            continue
+        try:
+            seconds = int(parts[5])
+        except ValueError:
+            continue
+        if seconds >= 0 and seconds % 60 == 0:
+            return seconds // 60
+    return None
+
+
+def _ups_section_int(
+    ups_conf_text: str | None,
+    ups_name: str,
+    key: str,
+) -> int | None:
+    if not ups_conf_text:
+        return None
+    section_re = re.compile(r"^\s*\[([^]]+)\]\s*(?:#.*)?$")
+    in_section = False
+    wanted = key.casefold()
+    for raw in ups_conf_text.splitlines():
+        match = section_re.match(raw)
+        if match:
+            in_section = match.group(1).strip() == ups_name
+            continue
+        if not in_section:
+            continue
+        stripped = raw.split("#", 1)[0].strip()
+        if not stripped:
+            continue
+        if "=" in stripped:
+            current_key, value = stripped.split("=", 1)
+        else:
+            parts = stripped.split(None, 1)
+            if len(parts) != 2:
+                continue
+            current_key, value = parts
+        if current_key.strip().casefold() != wanted:
+            continue
+        try:
+            return int(value.strip())
+        except ValueError:
+            return None
+    return None
+
+
 def parse_shutdown_policy(
     upsmon_text: str,
     upssched_text: str | None,
     *,
+    ups_conf_text: str | None = None,
+    ups_name: str = "ups",
     monitor_active: bool | None,
     guest_shutdown_budget_seconds: int | None = None,
     power_restore_behavior: str = "Not configured",
@@ -147,6 +214,12 @@ def parse_shutdown_policy(
         upssched_active=upssched_rules > 0,
         guest_shutdown_budget_seconds=guest_shutdown_budget_seconds,
         power_restore_behavior=power_restore_behavior,
+        on_battery_delay_minutes=_on_battery_delay_minutes(upssched_text),
+        power_restore_delay_seconds=_ups_section_int(
+            ups_conf_text,
+            ups_name,
+            "ondelay",
+        ),
     )
 
 
@@ -163,12 +236,15 @@ def read_shutdown_policy(
     *,
     upsmon_path: Path = Path("/etc/nut/upsmon.conf"),
     upssched_path: Path = Path("/etc/nut/upssched.conf"),
+    ups_conf_path: Path = Path("/etc/nut/ups.conf"),
+    ups_name: str = "ups",
     runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
     guest_shutdown_budget_seconds: int | None = None,
     power_restore_behavior: str = "Not configured",
 ) -> UpsShutdownPolicy:
     upsmon_text = _read_optional(upsmon_path) or ""
     upssched_text = _read_optional(upssched_path)
+    ups_conf_text = _read_optional(ups_conf_path)
 
     monitor_active: bool | None
     try:
@@ -192,6 +268,8 @@ def read_shutdown_policy(
     return parse_shutdown_policy(
         upsmon_text,
         upssched_text,
+        ups_conf_text=ups_conf_text,
+        ups_name=ups_name,
         monitor_active=monitor_active,
         guest_shutdown_budget_seconds=guest_shutdown_budget_seconds,
         power_restore_behavior=power_restore_behavior,
