@@ -77,11 +77,13 @@ def parse_guest_shutdown_journal(text: str) -> dict[str, Any]:
     clean_shutdown_at: datetime | None = None
     all_stopped_at: datetime | None = None
     clean_shutdown = False
+    journal_has_evidence = False
 
     for raw in text.splitlines():
         line = raw.strip()
         if not line:
             continue
+        journal_has_evidence = True
         timestamp = _parse_timestamp(line)
         if timestamp is not None:
             last_timestamp = timestamp
@@ -222,25 +224,29 @@ def parse_guest_shutdown_journal(text: str) -> dict[str, Any]:
 
     stop_boundary = all_stopped_at or latest_finished
     total = _seconds(first_started, stop_boundary)
+    clean_result: bool | None = clean_shutdown if journal_has_evidence else None
     return {
         "guests": guests,
         "all_guests_stopped_at": _iso(all_stopped_at),
         "guest_shutdown_total_seconds": total,
-        "clean_shutdown": clean_shutdown,
-        "shutdown_at": _iso(clean_shutdown_at or last_timestamp),
+        "clean_shutdown": clean_result,
+        "shutdown_at": _iso(clean_shutdown_at),
+        "last_journal_at": _iso(last_timestamp),
     }
 
 
 def classify_previous_shutdown(
     *,
-    clean_shutdown: bool,
+    clean_shutdown: bool | None,
     fsd_reason: str | None,
 ) -> tuple[str, str]:
     if fsd_reason in {"on_battery_fsd", "low_battery_fsd"}:
         return "ups_power", fsd_reason
-    if clean_shutdown:
+    if clean_shutdown is True:
         return "normal", fsd_reason or "shutdown"
-    return "unclean", "no_clean_shutdown"
+    if clean_shutdown is False:
+        return "unclean", fsd_reason or "no_clean_shutdown"
+    return "unknown", fsd_reason or "insufficient_evidence"
 
 
 def evaluate_shutdown_readiness(
@@ -262,12 +268,12 @@ def evaluate_shutdown_readiness(
     if guest_shutdown_budget_seconds is None:
         issues.append("shutdown_budget_unavailable")
 
-    if (
-        isinstance(previous_shutdown, Mapping)
-        and previous_shutdown.get("shutdown_class") == "ups_power"
-        and previous_shutdown.get("shutdown_clean") is False
-    ):
-        issues.append("previous_host_shutdown_unclean")
+    if isinstance(previous_shutdown, Mapping) and previous_shutdown.get("shutdown_class") == "ups_power":
+        shutdown_clean = previous_shutdown.get("shutdown_clean")
+        if shutdown_clean is False:
+            issues.append("previous_host_shutdown_unclean")
+        elif shutdown_clean is not True:
+            issues.append("previous_host_shutdown_unknown")
 
     guests = previous_shutdown.get("guests") if isinstance(previous_shutdown, Mapping) else None
     if isinstance(guests, Mapping):
@@ -372,7 +378,8 @@ class ShutdownHistoryTracker:
 
         journal = self.previous_boot_journal_reader()
         parsed = parse_guest_shutdown_journal(journal)
-        shutdown_clean = bool(parsed["clean_shutdown"])
+        raw_shutdown_clean = parsed.get("clean_shutdown")
+        shutdown_clean = raw_shutdown_clean if isinstance(raw_shutdown_clean, bool) else None
         shutdown_class, shutdown_reason = classify_previous_shutdown(
             clean_shutdown=shutdown_clean,
             fsd_reason=(
@@ -390,6 +397,7 @@ class ShutdownHistoryTracker:
             "boot_id": current.get("boot_id"),
             "boot_at": current.get("boot_at"),
             "shutdown_at": shutdown_at,
+            "last_journal_at": parsed.get("last_journal_at"),
             "shutdown_class": shutdown_class,
             "shutdown_reason": shutdown_reason,
             "shutdown_clean": shutdown_clean,
