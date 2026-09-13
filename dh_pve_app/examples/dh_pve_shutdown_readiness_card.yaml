@@ -26,20 +26,23 @@ cards:
       {% endif %}
     secondary: >-
       {% set s = states(entity) %}
+      {% set shutdown_clean = state_attr(entity, 'shutdown_clean') %}
+      {% set host_result = 'PVE shutdown: clean' if shutdown_clean == true else ('PVE shutdown: unclean' if shutdown_clean == false else 'PVE shutdown: нет данных') %}
       {% set total = state_attr(entity, 'guest_shutdown_total_seconds') %}
       {% set outage_fsd = state_attr(entity, 'outage_to_fsd_seconds') %}
       {% set fsd_guests = state_attr(entity, 'fsd_to_all_guests_stopped_seconds') %}
       {% set fsd_host = state_attr(entity, 'fsd_to_shutdown_seconds') %}
       {% set guests_host = state_attr(entity, 'all_guests_stopped_to_shutdown_seconds') %}
       {% if s == 'unclean' %}
-        Корректное завершение работы не зафиксировано.
+        {{ host_result }} · Корректное завершение работы не зафиксировано.
       {% elif s == 'ups_power' %}
+        {{ host_result }} ·
         {% if outage_fsd is not none %}Сеть→FSD {{ outage_fsd }} с · {% endif %}
         {% if fsd_guests is not none %}FSD→гости {{ fsd_guests }} с · {% endif %}
         {% if fsd_host is not none %}FSD→PVE {{ fsd_host }} с{% endif %}
         {% if guests_host is not none %} · гости→PVE {{ guests_host }} с{% endif %}
       {% elif s == 'normal' %}
-        {% if total is not none %}Все VM/LXC остановлены за {{ total }} с.{% else %}Shutdown завершён штатно.{% endif %}
+        {{ host_result }} · {% if total is not none %}Все VM/LXC остановлены за {{ total }} с.{% else %}Shutdown завершён штатно.{% endif %}
       {% else %}
         История появится после следующего завершённого boot/shutdown цикла.
       {% endif %}
