@@ -60,6 +60,7 @@ def build_shutdown_aware_pve_discovery_payload(
         icon="mdi:power-cycle",
         extra_attrs={
             "shutdown_reason": previous + ".shutdown_reason | default(none)",
+            "shutdown_clean": previous + ".shutdown_clean | default(none)",
             "boot_id": previous + ".boot_id | default(none)",
             "boot_at": previous + ".boot_at | default(none)",
             "shutdown_at": previous + ".shutdown_at | default(none)",
