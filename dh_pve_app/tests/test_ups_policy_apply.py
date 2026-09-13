@@ -150,6 +150,19 @@ class FakeRunner:
         return type("Result", (), {"returncode": 0, "stdout": "", "stderr": ""})()
 
 
+class FakeClock:
+    def __init__(self):
+        self.now = 0.0
+        self.sleeps = []
+
+    def monotonic(self):
+        return self.now
+
+    def sleep(self, seconds):
+        self.sleeps.append(seconds)
+        self.now += seconds
+
+
 def _paths(tmp_path):
     return ManagedNutPaths(
         upsmon=tmp_path / "upsmon.conf",
@@ -234,22 +247,89 @@ def test_apply_rolls_back_all_mutable_files_when_service_action_fails(tmp_path):
     assert not paths.metadata.exists()
 
 
-def test_apply_rolls_back_when_effective_restart_delay_does_not_match(tmp_path):
+def test_apply_retries_effective_delay_until_driver_snapshot_is_ready(tmp_path):
     paths = _paths(tmp_path)
     _seed(paths)
-    before = paths.upsmon.read_text(encoding="utf-8")
+    runner = FakeRunner()
+    clock = FakeClock()
+    values = [PolicyApplyError("temporary NUT read failure"), None, 120, 180]
+    attempts = []
+
+    def reader():
+        assert ("systemctl", "enable", "--now", "nut-monitor.service") not in runner.commands
+        value = values[len(attempts)]
+        attempts.append(value)
+        if isinstance(value, Exception):
+            raise value
+        return value
+
+    applier = UpsPolicyApplier(
+        paths=paths,
+        ups_name="ups",
+        runner=runner,
+        effective_restart_delay_reader=reader,
+        effective_delay_timeout_seconds=5.0,
+        effective_delay_retry_interval_seconds=1.0,
+        monotonic=clock.monotonic,
+        sleeper=clock.sleep,
+        **_helper_owner_kwargs(),
+    )
+    result = applier.apply(_draft(), _facts())
+
+    assert result.success is True
+    assert len(attempts) == 4
+    assert clock.sleeps == [1.0, 1.0, 1.0]
+    assert ("systemctl", "enable", "--now", "nut-monitor.service") in runner.commands
+
+
+def test_apply_does_not_sleep_when_effective_delay_is_ready_immediately(tmp_path):
+    paths = _paths(tmp_path)
+    _seed(paths)
+    clock = FakeClock()
 
     applier = UpsPolicyApplier(
         paths=paths,
         ups_name="ups",
         runner=FakeRunner(),
+        effective_restart_delay_reader=lambda: 180,
+        effective_delay_timeout_seconds=5.0,
+        effective_delay_retry_interval_seconds=1.0,
+        monotonic=clock.monotonic,
+        sleeper=clock.sleep,
+        **_helper_owner_kwargs(),
+    )
+    result = applier.apply(_draft(), _facts())
+
+    assert result.success is True
+    assert clock.sleeps == []
+
+
+def test_apply_rolls_back_when_effective_restart_delay_never_matches(tmp_path):
+    paths = _paths(tmp_path)
+    _seed(paths)
+    before = paths.upsmon.read_text(encoding="utf-8")
+    runner = FakeRunner()
+    clock = FakeClock()
+
+    applier = UpsPolicyApplier(
+        paths=paths,
+        ups_name="ups",
+        runner=runner,
         effective_restart_delay_reader=lambda: 120,
+        effective_delay_timeout_seconds=2.0,
+        effective_delay_retry_interval_seconds=1.0,
+        monotonic=clock.monotonic,
+        sleeper=clock.sleep,
         **_helper_owner_kwargs(),
     )
     result = applier.apply(_draft(), _facts())
 
     assert result.success is False
+    assert "не подтвердил" in result.message.lower()
     assert paths.upsmon.read_text(encoding="utf-8") == before
+    assert not paths.metadata.exists()
+    assert ("systemctl", "enable", "--now", "nut-monitor.service") not in runner.commands
+    assert clock.sleeps == [1.0, 1.0]
 
 
 def test_render_rejects_missing_selected_ups_section():
