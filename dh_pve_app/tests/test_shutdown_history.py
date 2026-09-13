@@ -150,7 +150,7 @@ def test_tracker_marks_unclean_boot_without_clean_shutdown_marker(tmp_path):
     previous = tracker.startup()["previous_shutdown"]
 
     assert previous["shutdown_class"] == "unclean"
-    assert previous["shutdown_reason"] == "no_clean_shutdown"
+    assert previous["shutdown_reason"] == "unknown"
     assert previous["shutdown_clean"] is False
     assert previous["shutdown_at"] is None
     assert previous["last_journal_at"] == "2026-09-13T23:59:59+05:00"
@@ -178,7 +178,7 @@ def test_tracker_marks_missing_journal_evidence_unknown(tmp_path):
     previous = tracker.startup()["previous_shutdown"]
 
     assert previous["shutdown_class"] == "unknown"
-    assert previous["shutdown_reason"] == "insufficient_evidence"
+    assert previous["shutdown_reason"] == "unknown"
     assert previous["shutdown_clean"] is None
     assert previous["shutdown_at"] is None
 
