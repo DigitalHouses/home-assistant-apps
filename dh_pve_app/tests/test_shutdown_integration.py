@@ -1,13 +1,14 @@
 from types import SimpleNamespace
 
 from app.config import AppConfig, GeneralConfig, MqttConfig, UpsConfig
-from app.discovery_guest import build_guest_aware_discovery_payload
-from app.discovery_ups import build_ups_discovery_payload
 from app.identity import HostIdentity
+from app.shutdown_discovery import (
+    build_shutdown_aware_pve_discovery_payload,
+    build_shutdown_aware_ups_discovery_payload,
+)
+from app.shutdown_integration import ShutdownAwareTopologyManager, ShutdownAwareUpsRuntime
 from app.state_store import StateStore
-from app.topology import TopologyManager
 from app.ups_nut import parse_upsc_output
-from app.ups_runtime import UpsRuntime
 
 
 class _Runner:
@@ -62,7 +63,7 @@ def _app_config():
 
 
 def test_guest_payload_exposes_effective_shutdown_configuration():
-    manager = TopologyManager(
+    manager = ShutdownAwareTopologyManager(
         runner=_Runner(),
         dri_to_pci={},
         config_reader=_config_reader,
@@ -124,7 +125,7 @@ def test_guest_discovery_exposes_previous_shutdown_and_per_guest_duration_attrib
         },
     }
 
-    components = build_guest_aware_discovery_payload(
+    components = build_shutdown_aware_pve_discovery_payload(
         _app_config(), _identity(), version="0.2.0-alpha", inventory=inventory
     )["components"]
 
@@ -137,8 +138,9 @@ def test_guest_discovery_exposes_previous_shutdown_and_per_guest_duration_attrib
     assert history["default_entity_id"] == "sensor.dh_pve_shutdown_history"
     assert "history" in history["json_attributes_template"]
 
-    haos = components["vm_110_status"]
+    haos = components["vm_110_shutdown"]
     attrs = haos["json_attributes_template"]
+    assert haos["default_entity_id"] == "sensor.dh_pve_vm_110_shutdown"
     assert "shutdown_timeout_seconds" in attrs
     assert "last_shutdown_duration_seconds" in attrs
     assert "last_shutdown_timeout_ratio" in attrs
@@ -148,7 +150,7 @@ def test_guest_discovery_exposes_previous_shutdown_and_per_guest_duration_attrib
 
 def test_ups_discovery_has_dedicated_budget_and_readiness_entities():
     snapshot = parse_upsc_output("ups.status: OL\n")
-    components = build_ups_discovery_payload(
+    components = build_shutdown_aware_ups_discovery_payload(
         _mqtt(), _identity(), version="0.2.0-alpha", snapshot=snapshot
     )["components"]
 
@@ -257,7 +259,7 @@ def test_ups_runtime_records_fsd_and_publishes_readiness_and_budget(tmp_path):
             "power_restore_delay_seconds": 120,
         },
     )
-    runtime = UpsRuntime(
+    runtime = ShutdownAwareUpsRuntime(
         config=UpsConfig(
             enabled=True,
             name="ups",
