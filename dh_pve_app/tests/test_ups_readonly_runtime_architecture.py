@@ -116,21 +116,36 @@ offdelay = 60
     assert policy.guest_shutdown_budget_seconds == 280
 
 
-def test_atomic_write_applies_parent_owner_and_group(tmp_path, monkeypatch):
+def test_atomic_write_sets_parent_owner_before_replace(tmp_path, monkeypatch):
     parent = tmp_path / "nut"
     parent.mkdir()
     target = parent / "upssched.conf"
     parent_stat = parent.stat()
-    calls = []
+    chowns = []
+    replaces = []
+    real_replace = __import__("os").replace
 
     def fake_chown(path, uid, gid):
-        calls.append((Path(path), uid, gid))
+        chowns.append((Path(path), uid, gid))
+
+    def tracked_replace(source, destination):
+        replaces.append((Path(source), Path(destination)))
+        assert chowns
+        assert chowns[-1][0] == Path(source)
+        return real_replace(source, destination)
 
     monkeypatch.setattr("app.ups_policy_apply.os.chown", fake_chown)
+    monkeypatch.setattr("app.ups_policy_apply.os.replace", tracked_replace)
 
     _atomic_write(target, b"AT ONBATT * START-TIMER x 1800\n", 0o640)
 
-    assert calls == [(target, parent_stat.st_uid, parent_stat.st_gid)]
+    assert len(chowns) == 1
+    temp, uid, gid = chowns[0]
+    assert temp.parent == parent
+    assert temp != target
+    assert uid == parent_stat.st_uid
+    assert gid == parent_stat.st_gid
+    assert replaces == [(temp, target)]
 
 
 def test_main_exposes_explicit_commissioning_but_runtime_does_not_build_applier():
