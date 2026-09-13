@@ -29,8 +29,8 @@ def test_ups_dashboard_uses_python_problem_summary_for_top_status():
     text = DASHBOARD.read_text(encoding="utf-8")
 
     assert "entity: sensor.dh_pve_ups_problems" in text
-    assert "state_attr('sensor.dh_pve_ups_problems', 'severity')" in text
-    assert "state_attr('sensor.dh_pve_ups_problems', 'details')" in text
+    assert "state_attr(entity, 'severity')" in text
+    assert "state_attr(entity, 'details')" in text
     assert "Проблем не обнаружено" not in text
     assert "type: conditional" not in text
 
@@ -43,7 +43,7 @@ def test_dashboard_uses_python_runtime_minutes_without_template_conversion():
     assert "/ 60" not in text
 
 
-def test_fault_binary_sensors_are_kept_only_for_event_log_visibility():
+def test_fault_binary_sensors_are_visible_and_included_in_event_log():
     text = DASHBOARD.read_text(encoding="utf-8")
 
     for entity_id in (
@@ -55,4 +55,15 @@ def test_fault_binary_sensors_are_kept_only_for_event_log_visibility():
     ):
         assert entity_id in text
 
-    assert "title: Переключения ИБП" in text
+    assert "title: События ИБП" in text
+
+
+def test_shutdown_policy_is_read_only_in_home_assistant_dashboard():
+    text = DASHBOARD.read_text(encoding="utf-8")
+
+    assert "sensor.dh_pve_ups_shutdown_policy" in text
+    assert "sensor.dh_pve_ups_policy_on_battery_delay" in text
+    assert "sensor.dh_pve_ups_policy_power_restore_delay" in text
+    assert "button.dh_pve_ups_apply_policy" not in text
+    assert "number.dh_pve_ups_policy_on_battery_delay" not in text
+    assert "number.dh_pve_ups_policy_power_restore_delay" not in text
