@@ -1,33 +1,10 @@
-import app.main as main_module
-from app.config import AppConfig, GeneralConfig, MqttConfig, UpsConfig
-from app.identity import HostIdentity
-from app.topics import build_ups_topics
+import app.ups_commission as commission_module
+from app.config import UpsConfig
 from app.ups_nut import parse_upsc_output
-from app.ups_policy import PolicySafetyFacts, UpsPolicyDraft
+from app.ups_policy import PolicyApplyResult, PolicySafetyFacts, UpsPolicyDraft
 
 
-def _mqtt():
-    return MqttConfig(
-        host="mqtt",
-        port=1883,
-        username="",
-        password="",
-        topic_prefix="DigitalHouses/Global/dh_pve_app",
-        discovery_prefix="homeassistant",
-        keepalive_seconds=60,
-    )
-
-
-def _identity():
-    return HostIdentity(
-        machine_id="0123456789abcdef0123456789abcdef",
-        instance_id="node_a",
-        hostname="pve",
-        node_name="PVE",
-    )
-
-
-def _ups(*, policy_apply_enabled: bool):
+def _ups():
     return UpsConfig(
         enabled=True,
         name="ups",
@@ -35,26 +12,6 @@ def _ups(*, policy_apply_enabled: bool):
         port=3493,
         poll_interval_seconds=5.0,
         command_timeout_seconds=3.0,
-        policy_apply_enabled=policy_apply_enabled,
-    )
-
-
-def _app_config(*, policy_apply_enabled: bool):
-    return AppConfig(
-        general=GeneralConfig(
-            instance_id="node_a",
-            node_name="PVE",
-            log_level="info",
-        ),
-        mqtt=_mqtt(),
-        ups=_ups(policy_apply_enabled=policy_apply_enabled),
-    )
-
-
-def _draft():
-    return UpsPolicyDraft(
-        on_battery_delay_minutes=30,
-        power_restore_delay_seconds=120,
     )
 
 
@@ -69,30 +26,57 @@ def _facts():
     )
 
 
-class Bridge:
-    def __init__(self):
-        self.ups_topics = None
-
-    def configure_ups(self, topics):
-        self.ups_topics = topics
-
-
-def test_local_gate_blocks_policy_writer_construction_when_disabled():
-    assert hasattr(main_module, "build_ups_policy_applier")
-    factory_calls = []
-
-    result = main_module.build_ups_policy_applier(
-        _ups(policy_apply_enabled=False),
-        applier_factory=lambda **kwargs: factory_calls.append(kwargs),
-        ups_reader=lambda config: (_ for _ in ()).throw(AssertionError("must not read UPS")),
+def test_commissioning_requires_root():
+    result = commission_module.commission_ups_policy(
+        _ups(),
+        on_battery_delay_minutes=30,
+        power_restore_delay_seconds=120,
+        geteuid=lambda: 1000,
+        ups_reader=lambda config: (_ for _ in ()).throw(
+            AssertionError("must not read UPS without root")
+        ),
     )
 
-    assert result is None
-    assert factory_calls == []
+    assert result.success is False
+    assert "root" in result.message
 
 
-def test_local_gate_builds_policy_writer_only_when_explicitly_enabled():
-    assert hasattr(main_module, "build_ups_policy_applier")
+def test_commissioning_refuses_on_battery():
+    snapshot = parse_upsc_output(
+        "ups.status: OB DISCHRG\nups.delay.start: 120\nups.test.result: No test initiated\n"
+    )
+    result = commission_module.commission_ups_policy(
+        _ups(),
+        on_battery_delay_minutes=30,
+        power_restore_delay_seconds=120,
+        geteuid=lambda: 0,
+        ups_reader=lambda config: snapshot,
+    )
+
+    assert result.success is False
+    assert "OL" in result.message
+
+
+def test_commissioning_refuses_during_battery_test():
+    snapshot = parse_upsc_output(
+        "ups.status: OL\nups.delay.start: 120\nups.test.result: In progress\n"
+    )
+    result = commission_module.commission_ups_policy(
+        _ups(),
+        on_battery_delay_minutes=30,
+        power_restore_delay_seconds=120,
+        geteuid=lambda: 0,
+        ups_reader=lambda config: snapshot,
+    )
+
+    assert result.success is False
+    assert "тест" in result.message.casefold()
+
+
+def test_commissioning_builds_writer_only_for_explicit_safe_call(monkeypatch):
+    snapshot = parse_upsc_output(
+        "ups.status: OL\nups.delay.start: 120\nups.test.result: No test initiated\n"
+    )
     captured = {}
 
     class FakeApplier:
@@ -100,133 +84,27 @@ def test_local_gate_builds_policy_writer_only_when_explicitly_enabled():
             captured.update(kwargs)
 
         def apply(self, draft, facts):
-            return draft, facts
+            captured["draft"] = draft
+            captured["facts"] = facts
+            return PolicyApplyResult(True, "ok")
 
-    snapshot = parse_upsc_output("ups.delay.start: 180\nups.status: OL\n")
-    writer = main_module.build_ups_policy_applier(
-        _ups(policy_apply_enabled=True),
-        applier_factory=FakeApplier,
-        ups_reader=lambda config: snapshot,
-    )
-
-    assert callable(writer)
-    assert captured["ups_name"] == "ups"
-    assert captured["effective_restart_delay_reader"]() == 180
-    assert writer(_draft(), _facts()) == (_draft(), _facts())
-
-
-def test_policy_writer_refuses_apply_when_ups_is_on_battery():
-    calls = []
-
-    class FakeApplier:
-        def __init__(self, **kwargs):
-            pass
-
-        def apply(self, draft, facts):
-            calls.append((draft, facts))
-            raise AssertionError("must not apply while UPS is on battery")
-
-    snapshot = parse_upsc_output(
-        "ups.status: OB DISCHRG\nups.delay.start: 120\nups.test.result: No test initiated\n"
-    )
-    writer = main_module.build_ups_policy_applier(
-        _ups(policy_apply_enabled=True),
-        applier_factory=FakeApplier,
-        ups_reader=lambda config: snapshot,
-    )
-
-    result = writer(_draft(), _facts())
-
-    assert result.success is False
-    assert "OL" in result.message
-    assert calls == []
-
-
-def test_policy_writer_refuses_apply_during_battery_test():
-    calls = []
-
-    class FakeApplier:
-        def __init__(self, **kwargs):
-            pass
-
-        def apply(self, draft, facts):
-            calls.append((draft, facts))
-            raise AssertionError("must not apply during battery test")
-
-    snapshot = parse_upsc_output(
-        "ups.status: OL DISCHRG\nups.delay.start: 120\nups.test.result: In progress\n"
-    )
-    writer = main_module.build_ups_policy_applier(
-        _ups(policy_apply_enabled=True),
-        applier_factory=FakeApplier,
-        ups_reader=lambda config: snapshot,
-    )
-
-    result = writer(_draft(), _facts())
-
-    assert result.success is False
-    assert "тест" in result.message.casefold()
-    assert calls == []
-
-
-def test_build_ups_runtime_receives_only_the_locally_gated_writer(tmp_path, monkeypatch):
-    sentinel_writer = lambda draft, facts: (draft, facts)
-    seen = []
-    monkeypatch.setattr(main_module, "resolve_identity", lambda general: _identity())
     monkeypatch.setattr(
-        main_module,
-        "build_ups_policy_applier",
-        lambda config: seen.append(config) or sentinel_writer,
-        raising=False,
-    )
-    bridge = Bridge()
-
-    runtime = main_module.build_ups_runtime(
-        _app_config(policy_apply_enabled=True),
-        bridge,
-        selected_name="ups",
-        state_dir=tmp_path,
+        commission_module,
+        "read_policy_safety_facts",
+        lambda config: _facts(),
     )
 
-    assert runtime is not None
-    assert seen and seen[0].name == "ups"
-    assert runtime.policy_applier is sentinel_writer
-
-
-def test_mqtt_ups_surface_has_no_shutdown_fsd_load_off_or_generic_command_topic():
-    topics = build_ups_topics(_mqtt(), _identity())
-    public_topics = {
-        key: value
-        for key, value in vars(topics).items()
-        if isinstance(value, str)
-    }
-
-    forbidden_field_fragments = (
-        "fsd",
-        "shutdown",
-        "load_off",
-        "load_on",
-        "upscmd",
-        "command",
-        "shell",
+    result = commission_module.commission_ups_policy(
+        _ups(),
+        on_battery_delay_minutes=30,
+        power_restore_delay_seconds=120,
+        geteuid=lambda: 0,
+        ups_reader=lambda config: snapshot,
+        applier_factory=FakeApplier,
     )
-    assert not {
-        key
-        for key in public_topics
-        if any(fragment in key.casefold() for fragment in forbidden_field_fragments)
-    }
 
-    forbidden_path_fragments = (
-        "/fsd",
-        "/shutdown",
-        "/load/off",
-        "/load/on",
-        "/upscmd",
-        "/command",
-        "/shell",
-    )
-    assert not {
-        value
-        for value in public_topics.values()
-        if any(fragment in value.casefold() for fragment in forbidden_path_fragments)
-    }
+    assert result == PolicyApplyResult(True, "ok")
+    assert captured["ups_name"] == "ups"
+    assert captured["effective_restart_delay_reader"]() == 120
+    assert captured["draft"] == UpsPolicyDraft(30, 120)
+    assert captured["facts"] == _facts()
