@@ -153,6 +153,34 @@ cd /opt/digitalhouses/dh_pve_app
   --ups-policy-preflight
 ```
 
+## Shutdown history and readiness
+
+The app keeps dry facts about Proxmox shutdowns; notification wording remains a Home Assistant responsibility. A real host boot is identified by the kernel `boot_id`, so restarting or upgrading `dh_pve_app` during the same boot does not create a false Proxmox boot event.
+
+Shutdown history is persisted in `/var/lib/dh_pve_app/shutdown_history.json`. Up to 50 cycles are retained locally and the most recent 10 are exposed through MQTT. For the previous boot the app publishes:
+
+- `shutdown_class`: `normal`, `unclean`, or `ups_power`;
+- `shutdown_reason`: a more specific dry cause such as `shutdown`, `no_clean_shutdown`, `on_battery_fsd`, or `low_battery_fsd`;
+- `shutdown_clean`: whether a clean host shutdown marker was actually observed, kept separate from the cause;
+- outage/FSD/guest/host timestamps and derived timing intervals when available;
+- UPS status, battery charge/runtime and load captured when FSD is first observed;
+- per-VM/LXC shutdown start/end, duration, timeout, timeout ratio, result and forced/timeout state.
+
+An unclean boot is never automatically called a power failure. `ups_power` requires confirmed UPS/FSD evidence; a manual/external FSD while the UPS remains on line power is kept distinct.
+
+Home Assistant entities include:
+
+- `sensor.dh_pve_previous_shutdown`
+- `sensor.dh_pve_shutdown_history`
+- `sensor.dh_pve_vm_<id>_shutdown`
+- `sensor.dh_pve_lxc_<id>_shutdown`
+- `sensor.dh_pve_ups_guest_shutdown_budget`
+- `sensor.dh_pve_ups_shutdown_readiness`
+
+Guest configuration is diagnostic-only. The app reads `onboot`, `startup.order` and `startup.down`; when `down` is absent, the effective Proxmox timeout is treated as 180 seconds. It never rewrites VM/LXC startup or shutdown settings.
+
+UPS shutdown readiness checks the production NUT path as well as guest history. It warns on a forced/timeout guest, a guest that consumed at least 80% of its previous timeout, an unavailable shutdown budget, a broken NUT PRIMARY/upssched path, or an UPS-triggered shutdown that did not reach a clean PVE shutdown. Hosts without a selected UPS report readiness as `skip` rather than an error.
+
 ## Battery tests
 
 Battery tests are runtime UPS operations and are intentionally separate from shutdown-policy configuration. Capability permitting, Home Assistant may expose:
@@ -234,9 +262,15 @@ UPS view:
 dh_pve_app/examples/dh_pve_ups_dashboard.yaml
 ```
 
-The UPS dashboard includes live UPS state, power/battery metrics, effective shutdown policy, NUT diagnostics, battery-test controls/schedule, history graphs and event log. Shutdown-policy controls are intentionally absent.
+Reusable shutdown/readiness card:
 
-The PVE dashboard requires Mushroom, auto-entities, mini-graph-card and Entity Progress Card. The UPS view requires Mushroom and mini-graph-card.
+```text
+dh_pve_app/examples/dh_pve_shutdown_readiness_card.yaml
+```
+
+The UPS dashboard includes live UPS state, power/battery metrics, effective shutdown policy, NUT diagnostics, battery-test controls/schedule, history graphs and event log. Shutdown-policy controls are intentionally absent. The shutdown/readiness card shows the previous host shutdown cause/result, timing chain, UPS readiness/budget when an UPS exists, and dynamic per-VM/LXC shutdown diagnostics.
+
+The PVE dashboard requires Mushroom, auto-entities, mini-graph-card and Entity Progress Card. The UPS view requires Mushroom and mini-graph-card. The reusable shutdown/readiness card requires Mushroom and auto-entities.
 
 ## Installation
 
@@ -272,4 +306,4 @@ A safe physical mains-loss commissioning test should first prove `OL → OB → 
 
 ## Status
 
-`0.2.0-alpha` currently provides production-oriented Proxmox monitoring, NUT-backed UPS telemetry, capability-driven battery tests, explicit NUT shutdown-policy commissioning, read-only policy observability in Home Assistant, and systemd-enforced separation between normal runtime and host configuration.
+`0.2.0-alpha` currently provides production-oriented Proxmox monitoring, NUT-backed UPS telemetry, capability-driven battery tests, explicit NUT shutdown-policy commissioning, persistent boot/shutdown history, guest shutdown diagnostics, UPS shutdown readiness, read-only policy observability in Home Assistant, and systemd-enforced separation between normal runtime and host configuration.
