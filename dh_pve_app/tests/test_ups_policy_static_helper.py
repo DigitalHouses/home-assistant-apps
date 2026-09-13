@@ -52,13 +52,13 @@ def test_static_helper_source_is_restricted_to_owned_fsd_timer_token():
     assert "eval" not in helper
 
 
-def test_installer_makes_static_helper_executable_but_service_cannot_write_opt():
+def test_installer_makes_static_helper_executable_but_runtime_cannot_write_system_config():
     installer = Path("dh_pve_app/install.sh").read_text(encoding="utf-8")
     unit = Path("dh_pve_app/systemd/dh_pve_app.service").read_text(encoding="utf-8")
 
     assert 'chmod 0755 "${APP_DIR}/bin/dh-pve-ups-policy-cmd"' in installer
     assert "ProtectSystem=full" in unit
-    assert "ReadWritePaths=/etc/nut" in unit
+    assert "ReadWritePaths=/etc/nut" not in unit
     assert "ReadWritePaths=/opt" not in unit
 
 
