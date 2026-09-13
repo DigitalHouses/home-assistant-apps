@@ -44,6 +44,32 @@ def parse_guest_shutdown_config(config: str) -> dict[str, object]:
     }
 
 
+def shutdown_policy_issues(policy: object | None, *, nut_available: bool) -> list[str]:
+    if policy is None:
+        return ["shutdown_policy_unavailable"]
+
+    issues: list[str] = []
+    if not nut_available:
+        issues.append("nut_unavailable")
+    if getattr(policy, "state", None) != "Enabled":
+        issues.append("shutdown_policy_not_enabled")
+    if getattr(policy, "role", None) != "primary":
+        issues.append("nut_role_not_primary")
+    if getattr(policy, "nut_monitor", None) != "active":
+        issues.append("nut_monitor_not_active")
+    if getattr(policy, "shutdown_enabled", None) is not True:
+        issues.append("shutdown_disabled")
+    if getattr(policy, "upssched_present", None) is not True or getattr(
+        policy, "upssched_active", None
+    ) is not True:
+        issues.append("upssched_inactive")
+    if getattr(policy, "on_battery_delay_minutes", None) is None:
+        issues.append("on_battery_delay_unreadable")
+    if getattr(policy, "power_restore_delay_seconds", None) is None:
+        issues.append("power_restore_delay_unreadable")
+    return issues
+
+
 class ShutdownAwareTopologyManager(TopologyManager):
     def guest_payload(self) -> dict[str, object]:
         payload = super().guest_payload()
@@ -115,6 +141,10 @@ class ShutdownAwareUpsRuntime(UpsRuntime):
             ups_present=True,
             guest_shutdown_budget_seconds=budget,
             previous_shutdown=previous if isinstance(previous, Mapping) else None,
+            additional_issues=shutdown_policy_issues(
+                self.shutdown_policy,
+                nut_available=self.nut_available,
+            ),
         )
         return fields
 
