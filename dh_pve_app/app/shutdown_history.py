@@ -33,6 +33,11 @@ _SIMPLE_END_RE = re.compile(
     re.IGNORECASE,
 )
 _ALL_STOPPED_RE = re.compile(r"\ball VMs and CTs stopped\b", re.IGNORECASE)
+_FORCE_STOP_MARKERS = (
+    "vm quit/powerdown failed - terminating now with sigterm",
+    "vm still running - terminating now with sigkill",
+)
+_GENERIC_TIMEOUT_MARKER = "vm quit/powerdown failed - got timeout"
 _CLEAN_MARKERS = (
     "reached target shutdown.target",
     "reached target system power off",
@@ -72,6 +77,7 @@ def _guest_kind(token: str) -> str:
 
 def parse_guest_shutdown_journal(text: str) -> dict[str, Any]:
     records: dict[tuple[str, str], dict[str, Any]] = {}
+    active_guests: set[tuple[str, str]] = set()
     first_started: datetime | None = None
     last_timestamp: datetime | None = None
     clean_shutdown_at: datetime | None = None
@@ -115,6 +121,7 @@ def parse_guest_shutdown_journal(text: str) -> dict[str, Any]:
                 },
             )
             item["timeout_seconds"] = timeout
+            active_guests.add(key)
             if item["started_at"] is None and timestamp is not None:
                 item["started_at"] = timestamp.isoformat()
                 if first_started is None or timestamp < first_started:
@@ -165,9 +172,28 @@ def parse_guest_shutdown_journal(text: str) -> dict[str, Any]:
             )
             if timestamp is not None:
                 item["finished_at"] = timestamp.isoformat()
-            if item["result"] == "unknown":
+            tail = line[end_match.end() :].casefold()
+            if "got timeout" in tail or "timed out" in tail:
+                item["result"] = "timeout"
+            elif any(marker in tail for marker in _FORCE_STOP_MARKERS):
+                item["result"] = "forced"
+                item["forced"] = True
+            elif item["result"] == "unknown":
                 item["result"] = "clean"
+            active_guests.discard(key)
             continue
+
+        if len(active_guests) == 1:
+            active_key = next(iter(active_guests))
+            active_item = records.get(active_key)
+            if active_item is not None:
+                if any(marker in lowered for marker in _FORCE_STOP_MARKERS):
+                    active_item["result"] = "forced"
+                    active_item["forced"] = True
+                    continue
+                if _GENERIC_TIMEOUT_MARKER in lowered:
+                    active_item["result"] = "timeout"
+                    continue
 
         simple_end = _SIMPLE_END_RE.search(line)
         if simple_end is not None:
@@ -192,10 +218,12 @@ def parse_guest_shutdown_journal(text: str) -> dict[str, Any]:
                 item["finished_at"] = timestamp.isoformat()
             if item["result"] == "unknown":
                 item["result"] = "clean"
+            active_guests.discard(key)
             continue
 
         if _ALL_STOPPED_RE.search(line) and timestamp is not None:
             all_stopped_at = timestamp
+            active_guests.clear()
 
     guests: dict[str, dict[str, dict[str, Any]]] = {"vm": {}, "lxc": {}}
     latest_finished: datetime | None = None
