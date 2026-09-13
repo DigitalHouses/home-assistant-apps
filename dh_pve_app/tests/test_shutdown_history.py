@@ -66,6 +66,7 @@ def test_tracker_classifies_previous_boot_as_ups_power_and_keeps_history(tmp_pat
     previous = payload["previous_shutdown"]
     assert previous["shutdown_class"] == "ups_power"
     assert previous["shutdown_reason"] == "on_battery_fsd"
+    assert previous["shutdown_clean"] is True
     assert previous["outage_started_at"] == "2026-09-13T22:33:12+05:00"
     assert previous["fsd_at"] == "2026-09-13T23:03:34+05:00"
     assert previous["outage_to_fsd_seconds"] == 1822
@@ -105,6 +106,7 @@ def test_tracker_marks_unclean_boot_without_clean_shutdown_marker(tmp_path):
 
     assert previous["shutdown_class"] == "unclean"
     assert previous["shutdown_reason"] == "no_clean_shutdown"
+    assert previous["shutdown_clean"] is False
 
 
 def test_tracker_records_on_battery_and_fsd_facts(tmp_path):
@@ -165,11 +167,28 @@ def test_readiness_skips_without_ups_and_warns_on_bad_guest():
     assert warning["guest_shutdown_budget_seconds"] == 420
 
 
+def test_readiness_warns_if_ups_power_shutdown_did_not_finish_cleanly():
+    warning = evaluate_shutdown_readiness(
+        ups_present=True,
+        guest_shutdown_budget_seconds=420,
+        previous_shutdown={
+            "shutdown_class": "ups_power",
+            "shutdown_clean": False,
+            "guests": {"vm": {}, "lxc": {}},
+        },
+    )
+
+    assert warning["status"] == "warning"
+    assert "previous_host_shutdown_unclean" in warning["issues"]
+
+
 def test_readiness_ok_for_clean_fast_guests():
     result = evaluate_shutdown_readiness(
         ups_present=True,
         guest_shutdown_budget_seconds=420,
         previous_shutdown={
+            "shutdown_class": "normal",
+            "shutdown_clean": True,
             "guests": {
                 "vm": {
                     "700": {
@@ -181,7 +200,7 @@ def test_readiness_ok_for_clean_fast_guests():
                     }
                 },
                 "lxc": {},
-            }
+            },
         },
     )
 
