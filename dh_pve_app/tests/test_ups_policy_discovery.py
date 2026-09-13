@@ -1,7 +1,6 @@
 from app.config import MqttConfig
 from app.discovery_ups import build_ups_discovery_payload
 from app.identity import HostIdentity
-from app.topics import build_ups_topics
 
 
 def _mqtt():
@@ -25,67 +24,32 @@ def _identity():
     )
 
 
-def test_policy_discovery_exposes_two_draft_numbers_and_apply_button():
-    topics = build_ups_topics(_mqtt(), _identity())
-    components = build_ups_discovery_payload(
+def _components():
+    return build_ups_discovery_payload(
         _mqtt(), _identity(), version="0.2.0-alpha", snapshot=None
     )["components"]
 
-    on_battery = components["policy_on_battery_delay"]
-    assert on_battery["platform"] == "number"
-    assert on_battery["default_entity_id"] == "number.dh_pve_ups_policy_on_battery_delay"
-    assert on_battery["command_topic"] == topics.policy_on_battery_delay_set
-    assert on_battery["state_topic"] == topics.state
-    assert "value_json.policy.draft.on_battery_delay_minutes" in on_battery["value_template"]
-    assert on_battery["min"] == 5
-    assert on_battery["max"] == 60
-    assert on_battery["step"] == 5
+
+def test_policy_discovery_exposes_effective_delays_as_read_only_sensors():
+    components = _components()
+
+    on_battery = components["policy_on_battery_delay_observed"]
+    assert on_battery["platform"] == "sensor"
+    assert on_battery["default_entity_id"] == "sensor.dh_pve_ups_policy_on_battery_delay"
+    assert "command_topic" not in on_battery
+    assert "value_json.shutdown_policy.on_battery_delay_minutes" in on_battery["value_template"]
     assert on_battery["unit_of_measurement"] == "min"
-    assert on_battery["mode"] == "slider"
 
-    assert "policy_emergency_runtime_reserve" not in components
-
-    restore = components["policy_power_restore_delay"]
-    assert restore["platform"] == "number"
-    assert restore["default_entity_id"] == "number.dh_pve_ups_policy_power_restore_delay"
-    assert restore["command_topic"] == topics.policy_power_restore_delay_set
-    assert restore["min"] == 60
-    assert restore["max"] == 300
-    assert restore["step"] == 30
+    restore = components["policy_power_restore_delay_observed"]
+    assert restore["platform"] == "sensor"
+    assert restore["default_entity_id"] == "sensor.dh_pve_ups_policy_power_restore_delay"
+    assert "command_topic" not in restore
+    assert "value_json.shutdown_policy.power_restore_delay_seconds" in restore["value_template"]
     assert restore["unit_of_measurement"] == "s"
 
-    apply_button = components["policy_apply"]
-    assert apply_button["platform"] == "button"
-    assert apply_button["default_entity_id"] == "button.dh_pve_ups_apply_policy"
-    assert apply_button["command_topic"] == topics.policy_apply
-    assert apply_button["payload_press"] == "PRESS"
 
-
-def test_policy_discovery_exposes_status_result_and_last_applied_sensors():
-    components = build_ups_discovery_payload(
-        _mqtt(), _identity(), version="0.2.0-alpha", snapshot=None
-    )["components"]
-
-    status = components["policy_status"]
-    assert status["default_entity_id"] == "sensor.dh_pve_ups_policy_status"
-    assert "value_json.policy.status" in status["value_template"]
-
-    result = components["policy_apply_result"]
-    assert result["default_entity_id"] == "sensor.dh_pve_ups_policy_apply_result"
-    assert "value_json.policy.apply_result" in result["value_template"]
-
-    applied = components["policy_last_applied"]
-    assert applied["default_entity_id"] == "sensor.dh_pve_ups_policy_last_applied"
-    assert applied["device_class"] == "timestamp"
-    assert "value_json.policy.last_applied" in applied["value_template"]
-    assert "policy_revision" in applied["json_attributes_template"]
-    assert "policy_hash" in applied["json_attributes_template"]
-
-
-def test_policy_controls_depend_on_app_availability_not_nut_telemetry():
-    components = build_ups_discovery_payload(
-        _mqtt(), _identity(), version="0.2.0-alpha", snapshot=None
-    )["components"]
+def test_policy_discovery_has_no_runtime_apply_or_draft_controls():
+    components = _components()
 
     for key in (
         "policy_on_battery_delay",
@@ -95,6 +59,19 @@ def test_policy_controls_depend_on_app_availability_not_nut_telemetry():
         "policy_apply_result",
         "policy_last_applied",
     ):
-        availability = components[key]["availability"]
-        assert len(availability) == 1
-        assert "value_json.available" not in str(availability)
+        assert key not in components
+
+    for component in components.values():
+        command_topic = component.get("command_topic")
+        if command_topic is None:
+            continue
+        assert "/ups/policy/" not in command_topic
+
+
+def test_shutdown_policy_attributes_include_effective_delays():
+    component = _components()["shutdown_policy"]
+    template = component["json_attributes_template"]
+
+    assert "on_battery_delay_minutes" in template
+    assert "power_restore_delay_seconds" in template
+    assert "guest_shutdown_budget_seconds" in template
