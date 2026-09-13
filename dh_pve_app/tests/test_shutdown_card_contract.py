@@ -62,6 +62,13 @@ def test_shutdown_readiness_card_explains_previous_shutdown_and_timing_chain():
         assert attribute in text
 
 
+def test_shutdown_readiness_card_shows_host_shutdown_result_separately_from_cause():
+    text = _text()
+    assert "state_attr(entity, 'shutdown_clean')" in text
+    assert "PVE shutdown: clean" in text
+    assert "PVE shutdown: unclean" in text
+
+
 def test_shutdown_readiness_card_uses_dedicated_budget_entity_not_policy_attribute():
     text = _text()
     assert "'entity': 'sensor.dh_pve_ups_guest_shutdown_budget'" in text
