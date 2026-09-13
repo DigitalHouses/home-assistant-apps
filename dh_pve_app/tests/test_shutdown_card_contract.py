@@ -64,9 +64,9 @@ def test_shutdown_readiness_card_explains_previous_shutdown_and_timing_chain():
 
 def test_shutdown_readiness_card_uses_dedicated_budget_entity_not_policy_attribute():
     text = _text()
-    assert "entity: sensor.dh_pve_ups_guest_shutdown_budget" in text
+    assert "'entity': 'sensor.dh_pve_ups_guest_shutdown_budget'" in text
     assert "state_attr(entity, 'guest_shutdown_budget_seconds')" not in text
-    assert "entity: sensor.dh_pve_ups_shutdown_readiness" in text
+    assert "'entity': 'sensor.dh_pve_ups_shutdown_readiness'" in text
     assert "state_attr(entity, 'issues')" in text
     assert "is_state(entity, 'ok')" in text
     assert "is_state(entity, 'warning')" in text
