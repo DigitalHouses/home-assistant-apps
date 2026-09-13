@@ -68,6 +68,11 @@ def test_tracker_classifies_previous_boot_as_ups_power_and_keeps_history(tmp_pat
     assert previous["shutdown_reason"] == "on_battery_fsd"
     assert previous["outage_started_at"] == "2026-09-13T22:33:12+05:00"
     assert previous["fsd_at"] == "2026-09-13T23:03:34+05:00"
+    assert previous["outage_to_fsd_seconds"] == 1822
+    assert previous["fsd_to_all_guests_stopped_seconds"] == 229
+    assert previous["fsd_to_shutdown_seconds"] == 335
+    assert previous["all_guests_stopped_to_shutdown_seconds"] == 106
+    assert previous["outage_to_shutdown_seconds"] == 2157
     assert previous["guests"]["vm"]["110"]["result"] == "timeout"
     assert len(payload["history"]) == 1
     assert payload["current_boot"]["boot_id"] == "new-boot"
