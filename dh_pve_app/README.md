@@ -2,7 +2,7 @@
 
 `dh_pve_app` is the DigitalHouses native Linux agent for Proxmox VE. It collects host, CPU, memory, storage, physical-disk/SMART, GPU/transcoding, fan, VM/LXC and passthrough topology data and publishes normalized Home Assistant entities through MQTT Discovery. The same process can also monitor a locally connected UPS through Network UPS Tools (NUT).
 
-Version `0.2.0-alpha` is the current UPS commissioning build. Proxmox/NUT owns the UPS and all emergency shutdown decisions; Home Assistant is an observability and battery-test UI, not a shutdown-policy authority.
+Version `0.2.0` is the current production release. Proxmox/NUT owns the UPS and all emergency shutdown decisions; Home Assistant provides observability, diagnostics and battery-test controls, but is not a shutdown-policy authority.
 
 ## Public identity
 
@@ -318,4 +318,4 @@ Release/deploy validation is non-destructive. Verify service/MQTT health, NUT te
 
 ## Status
 
-`0.2.0-alpha` currently provides production-oriented Proxmox monitoring, NUT-backed UPS telemetry, capability-driven battery tests, explicit NUT shutdown-policy commissioning, persistent boot/shutdown history, guest shutdown diagnostics, UPS shutdown readiness, read-only policy observability in Home Assistant, and systemd-enforced separation between normal runtime and host configuration.
+`0.2.0` is the current stable release and provides production Proxmox monitoring, NUT-backed UPS telemetry, capability-driven battery tests, explicit NUT shutdown-policy commissioning, persistent boot/shutdown history, guest shutdown diagnostics, UPS shutdown readiness, read-only policy observability in Home Assistant, and systemd-enforced separation between normal runtime and host configuration.
