@@ -168,3 +168,35 @@ def test_profile_summary_reports_maximum_active_resource_profile():
     assert summary["resources"]["cpu"] == "critical"
     assert summary["resources"]["memory"] == "normal"
     assert summary["reason"] == "cpu:throttling"
+
+
+def test_fan_summary_is_not_mistaken_for_fan_objects():
+    router = PvePresentationRouter()
+    fans = subsystem(
+        {
+            "detected": True,
+            "count": 1,
+            "status": "Detected",
+            "nct6798_fan1": {
+                "fan_id": "nct6798_fan1",
+                "name": "nct6798 fan1",
+                "label": "CPU fan",
+                "source": "hwmon",
+                "rpm": 1250.0,
+            },
+        }
+    )
+
+    decision = router.route(
+        {"fans": fans}, selected=("fans",), now=0.0,
+        collected_at="2026-09-14T20:00:00+05:00", last_refresh=None, force=True,
+    )
+
+    assert groups(decision) == {
+        "collector/fans",
+        "fans",
+        "fan/nct6798_fan1",
+    }
+    assert all("fan/detected" != item.group for item in decision)
+    assert all("fan/count" != item.group for item in decision)
+    assert all("fan/status" != item.group for item in decision)
