@@ -59,6 +59,8 @@ _TESTS = {
 _DIAGNOSTICS = {
     "last_refresh",
     "shutdown_readiness",
+    "ups_app_profile",
+    "ups_last_publication",
 }
 
 
@@ -76,6 +78,56 @@ def _group_for(component_key: str) -> str | None:
     return None
 
 
+def _adaptive_diagnostic_components(topics) -> dict[str, dict[str, object]]:
+    diagnostics = ups_state_group_topic(topics, "diagnostics")
+    availability = [
+        {
+            "topic": topics.availability,
+            "payload_available": "online",
+            "payload_not_available": "offline",
+        }
+    ]
+    uid = lambda suffix: f"{topics.device_id}_{suffix}"
+    return {
+        "ups_app_profile": {
+            "platform": "sensor",
+            "name": "App profile",
+            "unique_id": uid("app_profile"),
+            "default_entity_id": "sensor.dh_pve_ups_app_profile",
+            "state_topic": diagnostics,
+            "value_template": "{{ value_json.app_profile.state | default('normal') }}",
+            "availability": availability,
+            "availability_mode": "all",
+            "entity_category": "diagnostic",
+            "icon": "mdi:speedometer-medium",
+            "json_attributes_topic": diagnostics,
+            "json_attributes_template": (
+                "{{ {'reason': value_json.app_profile.reason | default(none)} | tojson }}"
+            ),
+        },
+        "ups_last_publication": {
+            "platform": "sensor",
+            "name": "Last publication",
+            "unique_id": uid("last_publication"),
+            "default_entity_id": "sensor.dh_pve_ups_last_publication",
+            "state_topic": diagnostics,
+            "value_template": "{{ value_json.last_publication.timestamp | default(none) }}",
+            "availability": availability,
+            "availability_mode": "all",
+            "entity_category": "diagnostic",
+            "device_class": "timestamp",
+            "icon": "mdi:publish",
+            "json_attributes_topic": diagnostics,
+            "json_attributes_template": (
+                "{{ {'group': value_json.last_publication.group | default(none), "
+                "'reason': value_json.last_publication.reason | default(none), "
+                "'profile': value_json.last_publication.profile | default(none), "
+                "'group_count': value_json.last_publication.group_count | default(0)} | tojson }}"
+            ),
+        },
+    }
+
+
 def route_ups_discovery_groups(payload: dict[str, object], topics) -> dict[str, object]:
     """Route UPS Discovery state to independent retained presentation groups.
 
@@ -90,6 +142,7 @@ def route_ups_discovery_groups(payload: dict[str, object], topics) -> dict[str, 
         return payload
 
     raw_components.pop("battery_runtime", None)
+    raw_components.update(_adaptive_diagnostic_components(topics))
 
     legacy_state = topics.state
     status_topic = ups_state_group_topic(topics, "status")
