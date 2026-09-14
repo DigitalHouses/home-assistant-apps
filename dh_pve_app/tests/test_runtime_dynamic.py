@@ -57,6 +57,23 @@ class GroupBridge(Bridge):
         return True
 
 
+def _cpu_sample():
+    return CollectorSample(
+        data={
+            "usage_percent": 20.0,
+            "temperature_c": 55.0,
+            "frequency": {"average_mhz": 1800.0},
+            "throttling_active": False,
+        },
+        metrics={
+            "usage_percent": MetricValue(20.0, "cpu_percent"),
+            "temperature_c": MetricValue(55.0, "temperature_c"),
+            "frequency_mhz": MetricValue(1800.0, "frequency_mhz"),
+            "throttling_active": MetricValue(False, "discrete"),
+        },
+    )
+
+
 def test_startup_builds_discovery_from_collected_inventory():
     bridge = Bridge()
     settings = RuntimeSettings()
@@ -85,7 +102,7 @@ def test_group_capable_dynamic_startup_tombstones_legacy_monolithic_state():
     bridge = GroupBridge()
     settings = RuntimeSettings()
     runtime = DynamicDiscoveryRuntime(
-        collectors={},
+        collectors={"cpu": _cpu_sample},
         bridge=bridge,
         settings=settings,
         publish_policy=PublishPolicy(settings),
@@ -93,12 +110,17 @@ def test_group_capable_dynamic_startup_tombstones_legacy_monolithic_state():
         scheduler=Scheduler(),
         now_iso=lambda: "2026-09-15T00:15:00+05:00",
         now_monotonic=lambda: 0.0,
-        discovery_builder=lambda inv: {"components": {}},
+        discovery_builder=lambda inv: {"has_cpu": "cpu" in inv},
     )
 
     assert runtime.startup() is True
     assert bridge.legacy_state_cleanup == 1
     assert bridge.states == []
+    assert {group for group, _payload in bridge.group_states} >= {
+        "cpu",
+        "collector/cpu",
+        "diagnostics",
+    }
 
 
 def test_startup_tombstones_retired_publish_delta_discovery_components_once():
@@ -178,20 +200,7 @@ def test_group_capable_dynamic_reconnect_republishes_group_cache_not_monolithic_
 
     def cpu():
         calls["cpu"] += 1
-        return CollectorSample(
-            data={
-                "usage_percent": 20.0,
-                "temperature_c": 55.0,
-                "frequency": {"average_mhz": 1800.0},
-                "throttling_active": False,
-            },
-            metrics={
-                "usage_percent": MetricValue(20.0, "cpu_percent"),
-                "temperature_c": MetricValue(55.0, "temperature_c"),
-                "frequency_mhz": MetricValue(1800.0, "frequency_mhz"),
-                "throttling_active": MetricValue(False, "discrete"),
-            },
-        )
+        return _cpu_sample()
 
     bridge = GroupBridge()
     settings = RuntimeSettings()
