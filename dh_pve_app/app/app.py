@@ -216,18 +216,21 @@ class DhPveRuntime:
         self._pending_groups.pop("diagnostics", None)
         return True
 
-    def _retry_pending_groups(self) -> bool:
+    def _retry_pending_groups(self) -> tuple[bool, tuple[str, ...]]:
         if not self._pending_groups:
-            return True
+            return True, ()
         publisher = getattr(self.bridge, "publish_state_group")
         failed: dict[str, dict[str, object]] = {}
+        retried: list[str] = []
         for group, payload in tuple(self._pending_groups.items()):
             if publisher(group, payload):
                 self._published_groups[group] = payload
+                if group != "diagnostics":
+                    retried.append(group)
             else:
                 failed[group] = payload
         self._pending_groups = failed
-        return not failed
+        return not failed, tuple(retried)
 
     def _run_group_publication(
         self,
@@ -238,7 +241,7 @@ class DhPveRuntime:
         force: bool,
         manual_refresh: bool,
     ) -> bool:
-        pending_ok = self._retry_pending_groups()
+        pending_ok, retried_groups = self._retry_pending_groups()
         publications = self.presentation_router.route(
             self._presentation_subsystems(),
             selected=selected,
@@ -249,7 +252,19 @@ class DhPveRuntime:
             manual=manual_refresh,
         )
         if not publications:
-            return False if not pending_ok else False
+            if not pending_ok or not retried_groups:
+                return False
+            profile = str(
+                self.presentation_router.profile_summary().get("state") or "normal"
+            )
+            return self._publish_diagnostics(
+                collected_at=collected_at,
+                last_refresh=candidate_refresh,
+                group=retried_groups[-1],
+                reason="retry",
+                profile=profile,
+                group_count=len(retried_groups),
+            )
 
         publisher = getattr(self.bridge, "publish_state_group")
         successful = []
@@ -274,7 +289,7 @@ class DhPveRuntime:
             group=last.group,
             reason=diagnostics_reason,
             profile=last.profile.value,
-            group_count=len(successful),
+            group_count=len(retried_groups) + len(successful),
         ):
             return False
 
