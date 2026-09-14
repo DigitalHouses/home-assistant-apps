@@ -497,8 +497,34 @@ class PvePresentationRouter:
         force: bool,
         manual: bool,
     ) -> list[Publication]:
+        raw = _mapping(state.data)
         result: list[Publication] = []
-        for fan_id, fan_raw in sorted(_mapping(state.data).items()):
+
+        summary = {
+            key: raw.get(key)
+            for key in ("detected", "count", "status")
+            if key in raw
+        }
+        summary_publication = self._change_only(
+            group_name="fans",
+            subsystem_name="fans",
+            state=state,
+            semantic=summary,
+            data=summary,
+            now=now,
+            collected_at=collected_at,
+            last_refresh=last_refresh,
+            force=force,
+            manual=manual,
+        )
+        if summary_publication is not None:
+            result.append(summary_publication)
+
+        for fan_id, fan_raw in sorted(raw.items()):
+            if fan_id in {"detected", "count", "status"}:
+                continue
+            if not isinstance(fan_raw, Mapping):
+                continue
             fan = _mapping(fan_raw)
             rpm = _number(fan.get("rpm"))
             stable = {
