@@ -22,12 +22,66 @@ class AdaptiveUpsRuntime(UpsRuntime):
     def _group_capable(self) -> bool:
         return callable(getattr(self.bridge, "publish_ups_state_group", None))
 
-    def _publish_groups(self, publications) -> bool:
+    def _publish_groups(
+        self,
+        publications,
+        *,
+        collected_at: str,
+        manual_refresh: bool = False,
+    ) -> bool:
         publish = getattr(self.bridge, "publish_ups_state_group")
-        for publication in publications:
+        publications = tuple(publications)
+        diagnostics_publication = next(
+            (publication for publication in publications if publication.group == "diagnostics"),
+            None,
+        )
+        data_publications = tuple(
+            publication for publication in publications if publication.group != "diagnostics"
+        )
+
+        for publication in data_publications:
             if not publish(publication.group, publication.payload):
                 return False
             self._last_group_payloads[publication.group] = dict(publication.payload)
+
+        if not data_publications and diagnostics_publication is None:
+            return True
+
+        if diagnostics_publication is not None:
+            diagnostics = dict(diagnostics_publication.payload)
+        else:
+            diagnostics = dict(self._last_group_payloads.get("diagnostics", {}))
+
+        profile_summary = self.presentation.profile_summary()
+        diagnostics["app_profile"] = {
+            "state": str(profile_summary.get("profile") or "normal"),
+            "reason": profile_summary.get("reason"),
+        }
+
+        if data_publications:
+            last = data_publications[-1]
+            last_group = last.group
+            last_reason = "manual_refresh" if manual_refresh else last.reason
+            last_profile = last.profile.value
+            group_count = len(data_publications)
+        else:
+            last = diagnostics_publication
+            last_group = "diagnostics"
+            last_reason = "manual_refresh" if manual_refresh else last.reason
+            last_profile = last.profile.value
+            group_count = 1
+
+        diagnostics["last_publication"] = {
+            "timestamp": collected_at,
+            "group": last_group,
+            "reason": last_reason,
+            "profile": last_profile,
+            "group_count": group_count,
+        }
+
+        if not publish("diagnostics", diagnostics):
+            return False
+        self._last_group_payloads["diagnostics"] = diagnostics
         return True
 
     def _collect(self, *, force: bool = False, manual_refresh: bool = False) -> bool:
@@ -49,7 +103,7 @@ class AdaptiveUpsRuntime(UpsRuntime):
                 force=bool(force and not self._last_group_payloads),
                 manual=False,
             )
-            self._publish_groups(publications)
+            self._publish_groups(publications, collected_at=collected_at)
             self.sync_discovery(force=False)
             return False
 
@@ -71,7 +125,11 @@ class AdaptiveUpsRuntime(UpsRuntime):
             force=bool(force and not self._last_group_payloads),
             manual=manual_refresh,
         )
-        state_ok = self._publish_groups(publications)
+        state_ok = self._publish_groups(
+            publications,
+            collected_at=collected_at,
+            manual_refresh=manual_refresh,
+        )
 
         if state_ok:
             self._last_state_payload = payload
@@ -81,6 +139,15 @@ class AdaptiveUpsRuntime(UpsRuntime):
             self.last_refresh = previous_refresh
 
         return bool(discovery_ok and state_ok)
+
+    def startup(self) -> bool:
+        if not self._group_capable():
+            return super().startup()
+        cleanup_ok = True
+        cleaner = getattr(self.bridge, "clear_legacy_ups_state", None)
+        if callable(cleaner):
+            cleanup_ok = bool(cleaner())
+        return bool(cleanup_ok and super().startup())
 
     def republish_after_reconnect(self) -> bool:
         if not self._group_capable():
