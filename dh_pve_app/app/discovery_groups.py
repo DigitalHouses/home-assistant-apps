@@ -111,6 +111,39 @@ def _component_groups(inventory: Mapping[str, object]) -> dict[str, str]:
     return groups
 
 
+def _route_disk_temperature_object_availability(
+    components: Mapping[str, object],
+    topics,
+    inventory: Mapping[str, object],
+) -> None:
+    """Keep per-disk availability on the discrete status topic.
+
+    Disk temperature state is published on an adaptive telemetry topic, while
+    the disk object's available flag belongs to the change-only status group.
+    Home Assistant can consume those from separate MQTT topics.
+    """
+    for disk_id in _mapping(inventory.get("smart")):
+        entity = _entity_slug(disk_id)
+        runtime = _state_slug(disk_id)
+        component = components.get(f"disk_{entity}_temperature")
+        if not isinstance(component, dict):
+            continue
+        availability = component.get("availability")
+        if not isinstance(availability, list):
+            continue
+        status_topic = state_group_topic(topics, f"disk/{runtime}/status")
+        for entry in availability:
+            if not isinstance(entry, dict):
+                continue
+            template = entry.get("value_template")
+            if (
+                isinstance(template, str)
+                and "subsystems.smart.data" in template
+                and ".available" in template
+            ):
+                entry["topic"] = status_topic
+
+
 def _diagnostic_components(topics) -> dict[str, dict[str, object]]:
     diagnostics = state_group_topic(topics, "diagnostics")
     availability = [
@@ -192,6 +225,8 @@ def route_pve_discovery_groups(
             for entry in availability:
                 if isinstance(entry, dict) and entry.get("topic") == topics.state:
                     entry["topic"] = group_topic
+
+    _route_disk_temperature_object_availability(components, topics, inventory)
 
     _drop_json_attribute(components.get("memory_usage"), "used_gib")
     for key, component in components.items():
