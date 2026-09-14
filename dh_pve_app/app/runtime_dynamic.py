@@ -95,9 +95,14 @@ class DynamicDiscoveryRuntime(DhPveRuntime):
         return state_published
 
     def startup(self) -> bool:
+        cleanup_ok = True
+        if self._group_capable():
+            cleaner = getattr(self.bridge, "clear_legacy_state", None)
+            if callable(cleaner):
+                cleanup_ok = bool(cleaner())
         settings_ok = self.publish_settings()
         state_ok = self.run_collection(force=True)
-        return settings_ok and state_ok and self._last_discovery_ok
+        return cleanup_ok and settings_ok and state_ok and self._last_discovery_ok
 
     def republish_after_reconnect(self) -> bool:
         discovery_ok = self.sync_discovery(force=True)
