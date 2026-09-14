@@ -42,6 +42,16 @@ class Bridge:
         return True
 
 
+class GroupBridge(Bridge):
+    def __init__(self):
+        super().__init__()
+        self.group_states = []
+
+    def publish_state_group(self, group, payload):
+        self.group_states.append((group, payload))
+        return True
+
+
 def test_startup_builds_discovery_from_collected_inventory():
     bridge = Bridge()
     settings = RuntimeSettings()
@@ -91,3 +101,51 @@ def test_same_discovery_shape_is_not_republished_on_metric_change():
     runtime.run_collection()
 
     assert bridge.discovery == [{"storage": ["local"]}]
+
+
+def test_group_capable_dynamic_reconnect_republishes_group_cache_not_monolithic_state():
+    calls = {"cpu": 0}
+
+    def cpu():
+        calls["cpu"] += 1
+        return CollectorSample(
+            data={
+                "usage_percent": 20.0,
+                "temperature_c": 55.0,
+                "frequency": {"average_mhz": 1800.0},
+                "throttling_active": False,
+            },
+            metrics={
+                "usage_percent": MetricValue(20.0, "cpu_percent"),
+                "temperature_c": MetricValue(55.0, "temperature_c"),
+                "frequency_mhz": MetricValue(1800.0, "frequency_mhz"),
+                "throttling_active": MetricValue(False, "discrete"),
+            },
+        )
+
+    bridge = GroupBridge()
+    settings = RuntimeSettings()
+    runtime = DynamicDiscoveryRuntime(
+        collectors={"cpu": cpu},
+        bridge=bridge,
+        settings=settings,
+        publish_policy=PublishPolicy(settings),
+        state_store=Store(),
+        scheduler=Scheduler(),
+        now_iso=lambda: "2026-09-14T20:00:00+05:00",
+        now_monotonic=lambda: 0.0,
+        discovery_builder=lambda inv: {"has_cpu": "cpu" in inv},
+    )
+
+    assert runtime.startup() is True
+    cached_groups = [group for group, _ in bridge.group_states]
+    before_calls = calls["cpu"]
+    bridge.group_states.clear()
+    bridge.states.clear()
+
+    assert runtime.republish_after_reconnect() is True
+
+    assert calls["cpu"] == before_calls
+    assert bridge.states == []
+    assert [group for group, _ in bridge.group_states] == cached_groups
+    assert bridge.discovery[-1] == {"has_cpu": True}
