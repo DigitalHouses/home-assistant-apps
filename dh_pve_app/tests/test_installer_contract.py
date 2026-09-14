@@ -46,3 +46,14 @@ def test_installer_validates_proxmox_and_configuration_before_service_restart():
     check_pos = text.index("--check-config")
     restart_pos = text.index('systemctl restart "${SERVICE_NAME}"')
     assert check_pos < restart_pos
+
+
+def test_static_policy_helper_is_directly_executable_and_installer_restores_mode():
+    helper = ROOT / "bin" / "dh-pve-ups-policy-cmd"
+    helper_text = helper.read_text(encoding="utf-8")
+    installer_text = (ROOT / "install.sh").read_text(encoding="utf-8")
+
+    assert helper.is_file()
+    assert helper.stat().st_mode & 0o111
+    assert helper_text.startswith("#!/")
+    assert 'chmod 0755 "${APP_DIR}/bin/dh-pve-ups-policy-cmd"' in installer_text
