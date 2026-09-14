@@ -51,14 +51,24 @@ def test_setting_command_is_validated_and_queued():
     topics = _topics()
     settings = RuntimeSettings()
     events = MqttEvents(topics, settings)
-    topic = f"{topics.settings_prefix}/cpu_publish_delta/set"
+    topic = f"{topics.settings_prefix}/fast_poll_interval_seconds/set"
 
-    assert events.handle_message(topic, b"7") is True
+    assert events.handle_message(topic, b"20") is True
     update = events.setting_updates.get_nowait()
 
-    assert update.key == "cpu_publish_delta"
-    assert update.value == 7.0
-    assert settings.get("cpu_publish_delta") == 7.0
+    assert update.key == "fast_poll_interval_seconds"
+    assert update.value == 20.0
+    assert settings.get("fast_poll_interval_seconds") == 20.0
+
+
+def test_removed_publish_delta_command_is_not_accepted():
+    topics = _topics()
+    settings = RuntimeSettings()
+    events = MqttEvents(topics, settings)
+    topic = f"{topics.settings_prefix}/cpu_publish_delta/set"
+
+    assert events.handle_message(topic, b"7") is False
+    assert events.setting_updates.empty()
 
 
 def test_unknown_topic_is_ignored():
