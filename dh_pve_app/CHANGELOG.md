@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.0
+
+- Promote the validated `0.2.0-alpha` UPS/NUT feature set to the stable production release without functional code changes.
+- Confirm the Proxmox-owned NUT PRIMARY shutdown architecture, read-only Home Assistant observability, persistent shutdown history/readiness diagnostics, and battery-test controls as the production contract.
+- Release after successful live deployment on Proxmox VE, production NUT policy validation with no operational issues, and full repository CI before and after integration to `main`.
+
 ## 0.2.0-alpha
 
 - Add optional NUT-backed UPS monitoring as a second logical MQTT device, `DH PVE UPS`, while keeping one `dh_pve_app` process and MQTT connection.
