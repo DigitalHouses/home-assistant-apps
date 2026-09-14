@@ -1,54 +1,220 @@
 # DH PVE App
 
-`dh_pve_app` is a native DigitalHouses Linux agent for Proxmox VE. It collects host, CPU, memory, storage, physical-disk/SMART, GPU/transcoding, fan, VM/LXC, and passthrough topology telemetry and publishes normalized Home Assistant entities through MQTT Discovery.
+`dh_pve_app` is the DigitalHouses native Linux agent for Proxmox VE. It collects host, CPU, memory, storage, physical-disk/SMART, GPU/transcoding, fan, VM/LXC and passthrough topology data and publishes normalized Home Assistant entities through MQTT Discovery. The same process can also monitor a locally connected UPS through Network UPS Tools (NUT).
 
-Phase 1 intentionally runs alongside the legacy Bash Proxmox-to-MQTT script. The new app uses its own MQTT namespace and Home Assistant entity IDs, so both implementations can be compared before cutover.
+Version `0.2.0-alpha` is the current UPS commissioning build. Proxmox/NUT owns the UPS and all emergency shutdown decisions; Home Assistant is an observability and battery-test UI, not a shutdown-policy authority.
 
 ## Public identity
 
 - Home Assistant MQTT device: `DH PVE`
+- Optional UPS MQTT device: `DH PVE UPS`
 - MQTT base namespace: `DigitalHouses/Global/dh_pve_app/<instance>`
-- Home Assistant entity prefix: `dh_pve_`
+- PVE entity prefix: `dh_pve_`
+- UPS entity prefix: `dh_pve_ups_`
 - Service: `dh_pve_app.service`
 - Install directory: `/opt/digitalhouses/dh_pve_app/`
 - Config: `/etc/dh_pve_app/dh_pve_app.conf`
 - Persistent state: `/var/lib/dh_pve_app/`
 
-The default instance ID is derived from `/etc/machine-id`, so multiple Proxmox hosts do not collide.
+The default instance identity is derived from `/etc/machine-id`, so multiple Proxmox hosts do not collide.
 
 ## Runtime model
 
-Collectors poll Proxmox/Linux locally. MQTT state is published only for meaningful metric deltas, discrete events, inventory changes, collector failure/recovery, reconnect restoration, or a manual refresh. There is no periodic state heartbeat; process/MQTT liveness uses retained availability plus MQTT LWT.
+Collectors poll Proxmox/Linux locally. MQTT state is published for meaningful metric deltas, discrete events, inventory changes, collector failure/recovery, reconnect restoration, or a manual refresh. Process/MQTT liveness uses retained availability plus MQTT LWT.
 
-A failure in one collector does not make unrelated subsystems unavailable. SMART reads are isolated per physical disk, and a disk is removed from inventory only after three consecutive authoritative scans confirm that it is absent.
+A failure in one collector does not make unrelated subsystems unavailable. SMART reads are isolated per physical disk, and a disk is removed from inventory only after repeated authoritative scans confirm that it is absent.
 
-Runtime polling/publish parameters can be adjusted from Home Assistant within application-defined hard limits. SMART/disk-health policy is version-controlled in the app and cannot be changed from Home Assistant.
+Runtime polling/publish parameters can be adjusted from Home Assistant within application-defined hard limits. Infrastructure health policy remains Python-owned rather than being recalculated by Home Assistant templates.
 
-Expensive Proxmox helper processes are deliberately kept out of the fast loop. Cheap CPU/memory/fan sampling may run at the fast interval, while VM/LXC status and guest GPU telemetry use a 30-second cadence. New installations use a 60-second SMART polling default.
+## UPS / NUT architecture
+
+The production ownership model is:
+
+```text
+UPS USB
+  ↓
+Proxmox
+  ↓
+NUT driver / upsd / upsmon PRIMARY / upssched
+  ↓
+Proxmox emergency shutdown policy
+  ↓ read-only monitoring
+DH PVE App
+  ↓ MQTT Discovery
+Home Assistant
+```
+
+Proxmox is the only physical UPS owner and the only authority that may initiate emergency shutdown of the host. Home Assistant does not issue FSD, does not shut down Proxmox, and does not edit the NUT shutdown policy.
+
+The long-running `dh_pve_app.service` is deliberately **read-only with respect to `/etc/nut`**. Its systemd sandbox keeps `ProtectSystem=full` and does not grant `ReadWritePaths=/etc/nut`.
+
+### NUT endpoint and UPS discovery
+
+The default local NUT endpoint is:
+
+```text
+127.0.0.1:3493
+```
+
+The optional `[ups]` config section controls only the runtime NUT endpoint and command timeouts:
+
+```ini
+[ups]
+host = 127.0.0.1
+port = 3493
+poll_interval_seconds = 5
+command_timeout_seconds = 3
+```
+
+`DH PVE` always exposes:
+
+- `button.dh_pve_scan_ups`
+- `sensor.dh_pve_ups_scan_result`
+- `sensor.dh_pve_ups_last_scan`
+
+Pressing **Сканировать UPS** performs a read-only `upsc -l` query. One discovered UPS is persisted as the selected UPS. Zero, multiple, or failed scans never erase an existing selection.
+
+When an UPS is selected, the same app process and MQTT connection publish the second logical device:
+
+```text
+DH PVE
+DH PVE UPS
+```
+
+### UPS telemetry
+
+Discovery is capability-driven. Only values reported by NUT are exposed. Normalized facts include, where supported:
+
+- UPS status and raw NUT status tokens;
+- battery charge, runtime and voltage;
+- load;
+- input/output voltage and frequency;
+- nominal real power;
+- warning/low battery thresholds;
+- test result and beeper status;
+- `ONBATT`, `LOW BATTERY`, overload, bypass, charging/discharging and replace-battery flags.
+
+The app does not derive active watts from `load × nominal power`; some UPS models quantize low load too coarsely for that value to be trustworthy.
+
+NUT is polled frequently but numeric MQTT publication remains sparse on line power and tighter on battery. Discrete power-state changes publish immediately. A NUT failure affects only `DH PVE UPS`; `DH PVE` monitoring continues.
+
+## Emergency shutdown policy
+
+NUT system files are treated as host configuration, not runtime application settings. They are configured during an explicit administrative commissioning operation and then observed read-only during normal service operation.
+
+The expected managed policy is:
+
+- `upsmon` role: `PRIMARY` on the Proxmox host;
+- `SHUTDOWNCMD "/sbin/shutdown -h now"`;
+- `POWERDOWNFLAG /etc/killpower`;
+- `NOTIFYCMD /usr/sbin/upssched`;
+- `ONBATT` starts the owned `dh-pve-ups-shutdown` timer;
+- `ONLINE` cancels that timer;
+- the timer invokes only the static DigitalHouses helper token, which calls `upsmon -c fsd`;
+- native hardware Low Battery remains authoritative; no `ignorelb` or battery threshold overrides are installed.
+
+The effective policy is read back from `/etc/nut/upsmon.conf`, `/etc/nut/upssched.conf`, `/etc/nut/ups.conf`, systemd state and NUT telemetry. Home Assistant receives diagnostic sensors such as:
+
+- `sensor.dh_pve_ups_shutdown_policy`
+- `sensor.dh_pve_ups_policy_on_battery_delay`
+- `sensor.dh_pve_ups_policy_power_restore_delay`
+- `sensor.dh_pve_ups_shutdown_delay`
+- `sensor.dh_pve_ups_start_delay`
+
+These entities are **read-only**. There is no MQTT/Home Assistant Apply button and no writable shutdown-policy number entity.
+
+### Explicit commissioning
+
+Commissioning is a rare root-only host operation. It is not invoked by the daemon and cannot be triggered over MQTT.
+
+Example for a 30-minute ONBATT wait and 120-second UPS restore delay:
+
+```bash
+cd /opt/digitalhouses/dh_pve_app
+.venv/bin/python -m app.main \
+  --config /etc/dh_pve_app/dh_pve_app.conf \
+  --state-dir /var/lib/dh_pve_app \
+  --ups-policy-commission \
+  --on-battery-delay-minutes 30 \
+  --power-restore-delay-seconds 120
+```
+
+Before writing anything, commissioning requires root, a selected UPS, stable line power, and no running battery test. It calculates the Proxmox guest-shutdown budget, validates the draft, writes NUT files transactionally, restarts the UPS driver, waits for the exact effective restore delay reported by the hardware, and only then starts/restarts `nut-monitor`.
+
+Managed NUT files are written with mode `0640` and the owner/group inherited from `/etc/nut` (normally `root:nut`). Rollback restores file contents, mode, owner and group.
+
+A read-only commissioning report remains available separately:
+
+```bash
+cd /opt/digitalhouses/dh_pve_app
+.venv/bin/python -m app.main \
+  --config /etc/dh_pve_app/dh_pve_app.conf \
+  --state-dir /var/lib/dh_pve_app \
+  --ups-policy-preflight
+```
+
+## Shutdown history and readiness
+
+The app keeps dry facts about Proxmox shutdowns; notification wording remains a Home Assistant responsibility. A real host boot is identified by the kernel `boot_id`, so restarting or upgrading `dh_pve_app` during the same boot does not create a false Proxmox boot event.
+
+Shutdown history is persisted in `/var/lib/dh_pve_app/shutdown_history.json`. Up to 50 cycles are retained locally and the most recent 10 are exposed through MQTT. For the previous boot the app publishes:
+
+- `shutdown_class`: `normal`, `unclean`, `ups_power`, or `unknown`;
+- `shutdown_reason`: the observed cause only, such as `shutdown`, `on_battery_fsd`, `low_battery_fsd`, `manual_or_external_fsd`, or `unknown` when no cause is established;
+- `shutdown_clean`: `true`, `false`, or unknown when previous-boot journal evidence is insufficient; this result is kept separate from the cause;
+- outage/FSD/guest/host timestamps and derived timing intervals only when the required evidence exists;
+- UPS status, battery charge/runtime and load captured when FSD is first observed;
+- per-VM/LXC shutdown start/end, duration, timeout, timeout ratio, result and forced/timeout state.
+
+`shutdown_reason` never encodes the shutdown result or evidence quality: an unclean shutdown is represented by `shutdown_clean=false`, and insufficient journal evidence by an unknown `shutdown_clean`, while an unknown cause remains `shutdown_reason=unknown`. An unclean boot is never automatically called a power failure. `ups_power` requires confirmed UPS/FSD evidence; a manual/external FSD while the UPS remains on line power is kept distinct. If the previous boot journal contains no usable evidence, the class is `unknown` rather than inventing an `unclean` result or a shutdown timestamp from an arbitrary last log line.
+
+Home Assistant entities include:
+
+- `sensor.dh_pve_previous_shutdown`
+- `sensor.dh_pve_shutdown_history`
+- `sensor.dh_pve_vm_<id>_shutdown`
+- `sensor.dh_pve_lxc_<id>_shutdown`
+- `sensor.dh_pve_ups_guest_shutdown_budget`
+- `sensor.dh_pve_ups_shutdown_readiness`
+
+Guest configuration is diagnostic-only. The app reads `onboot`, `startup.order` and `startup.down`; when `down` is absent, the effective Proxmox timeout is treated as 180 seconds. It never rewrites VM/LXC startup or shutdown settings.
+
+UPS shutdown readiness checks the production NUT path as well as guest history. It warns on a forced/timeout guest, a guest that consumed at least 80% of its previous timeout, an unavailable shutdown budget, a broken NUT PRIMARY/upssched path, or a UPS-triggered shutdown whose host shutdown result is unclean or unknown. Hosts without a selected UPS report readiness as `skip` rather than an error.
+
+## Battery tests
+
+Battery tests are runtime UPS operations and are intentionally separate from shutdown-policy configuration. Capability permitting, Home Assistant may expose:
+
+- `button.dh_pve_ups_test_quick`
+- `button.dh_pve_ups_test_deep`
+- `button.dh_pve_ups_test_stop`
+
+The built-in scheduler supports separate Quick and Deep intervals/times, with Deep priority when both are due. Before an automatic test the runtime verifies that NUT is available, the UPS is on line power, no fault/bypass/charge-discharge condition blocks the test, FSD is absent, and another battery test is not already running.
+
+Default schedule:
+
+- Quick: every 30 days at 12:00 local PVE time;
+- Deep: every 180 days at 13:00 local PVE time.
+
+Test history is retained in application state and exposed through MQTT Discovery.
 
 ## Guest and passthrough topology
 
-The app discovers Proxmox guests automatically; no site-specific `disk_vms`, `gpu_vms`, or passthrough VM lists are required.
+The app discovers Proxmox guests automatically; no site-specific VM/LXC lists are required.
 
-Topology behavior is deliberately split into a heavy and a lightweight path:
-
-- A full topology scan runs at app startup and on `button.dh_pve_refresh`.
-- VM/LXC status is polled independently every 30 seconds through one `/cluster/resources` query instead of separate `qm list` and `pct list` processes.
-- Guest configuration is normally read directly from pmxcfs under `/etc/pve/qemu-server` and `/etc/pve/lxc`; `qm config` / `pct config` are fallback paths only.
-- A guest transition from non-running to `running` triggers a targeted rescan of that guest rather than a full topology rebuild.
+- A full topology scan runs at startup and on `button.dh_pve_refresh`.
+- VM/LXC status uses one `/cluster/resources` query on a slower cadence.
+- Guest configuration is normally read directly from pmxcfs under `/etc/pve/qemu-server` and `/etc/pve/lxc`.
+- Guest start transitions trigger targeted rescans.
 - VM `hostpciN` PCI passthrough is detected and cached.
 - Existing LXC shared `/dev/dri` GPU ownership remains supported.
-- VM/LXC Home Assistant entities are read-only status/diagnostic entities; the app does not expose guest start/stop/reboot controls.
+- VM/LXC Home Assistant entities are read-only status/diagnostic entities.
 
-For storage-class PCI passthrough, a running VM with a working QEMU Guest Agent (QGA) is inspected with `lsblk`. Eligible physical disks are then queried through guest `smartctl -a -j` and fed into the same stable-ID, SMART parser, health engine, daily statistics, and MQTT Discovery pipeline as host-local disks. A stopped guest or unavailable QGA marks the guest-derived disk telemetry unavailable without immediately deleting the disk from inventory.
+For storage-class PCI passthrough, a running VM with QEMU Guest Agent can be inspected with `lsblk`; eligible physical disks then reuse the same SMART, stable-ID, health and daily-statistics pipeline as host-local disks.
 
-GPU ownership also uses the shared topology cache. Guest-side Intel GPU telemetry continues to use QGA when the GPU is assigned to a VM, but the expensive guest telemetry command is scheduled at 30 seconds rather than in the fast CPU/memory loop.
+## Storage and disk health
 
-## Storage semantics
-
-Storage entities use **used / total** semantics. Home Assistant receives ready-to-display `usage_percent`, `used_gib`, and `total_gib`; it does not need templates to calculate infrastructure values. `available_gib` may exist in the internal collector payload but is not the primary storage UI contract.
-
-## Disk health
+Storage entities use **used / total** semantics. Home Assistant receives ready-to-display `usage_percent`, `used_gib`, and `total_gib` values.
 
 Disk health is computed by the Python agent and exposed as exactly:
 
@@ -56,93 +222,100 @@ Disk health is computed by the Python agent and exposed as exactly:
 - `WARNING`
 - `CRITICAL`
 
-The health engine evaluates SMART overall status, NVMe critical warnings, wear, media/reallocated/pending/uncorrectable errors, unsafe-shutdown growth, temperature, and counter growth. Daily statistics include maximum temperature and sparse lifetime counters for Recorder-friendly history.
-
-Home Assistant templates may format or filter these ready facts, but must not recompute infrastructure health or disk thresholds.
+The health engine evaluates SMART overall state, NVMe critical warnings, wear, media/reallocated/pending/uncorrectable errors, unsafe-shutdown growth, temperature and counter growth. Home Assistant does not recompute these infrastructure decisions.
 
 ## Manual refresh
 
-Home Assistant exposes:
+PVE:
 
 - `button.dh_pve_refresh`
 - `sensor.dh_pve_last_refresh`
 
-A manual refresh runs the full topology scan first, then all enabled collectors, and forces a state publication. `last_refresh` advances only after a successful full refresh.
+UPS:
 
-## Dashboard
+- `button.dh_pve_ups_refresh`
+- `sensor.dh_pve_ups_last_refresh`
 
-A production Lovelace view is provided at:
+UPS refresh is independent of the full Proxmox topology refresh.
+
+## Home Assistant package
+
+Use one package for the entire application:
+
+```text
+dh_pve_app/examples/packages/dh_app_pve_package.yaml
+```
+
+Recorder includes `sensor.dh_pve_*` and `binary_sensor.dh_pve_*`, so PVE and UPS telemetry share one namespace. `number.dh_pve_ups_*` and `time.dh_pve_ups_*` are included for battery-test scheduler history. A separate UPS Recorder package is not required.
+
+## Dashboards
+
+PVE view:
 
 ```text
 dh_pve_app/examples/dh_pve_dashboard.yaml
 ```
 
-It requires the HACS cards **Mushroom**, **auto-entities**, **mini-graph-card**, and **Entity Progress Card**.
+UPS view:
 
-The production view is intentionally built as four continuous desktop columns rather than many independent Sections:
+```text
+dh_pve_app/examples/dh_pve_ups_dashboard.yaml
+```
 
-1. Host → Proxmox state → performance → system → disk diagnostics.
-2. Physical disks → Proxmox storage → monitoring/runtime settings.
-3. CPU/RAM/Swap → CPU/throttling → cooling → graphics → VM/LXC → collector diagnostics.
-4. History.
+Reusable shutdown/readiness card:
 
-Dynamic storage, physical disks, GPU, fans, VM/LXC, runtime settings, and collector diagnostics are selected through the `proxmox_*` semantic attributes emitted by MQTT Discovery rather than hard-coded hardware entity IDs. Guest-derived physical disks therefore appear in the same disk list automatically.
+```text
+dh_pve_app/examples/dh_pve_shutdown_readiness_card.yaml
+```
 
-The dashboard uses Python-normalized values directly. Storage progress uses `usage_percent` plus `used_gib / total_gib`, disk health remains the Python-produced `HEALTHY/WARNING/CRITICAL` state, and Home Assistant does not calculate infrastructure health.
+The UPS dashboard includes live UPS state, power/battery metrics, effective shutdown policy, NUT diagnostics, battery-test controls/schedule, history graphs and event log. Shutdown-policy controls are intentionally absent. The shutdown/readiness card shows the previous host shutdown cause/result, timing chain, UPS readiness/budget when an UPS exists, and dynamic per-VM/LXC shutdown diagnostics.
+
+The PVE dashboard requires Mushroom, auto-entities, mini-graph-card and Entity Progress Card. The UPS view requires Mushroom and mini-graph-card. The reusable shutdown/readiness card requires Mushroom and auto-entities.
 
 ## Installation
 
-Run on the Proxmox host as `root`:
+Run on Proxmox as `root`:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/main/dh_pve_app/install.sh | bash
 ```
 
-On first installation the installer asks only for MQTT host, port, username, and password. Host identity is detected automatically. Existing valid configuration is preserved on upgrades.
+For a pre-merge feature/ref deployment, the installer and application source must come from the **same ref**. Do not bootstrap a feature deployment with the `main` installer because installer fixes in the feature ref would be skipped:
 
-If configuration validation fails, the installer does not overwrite the file and points to:
-
-```bash
-nano /etc/dh_pve_app/dh_pve_app.conf
+```text
+REF=<ref>
+DIGITALHOUSES_SOURCE_REF="$REF" \
+  bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$REF/dh_pve_app/install.sh")
 ```
 
-The service intentionally runs as root because SMART, `/etc/pve` guest configuration, passthrough inspection, and future NUT diagnostics require host-level read access.
+Canonical same-ref URL shape: `https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/<ref>/dh_pve_app/install.sh`.
 
-## Phase 1 validation
+The static UPS policy helper is stored executable in git and the installer also restores mode `0755` after copying it. This is intentional defense in depth because a non-executable helper would break the owned `upssched` FSD action path.
 
-The installer does **not** disable, edit, or remove the legacy `digitalhouses-proxmox-mqtt.sh` cron job. After installation, compare the new `DH PVE` device against the legacy entities before any cutover.
+The installer deploys the application, helper and systemd service. It does **not** silently commission NUT shutdown policy. Commissioning is an explicit post-install administrative action when physical UPS access and validation are available.
 
-Basic service diagnostics:
+Existing valid application configuration is preserved on upgrades. Legacy `ups.policy_apply_enabled` lines are ignored for upgrade compatibility and no longer grant any runtime capability.
+
+The service intentionally runs as root because SMART, `/etc/pve` guest configuration and passthrough inspection require host privileges; systemd still prevents the long-running daemon from modifying protected system configuration such as `/etc/nut`.
+
+## Validation
+
+Basic application diagnostics:
 
 ```bash
 systemctl status dh_pve_app --no-pager
 journalctl -u dh_pve_app -n 100 --no-pager
 ```
 
-Guest/topology checks on Proxmox:
+NUT source diagnostics:
 
 ```bash
-qm list
-pct list
-qm config 700 | grep -E '^(name|agent|hostpci)'
-qm config 501 | grep -E '^(name|agent|hostpci)'
-qm agent 700 ping
-qm agent 501 ping
+upsc -l 127.0.0.1:3493
+upsc ups@127.0.0.1:3493
 ```
 
-For the current validation host, acceptance is:
-
-- `sensor.dh_pve_vm_700_status` shows the TrueNAS VM state.
-- `sensor.dh_pve_vm_501_status` shows the Plex VM state.
-- `sensor.dh_pve_vms` / `sensor.dh_pve_lxcs` expose running counts and total/paused/stopped/unknown attributes.
-- VM 700 storage passthrough is detected from `hostpci` and the Samsung SSD 850 EVO 1TB appears alongside the host-local Samsung SSD 990 EVO 1TB when QGA/SMART are available.
-- The Samsung SSD 850 EVO reports WWN `0x5002538d41046527`, serial `S2PWNX0H603177N`, and Python-produced disk health.
-- VM 501 keeps Intel GPU ownership and transcoding telemetry through the shared topology cache.
-- Pressing `button.dh_pve_refresh` rebuilds topology and updates `sensor.dh_pve_last_refresh`.
-- `examples/dh_pve_dashboard.yaml` renders as four continuous columns on a desktop-width view.
-
-Do not retire the legacy Bash agent until side-by-side parity is accepted on the live host.
+Release/deploy validation is non-destructive. Verify service/MQTT health, NUT telemetry and the read-only policy preflight. If mains behavior is checked physically, stop at `OL → OB → OL` and confirm `upssched` timer start/cancel before any FSD threshold. Do not invoke `upsmon -c fsd`, wait for the emergency shutdown timer to expire, or intentionally shut down the host as part of release validation.
 
 ## Status
 
-Version `0.1.0` is the initial Phase 1 implementation. UPS/NUT support is reserved for Phase 2 and will use a separate `DH UPS` MQTT device.
+`0.2.0-alpha` currently provides production-oriented Proxmox monitoring, NUT-backed UPS telemetry, capability-driven battery tests, explicit NUT shutdown-policy commissioning, persistent boot/shutdown history, guest shutdown diagnostics, UPS shutdown readiness, read-only policy observability in Home Assistant, and systemd-enforced separation between normal runtime and host configuration.

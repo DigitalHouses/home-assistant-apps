@@ -9,7 +9,12 @@ from typing import Any
 
 from .config import MqttConfig
 from .runtime_settings import RuntimeSettingError, RuntimeSettings
-from .topics import Topics
+from .topics import Topics, UpsTopics
+from .ups_test_schedule import (
+    TestScheduleError,
+    parse_interval_days_payload,
+    parse_time_command_payload,
+)
 
 
 @dataclass(frozen=True)
@@ -26,6 +31,13 @@ class SettingUpdate:
     value: float
 
 
+@dataclass(frozen=True)
+class TestScheduleUpdate:
+    test_type: str
+    field: str
+    value: int | str
+
+
 def build_lwt(topics: Topics) -> WillMessage:
     return WillMessage(topics.availability, "offline", 1, True)
 
@@ -34,22 +46,95 @@ class MqttEvents:
     def __init__(self, topics: Topics, settings: RuntimeSettings) -> None:
         self.topics = topics
         self.settings = settings
+        self.ups_topics: UpsTopics | None = None
         self.refresh_requested = threading.Event()
         self.reconnect_requested = threading.Event()
+        self.ups_scan_requested = threading.Event()
+        self.ups_refresh_requested = threading.Event()
+        self.ups_test_quick_requested = threading.Event()
+        self.ups_test_deep_requested = threading.Event()
+        self.ups_test_stop_requested = threading.Event()
+        self.ups_reconnect_requested = threading.Event()
         self.setting_updates: queue.SimpleQueue[SettingUpdate] = queue.SimpleQueue()
+        self.ups_test_schedule_updates: queue.SimpleQueue[TestScheduleUpdate] = queue.SimpleQueue()
+
+    def configure_ups(self, topics: UpsTopics) -> None:
+        self.ups_topics = topics
+
+    def handle_ha_online(self) -> None:
+        self.reconnect_requested.set()
+        if self.ups_topics is not None:
+            self.ups_reconnect_requested.set()
 
     def handle_message(self, topic: str, payload: bytes) -> bool:
+        text = payload.decode("utf-8", errors="replace").strip()
         if topic == self.topics.refresh:
-            if payload.decode("utf-8", errors="replace").strip().upper() == "PRESS":
+            if text.upper() == "PRESS":
                 self.refresh_requested.set()
                 return True
             return False
+        if topic == self.topics.ups_scan:
+            if text.upper() == "PRESS":
+                self.ups_scan_requested.set()
+                return True
+            return False
+        if self.ups_topics is not None and topic == self.ups_topics.refresh:
+            if text.upper() == "PRESS":
+                self.ups_refresh_requested.set()
+                return True
+            return False
+        if self.ups_topics is not None and topic == self.ups_topics.test_quick:
+            if text.upper() == "PRESS":
+                self.ups_test_quick_requested.set()
+                return True
+            return False
+        if self.ups_topics is not None and topic == self.ups_topics.test_deep:
+            if text.upper() == "PRESS":
+                self.ups_test_deep_requested.set()
+                return True
+            return False
+        if self.ups_topics is not None and topic == self.ups_topics.test_stop:
+            if text.upper() == "PRESS":
+                self.ups_test_stop_requested.set()
+                return True
+            return False
+        if self.ups_topics is not None:
+            schedule_topics = {
+                self.ups_topics.test_quick_interval_days_set: (
+                    "quick",
+                    "interval_days",
+                    parse_interval_days_payload,
+                ),
+                self.ups_topics.test_quick_time_set: (
+                    "quick",
+                    "preferred_time",
+                    parse_time_command_payload,
+                ),
+                self.ups_topics.test_deep_interval_days_set: (
+                    "deep",
+                    "interval_days",
+                    parse_interval_days_payload,
+                ),
+                self.ups_topics.test_deep_time_set: (
+                    "deep",
+                    "preferred_time",
+                    parse_time_command_payload,
+                ),
+            }
+            schedule_target = schedule_topics.get(topic)
+            if schedule_target is not None:
+                test_type, field, parser = schedule_target
+                value = parser(text)
+                self.ups_test_schedule_updates.put(
+                    TestScheduleUpdate(test_type=test_type, field=field, value=value)
+                )
+                return True
+
         prefix = f"{self.topics.settings_prefix}/"
         suffix = "/set"
         if topic.startswith(prefix) and topic.endswith(suffix):
             key = topic[len(prefix):-len(suffix)]
-            raw = payload.decode("utf-8", errors="replace").strip()
-            value = self.settings.apply(key, raw)
+            value = self.settings.apply(key, text)
             self.setting_updates.put(SettingUpdate(key=key, value=value))
             return True
         return False
@@ -85,6 +170,9 @@ class MqttBridge(MqttEvents):
         self.client.on_disconnect = self._on_disconnect
         self.client.on_message = self._on_message
 
+    def configure_ups(self, topics: UpsTopics) -> None:
+        super().configure_ups(topics)
+
     def _on_connect(self, client, userdata, flags, reason_code, properties) -> None:
         if getattr(reason_code, "is_failure", False):
             self.log.error("MQTT connection rejected: %s", reason_code)
@@ -92,9 +180,25 @@ class MqttBridge(MqttEvents):
         self.connected.set()
         client.subscribe(self.topics.ha_status, qos=1)
         client.subscribe(self.topics.refresh, qos=1)
+        client.subscribe(self.topics.ups_scan, qos=1)
+        client.subscribe(f"{self.topics.base}/ups/refresh", qos=1)
+        client.subscribe(f"{self.topics.base}/ups/test/quick", qos=1)
+        client.subscribe(f"{self.topics.base}/ups/test/deep", qos=1)
+        client.subscribe(f"{self.topics.base}/ups/test/stop", qos=1)
+        client.subscribe(f"{self.topics.base}/ups/test/schedule/quick/interval_days/set", qos=1)
+        client.subscribe(f"{self.topics.base}/ups/test/schedule/quick/time/set", qos=1)
+        client.subscribe(f"{self.topics.base}/ups/test/schedule/deep/interval_days/set", qos=1)
+        client.subscribe(f"{self.topics.base}/ups/test/schedule/deep/time/set", qos=1)
         client.subscribe(f"{self.topics.settings_prefix}/+/set", qos=1)
+        if self.ups_topics is not None:
+            client.publish(
+                self.ups_topics.availability,
+                payload="online",
+                qos=1,
+                retain=True,
+            )
         client.publish(self.topics.availability, payload="online", qos=1, retain=True)
-        self.reconnect_requested.set()
+        self.handle_ha_online()
         self.wake_requested.set()
 
     def _on_disconnect(self, client, userdata, disconnect_flags, reason_code, properties) -> None:
@@ -112,7 +216,7 @@ class MqttBridge(MqttEvents):
         payload = bytes(message.payload)
         text = payload.decode("utf-8", errors="replace").strip()
         if message.topic == self.topics.ha_status and text.casefold() == "online":
-            self.reconnect_requested.set()
+            self.handle_ha_online()
             self.wake_requested.set()
             return
         try:
@@ -125,6 +229,9 @@ class MqttBridge(MqttEvents):
                     self.publish_setting_value(key, self.settings.get(key))
                 except RuntimeSettingError:
                     pass
+            return
+        except TestScheduleError as exc:
+            self.log.warning("Отклонено значение расписания тестов UPS: %s", exc)
             return
         if handled:
             self.wake_requested.set()
@@ -139,6 +246,8 @@ class MqttBridge(MqttEvents):
     def stop(self) -> None:
         try:
             if self.connected.is_set():
+                if self.ups_topics is not None:
+                    self._publish(self.ups_topics.availability, "offline", retain=True)
                 self._publish(self.topics.availability, "offline", retain=True)
                 self.client.disconnect()
         finally:
@@ -176,9 +285,48 @@ class MqttBridge(MqttEvents):
             retain=True,
         )
 
+    def publish_ups_scan_state(self, payload: dict[str, object]) -> bool:
+        return self._publish(
+            self.topics.ups_scan_state,
+            json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+            retain=True,
+        )
+
     def publish_setting_value(self, key: str, value: float) -> bool:
         return self._publish(
             f"{self.topics.settings_prefix}/{key}/state",
             f"{value:g}",
+            retain=True,
+        )
+
+    def publish_ups_discovery(self, payload: dict[str, object]) -> bool:
+        if self.ups_topics is None:
+            return False
+        return self._publish(
+            self.ups_topics.discovery,
+            json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+            retain=True,
+        )
+
+    def clear_legacy_ups_discovery(self) -> bool:
+        if self.ups_topics is None:
+            return False
+        return self._publish(self.ups_topics.legacy_discovery, "", retain=True)
+
+    def publish_ups_state(self, payload: dict[str, object]) -> bool:
+        if self.ups_topics is None:
+            return False
+        return self._publish(
+            self.ups_topics.state,
+            json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+            retain=True,
+        )
+
+    def publish_ups_availability(self, online: bool) -> bool:
+        if self.ups_topics is None:
+            return False
+        return self._publish(
+            self.ups_topics.availability,
+            "online" if online else "offline",
             retain=True,
         )

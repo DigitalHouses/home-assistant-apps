@@ -5,8 +5,9 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-# Root is intentional: SMART, /etc/pve guest configuration, passthrough
-# inspection, and future NUT diagnostics require host-level read access.
+# Root is intentional for host monitoring: SMART, /etc/pve guest configuration,
+# passthrough inspection and other read-only host diagnostics require privileges.
+# NUT commissioning is an explicit CLI operation outside this long-running service.
 User=root
 Group=root
 WorkingDirectory=/opt/digitalhouses/dh_pve_app
@@ -18,6 +19,8 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectHome=true
 ProtectSystem=full
+# Runtime must never modify /etc/nut. ProtectSystem keeps system configuration
+# read-only; application state under /var/lib/dh_pve_app remains writable.
 
 [Install]
 WantedBy=multi-user.target

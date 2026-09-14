@@ -80,6 +80,7 @@ find "${APP_DIR}" \
     -exec rm -rf -- {} +
 cp -a "${SOURCE_APP}/." "${APP_DIR}/"
 chown -R root:root "${APP_DIR}"
+chmod 0755 "${APP_DIR}/bin/dh-pve-ups-policy-cmd"
 
 if [[ ! -x "${APP_DIR}/.venv/bin/python" ]]; then
     python3 -m venv "${APP_DIR}/.venv"

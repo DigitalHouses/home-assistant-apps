@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.2.0-alpha
+
+- Add optional NUT-backed UPS monitoring as a second logical MQTT device, `DH PVE UPS`, while keeping one `dh_pve_app` process and MQTT connection.
+- Scope UPS entity IDs under `dh_pve_ups_*` and use the stable Discovery device ID `dh_pve_ups_<instance>`.
+- Add read-only UPS scan/selection with `button.dh_pve_scan_ups`; one discovered UPS is persisted while zero/multiple/error scans preserve any existing selection.
+- Add capability-driven UPS telemetry for status, battery charge/runtime/voltage, load, input/output voltage/frequency, nominal power, hardware thresholds, test result, beeper and actionable status flags.
+- Keep telemetry factual: do not derive active watts from load percentage and nominal real power.
+- Add adaptive meaningful-change publication thresholds with tighter behavior while running on battery and immediate publication for discrete power-state changes.
+- Isolate NUT failures from the main PVE monitoring runtime and preserve the last valid UPS capability inventory across transient failures.
+- Add independent UPS refresh/reconnect handling and persistent last-successful refresh timestamp.
+- Add capability-driven Quick/Deep/Stop battery-test controls with a local-time scheduler, safety gate and persistent test history.
+- Default scheduled tests to Quick every 30 days at 12:00 and Deep every 180 days at 13:00, with Deep priority when both are due.
+- Add NUT shutdown-policy preflight with PVE guest-shutdown budget calculation and native hardware Low Battery validation.
+- Add explicit root-only `--ups-policy-commission` for rare administrative configuration of the Proxmox NUT PRIMARY shutdown policy.
+- Keep the long-running `dh_pve_app.service` strictly read-only with respect to `/etc/nut`; systemd no longer grants `ReadWritePaths=/etc/nut`.
+- Remove Home Assistant/MQTT shutdown-policy Apply controls and editable policy number entities. HA now observes the effective host policy only.
+- Publish observed ONBATT wait and UPS restore delay as read-only sensors parsed from the actual NUT configuration.
+- Preserve upgrade compatibility by ignoring the legacy `ups.policy_apply_enabled` config key without granting any runtime capability.
+- Reuse the transactional NUT policy renderer/applier only from explicit commissioning, never from the daemon or MQTT event path.
+- Make commissioning atomic writes preserve the owner/group contract of `/etc/nut` (normally `root:nut`) and mode `0640`; rollback restores content, mode, UID and GID.
+- After restarting the UPS driver during commissioning, wait up to 10 seconds for the exact effective hardware restore delay instead of performing a race-prone one-shot read.
+- Keep the static `dh-pve-ups-policy-cmd` helper restricted to the owned `dh-pve-ups-shutdown` timer token and `upsmon -c fsd` action.
+- Keep native hardware Low Battery authoritative; do not install `ignorelb` or battery threshold overrides.
+- Add persistent PVE boot/shutdown history keyed by the kernel `boot_id`, so restarting or upgrading `dh_pve_app` does not create a false host boot event.
+- Classify the previous shutdown as `normal`, `unclean`, `ups_power`, or `unknown`, keep `shutdown_reason` strictly as the observed cause, and keep the host `shutdown_clean` result separate from that cause. If no cause is known, `shutdown_reason` is `unknown`; clean/unclean/insufficient-evidence states are never encoded as causes.
+- Treat missing previous-boot journal evidence as `unknown` and never invent a shutdown timestamp from an arbitrary last log line.
+- Capture confirmed UPS/FSD facts and outage/FSD/guest/host timing intervals without assuming that every unclean boot was caused by a power failure.
+- Read each VM/LXC effective shutdown timeout/order/onboot state and retain the previous shutdown duration, timeout ratio, result and forced/timeout state; use the Proxmox 180-second effective default when `down` is absent.
+- Add dedicated `sensor.dh_pve_ups_guest_shutdown_budget` and `sensor.dh_pve_ups_shutdown_readiness` diagnostics. Readiness warns on forced/timeout/near-timeout guests, unavailable budget, a broken production NUT shutdown path, or a UPS-triggered host shutdown whose clean/unclean result failed or is unknown.
+- Keep guest shutdown diagnostics read-only; `dh_pve_app` never rewrites VM/LXC `startup` or `down` configuration.
+- Add the reusable `examples/dh_pve_shutdown_readiness_card.yaml` for previous host shutdown, timing chain, UPS readiness/budget and dynamic per-guest shutdown diagnostics.
+- Add an advanced UPS dashboard with live state, effective shutdown-policy diagnostics, battery-test controls/scheduler, 24-hour graphs and a 72-hour event log.
+- Update the shared HA package so Recorder includes all `sensor.dh_pve_*` / `binary_sensor.dh_pve_*` state plus UPS battery-test scheduler `number` / `time` entities.
+- Make release/deploy validation non-destructive: verify service, MQTT, NUT telemetry, policy preflight and optional `OL → OB → OL` timer start/cancel only; do not require or invoke FSD/host shutdown testing.
+
 ## 0.1.0
 
 - Introduce `dh_pve_app` as a native Proxmox VE Linux agent.
@@ -8,7 +43,7 @@
 - Add autonomous VM/LXC inventory plus a shared passthrough topology cache.
 - Add VM/LXC status polling and targeted guest rescans when a guest transitions to `running`.
 - Collapse VM/LXC status polling to one Proxmox `/cluster/resources` query every 30 seconds instead of separate `qm list` and `pct list` calls every 10 seconds.
-- Read guest configuration directly from pmxcfs under `/etc/pve` on the normal path, keeping `qm config` / `pct config` only as fallbacks.
+- Read guest configuration directly from pmxcfs under `/etc/pve/qemu-server` and `/etc/pve/lxc` on the normal path, keeping `qm config` / `pct config` only as fallbacks.
 - Move expensive guest GPU telemetry to a 30-second schedule while retaining fast polling for cheap CPU/memory/fan collectors.
 - Set the new-install SMART polling default to 60 seconds.
 - Detect VM `hostpciN` passthrough and preserve LXC shared `/dev/dri` GPU ownership support without site-specific VM lists.
@@ -26,4 +61,4 @@
 - Dashboard dependencies are Mushroom, auto-entities, mini-graph-card, and Entity Progress Card; infrastructure health remains Python-owned rather than HA-template calculated.
 - Add autonomous Proxmox installer, root-documented systemd service, persistent runtime state, repository validator, and CI coverage.
 - Preserve the legacy Bash Proxmox-to-MQTT cron job during Phase 1 side-by-side validation.
-- Reserve UPS/NUT monitoring for Phase 2 as a separate `DH UPS` MQTT device.
+- Reserve UPS/NUT monitoring for Phase 2 as a separate logical MQTT device owned by `dh_pve_app`.

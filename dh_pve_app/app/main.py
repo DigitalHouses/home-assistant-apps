@@ -1,26 +1,43 @@
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import signal
 import threading
 import time
+from collections.abc import Callable
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .config import AppConfig, load_config
-from .discovery_guest import build_guest_aware_discovery_payload
+from .config import AppConfig, UpsConfig, load_config
 from .identity import resolve_identity
 from .mqtt_bridge import MqttBridge
 from .production import _run
-from .production_guest import GuestAwareProductionCollectors
 from .publish_policy import PublishPolicy
 from .runtime_dynamic import DynamicDiscoveryRuntime
 from .runtime_settings import RuntimeSettings
 from .scheduler import Scheduler
+from .shutdown_discovery import build_shutdown_aware_pve_discovery_payload
+from .shutdown_history import ShutdownHistoryTracker
+from .shutdown_integration import (
+    ShutdownAwareProductionCollectors,
+    ShutdownAwareTopologyManager,
+    ShutdownAwareUpsRuntime,
+)
 from .state_store import StateStore
-from .topics import build_topics
-from .topology import TopologyManager
+from .topics import build_topics, build_ups_topics
+from .ups_commission import commission_ups_policy
+from .ups_policy_host import read_policy_safety_facts
+from .ups_policy_preflight import (
+    PreflightCheck,
+    UpsPolicyPreflight,
+    read_policy_preflight,
+)
+from .ups_runtime import UpsRuntime
+from .ups_scan import UpsScanner
+from .ups_shutdown_policy import read_shutdown_policy
 
 APP_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG = Path("/etc/dh_pve_app/dh_pve_app.conf")
@@ -36,6 +53,10 @@ def _version() -> str:
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _now_local() -> datetime:
+    return datetime.now().astimezone()
 
 
 def _configure_logging(level: str) -> None:
@@ -59,13 +80,26 @@ def _initial_settings(store: StateStore) -> RuntimeSettings:
     return RuntimeSettings()
 
 
-def build_runtime(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR):
+def _shutdown_tracker(state_dir: Path) -> ShutdownHistoryTracker:
+    return ShutdownHistoryTracker(
+        state_store=StateStore(state_dir / "shutdown_history.json"),
+        now_iso=lambda: datetime.now().astimezone().isoformat(),
+    )
+
+
+def build_runtime(
+    config: AppConfig,
+    *,
+    state_dir: Path = DEFAULT_STATE_DIR,
+    shutdown_history_tracker: ShutdownHistoryTracker | None = None,
+):
     identity = resolve_identity(config.general)
     topics = build_topics(config.mqtt, identity)
     runtime_store = StateStore(state_dir / "runtime.json")
     settings = _initial_settings(runtime_store)
+    tracker = shutdown_history_tracker or _shutdown_tracker(state_dir)
 
-    discovery_builder = lambda inventory: build_guest_aware_discovery_payload(
+    discovery_builder = lambda inventory: build_shutdown_aware_pve_discovery_payload(
         config,
         identity,
         version=_version(),
@@ -78,14 +112,12 @@ def build_runtime(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR):
         discovery_builder({}),
     )
 
-    # Topology must follow the actual PVE host node name, not the configurable
-    # display/node label used in MQTT identity. TopologyManager defaults to
-    # platform.node(), which matches the Proxmox API `node` field.
-    topology = TopologyManager(runner=_run)
-    production = GuestAwareProductionCollectors(
+    topology = ShutdownAwareTopologyManager(runner=_run)
+    production = ShutdownAwareProductionCollectors(
         node_name=identity.node_name,
         disk_state_store=StateStore(state_dir / "disks.json"),
         topology=topology,
+        shutdown_history_tracker=tracker,
     )
     collectors = production.mapping()
 
@@ -93,8 +125,6 @@ def build_runtime(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR):
     now = time.monotonic()
     fast = settings.get("fast_poll_interval_seconds")
     disk = settings.get("disk_poll_interval_seconds")
-    # qm/pct/pvesh and QGA helpers are Perl-heavy on PVE. Keep cheap host
-    # metrics fast, but poll guest inventory and guest GPU telemetry at 30 s.
     scheduler.add("guests", interval_seconds=30.0, now=now)
     scheduler.add("gpu", interval_seconds=30.0, now=now)
     for name in ("cpu", "memory", "fans"):
@@ -120,11 +150,146 @@ def build_runtime(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR):
     return bridge, runtime
 
 
+def build_ups_runtime(
+    config: AppConfig,
+    bridge,
+    *,
+    selected_name: str | None,
+    state_dir: Path = DEFAULT_STATE_DIR,
+    shutdown_history_tracker: ShutdownHistoryTracker | None = None,
+) -> UpsRuntime | None:
+    if not selected_name:
+        return None
+    identity = resolve_identity(config.general)
+    bridge.configure_ups(build_ups_topics(config.mqtt, identity))
+    runtime_config = replace(config.ups, enabled=True, name=selected_name)
+    tracker = shutdown_history_tracker or _shutdown_tracker(state_dir)
+
+    def observed_shutdown_policy():
+        budget: int | None = None
+        try:
+            budget = read_policy_safety_facts(
+                runtime_config
+            ).guest_shutdown_budget_seconds
+        except Exception:
+            pass
+        return read_shutdown_policy(
+            ups_name=runtime_config.name,
+            guest_shutdown_budget_seconds=budget,
+        )
+
+    return ShutdownAwareUpsRuntime(
+        config=runtime_config,
+        mqtt_config=config.mqtt,
+        bridge=bridge,
+        identity=identity,
+        version=_version(),
+        state_store=StateStore(state_dir / "ups_runtime.json"),
+        now_iso=_now_iso,
+        now_local=_now_local,
+        now_monotonic=time.monotonic,
+        shutdown_policy_reader=observed_shutdown_policy,
+        shutdown_history_tracker=tracker,
+    )
+
+
+def build_ups_scanner(
+    config: AppConfig,
+    *,
+    state_dir: Path = DEFAULT_STATE_DIR,
+) -> UpsScanner:
+    return UpsScanner(
+        config.ups,
+        StateStore(state_dir / "ups_selection.json"),
+        now_iso=_now_iso,
+    )
+
+
+def build_ups_policy_preflight(
+    config: AppConfig,
+    *,
+    state_dir: Path = DEFAULT_STATE_DIR,
+    preflight_reader: Callable[[UpsConfig], UpsPolicyPreflight] = read_policy_preflight,
+) -> UpsPolicyPreflight:
+    scanner = build_ups_scanner(config, state_dir=state_dir)
+    selected_name = scanner.selected_name()
+    if not selected_name:
+        return UpsPolicyPreflight(
+            state="Blocked",
+            ready=False,
+            checks=(
+                PreflightCheck(
+                    "ups_selected",
+                    False,
+                    "UPS еще не выбран; сначала выполните безопасное сканирование UPS.",
+                ),
+            ),
+            guest_shutdown_budget_seconds=None,
+        )
+    runtime_config = replace(config.ups, enabled=True, name=selected_name)
+    return preflight_reader(runtime_config)
+
+
+def commission_selected_ups_policy(
+    config: AppConfig,
+    *,
+    state_dir: Path,
+    on_battery_delay_minutes: int,
+    power_restore_delay_seconds: int,
+):
+    scanner = build_ups_scanner(config, state_dir=state_dir)
+    selected_name = scanner.selected_name()
+    if not selected_name:
+        return {
+            "success": False,
+            "message": (
+                "UPS еще не выбран; сначала выполните безопасное сканирование UPS."
+            ),
+            "policy": None,
+        }
+    runtime_config = replace(config.ups, enabled=True, name=selected_name)
+    result = commission_ups_policy(
+        runtime_config,
+        on_battery_delay_minutes=on_battery_delay_minutes,
+        power_restore_delay_seconds=power_restore_delay_seconds,
+    )
+    return {
+        "success": result.success,
+        "message": result.message,
+        "policy": {
+            "on_battery_delay_minutes": on_battery_delay_minutes,
+            "power_restore_delay_seconds": power_restore_delay_seconds,
+        },
+    }
+
+
 def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
     log = logging.getLogger("dh_pve_app")
-    bridge, runtime = build_runtime(config, state_dir=state_dir)
+    shutdown_history_tracker = _shutdown_tracker(state_dir)
+    try:
+        shutdown_history_tracker.startup()
+    except Exception as exc:
+        log.warning(
+            "Не удалось обновить историю запусков/остановок PVE: %s",
+            exc,
+        )
+
+    bridge, runtime = build_runtime(
+        config,
+        state_dir=state_dir,
+        shutdown_history_tracker=shutdown_history_tracker,
+    )
+    scanner = build_ups_scanner(config, state_dir=state_dir)
+    ups_runtime = build_ups_runtime(
+        config,
+        bridge,
+        selected_name=scanner.selected_name(),
+        state_dir=state_dir,
+        shutdown_history_tracker=shutdown_history_tracker,
+    )
     stop_event = threading.Event()
     initialized = False
+    ups_startup_attempted = False
 
     def stop(signum: int, frame: object) -> None:
         log.info("Получен сигнал остановки %s", signum)
@@ -135,6 +300,8 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
     signal.signal(signal.SIGINT, stop)
 
     log.info("Запуск DH PVE App %s", _version())
+    if ups_runtime is not None:
+        log.info("Найден сохраненный UPS %s", ups_runtime.config.name)
     bridge.start()
 
     try:
@@ -154,6 +321,41 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
                 runtime.process_events()
                 runtime.tick(time.monotonic())
 
+                if bridge.ups_scan_requested.is_set():
+                    bridge.ups_scan_requested.clear()
+                    outcome = scanner.scan()
+                    bridge.publish_ups_scan_state(outcome.payload())
+                    log.info("Сканирование UPS: %s", outcome.result)
+
+                    if outcome.selected_name is not None:
+                        if ups_runtime is None or outcome.selection_changed:
+                            ups_runtime = build_ups_runtime(
+                                config,
+                                bridge,
+                                selected_name=outcome.selected_name,
+                                state_dir=state_dir,
+                                shutdown_history_tracker=shutdown_history_tracker,
+                            )
+                            ups_startup_attempted = False
+                        elif outcome.count == 1:
+                            ups_runtime.manual_refresh()
+
+                if ups_runtime is not None and not ups_startup_attempted:
+                    bridge.ups_reconnect_requested.clear()
+                    bridge.clear_legacy_ups_discovery()
+                    ups_ok = ups_runtime.startup()
+                    ups_startup_attempted = True
+                    if ups_ok:
+                        log.info("Первичная публикация DH PVE UPS завершена")
+                    else:
+                        log.warning(
+                            "UPS через NUT пока недоступен; мониторинг PVE продолжает работать"
+                        )
+
+                if ups_runtime is not None and ups_startup_attempted:
+                    ups_runtime.process_events()
+                    ups_runtime.tick(time.monotonic())
+
             bridge.wake_requested.wait(1.0)
             bridge.wake_requested.clear()
     finally:
@@ -172,12 +374,47 @@ def main() -> int:
         action="store_true",
         help="Validate configuration and exit.",
     )
+    parser.add_argument(
+        "--ups-policy-preflight",
+        action="store_true",
+        help="Read UPS/NUT/PVE commissioning state, print JSON, and exit without MQTT.",
+    )
+    parser.add_argument(
+        "--ups-policy-commission",
+        action="store_true",
+        help="Explicitly configure and verify NUT shutdown policy, then exit.",
+    )
+    parser.add_argument(
+        "--on-battery-delay-minutes",
+        type=int,
+        default=30,
+        help="Commissioning ONBATT wait before FSD (default: 30 min).",
+    )
+    parser.add_argument(
+        "--power-restore-delay-seconds",
+        type=int,
+        default=120,
+        help="Commissioning UPS output restore delay (default: 120 s).",
+    )
     args = parser.parse_args()
 
     config = load_config(args.config)
     if args.check_config:
         resolve_identity(config.general)
         return 0
+    if args.ups_policy_preflight:
+        report = build_ups_policy_preflight(config, state_dir=args.state_dir)
+        print(json.dumps(report.as_dict(), ensure_ascii=False, indent=2))
+        return 0 if report.ready else 2
+    if args.ups_policy_commission:
+        result = commission_selected_ups_policy(
+            config,
+            state_dir=args.state_dir,
+            on_battery_delay_minutes=args.on_battery_delay_minutes,
+            power_restore_delay_seconds=args.power_restore_delay_seconds,
+        )
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0 if result["success"] else 2
 
     _configure_logging(config.general.log_level)
     return run(config, state_dir=args.state_dir)

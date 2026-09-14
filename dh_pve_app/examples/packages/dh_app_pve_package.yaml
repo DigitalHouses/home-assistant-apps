@@ -5,22 +5,17 @@
 #   /config/packages/Global/System/dh_app_pve_package.yaml
 #
 # Purpose:
-#   - Recorder: keep history for all entities published by dh_pve_app
+#   - Recorder: keep history for useful dh_pve_app entities
+#   - Record UPS battery-test scheduler settings
 #   - Provide UI / notification threshold helpers for dh_pve_app
 #   - Initialize unset threshold helpers once after Home Assistant startup
 #
 # Architecture notes:
-#   - Disk health is NOT calculated here. HEALTHY/WARNING/CRITICAL comes from
-#     dh_pve_app Python collectors.
-#   - Threshold helpers are presentation / notification thresholds only.
-#   - There are no periodic template sensors and no package-specific purge job.
-#     Recorder retention remains controlled by the site's normal Recorder policy.
-#
-# Namespace:
-#   - Package: dh_app_pve_package
-#   - Sensors: sensor.dh_pve_*
-#   - Binary sensors: binary_sensor.dh_pve_*
-#   - Helpers: input_number.dh_pve_*
+#   - Disk health is calculated by dh_pve_app Python collectors.
+#   - UPS / NUT / FSD shutdown policy runs on Proxmox, not in Home Assistant.
+#   - HA observes the effective UPS shutdown policy but cannot apply/edit it.
+#   - Battery-test schedule number/time entities remain runtime controls.
+#   - No periodic template sensors and no package-specific purge job.
 # =============================================================================
 
 dh_app_pve_package:
@@ -38,6 +33,8 @@ dh_app_pve_package:
       entity_globs:
         - sensor.dh_pve_*
         - binary_sensor.dh_pve_*
+        - number.dh_pve_ups_*
+        - time.dh_pve_ups_*
 
   input_number:
     dh_pve_storage_usage_threshold:
