@@ -190,3 +190,28 @@ def test_failed_group_publish_prevents_manual_refresh_timestamp_advance():
     assert runtime.manual_refresh() is False
     assert runtime.last_refresh is None
     assert all(group != "diagnostics" for group, _ in bridge.group_states)
+
+
+def test_successful_pending_group_retry_updates_last_publication_diagnostics():
+    runtime, bridge = make_runtime(
+        {"cpu": lambda: cpu_sample()},
+        mono_values=[0.0, 10.0],
+        iso_values=[
+            "2026-09-14T20:00:00+05:00",
+            "2026-09-14T20:00:10+05:00",
+        ],
+    )
+    bridge.fail_group = "cpu"
+
+    assert runtime.run_collection(force=True) is False
+    assert "cpu" in runtime._pending_groups
+    bridge.group_states.clear()
+
+    bridge.fail_group = None
+    assert runtime.run_collection(names=("cpu",)) is True
+
+    assert [group for group, _ in bridge.group_states] == ["cpu", "diagnostics"]
+    diagnostics = bridge.group_states[-1][1]
+    assert diagnostics["last_publication"]["group"] == "cpu"
+    assert diagnostics["last_publication"]["reason"] == "retry"
+    assert diagnostics["last_publication"]["group_count"] == 1
