@@ -131,8 +131,16 @@ def test_ups_discovery_routes_entities_to_independent_state_groups():
     ):
         assert c[key]["state_topic"] == tests
 
-    assert c["last_refresh"]["state_topic"] == diagnostics
-    assert c["shutdown_readiness"]["state_topic"] == diagnostics
+    for key in (
+        "last_refresh",
+        "shutdown_readiness",
+        "ups_app_profile",
+        "ups_last_publication",
+    ):
+        assert c[key]["state_topic"] == diagnostics
+
+    assert c["ups_app_profile"]["default_entity_id"] == "sensor.dh_pve_ups_app_profile"
+    assert c["ups_last_publication"]["default_entity_id"] == "sensor.dh_pve_ups_last_publication"
 
 
 def test_ups_nut_availability_always_reads_status_group():
