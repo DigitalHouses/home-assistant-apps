@@ -24,6 +24,7 @@ class GroupBridge:
         self.legacy_states = []
         self.discovery_count = 0
         self.setting_states = []
+        self.legacy_state_cleanup = 0
         self.refresh_requested = threading.Event()
         self.reconnect_requested = threading.Event()
         self.setting_updates = queue.SimpleQueue()
@@ -43,6 +44,10 @@ class GroupBridge:
 
     def publish_setting_value(self, key, value):
         self.setting_states.append((key, value))
+        return True
+
+    def clear_legacy_state(self):
+        self.legacy_state_cleanup += 1
         return True
 
 
@@ -113,6 +118,15 @@ def test_group_capable_runtime_does_not_publish_monolithic_state():
         "collector/cpu",
         "diagnostics",
     }
+
+
+def test_group_capable_startup_tombstones_legacy_monolithic_state():
+    runtime, bridge = make_runtime({"cpu": lambda: cpu_sample()})
+
+    assert runtime.startup() is True
+
+    assert bridge.legacy_state_cleanup == 1
+    assert bridge.legacy_states == []
 
 
 def test_cpu_profile_transition_only_publishes_cpu_resource_plus_diagnostics():
