@@ -292,6 +292,9 @@ class MqttBridge(MqttEvents):
             retain=True,
         )
 
+    def clear_legacy_state(self) -> bool:
+        return self._publish(self.topics.state, "", retain=True)
+
     def publish_state_group(self, group: str, payload: dict[str, object]) -> bool:
         return self._publish(
             state_group_topic(self.topics, group),
@@ -326,6 +329,11 @@ class MqttBridge(MqttEvents):
         if self.ups_topics is None:
             return False
         return self._publish(self.ups_topics.legacy_discovery, "", retain=True)
+
+    def clear_legacy_ups_state(self) -> bool:
+        if self.ups_topics is None:
+            return False
+        return self._publish(self.ups_topics.state, "", retain=True)
 
     def publish_ups_state(self, payload: dict[str, object]) -> bool:
         if self.ups_topics is None:
