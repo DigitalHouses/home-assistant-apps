@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .config import MqttConfig
-from .runtime_settings import RuntimeSettingError, RuntimeSettings
+from .runtime_settings import LEGACY_SETTING_KEYS, RuntimeSettingError, RuntimeSettings
 from .topics import (
     Topics,
     UpsTopics,
@@ -139,6 +139,8 @@ class MqttEvents:
         suffix = "/set"
         if topic.startswith(prefix) and topic.endswith(suffix):
             key = topic[len(prefix):-len(suffix)]
+            if key in LEGACY_SETTING_KEYS:
+                return False
             value = self.settings.apply(key, text)
             self.setting_updates.put(SettingUpdate(key=key, value=value))
             return True
