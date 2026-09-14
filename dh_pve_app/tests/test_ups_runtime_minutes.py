@@ -77,7 +77,7 @@ def test_runtime_minutes_are_published_by_python(tmp_path):
     assert bridge.states[-1]["battery_runtime_minutes"] == 36.0
 
 
-def test_discovery_exposes_minutes_and_keeps_seconds_as_diagnostic():
+def test_discovery_exposes_minutes_without_duplicate_seconds_entity():
     snapshot = parse_upsc_output("ups.status: OL\nbattery.runtime: 2160\n")
     components = build_ups_discovery_payload(
         _mqtt(), _identity(), version="0.2.0-alpha", snapshot=snapshot
@@ -89,8 +89,4 @@ def test_discovery_exposes_minutes_and_keeps_seconds_as_diagnostic():
     assert minutes["unit_of_measurement"] == "min"
     assert minutes["device_class"] == "duration"
     assert minutes.get("entity_category") is None
-
-    seconds = components["battery_runtime"]
-    assert seconds["default_entity_id"] == "sensor.dh_pve_ups_battery_runtime"
-    assert seconds["unit_of_measurement"] == "s"
-    assert seconds["entity_category"] == "diagnostic"
+    assert "battery_runtime" not in components
