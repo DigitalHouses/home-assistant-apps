@@ -203,18 +203,29 @@ def test_ups_state_group_publication_is_retained_qos1_json():
     assert json.loads(item[1]) == {"load": 35.0}
 
 
-def test_invalid_runtime_setting_republishes_effective_value():
+def test_invalid_poll_setting_republishes_effective_value():
     bridge, client, topics, settings, _, _ = _bridge()
     bridge.connected.set()
-    topic = f"{topics.settings_prefix}/cpu_publish_delta/set"
+    topic = f"{topics.settings_prefix}/fast_poll_interval_seconds/set"
     bridge._on_message(client, None, _Message(topic, b"999"))
-    assert settings.get("cpu_publish_delta") == 5.0
+    assert settings.get("fast_poll_interval_seconds") == 10.0
     assert (
-        f"{topics.settings_prefix}/cpu_publish_delta/state",
-        "5",
+        f"{topics.settings_prefix}/fast_poll_interval_seconds/state",
+        "10",
         1,
         True,
     ) in client.published
+
+
+def test_removed_publish_delta_topic_is_ignored():
+    bridge, client, topics, _, _, _ = _bridge()
+    bridge.connected.set()
+    topic = f"{topics.settings_prefix}/cpu_publish_delta/set"
+    before = list(client.published)
+
+    bridge._on_message(client, None, _Message(topic, b"7"))
+
+    assert client.published == before
 
 
 def test_ha_online_requests_full_republish():
