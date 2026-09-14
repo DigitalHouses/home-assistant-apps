@@ -76,6 +76,51 @@ def test_startup_builds_discovery_from_collected_inventory():
     assert len(bridge.states) == 1
 
 
+def test_startup_tombstones_retired_publish_delta_discovery_components_once():
+    bridge = Bridge()
+    settings = RuntimeSettings()
+    runtime = DynamicDiscoveryRuntime(
+        collectors={},
+        bridge=bridge,
+        settings=settings,
+        publish_policy=PublishPolicy(settings),
+        state_store=Store(),
+        scheduler=Scheduler(),
+        now_iso=lambda: "2026-09-14T20:00:00+05:00",
+        discovery_builder=lambda inv: {
+            "device": {"name": "DH PVE"},
+            "components": {
+                "setting_fast_poll_interval_seconds": {"platform": "number"},
+            },
+        },
+    )
+
+    assert runtime.sync_discovery(force=True) is True
+    assert len(bridge.discovery) == 2
+
+    cleanup = bridge.discovery[0]["components"]
+    for key in (
+        "setting_cpu_publish_delta",
+        "setting_memory_publish_delta",
+        "setting_temperature_publish_delta",
+        "setting_storage_publish_delta",
+        "setting_fan_publish_delta_rpm",
+        "setting_gpu_publish_delta",
+    ):
+        assert cleanup[key] == {"platform": "number"}
+
+    assert bridge.discovery[1]["components"] == {
+        "setting_fast_poll_interval_seconds": {"platform": "number"}
+    }
+
+    bridge.discovery.clear()
+    assert runtime.sync_discovery(force=True) is True
+    assert len(bridge.discovery) == 1
+    assert not any(
+        "publish_delta" in key for key in bridge.discovery[0]["components"]
+    )
+
+
 def test_same_discovery_shape_is_not_republished_on_metric_change():
     bridge = Bridge()
     settings = RuntimeSettings()
