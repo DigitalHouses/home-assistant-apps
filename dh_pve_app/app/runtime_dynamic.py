@@ -6,6 +6,16 @@ from collections.abc import Callable, Mapping
 from .app import DhPveRuntime
 
 
+_LEGACY_DISCOVERY_REMOVALS = {
+    "setting_cpu_publish_delta": "number",
+    "setting_memory_publish_delta": "number",
+    "setting_temperature_publish_delta": "number",
+    "setting_storage_publish_delta": "number",
+    "setting_fan_publish_delta_rpm": "number",
+    "setting_gpu_publish_delta": "number",
+}
+
+
 class DynamicDiscoveryRuntime(DhPveRuntime):
     """DhPveRuntime with inventory-driven MQTT Device Discovery."""
 
@@ -19,6 +29,7 @@ class DynamicDiscoveryRuntime(DhPveRuntime):
         self.discovery_builder = discovery_builder
         self._discovery_fingerprint: str | None = None
         self._last_discovery_ok = False
+        self._legacy_discovery_cleanup_done = False
 
     def _inventory(self) -> dict[str, object]:
         return {
@@ -26,6 +37,26 @@ class DynamicDiscoveryRuntime(DhPveRuntime):
             for name, state in self._subsystems.items()
             if state.data is not None
         }
+
+    @staticmethod
+    def _legacy_cleanup_payload(payload: dict[str, object]) -> dict[str, object] | None:
+        raw_components = payload.get("components")
+        if not isinstance(raw_components, dict):
+            return None
+
+        cleanup_components = dict(raw_components)
+        added = False
+        for key, platform in _LEGACY_DISCOVERY_REMOVALS.items():
+            if key in cleanup_components:
+                continue
+            cleanup_components[key] = {"platform": platform}
+            added = True
+        if not added:
+            return None
+
+        cleanup = dict(payload)
+        cleanup["components"] = cleanup_components
+        return cleanup
 
     def sync_discovery(self, *, force: bool = False) -> bool:
         payload = self.discovery_builder(self._inventory())
@@ -41,6 +72,16 @@ class DynamicDiscoveryRuntime(DhPveRuntime):
         setter = getattr(self.bridge, "set_discovery_payload", None)
         if not callable(setter):
             return False
+
+        if not self._legacy_discovery_cleanup_done:
+            cleanup = self._legacy_cleanup_payload(payload)
+            if cleanup is not None:
+                setter(cleanup)
+                if not self.bridge.publish_discovery():
+                    self._last_discovery_ok = False
+                    return False
+            self._legacy_discovery_cleanup_done = True
+
         setter(payload)
         ok = self.bridge.publish_discovery()
         self._last_discovery_ok = ok
