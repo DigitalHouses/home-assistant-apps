@@ -19,7 +19,20 @@ class PublishDecision:
 
 
 class PublishPolicy:
+    """Legacy monolithic publication policy kept for compatibility callers.
+
+    Production PVE/UPS presentation uses adaptive grouped publishers. These
+    thresholds are fixed compatibility defaults only; they are no longer HA
+    runtime settings.
+    """
+
     _FIXED_THRESHOLDS = {
+        "cpu_percent": 5.0,
+        "memory_percent": 1.0,
+        "temperature_c": 1.0,
+        "storage_percent": 0.5,
+        "fan_rpm": 100.0,
+        "gpu_percent": 5.0,
         "frequency_mhz": 100.0,
         # Legacy/general UPS policies kept for compatibility with existing callers/tests.
         "ups_percent": 1.0,
@@ -38,24 +51,14 @@ class PublishPolicy:
         "ups_frequency_battery": 0.2,
         "ups_runtime_battery": 60.0,
     }
-    _SETTING_THRESHOLDS = {
-        "cpu_percent": "cpu_publish_delta",
-        "memory_percent": "memory_publish_delta",
-        "temperature_c": "temperature_publish_delta",
-        "storage_percent": "storage_publish_delta",
-        "fan_rpm": "fan_publish_delta_rpm",
-        "gpu_percent": "gpu_publish_delta",
-    }
     _IMMEDIATE_POLICIES = {"discrete", "counter"}
 
     def __init__(self, settings: RuntimeSettings) -> None:
+        # Keep the constructor signature stable for compatibility callers.
         self.settings = settings
         self._last_published: dict[str, MetricValue] | None = None
 
     def _threshold(self, policy: str) -> float | None:
-        setting_key = self._SETTING_THRESHOLDS.get(policy)
-        if setting_key is not None:
-            return self.settings.get(setting_key)
         return self._FIXED_THRESHOLDS.get(policy)
 
     @staticmethod
