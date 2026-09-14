@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 
 from .presentation_pve_base import PresentationSubsystem, Publication
 from .presentation_pve_base import PvePresentationRouter as _BasePvePresentationRouter
@@ -8,6 +8,26 @@ from .presentation_pve_base import PvePresentationRouter as _BasePvePresentation
 
 class PvePresentationRouter(_BasePvePresentationRouter):
     """PVE presentation router with isolated host inventory and shutdown state."""
+
+    @staticmethod
+    def _guest_shutdown_config(state: PresentationSubsystem | None) -> dict[str, object]:
+        raw = state.data if state is not None and isinstance(state.data, Mapping) else {}
+        result: dict[str, object] = {"vms": {}, "lxcs": {}}
+        for plural in ("vms", "lxcs"):
+            records = raw.get(plural)
+            if not isinstance(records, Mapping):
+                continue
+            compact: dict[str, object] = {}
+            for guest_id, guest_raw in records.items():
+                if not isinstance(guest_raw, Mapping):
+                    continue
+                compact[str(guest_id)] = {
+                    "shutdown_timeout_seconds": guest_raw.get("shutdown_timeout_seconds"),
+                    "shutdown_order": guest_raw.get("shutdown_order"),
+                    "onboot": guest_raw.get("onboot", False),
+                }
+            result[plural] = compact
+        return result
 
     def _route_change_subsystem(
         self,
@@ -34,10 +54,8 @@ class PvePresentationRouter(_BasePvePresentationRouter):
             )
 
         raw = dict(state.data) if isinstance(state.data, Mapping) else {}
-        shutdown_history = raw.pop("shutdown_history", None)
-        result: list[Publication] = []
-
-        host_publication = self._change_only(
+        raw.pop("shutdown_history", None)
+        publication = self._change_only(
             group_name="host",
             subsystem_name="host",
             state=state,
@@ -49,23 +67,77 @@ class PvePresentationRouter(_BasePvePresentationRouter):
             force=force,
             manual=manual,
         )
-        if host_publication is not None:
-            result.append(host_publication)
+        return [] if publication is None else [publication]
 
-        if shutdown_history is not None:
-            shutdown_publication = self._change_only(
-                group_name="shutdown",
-                subsystem_name="host",
-                state=state,
-                semantic=shutdown_history,
-                data={"shutdown_history": shutdown_history},
+    def _route_shutdown(
+        self,
+        subsystems: Mapping[str, PresentationSubsystem],
+        *,
+        selected: Sequence[str],
+        now: float,
+        collected_at: str,
+        last_refresh: str | None,
+        force: bool,
+        manual: bool,
+    ) -> Publication | None:
+        if "host" not in selected and "guests" not in selected:
+            return None
+
+        host = subsystems.get("host")
+        if host is None or not isinstance(host.data, Mapping):
+            return None
+        shutdown_history = host.data.get("shutdown_history")
+        if shutdown_history is None:
+            return None
+
+        data = {
+            "shutdown_history": shutdown_history,
+            "guest_config": self._guest_shutdown_config(subsystems.get("guests")),
+        }
+        return self._change_only(
+            group_name="shutdown",
+            subsystem_name="host",
+            state=host,
+            semantic=data,
+            data=data,
+            now=now,
+            collected_at=collected_at,
+            last_refresh=last_refresh,
+            force=force,
+            manual=manual,
+        )
+
+    def route(
+        self,
+        subsystems: Mapping[str, PresentationSubsystem],
+        *,
+        selected: Sequence[str],
+        now: float,
+        collected_at: str,
+        last_refresh: str | None,
+        force: bool = False,
+        manual: bool = False,
+    ) -> tuple[Publication, ...]:
+        result = list(
+            super().route(
+                subsystems,
+                selected=selected,
                 now=now,
                 collected_at=collected_at,
                 last_refresh=last_refresh,
                 force=force,
                 manual=manual,
             )
-            if shutdown_publication is not None:
-                result.append(shutdown_publication)
-
-        return result
+        )
+        shutdown = self._route_shutdown(
+            subsystems,
+            selected=selected,
+            now=now,
+            collected_at=collected_at,
+            last_refresh=last_refresh,
+            force=force,
+            manual=manual,
+        )
+        if shutdown is not None:
+            result.append(shutdown)
+        return tuple(result)
