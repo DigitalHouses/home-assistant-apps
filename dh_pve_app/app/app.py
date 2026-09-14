@@ -374,10 +374,15 @@ class DhPveRuntime:
         return ok
 
     def startup(self) -> bool:
+        cleanup_ok = True
+        if self._group_capable():
+            cleaner = getattr(self.bridge, "clear_legacy_state", None)
+            if callable(cleaner):
+                cleanup_ok = bool(cleaner())
         discovery_ok = self.bridge.publish_discovery()
         settings_ok = self.publish_settings()
         state_ok = self.run_collection(force=True)
-        return discovery_ok and settings_ok and state_ok
+        return cleanup_ok and discovery_ok and settings_ok and state_ok
 
     def _republish_group_cache(self) -> bool:
         if not self._published_groups:
