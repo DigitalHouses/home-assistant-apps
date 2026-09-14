@@ -15,34 +15,22 @@ def test_package_exists_and_records_new_dh_pve_entities():
     assert "recorder:" in text
     assert "sensor.dh_pve_*" in text
     assert "binary_sensor.dh_pve_*" in text
+    assert "number.dh_pve_ups_*" in text
+    assert "time.dh_pve_ups_*" in text
     assert "sensor.digitalhouses_proxmox_*" not in text
     assert "binary_sensor.digitalhouses_proxmox_*" not in text
     assert "dh_app_proxmox_package:" not in text
 
 
-def test_package_uses_only_dh_pve_threshold_helpers():
+def test_package_has_no_duplicate_threshold_helpers_or_initializer():
     text = _text()
-    for entity in (
-        "dh_pve_storage_usage_threshold:",
-        "dh_pve_cpu_temperature_threshold:",
-        "dh_pve_hdd_temperature_threshold:",
-        "dh_pve_ssd_temperature_threshold:",
-        "dh_pve_nvme_temperature_threshold:",
-        "dh_pve_gpu_temperature_threshold:",
-    ):
-        assert entity in text
+
+    assert "input_number:" not in text
+    assert "automation:" not in text
+    assert "dh_pve_initialize_thresholds" not in text
+    assert "storage_usage_threshold" not in text
+    assert "_temperature_threshold" not in text
     assert "dh_proxmox_" not in text
-
-
-def test_package_initializes_threshold_defaults_without_periodic_trigger():
-    text = _text()
-    assert "id: dh_pve_initialize_thresholds" in text
-    assert "_[dh_app_pve_package]: Initialize thresholds" in text
-    assert "event: start" in text
-    for default in ("value: 80", "value: 90", "value: 45", "value: 75", "value: 85"):
-        assert default in text
-    assert "time_pattern" not in text
-    assert "platform: time" not in text
 
 
 def test_package_does_not_recreate_old_aggregate_health_templates():
@@ -52,3 +40,5 @@ def test_package_does_not_recreate_old_aggregate_health_templates():
     assert "storage_capacity_problem" not in text
     assert "temperature_problem" not in text
     assert "recorder.purge_entities" not in text
+    assert "time_pattern" not in text
+    assert "platform: time" not in text
