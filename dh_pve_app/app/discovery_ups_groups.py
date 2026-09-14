@@ -6,7 +6,6 @@ from .topics import ups_state_group_topic
 _TELEMETRY = {
     "battery_charge",
     "battery_runtime_minutes",
-    "battery_runtime",
     "battery_voltage",
     "load",
     "input_voltage",
@@ -81,11 +80,16 @@ def route_ups_discovery_groups(payload: dict[str, object], topics) -> dict[str, 
     """Route UPS Discovery state to independent retained presentation groups.
 
     NUT availability always reads the status group. Telemetry groups are
-    intentionally not refreshed just to announce a NUT outage.
+    intentionally not refreshed just to announce a NUT outage. The legacy
+    seconds runtime sensor is removed here so production Discovery exposes one
+    canonical runtime entity in minutes while the raw seconds value may remain
+    available inside the application payload for compatibility.
     """
     raw_components = payload.get("components")
     if not isinstance(raw_components, dict):
         return payload
+
+    raw_components.pop("battery_runtime", None)
 
     legacy_state = topics.state
     status_topic = ups_state_group_topic(topics, "status")
