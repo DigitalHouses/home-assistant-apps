@@ -61,6 +61,9 @@ class DynamicDiscoveryRuntime(DhPveRuntime):
     def republish_after_reconnect(self) -> bool:
         discovery_ok = self.sync_discovery(force=True)
         settings_ok = self.publish_settings()
+        if self._group_capable():
+            state_ok = self._republish_group_cache()
+            return discovery_ok and settings_ok and state_ok
         if not self._subsystems:
             state_ok = self.run_collection(force=True)
             return discovery_ok and settings_ok and state_ok
