@@ -200,3 +200,32 @@ def test_fan_summary_is_not_mistaken_for_fan_objects():
     assert all("fan/detected" != item.group for item in decision)
     assert all("fan/count" != item.group for item in decision)
     assert all("fan/status" != item.group for item in decision)
+
+
+def test_host_inventory_and_shutdown_history_publish_as_independent_groups():
+    router = PvePresentationRouter()
+    host = subsystem(
+        {
+            "hostname": "pve",
+            "model": "MINI S",
+            "shutdown_history": {
+                "history_count": 2,
+                "previous_shutdown": {
+                    "shutdown_class": "clean",
+                    "shutdown_reason": "user",
+                },
+            },
+        }
+    )
+
+    decision = router.route(
+        {"host": host}, selected=("host",), now=0.0,
+        collected_at="2026-09-14T20:00:00+05:00", last_refresh=None, force=True,
+    )
+
+    assert groups(decision) == {"collector/host", "host", "shutdown"}
+    by_group = {item.group: item for item in decision}
+    host_data = by_group["host"].payload["subsystems"]["host"]["data"]
+    shutdown_data = by_group["shutdown"].payload["subsystems"]["host"]["data"]
+    assert "shutdown_history" not in host_data
+    assert shutdown_data["shutdown_history"]["history_count"] == 2
