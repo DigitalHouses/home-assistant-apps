@@ -280,6 +280,16 @@ Run on Proxmox as `root`:
 curl -fsSL https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/main/dh_pve_app/install.sh | bash
 ```
 
+For a pre-merge feature/ref deployment, the installer and application source must come from the **same ref**. Do not bootstrap a feature deployment with the `main` installer because installer fixes in the feature ref would be skipped:
+
+```text
+REF=<ref>
+DIGITALHOUSES_SOURCE_REF="$REF" \
+  bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$REF/dh_pve_app/install.sh")
+```
+
+Canonical same-ref URL shape: `https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/<ref>/dh_pve_app/install.sh`.
+
 The installer deploys the application, helper and systemd service. It does **not** silently commission NUT shutdown policy. Commissioning is an explicit post-install administrative action when physical UPS access and validation are available.
 
 Existing valid application configuration is preserved on upgrades. Legacy `ups.policy_apply_enabled` lines are ignored for upgrade compatibility and no longer grant any runtime capability.
