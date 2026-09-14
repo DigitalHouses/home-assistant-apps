@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+- Replace production monolithic PVE/UPS MQTT state publication with independent retained Recorder-facing groups so one resource update no longer refreshes unrelated Home Assistant entities.
+- Add adaptive numeric publication profiles with default average windows of 30 seconds (`critical`), 60 seconds (`high`), 600 seconds (`normal`) and 3600 seconds (`quiet`), always clamped to the real source collector cadence.
+- Separate rolling profile-decision windows from HA publication averaging and add hysteresis so transient raw spikes do not churn Recorder history or resource profiles.
+- Make CPU, RAM, each physical disk, each GPU and UPS independently profiled; CPU throttling is immediately `critical`, while On Battery/Bypass and Low Battery/Overload trigger immediate UPS profile escalation.
+- Average continuous numeric telemetry for normal HA history while keeping discrete/state/event changes immediate and change-only/static data out of periodic churn.
+- Add `sensor.dh_pve_app_profile` and `sensor.dh_pve_last_publication` diagnostics, including successful transport retry reporting without resetting publication buckets.
+- Keep manual Refresh factual and immediate for all supported groups while preserving rolling decision history and normal averaging buckets.
+- Route shutdown history into its own retained state group and keep existing shutdown cause/result semantics unchanged.
+- Make continuous entity attributes Recorder-safe by removing volatile raw numeric attributes that duplicated changing telemetry.
+- Retire the six legacy `*_publish_delta` Home Assistant runtime controls; ignore old persisted values and MQTT set topics safely and publish MQTT Discovery tombstones for removed entities during migration.
+- Reduce the Home Assistant package to a simple Recorder-only package with broad `dh_pve_*` entity globs; remove the six unused threshold `input_number` helpers and their startup initializer so publication policy has one source of truth in the App.
+- Convert UPS telemetry/status/config/tests/diagnostics to independent retained groups while preserving the existing Proxmox-owned NUT PRIMARY/FSD shutdown-safety architecture.
+- Keep `sensor.dh_pve_ups_battery_runtime_minutes` as the canonical UPS runtime entity and remove the duplicate seconds-based Recorder entity while retaining raw seconds internally where compatibility requires it.
+- Preserve existing raw collector intervals, dynamic entity identity, UPS shutdown ownership, commissioning safeguards, battery-test controls, shutdown history and reconnect behavior.
+
 ## 0.2.0
 
 - Promote the validated `0.2.0-alpha` UPS/NUT feature set to the stable production release without functional code changes.
