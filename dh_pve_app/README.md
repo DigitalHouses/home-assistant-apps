@@ -302,7 +302,7 @@ upsc -l 127.0.0.1:3493
 upsc ups@127.0.0.1:3493
 ```
 
-A safe physical mains-loss commissioning test should first prove `OL → OB → OL` and `upssched` timer start/cancel without waiting for FSD. A full FSD/shutdown test belongs only after all intended NUT SECONDARY clients have been configured and verified.
+Release/deploy validation is non-destructive. Verify service/MQTT health, NUT telemetry and the read-only policy preflight. If mains behavior is checked physically, stop at `OL → OB → OL` and confirm `upssched` timer start/cancel before any FSD threshold. Do not invoke `upsmon -c fsd`, wait for the emergency shutdown timer to expire, or intentionally shut down the host as part of release validation.
 
 ## Status
 
