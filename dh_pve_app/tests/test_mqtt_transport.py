@@ -137,6 +137,19 @@ def test_legacy_ups_discovery_cleanup_is_empty_retained_publish():
     assert (ups.legacy_discovery, "", 1, True) in client.published
 
 
+def test_legacy_monolithic_state_cleanup_is_empty_retained_publish():
+    bridge, client, topics, _, config, identity = _bridge()
+    bridge.connected.set()
+    ups = build_ups_topics(config, identity)
+    bridge.configure_ups(ups)
+    client.published.clear()
+
+    assert bridge.clear_legacy_state() is True
+    assert bridge.clear_legacy_ups_state() is True
+    assert (topics.state, "", 1, True) in client.published
+    assert (ups.state, "", 1, True) in client.published
+
+
 def test_state_and_discovery_are_retained_qos1_json():
     bridge, client, topics, _, _, _ = _bridge()
     bridge.connected.set()
