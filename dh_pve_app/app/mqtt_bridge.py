@@ -9,7 +9,12 @@ from typing import Any
 
 from .config import MqttConfig
 from .runtime_settings import RuntimeSettingError, RuntimeSettings
-from .topics import Topics, UpsTopics
+from .topics import (
+    Topics,
+    UpsTopics,
+    state_group_topic,
+    ups_state_group_topic,
+)
 from .ups_test_schedule import (
     TestScheduleError,
     parse_interval_days_payload,
@@ -285,6 +290,13 @@ class MqttBridge(MqttEvents):
             retain=True,
         )
 
+    def publish_state_group(self, group: str, payload: dict[str, object]) -> bool:
+        return self._publish(
+            state_group_topic(self.topics, group),
+            json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+            retain=True,
+        )
+
     def publish_ups_scan_state(self, payload: dict[str, object]) -> bool:
         return self._publish(
             self.topics.ups_scan_state,
@@ -318,6 +330,15 @@ class MqttBridge(MqttEvents):
             return False
         return self._publish(
             self.ups_topics.state,
+            json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+            retain=True,
+        )
+
+    def publish_ups_state_group(self, group: str, payload: dict[str, object]) -> bool:
+        if self.ups_topics is None:
+            return False
+        return self._publish(
+            ups_state_group_topic(self.ups_topics, group),
             json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
             retain=True,
         )
