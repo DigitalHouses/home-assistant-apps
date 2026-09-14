@@ -193,11 +193,11 @@ def test_refresh_event_runs_manual_refresh():
 
 def test_setting_update_is_persisted_and_republished():
     runtime, bridge, _, store, _ = make_runtime({"cpu": lambda: sample(10.0)})
-    runtime.settings.apply("cpu_publish_delta", "7")
-    bridge.setting_updates.put(Update("cpu_publish_delta", 7.0))
+    runtime.settings.apply("fast_poll_interval_seconds", "20")
+    bridge.setting_updates.put(Update("fast_poll_interval_seconds", 20.0))
     assert runtime.process_events() is True
-    assert store.data["runtime_settings"]["cpu_publish_delta"] == 7.0
-    assert ("cpu_publish_delta", 7.0) in bridge.setting_states
+    assert store.data["runtime_settings"]["fast_poll_interval_seconds"] == 20.0
+    assert ("fast_poll_interval_seconds", 20.0) in bridge.setting_states
 
 
 def test_scheduler_runs_only_due_collectors():
