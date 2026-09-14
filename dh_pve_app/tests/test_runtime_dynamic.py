@@ -46,9 +46,14 @@ class GroupBridge(Bridge):
     def __init__(self):
         super().__init__()
         self.group_states = []
+        self.legacy_state_cleanup = 0
 
     def publish_state_group(self, group, payload):
         self.group_states.append((group, payload))
+        return True
+
+    def clear_legacy_state(self):
+        self.legacy_state_cleanup += 1
         return True
 
 
@@ -74,6 +79,26 @@ def test_startup_builds_discovery_from_collected_inventory():
     assert runtime.startup() is True
     assert bridge.discovery == [{"storage": ["local"]}]
     assert len(bridge.states) == 1
+
+
+def test_group_capable_dynamic_startup_tombstones_legacy_monolithic_state():
+    bridge = GroupBridge()
+    settings = RuntimeSettings()
+    runtime = DynamicDiscoveryRuntime(
+        collectors={},
+        bridge=bridge,
+        settings=settings,
+        publish_policy=PublishPolicy(settings),
+        state_store=Store(),
+        scheduler=Scheduler(),
+        now_iso=lambda: "2026-09-15T00:15:00+05:00",
+        now_monotonic=lambda: 0.0,
+        discovery_builder=lambda inv: {"components": {}},
+    )
+
+    assert runtime.startup() is True
+    assert bridge.legacy_state_cleanup == 1
+    assert bridge.states == []
 
 
 def test_startup_tombstones_retired_publish_delta_discovery_components_once():
