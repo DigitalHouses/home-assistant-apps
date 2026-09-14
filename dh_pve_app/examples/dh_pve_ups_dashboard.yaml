@@ -5,7 +5,7 @@
 #
 # UPS/NUT shutdown policy is configured on Proxmox during explicit commissioning.
 # Home Assistant observes the effective policy; it cannot apply/edit NUT policy.
-# Battery-test controls and their scheduler remain runtime controls.
+# Battery-test, scheduler and supported beeper controls remain runtime controls.
 # =============================================================================
 
 title: Электропитание
@@ -655,8 +655,8 @@ sections:
             name: Battery charge low
           - entity: sensor.dh_pve_ups_battery_runtime_low
             name: Battery runtime low
-          - entity: sensor.dh_pve_ups_beeper_status
-            name: Зуммер
+          - entity: switch.dh_pve_ups_beeper
+            name: Пищалка
           - entity: sensor.dh_pve_ups_test_result
             name: Последний hardware test
 

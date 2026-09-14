@@ -301,6 +301,28 @@ def build_ups_discovery_payload(
                 "test_stop", "Stop battery test", "button.dh_pve_ups_test_stop",
                 topics.test_stop, "mdi:stop-circle-outline",
             )
+        if (
+            capabilities.supports_beeper_switch()
+            and snapshot is not None
+            and snapshot.beeper_status is not None
+        ):
+            components["beeper"] = {
+                "platform": "switch",
+                "name": "Beeper",
+                "unique_id": uid("beeper"),
+                "default_entity_id": "switch.dh_pve_ups_beeper",
+                "state_topic": topics.state,
+                "command_topic": topics.beeper_set,
+                "value_template": (
+                    "{{ 'ON' if (value_json.beeper_status | default('') | lower) "
+                    "in ['enabled', 'on'] else 'OFF' }}"
+                ),
+                "payload_on": "ON",
+                "payload_off": "OFF",
+                "availability": telemetry_availability,
+                "availability_mode": "all",
+                "icon": "mdi:volume-high",
+            }
 
     if snapshot is not None:
         if snapshot.battery_charge_percent is not None:

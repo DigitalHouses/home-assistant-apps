@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Add capability-driven `switch.dh_pve_ups_beeper` control when NUT exposes paired beeper on/off commands. Commands are executed by `dh_pve_app` on Proxmox and the switch state is confirmed from real `ups.beeper.status` feedback; load and UPS shutdown instant commands remain intentionally unavailable to Home Assistant.
+
 ## 0.3.0
 
 - Replace production monolithic PVE/UPS MQTT state publication with independent retained Recorder-facing groups so one resource update no longer refreshes unrelated Home Assistant entities.

@@ -44,6 +44,7 @@ _CONFIG = {
 _TESTS = {
     "test_result",
     "beeper_status",
+    "beeper",
     "test_quick_interval_days",
     "test_quick_time",
     "test_deep_interval_days",

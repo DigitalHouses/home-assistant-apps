@@ -14,7 +14,12 @@ from .publish_policy import MetricValue, PublishPolicy
 from .runtime_settings import RuntimeSettings
 from .scheduler import Scheduler
 from .state_store import StateStore
-from .ups_control import UpsCapabilities, list_ups_commands, run_ups_battery_test
+from .ups_control import (
+    UpsCapabilities,
+    list_ups_commands,
+    run_ups_battery_test,
+    run_ups_beeper_command,
+)
 from .ups_health import summarize_ups_problems
 from .ups_nut import UpsSnapshot, read_ups, ups_metrics
 from .ups_policy import (
@@ -104,6 +109,7 @@ class UpsRuntime:
         reader: Callable[[UpsConfig], UpsSnapshot] = read_ups,
         capability_reader: Callable[[UpsConfig], UpsCapabilities] = list_ups_commands,
         command_executor: Callable[[UpsConfig, str], None] = run_ups_battery_test,
+        beeper_executor: Callable[[UpsConfig, str], None] = run_ups_beeper_command,
         shutdown_policy_reader: Callable[[], UpsShutdownPolicy] = read_shutdown_policy,
         policy_facts_reader: Callable[[], PolicySafetyFacts] | None = None,
         policy_applier: Callable[
@@ -122,6 +128,7 @@ class UpsRuntime:
         self.reader = reader
         self.capability_reader = capability_reader
         self.command_executor = command_executor
+        self.beeper_executor = beeper_executor
         self.shutdown_policy_reader = shutdown_policy_reader
         self.policy_facts_reader = policy_facts_reader
         self.policy_applier = policy_applier
@@ -850,6 +857,25 @@ class UpsRuntime:
         self._collect(force=True)
         return True
 
+    def _set_beeper(self, enabled: bool) -> bool:
+        if self.capabilities is None or not self.capabilities.supports_beeper_switch():
+            self.log.warning("UPS не поддерживает управляемый переключатель пищалки")
+            return False
+        command_name = self.capabilities.beeper_command(enabled)
+        if command_name is None:
+            return False
+        try:
+            self.beeper_executor(self.config, command_name)
+        except Exception as exc:
+            self.log.warning("Не удалось изменить состояние пищалки UPS: %s", exc)
+            self._collect(force=True)
+            return False
+        self.log.info(
+            "Команда пищалки UPS выполнена: %s",
+            "включить" if enabled else "выключить",
+        )
+        return self._collect(force=True)
+
     def _rollback_draft_to_active(self) -> None:
         self.policy_draft = self.policy_active or _DEFAULT_POLICY_DRAFT
         self._refresh_policy_validation()
@@ -1022,6 +1048,16 @@ class UpsRuntime:
             if event is not None and event.is_set():
                 event.clear()
                 self._run_battery_test(action, source="Manual")
+                handled = True
+
+        beeper_updates = getattr(self.bridge, "ups_beeper_updates", None)
+        if beeper_updates is not None:
+            while True:
+                try:
+                    enabled = beeper_updates.get_nowait()
+                except queue.Empty:
+                    break
+                self._set_beeper(bool(enabled))
                 handled = True
 
         if self._process_test_schedule_events():

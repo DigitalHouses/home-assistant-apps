@@ -220,6 +220,8 @@ Discovery is capability-driven. Only values reported by NUT are exposed. Normali
 
 The canonical HA runtime entity is `sensor.dh_pve_ups_battery_runtime_minutes`. Raw runtime seconds may remain inside the App payload for internal/backward compatibility but are not exposed as a duplicate Recorder entity.
 
+If NUT reports a paired beeper on/off command and command credentials are configured, MQTT Discovery also exposes `switch.dh_pve_ups_beeper`. The switch sends only the safe beeper command selected from the UPS capability inventory and confirms its state from the real `ups.beeper.status` feedback after the command. Load-control and UPS shutdown instant commands are intentionally not exposed to Home Assistant.
+
 The App does not derive active watts from `load × nominal power`; some UPS models quantize low load too coarsely for that value to be trustworthy.
 
 UPS numeric telemetry is averaged through the same adaptive presentation model while discrete power-state transitions remain immediate. A NUT failure affects only `DH PVE UPS`; PVE monitoring continues.

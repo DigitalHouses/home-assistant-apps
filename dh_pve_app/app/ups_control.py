@@ -31,6 +31,17 @@ class UpsCapabilities:
     def supports_test(self, action: str) -> bool:
         return self.controls_enabled and action in self.battery_tests
 
+    def beeper_command(self, enabled: bool) -> str | None:
+        candidates = ("beeper.enable", "beeper.on") if enabled else ("beeper.disable", "beeper.off")
+        return next((command for command in candidates if command in self.commands), None)
+
+    def supports_beeper_switch(self) -> bool:
+        return (
+            self.controls_enabled
+            and self.beeper_command(True) is not None
+            and self.beeper_command(False) is not None
+        )
+
     def as_dict(self) -> dict[str, object]:
         return {
             "available": True,
@@ -158,5 +169,52 @@ def run_ups_battery_test(
     except subprocess.CalledProcessError as exc:
         detail = _sanitize_detail((exc.stderr or "").strip(), config)
         raise NutControlError(detail or "NUT отклонил команду теста UPS") from exc
+    except OSError as exc:
+        raise NutControlError(f"Не удалось запустить upscmd: {exc}") from exc
+
+
+_BEEPER_COMMANDS = {
+    "beeper.on",
+    "beeper.off",
+    "beeper.enable",
+    "beeper.disable",
+}
+
+
+def run_ups_beeper_command(
+    config: UpsConfig,
+    command_name: str,
+    *,
+    runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+) -> None:
+    if command_name not in _BEEPER_COMMANDS:
+        raise ValueError(f"Неподдерживаемая команда пищалки UPS: {command_name}")
+    if not config.command_username or not config.command_password:
+        raise NutControlError("Не настроены учётные данные NUT для команд UPS")
+
+    command = [
+        "upscmd",
+        "-u",
+        config.command_username,
+        "-p",
+        config.command_password,
+        f"{config.name}@{config.host}:{config.port}",
+        command_name,
+    ]
+    try:
+        runner(
+            command,
+            capture_output=True,
+            text=True,
+            timeout=config.command_timeout_seconds,
+            check=True,
+        )
+    except FileNotFoundError as exc:
+        raise NutControlError("Команда upscmd не найдена") from exc
+    except subprocess.TimeoutExpired as exc:
+        raise NutControlError("Истекло время ожидания команды NUT") from exc
+    except subprocess.CalledProcessError as exc:
+        detail = _sanitize_detail((exc.stderr or "").strip(), config)
+        raise NutControlError(detail or "NUT отклонил команду пищалки UPS") from exc
     except OSError as exc:
         raise NutControlError(f"Не удалось запустить upscmd: {exc}") from exc

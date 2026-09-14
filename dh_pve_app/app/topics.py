@@ -27,6 +27,7 @@ class UpsTopics:
     state: str
     availability: str
     refresh: str
+    beeper_set: str
     test_quick: str
     test_deep: str
     test_stop: str
@@ -93,6 +94,7 @@ def build_ups_topics(mqtt: MqttConfig, identity: HostIdentity) -> UpsTopics:
         state=f"{pve.base}/ups/state",
         availability=f"{pve.base}/ups/availability",
         refresh=f"{pve.base}/ups/refresh",
+        beeper_set=f"{pve.base}/ups/beeper/set",
         test_quick=f"{pve.base}/ups/test/quick",
         test_deep=f"{pve.base}/ups/test/deep",
         test_stop=f"{pve.base}/ups/test/stop",
