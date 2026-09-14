@@ -33,7 +33,7 @@
 - Add the reusable `examples/dh_pve_shutdown_readiness_card.yaml` for previous host shutdown, timing chain, UPS readiness/budget and dynamic per-guest shutdown diagnostics.
 - Add an advanced UPS dashboard with live state, effective shutdown-policy diagnostics, battery-test controls/scheduler, 24-hour graphs and a 72-hour event log.
 - Update the shared HA package so Recorder includes all `sensor.dh_pve_*` / `binary_sensor.dh_pve_*` state plus UPS battery-test scheduler `number` / `time` entities.
-- Keep full FSD/shutdown validation deferred until all intended NUT SECONDARY clients are configured and verified.
+- Make release/deploy validation non-destructive: verify service, MQTT, NUT telemetry, policy preflight and optional `OL → OB → OL` timer start/cancel only; do not require or invoke FSD/host shutdown testing.
 
 ## 0.1.0
 
