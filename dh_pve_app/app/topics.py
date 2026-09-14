@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 from .config import MqttConfig
@@ -39,6 +40,27 @@ class UpsTopics:
     discovery: str
     legacy_discovery: str
     device_id: str
+
+
+_GROUP_SEGMENT = re.compile(r"^[A-Za-z0-9_.-]+$")
+
+
+def _group_topic(root: str, group: str) -> str:
+    parts = group.split("/")
+    if not group or any(
+        not part or part in {".", ".."} or _GROUP_SEGMENT.fullmatch(part) is None
+        for part in parts
+    ):
+        raise ValueError(f"invalid MQTT state group: {group!r}")
+    return f"{root}/{'/'.join(parts)}"
+
+
+def state_group_topic(topics: Topics, group: str) -> str:
+    return _group_topic(topics.state, group)
+
+
+def ups_state_group_topic(topics: UpsTopics, group: str) -> str:
+    return _group_topic(topics.state, group)
 
 
 def build_topics(mqtt: MqttConfig, identity: HostIdentity) -> Topics:
