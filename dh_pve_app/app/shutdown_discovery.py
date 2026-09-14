@@ -123,7 +123,7 @@ def build_shutdown_aware_pve_discovery_payload(
                 continue
             guest_id = str(guest_id_raw)
             name = str(raw.get("name") or f"{label} {guest_id}")
-            current = _path("guests", plural, guest_id)
+            current = _path("host", "guest_config", plural, guest_id)
             previous_guest = _path(
                 "host",
                 "shutdown_history",
