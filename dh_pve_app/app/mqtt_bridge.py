@@ -8,8 +8,13 @@ from dataclasses import dataclass
 from typing import Any
 
 from .config import MqttConfig
-from .runtime_settings import RuntimeSettingError, RuntimeSettings
-from .topics import Topics, UpsTopics
+from .runtime_settings import LEGACY_SETTING_KEYS, RuntimeSettingError, RuntimeSettings
+from .topics import (
+    Topics,
+    UpsTopics,
+    state_group_topic,
+    ups_state_group_topic,
+)
 from .ups_test_schedule import (
     TestScheduleError,
     parse_interval_days_payload,
@@ -134,6 +139,8 @@ class MqttEvents:
         suffix = "/set"
         if topic.startswith(prefix) and topic.endswith(suffix):
             key = topic[len(prefix):-len(suffix)]
+            if key in LEGACY_SETTING_KEYS:
+                return False
             value = self.settings.apply(key, text)
             self.setting_updates.put(SettingUpdate(key=key, value=value))
             return True
@@ -285,6 +292,16 @@ class MqttBridge(MqttEvents):
             retain=True,
         )
 
+    def clear_legacy_state(self) -> bool:
+        return self._publish(self.topics.state, "", retain=True)
+
+    def publish_state_group(self, group: str, payload: dict[str, object]) -> bool:
+        return self._publish(
+            state_group_topic(self.topics, group),
+            json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+            retain=True,
+        )
+
     def publish_ups_scan_state(self, payload: dict[str, object]) -> bool:
         return self._publish(
             self.topics.ups_scan_state,
@@ -313,11 +330,25 @@ class MqttBridge(MqttEvents):
             return False
         return self._publish(self.ups_topics.legacy_discovery, "", retain=True)
 
+    def clear_legacy_ups_state(self) -> bool:
+        if self.ups_topics is None:
+            return False
+        return self._publish(self.ups_topics.state, "", retain=True)
+
     def publish_ups_state(self, payload: dict[str, object]) -> bool:
         if self.ups_topics is None:
             return False
         return self._publish(
             self.ups_topics.state,
+            json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+            retain=True,
+        )
+
+    def publish_ups_state_group(self, group: str, payload: dict[str, object]) -> bool:
+        if self.ups_topics is None:
+            return False
+        return self._publish(
+            ups_state_group_topic(self.ups_topics, group),
             json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
             retain=True,
         )

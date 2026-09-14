@@ -4,9 +4,11 @@ import json
 from typing import Any, Mapping
 
 from .config import AppConfig, MqttConfig
+from .discovery_groups import route_pve_discovery_groups
 from .discovery_guest import build_guest_aware_discovery_payload
 from .discovery_metrics import _path, _sensor, _slug
 from .discovery_ups import build_ups_discovery_payload
+from .discovery_ups_groups import route_ups_discovery_groups
 from .identity import HostIdentity
 from .topics import build_topics, build_ups_topics
 from .ups_control import UpsCapabilities
@@ -121,7 +123,7 @@ def build_shutdown_aware_pve_discovery_payload(
                 continue
             guest_id = str(guest_id_raw)
             name = str(raw.get("name") or f"{label} {guest_id}")
-            current = _path("guests", plural, guest_id)
+            current = _path("host", "guest_config", plural, guest_id)
             previous_guest = _path(
                 "host",
                 "shutdown_history",
@@ -166,7 +168,7 @@ def build_shutdown_aware_pve_discovery_payload(
             )
             components[key] = item
 
-    return payload
+    return route_pve_discovery_groups(payload, topics, inventory=inventory)
 
 
 def build_shutdown_aware_ups_discovery_payload(
@@ -229,4 +231,4 @@ def build_shutdown_aware_ups_discovery_payload(
             "'history_available': value_json.shutdown_readiness.history_available | default(false)} | tojson }}"
         ),
     }
-    return payload
+    return route_ups_discovery_groups(payload, topics)

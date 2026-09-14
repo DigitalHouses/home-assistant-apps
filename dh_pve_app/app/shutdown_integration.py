@@ -9,8 +9,8 @@ from .production_guest import GuestAwareProductionCollectors
 from .shutdown_discovery import build_shutdown_aware_ups_discovery_payload
 from .shutdown_history import ShutdownHistoryTracker, evaluate_shutdown_readiness
 from .topology import TopologyManager
+from .ups_group_runtime import AdaptiveUpsRuntime
 from .ups_nut import read_ups
-from .ups_runtime import UpsRuntime
 
 
 def parse_guest_shutdown_config(config: str) -> dict[str, object]:
@@ -111,7 +111,7 @@ class ShutdownAwareProductionCollectors(GuestAwareProductionCollectors):
         return CollectorSample(data=data, metrics=metrics)
 
 
-class ShutdownAwareUpsRuntime(UpsRuntime):
+class ShutdownAwareUpsRuntime(AdaptiveUpsRuntime):
     def __init__(
         self,
         *args,

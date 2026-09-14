@@ -20,6 +20,9 @@ class SettingSpec:
     unit: str | None = None
 
 
+# Runtime settings exposed to Home Assistant are collector controls only.
+# Presentation thresholds/windows live in the adaptive presentation policy and
+# are intentionally not duplicated as HA number entities.
 SETTING_SPECS: dict[str, SettingSpec] = {
     "fast_poll_interval_seconds": SettingSpec(
         key="fast_poll_interval_seconds",
@@ -41,67 +44,20 @@ SETTING_SPECS: dict[str, SettingSpec] = {
         name="Disk poll interval",
         unit="s",
     ),
-    "cpu_publish_delta": SettingSpec(
-        key="cpu_publish_delta",
-        default=5.0,
-        minimum=1.0,
-        maximum=25.0,
-        step=1.0,
-        entity_id="number.dh_pve_cpu_publish_delta",
-        name="CPU publish delta",
-        unit="%",
-    ),
-    "memory_publish_delta": SettingSpec(
-        key="memory_publish_delta",
-        default=1.0,
-        minimum=0.5,
-        maximum=10.0,
-        step=0.5,
-        entity_id="number.dh_pve_memory_publish_delta",
-        name="Memory publish delta",
-        unit="%",
-    ),
-    "temperature_publish_delta": SettingSpec(
-        key="temperature_publish_delta",
-        default=1.0,
-        minimum=0.5,
-        maximum=10.0,
-        step=0.5,
-        entity_id="number.dh_pve_temperature_publish_delta",
-        name="Temperature publish delta",
-        unit="°C",
-    ),
-    "storage_publish_delta": SettingSpec(
-        key="storage_publish_delta",
-        default=0.5,
-        minimum=0.1,
-        maximum=5.0,
-        step=0.1,
-        entity_id="number.dh_pve_storage_publish_delta",
-        name="Storage publish delta",
-        unit="%",
-    ),
-    "fan_publish_delta_rpm": SettingSpec(
-        key="fan_publish_delta_rpm",
-        default=100.0,
-        minimum=25.0,
-        maximum=1000.0,
-        step=25.0,
-        entity_id="number.dh_pve_fan_publish_delta",
-        name="Fan publish delta",
-        unit="rpm",
-    ),
-    "gpu_publish_delta": SettingSpec(
-        key="gpu_publish_delta",
-        default=5.0,
-        minimum=1.0,
-        maximum=25.0,
-        step=1.0,
-        entity_id="number.dh_pve_gpu_publish_delta",
-        name="GPU publish delta",
-        unit="%",
-    ),
 }
+
+# Values from pre-adaptive installations may remain in runtime.json. They are
+# accepted only while loading persisted state, then disappear on the next save.
+LEGACY_SETTING_KEYS = frozenset(
+    {
+        "cpu_publish_delta",
+        "memory_publish_delta",
+        "temperature_publish_delta",
+        "storage_publish_delta",
+        "fan_publish_delta_rpm",
+        "gpu_publish_delta",
+    }
+)
 
 
 class RuntimeSettings:
@@ -109,6 +65,8 @@ class RuntimeSettings:
         self._values = {key: spec.default for key, spec in SETTING_SPECS.items()}
         if values:
             for key, value in values.items():
+                if key in LEGACY_SETTING_KEYS:
+                    continue
                 self.apply(key, str(value))
 
     def get(self, key: str) -> float:

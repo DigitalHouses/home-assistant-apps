@@ -1,10 +1,17 @@
 import json
 
+import pytest
+
 from app.config import MqttConfig
 from app.identity import HostIdentity
 from app.mqtt_bridge import MqttBridge
 from app.runtime_settings import RuntimeSettings
-from app.topics import build_topics, build_ups_topics
+from app.topics import (
+    build_topics,
+    build_ups_topics,
+    state_group_topic,
+    ups_state_group_topic,
+)
 
 
 class _Info:
@@ -130,6 +137,19 @@ def test_legacy_ups_discovery_cleanup_is_empty_retained_publish():
     assert (ups.legacy_discovery, "", 1, True) in client.published
 
 
+def test_legacy_monolithic_state_cleanup_is_empty_retained_publish():
+    bridge, client, topics, _, config, identity = _bridge()
+    bridge.connected.set()
+    ups = build_ups_topics(config, identity)
+    bridge.configure_ups(ups)
+    client.published.clear()
+
+    assert bridge.clear_legacy_state() is True
+    assert bridge.clear_legacy_ups_state() is True
+    assert (topics.state, "", 1, True) in client.published
+    assert (ups.state, "", 1, True) in client.published
+
+
 def test_state_and_discovery_are_retained_qos1_json():
     bridge, client, topics, _, _, _ = _bridge()
     bridge.connected.set()
@@ -142,18 +162,83 @@ def test_state_and_discovery_are_retained_qos1_json():
     assert json.loads(state[1]) == {"cpu": 12.5}
 
 
-def test_invalid_runtime_setting_republishes_effective_value():
+def test_group_topic_helpers_nest_under_existing_state_roots():
+    _, _, topics, _, config, identity = _bridge()
+    ups = build_ups_topics(config, identity)
+
+    assert state_group_topic(topics, "cpu") == f"{topics.state}/cpu"
+    assert state_group_topic(topics, "disk/nvme0/telemetry") == (
+        f"{topics.state}/disk/nvme0/telemetry"
+    )
+    assert ups_state_group_topic(ups, "telemetry") == f"{ups.state}/telemetry"
+
+
+@pytest.mark.parametrize("bad_group", ["", "/cpu", "cpu/", "../cpu", "cpu//temp"])
+def test_group_topic_helpers_reject_unsafe_paths(bad_group):
+    _, _, topics, _, config, identity = _bridge()
+    ups = build_ups_topics(config, identity)
+
+    with pytest.raises(ValueError):
+        state_group_topic(topics, bad_group)
+    with pytest.raises(ValueError):
+        ups_state_group_topic(ups, bad_group)
+
+
+def test_state_group_publication_is_retained_qos1_json():
+    bridge, client, topics, _, _, _ = _bridge()
+    bridge.connected.set()
+
+    assert bridge.publish_state_group("cpu", {"usage": 42.5}) is True
+
+    item = next(
+        published
+        for published in client.published
+        if published[0] == f"{topics.state}/cpu"
+    )
+    assert item[2:] == (1, True)
+    assert json.loads(item[1]) == {"usage": 42.5}
+
+
+def test_ups_state_group_publication_is_retained_qos1_json():
+    bridge, client, _, _, config, identity = _bridge()
+    bridge.connected.set()
+    ups = build_ups_topics(config, identity)
+    bridge.configure_ups(ups)
+
+    assert bridge.publish_ups_state_group("telemetry", {"load": 35.0}) is True
+
+    item = next(
+        published
+        for published in client.published
+        if published[0] == f"{ups.state}/telemetry"
+    )
+    assert item[2:] == (1, True)
+    assert json.loads(item[1]) == {"load": 35.0}
+
+
+def test_invalid_poll_setting_republishes_effective_value():
     bridge, client, topics, settings, _, _ = _bridge()
     bridge.connected.set()
-    topic = f"{topics.settings_prefix}/cpu_publish_delta/set"
+    topic = f"{topics.settings_prefix}/fast_poll_interval_seconds/set"
     bridge._on_message(client, None, _Message(topic, b"999"))
-    assert settings.get("cpu_publish_delta") == 5.0
+    assert settings.get("fast_poll_interval_seconds") == 10.0
     assert (
-        f"{topics.settings_prefix}/cpu_publish_delta/state",
-        "5",
+        f"{topics.settings_prefix}/fast_poll_interval_seconds/state",
+        "10",
         1,
         True,
     ) in client.published
+
+
+def test_removed_publish_delta_topic_is_ignored():
+    bridge, client, topics, _, _, _ = _bridge()
+    bridge.connected.set()
+    topic = f"{topics.settings_prefix}/cpu_publish_delta/set"
+    before = list(client.published)
+
+    bridge._on_message(client, None, _Message(topic, b"7"))
+
+    assert client.published == before
 
 
 def test_ha_online_requests_full_republish():

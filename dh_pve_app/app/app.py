@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Protocol
 
+from .presentation_pve import PresentationSubsystem, PvePresentationRouter
 from .publish_policy import MetricValue, PublishPolicy
 from .runtime_settings import RuntimeSettings
 from .scheduler import Scheduler
@@ -36,6 +37,7 @@ class RuntimeBridge(Protocol):
 
     def publish_discovery(self) -> bool: ...
     def publish_state(self, payload: dict[str, object]) -> bool: ...
+    def publish_state_group(self, group: str, payload: dict[str, object]) -> bool: ...
     def publish_setting_value(self, key: str, value: float) -> bool: ...
 
 
@@ -54,17 +56,24 @@ class DhPveRuntime:
         now_iso: Callable[[], str],
         now_monotonic: Callable[[], float] = time.monotonic,
         setting_tasks: Mapping[str, tuple[str, ...]] | None = None,
+        presentation_router: PvePresentationRouter | None = None,
     ) -> None:
         self.collectors = dict(collectors)
         self.bridge = bridge
         self.settings = settings
+        # Retained only as a compatibility path during migration.  Production
+        # MqttBridge exposes publish_state_group(), so adaptive presentation is
+        # authoritative there and the legacy delta policy is not consulted.
         self.publish_policy = publish_policy
         self.state_store = state_store
         self.scheduler = scheduler
         self.now_iso = now_iso
         self.now_monotonic = now_monotonic
         self.setting_tasks = dict(setting_tasks or {})
+        self.presentation_router = presentation_router or PvePresentationRouter()
         self._subsystems: dict[str, SubsystemState] = {}
+        self._published_groups: dict[str, dict[str, object]] = {}
+        self._pending_groups: dict[str, dict[str, object]] = {}
         self.last_refresh: str | None = None
         self._load_persisted_runtime_state()
 
@@ -163,6 +172,161 @@ class DhPveRuntime:
             "subsystems": subsystems,
         }
 
+    def _group_capable(self) -> bool:
+        return callable(getattr(self.bridge, "publish_state_group", None))
+
+    def _presentation_subsystems(self) -> dict[str, PresentationSubsystem]:
+        return {
+            name: PresentationSubsystem(
+                available=state.available,
+                data=self._jsonable(state.data),
+                last_success=state.last_success,
+                error=state.error,
+            )
+            for name, state in self._subsystems.items()
+        }
+
+    def _publish_diagnostics(
+        self,
+        *,
+        collected_at: str,
+        last_refresh: str | None,
+        group: str,
+        reason: str,
+        profile: str,
+        group_count: int,
+    ) -> bool:
+        publisher = getattr(self.bridge, "publish_state_group")
+        payload: dict[str, object] = {
+            "collected_at": collected_at,
+            "last_refresh": last_refresh,
+            "app_profile": self.presentation_router.profile_summary(),
+            "last_publication": {
+                "timestamp": collected_at,
+                "group": group,
+                "reason": reason,
+                "profile": profile,
+                "group_count": group_count,
+            },
+        }
+        if not publisher("diagnostics", payload):
+            self._pending_groups["diagnostics"] = payload
+            return False
+        self._published_groups["diagnostics"] = payload
+        self._pending_groups.pop("diagnostics", None)
+        return True
+
+    def _retry_pending_groups(self) -> tuple[bool, tuple[str, ...]]:
+        if not self._pending_groups:
+            return True, ()
+        publisher = getattr(self.bridge, "publish_state_group")
+        failed: dict[str, dict[str, object]] = {}
+        retried: list[str] = []
+        for group, payload in tuple(self._pending_groups.items()):
+            if publisher(group, payload):
+                self._published_groups[group] = payload
+                if group != "diagnostics":
+                    retried.append(group)
+            else:
+                failed[group] = payload
+        self._pending_groups = failed
+        return not failed, tuple(retried)
+
+    def _run_group_publication(
+        self,
+        *,
+        selected: tuple[str, ...],
+        collected_at: str,
+        candidate_refresh: str | None,
+        force: bool,
+        manual_refresh: bool,
+    ) -> bool:
+        pending_ok, retried_groups = self._retry_pending_groups()
+        publications = self.presentation_router.route(
+            self._presentation_subsystems(),
+            selected=selected,
+            now=self.now_monotonic(),
+            collected_at=collected_at,
+            last_refresh=candidate_refresh,
+            force=force,
+            manual=manual_refresh,
+        )
+        if not publications:
+            if not pending_ok or not retried_groups:
+                return False
+            profile = str(
+                self.presentation_router.profile_summary().get("state") or "normal"
+            )
+            return self._publish_diagnostics(
+                collected_at=collected_at,
+                last_refresh=candidate_refresh,
+                group=retried_groups[-1],
+                reason="retry",
+                profile=profile,
+                group_count=len(retried_groups),
+            )
+
+        publisher = getattr(self.bridge, "publish_state_group")
+        successful = []
+        failed = False
+        for publication in publications:
+            if publisher(publication.group, publication.payload):
+                self._published_groups[publication.group] = publication.payload
+                self._pending_groups.pop(publication.group, None)
+                successful.append(publication)
+            else:
+                self._pending_groups[publication.group] = publication.payload
+                failed = True
+
+        if failed or not pending_ok or not successful:
+            return False
+
+        last = successful[-1]
+        diagnostics_reason = "manual_refresh" if manual_refresh else last.reason
+        if not self._publish_diagnostics(
+            collected_at=collected_at,
+            last_refresh=candidate_refresh,
+            group=last.group,
+            reason=diagnostics_reason,
+            profile=last.profile.value,
+            group_count=len(retried_groups) + len(successful),
+        ):
+            return False
+
+        # Keep the old baseline coherent for migration/tests, but it no longer
+        # decides production publication once group publishing is available.
+        self.publish_policy.mark_published(self._policy_metrics())
+        if manual_refresh and candidate_refresh != self.last_refresh:
+            self.last_refresh = candidate_refresh
+            self._persist_runtime_state()
+        return True
+
+    def _run_legacy_publication(
+        self,
+        *,
+        collected_at: str,
+        candidate_refresh: str | None,
+        force: bool,
+        manual_refresh: bool,
+    ) -> bool:
+        metrics = self._policy_metrics()
+        decision = self.publish_policy.evaluate(metrics, force=force or manual_refresh)
+        if not decision.publish:
+            return False
+
+        payload = self._state_payload(
+            collected_at=collected_at,
+            last_refresh=candidate_refresh,
+        )
+        if not self.bridge.publish_state(payload):
+            return False
+
+        self.publish_policy.mark_published(metrics)
+        if manual_refresh and candidate_refresh != self.last_refresh:
+            self.last_refresh = candidate_refresh
+            self._persist_runtime_state()
+        return True
+
     def run_collection(
         self,
         names: tuple[str, ...] | list[str] | None = None,
@@ -185,23 +349,20 @@ class DhPveRuntime:
         ):
             candidate_refresh = collected_at
 
-        metrics = self._policy_metrics()
-        decision = self.publish_policy.evaluate(metrics, force=force or manual_refresh)
-        if not decision.publish:
-            return False
-
-        payload = self._state_payload(
+        if self._group_capable():
+            return self._run_group_publication(
+                selected=selected,
+                collected_at=collected_at,
+                candidate_refresh=candidate_refresh,
+                force=force,
+                manual_refresh=manual_refresh,
+            )
+        return self._run_legacy_publication(
             collected_at=collected_at,
-            last_refresh=candidate_refresh,
+            candidate_refresh=candidate_refresh,
+            force=force,
+            manual_refresh=manual_refresh,
         )
-        if not self.bridge.publish_state(payload):
-            return False
-
-        self.publish_policy.mark_published(metrics)
-        if manual_refresh and candidate_refresh != self.last_refresh:
-            self.last_refresh = candidate_refresh
-            self._persist_runtime_state()
-        return True
 
     def manual_refresh(self) -> bool:
         return self.run_collection(force=True, manual_refresh=True)
@@ -213,14 +374,35 @@ class DhPveRuntime:
         return ok
 
     def startup(self) -> bool:
+        cleanup_ok = True
+        if self._group_capable():
+            cleaner = getattr(self.bridge, "clear_legacy_state", None)
+            if callable(cleaner):
+                cleanup_ok = bool(cleaner())
         discovery_ok = self.bridge.publish_discovery()
         settings_ok = self.publish_settings()
         state_ok = self.run_collection(force=True)
-        return discovery_ok and settings_ok and state_ok
+        return cleanup_ok and discovery_ok and settings_ok and state_ok
+
+    def _republish_group_cache(self) -> bool:
+        if not self._published_groups:
+            return self.run_collection(force=True)
+        publisher = getattr(self.bridge, "publish_state_group")
+        ok = True
+        for group, payload in self._published_groups.items():
+            if not publisher(group, payload):
+                self._pending_groups[group] = payload
+                ok = False
+            else:
+                self._pending_groups.pop(group, None)
+        return ok
 
     def republish_after_reconnect(self) -> bool:
         discovery_ok = self.bridge.publish_discovery()
         settings_ok = self.publish_settings()
+        if self._group_capable():
+            state_ok = self._republish_group_cache()
+            return discovery_ok and settings_ok and state_ok
         if not self._subsystems:
             state_ok = self.run_collection(force=True)
             return discovery_ok and settings_ok and state_ok

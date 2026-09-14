@@ -37,7 +37,12 @@ def test_controls_and_runtime_settings_have_semantic_metadata():
         _config(), _identity(), version="0.1.0"
     )["components"]
 
-    for key in ("refresh", "last_refresh", "setting_cpu_publish_delta"):
+    for key in (
+        "refresh",
+        "last_refresh",
+        "setting_fast_poll_interval_seconds",
+        "setting_disk_poll_interval_seconds",
+    ):
         component = components[key]
         assert component["json_attributes_topic"]
         template = component["json_attributes_template"]
@@ -48,6 +53,8 @@ def test_controls_and_runtime_settings_have_semantic_metadata():
         assert "proxmox_object_id" in template
         assert "proxmox_display_name" in template
         assert "proxmox_sort_key" in template
+
+    assert not any("publish_delta" in key for key in components)
 
 
 def test_collector_names_preserve_known_acronyms():
