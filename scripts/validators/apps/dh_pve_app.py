@@ -37,8 +37,12 @@ def validate_dh_pve_app(
             app / "app/topology.py",
             app / "app/production_v1.py",
             app / "app/production_guest.py",
+            app / "app/shutdown_history.py",
+            app / "app/shutdown_integration.py",
+            app / "app/shutdown_discovery.py",
             app / "app/main.py",
             app / "examples/dh_pve_app.conf.example",
+            app / "examples/dh_pve_shutdown_readiness_card.yaml",
             app / "systemd/dh_pve_app.service",
         ],
     )
@@ -90,6 +94,30 @@ def validate_dh_pve_app(
         ),
         "guest Discovery",
     )
+    _require_text(
+        app / "app/shutdown_discovery.py",
+        (
+            'entity_id="sensor.dh_pve_previous_shutdown"',
+            'entity_id="sensor.dh_pve_shutdown_history"',
+            'entity_id=f"sensor.dh_pve_{kind}_{_slug(guest_id)}_shutdown"',
+            '"default_entity_id": "sensor.dh_pve_ups_guest_shutdown_budget"',
+            '"default_entity_id": "sensor.dh_pve_ups_shutdown_readiness"',
+        ),
+        "shutdown Discovery",
+    )
+    _require_text(
+        app / "examples/dh_pve_shutdown_readiness_card.yaml",
+        (
+            "sensor.dh_pve_previous_shutdown",
+            "sensor.dh_pve_shutdown_history",
+            "sensor.dh_pve_ups_shutdown_readiness",
+            "sensor.dh_pve_ups_guest_shutdown_budget",
+            "proxmox_metric') == 'shutdown_duration'",
+            "result in ['timeout', 'forced']",
+            "ratio >= 0.8",
+        ),
+        "shutdown readiness card",
+    )
 
     discovery_metrics = (app / "app/discovery_metrics.py").read_text(
         encoding="utf-8"
@@ -130,12 +158,25 @@ def validate_dh_pve_app(
         "low-cost topology",
     )
     _require_text(
+        app / "app/shutdown_integration.py",
+        (
+            "class ShutdownAwareTopologyManager",
+            "class ShutdownAwareProductionCollectors",
+            "class ShutdownAwareUpsRuntime",
+            '"shutdown_timeout_seconds": timeout',
+            'fields["shutdown_readiness"]',
+            "shutdown_policy_issues(",
+        ),
+        "shutdown runtime",
+    )
+    _require_text(
         app / "app/main.py",
         (
             "DynamicDiscoveryRuntime(",
-            "GuestAwareProductionCollectors(",
-            "TopologyManager(runner=_run)",
-            "build_guest_aware_discovery_payload(",
+            "ShutdownAwareProductionCollectors(",
+            "ShutdownAwareTopologyManager(runner=_run)",
+            "build_shutdown_aware_pve_discovery_payload(",
+            "ShutdownHistoryTracker(",
             'scheduler.add("guests", interval_seconds=30.0',
             'scheduler.add("gpu", interval_seconds=30.0',
             'scheduler.add("host", interval_seconds=86400.0',

@@ -16,10 +16,12 @@ def test_main_uses_event_driven_runtime_without_state_heartbeat():
     assert "heartbeat" not in text.casefold()
 
 
-def test_main_wires_shared_topology_and_low_cost_guest_gpu_polling():
+def test_main_wires_shared_topology_shutdown_history_and_low_cost_guest_gpu_polling():
     text = (ROOT / "app" / "main.py").read_text()
-    assert "GuestAwareProductionCollectors" in text
-    assert "TopologyManager" in text
+    assert "ShutdownAwareProductionCollectors" in text
+    assert "ShutdownAwareTopologyManager" in text
+    assert "ShutdownHistoryTracker" in text
+    assert "build_shutdown_aware_pve_discovery_payload" in text
     assert 'scheduler.add("guests", interval_seconds=30.0' in text
     assert 'scheduler.add("gpu", interval_seconds=30.0' in text
     assert 'scheduler.add("topology"' not in text

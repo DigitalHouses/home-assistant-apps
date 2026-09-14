@@ -153,6 +153,34 @@ cd /opt/digitalhouses/dh_pve_app
   --ups-policy-preflight
 ```
 
+## Shutdown history and readiness
+
+The app keeps dry facts about Proxmox shutdowns; notification wording remains a Home Assistant responsibility. A real host boot is identified by the kernel `boot_id`, so restarting or upgrading `dh_pve_app` during the same boot does not create a false Proxmox boot event.
+
+Shutdown history is persisted in `/var/lib/dh_pve_app/shutdown_history.json`. Up to 50 cycles are retained locally and the most recent 10 are exposed through MQTT. For the previous boot the app publishes:
+
+- `shutdown_class`: `normal`, `unclean`, `ups_power`, or `unknown`;
+- `shutdown_reason`: the observed cause only, such as `shutdown`, `on_battery_fsd`, `low_battery_fsd`, `manual_or_external_fsd`, or `unknown` when no cause is established;
+- `shutdown_clean`: `true`, `false`, or unknown when previous-boot journal evidence is insufficient; this result is kept separate from the cause;
+- outage/FSD/guest/host timestamps and derived timing intervals only when the required evidence exists;
+- UPS status, battery charge/runtime and load captured when FSD is first observed;
+- per-VM/LXC shutdown start/end, duration, timeout, timeout ratio, result and forced/timeout state.
+
+`shutdown_reason` never encodes the shutdown result or evidence quality: an unclean shutdown is represented by `shutdown_clean=false`, and insufficient journal evidence by an unknown `shutdown_clean`, while an unknown cause remains `shutdown_reason=unknown`. An unclean boot is never automatically called a power failure. `ups_power` requires confirmed UPS/FSD evidence; a manual/external FSD while the UPS remains on line power is kept distinct. If the previous boot journal contains no usable evidence, the class is `unknown` rather than inventing an `unclean` result or a shutdown timestamp from an arbitrary last log line.
+
+Home Assistant entities include:
+
+- `sensor.dh_pve_previous_shutdown`
+- `sensor.dh_pve_shutdown_history`
+- `sensor.dh_pve_vm_<id>_shutdown`
+- `sensor.dh_pve_lxc_<id>_shutdown`
+- `sensor.dh_pve_ups_guest_shutdown_budget`
+- `sensor.dh_pve_ups_shutdown_readiness`
+
+Guest configuration is diagnostic-only. The app reads `onboot`, `startup.order` and `startup.down`; when `down` is absent, the effective Proxmox timeout is treated as 180 seconds. It never rewrites VM/LXC startup or shutdown settings.
+
+UPS shutdown readiness checks the production NUT path as well as guest history. It warns on a forced/timeout guest, a guest that consumed at least 80% of its previous timeout, an unavailable shutdown budget, a broken NUT PRIMARY/upssched path, or a UPS-triggered shutdown whose host shutdown result is unclean or unknown. Hosts without a selected UPS report readiness as `skip` rather than an error.
+
 ## Battery tests
 
 Battery tests are runtime UPS operations and are intentionally separate from shutdown-policy configuration. Capability permitting, Home Assistant may expose:
@@ -234,9 +262,15 @@ UPS view:
 dh_pve_app/examples/dh_pve_ups_dashboard.yaml
 ```
 
-The UPS dashboard includes live UPS state, power/battery metrics, effective shutdown policy, NUT diagnostics, battery-test controls/schedule, history graphs and event log. Shutdown-policy controls are intentionally absent.
+Reusable shutdown/readiness card:
 
-The PVE dashboard requires Mushroom, auto-entities, mini-graph-card and Entity Progress Card. The UPS view requires Mushroom and mini-graph-card.
+```text
+dh_pve_app/examples/dh_pve_shutdown_readiness_card.yaml
+```
+
+The UPS dashboard includes live UPS state, power/battery metrics, effective shutdown policy, NUT diagnostics, battery-test controls/schedule, history graphs and event log. Shutdown-policy controls are intentionally absent. The shutdown/readiness card shows the previous host shutdown cause/result, timing chain, UPS readiness/budget when an UPS exists, and dynamic per-VM/LXC shutdown diagnostics.
+
+The PVE dashboard requires Mushroom, auto-entities, mini-graph-card and Entity Progress Card. The UPS view requires Mushroom and mini-graph-card. The reusable shutdown/readiness card requires Mushroom and auto-entities.
 
 ## Installation
 
@@ -245,6 +279,18 @@ Run on Proxmox as `root`:
 ```bash
 curl -fsSL https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/main/dh_pve_app/install.sh | bash
 ```
+
+For a pre-merge feature/ref deployment, the installer and application source must come from the **same ref**. Do not bootstrap a feature deployment with the `main` installer because installer fixes in the feature ref would be skipped:
+
+```text
+REF=<ref>
+DIGITALHOUSES_SOURCE_REF="$REF" \
+  bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$REF/dh_pve_app/install.sh")
+```
+
+Canonical same-ref URL shape: `https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/<ref>/dh_pve_app/install.sh`.
+
+The static UPS policy helper is stored executable in git and the installer also restores mode `0755` after copying it. This is intentional defense in depth because a non-executable helper would break the owned `upssched` FSD action path.
 
 The installer deploys the application, helper and systemd service. It does **not** silently commission NUT shutdown policy. Commissioning is an explicit post-install administrative action when physical UPS access and validation are available.
 
@@ -268,8 +314,8 @@ upsc -l 127.0.0.1:3493
 upsc ups@127.0.0.1:3493
 ```
 
-A safe physical mains-loss commissioning test should first prove `OL → OB → OL` and `upssched` timer start/cancel without waiting for FSD. A full FSD/shutdown test belongs only after all intended NUT SECONDARY clients have been configured and verified.
+Release/deploy validation is non-destructive. Verify service/MQTT health, NUT telemetry and the read-only policy preflight. If mains behavior is checked physically, stop at `OL → OB → OL` and confirm `upssched` timer start/cancel before any FSD threshold. Do not invoke `upsmon -c fsd`, wait for the emergency shutdown timer to expire, or intentionally shut down the host as part of release validation.
 
 ## Status
 
-`0.2.0-alpha` currently provides production-oriented Proxmox monitoring, NUT-backed UPS telemetry, capability-driven battery tests, explicit NUT shutdown-policy commissioning, read-only policy observability in Home Assistant, and systemd-enforced separation between normal runtime and host configuration.
+`0.2.0-alpha` currently provides production-oriented Proxmox monitoring, NUT-backed UPS telemetry, capability-driven battery tests, explicit NUT shutdown-policy commissioning, persistent boot/shutdown history, guest shutdown diagnostics, UPS shutdown readiness, read-only policy observability in Home Assistant, and systemd-enforced separation between normal runtime and host configuration.

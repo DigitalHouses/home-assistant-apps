@@ -12,18 +12,22 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .config import AppConfig, UpsConfig, load_config
-from .discovery_guest import build_guest_aware_discovery_payload
 from .identity import resolve_identity
 from .mqtt_bridge import MqttBridge
 from .production import _run
-from .production_guest import GuestAwareProductionCollectors
 from .publish_policy import PublishPolicy
 from .runtime_dynamic import DynamicDiscoveryRuntime
 from .runtime_settings import RuntimeSettings
 from .scheduler import Scheduler
+from .shutdown_discovery import build_shutdown_aware_pve_discovery_payload
+from .shutdown_history import ShutdownHistoryTracker
+from .shutdown_integration import (
+    ShutdownAwareProductionCollectors,
+    ShutdownAwareTopologyManager,
+    ShutdownAwareUpsRuntime,
+)
 from .state_store import StateStore
 from .topics import build_topics, build_ups_topics
-from .topology import TopologyManager
 from .ups_commission import commission_ups_policy
 from .ups_policy_host import read_policy_safety_facts
 from .ups_policy_preflight import (
@@ -76,13 +80,26 @@ def _initial_settings(store: StateStore) -> RuntimeSettings:
     return RuntimeSettings()
 
 
-def build_runtime(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR):
+def _shutdown_tracker(state_dir: Path) -> ShutdownHistoryTracker:
+    return ShutdownHistoryTracker(
+        state_store=StateStore(state_dir / "shutdown_history.json"),
+        now_iso=lambda: datetime.now().astimezone().isoformat(),
+    )
+
+
+def build_runtime(
+    config: AppConfig,
+    *,
+    state_dir: Path = DEFAULT_STATE_DIR,
+    shutdown_history_tracker: ShutdownHistoryTracker | None = None,
+):
     identity = resolve_identity(config.general)
     topics = build_topics(config.mqtt, identity)
     runtime_store = StateStore(state_dir / "runtime.json")
     settings = _initial_settings(runtime_store)
+    tracker = shutdown_history_tracker or _shutdown_tracker(state_dir)
 
-    discovery_builder = lambda inventory: build_guest_aware_discovery_payload(
+    discovery_builder = lambda inventory: build_shutdown_aware_pve_discovery_payload(
         config,
         identity,
         version=_version(),
@@ -95,11 +112,12 @@ def build_runtime(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR):
         discovery_builder({}),
     )
 
-    topology = TopologyManager(runner=_run)
-    production = GuestAwareProductionCollectors(
+    topology = ShutdownAwareTopologyManager(runner=_run)
+    production = ShutdownAwareProductionCollectors(
         node_name=identity.node_name,
         disk_state_store=StateStore(state_dir / "disks.json"),
         topology=topology,
+        shutdown_history_tracker=tracker,
     )
     collectors = production.mapping()
 
@@ -138,12 +156,14 @@ def build_ups_runtime(
     *,
     selected_name: str | None,
     state_dir: Path = DEFAULT_STATE_DIR,
+    shutdown_history_tracker: ShutdownHistoryTracker | None = None,
 ) -> UpsRuntime | None:
     if not selected_name:
         return None
     identity = resolve_identity(config.general)
     bridge.configure_ups(build_ups_topics(config.mqtt, identity))
     runtime_config = replace(config.ups, enabled=True, name=selected_name)
+    tracker = shutdown_history_tracker or _shutdown_tracker(state_dir)
 
     def observed_shutdown_policy():
         budget: int | None = None
@@ -158,7 +178,7 @@ def build_ups_runtime(
             guest_shutdown_budget_seconds=budget,
         )
 
-    return UpsRuntime(
+    return ShutdownAwareUpsRuntime(
         config=runtime_config,
         mqtt_config=config.mqtt,
         bridge=bridge,
@@ -169,6 +189,7 @@ def build_ups_runtime(
         now_local=_now_local,
         now_monotonic=time.monotonic,
         shutdown_policy_reader=observed_shutdown_policy,
+        shutdown_history_tracker=tracker,
     )
 
 
@@ -244,13 +265,27 @@ def commission_selected_ups_policy(
 
 def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
     log = logging.getLogger("dh_pve_app")
-    bridge, runtime = build_runtime(config, state_dir=state_dir)
+    shutdown_history_tracker = _shutdown_tracker(state_dir)
+    try:
+        shutdown_history_tracker.startup()
+    except Exception as exc:
+        log.warning(
+            "Не удалось обновить историю запусков/остановок PVE: %s",
+            exc,
+        )
+
+    bridge, runtime = build_runtime(
+        config,
+        state_dir=state_dir,
+        shutdown_history_tracker=shutdown_history_tracker,
+    )
     scanner = build_ups_scanner(config, state_dir=state_dir)
     ups_runtime = build_ups_runtime(
         config,
         bridge,
         selected_name=scanner.selected_name(),
         state_dir=state_dir,
+        shutdown_history_tracker=shutdown_history_tracker,
     )
     stop_event = threading.Event()
     initialized = False
@@ -299,6 +334,7 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
                                 bridge,
                                 selected_name=outcome.selected_name,
                                 state_dir=state_dir,
+                                shutdown_history_tracker=shutdown_history_tracker,
                             )
                             ups_startup_attempted = False
                         elif outcome.count == 1:
