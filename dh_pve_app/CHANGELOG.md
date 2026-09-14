@@ -47,7 +47,7 @@
 - Preserve upgrade compatibility by ignoring the legacy `ups.policy_apply_enabled` config key without granting any runtime capability.
 - Reuse the transactional NUT policy renderer/applier only from explicit commissioning, never from the daemon or MQTT event path.
 - Make commissioning atomic writes preserve the owner/group contract of `/etc/nut` (normally `root:nut`) and mode `0640`; rollback restores content, mode, UID and GID.
-- After restarting the UPS driver during commissioning, wait up to 10 seconds for the exact effective restore delay reported by the hardware instead of performing a race-prone one-shot read.
+- After restarting the UPS driver during commissioning, wait up to 10 seconds for the exact effective hardware restore delay reported by the hardware instead of performing a race-prone one-shot read.
 - Keep the static `dh-pve-ups-policy-cmd` helper restricted to the owned `dh-pve-ups-shutdown` timer token and `upsmon -c fsd` action.
 - Keep native hardware Low Battery authoritative; do not install `ignorelb` or battery threshold overrides.
 - Add persistent PVE boot/shutdown history keyed by the kernel `boot_id`, so restarting or upgrading `dh_pve_app` does not create a false host boot event.
@@ -66,7 +66,7 @@
 
 - Introduce `dh_pve_app` as a native Proxmox VE Linux agent.
 - Define the separate `DH PVE` MQTT device and `DigitalHouses/Global/dh_pve_app/<instance>` namespace.
-- Add host, CPU, memory, storage, SMART/disk-health, GPU/transcoding, fan, VM/LXC and passthrough topology data.
+- Add host, CPU, memory, storage, SMART/disk-health, GPU/transcoding, and fan collectors.
 - Add autonomous VM/LXC inventory plus a shared passthrough topology cache.
 - Add VM/LXC status polling and targeted guest rescans when a guest transitions to `running`.
 - Collapse VM/LXC status polling to one Proxmox `/cluster/resources` query every 30 seconds instead of separate `qm list` and `pct list` calls every 10 seconds.
