@@ -76,7 +76,6 @@ def test_ups_discovery_routes_entities_to_independent_state_groups():
     for key in (
         "battery_charge",
         "battery_runtime_minutes",
-        "battery_runtime",
         "battery_voltage",
         "load",
         "input_voltage",
@@ -85,6 +84,7 @@ def test_ups_discovery_routes_entities_to_independent_state_groups():
         "output_frequency",
     ):
         assert c[key]["state_topic"] == telemetry
+    assert "battery_runtime" not in c
 
     for key in (
         "status",
