@@ -2,7 +2,7 @@
 
 `dh_pve_app` is the DigitalHouses native Linux agent for Proxmox VE. It collects host, CPU, memory, storage, physical-disk/SMART, GPU/transcoding, fan, VM/LXC and passthrough topology data and publishes normalized Home Assistant entities through MQTT Discovery. The same process can monitor a locally connected UPS through Network UPS Tools (NUT).
 
-Version `0.2.0` remains the current stable release. The adaptive MQTT/Recorder v2 work described below is being validated on the feature branch before the next production release. Proxmox/NUT owns the UPS and every emergency-shutdown decision; Home Assistant is an observability and control surface, not the shutdown-policy authority.
+Version `0.3.0` is the current stable release. It introduces the adaptive MQTT/Recorder presentation layer validated on the production Proxmox host while preserving the existing Proxmox-owned UPS shutdown architecture. Proxmox/NUT owns the UPS and every emergency-shutdown decision; Home Assistant is an observability and control surface, not the shutdown-policy authority.
 
 ## Public identity
 
@@ -112,7 +112,7 @@ The monolithic state payload is no longer the production publication unit. Recor
 .../<instance>/ups/state/diagnostics
 ```
 
-Publishing one group must not refresh unrelated Home Assistant entities.
+Publishing one group must not refresh unrelated Home Assistant entities. During upgrade from the old monolithic contract, retained `.../<instance>/state` and `.../<instance>/ups/state` payloads are tombstoned so stale broker data does not survive the migration.
 
 Continuous sensors keep only stable metadata as Recorder attributes. Volatile values such as RAM `used_gib` or storage `used_gib` are not attached to another continuous state merely as changing attributes.
 
@@ -122,6 +122,11 @@ Continuous sensors keep only stable metadata as Recorder attributes. Volatile va
 
 - `sensor.dh_pve_app_profile` — highest currently active resource profile with compact per-resource profile/reason attributes;
 - `sensor.dh_pve_last_publication` — timestamp of the latest successful state-group publication with compact group/reason/profile metadata.
+
+`DH PVE UPS` exposes the matching diagnostics:
+
+- `sensor.dh_pve_ups_app_profile`;
+- `sensor.dh_pve_ups_last_publication`.
 
 These are diagnostics for verifying the adaptive presentation layer. Decision-window raw averages are intentionally not exposed as fast-changing attributes.
 
@@ -300,7 +305,7 @@ Home Assistant entities include:
 - `sensor.dh_pve_ups_guest_shutdown_budget`
 - `sensor.dh_pve_ups_shutdown_readiness`
 
-Guest configuration is diagnostic-only. The App reads `onboot`, `startup.order` and `startup.down`; when `down` is absent, the effective Proxmox timeout is 180 seconds. It never rewrites VM/LXC startup/shutdown settings.
+Guest configuration is diagnostic-only. The App reads `onboot`, `startup.order` and `startup.down`; when `down` is absent, the effective Proxmox timeout is 180 seconds. The retained `state/shutdown` group carries a compact snapshot of those stable settings so shutdown-history entities remain self-contained after MQTT group splitting. The App never rewrites VM/LXC startup/shutdown settings.
 
 UPS shutdown readiness warns on forced/timeout guests, near-timeout guests, an unavailable shutdown budget, a broken NUT PRIMARY/upssched path, or a UPS-triggered shutdown whose host clean/unclean result failed or is unknown. Hosts without a selected UPS report readiness as `skip`.
 
@@ -428,4 +433,4 @@ Release/deploy validation is non-destructive. Verify service/MQTT health, groupe
 
 ## Status
 
-`0.2.0` is the current stable release. The adaptive MQTT/Recorder v2 feature branch adds resource-local averaged publication, independent retained MQTT groups, profile diagnostics, Recorder-safe attributes, migration cleanup for retired delta controls, and a Recorder-only HA package while preserving the existing Proxmox/NUT shutdown-safety contract.
+`0.3.0` is the current stable release. Its production contract is resource-local averaged publication, independent retained MQTT groups, PVE/UPS profile diagnostics, Recorder-safe attributes, migration cleanup for retired delta controls and monolithic retained topics, a self-contained shutdown diagnostics group, and a Recorder-only HA package while preserving the Proxmox/NUT shutdown-safety architecture.
