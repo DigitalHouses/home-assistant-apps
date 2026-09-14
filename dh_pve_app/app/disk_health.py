@@ -23,6 +23,18 @@ _CONCERNING = (
 )
 
 
+_DISK_TEMPERATURE_LIMITS = {
+    "HDD": (50.0, 60.0),
+    "SSD": (70.0, 80.0),
+    "NVMe": (75.0, 85.0),
+}
+
+
+def disk_temperature_limits(disk_type: str | None) -> tuple[float, float]:
+    """Return the canonical warning/critical temperature policy for a disk type."""
+    return _DISK_TEMPERATURE_LIMITS.get(str(disk_type), (70.0, 85.0))
+
+
 def _positive(value):
     return value is not None and value > 0
 
@@ -59,11 +71,7 @@ def evaluate_disk_health(snapshot: SmartSnapshot, previous: dict[str, int | floa
     if _grew(snapshot, previous, "unsafe_shutdowns"):
         warning.append("unsafe_shutdown_growth")
 
-    warn_temp, crit_temp = {
-        "HDD": (50.0, 60.0),
-        "SSD": (70.0, 80.0),
-        "NVMe": (75.0, 85.0),
-    }.get(snapshot.disk_type, (70.0, 85.0))
+    warn_temp, crit_temp = disk_temperature_limits(snapshot.disk_type)
     if snapshot.temperature_c is not None:
         if snapshot.temperature_c >= crit_temp:
             critical.append("temperature")
