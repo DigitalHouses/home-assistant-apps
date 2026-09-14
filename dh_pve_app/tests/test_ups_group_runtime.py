@@ -21,6 +21,7 @@ class GroupBridge:
         self.groups = []
         self.states = []
         self.availability = []
+        self.legacy_state_cleanup = 0
 
     def publish_ups_discovery(self, payload):
         self.discovery.append(payload)
@@ -36,6 +37,10 @@ class GroupBridge:
 
     def publish_ups_availability(self, online):
         self.availability.append(online)
+        return True
+
+    def clear_legacy_ups_state(self):
+        self.legacy_state_cleanup += 1
         return True
 
 
@@ -111,12 +116,23 @@ def test_group_capable_startup_uses_only_group_transport(tmp_path):
     assert runtime.startup() is True
 
     assert bridge.states == []
-    assert {group for group, _payload in bridge.groups} == {
+    assert bridge.legacy_state_cleanup == 1
+    grouped = dict(bridge.groups)
+    assert set(grouped) == {
         "telemetry",
         "status",
         "config",
         "tests",
         "diagnostics",
+    }
+    diagnostics = grouped["diagnostics"]
+    assert diagnostics["app_profile"]["state"] == "normal"
+    assert diagnostics["last_publication"] == {
+        "timestamp": "2026-09-14T20:00:00+05:00",
+        "group": "tests",
+        "reason": "startup",
+        "profile": "normal",
+        "group_count": 4,
     }
 
 
@@ -134,7 +150,7 @@ def test_unchanged_online_poll_does_not_refresh_group_states(tmp_path):
     assert bridge.groups == []
 
 
-def test_on_battery_transition_publishes_only_status_and_telemetry(tmp_path):
+def test_on_battery_transition_publishes_status_telemetry_and_diagnostics(tmp_path):
     current = {"snapshot": parse_upsc_output("ups.status: OL\nbattery.runtime: 2160\nups.load: 5\n")}
     clock = {"iso": "2026-09-14T20:00:00+05:00", "mono": 0.0}
     bridge, runtime = _runtime(tmp_path, lambda config: current["snapshot"], clock)
@@ -148,7 +164,11 @@ def test_on_battery_transition_publishes_only_status_and_telemetry(tmp_path):
     clock["iso"] = "2026-09-14T20:00:05+05:00"
     runtime.tick(clock["mono"])
 
-    assert {group for group, _payload in bridge.groups} == {"status", "telemetry"}
+    grouped = dict(bridge.groups)
+    assert set(grouped) == {"status", "telemetry", "diagnostics"}
+    assert grouped["diagnostics"]["app_profile"]["state"] == "high"
+    assert grouped["diagnostics"]["last_publication"]["group"] == "status"
+    assert grouped["diagnostics"]["last_publication"]["group_count"] == 2
     assert bridge.states == []
 
 
@@ -166,6 +186,8 @@ def test_manual_refresh_publishes_all_groups_and_updates_last_refresh(tmp_path):
     grouped = dict(bridge.groups)
     assert set(grouped) == {"telemetry", "status", "config", "tests", "diagnostics"}
     assert grouped["diagnostics"]["last_refresh"] == "2026-09-14T20:00:05+05:00"
+    assert grouped["diagnostics"]["last_publication"]["reason"] == "manual_refresh"
+    assert grouped["diagnostics"]["last_publication"]["group_count"] == 4
 
 
 def test_reconnect_replays_group_cache_without_new_nut_read(tmp_path):
