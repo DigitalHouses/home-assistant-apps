@@ -290,6 +290,8 @@ DIGITALHOUSES_SOURCE_REF="$REF" \
 
 Canonical same-ref URL shape: `https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/<ref>/dh_pve_app/install.sh`.
 
+The static UPS policy helper is stored executable in git and the installer also restores mode `0755` after copying it. This is intentional defense in depth because a non-executable helper would break the owned `upssched` FSD action path.
+
 The installer deploys the application, helper and systemd service. It does **not** silently commission NUT shutdown policy. Commissioning is an explicit post-install administrative action when physical UPS access and validation are available.
 
 Existing valid application configuration is preserved on upgrades. Legacy `ups.policy_apply_enabled` lines are ignored for upgrade compatibility and no longer grant any runtime capability.
