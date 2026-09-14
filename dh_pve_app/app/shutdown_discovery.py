@@ -8,6 +8,7 @@ from .discovery_groups import route_pve_discovery_groups
 from .discovery_guest import build_guest_aware_discovery_payload
 from .discovery_metrics import _path, _sensor, _slug
 from .discovery_ups import build_ups_discovery_payload
+from .discovery_ups_groups import route_ups_discovery_groups
 from .identity import HostIdentity
 from .topics import build_topics, build_ups_topics
 from .ups_control import UpsCapabilities
@@ -230,4 +231,4 @@ def build_shutdown_aware_ups_discovery_payload(
             "'history_available': value_json.shutdown_readiness.history_available | default(false)} | tojson }}"
         ),
     }
-    return payload
+    return route_ups_discovery_groups(payload, topics)
