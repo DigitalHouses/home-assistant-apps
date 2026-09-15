@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import socket
 import subprocess
 from dataclasses import dataclass, replace
 from typing import Callable
@@ -16,6 +17,52 @@ _BATTERY_TEST_COMMANDS = {
 
 class NutControlError(RuntimeError):
     """Raised when an allowed NUT instant command cannot be completed."""
+
+
+def verify_nut_credentials(
+    *,
+    host: str,
+    port: int,
+    username: str,
+    password: str,
+    timeout_seconds: float,
+    connector: Callable[..., object] = socket.create_connection,
+) -> None:
+    """Verify NUT credentials without executing a UPS instant command."""
+    if not username or not password:
+        raise NutControlError("Не настроены учётные данные NUT для команд UPS")
+
+    def sanitize(text: str) -> str:
+        return text.replace(password, "***").replace(username, "***")
+
+    try:
+        with connector((host, port), timeout_seconds) as connection:
+            stream = connection.makefile("rwb")
+            exchanges = (
+                (f"USERNAME {username}\n", "USERNAME"),
+                (f"PASSWORD {password}\n", "PASSWORD"),
+                ("SET TRACKING OFF\n", "TRACKING"),
+            )
+            for request, stage in exchanges:
+                stream.write(request.encode("utf-8"))
+                stream.flush()
+                response = stream.readline().decode("utf-8", errors="replace").strip()
+                if not response.upper().startswith("OK"):
+                    detail = sanitize(response or "нет ответа")
+                    raise NutControlError(
+                        f"NUT credential probe {stage} отклонен: {detail}"
+                    )
+
+            stream.write(b"LOGOUT\n")
+            stream.flush()
+            stream.readline()
+    except NutControlError:
+        raise
+    except (OSError, TimeoutError, socket.timeout) as exc:
+        detail = sanitize(str(exc))
+        raise NutControlError(
+            f"Не удалось проверить учётные данные NUT: {detail}"
+        ) from exc
 
 
 @dataclass(frozen=True)
