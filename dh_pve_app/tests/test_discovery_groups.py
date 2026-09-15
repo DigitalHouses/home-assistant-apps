@@ -124,7 +124,7 @@ def test_pve_discovery_routes_entities_to_smallest_state_group():
     assert c["previous_shutdown"]["state_topic"] == state_group_topic(topics, "shutdown")
     assert c["cpu_usage"]["state_topic"] == state_group_topic(topics, "cpu")
     assert c["memory_usage"]["state_topic"] == state_group_topic(topics, "memory")
-    assert c["storage_local_lvm_usage"]["state_topic"] == state_group_topic(
+    assert c["storage_local_lvm_percent_used"]["state_topic"] == state_group_topic(
         topics, "storage/local-lvm"
     )
     assert c["disk_nvme_hot_temperature"]["state_topic"] == state_group_topic(
@@ -159,12 +159,12 @@ def test_pve_discovery_exposes_presentation_diagnostics():
     c = _components()
     diagnostics = state_group_topic(topics, "diagnostics")
 
-    assert c["app_profile"]["default_entity_id"] == "sensor.dh_pve_app_profile"
+    assert c["app_profile"]["default_entity_id"] == "sensor.dh_app_pve_app_profile"
     assert c["app_profile"]["state_topic"] == diagnostics
     assert "app_profile.state" in c["app_profile"]["value_template"]
     assert "resources" in c["app_profile"]["json_attributes_template"]
 
-    assert c["last_publication"]["default_entity_id"] == "sensor.dh_pve_last_publication"
+    assert c["last_publication"]["default_entity_id"] == "sensor.dh_app_pve_last_publication"
     assert c["last_publication"]["state_topic"] == diagnostics
     assert c["last_publication"]["device_class"] == "timestamp"
     assert "last_publication.timestamp" in c["last_publication"]["value_template"]
@@ -179,7 +179,7 @@ def test_continuous_sensor_attributes_do_not_duplicate_volatile_values():
     assert "used_gib" not in memory_attrs
     assert "total_gib" in memory_attrs
 
-    storage_attrs = c["storage_local_lvm_usage"]["json_attributes_template"]
+    storage_attrs = c["storage_local_lvm_percent_used"]["json_attributes_template"]
     assert "used_gib" not in storage_attrs
     assert '"status"' not in storage_attrs
     assert "total_gib" in storage_attrs
