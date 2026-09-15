@@ -43,18 +43,10 @@ def test_discovery_uses_dh_pve_device_and_refresh_contract():
     assert components["last_refresh"]["device_class"] == "timestamp"
 
 
-def test_discovery_exposes_only_bounded_collector_runtime_numbers():
+def test_discovery_does_not_expose_collection_cadence_controls():
     payload = build_discovery_payload(_config(), _identity(), version="0.1.0")
     components = payload["components"]
-    fast = components["setting_fast_poll_interval_seconds"]
-    disk = components["setting_disk_poll_interval_seconds"]
 
-    assert fast["platform"] == "number"
-    assert fast["default_entity_id"] == "number.dh_pve_fast_poll_interval"
-    assert fast["command_topic"].endswith("/settings/fast_poll_interval_seconds/set")
-    assert fast["state_topic"].endswith("/settings/fast_poll_interval_seconds/state")
-    assert fast["min"] == 2.0
-    assert fast["max"] == 60.0
-    assert fast["entity_category"] == "config"
-    assert disk["default_entity_id"] == "number.dh_pve_disk_poll_interval"
+    assert "setting_fast_poll_interval_seconds" not in components
+    assert "setting_disk_poll_interval_seconds" not in components
     assert not any("publish_delta" in key for key in components)
