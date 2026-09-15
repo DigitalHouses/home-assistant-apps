@@ -1,0 +1,78 @@
+type: sections
+max_columns: 3
+title: Proxmox
+path: proxmox
+icon: phu:proxmox
+sections:
+  - type: grid
+    cards:
+      - type: heading
+        heading: Состояние Proxmox
+        icon: mdi:server
+      - type: tile
+        entity: sensor.dh_app_pve_problems
+        name: Проблемы
+      - type: tile
+        entity: sensor.dh_app_pve_system
+        name: Система
+      - type: tile
+        entity: button.dh_app_pve_refresh
+        name: Обновить
+      - type: tile
+        entity: sensor.dh_app_pve_last_refresh
+        name: Последнее обновление
+
+  - type: grid
+    cards:
+      - type: heading
+        heading: Производительность
+        icon: mdi:gauge
+      - type: entities
+        entities:
+          - entity: sensor.dh_app_pve_cpu_usage
+            name: CPU
+          - entity: sensor.dh_app_pve_cpu_temperature
+            name: Температура CPU
+          - entity: sensor.dh_app_pve_cpu_frequency
+            name: Частота CPU
+          - entity: sensor.dh_app_pve_memory_usage
+            name: RAM
+          - entity: sensor.dh_app_pve_swap_usage
+            name: Swap
+      - type: history-graph
+        title: CPU / RAM / Swap · 24 часа
+        hours_to_show: 24
+        entities:
+          - sensor.dh_app_pve_cpu_usage
+          - sensor.dh_app_pve_memory_usage
+          - sensor.dh_app_pve_swap_usage
+      - type: history-graph
+        title: Температура CPU · 24 часа
+        hours_to_show: 24
+        entities:
+          - sensor.dh_app_pve_cpu_temperature
+
+  - type: grid
+    cards:
+      - type: heading
+        heading: Пороги уведомлений
+        icon: mdi:tune-vertical
+      - type: entities
+        entities:
+          - entity: number.dh_app_pve_storage_percent_used_threshold
+            name: Хранилище · занято
+          - entity: number.dh_app_pve_cpu_temperature_threshold
+            name: CPU · температура
+          - entity: number.dh_app_pve_hdd_temperature_threshold
+            name: HDD · температура
+          - entity: number.dh_app_pve_ssd_temperature_threshold
+            name: SSD · температура
+          - entity: number.dh_app_pve_nvme_temperature_threshold
+            name: NVMe · температура
+          - entity: number.dh_app_pve_gpu_temperature_threshold
+            name: GPU · температура
+      - type: markdown
+        content: >-
+          Пороговые значения хранятся и применяются в **DH PVE App**.
+          Home Assistant только отображает и изменяет MQTT-конфигурацию;
+          состояние проблем рассчитывает приложение.
