@@ -4,6 +4,8 @@
 
 `VERSION` remains `0.3.0`; the current branch contains unreleased runtime/UPS architecture work described below.
 
+MQTT base namespace: `DigitalHouses/Global/dh_pve_app/<instance>`.
+
 ## Architecture
 
 The App is the source of truth for acquisition, calculations, thresholds, problem state, topology, UPS interpretation and effective policy. Home Assistant is a light client for UI, explicit Recorder history, notifications and user configuration input.
