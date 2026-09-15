@@ -135,34 +135,60 @@ class AdaptiveUpsRuntime(UpsRuntime):
             return False
         return True
 
-    def _publish_problem_transition(self, transition: ProblemTransition) -> bool:
-        state = transition.current
-        if not self._publish_problem_core(state):
-            return False
+    def _publish_pending_problem_batch(self) -> bool:
+        """Publish one coherent retained-state batch, then its Events.
+
+        All changed binary states are retained before the aggregate/presentation
+        snapshot is published. Only after that snapshot is coherent are Events
+        emitted. Successfully emitted Events are removed from the pending queue,
+        so a later Event failure never causes an earlier Event to be duplicated.
+        """
+        if not self._pending_problem_transitions:
+            return True
+
+        pending_ids = {
+            transition.current.problem_id
+            for transition in self._pending_problem_transitions
+        }
+        states = [
+            transition.current
+            for transition in self._pending_problem_transitions
+        ]
+        states.extend(
+            state
+            for state in self.problem_engine.states()
+            if state.problem_id not in self._published_problem_ids
+            and state.problem_id not in pending_ids
+        )
+
+        for state in states:
+            if not self._publish_problem_core(state):
+                return False
+            if state.problem_id not in pending_ids:
+                self._published_problem_ids.add(state.problem_id)
+
         if not self._publish_problem_aggregate_bundle():
             return False
 
         aggregate = self.problem_engine.aggregate()
-        event = DiagnosticEvent.from_transition(
-            transition,
-            active_problem_count=aggregate.count,
-        )
-        if not self.bridge.publish_ups_diagnostic_event(event.as_payload()):
-            return False
+        while self._pending_problem_transitions:
+            transition = self._pending_problem_transitions[0]
+            event = DiagnosticEvent.from_transition(
+                transition,
+                active_problem_count=aggregate.count,
+            )
+            if not self.bridge.publish_ups_diagnostic_event(event.as_payload()):
+                return False
+            self._published_problem_ids.add(transition.current.problem_id)
+            self._pending_problem_transitions.pop(0)
 
-        self._published_problem_ids.add(state.problem_id)
         self._problem_snapshot_dirty = False
         return True
 
     def _flush_pending_problem_transitions(self) -> bool:
         if not self._problem_capable():
             return True
-        while self._pending_problem_transitions:
-            transition = self._pending_problem_transitions[0]
-            if not self._publish_problem_transition(transition):
-                return False
-            self._pending_problem_transitions.pop(0)
-        return True
+        return self._publish_pending_problem_batch()
 
     def _sync_current_problem_states(self) -> bool:
         if not self._problem_capable():
