@@ -22,6 +22,9 @@ from .ups_shutdown_budget import ShutdownBudgetResult
 from .ups_trigger import SoftwareShutdownController, SoftwareShutdownTriggerResult
 
 
+SHUTDOWN_BUDGET_REFRESH_SECONDS = 60.0
+
+
 def parse_guest_shutdown_config(config: str) -> dict[str, object]:
     onboot = False
     timeout = 180
@@ -139,6 +142,7 @@ class ShutdownAwareUpsRuntime(AdaptiveUpsRuntime):
         )
         self.last_software_shutdown_trigger: SoftwareShutdownTriggerResult | None = None
         self.last_shutdown_budget: ShutdownBudgetResult | None = None
+        self._shutdown_budget_refreshed_at: float | None = None
         self._pending_policy_config_event: dict[str, object] | None = None
 
         def observed_reader(config):
@@ -158,25 +162,71 @@ class ShutdownAwareUpsRuntime(AdaptiveUpsRuntime):
         controller = self.software_shutdown_controller
         return controller.committed_reason if controller is not None else None
 
-    def _evaluate_software_shutdown(self) -> None:
-        controller = self.software_shutdown_controller
+    @staticmethod
+    def _budget_reader_failure() -> ShutdownBudgetResult:
+        return ShutdownBudgetResult(
+            available=False,
+            configured_guest_budget_seconds=None,
+            observed_guest_budget_seconds=None,
+            effective_guest_budget_seconds=None,
+            hostsync_budget_seconds=None,
+            finaldelay_seconds=None,
+            observed_host_tail_seconds=None,
+            host_tail_fallback_seconds=None,
+            host_tail_budget_seconds=None,
+            shutdown_budget_seconds=None,
+            unavailable_reason="budget_reader_failed",
+        )
+
+    def _current_shutdown_budget(self, *, force: bool = False) -> ShutdownBudgetResult | None:
         budget_reader = self.shutdown_budget_reader
-        snapshot = self.last_snapshot
-        if (
-            controller is None
-            or budget_reader is None
-            or snapshot is None
-            or not self.nut_available
-        ):
-            return
+        if budget_reader is None:
+            return None
+        now = self.now_monotonic()
+        should_refresh = (
+            force
+            or self.last_shutdown_budget is None
+            or self._shutdown_budget_refreshed_at is None
+            or now - self._shutdown_budget_refreshed_at >= SHUTDOWN_BUDGET_REFRESH_SECONDS
+        )
+        if not should_refresh:
+            return self.last_shutdown_budget
+
         try:
             budget = budget_reader()
-            self.last_shutdown_budget = budget
-            self.last_software_shutdown_trigger = controller.evaluate_and_commit(
+        except Exception as exc:
+            budget = self._budget_reader_failure()
+            self.log.warning(
+                "Не удалось обновить shutdown budget UPS (%s); Trigger B временно недоступен",
+                type(exc).__name__,
+            )
+        self.last_shutdown_budget = budget
+        self._shutdown_budget_refreshed_at = now
+        fingerprint = budget.configuration_fingerprint
+        if isinstance(fingerprint, str) and fingerprint:
+            try:
+                self.shutdown_history_tracker.record_shutdown_budget_fingerprint(fingerprint)
+            except Exception:
+                self.log.exception("Не удалось сохранить fingerprint shutdown budget")
+        return budget
+
+    def _evaluate_software_shutdown(self, *, force_budget_refresh: bool = False) -> None:
+        controller = self.software_shutdown_controller
+        snapshot = self.last_snapshot
+        if controller is None or snapshot is None or not self.nut_available:
+            return
+        budget = self._current_shutdown_budget(force=force_budget_refresh)
+        if budget is None:
+            return
+
+        was_committed = controller.committed
+        try:
+            result = controller.evaluate_and_commit(
                 snapshot,
                 self.policy_active,
                 budget,
             )
+            self.last_software_shutdown_trigger = result
         except Exception as exc:
             # A local FSD/helper failure must never kill monitoring. Do not latch;
             # the controller will retry on the next successful UPS sample.
@@ -184,6 +234,18 @@ class ShutdownAwareUpsRuntime(AdaptiveUpsRuntime):
                 "Не удалось зафиксировать software shutdown UPS (%s); повтор на следующем опросе",
                 type(exc).__name__,
             )
+            return
+
+        if not was_committed and controller.committed and result is not None and result.reason:
+            try:
+                self.shutdown_history_tracker.record_software_shutdown_commit(
+                    result.reason,
+                    snapshot,
+                )
+            except Exception:
+                # The shutdown commitment has already happened; history failure
+                # is diagnostic only and must not alter the irreversible latch.
+                self.log.exception("Не удалось сохранить причину software shutdown UPS")
 
     def _policy_state_backup(self) -> dict[str, object]:
         return {
@@ -276,6 +338,9 @@ class ShutdownAwareUpsRuntime(AdaptiveUpsRuntime):
             self.log.error("UPS policy Apply rollback: %s", type(exc).__name__)
             return
 
+        # A successful Apply may affect future budget-derived policy fields.
+        # Force a fresh cheap SLOW budget read before the next trigger decision.
+        self._shutdown_budget_refreshed_at = None
         self._pending_policy_config_event = {
             "schema_version": 1,
             "event_type": "config_changed",
@@ -307,7 +372,7 @@ class ShutdownAwareUpsRuntime(AdaptiveUpsRuntime):
     def _collect(self, *, force: bool = False, manual_refresh: bool = False) -> bool:
         result = super()._collect(force=force, manual_refresh=manual_refresh)
         if self.nut_available and self.last_snapshot is not None:
-            self._evaluate_software_shutdown()
+            self._evaluate_software_shutdown(force_budget_refresh=manual_refresh)
         if result:
             self._flush_pending_policy_config_event()
         return result
@@ -315,8 +380,8 @@ class ShutdownAwareUpsRuntime(AdaptiveUpsRuntime):
     def _auxiliary_fields(self) -> dict[str, object]:
         fields = super()._auxiliary_fields()
         budget = (
-            self.shutdown_policy.guest_shutdown_budget_seconds
-            if self.shutdown_policy is not None
+            self.last_shutdown_budget.shutdown_budget_seconds
+            if self.last_shutdown_budget is not None
             else None
         )
         history = self.shutdown_history_tracker.payload()
