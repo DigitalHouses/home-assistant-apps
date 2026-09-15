@@ -50,7 +50,7 @@ def _mqtt():
     )
 
 
-def test_runtime_minutes_are_published_by_python(tmp_path):
+def _runtime(tmp_path, *, poll_interval_seconds=5.0):
     snapshot = parse_upsc_output("ups.status: OL\nbattery.runtime: 2160\n")
     bridge = Bridge()
     runtime = UpsRuntime(
@@ -59,7 +59,7 @@ def test_runtime_minutes_are_published_by_python(tmp_path):
             name="ups",
             host="127.0.0.1",
             port=3493,
-            poll_interval_seconds=5.0,
+            poll_interval_seconds=poll_interval_seconds,
             command_timeout_seconds=3.0,
         ),
         mqtt_config=_mqtt(),
@@ -71,10 +71,21 @@ def test_runtime_minutes_are_published_by_python(tmp_path):
         now_monotonic=lambda: 100.0,
         reader=lambda config: snapshot,
     )
+    return runtime, bridge
+
+
+def test_runtime_minutes_are_published_by_python(tmp_path):
+    runtime, bridge = _runtime(tmp_path)
 
     assert runtime.startup() is True
     assert bridge.states[-1]["runtime_seconds"] == 2160.0
     assert bridge.states[-1]["battery_runtime_minutes"] == 36.0
+
+
+def test_ups_runtime_uses_fixed_10_second_collection_even_for_legacy_config_value(tmp_path):
+    runtime, _bridge = _runtime(tmp_path, poll_interval_seconds=1.0)
+
+    assert runtime.scheduler.interval("ups") == 10.0
 
 
 def test_production_discovery_exposes_minutes_without_duplicate_seconds_entity():
