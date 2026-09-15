@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import queue
+import re
 import threading
 from dataclasses import dataclass
 from typing import Any
@@ -20,6 +21,9 @@ from .ups_test_schedule import (
     parse_interval_days_payload,
     parse_time_command_payload,
 )
+
+
+_PROBLEM_ID = re.compile(r"^[a-z0-9_]+$")
 
 
 @dataclass(frozen=True)
@@ -289,6 +293,11 @@ class MqttBridge(MqttEvents):
             self.log.exception("MQTT publish failed: %s", topic)
             return False
 
+    def _problem_topic(self, problem_id: str, suffix: str) -> str:
+        if not isinstance(problem_id, str) or _PROBLEM_ID.fullmatch(problem_id) is None:
+            raise ValueError(f"invalid problem id: {problem_id!r}")
+        return f"{self.topics.base}/problems/{problem_id}/{suffix}"
+
     def publish_discovery(self) -> bool:
         return self._publish(
             self.topics.discovery,
@@ -308,6 +317,42 @@ class MqttBridge(MqttEvents):
             self.topics.diagnostic_event,
             json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
             retain=False,
+        )
+
+    def publish_problem_metric(
+        self,
+        problem_id: str,
+        payload: dict[str, object],
+    ) -> bool:
+        return self._publish(
+            self._problem_topic(problem_id, "metric"),
+            json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+            retain=True,
+        )
+
+    def publish_problem_state(self, problem_id: str, active: bool) -> bool:
+        if not isinstance(active, bool):
+            raise ValueError("problem state must be bool")
+        return self._publish(
+            self._problem_topic(problem_id, "state"),
+            "ON" if active else "OFF",
+            retain=True,
+        )
+
+    def publish_problem_aggregate(self, count: int) -> bool:
+        if isinstance(count, bool) or not isinstance(count, int) or count < 0:
+            raise ValueError("problem aggregate count must be a non-negative integer")
+        return self._publish(
+            f"{self.topics.base}/problems/aggregate",
+            str(count),
+            retain=True,
+        )
+
+    def publish_problem_presentation(self, payload: dict[str, object]) -> bool:
+        return self._publish(
+            f"{self.topics.base}/problems/presentation",
+            json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+            retain=True,
         )
 
     def clear_legacy_state(self) -> bool:
