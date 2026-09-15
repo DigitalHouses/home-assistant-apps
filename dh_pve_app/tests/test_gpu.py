@@ -154,6 +154,10 @@ def test_dri_to_pci_mapping_uses_sysfs_device_symlink(tmp_path: Path):
 class CachedGpuTopology:
     def __init__(self):
         self.guest_exec_calls = 0
+        self.qga_state_calls = 0
+
+    def gpu_catalog_text(self):
+        return (FIX / "shahristan_lspci.txt").read_text()
 
     def gpu_owners(self):
         return {
@@ -172,8 +176,8 @@ class CachedGpuTopology:
         return "running"
 
     def qga_state(self, guest_id):
-        assert guest_id == "501"
-        return "available"
+        self.qga_state_calls += 1
+        raise AssertionError("SLOW GPU telemetry must not ping/check QGA before guest exec")
 
     def guest_exec(self, guest_id, command, *, timeout=12.0):
         assert guest_id == "501"
@@ -182,7 +186,7 @@ class CachedGpuTopology:
         return (FIX / "intel_gpu_top.jsonstream").read_text()
 
 
-def test_gpu_uses_cached_topology_and_keeps_vm501_transcoding(tmp_path, monkeypatch):
+def test_gpu_slow_path_uses_static_catalog_and_only_real_utilization_probe(tmp_path, monkeypatch):
     import app.production as production
 
     topology = CachedGpuTopology()
@@ -190,11 +194,7 @@ def test_gpu_uses_cached_topology_and_keeps_vm501_transcoding(tmp_path, monkeypa
 
     def fake_run(argv, *, timeout=20.0, check=True):
         calls.append(tuple(argv))
-        if tuple(argv) == ("lspci", "-Dnnk"):
-            return (FIX / "shahristan_lspci.txt").read_text()
-        if argv and argv[0] in {"qm", "pct"}:
-            return ""
-        raise AssertionError(f"unexpected command: {argv}")
+        raise AssertionError(f"SLOW GPU telemetry invoked forbidden host command: {argv}")
 
     monkeypatch.setattr(production, "_run", fake_run)
 
@@ -208,9 +208,11 @@ def test_gpu_uses_cached_topology_and_keeps_vm501_transcoding(tmp_path, monkeypa
     first = collector.gpu()
     second = collector.gpu()
     gpu = first.data["pci_0000_00_02_0"]
+
     assert gpu["owner"] == "VM 501"
     assert gpu["source_name"] == "plex-vm"
     assert gpu["transcoding_load_percent"] == 71.3
     assert topology.guest_exec_calls == 2
-    assert not any(call and call[0] in {"qm", "pct"} for call in calls)
+    assert topology.qga_state_calls == 0
+    assert calls == []
     assert second.data["pci_0000_00_02_0"]["owner"] == "VM 501"
