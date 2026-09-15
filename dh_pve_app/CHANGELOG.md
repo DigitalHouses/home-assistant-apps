@@ -3,6 +3,11 @@
 ## Unreleased
 
 - Add capability-driven `switch.dh_pve_ups_beeper` control when NUT exposes paired beeper on/off commands. Commands are executed by `dh_pve_app` on Proxmox and the switch state is confirmed from real `ups.beeper.status` feedback; load and UPS shutdown instant commands remain intentionally unavailable to Home Assistant.
+- Extend explicit root UPS/NUT commissioning to manage `/etc/nut/upsd.users` and the App command credentials as part of the same rollback-safe transaction as the shutdown policy.
+- Standardize the local UPS control identity on one `dh_primary_user` with `upsmon primary` and `instcmds = ALL`; preserve its existing password or generate a strong password on first commissioning and synchronize it with the selected `MONITOR` entry and App `[ups]` command credentials.
+- Restart `nut-server` and perform a non-destructive authenticated NUT protocol probe before completing commissioning; rollback all managed files and service state on authentication or apply failure without leaking credentials in errors.
+- Extend read-only UPS policy preflight to verify the managed NUT user, PRIMARY role, `instcmds = ALL`, selected `MONITOR` identity, App command identity and credential consistency.
+- Keep the Home Assistant/MQTT command surface restricted by explicit App allowlists despite the administrative NUT user having `instcmds = ALL`; arbitrary `upscmd`, FSD, `load.*`, `shutdown.*` and shell execution remain unavailable.
 
 ## 0.3.0
 
