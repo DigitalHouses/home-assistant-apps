@@ -1,9 +1,10 @@
-import math
-
 from app.ups_nut import parse_upsc_output
 from app.ups_policy import UpsPolicyDraft
 from app.ups_shutdown_budget import ShutdownBudgetInputs, calculate_shutdown_budget
-from app.ups_trigger import evaluate_software_shutdown_trigger
+from app.ups_trigger import (
+    SoftwareShutdownController,
+    evaluate_software_shutdown_trigger,
+)
 
 
 def _budget(seconds_case: str = "available"):
@@ -122,3 +123,56 @@ def test_simultaneous_software_guards_report_both_and_use_stable_reason_order():
     assert result.charge_guard_satisfied is True
     assert result.runtime_guard_satisfied is True
     assert result.reason == "charge_guard"
+
+
+def test_controller_executes_only_once_after_successful_commitment():
+    calls = []
+    controller = SoftwareShutdownController(lambda reason: calls.append(reason))
+    snapshot = _snapshot("OB", 20, 9999)
+    policy = UpsPolicyDraft(20, 180)
+
+    first = controller.evaluate_and_commit(snapshot, policy, _budget())
+    second = controller.evaluate_and_commit(snapshot, policy, _budget())
+
+    assert first is not None and first.triggered is True
+    assert second is not None and second.triggered is True
+    assert calls == ["charge_guard"]
+    assert controller.committed is True
+    assert controller.committed_reason == "charge_guard"
+
+
+def test_controller_does_not_latch_failed_executor_and_retries_next_sample():
+    calls = []
+
+    def executor(reason):
+        calls.append(reason)
+        if len(calls) == 1:
+            raise RuntimeError("executor failed")
+
+    controller = SoftwareShutdownController(executor)
+    snapshot = _snapshot("OB", 80, 1)
+    policy = UpsPolicyDraft(20, 180)
+
+    try:
+        controller.evaluate_and_commit(snapshot, policy, _budget())
+    except RuntimeError:
+        pass
+    else:
+        raise AssertionError("executor failure must propagate")
+
+    assert controller.committed is False
+    controller.evaluate_and_commit(snapshot, policy, _budget())
+    assert calls == ["runtime_guard", "runtime_guard"]
+    assert controller.committed is True
+    assert controller.committed_reason == "runtime_guard"
+
+
+def test_controller_without_active_policy_never_executes():
+    calls = []
+    controller = SoftwareShutdownController(lambda reason: calls.append(reason))
+
+    result = controller.evaluate_and_commit(_snapshot("OB", 1, 1), None, _budget())
+
+    assert result is None
+    assert calls == []
+    assert controller.committed is False
