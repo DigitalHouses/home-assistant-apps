@@ -5,6 +5,7 @@
 `VERSION` remains `0.3.0`; the current branch contains unreleased runtime/UPS architecture work described below.
 
 MQTT base namespace: `DigitalHouses/Global/dh_pve_app/<instance>`.
+MQTT devices: `DH PVE` and optional `DH PVE UPS`.
 
 ## Architecture
 
