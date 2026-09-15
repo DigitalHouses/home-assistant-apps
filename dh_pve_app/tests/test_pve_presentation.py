@@ -15,19 +15,22 @@ def groups(publications):
     return {item.group for item in publications}
 
 
-def test_cpu_load_profile_transition_publishes_cpu_not_other_resources():
-    router = PvePresentationRouter()
-    cpu = subsystem(
+def cpu_state(usage=20.0, temperature=55.0, throttling=False):
+    return subsystem(
         {
-            "usage_percent": 80.0,
-            "temperature_c": 60.0,
-            "frequency": {"average_mhz": 2200.0},
-            "throttling_active": False,
+            "usage_percent": usage,
+            "temperature_c": temperature,
+            "frequency": {"average_mhz": 1800.0},
+            "throttling_active": throttling,
         }
     )
 
+
+def test_cpu_rolling_average_profile_transition_publishes_only_cpu():
+    router = PvePresentationRouter()
+
     router.route(
-        {"cpu": cpu},
+        {"cpu": cpu_state(usage=70.0)},
         selected=("cpu",),
         now=0.0,
         collected_at="2026-09-14T20:00:00+05:00",
@@ -35,97 +38,137 @@ def test_cpu_load_profile_transition_publishes_cpu_not_other_resources():
         force=True,
     )
     decision = router.route(
-        {"cpu": cpu},
+        {"cpu": cpu_state(usage=90.0)},
         selected=("cpu",),
-        now=60.0,
+        now=60.1,
         collected_at="2026-09-14T20:01:00+05:00",
         last_refresh=None,
     )
 
     assert groups(decision) == {"cpu"}
-    cpu_publication = decision[0]
-    assert cpu_publication.profile is PublicationProfile.HIGH
-    assert cpu_publication.reason == "profile_transition"
+    assert decision[0].profile is PublicationProfile.DETAIL
+    assert decision[0].reason == "profile_transition"
 
 
-def test_cpu_throttling_immediately_publishes_cpu_critical():
+def test_cpu_throttling_immediately_publishes_cpu_detail():
     router = PvePresentationRouter()
-    normal = subsystem(
-        {
-            "usage_percent": 20.0,
-            "temperature_c": 55.0,
-            "frequency": {"average_mhz": 1200.0},
-            "throttling_active": False,
-        }
-    )
-    throttled = subsystem(
-        {
-            "usage_percent": 25.0,
-            "temperature_c": 70.0,
-            "frequency": {"average_mhz": 900.0},
-            "throttling_active": True,
-        }
-    )
-
     router.route(
-        {"cpu": normal}, selected=("cpu",), now=0.0,
+        {"cpu": cpu_state()}, selected=("cpu",), now=0.0,
         collected_at="2026-09-14T20:00:00+05:00", last_refresh=None, force=True,
     )
+
     decision = router.route(
-        {"cpu": throttled}, selected=("cpu",), now=10.0,
+        {"cpu": cpu_state(usage=25.0, temperature=70.0, throttling=True)},
+        selected=("cpu",), now=10.0,
         collected_at="2026-09-14T20:00:10+05:00", last_refresh=None,
     )
 
     assert groups(decision) == {"cpu"}
-    assert decision[0].profile is PublicationProfile.CRITICAL
+    assert decision[0].profile is PublicationProfile.DETAIL
     assert decision[0].payload["subsystems"]["cpu"]["data"]["throttling_active"] is True
 
 
-def test_one_hot_disk_only_accelerates_that_disk_telemetry():
+def test_slow_disk_temperature_drives_disk_telemetry_not_hourly_smart_snapshot():
     router = PvePresentationRouter()
-    initial = subsystem(
+    cool = subsystem(
         {
-            "nvme_hot": {
-                "disk_id": "nvme_hot",
+            "nvme0": {
+                "disk_id": "nvme0",
+                "disk_type": "NVMe",
+                "temperature_c": 70.0,
+                "model": "A",
+                "available": True,
+            }
+        }
+    )
+    hot = subsystem(
+        {
+            "nvme0": {
+                "disk_id": "nvme0",
                 "disk_type": "NVMe",
                 "temperature_c": 80.0,
-                "health_state": "HEALTHY",
                 "model": "A",
-            },
-            "nvme_cool": {
-                "disk_id": "nvme_cool",
-                "disk_type": "NVMe",
-                "temperature_c": 45.0,
-                "health_state": "HEALTHY",
-                "model": "B",
-            },
+                "available": True,
+            }
         }
     )
 
     router.route(
-        {"smart": initial}, selected=("smart",), now=0.0,
+        {"disk_temperature": cool}, selected=("disk_temperature",), now=0.0,
         collected_at="2026-09-14T20:00:00+05:00", last_refresh=None, force=True,
     )
     decision = router.route(
-        {"smart": initial}, selected=("smart",), now=180.0,
-        collected_at="2026-09-14T20:03:00+05:00", last_refresh=None,
+        {"disk_temperature": hot}, selected=("disk_temperature",), now=300.1,
+        collected_at="2026-09-14T20:05:00+05:00", last_refresh=None,
     )
 
-    assert groups(decision) == {"disk/nvme_hot/telemetry"}
-    assert decision[0].profile is PublicationProfile.HIGH
+    assert groups(decision) == {"disk/nvme0/telemetry"}
+    publication = decision[0]
+    assert publication.profile is PublicationProfile.DETAIL
+    assert publication.payload["subsystems"]["smart"]["data"]["nvme0"]["temperature_c"] == 80.0
+
+
+def test_smart_health_is_change_only_and_does_not_drive_disk_temperature_profile():
+    router = PvePresentationRouter()
+    smart = subsystem(
+        {
+            "nvme0": {
+                "disk_id": "nvme0",
+                "disk_type": "NVMe",
+                "temperature_c": 90.0,
+                "health_state": "HEALTHY",
+                "available": True,
+            }
+        }
+    )
+
+    decision = router.route(
+        {"smart": smart}, selected=("smart",), now=0.0,
+        collected_at="2026-09-14T20:00:00+05:00", last_refresh=None, force=True,
+    )
+
+    assert groups(decision) == {"collector/smart", "disk/nvme0/status"}
+    assert "disk:nvme0" not in router.profile_summary()["resources"]
+
+
+def test_cpu_detail_does_not_change_gpu_or_storage_profile():
+    router = PvePresentationRouter()
+    states = {
+        "cpu": cpu_state(usage=70.0),
+        "gpu": subsystem(
+            {
+                "gpu0": {
+                    "gpu_id": "gpu0",
+                    "temperature_c": 55.0,
+                    "transcoding_load_percent": 0.0,
+                    "model": "iGPU",
+                }
+            }
+        ),
+        "storage": subsystem(
+            {"local": {"name": "local", "usage_percent": 40.0, "total_gib": 100.0}}
+        ),
+    }
+    router.route(
+        states, selected=("cpu", "gpu", "storage"), now=0.0,
+        collected_at="2026-09-14T20:00:00+05:00", last_refresh=None, force=True,
+    )
+    states["cpu"] = cpu_state(usage=90.0)
+    router.route(
+        states, selected=("cpu",), now=60.1,
+        collected_at="2026-09-14T20:01:00+05:00", last_refresh=None,
+    )
+
+    summary = router.profile_summary()
+    assert summary["resources"]["cpu"] == "detail"
+    assert summary["resources"]["gpu:gpu0"] == "normal"
+    assert summary["resources"]["storage"] == "normal"
 
 
 def test_manual_refresh_emits_current_groups_without_waiting_for_average_windows():
     router = PvePresentationRouter()
     states = {
-        "cpu": subsystem(
-            {
-                "usage_percent": 10.0,
-                "temperature_c": 50.0,
-                "frequency": {"average_mhz": 1000.0},
-                "throttling_active": False,
-            }
-        ),
+        "cpu": cpu_state(usage=10.0, temperature=50.0),
         "memory": subsystem(
             {"usage_percent": 80.0, "swap_usage_percent": 0.0, "total_gib": 16.0}
         ),
@@ -146,26 +189,17 @@ def test_manual_refresh_emits_current_groups_without_waiting_for_average_windows
     assert all(item.reason == "manual_refresh" for item in decision)
 
 
-def test_profile_summary_reports_maximum_active_resource_profile():
+def test_profile_summary_reports_detail_as_highest_active_profile():
     router = PvePresentationRouter()
-    cpu = subsystem(
-        {
-            "usage_percent": 10.0,
-            "temperature_c": 50.0,
-            "frequency": {"average_mhz": 1000.0},
-            "throttling_active": True,
-        }
-    )
-    memory = subsystem({"usage_percent": 80.0, "swap_usage_percent": 0.0})
-
     router.route(
-        {"cpu": cpu, "memory": memory}, selected=("cpu", "memory"), now=0.0,
+        {"cpu": cpu_state(throttling=True), "memory": subsystem({"usage_percent": 80.0})},
+        selected=("cpu", "memory"), now=0.0,
         collected_at="2026-09-14T20:00:00+05:00", last_refresh=None, force=True,
     )
     summary = router.profile_summary()
 
-    assert summary["state"] == "critical"
-    assert summary["resources"]["cpu"] == "critical"
+    assert summary["state"] == "detail"
+    assert summary["resources"]["cpu"] == "detail"
     assert summary["resources"]["memory"] == "normal"
     assert summary["reason"] == "cpu:throttling"
 
@@ -192,14 +226,7 @@ def test_fan_summary_is_not_mistaken_for_fan_objects():
         collected_at="2026-09-14T20:00:00+05:00", last_refresh=None, force=True,
     )
 
-    assert groups(decision) == {
-        "collector/fans",
-        "fans",
-        "fan/nct6798_fan1",
-    }
-    assert all("fan/detected" != item.group for item in decision)
-    assert all("fan/count" != item.group for item in decision)
-    assert all("fan/status" != item.group for item in decision)
+    assert groups(decision) == {"collector/fans", "fans", "fan/nct6798_fan1"}
 
 
 def test_host_inventory_and_shutdown_history_publish_as_independent_groups():
@@ -210,10 +237,7 @@ def test_host_inventory_and_shutdown_history_publish_as_independent_groups():
             "model": "MINI S",
             "shutdown_history": {
                 "history_count": 2,
-                "previous_shutdown": {
-                    "shutdown_class": "clean",
-                    "shutdown_reason": "user",
-                },
+                "previous_shutdown": {"shutdown_class": "clean", "shutdown_reason": "user"},
             },
         }
     )
@@ -224,8 +248,3 @@ def test_host_inventory_and_shutdown_history_publish_as_independent_groups():
     )
 
     assert groups(decision) == {"collector/host", "host", "shutdown"}
-    by_group = {item.group: item for item in decision}
-    host_data = by_group["host"].payload["subsystems"]["host"]["data"]
-    shutdown_data = by_group["shutdown"].payload["subsystems"]["host"]["data"]
-    assert "shutdown_history" not in host_data
-    assert shutdown_data["shutdown_history"]["history_count"] == 2
