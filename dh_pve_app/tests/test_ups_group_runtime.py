@@ -143,8 +143,8 @@ def test_unchanged_online_poll_does_not_refresh_group_states(tmp_path):
     runtime.startup()
     bridge.groups.clear()
 
-    clock["mono"] = 5.0
-    clock["iso"] = "2026-09-14T20:00:05+05:00"
+    clock["mono"] = 10.0
+    clock["iso"] = "2026-09-14T20:00:10+05:00"
     assert runtime.tick(clock["mono"]) is True
 
     assert bridge.groups == []
@@ -160,8 +160,8 @@ def test_on_battery_transition_publishes_status_telemetry_and_diagnostics(tmp_pa
     current["snapshot"] = parse_upsc_output(
         "ups.status: OB DISCHRG\nbattery.runtime: 2130\nups.load: 5\n"
     )
-    clock["mono"] = 5.0
-    clock["iso"] = "2026-09-14T20:00:05+05:00"
+    clock["mono"] = 10.0
+    clock["iso"] = "2026-09-14T20:00:10+05:00"
     runtime.tick(clock["mono"])
 
     grouped = dict(bridge.groups)
