@@ -192,6 +192,7 @@ class GuestAwareProductionCollectors(ResilientProductionCollectors):
             "cpu": self.cpu,
             "memory": self.memory,
             "storage": self.storage,
+            "disk_temperature": self.disk_temperature,
             "smart": self.smart,
             "gpu": self.gpu,
             "fans": self.fans,
