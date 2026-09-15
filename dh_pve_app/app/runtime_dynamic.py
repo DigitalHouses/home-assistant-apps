@@ -7,6 +7,8 @@ from .app import DhPveRuntime
 
 
 _LEGACY_DISCOVERY_REMOVALS = {
+    "setting_fast_poll_interval_seconds": "number",
+    "setting_disk_poll_interval_seconds": "number",
     "setting_cpu_publish_delta": "number",
     "setting_memory_publish_delta": "number",
     "setting_temperature_publish_delta": "number",
@@ -102,6 +104,8 @@ class DynamicDiscoveryRuntime(DhPveRuntime):
                 cleanup_ok = bool(cleaner())
         settings_ok = self.publish_settings()
         state_ok = self.run_collection(force=True)
+        if self._static_collectors_available():
+            self._prime_version_fingerprint()
         return cleanup_ok and settings_ok and state_ok and self._last_discovery_ok
 
     def republish_after_reconnect(self) -> bool:
