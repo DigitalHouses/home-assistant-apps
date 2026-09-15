@@ -518,7 +518,7 @@ class ShutdownAwareUpsRuntime(AdaptiveUpsRuntime):
 
     def _auxiliary_fields(self) -> dict[str, object]:
         fields = super()._auxiliary_fields()
-        budget = self.last_shutdown_budget
+        budget = self._current_shutdown_budget()
         budget_payload = _shutdown_budget_payload(budget)
         fields["shutdown_budget"] = budget_payload
 
