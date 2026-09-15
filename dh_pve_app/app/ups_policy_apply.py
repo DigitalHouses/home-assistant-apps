@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import secrets
 import stat
 import subprocess
 import tempfile
@@ -245,6 +246,33 @@ def _find_section_ranges(lines: list[str], section_name: str) -> list[tuple[int,
     return ranges
 
 
+def _extract_managed_password(existing: str) -> str | None:
+    lines = existing.splitlines()
+    ranges = _find_section_ranges(lines, _MANAGED_NUT_USER)
+    if len(ranges) > 1:
+        raise PolicyApplyError(
+            f"В upsd.users найдено несколько секций [{_MANAGED_NUT_USER}]."
+        )
+    if not ranges:
+        return None
+    start, end = ranges[0]
+    for raw in lines[start + 1 : end]:
+        stripped = raw.strip()
+        if not stripped or stripped.startswith(("#", ";")):
+            continue
+        if "=" in stripped:
+            key, value = stripped.split("=", 1)
+        else:
+            parts = stripped.split(None, 1)
+            if len(parts) != 2:
+                continue
+            key, value = parts
+        if key.strip().casefold() == "password":
+            password = value.strip().strip('"').strip("'")
+            return password or None
+    return None
+
+
 def _render_upsd_users(existing: str, managed_password: str) -> str:
     lines = existing.splitlines()
     ranges = _find_section_ranges(lines, _MANAGED_NUT_USER)
@@ -462,10 +490,11 @@ def _run(
 def _service_state(
     runner: Callable[..., subprocess.CompletedProcess[str]],
     verb: str,
+    service: str = "nut-monitor.service",
 ) -> str:
     try:
         result = runner(
-            ["systemctl", verb, "nut-monitor.service"],
+            ["systemctl", verb, service],
             capture_output=True,
             text=True,
             timeout=5.0,
@@ -506,6 +535,10 @@ def _validate_static_helper(
         )
 
 
+def _redact_secret(text: str, secret: str) -> str:
+    return text.replace(secret, "***") if secret else text
+
+
 class UpsPolicyApplier:
     """Transactional writer used only by explicit UPS commissioning."""
 
@@ -522,6 +555,8 @@ class UpsPolicyApplier:
         effective_delay_retry_interval_seconds: float = 0.5,
         monotonic: Callable[[], float] = time.monotonic,
         sleeper: Callable[[float], None] = time.sleep,
+        secret_generator: Callable[[], str] | None = None,
+        credential_verifier: Callable[[str, str], None] | None = None,
     ) -> None:
         self.paths = paths
         self.ups_name = ups_name
@@ -533,6 +568,8 @@ class UpsPolicyApplier:
         self.effective_delay_retry_interval_seconds = effective_delay_retry_interval_seconds
         self.monotonic = monotonic
         self.sleeper = sleeper
+        self.secret_generator = secret_generator or (lambda: secrets.token_urlsafe(32))
+        self.credential_verifier = credential_verifier
 
     def _wait_for_effective_restart_delay(self, expected_delay: int) -> None:
         deadline = self.monotonic() + self.effective_delay_timeout_seconds
@@ -561,11 +598,15 @@ class UpsPolicyApplier:
         *,
         monitor_active_before: str,
         monitor_enabled_before: str,
+        server_active_before: str = "unknown",
+        server_enabled_before: str = "unknown",
     ) -> None:
         modes = {
             self.paths.upsmon: 0o640,
             self.paths.upssched: 0o640,
             self.paths.ups_conf: 0o640,
+            self.paths.upsd_users: 0o640,
+            self.paths.app_config: 0o600,
             self.paths.metadata: 0o600,
         }
         for path, snapshot in snapshots.items():
@@ -582,6 +623,29 @@ class UpsPolicyApplier:
                 timeout=15.0,
                 check=False,
             )
+        except Exception:
+            pass
+        try:
+            server_command = (
+                ["systemctl", "restart", "nut-server.service"]
+                if server_active_before == "active"
+                else ["systemctl", "stop", "nut-server.service"]
+            )
+            self.runner(
+                server_command,
+                capture_output=True,
+                text=True,
+                timeout=15.0,
+                check=False,
+            )
+            if server_enabled_before not in {"enabled", "enabled-runtime"}:
+                self.runner(
+                    ["systemctl", "disable", "nut-server.service"],
+                    capture_output=True,
+                    text=True,
+                    timeout=15.0,
+                    check=False,
+                )
         except Exception:
             pass
         try:
@@ -612,6 +676,8 @@ class UpsPolicyApplier:
         draft: UpsPolicyDraft,
         facts: PolicySafetyFacts,
     ) -> PolicyApplyResult:
+        managed_password = ""
+        identity_mode = self.paths.app_config.exists() or self.paths.upsd_users.exists()
         try:
             validate_policy(draft, facts)
             _validate_static_helper(
@@ -619,33 +685,68 @@ class UpsPolicyApplier:
                 expected_uid=self.helper_expected_uid,
                 expected_gid=self.helper_expected_gid,
             )
-            snapshots = {
-                path: _snapshot(path)
-                for path in (
-                    self.paths.upsmon,
-                    self.paths.upssched,
-                    self.paths.ups_conf,
-                    self.paths.metadata,
-                )
-            }
+            mutable_paths = [
+                self.paths.upsmon,
+                self.paths.upssched,
+                self.paths.ups_conf,
+            ]
+            if identity_mode:
+                mutable_paths.extend((self.paths.upsd_users, self.paths.app_config))
+            mutable_paths.append(self.paths.metadata)
+            snapshots = {path: _snapshot(path) for path in mutable_paths}
+
             upsmon_text = snapshots[self.paths.upsmon].content.decode("utf-8")
             ups_conf_text = snapshots[self.paths.ups_conf].content.decode("utf-8")
+            render_kwargs: dict[str, str] = {}
+            if identity_mode:
+                if not snapshots[self.paths.app_config].existed:
+                    raise PolicyApplyError("App config отсутствует; commissioning остановлен.")
+                upsd_users_text = snapshots[self.paths.upsd_users].content.decode("utf-8")
+                app_config_text = snapshots[self.paths.app_config].content.decode("utf-8")
+                managed_password = _extract_managed_password(upsd_users_text) or self.secret_generator()
+                if not managed_password or any(char.isspace() for char in managed_password):
+                    raise PolicyApplyError("Не удалось получить безопасный password для NUT user.")
+                render_kwargs = {
+                    "upsd_users_text": upsd_users_text,
+                    "app_config_text": app_config_text,
+                    "managed_password": managed_password,
+                }
+
             target = render_managed_policy(
                 draft,
                 upsmon_text,
                 ups_conf_text,
                 command_script_path=self.paths.command_script,
                 ups_name=self.ups_name,
+                **render_kwargs,
             )
             monitor_active_before = _service_state(self.runner, "is-active")
             monitor_enabled_before = _service_state(self.runner, "is-enabled")
+            server_active_before = _service_state(
+                self.runner, "is-active", "nut-server.service"
+            )
+            server_enabled_before = _service_state(
+                self.runner, "is-enabled", "nut-server.service"
+            )
         except Exception as exc:
-            return PolicyApplyResult(False, f"Не удалось подготовить политику UPS: {exc}")
+            detail = _redact_secret(str(exc), managed_password)
+            return PolicyApplyResult(False, f"Не удалось подготовить политику UPS: {detail}")
 
         try:
             _atomic_write(self.paths.upsmon, target.upsmon_text.encode("utf-8"), 0o640)
             _atomic_write(self.paths.upssched, target.upssched_text.encode("utf-8"), 0o640)
             _atomic_write(self.paths.ups_conf, target.ups_conf_text.encode("utf-8"), 0o640)
+            if identity_mode:
+                _atomic_write(
+                    self.paths.upsd_users,
+                    target.upsd_users_text.encode("utf-8"),
+                    0o640,
+                )
+                _atomic_write(
+                    self.paths.app_config,
+                    target.app_config_text.encode("utf-8"),
+                    0o600,
+                )
 
             if self.paths.upsmon.read_text(encoding="utf-8") != target.upsmon_text:
                 raise PolicyApplyError("Проверка upsmon.conf после записи не прошла.")
@@ -653,11 +754,20 @@ class UpsPolicyApplier:
                 raise PolicyApplyError("Проверка upssched.conf после записи не прошла.")
             if self.paths.ups_conf.read_text(encoding="utf-8") != target.ups_conf_text:
                 raise PolicyApplyError("Проверка ups.conf после записи не прошла.")
+            if identity_mode:
+                if self.paths.upsd_users.read_text(encoding="utf-8") != target.upsd_users_text:
+                    raise PolicyApplyError("Проверка upsd.users после записи не прошла.")
+                if self.paths.app_config.read_text(encoding="utf-8") != target.app_config_text:
+                    raise PolicyApplyError("Проверка App config после записи не прошла.")
 
             _run(
                 self.runner,
                 ["systemctl", "restart", f"nut-driver@{self.ups_name}.service"],
             )
+            if identity_mode:
+                _run(self.runner, ["systemctl", "restart", "nut-server.service"])
+                if self.credential_verifier is not None:
+                    self.credential_verifier(_MANAGED_NUT_USER, managed_password)
 
             self._wait_for_effective_restart_delay(
                 draft.power_restore_delay_seconds
@@ -687,5 +797,8 @@ class UpsPolicyApplier:
                 snapshots,
                 monitor_active_before=monitor_active_before,
                 monitor_enabled_before=monitor_enabled_before,
+                server_active_before=server_active_before,
+                server_enabled_before=server_enabled_before,
             )
-            return PolicyApplyResult(False, f"Применение политики UPS отменено: {exc}")
+            detail = _redact_secret(str(exc), managed_password)
+            return PolicyApplyResult(False, f"Применение политики UPS отменено: {detail}")
