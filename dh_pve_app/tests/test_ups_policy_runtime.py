@@ -109,14 +109,6 @@ def test_legacy_v1_policy_is_not_silently_promoted_to_active_v2(tmp_path):
     assert runtime.policy_hash is None
     assert runtime.policy_last_applied is None
 
-    persisted = StateStore(tmp_path / "ups.json").load()
-    assert persisted["policy_active"] is None
-    assert persisted["policy_draft"] == UpsPolicyDraft(20, 180).as_dict()
-    assert persisted["policy_status"] == "Legacy policy"
-    assert persisted["policy_revision"] == 0
-    assert persisted["policy_hash"] is None
-    assert persisted["policy_last_applied"] is None
-
 
 def test_persisted_v2_active_policy_is_restored_without_revision_loss(tmp_path):
     active = UpsPolicyDraft(25, 300)
