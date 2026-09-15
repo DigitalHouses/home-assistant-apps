@@ -117,7 +117,7 @@ def test_disappearing_capability_is_tombstoned_then_removed(tmp_path):
     bridge.discovery.clear()
 
     current["snapshot"] = parse_upsc_output("ups.status: OL\n")
-    clock["mono"] = 105.0
+    clock["mono"] = 110.0
     runtime.tick(clock["mono"])
 
     assert len(bridge.discovery) == 2
@@ -131,12 +131,12 @@ def test_unchanged_poll_suppressed_but_ol_to_ob_publishes(tmp_path):
     assert runtime.startup() is True
     bridge.states.clear()
 
-    clock["mono"] = 105.0
+    clock["mono"] = 110.0
     runtime.tick(clock["mono"])
     assert bridge.states == []
 
     current["snapshot"] = parse_upsc_output("ups.status: OB DISCHRG\nbattery.runtime: 2130\n")
-    clock["mono"] = 110.0
+    clock["mono"] = 120.0
     runtime.tick(clock["mono"])
     assert len(bridge.states) == 1
     assert bridge.states[-1]["status"] == "On battery"
@@ -150,12 +150,12 @@ def test_runtime_drift_threshold_is_five_minutes_while_online(tmp_path):
     bridge.states.clear()
 
     current["snapshot"] = parse_upsc_output("ups.status: OL\nbattery.runtime: 2100\n")
-    clock["mono"] = 105.0
+    clock["mono"] = 110.0
     runtime.tick(clock["mono"])
     assert bridge.states == []
 
     current["snapshot"] = parse_upsc_output("ups.status: OL\nbattery.runtime: 1860\n")
-    clock["mono"] = 110.0
+    clock["mono"] = 120.0
     runtime.tick(clock["mono"])
     assert len(bridge.states) == 1
 
@@ -174,7 +174,7 @@ def test_reader_failure_publishes_unavailable_without_losing_capabilities(tmp_pa
     first_components = set(bridge.discovery[-1]["components"])
     bridge.states.clear()
     calls["fail"] = True
-    clock["mono"] = 105.0
+    clock["mono"] = 110.0
 
     runtime.tick(clock["mono"])
 
