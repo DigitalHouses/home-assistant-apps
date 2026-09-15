@@ -67,6 +67,17 @@ class VerifyMismatchStore(StateStore):
         return value
 
 
+class ReloadRecorder:
+    def __init__(self, *, error=None):
+        self.calls = 0
+        self.error = error
+
+    def __call__(self):
+        self.calls += 1
+        if self.error is not None:
+            raise self.error
+
+
 def _identity():
     return HostIdentity(
         machine_id="0123456789abcdef0123456789abcdef",
@@ -105,7 +116,7 @@ def _budget():
     )
 
 
-def _runtime(tmp_path, *, store_class=StateStore):
+def _runtime(tmp_path, *, store_class=StateStore, reload_executor=None):
     store = store_class(tmp_path / "ups.json")
     active = UpsPolicyDraft(20, 180)
     store.save(
@@ -122,6 +133,7 @@ def _runtime(tmp_path, *, store_class=StateStore):
     snapshot = parse_upsc_output(
         "ups.status: OL\nbattery.charge: 100\nbattery.runtime: 9999\n"
     )
+    reload_executor = reload_executor or ReloadRecorder()
     runtime = ShutdownAwareUpsRuntime(
         config=_config(),
         mqtt_config=_mqtt(),
@@ -136,12 +148,13 @@ def _runtime(tmp_path, *, store_class=StateStore):
         shutdown_policy_reader=lambda: (_ for _ in ()).throw(RuntimeError("skip")),
         shutdown_history_tracker=HistoryTracker(),
         shutdown_budget_reader=_budget,
+        policy_reload_executor=reload_executor,
     )
-    return runtime, bridge, store
+    return runtime, bridge, store, reload_executor
 
 
-def test_successful_apply_persists_verifies_then_emits_old_to_new_event_last(tmp_path):
-    runtime, bridge, store = _runtime(tmp_path)
+def test_changed_apply_persists_pending_transaction_and_requests_service_reload(tmp_path):
+    runtime, bridge, store, reloads = _runtime(tmp_path)
     old = runtime.policy_active
     new = UpsPolicyDraft(25, 240)
     runtime.policy_draft = new
@@ -149,17 +162,40 @@ def test_successful_apply_persists_verifies_then_emits_old_to_new_event_last(tmp
 
     runtime._apply_policy()
 
+    assert reloads.calls == 1
+    assert runtime.policy_active == old
+    assert runtime.policy_draft == new
+    assert runtime.policy_status == "Applying"
+    assert runtime.policy_revision == 4
+    assert bridge.events == []
+
+    persisted = store.load()
+    assert persisted["policy_active"] == old.as_dict()
+    assert persisted["policy_revision"] == 4
+    transaction = persisted["policy_apply_transaction"]
+    assert transaction["old_values"] == old.as_dict()
+    assert transaction["new_values"] == new.as_dict()
+    assert transaction["target_revision"] == 5
+    assert transaction["target_hash"] == policy_hash(new)
+
+
+def test_reload_completion_promotes_policy_verifies_then_emits_event_last(tmp_path):
+    runtime, bridge, store, reloads = _runtime(tmp_path)
+    old = runtime.policy_active
+    new = UpsPolicyDraft(25, 240)
+    runtime.policy_draft = new
+    runtime.policy_status = "Pending changes"
+
+    runtime._apply_policy()
+    assert reloads.calls == 1
+    assert runtime.complete_policy_reload() is True
+
     assert runtime.policy_active == new
     assert runtime.policy_draft == new
     assert runtime.policy_status == "Active"
     assert runtime.policy_revision == 5
     assert runtime.policy_hash == policy_hash(new)
-    assert bridge.events == []
-    persisted = store.load()
-    assert persisted["policy_active"] == new.as_dict()
-    assert persisted["policy_revision"] == 5
-
-    runtime._collect(force=True)
+    assert store.load().get("policy_apply_transaction") is None
 
     assert bridge.order[-1] == "event"
     assert len(bridge.events) == 1
@@ -173,30 +209,57 @@ def test_successful_apply_persists_verifies_then_emits_old_to_new_event_last(tmp
     assert event["active_problem_count"] == 0
 
 
-def test_noop_apply_does_not_increment_revision_or_emit_event(tmp_path):
-    runtime, bridge, store = _runtime(tmp_path)
+def test_noop_apply_does_not_reload_increment_revision_or_emit_event(tmp_path):
+    runtime, bridge, store, reloads = _runtime(tmp_path)
     original_revision = runtime.policy_revision
     original_last_applied = runtime.policy_last_applied
 
     runtime._apply_policy()
     runtime._collect(force=True)
 
+    assert reloads.calls == 0
     assert runtime.policy_revision == original_revision
     assert runtime.policy_last_applied == original_last_applied
     assert runtime.policy_status == "Active"
     assert runtime.policy_apply_result == "No changes"
     assert bridge.events == []
     assert store.load()["policy_revision"] == original_revision
+    assert store.load().get("policy_apply_transaction") is None
 
 
-def test_verify_mismatch_rolls_back_previous_active_policy_and_emits_no_event(tmp_path):
-    runtime, bridge, store = _runtime(tmp_path, store_class=VerifyMismatchStore)
+def test_reload_request_failure_rolls_back_pending_draft_and_keeps_active(tmp_path):
+    reloads = ReloadRecorder(error=RuntimeError("reload failed"))
+    runtime, bridge, store, _ = _runtime(tmp_path, reload_executor=reloads)
     old = runtime.policy_active
     runtime.policy_draft = UpsPolicyDraft(25, 240)
     runtime.policy_status = "Pending changes"
-    store.break_next_policy_verify = True
 
     runtime._apply_policy()
+
+    assert reloads.calls == 1
+    assert runtime.policy_active == old
+    assert runtime.policy_draft == old
+    assert runtime.policy_revision == 4
+    assert runtime.policy_hash == policy_hash(old)
+    assert runtime.policy_status == "Apply failed"
+    assert bridge.events == []
+    assert store.load().get("policy_apply_transaction") is None
+
+
+def test_verify_mismatch_after_reload_rolls_back_previous_active_and_emits_no_event(tmp_path):
+    runtime, bridge, store, reloads = _runtime(
+        tmp_path,
+        store_class=VerifyMismatchStore,
+    )
+    old = runtime.policy_active
+    runtime.policy_draft = UpsPolicyDraft(25, 240)
+    runtime.policy_status = "Pending changes"
+
+    runtime._apply_policy()
+    assert reloads.calls == 1
+    store.break_next_policy_verify = True
+
+    assert runtime.complete_policy_reload() is False
 
     assert runtime.policy_active == old
     assert runtime.policy_draft == old
@@ -207,3 +270,4 @@ def test_verify_mismatch_rolls_back_previous_active_policy_and_emits_no_event(tm
     persisted = store.load()
     assert persisted["policy_active"] == old.as_dict()
     assert persisted["policy_revision"] == 4
+    assert persisted.get("policy_apply_transaction") is None
