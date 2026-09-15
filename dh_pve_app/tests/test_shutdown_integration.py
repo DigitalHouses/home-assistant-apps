@@ -157,18 +157,18 @@ def test_guest_discovery_exposes_previous_shutdown_and_per_guest_duration_attrib
     )["components"]
 
     previous = components["previous_shutdown"]
-    assert previous["default_entity_id"] == "sensor.dh_pve_previous_shutdown"
+    assert previous["default_entity_id"] == "sensor.dh_app_pve_previous_shutdown"
     assert "shutdown_reason" in previous["json_attributes_template"]
     assert "shutdown_clean" in previous["json_attributes_template"]
     assert "guest_shutdown_total_seconds" in previous["json_attributes_template"]
 
     history = components["shutdown_history"]
-    assert history["default_entity_id"] == "sensor.dh_pve_shutdown_history"
+    assert history["default_entity_id"] == "sensor.dh_app_pve_shutdown_history"
     assert "history" in history["json_attributes_template"]
 
     haos = components["vm_110_shutdown"]
     attrs = haos["json_attributes_template"]
-    assert haos["default_entity_id"] == "sensor.dh_pve_vm_110_shutdown"
+    assert haos["default_entity_id"] == "sensor.dh_app_pve_vm_110_shutdown"
     assert "shutdown_timeout_seconds" in attrs
     assert "last_shutdown_duration_seconds" in attrs
     assert "last_shutdown_timeout_ratio" in attrs
