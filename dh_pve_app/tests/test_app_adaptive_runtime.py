@@ -130,9 +130,10 @@ def test_group_capable_startup_tombstones_legacy_monolithic_state():
 
 
 def test_cpu_profile_transition_only_publishes_cpu_resource_plus_diagnostics():
+    usages = iter([70.0, 90.0])
     runtime, bridge = make_runtime(
-        {"cpu": lambda: cpu_sample(usage=80.0)},
-        mono_values=[0.0, 60.0],
+        {"cpu": lambda: cpu_sample(usage=next(usages))},
+        mono_values=[0.0, 60.1],
         iso_values=[
             "2026-09-14T20:00:00+05:00",
             "2026-09-14T20:01:00+05:00",
@@ -145,9 +146,27 @@ def test_cpu_profile_transition_only_publishes_cpu_resource_plus_diagnostics():
 
     assert [group for group, _ in bridge.group_states] == ["cpu", "diagnostics"]
     diagnostics = bridge.group_states[-1][1]
-    assert diagnostics["app_profile"]["state"] == "high"
+    assert diagnostics["app_profile"]["state"] == "detail"
     assert diagnostics["last_publication"]["group"] == "cpu"
     assert diagnostics["last_publication"]["reason"] == "profile_transition"
+
+
+def test_detail_transition_does_not_mutate_scheduler_collection_cadence():
+    usages = iter([70.0, 90.0])
+    runtime, _bridge = make_runtime(
+        {"cpu": lambda: cpu_sample(usage=next(usages))},
+        mono_values=[0.0, 60.1],
+    )
+    runtime.scheduler.add("cpu", interval_seconds=10.0, now=0.0)
+    runtime.scheduler.add("gpu", interval_seconds=60.0, now=0.0)
+    runtime.scheduler.add("smart", interval_seconds=3600.0, now=0.0)
+    before = {name: runtime.scheduler.interval(name) for name in runtime.scheduler.names()}
+
+    runtime.run_collection(force=True)
+    runtime.run_collection(names=("cpu",))
+
+    after = {name: runtime.scheduler.interval(name) for name in runtime.scheduler.names()}
+    assert after == before
 
 
 def test_manual_refresh_publishes_all_current_resource_groups_and_updates_refresh_time():
