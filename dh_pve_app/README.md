@@ -232,6 +232,9 @@ NUT system files are host configuration, not runtime application settings. They 
 
 The expected managed policy is:
 
+- one local NUT control identity, `dh_primary_user`;
+- `dh_primary_user` has `upsmon primary` and `instcmds = ALL` in `/etc/nut/upsd.users`;
+- the selected `MONITOR` entry and the App `[ups]` command credentials use the same `dh_primary_user` password;
 - `upsmon` role: `PRIMARY` on the Proxmox host;
 - `SHUTDOWNCMD "/sbin/shutdown -h now"`;
 - `POWERDOWNFLAG /etc/killpower`;
@@ -241,7 +244,9 @@ The expected managed policy is:
 - the timer invokes only the static DigitalHouses helper token, which calls `upsmon -c fsd`;
 - native hardware Low Battery remains authoritative; no `ignorelb` or battery-threshold overrides are installed.
 
-The effective policy is read from `/etc/nut/upsmon.conf`, `/etc/nut/upssched.conf`, `/etc/nut/ups.conf`, systemd state and NUT telemetry. Home Assistant receives read-only diagnostics including:
+`instcmds = ALL` is a NUT permission of the local administrative identity; it does **not** expose arbitrary commands to MQTT/Home Assistant. The App still accepts only its explicit command families (currently battery tests and supported beeper control), and rejects arbitrary `upscmd`, `load.*`, `shutdown.*`, FSD and shell execution.
+
+The effective policy is read from `/etc/nut/upsmon.conf`, `/etc/nut/upssched.conf`, `/etc/nut/ups.conf`, `/etc/nut/upsd.users`, App command credentials, systemd state and NUT telemetry. Home Assistant receives read-only diagnostics including:
 
 - `sensor.dh_pve_ups_shutdown_policy`
 - `sensor.dh_pve_ups_policy_on_battery_delay`
@@ -253,7 +258,15 @@ There is no MQTT/Home Assistant Apply button and no writable shutdown-policy num
 
 ### Explicit commissioning
 
-Commissioning is a rare root-only host operation. It is not invoked by the daemon and cannot be triggered over MQTT.
+Commissioning is a rare root-only host operation. It is not invoked by the daemon and cannot be triggered over MQTT. The intended lifecycle is:
+
+```text
+install App
+→ connect / scan / select UPS
+→ explicit root UPS/NUT commissioning
+→ verified READY state
+→ normal read-only daemon operation
+```
 
 Example for a 30-minute ONBATT wait and 120-second UPS restore delay:
 
@@ -267,9 +280,13 @@ cd /opt/digitalhouses/dh_pve_app
   --power-restore-delay-seconds 120
 ```
 
-Before writing anything, commissioning requires root, a selected UPS, stable line power and no running battery test. It calculates the Proxmox guest-shutdown budget, validates the draft, writes NUT files transactionally, restarts the UPS driver, waits for the exact effective restore delay reported by the hardware, and only then starts/restarts `nut-monitor`.
+Before writing anything, commissioning requires root, a selected UPS, stable line power and no running battery test. It calculates the Proxmox guest-shutdown budget, validates the draft, then updates the NUT/App configuration as one rollback-safe operation. The transaction owns `/etc/nut/upsmon.conf`, `/etc/nut/upssched.conf`, `/etc/nut/ups.conf`, `/etc/nut/upsd.users`, the App `[ups]` command credentials and policy metadata.
 
-Managed NUT files are written with mode `0640` and owner/group inherited from `/etc/nut` (normally `root:nut`). Rollback restores content, mode, owner and group.
+If `[dh_primary_user]` already has a non-empty password, commissioning preserves it and synchronizes the `MONITOR` entry and App command credentials to that value. On first commissioning, a strong random password is generated. The password is never published to MQTT, included in policy metadata, or returned in preflight/error details.
+
+After writing the configuration, commissioning restarts the UPS driver and `nut-server`, performs a non-destructive authenticated NUT protocol probe, verifies the exact effective UPS restore delay, and only then starts/restarts `nut-monitor`. The credential probe authenticates the connection and uses connection-local NUT tracking state; it does not execute an UPS instant command or FSD.
+
+Managed NUT files are written with mode `0640` and owner/group inherited from `/etc/nut` (normally `root:nut`); the App config remains `0600`. Rollback restores content, mode, owner/group and relevant NUT service state for every managed file if any stage fails.
 
 Read-only preflight:
 
@@ -280,6 +297,10 @@ cd /opt/digitalhouses/dh_pve_app
   --state-dir /var/lib/dh_pve_app \
   --ups-policy-preflight
 ```
+
+Preflight also verifies that `dh_primary_user`, `upsmon primary`, `instcmds = ALL`, the selected `MONITOR` identity and the App command credentials are mutually consistent, without exposing the password.
+
+Existing installations created before this commissioning contract should run explicit commissioning once after upgrading so `/etc/nut/upsd.users` and the App command credentials are normalized and verified.
 
 ## Shutdown history and readiness
 
@@ -411,7 +432,9 @@ DIGITALHOUSES_SOURCE_REF="$REF" \
   bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$REF/dh_pve_app/install.sh")
 ```
 
-The installer deploys the App, helper and systemd service. It does **not** silently commission NUT shutdown policy. Existing valid application configuration is preserved. Legacy `ups.policy_apply_enabled` is ignored for upgrade compatibility and does not grant runtime capability.
+The installer deploys the App, helper and systemd service. It does **not** silently commission NUT shutdown policy or rewrite `/etc/nut`; UPS hardware is optional at App installation time. Existing valid application configuration is preserved. Legacy `ups.policy_apply_enabled` is ignored for upgrade compatibility and does not grant runtime capability.
+
+After a UPS is physically connected, use the read-only scan/select flow first and then run explicit root commissioning. Commissioning, not the installer or long-running daemon, owns the NUT control identity and host-policy transaction.
 
 The service runs as root because SMART, `/etc/pve` guest configuration and passthrough inspection require host privileges; systemd still prevents the long-running daemon from modifying protected host configuration such as `/etc/nut`.
 
