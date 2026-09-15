@@ -1,0 +1,87 @@
+type: sections
+max_columns: 3
+title: UPS
+path: ups
+icon: mdi:power-plug-battery
+sections:
+  - type: grid
+    cards:
+      - type: heading
+        heading: Состояние UPS
+        icon: mdi:power-plug-battery
+      - type: tile
+        entity: sensor.dh_app_pve_ups_status
+        name: Статус
+      - type: tile
+        entity: sensor.dh_app_pve_ups_problems
+        name: Проблемы
+      - type: tile
+        entity: button.dh_app_pve_ups_refresh
+        name: Обновить
+
+  - type: grid
+    cards:
+      - type: heading
+        heading: Питание и батарея
+        icon: mdi:battery-medium
+      - type: entities
+        entities:
+          - entity: sensor.dh_app_pve_ups_battery_charge
+            name: Заряд батареи
+          - entity: sensor.dh_app_pve_ups_battery_runtime_minutes
+            name: Прогноз работы от батареи
+          - entity: sensor.dh_app_pve_ups_load
+            name: Нагрузка
+          - entity: sensor.dh_app_pve_ups_input_voltage
+            name: Входное напряжение
+          - entity: sensor.dh_app_pve_ups_output_voltage
+            name: Выходное напряжение
+          - entity: sensor.dh_app_pve_ups_battery_voltage
+            name: Напряжение батареи
+      - type: history-graph
+        title: Заряд / нагрузка · 24 часа
+        hours_to_show: 24
+        entities:
+          - sensor.dh_app_pve_ups_battery_charge
+          - sensor.dh_app_pve_ups_load
+
+  - type: grid
+    cards:
+      - type: heading
+        heading: Диагностика
+        icon: mdi:alert-circle-outline
+      - type: entities
+        entities:
+          - entity: binary_sensor.dh_app_pve_ups_nut_unavailable_problem
+            name: NUT недоступен
+          - entity: binary_sensor.dh_app_pve_ups_on_battery_problem
+            name: Работа от батареи
+          - entity: binary_sensor.dh_app_pve_ups_low_battery_problem
+            name: Низкий заряд
+          - entity: binary_sensor.dh_app_pve_ups_overload_problem
+            name: Перегрузка
+          - entity: binary_sensor.dh_app_pve_ups_replace_battery_problem
+            name: Замена батареи
+          - entity: binary_sensor.dh_app_pve_ups_bypass_problem
+            name: Bypass
+          - entity: binary_sensor.dh_app_pve_ups_power_state_unknown_problem
+            name: Неизвестное состояние питания
+
+  - type: grid
+    cards:
+      - type: heading
+        heading: Текущая политика выключения
+        icon: mdi:power-settings
+      - type: entities
+        entities:
+          - entity: sensor.dh_app_pve_ups_shutdown_policy
+            name: Политика
+          - entity: sensor.dh_app_pve_ups_policy_on_battery_delay
+            name: Ожидание после пропадания питания
+          - entity: sensor.dh_app_pve_ups_policy_power_restore_delay
+            name: Задержка восстановления питания
+      - type: markdown
+        content: >-
+          Этот блок пока показывает фактически действующую политику PVE/NUT.
+          Управление UPS Trigger Policy v2 будет добавлено вместе с backend-контрактом
+          draft → Apply/Confirm → verify/rollback.
