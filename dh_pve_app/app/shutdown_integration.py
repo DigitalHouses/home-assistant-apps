@@ -26,6 +26,40 @@ from .ups_trigger import SoftwareShutdownController, SoftwareShutdownTriggerResu
 SHUTDOWN_BUDGET_REFRESH_SECONDS = 60.0
 
 
+def _shutdown_budget_payload(budget: ShutdownBudgetResult | None) -> dict[str, object]:
+    if budget is None:
+        return {
+            "available": False,
+            "configured_guest_budget_seconds": None,
+            "observed_guest_budget_seconds": None,
+            "effective_guest_budget_seconds": None,
+            "hostsync_budget_seconds": None,
+            "finaldelay_seconds": None,
+            "observed_host_tail_seconds": None,
+            "host_tail_fallback_seconds": None,
+            "host_tail_budget_seconds": None,
+            "shutdown_budget_seconds": None,
+            "unavailable_reason": "not_collected",
+            "configuration_fingerprint": None,
+            "history_evidence_status": "none",
+        }
+    return {
+        "available": budget.available,
+        "configured_guest_budget_seconds": budget.configured_guest_budget_seconds,
+        "observed_guest_budget_seconds": budget.observed_guest_budget_seconds,
+        "effective_guest_budget_seconds": budget.effective_guest_budget_seconds,
+        "hostsync_budget_seconds": budget.hostsync_budget_seconds,
+        "finaldelay_seconds": budget.finaldelay_seconds,
+        "observed_host_tail_seconds": budget.observed_host_tail_seconds,
+        "host_tail_fallback_seconds": budget.host_tail_fallback_seconds,
+        "host_tail_budget_seconds": budget.host_tail_budget_seconds,
+        "shutdown_budget_seconds": budget.shutdown_budget_seconds,
+        "unavailable_reason": budget.unavailable_reason,
+        "configuration_fingerprint": budget.configuration_fingerprint,
+        "history_evidence_status": budget.history_evidence_status,
+    }
+
+
 def parse_guest_shutdown_config(config: str) -> dict[str, object]:
     onboot = False
     timeout = 180
@@ -484,22 +518,25 @@ class ShutdownAwareUpsRuntime(AdaptiveUpsRuntime):
 
     def _auxiliary_fields(self) -> dict[str, object]:
         fields = super()._auxiliary_fields()
-        budget = (
-            self.last_shutdown_budget.shutdown_budget_seconds
-            if self.last_shutdown_budget is not None
-            else None
-        )
+        budget = self.last_shutdown_budget
+        budget_payload = _shutdown_budget_payload(budget)
+        fields["shutdown_budget"] = budget_payload
+
         history = self.shutdown_history_tracker.payload()
         previous = history.get("previous_shutdown")
-        fields["shutdown_readiness"] = evaluate_shutdown_readiness(
+        guest_budget = budget.effective_guest_budget_seconds if budget is not None else None
+        total_budget = budget.shutdown_budget_seconds if budget is not None else None
+        readiness = evaluate_shutdown_readiness(
             ups_present=True,
-            guest_shutdown_budget_seconds=budget,
+            guest_shutdown_budget_seconds=guest_budget,
             previous_shutdown=previous if isinstance(previous, Mapping) else None,
             additional_issues=shutdown_policy_issues(
                 self.shutdown_policy,
                 nut_available=self.nut_available,
             ),
         )
+        readiness["shutdown_budget_seconds"] = total_budget
+        fields["shutdown_readiness"] = readiness
         return fields
 
     def _build_discovery(self) -> dict[str, object]:
