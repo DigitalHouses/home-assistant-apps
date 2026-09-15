@@ -62,7 +62,7 @@ The commissioning transaction owns all files required to make the local PRIMARY 
 
 The static helper remains installed under `/opt/digitalhouses/dh_pve_app/bin/` and is validated but not generated dynamically.
 
-Every managed file is snapshotted before the first write. NUT files retain the existing `/etc/nut` owner/group convention and mode `0640`; the App config remains root-owned and mode `0600`; metadata remains mode `0600`. On any failure after mutation begins, all file snapshots and relevant NUT service state are restored.
+Every managed file is snapshotted before the first write. NUT files retain the existing `/etc/nut` owner/group convention and mode `0640`; the App config remains root-owned and mode `0600`; metadata remains mode `0600`. On any failure after mutation begins, all file snapshots and relevant NUT/App service state are restored.
 
 ## Credential source of truth
 
@@ -125,12 +125,15 @@ After all target files are written and content-verified:
 
 1. restart the selected NUT driver as required by existing UPS delay handling;
 2. restart/reload the NUT server so `upsd.users` takes effect;
-3. verify the configured `dh_primary_user` can authenticate to the selected UPS command endpoint and that the UPS command inventory is readable;
+3. verify the configured credentials with the NUT `PRIMARY <ups>` access-level check, then read `LIST CMD <ups>` to confirm the selected UPS command inventory is reachable without executing an instant command;
 4. wait for and verify the effective hardware restore delay as today;
 5. restart or enable/start `nut-monitor.service` according to its pre-transaction state;
-6. persist policy metadata only after the whole transaction has passed verification.
+6. persist rollback-protected policy metadata;
+7. if `dh_pve_app.service` was active before commissioning, restart it so the synchronized App command credentials become effective; if it was inactive, leave it inactive.
 
-If a required service or verification step fails, rollback restores every managed file and prior monitor/server state as far as systemd permits.
+`PRIMARY` is used only as a NUT authorization check. Commissioning does not issue `INSTCMD`, FSD, or any UPS hardware-changing command during credential verification.
+
+If a required service or verification step fails, rollback restores every managed file and prior monitor/server state as far as systemd permits. If the App had been active, rollback also reloads the restored App config so a failed commissioning cannot leave the daemon running with mismatched credentials. Policy metadata is part of the same rollback boundary.
 
 ## Preflight / readiness contract
 
@@ -168,7 +171,8 @@ For an already commissioned host, running explicit commissioning after this chan
 - add/normalize `upsmon primary` and `instcmds = ALL`;
 - synchronize `upsmon.conf` and App command credentials;
 - preserve unrelated NUT users and unrelated App config;
-- verify the effective command path before reporting success.
+- verify the effective command path before reporting success;
+- reload an already-active App only after the commissioned NUT path is ready, while leaving an inactive App inactive.
 
 This directly fixes the production failure where battery-test permissions existed but newly added beeper commands returned `ERR ACCESS-DENIED`.
 
@@ -183,7 +187,11 @@ Regression coverage must prove:
 - `upsmon.conf`, `upsd.users`, and App config receive one consistent identity;
 - secrets do not leak through errors/results;
 - NUT server restart/reload is included before command-path verification;
+- credential verification uses the real NUT PRIMARY access check plus read-only command inventory and never executes `INSTCMD` or FSD;
 - failure after each mutation/service stage restores all managed files;
+- an active `dh_pve_app.service` reloads the commissioned credentials only after NUT/monitor readiness;
+- an inactive App is not started by commissioning;
+- App restart failure restores the prior App config and reloads the previously active service on rollback;
 - preflight fails when `dh_primary_user` is absent, is not PRIMARY, lacks `instcmds = ALL`, or App credentials do not match;
 - runtime service sandbox remains read-only for `/etc/nut`;
 - existing App command allowlists still reject dangerous/arbitrary commands even though the NUT user has `instcmds = ALL`.
