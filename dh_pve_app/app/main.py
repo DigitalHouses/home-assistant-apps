@@ -34,6 +34,7 @@ from .ups_policy_preflight import (
     UpsPolicyPreflight,
     read_policy_preflight,
 )
+from .ups_policy_reload import FixedServiceReloadExecutor
 from .ups_runtime import UpsRuntime
 from .ups_scan import UpsScanner
 from .ups_shutdown_budget_reader import read_shutdown_budget
@@ -199,6 +200,7 @@ def build_ups_runtime(
         shutdown_history_tracker=tracker,
         shutdown_budget_reader=current_shutdown_budget,
         software_shutdown_executor=execute_fixed_ups_shutdown,
+        policy_reload_executor=FixedServiceReloadExecutor(),
     )
 
 
@@ -264,6 +266,7 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
         shutdown_history_tracker=shutdown_history_tracker,
     )
     stop_event = threading.Event()
+    reload_event = threading.Event()
     initialized = False
     ups_startup_attempted = False
 
@@ -272,8 +275,13 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
         stop_event.set()
         bridge.wake_requested.set()
 
+    def reload_policy(signum: int, frame: object) -> None:
+        reload_event.set()
+        bridge.wake_requested.set()
+
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
+    signal.signal(signal.SIGHUP, reload_policy)
 
     log.info("Запуск DH PVE App %s", _version())
     if ups_runtime is not None:
@@ -330,7 +338,16 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
 
                 if ups_runtime is not None and ups_startup_attempted:
                     ups_runtime.process_events()
+                    if reload_event.is_set():
+                        reload_event.clear()
+                        if ups_runtime.complete_policy_reload():
+                            log.info("Reload UPS Trigger Policy успешно подтвержден")
+                        else:
+                            log.debug("SIGHUP обработан без ожидающей UPS policy transaction")
                     ups_runtime.tick(time.monotonic())
+                elif reload_event.is_set():
+                    reload_event.clear()
+                    log.debug("SIGHUP обработан до инициализации UPS runtime")
 
             bridge.wake_requested.wait(1.0)
             bridge.wake_requested.clear()
@@ -353,7 +370,7 @@ def main() -> int:
     parser.add_argument(
         "--ups-policy-preflight",
         action="store_true",
-        help="Read UPS/NUT/PVE commissioning state, print JSON, and exit without MQTT.",
+        help="Read UPS/NUT/PVE safety state, print JSON, and exit without MQTT.",
     )
     args = parser.parse_args()
 
