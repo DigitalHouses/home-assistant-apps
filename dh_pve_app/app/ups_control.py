@@ -23,12 +23,15 @@ def verify_nut_credentials(
     *,
     host: str,
     port: int,
+    ups_name: str,
     username: str,
     password: str,
     timeout_seconds: float,
     connector: Callable[..., object] = socket.create_connection,
 ) -> None:
-    """Verify NUT credentials without executing a UPS instant command."""
+    """Verify NUT credentials and readable command inventory without INSTCMD/FSD."""
+    if not ups_name:
+        raise NutControlError("Не выбран UPS для проверки NUT")
     if not username or not password:
         raise NutControlError("Не настроены учётные данные NUT для команд UPS")
 
@@ -38,19 +41,62 @@ def verify_nut_credentials(
     try:
         with connector((host, port), timeout_seconds) as connection:
             stream = connection.makefile("rwb")
-            exchanges = (
-                (f"USERNAME {username}\n", "USERNAME"),
-                (f"PASSWORD {password}\n", "PASSWORD"),
-                ("SET TRACKING OFF\n", "TRACKING"),
-            )
-            for request, stage in exchanges:
+
+            def read_response(stage: str) -> str:
+                try:
+                    raw = stream.readline()
+                except StopIteration:
+                    raw = b""
+                if not raw:
+                    raise NutControlError(
+                        f"NUT credential probe {stage} отклонен: соединение закрыто"
+                    )
+                return raw.decode("utf-8", errors="replace").strip()
+
+            def require_ok(request: str, stage: str) -> None:
                 stream.write(request.encode("utf-8"))
                 stream.flush()
-                response = stream.readline().decode("utf-8", errors="replace").strip()
+                response = read_response(stage)
                 if not response.upper().startswith("OK"):
-                    detail = sanitize(response or "нет ответа")
+                    detail = sanitize(response)
                     raise NutControlError(
                         f"NUT credential probe {stage} отклонен: {detail}"
+                    )
+
+            require_ok(f"USERNAME {username}\n", "USERNAME")
+            require_ok(f"PASSWORD {password}\n", "PASSWORD")
+
+            # PRIMARY is explicitly an access-level check in upsd: it validates
+            # the configured username/password and the upsmon PRIMARY action,
+            # without changing UPS hardware state.
+            require_ok(f"PRIMARY {ups_name}\n", "PRIMARY")
+
+            stream.write(f"LIST CMD {ups_name}\n".encode("utf-8"))
+            stream.flush()
+            begin = read_response("command inventory")
+            expected_begin = f"BEGIN LIST CMD {ups_name}"
+            expected_end = f"END LIST CMD {ups_name}"
+            if begin != expected_begin:
+                detail = sanitize(begin)
+                raise NutControlError(
+                    f"NUT command inventory некорректен: ожидалось {expected_begin}; "
+                    f"получено {detail}"
+                )
+
+            while True:
+                line = read_response("command inventory")
+                if line == expected_end:
+                    break
+                parts = line.split()
+                if (
+                    len(parts) != 3
+                    or parts[0] != "CMD"
+                    or parts[1] != ups_name
+                    or not parts[2]
+                ):
+                    detail = sanitize(line)
+                    raise NutControlError(
+                        f"NUT command inventory некорректен: {detail}"
                     )
 
             stream.write(b"LOGOUT\n")
