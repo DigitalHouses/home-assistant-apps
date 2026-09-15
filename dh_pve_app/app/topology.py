@@ -14,13 +14,11 @@ from .collectors.guests import (
     GuestRecord,
     PassthroughDevice,
     is_physical_guest_disk,
-    parse_cluster_resources,
     parse_hostpci,
     parse_lspci_catalog,
-    parse_pct_list,
     parse_qga_lsblk,
-    parse_qm_list,
 )
+from .pve_cache import read_pve_rrd, read_pve_vmlist
 
 Runner = Callable[..., str]
 ConfigReader = Callable[[str, str], str]
@@ -102,6 +100,7 @@ class TopologyManager:
         runner: Runner,
         dri_to_pci: Mapping[str, str] | None = None,
         now_monotonic: Callable[[], float] = time.monotonic,
+        now_epoch: Callable[[], float] = time.time,
         config_reader: ConfigReader | None = None,
         pve_root: Path = Path("/etc/pve"),
         node_name: str | None = None,
@@ -109,6 +108,7 @@ class TopologyManager:
         self.runner = runner
         self._fixed_dri_to_pci = dict(dri_to_pci) if dri_to_pci is not None else None
         self.now_monotonic = now_monotonic
+        self.now_epoch = now_epoch
         self.config_reader = config_reader
         self.pve_root = pve_root
         self.node_name = node_name or platform.node()
@@ -127,18 +127,33 @@ class TopologyManager:
         return self.runner(argv, timeout=timeout, check=check)
 
     def _guest_lists(self) -> tuple[dict[str, GuestRecord], dict[str, GuestRecord]]:
-        """Get all local VM/LXC states with one Proxmox API process when possible."""
-        try:
-            raw = self._run(
-                ["pvesh", "get", "/cluster/resources", "--type", "vm", "--output-format", "json"],
-                timeout=10,
-            )
-            return parse_cluster_resources(raw, node_name=self.node_name)
-        except Exception:
-            # Compatibility fallback for environments where pvesh is unavailable.
-            vms = parse_qm_list(self._run(["qm", "list"], timeout=10))
-            lxcs = parse_pct_list(self._run(["pct", "list"], timeout=10))
-            return vms, lxcs
+        """Read local VM/LXC inventory and current status from pmxcfs caches."""
+        inventory = read_pve_vmlist(
+            self.pve_root / ".vmlist",
+            node_name=self.node_name,
+        )
+        runtime = read_pve_rrd(
+            self.pve_root / ".rrd",
+            node_name=self.node_name,
+            now_epoch=self.now_epoch(),
+        )
+        vms: dict[str, GuestRecord] = {}
+        lxcs: dict[str, GuestRecord] = {}
+        for guest_id, item in inventory.guests.items():
+            live = runtime.guests.get(guest_id)
+            if live is not None and live.name:
+                name = live.name
+            elif item.kind == "vm":
+                name = f"VM {guest_id}"
+            else:
+                name = f"LXC {guest_id}"
+            status = live.status if live is not None and live.status else "unknown"
+            record = GuestRecord(item.kind, guest_id, name, status)
+            if item.kind == "vm":
+                vms[guest_id] = record
+            else:
+                lxcs[guest_id] = record
+        return vms, lxcs
 
     def _read_config(self, kind: str, guest_id: str) -> str:
         if self.config_reader is not None:
@@ -146,15 +161,7 @@ class TopologyManager:
 
         directory = "qemu-server" if kind == "vm" else "lxc"
         path = self.pve_root / directory / f"{guest_id}.conf"
-        try:
-            return path.read_text(encoding="utf-8")
-        except OSError:
-            # Direct pmxcfs reads are the normal fast path; CLI is only fallback.
-            command = "qm" if kind == "vm" else "pct"
-            try:
-                return self._run([command, "config", guest_id], timeout=10)
-            except Exception:
-                return ""
+        return path.read_text(encoding="utf-8")
 
     def _qga_state(self, guest: GuestRecord, config: str, *, force: bool = False) -> str:
         if not _agent_enabled(config):
@@ -347,8 +354,6 @@ class TopologyManager:
             if guest is None:
                 return
             config = self._read_config("vm", guest_id)
-            if not config:
-                config = self._vm_configs.get(guest_id, "")
             self._vm_configs[guest_id] = config
             qga[guest_id] = self._qga_state(guest, config, force=True)
             devices = parse_hostpci(config, self._pci_catalog)
@@ -358,8 +363,7 @@ class TopologyManager:
             if guest is None:
                 return
             config = self._read_config("lxc", guest_id)
-            if config:
-                self._lxc_configs[guest_id] = config
+            self._lxc_configs[guest_id] = config
 
         self._snapshot = self._compose_snapshot(vms, lxcs, qga)
 
