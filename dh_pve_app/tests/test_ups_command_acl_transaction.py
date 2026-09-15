@@ -97,9 +97,10 @@ def _seed(paths, *, users=UPSD_USERS):
 
 
 class Runner:
-    def __init__(self, events, *, fail_service=None):
+    def __init__(self, events, *, fail_service=None, app_active=True):
         self.events = events
         self.fail_service = fail_service
+        self.app_active = app_active
 
     def __call__(self, command, **kwargs):
         text = " ".join(command)
@@ -114,6 +115,13 @@ class Runner:
             return type("Result", (), {"returncode": 0, "stdout": "active\n", "stderr": ""})()
         if command[:3] == ["systemctl", "is-enabled", "nut-server.service"]:
             return type("Result", (), {"returncode": 0, "stdout": "enabled\n", "stderr": ""})()
+        if command[:3] == ["systemctl", "is-active", "dh_pve_app.service"]:
+            state = "active\n" if self.app_active else "inactive\n"
+            return type(
+                "Result",
+                (),
+                {"returncode": 0 if self.app_active else 3, "stdout": state, "stderr": ""},
+            )()
         return type("Result", (), {"returncode": 0, "stdout": "", "stderr": ""})()
 
 
@@ -121,7 +129,11 @@ def _applier(paths, events, **kwargs):
     return UpsPolicyApplier(
         paths=paths,
         ups_name="ups",
-        runner=Runner(events, fail_service=kwargs.pop("fail_service", None)),
+        runner=Runner(
+            events,
+            fail_service=kwargs.pop("fail_service", None),
+            app_active=kwargs.pop("app_active", True),
+        ),
         effective_restart_delay_reader=lambda: events.append("restore-delay") or 180,
         helper_expected_uid=os.getuid(),
         helper_expected_gid=os.getgid(),
@@ -198,6 +210,43 @@ def test_apply_restarts_server_before_credential_verification_and_monitor(tmp_pa
     assert driver < server < verifier < delay < monitor
 
 
+def test_apply_restarts_active_app_after_commissioned_config_is_ready(tmp_path):
+    paths = _paths(tmp_path)
+    _seed(paths, users="[secondary]\npassword = secondary-secret\nupsmon secondary\n")
+    events = []
+
+    result = _applier(
+        paths,
+        events,
+        secret_generator=lambda: "generated-secret",
+        credential_verifier=lambda username, password: None,
+        app_active=True,
+    ).apply(_draft(), _facts())
+
+    assert result.success is True
+    monitor = events.index("systemctl enable --now nut-monitor.service")
+    app_restart = events.index("systemctl restart dh_pve_app.service")
+    assert monitor < app_restart
+
+
+def test_apply_does_not_start_app_that_was_inactive(tmp_path):
+    paths = _paths(tmp_path)
+    _seed(paths)
+    events = []
+
+    result = _applier(
+        paths,
+        events,
+        secret_generator=lambda: "unused",
+        credential_verifier=lambda username, password: None,
+        app_active=False,
+    ).apply(_draft(), _facts())
+
+    assert result.success is True
+    assert "systemctl restart dh_pve_app.service" not in events
+    assert "systemctl start dh_pve_app.service" not in events
+
+
 def test_apply_rolls_back_users_and_app_config_when_nut_server_restart_fails(tmp_path):
     paths = _paths(tmp_path)
     _seed(paths)
@@ -243,3 +292,23 @@ def test_apply_rolls_back_and_redacts_secret_when_credential_verification_fails(
     assert "generated-secret" not in result.message
     assert paths.upsd_users.read_bytes() == before_users
     assert paths.app_config.read_bytes() == before_app
+
+
+def test_apply_restores_old_app_config_if_app_restart_fails(tmp_path):
+    paths = _paths(tmp_path)
+    _seed(paths, users="[secondary]\npassword = secondary-secret\nupsmon secondary\n")
+    before_app = paths.app_config.read_bytes()
+    events = []
+
+    result = _applier(
+        paths,
+        events,
+        fail_service="systemctl restart dh_pve_app.service",
+        secret_generator=lambda: "generated-secret",
+        credential_verifier=lambda username, password: None,
+        app_active=True,
+    ).apply(_draft(), _facts())
+
+    assert result.success is False
+    assert paths.app_config.read_bytes() == before_app
+    assert events.count("systemctl restart dh_pve_app.service") >= 2
