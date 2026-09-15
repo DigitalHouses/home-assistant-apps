@@ -176,7 +176,7 @@ def validate_dh_pve_app(
     _require_text(
         app / "app/main.py",
         (
-            "DynamicDiscoveryRuntime(",
+            "ProblemAwareRuntime(",
             "ShutdownAwareProductionCollectors(",
             "ShutdownAwareTopologyManager(runner=_run)",
             "build_shutdown_aware_pve_discovery_payload(",
