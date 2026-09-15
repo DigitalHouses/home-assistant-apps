@@ -6,6 +6,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from .config import UpsConfig
+from .ups_control import verify_nut_credentials
 from .ups_nut import UpsSnapshot, read_ups
 from .ups_policy import PolicyApplyResult, UpsPolicyDraft
 from .ups_policy_apply import ManagedNutPaths, PolicyApplyError, UpsPolicyApplier
@@ -104,10 +105,20 @@ def commission_ups_policy(
             )
         return int(value)
 
+    def credential_verifier(username: str, password: str) -> None:
+        verify_nut_credentials(
+            host=config.host,
+            port=config.port,
+            username=username,
+            password=password,
+            timeout_seconds=config.command_timeout_seconds,
+        )
+
     applier = applier_factory(
         paths=ManagedNutPaths(),
         ups_name=config.name,
         runner=runner,
         effective_restart_delay_reader=effective_restart_delay_reader,
+        credential_verifier=credential_verifier,
     )
     return applier.apply(draft, facts)
