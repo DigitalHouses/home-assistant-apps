@@ -27,6 +27,8 @@ class ShutdownBudgetResult:
     host_tail_budget_seconds: int | None
     shutdown_budget_seconds: int | None
     unavailable_reason: str | None
+    configuration_fingerprint: str | None = None
+    history_evidence_status: str = "none"
 
     def runtime_guard_threshold_seconds(self, runtime_reserve_seconds: int) -> int | None:
         if self.shutdown_budget_seconds is None:
