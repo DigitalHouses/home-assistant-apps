@@ -40,7 +40,7 @@ def _temperature(value: object) -> float | None:
     return result
 
 
-def _smart_temperature(payload: object) -> float | None:
+def smart_temperature(payload: object) -> float | None:
     if not isinstance(payload, Mapping):
         return None
 
@@ -75,6 +75,14 @@ def _smart_temperature(payload: object) -> float | None:
             return max(values)
 
     return None
+
+
+def parse_smart_temperature(text: str) -> float | None:
+    try:
+        payload = json.loads(text)
+    except (json.JSONDecodeError, TypeError):
+        return None
+    return smart_temperature(payload)
 
 
 class DiskTemperatureReader:
@@ -122,10 +130,9 @@ class DiskTemperatureReader:
                 timeout=8.0,
                 check=False,
             )
-            payload = json.loads(raw)
-        except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError, TypeError, ValueError):
+        except (OSError, subprocess.TimeoutExpired, TypeError, ValueError):
             return None
-        return _smart_temperature(payload)
+        return parse_smart_temperature(raw)
 
     def read(self, device_path: str) -> DiskTemperatureSample:
         sysfs = self._sysfs_temperature(device_path)
