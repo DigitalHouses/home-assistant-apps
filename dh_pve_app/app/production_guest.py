@@ -115,7 +115,9 @@ class GuestAwareProductionCollectors(ResilientProductionCollectors):
 
     def gpu(self) -> CollectorSample:
         if self.topology is None:
-            return super().gpu()
+            # STATIC topology is authoritative for GPU inventory. Missing cache
+            # must not silently re-enable the legacy lspci/qm/pct polling path.
+            return CollectorSample(data={}, metrics={})
 
         catalog_reader = getattr(self.topology, "gpu_catalog_text", None)
         lspci = catalog_reader() if callable(catalog_reader) else ""
@@ -182,8 +184,9 @@ class GuestAwareProductionCollectors(ResilientProductionCollectors):
         return CollectorSample(data=data, metrics=metrics)
 
     def mapping(self):
-        if self.topology is None:
-            return super().mapping()
+        # Keep the guest-aware collector surface even if STATIC topology is
+        # temporarily unavailable; individual topology-dependent collectors
+        # fail closed instead of falling back to legacy subprocess polling.
         return {
             "topology": self.topology_inventory,
             "guests": self.guests,
