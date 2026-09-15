@@ -2,7 +2,6 @@ import pytest
 
 from app.ups_policy import (
     GuestShutdownTask,
-    PolicySafetyFacts,
     PolicyValidationError,
     UpsPolicyDraft,
     calculate_guest_shutdown_budget,
@@ -12,45 +11,36 @@ from app.ups_policy import (
 )
 
 
-def test_parse_policy_values_accepts_only_user_facing_ranges_and_steps():
-    assert parse_policy_value("on_battery_delay_minutes", "30") == 30
-    assert parse_policy_value("power_restore_delay_seconds", "120") == 120
+def test_parse_policy_values_accepts_only_v2_ranges_and_steps():
+    assert parse_policy_value("shutdown_battery_charge_threshold_percent", "20") == 20
+    assert parse_policy_value("runtime_reserve_seconds", "180") == 180
 
     for key, value in (
-        ("on_battery_delay_minutes", "4"),
-        ("on_battery_delay_minutes", "31"),
-        ("on_battery_delay_minutes", "65"),
-        ("power_restore_delay_seconds", "30"),
-        ("power_restore_delay_seconds", "125"),
-        ("power_restore_delay_seconds", "330"),
-        ("power_restore_delay_seconds", "abc"),
+        ("shutdown_battery_charge_threshold_percent", "9"),
+        ("shutdown_battery_charge_threshold_percent", "11"),
+        ("shutdown_battery_charge_threshold_percent", "31"),
+        ("runtime_reserve_seconds", "0"),
+        ("runtime_reserve_seconds", "61"),
+        ("runtime_reserve_seconds", "901"),
+        ("runtime_reserve_seconds", "abc"),
+        ("on_battery_delay_minutes", "30"),
+        ("power_restore_delay_seconds", "120"),
+        ("unknown", "10"),
     ):
         with pytest.raises(PolicyValidationError):
             parse_policy_value(key, value)
 
-    with pytest.raises(PolicyValidationError):
-        parse_policy_value("emergency_runtime_reserve_minutes", "15")
-    with pytest.raises(PolicyValidationError):
-        parse_policy_value("unknown", "10")
 
-
-def test_policy_hash_is_stable_and_depends_only_on_policy_values():
-    first = UpsPolicyDraft(
-        on_battery_delay_minutes=30,
-        power_restore_delay_seconds=120,
-    )
-    same = UpsPolicyDraft(
-        on_battery_delay_minutes=30,
-        power_restore_delay_seconds=120,
-    )
-    changed = UpsPolicyDraft(
-        on_battery_delay_minutes=35,
-        power_restore_delay_seconds=120,
-    )
+def test_policy_hash_is_stable_and_depends_only_on_v2_policy_values():
+    first = UpsPolicyDraft(20, 180)
+    same = UpsPolicyDraft(20, 180)
+    changed_charge = UpsPolicyDraft(25, 180)
+    changed_reserve = UpsPolicyDraft(20, 240)
 
     assert policy_hash(first) == policy_hash(same)
     assert len(policy_hash(first)) == 64
-    assert policy_hash(first) != policy_hash(changed)
+    assert policy_hash(first) != policy_hash(changed_charge)
+    assert policy_hash(first) != policy_hash(changed_reserve)
 
 
 def test_guest_shutdown_budget_matches_current_pve_policy_groups():
@@ -89,39 +79,8 @@ def test_missing_startup_order_is_shutdown_before_numbered_groups():
     assert calculate_guest_shutdown_budget(tasks, max_workers=4) == 190
 
 
-def test_validation_returns_only_wait_and_restore_delay():
-    facts = PolicySafetyFacts(
-        guest_shutdown_budget_seconds=280,
-        hostsync_seconds=120,
-        finaldelay_seconds=5,
-        host_shutdown_reserve_seconds=60,
-        ups_poweroff_delay_seconds=60,
-        safety_margin_seconds=60,
-    )
-    draft = UpsPolicyDraft(
-        on_battery_delay_minutes=30,
-        power_restore_delay_seconds=120,
-    )
+def test_validation_returns_only_validated_v2_trigger_values_without_budget_facts():
+    result = validate_policy(UpsPolicyDraft(20, 180))
 
-    result = validate_policy(draft, facts)
-
-    assert result.on_battery_delay_seconds == 1800
-    assert result.power_restore_delay_seconds == 120
-    assert not hasattr(result, "emergency_runtime_reserve_seconds")
-    assert not hasattr(result, "minimum_emergency_runtime_reserve_seconds")
-    assert not hasattr(result, "recommended_emergency_runtime_reserve_seconds")
-
-
-def test_validation_rejects_invalid_host_fact_but_does_not_derive_battery_reserve():
-    facts = PolicySafetyFacts(
-        guest_shutdown_budget_seconds=-1,
-        hostsync_seconds=120,
-        finaldelay_seconds=5,
-    )
-    draft = UpsPolicyDraft(
-        on_battery_delay_minutes=30,
-        power_restore_delay_seconds=120,
-    )
-
-    with pytest.raises(PolicyValidationError, match="guest_shutdown_budget_seconds"):
-        validate_policy(draft, facts)
+    assert result.shutdown_battery_charge_threshold_percent == 20
+    assert result.runtime_reserve_seconds == 180
