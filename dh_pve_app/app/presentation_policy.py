@@ -1,22 +1,18 @@
 from __future__ import annotations
 
-from collections import defaultdict, deque
 from dataclasses import dataclass
-from numbers import Real
 from typing import Mapping
 
 from .disk_health import disk_temperature_limits
 from .presentation import PublicationProfile
+from .runtime_windows import RollingAverage
 
 
 @dataclass(frozen=True)
 class ThresholdRule:
     key: str
     decision_window_seconds: float
-    high_enter: float | None
-    high_exit: float | None
-    critical_enter: float | None = None
-    critical_exit: float | None = None
+    threshold: float
     higher_is_worse: bool = True
 
 
@@ -28,57 +24,46 @@ class ProfileChoice:
 
 
 class ResourceProfileSelector:
-    """Choose one resource profile from rolling averaged numeric signals.
-
-    Numeric escalation is intentionally disabled until each rule has observed
-    a complete decision window. Immediate discrete flags bypass that delay.
-    """
+    """Choose NORMAL or DETAIL from independent rolling decision averages."""
 
     def __init__(
         self,
         rules: tuple[ThresholdRule, ...],
         *,
-        immediate_high: tuple[str, ...] = (),
-        immediate_critical: tuple[str, ...] = (),
+        immediate_detail: tuple[str, ...] = (),
     ) -> None:
         self.rules = rules
-        self.immediate_high = immediate_high
-        self.immediate_critical = immediate_critical
+        self.immediate_detail = immediate_detail
         self.profile = PublicationProfile.NORMAL
-        self._samples: dict[str, deque[tuple[float, float]]] = defaultdict(deque)
-        self._first_seen: dict[str, float] = {}
+        self._windows = {
+            rule.key: RollingAverage(rule.decision_window_seconds)
+            for rule in rules
+        }
+        self._rule_profiles = {
+            rule.key: PublicationProfile.NORMAL
+            for rule in rules
+        }
+        self._reason: str | None = None
 
     @staticmethod
-    def _numeric(value: object) -> bool:
-        return isinstance(value, Real) and not isinstance(value, bool)
-
-    @staticmethod
-    def _crosses(value: float, threshold: float | None, *, higher: bool) -> bool:
-        if threshold is None:
-            return False
-        return value >= threshold if higher else value <= threshold
-
-    def _add(self, rule: ThresholdRule, now: float, value: object) -> None:
-        if value is None:
-            return
-        if not self._numeric(value):
-            raise TypeError(f"profile metric {rule.key!r} must be numeric or None")
-        samples = self._samples[rule.key]
-        samples.append((now, float(value)))
-        self._first_seen.setdefault(rule.key, now)
-        cutoff = now - float(rule.decision_window_seconds)
-        while samples and samples[0][0] < cutoff:
-            samples.popleft()
-
-    def _average(self, key: str) -> float | None:
-        samples = self._samples.get(key)
-        if not samples:
-            return None
-        return sum(value for _at, value in samples) / len(samples)
-
-    def _ready(self, rule: ThresholdRule, now: float) -> bool:
-        first = self._first_seen.get(rule.key)
-        return first is not None and now - first >= float(rule.decision_window_seconds)
+    def _next_profile(
+        current: PublicationProfile,
+        value: float,
+        threshold: float,
+        *,
+        higher_is_worse: bool,
+    ) -> PublicationProfile:
+        if higher_is_worse:
+            if value > threshold:
+                return PublicationProfile.DETAIL
+            if value < threshold:
+                return PublicationProfile.NORMAL
+        else:
+            if value < threshold:
+                return PublicationProfile.DETAIL
+            if value > threshold:
+                return PublicationProfile.NORMAL
+        return current
 
     def observe(
         self,
@@ -91,126 +76,91 @@ class ResourceProfileSelector:
         flags = flags or {}
         for rule in self.rules:
             if rule.key in metrics:
-                self._add(rule, now, metrics.get(rule.key))
+                self._windows[rule.key].observe(now, metrics.get(rule.key))
 
-        averages = {
-            rule.key: round(value, 3)
-            for rule in self.rules
-            if (value := self._average(rule.key)) is not None
-        }
+        averages: dict[str, float] = {}
+        valid_rules = 0
+        for rule in self.rules:
+            value = self._windows[rule.key].average(now)
+            if value is None:
+                continue
+            valid_rules += 1
+            averages[rule.key] = round(value, 3)
+            self._rule_profiles[rule.key] = self._next_profile(
+                self._rule_profiles[rule.key],
+                value,
+                float(rule.threshold),
+                higher_is_worse=rule.higher_is_worse,
+            )
 
-        for key in self.immediate_critical:
+        for key in self.immediate_detail:
             if flags.get(key) is True:
-                self.profile = PublicationProfile.CRITICAL
-                return ProfileChoice(self.profile, key, averages)
+                self.profile = PublicationProfile.DETAIL
+                self._reason = key
+                return ProfileChoice(self.profile, self._reason, averages)
 
-        ready_rules = [rule for rule in self.rules if self._ready(rule, now)]
+        # No valid decision average means no transition. This is deliberately
+        # different from treating unavailable telemetry as zero.
+        if valid_rules == 0:
+            return ProfileChoice(self.profile, self._reason, averages)
 
-        for rule in ready_rules:
-            value = averages.get(rule.key)
-            if value is not None and self._crosses(
-                value, rule.critical_enter, higher=rule.higher_is_worse
-            ):
-                self.profile = PublicationProfile.CRITICAL
-                return ProfileChoice(self.profile, rule.key, averages)
-
-        for key in self.immediate_high:
-            if flags.get(key) is True:
-                self.profile = PublicationProfile.HIGH
-                return ProfileChoice(self.profile, key, averages)
-
-        # A profile entered through an immediate flag must remain detailed until
-        # the numeric recovery window is mature enough to make a safe downgrade.
-        if self.profile in {PublicationProfile.HIGH, PublicationProfile.CRITICAL}:
-            if self.rules and not ready_rules:
-                return ProfileChoice(self.profile, "recovery_pending", averages)
-
-        if self.profile is PublicationProfile.CRITICAL:
-            for rule in ready_rules:
-                value = averages.get(rule.key)
-                if value is not None and self._crosses(
-                    value, rule.critical_exit, higher=rule.higher_is_worse
-                ):
-                    return ProfileChoice(self.profile, rule.key, averages)
-
-            for rule in ready_rules:
-                value = averages.get(rule.key)
-                if value is not None and self._crosses(
-                    value, rule.high_enter, higher=rule.higher_is_worse
-                ):
-                    self.profile = PublicationProfile.HIGH
-                    return ProfileChoice(self.profile, rule.key, averages)
-
-            self.profile = PublicationProfile.NORMAL
-            return ProfileChoice(self.profile, "recovered", averages)
-
-        if self.profile is PublicationProfile.HIGH:
-            for rule in ready_rules:
-                value = averages.get(rule.key)
-                if value is not None and self._crosses(
-                    value, rule.high_exit, higher=rule.higher_is_worse
-                ):
-                    return ProfileChoice(self.profile, rule.key, averages)
-
-            self.profile = PublicationProfile.NORMAL
-            return ProfileChoice(self.profile, "recovered", averages)
-
-        for rule in ready_rules:
-            value = averages.get(rule.key)
-            if value is not None and self._crosses(
-                value, rule.high_enter, higher=rule.higher_is_worse
-            ):
-                self.profile = PublicationProfile.HIGH
-                return ProfileChoice(self.profile, rule.key, averages)
-
-        self.profile = PublicationProfile.NORMAL
-        return ProfileChoice(self.profile, None, averages)
+        detail_reason = next(
+            (
+                rule.key
+                for rule in self.rules
+                if self._rule_profiles[rule.key] is PublicationProfile.DETAIL
+            ),
+            None,
+        )
+        target = (
+            PublicationProfile.DETAIL
+            if detail_reason is not None
+            else PublicationProfile.NORMAL
+        )
+        if target is PublicationProfile.DETAIL:
+            self.profile = target
+            self._reason = detail_reason
+        elif self.profile is PublicationProfile.DETAIL:
+            self.profile = target
+            self._reason = "recovered"
+        else:
+            self.profile = target
+            self._reason = None
+        return ProfileChoice(self.profile, self._reason, averages)
 
 
 def cpu_profile_selector() -> ResourceProfileSelector:
     return ResourceProfileSelector(
         (
-            ThresholdRule("usage", 60.0, 75.0, 60.0, 95.0, 85.0),
-            ThresholdRule("temperature", 60.0, 80.0, 75.0, 90.0, 85.0),
+            ThresholdRule("usage", 60.0, 75.0),
+            ThresholdRule("temperature", 60.0, 80.0),
         ),
-        immediate_critical=("throttling",),
+        immediate_detail=("throttling",),
     )
 
 
 def memory_profile_selector() -> ResourceProfileSelector:
-    return ResourceProfileSelector(
-        (ThresholdRule("usage", 120.0, 92.0, 88.0, 97.0, 94.0),)
-    )
+    return ResourceProfileSelector((ThresholdRule("usage", 60.0, 92.0),))
 
 
 def disk_profile_selector(disk_type: str | None) -> ResourceProfileSelector:
-    warning, critical = disk_temperature_limits(disk_type)
+    warning, _critical = disk_temperature_limits(disk_type)
     return ResourceProfileSelector(
-        (
-            ThresholdRule(
-                "temperature",
-                180.0,
-                warning,
-                max(0.0, warning - 5.0),
-                critical,
-                max(0.0, critical - 5.0),
-            ),
-        )
+        (ThresholdRule("temperature", 300.0, warning),)
     )
 
 
 def gpu_profile_selector() -> ResourceProfileSelector:
     return ResourceProfileSelector(
         (
-            ThresholdRule("temperature", 60.0, 75.0, 70.0, 85.0, 80.0),
-            ThresholdRule("load", 60.0, 20.0, 10.0),
+            ThresholdRule("temperature", 300.0, 75.0),
+            ThresholdRule("load", 300.0, 20.0),
         )
     )
 
 
 def ups_profile_selector() -> ResourceProfileSelector:
     return ResourceProfileSelector(
-        (ThresholdRule("load", 30.0, 80.0, 70.0, 95.0, 90.0),),
-        immediate_high=("on_battery", "bypass"),
-        immediate_critical=("low_battery", "overload"),
+        (ThresholdRule("load", 60.0, 80.0),),
+        immediate_detail=("low_battery", "overload", "on_battery", "bypass"),
     )
