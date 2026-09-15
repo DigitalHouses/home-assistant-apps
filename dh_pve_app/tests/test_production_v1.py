@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+from app.disk_temperature import DiskTemperatureSample
 from app.production_v1 import (
     ResilientProductionCollectors,
     boot_time_iso,
@@ -83,9 +84,49 @@ def test_resilient_smart_state_is_json_serializable(tmp_path, monkeypatch):
     json.dumps({key: metric.value for key, metric in sample.metrics.items()})
 
 
+def test_health_smart_keeps_temperature_in_snapshot_but_not_temperature_metric(tmp_path, monkeypatch):
+    collector = _collector(tmp_path)
+    raw = (FIX / "nvme_samsung_990_evo.json").read_text()
+    monkeypatch.setattr(collector, "_smart_scan", lambda: (("/dev/nvme0", "-d", "nvme"),))
+    monkeypatch.setattr(collector, "_smart_read", lambda entry: raw)
+
+    sample = collector.smart()
+    disk_id = next(iter(sample.data))
+
+    assert sample.data[disk_id]["temperature_c"] == 57.0
+    assert f"{disk_id}.temperature_c" not in sample.metrics
+
+
+def test_slow_disk_temperature_uses_persisted_inventory_without_full_smart_scan(tmp_path, monkeypatch):
+    collector = _collector(tmp_path)
+    raw = (FIX / "nvme_samsung_990_evo.json").read_text()
+    monkeypatch.setattr(collector, "_smart_scan", lambda: (("/dev/nvme0", "-d", "nvme"),))
+    monkeypatch.setattr(collector, "_smart_read", lambda entry: raw)
+    health = collector.smart()
+    disk_id = next(iter(health.data))
+
+    monkeypatch.setattr(
+        collector,
+        "_smart_scan",
+        lambda: (_ for _ in ()).throw(AssertionError("full SMART scan must not run")),
+    )
+    monkeypatch.setattr(
+        collector._disk_temperature_reader,
+        "read",
+        lambda path: DiskTemperatureSample(path, 42.0, "sysfs"),
+    )
+
+    sample = collector.disk_temperature()
+
+    assert sample.data[disk_id]["temperature_c"] == 42.0
+    assert sample.data[disk_id]["source"] == "sysfs"
+    assert sample.metrics[f"{disk_id}.temperature_c"].value == 42.0
+
+
 class FakeTopology:
     def __init__(self):
         self.status = "running"
+        self.commands = []
         self.source = GuestStorageSource(
             guest_id="700",
             guest_name="TrueNAS",
@@ -114,10 +155,14 @@ class FakeTopology:
 
     def guest_exec(self, guest_id, command, *, timeout=12.0):
         assert guest_id == "700"
+        self.commands.append(command)
         if self.status != "running":
             raise RuntimeError("guest is not running")
-        assert "smartctl -a -j /dev/sdb" in command
-        return (GUEST_FIX / "samsung_850_evo_smart.json").read_text()
+        if "smartctl -a -j /dev/sdb" in command:
+            return (GUEST_FIX / "samsung_850_evo_smart.json").read_text()
+        if "smartctl -A -j -n standby /dev/sdb" in command:
+            return '{"temperature":{"current":36}}'
+        raise AssertionError(command)
 
 
 def _find_serial(sample, serial):
@@ -142,6 +187,31 @@ def test_smart_merges_local_nvme_and_vm700_passthrough_ssd(tmp_path, monkeypatch
     assert guest["source_guest_name"] == "TrueNAS"
     assert guest["source_device_path"] == "/dev/sdb"
     assert guest["passthrough_hostpci"] == "hostpci0"
+
+
+def test_slow_guest_disk_temperature_uses_bounded_guest_smart_not_full_health(tmp_path, monkeypatch):
+    topology = FakeTopology()
+    collector = _collector(tmp_path, topology=topology)
+    local_raw = (FIX / "nvme_samsung_990_evo.json").read_text()
+    monkeypatch.setattr(collector, "_smart_scan", lambda: (("/dev/nvme0", "-d", "nvme"),))
+    monkeypatch.setattr(collector, "_smart_read", lambda entry: local_raw)
+    health = collector.smart()
+    guest_id = next(
+        disk_id for disk_id, item in health.data.items() if item.get("source_type") == "guest"
+    )
+    topology.commands.clear()
+    monkeypatch.setattr(
+        collector._disk_temperature_reader,
+        "read",
+        lambda path: DiskTemperatureSample(path, 40.0, "sysfs"),
+    )
+
+    sample = collector.disk_temperature()
+
+    assert sample.data[guest_id]["temperature_c"] == 36.0
+    assert sample.data[guest_id]["source"] == "guest_smartctl"
+    assert topology.commands == ["smartctl -A -j -n standby /dev/sdb"]
+    assert all(" -a " not in f" {command} " for command in topology.commands)
 
 
 def test_stopped_vm_marks_guest_disk_unavailable_without_removing_local_disk(tmp_path, monkeypatch):
