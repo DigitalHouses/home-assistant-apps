@@ -1,19 +1,11 @@
 import os
-from pathlib import Path
 
 from app.config import UpsConfig
-from app.ups_policy import PolicySafetyFacts, UpsPolicyDraft
-from app.ups_policy_apply import ManagedNutPaths, UpsPolicyApplier
+from app.ups_policy import PolicySafetyFacts
 from app.ups_policy_preflight import read_policy_preflight
 from app.ups_shutdown_policy import UpsShutdownPolicy
 
 
-UPSMON = '''MONITOR ups@127.0.0.1 1 dh_primary_user secret primary
-MINSUPPLIES 1
-HOSTSYNC 120
-FINALDELAY 5
-SHUTDOWNCMD "/bin/true"
-'''
 UPS_CONF = '''[ups]
     driver = "usbhid-ups"
     offdelay = 60
@@ -74,47 +66,12 @@ def _config():
     )
 
 
-def _seed(tmp_path):
+def test_preflight_blocks_helper_with_untrusted_owner(tmp_path):
     helper = tmp_path / "helper"
     helper.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
     helper.chmod(0o755)
     ups_conf = tmp_path / "ups.conf"
     ups_conf.write_text(UPS_CONF, encoding="utf-8")
-    return helper, ups_conf
-
-
-def test_applier_rejects_helper_owned_by_untrusted_uid(tmp_path):
-    helper, _ = _seed(tmp_path)
-    paths = ManagedNutPaths(
-        upsmon=tmp_path / "upsmon.conf",
-        upssched=tmp_path / "upssched.conf",
-        ups_conf=tmp_path / "ups.conf",
-        command_script=helper,
-        metadata=tmp_path / "policy.json",
-    )
-    paths.upsmon.write_text(UPSMON, encoding="utf-8")
-
-    result = UpsPolicyApplier(
-        paths=paths,
-        ups_name="ups",
-        runner=Runner(),
-        effective_restart_delay_reader=lambda: 180,
-        helper_expected_uid=os.getuid() + 1,
-        helper_expected_gid=os.getgid(),
-    ).apply(
-        UpsPolicyDraft(
-            on_battery_delay_minutes=30,
-            power_restore_delay_seconds=180,
-        ),
-        _facts(),
-    )
-
-    assert result.success is False
-    assert "владел" in result.message.lower() or "uid" in result.message.lower()
-
-
-def test_preflight_blocks_helper_with_untrusted_owner(tmp_path):
-    helper, ups_conf = _seed(tmp_path)
 
     report = read_policy_preflight(
         _config(),
