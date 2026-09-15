@@ -12,6 +12,7 @@ from typing import Mapping
 class PublicationProfile(str, Enum):
     QUIET = "quiet"
     NORMAL = "normal"
+    DETAIL = "detail"
     HIGH = "high"
     CRITICAL = "critical"
 
@@ -21,6 +22,7 @@ class ProfileWindows:
     critical: float = 30.0
     high: float = 60.0
     normal: float = 600.0
+    detail: float = 300.0
     quiet: float = 3600.0
 
     def seconds(self, profile: PublicationProfile) -> float:
@@ -28,6 +30,7 @@ class ProfileWindows:
             PublicationProfile.CRITICAL: float(self.critical),
             PublicationProfile.HIGH: float(self.high),
             PublicationProfile.NORMAL: float(self.normal),
+            PublicationProfile.DETAIL: float(self.detail),
             PublicationProfile.QUIET: float(self.quiet),
         }[profile]
 
