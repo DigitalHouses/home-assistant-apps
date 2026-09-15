@@ -29,7 +29,6 @@ from .shutdown_integration import (
 )
 from .state_store import StateStore
 from .topics import build_topics, build_ups_topics
-from .ups_commission import commission_ups_policy
 from .ups_policy_preflight import (
     PreflightCheck,
     UpsPolicyPreflight,
@@ -240,39 +239,6 @@ def build_ups_policy_preflight(
     return preflight_reader(runtime_config)
 
 
-def commission_selected_ups_policy(
-    config: AppConfig,
-    *,
-    state_dir: Path,
-    on_battery_delay_minutes: int,
-    power_restore_delay_seconds: int,
-):
-    scanner = build_ups_scanner(config, state_dir=state_dir)
-    selected_name = scanner.selected_name()
-    if not selected_name:
-        return {
-            "success": False,
-            "message": (
-                "UPS еще не выбран; сначала выполните безопасное сканирование UPS."
-            ),
-            "policy": None,
-        }
-    runtime_config = replace(config.ups, enabled=True, name=selected_name)
-    result = commission_ups_policy(
-        runtime_config,
-        on_battery_delay_minutes=on_battery_delay_minutes,
-        power_restore_delay_seconds=power_restore_delay_seconds,
-    )
-    return {
-        "success": result.success,
-        "message": result.message,
-        "policy": {
-            "on_battery_delay_minutes": on_battery_delay_minutes,
-            "power_restore_delay_seconds": power_restore_delay_seconds,
-        },
-    }
-
-
 def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
     log = logging.getLogger("dh_pve_app")
     shutdown_history_tracker = _shutdown_tracker(state_dir)
@@ -389,23 +355,6 @@ def main() -> int:
         action="store_true",
         help="Read UPS/NUT/PVE commissioning state, print JSON, and exit without MQTT.",
     )
-    parser.add_argument(
-        "--ups-policy-commission",
-        action="store_true",
-        help="Explicitly configure and verify NUT shutdown policy, then exit.",
-    )
-    parser.add_argument(
-        "--on-battery-delay-minutes",
-        type=int,
-        default=30,
-        help="Commissioning ONBATT wait before FSD (default: 30 min).",
-    )
-    parser.add_argument(
-        "--power-restore-delay-seconds",
-        type=int,
-        default=120,
-        help="Commissioning UPS output restore delay (default: 120 s).",
-    )
     args = parser.parse_args()
 
     config = load_config(args.config)
@@ -416,15 +365,6 @@ def main() -> int:
         report = build_ups_policy_preflight(config, state_dir=args.state_dir)
         print(json.dumps(report.as_dict(), ensure_ascii=False, indent=2))
         return 0 if report.ready else 2
-    if args.ups_policy_commission:
-        result = commission_selected_ups_policy(
-            config,
-            state_dir=args.state_dir,
-            on_battery_delay_minutes=args.on_battery_delay_minutes,
-            power_restore_delay_seconds=args.power_restore_delay_seconds,
-        )
-        print(json.dumps(result, ensure_ascii=False, indent=2))
-        return 0 if result["success"] else 2
 
     _configure_logging(config.general.log_level)
     return run(config, state_dir=args.state_dir)
