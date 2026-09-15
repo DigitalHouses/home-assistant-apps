@@ -205,13 +205,41 @@ def build_shutdown_aware_ups_discovery_payload(
         "unique_id": f"{topics.device_id}_guest_shutdown_budget",
         "default_entity_id": "sensor.dh_pve_ups_guest_shutdown_budget",
         "state_topic": topics.state,
-        "value_template": "{{ value_json.shutdown_policy.guest_shutdown_budget_seconds | default(none) }}",
+        "value_template": "{{ value_json.shutdown_budget.effective_guest_budget_seconds | default(none) }}",
         "unit_of_measurement": "s",
         "device_class": "duration",
         "entity_category": "diagnostic",
         "availability": availability,
         "availability_mode": "all",
         "icon": "mdi:timer-sand",
+        "json_attributes_topic": topics.state,
+        "json_attributes_template": (
+            "{{ {'configured_guest_budget_seconds': value_json.shutdown_budget.configured_guest_budget_seconds | default(none), "
+            "'observed_guest_budget_seconds': value_json.shutdown_budget.observed_guest_budget_seconds | default(none), "
+            "'history_evidence_status': value_json.shutdown_budget.history_evidence_status | default('none')} | tojson }}"
+        ),
+    }
+    components["shutdown_budget"] = {
+        "platform": "sensor",
+        "name": "Shutdown budget",
+        "unique_id": f"{topics.device_id}_shutdown_budget",
+        "default_entity_id": "sensor.dh_pve_ups_shutdown_budget",
+        "state_topic": topics.state,
+        "value_template": "{{ value_json.shutdown_budget.shutdown_budget_seconds | default(none) }}",
+        "unit_of_measurement": "s",
+        "device_class": "duration",
+        "entity_category": "diagnostic",
+        "availability": availability,
+        "availability_mode": "all",
+        "icon": "mdi:timer-cog-outline",
+        "json_attributes_topic": topics.state,
+        "json_attributes_template": (
+            "{{ {'hostsync_budget_seconds': value_json.shutdown_budget.hostsync_budget_seconds | default(none), "
+            "'finaldelay_seconds': value_json.shutdown_budget.finaldelay_seconds | default(none), "
+            "'host_tail_budget_seconds': value_json.shutdown_budget.host_tail_budget_seconds | default(none), "
+            "'configuration_fingerprint': value_json.shutdown_budget.configuration_fingerprint | default(none), "
+            "'history_evidence_status': value_json.shutdown_budget.history_evidence_status | default('none')} | tojson }}"
+        ),
     }
     components["shutdown_readiness"] = {
         "platform": "sensor",
@@ -228,6 +256,7 @@ def build_shutdown_aware_ups_discovery_payload(
         "json_attributes_template": (
             "{{ {'issues': value_json.shutdown_readiness.issues | default([]), "
             "'guest_shutdown_budget_seconds': value_json.shutdown_readiness.guest_shutdown_budget_seconds | default(none), "
+            "'shutdown_budget_seconds': value_json.shutdown_readiness.shutdown_budget_seconds | default(none), "
             "'history_available': value_json.shutdown_readiness.history_available | default(false)} | tojson }}"
         ),
     }
