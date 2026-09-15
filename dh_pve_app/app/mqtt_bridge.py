@@ -16,6 +16,7 @@ from .topics import (
     state_group_topic,
     ups_state_group_topic,
 )
+from .ups_policy import PolicyValidationError, parse_policy_value
 from .ups_test_schedule import (
     TestScheduleError,
     parse_interval_days_payload,
@@ -47,6 +48,12 @@ class TestScheduleUpdate:
     value: int | str
 
 
+@dataclass(frozen=True)
+class PolicyDraftUpdate:
+    key: str
+    value: int
+
+
 def build_lwt(topics: Topics) -> WillMessage:
     return WillMessage(topics.availability, "offline", 1, True)
 
@@ -64,9 +71,11 @@ class MqttEvents:
         self.ups_test_deep_requested = threading.Event()
         self.ups_test_stop_requested = threading.Event()
         self.ups_reconnect_requested = threading.Event()
+        self.ups_policy_apply_requested = threading.Event()
         self.ups_beeper_updates: queue.SimpleQueue[bool] = queue.SimpleQueue()
         self.setting_updates: queue.SimpleQueue[SettingUpdate] = queue.SimpleQueue()
         self.ups_test_schedule_updates: queue.SimpleQueue[TestScheduleUpdate] = queue.SimpleQueue()
+        self.ups_policy_updates: queue.SimpleQueue[PolicyDraftUpdate] = queue.SimpleQueue()
 
     def configure_ups(self, topics: UpsTopics) -> None:
         self.ups_topics = topics
@@ -118,6 +127,23 @@ class MqttEvents:
                 return True
             return False
         if self.ups_topics is not None:
+            policy_topics = {
+                self.ups_topics.policy_charge_threshold_set: (
+                    "shutdown_battery_charge_threshold_percent"
+                ),
+                self.ups_topics.policy_runtime_reserve_set: "runtime_reserve_seconds",
+            }
+            policy_key = policy_topics.get(topic)
+            if policy_key is not None:
+                value = parse_policy_value(policy_key, text)
+                self.ups_policy_updates.put(PolicyDraftUpdate(key=policy_key, value=value))
+                return True
+            if topic == self.ups_topics.policy_apply:
+                if text.upper() == "PRESS":
+                    self.ups_policy_apply_requested.set()
+                    return True
+                return False
+
             schedule_topics = {
                 self.ups_topics.test_quick_interval_days_set: (
                     "quick",
@@ -211,6 +237,10 @@ class MqttBridge(MqttEvents):
         client.subscribe(f"{self.topics.base}/ups/test/schedule/quick/time/set", qos=1)
         client.subscribe(f"{self.topics.base}/ups/test/schedule/deep/interval_days/set", qos=1)
         client.subscribe(f"{self.topics.base}/ups/test/schedule/deep/time/set", qos=1)
+        if self.ups_topics is not None:
+            client.subscribe(self.ups_topics.policy_charge_threshold_set, qos=1)
+            client.subscribe(self.ups_topics.policy_runtime_reserve_set, qos=1)
+            client.subscribe(self.ups_topics.policy_apply, qos=1)
         client.subscribe(f"{self.topics.settings_prefix}/+/set", qos=1)
         if self.ups_topics is not None:
             client.publish(
@@ -254,6 +284,9 @@ class MqttBridge(MqttEvents):
             return
         except TestScheduleError as exc:
             self.log.warning("Отклонено значение расписания тестов UPS: %s", exc)
+            return
+        except PolicyValidationError as exc:
+            self.log.warning("Отклонено значение UPS Trigger Policy: %s", exc)
             return
         if handled:
             self.wake_requested.set()
