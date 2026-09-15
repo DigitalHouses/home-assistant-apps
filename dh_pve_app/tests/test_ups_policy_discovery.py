@@ -1,6 +1,7 @@
 from app.config import MqttConfig
 from app.discovery_ups import build_ups_discovery_payload
 from app.identity import HostIdentity
+from app.topics import build_ups_topics
 
 
 def _mqtt():
@@ -30,48 +31,54 @@ def _components():
     )["components"]
 
 
-def test_policy_discovery_exposes_effective_delays_as_read_only_sensors():
+def test_trigger_v2_discovery_exposes_draft_numbers_and_explicit_apply_button():
+    components = _components()
+    topics = build_ups_topics(_mqtt(), _identity())
+
+    charge = components["policy_charge_threshold"]
+    assert charge["platform"] == "number"
+    assert charge["default_entity_id"] == (
+        "number.dh_app_pve_ups_shutdown_battery_charge_threshold"
+    )
+    assert charge["command_topic"] == topics.policy_charge_threshold_set
+    assert charge["state_topic"] == topics.state
+    assert "policy.draft.shutdown_battery_charge_threshold_percent" in charge["value_template"]
+    assert (charge["min"], charge["max"], charge["step"]) == (10, 30, 5)
+    assert charge["entity_category"] == "config"
+
+    reserve = components["policy_runtime_reserve"]
+    assert reserve["platform"] == "number"
+    assert reserve["default_entity_id"] == "number.dh_app_pve_ups_shutdown_runtime_reserve"
+    assert reserve["command_topic"] == topics.policy_runtime_reserve_set
+    assert "policy.draft.runtime_reserve_seconds" in reserve["value_template"]
+    assert (reserve["min"], reserve["max"], reserve["step"]) == (60, 900, 60)
+    assert reserve["unit_of_measurement"] == "s"
+    assert reserve["entity_category"] == "config"
+
+    apply = components["policy_apply"]
+    assert apply["platform"] == "button"
+    assert apply["default_entity_id"] == "button.dh_app_pve_ups_apply_trigger_policy"
+    assert apply["command_topic"] == topics.policy_apply
+    assert apply["payload_press"] == "PRESS"
+    assert apply["entity_category"] == "config"
+
+
+def test_legacy_onbatt_timer_controls_are_not_exposed():
     components = _components()
 
-    on_battery = components["policy_on_battery_delay_observed"]
-    assert on_battery["platform"] == "sensor"
-    assert on_battery["default_entity_id"] == "sensor.dh_pve_ups_policy_on_battery_delay"
-    assert "command_topic" not in on_battery
-    assert "value_json.shutdown_policy.on_battery_delay_minutes" in on_battery["value_template"]
-    assert on_battery["unit_of_measurement"] == "min"
-
-    restore = components["policy_power_restore_delay_observed"]
-    assert restore["platform"] == "sensor"
-    assert restore["default_entity_id"] == "sensor.dh_pve_ups_policy_power_restore_delay"
-    assert "command_topic" not in restore
-    assert "value_json.shutdown_policy.power_restore_delay_seconds" in restore["value_template"]
-    assert restore["unit_of_measurement"] == "s"
-
-
-def test_policy_discovery_has_no_runtime_apply_or_draft_controls():
-    components = _components()
-
-    for key in (
-        "policy_on_battery_delay",
-        "policy_power_restore_delay",
-        "policy_apply",
-        "policy_status",
-        "policy_apply_result",
-        "policy_last_applied",
-    ):
-        assert key not in components
-
+    assert "policy_on_battery_delay" not in components
+    assert "policy_power_restore_delay" not in components
     for component in components.values():
         command_topic = component.get("command_topic")
         if command_topic is None:
             continue
-        assert "/ups/policy/" not in command_topic
+        assert "/ups/policy/on_battery_delay/" not in command_topic
 
 
-def test_shutdown_policy_attributes_include_effective_delays():
+def test_shutdown_policy_keeps_native_nut_state_read_only():
     component = _components()["shutdown_policy"]
     template = component["json_attributes_template"]
 
-    assert "on_battery_delay_minutes" in template
-    assert "power_restore_delay_seconds" in template
-    assert "guest_shutdown_budget_seconds" in template
+    assert "hostsync_seconds" in template
+    assert "finaldelay_seconds" in template
+    assert "shutdown_enabled" in template
