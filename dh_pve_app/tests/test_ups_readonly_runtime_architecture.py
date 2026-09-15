@@ -31,32 +31,33 @@ def _identity():
     )
 
 
-def test_policy_discovery_is_read_only():
+def test_policy_discovery_exposes_only_app_owned_v2_write_controls():
     components = build_ups_discovery_payload(
         _mqtt(), _identity(), version="0.2.0-alpha", snapshot=None
     )["components"]
 
     on_battery = components["policy_on_battery_delay_observed"]
     restore = components["policy_power_restore_delay_observed"]
+    charge = components["policy_charge_threshold"]
+    reserve = components["policy_runtime_reserve"]
+    apply = components["policy_apply"]
 
     assert on_battery["platform"] == "sensor"
     assert restore["platform"] == "sensor"
     assert "command_topic" not in on_battery
     assert "command_topic" not in restore
-    assert "value_json.shutdown_policy.on_battery_delay_minutes" in on_battery["value_template"]
-    assert "value_json.shutdown_policy.power_restore_delay_seconds" in restore["value_template"]
-
-    assert "policy_apply" not in components
-    assert "policy_apply_result" not in components
-    assert "policy_last_applied" not in components
+    assert charge["platform"] == "number"
+    assert reserve["platform"] == "number"
+    assert apply["platform"] == "button"
 
 
-def test_policy_mqtt_write_topics_are_ignored():
+def test_legacy_policy_write_topics_are_ignored_but_v2_apply_is_explicit():
     mqtt = _mqtt()
     identity = _identity()
     pve = build_topics(mqtt, identity)
+    ups = build_ups_topics(mqtt, identity)
     events = MqttEvents(pve, RuntimeSettings())
-    events.configure_ups(build_ups_topics(mqtt, identity))
+    events.configure_ups(ups)
 
     assert events.handle_message(
         f"{pve.base}/ups/policy/on_battery_delay/set", b"30"
@@ -64,9 +65,9 @@ def test_policy_mqtt_write_topics_are_ignored():
     assert events.handle_message(
         f"{pve.base}/ups/policy/power_restore_delay/set", b"120"
     ) is False
-    assert events.handle_message(
-        f"{pve.base}/ups/policy/apply", b"PRESS"
-    ) is False
+    assert events.handle_message(ups.policy_apply, b"NO") is False
+    assert events.handle_message(ups.policy_apply, b"PRESS") is True
+    assert events.ups_policy_apply_requested.is_set()
 
 
 def test_runtime_service_cannot_write_etc_nut():
