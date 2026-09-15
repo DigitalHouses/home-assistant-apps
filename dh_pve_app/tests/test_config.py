@@ -35,19 +35,19 @@ def test_load_config_validates_explicit_instance_id(tmp_path: Path):
         load_config(path)
 
 
-def test_ups_defaults_to_disabled_for_existing_config(tmp_path: Path):
+def test_ups_defaults_to_fixed_collection_cadence(tmp_path: Path):
     path = write_config(tmp_path, "[mqtt]\nhost = broker\n")
     config = load_config(path)
     assert config.ups.enabled is False
     assert config.ups.name == "ups"
     assert config.ups.host == "127.0.0.1"
     assert config.ups.port == 3493
-    assert config.ups.poll_interval_seconds == 5.0
+    assert config.ups.poll_interval_seconds == 10.0
     assert config.ups.command_timeout_seconds == 3.0
     assert not hasattr(config.ups, "policy_apply_enabled")
 
 
-def test_ups_section_is_parsed(tmp_path: Path):
+def test_legacy_ups_poll_interval_is_ignored_for_upgrade_compatibility(tmp_path: Path):
     path = write_config(
         tmp_path,
         """[mqtt]
@@ -57,7 +57,7 @@ enabled = true
 name = rackups
 host = 127.0.0.1
 port = 3493
-poll_interval_seconds = 7
+poll_interval_seconds = 1
 command_timeout_seconds = 2
 """,
     )
@@ -66,7 +66,7 @@ command_timeout_seconds = 2
     assert config.ups.name == "rackups"
     assert config.ups.host == "127.0.0.1"
     assert config.ups.port == 3493
-    assert config.ups.poll_interval_seconds == 7.0
+    assert config.ups.poll_interval_seconds == 10.0
     assert config.ups.command_timeout_seconds == 2.0
 
 
