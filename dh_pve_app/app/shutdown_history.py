@@ -268,7 +268,12 @@ def classify_previous_shutdown(
     clean_shutdown: bool | None,
     fsd_reason: str | None,
 ) -> tuple[str, str]:
-    if fsd_reason in {"on_battery_fsd", "low_battery_fsd"}:
+    if fsd_reason in {
+        "on_battery_fsd",
+        "low_battery_fsd",
+        "charge_guard",
+        "runtime_guard",
+    }:
         return "ups_power", fsd_reason
     if clean_shutdown is True:
         return "normal", fsd_reason or "shutdown"
@@ -510,6 +515,33 @@ class ShutdownHistoryTracker:
         if changed:
             state["current_boot"] = updated
             self.state_store.save(state)
+
+    def record_software_shutdown_commit(self, reason: str, snapshot: UpsSnapshot) -> None:
+        if reason not in {"charge_guard", "runtime_guard"}:
+            raise ValueError("unsupported software shutdown reason")
+        state = self._load()
+        current = state.get("current_boot")
+        if not isinstance(current, Mapping):
+            self.startup()
+            state = self._load()
+            current = state.get("current_boot")
+        if not isinstance(current, Mapping):
+            return
+        if isinstance(current.get("fsd_at"), str):
+            return
+        updated = dict(current)
+        updated.update(
+            {
+                "fsd_at": self.now_iso(),
+                "fsd_reason": reason,
+                "ups_status_at_fsd": snapshot.status_raw,
+                "battery_charge_at_fsd": snapshot.battery_charge_percent,
+                "battery_runtime_at_fsd": snapshot.runtime_seconds,
+                "ups_load_at_fsd": snapshot.load_percent,
+            }
+        )
+        state["current_boot"] = updated
+        self.state_store.save(state)
 
     def payload(self) -> dict[str, Any]:
         state = self._load()
