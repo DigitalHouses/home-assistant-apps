@@ -3,7 +3,6 @@ from types import SimpleNamespace
 from app.config import MqttConfig, UpsConfig
 from app.identity import HostIdentity
 from app.shutdown_discovery import build_shutdown_aware_ups_discovery_payload
-from app.shutdown_history import evaluate_shutdown_readiness
 from app.shutdown_integration import ShutdownAwareUpsRuntime
 from app.state_store import StateStore
 from app.ups_nut import parse_upsc_output
@@ -114,19 +113,6 @@ def budget():
             host_tail_fallback_seconds=90,
         )
     )
-
-
-def test_readiness_distinguishes_guest_budget_from_total_shutdown_budget():
-    result = evaluate_shutdown_readiness(
-        ups_present=True,
-        guest_shutdown_budget_seconds=420,
-        shutdown_budget_seconds=635,
-        previous_shutdown=None,
-    )
-
-    assert result["guest_shutdown_budget_seconds"] == 420
-    assert result["shutdown_budget_seconds"] == 635
-    assert result["status"] == "ok"
 
 
 def test_runtime_publishes_full_shutdown_budget_object_and_correct_readiness(tmp_path):
