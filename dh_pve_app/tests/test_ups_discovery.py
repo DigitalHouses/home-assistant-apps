@@ -34,12 +34,17 @@ def test_ups_topics_are_separate_from_pve_topics():
     pve = build_topics(_mqtt(), _identity())
     ups = build_ups_topics(_mqtt(), _identity())
 
+    assert ups.base == f"{pve.base}/ups"
     assert ups.state == f"{pve.base}/ups/state"
     assert ups.availability == f"{pve.base}/ups/availability"
     assert ups.refresh == f"{pve.base}/ups/refresh"
-    assert ups.discovery == "homeassistant/device/dh_pve_ups_node_a/config"
+    assert ups.discovery == "homeassistant/device/dh_app_pve_ups_node_a/config"
+    assert ups.legacy_discoveries == (
+        "homeassistant/device/dh_pve_ups_node_a/config",
+        "homeassistant/device/dh_ups_node_a/config",
+    )
     assert ups.legacy_discovery == "homeassistant/device/dh_ups_node_a/config"
-    assert ups.device_id == "dh_pve_ups_node_a"
+    assert ups.device_id == "dh_app_pve_ups_node_a"
     assert pve.state != ups.state
     assert pve.discovery != ups.discovery
 
@@ -176,7 +181,7 @@ def test_ups_device_metadata_uses_real_hardware_identity():
         _mqtt(), _identity(), version="0.2.0-alpha", snapshot=snapshot
     )
 
-    assert payload["device"]["identifiers"] == ["dh_pve_ups_node_a"]
+    assert payload["device"]["identifiers"] == ["dh_app_pve_ups_node_a"]
     assert payload["device"]["name"] == "DH PVE UPS"
     assert payload["device"]["manufacturer"] == "CPS"
     assert payload["device"]["model"] == "UT2200E"
