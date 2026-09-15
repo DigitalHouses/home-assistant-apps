@@ -15,6 +15,7 @@ class Topics:
     refresh: str
     manifest: str
     settings_prefix: str
+    diagnostic_event: str
     discovery: str
     ha_status: str
     device_id: str
@@ -38,6 +39,7 @@ class UpsTopics:
     policy_on_battery_delay_set: str
     policy_power_restore_delay_set: str
     policy_apply: str
+    diagnostic_event: str
     discovery: str
     legacy_discovery: str
     device_id: str
@@ -75,6 +77,7 @@ def build_topics(mqtt: MqttConfig, identity: HostIdentity) -> Topics:
         refresh=f"{base}/refresh",
         manifest=f"{base}/manifest",
         settings_prefix=f"{base}/settings",
+        diagnostic_event=f"{base}/event/diagnostic",
         discovery=f"{discovery_prefix}/device/{device_id}/config",
         ha_status=f"{discovery_prefix}/status",
         device_id=device_id,
@@ -105,6 +108,7 @@ def build_ups_topics(mqtt: MqttConfig, identity: HostIdentity) -> UpsTopics:
         policy_on_battery_delay_set=f"{policy_base}/on_battery_delay/set",
         policy_power_restore_delay_set=f"{policy_base}/power_restore_delay/set",
         policy_apply=f"{policy_base}/apply",
+        diagnostic_event=f"{pve.base}/ups/event/diagnostic",
         discovery=f"{discovery_prefix}/device/{device_id}/config",
         legacy_discovery=f"{discovery_prefix}/device/{legacy_device_id}/config",
         device_id=device_id,
