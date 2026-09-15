@@ -183,13 +183,13 @@ def test_ups_discovery_has_dedicated_budget_and_readiness_entities():
     )["components"]
 
     budget = components["guest_shutdown_budget"]
-    assert budget["default_entity_id"] == "sensor.dh_pve_ups_guest_shutdown_budget"
+    assert budget["default_entity_id"] == "sensor.dh_app_pve_ups_guest_shutdown_budget"
     assert budget["unit_of_measurement"] == "s"
     assert budget["device_class"] == "duration"
     assert "guest_shutdown_budget_seconds" in budget["value_template"]
 
     readiness = components["shutdown_readiness"]
-    assert readiness["default_entity_id"] == "sensor.dh_pve_ups_shutdown_readiness"
+    assert readiness["default_entity_id"] == "sensor.dh_app_pve_ups_shutdown_readiness"
     assert "value_json.shutdown_readiness.status" in readiness["value_template"]
     assert "issues" in readiness["json_attributes_template"]
 
