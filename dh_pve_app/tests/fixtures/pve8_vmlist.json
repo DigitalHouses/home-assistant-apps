@@ -1,0 +1,9 @@
+{
+  "version": 42,
+  "ids": {
+    "110": {"node": "pve", "type": "qemu", "version": 11},
+    "700": {"node": "pve", "type": "qemu", "version": 12},
+    "1011": {"node": "pve", "type": "lxc", "version": 13},
+    "999": {"node": "other", "type": "qemu", "version": 14}
+  }
+}
