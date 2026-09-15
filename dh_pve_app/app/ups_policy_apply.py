@@ -600,6 +600,7 @@ class UpsPolicyApplier:
         monitor_enabled_before: str,
         server_active_before: str = "unknown",
         server_enabled_before: str = "unknown",
+        app_active_before: str = "unknown",
     ) -> None:
         modes = {
             self.paths.upsmon: 0o640,
@@ -670,6 +671,17 @@ class UpsPolicyApplier:
                 )
         except Exception:
             pass
+        if app_active_before == "active":
+            try:
+                self.runner(
+                    ["systemctl", "restart", "dh_pve_app.service"],
+                    capture_output=True,
+                    text=True,
+                    timeout=15.0,
+                    check=False,
+                )
+            except Exception:
+                pass
 
     def apply(
         self,
@@ -727,6 +739,11 @@ class UpsPolicyApplier:
             )
             server_enabled_before = _service_state(
                 self.runner, "is-enabled", "nut-server.service"
+            )
+            app_active_before = (
+                _service_state(self.runner, "is-active", "dh_pve_app.service")
+                if identity_mode
+                else "unknown"
             )
         except Exception as exc:
             detail = _redact_secret(str(exc), managed_password)
@@ -791,6 +808,10 @@ class UpsPolicyApplier:
                 ),
                 0o600,
             )
+
+            if identity_mode and app_active_before == "active":
+                _run(self.runner, ["systemctl", "restart", "dh_pve_app.service"])
+
             return PolicyApplyResult(True, "Политика UPS применена и проверена.")
         except Exception as exc:
             self._rollback(
@@ -799,6 +820,7 @@ class UpsPolicyApplier:
                 monitor_enabled_before=monitor_enabled_before,
                 server_active_before=server_active_before,
                 server_enabled_before=server_enabled_before,
+                app_active_before=app_active_before,
             )
             detail = _redact_secret(str(exc), managed_password)
             return PolicyApplyResult(False, f"Применение политики UPS отменено: {detail}")
