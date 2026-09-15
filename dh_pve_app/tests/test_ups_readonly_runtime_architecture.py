@@ -6,7 +6,6 @@ from app.identity import HostIdentity
 from app.mqtt_bridge import MqttEvents
 from app.runtime_settings import RuntimeSettings
 from app.topics import build_topics, build_ups_topics
-from app.ups_policy_apply import _atomic_write
 from app.ups_shutdown_policy import parse_shutdown_policy
 
 
@@ -93,7 +92,7 @@ policy_apply_enabled = true
     assert not hasattr(config.ups, "policy_apply_enabled")
 
 
-def test_effective_policy_delays_are_parsed_from_nut_files():
+def test_legacy_nut_timer_is_observed_read_only_when_present():
     policy = parse_shutdown_policy(
         """MONITOR ups@127.0.0.1 1 user password primary
 SHUTDOWNCMD \"/sbin/shutdown -h now\"
@@ -117,40 +116,11 @@ offdelay = 60
     assert policy.guest_shutdown_budget_seconds == 280
 
 
-def test_atomic_write_sets_parent_owner_before_replace(tmp_path, monkeypatch):
-    parent = tmp_path / "nut"
-    parent.mkdir()
-    target = parent / "upssched.conf"
-    parent_stat = parent.stat()
-    chowns = []
-    replaces = []
-    real_replace = __import__("os").replace
-
-    def fake_chown(path, uid, gid):
-        chowns.append((Path(path), uid, gid))
-
-    def tracked_replace(source, destination):
-        replaces.append((Path(source), Path(destination)))
-        assert chowns
-        assert chowns[-1][0] == Path(source)
-        return real_replace(source, destination)
-
-    monkeypatch.setattr("app.ups_policy_apply.os.chown", fake_chown)
-    monkeypatch.setattr("app.ups_policy_apply.os.replace", tracked_replace)
-
-    _atomic_write(target, b"AT ONBATT * START-TIMER x 1800\n", 0o640)
-
-    assert len(chowns) == 1
-    temp, uid, gid = chowns[0]
-    assert temp.parent == parent
-    assert temp != target
-    assert uid == parent_stat.st_uid
-    assert gid == parent_stat.st_gid
-    assert replaces == [(temp, target)]
-
-
-def test_main_exposes_explicit_commissioning_but_runtime_does_not_build_applier():
+def test_main_has_no_legacy_timer_commissioning_writer_surface():
     text = Path("dh_pve_app/app/main.py").read_text(encoding="utf-8")
 
-    assert '"--ups-policy-commission"' in text
+    assert "ups_commission" not in text
+    assert '"--ups-policy-commission"' not in text
+    assert '"--on-battery-delay-minutes"' not in text
+    assert '"--power-restore-delay-seconds"' not in text
     assert "policy_applier=build_ups_policy_applier" not in text
