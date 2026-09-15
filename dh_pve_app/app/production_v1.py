@@ -11,6 +11,7 @@ from .collectors.disks import stable_disk_id
 from .collectors.smart import SmartSnapshot, parse_smart_json
 from .daily_disk_stats import DailyDiskStats, update_daily_stats
 from .disk_health import evaluate_disk_health
+from .disk_temperature import DiskTemperatureReader, parse_smart_temperature
 from .production import ProductionCollectors, _checkpoint, _run
 from .publish_policy import MetricValue
 
@@ -50,11 +51,13 @@ def _metric(value: object, policy: str) -> MetricValue:
 
 
 class ResilientProductionCollectors(ProductionCollectors):
-    """Phase-1 collectors with per-disk SMART fault isolation.
+    """Production collectors with isolated SMART health and disk temperature paths.
 
     An authoritative local/guest SMART scan may remove a disk only after three
-    consecutive missing scans. A failed SMART read keeps the last successful
-    disk payload but marks only that disk unavailable.
+    consecutive missing scans. A failed HEALTH SMART read keeps the last
+    successful disk payload but marks only that disk unavailable. SLOW disk
+    temperature reads reuse the persisted disk inventory and never run a full
+    SMART inventory/health scan.
     """
 
     def __init__(
@@ -71,6 +74,7 @@ class ResilientProductionCollectors(ProductionCollectors):
             **kwargs,
         )
         self.topology = topology
+        self._disk_temperature_reader = DiskTemperatureReader(sys_root=self.sys_root)
 
     def host(self) -> CollectorSample:
         sample = super().host()
@@ -145,6 +149,30 @@ class ResilientProductionCollectors(ProductionCollectors):
             raise ValueError("guest smartctl returned no data")
         return raw
 
+    def _guest_temperature_read(self, guest_id: str, device_path: str) -> str:
+        command = f"smartctl -A -j -n standby {shlex.quote(device_path)}"
+        guest_exec = getattr(self.topology, "guest_exec", None)
+        if callable(guest_exec):
+            return guest_exec(guest_id, command, timeout=12.0)
+
+        outer_text = _run(
+            [
+                "qm", "guest", "exec", guest_id,
+                "--", "/bin/sh", "-c", command,
+            ],
+            timeout=15,
+        )
+        outer = json.loads(outer_text)
+        if not isinstance(outer, Mapping):
+            raise ValueError("QEMU guest exec temperature result is not an object")
+        exitcode = outer.get("exitcode")
+        if not isinstance(exitcode, int) or isinstance(exitcode, bool) or exitcode != 0:
+            raise ValueError(f"guest smartctl temperature failed: exitcode={exitcode!r}")
+        raw = outer.get("out-data")
+        if not isinstance(raw, str) or not raw.strip():
+            raise ValueError("guest smartctl temperature returned no data")
+        return raw
+
     @staticmethod
     def _daily_from_mapping(value: object) -> DailyDiskStats | None:
         if not isinstance(value, Mapping):
@@ -185,15 +213,94 @@ class ResilientProductionCollectors(ProductionCollectors):
             if value is not None:
                 result[f"{disk_id}.{field}"] = _metric(value, "counter")
 
-        if snapshot.temperature_c is not None:
-            result[f"{disk_id}.temperature_c"] = _metric(
-                snapshot.temperature_c, "temperature_c"
-            )
         if snapshot.wear_used_percent is not None:
             result[f"{disk_id}.wear_used_percent"] = _metric(
                 snapshot.wear_used_percent, "discrete"
             )
         return result
+
+    def disk_temperature(self) -> CollectorSample:
+        persisted = self.disk_state_store.load()
+        inventory_raw = persisted.get("inventory", {})
+        last_data_raw = persisted.get("last_data", {})
+        inventory = dict(inventory_raw) if isinstance(inventory_raw, Mapping) else {}
+        last_data = dict(last_data_raw) if isinstance(last_data_raw, Mapping) else {}
+
+        output: dict[str, dict[str, object]] = {}
+        metrics: dict[str, MetricValue] = {}
+        for raw_disk_id, raw_inventory in sorted(inventory.items(), key=lambda item: str(item[0])):
+            disk_id = str(raw_disk_id)
+            if not isinstance(raw_inventory, Mapping):
+                continue
+            previous = last_data.get(raw_disk_id)
+            if previous is None:
+                previous = last_data.get(disk_id)
+            previous = dict(previous) if isinstance(previous, Mapping) else {}
+
+            source_type = raw_inventory.get("source_type") or previous.get("source_type")
+            temperature: float | None = None
+            source = "unavailable"
+            error: str | None = None
+
+            if source_type == "guest":
+                guest_id = previous.get("source_guest_id")
+                device_path = previous.get("source_device_path")
+                if not isinstance(guest_id, str) or not isinstance(device_path, str):
+                    error = "guest disk identity unavailable"
+                elif self.topology is None:
+                    error = "guest topology unavailable"
+                elif self.topology.guest_status(guest_id) != "running":
+                    error = f"guest VM {guest_id} is not running"
+                elif self.topology.qga_state(guest_id) != "available":
+                    error = f"QEMU Guest Agent for {guest_id} is unavailable"
+                else:
+                    try:
+                        raw = self._guest_temperature_read(guest_id, device_path)
+                        temperature = parse_smart_temperature(raw)
+                        if temperature is not None:
+                            source = "guest_smartctl"
+                        else:
+                            error = "guest SMART temperature unavailable"
+                    except Exception as exc:
+                        error = f"{type(exc).__name__}: {exc}"
+            else:
+                path = raw_inventory.get("path")
+                if isinstance(path, str) and path.startswith("/"):
+                    sample = self._disk_temperature_reader.read(path)
+                    temperature = sample.temperature_c
+                    source = sample.source
+                    if temperature is None:
+                        error = "disk temperature unavailable"
+                else:
+                    error = "disk path unavailable"
+
+            data: dict[str, object] = {
+                "disk_id": disk_id,
+                "disk_type": previous.get("disk_type"),
+                "model": previous.get("model"),
+                "serial": previous.get("serial"),
+                "device_path": previous.get("device_path"),
+                "source_type": source_type or "host",
+                "temperature_c": temperature,
+                "source": source,
+                "available": temperature is not None,
+                "error": error,
+            }
+            if source_type == "guest":
+                data.update(
+                    {
+                        "source_guest_id": previous.get("source_guest_id"),
+                        "source_guest_name": previous.get("source_guest_name"),
+                        "source_device_path": previous.get("source_device_path"),
+                    }
+                )
+            output[disk_id] = data
+            if temperature is not None:
+                metrics[f"{disk_id}.temperature_c"] = _metric(
+                    temperature, "temperature_c"
+                )
+
+        return CollectorSample(data=output, metrics=metrics)
 
     def smart(self) -> CollectorSample:
         entries = self._smart_scan()
@@ -370,3 +477,9 @@ class ResilientProductionCollectors(ProductionCollectors):
             }
         )
         return CollectorSample(data=output, metrics=metrics)
+
+    def mapping(self):
+        result = dict(super().mapping())
+        result["disk_temperature"] = self.disk_temperature
+        result["smart"] = self.smart
+        return result
