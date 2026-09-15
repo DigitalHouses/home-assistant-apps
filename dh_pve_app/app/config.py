@@ -41,11 +41,18 @@ class UpsConfig:
     host: str = "127.0.0.1"
     port: int = 3493
     # Compatibility field for callers/tests created before the fixed-cadence
-    # runtime. load_config() never accepts a user override for this value.
+    # runtime. The value is normalized to the canonical fixed cadence.
     poll_interval_seconds: float = FIXED_UPS_POLL_INTERVAL_SECONDS
     command_timeout_seconds: float = 3.0
     command_username: str = ""
     command_password: str = ""
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "poll_interval_seconds",
+            FIXED_UPS_POLL_INTERVAL_SECONDS,
+        )
 
 
 @dataclass(frozen=True)
@@ -193,7 +200,6 @@ def load_config(path: Path) -> AppConfig:
             name=ups_name,
             host=ups_host,
             port=ups_port,
-            poll_interval_seconds=FIXED_UPS_POLL_INTERVAL_SECONDS,
             command_timeout_seconds=ups_timeout,
             command_username=ups_command_username,
             command_password=ups_command_password,
