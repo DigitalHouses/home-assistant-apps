@@ -16,6 +16,7 @@ from .identity import resolve_identity
 from .mqtt_bridge import MqttBridge
 from .production import _run
 from .publish_policy import PublishPolicy
+from .pve_cache import read_pve_version
 from .runtime_dynamic import DynamicDiscoveryRuntime
 from .runtime_settings import RuntimeSettings
 from .scheduler import Scheduler
@@ -42,6 +43,10 @@ from .ups_shutdown_policy import read_shutdown_policy
 APP_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG = Path("/etc/dh_pve_app/dh_pve_app.conf")
 DEFAULT_STATE_DIR = Path("/var/lib/dh_pve_app")
+
+FAST_SECONDS = 10.0
+SLOW_SECONDS = 60.0
+HEALTH_SECONDS = 3600.0
 
 
 def _version() -> str:
@@ -123,15 +128,14 @@ def build_runtime(
 
     scheduler = Scheduler()
     now = time.monotonic()
-    fast = settings.get("fast_poll_interval_seconds")
-    disk = settings.get("disk_poll_interval_seconds")
-    scheduler.add("guests", interval_seconds=30.0, now=now)
-    scheduler.add("gpu", interval_seconds=30.0, now=now)
     for name in ("cpu", "memory", "fans"):
-        scheduler.add(name, interval_seconds=fast, now=now)
-    scheduler.add("smart", interval_seconds=disk, now=now)
-    scheduler.add("storage", interval_seconds=60.0, now=now)
-    scheduler.add("host", interval_seconds=86400.0, now=now)
+        scheduler.add(name, interval_seconds=FAST_SECONDS, now=now)
+    for name in ("guests", "storage", "gpu", "disk_temperature"):
+        scheduler.add(name, interval_seconds=SLOW_SECONDS, now=now)
+    scheduler.add("smart", interval_seconds=HEALTH_SECONDS, now=now)
+
+    def pve_version_fingerprint() -> str:
+        return read_pve_version(topology.pve_root / ".version").fingerprint
 
     runtime = DynamicDiscoveryRuntime(
         collectors=collectors,
@@ -142,10 +146,9 @@ def build_runtime(
         scheduler=scheduler,
         now_iso=_now_iso,
         discovery_builder=discovery_builder,
-        setting_tasks={
-            "fast_poll_interval_seconds": ("cpu", "memory", "fans"),
-            "disk_poll_interval_seconds": ("smart",),
-        },
+        static_collectors=("topology", "host"),
+        slow_tasks=("guests", "storage", "gpu", "disk_temperature"),
+        version_probe=pve_version_fingerprint,
     )
     return bridge, runtime
 
