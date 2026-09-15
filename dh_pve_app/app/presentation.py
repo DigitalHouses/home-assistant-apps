@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-"""Adaptive MQTT/Home Assistant presentation primitives for dh_pve_app."""
+"""Recorder-facing publication primitives for dh_pve_app."""
 
 from collections import defaultdict
 from dataclasses import dataclass
@@ -10,29 +10,21 @@ from typing import Mapping
 
 
 class PublicationProfile(str, Enum):
-    QUIET = "quiet"
     NORMAL = "normal"
     DETAIL = "detail"
-    HIGH = "high"
-    CRITICAL = "critical"
 
 
 @dataclass(frozen=True)
 class ProfileWindows:
-    critical: float = 30.0
-    high: float = 60.0
-    normal: float = 600.0
-    detail: float = 300.0
-    quiet: float = 3600.0
+    normal_seconds: float = 900.0
+    detail_seconds: float = 300.0
 
     def seconds(self, profile: PublicationProfile) -> float:
-        return {
-            PublicationProfile.CRITICAL: float(self.critical),
-            PublicationProfile.HIGH: float(self.high),
-            PublicationProfile.NORMAL: float(self.normal),
-            PublicationProfile.DETAIL: float(self.detail),
-            PublicationProfile.QUIET: float(self.quiet),
-        }[profile]
+        if profile is PublicationProfile.NORMAL:
+            return float(self.normal_seconds)
+        if profile is PublicationProfile.DETAIL:
+            return float(self.detail_seconds)
+        raise ValueError(f"unsupported publication profile: {profile!r}")
 
 
 @dataclass(frozen=True)
@@ -45,11 +37,10 @@ class GroupDecision:
 
 
 class AdaptiveGroup:
-    """Accumulates raw numeric samples and emits Recorder-facing group states.
+    """Average acquired samples without ever changing acquisition cadence.
 
-    Profile selection is intentionally external.  The group only implements
-    publication averaging, profile-boundary handling, immediate discrete
-    changes, duplicate suppression, and manual snapshots.
+    Profile selection is external. The group only controls Recorder-facing
+    publication windows, immediate semantic changes and manual snapshots.
     """
 
     def __init__(
@@ -99,8 +90,8 @@ class AdaptiveGroup:
             result[str(key)] = round(float(value), self.round_digits)
         return result
 
+    @staticmethod
     def _combined(
-        self,
         continuous_values: Mapping[str, object],
         discrete: Mapping[str, object],
     ) -> dict[str, object]:
