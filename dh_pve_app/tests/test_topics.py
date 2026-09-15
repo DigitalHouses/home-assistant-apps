@@ -49,6 +49,6 @@ def test_build_topics_is_exact():
     assert topics.refresh == topics.base + "/refresh"
     assert topics.manifest == topics.base + "/manifest"
     assert topics.settings_prefix == topics.base + "/settings"
-    assert topics.device_id == "dh_pve_shahristan"
-    assert topics.discovery == "homeassistant/device/dh_pve_shahristan/config"
+    assert topics.device_id == "dh_app_pve_shahristan"
+    assert topics.discovery == "homeassistant/device/dh_app_pve_shahristan/config"
     assert topics.ha_status == "homeassistant/status"
