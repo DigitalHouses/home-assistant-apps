@@ -33,7 +33,13 @@ def validate_dh_pve_app(
             app / "app/discovery_metrics.py",
             app / "app/discovery_guest.py",
             app / "app/discovery_groups.py",
+            app / "app/discovery_ups_groups.py",
+            app / "app/diagnostic_events.py",
             app / "app/runtime_dynamic.py",
+            app / "app/runtime_problems.py",
+            app / "app/ups_health.py",
+            app / "app/ups_problems.py",
+            app / "app/ups_group_runtime.py",
             app / "app/pve_cache.py",
             app / "app/disk_temperature.py",
             app / "app/collectors/guests.py",
@@ -43,6 +49,7 @@ def validate_dh_pve_app(
             app / "app/shutdown_history.py",
             app / "app/shutdown_integration.py",
             app / "app/shutdown_discovery.py",
+            app / "app/mqtt_bridge.py",
             app / "app/main.py",
             app / "examples/dh_pve_app.conf.example",
             app / "examples/dh_pve_shutdown_readiness_card.yaml",
@@ -63,6 +70,10 @@ def validate_dh_pve_app(
         (
             'device_id = f"dh_app_pve_{identity.instance_id}"',
             'diagnostic_event=f"{base}/event/diagnostic"',
+            'device_id = f"dh_app_pve_ups_{identity.instance_id}"',
+            'previous_device_id = f"dh_pve_ups_{identity.instance_id}"',
+            'legacy_device_id = f"dh_ups_{identity.instance_id}"',
+            "legacy_discoveries=(",
         ),
         "canonical topics",
     )
@@ -112,6 +123,22 @@ def validate_dh_pve_app(
         "canonical ready-state Discovery",
     )
     _require_text(
+        app / "app/discovery_ups_groups.py",
+        (
+            'return value.replace(".dh_pve_ups_", ".dh_app_pve_ups_", 1)',
+            'return value.replace(".dh_ups_", ".dh_app_pve_ups_", 1)',
+            '"default_entity_id": f"binary_sensor.dh_app_pve_ups_{problem_id}_problem"',
+            '"default_entity_id": "sensor.dh_app_pve_ups_problems"',
+            '"default_entity_id": "event.dh_app_pve_ups_diagnostic"',
+            '"nut_unavailable": "NUT unavailable"',
+            '"power_state_unknown": "Power state unknown"',
+            '"problem_started"',
+            '"problem_recovered"',
+            '"problem_updated"',
+        ),
+        "canonical UPS ready-state Discovery",
+    )
+    _require_text(
         app / "app/discovery_guest.py",
         (
             'entity_id=f"sensor.dh_pve_{kind}_{_slug(guest_id)}_status"',
@@ -131,8 +158,59 @@ def validate_dh_pve_app(
             '"default_entity_id": "sensor.dh_pve_ups_guest_shutdown_budget"',
             '"default_entity_id": "sensor.dh_pve_ups_shutdown_readiness"',
             "route_pve_discovery_groups(",
+            "route_ups_discovery_groups(",
         ),
-        "shutdown Discovery",
+        "shutdown Discovery intermediate",
+    )
+    _require_text(
+        app / "app/ups_health.py",
+        (
+            "class UpsProblemObservation",
+            "def ups_problem_observations(",
+            'problem_id="nut_unavailable"',
+            'problem_id="on_battery"',
+            'problem_id="low_battery"',
+            'problem_id="overload"',
+            'problem_id="replace_battery"',
+            'problem_id="bypass"',
+            'problem_id="power_state_unknown"',
+            "snapshot-derived problem states are deliberately",
+        ),
+        "UPS health policy",
+    )
+    _require_text(
+        app / "app/ups_problems.py",
+        (
+            "class UpsProblemEngine",
+            'category="ups"',
+            '"problem_started" if state.active else "problem_recovered"',
+            "ups_problem_observations(",
+            "def aggregate(self) -> ProblemAggregate:",
+        ),
+        "UPS problem engine",
+    )
+    _require_text(
+        app / "app/ups_group_runtime.py",
+        (
+            "self.problem_engine = UpsProblemEngine(",
+            "def _flush_pending_problem_transitions(self) -> bool:",
+            "def _republish_problem_snapshot(self) -> bool:",
+            "self.bridge.publish_ups_diagnostic_event(event.as_payload())",
+            "if not self._flush_pending_problem_transitions():",
+            "self._observe_problem_snapshot(None, nut_available=False)",
+        ),
+        "UPS problem runtime",
+    )
+    _require_text(
+        app / "app/mqtt_bridge.py",
+        (
+            "def publish_ups_problem_state(self, problem_id: str, active: bool) -> bool:",
+            "def publish_ups_problem_aggregate(self, count: int) -> bool:",
+            "def publish_ups_problem_presentation(self, payload: dict[str, object]) -> bool:",
+            "def publish_ups_diagnostic_event(self, payload: dict[str, object]) -> bool:",
+            "for topic in self.ups_topics.legacy_discoveries:",
+        ),
+        "UPS MQTT transport",
     )
     _require_text(
         app / "examples/dh_pve_shutdown_readiness_card.yaml",
