@@ -1,28 +1,31 @@
-# DH PVE Simplified Runtime, MQTT and HAOS Design
+# DH PVE Simplified Runtime, MQTT, HAOS and UPS Trigger Policy v2 Design
 
 Date: 2026-09-15
-Status: canonical design for the next `dh_pve_app` refactor
+Status: canonical design — freeze candidate; production code must not change until this document is reviewed and frozen
 Target runtime: Proxmox VE 8.x
 Branch at design time: `design/dh-pve-observability-ups-trigger-v2`
 
-## Why this design replaces the previous observability plan
+## Authority and supersession
 
-The previous Runtime Observability design treated expensive polling (`pvesh`, `qm`, `pct`, `pvesm`, guest exec and related subprocesses) as an architecture to instrument and measure. The new decision is to simplify the architecture first: do not repeatedly execute a heavy command when the same information is already available from local kernel/PVE files or PVE-maintained status cache.
+This document is the canonical architecture for the next `dh_pve_app` development cycle.
 
-Therefore the old Runtime Observability design and its implementation plan are removed. Command-level 60-second observability, an instrumented subprocess runner and command timing aggregation are not the first implementation target anymore. After the simplified runtime is running on the home PVE, add only the minimum observability that production evidence proves useful.
+It supersedes the deleted Runtime Observability design/plan and supersedes older UPS policy documents wherever they conflict with this document. Older UPS documents remain historical implementation input only.
 
-This document also defines the target Home Assistant contract discovered by reverse engineering the existing PVE/UPS dashboards and HA packages.
+The previous plan to preserve heavy polling and add an instrumented subprocess runner plus 60-second `COMMANDS` / `COLLECTORS` / `PERF` summaries is not the target architecture. The first objective is to remove unnecessary work by using cheap PVE 8.x local sources.
+
+The previous statement that UPS Trigger Policy v2 is postponed is cancelled. **UPS Trigger Policy v2 is part of this development cycle**, after the simplified source/runtime foundation and UPS telemetry improvements are in place.
 
 ## Core principles
 
-1. **PVE 8.x only.** Internal PVE file/cache formats may be used deliberately. We do not add compatibility complexity for other major PVE versions in this refactor.
-2. **Files/cache first.** Prefer `read()` over spawning a process.
-3. **Collection cadence is fixed.** System load never makes `dh_pve_app` collect more aggressively.
-4. **Adaptive behavior affects MQTT publication only.** It is domain-local and cannot trigger extra digging, subprocesses or guest commands.
-5. **HAOS is a light client.** The app owns data acquisition, averages, derived values, thresholds and problem states. HAOS displays, records selected history and sends notifications.
-6. **Recorder is explicit.** Historical numeric telemetry is flat and attribute-light. Presentation/diagnostic objects with richer attributes are excluded from Recorder.
-7. **Events are immediate.** Important discrete state changes do not wait for a 5/15-minute telemetry publication window.
-8. **No destructive validation.** No FSD, UPS output-off, mains-unplug or deep-discharge validation is part of the refactor release gate.
+1. **PVE 8.x only.** Internal PVE 8.x file/cache formats may be used deliberately and must be fixture-tested.
+2. **Files/cache first.** Prefer local reads over subprocesses.
+3. **Fixed collection cadence.** System load never causes faster acquisition.
+4. **Adaptive publication only.** NORMAL/DETAIL changes MQTT publication cadence, never acquisition cadence or diagnostic depth.
+5. **HAOS is a light client.** The app owns acquisition, parsing, averages, calculations, thresholds, problems, topology, presentation and NUT interpretation.
+6. **PVE/NUT is the only shutdown authority.** HAOS configures and displays policy; it never decides or commits host shutdown.
+7. **Recorder is explicit.** Useful time-series telemetry is whitelisted; rich presentation/events are excluded.
+8. **Meaningful transitions are immediate.** They do not wait for 5/15-minute telemetry publication.
+9. **No destructive validation.** No casual FSD, UPS output-off, mains unplug, deep discharge, HA-side shutdown or arbitrary shell/upscmd over MQTT.
 
 ---
 
@@ -39,7 +42,7 @@ Use this order whenever possible:
 4. pvesh/API only for rare/on-demand cases or actions, not normal monitoring polling
 ```
 
-Important PVE sources include, where suitable for PVE 8.x:
+Candidate PVE 8.x sources include:
 
 ```text
 /etc/pve/qemu-server/*.conf
@@ -52,32 +55,35 @@ Important PVE sources include, where suitable for PVE 8.x:
 /sys/*
 ```
 
-The implementation must verify the exact PVE 8.x schema it consumes and cover it with fixtures/tests.
+Every internal PVE structure consumed by the app must have an explicit parser contract and fixtures from supported PVE 8.x data.
 
 ### 1.2 No automatic heavy fallback loop
 
-Do **not** implement this behavior:
+The following is forbidden:
 
 ```text
 file/cache read failed
-  -> silently use pvesh/qm/pct every poll forever
+  -> silently use pvesh/qm/pct/pvesm every poll forever
 ```
 
-If a supported PVE 8.x source cannot be parsed/read, expose the affected subsystem as unavailable/problem and log a useful transition. A fallback may exist only when explicitly designed and must not turn a source failure into a permanent high-load polling mode.
+If a supported source becomes unreadable or unparsable, expose that subsystem as unavailable/problem and log a transition. A subprocess/API fallback may exist only when explicitly designed for that field and must not turn source failure into permanent high-load polling.
 
-### 1.3 Static data
+### 1.3 pmxcfs and STATIC correctness
 
-Static/configuration data is not periodically polled.
+`/etc/pve` is pmxcfs/FUSE. Filesystem notification such as inotify is **not** a correctness mechanism. It may only be an optimization.
 
-Read it on:
+STATIC/configuration data is refreshed on:
 
 ```text
 startup
-+ relevant /etc/pve change/version change
++ detected /etc/pve/.version change
++ reliable local event when available (optimization only)
 + Manual Refresh
 ```
 
-Examples:
+`/etc/pve/.version` is checked on every SLOW cycle. A version change triggers reread of relevant STATIC/configuration data.
+
+STATIC examples:
 
 - VM/LXC configuration;
 - startup/shutdown order and timeout configuration;
@@ -90,21 +96,21 @@ Examples:
 
 ## 2. Fixed collection cadence
 
-The initial production baseline intentionally has very few cadence classes and roughly an order-of-magnitude difference between them.
+Collection cadence is an internal app contract and is not user-configurable from HAOS.
 
-| Class | Interval | Initial responsibility |
+| Class | Interval | Responsibility |
 |---|---:|---|
 | `FAST` | 10 s | CPU usage, CPU temperature, CPU frequency, RAM, Swap, fans |
-| `UPS` | 10 s | NUT runtime state, battery, runtime, load, voltages, status flags |
-| `SLOW` | 1 min | storage percent used, disk temperature, GPU/transcoding, light runtime diagnostics |
-| `HEALTH` | 1 h | full SMART/health, wear/counters, PVE runtime cache such as VM/LXC status and host load |
-| `STATIC` | event | startup/change/manual-refresh configuration and inventory |
+| `UPS` | 10 s | NUT runtime state, battery/runtime/load/voltages/status/charger data |
+| `SLOW` | 1 min | storage percent used, disk temperature, GPU/transcoding, VM/LXC runtime status, host load, light runtime diagnostics, `/etc/pve/.version` check |
+| `HEALTH` | 1 h | full SMART/health, wear, SMART counters and genuinely heavy health diagnostics |
+| `STATIC` | event | startup/version-change/reliable-event/manual-refresh configuration and inventory |
 
-This is an **initial baseline**. We will tune it only after observing real production data.
+Collection **never** accelerates because CPU, memory, disk, GPU or UPS state becomes busy/critical.
 
 ### 2.1 Manual Refresh
 
-Manual Refresh requests a complete current snapshot:
+Manual Refresh requests one complete current snapshot:
 
 ```text
 STATIC
@@ -114,19 +120,19 @@ HEALTH
 UPS
 ```
 
-Potentially expensive HEALTH work must run sequentially, not as a parallel burst.
+Potentially expensive HEALTH operations run sequentially, not as a parallel burst.
 
-### 2.2 No user poll controls
+A Manual Refresh also recalculates shutdown-policy derived values from current Proxmox configuration, current guest runtime state and persisted shutdown history.
 
-Remove runtime controls such as fast/disk poll interval MQTT numbers. Collection cadence is an internal app contract, not a Home Assistant setting.
+### 2.2 Remove poll controls
+
+Legacy MQTT controls for collector/poll intervals are removed. Collection cadence is not part of the HA configuration surface.
 
 ---
 
-## 3. MQTT publication model
+## 3. Decision averages and MQTT publication
 
 Collection and publication are independent.
-
-Initial publication baseline:
 
 ```text
 NORMAL = every 15 min
@@ -134,9 +140,48 @@ DETAIL = every 5 min
 EVENTS / PROBLEM TRANSITIONS = immediately
 ```
 
-### 3.1 Domain-local DETAIL
+### 3.1 Decision windows
 
-DETAIL is selected independently per domain. Example domains:
+Decision averages are rolling windows used for publication-profile and threshold/problem decisions:
+
+```text
+FAST metrics -> rolling 60 s
+SLOW metrics -> rolling 5 min
+HEALTH/discrete state -> no rolling average unless explicitly designed for a specific metric
+```
+
+After app restart a window starts empty and is calculated from available valid samples only.
+
+Missing/invalid samples:
+
+- are excluded;
+- are never converted to zero;
+- do not cause a state transition when no valid samples exist.
+
+Strict comparison semantics:
+
+```text
+average > threshold  -> ON / DETAIL
+average < threshold  -> OFF / NORMAL
+average == threshold -> unchanged
+```
+
+No `>=` / `<=` transition semantics and no initial hysteresis layer.
+
+### 3.2 Publication averages
+
+Published averaged telemetry uses the publication period for its domain:
+
+```text
+DETAIL -> 5 min publication average
+NORMAL -> 15 min publication average
+```
+
+Profile-decision thresholds are internal app defaults, not HA controls. Alert thresholds are separate MQTT `number` configuration owned by the app.
+
+### 3.3 Domain-local DETAIL
+
+DETAIL is selected independently per domain, for example:
 
 ```text
 cpu
@@ -148,45 +193,27 @@ cooling
 ups
 ```
 
-If CPU enters DETAIL, only CPU telemetry publishes on the DETAIL cadence. GPU/storage/UPS remain in their own profiles.
+A domain entering DETAIL changes only that domain's MQTT publication cadence.
 
-A profile change **must never**:
+A profile transition must never:
 
 - increase collection frequency;
-- start additional diagnostics;
-- trigger `pvesh`/`qm`/`pct`/guest exec;
-- increase SMART frequency;
-- cause automatic "digging".
+- run extra SMART;
+- trigger `pvesh`, `qm`, `pct`, `pvesm` or guest exec;
+- launch automatic deep diagnostics;
+- cause recursive load-driven collection.
 
-It only changes MQTT publication cadence for that domain.
+### 3.4 Immediate discrete state
 
-### 3.2 Averages and profile decisions
+Meaningful discrete changes publish immediately, independent of NORMAL/DETAIL telemetry cadence. Examples include:
 
-Use averaged values for profile decisions and publication. Initial decision logic has no hysteresis.
-
-Strict comparison semantics:
-
-```text
-average > threshold  -> DETAIL / problem ON
-average < threshold  -> NORMAL / problem OFF
-average == threshold -> keep current state
-```
-
-No `>=` or `<=` transition semantics.
-
-Internal publication-profile thresholds are **not** exposed to HAOS. They live under the hood and are documented defaults. Tune them from production evidence later.
-
-### 3.3 Immediate states
-
-Discrete events/problems are change-oriented and publish immediately, independent of NORMAL/DETAIL telemetry cadence. Examples:
-
-- UPS OL/OB/LB/FSD/alarm transitions;
-- threshold problem ON/OFF;
+- UPS OL/OB/LB/FSD/ALARM changes;
+- alert problem transitions;
 - SMART problem transition after HEALTH detects it;
 - CPU throttling transition;
-- VM/LXC state transition when the runtime source is refreshed;
-- collector/data-source failure/recovery;
-- profile transition.
+- VM/LXC runtime transition when SLOW refreshes it;
+- supported data-source failure/recovery;
+- publication-profile transition.
 
 ---
 
@@ -196,17 +223,18 @@ Discrete events/problems are change-oriented and publish immediately, independen
 
 `dh_pve_app` owns:
 
-- source acquisition;
-- parsing;
-- averages;
-- derived values;
+- acquisition and parsing;
+- decision/publication averages;
+- derived calculations;
 - publication profiles;
-- user alert thresholds and their persistence/defaults;
-- threshold comparison;
-- problem binary states;
-- compact presentation summaries needed by UI;
-- UPS/NUT interpretation;
-- shutdown history/evidence already owned by the app.
+- alert-threshold defaults/persistence/validation;
+- threshold comparison and problem states;
+- aggregates and presentation summaries;
+- VM/LXC/PCI topology composition;
+- NUT/UPS interpretation;
+- shutdown history/evidence;
+- shutdown-budget calculation;
+- UPS Trigger Policy v2 active/draft state and validation.
 
 ### 4.2 HAOS owns
 
@@ -214,55 +242,64 @@ HAOS owns:
 
 - display/layout;
 - explicit Recorder whitelist;
-- notification delivery and repeat policy;
+- notification delivery/repeat policy;
 - site-specific notification gates;
-- user interaction with MQTT Discovery controls.
+- user interaction with MQTT Discovery configuration controls.
 
-`binary_sensor.bs_global_system_boot_completed` remains **HAOS-only**. It means HAOS has booted successfully and is safe to run HA-side notification automations. It is not moved into `dh_pve_app`.
+`binary_sensor.bs_global_system_boot_completed` remains **HAOS-only**. Its site meaning is that HAOS is successfully booted and HA-side dependencies such as MQTT and Zigbee are ready for notification automations.
 
-### 4.3 Remove business logic from Lovelace/packages
+Do **not** add startup reconciliation that scans dynamic `binary_sensor.*_problem` entities. Do **not** add wildcard state scanning as an application contract.
 
-The target UI must not repeatedly:
+### 4.3 Keep business logic out of HA templates
+
+The target HA package/UI must not repeatedly:
 
 - scan all `states.sensor` / `states.binary_sensor`;
-- join related entities by attributes;
-- calculate thresholds;
-- calculate storage used from percentage and total;
-- construct VM/LXC/PCI topology;
-- calculate warning state/color from multiple raw entities;
-- format complex shutdown timelines from raw fields in many cards.
+- join dynamic related entities by attributes;
+- calculate thresholds or problems;
+- calculate storage used from other fields;
+- build VM/LXC/PCI topology;
+- reconstruct shutdown-policy math;
+- re-read state entities to construct a transition notification.
 
-The app should provide a ready numeric entity, problem binary or non-Recorder presentation entity/attribute instead.
-
-HA packages should converge toward:
-
-```text
-Recorder whitelist
-+ notification automations
-```
-
-not a second application layer.
+The app publishes ready numeric state, problem state, aggregates and presentation objects.
 
 ---
 
-## 5. MQTT Discovery naming
+## 5. MQTT Discovery naming and migration
 
-Canonical entity prefixes:
+Canonical prefixes:
 
 ```text
 PVE: dh_app_pve_*
 UPS: dh_app_pve_ups_*
 ```
 
-Do not preserve legacy `digitalhouses_proxmox_*`, `dh_pve_*` or `myups_*` naming merely for historical compatibility in the new contract. Migration/cleanup must be explicit.
+Legacy `digitalhouses_proxmox_*`, `dh_pve_*` and `myups_*` identifiers are not preserved as the new contract.
+
+### 5.1 Discovery schema migration
+
+Discovery migration is explicit and idempotent.
+
+The app maintains a `discovery_schema_version` and a versioned manifest of legacy retained Discovery topics owned by previous schemas.
+
+When migration is required:
+
+1. load the old-topic manifest;
+2. publish retained empty payload tombstones for owned legacy Discovery configs;
+3. tombstone known legacy retained state topics where required by the old schema;
+4. publish the new Discovery schema;
+5. persist the successful discovery schema version only after the migration/publish sequence completes.
+
+Repeating the same migration must be safe. An interrupted migration must converge on the next start rather than leave permanent old+new duplicate entities.
+
+HA package/UI changes switch to new entity IDs only after the corresponding Discovery migration is implemented.
 
 ---
 
 ## 6. Home Assistant device-page grouping
 
-There will be many entities. Discovery metadata is part of the UX contract.
-
-### Main sensors
+### Main telemetry
 
 Normal telemetry/presentation entities have no `entity_category` unless they are purely diagnostic/configuration objects.
 
@@ -274,14 +311,14 @@ Use:
 entity_category: config
 ```
 
-for user-settable configuration such as:
+for:
 
 - alert threshold MQTT numbers;
-- UPS battery-test schedules;
-- scheduled-test beeper behavior;
-- later approved UPS policy configuration controls.
+- battery-test schedules;
+- scheduled-test beeper settings;
+- approved UPS Trigger Policy v2 draft controls.
 
-### Diagnostics / problems
+### Diagnostics/problems
 
 Use:
 
@@ -290,36 +327,32 @@ entity_category: diagnostic
 device_class: problem
 ```
 
-for problem binaries where appropriate. This keeps thresholds and their resulting problem binaries in separate device-page groups.
+for problem binaries where appropriate.
 
-Low-level technical debug entities may additionally use:
+Low-level debug entities may additionally use:
 
 ```text
 enabled_by_default: false
 ```
 
-so the default device card remains readable.
+### Actions
 
-### Controls
-
-Real actions remain normal controls, for example Refresh, battery-test buttons and the physical UPS beeper switch.
+Real actions remain normal controls, including Refresh, battery-test buttons, Apply Policy and the physical UPS beeper switch.
 
 ---
 
-## 7. Recorder contract
+## 7. Recorder and Logbook contract
 
-Do not use broad globs such as:
+Recorder uses an explicit whitelist only. Broad patterns such as these are forbidden:
 
 ```text
 sensor.dh_app_pve_*
 binary_sensor.dh_app_pve_*
 ```
 
-Recorder uses an explicit whitelist.
-
 ### 7.1 Recorded PVE telemetry
 
-Record useful historical numeric telemetry, including even if the old package did not yet list it:
+Useful numeric history includes:
 
 ```text
 sensor.dh_app_pve_cpu_usage
@@ -335,30 +368,33 @@ sensor.dh_app_pve_gpu_<id>_temperature
 sensor.dh_app_pve_gpu_<id>_transcoding
 ```
 
-Recorded telemetry should have very few dynamic attributes. Prefer state + native HA metadata only.
+Recorded telemetry has minimal dynamic attributes.
 
-### 7.2 Presentation/diagnostic entities
+### 7.2 Recorded UPS telemetry
 
-Entities whose purpose is UI composition, topology, history lists, policy descriptions or diagnostics are not written to Recorder. They may carry richer attributes because they are outside the time-series path.
+Record useful UPS status/telemetry required for long-term graphs and incident reconstruction. At minimum `sensor.dh_app_pve_ups_status` is mandatory in Recorder and Logbook.
+
+Numeric UPS telemetry such as charge, runtime, load and relevant voltages/power is explicitly whitelisted where useful.
+
+### 7.3 Not Recorder
+
+The following are excluded from Recorder by default:
+
+- rich presentation/summary entities;
+- topology objects;
+- policy descriptions/history lists;
+- publication diagnostics;
+- MQTT Event entities.
 
 ---
 
-## 8. Alert thresholds and problem binaries
+## 8. Alert thresholds, problem state and diagnostic events
 
-Replace HA `input_number` threshold helpers with MQTT Discovery `number` entities owned by the app.
+### 8.1 Threshold pair model
 
-Initial threshold controls:
+Replace HA `input_number` alert helpers with app-owned MQTT Discovery `number` entities.
 
-```text
-number.dh_app_pve_storage_percent_used_threshold
-number.dh_app_pve_cpu_temperature_threshold
-number.dh_app_pve_hdd_temperature_threshold
-number.dh_app_pve_ssd_temperature_threshold
-number.dh_app_pve_nvme_temperature_threshold
-number.dh_app_pve_gpu_temperature_threshold
-```
-
-Initial defaults remain:
+Initial threshold controls/defaults:
 
 ```text
 storage percent used  80 %
@@ -369,20 +405,7 @@ NVMe temperature      80 C
 GPU temperature       85 C
 ```
 
-The app validates, persists and republishes the effective value. HA does not use `0 = default` and does not initialize defaults on startup.
-
-### 8.1 Pair model
-
-The basic model is deliberately simple:
-
-```text
-MQTT number threshold
-+ problem binary
-```
-
-No extra enable/disable switch is added for ordinary alerts.
-
-Examples:
+Canonical examples:
 
 ```text
 number.dh_app_pve_cpu_temperature_threshold
@@ -395,52 +418,95 @@ number.dh_app_pve_nvme_temperature_threshold
 binary_sensor.dh_app_pve_disk_<id>_temperature_problem
 ```
 
-When either the measured average **or the threshold itself** changes, the app immediately reevaluates the problem binary. Therefore HA needs no special `threshold_changed` automation.
+The app validates, persists and republishes the effective threshold. HA does not use `0 = default` and does not initialize defaults at startup.
 
-Individual problem binaries are the automation trigger contract:
+When either the relevant decision metric/average **or the threshold** changes, the app immediately reevaluates the problem binary.
+
+Problem binary semantics:
 
 ```text
-OFF -> ON = alert
-ON -> OFF = recovery
+OFF = OK
+ON  = problem currently active
 ```
 
-### 8.2 Aggregate PVE problems
+Problem binaries are current-state/UI contracts. They are **not** the dynamic notification transport.
 
-Provide a non-Recorder presentation entity such as:
+### 8.2 Aggregates
+
+Provide non-Recorder aggregate presentation entities such as:
 
 ```text
 sensor.dh_app_pve_problems
+sensor.dh_app_pve_ups_problems
 ```
 
-Its state is total active problem count. Compact category counts/details may be attributes, for example:
+State is active problem count. Compact category/severity/summary information may be attributes. HA must not rescan all entities to calculate these aggregates.
+
+### 8.3 Coherent problem-transition publication bundle
+
+MQTT does not provide a multi-topic transaction, so do not call this atomic. For each problem transition, publish in this order:
 
 ```text
-temperature: 1
-storage: 1
-smart: 0
-throttling: 0
-data: 1
-severity: warning
-summary: "Обнаружено проблем: 3"
+1. related metric/current decision data
+2. effective threshold
+3. problem binary
+4. aggregate problem state
+5. related presentation state
+6. diagnostic event LAST
 ```
 
-The UI must not rescan every entity to calculate this.
+The event is published last so the HA notification automation can trust its payload rather than rereading a partially updated set of entities.
+
+### 8.4 Native MQTT Event boundary
+
+Use native MQTT Event entities:
+
+```text
+event.dh_app_pve_diagnostic
+event.dh_app_pve_ups_diagnostic
+```
+
+Runtime event messages are `retain=false`.
+
+Problem event schema:
+
+```text
+schema_version: 1
+event_type: problem_started | problem_recovered | problem_updated
+category
+severity
+object_id
+object_name
+metric
+value
+average
+threshold
+summary
+details
+active_problem_count
+```
+
+Default HA notifications:
+
+```text
+problem_started   -> notify
+problem_recovered -> notify
+problem_updated   -> do not notify by default
+```
+
+HA notifications use the event payload directly. They do not reread metric/problem/aggregate entities to reconstruct the event.
+
+Event entities are excluded from Recorder.
 
 ---
 
-## 9. PVE presentation entities
+## 9. PVE presentation contract
 
 Presentation entities are non-Recorder by default.
 
 ### 9.1 System overview
 
-Keep a system overview entity, for example:
-
-```text
-sensor.dh_app_pve_system
-```
-
-The app provides the already formatted summary in this order:
+Provide `sensor.dh_app_pve_system` with an app-formatted summary in this order:
 
 ```text
 Manufacturer
@@ -453,11 +519,9 @@ Proxmox version / Kernel
 IP
 ```
 
-Hardware/cooling is intentionally shown before PVE software version.
+### 9.2 Storage and disks
 
-### 9.2 Storage
-
-Canonical metric naming is **percent used**:
+Canonical storage naming is **percent used**:
 
 ```text
 sensor.dh_app_pve_storage_<id>_percent_used
@@ -465,31 +529,31 @@ binary_sensor.dh_app_pve_storage_<id>_percent_used_problem
 number.dh_app_pve_storage_percent_used_threshold
 ```
 
-A non-Recorder overview may expose `used_gib`, `free_gib`, `total_gib` and a ready `summary` for the UI.
+Temperature/wear remain separate recorded telemetry. SMART and temperature problems remain separate problem state. Rich disk/storage UI summaries are app-provided presentation data.
 
-### 9.3 Physical disks
+### 9.3 VM/LXC/PCI topology
 
-Keep separate recorded telemetry for temperature/wear and separate problem binaries for temperature/SMART. A non-Recorder overview may combine model/type/current temperature/wear/SMART health into a ready UI summary so Lovelace does not perform entity joins.
+The app owns topology composition. Lovelace does not build it by looping over all entities.
 
-Detailed SMART diagnostics belong in a non-Recorder diagnostic entity or attributes, not on continuously recorded telemetry.
+Per-guest current state and shutdown evidence may remain separate where useful, but joins/summary formatting belong in the app.
 
-### 9.4 VM/LXC topology
+### 9.4 Shutdown history
 
-The app owns topology composition. A non-Recorder entity may provide a ready display string/list for VM, LXC and PCI passthrough instead of Lovelace looping over all entities.
+Preserve app-owned shutdown history and the distinction between:
 
-Existing per-guest state/shutdown evidence may remain where useful, but presentation joins belong in the app.
+- shutdown reason;
+- clean/unclean fact;
+- per-guest shutdown duration/result;
+- total guest shutdown duration;
+- host shutdown timing where evidence exists.
 
-### 9.5 Shutdown history
-
-Preserve the canonical app-owned shutdown history and clean/unclean/reason separation. UI summary/timeline formatting should move into app-provided presentation data instead of repeated Jinja calculations.
-
-Do not change destructive UPS/FSD behavior as part of this simplification refactor.
+This history is also input evidence for shutdown-budget calculation as defined below.
 
 ---
 
-## 10. UPS Discovery contract
+## 10. UPS Discovery and NUT interpretation
 
-Canonical prefix:
+Canonical UPS prefix:
 
 ```text
 dh_app_pve_ups_*
@@ -497,7 +561,7 @@ dh_app_pve_ups_*
 
 ### 10.1 Primary telemetry
 
-Initial core sensors include:
+Core sensors include:
 
 ```text
 sensor.dh_app_pve_ups_status
@@ -511,100 +575,97 @@ sensor.dh_app_pve_ups_nominal_real_power
 sensor.dh_app_pve_ups_power
 ```
 
-For current real power:
+Current real power:
 
 1. use NUT `ups.realpower` when available;
-2. otherwise use `ups.realpower.nominal * ups.load / 100` as the documented fallback calculation.
+2. otherwise calculate `ups.realpower.nominal * ups.load / 100`.
 
-Do not invent an app energy accumulator in this refactor unless a real UI/reporting requirement is confirmed later.
+Do not add an app energy accumulator without a separate reporting requirement.
 
-### 10.2 NUT status interpretation
+### 10.2 NUT status tokens
 
-Interpret standard NUT `ups.status` tokens and expose corresponding binary sensors:
+Interpret at least:
 
-| NUT token | Discovery suffix | Meaning |
+| Token | Discovery suffix | Meaning |
 |---|---|---|
-| `OL` | `online` | online / utility present |
+| `OL` | `online` | utility present |
 | `OB` | `on_battery` | on battery |
-| `LB` | `low_battery` | low battery |
+| `LB` | `low_battery` | native Low Battery |
 | `HB` | `high_battery` | high battery |
 | `RB` | `replace_battery` | replace battery |
-| `CHRG` | `charging` | charging |
-| `DISCHRG` | `discharging` | discharging |
+| `CHRG` | `charging` | charging fallback flag |
+| `DISCHRG` | `discharging` | discharging fallback flag |
 | `BYPASS` | `bypass` | bypass active |
-| `CAL` | `calibration` | calibration/runtime test |
-| `OFF` | `off` | UPS output/load is off |
+| `CAL` | `calibration` | battery calibration/test |
+| `OFF` | `off` | UPS output/load off |
 | `OVER` | `overload` | overload |
-| `TRIM` | `trim` | high input voltage / trim state |
-| `BOOST` | `boost` | low input voltage / boost state |
-| `FSD` | `forced_shutdown` | forced shutdown state |
+| `TRIM` | `trim` | correction of high input voltage |
+| `BOOST` | `boost` | correction of low input voltage |
+| `FSD` | `forced_shutdown` | forced-shutdown state |
 | `ALARM` | `alarm` | alarm present |
 
-Also expose NUT communication availability separately:
+Unknown future tokens must not break the parser. Preserve raw tokens for diagnostics.
+
+Expose NUT communication availability separately:
 
 ```text
 binary_sensor.dh_app_pve_ups_available
 ```
 
-Unknown future NUT status tokens must not break the parser.
+### 10.3 Charger state priority
 
-### 10.3 UPS status sensor and Russian text
+For charging/discharging interpretation:
 
-`sensor.dh_app_pve_ups_status` is a mandatory Recorder entity and is used by the UPS Logbook.
+```text
+1. battery.charger.status when available/valid
+2. CHRG / DISCHRG tokens from ups.status as fallback
+```
 
-Keep its attributes intentionally tiny and stable. At minimum:
+### 10.4 Status sensor and Russian text
+
+`sensor.dh_app_pve_ups_status` is mandatory Recorder + Logbook state.
+
+Keep attributes small and stable, at least:
 
 ```text
 raw_status
 status_ru
 ```
 
-`status_ru` is a human-readable Russian interpretation of the current token combination, for example:
+Canonical wording includes:
 
 ```text
-OL            -> Работает от сети
-OB            -> Работает от батареи
-CHRG          -> Заряжается
-DISCHRG       -> Разряжается
-LB            -> Низкий заряд
-RB            -> Требуется замена батареи
-BYPASS        -> Байпас
-BOOST         -> Повышенное напряжение
-TRIM          -> Пониженное напряжение
-OVER          -> Перегрузка
-FSD           -> Аварийное отключение
-ALARM         -> Авария
-CAL           -> Калибровка
-OFF           -> Выход UPS отключён
+OL       -> Работает от сети
+OB       -> Работает от батареи
+CHRG     -> Заряжается
+DISCHRG  -> Разряжается
+LB       -> Низкий заряд
+RB       -> Требуется замена батареи
+BYPASS   -> Байпас
+BOOST    -> Коррекция пониженного входного напряжения
+TRIM     -> Коррекция повышенного входного напряжения
+OVER     -> Перегрузка
+FSD      -> Аварийное отключение
+ALARM    -> Авария
+CAL      -> Калибровка
+OFF      -> Выход UPS отключён
 ```
 
-For multiple tokens, compose a readable string, for example:
+Example:
 
 ```text
 raw_status: "OB DISCHRG"
 status_ru: "Работает от батареи · Разряжается"
 
 raw_status: "OL BOOST"
-status_ru: "Работает от сети · Повышенное напряжение"
+status_ru: "Работает от сети · Коррекция пониженного входного напряжения"
 ```
-
-The status state itself and selected event binaries provide the chronological UPS picture in Recorder/Logbook. Charging/discharging Recorder noise should be assessed from real production data before expanding the whitelist unnecessarily.
-
-### 10.4 UPS problems
-
-Provide a non-Recorder aggregate presentation entity such as:
-
-```text
-sensor.dh_app_pve_ups_problems
-```
-
-Individual NUT/problem binaries remain the automation/logbook contract.
 
 ---
 
 ## 11. UPS controls and battery-test scheduler
 
-Real controls remain controls:
+Supported control surface:
 
 ```text
 button.dh_app_pve_ups_refresh
@@ -614,7 +675,7 @@ button.dh_app_pve_ups_test_stop
 switch.dh_app_pve_ups_beeper
 ```
 
-Scheduled tests have per-test beeper configuration:
+Scheduled Quick and Deep tests each have independent configuration:
 
 ```text
 number.dh_app_pve_ups_quick_test_interval_days
@@ -626,76 +687,335 @@ time.dh_app_pve_ups_deep_test_time
 switch.dh_app_pve_ups_deep_test_beeper
 ```
 
-Scheduled-test behavior:
+Scheduled test transaction:
 
 ```text
-remember current physical beeper state
--> set beeper to the schedule's requested state
--> start the scheduled test
--> on passed/failed/stopped/other completion, restore original beeper state
+save current physical beeper state
+-> set requested scheduled beeper state
+-> start requested test
+-> always restore original beeper state on pass/fail/stop/other completion
 ```
 
-Example requirement: a scheduled Deep test may run with beeper OFF without permanently changing the normal UPS beeper setting.
+The restore path must execute even when the test command/result path fails after the temporary beeper change.
 
 Manual Quick/Deep tests use the current physical beeper state and do not temporarily override it.
 
-Support for scheduling a deep test does **not** make deep-discharge testing part of deployment validation.
+Deep-test support does not make deep-discharge live validation acceptable.
 
-Battery-test history may be exposed as a non-Recorder presentation/history entity.
+Battery-test history remains app-owned and may be presented through a non-Recorder history entity.
 
 ---
 
-## 12. HA notification model
+## 12. UPS Trigger Policy v2
 
-The old packages are behavioral references only; their legacy entity names and template implementation are not retained.
+UPS Trigger Policy v2 is in scope for this development cycle.
 
-### PVE
+HAOS only configures/displays the policy. The decision loop and shutdown commitment run locally on PVE/NUT and do not depend on HAOS, MQTT availability or HA automations.
 
-HA notifications react to app-owned state transitions:
+### 12.1 Software trigger evaluation
+
+Software triggers are evaluated only while the UPS is confirmed On Battery (`OB`). A low charge while utility power is present is not by itself a host-shutdown command.
+
+Trigger A — charge guard:
 
 ```text
-*_problem OFF -> ON  -> alert
-*_problem ON -> OFF  -> recovery
-SMART problem ON     -> critical notification
-SMART still ON       -> HA may repeat hourly
-CPU throttling ON/OFF -> alert/recovery
+OB
+AND valid battery.charge
+AND battery.charge <= active configured shutdown battery-charge threshold
 ```
 
-Notification repetition and delivery belong to HAOS, not the app.
+Trigger B — runtime guard:
 
-PVE boot notification may still use the HAOS-only gate:
+```text
+OB
+AND valid battery.runtime
+AND battery.runtime <= shutdown_budget_seconds + active reserve_seconds
+```
+
+The first satisfied software trigger commits shutdown.
+
+Missing/invalid charge/runtime is never converted to zero and never satisfies that software trigger. Data-source failure is exposed diagnostically. Native Low Battery remains the independent emergency path.
+
+### 12.2 Native Low Battery emergency path
+
+UPS/NUT native `LB` remains an independent emergency shutdown path.
+
+The app must not:
+
+- enable `ignorelb`;
+- synthesize `LB` from estimated runtime or charge;
+- override native LB merely to implement Trigger A/B;
+- delay or cancel an UPS-reported LB shutdown.
+
+Conceptually:
+
+```text
+software charge guard
+OR software runtime-budget guard
+OR native UPS/NUT Low Battery emergency
+-> local shutdown commitment
+```
+
+### 12.3 Commitment semantics
+
+Before commitment, restored utility cancels only transient software trigger evaluation because `OB` is no longer true.
+
+Once the local NUT/PVE shutdown commitment/FSD path has been entered, the sequence is irreversible. Utility restoration does not cancel committed shutdown.
+
+No MQTT command may directly expose FSD, `upsmon -c fsd`, load-off, shutdown instant commands, arbitrary `upscmd`, arbitrary shell, or arbitrary NUT configuration text.
+
+### 12.4 Policy configuration surface
+
+Trigger Policy v2 replaces the old product-level `on_battery_delay` timer as the normal software trigger model.
+
+User-facing draft trigger values are:
+
+```text
+number.dh_app_pve_ups_shutdown_battery_charge_threshold   # percent
+number.dh_app_pve_ups_shutdown_runtime_reserve            # user-facing time, normalized internally to seconds
+```
+
+Power-restore delay remains a separate policy/power-cycle setting where supported; it is not a shutdown-trigger condition.
+
+Exact default values/ranges are implementation configuration, not architectural constants, but they must be explicit, bounded, backend-validated, documented and covered by tests. HA min/max metadata is convenience only and never replaces app validation.
+
+---
+
+## 13. Shutdown budget and reserve
+
+`shutdown_budget_seconds` is a derived read-only safety value. It is not a user slider and must not be a guessed constant.
+
+The user-configurable `reserve_seconds` is separate additional safety headroom. Trigger B compares runtime against:
+
+```text
+runtime_guard_threshold_seconds = shutdown_budget_seconds + reserve_seconds
+```
+
+### 13.1 Current Proxmox configuration component
+
+Calculate a current Proxmox guest shutdown ceiling from the guests that would require shutdown, using current effective PVE settings:
+
+- guest `startup` order;
+- per-guest effective `down` timeout, including PVE fallback when absent;
+- current shutdown worker concurrency (`max_workers` / effective PVE behavior);
+- shutdown groups processed in reverse startup order;
+- guests within a group scheduled according to the effective worker concurrency.
+
+Expose this component as:
+
+```text
+configured_guest_shutdown_budget_seconds
+```
+
+The source audit must confirm the exact PVE 8.x semantics and parser fixtures before this calculation is rewritten.
+
+### 13.2 Historical evidence component
+
+Use bounded persisted shutdown history as evidence, not as an optimistic replacement for configuration safety.
+
+For comparable clean historical shutdowns, derive at least:
+
+```text
+observed_guest_shutdown_budget_seconds
+observed_host_tail_seconds
+```
+
+`observed_guest_shutdown_budget_seconds` comes from the real guest shutdown interval/evidence. `observed_host_tail_seconds` is the real interval after guests are stopped until host clean shutdown evidence, where timestamps permit it.
+
+A history sample used for budget calculation must be structurally valid and comparable to the relevant current shutdown topology/configuration. The app persists enough configuration/topology fingerprint/revision with future shutdown history to determine comparability. Older non-comparable history remains visible for diagnostics but does not lower safety assumptions.
+
+History must **never reduce** the configured guest ceiling. Effective guest budget is conservative:
+
+```text
+effective_guest_budget = max(
+    configured_guest_shutdown_budget_seconds,
+    valid comparable observed_guest_shutdown_budget_seconds
+)
+```
+
+This allows actual evidence to increase the safety estimate if real shutdown behavior was slower than configuration math, while a previously fast shutdown can never make the next runtime guard less safe.
+
+### 13.3 Full shutdown budget
+
+The runtime guard must cover the shutdown chain, not only guest timeout math.
+
+`shutdown_budget_seconds` includes the applicable sequential safety components required before UPS power can be safely removed, including:
+
+- current NUT secondary synchronization allowance (`HOSTSYNC`) when applicable;
+- `effective_guest_budget`;
+- host-finalization/tail allowance;
+- NUT final delay where applicable;
+- UPS output-off delay where applicable.
+
+For host-finalization/tail:
+
+- use the maximum valid comparable observed host tail when it is larger;
+- keep a conservative internal fallback floor when no valid history exists;
+- expose the chosen component and its source (`observed` or `fallback`) diagnostically.
+
+The internal fallback is not a HA slider and cannot be silently zero.
+
+Expose enough read-only detail for HA to explain the result, for example:
+
+```text
+configured_guest_shutdown_budget_seconds
+observed_guest_shutdown_budget_seconds
+effective_guest_shutdown_budget_seconds
+hostsync_seconds
+observed_host_tail_seconds
+host_tail_budget_seconds
+finaldelay_seconds
+ups_poweroff_delay_seconds
+shutdown_budget_seconds
+reserve_seconds
+runtime_guard_threshold_seconds
+budget_evidence_status
+```
+
+### 13.4 Recalculation
+
+Recalculate when relevant inputs change, including:
+
+- relevant STATIC/PVE configuration change detected through `.version`;
+- VM/LXC runtime membership/state relevant to shutdown changes;
+- new shutdown-history evidence is persisted;
+- successful policy Apply changes a relevant setting;
+- Manual Refresh.
+
+User workflow after changing Proxmox shutdown settings:
+
+```text
+change PVE settings
+-> return to HAOS
+-> press Refresh
+-> app rereads current PVE configuration/history
+-> app publishes the new budget and its components
+```
+
+### 13.5 Budget unavailable
+
+If a mandatory budget component cannot be established safely, Trigger B is unavailable rather than using zero or a guessed optimistic value. Publish a policy/readiness diagnostic problem. Trigger A and native `LB` remain independent according to their own valid inputs.
+
+---
+
+## 14. UPS policy draft/apply transaction
+
+HA configuration is not applied immediately.
+
+### 14.1 Active vs draft
+
+Maintain separate models:
+
+```text
+active policy = last successfully validated/applied/verified policy
+draft policy  = current user edits in HAOS
+```
+
+Changing a number only changes draft state and marks `Pending changes`. It must not alter active production behavior.
+
+The HA UI shows a pending/config block with explicit Apply/Confirm. After successful Apply, draft and active converge and the pending block disappears; the normal active/config view remains.
+
+### 14.2 Apply transaction
+
+Explicit Apply/Confirm performs one transaction:
+
+1. snapshot the immutable draft;
+2. read current host/NUT/PVE facts required for validation;
+3. validate values and cross-field safety;
+4. calculate derived policy/budget values;
+5. back up every managed file/state object that will change;
+6. write target state atomically where applicable;
+7. perform only the controlled reload/restart actions required by the changed settings;
+8. reread effective configuration/runtime state;
+9. verify effective state matches the target policy;
+10. persist the new active policy only after successful verification;
+11. publish synchronized active/draft state and derived values.
+
+No host-side write occurs before pre-write validation passes.
+
+### 14.3 Rollback
+
+If write/reload/restart/reread/verification fails:
+
+- restore all modified managed files/state from the transaction backup;
+- restore/reload the previous effective service configuration as required;
+- verify rollback where possible;
+- keep the previous active policy authoritative;
+- republish draft controls from the active policy or otherwise clearly return the UI to the effective state;
+- publish a sanitized failure result with no credentials.
+
+A partially applied policy is never published as active.
+
+### 14.4 Config-change event
+
+After successful application, publish an UPS diagnostic config-change event **after** effective state has been verified and published.
+
+Use the same UPS Event entity with schema version 1 and a distinct non-problem event type:
+
+```text
+event.dh_app_pve_ups_diagnostic
+schema_version: 1
+event_type: config_changed
+category: policy
+severity: info
+object_id: ups_trigger_policy
+summary
+details
+old_values
+new_values
+active_problem_count
+```
+
+The associated notification must show the meaningful **OLD -> NEW** values. Failed Apply/rollback is not reported as a successful config change.
+
+This Event entity remains excluded from Recorder.
+
+---
+
+## 15. HA notification model
+
+The old packages are behavioral references only. Their legacy names/template architecture are not retained.
+
+### 15.1 Diagnostic notifications
+
+Dynamic problem notifications consume `event.dh_app_pve_diagnostic` or `event.dh_app_pve_ups_diagnostic` payloads directly.
+
+The HAOS-only readiness gate may suppress delivery until:
 
 ```text
 binary_sensor.bs_global_system_boot_completed == ON
-+ recent app-provided PVE boot information
--> notification
 ```
 
-### UPS
+Do not compensate for a missed runtime event by wildcard scanning all dynamic problem binaries at HA startup. Current state remains visible through problem binaries/aggregates; the notification event is intentionally `retain=false`.
 
-HA reacts to app-provided UPS states, for example:
+### 15.2 Repeats
+
+Repeat policy belongs to HAOS. For example, HA may periodically repeat selected still-active critical problems such as SMART, but this is separate from app transition-event production.
+
+### 15.3 PVE boot notification
+
+PVE boot notification may use:
 
 ```text
-on_battery OFF -> ON -> mains-lost notification
-on_battery ON -> OFF -> mains-restored notification
-LB/OVER/RB/FSD/ALARM -> appropriate notification
+bs_global_system_boot_completed == ON
++ app-provided recent PVE boot information
 ```
 
-HA never initiates Proxmox shutdown. NUT/PVE remains the shutdown authority.
+HA never initiates Proxmox shutdown.
 
 ---
 
-## 13. Publication diagnostics
+## 16. Publication diagnostics
 
-Replace old global `quiet/normal/high/critical` publication semantics with the two-profile model.
+Use the two-profile model rather than legacy global quiet/normal/high/critical publication semantics.
 
-A non-Recorder diagnostic entity may show overall/current domain state, for example:
+A non-Recorder diagnostic may expose domain state:
 
 ```text
 sensor.dh_app_pve_publication_profile
 ```
 
-with compact attributes:
+Example attributes:
 
 ```text
 cpu: NORMAL
@@ -706,55 +1026,164 @@ gpu: NORMAL
 ups: NORMAL
 ```
 
-Also keep a lightweight non-Recorder last-publication diagnostic if useful.
+Keep a lightweight non-Recorder last-publication timestamp/diagnostic so HA can show when the app last published useful state.
 
-These are diagnostic entities, not control knobs.
-
----
-
-## 14. Initial implementation order
-
-The next implementation session should proceed in this order and use TDD:
-
-1. **Source audit:** map every current collector/field to current source and target cheap source.
-2. **PVE 8.x readers:** implement/test file/cache parsers before changing publication behavior.
-3. **Remove normal heavy polling:** eliminate unnecessary `pvesh`, `qm`, `pct`, `pvesm`, QGA probes and repeated inventory commands where files/cache satisfy the requirement.
-4. **Fixed scheduler:** implement `FAST=10s`, `UPS=10s`, `SLOW=1m`, `HEALTH=1h`, `STATIC=event`.
-5. **Publication model:** domain-local `NORMAL=15m`, `DETAIL=5m`, averages, strict `>/<`, no hysteresis, immediate events.
-6. **Discovery contract:** migrate names, thresholds, problem binaries, entity categories and UPS NUT status contract.
-7. **Presentation layer:** move heavy Lovelace calculations/joins into non-Recorder app presentation data.
-8. **HA package/UI:** replace broad Recorder globs with whitelist; simplify package to Recorder + notifications; simplify UI to display ready entities.
-9. **Full CI and diff review.** Verify no hidden heavy fallback loops and no increased collection cadence under load.
-10. **Home PVE deploy (`192.168.11.30`) and non-destructive validation.** User performs CLI deploy/validation from commands prepared in chat.
-11. **Tune from real data.** Only after production evidence, adjust collection/publication intervals, profile thresholds or additional observability.
-
-Do not begin UPS Trigger Policy v2 behavior changes as part of this refactor unless explicitly re-approved after the simplified runtime is validated.
+These are diagnostics, not control knobs.
 
 ---
 
-## 15. Production validation questions
+## 17. Storage/unmount shutdown technical debt
 
-After deployment, collect real evidence for:
+NFS/CIFS/SMB storage backed by TrueNAS, another VM or an external NAS can materially lengthen real host shutdown if the provider disappears before PVE unmount/storage teardown completes.
+
+Therefore guest shutdown history alone is not guaranteed to represent total host shutdown time.
+
+Preserve this as explicit technical debt/diagnostic work:
+
+- identify PVE storage/provider dependencies;
+- identify configurations where a storage provider is a guest on the same host;
+- warn when shutdown ordering may make mounts unavailable too early;
+- use observed host-tail evidence to detect unexpectedly long post-guest shutdown;
+- do not silently assume guest budget equals total host budget.
+
+Do not add speculative automatic storage rewrites in this development cycle.
+
+---
+
+## 18. Source audit contract
+
+After this design is frozen and before production refactoring, perform a field-by-field source audit.
+
+For every current field record:
+
+```text
+CURRENT FIELD
+-> CURRENT SOURCE
+-> CURRENT COST
+-> TARGET CHEAP SOURCE
+-> parser/fixture contract
+-> subprocess remains? yes/no
+-> cadence class FAST/SLOW/HEALTH/STATIC/UPS
+-> Recorder? yes/no
+-> problem/event relation
+```
+
+Audit at least:
+
+- CPU usage/frequency/temperature;
+- RAM/Swap;
+- thermal/fans;
+- host load/runtime facts;
+- VM/LXC runtime;
+- VM/LXC configuration/startup/shutdown topology;
+- storage;
+- disk temperature;
+- SMART/wear/counters;
+- GPU/transcoding;
+- PCI passthrough topology;
+- PVE/kernel/hardware inventory;
+- UPS/NUT telemetry;
+- shutdown history and shutdown-budget inputs.
+
+No production reader rewrite begins before this audit establishes the target source/parser contract.
+
+---
+
+## 19. Implementation order after design freeze
+
+Use TDD and proceed in this order:
+
+1. source audit;
+2. PVE 8.x file/cache readers and fixtures;
+3. remove unnecessary regular heavy polling;
+4. fixed scheduler (`FAST=10s`, `UPS=10s`, `SLOW=1m`, `HEALTH=1h`, `STATIC=event`);
+5. decision and publication averages;
+6. domain-local NORMAL/DETAIL publication;
+7. new Discovery naming and schema foundation;
+8. MQTT threshold numbers and problem binaries;
+9. aggregates/presentation layer;
+10. native MQTT Event transition boundary;
+11. Discovery tombstone migration;
+12. UPS status/charger/power improvements;
+13. scheduled UPS tests and beeper restore;
+14. UPS Trigger Policy v2 and shutdown-budget engine;
+15. HA package simplification;
+16. UI simplification and policy pending/active UX;
+17. explicit Recorder whitelist;
+18. notification automations using Event payloads;
+19. full CI;
+20. final diff review;
+21. deploy exact reviewed SHA to home PVE `192.168.11.30`;
+22. non-destructive production validation;
+23. tune only from real production evidence.
+
+---
+
+## 20. Production validation and safety gate
+
+Initial production validation collects evidence for:
 
 - `dh_pve_app` CPU/RSS under normal operation;
-- whether file/cache readers eliminate the previous subprocess spikes;
-- Recorder row/update rate with NORMAL 15m / DETAIL 5m;
-- usefulness of 15m normal graphs and 5m detailed graphs;
-- stability of average-based profile switching without hysteresis;
-- whether `HEALTH=1h` makes VM/LXC/status or SMART visibility too stale in real use;
-- whether UPS charging/discharging flags create excessive Logbook/Recorder noise;
-- Manual Refresh latency and peak load;
-- device-page readability with Configuration / Diagnostics grouping.
+- whether file/cache readers remove previous subprocess spikes;
+- Recorder update rate with NORMAL 15m / DETAIL 5m;
+- usefulness of 15m normal and 5m detail graphs;
+- average/profile stability;
+- VM/LXC SLOW=1m visibility;
+- Manual Refresh latency/peak load;
+- shutdown-budget calculation and evidence visibility;
+- UPS event/logbook noise;
+- device-page readability;
+- policy draft/apply/rollback behavior without committing real shutdown.
 
-Tune only from those observations rather than adding speculative complexity.
+The following are **not** casual validation steps:
 
-## Non-goals for the first refactor release
+```text
+FSD
+upsmon -c fsd
+UPS output-off/load-off
+mains unplug
+deep battery discharge
+HA-side host shutdown
+arbitrary shell/upscmd over MQTT
+```
 
-- PVE 9 compatibility.
-- automatic load-triggered deep diagnostics.
-- adaptive collection cadence.
-- custom arbitrary Home Assistant grouping beyond supported Discovery metadata.
-- HA-side threshold computation.
-- HA-side PVE shutdown decisions.
-- destructive FSD/UPS-output/deep-discharge deployment testing.
-- reimplementation of a large command-level observability framework before the simplified runtime is measured.
+Live UPS shutdown commissioning is a separately reviewed gate. Supporting a safe production path in code does not authorize destructive testing during ordinary deployment validation.
+
+---
+
+## 21. Freeze invariants
+
+Before production code starts, this design freezes these architectural invariants:
+
+```text
+PVE 8.x files/cache first
+fixed acquisition cadence
+.version checked every SLOW cycle
+no permanent heavy fallback loop
+FAST decision window 60 s
+SLOW decision window 5 min
+missing/invalid != zero
+NORMAL 15m / DETAIL 5m publication only
+DETAIL is per-domain publication only
+HAOS is a light client
+PVE/NUT is shutdown authority
+MQTT number + problem binary current-state model
+native MQTT Event is dynamic notification boundary
+event published last in coherent transition bundle
+explicit Recorder whitelist
+UPS status is Recorder + Logbook
+battery.charger.status preferred over CHRG/DISCHRG fallback
+BOOST/TRIM wording follows electrical meaning
+scheduled test beeper always restored
+Trigger A OR Trigger B OR native LB
+ignorelb forbidden
+shutdown budget derived from current PVE config + conservative historical evidence
+history never lowers configured guest ceiling
+policy controls are draft until explicit transactional Apply
+successful policy change event includes OLD -> NEW
+Discovery migration uses versioned manifest + retained tombstones and is idempotent
+NFS/CIFS/SMB unmount delay remains explicit shutdown-budget technical debt
+no destructive validation in ordinary CI/deploy
+```
+
+Any future change to one of these invariants requires an explicit design revision before implementation.
