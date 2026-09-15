@@ -92,6 +92,7 @@ def test_commissioning_wires_safe_credential_verifier_into_applier(monkeypatch, 
         {
             "host": "127.0.0.1",
             "port": 3493,
+            "ups_name": "ups",
             "username": "dh_primary_user",
             "password": "super-secret",
             "timeout_seconds": 3.0,
