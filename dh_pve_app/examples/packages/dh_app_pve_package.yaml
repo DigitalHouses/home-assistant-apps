@@ -4,24 +4,44 @@
 # Recommended target:
 #   /config/packages/Global/System/dh_app_pve_package.yaml
 #
-# Purpose:
-#   - Recorder: keep history for useful dh_pve_app entities.
+# Home Assistant is a light client:
+#   - dh_pve_app owns acquisition, averages, thresholds and problem decisions;
+#   - HA owns presentation, Recorder, Logbook and notification delivery;
+#   - PVE/NUT remains the only shutdown authority.
 #
-# Architecture notes:
-#   - Publication profiles, averaging windows and thresholds live in dh_pve_app.
-#   - Disk health is calculated by dh_pve_app Python collectors.
-#   - UPS / NUT / FSD shutdown policy runs on Proxmox, not in Home Assistant.
-#   - HA observes the effective UPS shutdown policy but cannot apply/edit it.
-#   - Battery-test schedule number/time entities remain runtime controls.
-#   - No duplicate threshold helpers, periodic template sensors or purge job.
+# Recorder deliberately stores only useful time-series telemetry. Rich
+# presentation, problem aggregates, topology, policy history, publication
+# diagnostics and MQTT Event entities are not recorded here.
 # =============================================================================
 
 dh_app_pve_package:
 
   recorder:
     include:
+      entities:
+        - sensor.dh_app_pve_cpu_usage
+        - sensor.dh_app_pve_cpu_temperature
+        - sensor.dh_app_pve_cpu_frequency
+        - sensor.dh_app_pve_memory_usage
+        - sensor.dh_app_pve_swap_usage
+        - sensor.dh_app_pve_ups_status
+        - sensor.dh_app_pve_ups_battery_charge
+        - sensor.dh_app_pve_ups_battery_runtime_minutes
+        - sensor.dh_app_pve_ups_load
+        - sensor.dh_app_pve_ups_input_voltage
+        - sensor.dh_app_pve_ups_output_voltage
+        - sensor.dh_app_pve_ups_battery_voltage
+        - sensor.dh_app_pve_ups_input_frequency
+        - sensor.dh_app_pve_ups_output_frequency
       entity_globs:
-        - sensor.dh_pve_*
-        - binary_sensor.dh_pve_*
-        - number.dh_pve_ups_*
-        - time.dh_pve_ups_*
+        - sensor.dh_app_pve_fan_*_rpm
+        - sensor.dh_app_pve_disk_*_temperature
+        - sensor.dh_app_pve_disk_*_wear
+        - sensor.dh_app_pve_storage_*_percent_used
+        - sensor.dh_app_pve_gpu_*_temperature
+        - sensor.dh_app_pve_gpu_*_transcoding
+
+  logbook:
+    include:
+      entities:
+        - sensor.dh_app_pve_ups_status
