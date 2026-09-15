@@ -7,6 +7,9 @@ from app.ups_policy_preflight import read_policy_preflight
 from app.ups_shutdown_policy import UpsShutdownPolicy
 
 
+SECRET = "managed-secret"
+
+
 class Runner:
     def __init__(self):
         self.commands = []
@@ -29,6 +32,8 @@ def _config():
         port=3493,
         poll_interval_seconds=5.0,
         command_timeout_seconds=3.0,
+        command_username="dh_primary_user",
+        command_password=SECRET,
     )
 
 
@@ -71,14 +76,40 @@ def _seed(tmp_path):
     helper = tmp_path / "dh-pve-ups-policy-cmd"
     helper.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
     helper.chmod(0o755)
+    (tmp_path / "upsd.users").write_text(
+        "[dh_primary_user]\n"
+        f"password = {SECRET}\n"
+        "upsmon primary\n"
+        "instcmds = ALL\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "upsmon.conf").write_text(
+        f"MONITOR ups@127.0.0.1 1 dh_primary_user {SECRET} primary\n"
+        'SHUTDOWNCMD "/bin/true"\n',
+        encoding="utf-8",
+    )
+    (tmp_path / "dh_pve_app.conf").write_text(
+        "[general]\nnode_name = PVE\n\n"
+        "[mqtt]\nhost = mqtt\n\n"
+        "[ups]\n"
+        "enabled = true\n"
+        "name = ups\n"
+        "command_username = dh_primary_user\n"
+        f"command_password = {SECRET}\n",
+        encoding="utf-8",
+    )
     return ups_conf, helper
 
 
 def _preflight_kwargs(helper):
+    root = helper.parent
     return {
         "helper_path": helper,
         "helper_expected_uid": os.getuid(),
         "helper_expected_gid": os.getgid(),
+        "upsd_users_path": root / "upsd.users",
+        "upsmon_path": root / "upsmon.conf",
+        "app_config_path": root / "dh_pve_app.conf",
     }
 
 
@@ -101,6 +132,7 @@ def test_preflight_ready_is_read_only_and_requires_safe_commissioning_state(tmp_
     assert report.ready is True
     assert report.as_dict()["guest_shutdown_budget_seconds"] == 280
     assert all(check.ok for check in report.checks)
+    assert SECRET not in repr(report.as_dict())
     assert runner.commands == [
         ("systemctl", "is-active", "nut-driver@ups.service"),
         ("systemctl", "is-active", "nut-server.service"),
