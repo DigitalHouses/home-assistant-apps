@@ -124,7 +124,7 @@ def test_full_discovery_exposes_fan_status_without_template_counting():
     )["components"]
 
     fan_status = components["fans_status"]
-    assert fan_status["default_entity_id"] == "sensor.dh_pve_fans"
+    assert fan_status["default_entity_id"] == "sensor.dh_app_pve_fans"
     assert ".status" in fan_status["value_template"]
     assert "| count" not in fan_status["value_template"]
     assert "count" in fan_status["json_attributes_template"]
