@@ -11,6 +11,13 @@ from .shutdown_history import ShutdownHistoryTracker, evaluate_shutdown_readines
 from .topology import TopologyManager
 from .ups_group_runtime import AdaptiveUpsRuntime
 from .ups_nut import read_ups
+from .ups_policy import (
+    PolicyValidationError,
+    UpsPolicyDraft,
+    policy_from_mapping,
+    policy_hash,
+    validate_policy,
+)
 from .ups_shutdown_budget import ShutdownBudgetResult
 from .ups_trigger import SoftwareShutdownController, SoftwareShutdownTriggerResult
 
@@ -132,6 +139,7 @@ class ShutdownAwareUpsRuntime(AdaptiveUpsRuntime):
         )
         self.last_software_shutdown_trigger: SoftwareShutdownTriggerResult | None = None
         self.last_shutdown_budget: ShutdownBudgetResult | None = None
+        self._pending_policy_config_event: dict[str, object] | None = None
 
         def observed_reader(config):
             snapshot = reader(config)
@@ -177,10 +185,131 @@ class ShutdownAwareUpsRuntime(AdaptiveUpsRuntime):
                 type(exc).__name__,
             )
 
+    def _policy_state_backup(self) -> dict[str, object]:
+        return {
+            "active": self.policy_active,
+            "draft": self.policy_draft,
+            "status": self.policy_status,
+            "apply_result": self.policy_apply_result,
+            "last_applied": self.policy_last_applied,
+            "revision": self.policy_revision,
+            "hash": self.policy_hash,
+            "validation": self.policy_validation,
+        }
+
+    def _restore_policy_state(self, backup: Mapping[str, object]) -> None:
+        self.policy_active = backup["active"]  # type: ignore[assignment]
+        self.policy_draft = backup["draft"]  # type: ignore[assignment]
+        self.policy_status = str(backup["status"])
+        self.policy_apply_result = str(backup["apply_result"])
+        self.policy_last_applied = backup["last_applied"]  # type: ignore[assignment]
+        self.policy_revision = int(backup["revision"])
+        self.policy_hash = backup["hash"]  # type: ignore[assignment]
+        self.policy_validation = backup["validation"]  # type: ignore[assignment]
+
+    def _verify_persisted_policy(
+        self,
+        target: UpsPolicyDraft,
+        *,
+        revision: int,
+        target_hash: str,
+    ) -> bool:
+        persisted = self.state_store.load()
+        active = policy_from_mapping(persisted.get("policy_active"))
+        return bool(
+            active == target
+            and persisted.get("policy_revision") == revision
+            and persisted.get("policy_hash") == target_hash
+        )
+
+    def _apply_policy(self) -> None:
+        draft = UpsPolicyDraft(**self.policy_draft.as_dict())
+        try:
+            validation = validate_policy(draft)
+        except PolicyValidationError as exc:
+            self.policy_status = "Validation failed"
+            self.policy_apply_result = str(exc)
+            self.policy_draft = self.policy_active or self.policy_draft
+            self._pending_policy_config_event = None
+            self._persist()
+            return
+
+        if self.policy_active == draft:
+            self.policy_draft = draft
+            self.policy_status = "Active"
+            self.policy_apply_result = "No changes"
+            self.policy_validation = validation
+            self._pending_policy_config_event = None
+            self._persist()
+            return
+
+        backup = self._policy_state_backup()
+        old_values = self.policy_active.as_dict() if self.policy_active is not None else {}
+        new_revision = self.policy_revision + 1
+        new_hash = policy_hash(draft)
+        try:
+            self.policy_active = draft
+            self.policy_draft = draft
+            self.policy_status = "Active"
+            self.policy_apply_result = "Applied"
+            self.policy_last_applied = self.now_iso()
+            self.policy_revision = new_revision
+            self.policy_hash = new_hash
+            self.policy_validation = validation
+            self._persist()
+            if not self._verify_persisted_policy(
+                draft,
+                revision=new_revision,
+                target_hash=new_hash,
+            ):
+                raise RuntimeError("policy persistence verification mismatch")
+        except Exception as exc:
+            self._restore_policy_state(backup)
+            self.policy_draft = self.policy_active or self.policy_draft
+            self.policy_status = "Apply failed"
+            self.policy_apply_result = "Не удалось применить и проверить политику."
+            self._pending_policy_config_event = None
+            try:
+                self._persist()
+            except Exception:
+                self.log.exception("Не удалось сохранить rollback UPS policy")
+            self.log.error("UPS policy Apply rollback: %s", type(exc).__name__)
+            return
+
+        self._pending_policy_config_event = {
+            "schema_version": 1,
+            "event_type": "config_changed",
+            "category": "policy",
+            "severity": "info",
+            "object_id": "ups_trigger_policy",
+            "object_name": "UPS Trigger Policy",
+            "summary": "UPS Trigger Policy изменена",
+            "details": "Активная политика UPS успешно применена и проверена.",
+            "old_values": old_values,
+            "new_values": draft.as_dict(),
+        }
+
+    def _flush_pending_policy_config_event(self) -> None:
+        event = self._pending_policy_config_event
+        if event is None:
+            return
+        publish = getattr(self.bridge, "publish_ups_diagnostic_event", None)
+        if not callable(publish):
+            return
+        payload = dict(event)
+        try:
+            payload["active_problem_count"] = self.problem_engine.aggregate().count
+        except Exception:
+            payload["active_problem_count"] = 0
+        if publish(payload):
+            self._pending_policy_config_event = None
+
     def _collect(self, *, force: bool = False, manual_refresh: bool = False) -> bool:
         result = super()._collect(force=force, manual_refresh=manual_refresh)
         if self.nut_available and self.last_snapshot is not None:
             self._evaluate_software_shutdown()
+        if result:
+            self._flush_pending_policy_config_event()
         return result
 
     def _auxiliary_fields(self) -> dict[str, object]:
