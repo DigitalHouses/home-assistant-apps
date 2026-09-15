@@ -434,6 +434,7 @@ class ShutdownHistoryTracker:
             "shutdown_class": shutdown_class,
             "shutdown_reason": shutdown_reason,
             "shutdown_clean": shutdown_clean,
+            "shutdown_budget_fingerprint": current.get("shutdown_budget_fingerprint"),
             "uptime_seconds": _duration_between(current.get("boot_at"), shutdown_at),
             "downtime_seconds": _duration_between(shutdown_at, boot_at),
             "outage_started_at": outage_started_at,
@@ -515,6 +516,25 @@ class ShutdownHistoryTracker:
         if changed:
             state["current_boot"] = updated
             self.state_store.save(state)
+
+    def record_shutdown_budget_fingerprint(self, fingerprint: str) -> None:
+        if not isinstance(fingerprint, str) or not fingerprint.strip():
+            raise ValueError("shutdown budget fingerprint must be a non-empty string")
+        normalized = fingerprint.strip()
+        state = self._load()
+        current = state.get("current_boot")
+        if not isinstance(current, Mapping):
+            self.startup()
+            state = self._load()
+            current = state.get("current_boot")
+        if not isinstance(current, Mapping):
+            return
+        if current.get("shutdown_budget_fingerprint") == normalized:
+            return
+        updated = dict(current)
+        updated["shutdown_budget_fingerprint"] = normalized
+        state["current_boot"] = updated
+        self.state_store.save(state)
 
     def record_software_shutdown_commit(self, reason: str, snapshot: UpsSnapshot) -> None:
         if reason not in {"charge_guard", "runtime_guard"}:
