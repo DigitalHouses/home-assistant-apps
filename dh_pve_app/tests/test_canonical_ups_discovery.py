@@ -143,6 +143,7 @@ def test_ups_problem_aggregate_and_native_event_are_canonical():
         "problem_started",
         "problem_recovered",
         "problem_updated",
+        "config_changed",
     ]
     assert event["entity_category"] == "diagnostic"
     assert "json_attributes_topic" not in event
