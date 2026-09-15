@@ -284,9 +284,9 @@ Before writing anything, commissioning requires root, a selected UPS, stable lin
 
 If `[dh_primary_user]` already has a non-empty password, commissioning preserves it and synchronizes the `MONITOR` entry and App command credentials to that value. On first commissioning, a strong random password is generated. The password is never published to MQTT, included in policy metadata, or returned in preflight/error details.
 
-After writing the configuration, commissioning restarts the UPS driver and `nut-server`, performs a non-destructive authenticated NUT protocol probe, verifies the exact effective UPS restore delay, and only then starts/restarts `nut-monitor`. The credential probe authenticates the connection and uses connection-local NUT tracking state; it does not execute an UPS instant command or FSD.
+After writing the configuration, commissioning restarts the UPS driver and `nut-server`, verifies the credentials with the NUT `PRIMARY <ups>` access-level check, reads the selected UPS command inventory with `LIST CMD <ups>`, verifies the exact effective UPS restore delay, and only then starts/restarts `nut-monitor`. The credential probe does not execute `INSTCMD`, FSD, or any UPS hardware-changing command. If `dh_pve_app.service` was active before commissioning, it is restarted only after the NUT/monitor path and rollback-protected metadata are ready so the synchronized command credentials are loaded; an inactive App is left inactive.
 
-Managed NUT files are written with mode `0640` and owner/group inherited from `/etc/nut` (normally `root:nut`); the App config remains `0600`. Rollback restores content, mode, owner/group and relevant NUT service state for every managed file if any stage fails.
+Managed NUT files are written with mode `0640` and owner/group inherited from `/etc/nut` (normally `root:nut`); the App config remains `0600`. Rollback restores content, mode, owner/group and relevant NUT service state for every managed file if any stage fails. If the App had been active, rollback also restores its prior config and reloads the service so failed commissioning cannot leave the daemon using mismatched credentials.
 
 Read-only preflight:
 
