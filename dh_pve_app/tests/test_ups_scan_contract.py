@@ -48,11 +48,11 @@ def test_pve_device_exposes_manual_ups_scan_controls():
     payload = build_discovery_payload(_app_config(), _identity(), version="0.2.0-alpha")
     components = payload["components"]
 
-    assert components["ups_scan"]["default_entity_id"] == "button.dh_pve_scan_ups"
+    assert components["ups_scan"]["default_entity_id"] == "button.dh_app_pve_scan_ups"
     assert components["ups_scan"]["command_topic"] == topics.ups_scan
-    assert components["ups_scan_result"]["default_entity_id"] == "sensor.dh_pve_ups_scan_result"
+    assert components["ups_scan_result"]["default_entity_id"] == "sensor.dh_app_pve_ups_scan_result"
     assert components["ups_scan_result"]["state_topic"] == topics.ups_scan_state
-    assert components["ups_last_scan"]["default_entity_id"] == "sensor.dh_pve_ups_last_scan"
+    assert components["ups_last_scan"]["default_entity_id"] == "sensor.dh_app_pve_ups_last_scan"
     assert components["ups_last_scan"]["state_topic"] == topics.ups_scan_state
 
 
