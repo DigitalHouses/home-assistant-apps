@@ -68,7 +68,7 @@ def ups_state_group_topic(topics: UpsTopics, group: str) -> str:
 
 def build_topics(mqtt: MqttConfig, identity: HostIdentity) -> Topics:
     base = f"{mqtt.topic_prefix.rstrip('/')}/{identity.instance_id}"
-    device_id = f"dh_pve_{identity.instance_id}"
+    device_id = f"dh_app_pve_{identity.instance_id}"
     discovery_prefix = mqtt.discovery_prefix.strip("/")
     return Topics(
         base=base,
