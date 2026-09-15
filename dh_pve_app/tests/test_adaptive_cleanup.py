@@ -74,6 +74,6 @@ def test_duplicate_ups_runtime_seconds_entity_is_removed_from_discovery():
 
     assert "battery_runtime_minutes" in components
     assert components["battery_runtime_minutes"]["default_entity_id"] == (
-        "sensor.dh_pve_ups_battery_runtime_minutes"
+        "sensor.dh_app_pve_ups_battery_runtime_minutes"
     )
     assert "battery_runtime" not in components
