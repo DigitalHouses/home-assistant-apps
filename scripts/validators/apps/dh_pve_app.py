@@ -33,6 +33,8 @@ def validate_dh_pve_app(
             app / "app/discovery_metrics.py",
             app / "app/discovery_guest.py",
             app / "app/runtime_dynamic.py",
+            app / "app/pve_cache.py",
+            app / "app/disk_temperature.py",
             app / "app/collectors/guests.py",
             app / "app/topology.py",
             app / "app/production_v1.py",
@@ -143,6 +145,7 @@ def validate_dh_pve_app(
             "class GuestAwareProductionCollectors",
             '"topology": self.topology_inventory',
             '"guests": self.guests',
+            '"disk_temperature": self.disk_temperature',
             '"smart": self.smart',
             '"gpu": self.gpu',
         ),
@@ -178,11 +181,25 @@ def validate_dh_pve_app(
             "ShutdownAwareTopologyManager(runner=_run)",
             "build_shutdown_aware_pve_discovery_payload(",
             "ShutdownHistoryTracker(",
-            'scheduler.add("guests", interval_seconds=30.0',
-            'scheduler.add("gpu", interval_seconds=30.0',
-            'scheduler.add("host", interval_seconds=86400.0',
+            "FAST_SECONDS = 10.0",
+            "SLOW_SECONDS = 60.0",
+            "HEALTH_SECONDS = 3600.0",
+            'for name in ("cpu", "memory", "fans"):',
+            'for name in ("guests", "storage", "gpu", "disk_temperature"):',
+            'scheduler.add("smart", interval_seconds=HEALTH_SECONDS',
+            'static_collectors=("topology", "host")',
+            'slow_tasks=("guests", "storage", "gpu", "disk_temperature")',
+            "read_pve_version(",
         ),
         "runtime",
+    )
+    _require_text(
+        app / "app/runtime_dynamic.py",
+        (
+            '"setting_fast_poll_interval_seconds": "number"',
+            '"setting_disk_poll_interval_seconds": "number"',
+        ),
+        "retired poll control cleanup",
     )
 
     service = app / "systemd/dh_pve_app.service"
