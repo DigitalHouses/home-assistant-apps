@@ -121,7 +121,7 @@ def test_selected_ups_wires_cheap_budget_reader_and_fixed_shutdown_executor(
     assert runtime.shutdown_budget_reader is not None
     assert runtime.software_shutdown_controller is not None
     assert runtime._current_shutdown_budget() == budget
-    assert budget_calls == [("rackups", "PVE", tracker.history)]
+    assert budget_calls == [("rackups", "pve", tracker.history)]
     runtime.software_shutdown_controller.executor("runtime_guard")
     assert shutdown_calls == ["runtime_guard"]
 
