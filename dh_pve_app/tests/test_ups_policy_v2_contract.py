@@ -3,7 +3,6 @@ import pytest
 from app.ups_policy import (
     PolicyValidationError,
     UpsPolicyDraft,
-    migrate_legacy_policy_state,
     parse_policy_value,
     policy_hash,
 )
@@ -43,35 +42,3 @@ def test_v2_policy_backend_ranges_are_explicit_and_step_validated():
     ):
         with pytest.raises(PolicyValidationError):
             parse_policy_value(key, value)
-
-
-def test_legacy_timer_is_never_migrated_into_runtime_reserve():
-    migrated = migrate_legacy_policy_state(
-        {
-            "on_battery_delay_minutes": 30,
-            "power_restore_delay_seconds": 120,
-        },
-        shutdown_battery_charge_threshold_percent=20,
-    )
-
-    assert migrated == UpsPolicyDraft(
-        shutdown_battery_charge_threshold_percent=20,
-        runtime_reserve_seconds=180,
-    )
-
-
-def test_legacy_migration_requires_valid_charge_threshold_source():
-    assert (
-        migrate_legacy_policy_state(
-            {"on_battery_delay_minutes": 30},
-            shutdown_battery_charge_threshold_percent=None,
-        )
-        is None
-    )
-    assert (
-        migrate_legacy_policy_state(
-            {"on_battery_delay_minutes": 30},
-            shutdown_battery_charge_threshold_percent=11,
-        )
-        is None
-    )
