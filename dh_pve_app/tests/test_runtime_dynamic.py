@@ -123,7 +123,7 @@ def test_group_capable_dynamic_startup_tombstones_legacy_monolithic_state():
     }
 
 
-def test_startup_tombstones_retired_publish_delta_discovery_components_once():
+def test_startup_tombstones_all_retired_runtime_number_components_once():
     bridge = Bridge()
     settings = RuntimeSettings()
     runtime = DynamicDiscoveryRuntime(
@@ -136,9 +136,7 @@ def test_startup_tombstones_retired_publish_delta_discovery_components_once():
         now_iso=lambda: "2026-09-14T20:00:00+05:00",
         discovery_builder=lambda inv: {
             "device": {"name": "DH PVE"},
-            "components": {
-                "setting_fast_poll_interval_seconds": {"platform": "number"},
-            },
+            "components": {},
         },
     )
 
@@ -147,6 +145,8 @@ def test_startup_tombstones_retired_publish_delta_discovery_components_once():
 
     cleanup = bridge.discovery[0]["components"]
     for key in (
+        "setting_fast_poll_interval_seconds",
+        "setting_disk_poll_interval_seconds",
         "setting_cpu_publish_delta",
         "setting_memory_publish_delta",
         "setting_temperature_publish_delta",
@@ -156,16 +156,12 @@ def test_startup_tombstones_retired_publish_delta_discovery_components_once():
     ):
         assert cleanup[key] == {"platform": "number"}
 
-    assert bridge.discovery[1]["components"] == {
-        "setting_fast_poll_interval_seconds": {"platform": "number"}
-    }
+    assert bridge.discovery[1]["components"] == {}
 
     bridge.discovery.clear()
     assert runtime.sync_discovery(force=True) is True
     assert len(bridge.discovery) == 1
-    assert not any(
-        "publish_delta" in key for key in bridge.discovery[0]["components"]
-    )
+    assert bridge.discovery[0]["components"] == {}
 
 
 def test_same_discovery_shape_is_not_republished_on_metric_change():
