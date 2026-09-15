@@ -142,7 +142,7 @@ EVENTS / PROBLEM TRANSITIONS = immediately
 
 ### 3.1 Decision windows
 
-Decision averages are rolling windows used for publication-profile and threshold/problem decisions:
+Decision averages are rolling windows used for publication-profile and ordinary alert/problem decisions:
 
 ```text
 FAST metrics -> rolling 60 s
@@ -158,7 +158,7 @@ Missing/invalid samples:
 - are never converted to zero;
 - do not cause a state transition when no valid samples exist.
 
-Strict comparison semantics:
+Strict comparison semantics for ordinary averaged alert/profile thresholds:
 
 ```text
 average > threshold  -> ON / DETAIL
@@ -166,7 +166,9 @@ average < threshold  -> OFF / NORMAL
 average == threshold -> unchanged
 ```
 
-No `>=` / `<=` transition semantics and no initial hysteresis layer.
+No `>=` / `<=` transition semantics and no initial hysteresis layer for this ordinary threshold model.
+
+UPS shutdown safety predicates are a separate contract defined in section 12; they use current valid NUT telemetry and explicit `<=` guards, not rolling decision averages.
 
 ### 3.2 Publication averages
 
@@ -486,6 +488,8 @@ details
 active_problem_count
 ```
 
+Fields that are not applicable to a discrete problem may be null/absent according to the schema contract; HA must not infer them by rereading entities.
+
 Default HA notifications:
 
 ```text
@@ -714,6 +718,8 @@ HAOS only configures/displays the policy. The decision loop and shutdown commitm
 
 ### 12.1 Software trigger evaluation
 
+Software shutdown guards use the **current valid NUT sample** from the fixed UPS collection path. They do not use the 60-second/5-minute rolling averages defined for ordinary telemetry/problem decisions.
+
 Software triggers are evaluated only while the UPS is confirmed On Battery (`OB`). A low charge while utility power is present is not by itself a host-shutdown command.
 
 Trigger A — charge guard:
@@ -732,6 +738,8 @@ AND valid battery.runtime
 AND battery.runtime <= shutdown_budget_seconds + active reserve_seconds
 ```
 
+The `<=` comparisons above are deliberate safety predicates and are not the ordinary alert/profile comparison semantics from section 3.
+
 The first satisfied software trigger commits shutdown.
 
 Missing/invalid charge/runtime is never converted to zero and never satisfies that software trigger. Data-source failure is exposed diagnostically. Native Low Battery remains the independent emergency path.
@@ -744,6 +752,7 @@ The app must not:
 
 - enable `ignorelb`;
 - synthesize `LB` from estimated runtime or charge;
+- rewrite `battery.charge.low` / `battery.runtime.low` merely to implement Trigger A/B;
 - override native LB merely to implement Trigger A/B;
 - delay or cancel an UPS-reported LB shutdown.
 
@@ -775,7 +784,13 @@ number.dh_app_pve_ups_shutdown_battery_charge_threshold   # percent
 number.dh_app_pve_ups_shutdown_runtime_reserve            # user-facing time, normalized internally to seconds
 ```
 
-Power-restore delay remains a separate policy/power-cycle setting where supported; it is not a shutdown-trigger condition.
+Power-restore delay remains a separate policy/power-cycle setting where supported:
+
+```text
+number.dh_app_pve_ups_power_restore_delay
+```
+
+It is not a shutdown-trigger condition.
 
 Exact default values/ranges are implementation configuration, not architectural constants, but they must be explicit, bounded, backend-validated, documented and covered by tests. HA min/max metadata is convenience only and never replaces app validation.
 
@@ -837,15 +852,26 @@ This allows actual evidence to increase the safety estimate if real shutdown beh
 
 ### 13.3 Full shutdown budget
 
-The runtime guard must cover the shutdown chain, not only guest timeout math.
+The runtime guard covers the time until the PVE host reaches a safe clean shutdown/power-off handoff. It is not the same as the later UPS output-off/restart timing.
 
-`shutdown_budget_seconds` includes the applicable sequential safety components required before UPS power can be safely removed, including:
+Use the applicable sequential pre-handoff components:
 
 - current NUT secondary synchronization allowance (`HOSTSYNC`) when applicable;
+- NUT `FINALDELAY` before local `SHUTDOWNCMD`;
 - `effective_guest_budget`;
-- host-finalization/tail allowance;
-- NUT final delay where applicable;
-- UPS output-off delay where applicable.
+- host-finalization/tail allowance after guests stop, including service/filesystem/unmount work reflected by valid evidence.
+
+Canonical calculation:
+
+```text
+shutdown_budget_seconds =
+    hostsync_budget_seconds
+    + finaldelay_seconds
+    + effective_guest_budget_seconds
+    + host_tail_budget_seconds
+```
+
+When there are no relevant NUT secondaries, the effective HOSTSYNC budget component is zero rather than blindly adding the configured maximum.
 
 For host-finalization/tail:
 
@@ -855,6 +881,8 @@ For host-finalization/tail:
 
 The internal fallback is not a HA slider and cannot be silently zero.
 
+`ups.delay.shutdown` / UPS output-off delay and output-restore delay remain important power-cycle diagnostics/configuration, but are **not added to Trigger B's shutdown budget merely because they happen later in the UPS power-cycle sequence**. NUT invokes the driver shutdown sequence as the final system-shutdown stage after the host has reached the safe handoff path. If future production evidence shows a particular driver/platform needs a pre-handoff allowance, that requires an explicit design revision rather than silently padding the budget.
+
 Expose enough read-only detail for HA to explain the result, for example:
 
 ```text
@@ -862,13 +890,15 @@ configured_guest_shutdown_budget_seconds
 observed_guest_shutdown_budget_seconds
 effective_guest_shutdown_budget_seconds
 hostsync_seconds
+hostsync_budget_seconds
+finaldelay_seconds
 observed_host_tail_seconds
 host_tail_budget_seconds
-finaldelay_seconds
-ups_poweroff_delay_seconds
 shutdown_budget_seconds
 reserve_seconds
 runtime_guard_threshold_seconds
+ups_poweroff_delay_seconds
+ups_restart_delay_seconds
 budget_evidence_status
 ```
 
@@ -1175,10 +1205,13 @@ UPS status is Recorder + Logbook
 battery.charger.status preferred over CHRG/DISCHRG fallback
 BOOST/TRIM wording follows electrical meaning
 scheduled test beeper always restored
+UPS software shutdown guards use current valid NUT telemetry, not rolling averages
 Trigger A OR Trigger B OR native LB
 ignorelb forbidden
+Trigger A/B do not rewrite native battery low thresholds
 shutdown budget derived from current PVE config + conservative historical evidence
 history never lowers configured guest ceiling
+shutdown budget ends at safe host handoff; UPS output-off/restart delays remain separate diagnostics
 policy controls are draft until explicit transactional Apply
 successful policy change event includes OLD -> NEW
 Discovery migration uses versioned manifest + retained tombstones and is idempotent
