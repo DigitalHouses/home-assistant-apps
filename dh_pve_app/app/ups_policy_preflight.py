@@ -19,6 +19,8 @@ _FORBIDDEN_LB_DIRECTIVES = {
     "override.battery.runtime.low",
     "override.battery.charge.low",
 }
+_MANAGED_NUT_USER = "dh_primary_user"
+_SECTION_RE = re.compile(r"^\s*\[([^]]+)\]\s*(?:#.*)?$")
 
 
 @dataclass(frozen=True)
@@ -66,10 +68,9 @@ def _service_active(
 
 
 def _selected_ups_lines(text: str, ups_name: str) -> list[str] | None:
-    section_re = re.compile(r"^\s*\[([^]]+)\]\s*(?:#.*)?$")
     selected: list[str] | None = None
     for raw in text.splitlines():
-        match = section_re.match(raw)
+        match = _SECTION_RE.match(raw)
         if match:
             if match.group(1).strip() == ups_name:
                 selected = []
@@ -79,6 +80,199 @@ def _selected_ups_lines(text: str, ups_name: str) -> list[str] | None:
         if selected is not None:
             selected.append(raw)
     return selected
+
+
+def _named_sections(text: str, section_name: str) -> list[list[str]]:
+    sections: list[list[str]] = []
+    current: list[str] | None = None
+    for raw in text.splitlines():
+        match = _SECTION_RE.match(raw)
+        if match:
+            if current is not None:
+                sections.append(current)
+                current = None
+            if match.group(1).strip() == section_name:
+                current = []
+            continue
+        if current is not None:
+            current.append(raw)
+    if current is not None:
+        sections.append(current)
+    return sections
+
+
+def _directive_value(lines: list[str], key: str) -> str | None:
+    wanted = key.casefold()
+    for raw in lines:
+        stripped = raw.strip()
+        if not stripped or stripped.startswith(("#", ";")):
+            continue
+        if "#" in stripped:
+            stripped = stripped.split("#", 1)[0].strip()
+        if not stripped:
+            continue
+        if "=" in stripped:
+            current_key, value = stripped.split("=", 1)
+        else:
+            parts = stripped.split(None, 1)
+            if len(parts) != 2:
+                continue
+            current_key, value = parts
+        if current_key.strip().casefold() == wanted:
+            return value.strip().strip('"').strip("'")
+    return None
+
+
+def _identity_checks(
+    *,
+    config: UpsConfig,
+    upsd_users_path: Path,
+    upsmon_path: Path,
+    app_config_path: Path,
+) -> list[PreflightCheck]:
+    checks: list[PreflightCheck] = []
+
+    try:
+        users_text = upsd_users_path.read_text(encoding="utf-8")
+    except OSError as exc:
+        checks.extend(
+            (
+                PreflightCheck(
+                    "nut_primary_user",
+                    False,
+                    f"Не удалось прочитать {upsd_users_path}: {type(exc).__name__}.",
+                ),
+                PreflightCheck("nut_primary_role", False, "NUT PRIMARY user не проверен."),
+                PreflightCheck("nut_instcmds_all", False, "NUT command ACL не проверен."),
+            )
+        )
+        user_password = None
+    else:
+        sections = _named_sections(users_text, _MANAGED_NUT_USER)
+        user_ok = len(sections) == 1
+        checks.append(
+            PreflightCheck(
+                "nut_primary_user",
+                user_ok,
+                (
+                    f"NUT user {_MANAGED_NUT_USER} настроен."
+                    if user_ok
+                    else (
+                        f"NUT user {_MANAGED_NUT_USER} отсутствует."
+                        if not sections
+                        else f"NUT user {_MANAGED_NUT_USER} определен несколько раз."
+                    )
+                ),
+            )
+        )
+        user_lines = sections[0] if user_ok else []
+        role = (_directive_value(user_lines, "upsmon") or "").casefold()
+        checks.append(
+            PreflightCheck(
+                "nut_primary_role",
+                user_ok and role == "primary",
+                (
+                    f"{_MANAGED_NUT_USER}: upsmon primary."
+                    if user_ok and role == "primary"
+                    else f"{_MANAGED_NUT_USER}: ожидается upsmon primary."
+                ),
+            )
+        )
+        instcmds = (_directive_value(user_lines, "instcmds") or "").casefold()
+        checks.append(
+            PreflightCheck(
+                "nut_instcmds_all",
+                user_ok and instcmds == "all",
+                (
+                    f"{_MANAGED_NUT_USER}: instcmds = ALL."
+                    if user_ok and instcmds == "all"
+                    else f"{_MANAGED_NUT_USER}: ожидается instcmds = ALL."
+                ),
+            )
+        )
+        user_password = _directive_value(user_lines, "password") if user_ok else None
+
+    monitor_user: str | None = None
+    monitor_password: str | None = None
+    monitor_role: str | None = None
+    try:
+        upsmon_text = upsmon_path.read_text(encoding="utf-8")
+    except OSError as exc:
+        monitor_detail = f"Не удалось прочитать {upsmon_path}: {type(exc).__name__}."
+        monitor_ok = False
+    else:
+        monitor_lines: list[list[str]] = []
+        for raw in upsmon_text.splitlines():
+            stripped = raw.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            parts = stripped.split()
+            if len(parts) >= 6 and parts[0].upper() == "MONITOR":
+                if parts[1].split("@", 1)[0] == config.name:
+                    monitor_lines.append(parts)
+        if len(monitor_lines) == 1:
+            parts = monitor_lines[0]
+            monitor_user = parts[3]
+            monitor_password = parts[4]
+            monitor_role = parts[5].casefold()
+            monitor_ok = (
+                monitor_user == _MANAGED_NUT_USER and monitor_role == "primary"
+            )
+            monitor_detail = (
+                f"MONITOR {config.name} использует {_MANAGED_NUT_USER} primary."
+                if monitor_ok
+                else f"MONITOR {config.name} должен использовать {_MANAGED_NUT_USER} primary."
+            )
+        else:
+            monitor_ok = False
+            monitor_detail = (
+                f"Для UPS {config.name} ожидается ровно один MONITOR; найдено {len(monitor_lines)}."
+            )
+    checks.append(PreflightCheck("monitor_identity", monitor_ok, monitor_detail))
+
+    app_user: str | None = None
+    app_password: str | None = None
+    try:
+        app_text = app_config_path.read_text(encoding="utf-8")
+    except OSError as exc:
+        app_ok = False
+        app_detail = f"Не удалось прочитать {app_config_path}: {type(exc).__name__}."
+    else:
+        app_sections = _named_sections(app_text, "ups")
+        if len(app_sections) == 1:
+            app_user = _directive_value(app_sections[0], "command_username")
+            app_password = _directive_value(app_sections[0], "command_password")
+            app_ok = app_user == _MANAGED_NUT_USER
+            app_detail = (
+                f"DH PVE App использует {_MANAGED_NUT_USER}."
+                if app_ok
+                else f"DH PVE App должен использовать {_MANAGED_NUT_USER}."
+            )
+        else:
+            app_ok = False
+            app_detail = (
+                f"В App config ожидается ровно одна секция [ups]; найдено {len(app_sections)}."
+            )
+    checks.append(PreflightCheck("app_command_identity", app_ok, app_detail))
+
+    credentials_ok = bool(
+        user_password
+        and monitor_password
+        and app_password
+        and user_password == monitor_password == app_password
+    )
+    checks.append(
+        PreflightCheck(
+            "credentials_consistent",
+            credentials_ok,
+            (
+                "NUT credentials синхронизированы между upsd.users, upsmon и App."
+                if credentials_ok
+                else "NUT credentials не заданы или не совпадают между upsd.users, upsmon и App."
+            ),
+        )
+    )
+    return checks
 
 
 def _hardware_lb_check(path: Path, ups_name: str) -> tuple[bool, str]:
@@ -151,6 +345,9 @@ def read_policy_preflight(
     shutdown_policy_reader: Callable[[], UpsShutdownPolicy] = read_shutdown_policy,
     facts_reader: Callable[[UpsConfig], PolicySafetyFacts] = read_policy_safety_facts,
     ups_conf_path: Path = Path("/etc/nut/ups.conf"),
+    upsd_users_path: Path = Path("/etc/nut/upsd.users"),
+    upsmon_path: Path = Path("/etc/nut/upsmon.conf"),
+    app_config_path: Path = Path("/etc/dh_pve_app/dh_pve_app.conf"),
     helper_path: Path = Path(
         "/opt/digitalhouses/dh_pve_app/bin/dh-pve-ups-policy-cmd"
     ),
@@ -178,6 +375,15 @@ def read_policy_preflight(
     checks.append(PreflightCheck("nut_driver_active", driver_ok, driver_detail))
     server_ok, server_detail = _service_active(runner, "nut-server.service")
     checks.append(PreflightCheck("nut_server_active", server_ok, server_detail))
+
+    checks.extend(
+        _identity_checks(
+            config=config,
+            upsd_users_path=upsd_users_path,
+            upsmon_path=upsmon_path,
+            app_config_path=app_config_path,
+        )
+    )
 
     policy: UpsShutdownPolicy | None
     try:
