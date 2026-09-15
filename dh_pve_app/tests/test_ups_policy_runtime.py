@@ -4,8 +4,8 @@ from app.config import MqttConfig, UpsConfig
 from app.identity import HostIdentity
 from app.state_store import StateStore
 from app.ups_nut import parse_upsc_output
+from app.ups_policy import UpsPolicyDraft, policy_hash
 from app.ups_runtime import UpsRuntime
-from app.ups_shutdown_policy import UpsShutdownPolicy
 
 
 class Bridge:
@@ -64,77 +64,68 @@ def _config():
     )
 
 
-def _observed_policy():
-    return UpsShutdownPolicy(
-        state="Enabled",
-        role="primary",
-        nut_monitor="active",
-        shutdown_enabled=True,
-        shutdown_command="/sbin/shutdown -h now",
-        min_supplies=1,
-        pollfreq_seconds=5,
-        pollfreqalert_seconds=5,
-        deadtime_seconds=15,
-        hostsync_seconds=120,
-        finaldelay_seconds=5,
-        upssched_present=True,
-        upssched_rules=2,
-        upssched_active=True,
-        guest_shutdown_budget_seconds=280,
-        power_restore_behavior="native",
-        on_battery_delay_minutes=30,
-        power_restore_delay_seconds=120,
-    )
-
-
-def test_runtime_publishes_effective_read_only_shutdown_policy(tmp_path):
-    bridge = Bridge()
-    snapshot = parse_upsc_output(
-        "ups.status: OL\nbattery.charge: 100\nups.delay.start: 120\n"
-    )
-    runtime = UpsRuntime(
-        config=_config(),
-        mqtt_config=_mqtt(),
-        bridge=bridge,
-        identity=_identity(),
-        version="0.2.0",
-        state_store=StateStore(tmp_path / "ups.json"),
-        now_iso=lambda: "2026-09-13T06:00:00+05:00",
-        now_monotonic=lambda: 100.0,
-        reader=lambda config: snapshot,
-        capability_reader=lambda config: (_ for _ in ()).throw(RuntimeError("skip")),
-        shutdown_policy_reader=_observed_policy,
-    )
-
-    assert runtime.policy_applier is None
-    assert runtime.startup() is True
-
-    observed = bridge.states[-1]["shutdown_policy"]
-    assert observed["state"] == "Enabled"
-    assert observed["role"] == "primary"
-    assert observed["on_battery_delay_minutes"] == 30
-    assert observed["power_restore_delay_seconds"] == 120
-    assert observed["guest_shutdown_budget_seconds"] == 280
-
-
-def test_runtime_bridge_has_no_policy_apply_or_draft_events(tmp_path):
-    bridge = Bridge()
+def _runtime(tmp_path, persisted=None):
+    state_store = StateStore(tmp_path / "ups.json")
+    if persisted is not None:
+        state_store.save(persisted)
     snapshot = parse_upsc_output("ups.status: OL\nbattery.charge: 100\n")
-    runtime = UpsRuntime(
+    return UpsRuntime(
         config=_config(),
         mqtt_config=_mqtt(),
-        bridge=bridge,
+        bridge=Bridge(),
         identity=_identity(),
         version="0.2.0",
-        state_store=StateStore(tmp_path / "ups.json"),
-        now_iso=lambda: "2026-09-13T06:00:00+05:00",
+        state_store=state_store,
+        now_iso=lambda: "2026-09-16T01:00:00+05:00",
         now_monotonic=lambda: 100.0,
         reader=lambda config: snapshot,
         capability_reader=lambda config: (_ for _ in ()).throw(RuntimeError("skip")),
-        shutdown_policy_reader=_observed_policy,
     )
 
-    assert not hasattr(bridge, "ups_policy_updates")
-    assert not hasattr(bridge, "ups_policy_apply_requested")
-    assert runtime.policy_applier is None
-    assert runtime.process_events() is False
+
+def test_legacy_v1_policy_is_not_silently_promoted_to_active_v2(tmp_path):
+    runtime = _runtime(
+        tmp_path,
+        {
+            "policy_active": {
+                "on_battery_delay_minutes": 30,
+                "power_restore_delay_seconds": 120,
+            },
+            "policy_draft": {
+                "on_battery_delay_minutes": 45,
+                "power_restore_delay_seconds": 180,
+            },
+            "policy_status": "Active",
+            "policy_revision": 7,
+            "policy_hash": "legacy-hash",
+            "policy_last_applied": "2026-09-15T10:00:00+05:00",
+        },
+    )
+
+    assert runtime.policy_active is None
+    assert runtime.policy_draft == UpsPolicyDraft(20, 180)
+    assert runtime.policy_status == "Legacy policy"
+    assert runtime.policy_revision == 0
+    assert runtime.policy_hash is None
+    assert runtime.policy_last_applied is None
+
+
+def test_persisted_v2_active_policy_is_restored_without_revision_loss(tmp_path):
+    active = UpsPolicyDraft(25, 300)
+    runtime = _runtime(
+        tmp_path,
+        {
+            "policy_active": active.as_dict(),
+            "policy_draft": active.as_dict(),
+            "policy_status": "Active",
+            "policy_revision": 8,
+            "policy_last_applied": "2026-09-16T00:30:00+05:00",
+        },
+    )
+
+    assert runtime.policy_active == active
+    assert runtime.policy_draft == active
+    assert runtime.policy_status == "Active"
+    assert runtime.policy_revision == 8
+    assert runtime.policy_hash == policy_hash(active)
+    assert runtime.policy_last_applied == "2026-09-16T00:30:00+05:00"
