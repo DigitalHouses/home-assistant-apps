@@ -3,6 +3,7 @@ from pathlib import Path
 from app import main as main_module
 from app.config import AppConfig, GeneralConfig, MqttConfig
 from app.identity import HostIdentity
+from app.runtime_problems import ProblemAwareRuntime
 
 ROOT = Path(__file__).parents[1]
 
@@ -54,6 +55,7 @@ def test_runtime_scheduler_uses_frozen_collection_cadence(tmp_path, monkeypatch)
     monkeypatch.setattr(main_module, "resolve_identity", lambda general: _identity())
     _bridge, runtime = main_module.build_runtime(_config(), state_dir=tmp_path)
 
+    assert isinstance(runtime, ProblemAwareRuntime)
     assert runtime.scheduler.interval("cpu") == 10.0
     assert runtime.scheduler.interval("memory") == 10.0
     assert runtime.scheduler.interval("fans") == 10.0
