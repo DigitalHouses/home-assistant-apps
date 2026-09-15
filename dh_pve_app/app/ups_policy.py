@@ -11,6 +11,7 @@ class PolicyValidationError(ValueError):
     """Raised when a shutdown-policy value or combination is unsafe."""
 
 
+DEFAULT_SHUTDOWN_BATTERY_CHARGE_THRESHOLD_PERCENT = 20
 DEFAULT_RUNTIME_RESERVE_SECONDS = 180
 
 
@@ -89,6 +90,57 @@ def parse_policy_value(key: str, text: str) -> int:
     if not math.isfinite(numeric) or not numeric.is_integer():
         raise PolicyValidationError(f"Некорректное значение параметра {key}.")
     return _validate_value(key, int(numeric))
+
+
+def policy_from_mapping(value: object) -> UpsPolicyDraft | None:
+    if not isinstance(value, dict):
+        return None
+    expected = {
+        "shutdown_battery_charge_threshold_percent",
+        "runtime_reserve_seconds",
+    }
+    if set(value) != expected:
+        return None
+    try:
+        draft = UpsPolicyDraft(
+            shutdown_battery_charge_threshold_percent=int(
+                value["shutdown_battery_charge_threshold_percent"]
+            ),
+            runtime_reserve_seconds=int(value["runtime_reserve_seconds"]),
+        )
+        validate_policy(draft)
+    except (TypeError, ValueError, PolicyValidationError):
+        return None
+    return draft
+
+
+def migrate_legacy_policy_state(
+    raw: object,
+    *,
+    shutdown_battery_charge_threshold_percent: int | None,
+) -> UpsPolicyDraft | None:
+    """Build an unapplied v2 draft from legacy state without reusing timer semantics."""
+
+    current = policy_from_mapping(raw)
+    if current is not None:
+        return current
+    if not isinstance(raw, dict):
+        return None
+    if not ({"on_battery_delay_minutes", "power_restore_delay_seconds"} & set(raw)):
+        return None
+    if shutdown_battery_charge_threshold_percent is None:
+        return None
+    try:
+        threshold = _validate_value(
+            "shutdown_battery_charge_threshold_percent",
+            int(shutdown_battery_charge_threshold_percent),
+        )
+    except (TypeError, ValueError, PolicyValidationError):
+        return None
+    return UpsPolicyDraft(
+        shutdown_battery_charge_threshold_percent=threshold,
+        runtime_reserve_seconds=DEFAULT_RUNTIME_RESERVE_SECONDS,
+    )
 
 
 def policy_hash(policy: UpsPolicyDraft) -> str:
