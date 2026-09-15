@@ -205,6 +205,62 @@ def build_ups_discovery_payload(
             "entity_category": "diagnostic",
             "icon": "mdi:power-cycle",
         },
+        "policy_charge_threshold": {
+            "platform": "number",
+            "name": "Shutdown battery charge threshold",
+            "unique_id": uid("policy_charge_threshold"),
+            "default_entity_id": (
+                "number.dh_app_pve_ups_shutdown_battery_charge_threshold"
+            ),
+            "state_topic": topics.state,
+            "command_topic": topics.policy_charge_threshold_set,
+            "value_template": (
+                "{{ value_json.policy.draft.shutdown_battery_charge_threshold_percent "
+                "| default(none) }}"
+            ),
+            "min": 10,
+            "max": 30,
+            "step": 5,
+            "unit_of_measurement": "%",
+            "mode": "slider",
+            "availability": [app_availability],
+            "availability_mode": "all",
+            "entity_category": "config",
+            "icon": "mdi:battery-arrow-down-outline",
+        },
+        "policy_runtime_reserve": {
+            "platform": "number",
+            "name": "Shutdown runtime reserve",
+            "unique_id": uid("policy_runtime_reserve"),
+            "default_entity_id": "number.dh_app_pve_ups_shutdown_runtime_reserve",
+            "state_topic": topics.state,
+            "command_topic": topics.policy_runtime_reserve_set,
+            "value_template": (
+                "{{ value_json.policy.draft.runtime_reserve_seconds | default(none) }}"
+            ),
+            "min": 60,
+            "max": 900,
+            "step": 60,
+            "unit_of_measurement": "s",
+            "device_class": "duration",
+            "mode": "slider",
+            "availability": [app_availability],
+            "availability_mode": "all",
+            "entity_category": "config",
+            "icon": "mdi:timer-sand",
+        },
+        "policy_apply": {
+            "platform": "button",
+            "name": "Apply trigger policy",
+            "unique_id": uid("policy_apply"),
+            "default_entity_id": "button.dh_app_pve_ups_apply_trigger_policy",
+            "command_topic": topics.policy_apply,
+            "payload_press": "PRESS",
+            "availability": [app_availability],
+            "availability_mode": "all",
+            "entity_category": "config",
+            "icon": "mdi:check-decagram-outline",
+        },
     }
 
     components.update(
