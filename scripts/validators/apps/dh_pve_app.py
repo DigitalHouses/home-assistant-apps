@@ -7,8 +7,8 @@ from validators.common import fail, require_files
 
 EXPECTED_TOPIC_PREFIX = "DigitalHouses/Global/dh_pve_app"
 EXPECTED_DEVICE_NAME = "DH PVE"
-EXPECTED_REFRESH_ENTITY = "button.dh_pve_refresh"
-EXPECTED_LAST_REFRESH_ENTITY = "sensor.dh_pve_last_refresh"
+EXPECTED_REFRESH_ENTITY = "button.dh_app_pve_refresh"
+EXPECTED_LAST_REFRESH_ENTITY = "sensor.dh_app_pve_last_refresh"
 
 
 def _require_text(path: Path, expected: tuple[str, ...], label: str) -> None:
@@ -32,6 +32,7 @@ def validate_dh_pve_app(
             app / "app/discovery.py",
             app / "app/discovery_metrics.py",
             app / "app/discovery_guest.py",
+            app / "app/discovery_groups.py",
             app / "app/runtime_dynamic.py",
             app / "app/pve_cache.py",
             app / "app/disk_temperature.py",
@@ -56,6 +57,14 @@ def validate_dh_pve_app(
         app / "app/config.py",
         (f'DEFAULT_TOPIC_PREFIX = "{EXPECTED_TOPIC_PREFIX}"',),
         "MQTT",
+    )
+    _require_text(
+        app / "app/topics.py",
+        (
+            'device_id = f"dh_app_pve_{identity.instance_id}"',
+            'diagnostic_event=f"{base}/event/diagnostic"',
+        ),
+        "canonical topics",
     )
     _require_text(
         app / "app/discovery.py",
@@ -83,7 +92,24 @@ def validate_dh_pve_app(
             '"used_gib":',
             '"total_gib":',
         ),
-        "metric Discovery",
+        "metric Discovery intermediate",
+    )
+    _require_text(
+        app / "app/discovery_groups.py",
+        (
+            'object_id.startswith("dh_pve_")',
+            '"dh_app_pve_" + object_id.removeprefix("dh_pve_")',
+            '"default_entity_id": "sensor.dh_app_pve_problems"',
+            '"default_entity_id": "event.dh_app_pve_diagnostic"',
+            'entity_id="binary_sensor.dh_app_pve_cpu_temperature_problem"',
+            'entity_id=f"binary_sensor.dh_app_pve_storage_{slug}_percent_used_problem"',
+            'entity_id=f"binary_sensor.dh_app_pve_disk_{slug}_smart_problem"',
+            'entity_id=f"binary_sensor.dh_app_pve_gpu_{slug}_temperature_problem"',
+            '"problem_started"',
+            '"problem_recovered"',
+            '"problem_updated"',
+        ),
+        "canonical ready-state Discovery",
     )
     _require_text(
         app / "app/discovery_guest.py",
@@ -94,7 +120,7 @@ def validate_dh_pve_app(
             'section="guests"',
             'subject="passthrough"',
         ),
-        "guest Discovery",
+        "guest Discovery intermediate",
     )
     _require_text(
         app / "app/shutdown_discovery.py",
@@ -104,6 +130,7 @@ def validate_dh_pve_app(
             'entity_id=f"sensor.dh_pve_{kind}_{_slug(guest_id)}_shutdown"',
             '"default_entity_id": "sensor.dh_pve_ups_guest_shutdown_budget"',
             '"default_entity_id": "sensor.dh_pve_ups_shutdown_readiness"',
+            "route_pve_discovery_groups(",
         ),
         "shutdown Discovery",
     )
