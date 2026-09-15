@@ -35,15 +35,12 @@ def _identity():
     )
 
 
-def test_only_collector_poll_intervals_remain_as_runtime_number_settings():
-    assert set(SETTING_SPECS) == {
-        "fast_poll_interval_seconds",
-        "disk_poll_interval_seconds",
-    }
+def test_collection_cadence_is_not_exposed_as_runtime_number_settings():
+    assert SETTING_SPECS == {}
 
     components = build_discovery_payload(_config(), _identity(), version="0.2.0")["components"]
-    assert "setting_fast_poll_interval_seconds" in components
-    assert "setting_disk_poll_interval_seconds" in components
+    assert "setting_fast_poll_interval_seconds" not in components
+    assert "setting_disk_poll_interval_seconds" not in components
     assert not any("publish_delta" in key for key in components)
 
 
