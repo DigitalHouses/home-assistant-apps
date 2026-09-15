@@ -57,11 +57,14 @@ class DhPveRuntime:
         now_monotonic: Callable[[], float] = time.monotonic,
         setting_tasks: Mapping[str, tuple[str, ...]] | None = None,
         presentation_router: PvePresentationRouter | None = None,
+        static_collectors: tuple[str, ...] = (),
+        slow_tasks: tuple[str, ...] = (),
+        version_probe: Callable[[], str | None] | None = None,
     ) -> None:
         self.collectors = dict(collectors)
         self.bridge = bridge
         self.settings = settings
-        # Retained only as a compatibility path during migration.  Production
+        # Retained only as a compatibility path during migration. Production
         # MqttBridge exposes publish_state_group(), so adaptive presentation is
         # authoritative there and the legacy delta policy is not consulted.
         self.publish_policy = publish_policy
@@ -71,6 +74,10 @@ class DhPveRuntime:
         self.now_monotonic = now_monotonic
         self.setting_tasks = dict(setting_tasks or {})
         self.presentation_router = presentation_router or PvePresentationRouter()
+        self.static_collectors = tuple(static_collectors)
+        self.slow_tasks = frozenset(slow_tasks)
+        self.version_probe = version_probe
+        self._pve_version_fingerprint: str | None = None
         self._subsystems: dict[str, SubsystemState] = {}
         self._published_groups: dict[str, dict[str, object]] = {}
         self._pending_groups: dict[str, dict[str, object]] = {}
@@ -364,8 +371,46 @@ class DhPveRuntime:
             manual_refresh=manual_refresh,
         )
 
+    def _read_version_fingerprint(self) -> str | None:
+        if self.version_probe is None:
+            return None
+        try:
+            value = self.version_probe()
+        except Exception:
+            return None
+        if not isinstance(value, str) or not value:
+            return None
+        return value
+
+    def _prime_version_fingerprint(self) -> None:
+        value = self._read_version_fingerprint()
+        if value is not None:
+            self._pve_version_fingerprint = value
+
+    def _version_change_candidate(self) -> str | None:
+        value = self._read_version_fingerprint()
+        if value is None:
+            return None
+        if self._pve_version_fingerprint is None:
+            self._pve_version_fingerprint = value
+            return None
+        if value == self._pve_version_fingerprint:
+            return None
+        return value
+
+    def _static_collectors_available(self) -> bool:
+        return all(
+            self._subsystems.get(name) is not None
+            and self._subsystems[name].available
+            for name in self.static_collectors
+            if name in self.collectors
+        )
+
     def manual_refresh(self) -> bool:
-        return self.run_collection(force=True, manual_refresh=True)
+        published = self.run_collection(force=True, manual_refresh=True)
+        if self._static_collectors_available():
+            self._prime_version_fingerprint()
+        return published
 
     def publish_settings(self) -> bool:
         ok = True
@@ -382,6 +427,8 @@ class DhPveRuntime:
         discovery_ok = self.bridge.publish_discovery()
         settings_ok = self.publish_settings()
         state_ok = self.run_collection(force=True)
+        if self._static_collectors_available():
+            self._prime_version_fingerprint()
         return cleanup_ok and discovery_ok and settings_ok and state_ok
 
     def _republish_group_cache(self) -> bool:
@@ -447,7 +494,18 @@ class DhPveRuntime:
         due = self.scheduler.due(now_monotonic)
         if not due:
             return False
-        published = self.run_collection(due)
+
+        selected = list(due)
+        version_candidate = None
+        if self.slow_tasks.intersection(due):
+            version_candidate = self._version_change_candidate()
+            if version_candidate is not None:
+                selected = list(dict.fromkeys((*self.static_collectors, *selected)))
+
+        published = self.run_collection(tuple(selected))
+        if version_candidate is not None and self._static_collectors_available():
+            self._pve_version_fingerprint = version_candidate
+
         for name in due:
             self.scheduler.mark_run(name, now=now_monotonic)
         return published
