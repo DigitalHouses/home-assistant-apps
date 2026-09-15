@@ -166,7 +166,7 @@ def test_on_battery_transition_publishes_status_telemetry_and_diagnostics(tmp_pa
 
     grouped = dict(bridge.groups)
     assert set(grouped) == {"status", "telemetry", "diagnostics"}
-    assert grouped["diagnostics"]["app_profile"]["state"] == "high"
+    assert grouped["diagnostics"]["app_profile"]["state"] == "detail"
     assert grouped["diagnostics"]["last_publication"]["group"] == "status"
     assert grouped["diagnostics"]["last_publication"]["group_count"] == 2
     assert bridge.states == []
