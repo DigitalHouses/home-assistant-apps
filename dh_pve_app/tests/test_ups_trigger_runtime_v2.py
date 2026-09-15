@@ -2,10 +2,10 @@ import threading
 
 from app.config import MqttConfig, UpsConfig
 from app.identity import HostIdentity
+from app.shutdown_integration import ShutdownAwareUpsRuntime
 from app.state_store import StateStore
 from app.ups_nut import parse_upsc_output
 from app.ups_policy import UpsPolicyDraft
-from app.ups_runtime import UpsRuntime
 from app.ups_shutdown_budget import ShutdownBudgetInputs, calculate_shutdown_budget
 
 
@@ -31,6 +31,17 @@ class Bridge:
     def publish_ups_availability(self, online):
         self.availability.append(online)
         return True
+
+
+class HistoryTracker:
+    def __init__(self):
+        self.snapshots = []
+
+    def observe_ups(self, snapshot):
+        self.snapshots.append(snapshot)
+
+    def payload(self):
+        return {"previous_shutdown": None, "history": [], "history_count": 0}
 
 
 def _identity():
@@ -101,7 +112,7 @@ def _runtime(tmp_path, snapshots, *, active=True, budget=None, executor=None):
         except StopIteration:
             return last
 
-    return UpsRuntime(
+    return ShutdownAwareUpsRuntime(
         config=_config(),
         mqtt_config=_mqtt(),
         bridge=Bridge(),
@@ -113,6 +124,7 @@ def _runtime(tmp_path, snapshots, *, active=True, budget=None, executor=None):
         reader=reader,
         capability_reader=lambda config: (_ for _ in ()).throw(RuntimeError("skip")),
         shutdown_policy_reader=lambda: (_ for _ in ()).throw(RuntimeError("skip")),
+        shutdown_history_tracker=HistoryTracker(),
         shutdown_budget_reader=lambda: budget if budget is not None else _budget(),
         software_shutdown_executor=executor,
     )
