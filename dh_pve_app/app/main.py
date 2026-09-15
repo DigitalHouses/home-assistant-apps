@@ -30,7 +30,6 @@ from .shutdown_integration import (
 from .state_store import StateStore
 from .topics import build_topics, build_ups_topics
 from .ups_commission import commission_ups_policy
-from .ups_policy_host import read_policy_safety_facts
 from .ups_policy_preflight import (
     PreflightCheck,
     UpsPolicyPreflight,
@@ -38,6 +37,8 @@ from .ups_policy_preflight import (
 )
 from .ups_runtime import UpsRuntime
 from .ups_scan import UpsScanner
+from .ups_shutdown_budget_reader import read_shutdown_budget
+from .ups_shutdown_executor import execute_fixed_ups_shutdown
 from .ups_shutdown_policy import read_shutdown_policy
 
 APP_ROOT = Path(__file__).resolve().parents[1]
@@ -169,16 +170,20 @@ def build_ups_runtime(
     tracker = shutdown_history_tracker or _shutdown_tracker(state_dir)
 
     def observed_shutdown_policy():
-        budget: int | None = None
-        try:
-            budget = read_policy_safety_facts(
-                runtime_config
-            ).guest_shutdown_budget_seconds
-        except Exception:
-            pass
-        return read_shutdown_policy(
-            ups_name=runtime_config.name,
-            guest_shutdown_budget_seconds=budget,
+        return read_shutdown_policy(ups_name=runtime_config.name)
+
+    def current_shutdown_budget():
+        history_payload = tracker.payload()
+        raw_history = history_payload.get("history")
+        history = (
+            [item for item in raw_history if isinstance(item, dict)]
+            if isinstance(raw_history, list)
+            else []
+        )
+        return read_shutdown_budget(
+            runtime_config,
+            node_name=identity.node_name,
+            history=history,
         )
 
     return ShutdownAwareUpsRuntime(
@@ -193,6 +198,8 @@ def build_ups_runtime(
         now_monotonic=time.monotonic,
         shutdown_policy_reader=observed_shutdown_policy,
         shutdown_history_tracker=tracker,
+        shutdown_budget_reader=current_shutdown_budget,
+        software_shutdown_executor=execute_fixed_ups_shutdown,
     )
 
 
