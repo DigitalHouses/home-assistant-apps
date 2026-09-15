@@ -47,18 +47,14 @@ def test_refresh_press_sets_event():
     assert events.refresh_requested.is_set()
 
 
-def test_setting_command_is_validated_and_queued():
+def test_retired_poll_setting_command_is_not_accepted():
     topics = _topics()
     settings = RuntimeSettings()
     events = MqttEvents(topics, settings)
     topic = f"{topics.settings_prefix}/fast_poll_interval_seconds/set"
 
-    assert events.handle_message(topic, b"20") is True
-    update = events.setting_updates.get_nowait()
-
-    assert update.key == "fast_poll_interval_seconds"
-    assert update.value == 20.0
-    assert settings.get("fast_poll_interval_seconds") == 20.0
+    assert events.handle_message(topic, b"20") is False
+    assert events.setting_updates.empty()
 
 
 def test_removed_publish_delta_command_is_not_accepted():
