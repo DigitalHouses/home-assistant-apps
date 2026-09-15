@@ -2,12 +2,19 @@
 
 ## Unreleased
 
-- Add capability-driven `switch.dh_pve_ups_beeper` control when NUT exposes paired beeper on/off commands. Commands are executed by `dh_pve_app` on Proxmox and the switch state is confirmed from real `ups.beeper.status` feedback; load and UPS shutdown instant commands remain intentionally unavailable to Home Assistant.
-- Extend explicit root UPS/NUT commissioning to manage `/etc/nut/upsd.users` and the App command credentials as part of the same rollback-safe transaction as the shutdown policy.
-- Standardize the local UPS control identity on one `dh_primary_user` with `upsmon primary` and `instcmds = ALL`; preserve its existing password or generate a strong password on first commissioning and synchronize it with the selected `MONITOR` entry and App `[ups]` command credentials.
-- Restart `nut-server` and perform a non-destructive authenticated NUT protocol probe before completing commissioning; rollback all managed files and service state on authentication or apply failure without leaking credentials in errors.
-- Extend read-only UPS policy preflight to verify the managed NUT user, PRIMARY role, `instcmds = ALL`, selected `MONITOR` identity, App command identity and credential consistency.
-- Keep the Home Assistant/MQTT command surface restricted by explicit App allowlists despite the administrative NUT user having `instcmds = ALL`; arbitrary `upscmd`, FSD, `load.*`, `shutdown.*` and shell execution remain unavailable.
+- Replace the previous heavy/adaptive collection direction with the canonical Proxmox VE 8.x file/cache-first runtime: `/proc`/`/sys` and `/etc/pve`/PVE caches are primary sources, while expensive subprocess/API paths are reserved for data that has no cheap source and are never used as permanent fallback loops.
+- Freeze collection cadence independently from MQTT presentation: FAST 10 s, UPS 10 s, SLOW 60 s, HEALTH 1 h and event-driven STATIC refresh. Legacy `ups.poll_interval_seconds` remains load-compatible but is ignored and normalized to the fixed 10-second UPS cadence.
+- Separate decision/publication windows from collection and move toward domain-local NORMAL/DETAIL MQTT publication, immediate semantic/problem transitions, retained grouped state and explicit Recorder-safe history.
+- Migrate public MQTT Discovery identity to canonical `dh_app_pve_*` and `dh_app_pve_ups_*` entity IDs with retained legacy Discovery tombstones instead of leaving orphaned old entities.
+- Move problem calculation and threshold semantics into the App, expose App-owned `binary_sensor` problem state and aggregate presentation, and use native MQTT Event entities for `problem_started`, `problem_recovered`, `problem_updated` and UPS `config_changed` transitions.
+- Preserve capability-driven UPS beeper/test controls while keeping arbitrary shell, arbitrary `upscmd`, UPS load/output-off and generic shutdown commands unavailable to Home Assistant/MQTT.
+- Add UPS Trigger Policy v2: software shutdown is `charge threshold OR runtime <= shutdown_budget + reserve`, while native NUT Low Battery remains an independent emergency path and `ignorelb`/synthetic Low Battery overrides remain forbidden.
+- Add cheap shutdown-budget acquisition from PVE cache/config plus comparable clean shutdown history and configuration fingerprints; regular Trigger B evaluation no longer requires `qm list`/`pct list` polling.
+- Add a fixed immutable FSD boundary through `/opt/digitalhouses/dh_pve_app/bin/dh-pve-ups-policy-cmd dh-pve-ups-shutdown`; a software-trigger shutdown reason is recorded only after the fixed helper succeeds.
+- Replace the former ONBATT/upssched mutation product path and root commissioning CLI with HA draft controls for charge threshold/runtime reserve plus an explicit Apply button. The long-running daemon keeps `/etc/nut` read-only and existing administrator NUT/upssched content is observational only.
+- Make UPS policy Apply a durable two-phase transaction: preserve the previous active policy, request only a fixed `dh_pve_app.service` reload, complete through SIGHUP in the main loop, promote/reread/verify the target policy, publish synchronized state, then emit `config_changed` OLD -> NEW last. No-op Apply performs no reload/revision/event; failed or interrupted transactions roll back conservatively.
+- Remove the obsolete `ups_commission.py` and `ups_policy_apply.py` timer writer modules and their superseded ONBATT/upssched mutation tests while preserving read-only preflight, native Low Battery checks, fixed-helper ownership validation and the systemd `/etc/nut` sandbox.
+- Keep routine CI/deploy validation non-destructive: live FSD, UPS output-off, mains-unplug and deep-discharge validation remain a separate reviewed commissioning gate.
 
 ## 0.3.0
 
