@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from .diagnostic_events import DiagnosticEvent
 from .presentation_ups import UpsPresentationRouter
+from .problems import ProblemState, ProblemTransition
+from .ups_problems import UpsProblemEngine
 from .ups_runtime import UpsRuntime
 
 
@@ -10,6 +13,10 @@ class AdaptiveUpsRuntime(UpsRuntime):
     The legacy monolithic path remains available when a bridge does not expose
     ``publish_ups_state_group`` so older unit fakes and compatibility callers
     keep their existing contract. Production MqttBridge uses this group path.
+
+    App-owned UPS problem state is layered on top of the grouped path. It never
+    changes NUT collection cadence or shutdown policy semantics. Diagnostic
+    events are emitted only after the complete retained problem bundle succeeds.
     """
 
     def __init__(self, *args, **kwargs) -> None:
@@ -18,9 +25,27 @@ class AdaptiveUpsRuntime(UpsRuntime):
             source_interval_seconds=self.config.poll_interval_seconds
         )
         self._last_group_payloads: dict[str, dict[str, object]] = {}
+        self.problem_engine = UpsProblemEngine(
+            object_id=self.config.name,
+            object_name=self.config.name,
+        )
+        self._published_problem_ids: set[str] = set()
+        self._pending_problem_transitions: list[ProblemTransition] = []
+        self._problem_snapshot_dirty = False
 
     def _group_capable(self) -> bool:
         return callable(getattr(self.bridge, "publish_ups_state_group", None))
+
+    def _problem_capable(self) -> bool:
+        return all(
+            callable(getattr(self.bridge, name, None))
+            for name in (
+                "publish_ups_problem_state",
+                "publish_ups_problem_aggregate",
+                "publish_ups_problem_presentation",
+                "publish_ups_diagnostic_event",
+            )
+        )
 
     def _publish_groups(
         self,
@@ -84,9 +109,124 @@ class AdaptiveUpsRuntime(UpsRuntime):
         self._last_group_payloads["diagnostics"] = diagnostics
         return True
 
+    def _problem_presentation_payload(self) -> dict[str, object]:
+        aggregate = self.problem_engine.aggregate()
+        return {
+            "severity": aggregate.severity,
+            "summary": aggregate.summary,
+            "active": list(aggregate.active),
+        }
+
+    def _publish_problem_core(self, state: ProblemState) -> bool:
+        return bool(
+            self.bridge.publish_ups_problem_state(
+                state.problem_id,
+                state.active,
+            )
+        )
+
+    def _publish_problem_aggregate_bundle(self) -> bool:
+        aggregate = self.problem_engine.aggregate()
+        if not self.bridge.publish_ups_problem_aggregate(aggregate.count):
+            return False
+        if not self.bridge.publish_ups_problem_presentation(
+            self._problem_presentation_payload()
+        ):
+            return False
+        return True
+
+    def _publish_problem_transition(self, transition: ProblemTransition) -> bool:
+        state = transition.current
+        if not self._publish_problem_core(state):
+            return False
+        if not self._publish_problem_aggregate_bundle():
+            return False
+
+        aggregate = self.problem_engine.aggregate()
+        event = DiagnosticEvent.from_transition(
+            transition,
+            active_problem_count=aggregate.count,
+        )
+        if not self.bridge.publish_ups_diagnostic_event(event.as_payload()):
+            return False
+
+        self._published_problem_ids.add(state.problem_id)
+        self._problem_snapshot_dirty = False
+        return True
+
+    def _flush_pending_problem_transitions(self) -> bool:
+        if not self._problem_capable():
+            return True
+        while self._pending_problem_transitions:
+            transition = self._pending_problem_transitions[0]
+            if not self._publish_problem_transition(transition):
+                return False
+            self._pending_problem_transitions.pop(0)
+        return True
+
+    def _sync_current_problem_states(self) -> bool:
+        if not self._problem_capable():
+            return True
+
+        pending_ids = {
+            transition.current.problem_id
+            for transition in self._pending_problem_transitions
+        }
+        unpublished = [
+            state
+            for state in self.problem_engine.states()
+            if state.problem_id not in self._published_problem_ids
+            and state.problem_id not in pending_ids
+        ]
+
+        published_any = False
+        for state in unpublished:
+            if not self._publish_problem_core(state):
+                return False
+            self._published_problem_ids.add(state.problem_id)
+            published_any = True
+
+        if published_any:
+            self._problem_snapshot_dirty = True
+
+        if self._problem_snapshot_dirty:
+            if not self._publish_problem_aggregate_bundle():
+                return False
+            self._problem_snapshot_dirty = False
+        return True
+
+    def _observe_problem_snapshot(
+        self,
+        snapshot,
+        *,
+        nut_available: bool,
+    ) -> bool:
+        if not self._problem_capable():
+            return True
+        transitions = self.problem_engine.observe(
+            snapshot,
+            nut_available=nut_available,
+        )
+        self._pending_problem_transitions.extend(transitions)
+        transitions_ok = self._flush_pending_problem_transitions()
+        snapshot_ok = self._sync_current_problem_states()
+        return bool(transitions_ok and snapshot_ok)
+
+    def _republish_problem_snapshot(self) -> bool:
+        if not self._problem_capable():
+            return True
+        self._published_problem_ids.clear()
+        self._problem_snapshot_dirty = True
+        return self._sync_current_problem_states()
+
     def _collect(self, *, force: bool = False, manual_refresh: bool = False) -> bool:
         if not self._group_capable():
             return super()._collect(force=force, manual_refresh=manual_refresh)
+
+        # Complete an earlier retained-state/Event transaction before a new NUT
+        # observation can create a later transition.
+        if not self._flush_pending_problem_transitions():
+            return False
 
         collected_at = self.now_iso()
         now = self.now_monotonic()
@@ -105,6 +245,7 @@ class AdaptiveUpsRuntime(UpsRuntime):
             )
             self._publish_groups(publications, collected_at=collected_at)
             self.sync_discovery(force=False)
+            self._observe_problem_snapshot(None, nut_available=False)
             return False
 
         self.nut_available = True
@@ -131,6 +272,13 @@ class AdaptiveUpsRuntime(UpsRuntime):
             manual_refresh=manual_refresh,
         )
 
+        problem_ok = True
+        if state_ok:
+            problem_ok = self._observe_problem_snapshot(
+                snapshot,
+                nut_available=True,
+            )
+
         if state_ok:
             self._last_state_payload = payload
             if manual_refresh or history_changed:
@@ -138,7 +286,7 @@ class AdaptiveUpsRuntime(UpsRuntime):
         elif manual_refresh:
             self.last_refresh = previous_refresh
 
-        return bool(discovery_ok and state_ok)
+        return bool(discovery_ok and state_ok and problem_ok)
 
     def startup(self) -> bool:
         if not self._group_capable():
@@ -164,4 +312,12 @@ class AdaptiveUpsRuntime(UpsRuntime):
         publish = getattr(self.bridge, "publish_ups_state_group")
         for group, payload in self._last_group_payloads.items():
             state_ok = bool(publish(group, payload)) and state_ok
-        return bool(availability_ok and discovery_ok and state_ok)
+
+        pending_ok = self._flush_pending_problem_transitions()
+        problem_ok = pending_ok and self._republish_problem_snapshot()
+        return bool(
+            availability_ok
+            and discovery_ok
+            and state_ok
+            and problem_ok
+        )
