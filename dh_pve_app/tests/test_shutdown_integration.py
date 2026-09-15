@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+import json
 from types import SimpleNamespace
 
 from app.config import AppConfig, GeneralConfig, MqttConfig, UpsConfig
@@ -14,11 +17,6 @@ from app.ups_nut import parse_upsc_output
 class _Runner:
     def __call__(self, argv, *, timeout=20.0, check=True):
         argv = tuple(argv)
-        if argv == ("pvesh", "get", "/cluster/resources", "--type", "vm", "--output-format", "json"):
-            return (
-                '[{"type":"qemu","vmid":110,"name":"haos","status":"running"},'
-                '{"type":"lxc","vmid":149,"name":"climate","status":"running"}]'
-            )
         if argv == ("lspci", "-Dnn"):
             return ""
         if argv[:2] == ("qm", "agent"):
@@ -32,6 +30,31 @@ def _config_reader(kind: str, guest_id: str) -> str:
     if kind == "lxc" and guest_id == "149":
         return "onboot: 1\nstartup: order=20,down=60\n"
     return ""
+
+
+def _write_topology_cache(root) -> None:
+    (root / ".vmlist").write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "ids": {
+                    "110": {"node": "pve", "type": "qemu", "version": 1},
+                    "149": {"node": "pve", "type": "lxc", "version": 1},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    (root / ".rrd").write_text(
+        "\n".join(
+            [
+                "pve2.3-vm/110:600:haos:running:0:100:4:0.1:4294967296:2147483648:34359738368:8589934592:1:2:3:4",
+                "pve2.3-vm/149:600:climate:running:0:100:2:0.1:2147483648:1073741824:34359738368:8589934592:1:2:3:4",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
 
 
 def _mqtt():
@@ -62,11 +85,15 @@ def _app_config():
     )
 
 
-def test_guest_payload_exposes_effective_shutdown_configuration():
+def test_guest_payload_exposes_effective_shutdown_configuration(tmp_path):
+    _write_topology_cache(tmp_path)
     manager = ShutdownAwareTopologyManager(
         runner=_Runner(),
         dri_to_pci={},
         config_reader=_config_reader,
+        pve_root=tmp_path,
+        node_name="pve",
+        now_epoch=lambda: 110.0,
     )
     manager.full_scan()
 
