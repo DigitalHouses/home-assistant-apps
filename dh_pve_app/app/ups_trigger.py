@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from .ups_nut import UpsSnapshot
@@ -85,3 +86,36 @@ def evaluate_software_shutdown_trigger(
         charge_threshold_percent=policy.shutdown_battery_charge_threshold_percent,
         runtime_guard_threshold_seconds=runtime_threshold,
     )
+
+
+class SoftwareShutdownController:
+    """Commit a software-triggered shutdown once per process lifetime."""
+
+    def __init__(self, executor: Callable[[str], None]) -> None:
+        self.executor = executor
+        self.committed = False
+        self.committed_reason: str | None = None
+
+    def evaluate_and_commit(
+        self,
+        snapshot: UpsSnapshot,
+        policy: UpsPolicyDraft | None,
+        budget: ShutdownBudgetResult,
+    ) -> SoftwareShutdownTriggerResult | None:
+        if policy is None:
+            return None
+
+        result = evaluate_software_shutdown_trigger(snapshot, policy, budget)
+        if not result.triggered or self.committed:
+            return result
+
+        reason = result.reason
+        if reason is None:
+            return result
+
+        # The latch is deliberately set only after the fixed local executor
+        # returns successfully. If it fails, the caller may retry next sample.
+        self.executor(reason)
+        self.committed = True
+        self.committed_reason = reason
+        return result
