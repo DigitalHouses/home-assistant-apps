@@ -58,7 +58,7 @@ def by_group(publications):
 
 
 def test_startup_partitions_ups_state_into_independent_groups():
-    router = UpsPresentationRouter(source_interval_seconds=5.0)
+    router = UpsPresentationRouter(source_interval_seconds=10.0)
 
     publications = router.route(payload(), now=0.0, force=True)
     groups = by_group(publications)
@@ -73,8 +73,8 @@ def test_startup_partitions_ups_state_into_independent_groups():
     assert groups["diagnostics"].payload["shutdown_readiness"]["status"] == "Ready"
 
 
-def test_on_battery_transition_publishes_status_immediately_and_accelerates_telemetry():
-    router = UpsPresentationRouter(source_interval_seconds=5.0)
+def test_on_battery_transition_publishes_status_immediately_and_enters_detail():
+    router = UpsPresentationRouter(source_interval_seconds=10.0)
     router.route(payload(), now=0.0, force=True)
 
     changed = payload(
@@ -86,16 +86,16 @@ def test_on_battery_transition_publishes_status_immediately_and_accelerates_tele
         discharging=True,
         battery_charge_percent=99.0,
     )
-    publications = by_group(router.route(changed, now=5.0))
+    publications = by_group(router.route(changed, now=10.0))
 
     assert set(publications) == {"status", "telemetry"}
     assert publications["status"].reason == "change"
     assert publications["telemetry"].reason == "profile_transition"
-    assert publications["telemetry"].profile is PublicationProfile.HIGH
+    assert publications["telemetry"].profile is PublicationProfile.DETAIL
 
 
-def test_low_battery_transition_is_immediate_critical():
-    router = UpsPresentationRouter(source_interval_seconds=5.0)
+def test_low_battery_transition_is_immediate_detail():
+    router = UpsPresentationRouter(source_interval_seconds=10.0)
     router.route(payload(), now=0.0, force=True)
 
     changed = payload(
@@ -108,33 +108,33 @@ def test_low_battery_transition_is_immediate_critical():
         discharging=True,
         battery_charge_percent=8.0,
     )
-    publications = by_group(router.route(changed, now=5.0))
+    publications = by_group(router.route(changed, now=10.0))
 
-    assert publications["telemetry"].profile is PublicationProfile.CRITICAL
+    assert publications["telemetry"].profile is PublicationProfile.DETAIL
     assert publications["status"].payload["low_battery"] is True
 
 
-def test_online_numeric_jitter_waits_for_normal_average_window():
-    router = UpsPresentationRouter(source_interval_seconds=5.0)
+def test_online_numeric_jitter_waits_for_normal_fifteen_minute_average_window():
+    router = UpsPresentationRouter(source_interval_seconds=10.0)
     router.route(payload(load_percent=5.0), now=0.0, force=True)
 
-    assert router.route(payload(load_percent=7.0), now=5.0) == ()
-    assert router.route(payload(load_percent=9.0), now=300.0) == ()
+    assert router.route(payload(load_percent=7.0), now=300.0) == ()
+    assert router.route(payload(load_percent=9.0), now=600.0) == ()
 
-    publications = by_group(router.route(payload(load_percent=11.0), now=600.0))
+    publications = by_group(router.route(payload(load_percent=11.0), now=900.0))
     assert set(publications) == {"telemetry"}
     assert publications["telemetry"].reason == "average_window_complete"
     assert publications["telemetry"].payload["load_percent"] == 9.0
 
 
 def test_manual_refresh_publishes_all_groups_without_resetting_profile():
-    router = UpsPresentationRouter(source_interval_seconds=5.0)
+    router = UpsPresentationRouter(source_interval_seconds=10.0)
     router.route(payload(), now=0.0, force=True)
 
     publications = by_group(
         router.route(
-            payload(load_percent=17.0, last_refresh="2026-09-14T20:00:05+05:00"),
-            now=5.0,
+            payload(load_percent=17.0, last_refresh="2026-09-14T20:00:10+05:00"),
+            now=10.0,
             manual=True,
         )
     )
@@ -144,12 +144,12 @@ def test_manual_refresh_publishes_all_groups_without_resetting_profile():
     assert publications["telemetry"].payload["load_percent"] == 17.0
 
 
-def test_profile_summary_is_ups_only_and_reports_reason():
-    router = UpsPresentationRouter(source_interval_seconds=5.0)
+def test_profile_summary_is_ups_only_and_reports_detail_reason():
+    router = UpsPresentationRouter(source_interval_seconds=10.0)
     router.route(payload(), now=0.0, force=True)
-    router.route(payload(overload=True, status="Overload"), now=5.0)
+    router.route(payload(overload=True, status="Overload"), now=10.0)
 
     assert router.profile_summary() == {
-        "profile": "critical",
+        "profile": "detail",
         "reason": "overload",
     }
