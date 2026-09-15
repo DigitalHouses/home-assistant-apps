@@ -71,12 +71,6 @@ def shutdown_policy_issues(policy: object | None, *, nut_available: bool) -> lis
         issues.append("nut_monitor_not_active")
     if getattr(policy, "shutdown_enabled", None) is not True:
         issues.append("shutdown_disabled")
-    if getattr(policy, "upssched_present", None) is not True or getattr(
-        policy, "upssched_active", None
-    ) is not True:
-        issues.append("upssched_inactive")
-    if getattr(policy, "on_battery_delay_minutes", None) is None:
-        issues.append("on_battery_delay_unreadable")
     if getattr(policy, "power_restore_delay_seconds", None) is None:
         issues.append("power_restore_delay_unreadable")
     return issues
