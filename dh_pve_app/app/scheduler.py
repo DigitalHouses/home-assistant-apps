@@ -36,6 +36,12 @@ class Scheduler:
         next_due = float(now) if run_immediately else float(now) + interval
         self._tasks[name] = _Task(interval_seconds=interval, next_due=next_due)
 
+    def names(self) -> tuple[str, ...]:
+        return tuple(self._tasks)
+
+    def interval(self, name: str) -> float:
+        return self._tasks[name].interval_seconds
+
     def due(self, now: float) -> tuple[str, ...]:
         current = float(now)
         return tuple(
