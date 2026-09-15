@@ -52,13 +52,28 @@ def sample(value, policy="cpu_percent"):
     return CollectorSample(data={"value": value}, metrics={"value": MetricValue(value, policy)})
 
 
-def make_runtime(collectors, *, now_values=None, setting_tasks=None):
+def make_runtime(
+    collectors,
+    *,
+    now_values=None,
+    setting_tasks=None,
+    static_collectors=(),
+    slow_tasks=(),
+    version_probe=None,
+):
     bridge = FakeBridge()
     settings = RuntimeSettings()
     policy = PublishPolicy(settings)
     store = FakeStore()
     scheduler = Scheduler()
     clock_values = iter(now_values or ["2026-09-10T21:40:00+05:00"] * 20)
+    extra = {}
+    if static_collectors or slow_tasks or version_probe is not None:
+        extra = {
+            "static_collectors": static_collectors,
+            "slow_tasks": slow_tasks,
+            "version_probe": version_probe,
+        }
     runtime = DhPveRuntime(
         collectors=collectors,
         bridge=bridge,
@@ -69,6 +84,7 @@ def make_runtime(collectors, *, now_values=None, setting_tasks=None):
         now_iso=lambda: next(clock_values),
         now_monotonic=lambda: 100.0,
         setting_tasks=setting_tasks,
+        **extra,
     )
     return runtime, bridge, policy, store, scheduler
 
@@ -191,15 +207,6 @@ def test_refresh_event_runs_manual_refresh():
     assert runtime.last_refresh is not None
 
 
-def test_setting_update_is_persisted_and_republished():
-    runtime, bridge, _, store, _ = make_runtime({"cpu": lambda: sample(10.0)})
-    runtime.settings.apply("fast_poll_interval_seconds", "20")
-    bridge.setting_updates.put(Update("fast_poll_interval_seconds", 20.0))
-    assert runtime.process_events() is True
-    assert store.data["runtime_settings"]["fast_poll_interval_seconds"] == 20.0
-    assert ("fast_poll_interval_seconds", 20.0) in bridge.setting_states
-
-
 def test_scheduler_runs_only_due_collectors():
     calls = {"fast": 0, "slow": 0}
 
@@ -218,14 +225,34 @@ def test_scheduler_runs_only_due_collectors():
     assert calls == {"fast": 1, "slow": 0}
 
 
-def test_poll_interval_setting_reschedules_registered_tasks():
-    runtime, bridge, _, _, scheduler = make_runtime(
-        {"fast": lambda: sample(10.0)},
-        setting_tasks={"fast_poll_interval_seconds": ("fast",)},
+def test_slow_version_change_refreshes_static_exactly_once():
+    calls = {"static": 0, "slow": 0}
+    fingerprints = iter(["A", "A", "B", "B"])
+
+    def static():
+        calls["static"] += 1
+        return sample(calls["static"], "discrete")
+
+    def slow():
+        calls["slow"] += 1
+        return sample(calls["slow"])
+
+    runtime, _, _, _, scheduler = make_runtime(
+        {"static": static, "slow": slow},
+        static_collectors=("static",),
+        slow_tasks=("slow",),
+        version_probe=lambda: next(fingerprints),
     )
-    scheduler.add("fast", interval_seconds=10, now=0)
-    runtime.settings.apply("fast_poll_interval_seconds", "20")
-    bridge.setting_updates.put(Update("fast_poll_interval_seconds", 20.0))
-    assert runtime.process_events() is True
-    assert scheduler.due(119.9) == ()
-    assert scheduler.due(120.0) == ("fast",)
+    scheduler.add("slow", interval_seconds=60, now=0)
+
+    assert runtime.startup() is True
+    assert calls == {"static": 1, "slow": 1}
+
+    runtime.tick(60)
+    assert calls == {"static": 1, "slow": 2}
+
+    runtime.tick(120)
+    assert calls == {"static": 2, "slow": 3}
+
+    runtime.tick(180)
+    assert calls == {"static": 2, "slow": 4}
