@@ -109,6 +109,7 @@ def commission_ups_policy(
         verify_nut_credentials(
             host=config.host,
             port=config.port,
+            ups_name=config.name,
             username=username,
             password=password,
             timeout_seconds=config.command_timeout_seconds,
