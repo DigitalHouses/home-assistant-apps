@@ -11,15 +11,20 @@ class PolicyValidationError(ValueError):
     """Raised when a shutdown-policy value or combination is unsafe."""
 
 
+DEFAULT_RUNTIME_RESERVE_SECONDS = 180
+
+
 @dataclass(frozen=True)
 class UpsPolicyDraft:
-    on_battery_delay_minutes: int
-    power_restore_delay_seconds: int
+    shutdown_battery_charge_threshold_percent: int
+    runtime_reserve_seconds: int
 
     def as_dict(self) -> dict[str, int]:
         return {
-            "on_battery_delay_minutes": self.on_battery_delay_minutes,
-            "power_restore_delay_seconds": self.power_restore_delay_seconds,
+            "shutdown_battery_charge_threshold_percent": (
+                self.shutdown_battery_charge_threshold_percent
+            ),
+            "runtime_reserve_seconds": self.runtime_reserve_seconds,
         }
 
 
@@ -32,6 +37,8 @@ class GuestShutdownTask:
 
 @dataclass(frozen=True)
 class PolicySafetyFacts:
+    """Legacy-compatible host facts container pending the canonical budget engine."""
+
     guest_shutdown_budget_seconds: int
     hostsync_seconds: int
     finaldelay_seconds: int
@@ -42,8 +49,8 @@ class PolicySafetyFacts:
 
 @dataclass(frozen=True)
 class PolicyValidationResult:
-    on_battery_delay_seconds: int
-    power_restore_delay_seconds: int
+    shutdown_battery_charge_threshold_percent: int
+    runtime_reserve_seconds: int
 
 
 @dataclass(frozen=True)
@@ -53,8 +60,8 @@ class PolicyApplyResult:
 
 
 _POLICY_RANGES: dict[str, tuple[int, int, int]] = {
-    "on_battery_delay_minutes": (5, 60, 5),
-    "power_restore_delay_seconds": (60, 300, 30),
+    "shutdown_battery_charge_threshold_percent": (10, 30, 5),
+    "runtime_reserve_seconds": (60, 900, 60),
 }
 
 
@@ -110,7 +117,9 @@ def calculate_guest_shutdown_budget(
     max_workers: int,
 ) -> int:
     if max_workers < 1:
-        raise PolicyValidationError("Количество Proxmox shutdown workers должно быть не меньше 1.")
+        raise PolicyValidationError(
+            "Количество Proxmox shutdown workers должно быть не меньше 1."
+        )
 
     groups: dict[int | None, list[GuestShutdownTask]] = {}
     for task in tasks:
@@ -131,11 +140,13 @@ def validate_policy(
     draft: UpsPolicyDraft,
     facts: PolicySafetyFacts | None = None,
 ) -> PolicyValidationResult:
-    on_battery = _validate_value(
-        "on_battery_delay_minutes", draft.on_battery_delay_minutes
+    charge_threshold = _validate_value(
+        "shutdown_battery_charge_threshold_percent",
+        draft.shutdown_battery_charge_threshold_percent,
     )
-    restore_delay = _validate_value(
-        "power_restore_delay_seconds", draft.power_restore_delay_seconds
+    reserve = _validate_value(
+        "runtime_reserve_seconds",
+        draft.runtime_reserve_seconds,
     )
 
     if facts is not None:
@@ -153,6 +164,6 @@ def validate_policy(
                 )
 
     return PolicyValidationResult(
-        on_battery_delay_seconds=on_battery * 60,
-        power_restore_delay_seconds=restore_delay,
+        shutdown_battery_charge_threshold_percent=charge_threshold,
+        runtime_reserve_seconds=reserve,
     )
