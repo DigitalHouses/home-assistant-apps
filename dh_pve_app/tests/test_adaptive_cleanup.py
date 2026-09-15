@@ -47,18 +47,17 @@ def test_collection_cadence_is_not_exposed_as_runtime_number_settings():
     assert not any("publish_delta" in key for key in components)
 
 
-def test_ha_package_is_recorder_only_without_duplicate_threshold_helpers():
+def test_ha_package_keeps_recorder_narrow_and_threshold_logic_in_app():
     text = (ROOT / "examples" / "packages" / "dh_app_pve_package.yaml").read_text()
 
     assert "recorder:" in text
-    assert "sensor.dh_pve_*" in text
-    assert "binary_sensor.dh_pve_*" in text
-    assert "number.dh_pve_ups_*" in text
-    assert "time.dh_pve_ups_*" in text
+    assert "sensor.dh_app_pve_cpu_usage" in text
+    assert "sensor.dh_app_pve_ups_status" in text
+    assert "sensor.dh_app_pve_storage_*_percent_used" in text
+    assert "sensor.dh_app_pve_*" not in text
+    assert "binary_sensor.dh_app_pve_*" not in text
     assert "input_number:" not in text
     assert "automation:" not in text
-    assert "_temperature_threshold" not in text
-    assert "storage_usage_threshold" not in text
 
 
 def test_duplicate_ups_runtime_seconds_entity_is_removed_from_discovery():
