@@ -293,10 +293,21 @@ class MqttBridge(MqttEvents):
             self.log.exception("MQTT publish failed: %s", topic)
             return False
 
-    def _problem_topic(self, problem_id: str, suffix: str) -> str:
+    @staticmethod
+    def _validate_problem_id(problem_id: str) -> str:
         if not isinstance(problem_id, str) or _PROBLEM_ID.fullmatch(problem_id) is None:
             raise ValueError(f"invalid problem id: {problem_id!r}")
+        return problem_id
+
+    def _problem_topic(self, problem_id: str, suffix: str) -> str:
+        problem_id = self._validate_problem_id(problem_id)
         return f"{self.topics.base}/problems/{problem_id}/{suffix}"
+
+    def _ups_problem_topic(self, problem_id: str, suffix: str) -> str:
+        problem_id = self._validate_problem_id(problem_id)
+        if self.ups_topics is None:
+            raise RuntimeError("UPS MQTT topics are not configured")
+        return f"{self.ups_topics.base}/problems/{problem_id}/{suffix}"
 
     def publish_discovery(self) -> bool:
         return self._publish(
@@ -391,7 +402,11 @@ class MqttBridge(MqttEvents):
     def clear_legacy_ups_discovery(self) -> bool:
         if self.ups_topics is None:
             return False
-        return self._publish(self.ups_topics.legacy_discovery, "", retain=True)
+        ok = True
+        for topic in self.ups_topics.legacy_discoveries:
+            published = self._publish(topic, "", retain=True)
+            ok = published and ok
+        return ok
 
     def clear_legacy_ups_state(self) -> bool:
         if self.ups_topics is None:
@@ -414,6 +429,37 @@ class MqttBridge(MqttEvents):
             self.ups_topics.diagnostic_event,
             json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
             retain=False,
+        )
+
+    def publish_ups_problem_state(self, problem_id: str, active: bool) -> bool:
+        if self.ups_topics is None:
+            return False
+        if not isinstance(active, bool):
+            raise ValueError("UPS problem state must be bool")
+        return self._publish(
+            self._ups_problem_topic(problem_id, "state"),
+            "ON" if active else "OFF",
+            retain=True,
+        )
+
+    def publish_ups_problem_aggregate(self, count: int) -> bool:
+        if self.ups_topics is None:
+            return False
+        if isinstance(count, bool) or not isinstance(count, int) or count < 0:
+            raise ValueError("UPS problem aggregate count must be a non-negative integer")
+        return self._publish(
+            f"{self.ups_topics.base}/problems/aggregate",
+            str(count),
+            retain=True,
+        )
+
+    def publish_ups_problem_presentation(self, payload: dict[str, object]) -> bool:
+        if self.ups_topics is None:
+            return False
+        return self._publish(
+            f"{self.ups_topics.base}/problems/presentation",
+            json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+            retain=True,
         )
 
     def publish_ups_state_group(self, group: str, payload: dict[str, object]) -> bool:
