@@ -745,6 +745,11 @@ class UpsPolicyApplier:
                 if identity_mode
                 else "unknown"
             )
+            if identity_mode and app_active_before == "unknown":
+                raise PolicyApplyError(
+                    "Не удалось определить состояние dh_pve_app.service; "
+                    "commissioning остановлен."
+                )
         except Exception as exc:
             detail = _redact_secret(str(exc), managed_password)
             return PolicyApplyResult(False, f"Не удалось подготовить политику UPS: {detail}")
