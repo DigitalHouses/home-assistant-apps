@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 
 from .app import CollectorSample
 from .publish_policy import MetricValue
@@ -11,6 +11,8 @@ from .shutdown_history import ShutdownHistoryTracker, evaluate_shutdown_readines
 from .topology import TopologyManager
 from .ups_group_runtime import AdaptiveUpsRuntime
 from .ups_nut import read_ups
+from .ups_shutdown_budget import ShutdownBudgetResult
+from .ups_trigger import SoftwareShutdownController, SoftwareShutdownTriggerResult
 
 
 def parse_guest_shutdown_config(config: str) -> dict[str, object]:
@@ -117,9 +119,19 @@ class ShutdownAwareUpsRuntime(AdaptiveUpsRuntime):
         *args,
         shutdown_history_tracker: ShutdownHistoryTracker,
         reader=read_ups,
+        shutdown_budget_reader: Callable[[], ShutdownBudgetResult] | None = None,
+        software_shutdown_executor: Callable[[str], None] | None = None,
         **kwargs,
     ) -> None:
         self.shutdown_history_tracker = shutdown_history_tracker
+        self.shutdown_budget_reader = shutdown_budget_reader
+        self.software_shutdown_controller = (
+            SoftwareShutdownController(software_shutdown_executor)
+            if software_shutdown_executor is not None
+            else None
+        )
+        self.last_software_shutdown_trigger: SoftwareShutdownTriggerResult | None = None
+        self.last_shutdown_budget: ShutdownBudgetResult | None = None
 
         def observed_reader(config):
             snapshot = reader(config)
@@ -127,6 +139,49 @@ class ShutdownAwareUpsRuntime(AdaptiveUpsRuntime):
             return snapshot
 
         super().__init__(*args, reader=observed_reader, **kwargs)
+
+    @property
+    def software_shutdown_committed(self) -> bool:
+        controller = self.software_shutdown_controller
+        return bool(controller is not None and controller.committed)
+
+    @property
+    def software_shutdown_reason(self) -> str | None:
+        controller = self.software_shutdown_controller
+        return controller.committed_reason if controller is not None else None
+
+    def _evaluate_software_shutdown(self) -> None:
+        controller = self.software_shutdown_controller
+        budget_reader = self.shutdown_budget_reader
+        snapshot = self.last_snapshot
+        if (
+            controller is None
+            or budget_reader is None
+            or snapshot is None
+            or not self.nut_available
+        ):
+            return
+        try:
+            budget = budget_reader()
+            self.last_shutdown_budget = budget
+            self.last_software_shutdown_trigger = controller.evaluate_and_commit(
+                snapshot,
+                self.policy_active,
+                budget,
+            )
+        except Exception as exc:
+            # A local FSD/helper failure must never kill monitoring. Do not latch;
+            # the controller will retry on the next successful UPS sample.
+            self.log.error(
+                "Не удалось зафиксировать software shutdown UPS (%s); повтор на следующем опросе",
+                type(exc).__name__,
+            )
+
+    def _collect(self, *, force: bool = False, manual_refresh: bool = False) -> bool:
+        result = super()._collect(force=force, manual_refresh=manual_refresh)
+        if self.nut_available and self.last_snapshot is not None:
+            self._evaluate_software_shutdown()
+        return result
 
     def _auxiliary_fields(self) -> dict[str, object]:
         fields = super()._auxiliary_fields()
