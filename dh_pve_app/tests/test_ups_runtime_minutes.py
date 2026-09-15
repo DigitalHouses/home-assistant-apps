@@ -84,7 +84,7 @@ def test_production_discovery_exposes_minutes_without_duplicate_seconds_entity()
     )["components"]
 
     minutes = components["battery_runtime_minutes"]
-    assert minutes["default_entity_id"] == "sensor.dh_pve_ups_battery_runtime_minutes"
+    assert minutes["default_entity_id"] == "sensor.dh_app_pve_ups_battery_runtime_minutes"
     assert minutes["value_template"] == "{{ value_json.battery_runtime_minutes }}"
     assert minutes["unit_of_measurement"] == "min"
     assert minutes["device_class"] == "duration"
