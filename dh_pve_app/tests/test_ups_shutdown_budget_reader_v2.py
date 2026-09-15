@@ -26,8 +26,8 @@ def _seed(tmp_path: Path):
     pve = tmp_path / "pve"
     qemu = pve / "qemu-server"
     lxc = pve / "lxc"
-    qemu.mkdir(parents=True)
-    lxc.mkdir(parents=True)
+    qemu.mkdir(parents=True, exist_ok=True)
+    lxc.mkdir(parents=True, exist_ok=True)
     (qemu / "110.conf").write_text(
         "name: haos\nonboot: 1\nstartup: order=3,up=30,down=60\n",
         encoding="utf-8",
