@@ -182,7 +182,7 @@ def build_ups_runtime(
         )
         return read_shutdown_budget(
             runtime_config,
-            node_name=identity.node_name,
+            node_name=identity.hostname,
             history=history,
         )
 
