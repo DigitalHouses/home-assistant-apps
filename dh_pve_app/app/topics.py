@@ -37,8 +37,8 @@ class UpsTopics:
     test_quick_time_set: str
     test_deep_interval_days_set: str
     test_deep_time_set: str
-    policy_on_battery_delay_set: str
-    policy_power_restore_delay_set: str
+    policy_charge_threshold_set: str
+    policy_runtime_reserve_set: str
     policy_apply: str
     diagnostic_event: str
     discovery: str
@@ -114,8 +114,8 @@ def build_ups_topics(mqtt: MqttConfig, identity: HostIdentity) -> UpsTopics:
         test_quick_time_set=f"{test_schedule_base}/quick/time/set",
         test_deep_interval_days_set=f"{test_schedule_base}/deep/interval_days/set",
         test_deep_time_set=f"{test_schedule_base}/deep/time/set",
-        policy_on_battery_delay_set=f"{policy_base}/on_battery_delay/set",
-        policy_power_restore_delay_set=f"{policy_base}/power_restore_delay/set",
+        policy_charge_threshold_set=f"{policy_base}/shutdown_battery_charge_threshold/set",
+        policy_runtime_reserve_set=f"{policy_base}/shutdown_runtime_reserve/set",
         policy_apply=f"{policy_base}/apply",
         diagnostic_event=f"{base}/event/diagnostic",
         discovery=f"{discovery_prefix}/device/{device_id}/config",
