@@ -6,117 +6,95 @@ Depends on: PR #12 (`fix/dh-pve-nut-command-acl`, head `40f1121b5560a3832569cdfe
 
 ## Purpose
 
-Add production-grade incident observability to `dh_pve_app` without turning the application into a high-volume logger or adding a second log-storage subsystem.
+Add production incident observability to `dh_pve_app` without creating a second logging subsystem or a high-volume log stream.
 
-The design is driven by the 2026-09-15 UPS incident, where the host heated sharply while on battery and the cause had to be reconstructed with an external observer. The eventual root cause was a NUT/upssched CPU loop, while `dh_pve_app` collectors contributed shorter CPU spikes. The application should provide enough evidence in its normal journal to distinguish these cases during the next incident.
+The 2026-09-15 UPS incident showed the gap: the host heated sharply while on battery, but the root cause had to be reconstructed with an external observer. The sustained load was a NUT/upssched CPU loop; `dh_pve_app` collectors contributed shorter CPU spikes. A normal production journal should have made that distinction obvious.
 
 ## Goals
 
-- Make it possible to answer, from the normal system journal, which subsystem consumed time and CPU around an incident.
-- Measure collector duration and failure/recovery without changing collector semantics.
-- Measure important external command duration because commands such as `pvesh`, `qm guest exec`, `pvesm`, and `smartctl` can dominate collector cost.
-- Record one compact performance summary per minute at INFO level.
-- Record warnings for slow, failed, and timed-out operations.
-- Keep detailed per-operation success logging at DEBUG level only.
-- Add a durable shutdown incident timeline that survives reboot and records the policy context active during that shutdown.
-- Keep disk usage bounded by existing `journald` retention; do not create custom log files, custom rotation, cron cleanup, or application-owned ring buffers.
+- Show which collector/command consumed time around an incident.
+- Correlate host pressure with `dh_pve_app.service` and `nut-monitor.service` CPU.
+- Emit one compact performance/collector/command summary every 60 seconds at INFO.
+- Log slow/failing operations without logging every successful poll.
+- Keep per-operation success detail at DEBUG only.
+- Persist a compact shutdown incident timeline and the active policy context across reboot.
+- Use `journald` retention only; no custom log files, cron cleanup, logrotate config, or application ring buffer.
 - Keep secrets out of logs.
-- Preserve monitoring and shutdown safety if observability itself fails.
+- Make observability fail-open: an instrumentation failure must never affect monitoring or shutdown safety.
 
 ## Non-goals
 
-- No new monitoring database.
-- No custom log daemon or JSONL file storage.
-- No per-sample telemetry log at INFO.
-- No Home Assistant control for log verbosity beyond the existing application log-level mechanism.
-- No automatic storage dependency detection in this change.
-- No destructive UPS/FSD testing.
+- No monitoring database.
+- No fast diagnostic MQTT entities.
+- No Home Assistant logging knobs beyond the existing app log level.
+- No storage dependency detection in this change.
+- No destructive UPS/FSD test.
 
-## Existing architecture
+## Existing boundaries to preserve
 
-`dh_pve_app` already has useful isolation boundaries:
-
-- `DhPveRuntime._collect_one()` executes each collector and contains collector failures.
-- production collectors call shared command helpers such as `production._run()`.
-- `TopologyManager` accepts a runner dependency and therefore can be instrumented without coupling topology logic to logging.
-- systemd already owns stdout/stderr through `journald`.
+- `DhPveRuntime._collect_one()` contains collector failures.
+- Production collectors use command helpers such as `production._run()`.
+- `TopologyManager` already accepts a runner dependency.
+- systemd sends stdout/stderr to `journald`.
 - `ShutdownHistoryTracker` persists reboot/shutdown history under `/var/lib/dh_pve_app`.
 
-The current gaps are:
-
-- `_collect_one()` does not measure or log collector duration;
-- many external command calls are not timed or attributed in a common way;
-- some expected collector exceptions are intentionally swallowed, making slow/failing internal operations invisible;
-- no compact periodic summary correlates host pressure with application/NUT service CPU;
-- shutdown history records outcome, but not a complete incident timeline and policy snapshot suitable for forensic review.
+Observability augments these boundaries; it must not change collector cadence, MQTT publication policy, or NUT shutdown behavior.
 
 ## Logging model
 
-Use the existing Python logging pipeline and `journald` only.
-
 ### INFO
 
-INFO is for low-volume operational evidence:
+INFO contains only low-volume operational evidence:
 
-- app startup and clean stop;
-- MQTT connection/recovery transitions already useful operationally;
-- UPS state transitions relevant to shutdown decisions;
-- one aggregated `PERF` summary per 60 seconds;
-- one aggregated `COLLECTORS` summary per 60 seconds;
-- one aggregated `COMMANDS` summary per 60 seconds;
+- app startup/stop;
+- meaningful MQTT/UPS transitions;
+- one `PERF` line per 60 seconds;
+- one `COLLECTORS` line per 60 seconds;
+- one `COMMANDS` line per 60 seconds;
 - shutdown timeline milestones;
-- policy revision applied during a shutdown incident.
+- UPS trigger/FSD transitions once Trigger Policy v2 exists.
 
-INFO must not log every collector run or every successful external command.
+INFO must not contain every poll or every successful command.
 
 ### WARNING / ERROR
 
-Warn on:
+WARN/ERROR on:
 
 - collector failure;
-- collector recovery after failure;
-- collector duration above its slow-operation threshold;
-- command non-zero exit when unexpected;
-- command timeout;
-- command duration above its slow-operation threshold;
+- recovery after collector failure;
+- command failure/timeout;
+- slow collector/command;
 - inability to read performance accounting;
 - inability to persist shutdown timeline state.
 
-Repeated identical warnings must be rate-limited or transition-based so a single broken subsystem cannot flood the journal.
+Repeated warning suppression rule:
+
+- same logical key + same failure class: at most one WARNING per 60 seconds;
+- recovery is always logged once when the operation becomes healthy again;
+- a different failure class may log immediately.
 
 ### DEBUG
 
-DEBUG may contain:
-
-- each collector start/end with duration;
-- each instrumented external command with duration and result category;
-- detailed presentation/router decisions when needed;
-- runtime-trigger evaluation detail once UPS Trigger Policy v2 exists.
-
-DEBUG is off in normal production operation.
+DEBUG may contain every collector/command duration and detailed decision information. DEBUG is off in normal production operation.
 
 ## Journald retention and disk safety
 
-No application-owned cleanup logic is added.
+No application cleanup mechanism is added. `journald` remains responsible for retention/rotation/deletion.
 
-`dh_pve_app` writes to stdout/stderr as it does today; systemd/journald remains responsible for retention, rotation, and deletion of old logs according to host policy.
+The service explicitly limits bursts:
 
-The application must reduce volume at the source:
+```ini
+LogRateLimitIntervalSec=30s
+LogRateLimitBurst=200
+```
 
-- summaries once per 60 seconds;
-- event/transition logging instead of repeated state logging;
-- per-operation success details only at DEBUG;
-- repeated warnings de-duplicated or rate-limited.
+These values are a safety net, not a substitute for low-volume logging. `systemd-analyze verify` is part of the release gate.
 
-The systemd unit should explicitly use sensible journald rate limiting so a software defect cannot emit unbounded lines in a short interval. The implementation must use systemd-supported service rate-limit directives appropriate for the target Debian/systemd version and verify them with `systemd-analyze verify`.
+## Runtime statistics accumulator
 
-## Instrumentation components
+Create one process-local accumulator for the current 60-second summary window.
 
-### 1. Operation statistics accumulator
-
-Introduce a small process-local accumulator responsible only for aggregated runtime statistics.
-
-For each collector and command key it tracks the current summary window:
+For each logical collector/command key record:
 
 - count;
 - total duration;
@@ -124,87 +102,94 @@ For each collector and command key it tracks the current summary window:
 - failures;
 - timeouts where applicable.
 
-The accumulator resets after the periodic summary is emitted.
+The window is reset only after the summary is emitted. The accumulator is not persisted and is not published to MQTT.
 
-It is not persisted across restarts and is not published to MQTT.
+## Collector instrumentation
 
-### 2. Collector instrumentation
+Instrument `DhPveRuntime._collect_one()` with monotonic timing around the existing call.
 
-Instrument `DhPveRuntime._collect_one()` around the existing collector call.
+Behavior:
 
-For each collector run:
+- record success/failure/duration;
+- preserve `SubsystemState` semantics exactly;
+- WARN only on failure, recovery, or slow duration;
+- DEBUG may log every run;
+- instrumentation exceptions are swallowed after a rate-limited warning and cannot fail the collector.
 
-- measure monotonic elapsed time;
-- record success/failure in the accumulator;
-- preserve the existing `SubsystemState` behavior exactly;
-- WARN only on failure, recovery, or an abnormal duration;
-- DEBUG may show every duration.
+Slow collector thresholds for the first release:
 
-Collector instrumentation must not change scheduling or publication decisions.
+| Collector | WARN at |
+|---|---:|
+| `cpu` | 1.0 s |
+| `memory` | 1.0 s |
+| `fans` | 1.0 s |
+| `guests` | 2.0 s |
+| `topology` | 2.0 s |
+| `storage` | 2.0 s |
+| `gpu` | 6.0 s |
+| `smart` | 20.0 s |
+| `host` | 5.0 s |
 
-Example summary:
+These thresholds are diagnostics only and never alter scheduling/profiles.
+
+Example:
 
 ```text
-COLLECTORS window=60s cpu=count:6 avg:0.012s max:0.018s fail:0 memory=count:6 avg:0.004s max:0.006s fail:0 guests=count:2 avg:1.10s max:1.20s fail:0 gpu=count:2 avg:4.80s max:5.00s fail:0
+COLLECTORS window=60s cpu=count:6 avg:0.012s max:0.018s fail:0 guests=count:2 avg:1.10s max:1.20s fail:0 gpu=count:2 avg:4.80s max:5.00s fail:0
 ```
 
-Formatting can be compact, but the field names and collector identity must be stable enough for grep/journal analysis.
+## Instrumented external command runner
 
-### 3. Instrumented external command runner
+Introduce one reusable runner for production collectors/topology. It must preserve existing stdout/check/timeout behavior while adding monotonic timing and stable attribution.
 
-Create one reusable runner abstraction for commands executed by production collectors/topology.
+Stable keys and first-release WARN thresholds:
 
-Responsibilities:
+| Key | WARN at |
+|---|---:|
+| `pvesh.cluster_resources` | 2.0 s |
+| `qm.list` | 2.0 s |
+| `pct.list` | 2.0 s |
+| `qm.agent_ping` | 3.0 s |
+| `qm.guest_exec.gpu` | 6.0 s |
+| `qm.guest_exec.smart` | 20.0 s |
+| `pvesm.status` | 2.0 s |
+| `smartctl.scan` | 5.0 s |
+| `smartctl.read` | 20.0 s |
+| `lspci.inventory` | 2.0 s |
+| `pveversion` | 2.0 s |
+| `lscpu` | 2.0 s |
 
-- execute a command with existing timeout/check semantics;
-- measure monotonic duration;
-- attribute the command to a stable logical key;
-- record count/total/max/failure/timeout in the accumulator;
-- sanitize arguments before logging;
-- preserve stdout and exception semantics expected by callers.
+The runner records count/total/max/failure/timeout in the shared accumulator.
 
-Stable logical keys are preferred over full argv. Examples:
+Do not log arbitrary argv blindly. Logging uses the stable logical key and sanitized metadata only; guest shell command bodies, NUT credentials, MQTT credentials and passwords are forbidden.
 
-- `pvesh.cluster_resources`
-- `qm.list`
-- `pct.list`
-- `qm.agent_ping`
-- `qm.guest_exec.gpu`
-- `qm.guest_exec.smart`
-- `pvesm.status`
-- `smartctl.scan`
-- `smartctl.read`
-- `lspci.inventory`
+Known expensive paths must migrate to this runner in the first release: guest topology polling, GPU guest exec, guest SMART exec, storage, SMART and host inventory.
 
-The command runner must not log credentials, MQTT passwords, NUT command passwords, or arbitrary guest command contents that can contain sensitive data.
-
-The migration should be incremental but complete for the known expensive paths involved in incident analysis: topology guest polling, GPU guest exec, storage, SMART, and host inventory commands.
-
-Example summary:
+Example:
 
 ```text
 COMMANDS window=60s pvesh.cluster_resources=count:2 total:2.20s max:1.20s fail:0 qm.guest_exec.gpu=count:2 total:9.70s max:5.00s fail:0 pvesm.status=count:1 total:0.80s max:0.80s fail:0
 ```
 
-### 4. Host/service performance summary
+## Host/service performance summary
 
 Every 60 seconds emit one compact `PERF` line.
 
-Target fields:
+Sources:
 
-- host aggregate CPU percentage;
-- CPU temperature when available;
-- load average;
-- `dh_pve_app.service` CPU consumption from cgroup/systemd accounting;
-- `nut-monitor.service` CPU consumption from cgroup/systemd accounting;
-- application RSS if cheaply available;
-- current UPS high-level state when a UPS is selected (`OL`, `OB`, `LB`, `FSD`-relevant state or normalized equivalent).
+- host CPU delta: `/proc/stat`;
+- load average: `/proc/loadavg`;
+- CPU temperature: existing CPU temperature reader;
+- App CPU delta: `/sys/fs/cgroup/system.slice/dh_pve_app.service/cpu.stat` (`usage_usec`);
+- NUT monitor CPU delta: `/sys/fs/cgroup/system.slice/nut-monitor.service/cpu.stat` (`usage_usec`);
+- App memory: `/sys/fs/cgroup/system.slice/dh_pve_app.service/memory.current`;
+- UPS high-level state: the current in-process UPS snapshot when available.
 
-The exact source may use cgroup v2 files and `/proc` directly rather than spawning `systemctl` every minute, as long as it is reliable on PVE 8 / Debian 12.
+Do not spawn `systemctl` every minute for accounting.
 
-The metrics should represent a window/delta where meaningful, not lifetime CPU percentages mislabeled as current load.
+CPU values are interval deltas. Service CPU is expressed as `%core`: 100% means one logical core saturated over the 60-second window.
 
-A failure to read one field must not fail the summary or the application; emit the remaining fields and rate-limit a warning.
+A missing cgroup/temperature/UPS field omits that field but does not suppress the rest of the summary.
 
 Example:
 
@@ -212,28 +197,9 @@ Example:
 PERF window=60s host_cpu=42.1% temp=84C load1=1.89 app_cpu=8.3%core nut_cpu=99.1%core app_rss=214MiB ups=OB
 ```
 
-`%core` means percentage of one logical CPU core, so `100%core` is approximately one saturated logical core regardless of host CPU count.
-
-## Slow-operation policy
-
-Use internal engineering defaults, not Home Assistant knobs.
-
-The initial implementation may define conservative thresholds by command/collector class, for example:
-
-- fast in-process collectors: warning at >= 1 second;
-- topology/storage API calls: warning at >= 2 seconds;
-- guest GPU exec: warning at >= 6 seconds;
-- SMART reads: warning near their normal timeout budget rather than a universal low threshold.
-
-These thresholds are for diagnostics only. They do not change collector scheduling or profiles.
-
-A later tuning pass may adjust them from production evidence without changing any public contract.
-
 ## UPS decision audit contract
 
-Runtime Observability must define a stable logging vocabulary used by the later UPS Trigger Policy v2 implementation.
-
-Required event families:
+Runtime Observability defines the vocabulary used by UPS Trigger Policy v2:
 
 ```text
 UPS_TRIGGER ON_BATTERY ...
@@ -244,25 +210,15 @@ UPS_TRIGGER FSD ...
 UPS_TRIGGER CANCELLED ...
 ```
 
-Each line should include only the values relevant to the decision, such as:
+INFO logs transitions only, never every 5-second UPS poll.
 
-- charge percentage;
-- runtime seconds;
-- configured low-battery threshold;
-- shutdown budget;
-- safety reserve;
-- effective runtime trigger;
-- confirmation count;
-- policy revision;
-- final FSD reason.
-
-Do not log every UPS poll at INFO.
+Relevant fields may include charge, runtime, low-battery threshold, shutdown budget, reserve, effective runtime trigger, confirmation count, policy revision and final FSD reason.
 
 ## Durable shutdown incident timeline
 
-Extend shutdown history with a compact persisted incident record that survives the power cycle.
+Extend `ShutdownHistoryTracker`; do not create a parallel history subsystem.
 
-Required timestamps when observable:
+Persist when observable:
 
 - `outage_started_at`;
 - `fsd_at`;
@@ -278,109 +234,88 @@ Derived durations:
 - `fsd_to_shutdown_start_seconds`;
 - `shutdown_start_to_guests_stopped_seconds`;
 - `fsd_to_last_shutdown_event_seconds`;
-- `host_offline_gap_seconds` = `last_shutdown_event_at -> next_boot_at`;
+- `host_offline_gap_seconds` (`last_shutdown_event_at -> next_boot_at`);
 - `fsd_to_next_boot_seconds`.
 
-The application must not label `host_offline_gap_seconds` as exact UPS output-off duration. The exact physical output-off/output-on instants are not known unless the UPS exposes them independently.
+`host_offline_gap_seconds` must never be described as exact UPS output-off duration. Physical UPS output-off/on instants are not known from host journal timestamps alone.
 
 ### Policy snapshot stored with the incident
 
-Persist the active policy context used for the incident:
+Store factual policy context active at the incident:
 
 - `policy_revision`;
 - `battery_charge_low_percent` when known;
 - `guest_shutdown_budget_seconds`;
-- `total_shutdown_budget_seconds` when UPS Trigger Policy v2 is implemented;
+- `total_shutdown_budget_seconds` when Policy v2 exists;
 - `runtime_safety_reserve_seconds` when available;
 - `effective_runtime_trigger_seconds` when available;
 - `power_restore_delay_seconds`;
 - relevant NUT role/state identifiers needed to explain the shutdown path.
 
-The snapshot is factual history. Later configuration changes must not rewrite old incident records.
+Historical snapshots are immutable after later config changes.
 
-## Relationship to current ShutdownHistoryTracker
+Existing shutdown history remains canonical for clean/unclean result, shutdown reason, per-guest duration/result and total guest shutdown duration.
 
-Do not build a parallel history subsystem.
+## MQTT / Home Assistant
 
-Extend `ShutdownHistoryTracker` so the existing previous-shutdown record remains the canonical source for:
+Do not publish `PERF`, `COLLECTORS` or `COMMANDS` summaries to MQTT; doing so would recreate Recorder churn.
 
-- clean/unclean result;
-- shutdown reason;
-- per-guest shutdown durations and timeout results;
-- total guest shutdown duration;
-- the new incident timeline/policy snapshot.
+The existing shutdown-history group may gain incident fields, but only changes to the persisted incident cause publication.
 
-Existing published history limits remain bounded.
-
-## MQTT / Home Assistant surface
-
-This observability change is primarily journal/history work.
-
-Do not expose the minute-by-minute PERF/COLLECTORS/COMMANDS summaries to MQTT; that would recreate Recorder churn.
-
-The existing shutdown-history MQTT group may gain stable incident fields needed by the dashboard or notifications, but only when the incident record changes.
-
-No new fast telemetry entities are required.
+No new fast diagnostic sensors are required.
 
 ## Error handling
 
-Observability must be fail-open with respect to monitoring and safety:
+Observability is fail-open:
 
-- accumulator failure must not stop a collector;
-- cgroup/accounting failure must not stop the runtime loop;
-- logging-format failure must not block MQTT publication;
-- shutdown-history persistence failure must be logged but must not interfere with NUT/Proxmox shutdown behavior.
+- accumulator failure cannot stop a collector;
+- cgroup/accounting failure cannot stop the runtime loop;
+- formatting/logging failure cannot block MQTT publication;
+- history persistence failure is logged but cannot interfere with NUT/PVE shutdown.
 
-## Security and privacy
+## Security
 
-- Never log NUT passwords, MQTT passwords, or generated control credentials.
-- Sanitize external command logging.
-- Do not log arbitrary guest command output at INFO.
-- Keep existing App/NUT privilege separation unchanged.
+- Never log NUT/MQTT passwords or generated control credentials.
+- Never log arbitrary guest command output at INFO.
+- Preserve App/NUT privilege separation.
 
 ## Testing
 
-Use TDD.
+Use TDD. Cover at least:
 
-Tests must cover at least:
-
-- collector timing recorded on success;
-- collector timing/failure recorded on exception while preserving previous subsystem data;
-- failure/recovery warnings are transition-based and do not flood;
-- command runner preserves stdout/check/timeout behavior;
-- command timing statistics are attributed to stable keys;
-- command arguments are sanitized;
-- periodic summaries reset the current aggregation window correctly;
-- performance accounting tolerates missing cgroup files/temperature/UPS fields;
-- INFO summaries are emitted at the requested interval rather than on every poll;
-- DEBUG can include per-operation timing without changing behavior;
-- shutdown timeline derives durations correctly across timezone-aware timestamps;
-- previous incident policy snapshot is immutable after later policy changes;
-- `host_offline_gap_seconds` is named/represented without claiming exact UPS output-off duration;
-- existing shutdown history parsing and classification tests remain green;
-- systemd unit verification passes with any journald rate-limit directives added.
+- collector duration success/failure;
+- previous subsystem data preserved on collector failure;
+- failure/recovery transition logging and 60-second warning suppression;
+- command runner stdout/check/timeout compatibility;
+- stable command attribution and sanitization;
+- exact slow thresholds above;
+- 60-second aggregation reset behavior;
+- host/service CPU delta calculation from fixture `cpu.stat` and `/proc/stat` data;
+- missing accounting fields tolerated;
+- INFO summaries emitted once per 60 seconds, not per poll;
+- DEBUG timing does not alter behavior;
+- shutdown timeline duration calculations with timezone-aware timestamps;
+- historical policy snapshot immutability;
+- `host_offline_gap_seconds` semantics;
+- all existing shutdown-history tests remain green;
+- systemd unit verifies with `LogRateLimitIntervalSec=30s` and `LogRateLimitBurst=200`.
 
 ## Deployment validation
 
-Production validation on the home PVE must be non-destructive.
-
-Validate:
+Non-destructive home-PVE validation:
 
 1. deploy exact feature SHA;
-2. confirm normal `journalctl -u dh_pve_app.service` volume is low;
-3. wait at least two summary windows and verify `PERF`, `COLLECTORS`, and `COMMANDS` appear once per window;
-4. verify known expensive operations (`pvesh.cluster_resources`, GPU guest exec) are visible in aggregated command timing;
-5. verify `dh_pve_app` and `nut-monitor` accounting values are plausible under normal OL operation;
-6. run Manual Refresh and confirm it does not create an INFO log storm;
-7. restart only `dh_pve_app.service` and verify no false PVE shutdown incident is created;
-8. confirm MQTT/Recorder behavior remains unchanged.
+2. wait two summary windows and verify one `PERF`, `COLLECTORS`, `COMMANDS` line per window;
+3. verify `pvesh.cluster_resources` and GPU guest-exec are visible in command summaries;
+4. verify App/NUT service CPU values are plausible under OL;
+5. Manual Refresh must not create an INFO storm;
+6. restart only `dh_pve_app.service`; no false PVE shutdown incident may appear;
+7. confirm MQTT/Recorder behavior is unchanged.
 
-No battery discharge, FSD, UPS output shutdown, or destructive power-cycle test is required for this observability release.
+No battery discharge, FSD, UPS output shutdown or destructive power-cycle test is part of this release gate.
 
-## Technical debt explicitly out of scope
+## Technical debt out of scope
 
 Track separately:
 
 > Detect PVE NFS/CIFS/SMB storage whose provider is a VM/LXC/NAS participating in the same shutdown sequence. Warn that stopping the storage provider before host unmount can introduce long storage/unmount timeouts and make actual host shutdown exceed the calculated budget.
-
-This dependency detection must not delay Runtime Observability.
