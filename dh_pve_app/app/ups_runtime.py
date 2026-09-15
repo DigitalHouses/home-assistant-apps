@@ -23,12 +23,14 @@ from .ups_control import (
 from .ups_health import summarize_ups_problems
 from .ups_nut import UpsSnapshot, read_ups, ups_metrics
 from .ups_policy import (
+    DEFAULT_RUNTIME_RESERVE_SECONDS,
+    DEFAULT_SHUTDOWN_BATTERY_CHARGE_THRESHOLD_PERCENT,
     PolicyApplyResult,
     PolicySafetyFacts,
     PolicyValidationError,
     PolicyValidationResult,
     UpsPolicyDraft,
-    parse_policy_value,
+    policy_from_mapping,
     policy_hash,
     validate_policy,
 )
@@ -42,8 +44,10 @@ _LEGACY_DISCOVERY_REMOVALS = {
 }
 
 _DEFAULT_POLICY_DRAFT = UpsPolicyDraft(
-    on_battery_delay_minutes=30,
-    power_restore_delay_seconds=120,
+    shutdown_battery_charge_threshold_percent=(
+        DEFAULT_SHUTDOWN_BATTERY_CHARGE_THRESHOLD_PERCENT
+    ),
+    runtime_reserve_seconds=DEFAULT_RUNTIME_RESERVE_SECONDS,
 )
 
 _DEFAULT_TEST_SCHEDULES = {
@@ -57,27 +61,15 @@ _POLICY_STATUSES = {
     "Validation failed",
     "Apply failed",
     "Commissioning",
+    "Legacy policy",
     "Unknown",
 }
 
 
-def _policy_from_mapping(value: object) -> UpsPolicyDraft | None:
-    if not isinstance(value, dict):
-        return None
-    try:
-        draft = UpsPolicyDraft(
-            on_battery_delay_minutes=int(value["on_battery_delay_minutes"]),
-            power_restore_delay_seconds=int(value["power_restore_delay_seconds"]),
-        )
-        parse_policy_value(
-            "on_battery_delay_minutes", str(draft.on_battery_delay_minutes)
-        )
-        parse_policy_value(
-            "power_restore_delay_seconds", str(draft.power_restore_delay_seconds)
-        )
-        return draft
-    except (KeyError, TypeError, ValueError, PolicyValidationError):
-        return None
+def _is_legacy_policy_mapping(value: object) -> bool:
+    return isinstance(value, dict) and bool(
+        {"on_battery_delay_minutes", "power_restore_delay_seconds"} & set(value)
+    )
 
 
 def _aware_datetime(value: object) -> datetime | None:
@@ -155,14 +147,19 @@ class UpsRuntime:
             self._discovery_components = {}
         self._discovery_cleanup_v1 = persisted.get("discovery_cleanup_v1") is True
 
-        self.policy_active = _policy_from_mapping(persisted.get("policy_active"))
-        self.policy_draft = (
-            _policy_from_mapping(persisted.get("policy_draft"))
-            or self.policy_active
-            or _DEFAULT_POLICY_DRAFT
+        raw_active_policy = persisted.get("policy_active")
+        raw_draft_policy = persisted.get("policy_draft")
+        self.policy_active = policy_from_mapping(raw_active_policy)
+        restored_draft = policy_from_mapping(raw_draft_policy)
+        legacy_policy_present = self.policy_active is None and (
+            _is_legacy_policy_mapping(raw_active_policy)
+            or _is_legacy_policy_mapping(raw_draft_policy)
         )
+        self.policy_draft = restored_draft or self.policy_active or _DEFAULT_POLICY_DRAFT
         persisted_status = persisted.get("policy_status")
-        if isinstance(persisted_status, str) and persisted_status in _POLICY_STATUSES:
+        if legacy_policy_present:
+            self.policy_status = "Legacy policy"
+        elif isinstance(persisted_status, str) and persisted_status in _POLICY_STATUSES:
             self.policy_status = persisted_status
         elif self.policy_active is not None:
             self.policy_status = "Active"
