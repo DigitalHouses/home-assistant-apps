@@ -33,10 +33,8 @@ class Publication:
 
 _SEGMENT = re.compile(r"[^a-z0-9_.-]+")
 _PROFILE_RANK = {
-    PublicationProfile.QUIET: 0,
-    PublicationProfile.NORMAL: 1,
-    PublicationProfile.HIGH: 2,
-    PublicationProfile.CRITICAL: 3,
+    PublicationProfile.NORMAL: 0,
+    PublicationProfile.DETAIL: 1,
 }
 
 
@@ -312,7 +310,7 @@ class PvePresentationRouter:
             }
             decision = self._group(
                 group_name,
-                initial_profile=PublicationProfile.QUIET,
+                initial_profile=PublicationProfile.NORMAL,
                 source_interval_seconds=60.0,
             ).observe(
                 now=now,
