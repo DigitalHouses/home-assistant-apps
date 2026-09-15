@@ -32,17 +32,12 @@ def _identity() -> HostIdentity:
     )
 
 
-def test_controls_and_runtime_settings_have_semantic_metadata():
+def test_active_controls_have_semantic_metadata_and_poll_controls_are_absent():
     components = build_discovery_payload(
         _config(), _identity(), version="0.1.0"
     )["components"]
 
-    for key in (
-        "refresh",
-        "last_refresh",
-        "setting_fast_poll_interval_seconds",
-        "setting_disk_poll_interval_seconds",
-    ):
+    for key in ("refresh", "last_refresh"):
         component = components[key]
         assert component["json_attributes_topic"]
         template = component["json_attributes_template"]
@@ -54,6 +49,8 @@ def test_controls_and_runtime_settings_have_semantic_metadata():
         assert "proxmox_display_name" in template
         assert "proxmox_sort_key" in template
 
+    assert "setting_fast_poll_interval_seconds" not in components
+    assert "setting_disk_poll_interval_seconds" not in components
     assert not any("publish_delta" in key for key in components)
 
 
