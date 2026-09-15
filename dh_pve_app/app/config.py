@@ -9,6 +9,7 @@ INSTANCE_ID_RE = re.compile(r"^[a-z0-9][a-z0-9_]*$")
 LOG_LEVELS = {"debug", "info", "warning", "error"}
 DEFAULT_TOPIC_PREFIX = "DigitalHouses/Global/dh_pve_app"
 DEFAULT_DISCOVERY_PREFIX = "homeassistant"
+FIXED_UPS_POLL_INTERVAL_SECONDS = 10.0
 
 
 class ConfigError(ValueError):
@@ -39,7 +40,9 @@ class UpsConfig:
     name: str = "ups"
     host: str = "127.0.0.1"
     port: int = 3493
-    poll_interval_seconds: float = 5.0
+    # Compatibility field for callers/tests created before the fixed-cadence
+    # runtime. load_config() never accepts a user override for this value.
+    poll_interval_seconds: float = FIXED_UPS_POLL_INTERVAL_SECONDS
     command_timeout_seconds: float = 3.0
     command_username: str = ""
     command_password: str = ""
@@ -108,6 +111,8 @@ def load_config(path: Path) -> AppConfig:
             parser.read_file(handle)
     except (OSError, configparser.Error) as exc:
         raise ConfigError(f"unable to read configuration: {path}") from exc
+    if not isinstance(parser, configparser.ConfigParser):
+        raise ConfigError(f"unable to read configuration: {path}")
 
     instance_id = _get(parser, "general", "instance_id", "").strip().lower()
     if instance_id and not INSTANCE_ID_RE.fullmatch(instance_id):
@@ -151,7 +156,6 @@ def load_config(path: Path) -> AppConfig:
     ups_name = _get(parser, "ups", "name", "ups").strip()
     ups_host = _get(parser, "ups", "host", "127.0.0.1").strip()
     ups_port = _get_int(parser, "ups", "port", 3493)
-    ups_poll_interval = _get_float(parser, "ups", "poll_interval_seconds", 5.0)
     ups_timeout = _get_float(parser, "ups", "command_timeout_seconds", 3.0)
     ups_command_username = _get(parser, "ups", "command_username", "").strip()
     ups_command_password = _get(parser, "ups", "command_password", "")
@@ -162,14 +166,13 @@ def load_config(path: Path) -> AppConfig:
         raise ConfigError("ups.host must not be empty")
     if not 1 <= ups_port <= 65535:
         raise ConfigError("ups.port must be between 1 and 65535")
-    if not 1.0 <= ups_poll_interval <= 300.0:
-        raise ConfigError("ups.poll_interval_seconds must be between 1 and 300")
     if not 1.0 <= ups_timeout <= 30.0:
         raise ConfigError("ups.command_timeout_seconds must be between 1 and 30")
 
-    # Legacy keys that are no longer part of the runtime contract, such as
-    # ups.policy_apply_enabled, are intentionally ignored. Existing installations
-    # therefore remain upgrade-compatible while the daemon stays read-only.
+    # Legacy keys that are no longer part of the runtime contract, including
+    # ups.poll_interval_seconds and ups.policy_apply_enabled, are intentionally
+    # ignored. Existing installations remain loadable while collection cadence
+    # and the policy-apply safety model stay App-owned.
     return AppConfig(
         general=GeneralConfig(
             instance_id=instance_id,
@@ -190,7 +193,7 @@ def load_config(path: Path) -> AppConfig:
             name=ups_name,
             host=ups_host,
             port=ups_port,
-            poll_interval_seconds=ups_poll_interval,
+            poll_interval_seconds=FIXED_UPS_POLL_INTERVAL_SECONDS,
             command_timeout_seconds=ups_timeout,
             command_username=ups_command_username,
             command_password=ups_command_password,
