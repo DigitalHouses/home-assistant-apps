@@ -172,7 +172,8 @@ def test_changed_apply_persists_pending_transaction_and_requests_service_reload(
     persisted = store.load()
     assert persisted["policy_active"] == old.as_dict()
     assert persisted["policy_revision"] == 4
-    transaction = persisted["policy_apply_transaction"]
+    transaction = runtime.policy_apply_store.load()
+    assert transaction["phase"] == "reload_requested"
     assert transaction["old_values"] == old.as_dict()
     assert transaction["new_values"] == new.as_dict()
     assert transaction["target_revision"] == 5
@@ -195,7 +196,7 @@ def test_reload_completion_promotes_policy_verifies_then_emits_event_last(tmp_pa
     assert runtime.policy_status == "Active"
     assert runtime.policy_revision == 5
     assert runtime.policy_hash == policy_hash(new)
-    assert store.load().get("policy_apply_transaction") is None
+    assert runtime.policy_apply_store.load() == {}
 
     assert bridge.order[-1] == "event"
     assert len(bridge.events) == 1
@@ -224,7 +225,7 @@ def test_noop_apply_does_not_reload_increment_revision_or_emit_event(tmp_path):
     assert runtime.policy_apply_result == "No changes"
     assert bridge.events == []
     assert store.load()["policy_revision"] == original_revision
-    assert store.load().get("policy_apply_transaction") is None
+    assert runtime.policy_apply_store.load() == {}
 
 
 def test_reload_request_failure_rolls_back_pending_draft_and_keeps_active(tmp_path):
@@ -243,7 +244,8 @@ def test_reload_request_failure_rolls_back_pending_draft_and_keeps_active(tmp_pa
     assert runtime.policy_hash == policy_hash(old)
     assert runtime.policy_status == "Apply failed"
     assert bridge.events == []
-    assert store.load().get("policy_apply_transaction") is None
+    assert runtime.policy_apply_store.load() == {}
+    assert store.load()["policy_active"] == old.as_dict()
 
 
 def test_verify_mismatch_after_reload_rolls_back_previous_active_and_emits_no_event(tmp_path):
@@ -270,4 +272,38 @@ def test_verify_mismatch_after_reload_rolls_back_previous_active_and_emits_no_ev
     persisted = store.load()
     assert persisted["policy_active"] == old.as_dict()
     assert persisted["policy_revision"] == 4
-    assert persisted.get("policy_apply_transaction") is None
+    assert runtime.policy_apply_store.load() == {}
+
+
+def test_startup_rolls_back_interrupted_reload_requested_transaction(tmp_path):
+    runtime, bridge, store, reloads = _runtime(tmp_path)
+    old = runtime.policy_active
+    runtime.policy_draft = UpsPolicyDraft(25, 240)
+    runtime.policy_status = "Pending changes"
+    runtime._apply_policy()
+    assert reloads.calls == 1
+
+    restarted = ShutdownAwareUpsRuntime(
+        config=_config(),
+        mqtt_config=_mqtt(),
+        bridge=bridge,
+        identity=_identity(),
+        version="0.2.0",
+        state_store=store,
+        now_iso=lambda: "2026-09-16T01:01:00+05:00",
+        now_monotonic=lambda: 101.0,
+        reader=lambda config: parse_upsc_output("ups.status: OL\n"),
+        capability_reader=lambda config: (_ for _ in ()).throw(RuntimeError("skip")),
+        shutdown_policy_reader=lambda: (_ for _ in ()).throw(RuntimeError("skip")),
+        shutdown_history_tracker=HistoryTracker(),
+        shutdown_budget_reader=_budget,
+        policy_reload_executor=reloads,
+    )
+
+    restarted._recover_interrupted_policy_apply()
+
+    assert restarted.policy_active == old
+    assert restarted.policy_draft == old
+    assert restarted.policy_revision == 4
+    assert restarted.policy_status == "Apply failed"
+    assert restarted.policy_apply_store.load() == {}
