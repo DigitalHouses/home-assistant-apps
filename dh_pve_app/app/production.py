@@ -22,17 +22,6 @@ from .collectors.cpu import (
     thermal_throttling_active,
 )
 from .collectors.disks import stable_disk_id
-from .collectors.gpu import (
-    GuestInfo,
-    build_gpu_snapshots,
-    parse_intel_gpu_top_json,
-    parse_lspci_gpus,
-    parse_lxc_gpu_owners,
-    parse_qemu_guest_exec_transcoding,
-    parse_vm_gpu_owners,
-    read_dri_pci_map,
-    read_gpu_temperature,
-)
 from .collectors.host import build_hardware_identity, parse_pve_manager_version
 from .collectors.memory import collect_memory, collect_memory_inventory
 from .collectors.smart import SmartSnapshot, parse_smart_json
@@ -80,35 +69,6 @@ def _kib_from_bytes(value: float | None) -> int | None:
 
 def _metric(value: object, policy: str) -> MetricValue:
     return MetricValue(value=value, policy=policy)
-
-
-def _parse_guest_list(text: str, kind: str) -> dict[str, GuestInfo]:
-    guests: dict[str, GuestInfo] = {}
-    for raw in text.splitlines():
-        parts = raw.split()
-        if not parts or not parts[0].isdigit():
-            continue
-        guest_id = parts[0]
-        if kind == "vm":
-            name = parts[1] if len(parts) > 1 else f"VM {guest_id}"
-            status = parts[2] if len(parts) > 2 else "unknown"
-        else:
-            status = parts[1] if len(parts) > 1 else "unknown"
-            name = parts[-1] if len(parts) > 2 else f"LXC {guest_id}"
-        guests[guest_id] = GuestInfo(guest_id, name, status)
-    return guests
-
-
-def _guest_configs(directory: Path) -> dict[str, str]:
-    result: dict[str, str] = {}
-    if not directory.exists():
-        return result
-    for path in directory.glob("*.conf"):
-        try:
-            result[path.stem] = path.read_text(encoding="utf-8")
-        except OSError:
-            continue
-    return result
 
 
 def _checkpoint(snapshot: SmartSnapshot) -> dict[str, int | float]:
@@ -351,74 +311,11 @@ class ProductionCollectors:
         self.disk_state_store.save({"checkpoints": checkpoints, "daily": daily_next})
         return CollectorSample(data=data, metrics=metrics)
 
-    def _gpu_context(self):
-        lspci = _run(["lspci", "-Dnnk"], timeout=10)
-        vm_configs = _guest_configs(self.pve_root / "qemu-server")
-        lxc_configs = _guest_configs(self.pve_root / "lxc")
-        try:
-            vm_guests = _parse_guest_list(_run(["qm", "list"], timeout=10), "vm")
-        except Exception:
-            vm_guests = {}
-        try:
-            lxc_guests = _parse_guest_list(_run(["pct", "list"], timeout=10), "lxc")
-        except Exception:
-            lxc_guests = {}
-        vm_owners = parse_vm_gpu_owners(vm_configs, vm_guests)
-        lxc_owners = parse_lxc_gpu_owners(lxc_configs, lxc_guests, read_dri_pci_map(self.sys_root))
-        return lspci, vm_guests, vm_owners, lxc_owners
-
     def gpu(self) -> CollectorSample:
-        lspci, vm_guests, vm_owners, lxc_owners = self._gpu_context()
-        inventory = parse_lspci_gpus(lspci)
-        temperatures = {}
-        transcoding = {}
-        for item in inventory:
-            pci = item["pci_address"]
-            temperature = read_gpu_temperature(pci, sys_root=self.sys_root)
-            if temperature is not None:
-                temperatures[pci] = temperature
-            owner = vm_owners.get(pci) or lxc_owners.get(pci)
-            if item["vendor_id"] != "0x8086":
-                continue
-            try:
-                if owner and owner.source_type == "vm" and owner.source_id:
-                    guest = vm_guests.get(owner.source_id)
-                    if guest is None or guest.status != "running":
-                        continue
-                    guest_cmd = (
-                        'command -v intel_gpu_top >/dev/null 2>&1 || exit 20; '
-                        'raw="$(timeout 3s intel_gpu_top -J -s 1000 2>/dev/null)"; '
-                        'rc=$?; [ "$rc" -eq 0 ] || [ "$rc" -eq 124 ] || exit "$rc"; '
-                        '[ -n "$raw" ] || exit 21; printf "%s" "$raw"'
-                    )
-                    outer = _run(
-                        ["qm", "guest", "exec", owner.source_id, "--", "/bin/sh", "-c", guest_cmd],
-                        timeout=12,
-                    )
-                    transcoding[pci] = parse_qemu_guest_exec_transcoding(outer, owner.source_id)
-                elif owner is None and item["kernel_driver"] == "i915":
-                    raw = _run(["timeout", "3s", "intel_gpu_top", "-J", "-s", "1000"], timeout=5, check=False)
-                    if raw.strip():
-                        transcoding[pci] = dict(parse_intel_gpu_top_json(raw))
-            except Exception:
-                continue
-        snapshots = build_gpu_snapshots(
-            lspci, vm_owners=vm_owners, lxc_owners=lxc_owners,
-            temperatures=temperatures, transcoding=transcoding, hostname=platform.node(),
-        )
-        data = {item.gpu_id: asdict(item) for item in snapshots}
-        metrics = {}
-        for item in snapshots:
-            metrics[f"{item.gpu_id}.owner"] = _metric(
-                f"{item.connection}:{item.source_type}:{item.source_id}", "discrete"
-            )
-            if item.temperature_c is not None:
-                metrics[f"{item.gpu_id}.temperature_c"] = _metric(item.temperature_c, "temperature_c")
-            if item.transcoding_load_percent is not None:
-                metrics[f"{item.gpu_id}.transcoding_load_percent"] = _metric(
-                    item.transcoding_load_percent, "gpu_percent"
-                )
-        return CollectorSample(data=data, metrics=metrics)
+        # GPU inventory/ownership belongs to STATIC topology. The base collector
+        # intentionally fails closed so it cannot resurrect legacy lspci/qm/pct
+        # polling if instantiated without the guest-aware topology layer.
+        return CollectorSample(data={}, metrics={})
 
     def fans(self) -> CollectorSample:
         fans = collect_fans(self.sys_root / "class" / "hwmon")
