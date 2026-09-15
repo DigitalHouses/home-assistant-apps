@@ -28,19 +28,21 @@ def _identity() -> HostIdentity:
     )
 
 
-def test_discovery_uses_dh_pve_device_and_refresh_contract():
+def test_discovery_uses_canonical_dh_app_pve_device_and_refresh_contract():
     payload = build_discovery_payload(_config(), _identity(), version="0.1.0")
     components = payload["components"]
 
+    canonical_id = "dh_app_pve_0123456789abcdef0123456789abcdef"
     assert payload["device"]["name"] == "DH PVE"
-    assert payload["device"]["identifiers"] == ["dh_pve_0123456789abcdef0123456789abcdef"]
-    assert components["refresh"]["default_entity_id"] == "button.dh_pve_refresh"
+    assert payload["device"]["identifiers"] == [canonical_id]
+    assert components["refresh"]["unique_id"] == f"{canonical_id}_refresh"
+    assert components["refresh"]["default_entity_id"] == "button.dh_app_pve_refresh"
     assert components["refresh"]["command_topic"] == (
         "DigitalHouses/Global/dh_pve_app/"
         "0123456789abcdef0123456789abcdef/refresh"
     )
     assert components["refresh"]["payload_press"] == "PRESS"
-    assert components["last_refresh"]["default_entity_id"] == "sensor.dh_pve_last_refresh"
+    assert components["last_refresh"]["default_entity_id"] == "sensor.dh_app_pve_last_refresh"
     assert components["last_refresh"]["device_class"] == "timestamp"
 
 
