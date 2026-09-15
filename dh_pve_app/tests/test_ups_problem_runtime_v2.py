@@ -150,6 +150,10 @@ def _on_battery():
     return parse_upsc_output("ups.status: OB DISCHRG\nbattery.charge: 90\n")
 
 
+def _on_battery_low():
+    return parse_upsc_output("ups.status: OB LB DISCHRG\nbattery.charge: 9\n")
+
+
 def test_startup_publishes_current_off_states_without_fake_events(tmp_path):
     current = {"snapshot": _healthy()}
     clock = {"iso": "2026-09-15T20:00:00+05:00", "mono": 0.0}
@@ -211,6 +215,36 @@ def test_on_battery_transition_and_recovery_publish_event_last(tmp_path):
     recovered = bridge.problem_calls[3][1]
     assert recovered["event_type"] == "problem_recovered"
     assert recovered["active_problem_count"] == 0
+
+
+def test_simultaneous_ups_transitions_publish_all_states_before_aggregate_and_events(tmp_path):
+    current = {"snapshot": _healthy()}
+    clock = {"iso": "2026-09-15T20:00:00+05:00", "mono": 0.0}
+    bridge, runtime = _runtime(tmp_path, current, clock)
+    runtime.startup()
+    bridge.problem_calls.clear()
+
+    current["snapshot"] = _on_battery_low()
+    clock.update(iso="2026-09-15T20:00:05+05:00", mono=5.0)
+    assert runtime.tick(clock["mono"]) is True
+
+    assert [call[0] for call in bridge.problem_calls] == [
+        "state",
+        "state",
+        "aggregate",
+        "presentation",
+        "event",
+        "event",
+    ]
+    state_calls = bridge.problem_calls[:2]
+    assert {call[1] for call in state_calls} == {"on_battery", "low_battery"}
+    assert all(call[2] is True for call in state_calls)
+    assert bridge.problem_calls[2] == ("aggregate", 2)
+    assert bridge.problem_calls[3][1]["severity"] == "critical"
+    events = bridge.problem_calls[4:]
+    assert {call[1]["metric"] for call in events} == {"on_battery", "low_battery"}
+    assert all(call[1]["event_type"] == "problem_started" for call in events)
+    assert all(call[1]["active_problem_count"] == 2 for call in events)
 
 
 def test_nut_failure_starts_critical_problem_without_false_recoveries(tmp_path):
