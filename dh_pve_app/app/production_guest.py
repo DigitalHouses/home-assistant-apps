@@ -98,8 +98,6 @@ class GuestAwareProductionCollectors(ResilientProductionCollectors):
             return None
         if self.topology.guest_status(owner.source_id) != "running":
             return None
-        if self.topology.qga_state(owner.source_id) != "available":
-            return None
 
         guest_exec = getattr(self.topology, "guest_exec", None)
         if callable(guest_exec):
@@ -119,7 +117,8 @@ class GuestAwareProductionCollectors(ResilientProductionCollectors):
         if self.topology is None:
             return super().gpu()
 
-        lspci = base_production._run(["lspci", "-Dnnk"], timeout=10)
+        catalog_reader = getattr(self.topology, "gpu_catalog_text", None)
+        lspci = catalog_reader() if callable(catalog_reader) else ""
         inventory = parse_lspci_gpus(lspci)
         owners = dict(self.topology.gpu_owners())
         vm_owners = {pci: owner for pci, owner in owners.items() if owner.source_type == "vm"}
