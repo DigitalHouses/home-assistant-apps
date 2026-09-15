@@ -8,6 +8,7 @@ from .publish_policy import MetricValue
 from .production_guest import GuestAwareProductionCollectors
 from .shutdown_discovery import build_shutdown_aware_ups_discovery_payload
 from .shutdown_history import ShutdownHistoryTracker, evaluate_shutdown_readiness
+from .state_store import StateStore
 from .topology import TopologyManager
 from .ups_group_runtime import AdaptiveUpsRuntime
 from .ups_nut import read_ups
@@ -125,10 +126,12 @@ class ShutdownAwareUpsRuntime(AdaptiveUpsRuntime):
         reader=read_ups,
         shutdown_budget_reader: Callable[[], ShutdownBudgetResult] | None = None,
         software_shutdown_executor: Callable[[str], None] | None = None,
+        policy_reload_executor: Callable[[], None] | None = None,
         **kwargs,
     ) -> None:
         self.shutdown_history_tracker = shutdown_history_tracker
         self.shutdown_budget_reader = shutdown_budget_reader
+        self.policy_reload_executor = policy_reload_executor
         self.software_shutdown_controller = (
             SoftwareShutdownController(software_shutdown_executor)
             if software_shutdown_executor is not None
@@ -145,6 +148,14 @@ class ShutdownAwareUpsRuntime(AdaptiveUpsRuntime):
             return snapshot
 
         super().__init__(*args, reader=observed_reader, **kwargs)
+        self.policy_apply_store = StateStore(
+            self.state_store.path.with_name("ups_policy_apply.json")
+        )
+        transaction = self.policy_apply_store.load()
+        if transaction.get("phase") == "event_pending":
+            event = transaction.get("event")
+            if isinstance(event, dict):
+                self._pending_policy_config_event = dict(event)
 
     @property
     def software_shutdown_committed(self) -> bool:
@@ -222,8 +233,6 @@ class ShutdownAwareUpsRuntime(AdaptiveUpsRuntime):
             )
             self.last_software_shutdown_trigger = result
         except Exception as exc:
-            # A local FSD/helper failure must never kill monitoring. Do not latch;
-            # the controller will retry on the next successful UPS sample.
             self.log.error(
                 "Не удалось зафиксировать software shutdown UPS (%s); повтор на следующем опросе",
                 type(exc).__name__,
@@ -237,8 +246,6 @@ class ShutdownAwareUpsRuntime(AdaptiveUpsRuntime):
                     snapshot,
                 )
             except Exception:
-                # The shutdown commitment has already happened; history failure
-                # is diagnostic only and must not alter the irreversible latch.
                 self.log.exception("Не удалось сохранить причину software shutdown UPS")
 
     def _policy_state_backup(self) -> dict[str, object]:
@@ -262,6 +269,35 @@ class ShutdownAwareUpsRuntime(AdaptiveUpsRuntime):
         self.policy_revision = int(backup["revision"])
         self.policy_hash = backup["hash"]  # type: ignore[assignment]
         self.policy_validation = backup["validation"]  # type: ignore[assignment]
+
+    def _clear_policy_apply_transaction(self) -> None:
+        self.policy_apply_store.path.unlink(missing_ok=True)
+
+    def _save_policy_apply_transaction(self, transaction: Mapping[str, object]) -> None:
+        self.policy_apply_store.save(transaction)
+
+    def _rollback_from_transaction(
+        self,
+        transaction: Mapping[str, object],
+        *,
+        message: str,
+    ) -> None:
+        old_active = policy_from_mapping(transaction.get("old_values"))
+        self.policy_active = old_active
+        self.policy_draft = old_active or self.policy_draft
+        old_revision = transaction.get("old_revision")
+        self.policy_revision = old_revision if isinstance(old_revision, int) else 0
+        old_hash = transaction.get("old_hash")
+        self.policy_hash = old_hash if isinstance(old_hash, str) else None
+        old_last_applied = transaction.get("old_last_applied")
+        self.policy_last_applied = (
+            old_last_applied if isinstance(old_last_applied, str) else None
+        )
+        self.policy_status = "Apply failed"
+        self.policy_apply_result = message
+        self._pending_policy_config_event = None
+        self._clear_policy_apply_transaction()
+        self._persist()
 
     def _verify_persisted_policy(
         self,
@@ -296,46 +332,92 @@ class ShutdownAwareUpsRuntime(AdaptiveUpsRuntime):
             self.policy_apply_result = "No changes"
             self.policy_validation = validation
             self._pending_policy_config_event = None
+            self._clear_policy_apply_transaction()
             self._persist()
             return
 
-        backup = self._policy_state_backup()
+        if self.policy_reload_executor is None:
+            self.policy_draft = self.policy_active or self.policy_draft
+            self.policy_status = "Apply failed"
+            self.policy_apply_result = "Reload dh_pve_app.service не настроен."
+            self._pending_policy_config_event = None
+            self._persist()
+            return
+
         old_values = self.policy_active.as_dict() if self.policy_active is not None else {}
-        new_revision = self.policy_revision + 1
-        new_hash = policy_hash(draft)
+        transaction: dict[str, object] = {
+            "phase": "prepared",
+            "requested_at": self.now_iso(),
+            "old_values": old_values,
+            "old_revision": self.policy_revision,
+            "old_hash": self.policy_hash,
+            "old_last_applied": self.policy_last_applied,
+            "new_values": draft.as_dict(),
+            "target_revision": self.policy_revision + 1,
+            "target_hash": policy_hash(draft),
+        }
         try:
-            self.policy_active = draft
-            self.policy_draft = draft
+            self._save_policy_apply_transaction(transaction)
+            self.policy_status = "Applying"
+            self.policy_apply_result = "Ожидается reload dh_pve_app.service."
+            self.policy_validation = validation
+            self._persist()
+            self.policy_reload_executor()
+            transaction["phase"] = "reload_requested"
+            transaction["reload_requested_at"] = self.now_iso()
+            self._save_policy_apply_transaction(transaction)
+        except Exception as exc:
+            self.log.error("UPS policy reload request failed: %s", type(exc).__name__)
+            self._rollback_from_transaction(
+                transaction,
+                message="Не удалось выполнить reload dh_pve_app.service.",
+            )
+
+    def complete_policy_reload(self) -> bool:
+        transaction = self.policy_apply_store.load()
+        if transaction.get("phase") != "reload_requested":
+            return False
+
+        target = policy_from_mapping(transaction.get("new_values"))
+        target_revision = transaction.get("target_revision")
+        target_hash = transaction.get("target_hash")
+        if (
+            target is None
+            or not isinstance(target_revision, int)
+            or not isinstance(target_hash, str)
+        ):
+            self._rollback_from_transaction(
+                transaction,
+                message="Транзакция Apply повреждена; сохранена предыдущая политика.",
+            )
+            return False
+
+        try:
+            validation = validate_policy(target)
+            self.policy_active = target
+            self.policy_draft = target
             self.policy_status = "Active"
             self.policy_apply_result = "Applied"
             self.policy_last_applied = self.now_iso()
-            self.policy_revision = new_revision
-            self.policy_hash = new_hash
+            self.policy_revision = target_revision
+            self.policy_hash = target_hash
             self.policy_validation = validation
             self._persist()
             if not self._verify_persisted_policy(
-                draft,
-                revision=new_revision,
-                target_hash=new_hash,
+                target,
+                revision=target_revision,
+                target_hash=target_hash,
             ):
                 raise RuntimeError("policy persistence verification mismatch")
         except Exception as exc:
-            self._restore_policy_state(backup)
-            self.policy_draft = self.policy_active or self.policy_draft
-            self.policy_status = "Apply failed"
-            self.policy_apply_result = "Не удалось применить и проверить политику."
-            self._pending_policy_config_event = None
-            try:
-                self._persist()
-            except Exception:
-                self.log.exception("Не удалось сохранить rollback UPS policy")
-            self.log.error("UPS policy Apply rollback: %s", type(exc).__name__)
-            return
+            self.log.error("UPS policy post-reload verification failed: %s", type(exc).__name__)
+            self._rollback_from_transaction(
+                transaction,
+                message="Reload выполнен, но эффективная политика не прошла проверку.",
+            )
+            return False
 
-        # A successful Apply may affect future budget-derived policy fields.
-        # Force a fresh cheap SLOW budget read before the next trigger decision.
-        self._shutdown_budget_refreshed_at = None
-        self._pending_policy_config_event = {
+        event = {
             "schema_version": 1,
             "event_type": "config_changed",
             "category": "policy",
@@ -343,10 +425,36 @@ class ShutdownAwareUpsRuntime(AdaptiveUpsRuntime):
             "object_id": "ups_trigger_policy",
             "object_name": "UPS Trigger Policy",
             "summary": "UPS Trigger Policy изменена",
-            "details": "Активная политика UPS успешно применена и проверена.",
-            "old_values": old_values,
-            "new_values": draft.as_dict(),
+            "details": "Активная политика UPS успешно применена после reload и проверена.",
+            "old_values": transaction.get("old_values", {}),
+            "new_values": target.as_dict(),
         }
+        self._pending_policy_config_event = event
+        transaction = dict(transaction)
+        transaction["phase"] = "event_pending"
+        transaction["event"] = event
+        self._save_policy_apply_transaction(transaction)
+
+        self._shutdown_budget_refreshed_at = None
+        self._collect(force=True)
+        return True
+
+    def _recover_interrupted_policy_apply(self) -> None:
+        transaction = self.policy_apply_store.load()
+        phase = transaction.get("phase")
+        if phase in {"prepared", "reload_requested"}:
+            self._rollback_from_transaction(
+                transaction,
+                message="Применение политики было прервано до post-reload проверки.",
+            )
+        elif phase == "event_pending":
+            event = transaction.get("event")
+            if isinstance(event, dict):
+                self._pending_policy_config_event = dict(event)
+
+    def startup(self) -> bool:
+        self._recover_interrupted_policy_apply()
+        return super().startup()
 
     def _flush_pending_policy_config_event(self) -> None:
         event = self._pending_policy_config_event
@@ -362,6 +470,9 @@ class ShutdownAwareUpsRuntime(AdaptiveUpsRuntime):
             payload["active_problem_count"] = 0
         if publish(payload):
             self._pending_policy_config_event = None
+            transaction = self.policy_apply_store.load()
+            if transaction.get("phase") == "event_pending":
+                self._clear_policy_apply_transaction()
 
     def _collect(self, *, force: bool = False, manual_refresh: bool = False) -> bool:
         result = super()._collect(force=force, manual_refresh=manual_refresh)
