@@ -151,11 +151,12 @@ def validate_dh_pve_app(
     _require_text(
         app / "app/topology.py",
         (
-            '"pvesh", "get", "/cluster/resources"',
+            'read_pve_vmlist(',
+            'read_pve_rrd(',
             'path = self.pve_root / directory / f"{guest_id}.conf"',
             'current_vms, current_lxcs = self._guest_lists()',
         ),
-        "low-cost topology",
+        "cache-first topology",
     )
     _require_text(
         app / "app/shutdown_integration.py",
