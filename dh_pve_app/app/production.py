@@ -4,6 +4,7 @@ import json
 import platform
 import re
 import subprocess
+import time
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
@@ -35,10 +36,10 @@ from .collectors.gpu import (
 from .collectors.host import build_hardware_identity, parse_pve_manager_version
 from .collectors.memory import collect_memory, collect_memory_inventory
 from .collectors.smart import SmartSnapshot, parse_smart_json
-from .collectors.storage import parse_pvesm_status
 from .daily_disk_stats import DailyDiskStats, update_daily_stats
 from .disk_health import evaluate_disk_health
 from .publish_policy import MetricValue
+from .pve_cache import read_pve_rrd, read_storage_config
 from .state_store import StateStore
 
 
@@ -63,6 +64,18 @@ def _read(path: Path) -> str | None:
 
 def _gib_from_kib(value: int) -> float:
     return round(value / (1024 * 1024), 2)
+
+
+def _gib_from_bytes(value: float | None) -> float | None:
+    if value is None:
+        return None
+    return round(value / (1024 ** 3), 2)
+
+
+def _kib_from_bytes(value: float | None) -> int | None:
+    if value is None:
+        return None
+    return int(value / 1024)
 
 
 def _metric(value: object, policy: str) -> MetricValue:
@@ -127,12 +140,14 @@ class ProductionCollectors:
         sys_root: Path = Path("/sys"),
         proc_root: Path = Path("/proc"),
         pve_root: Path = Path("/etc/pve"),
+        now_epoch=time.time,
     ) -> None:
         self.node_name = node_name
         self.disk_state_store = disk_state_store
         self.sys_root = sys_root
         self.proc_root = proc_root
         self.pve_root = pve_root
+        self.now_epoch = now_epoch
         self._cpu_previous: CpuTimes | None = None
         self._throttle_previous = None
 
@@ -235,12 +250,36 @@ class ProductionCollectors:
         )
 
     def storage(self) -> CollectorSample:
-        items = parse_pvesm_status(_run(["pvesm", "status"], timeout=20))
-        data = {item.name: asdict(item) for item in items}
-        metrics = {
-            f"{item.name}.usage_percent": _metric(item.usage_percent, "storage_percent")
-            for item in items
-        }
+        configured = read_storage_config(self.pve_root / "storage.cfg")
+        runtime = read_pve_rrd(
+            self.pve_root / ".rrd",
+            node_name=self.node_name,
+            now_epoch=self.now_epoch(),
+        )
+        data: dict[str, dict[str, object]] = {}
+        metrics: dict[str, MetricValue] = {}
+        for storage_id, config in configured.items():
+            live = runtime.storages.get(storage_id)
+            total = live.total if live is not None else None
+            used = live.used if live is not None else None
+            available = live.free if live is not None else None
+            usage = live.usage_percent if live is not None else None
+            item = {
+                "name": storage_id,
+                "storage_type": config.storage_type,
+                "status": "active" if live is not None else "inactive",
+                "active": live is not None,
+                "total_kib": _kib_from_bytes(total),
+                "used_kib": _kib_from_bytes(used),
+                "available_kib": _kib_from_bytes(available),
+                "total_gib": _gib_from_bytes(total),
+                "used_gib": _gib_from_bytes(used),
+                "available_gib": _gib_from_bytes(available),
+                "usage_percent": round(usage, 2) if usage is not None else None,
+            }
+            data[storage_id] = item
+            if usage is not None:
+                metrics[f"{storage_id}.usage_percent"] = _metric(round(usage, 2), "storage_percent")
         return CollectorSample(data=data, metrics=metrics)
 
     @staticmethod
