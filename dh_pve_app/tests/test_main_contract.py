@@ -81,6 +81,17 @@ def test_main_wires_shared_topology_shutdown_history_and_static_inventory():
     assert "HEALTH_SECONDS = 3600.0" in text
 
 
+def test_main_wires_fixed_policy_reload_barrier():
+    main_text = (ROOT / "app" / "main.py").read_text()
+    unit_text = (ROOT / "systemd" / "dh_pve_app.service").read_text()
+
+    assert "FixedServiceReloadExecutor" in main_text
+    assert "policy_reload_executor=FixedServiceReloadExecutor()" in main_text
+    assert "signal.signal(signal.SIGHUP, reload_policy)" in main_text
+    assert "ups_runtime.complete_policy_reload()" in main_text
+    assert "ExecReload=/bin/kill -HUP $MAINPID" in unit_text
+
+
 def test_guest_aware_full_collection_orders_topology_before_dependents():
     text = (ROOT / "app" / "production_guest.py").read_text()
     mapping = text[text.index("def mapping(self):"):]
