@@ -414,18 +414,15 @@ def read_policy_preflight(
         )
         checks.append(
             PreflightCheck(
-                "monitor_inactive",
-                policy.nut_monitor == "inactive",
-                f"nut-monitor: {policy.nut_monitor}; до commissioning ожидается inactive.",
+                "monitor_active",
+                policy.nut_monitor == "active",
+                f"nut-monitor: {policy.nut_monitor}; для native LB ожидается active.",
             )
-        )
-        shutdown_noop = (
-            not policy.shutdown_enabled and policy.shutdown_command == "/bin/true"
         )
         checks.append(
             PreflightCheck(
-                "shutdown_noop",
-                shutdown_noop,
+                "shutdown_enabled",
+                policy.shutdown_enabled,
                 f"SHUTDOWNCMD: {policy.shutdown_command or 'не задан'}.",
             )
         )
