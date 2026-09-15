@@ -57,7 +57,7 @@ def test_selected_ups_builds_aux_runtime_and_configures_scoped_topics(tmp_path: 
     assert runtime is not None
     assert runtime.config.name == "rackups"
     assert bridge.ups_topics is not None
-    assert bridge.ups_topics.device_id == "dh_pve_ups_node_a"
+    assert bridge.ups_topics.device_id == "dh_app_pve_ups_node_a"
     assert bridge.ups_topics.state.endswith("/node_a/ups/state")
 
 
