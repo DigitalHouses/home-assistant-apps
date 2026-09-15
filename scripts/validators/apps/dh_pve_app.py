@@ -52,7 +52,10 @@ def validate_dh_pve_app(
             app / "app/mqtt_bridge.py",
             app / "app/main.py",
             app / "examples/dh_pve_app.conf.example",
-            app / "examples/dh_pve_shutdown_readiness_card.yaml",
+            app / "examples/dh_app_pve_dashboard.yaml",
+            app / "examples/dh_app_pve_ups_dashboard.yaml",
+            app / "examples/dh_app_pve_shutdown_readiness_card.yaml",
+            app / "examples/packages/dh_app_pve_package.yaml",
             app / "systemd/dh_pve_app.service",
         ],
     )
@@ -212,19 +215,91 @@ def validate_dh_pve_app(
         ),
         "UPS MQTT transport",
     )
+
     _require_text(
-        app / "examples/dh_pve_shutdown_readiness_card.yaml",
+        app / "examples/packages/dh_app_pve_package.yaml",
         (
-            "sensor.dh_pve_previous_shutdown",
-            "sensor.dh_pve_shutdown_history",
-            "sensor.dh_pve_ups_shutdown_readiness",
-            "sensor.dh_pve_ups_guest_shutdown_budget",
-            "proxmox_metric') == 'shutdown_duration'",
-            "result in ['timeout', 'forced']",
-            "ratio >= 0.8",
+            "sensor.dh_app_pve_cpu_usage",
+            "sensor.dh_app_pve_storage_*_percent_used",
+            "sensor.dh_app_pve_ups_status",
+            "logbook:",
+        ),
+        "HA package",
+    )
+    _require_text(
+        app / "examples/dh_app_pve_dashboard.yaml",
+        (
+            "sensor.dh_app_pve_problems",
+            "button.dh_app_pve_refresh",
+            "number.dh_app_pve_cpu_temperature_threshold",
+            "number.dh_app_pve_storage_percent_used_threshold",
+        ),
+        "PVE dashboard",
+    )
+    _require_text(
+        app / "examples/dh_app_pve_ups_dashboard.yaml",
+        (
+            "sensor.dh_app_pve_ups_status",
+            "sensor.dh_app_pve_ups_problems",
+            "binary_sensor.dh_app_pve_ups_on_battery_problem",
+            "button.dh_app_pve_ups_refresh",
+        ),
+        "UPS dashboard",
+    )
+    _require_text(
+        app / "examples/dh_app_pve_shutdown_readiness_card.yaml",
+        (
+            "sensor.dh_app_pve_previous_shutdown",
+            "sensor.dh_app_pve_shutdown_history",
+            "sensor.dh_app_pve_ups_shutdown_readiness",
+            "sensor.dh_app_pve_ups_guest_shutdown_budget",
+            "shutdown_reason",
+            "shutdown_clean",
         ),
         "shutdown readiness card",
     )
+
+    package = (app / "examples/packages/dh_app_pve_package.yaml").read_text(
+        encoding="utf-8"
+    )
+    for forbidden in (
+        "sensor.dh_app_pve_*",
+        "binary_sensor.dh_app_pve_*",
+        "sensor.dh_pve_",
+        "binary_sensor.dh_pve_",
+        "event.dh_app_pve_",
+        "input_number:",
+        "automation:",
+    ):
+        if forbidden in package:
+            fail(f"DH PVE HA package must remain explicit/lightweight: {forbidden}")
+
+    haos_source = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in (
+            app / "examples/dh_app_pve_dashboard.yaml",
+            app / "examples/dh_app_pve_ups_dashboard.yaml",
+            app / "examples/dh_app_pve_shutdown_readiness_card.yaml",
+        )
+    )
+    for forbidden in (
+        ".dh_pve_",
+        ".dh_ups_",
+        "input_number.dh_proxmox_",
+        "states.sensor",
+        "states.binary_sensor",
+        "custom:auto-entities",
+    ):
+        if forbidden in haos_source:
+            fail(f"DH PVE canonical HAOS examples contain legacy/business logic: {forbidden}")
+
+    for legacy_name in (
+        "dh_pve_dashboard.yaml",
+        "dh_pve_ups_dashboard.yaml",
+        "dh_pve_shutdown_readiness_card.yaml",
+    ):
+        if (app / "examples" / legacy_name).exists():
+            fail(f"DH PVE legacy HAOS example must be removed: {legacy_name}")
 
     discovery_metrics = (app / "app/discovery_metrics.py").read_text(
         encoding="utf-8"
