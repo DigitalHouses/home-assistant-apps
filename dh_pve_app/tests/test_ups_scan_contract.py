@@ -94,9 +94,13 @@ def test_read_only_nut_scan_lists_configured_ups_names():
 
 def test_ups_device_and_entities_use_pve_scoped_public_namespace():
     topics = build_ups_topics(_mqtt(), _identity())
-    assert topics.device_id == "dh_pve_ups_node_a"
-    assert topics.discovery == "homeassistant/device/dh_pve_ups_node_a/config"
-    assert getattr(topics, "legacy_discovery", None) == "homeassistant/device/dh_ups_node_a/config"
+    assert topics.device_id == "dh_app_pve_ups_node_a"
+    assert topics.discovery == "homeassistant/device/dh_app_pve_ups_node_a/config"
+    assert topics.legacy_discoveries == (
+        "homeassistant/device/dh_pve_ups_node_a/config",
+        "homeassistant/device/dh_ups_node_a/config",
+    )
+    assert topics.legacy_discovery == "homeassistant/device/dh_ups_node_a/config"
 
     snapshot = parse_upsc_output(
         "device.mfr: CPS\n"
@@ -110,7 +114,9 @@ def test_ups_device_and_entities_use_pve_scoped_public_namespace():
     )
 
     assert payload["device"]["name"] == "DH PVE UPS"
-    assert payload["device"]["identifiers"] == ["dh_pve_ups_node_a"]
+    assert payload["device"]["identifiers"] == ["dh_app_pve_ups_node_a"]
+    # This is the raw builder. Final production Discovery canonicalizes public
+    # entity IDs in route_ups_discovery_groups().
     assert payload["components"]["status"]["default_entity_id"] == "sensor.dh_pve_ups_status"
     assert payload["components"]["battery_charge"]["default_entity_id"] == "sensor.dh_pve_ups_battery_charge"
     assert payload["components"]["refresh"]["default_entity_id"] == "button.dh_pve_ups_refresh"
