@@ -1,8 +1,13 @@
+import queue
+
+import pytest
+
 from app.config import MqttConfig
 from app.identity import HostIdentity
 from app.mqtt_bridge import MqttBridge, MqttEvents
 from app.runtime_settings import RuntimeSettings
 from app.topics import build_topics, build_ups_topics
+from app.ups_policy import PolicyValidationError
 
 
 def _mqtt():
@@ -26,16 +31,37 @@ def _identity():
     )
 
 
-def test_legacy_policy_command_topics_are_not_handled():
+def test_trigger_v2_policy_topics_queue_only_draft_updates_and_explicit_apply():
     events = MqttEvents(build_topics(_mqtt(), _identity()), RuntimeSettings())
     ups = build_ups_topics(_mqtt(), _identity())
     events.configure_ups(ups)
 
-    assert events.handle_message(ups.policy_on_battery_delay_set, b"30") is False
-    assert events.handle_message(ups.policy_power_restore_delay_set, b"120") is False
-    assert events.handle_message(ups.policy_apply, b"PRESS") is False
-    assert not hasattr(events, "ups_policy_updates")
-    assert not hasattr(events, "ups_policy_apply_requested")
+    assert events.handle_message(ups.policy_charge_threshold_set, b"25") is True
+    assert events.handle_message(ups.policy_runtime_reserve_set, b"240") is True
+    assert events.handle_message(ups.policy_apply, b"PRESS") is True
+
+    first = events.ups_policy_updates.get_nowait()
+    second = events.ups_policy_updates.get_nowait()
+    assert (first.key, first.value) == (
+        "shutdown_battery_charge_threshold_percent",
+        25,
+    )
+    assert (second.key, second.value) == ("runtime_reserve_seconds", 240)
+    with pytest.raises(queue.Empty):
+        events.ups_policy_updates.get_nowait()
+    assert events.ups_policy_apply_requested.is_set()
+
+
+def test_trigger_v2_policy_topics_reject_invalid_backend_values():
+    events = MqttEvents(build_topics(_mqtt(), _identity()), RuntimeSettings())
+    ups = build_ups_topics(_mqtt(), _identity())
+    events.configure_ups(ups)
+
+    with pytest.raises(PolicyValidationError):
+        events.handle_message(ups.policy_charge_threshold_set, b"11")
+    with pytest.raises(PolicyValidationError):
+        events.handle_message(ups.policy_runtime_reserve_set, b"61")
+    assert events.handle_message(ups.policy_apply, b"NO") is False
 
 
 class _PublishInfo:
@@ -68,7 +94,7 @@ class _Client:
         return _PublishInfo()
 
 
-def test_policy_command_topics_are_not_subscribed_on_connect():
+def test_trigger_v2_policy_command_topics_are_subscribed_on_connect():
     mqtt = _mqtt()
     identity = _identity()
     pve = build_topics(mqtt, identity)
@@ -86,10 +112,9 @@ def test_policy_command_topics_are_not_subscribed_on_connect():
     bridge._on_connect(client, None, None, 0, None)
 
     subscribed = {topic for topic, _qos in client.subscriptions}
-    assert ups.policy_on_battery_delay_set not in subscribed
-    assert ups.policy_power_restore_delay_set not in subscribed
-    assert ups.policy_apply not in subscribed
-
+    assert ups.policy_charge_threshold_set in subscribed
+    assert ups.policy_runtime_reserve_set in subscribed
+    assert ups.policy_apply in subscribed
     assert ups.test_quick_interval_days_set in subscribed
     assert ups.test_quick_time_set in subscribed
     assert ups.test_deep_interval_days_set in subscribed
