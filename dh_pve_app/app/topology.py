@@ -116,6 +116,7 @@ class TopologyManager:
         self._vm_configs: dict[str, str] = {}
         self._lxc_configs: dict[str, str] = {}
         self._pci_catalog: dict[str, dict[str, str]] = {}
+        self._gpu_catalog_text = ""
         self._qga_last_probe: dict[str, float] = {}
         self._storage_sources: dict[tuple[str, str], GuestStorageSource] = {}
 
@@ -324,7 +325,12 @@ class TopologyManager:
 
     def full_scan(self) -> TopologySnapshot:
         vms, lxcs = self._guest_lists()
-        self._pci_catalog = parse_lspci_catalog(self._run(["lspci", "-Dnn"], timeout=10))
+        try:
+            pci_text = self._run(["lspci", "-Dnnk"], timeout=10)
+        except Exception:
+            pci_text = self._run(["lspci", "-Dnn"], timeout=10)
+        self._gpu_catalog_text = pci_text
+        self._pci_catalog = parse_lspci_catalog(pci_text)
 
         self._vm_configs = {guest_id: self._read_config("vm", guest_id) for guest_id in vms}
         self._lxc_configs = {guest_id: self._read_config("lxc", guest_id) for guest_id in lxcs}
@@ -412,6 +418,9 @@ class TopologyManager:
         if self._snapshot is None:
             return ()
         return self._snapshot.storage_sources
+
+    def gpu_catalog_text(self) -> str:
+        return self._gpu_catalog_text
 
     def gpu_owners(self) -> Mapping[str, GpuOwner]:
         return {} if self._snapshot is None else self._snapshot.gpu_owners
