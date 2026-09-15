@@ -64,6 +64,16 @@ _DIAGNOSTICS = {
     "ups_last_publication",
 }
 
+_PROBLEM_NAMES = {
+    "nut_unavailable": "NUT unavailable",
+    "on_battery": "On battery",
+    "low_battery": "Low battery",
+    "overload": "Overload",
+    "replace_battery": "Replace battery",
+    "bypass": "Bypass",
+    "power_state_unknown": "Power state unknown",
+}
+
 
 def _group_for(component_key: str) -> str | None:
     if component_key in _TELEMETRY:
@@ -79,15 +89,19 @@ def _group_for(component_key: str) -> str | None:
     return None
 
 
-def _adaptive_diagnostic_components(topics) -> dict[str, dict[str, object]]:
-    diagnostics = ups_state_group_topic(topics, "diagnostics")
-    availability = [
+def _availability(topics) -> list[dict[str, str]]:
+    return [
         {
             "topic": topics.availability,
             "payload_available": "online",
             "payload_not_available": "offline",
         }
     ]
+
+
+def _adaptive_diagnostic_components(topics) -> dict[str, dict[str, object]]:
+    diagnostics = ups_state_group_topic(topics, "diagnostics")
+    availability = _availability(topics)
     uid = lambda suffix: f"{topics.device_id}_{suffix}"
     return {
         "ups_app_profile": {
@@ -129,15 +143,69 @@ def _adaptive_diagnostic_components(topics) -> dict[str, dict[str, object]]:
     }
 
 
-def route_ups_discovery_groups(payload: dict[str, object], topics) -> dict[str, object]:
-    """Route UPS Discovery state to independent retained presentation groups.
+def _canonicalize_entity_id(value: object) -> object:
+    if not isinstance(value, str):
+        return value
+    if ".dh_pve_ups_" in value:
+        return value.replace(".dh_pve_ups_", ".dh_app_pve_ups_", 1)
+    if ".dh_ups_" in value:
+        return value.replace(".dh_ups_", ".dh_app_pve_ups_", 1)
+    return value
 
-    NUT availability always reads the status group. Telemetry groups are
-    intentionally not refreshed just to announce a NUT outage. The legacy
-    seconds runtime sensor is removed here so production Discovery exposes one
-    canonical runtime entity in minutes while the raw seconds value may remain
-    available inside the application payload for compatibility.
-    """
+
+def _problem_components(topics) -> dict[str, dict[str, object]]:
+    availability = _availability(topics)
+    uid = lambda suffix: f"{topics.device_id}_{suffix}"
+    components: dict[str, dict[str, object]] = {}
+
+    for problem_id, name in _PROBLEM_NAMES.items():
+        components[f"{problem_id}_problem"] = {
+            "platform": "binary_sensor",
+            "name": name,
+            "unique_id": uid(f"{problem_id}_problem"),
+            "default_entity_id": f"binary_sensor.dh_app_pve_ups_{problem_id}_problem",
+            "state_topic": f"{topics.base}/problems/{problem_id}/state",
+            "payload_on": "ON",
+            "payload_off": "OFF",
+            "availability": availability,
+            "availability_mode": "all",
+            "device_class": "problem",
+            "entity_category": "diagnostic",
+        }
+
+    components["problems"] = {
+        "platform": "sensor",
+        "name": "Problems",
+        "unique_id": uid("problems"),
+        "default_entity_id": "sensor.dh_app_pve_ups_problems",
+        "state_topic": f"{topics.base}/problems/aggregate",
+        "availability": availability,
+        "availability_mode": "all",
+        "entity_category": "diagnostic",
+        "icon": "mdi:alert-circle-outline",
+        "json_attributes_topic": f"{topics.base}/problems/presentation",
+    }
+    components["diagnostic_event"] = {
+        "platform": "event",
+        "name": "Diagnostic",
+        "unique_id": uid("diagnostic_event"),
+        "default_entity_id": "event.dh_app_pve_ups_diagnostic",
+        "state_topic": topics.diagnostic_event,
+        "event_types": [
+            "problem_started",
+            "problem_recovered",
+            "problem_updated",
+        ],
+        "availability": availability,
+        "availability_mode": "all",
+        "entity_category": "diagnostic",
+        "icon": "mdi:alert-circle-outline",
+    }
+    return components
+
+
+def route_ups_discovery_groups(payload: dict[str, object], topics) -> dict[str, object]:
+    """Route UPS Discovery to canonical retained presentation groups."""
     raw_components = payload.get("components")
     if not isinstance(raw_components, dict):
         return payload
@@ -171,4 +239,13 @@ def route_ups_discovery_groups(payload: dict[str, object], topics) -> dict[str, 
                 # value_json.available, which now belongs to the status group.
                 item["topic"] = status_topic
 
+        if "default_entity_id" in component:
+            component["default_entity_id"] = _canonicalize_entity_id(
+                component.get("default_entity_id")
+            )
+
+    # App-owned problem state is a separate retained contract and intentionally
+    # replaces the aggregate that used to be derived from the monolithic UPS
+    # status JSON. Raw UPS status binaries remain available as telemetry.
+    raw_components.update(_problem_components(topics))
     return payload
