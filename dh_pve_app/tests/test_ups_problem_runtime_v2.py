@@ -180,7 +180,7 @@ def test_on_battery_transition_and_recovery_publish_event_last(tmp_path):
     bridge.problem_calls.clear()
 
     current["snapshot"] = _on_battery()
-    clock.update(iso="2026-09-15T20:00:05+05:00", mono=5.0)
+    clock.update(iso="2026-09-15T20:00:10+05:00", mono=10.0)
     assert runtime.tick(clock["mono"]) is True
 
     assert [call[0] for call in bridge.problem_calls] == [
@@ -201,7 +201,7 @@ def test_on_battery_transition_and_recovery_publish_event_last(tmp_path):
 
     bridge.problem_calls.clear()
     current["snapshot"] = _healthy()
-    clock.update(iso="2026-09-15T20:00:10+05:00", mono=10.0)
+    clock.update(iso="2026-09-15T20:00:20+05:00", mono=20.0)
     assert runtime.tick(clock["mono"]) is True
 
     assert [call[0] for call in bridge.problem_calls] == [
@@ -225,7 +225,7 @@ def test_simultaneous_ups_transitions_publish_all_states_before_aggregate_and_ev
     bridge.problem_calls.clear()
 
     current["snapshot"] = _on_battery_low()
-    clock.update(iso="2026-09-15T20:00:05+05:00", mono=5.0)
+    clock.update(iso="2026-09-15T20:00:10+05:00", mono=10.0)
     assert runtime.tick(clock["mono"]) is True
 
     assert [call[0] for call in bridge.problem_calls] == [
@@ -255,7 +255,7 @@ def test_nut_failure_starts_critical_problem_without_false_recoveries(tmp_path):
     bridge.problem_calls.clear()
 
     current["snapshot"] = RuntimeError("NUT offline")
-    clock.update(iso="2026-09-15T20:00:05+05:00", mono=5.0)
+    clock.update(iso="2026-09-15T20:00:10+05:00", mono=10.0)
     runtime.tick(clock["mono"])
 
     state_calls = [call for call in bridge.problem_calls if call[0] == "state"]
@@ -284,7 +284,7 @@ def test_failed_event_is_retried_before_new_observation(tmp_path):
 
     current["snapshot"] = _on_battery()
     bridge.fail_event_once = True
-    clock.update(iso="2026-09-15T20:00:05+05:00", mono=5.0)
+    clock.update(iso="2026-09-15T20:00:10+05:00", mono=10.0)
     assert runtime.tick(clock["mono"]) is False
     assert bridge.problem_calls[-1][0] == "event"
     assert bridge.problem_calls[-1][1]["event_type"] == "problem_started"
@@ -292,11 +292,9 @@ def test_failed_event_is_retried_before_new_observation(tmp_path):
     reads_before_retry = calls["count"]
     bridge.problem_calls.clear()
     current["snapshot"] = _healthy()
-    clock.update(iso="2026-09-15T20:00:10+05:00", mono=10.0)
+    clock.update(iso="2026-09-15T20:00:20+05:00", mono=20.0)
     assert runtime.tick(clock["mono"]) is True
 
-    # The pending started bundle is completed before the new healthy sample is
-    # observed and allowed to create the recovery transition.
     assert [call[0] for call in bridge.problem_calls[:4]] == [
         "state",
         "aggregate",
