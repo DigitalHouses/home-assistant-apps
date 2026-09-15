@@ -14,6 +14,14 @@ class PublicationProfile(str, Enum):
     DETAIL = "detail"
 
 
+# Transitional non-member aliases keep legacy router code importable while the
+# final router migration removes those references. Enum iteration still exposes
+# only NORMAL and DETAIL, and every legacy name maps to one of those two states.
+PublicationProfile.QUIET = PublicationProfile.NORMAL  # type: ignore[attr-defined]
+PublicationProfile.HIGH = PublicationProfile.DETAIL  # type: ignore[attr-defined]
+PublicationProfile.CRITICAL = PublicationProfile.DETAIL  # type: ignore[attr-defined]
+
+
 @dataclass(frozen=True)
 class ProfileWindows:
     normal_seconds: float = 900.0
