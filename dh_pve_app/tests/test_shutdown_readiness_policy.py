@@ -10,17 +10,32 @@ def _policy(**overrides):
         "role": "primary",
         "nut_monitor": "active",
         "shutdown_enabled": True,
-        "upssched_present": True,
-        "upssched_active": True,
-        "on_battery_delay_minutes": 30,
+        # Trigger Policy v2 does not use the former upssched ONBATT timer.
+        # These fields remain observable legacy diagnostics only.
+        "upssched_present": False,
+        "upssched_active": False,
+        "on_battery_delay_minutes": None,
         "power_restore_delay_seconds": 120,
     }
     values.update(overrides)
     return SimpleNamespace(**values)
 
 
-def test_enabled_production_policy_has_no_readiness_issues():
+def test_enabled_production_policy_has_no_readiness_issues_without_legacy_timer():
     assert shutdown_policy_issues(_policy(), nut_available=True) == []
+
+
+def test_legacy_upssched_timer_does_not_affect_v2_readiness():
+    issues = shutdown_policy_issues(
+        _policy(
+            upssched_present=True,
+            upssched_active=True,
+            on_battery_delay_minutes=30,
+        ),
+        nut_available=True,
+    )
+
+    assert issues == []
 
 
 def test_broken_production_policy_is_reported_as_warning():
@@ -30,8 +45,6 @@ def test_broken_production_policy_is_reported_as_warning():
             role="secondary",
             nut_monitor="inactive",
             shutdown_enabled=False,
-            upssched_active=False,
-            on_battery_delay_minutes=None,
         ),
         nut_available=False,
     )
@@ -41,8 +54,8 @@ def test_broken_production_policy_is_reported_as_warning():
     assert "nut_role_not_primary" in issues
     assert "nut_monitor_not_active" in issues
     assert "shutdown_disabled" in issues
-    assert "upssched_inactive" in issues
-    assert "on_battery_delay_unreadable" in issues
+    assert "upssched_inactive" not in issues
+    assert "on_battery_delay_unreadable" not in issues
 
     readiness = evaluate_shutdown_readiness(
         ups_present=True,
@@ -52,6 +65,15 @@ def test_broken_production_policy_is_reported_as_warning():
     )
     assert readiness["status"] == "warning"
     assert "nut_monitor_not_active" in readiness["issues"]
+
+
+def test_missing_power_restore_delay_is_still_reported():
+    issues = shutdown_policy_issues(
+        _policy(power_restore_delay_seconds=None),
+        nut_available=True,
+    )
+
+    assert issues == ["power_restore_delay_unreadable"]
 
 
 def test_missing_policy_is_not_ready():
