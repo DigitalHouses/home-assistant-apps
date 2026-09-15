@@ -37,13 +37,13 @@ def _config():
     )
 
 
-def _commissioning_policy():
+def _enabled_policy():
     return UpsShutdownPolicy(
-        state="Commissioning",
+        state="Enabled",
         role="primary",
-        nut_monitor="inactive",
-        shutdown_enabled=False,
-        shutdown_command="/bin/true",
+        nut_monitor="active",
+        shutdown_enabled=True,
+        shutdown_command="/sbin/shutdown -h now",
         min_supplies=1,
         pollfreq_seconds=5,
         pollfreqalert_seconds=5,
@@ -85,7 +85,7 @@ def _seed(tmp_path):
     )
     (tmp_path / "upsmon.conf").write_text(
         f"MONITOR ups@127.0.0.1 1 dh_primary_user {SECRET} primary\n"
-        'SHUTDOWNCMD "/bin/true"\n',
+        'SHUTDOWNCMD "/sbin/shutdown -h now"\n',
         encoding="utf-8",
     )
     (tmp_path / "dh_pve_app.conf").write_text(
@@ -113,7 +113,7 @@ def _preflight_kwargs(helper):
     }
 
 
-def test_preflight_ready_is_read_only_and_requires_safe_commissioning_state(tmp_path):
+def test_preflight_ready_requires_live_primary_native_shutdown_path(tmp_path):
     ups_conf, helper = _seed(tmp_path)
     runner = Runner()
 
@@ -121,7 +121,7 @@ def test_preflight_ready_is_read_only_and_requires_safe_commissioning_state(tmp_
         _config(),
         runner=runner,
         ups_reader=lambda config: object(),
-        shutdown_policy_reader=_commissioning_policy,
+        shutdown_policy_reader=_enabled_policy,
         facts_reader=lambda config: _facts(),
         ups_conf_path=ups_conf,
         killpower_path=tmp_path / "killpower",
@@ -139,15 +139,15 @@ def test_preflight_ready_is_read_only_and_requires_safe_commissioning_state(tmp_
     ]
 
 
-def test_preflight_blocks_if_monitor_is_already_live_or_shutdown_is_enabled(tmp_path):
+def test_preflight_blocks_if_primary_monitor_or_native_shutdown_path_is_disabled(tmp_path):
     ups_conf, helper = _seed(tmp_path)
-    policy = _commissioning_policy()
+    policy = _enabled_policy()
     policy = UpsShutdownPolicy(**{
         **policy.__dict__,
-        "state": "Enabled",
-        "nut_monitor": "active",
-        "shutdown_enabled": True,
-        "shutdown_command": "/sbin/shutdown -h now",
+        "state": "Commissioning",
+        "nut_monitor": "inactive",
+        "shutdown_enabled": False,
+        "shutdown_command": "/bin/true",
     })
 
     report = read_policy_preflight(
@@ -164,8 +164,8 @@ def test_preflight_blocks_if_monitor_is_already_live_or_shutdown_is_enabled(tmp_
     assert report.state == "Blocked"
     assert report.ready is False
     failed = {check.key for check in report.checks if not check.ok}
-    assert "monitor_inactive" in failed
-    assert "shutdown_noop" in failed
+    assert "monitor_active" in failed
+    assert "shutdown_enabled" in failed
 
 
 def test_preflight_blocks_for_hardware_low_battery_override(tmp_path):
@@ -179,7 +179,7 @@ def test_preflight_blocks_for_hardware_low_battery_override(tmp_path):
         _config(),
         runner=Runner(),
         ups_reader=lambda config: object(),
-        shutdown_policy_reader=_commissioning_policy,
+        shutdown_policy_reader=_enabled_policy,
         facts_reader=lambda config: _facts(),
         ups_conf_path=ups_conf,
         killpower_path=tmp_path / "killpower",
@@ -200,7 +200,7 @@ def test_preflight_blocks_when_killpower_flag_exists(tmp_path):
         _config(),
         runner=Runner(),
         ups_reader=lambda config: object(),
-        shutdown_policy_reader=_commissioning_policy,
+        shutdown_policy_reader=_enabled_policy,
         facts_reader=lambda config: _facts(),
         ups_conf_path=ups_conf,
         killpower_path=killpower,
