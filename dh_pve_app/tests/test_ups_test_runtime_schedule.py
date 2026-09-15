@@ -191,7 +191,7 @@ def test_due_safe_quick_test_runs_once_and_is_recorded(tmp_path):
         persisted=_stored_schedule(),
     )
     runtime.startup()
-    clock["mono"] = 105.0
+    clock["mono"] = 110.0
 
     assert runtime.tick(clock["mono"]) is True
     assert calls == ["quick"]
@@ -200,7 +200,7 @@ def test_due_safe_quick_test_runs_once_and_is_recorded(tmp_path):
     assert persisted["test_history"][-1]["type"] == "Quick"
     assert persisted["test_history"][-1]["source"] == "Scheduled"
 
-    clock["mono"] = 110.0
+    clock["mono"] = 120.0
     runtime.tick(clock["mono"])
     assert calls == ["quick"]
 
@@ -215,19 +215,19 @@ def test_overdue_test_waits_for_later_eligible_window_when_unsafe(tmp_path):
         persisted=_stored_schedule(),
     )
     runtime.startup()
-    clock["mono"] = 105.0
+    clock["mono"] = 110.0
     runtime.tick(clock["mono"])
     assert calls == []
     assert store.load()["test_schedule"]["quick"]["anchor"] == "2026-08-14T12:00:00+05:00"
 
     holder["value"] = _safe_snapshot()
     clock["local"] = datetime(2026, 9, 13, 12, 30, tzinfo=TZ)
-    clock["mono"] = 110.0
+    clock["mono"] = 120.0
     runtime.tick(clock["mono"])
     assert calls == []
 
     clock["local"] = datetime(2026, 9, 14, 12, 5, tzinfo=TZ)
-    clock["mono"] = 115.0
+    clock["mono"] = 130.0
     runtime.tick(clock["mono"])
     assert calls == ["quick"]
 
@@ -240,7 +240,7 @@ def test_overdue_test_does_not_start_at_night(tmp_path):
         persisted=_stored_schedule(),
     )
     runtime.startup()
-    clock["mono"] = 105.0
+    clock["mono"] = 110.0
     runtime.tick(clock["mono"])
 
     assert calls == []
@@ -255,7 +255,7 @@ def test_deep_priority_defers_quick_until_next_eligible_day(tmp_path):
     )
     _, runtime, store, _, calls = _runtime(tmp_path, clock=clock, persisted=persisted)
     runtime.startup()
-    clock["mono"] = 105.0
+    clock["mono"] = 110.0
     runtime.tick(clock["mono"])
 
     assert calls == ["deep"]
@@ -263,12 +263,12 @@ def test_deep_priority_defers_quick_until_next_eligible_day(tmp_path):
     assert state["quick"]["anchor"] == "2026-08-14T12:00:00+05:00"
     assert state["last_decision"] == "Deep priority; Quick deferred"
 
-    clock["mono"] = 110.0
+    clock["mono"] = 120.0
     runtime.tick(clock["mono"])
     assert calls == ["deep"]
 
     clock["local"] = datetime(2026, 9, 14, 12, 5, tzinfo=TZ)
-    clock["mono"] = 115.0
+    clock["mono"] = 130.0
     runtime.tick(clock["mono"])
     assert calls == ["deep", "quick"]
 
