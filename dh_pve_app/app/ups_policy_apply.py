@@ -29,6 +29,8 @@ class ManagedNutPaths:
     upsmon: Path = Path("/etc/nut/upsmon.conf")
     upssched: Path = Path("/etc/nut/upssched.conf")
     ups_conf: Path = Path("/etc/nut/ups.conf")
+    upsd_users: Path = Path("/etc/nut/upsd.users")
+    app_config: Path = Path("/etc/dh_pve_app/dh_pve_app.conf")
     command_script: Path = Path(
         "/opt/digitalhouses/dh_pve_app/bin/dh-pve-ups-policy-cmd"
     )
@@ -40,6 +42,8 @@ class ManagedPolicyTarget:
     upsmon_text: str
     upssched_text: str
     ups_conf_text: str
+    upsd_users_text: str = ""
+    app_config_text: str = ""
 
 
 @dataclass(frozen=True)
@@ -57,6 +61,8 @@ _FORBIDDEN_UPS_DIRECTIVES = {
     "override.battery.runtime.low",
     "override.battery.charge.low",
 }
+_MANAGED_NUT_USER = "dh_primary_user"
+_SECTION_RE = re.compile(r"^\s*\[([^]]+)\]\s*(?:#.*)?$")
 
 
 def _line_key(line: str) -> str:
@@ -66,8 +72,24 @@ def _line_key(line: str) -> str:
     return stripped.split(None, 1)[0].upper()
 
 
-def _render_upsmon(existing: str) -> str:
+def _monitor_ups_name(line: str) -> str | None:
+    stripped = line.strip()
+    if not stripped or stripped.startswith("#"):
+        return None
+    parts = stripped.split()
+    if len(parts) < 2 or parts[0].upper() != "MONITOR":
+        return None
+    return parts[1].split("@", 1)[0]
+
+
+def _render_upsmon(
+    existing: str,
+    *,
+    ups_name: str | None = None,
+    managed_password: str | None = None,
+) -> str:
     output: list[str] = []
+    selected_monitor_seen = False
     for line in existing.splitlines():
         stripped = line.strip()
         key = _line_key(line)
@@ -77,10 +99,30 @@ def _render_upsmon(existing: str) -> str:
             parts = stripped.split()
             if len(parts) >= 2 and parts[1].upper() in {"ONBATT", "ONLINE"}:
                 continue
+        if (
+            key == "MONITOR"
+            and ups_name is not None
+            and managed_password is not None
+            and _monitor_ups_name(line) == ups_name
+        ):
+            if selected_monitor_seen:
+                raise PolicyApplyError(
+                    f"В upsmon.conf найдено несколько MONITOR для UPS {ups_name}."
+                )
+            output.append(
+                f"MONITOR {ups_name}@127.0.0.1 1 {_MANAGED_NUT_USER} "
+                f"{managed_password} primary"
+            )
+            selected_monitor_seen = True
+            continue
         output.append(line)
 
     if not any(_line_key(line) == "MONITOR" for line in output):
         raise PolicyApplyError("В upsmon.conf не найден MONITOR для UPS.")
+    if ups_name is not None and managed_password is not None and not selected_monitor_seen:
+        raise PolicyApplyError(
+            f"В upsmon.conf не найден MONITOR для выбранного UPS {ups_name}."
+        )
 
     while output and not output[-1].strip():
         output.pop()
@@ -99,11 +141,10 @@ def _render_upsmon(existing: str) -> str:
 
 
 def _section_bounds(lines: list[str], section_name: str) -> tuple[int, int]:
-    section_re = re.compile(r"^\s*\[([^]]+)\]\s*(?:#.*)?$")
     start: int | None = None
     end = len(lines)
     for index, line in enumerate(lines):
-        match = section_re.match(line)
+        match = _SECTION_RE.match(line)
         if not match:
             continue
         current = match.group(1).strip()
@@ -187,6 +228,104 @@ def _render_upssched(delay_seconds: int, command_script_path: Path) -> str:
     )
 
 
+def _find_section_ranges(lines: list[str], section_name: str) -> list[tuple[int, int]]:
+    starts: list[int] = []
+    for index, line in enumerate(lines):
+        match = _SECTION_RE.match(line)
+        if match and match.group(1).strip() == section_name:
+            starts.append(index)
+    ranges: list[tuple[int, int]] = []
+    for start in starts:
+        end = len(lines)
+        for index in range(start + 1, len(lines)):
+            if _SECTION_RE.match(lines[index]):
+                end = index
+                break
+        ranges.append((start, end))
+    return ranges
+
+
+def _render_upsd_users(existing: str, managed_password: str) -> str:
+    lines = existing.splitlines()
+    ranges = _find_section_ranges(lines, _MANAGED_NUT_USER)
+    if len(ranges) > 1:
+        raise PolicyApplyError(
+            f"В upsd.users найдено несколько секций [{_MANAGED_NUT_USER}]."
+        )
+
+    managed = [
+        f"[{_MANAGED_NUT_USER}]",
+        f"    password = {managed_password}",
+        "    upsmon primary",
+        "    instcmds = ALL",
+    ]
+
+    if ranges:
+        start, end = ranges[0]
+        rendered = lines[:start] + managed + lines[end:]
+    else:
+        rendered = list(lines)
+        while rendered and not rendered[-1].strip():
+            rendered.pop()
+        if rendered:
+            rendered.append("")
+        rendered.extend(managed)
+
+    return "\n".join(rendered).rstrip() + "\n"
+
+
+def _render_app_config(existing: str, ups_name: str, managed_password: str) -> str:
+    lines = existing.splitlines()
+    ranges = _find_section_ranges(lines, "ups")
+    if len(ranges) > 1:
+        raise PolicyApplyError("В dh_pve_app.conf найдено несколько секций [ups].")
+
+    managed_values = {
+        "enabled": "true",
+        "name": ups_name,
+        "command_username": _MANAGED_NUT_USER,
+        "command_password": managed_password,
+    }
+
+    if ranges:
+        start, end = ranges[0]
+        body = lines[start + 1 : end]
+        rendered_body: list[str] = []
+        seen: set[str] = set()
+        for line in body:
+            stripped = line.strip()
+            if not stripped or stripped.startswith(("#", ";")) or "=" not in line:
+                rendered_body.append(line)
+                continue
+            key = line.split("=", 1)[0].strip().casefold()
+            if key in managed_values:
+                rendered_body.append(f"{key} = {managed_values[key]}")
+                seen.add(key)
+            else:
+                rendered_body.append(line)
+        for key, value in managed_values.items():
+            if key not in seen:
+                rendered_body.append(f"{key} = {value}")
+        rendered = lines[: start + 1] + rendered_body + lines[end:]
+    else:
+        rendered = list(lines)
+        while rendered and not rendered[-1].strip():
+            rendered.pop()
+        if rendered:
+            rendered.append("")
+        rendered.extend(
+            [
+                "[ups]",
+                "enabled = true",
+                f"name = {ups_name}",
+                f"command_username = {_MANAGED_NUT_USER}",
+                f"command_password = {managed_password}",
+            ]
+        )
+
+    return "\n".join(rendered).rstrip() + "\n"
+
+
 def render_managed_policy(
     draft: UpsPolicyDraft,
     upsmon_text: str,
@@ -194,10 +333,24 @@ def render_managed_policy(
     *,
     command_script_path: Path,
     ups_name: str = "ups",
+    upsd_users_text: str | None = None,
+    app_config_text: str | None = None,
+    managed_password: str | None = None,
 ) -> ManagedPolicyTarget:
+    identity_args = (upsd_users_text, app_config_text, managed_password)
+    identity_requested = any(value is not None for value in identity_args)
+    if identity_requested and not all(value is not None for value in identity_args):
+        raise PolicyApplyError(
+            "Для managed NUT identity требуются upsd.users, App config и password."
+        )
+
     validation = validate_policy(draft)
     return ManagedPolicyTarget(
-        upsmon_text=_render_upsmon(upsmon_text),
+        upsmon_text=_render_upsmon(
+            upsmon_text,
+            ups_name=ups_name if identity_requested else None,
+            managed_password=managed_password if identity_requested else None,
+        ),
         upssched_text=_render_upssched(
             validation.on_battery_delay_seconds, command_script_path
         ),
@@ -205,6 +358,16 @@ def render_managed_policy(
             ups_conf_text,
             ups_name,
             validation.power_restore_delay_seconds,
+        ),
+        upsd_users_text=(
+            _render_upsd_users(upsd_users_text or "", managed_password or "")
+            if identity_requested
+            else ""
+        ),
+        app_config_text=(
+            _render_app_config(app_config_text or "", ups_name, managed_password or "")
+            if identity_requested
+            else ""
         ),
     )
 
