@@ -17,7 +17,7 @@ from .mqtt_bridge import MqttBridge
 from .production import _run
 from .publish_policy import PublishPolicy
 from .pve_cache import read_pve_version
-from .runtime_dynamic import DynamicDiscoveryRuntime
+from .runtime_problems import ProblemAwareRuntime
 from .runtime_settings import RuntimeSettings
 from .scheduler import Scheduler
 from .shutdown_discovery import build_shutdown_aware_pve_discovery_payload
@@ -137,7 +137,7 @@ def build_runtime(
     def pve_version_fingerprint() -> str:
         return read_pve_version(topology.pve_root / ".version").fingerprint
 
-    runtime = DynamicDiscoveryRuntime(
+    runtime = ProblemAwareRuntime(
         collectors=collectors,
         bridge=bridge,
         settings=settings,
