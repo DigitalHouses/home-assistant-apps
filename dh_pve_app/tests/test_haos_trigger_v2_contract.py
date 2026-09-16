@@ -69,6 +69,7 @@ def test_notification_package_uses_events_gate_and_retained_aggregates_only():
         "sensor.dh_app_pve_problems",
         "sensor.dh_app_pve_ups_problems",
         "problem_started",
+        "problem_updated",
         "problem_recovered",
         "config_changed",
         "event: dh_app_pve_notification",
