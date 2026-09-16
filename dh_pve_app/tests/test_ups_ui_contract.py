@@ -56,6 +56,43 @@ def test_ups_dashboard_keeps_nut_observation_and_uses_trigger_v2_policy_view():
     assert "button.dh_app_pve_ups_apply_policy" not in text
 
 
+def test_ups_dashboard_has_permanent_app_owned_line_power_monthly_statistics():
+    text = _text()
+
+    for entity_id in (
+        "binary_sensor.dh_app_pve_ups_line_power",
+        "sensor.dh_app_pve_ups_line_power_online_month",
+        "sensor.dh_app_pve_ups_line_power_offline_month",
+        "sensor.dh_app_pve_ups_line_power_outages_month",
+        "sensor.dh_app_pve_ups_line_power_availability_month",
+        "sensor.dh_app_pve_ups_line_power_current_outage_started",
+    ):
+        assert entity_id in text
+
+    for label in (
+        "Городская сеть работает",
+        "Городская сеть отсутствует",
+        "Состояние городской сети неизвестно",
+        "Статистика за",
+        "Свет был",
+        "Света не было",
+        "Отключений",
+        "Доступность",
+    ):
+        assert label in text
+
+    # The month title/partial-month note come from App metadata. HA only formats
+    # ready state; it must not reconstruct monthly accounting from history.
+    assert "month_label_ru" in text
+    assert "partial_month" in text
+    assert "tracking_since" in text
+    assert "history_stats" not in text
+    assert "recorder" not in text.casefold()
+
+    monthly = text.split("Статистика за", 1)[1]
+    assert "type: conditional" not in monthly.split("heading: UPS Shutdown Trigger", 1)[0]
+
+
 def test_ups_dashboard_contains_no_legacy_public_entity_ids():
     text = _text()
 
