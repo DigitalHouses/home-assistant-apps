@@ -25,16 +25,19 @@ class Bridge:
         self.states = []
         self.setting_states = []
         self.discovery_payload = None
+        self.publication_order = []
 
     def set_discovery_payload(self, payload):
         self.discovery_payload = payload
 
     def publish_discovery(self):
         self.discovery.append(self.discovery_payload)
+        self.publication_order.append("discovery")
         return True
 
     def publish_state(self, payload):
         self.states.append(payload)
+        self.publication_order.append("state")
         return True
 
     def publish_setting_value(self, key, value):
@@ -50,6 +53,7 @@ class GroupBridge(Bridge):
 
     def publish_state_group(self, group, payload):
         self.group_states.append((group, payload))
+        self.publication_order.append(f"state:{group}")
         return True
 
     def clear_legacy_state(self):
@@ -96,6 +100,29 @@ def test_startup_builds_discovery_from_collected_inventory():
     assert runtime.startup() is True
     assert bridge.discovery == [{"storage": ["local"]}]
     assert len(bridge.states) == 1
+
+
+def test_startup_publishes_inventory_discovery_before_first_state():
+    bridge = Bridge()
+    settings = RuntimeSettings()
+    runtime = DynamicDiscoveryRuntime(
+        collectors={
+            "storage": lambda: CollectorSample(
+                data={"local": {"usage_percent": 10}},
+                metrics={"local": MetricValue(10, "storage_percent")},
+            )
+        },
+        bridge=bridge,
+        settings=settings,
+        publish_policy=PublishPolicy(settings),
+        state_store=Store(),
+        scheduler=Scheduler(),
+        now_iso=lambda: "2026-09-16T15:00:00+00:00",
+        discovery_builder=lambda inv: {"storage": sorted(inv.get("storage", {}))},
+    )
+
+    assert runtime.startup() is True
+    assert bridge.publication_order[:2] == ["discovery", "state"]
 
 
 def test_group_capable_dynamic_startup_tombstones_legacy_monolithic_state():
