@@ -10,6 +10,7 @@ Type=simple
 User=root
 Group=root
 WorkingDirectory=/opt/digitalhouses/dh_pve_app
+ExecStartPre=/opt/digitalhouses/dh_pve_app/.venv/bin/python -m app.ups_policy_state_migration --state-dir /var/lib/dh_pve_app
 ExecStart=/opt/digitalhouses/dh_pve_app/.venv/bin/python -m app.main --config /etc/dh_pve_app/dh_pve_app.conf --state-dir /var/lib/dh_pve_app
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=on-failure
