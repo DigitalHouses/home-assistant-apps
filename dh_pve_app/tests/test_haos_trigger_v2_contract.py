@@ -73,6 +73,10 @@ def test_notification_package_uses_events_gate_and_retained_aggregates_only():
         "config_changed",
         "event: dh_app_pve_notification",
         "trigger: event.received",
+        "state_attr('sensor.dh_app_pve_problems', 'summary')",
+        "state_attr('sensor.dh_app_pve_problems', 'active')",
+        "state_attr('sensor.dh_app_pve_ups_problems', 'summary')",
+        "state_attr('sensor.dh_app_pve_ups_problems', 'active')",
     ):
         assert token in text
     for forbidden in (
