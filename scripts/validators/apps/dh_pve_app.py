@@ -274,6 +274,9 @@ def validate_dh_pve_app(
         if forbidden in package:
             fail(f"DH PVE HA package must remain explicit/lightweight: {forbidden}")
 
+    pve_dashboard = (app / "examples/dh_app_pve_dashboard.yaml").read_text(
+        encoding="utf-8"
+    )
     haos_source = "\n".join(
         path.read_text(encoding="utf-8")
         for path in (
@@ -288,10 +291,35 @@ def validate_dh_pve_app(
         "input_number.dh_proxmox_",
         "states.sensor",
         "states.binary_sensor",
-        "custom:auto-entities",
     ):
         if forbidden in haos_source:
             fail(f"DH PVE canonical HAOS examples contain legacy/business logic: {forbidden}")
+
+    # auto-entities is presentation-only and is allowed only for the PVE
+    # inventory collections whose membership is dynamic. It must not return to
+    # the UPS/readiness examples or be used as a problem-discovery mechanism.
+    strict_haos_source = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in (
+            app / "examples/dh_app_pve_ups_dashboard.yaml",
+            app / "examples/dh_app_pve_shutdown_readiness_card.yaml",
+        )
+    )
+    if "custom:auto-entities" in strict_haos_source:
+        fail("DH PVE UPS/readiness UI must not use auto-entities")
+
+    if pve_dashboard.count("type: custom:auto-entities") != 4:
+        fail("DH PVE dashboard must use auto-entities only for 4 dynamic inventory collections")
+    for required in (
+        "proxmox_section: storage",
+        "proxmox_section: disk",
+        "proxmox_section: guests",
+        "proxmox_subject: vm",
+        "proxmox_subject: lxc",
+        "attribute: proxmox_sort_key",
+    ):
+        if required not in pve_dashboard:
+            fail(f"DH PVE inventory auto-entities contract changed: {required}")
 
     for legacy_name in (
         "dh_pve_dashboard.yaml",
