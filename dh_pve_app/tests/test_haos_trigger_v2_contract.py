@@ -4,6 +4,14 @@ ROOT = Path(__file__).parents[1]
 DASHBOARD = ROOT / "examples" / "dh_app_pve_ups_dashboard.yaml"
 UI_PACKAGE = ROOT / "examples" / "packages" / "dh_app_pve_ui_package.yaml"
 NOTIFICATION_PACKAGE = ROOT / "examples" / "packages" / "dh_app_pve_notification_package.yaml"
+RU_NOTIFICATION_PACKAGE = (
+    ROOT
+    / "examples"
+    / "packages"
+    / "locales"
+    / "ru"
+    / "dh_app_pve_notification_package.yaml"
+)
 
 
 def test_trigger_dashboard_has_view_edit_confirm_apply_flow():
@@ -92,7 +100,8 @@ def test_notification_package_uses_events_gate_and_retained_aggregates_only():
 
 
 def test_live_notification_presentation_is_localized_from_structured_event_fields():
-    text = NOTIFICATION_PACKAGE.read_text(encoding="utf-8")
+    assert RU_NOTIFICATION_PACKAGE.exists()
+    text = RU_NOTIFICATION_PACKAGE.read_text(encoding="utf-8")
     for token in (
         "trigger.to_state.attributes.metric",
         "trigger.to_state.attributes.value",
@@ -110,7 +119,8 @@ def test_live_notification_presentation_is_localized_from_structured_event_field
 
 
 def test_config_and_startup_notification_messages_are_localized():
-    text = NOTIFICATION_PACKAGE.read_text(encoding="utf-8")
+    assert RU_NOTIFICATION_PACKAGE.exists()
+    text = RU_NOTIFICATION_PACKAGE.read_text(encoding="utf-8")
     for token in (
         "Было:",
         "Стало:",
