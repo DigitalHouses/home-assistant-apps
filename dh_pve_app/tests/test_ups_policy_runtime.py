@@ -6,6 +6,7 @@ from app.state_store import StateStore
 from app.ups_nut import parse_upsc_output
 from app.ups_policy import UpsPolicyDraft, policy_hash
 from app.ups_runtime import UpsRuntime
+from app.ups_shutdown_policy import parse_shutdown_policy
 
 
 class Bridge:
@@ -64,11 +65,28 @@ def _config():
     )
 
 
-def _runtime(tmp_path, persisted=None):
+def _shutdown_policy(*, legacy_timer: bool):
+    upssched = None
+    if legacy_timer:
+        upssched = "AT ONBATT * START-TIMER dh-pve-ups-shutdown 1800\n"
+    return parse_shutdown_policy(
+        'MONITOR ups@127.0.0.1 1 user pass primary\nSHUTDOWNCMD "/sbin/shutdown -h now"\n',
+        upssched,
+        ups_conf_text='[ups]\nondelay = 120\n',
+        monitor_active=True,
+    )
+
+
+def _runtime(tmp_path, persisted=None, *, legacy_timer=None):
     state_store = StateStore(tmp_path / "ups.json")
     if persisted is not None:
         state_store.save(persisted)
     snapshot = parse_upsc_output("ups.status: OL\nbattery.charge: 100\n")
+    kwargs = {}
+    if legacy_timer is not None:
+        kwargs["shutdown_policy_reader"] = lambda: _shutdown_policy(
+            legacy_timer=legacy_timer
+        )
     return UpsRuntime(
         config=_config(),
         mqtt_config=_mqtt(),
@@ -80,27 +98,30 @@ def _runtime(tmp_path, persisted=None):
         now_monotonic=lambda: 100.0,
         reader=lambda config: snapshot,
         capability_reader=lambda config: (_ for _ in ()).throw(RuntimeError("skip")),
+        **kwargs,
     )
+
+
+def _legacy_state():
+    return {
+        "policy_active": {
+            "on_battery_delay_minutes": 30,
+            "power_restore_delay_seconds": 120,
+        },
+        "policy_draft": {
+            "on_battery_delay_minutes": 45,
+            "power_restore_delay_seconds": 180,
+        },
+        "policy_status": "Active",
+        "policy_apply_result": "Политика UPS применена и проверена.",
+        "policy_revision": 7,
+        "policy_hash": "legacy-hash",
+        "policy_last_applied": "2026-09-15T10:00:00+05:00",
+    }
 
 
 def test_legacy_v1_policy_is_not_silently_promoted_to_active_v2(tmp_path):
-    runtime = _runtime(
-        tmp_path,
-        {
-            "policy_active": {
-                "on_battery_delay_minutes": 30,
-                "power_restore_delay_seconds": 120,
-            },
-            "policy_draft": {
-                "on_battery_delay_minutes": 45,
-                "power_restore_delay_seconds": 180,
-            },
-            "policy_status": "Active",
-            "policy_revision": 7,
-            "policy_hash": "legacy-hash",
-            "policy_last_applied": "2026-09-15T10:00:00+05:00",
-        },
-    )
+    runtime = _runtime(tmp_path, _legacy_state())
 
     assert runtime.policy_active is None
     assert runtime.policy_draft == UpsPolicyDraft(20, 180)
@@ -108,6 +129,39 @@ def test_legacy_v1_policy_is_not_silently_promoted_to_active_v2(tmp_path):
     assert runtime.policy_revision == 0
     assert runtime.policy_hash is None
     assert runtime.policy_last_applied is None
+
+
+def test_retired_legacy_timer_moves_v1_policy_to_commissioning_on_startup(tmp_path):
+    runtime = _runtime(tmp_path, _legacy_state(), legacy_timer=False)
+
+    assert runtime.startup() is True
+
+    assert runtime.policy_active is None
+    assert runtime.policy_draft == UpsPolicyDraft(20, 180)
+    assert runtime.policy_status == "Commissioning"
+    assert runtime.policy_apply_result == "Not applied"
+    assert runtime.policy_revision == 0
+    assert runtime.policy_hash is None
+    assert runtime.policy_last_applied is None
+
+    persisted = runtime.state_store.load()
+    assert persisted["policy_active"] is None
+    assert persisted["policy_draft"] == UpsPolicyDraft(20, 180).as_dict()
+    assert persisted["policy_status"] == "Commissioning"
+    assert persisted["policy_apply_result"] == "Not applied"
+    assert persisted["policy_revision"] == 0
+    assert persisted["policy_hash"] is None
+    assert persisted["policy_last_applied"] is None
+
+
+def test_existing_legacy_timer_keeps_v1_policy_in_legacy_state(tmp_path):
+    runtime = _runtime(tmp_path, _legacy_state(), legacy_timer=True)
+
+    assert runtime.startup() is True
+
+    assert runtime.policy_active is None
+    assert runtime.policy_status == "Legacy policy"
+    assert runtime.policy_draft == UpsPolicyDraft(20, 180)
 
 
 def test_persisted_v2_active_policy_is_restored_without_revision_loss(tmp_path):
