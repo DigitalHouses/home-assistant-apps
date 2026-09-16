@@ -56,14 +56,41 @@ Legacy MQTT Discovery identities are removed through retained tombstones during 
 
 Problem calculation is App-owned. Home Assistant does not scan `states.sensor`, wildcard all entities, rebuild topology or calculate thresholds.
 
-Current problems are exposed as `binary_sensor` entities with `device_class: problem`. Aggregate problem state and compact presentation are separate sensors.
+Current problems are exposed as `binary_sensor` entities with `device_class: problem`. Aggregate problem state and compact presentation are separate retained sensors.
 
 Native MQTT Event entities are used for diagnostic transitions:
 
 - `event.dh_app_pve_diagnostic`;
 - `event.dh_app_pve_ups_diagnostic`.
 
-Problem event types are `problem_started`, `problem_recovered` and `problem_updated`. UPS policy changes also use `config_changed` with OLD and NEW values. Runtime Event messages are non-retained and are published after the synchronized metric/threshold/problem/current-state bundle.
+Problem event types are `problem_started`, `problem_recovered` and `problem_updated`. UPS policy changes also use `config_changed` with OLD and NEW values. Runtime Event messages are non-retained, published with MQTT QoS 1 after the synchronized metric/threshold/problem/current-state bundle, and Home Assistant subscribes to the Event topics at QoS 1 through MQTT Discovery.
+
+The retained problem binaries and aggregate sensors are the authoritative current-state/reconciliation contract. Event entities describe what just happened; they are not used as retained state.
+
+## Home Assistant notification layer
+
+The reusable notification package is `examples/packages/dh_app_pve_notification_package.yaml`.
+
+Live notifications are event-driven:
+
+```text
+App problem transition
+-> MQTT diagnostic Event (QoS 1, retain=false)
+-> event.dh_app_pve_diagnostic / event.dh_app_pve_ups_diagnostic
+-> HA event.received automation
+-> dh_app_pve_notification
+```
+
+Live delivery is gated by `binary_sensor.bs_global_system_boot_completed`. If HAOS was offline when a transition happened, no old Event is replayed as a new transition. When the boot gate becomes `on`, startup reconciliation reads only the retained aggregate sensors:
+
+- `sensor.dh_app_pve_problems`;
+- `sensor.dh_app_pve_ups_problems`.
+
+This gives the notification layer two complementary contracts: Events for live facts and retained aggregates for current-state recovery after HAOS downtime/reconnect. Problem `binary_sensor` entities remain available for UI and user automations, but the reusable live notification path does not infer transitions from their state changes.
+
+The package converts structured diagnostic fields (`event_type`, `category`, `severity`, `object_id`, `object_name`, `metric`, `value`, `average`, `threshold`, `summary`, `details`, `active_problem_count`) into a Russian human-readable `title` and `message`, then emits the transport-neutral Home Assistant event `dh_app_pve_notification` while preserving the structured fields.
+
+The reusable package intentionally does not call `script.write2log`, Telegram, a specific `notify.mobile_app` service or any customer-specific target. A site-local adapter may listen for `dh_app_pve_notification` and deliver its already-formatted `title`/`message` through the site's preferred transport.
 
 ## Recorder
 
@@ -117,6 +144,8 @@ The UPS trigger controls are MQTT Discovery configuration entities:
 - `button.dh_app_pve_ups_apply_trigger_policy`.
 
 Changing a number changes only the draft. It does **not** change the active shutdown policy.
+
+The reusable presentation package `examples/packages/dh_app_pve_ui_package.yaml` and `examples/dh_app_pve_ups_dashboard.yaml` implement a VIEW -> EDIT -> CONFIRM -> APPLY workflow. `sensor.dh_app_pve_ups_trigger_policy` is the read-only committed-policy presentation entity; draft `number` entities are never shown as if they were active values. Opening the editor snapshots committed values, Cancel restores the draft, and a successful `config_changed` Event closes the editor back to VIEW.
 
 A real Apply is a durable transaction:
 
