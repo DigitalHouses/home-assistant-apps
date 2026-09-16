@@ -213,10 +213,10 @@ def build_shutdown_aware_ups_discovery_payload(
         "icon": "mdi:shield-cog-outline",
         "json_attributes_topic": config_topic,
         "json_attributes_template": (
-            "{{ {'active_charge_threshold_percent': value_json.policy.active.shutdown_battery_charge_threshold_percent | default(none), "
-            "'active_runtime_reserve_seconds': value_json.policy.active.runtime_reserve_seconds | default(none), "
-            "'draft_charge_threshold_percent': value_json.policy.draft.shutdown_battery_charge_threshold_percent | default(none), "
-            "'draft_runtime_reserve_seconds': value_json.policy.draft.runtime_reserve_seconds | default(none), "
+            "{{ {'active_charge_threshold_percent': (value_json.policy.active | default({}, true)).shutdown_battery_charge_threshold_percent | default(none), "
+            "'active_runtime_reserve_seconds': (value_json.policy.active | default({}, true)).runtime_reserve_seconds | default(none), "
+            "'draft_charge_threshold_percent': (value_json.policy.draft | default({}, true)).shutdown_battery_charge_threshold_percent | default(none), "
+            "'draft_runtime_reserve_seconds': (value_json.policy.draft | default({}, true)).runtime_reserve_seconds | default(none), "
             "'policy_revision': value_json.policy.revision | default(0), "
             "'policy_hash': value_json.policy.hash | default(none), "
             "'last_applied': value_json.policy.last_applied | default(none), "
