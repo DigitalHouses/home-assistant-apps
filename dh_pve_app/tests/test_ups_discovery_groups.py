@@ -105,7 +105,6 @@ def test_ups_discovery_routes_entities_to_independent_state_groups():
     for key in (
         "capabilities",
         "shutdown_policy",
-        "policy_on_battery_delay_observed",
         "policy_power_restore_delay_observed",
         "nominal_real_power",
         "battery_charge_warning",
@@ -113,9 +112,10 @@ def test_ups_discovery_routes_entities_to_independent_state_groups():
         "battery_runtime_low",
         "ups_shutdown_delay",
         "ups_start_delay",
-        "guest_shutdown_budget",
     ):
         assert c[key]["state_topic"] == config
+
+    assert "policy_on_battery_delay_observed" not in c
 
     for key in (
         "test_result",
@@ -135,6 +135,8 @@ def test_ups_discovery_routes_entities_to_independent_state_groups():
 
     for key in (
         "last_refresh",
+        "guest_shutdown_budget",
+        "shutdown_budget",
         "shutdown_readiness",
         "ups_app_profile",
         "ups_last_publication",
