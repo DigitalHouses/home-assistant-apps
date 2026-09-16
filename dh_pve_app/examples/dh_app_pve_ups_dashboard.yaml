@@ -34,10 +34,26 @@ sections:
             name: Нагрузка
           - entity: sensor.dh_app_pve_ups_input_voltage
             name: Входное напряжение
-          - entity: sensor.dh_app_pve_ups_output_voltage
-            name: Выходное напряжение
-          - entity: sensor.dh_app_pve_ups_battery_voltage
-            name: Напряжение батареи
+          - type: conditional
+            conditions:
+              - condition: state
+                entity: sensor.dh_app_pve_ups_output_voltage
+                state_not:
+                  - unknown
+                  - unavailable
+            row:
+              entity: sensor.dh_app_pve_ups_output_voltage
+              name: Выходное напряжение
+          - type: conditional
+            conditions:
+              - condition: state
+                entity: sensor.dh_app_pve_ups_battery_voltage
+                state_not:
+                  - unknown
+                  - unavailable
+            row:
+              entity: sensor.dh_app_pve_ups_battery_voltage
+              name: Напряжение батареи
       - type: history-graph
         title: Заряд / нагрузка · 24 часа
         hours_to_show: 24
@@ -70,18 +86,121 @@ sections:
   - type: grid
     cards:
       - type: heading
-        heading: Текущая политика выключения
+        heading: UPS Shutdown Trigger
         icon: mdi:power-settings
-      - type: entities
-        entities:
-          - entity: sensor.dh_app_pve_ups_shutdown_policy
-            name: Политика
-          - entity: sensor.dh_app_pve_ups_policy_on_battery_delay
-            name: Ожидание после пропадания питания
-          - entity: sensor.dh_app_pve_ups_policy_power_restore_delay
-            name: Задержка восстановления питания
-      - type: markdown
-        content: >-
-          Этот блок пока показывает фактически действующую политику PVE/NUT.
-          Управление UPS Trigger Policy v2 будет добавлено вместе с backend-контрактом
-          draft → Apply/Confirm → verify/rollback.
+      - type: tile
+        entity: sensor.dh_app_pve_ups_shutdown_policy
+        name: NUT policy
+      - type: tile
+        entity: sensor.dh_app_pve_ups_policy_power_restore_delay
+        name: Задержка восстановления питания
+
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: input_select.dh_app_pve_ups_trigger_ui_state
+            state: view
+        card:
+          type: vertical-stack
+          cards:
+            - type: markdown
+              content: >-
+                {% set charge = states('number.dh_app_pve_ups_shutdown_battery_charge_threshold') %}
+                {% set reserve = states('number.dh_app_pve_ups_shutdown_runtime_reserve') | int(0) %}
+                {% set guest = states('sensor.dh_app_pve_ups_guest_shutdown_budget') | int(0) %}
+                {% set budget = states('sensor.dh_app_pve_ups_shutdown_budget') | int(0) %}
+                {% set trigger_s = budget + reserve %}
+                **Battery threshold:** {{ charge }} %  
+                **Runtime reserve:** {{ reserve }} s  
+                **Guest shutdown budget:** {{ guest }} s  
+                **Full shutdown budget:** {{ budget }} s  
+                **Effective runtime trigger:** {{ trigger_s }} s / {{ '%02d:%02d' | format(trigger_s // 60, trigger_s % 60) }}  
+                **Readiness:** {{ states('sensor.dh_app_pve_ups_shutdown_readiness') | upper }}
+            - type: button
+              name: Config UPS trigger
+              icon: mdi:tune-variant
+              tap_action:
+                action: perform-action
+                perform_action: script.dh_app_pve_ups_trigger_open
+
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: input_select.dh_app_pve_ups_trigger_ui_state
+            state: edit
+        card:
+          type: vertical-stack
+          cards:
+            - type: markdown
+              content: >-
+                ## Configure UPS trigger
+
+                Изменения ниже меняют только **draft**. PVE/NUT policy пока не применяется.
+            - type: entities
+              entities:
+                - entity: number.dh_app_pve_ups_shutdown_battery_charge_threshold
+                  name: Battery threshold
+                - entity: number.dh_app_pve_ups_shutdown_runtime_reserve
+                  name: Runtime reserve
+            - type: markdown
+              content: >-
+                {% set budget = states('sensor.dh_app_pve_ups_shutdown_budget') | int(0) %}
+                {% set reserve = states('number.dh_app_pve_ups_shutdown_runtime_reserve') | int(0) %}
+                {% set trigger_s = budget + reserve %}
+                **Calculated**  
+                Full shutdown budget: {{ budget }} s  
+                Runtime trigger: {{ trigger_s }} s / {{ '%02d:%02d' | format(trigger_s // 60, trigger_s % 60) }}
+            - type: grid
+              columns: 2
+              square: false
+              cards:
+                - type: button
+                  name: Apply configuration
+                  icon: mdi:check-circle-outline
+                  tap_action:
+                    action: perform-action
+                    perform_action: script.dh_app_pve_ups_trigger_review
+                - type: button
+                  name: Cancel
+                  icon: mdi:close-circle-outline
+                  tap_action:
+                    action: perform-action
+                    perform_action: script.dh_app_pve_ups_trigger_cancel
+
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: input_select.dh_app_pve_ups_trigger_ui_state
+            state: confirm
+        card:
+          type: vertical-stack
+          cards:
+            - type: markdown
+              content: >-
+                {% set charge = states('number.dh_app_pve_ups_shutdown_battery_charge_threshold') | int(0) %}
+                {% set reserve = states('number.dh_app_pve_ups_shutdown_runtime_reserve') | int(0) %}
+                {% set budget = states('sensor.dh_app_pve_ups_shutdown_budget') | int(0) %}
+                {% set trigger_s = budget + reserve %}
+                ## Подтвердить UPS Trigger Policy
+
+                Будет применена конфигурация:  
+                **Battery threshold:** {{ charge }} %  
+                **Runtime reserve:** {{ reserve }} s  
+                **Full shutdown budget:** {{ budget }} s  
+                **Effective runtime trigger:** {{ trigger_s }} s / {{ '%02d:%02d' | format(trigger_s // 60, trigger_s % 60) }}
+            - type: grid
+              columns: 2
+              square: false
+              cards:
+                - type: button
+                  name: Подтвердить и применить
+                  icon: mdi:check-decagram-outline
+                  tap_action:
+                    action: perform-action
+                    perform_action: script.dh_app_pve_ups_trigger_apply
+                - type: button
+                  name: Назад
+                  icon: mdi:arrow-left
+                  tap_action:
+                    action: perform-action
+                    perform_action: script.dh_app_pve_ups_trigger_back_to_edit
