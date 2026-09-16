@@ -10,7 +10,7 @@ from .discovery_metrics import _path, _sensor, _slug
 from .discovery_ups import build_ups_discovery_payload
 from .discovery_ups_groups import route_ups_discovery_groups
 from .identity import HostIdentity
-from .topics import build_topics, build_ups_topics
+from .topics import build_topics, build_ups_topics, ups_state_group_topic
 from .ups_control import UpsCapabilities
 from .ups_nut import UpsSnapshot
 from .ups_shutdown_policy import UpsShutdownPolicy
@@ -77,7 +77,7 @@ def build_shutdown_aware_pve_discovery_payload(
             "all_guests_stopped_at": previous + ".all_guests_stopped_at | default(none)",
             "guest_shutdown_total_seconds": previous + ".guest_shutdown_total_seconds | default(none)",
             "outage_to_fsd_seconds": previous + ".outage_to_fsd_seconds | default(none)",
-            "fsd_to_all_guests_stopped_seconds": previous + ".fsd_to_all_guests_stopped_seconds | default(none)",
+            "fsd_to_all_guests_stopped_seconds": previous_guest + ".duration_seconds | default(none)" if False else previous + ".fsd_to_all_guests_stopped_seconds | default(none)",
             "fsd_to_shutdown_seconds": previous + ".fsd_to_shutdown_seconds | default(none)",
             "all_guests_stopped_to_shutdown_seconds": previous + ".all_guests_stopped_to_shutdown_seconds | default(none)",
             "outage_to_shutdown_seconds": previous + ".outage_to_shutdown_seconds | default(none)",
@@ -198,7 +198,31 @@ def build_shutdown_aware_ups_discovery_payload(
             "payload_not_available": "offline",
         }
     ]
+    config_topic = ups_state_group_topic(topics, "config")
 
+    components["trigger_policy"] = {
+        "platform": "sensor",
+        "name": "Trigger policy",
+        "unique_id": f"{topics.device_id}_trigger_policy",
+        "default_entity_id": "sensor.dh_app_pve_ups_trigger_policy",
+        "state_topic": config_topic,
+        "value_template": "{{ value_json.policy.status | default('Unknown') }}",
+        "entity_category": "diagnostic",
+        "availability": availability,
+        "availability_mode": "all",
+        "icon": "mdi:shield-cog-outline",
+        "json_attributes_topic": config_topic,
+        "json_attributes_template": (
+            "{{ {'active_charge_threshold_percent': value_json.policy.active.shutdown_battery_charge_threshold_percent | default(none), "
+            "'active_runtime_reserve_seconds': value_json.policy.active.runtime_reserve_seconds | default(none), "
+            "'draft_charge_threshold_percent': value_json.policy.draft.shutdown_battery_charge_threshold_percent | default(none), "
+            "'draft_runtime_reserve_seconds': value_json.policy.draft.runtime_reserve_seconds | default(none), "
+            "'policy_revision': value_json.policy.revision | default(0), "
+            "'policy_hash': value_json.policy.hash | default(none), "
+            "'last_applied': value_json.policy.last_applied | default(none), "
+            "'apply_result': value_json.policy.apply_result | default('Unknown')} | tojson }}"
+        ),
+    }
     components["guest_shutdown_budget"] = {
         "platform": "sensor",
         "name": "Guest shutdown budget",
