@@ -74,6 +74,18 @@ dh_app_pve_ui_package:
             entity_id: number.dh_app_pve_ups_shutdown_runtime_reserve
           data:
             value: "{{ active_reserve | float }}"
+        # MQTT number commands are asynchronous. Do not expose EDIT until the
+        # App-owned policy sensor confirms that DRAFT really equals ACTIVE.
+        - wait_template: >-
+            {% set draft_charge = state_attr('sensor.dh_app_pve_ups_trigger_policy',
+                                             'draft_charge_threshold_percent') %}
+            {% set draft_reserve = state_attr('sensor.dh_app_pve_ups_trigger_policy',
+                                              'draft_runtime_reserve_seconds') %}
+            {{ draft_charge is not none and draft_reserve is not none
+               and (draft_charge | float) == (active_charge | float)
+               and (draft_reserve | float) == (active_reserve | float) }}
+          timeout: "00:00:30"
+          continue_on_timeout: false
         - action: input_select.select_option
           target:
             entity_id: input_select.dh_app_pve_ups_trigger_ui_state
@@ -96,6 +108,20 @@ dh_app_pve_ui_package:
           data:
             value: >-
               {{ states('input_number.dh_app_pve_ups_trigger_snapshot_reserve') | float }}
+        # Keep the editor visible until the App confirms the rollback. A timeout
+        # stops the script here, so VIEW can never falsely imply success.
+        - wait_template: >-
+            {% set draft_charge = state_attr('sensor.dh_app_pve_ups_trigger_policy',
+                                             'draft_charge_threshold_percent') %}
+            {% set draft_reserve = state_attr('sensor.dh_app_pve_ups_trigger_policy',
+                                              'draft_runtime_reserve_seconds') %}
+            {{ draft_charge is not none and draft_reserve is not none
+               and (draft_charge | float) ==
+                   (states('input_number.dh_app_pve_ups_trigger_snapshot_charge') | float)
+               and (draft_reserve | float) ==
+                   (states('input_number.dh_app_pve_ups_trigger_snapshot_reserve') | float) }}
+          timeout: "00:00:30"
+          continue_on_timeout: false
         - action: input_select.select_option
           target:
             entity_id: input_select.dh_app_pve_ups_trigger_ui_state
