@@ -69,7 +69,12 @@ The retained problem binaries and aggregate sensors are the authoritative curren
 
 ## Home Assistant notification layer
 
-The reusable notification package is `examples/packages/dh_app_pve_notification_package.yaml`.
+Notification presentation is localized. Install exactly one notification locale:
+
+- Russian: `examples/packages/locales/ru/dh_app_pve_notification_package.yaml`;
+- English: `examples/packages/locales/en/dh_app_pve_notification_package.yaml`.
+
+Copy the selected locale into the Home Assistant packages directory as the canonical installed file `dh_app_pve_notification_package.yaml`. Do not install both locale files at the same time: they intentionally expose the same package key, automation IDs and machine contract so there is only one notification formatter/producer per Home Assistant instance.
 
 Live notifications are event-driven:
 
@@ -88,7 +93,7 @@ Live delivery is gated by `binary_sensor.bs_global_system_boot_completed`. If HA
 
 This gives the notification layer two complementary contracts: Events for live facts and retained aggregates for current-state recovery after HAOS downtime/reconnect. Problem `binary_sensor` entities remain available for UI and user automations, but the reusable live notification path does not infer transitions from their state changes.
 
-The package converts structured diagnostic fields (`event_type`, `category`, `severity`, `object_id`, `object_name`, `metric`, `value`, `average`, `threshold`, `summary`, `details`, `active_problem_count`) into a Russian human-readable `title` and `message`, then emits the transport-neutral Home Assistant event `dh_app_pve_notification` while preserving the structured fields.
+Both locale packages preserve the same structured diagnostic fields (`event_type`, `category`, `severity`, `object_id`, `object_name`, `metric`, `value`, `average`, `threshold`, `summary`, `details`, `active_problem_count`) and emit the same transport-neutral Home Assistant event `dh_app_pve_notification`. They differ only in human-readable `title` and `message` presentation.
 
 The reusable package intentionally does not call `script.write2log`, Telegram, a specific `notify.mobile_app` service or any customer-specific target. A site-local adapter may listen for `dh_app_pve_notification` and deliver its already-formatted `title`/`message` through the site's preferred transport.
 
