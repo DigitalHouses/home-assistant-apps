@@ -64,6 +64,14 @@ def test_trigger_v2_discovery_exposes_active_policy_read_only():
     assert policy["entity_category"] == "diagnostic"
 
 
+def test_trigger_policy_presentation_handles_null_active_and_draft_objects():
+    policy = _shutdown_components()["trigger_policy"]
+    template = policy["json_attributes_template"]
+
+    assert "value_json.policy.active | default({}, true)" in template
+    assert "value_json.policy.draft | default({}, true)" in template
+
+
 def test_trigger_v2_discovery_exposes_draft_numbers_and_explicit_apply_button():
     components = _components()
     topics = build_ups_topics(_mqtt(), _identity())
