@@ -153,57 +153,6 @@ if ! PYTHONPATH="${APP_DIR}" "${APP_DIR}/.venv/bin/python" -m app.main \
     exit 1
 fi
 
-legacy_timer_result="$({
-    PYTHONPATH="${APP_DIR}" "${APP_DIR}/.venv/bin/python" -c '
-from pathlib import Path
-from app.config import load_config
-from app.ups_legacy_timer import legacy_timer_present, retire_legacy_timer_files
-from app.ups_nut import read_ups
-
-config_path = Path("/etc/dh_pve_app/dh_pve_app.conf")
-upssched_path = Path("/etc/nut/upssched.conf")
-if not upssched_path.exists():
-    print("unchanged")
-    raise SystemExit(0)
-text = upssched_path.read_text(encoding="utf-8")
-if not legacy_timer_present(text):
-    print("unchanged")
-    raise SystemExit(0)
-config = load_config(config_path)
-if not config.ups.enabled:
-    print("blocked:ups-disabled")
-    raise SystemExit(0)
-snapshot = read_ups(config.ups)
-if snapshot.on_battery or not snapshot.line_power:
-    print("blocked:ups-not-online")
-    raise SystemExit(0)
-print("changed" if retire_legacy_timer_files() else "unchanged")
-'
-} 2>/dev/null || true)"
-
-case "${legacy_timer_result}" in
-    changed)
-        echo "Удален legacy DH UPS upssched timer; backup: /etc/nut/*.dh-pve-v1.bak"
-        systemctl restart nut-monitor.service
-        if ! systemctl is-active --quiet nut-monitor.service; then
-            echo "Ошибка: nut-monitor.service не запустился после retirement legacy timer."
-            systemctl status nut-monitor.service --no-pager || true
-            exit 1
-        fi
-        ;;
-    unchanged)
-        ;;
-    blocked:*)
-        echo "Ошибка: legacy DH UPS upssched timer найден, но безопасно удалить его сейчас нельзя (${legacy_timer_result#blocked:})."
-        echo "Установка остановлена до перехода UPS в стабильное OL состояние."
-        exit 1
-        ;;
-    *)
-        echo "Ошибка: не удалось проверить migration legacy DH UPS timer."
-        exit 1
-        ;;
-esac
-
 "${APP_DIR}/.venv/bin/python" -m compileall -q "${APP_DIR}/app"
 
 VERSION="$(tr -d '[:space:]' <"${APP_DIR}/VERSION")"
