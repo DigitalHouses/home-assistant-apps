@@ -4,6 +4,11 @@ import re
 from collections.abc import Callable, Mapping
 
 from .app import CollectorSample
+from .line_power_statistics import (
+    LinePowerState,
+    LinePowerStatisticsTracker,
+    line_power_state_from_snapshot,
+)
 from .publish_policy import MetricValue
 from .production_guest import GuestAwareProductionCollectors
 from .shutdown_discovery import build_shutdown_aware_ups_discovery_payload
@@ -161,6 +166,7 @@ class ShutdownAwareUpsRuntime(AdaptiveUpsRuntime):
         shutdown_budget_reader: Callable[[], ShutdownBudgetResult] | None = None,
         software_shutdown_executor: Callable[[str], None] | None = None,
         policy_reload_executor: Callable[[], None] | None = None,
+        line_power_statistics_tracker: LinePowerStatisticsTracker | None = None,
         **kwargs,
     ) -> None:
         self.shutdown_history_tracker = shutdown_history_tracker
@@ -175,13 +181,32 @@ class ShutdownAwareUpsRuntime(AdaptiveUpsRuntime):
         self.last_shutdown_budget: ShutdownBudgetResult | None = None
         self._shutdown_budget_refreshed_at: float | None = None
         self._pending_policy_config_event: dict[str, object] | None = None
+        self.line_power_statistics_tracker = line_power_statistics_tracker
 
         def observed_reader(config):
-            snapshot = reader(config)
+            try:
+                snapshot = reader(config)
+            except Exception:
+                tracker = self.line_power_statistics_tracker
+                if tracker is not None:
+                    tracker.observe(LinePowerState.UNKNOWN)
+                raise
+            tracker = self.line_power_statistics_tracker
+            if tracker is not None:
+                tracker.observe(
+                    line_power_state_from_snapshot(snapshot, nut_available=True)
+                )
             self.shutdown_history_tracker.observe_ups(snapshot)
             return snapshot
 
         super().__init__(*args, reader=observed_reader, **kwargs)
+        if self.line_power_statistics_tracker is None:
+            self.line_power_statistics_tracker = LinePowerStatisticsTracker(
+                StateStore(
+                    self.state_store.path.with_name("line_power_statistics.json")
+                ),
+                now_local=self.now_local,
+            )
         self.policy_apply_store = StateStore(
             self.state_store.path.with_name("ups_policy_apply.json")
         )
@@ -518,6 +543,9 @@ class ShutdownAwareUpsRuntime(AdaptiveUpsRuntime):
 
     def _auxiliary_fields(self) -> dict[str, object]:
         fields = super()._auxiliary_fields()
+        fields["line_power_statistics"] = (
+            self.line_power_statistics_tracker.snapshot().as_payload()
+        )
         budget = self._current_shutdown_budget()
         budget_payload = _shutdown_budget_payload(budget)
         fields["shutdown_budget"] = budget_payload
