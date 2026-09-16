@@ -185,7 +185,7 @@ sections:
                   {{ states(entity) }} % занято{% if total not in [none, '', 'unknown', 'unavailable'] %} · {{ total }} GiB всего{% endif %}{% if storage_type not in [none, '', 'unknown', 'unavailable'] %} · {{ storage_type }}{% endif %}
                 icon: mdi:database
                 icon_color: >-
-                  {% set problem = entity | replace('sensor.', 'binary_sensor.') ~ '_problem' %}
+                  {% set problem = entity | replace('sensor.', 'binary_sensor.') | replace('_percent_used', '_percent_used_problem') %}
                   {% if is_state(problem, 'on') %}
                     red
                   {% elif is_state(problem, 'off') %}
@@ -228,7 +228,7 @@ sections:
                   {{ states(entity) }} °C{% if states(health) not in ['unknown', 'unavailable', 'none', ''] %} · SMART: {{ states(health) }}{% elif is_state(smart_problem, 'off') %} · SMART: OK{% elif is_state(smart_problem, 'on') %} · SMART: проблема{% endif %}{% if states(wear) not in ['unknown', 'unavailable', 'none', ''] %} · Wearout: {{ states(wear) }} %{% endif %}
                 icon: mdi:harddisk
                 icon_color: >-
-                  {% set problem = entity | replace('sensor.', 'binary_sensor.') ~ '_problem' %}
+                  {% set problem = entity | replace('sensor.', 'binary_sensor.') | replace('_temperature', '_temperature_problem') %}
                   {% if is_state(problem, 'on') %}
                     red
                   {% elif is_state(problem, 'off') %}
