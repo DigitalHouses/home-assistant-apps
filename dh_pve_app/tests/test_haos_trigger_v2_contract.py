@@ -107,3 +107,13 @@ def test_live_notification_presentation_is_localized_from_structured_event_field
         "состояние нормализовалось",
     ):
         assert token in text
+
+
+def test_config_and_startup_notification_messages_are_localized():
+    text = NOTIFICATION_PACKAGE.read_text(encoding="utf-8")
+    for token in (
+        "Было:",
+        "Стало:",
+        "После запуска обнаружено активных проблем",
+    ):
+        assert token in text
