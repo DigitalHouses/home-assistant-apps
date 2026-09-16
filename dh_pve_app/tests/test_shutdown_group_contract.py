@@ -118,3 +118,30 @@ def test_shutdown_discovery_reads_current_guest_config_from_shutdown_group():
 
     assert "value_json.subsystems.host.data.guest_config.vms" in attrs
     assert "value_json.subsystems.guests.data" not in attrs
+
+
+def test_shutdown_discovery_is_null_safe_when_current_guest_has_no_previous_history():
+    components = build_shutdown_aware_pve_discovery_payload(
+        _config(),
+        _identity(),
+        version="0.2.0",
+        inventory=_inventory(),
+    )["components"]
+
+    for component_id, kind, guest_id in (
+        ("vm_110_shutdown", "vm", "110"),
+        ("lxc_149_shutdown", "lxc", "149"),
+    ):
+        component = components[component_id]
+        templates = (
+            component["value_template"],
+            component["json_attributes_template"],
+        )
+        direct_path = f'previous_shutdown.guests.{kind}["{guest_id}"]'
+
+        for template in templates:
+            assert direct_path not in template
+            assert "previous_shutdown | default({}, true)" in template
+            assert ".guests | default({}, true)" in template
+            assert f".{kind} | default({{}}, true)" in template
+            assert f'.get("{guest_id}", {{}})' in template
