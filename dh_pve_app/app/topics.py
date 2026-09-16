@@ -21,6 +21,7 @@ class Topics:
     device_id: str
     ups_scan: str
     ups_scan_state: str
+    legacy_discoveries: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -75,6 +76,7 @@ def ups_state_group_topic(topics: UpsTopics, group: str) -> str:
 def build_topics(mqtt: MqttConfig, identity: HostIdentity) -> Topics:
     base = f"{mqtt.topic_prefix.rstrip('/')}/{identity.instance_id}"
     device_id = f"dh_app_pve_{identity.instance_id}"
+    previous_device_id = f"dh_pve_{identity.instance_id}"
     discovery_prefix = mqtt.discovery_prefix.strip("/")
     return Topics(
         base=base,
@@ -89,6 +91,9 @@ def build_topics(mqtt: MqttConfig, identity: HostIdentity) -> Topics:
         device_id=device_id,
         ups_scan=f"{base}/ups/scan",
         ups_scan_state=f"{base}/ups/scan/state",
+        legacy_discoveries=(
+            f"{discovery_prefix}/device/{previous_device_id}/config",
+        ),
     )
 
 
