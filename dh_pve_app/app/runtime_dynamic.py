@@ -91,10 +91,19 @@ class DynamicDiscoveryRuntime(DhPveRuntime):
             self._discovery_fingerprint = fingerprint
         return ok
 
-    def run_collection(self, *args, **kwargs) -> bool:
-        state_published = super().run_collection(*args, **kwargs)
-        self.sync_discovery(force=self._discovery_fingerprint is None)
-        return state_published
+    def _sync_discovery_before_state(self) -> bool:
+        """Keep retained discovery current before any state uses its templates."""
+        return self.sync_discovery(force=self._discovery_fingerprint is None)
+
+    def _run_group_publication(self, *args, **kwargs) -> bool:
+        if not self._sync_discovery_before_state():
+            return False
+        return super()._run_group_publication(*args, **kwargs)
+
+    def _run_legacy_publication(self, *args, **kwargs) -> bool:
+        if not self._sync_discovery_before_state():
+            return False
+        return super()._run_legacy_publication(*args, **kwargs)
 
     def startup(self) -> bool:
         cleanup_ok = True
