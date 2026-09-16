@@ -200,6 +200,7 @@ def _problem_components(topics) -> dict[str, dict[str, object]]:
             "problem_updated",
             "config_changed",
         ],
+        "qos": 1,
         "availability": availability,
         "availability_mode": "all",
         "entity_category": "diagnostic",
