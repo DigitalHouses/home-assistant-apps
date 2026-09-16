@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Callable
 
 from .config import UpsConfig
+from .ups_legacy_timer import legacy_timer_present
 from .ups_nut import read_ups
 from .ups_policy import PolicySafetyFacts
 from .ups_policy_host import read_policy_safety_facts
@@ -307,6 +308,18 @@ def _hardware_lb_check(path: Path, ups_name: str) -> tuple[bool, str]:
     return True, "Hardware Low Battery остается нативным."
 
 
+def _legacy_timer_check(path: Path) -> tuple[bool, str]:
+    try:
+        text = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return True, "Legacy DH ONBATT timer отсутствует."
+    except OSError as exc:
+        return False, f"Не удалось прочитать {path}: {type(exc).__name__}."
+    if legacy_timer_present(text):
+        return False, "Legacy DH ONBATT upssched timer еще активен и должен быть retired."
+    return True, "Legacy DH ONBATT upssched timer retired."
+
+
 def _helper_check(
     path: Path,
     *,
@@ -347,6 +360,7 @@ def read_policy_preflight(
     ups_conf_path: Path = Path("/etc/nut/ups.conf"),
     upsd_users_path: Path = Path("/etc/nut/upsd.users"),
     upsmon_path: Path = Path("/etc/nut/upsmon.conf"),
+    upssched_path: Path = Path("/etc/nut/upssched.conf"),
     app_config_path: Path = Path("/etc/dh_pve_app/dh_pve_app.conf"),
     helper_path: Path = Path(
         "/opt/digitalhouses/dh_pve_app/bin/dh-pve-ups-policy-cmd"
@@ -426,6 +440,9 @@ def read_policy_preflight(
                 f"SHUTDOWNCMD: {policy.shutdown_command or 'не задан'}.",
             )
         )
+
+    legacy_ok, legacy_detail = _legacy_timer_check(upssched_path)
+    checks.append(PreflightCheck("legacy_upssched_retired", legacy_ok, legacy_detail))
 
     killpower_exists = killpower_path.exists()
     checks.append(
