@@ -39,16 +39,20 @@ def test_ups_dashboard_uses_app_owned_problem_state():
     ):
         assert entity_id in text
 
+    # Conditional cards are presentation-only in Trigger v2. Problem decisions
+    # still come from App-owned entities; HA must not scan entity registries or
+    # rebuild the problem engine locally.
     assert "states.binary_sensor" not in text
-    assert "type: conditional" not in text
+    assert "custom:auto-entities" not in text
 
 
-def test_ups_dashboard_keeps_current_shutdown_policy_observation_read_only():
+def test_ups_dashboard_keeps_nut_observation_and_uses_trigger_v2_policy_view():
     text = _text()
 
     assert "sensor.dh_app_pve_ups_shutdown_policy" in text
-    assert "sensor.dh_app_pve_ups_policy_on_battery_delay" in text
     assert "sensor.dh_app_pve_ups_policy_power_restore_delay" in text
+    assert "sensor.dh_app_pve_ups_policy_on_battery_delay" not in text
+    assert "Config UPS trigger" in text
     assert "button.dh_app_pve_ups_apply_policy" not in text
 
 
