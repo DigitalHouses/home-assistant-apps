@@ -44,6 +44,7 @@ def _mqtt():
 
 def _identity():
     return HostIdentity(
+        machine_id="0123456789abcdef0123456789abcdef",
         instance_id="node_a",
         hostname="pve",
         node_name="PVE",
