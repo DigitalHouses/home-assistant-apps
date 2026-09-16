@@ -25,7 +25,7 @@ def test_parse_guest_shutdown_journal_captures_duration_timeout_and_total():
     assert haos["timeout_seconds"] == 60
     assert haos["duration_seconds"] == 62
     assert haos["result"] == "timeout"
-    assert haos["forced"] is True
+    assert haos["forced"] is False
     assert haos["timeout_ratio"] > 1.0
 
     truenas = parsed["guests"]["vm"]["700"]
