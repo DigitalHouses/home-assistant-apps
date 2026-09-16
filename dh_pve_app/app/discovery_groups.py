@@ -358,6 +358,7 @@ def _problem_summary_components(topics) -> dict[str, dict[str, object]]:
                 "problem_recovered",
                 "problem_updated",
             ],
+            "qos": 1,
             "availability": availability,
             "availability_mode": "all",
             "entity_category": "diagnostic",
