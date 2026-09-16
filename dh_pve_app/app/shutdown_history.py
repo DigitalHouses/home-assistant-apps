@@ -13,6 +13,7 @@ from .ups_nut import UpsSnapshot
 
 HISTORY_LIMIT = 50
 PUBLISHED_HISTORY_LIMIT = 10
+HISTORY_PARSER_VERSION = 2
 
 _TIMESTAMP_RE = re.compile(r"^(?P<ts>\S+)")
 _START_RE = re.compile(
@@ -20,8 +21,13 @@ _START_RE = re.compile(
     r"\(timeout\s*=\s*(?P<timeout>\d+)\s+seconds\)",
     re.IGNORECASE,
 )
-_TIMEOUT_RE = re.compile(
-    r"\b(?P<kind>VM|CT)\s+(?P<id>\d+).*?(?:got timeout|timed out)",
+# A guest-agent liveness probe such as `guest-ping ... got timeout` is not
+# evidence that the VM shutdown operation itself timed out. Only the explicit
+# guest-shutdown QMP operation is treated as a shutdown timeout here. Generic
+# Proxmox powerdown timeout markers are handled separately below.
+_SHUTDOWN_TIMEOUT_RE = re.compile(
+    r"\bVM\s+(?P<id>\d+)\b.*?\bqmp\b.*?\bguest-shutdown\b.*?"
+    r"(?:got timeout|timed out)",
     re.IGNORECASE,
 )
 _END_TASK_RE = re.compile(
@@ -45,6 +51,12 @@ _CLEAN_MARKERS = (
     "system is powering down",
     "powering off",
 )
+_FSD_REASONS = {
+    "on_battery_fsd",
+    "low_battery_fsd",
+    "charge_guard",
+    "runtime_guard",
+}
 
 
 def _parse_timestamp(line: str) -> datetime | None:
@@ -73,6 +85,20 @@ def _seconds(start: datetime | None, end: datetime | None) -> int | None:
 
 def _guest_kind(token: str) -> str:
     return "vm" if token.casefold() == "vm" else "lxc"
+
+
+def _empty_guest(kind: str, guest_id: str, timeout: int | None = None) -> dict[str, Any]:
+    return {
+        "kind": kind,
+        "guest_id": guest_id,
+        "timeout_seconds": timeout,
+        "started_at": None,
+        "finished_at": None,
+        "duration_seconds": None,
+        "timeout_ratio": None,
+        "result": "unknown",
+        "forced": False,
+    }
 
 
 def parse_guest_shutdown_journal(text: str) -> dict[str, Any]:
@@ -106,20 +132,7 @@ def parse_guest_shutdown_journal(text: str) -> dict[str, Any]:
             guest_id = start.group("id")
             timeout = int(start.group("timeout"))
             key = (kind, guest_id)
-            item = records.setdefault(
-                key,
-                {
-                    "kind": kind,
-                    "guest_id": guest_id,
-                    "timeout_seconds": timeout,
-                    "started_at": None,
-                    "finished_at": None,
-                    "duration_seconds": None,
-                    "timeout_ratio": None,
-                    "result": "unknown",
-                    "forced": False,
-                },
-            )
+            item = records.setdefault(key, _empty_guest(kind, guest_id, timeout))
             item["timeout_seconds"] = timeout
             active_guests.add(key)
             if item["started_at"] is None and timestamp is not None:
@@ -128,27 +141,12 @@ def parse_guest_shutdown_journal(text: str) -> dict[str, Any]:
                     first_started = timestamp
             continue
 
-        timeout_match = _TIMEOUT_RE.search(line)
-        if timeout_match is not None:
-            kind = _guest_kind(timeout_match.group("kind"))
-            guest_id = timeout_match.group("id")
-            key = (kind, guest_id)
-            item = records.setdefault(
-                key,
-                {
-                    "kind": kind,
-                    "guest_id": guest_id,
-                    "timeout_seconds": None,
-                    "started_at": None,
-                    "finished_at": None,
-                    "duration_seconds": None,
-                    "timeout_ratio": None,
-                    "result": "unknown",
-                    "forced": False,
-                },
-            )
+        shutdown_timeout = _SHUTDOWN_TIMEOUT_RE.search(line)
+        if shutdown_timeout is not None:
+            guest_id = shutdown_timeout.group("id")
+            key = ("vm", guest_id)
+            item = records.setdefault(key, _empty_guest("vm", guest_id))
             item["result"] = "timeout"
-            item["forced"] = True
             continue
 
         end_match = _END_TASK_RE.search(line)
@@ -156,20 +154,7 @@ def parse_guest_shutdown_journal(text: str) -> dict[str, Any]:
             kind = "vm" if end_match.group("type").casefold() == "qmshutdown" else "lxc"
             guest_id = end_match.group("id")
             key = (kind, guest_id)
-            item = records.setdefault(
-                key,
-                {
-                    "kind": kind,
-                    "guest_id": guest_id,
-                    "timeout_seconds": None,
-                    "started_at": None,
-                    "finished_at": None,
-                    "duration_seconds": None,
-                    "timeout_ratio": None,
-                    "result": "unknown",
-                    "forced": False,
-                },
-            )
+            item = records.setdefault(key, _empty_guest(kind, guest_id))
             if timestamp is not None:
                 item["finished_at"] = timestamp.isoformat()
             tail = line[end_match.end() :].casefold()
@@ -200,20 +185,7 @@ def parse_guest_shutdown_journal(text: str) -> dict[str, Any]:
             kind = _guest_kind(simple_end.group("kind"))
             guest_id = simple_end.group("id")
             key = (kind, guest_id)
-            item = records.setdefault(
-                key,
-                {
-                    "kind": kind,
-                    "guest_id": guest_id,
-                    "timeout_seconds": None,
-                    "started_at": None,
-                    "finished_at": None,
-                    "duration_seconds": None,
-                    "timeout_ratio": None,
-                    "result": "unknown",
-                    "forced": False,
-                },
-            )
+            item = records.setdefault(key, _empty_guest(kind, guest_id))
             if timestamp is not None:
                 item["finished_at"] = timestamp.isoformat()
             if item["result"] == "unknown":
@@ -268,12 +240,7 @@ def classify_previous_shutdown(
     clean_shutdown: bool | None,
     fsd_reason: str | None,
 ) -> tuple[str, str]:
-    if fsd_reason in {
-        "on_battery_fsd",
-        "low_battery_fsd",
-        "charge_guard",
-        "runtime_guard",
-    }:
+    if fsd_reason in _FSD_REASONS:
         return "ups_power", fsd_reason
     if clean_shutdown is True:
         return "normal", fsd_reason or "shutdown"
@@ -371,6 +338,82 @@ def _duration_between(start: object, end: object) -> int | None:
     return max(0, int(round((end_dt - start_dt).total_seconds())))
 
 
+def _merge_guest_history(
+    existing: object,
+    parsed: object,
+) -> dict[str, dict[str, dict[str, Any]]]:
+    merged: dict[str, dict[str, dict[str, Any]]] = {"vm": {}, "lxc": {}}
+    for source in (existing, parsed):
+        if not isinstance(source, Mapping):
+            continue
+        for kind in ("vm", "lxc"):
+            records = source.get(kind)
+            if not isinstance(records, Mapping):
+                continue
+            for guest_id, raw in records.items():
+                if isinstance(raw, Mapping):
+                    merged[kind][str(guest_id)] = dict(raw)
+    return merged
+
+
+def _previous_from_parsed(
+    *,
+    source: Mapping[str, Any],
+    parsed: Mapping[str, Any],
+    next_boot_at: object,
+) -> dict[str, Any]:
+    raw_shutdown_clean = parsed.get("clean_shutdown")
+    shutdown_clean = raw_shutdown_clean if isinstance(raw_shutdown_clean, bool) else source.get("shutdown_clean")
+    if not isinstance(shutdown_clean, bool):
+        shutdown_clean = None
+
+    raw_reason = source.get("fsd_reason")
+    if not isinstance(raw_reason, str):
+        existing_reason = source.get("shutdown_reason")
+        raw_reason = existing_reason if isinstance(existing_reason, str) and existing_reason in _FSD_REASONS else None
+
+    shutdown_class, shutdown_reason = classify_previous_shutdown(
+        clean_shutdown=shutdown_clean,
+        fsd_reason=raw_reason,
+    )
+
+    shutdown_at = parsed.get("shutdown_at") or source.get("shutdown_at")
+    all_guests_stopped_at = parsed.get("all_guests_stopped_at") or source.get("all_guests_stopped_at")
+    outage_started_at = source.get("outage_started_at")
+    fsd_at = source.get("fsd_at")
+    parsed_total = parsed.get("guest_shutdown_total_seconds")
+
+    return {
+        "history_parser_version": HISTORY_PARSER_VERSION,
+        "boot_id": source.get("boot_id"),
+        "boot_at": source.get("boot_at"),
+        "shutdown_at": shutdown_at,
+        "last_journal_at": parsed.get("last_journal_at") or source.get("last_journal_at"),
+        "shutdown_class": shutdown_class,
+        "shutdown_reason": shutdown_reason,
+        "shutdown_clean": shutdown_clean,
+        "shutdown_budget_fingerprint": source.get("shutdown_budget_fingerprint"),
+        "uptime_seconds": _duration_between(source.get("boot_at"), shutdown_at),
+        "downtime_seconds": _duration_between(shutdown_at, next_boot_at),
+        "outage_started_at": outage_started_at,
+        "fsd_at": fsd_at,
+        "ups_status_at_fsd": source.get("ups_status_at_fsd"),
+        "battery_charge_at_fsd": source.get("battery_charge_at_fsd"),
+        "battery_runtime_at_fsd": source.get("battery_runtime_at_fsd"),
+        "ups_load_at_fsd": source.get("ups_load_at_fsd"),
+        "all_guests_stopped_at": all_guests_stopped_at,
+        "guest_shutdown_total_seconds": (
+            parsed_total if isinstance(parsed_total, int) else source.get("guest_shutdown_total_seconds")
+        ),
+        "outage_to_fsd_seconds": _duration_between(outage_started_at, fsd_at),
+        "fsd_to_all_guests_stopped_seconds": _duration_between(fsd_at, all_guests_stopped_at),
+        "fsd_to_shutdown_seconds": _duration_between(fsd_at, shutdown_at),
+        "all_guests_stopped_to_shutdown_seconds": _duration_between(all_guests_stopped_at, shutdown_at),
+        "outage_to_shutdown_seconds": _duration_between(outage_started_at, shutdown_at),
+        "guests": _merge_guest_history(source.get("guests"), parsed.get("guests")),
+    }
+
+
 class ShutdownHistoryTracker:
     def __init__(
         self,
@@ -394,6 +437,45 @@ class ShutdownHistoryTracker:
             state["history"] = []
         return state
 
+    def _reconcile_previous_parser(self, state: dict[str, Any], *, current_boot_at: object) -> bool:
+        previous = state.get("previous_shutdown")
+        if not isinstance(previous, Mapping):
+            return False
+        version = previous.get("history_parser_version")
+        if isinstance(version, int) and version >= HISTORY_PARSER_VERSION:
+            return False
+
+        journal = self.previous_boot_journal_reader()
+        if not journal.strip():
+            return False
+        parsed = parse_guest_shutdown_journal(journal)
+        if parsed.get("last_journal_at") is None:
+            return False
+
+        reconciled = _previous_from_parsed(
+            source=previous,
+            parsed=parsed,
+            next_boot_at=current_boot_at,
+        )
+        state["previous_shutdown"] = reconciled
+
+        previous_boot_id = reconciled.get("boot_id")
+        history: list[dict[str, Any]] = []
+        replaced = False
+        for raw in state.get("history", []):
+            if not isinstance(raw, Mapping):
+                continue
+            item = dict(raw)
+            if previous_boot_id is not None and item.get("boot_id") == previous_boot_id:
+                history.append(dict(reconciled))
+                replaced = True
+            else:
+                history.append(item)
+        if not replaced:
+            history.append(dict(reconciled))
+        state["history"] = history[-HISTORY_LIMIT:]
+        return True
+
     def startup(self) -> dict[str, Any]:
         state = self._load()
         boot_id = self.boot_id_reader().strip()
@@ -407,60 +489,20 @@ class ShutdownHistoryTracker:
             return self.payload()
 
         if str(current.get("boot_id") or "") == boot_id:
+            if self._reconcile_previous_parser(
+                state,
+                current_boot_at=current.get("boot_at") or boot_at,
+            ):
+                self.state_store.save(state)
             return self.payload()
 
         journal = self.previous_boot_journal_reader()
         parsed = parse_guest_shutdown_journal(journal)
-        raw_shutdown_clean = parsed.get("clean_shutdown")
-        shutdown_clean = raw_shutdown_clean if isinstance(raw_shutdown_clean, bool) else None
-        shutdown_class, shutdown_reason = classify_previous_shutdown(
-            clean_shutdown=shutdown_clean,
-            fsd_reason=(
-                str(current.get("fsd_reason"))
-                if isinstance(current.get("fsd_reason"), str)
-                else None
-            ),
+        previous = _previous_from_parsed(
+            source=current,
+            parsed=parsed,
+            next_boot_at=boot_at,
         )
-        shutdown_at = parsed.get("shutdown_at")
-        all_guests_stopped_at = parsed.get("all_guests_stopped_at")
-        outage_started_at = current.get("outage_started_at")
-        fsd_at = current.get("fsd_at")
-
-        previous = {
-            "boot_id": current.get("boot_id"),
-            "boot_at": current.get("boot_at"),
-            "shutdown_at": shutdown_at,
-            "last_journal_at": parsed.get("last_journal_at"),
-            "shutdown_class": shutdown_class,
-            "shutdown_reason": shutdown_reason,
-            "shutdown_clean": shutdown_clean,
-            "shutdown_budget_fingerprint": current.get("shutdown_budget_fingerprint"),
-            "uptime_seconds": _duration_between(current.get("boot_at"), shutdown_at),
-            "downtime_seconds": _duration_between(shutdown_at, boot_at),
-            "outage_started_at": outage_started_at,
-            "fsd_at": fsd_at,
-            "ups_status_at_fsd": current.get("ups_status_at_fsd"),
-            "battery_charge_at_fsd": current.get("battery_charge_at_fsd"),
-            "battery_runtime_at_fsd": current.get("battery_runtime_at_fsd"),
-            "ups_load_at_fsd": current.get("ups_load_at_fsd"),
-            "all_guests_stopped_at": all_guests_stopped_at,
-            "guest_shutdown_total_seconds": parsed.get("guest_shutdown_total_seconds"),
-            "outage_to_fsd_seconds": _duration_between(outage_started_at, fsd_at),
-            "fsd_to_all_guests_stopped_seconds": _duration_between(
-                fsd_at,
-                all_guests_stopped_at,
-            ),
-            "fsd_to_shutdown_seconds": _duration_between(fsd_at, shutdown_at),
-            "all_guests_stopped_to_shutdown_seconds": _duration_between(
-                all_guests_stopped_at,
-                shutdown_at,
-            ),
-            "outage_to_shutdown_seconds": _duration_between(
-                outage_started_at,
-                shutdown_at,
-            ),
-            "guests": parsed.get("guests"),
-        }
 
         history = [item for item in state.get("history", []) if isinstance(item, Mapping)]
         history.append(previous)
