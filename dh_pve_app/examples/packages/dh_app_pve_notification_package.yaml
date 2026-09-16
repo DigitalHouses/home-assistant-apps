@@ -94,8 +94,8 @@ dh_app_pve_notification_package:
                 category: diagnostic
                 severity: "{{ state_attr('sensor.dh_app_pve_problems', 'severity') | default('warning', true) }}"
                 title: "🖥️ Proxmox: активные проблемы после запуска"
-                message: "{{ state_attr('sensor.dh_app_pve_problems', 'details') | default('', true) }}"
-                problems: "{{ state_attr('sensor.dh_app_pve_problems', 'problems') | default([], true) }}"
+                message: "{{ state_attr('sensor.dh_app_pve_problems', 'summary') | default('', true) }}"
+                active: "{{ state_attr('sensor.dh_app_pve_problems', 'active') | default([], true) }}"
                 startup_reconciliation: true
         - if:
             - condition: template
@@ -109,6 +109,6 @@ dh_app_pve_notification_package:
                 category: diagnostic
                 severity: "{{ state_attr('sensor.dh_app_pve_ups_problems', 'severity') | default('warning', true) }}"
                 title: "🔋 UPS: активные проблемы после запуска"
-                message: "{{ state_attr('sensor.dh_app_pve_ups_problems', 'details') | default('', true) }}"
-                problems: "{{ state_attr('sensor.dh_app_pve_ups_problems', 'problems') | default([], true) }}"
+                message: "{{ state_attr('sensor.dh_app_pve_ups_problems', 'summary') | default('', true) }}"
+                active: "{{ state_attr('sensor.dh_app_pve_ups_problems', 'active') | default([], true) }}"
                 startup_reconciliation: true
