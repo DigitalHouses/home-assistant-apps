@@ -146,6 +146,159 @@ def _adaptive_diagnostic_components(topics) -> dict[str, dict[str, object]]:
     }
 
 
+def _line_power_components(topics) -> dict[str, dict[str, object]]:
+    state_topic = ups_state_group_topic(topics, "line_power_statistics")
+    availability = _availability(topics)
+    uid = lambda suffix: f"{topics.device_id}_{suffix}"
+
+    line_state_availability = availability + [
+        {
+            "topic": state_topic,
+            "value_template": (
+                "{{ 'online' if value_json.state | default('unknown') "
+                "in ['online', 'offline'] else 'offline' }}"
+            ),
+            "payload_available": "online",
+            "payload_not_available": "offline",
+        }
+    ]
+
+    components: dict[str, dict[str, object]] = {
+        "line_power": {
+            "platform": "binary_sensor",
+            "name": "Line power",
+            "unique_id": uid("line_power"),
+            "default_entity_id": "binary_sensor.dh_app_pve_ups_line_power",
+            "state_topic": state_topic,
+            "value_template": (
+                "{{ 'ON' if value_json.state | default('unknown') == 'online' else 'OFF' }}"
+            ),
+            "payload_on": "ON",
+            "payload_off": "OFF",
+            "availability": line_state_availability,
+            "availability_mode": "all",
+            "device_class": "power",
+            "icon": "mdi:transmission-tower",
+        },
+        "line_power_online_month": {
+            "platform": "sensor",
+            "name": "Line power online this month",
+            "unique_id": uid("line_power_online_month"),
+            "default_entity_id": "sensor.dh_app_pve_ups_line_power_online_month",
+            "state_topic": state_topic,
+            "value_template": "{{ value_json.online_seconds | default(none) }}",
+            "unit_of_measurement": "s",
+            "device_class": "duration",
+            "availability": availability,
+            "availability_mode": "all",
+            "icon": "mdi:transmission-tower-export",
+        },
+        "line_power_offline_month": {
+            "platform": "sensor",
+            "name": "Line power offline this month",
+            "unique_id": uid("line_power_offline_month"),
+            "default_entity_id": "sensor.dh_app_pve_ups_line_power_offline_month",
+            "state_topic": state_topic,
+            "value_template": "{{ value_json.offline_seconds | default(none) }}",
+            "unit_of_measurement": "s",
+            "device_class": "duration",
+            "availability": availability,
+            "availability_mode": "all",
+            "icon": "mdi:transmission-tower-off",
+        },
+        "line_power_outages_month": {
+            "platform": "sensor",
+            "name": "Line power outages this month",
+            "unique_id": uid("line_power_outages_month"),
+            "default_entity_id": "sensor.dh_app_pve_ups_line_power_outages_month",
+            "state_topic": state_topic,
+            "value_template": "{{ value_json.outages_month | default(none) }}",
+            "availability": availability,
+            "availability_mode": "all",
+            "icon": "mdi:counter",
+        },
+        "line_power_availability_month": {
+            "platform": "sensor",
+            "name": "Line power availability this month",
+            "unique_id": uid("line_power_availability_month"),
+            "default_entity_id": "sensor.dh_app_pve_ups_line_power_availability_month",
+            "state_topic": state_topic,
+            "value_template": "{{ value_json.availability_percent | default(none) }}",
+            "unit_of_measurement": "%",
+            "availability": availability,
+            "availability_mode": "all",
+            "icon": "mdi:percent-outline",
+            "json_attributes_topic": state_topic,
+            "json_attributes_template": (
+                "{{ {'month_key': value_json.month_key | default(none), "
+                "'month_label_ru': value_json.month_label_ru | default(none), "
+                "'tracking_since': value_json.tracking_since | default(none), "
+                "'partial_month': value_json.partial_month | default(true)} | tojson }}"
+            ),
+        },
+        "line_power_current_outage_started": {
+            "platform": "sensor",
+            "name": "Current line power outage started",
+            "unique_id": uid("line_power_current_outage_started"),
+            "default_entity_id": (
+                "sensor.dh_app_pve_ups_line_power_current_outage_started"
+            ),
+            "state_topic": state_topic,
+            "value_template": "{{ value_json.current_outage_started | default(none) }}",
+            "device_class": "timestamp",
+            "availability": availability,
+            "availability_mode": "all",
+            "entity_category": "diagnostic",
+            "icon": "mdi:power-plug-off-outline",
+        },
+        "line_power_last_failure": {
+            "platform": "sensor",
+            "name": "Last line power failure",
+            "unique_id": uid("line_power_last_failure"),
+            "default_entity_id": "sensor.dh_app_pve_ups_line_power_last_failure",
+            "state_topic": state_topic,
+            "value_template": "{{ value_json.last_failure | default(none) }}",
+            "device_class": "timestamp",
+            "availability": availability,
+            "availability_mode": "all",
+            "entity_category": "diagnostic",
+            "icon": "mdi:transmission-tower-off",
+        },
+        "line_power_last_restore": {
+            "platform": "sensor",
+            "name": "Last line power restore",
+            "unique_id": uid("line_power_last_restore"),
+            "default_entity_id": "sensor.dh_app_pve_ups_line_power_last_restore",
+            "state_topic": state_topic,
+            "value_template": "{{ value_json.last_restore | default(none) }}",
+            "device_class": "timestamp",
+            "availability": availability,
+            "availability_mode": "all",
+            "entity_category": "diagnostic",
+            "icon": "mdi:transmission-tower-import",
+        },
+        "line_power_last_outage_duration": {
+            "platform": "sensor",
+            "name": "Last line power outage duration",
+            "unique_id": uid("line_power_last_outage_duration"),
+            "default_entity_id": (
+                "sensor.dh_app_pve_ups_line_power_last_outage_duration"
+            ),
+            "state_topic": state_topic,
+            "value_template": (
+                "{{ value_json.last_outage_duration_seconds | default(none) }}"
+            ),
+            "unit_of_measurement": "s",
+            "device_class": "duration",
+            "availability": availability,
+            "availability_mode": "all",
+            "entity_category": "diagnostic",
+            "icon": "mdi:timer-outline",
+        },
+    }
+    return components
+
+
 def _canonicalize_entity_id(value: object) -> object:
     if not isinstance(value, str):
         return value
@@ -254,4 +407,5 @@ def route_ups_discovery_groups(payload: dict[str, object], topics) -> dict[str, 
     # replaces the aggregate that used to be derived from the monolithic UPS
     # status JSON. Raw UPS status binaries remain available as telemetry.
     raw_components.update(_problem_components(topics))
+    raw_components.update(_line_power_components(topics))
     return payload
