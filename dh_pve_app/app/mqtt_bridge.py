@@ -399,8 +399,17 @@ class MqttBridge(MqttEvents):
             retain=True,
         )
 
+    def clear_legacy_pve_discovery(self) -> bool:
+        ok = True
+        for topic in self.topics.legacy_discoveries:
+            published = self._publish(topic, "", retain=True)
+            ok = published and ok
+        return ok
+
     def clear_legacy_state(self) -> bool:
-        return self._publish(self.topics.state, "", retain=True)
+        discovery_ok = self.clear_legacy_pve_discovery()
+        state_ok = self._publish(self.topics.state, "", retain=True)
+        return discovery_ok and state_ok
 
     def publish_state_group(self, group: str, payload: dict[str, object]) -> bool:
         return self._publish(
