@@ -1,0 +1,114 @@
+# =============================================================================
+# DigitalHouses PVE notification contract
+# =============================================================================
+# Reusable HAOS layer only. It does not depend on private delivery services
+# such as write2log, Telegram, or a specific mobile_app target.
+# Consumers may listen for the Home Assistant event: dh_app_pve_notification.
+# =============================================================================
+
+dh_app_pve_notification_package:
+
+  automation:
+    - id: dh_app_pve_live_problem_notifications
+      alias: DH PVE · Live diagnostic notifications
+      mode: queued
+      max: 20
+      triggers:
+        - trigger: event.received
+          target:
+            entity_id:
+              - event.dh_app_pve_diagnostic
+              - event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - problem_started
+              - problem_recovered
+      conditions:
+        - condition: state
+          entity_id: binary_sensor.bs_global_system_boot_completed
+          state: "on"
+      actions:
+        - event: dh_app_pve_notification
+          event_data:
+            source: dh_app_pve
+            source_entity: "{{ trigger.entity_id }}"
+            kind: "{{ trigger.to_state.attributes.event_type }}"
+            category: "{{ trigger.to_state.attributes.category | default('diagnostic', true) }}"
+            severity: "{{ trigger.to_state.attributes.severity | default('info', true) }}"
+            object_id: "{{ trigger.to_state.attributes.object_id | default('', true) }}"
+            object_name: "{{ trigger.to_state.attributes.object_name | default('', true) }}"
+            summary: "{{ trigger.to_state.attributes.summary | default('', true) }}"
+            details: "{{ trigger.to_state.attributes.details | default('', true) }}"
+            startup_reconciliation: false
+
+    - id: dh_app_pve_ups_config_changed_notification
+      alias: DH PVE · UPS Trigger config changed notification
+      mode: queued
+      max: 5
+      triggers:
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - config_changed
+      conditions:
+        - condition: state
+          entity_id: binary_sensor.bs_global_system_boot_completed
+          state: "on"
+      actions:
+        - event: dh_app_pve_notification
+          event_data:
+            source: dh_app_pve
+            source_entity: event.dh_app_pve_ups_diagnostic
+            kind: config_changed
+            category: policy
+            severity: info
+            title: "🔋 Конфигурация UPS изменена"
+            message: >-
+              {% set old = trigger.to_state.attributes.old_values | default({}, true) %}
+              {% set new = trigger.to_state.attributes.new_values | default({}, true) %}
+              OLD: charge={{ old.get('shutdown_battery_charge_threshold_percent', '—') }}%, reserve={{ old.get('runtime_reserve_seconds', '—') }} s.
+              NEW: charge={{ new.get('shutdown_battery_charge_threshold_percent', '—') }}%, reserve={{ new.get('runtime_reserve_seconds', '—') }} s.
+            old_values: "{{ trigger.to_state.attributes.old_values | default({}, true) }}"
+            new_values: "{{ trigger.to_state.attributes.new_values | default({}, true) }}"
+            startup_reconciliation: false
+
+    - id: dh_app_pve_startup_problem_reconciliation
+      alias: DH PVE · Startup problem reconciliation
+      mode: single
+      triggers:
+        - trigger: state
+          entity_id: binary_sensor.bs_global_system_boot_completed
+          to: "on"
+      actions:
+        - if:
+            - condition: template
+              value_template: "{{ states('sensor.dh_app_pve_problems') | int(0) > 0 }}"
+          then:
+            - event: dh_app_pve_notification
+              event_data:
+                source: dh_app_pve
+                source_entity: sensor.dh_app_pve_problems
+                kind: startup_reconciliation
+                category: diagnostic
+                severity: "{{ state_attr('sensor.dh_app_pve_problems', 'severity') | default('warning', true) }}"
+                title: "🖥️ Proxmox: активные проблемы после запуска"
+                message: "{{ state_attr('sensor.dh_app_pve_problems', 'details') | default('', true) }}"
+                problems: "{{ state_attr('sensor.dh_app_pve_problems', 'problems') | default([], true) }}"
+                startup_reconciliation: true
+        - if:
+            - condition: template
+              value_template: "{{ states('sensor.dh_app_pve_ups_problems') | int(0) > 0 }}"
+          then:
+            - event: dh_app_pve_notification
+              event_data:
+                source: dh_app_pve
+                source_entity: sensor.dh_app_pve_ups_problems
+                kind: startup_reconciliation
+                category: diagnostic
+                severity: "{{ state_attr('sensor.dh_app_pve_ups_problems', 'severity') | default('warning', true) }}"
+                title: "🔋 UPS: активные проблемы после запуска"
+                message: "{{ state_attr('sensor.dh_app_pve_ups_problems', 'details') | default('', true) }}"
+                problems: "{{ state_attr('sensor.dh_app_pve_ups_problems', 'problems') | default([], true) }}"
+                startup_reconciliation: true
