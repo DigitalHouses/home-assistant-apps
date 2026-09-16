@@ -29,6 +29,13 @@ def _is_legacy_policy_mapping(value: object) -> bool:
     return isinstance(value, dict) and bool(LEGACY_POLICY_KEYS & set(value))
 
 
+def _is_runtime_normalized_legacy_state(state: dict[str, object]) -> bool:
+    return (
+        state.get("policy_status") == "Legacy policy"
+        and state.get("policy_active") is None
+    )
+
+
 def _read_upssched(path: Path) -> str:
     try:
         return path.read_text(encoding="utf-8")
@@ -45,8 +52,10 @@ def migrate_retired_legacy_policy_state(
     if not state:
         return False
 
-    legacy_state = _is_legacy_policy_mapping(state.get("policy_active")) or _is_legacy_policy_mapping(
-        state.get("policy_draft")
+    legacy_state = (
+        _is_legacy_policy_mapping(state.get("policy_active"))
+        or _is_legacy_policy_mapping(state.get("policy_draft"))
+        or _is_runtime_normalized_legacy_state(state)
     )
     if not legacy_state:
         return False
