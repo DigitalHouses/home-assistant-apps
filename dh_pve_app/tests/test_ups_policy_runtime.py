@@ -96,6 +96,7 @@ def test_legacy_v1_policy_is_not_silently_promoted_to_active_v2(tmp_path):
                 "power_restore_delay_seconds": 180,
             },
             "policy_status": "Active",
+            "policy_apply_result": "Политика UPS применена и проверена.",
             "policy_revision": 7,
             "policy_hash": "legacy-hash",
             "policy_last_applied": "2026-09-15T10:00:00+05:00",
@@ -105,6 +106,7 @@ def test_legacy_v1_policy_is_not_silently_promoted_to_active_v2(tmp_path):
     assert runtime.policy_active is None
     assert runtime.policy_draft == UpsPolicyDraft(20, 180)
     assert runtime.policy_status == "Legacy policy"
+    assert runtime.policy_apply_result == "Обнаружена legacy v1 политика; Trigger v2 неактивен до Apply."
     assert runtime.policy_revision == 0
     assert runtime.policy_hash is None
     assert runtime.policy_last_applied is None
@@ -118,6 +120,7 @@ def test_persisted_v2_active_policy_is_restored_without_revision_loss(tmp_path):
             "policy_active": active.as_dict(),
             "policy_draft": active.as_dict(),
             "policy_status": "Active",
+            "policy_apply_result": "Applied",
             "policy_revision": 8,
             "policy_last_applied": "2026-09-16T00:30:00+05:00",
         },
@@ -126,6 +129,7 @@ def test_persisted_v2_active_policy_is_restored_without_revision_loss(tmp_path):
     assert runtime.policy_active == active
     assert runtime.policy_draft == active
     assert runtime.policy_status == "Active"
+    assert runtime.policy_apply_result == "Applied"
     assert runtime.policy_revision == 8
     assert runtime.policy_hash == policy_hash(active)
     assert runtime.policy_last_applied == "2026-09-16T00:30:00+05:00"
