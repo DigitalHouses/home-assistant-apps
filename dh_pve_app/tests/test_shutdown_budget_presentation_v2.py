@@ -5,6 +5,7 @@ from app.identity import HostIdentity
 from app.shutdown_discovery import build_shutdown_aware_ups_discovery_payload
 from app.shutdown_integration import ShutdownAwareUpsRuntime
 from app.state_store import StateStore
+from app.topics import build_ups_topics, ups_state_group_topic
 from app.ups_nut import parse_upsc_output
 from app.ups_shutdown_budget import ShutdownBudgetInputs, calculate_shutdown_budget
 
@@ -29,6 +30,16 @@ class Bridge:
 
     def publish_ups_availability(self, online):
         self.availability.append(online)
+        return True
+
+
+class GroupBridge(Bridge):
+    def __init__(self):
+        super().__init__()
+        self.group_states = []
+
+    def publish_ups_state_group(self, group, payload):
+        self.group_states.append((group, payload))
         return True
 
 
@@ -115,10 +126,9 @@ def budget():
     )
 
 
-def test_runtime_publishes_full_shutdown_budget_object_and_correct_readiness(tmp_path):
-    bridge = Bridge()
+def runtime(tmp_path, bridge):
     snapshot = parse_upsc_output("ups.status: OL\nbattery.charge: 100\nbattery.runtime: 5790\n")
-    runtime = ShutdownAwareUpsRuntime(
+    return ShutdownAwareUpsRuntime(
         config=UpsConfig(enabled=True, name="ups", host="127.0.0.1", port=3493),
         mqtt_config=mqtt_config(),
         bridge=bridge,
@@ -145,13 +155,30 @@ def test_runtime_publishes_full_shutdown_budget_object_and_correct_readiness(tmp
         shutdown_budget_reader=budget,
     )
 
-    assert runtime.startup() is True
+
+def test_runtime_publishes_full_shutdown_budget_object_and_correct_readiness(tmp_path):
+    bridge = Bridge()
+    app = runtime(tmp_path, bridge)
+
+    assert app.startup() is True
     state = bridge.states[-1]
 
     assert state["shutdown_budget"]["effective_guest_budget_seconds"] == 420
     assert state["shutdown_budget"]["shutdown_budget_seconds"] == 635
     assert state["shutdown_readiness"]["guest_shutdown_budget_seconds"] == 420
     assert state["shutdown_readiness"]["shutdown_budget_seconds"] == 635
+
+
+def test_grouped_runtime_publishes_shutdown_budget_in_diagnostics(tmp_path):
+    bridge = GroupBridge()
+    app = runtime(tmp_path, bridge)
+
+    assert app.startup() is True
+    groups = {group: payload for group, payload in bridge.group_states}
+    diagnostics = groups["diagnostics"]
+
+    assert diagnostics["shutdown_budget"]["effective_guest_budget_seconds"] == 420
+    assert diagnostics["shutdown_budget"]["shutdown_budget_seconds"] == 635
 
 
 def test_discovery_exposes_separate_guest_and_total_budget_sensors():
@@ -161,13 +188,29 @@ def test_discovery_exposes_separate_guest_and_total_budget_sensors():
         version="0.3.0",
         snapshot=parse_upsc_output("ups.status: OL\n"),
     )["components"]
+    topics = build_ups_topics(mqtt_config(), identity())
+    diagnostics_topic = ups_state_group_topic(topics, "diagnostics")
 
     guest = components["guest_shutdown_budget"]
     total = components["shutdown_budget"]
     readiness = components["shutdown_readiness"]
 
     assert guest["default_entity_id"] == "sensor.dh_app_pve_ups_guest_shutdown_budget"
+    assert guest["state_topic"] == diagnostics_topic
     assert "value_json.shutdown_budget.effective_guest_budget_seconds" in guest["value_template"]
     assert total["default_entity_id"] == "sensor.dh_app_pve_ups_shutdown_budget"
+    assert total["state_topic"] == diagnostics_topic
     assert "value_json.shutdown_budget.shutdown_budget_seconds" in total["value_template"]
     assert "shutdown_budget_seconds" in readiness["json_attributes_template"]
+
+
+def test_discovery_removes_legacy_on_battery_delay_but_keeps_restore_delay():
+    components = build_shutdown_aware_ups_discovery_payload(
+        mqtt_config(),
+        identity(),
+        version="0.3.0",
+        snapshot=parse_upsc_output("ups.status: OL\n"),
+    )["components"]
+
+    assert "policy_on_battery_delay_observed" not in components
+    assert "policy_power_restore_delay_observed" in components
