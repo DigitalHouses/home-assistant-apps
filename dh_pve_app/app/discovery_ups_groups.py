@@ -30,7 +30,6 @@ _STATUS = {
 _CONFIG = {
     "capabilities",
     "shutdown_policy",
-    "policy_on_battery_delay_observed",
     "policy_power_restore_delay_observed",
     "policy_charge_threshold",
     "policy_runtime_reserve",
@@ -41,7 +40,6 @@ _CONFIG = {
     "battery_runtime_low",
     "ups_shutdown_delay",
     "ups_start_delay",
-    "guest_shutdown_budget",
 }
 
 _TESTS = {
@@ -62,6 +60,8 @@ _TESTS = {
 
 _DIAGNOSTICS = {
     "last_refresh",
+    "guest_shutdown_budget",
+    "shutdown_budget",
     "shutdown_readiness",
     "ups_app_profile",
     "ups_last_publication",
@@ -215,6 +215,7 @@ def route_ups_discovery_groups(payload: dict[str, object], topics) -> dict[str, 
         return payload
 
     raw_components.pop("battery_runtime", None)
+    raw_components.pop("policy_on_battery_delay_observed", None)
     raw_components.update(_adaptive_diagnostic_components(topics))
 
     legacy_state = topics.state
