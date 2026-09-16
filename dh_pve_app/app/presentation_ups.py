@@ -79,6 +79,7 @@ _TEST_FIELDS = (
 _DIAGNOSTIC_FIELDS = (
     "last_refresh",
     "shutdown_readiness",
+    "shutdown_budget",
 )
 
 
