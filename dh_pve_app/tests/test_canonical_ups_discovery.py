@@ -1,7 +1,7 @@
 from app.config import MqttConfig
 from app.identity import HostIdentity
 from app.shutdown_discovery import build_shutdown_aware_ups_discovery_payload
-from app.topics import build_ups_topics
+from app.topics import build_ups_topics, ups_state_group_topic
 from app.ups_nut import parse_upsc_output
 
 
@@ -148,3 +148,47 @@ def test_ups_problem_aggregate_and_native_event_are_canonical():
     assert event["qos"] == 1
     assert event["entity_category"] == "diagnostic"
     assert "json_attributes_topic" not in event
+
+
+def test_line_power_monthly_discovery_is_canonical_and_grouped():
+    topics = build_ups_topics(_mqtt(), _identity())
+    c = _payload()["components"]
+    state_topic = ups_state_group_topic(topics, "line_power_statistics")
+
+    expected_ids = {
+        "line_power": "binary_sensor.dh_app_pve_ups_line_power",
+        "line_power_online_month": "sensor.dh_app_pve_ups_line_power_online_month",
+        "line_power_offline_month": "sensor.dh_app_pve_ups_line_power_offline_month",
+        "line_power_outages_month": "sensor.dh_app_pve_ups_line_power_outages_month",
+        "line_power_availability_month": "sensor.dh_app_pve_ups_line_power_availability_month",
+        "line_power_current_outage_started": (
+            "sensor.dh_app_pve_ups_line_power_current_outage_started"
+        ),
+        "line_power_last_failure": "sensor.dh_app_pve_ups_line_power_last_failure",
+        "line_power_last_restore": "sensor.dh_app_pve_ups_line_power_last_restore",
+        "line_power_last_outage_duration": (
+            "sensor.dh_app_pve_ups_line_power_last_outage_duration"
+        ),
+    }
+
+    for key, entity_id in expected_ids.items():
+        assert c[key]["default_entity_id"] == entity_id
+        assert c[key]["state_topic"] == state_topic
+
+    assert c["line_power"]["platform"] == "binary_sensor"
+    assert c["line_power_online_month"]["unit_of_measurement"] == "s"
+    assert c["line_power_online_month"]["device_class"] == "duration"
+    assert c["line_power_offline_month"]["unit_of_measurement"] == "s"
+    assert c["line_power_offline_month"]["device_class"] == "duration"
+    assert c["line_power_availability_month"]["unit_of_measurement"] == "%"
+    assert c["line_power_current_outage_started"]["device_class"] == "timestamp"
+    assert c["line_power_last_failure"]["device_class"] == "timestamp"
+    assert c["line_power_last_restore"]["device_class"] == "timestamp"
+    assert c["line_power_last_outage_duration"]["unit_of_measurement"] == "s"
+    assert c["line_power_last_outage_duration"]["device_class"] == "duration"
+
+    metadata = c["line_power_availability_month"]["json_attributes_template"]
+    assert "month_key" in metadata
+    assert "month_label_ru" in metadata
+    assert "tracking_since" in metadata
+    assert "partial_month" in metadata
