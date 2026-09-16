@@ -22,6 +22,7 @@ dh_app_pve_notification_package:
           options:
             event_type:
               - problem_started
+              - problem_updated
               - problem_recovered
       conditions:
         - condition: state
