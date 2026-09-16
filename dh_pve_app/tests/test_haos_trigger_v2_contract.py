@@ -18,6 +18,9 @@ def test_trigger_dashboard_has_view_edit_confirm_apply_flow():
         "script.dh_app_pve_ups_trigger_cancel",
         "script.dh_app_pve_ups_trigger_review",
         "script.dh_app_pve_ups_trigger_apply",
+        "sensor.dh_app_pve_ups_trigger_policy",
+        "active_charge_threshold_percent",
+        "active_runtime_reserve_seconds",
         "number.dh_app_pve_ups_shutdown_battery_charge_threshold",
         "number.dh_app_pve_ups_shutdown_runtime_reserve",
         "sensor.dh_app_pve_ups_guest_shutdown_budget",
@@ -29,7 +32,7 @@ def test_trigger_dashboard_has_view_edit_confirm_apply_flow():
     assert "custom:auto-entities" not in text
 
 
-def test_ui_package_snapshots_active_draft_reverts_cancel_and_closes_on_success():
+def test_ui_package_snapshots_real_active_policy_reverts_cancel_and_closes_on_success():
     assert UI_PACKAGE.exists()
     text = UI_PACKAGE.read_text(encoding="utf-8")
     for token in (
@@ -43,6 +46,9 @@ def test_ui_package_snapshots_active_draft_reverts_cancel_and_closes_on_success(
         "dh_app_pve_ups_trigger_cancel:",
         "dh_app_pve_ups_trigger_review:",
         "dh_app_pve_ups_trigger_apply:",
+        "sensor.dh_app_pve_ups_trigger_policy",
+        "active_charge_threshold_percent",
+        "active_runtime_reserve_seconds",
         "number.set_value",
         "button.press",
         "trigger: event.received",
