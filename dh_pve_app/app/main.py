@@ -120,7 +120,7 @@ def build_runtime(
 
     topology = ShutdownAwareTopologyManager(runner=_run)
     production = ShutdownAwareProductionCollectors(
-        node_name=identity.node_name,
+        node_name=identity.hostname,
         disk_state_store=StateStore(state_dir / "disks.json"),
         topology=topology,
         shutdown_history_tracker=tracker,
