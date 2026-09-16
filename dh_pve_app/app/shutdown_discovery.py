@@ -77,7 +77,7 @@ def build_shutdown_aware_pve_discovery_payload(
             "all_guests_stopped_at": previous + ".all_guests_stopped_at | default(none)",
             "guest_shutdown_total_seconds": previous + ".guest_shutdown_total_seconds | default(none)",
             "outage_to_fsd_seconds": previous + ".outage_to_fsd_seconds | default(none)",
-            "fsd_to_all_guests_stopped_seconds": previous_guest + ".duration_seconds | default(none)" if False else previous + ".fsd_to_all_guests_stopped_seconds | default(none)",
+            "fsd_to_all_guests_stopped_seconds": previous + ".fsd_to_all_guests_stopped_seconds | default(none)",
             "fsd_to_shutdown_seconds": previous + ".fsd_to_shutdown_seconds | default(none)",
             "all_guests_stopped_to_shutdown_seconds": previous + ".all_guests_stopped_to_shutdown_seconds | default(none)",
             "outage_to_shutdown_seconds": previous + ".outage_to_shutdown_seconds | default(none)",
