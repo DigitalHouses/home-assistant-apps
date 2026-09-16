@@ -1,9 +1,8 @@
-from pathlib import Path
-
 from app.ups_legacy_timer import (
     legacy_timer_present,
     retire_legacy_timer_text,
 )
+from app.ups_policy_preflight import _legacy_timer_check
 
 
 UPSCHED_MANAGED = """\
@@ -26,6 +25,23 @@ NOTIFYFLAG ONLINE SYSLOG+EXEC
 
 def test_detects_known_dh_v1_timer():
     assert legacy_timer_present(UPSCHED_MANAGED) is True
+
+
+def test_preflight_blocks_known_dh_v1_timer(tmp_path):
+    path = tmp_path / "upssched.conf"
+    path.write_text(UPSCHED_MANAGED, encoding="utf-8")
+
+    ok, detail = _legacy_timer_check(path)
+
+    assert ok is False
+    assert "Legacy DH ONBATT" in detail
+
+
+def test_preflight_accepts_missing_upssched_file(tmp_path):
+    ok, detail = _legacy_timer_check(tmp_path / "missing.conf")
+
+    assert ok is True
+    assert "отсутствует" in detail
 
 
 def test_retirement_removes_only_known_timer_and_detaches_exec_when_no_other_rules():
