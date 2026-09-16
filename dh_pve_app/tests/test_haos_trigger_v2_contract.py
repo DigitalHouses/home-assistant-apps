@@ -67,6 +67,27 @@ def test_ui_package_snapshots_real_active_policy_reverts_cancel_and_closes_on_su
     assert "notify.mobile_app" not in text
 
 
+def test_ui_open_and_cancel_wait_for_app_owned_draft_ack_before_state_transition():
+    text = UI_PACKAGE.read_text(encoding="utf-8")
+    open_section = text.split("    dh_app_pve_ups_trigger_open:", 1)[1].split(
+        "    dh_app_pve_ups_trigger_cancel:", 1
+    )[0]
+    cancel_section = text.split("    dh_app_pve_ups_trigger_cancel:", 1)[1].split(
+        "    dh_app_pve_ups_trigger_review:", 1
+    )[0]
+
+    for section, final_option in ((open_section, "edit"), (cancel_section, "view")):
+        assert "wait_template:" in section
+        assert "draft_charge_threshold_percent" in section
+        assert "draft_runtime_reserve_seconds" in section
+        assert 'timeout: "00:00:30"' in section
+        assert "continue_on_timeout: false" in section
+        assert section.index("wait_template:") < section.index(f"option: {final_option}")
+
+    assert "delay:" not in open_section
+    assert "delay:" not in cancel_section
+
+
 def test_notification_package_uses_events_gate_and_retained_aggregates_only():
     assert NOTIFICATION_PACKAGE.exists()
     text = NOTIFICATION_PACKAGE.read_text(encoding="utf-8")
