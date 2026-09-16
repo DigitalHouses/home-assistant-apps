@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.4.0
+
 - Replace the previous heavy/adaptive collection direction with the canonical Proxmox VE 8.x file/cache-first runtime: `/proc`/`/sys` and `/etc/pve`/PVE caches are primary sources, while expensive subprocess/API paths are reserved for data that has no cheap source and are never used as permanent fallback loops.
 - Freeze collection cadence independently from MQTT presentation: FAST 10 s, UPS 10 s, SLOW 60 s, HEALTH 1 h and event-driven STATIC refresh. Legacy `ups.poll_interval_seconds` remains load-compatible but is ignored and normalized to the fixed 10-second UPS cadence.
 - Separate decision/publication windows from collection and move toward domain-local NORMAL/DETAIL MQTT publication, immediate semantic/problem transitions, retained grouped state and explicit Recorder-safe history.
@@ -19,6 +21,9 @@
 - Make UPS policy Apply a durable two-phase transaction: preserve the previous active policy, request only a fixed `dh_pve_app.service` reload, complete through SIGHUP in the main loop, promote/reread/verify the target policy, publish synchronized state, then emit `config_changed` OLD -> NEW last. No-op Apply performs no reload/revision/event; failed or interrupted transactions roll back conservatively.
 - Make Trigger Policy read-only presentation null-safe for Commissioning state where active/draft policy objects may not yet be populated.
 - Remove the obsolete `ups_commission.py` and `ups_policy_apply.py` timer writer modules and their superseded ONBATT/upssched mutation tests while preserving read-only preflight, native Low Battery checks, fixed-helper ownership validation and the systemd `/etc/nut` sandbox.
+- Add App-owned monthly city line-power statistics persisted on PVE in `line_power_statistics.json`, counting ONLINE, OFFLINE and UNKNOWN time without importing historical Home Assistant data.
+- Publish monthly line-power statistics through dedicated MQTT Discovery entities with ONLINE updates every 600 seconds, OFFLINE updates every 10 seconds and immediate state transitions.
+- Add the permanent UPS dashboard block `Городская сеть` with `Свет был`, `Света не было`, `Отключений` and `Доступность`, using App-owned monthly facts and remaining visible during an outage.
 - Keep routine CI/deploy validation non-destructive: live FSD, UPS output-off, mains-unplug and deep-discharge validation remain a separate reviewed commissioning gate.
 
 ## 0.3.0
@@ -87,7 +92,7 @@
 
 - Introduce `dh_pve_app` as a native Proxmox VE Linux agent.
 - Define the separate `DH PVE` MQTT device and `DigitalHouses/Global/dh_pve_app/<instance>` namespace.
-- Add host, CPU, memory, storage, SMART/disk-health, GPU/transcoding, and fan collectors.
+- Add host, CPU, memory, storage, disk/SMART, GPU/transcoding, and fan collectors.
 - Add autonomous VM/LXC inventory plus a shared passthrough topology cache.
 - Add VM/LXC status polling and targeted guest rescans when a guest transitions to `running`.
 - Collapse VM/LXC status polling to one Proxmox `/cluster/resources` query every 30 seconds instead of separate `qm list` and `pct list` calls every 10 seconds.
