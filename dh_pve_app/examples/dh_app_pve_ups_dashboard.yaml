@@ -105,16 +105,22 @@ sections:
           cards:
             - type: markdown
               content: >-
-                {% set charge = states('number.dh_app_pve_ups_shutdown_battery_charge_threshold') %}
-                {% set reserve = states('number.dh_app_pve_ups_shutdown_runtime_reserve') | int(0) %}
-                {% set guest = states('sensor.dh_app_pve_ups_guest_shutdown_budget') | int(0) %}
-                {% set budget = states('sensor.dh_app_pve_ups_shutdown_budget') | int(0) %}
-                {% set trigger_s = budget + reserve %}
-                **Battery threshold:** {{ charge }} %  
-                **Runtime reserve:** {{ reserve }} s  
-                **Guest shutdown budget:** {{ guest }} s  
-                **Full shutdown budget:** {{ budget }} s  
-                **Effective runtime trigger:** {{ trigger_s }} s / {{ '%02d:%02d' | format(trigger_s // 60, trigger_s % 60) }}  
+                {% set policy = 'sensor.dh_app_pve_ups_trigger_policy' %}
+                {% set charge = state_attr(policy, 'active_charge_threshold_percent') %}
+                {% set reserve = state_attr(policy, 'active_runtime_reserve_seconds') %}
+                {% set revision = state_attr(policy, 'policy_revision') %}
+                {% set guest_raw = states('sensor.dh_app_pve_ups_guest_shutdown_budget') %}
+                {% set budget_raw = states('sensor.dh_app_pve_ups_shutdown_budget') %}
+                {% set guest = guest_raw | int(0) %}
+                {% set budget = budget_raw | int(0) %}
+                {% set reserve_s = reserve | int(0) %}
+                {% set trigger_s = budget + reserve_s %}
+                **Policy:** {{ states(policy) }}{% if revision is not none %} · revision {{ revision }}{% endif %}  
+                **Battery threshold:** {{ charge if charge is not none else '—' }} %  
+                **Runtime reserve:** {{ reserve if reserve is not none else '—' }} s  
+                **Guest shutdown budget:** {{ guest if guest_raw not in ['unknown', 'unavailable', 'none', ''] else '—' }} s  
+                **Full shutdown budget:** {{ budget if budget_raw not in ['unknown', 'unavailable', 'none', ''] else '—' }} s  
+                **Effective runtime trigger:** {% if reserve is not none and budget_raw not in ['unknown', 'unavailable', 'none', ''] %}{{ trigger_s }} s / {{ '%02d:%02d' | format(trigger_s // 60, trigger_s % 60) }}{% else %}—{% endif %}  
                 **Readiness:** {{ states('sensor.dh_app_pve_ups_shutdown_readiness') | upper }}
             - type: button
               name: Config UPS trigger
@@ -133,10 +139,15 @@ sections:
           cards:
             - type: markdown
               content: >-
+                {% set policy = 'sensor.dh_app_pve_ups_trigger_policy' %}
+                {% set active_charge = state_attr(policy, 'active_charge_threshold_percent') %}
+                {% set active_reserve = state_attr(policy, 'active_runtime_reserve_seconds') %}
                 ## Configure UPS trigger
 
-                Изменения ниже меняют только **draft**. PVE/NUT policy пока не применяется.
+                **ACTIVE:** {{ active_charge if active_charge is not none else '—' }} % / {{ active_reserve if active_reserve is not none else '—' }} s  
+                Изменения ниже меняют только **DRAFT**. PVE/NUT policy пока не применяется.
             - type: entities
+              title: Draft
               entities:
                 - entity: number.dh_app_pve_ups_shutdown_battery_charge_threshold
                   name: Battery threshold
@@ -144,12 +155,13 @@ sections:
                   name: Runtime reserve
             - type: markdown
               content: >-
-                {% set budget = states('sensor.dh_app_pve_ups_shutdown_budget') | int(0) %}
+                {% set budget_raw = states('sensor.dh_app_pve_ups_shutdown_budget') %}
+                {% set budget = budget_raw | int(0) %}
                 {% set reserve = states('number.dh_app_pve_ups_shutdown_runtime_reserve') | int(0) %}
                 {% set trigger_s = budget + reserve %}
-                **Calculated**  
-                Full shutdown budget: {{ budget }} s  
-                Runtime trigger: {{ trigger_s }} s / {{ '%02d:%02d' | format(trigger_s // 60, trigger_s % 60) }}
+                **DRAFT calculation**  
+                Full shutdown budget: {{ budget if budget_raw not in ['unknown', 'unavailable', 'none', ''] else '—' }} s  
+                Runtime trigger: {% if budget_raw not in ['unknown', 'unavailable', 'none', ''] %}{{ trigger_s }} s / {{ '%02d:%02d' | format(trigger_s // 60, trigger_s % 60) }}{% else %}—{% endif %}
             - type: grid
               columns: 2
               square: false
@@ -177,17 +189,20 @@ sections:
           cards:
             - type: markdown
               content: >-
-                {% set charge = states('number.dh_app_pve_ups_shutdown_battery_charge_threshold') | int(0) %}
-                {% set reserve = states('number.dh_app_pve_ups_shutdown_runtime_reserve') | int(0) %}
-                {% set budget = states('sensor.dh_app_pve_ups_shutdown_budget') | int(0) %}
-                {% set trigger_s = budget + reserve %}
+                {% set policy = 'sensor.dh_app_pve_ups_trigger_policy' %}
+                {% set old_charge = state_attr(policy, 'active_charge_threshold_percent') %}
+                {% set old_reserve = state_attr(policy, 'active_runtime_reserve_seconds') %}
+                {% set new_charge = states('number.dh_app_pve_ups_shutdown_battery_charge_threshold') | int(0) %}
+                {% set new_reserve = states('number.dh_app_pve_ups_shutdown_runtime_reserve') | int(0) %}
+                {% set budget_raw = states('sensor.dh_app_pve_ups_shutdown_budget') %}
+                {% set budget = budget_raw | int(0) %}
+                {% set trigger_s = budget + new_reserve %}
                 ## Подтвердить UPS Trigger Policy
 
-                Будет применена конфигурация:  
-                **Battery threshold:** {{ charge }} %  
-                **Runtime reserve:** {{ reserve }} s  
-                **Full shutdown budget:** {{ budget }} s  
-                **Effective runtime trigger:** {{ trigger_s }} s / {{ '%02d:%02d' | format(trigger_s // 60, trigger_s % 60) }}
+                **OLD:** {{ old_charge if old_charge is not none else '—' }} % / {{ old_reserve if old_reserve is not none else '—' }} s  
+                **NEW:** {{ new_charge }} % / {{ new_reserve }} s  
+                **Full shutdown budget:** {{ budget if budget_raw not in ['unknown', 'unavailable', 'none', ''] else '—' }} s  
+                **NEW effective runtime trigger:** {% if budget_raw not in ['unknown', 'unavailable', 'none', ''] %}{{ trigger_s }} s / {{ '%02d:%02d' | format(trigger_s // 60, trigger_s % 60) }}{% else %}—{% endif %}
             - type: grid
               columns: 2
               square: false
