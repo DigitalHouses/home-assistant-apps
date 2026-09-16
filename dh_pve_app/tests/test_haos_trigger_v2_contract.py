@@ -89,3 +89,21 @@ def test_notification_package_uses_events_gate_and_retained_aggregates_only():
         "time_pattern",
     ):
         assert forbidden not in text
+
+
+def test_live_notification_presentation_is_localized_from_structured_event_fields():
+    text = NOTIFICATION_PACKAGE.read_text(encoding="utf-8")
+    for token in (
+        "trigger.to_state.attributes.metric",
+        "trigger.to_state.attributes.value",
+        "trigger.to_state.attributes.average",
+        "trigger.to_state.attributes.threshold",
+        "Температура",
+        "Занято",
+        "Троттлинг",
+        "SMART",
+        "обнаружена проблема",
+        "параметры проблемы изменились",
+        "состояние нормализовалось",
+    ):
+        assert token in text
