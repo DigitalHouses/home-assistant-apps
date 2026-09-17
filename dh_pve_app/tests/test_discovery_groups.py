@@ -110,10 +110,14 @@ def _inventory():
     }
 
 
-def _components():
+def _payload():
     return build_shutdown_aware_pve_discovery_payload(
         _config(), _identity(), version="0.2.0", inventory=_inventory()
-    )["components"]
+    )
+
+
+def _components():
+    return _payload()["components"]
 
 
 def test_pve_discovery_routes_entities_to_smallest_state_group():
@@ -170,6 +174,26 @@ def test_pve_discovery_exposes_presentation_diagnostics():
     assert "last_publication.timestamp" in c["last_publication"]["value_template"]
 
     assert c["last_refresh"]["state_topic"] == diagnostics
+
+
+def test_pve_discovery_exposes_app_version_from_same_release_value():
+    topics = build_topics(_config().mqtt, _identity())
+    payload = _payload()
+    c = payload["components"]
+    diagnostics = state_group_topic(topics, "diagnostics")
+
+    assert [key for key in c if key == "app_version"] == ["app_version"]
+    assert c["app_version"]["platform"] == "sensor"
+    assert c["app_version"]["default_entity_id"] == "sensor.dh_app_pve_app_version"
+    assert c["app_version"]["state_topic"] == diagnostics
+    assert c["app_version"]["value_template"] == (
+        "{{ value_json.app_version | default('unknown') }}"
+    )
+    assert c["app_version"]["entity_category"] == "diagnostic"
+    assert c["app_version"]["icon"] == "mdi:tag-outline"
+
+    assert payload["device"]["sw_version"] == "0.2.0"
+    assert payload["origin"]["sw_version"] == "0.2.0"
 
 
 def test_continuous_sensor_attributes_do_not_duplicate_volatile_values():
