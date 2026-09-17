@@ -25,6 +25,10 @@ dh_app_pve_notification_package:
               - problem_started
               - problem_updated
               - problem_recovered
+              - ups_status_changed
+              - battery_discharge_level_crossed
+              - battery_fully_charged
+              - shutdown_committed
       conditions:
         - condition: state
           entity_id: binary_sensor.bs_global_system_boot_completed
@@ -34,48 +38,141 @@ dh_app_pve_notification_package:
           event_data:
             source: dh_app_pve
             source_entity: "{{ trigger.entity_id }}"
+            schema_version: "{{ trigger.to_state.attributes.schema_version | int(1) }}"
             kind: "{{ trigger.to_state.attributes.event_type }}"
-            category: "{{ trigger.to_state.attributes.category | default('diagnostic', true) }}"
-            severity: "{{ trigger.to_state.attributes.severity | default('info', true) }}"
+            category: >-
+              {% set category = trigger.to_state.attributes.category | default('', true) %}
+              {{ category if category else ('ups' if trigger.entity_id == 'event.dh_app_pve_ups_diagnostic' else 'diagnostic') }}
+            severity: >-
+              {% set severity = trigger.to_state.attributes.severity | default('', true) %}
+              {% set kind = trigger.to_state.attributes.event_type %}
+              {% if severity %}
+                {{ severity }}
+              {% elif kind == 'shutdown_committed' %}
+                critical
+              {% elif kind in ['ups_status_changed', 'battery_discharge_level_crossed'] %}
+                warning
+              {% else %}
+                info
+              {% endif %}
             object_id: "{{ trigger.to_state.attributes.object_id | default('', true) }}"
             object_name: "{{ trigger.to_state.attributes.object_name | default('', true) }}"
             metric: "{{ trigger.to_state.attributes.metric | default('', true) }}"
-            value: "{{ trigger.to_state.attributes.value | default(none) }}"
-            average: "{{ trigger.to_state.attributes.average | default(none) }}"
-            threshold: "{{ trigger.to_state.attributes.threshold | default(none) }}"
-            summary: "{{ trigger.to_state.attributes.summary | default('', true) }}"
-            details: "{{ trigger.to_state.attributes.details | default('', true) }}"
+            value: >-
+              {% set schema = trigger.to_state.attributes.schema_version | int(1) %}
+              {% if schema == 1 %}
+                {{ trigger.to_state.attributes.value | default(none) }}
+              {% else %}
+                {% set current = trigger.to_state.attributes.current | default({}, true) %}
+                {{ current.get('value') }}
+              {% endif %}
+            average: >-
+              {% set schema = trigger.to_state.attributes.schema_version | int(1) %}
+              {% if schema == 1 %}
+                {{ trigger.to_state.attributes.average | default(none) }}
+              {% else %}
+                {% set current = trigger.to_state.attributes.current | default({}, true) %}
+                {{ current.get('average') }}
+              {% endif %}
+            threshold: >-
+              {% set schema = trigger.to_state.attributes.schema_version | int(1) %}
+              {% if schema == 1 %}
+                {{ trigger.to_state.attributes.threshold | default(none) }}
+              {% else %}
+                {% set current = trigger.to_state.attributes.current | default({}, true) %}
+                {{ current.get('threshold') }}
+              {% endif %}
+            summary: >-
+              {% set schema = trigger.to_state.attributes.schema_version | int(1) %}
+              {{ trigger.to_state.attributes.summary | default('', true) if schema == 1 else '' }}
+            details: >-
+              {% set schema = trigger.to_state.attributes.schema_version | int(1) %}
+              {{ trigger.to_state.attributes.details | default('', true) if schema == 1 else '' }}
+            previous: "{{ trigger.to_state.attributes.previous | default(none) }}"
+            current: "{{ trigger.to_state.attributes.current | default(none) }}"
+            previous_status: "{{ trigger.to_state.attributes.previous_status | default([], true) }}"
+            current_status: "{{ trigger.to_state.attributes.current_status | default([], true) }}"
+            crossed_thresholds: "{{ trigger.to_state.attributes.crossed_thresholds | default([], true) }}"
+            current_charge_percent: "{{ trigger.to_state.attributes.current_charge_percent | default(none) }}"
+            observed_at: "{{ trigger.to_state.attributes.observed_at | default('', true) }}"
             active_problem_count: "{{ trigger.to_state.attributes.active_problem_count | int(0) }}"
             title: >-
               {% set kind = trigger.to_state.attributes.event_type %}
               {% set is_ups = trigger.entity_id == 'event.dh_app_pve_ups_diagnostic' %}
               {% set name = 'UPS' if is_ups else (trigger.to_state.attributes.object_name | default('Proxmox', true)) %}
+              {% set previous_status = trigger.to_state.attributes.previous_status | default([], true) %}
+              {% set current_status = trigger.to_state.attributes.current_status | default([], true) %}
+              {% set charge = trigger.to_state.attributes.current_charge_percent | default(none) %}
               {% if kind == 'problem_started' %}
                 {{ '🔋' if is_ups else '🖥️' }}⚠️ {{ name }}: problem detected
               {% elif kind == 'problem_updated' %}
                 {{ '🔋' if is_ups else '🖥️' }}⚠️ {{ name }}: problem parameters changed
-              {% else %}
+              {% elif kind == 'problem_recovered' %}
                 {{ '🔋' if is_ups else '🖥️' }}✅ {{ name }}: state returned to normal
+              {% elif kind == 'ups_status_changed' and 'on_battery' in current_status and 'on_battery' not in previous_status %}
+                🔋⚠️ UPS: utility power unavailable
+              {% elif kind == 'ups_status_changed' and 'on_battery' in previous_status and 'online' in current_status %}
+                🔋✅ UPS: utility power restored
+              {% elif kind == 'ups_status_changed' %}
+                🔋ℹ️ UPS: status changed
+              {% elif kind == 'battery_discharge_level_crossed' %}
+                🔋⚠️ UPS: battery charge {{ charge if charge is not none else '—' }}%
+              {% elif kind == 'battery_fully_charged' %}
+                🔋✅ UPS: battery charged
+              {% else %}
+                🔋🛑 UPS: emergency shutdown started
               {% endif %}
             message: >-
+              {% set schema = trigger.to_state.attributes.schema_version | int(1) %}
+              {% set kind = trigger.to_state.attributes.event_type %}
               {% set is_ups = trigger.entity_id == 'event.dh_app_pve_ups_diagnostic' %}
               {% set metric = trigger.to_state.attributes.metric | default('', true) %}
-              {% set value = trigger.to_state.attributes.value | default(none) %}
-              {% set average = trigger.to_state.attributes.average | default(none) %}
-              {% set threshold = trigger.to_state.attributes.threshold | default(none) %}
-              {% set summary = trigger.to_state.attributes.summary | default('', true) %}
-              {% if is_ups %}
-                {{ summary }}
-              {% elif metric == 'temperature_c' %}
-                Temperature: {{ value if value is not none else '—' }} °C{% if average is not none %} · average {{ average }} °C{% endif %}{% if threshold is not none %} · threshold {{ threshold }} °C{% endif %}
-              {% elif metric == 'percent_used' %}
-                Used: {{ value if value is not none else '—' }}%{% if average is not none %} · average {{ average }}%{% endif %}{% if threshold is not none %} · threshold {{ threshold }}%{% endif %}
-              {% elif metric == 'throttling' %}
-                Throttling: {{ 'active' if value else 'normal' }}
-              {% elif metric == 'smart_passed' %}
-                SMART: {{ 'normal' if value else 'error' }}
+              {% if schema == 1 %}
+                {% set value = trigger.to_state.attributes.value | default(none) %}
+                {% set average = trigger.to_state.attributes.average | default(none) %}
+                {% set threshold = trigger.to_state.attributes.threshold | default(none) %}
+                {% set summary = trigger.to_state.attributes.summary | default('', true) %}
+                {% if is_ups %}
+                  {{ summary }}
+                {% elif metric == 'temperature_c' %}
+                  Temperature: {{ value if value is not none else '—' }} °C{% if average is not none %} · average {{ average }} °C{% endif %}{% if threshold is not none %} · threshold {{ threshold }} °C{% endif %}
+                {% elif metric == 'percent_used' %}
+                  Used: {{ value if value is not none else '—' }}%{% if average is not none %} · average {{ average }}%{% endif %}{% if threshold is not none %} · threshold {{ threshold }}%{% endif %}
+                {% elif metric == 'throttling' %}
+                  Throttling: {{ 'active' if value else 'normal' }}
+                {% elif metric == 'smart_passed' %}
+                  SMART: {{ 'normal' if value else 'error' }}
+                {% else %}
+                  {{ summary }}
+                {% endif %}
+              {% elif kind in ['problem_started', 'problem_updated', 'problem_recovered'] %}
+                {% set current = trigger.to_state.attributes.current | default({}, true) %}
+                {% set value = current.get('value') %}
+                {% set average = current.get('average') %}
+                {% set threshold = current.get('threshold') %}
+                {% if metric == 'temperature_c' %}
+                  Temperature: {{ value if value is not none else '—' }} °C{% if average is not none %} · average {{ average }} °C{% endif %}{% if threshold is not none %} · threshold {{ threshold }} °C{% endif %}
+                {% elif metric == 'percent_used' %}
+                  Used: {{ value if value is not none else '—' }}%{% if average is not none %} · average {{ average }}%{% endif %}{% if threshold is not none %} · threshold {{ threshold }}%{% endif %}
+                {% elif metric == 'throttling' %}
+                  Throttling: {{ 'active' if value else 'normal' }}
+                {% elif metric == 'smart_passed' %}
+                  SMART: {{ 'normal' if value else 'error' }}
+                {% else %}
+                  {{ trigger.to_state.attributes.object_name | default(trigger.to_state.attributes.object_id, true) }} · {{ metric }}: {{ value if value is not none else '—' }}
+                {% endif %}
+              {% elif kind == 'ups_status_changed' %}
+                {% set previous_status = trigger.to_state.attributes.previous_status | default([], true) %}
+                {% set current_status = trigger.to_state.attributes.current_status | default([], true) %}
+                Status: {{ previous_status | join(', ') if previous_status else '—' }} → {{ current_status | join(', ') if current_status else '—' }}.
+              {% elif kind == 'battery_discharge_level_crossed' %}
+                {% set crossed = trigger.to_state.attributes.crossed_thresholds | default([], true) %}
+                Crossed discharge level(s): {{ crossed | join(', ') }}%.
+              {% elif kind == 'battery_fully_charged' %}
+                {% set charge = trigger.to_state.attributes.current_charge_percent | default(none) %}
+                Charge: {{ (charge ~ '%') if charge is not none else '—' }} · charger: {{ trigger.to_state.attributes.current_charger_status | default('unknown', true) }}.
               {% else %}
-                {{ summary }}
+                Reason: {{ trigger.to_state.attributes.reason | default('unknown', true) }} · charge {{ trigger.to_state.attributes.battery_charge_percent | default('—', true) }}% · runtime {{ trigger.to_state.attributes.battery_runtime_seconds | default('—', true) }} s · shutdown budget {{ trigger.to_state.attributes.shutdown_budget_seconds | default('—', true) }} s · reserve {{ trigger.to_state.attributes.runtime_reserve_seconds | default('—', true) }} s.
               {% endif %}
             startup_reconciliation: false
 
@@ -99,11 +196,13 @@ dh_app_pve_notification_package:
           event_data:
             source: dh_app_pve
             source_entity: event.dh_app_pve_ups_diagnostic
+            schema_version: "{{ trigger.to_state.attributes.schema_version | int(1) }}"
             kind: config_changed
             category: policy
             severity: info
             title: "🔋⚙️ UPS Trigger configuration changed"
             message: >-
+              {% set schema = trigger.to_state.attributes.schema_version | int(1) %}
               {% set old = trigger.to_state.attributes.old_values | default({}, true) %}
               {% set new = trigger.to_state.attributes.new_values | default({}, true) %}
               {% set old_charge = old.get('shutdown_battery_charge_threshold_percent') %}
@@ -111,7 +210,8 @@ dh_app_pve_notification_package:
               {% set new_charge = new.get('shutdown_battery_charge_threshold_percent') %}
               {% set new_reserve = new.get('runtime_reserve_seconds') %}
               Before: charge {{ (old_charge ~ '%') if old_charge is not none else '—' }}, reserve {{ (old_reserve ~ ' s') if old_reserve is not none else '—' }}.
-              After: charge {{ (new_charge ~ '%') if new_charge is not none else '—' }}, reserve {{ (new_reserve ~ ' s') if new_reserve is not none else '—' }}.
+              After: charge {{ (new_charge ~ '%') if new_charge is not none else '—' }}, reserve {{ (new_reserve ~ ' s') if new_reserve is not none else '—' }}.{% if schema >= 2 %}
+              Revision: {{ trigger.to_state.attributes.previous_revision | default('—', true) }} → {{ trigger.to_state.attributes.current_revision | default('—', true) }}.{% endif %}
             old_values: "{{ trigger.to_state.attributes.old_values | default({}, true) }}"
             new_values: "{{ trigger.to_state.attributes.new_values | default({}, true) }}"
             startup_reconciliation: false
