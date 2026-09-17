@@ -8,6 +8,7 @@ CONFIG_DIR="/etc/${APP_NAME}"
 CONFIG_FILE="${CONFIG_DIR}/${APP_NAME}.conf"
 STATE_DIR="/var/lib/${APP_NAME}"
 UNIT_FILE="/etc/systemd/system/${SERVICE_NAME}"
+ROOT_GUIDE="/root/dh_app_pve.txt"
 
 purge=0
 if [[ "$#" -gt 1 ]]; then
@@ -92,6 +93,7 @@ else
 fi
 
 rm -f -- "${UNIT_FILE}"
+rm -f -- "${ROOT_GUIDE}"
 rm -rf -- "${APP_DIR}"
 
 if [[ "${purge}" -eq 1 ]]; then
