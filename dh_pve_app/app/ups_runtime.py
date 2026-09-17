@@ -267,26 +267,6 @@ class UpsRuntime:
             ),
         }
 
-    @staticmethod
-    def _human_status(snapshot: UpsSnapshot) -> str:
-        if snapshot.overload:
-            return "Overload"
-        if snapshot.replace_battery:
-            return "Replace battery"
-        if snapshot.low_battery:
-            return "Low battery"
-        if snapshot.bypass:
-            return "Bypass"
-        if snapshot.on_battery:
-            return "On battery"
-        if snapshot.charging:
-            return "Charging"
-        if snapshot.discharging:
-            return "Discharging"
-        if snapshot.line_power:
-            return "Online"
-        return "Unknown"
-
     def _persisted_test_schedule(self) -> dict[str, object]:
         return {
             "quick": dict(self.test_schedule["quick"]),
@@ -344,6 +324,9 @@ class UpsRuntime:
     def _snapshot_data(self, snapshot: UpsSnapshot) -> dict[str, object]:
         data = dataclasses.asdict(snapshot)
         data["status_tokens"] = list(snapshot.status_tokens)
+        data["normalized_status"] = list(snapshot.normalized_status)
+        data["status_set"] = list(snapshot.normalized_status)
+        data["raw_status_tokens"] = list(snapshot.status_tokens)
         if snapshot.runtime_seconds is not None:
             data["battery_runtime_minutes"] = round(snapshot.runtime_seconds / 60.0, 1)
         return data
@@ -466,7 +449,7 @@ class UpsRuntime:
             "available": True,
             "collected_at": collected_at,
             "last_refresh": self.last_refresh,
-            "status": self._human_status(snapshot),
+            "status": snapshot.primary_status,
             "error": None,
             "data": data,
         }
@@ -481,13 +464,13 @@ class UpsRuntime:
             "available": False,
             "collected_at": collected_at,
             "last_refresh": self.last_refresh,
-            "status": "Unavailable",
+            "status": "unknown",
             "error": error,
             "data": data,
         }
         payload.update(data)
         payload["available"] = False
-        payload["status"] = "Unavailable"
+        payload["status"] = "unknown"
         payload["error"] = error
         payload.update(self._problem_fields(None, nut_available=False))
         payload.update(self._auxiliary_fields())
