@@ -92,8 +92,19 @@ dh_app_pve_notification_package:
             current: "{{ trigger.to_state.attributes.current | default(none) }}"
             previous_status: "{{ trigger.to_state.attributes.previous_status | default([], true) }}"
             current_status: "{{ trigger.to_state.attributes.current_status | default([], true) }}"
+            previous_raw_status: "{{ trigger.to_state.attributes.previous_raw_status | default([], true) }}"
+            current_raw_status: "{{ trigger.to_state.attributes.current_raw_status | default([], true) }}"
             crossed_thresholds: "{{ trigger.to_state.attributes.crossed_thresholds | default([], true) }}"
+            previous_charge_percent: "{{ trigger.to_state.attributes.previous_charge_percent | default(none) }}"
             current_charge_percent: "{{ trigger.to_state.attributes.current_charge_percent | default(none) }}"
+            previous_charger_status: "{{ trigger.to_state.attributes.previous_charger_status | default('', true) }}"
+            current_charger_status: "{{ trigger.to_state.attributes.current_charger_status | default('', true) }}"
+            reason: "{{ trigger.to_state.attributes.reason | default('', true) }}"
+            battery_charge_percent: "{{ trigger.to_state.attributes.battery_charge_percent | default(none) }}"
+            battery_runtime_seconds: "{{ trigger.to_state.attributes.battery_runtime_seconds | default(none) }}"
+            shutdown_budget_seconds: "{{ trigger.to_state.attributes.shutdown_budget_seconds | default(none) }}"
+            runtime_reserve_seconds: "{{ trigger.to_state.attributes.runtime_reserve_seconds | default(none) }}"
+            runtime_guard_threshold_seconds: "{{ trigger.to_state.attributes.runtime_guard_threshold_seconds | default(none) }}"
             observed_at: "{{ trigger.to_state.attributes.observed_at | default('', true) }}"
             active_problem_count: "{{ trigger.to_state.attributes.active_problem_count | int(0) }}"
             title: >-
@@ -109,18 +120,44 @@ dh_app_pve_notification_package:
                 {{ '🔋' if is_ups else '🖥️' }}⚠️ {{ name }}: параметры проблемы изменились
               {% elif kind == 'problem_recovered' %}
                 {{ '🔋' if is_ups else '🖥️' }}✅ {{ name }}: состояние нормализовалось
+              {% elif kind == 'ups_status_changed' and 'overload' in current_status and 'overload' not in previous_status %}
+                🔋⚠️ UPS: перегрузка
+              {% elif kind == 'ups_status_changed' and 'overload' in previous_status and 'overload' not in current_status %}
+                🔋✅ UPS: перегрузка устранена
+              {% elif kind == 'ups_status_changed' and 'low_battery' in current_status and 'low_battery' not in previous_status %}
+                🔋⚠️ UPS: низкий заряд батареи
+              {% elif kind == 'ups_status_changed' and 'low_battery' in previous_status and 'low_battery' not in current_status %}
+                🔋✅ UPS: предупреждение о низком заряде снято
+              {% elif kind == 'ups_status_changed' and 'replace_battery' in current_status and 'replace_battery' not in previous_status %}
+                🔋⚠️ UPS: требуется замена батареи
+              {% elif kind == 'ups_status_changed' and 'replace_battery' in previous_status and 'replace_battery' not in current_status %}
+                🔋✅ UPS: предупреждение о замене батареи снято
+              {% elif kind == 'ups_status_changed' and 'bypass' in current_status and 'bypass' not in previous_status %}
+                🔋⚠️ UPS: включён bypass
+              {% elif kind == 'ups_status_changed' and 'bypass' in previous_status and 'bypass' not in current_status %}
+                🔋✅ UPS: bypass отключён
               {% elif kind == 'ups_status_changed' and 'on_battery' in current_status and 'on_battery' not in previous_status %}
                 🔋⚠️ UPS: городское питание отсутствует
-              {% elif kind == 'ups_status_changed' and 'on_battery' in previous_status and 'online' in current_status %}
+              {% elif kind == 'ups_status_changed' and 'on_battery' in previous_status and 'on_battery' not in current_status %}
                 🔋✅ UPS: городское питание восстановлено
+              {% elif kind == 'ups_status_changed' and 'boost' in current_status and 'boost' not in previous_status %}
+                🔋⚠️ UPS: включён AVR Boost
+              {% elif kind == 'ups_status_changed' and 'boost' in previous_status and 'boost' not in current_status %}
+                🔋✅ UPS: AVR Boost отключён
+              {% elif kind == 'ups_status_changed' and 'trim' in current_status and 'trim' not in previous_status %}
+                🔋⚠️ UPS: включён AVR Trim
+              {% elif kind == 'ups_status_changed' and 'trim' in previous_status and 'trim' not in current_status %}
+                🔋✅ UPS: AVR Trim отключён
               {% elif kind == 'ups_status_changed' %}
                 🔋ℹ️ UPS: состояние изменилось
               {% elif kind == 'battery_discharge_level_crossed' %}
                 🔋⚠️ UPS: заряд батареи {{ charge if charge is not none else '—' }}%
               {% elif kind == 'battery_fully_charged' %}
                 🔋✅ UPS: батарея заряжена
-              {% else %}
+              {% elif kind == 'shutdown_committed' %}
                 🔋🛑 UPS: начато аварийное выключение
+              {% else %}
+                🔋ℹ️ UPS: событие
               {% endif %}
             message: >-
               {% set schema = trigger.to_state.attributes.schema_version | int(1) %}
@@ -167,12 +204,17 @@ dh_app_pve_notification_package:
                 Состояние: {{ previous_status | join(', ') if previous_status else '—' }} → {{ current_status | join(', ') if current_status else '—' }}.
               {% elif kind == 'battery_discharge_level_crossed' %}
                 {% set crossed = trigger.to_state.attributes.crossed_thresholds | default([], true) %}
-                Пересечены уровни разряда: {{ crossed | join(', ') }}%.
+                {% set previous_charge = trigger.to_state.attributes.previous_charge_percent | default(none) %}
+                {% set current_charge = trigger.to_state.attributes.current_charge_percent | default(none) %}
+                Заряд: {{ (previous_charge ~ '%') if previous_charge is not none else '—' }} → {{ (current_charge ~ '%') if current_charge is not none else '—' }} · пересечены уровни: {{ crossed | join(', ') }}%.
               {% elif kind == 'battery_fully_charged' %}
-                {% set charge = trigger.to_state.attributes.current_charge_percent | default(none) %}
-                Заряд: {{ (charge ~ '%') if charge is not none else '—' }} · режим зарядки: {{ trigger.to_state.attributes.current_charger_status | default('unknown', true) }}.
+                {% set previous_charge = trigger.to_state.attributes.previous_charge_percent | default(none) %}
+                {% set current_charge = trigger.to_state.attributes.current_charge_percent | default(none) %}
+                Заряд: {{ (previous_charge ~ '%') if previous_charge is not none else '—' }} → {{ (current_charge ~ '%') if current_charge is not none else '—' }} · режим зарядки: {{ trigger.to_state.attributes.previous_charger_status | default('unknown', true) }} → {{ trigger.to_state.attributes.current_charger_status | default('unknown', true) }}.
+              {% elif kind == 'shutdown_committed' %}
+                Причина: {{ trigger.to_state.attributes.reason | default('unknown', true) }} · заряд {{ trigger.to_state.attributes.battery_charge_percent | default('—', true) }}% · runtime {{ trigger.to_state.attributes.battery_runtime_seconds | default('—', true) }} с · бюджет выключения {{ trigger.to_state.attributes.shutdown_budget_seconds | default('—', true) }} с · резерв {{ trigger.to_state.attributes.runtime_reserve_seconds | default('—', true) }} с · порог runtime {{ trigger.to_state.attributes.runtime_guard_threshold_seconds | default('—', true) }} с.
               {% else %}
-                Причина: {{ trigger.to_state.attributes.reason | default('unknown', true) }} · заряд {{ trigger.to_state.attributes.battery_charge_percent | default('—', true) }}% · runtime {{ trigger.to_state.attributes.battery_runtime_seconds | default('—', true) }} с · бюджет выключения {{ trigger.to_state.attributes.shutdown_budget_seconds | default('—', true) }} с · резерв {{ trigger.to_state.attributes.runtime_reserve_seconds | default('—', true) }} с.
+                Машинное событие: {{ kind }}.
               {% endif %}
             startup_reconciliation: false
 
