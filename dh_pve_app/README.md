@@ -238,6 +238,25 @@ bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistan
 
 After deployment verify the exact installed version/ref, service state, MQTT availability, canonical charger-status entity, expanded UPS Event metadata and read-only preflight before any UPS shutdown commissioning.
 
+## Installed operational guide
+
+After a successful install/update, the installer writes a short operational
+reference to:
+
+```text
+/root/dh_app_pve.txt
+```
+
+The canonical guide is stored in the repository as
+`dh_pve_app/dh_app_pve.txt`. The installed copy is regenerated on every
+successful update and is prefixed with the actual installed `version`,
+`source` and `commit`.
+
+The guide contains the normal install/update commands, service/log/config
+commands, read-only UPS preflight, important paths and supported uninstall
+commands. Supported uninstall removes the root guide after successful MQTT
+cleanup so a stale reference is not left behind.
+
 ## Supported uninstall
 
 The installer deploys an executable supported uninstaller at:
