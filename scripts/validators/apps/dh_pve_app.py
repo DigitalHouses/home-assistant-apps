@@ -5,7 +5,7 @@ from typing import Any
 
 from validators.common import fail, require_files
 
-EXPECTED_VERSION = "0.5.0"
+EXPECTED_VERSION = "0.5.1"
 EXPECTED_TOPIC_PREFIX = "DigitalHouses/Global/dh_pve_app"
 EXPECTED_DEVICE_NAME = "DH PVE"
 EXPECTED_REFRESH_ENTITY = "button.dh_app_pve_refresh"
@@ -52,6 +52,7 @@ def validate_dh_pve_app(
             app / "app/shutdown_integration.py",
             app / "app/shutdown_discovery.py",
             app / "app/mqtt_bridge.py",
+            app / "app/uninstall_cleanup.py",
             app / "app/main.py",
             app / "examples/dh_pve_app.conf.example",
             app / "examples/dh_app_pve_dashboard.yaml",
@@ -59,6 +60,7 @@ def validate_dh_pve_app(
             app / "examples/dh_app_pve_shutdown_readiness_card.yaml",
             app / "examples/packages/dh_app_pve_package.yaml",
             app / "systemd/dh_pve_app.service",
+            app / "uninstall.sh",
         ],
     )
 
@@ -128,6 +130,8 @@ def validate_dh_pve_app(
             '"problem_started"',
             '"problem_recovered"',
             '"problem_updated"',
+            '"default_entity_id": "sensor.dh_app_pve_app_version"',
+            "{{ value_json.app_version | default('unknown') }}",
         ),
         "canonical ready-state Discovery",
     )
@@ -424,6 +428,9 @@ def validate_dh_pve_app(
             'static_collectors=("topology", "host")',
             'slow_tasks=("guests", "storage", "gpu", "disk_temperature")',
             "read_pve_version(",
+            "app_version=version",
+            "--uninstall-mqtt-cleanup",
+            "cleanup_mqtt(config, identity)",
         ),
         "runtime",
     )
@@ -461,6 +468,7 @@ def validate_dh_pve_app(
         'if [[ ! -f "${CONFIG_FILE}" ]]; then',
         "nano /etc/dh_pve_app/dh_pve_app.conf",
         "--check-config",
+        'chmod 0755 "${APP_DIR}/uninstall.sh"',
     ):
         if expected not in installer:
             fail(f"DH PVE installer contract changed: {expected}")
@@ -471,6 +479,55 @@ def validate_dh_pve_app(
     ):
         if forbidden in installer:
             fail(f"DH PVE Phase 1 installer must not touch legacy agent: {forbidden}")
+
+    cleanup_source = (app / "app/uninstall_cleanup.py").read_text(encoding="utf-8")
+    for expected in (
+        "build_topics(config.mqtt, identity)",
+        "build_ups_topics(config.mqtt, identity)",
+        '(topics.availability, "offline")',
+        '(ups_topics.availability, "offline")',
+        '(topics.discovery, "")',
+        '(ups_topics.discovery, "")',
+        "topics.legacy_discoveries",
+        "ups_topics.legacy_discoveries",
+        "qos=1",
+        "retain=True",
+    ):
+        if expected not in cleanup_source:
+            fail(f"DH PVE uninstall MQTT cleanup contract changed: {expected}")
+
+    uninstaller = (app / "uninstall.sh").read_text(encoding="utf-8")
+    for expected in (
+        'CONFIG_DIR="/etc/${APP_NAME}"',
+        'STATE_DIR="/var/lib/${APP_NAME}"',
+        '"--purge"',
+        'systemctl stop "${SERVICE_NAME}"',
+        '"--uninstall-mqtt-cleanup"',
+        'systemctl start "${SERVICE_NAME}"',
+        'rm -rf -- "${APP_DIR}"',
+        'rm -rf -- "${CONFIG_DIR}" "${STATE_DIR}"',
+    ):
+        if expected not in uninstaller:
+            fail(f"DH PVE uninstaller contract changed: {expected}")
+
+    uninstaller_lower = uninstaller.lower()
+    for forbidden in (
+        "/etc/nut",
+        "upsmon -c fsd",
+        "upscmd",
+        "load.off",
+        "load.on",
+        "apt-get remove",
+        "apt remove",
+        "apt purge",
+        "haos",
+        "mosquitto",
+    ):
+        if forbidden in uninstaller_lower:
+            fail(f"DH PVE uninstaller crosses ownership/safety boundary: {forbidden}")
+
+    if "sensor.dh_app_pve_app_version" in package:
+        fail("DH PVE App version sensor must not be added to Recorder whitelist")
 
     app_source = "\n".join(
         path.read_text(encoding="utf-8")
