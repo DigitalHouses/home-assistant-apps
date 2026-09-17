@@ -25,6 +25,7 @@ _STATUS = {
     "bypass",
     "charging",
     "discharging",
+    "battery_charger_status",
 }
 
 _CONFIG = {
@@ -362,6 +363,74 @@ def _problem_components(topics) -> dict[str, dict[str, object]]:
     return components
 
 
+def _apply_canonical_status_components(
+    components: dict[str, object],
+    topics,
+) -> None:
+    status_topic = ups_state_group_topic(topics, "status")
+
+    status = components.get("status")
+    if isinstance(status, dict):
+        status["value_template"] = "{{ value_json.status | default('unknown') }}"
+        status["json_attributes_topic"] = status_topic
+        status["json_attributes_template"] = (
+            "{{ {'raw_status': value_json.status_raw | default(''), "
+            "'raw_status_tokens': value_json.raw_status_tokens | default([]), "
+            "'status_set': value_json.status_set | default([])} | tojson }}"
+        )
+
+    base_availability = _availability(topics) + [
+        {
+            "topic": status_topic,
+            "value_template": (
+                "{{ 'online' if value_json.available | default(false) else 'offline' }}"
+            ),
+            "payload_available": "online",
+            "payload_not_available": "offline",
+        }
+    ]
+    charger_known = {
+        "topic": status_topic,
+        "value_template": (
+            "{{ 'online' if value_json.battery_charger_status | default('unknown') "
+            "!= 'unknown' else 'offline' }}"
+        ),
+        "payload_available": "online",
+        "payload_not_available": "offline",
+    }
+
+    components["battery_charger_status"] = {
+        "platform": "sensor",
+        "name": "Battery charger status",
+        "unique_id": f"{topics.device_id}_battery_charger_status",
+        "default_entity_id": "sensor.dh_app_pve_ups_battery_charger_status",
+        "state_topic": status_topic,
+        "value_template": (
+            "{{ value_json.battery_charger_status | default('unknown') }}"
+        ),
+        "availability": base_availability,
+        "availability_mode": "all",
+        "entity_category": "diagnostic",
+        "icon": "mdi:battery-sync-outline",
+    }
+
+    for key, active_status in (
+        ("charging", "charging"),
+        ("discharging", "discharging"),
+    ):
+        component = components.get(key)
+        if not isinstance(component, dict):
+            continue
+        component["state_topic"] = status_topic
+        component["value_template"] = (
+            "{{ 'ON' if value_json.battery_charger_status | default('unknown') == '"
+            + active_status
+            + "' else 'OFF' }}"
+        )
+        component["availability"] = base_availability + [charger_known]
+        component["availability_mode"] = "all"
+
+
 def route_ups_discovery_groups(payload: dict[str, object], topics) -> dict[str, object]:
     """Route UPS Discovery to canonical retained presentation groups."""
     raw_components = payload.get("components")
@@ -402,6 +471,8 @@ def route_ups_discovery_groups(payload: dict[str, object], topics) -> dict[str, 
             component["default_entity_id"] = _canonicalize_entity_id(
                 component.get("default_entity_id")
             )
+
+    _apply_canonical_status_components(raw_components, topics)
 
     # App-owned problem state is a separate retained contract and intentionally
     # replaces the aggregate that used to be derived from the monolithic UPS
