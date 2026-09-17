@@ -227,7 +227,7 @@ Preflight checks the selected UPS, NUT services/PRIMARY path, native Low Battery
 
 The installer deploys the App code, fixed helper and systemd unit. It preserves existing configuration/state where appropriate and does not silently execute destructive UPS commissioning.
 
-For an upgrade to 0.5.0, update the HA notification package first, reload/restart Home Assistant and verify there are no package/template errors. Only then deploy the reviewed App SHA.
+If upgrading from a release older than 0.5.0, complete the 0.5.0 Event-contract migration first: update the HA notification package, reload/restart Home Assistant and verify there are no package/template errors before deploying the reviewed App SHA.
 
 For a reviewed ref/commit:
 
@@ -246,7 +246,7 @@ The installer deploys an executable supported uninstaller at:
 /opt/digitalhouses/dh_pve_app/uninstall.sh
 ```
 
-A normal uninstall stops and removes the App runtime/service only after successful MQTT cleanup. Before local removal it publishes canonical PVE and UPS availability as retained `offline`, then removes canonical and legacy PVE/UPS MQTT Discovery through retained tombstones. It preserves:
+A normal uninstall records the service state and stops the service gracefully, then runs MQTT cleanup while the installed Python environment and source are still present. Only after cleanup succeeds does it disable/remove the unit and App runtime. The cleanup publishes canonical PVE and UPS availability as retained `offline`, then removes canonical and legacy PVE/UPS MQTT Discovery through retained tombstones. It preserves:
 
 - `/etc/dh_pve_app/`;
 - `/var/lib/dh_pve_app/`.
