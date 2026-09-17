@@ -113,7 +113,6 @@ class AdaptiveUpsRuntime(UpsRuntime):
         aggregate = self.problem_engine.aggregate()
         return {
             "severity": aggregate.severity,
-            "summary": aggregate.summary,
             "active": list(aggregate.active),
         }
 
@@ -176,6 +175,7 @@ class AdaptiveUpsRuntime(UpsRuntime):
             event = DiagnosticEvent.from_transition(
                 transition,
                 active_problem_count=aggregate.count,
+                observed_at=self.now_iso(),
             )
             if not self.bridge.publish_ups_diagnostic_event(event.as_payload()):
                 return False
