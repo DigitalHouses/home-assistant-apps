@@ -502,7 +502,7 @@ def validate_dh_pve_app(
         'STATE_DIR="/var/lib/${APP_NAME}"',
         '"--purge"',
         'systemctl stop "${SERVICE_NAME}"',
-        '"--uninstall-mqtt-cleanup"',
+        "--uninstall-mqtt-cleanup",
         'systemctl start "${SERVICE_NAME}"',
         'rm -rf -- "${APP_DIR}"',
         'rm -rf -- "${CONFIG_DIR}" "${STATE_DIR}"',
