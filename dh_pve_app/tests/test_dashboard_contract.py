@@ -31,6 +31,18 @@ def test_canonical_pve_dashboard_exists_and_uses_app_owned_state():
         assert entity_id in text
 
 
+def test_dashboard_shows_app_version_in_system_card_and_hides_unknown_values():
+    text = _text()
+    system_card = text.split(
+        "entity: sensor.dh_app_pve_system", 1
+    )[1].split("icon: mdi:server", 1)[0]
+
+    assert "sensor.dh_app_pve_app_version" in system_card
+    assert "App " in system_card
+    assert "unknown" in system_card
+    assert "unavailable" in system_card
+
+
 def test_dashboard_keeps_problem_summary_first_with_full_problem_list_and_colors():
     text = _text()
 
