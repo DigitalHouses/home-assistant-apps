@@ -1,3 +1,6 @@
+import json
+from pathlib import Path
+
 from app.config import MqttConfig
 from app.identity import HostIdentity
 from app.shutdown_discovery import build_shutdown_aware_ups_discovery_payload
@@ -173,10 +176,42 @@ def test_ups_problem_aggregate_and_native_event_are_canonical():
         "problem_recovered",
         "problem_updated",
         "config_changed",
+        "ups_status_changed",
+        "battery_discharge_level_crossed",
+        "battery_fully_charged",
+        "shutdown_committed",
     ]
     assert event["qos"] == 1
     assert event["entity_category"] == "diagnostic"
     assert "json_attributes_topic" not in event
+
+
+def test_ups_discovery_contains_no_removed_presentation_fields():
+    payload = json.dumps(_payload(), sort_keys=True)
+
+    for forbidden in ("status_ru", "summary", "details", "problems_details"):
+        assert forbidden not in payload
+
+
+def test_standard_ups_dashboard_localizes_machine_charger_status():
+    dashboard = (
+        Path(__file__).parents[1] / "examples" / "dh_app_pve_ups_dashboard.yaml"
+    ).read_text(encoding="utf-8")
+
+    assert "sensor.dh_app_pve_ups_battery_charger_status" in dashboard
+    for machine_value, label in (
+        ("charging", "Заряжается"),
+        ("floating", "Поддержание заряда"),
+        ("resting", "Заряжена"),
+        ("idle", "Ожидание"),
+        ("discharging", "Разряжается"),
+        ("unknown", "Неизвестно"),
+        ("unavailable", "Недоступно"),
+    ):
+        assert f"'{machine_value}': '{label}'" in dashboard
+
+    assert "binary_sensor.dh_app_pve_ups_charging" not in dashboard
+    assert "binary_sensor.dh_app_pve_ups_discharging" not in dashboard
 
 
 def test_line_power_monthly_discovery_is_canonical_and_grouped():
