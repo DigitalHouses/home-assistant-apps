@@ -44,6 +44,17 @@ def test_uninstaller_records_service_state_and_restores_active_service_on_cleanu
     assert cleanup_pos < failure_pos < remove_pos
 
 
+def test_uninstaller_requires_disable_success_when_service_was_enabled():
+    text = _text()
+
+    assert 'if [[ "${was_enabled}" -eq 1 ]]; then' in text
+    assert "не удалось отключить автозапуск" in text
+
+    disable_pos = text.index('systemctl disable "${SERVICE_NAME}"')
+    remove_pos = text.index('rm -rf -- "${APP_DIR}"')
+    assert disable_pos < remove_pos
+
+
 def test_uninstaller_preserves_config_state_by_default_and_purges_only_after_cleanup():
     text = _text()
 
