@@ -33,3 +33,30 @@ def test_app_version_sensor_is_not_in_explicit_recorder_whitelist():
     text = RECORDER_PACKAGE.read_text(encoding="utf-8")
 
     assert "sensor.dh_app_pve_app_version" not in text
+
+
+def test_051_readme_documents_version_sensor_and_supported_uninstall():
+    readme = (ROOT / "dh_pve_app" / "README.md").read_text(encoding="utf-8")
+
+    for required in (
+        "`VERSION` is `0.5.1`.",
+        "sensor.dh_app_pve_app_version",
+        "/opt/digitalhouses/dh_pve_app/uninstall.sh",
+        "uninstall.sh --purge",
+        "/etc/dh_pve_app/",
+        "/var/lib/dh_pve_app/",
+        "MQTT Discovery",
+        "MQTT cleanup",
+        "NUT",
+        "OS dependencies",
+    ):
+        assert required in readme
+
+
+def test_051_changelog_records_version_sensor_and_uninstall():
+    changelog = (ROOT / "dh_pve_app" / "CHANGELOG.md").read_text(encoding="utf-8")
+
+    assert "## 0.5.1" in changelog
+    assert "sensor.dh_app_pve_app_version" in changelog
+    assert "uninstall.sh" in changelog
+    assert "--purge" in changelog
