@@ -60,6 +60,7 @@ class DhPveRuntime:
         static_collectors: tuple[str, ...] = (),
         slow_tasks: tuple[str, ...] = (),
         version_probe: Callable[[], str | None] | None = None,
+        app_version: str = "unknown",
     ) -> None:
         self.collectors = dict(collectors)
         self.bridge = bridge
@@ -77,6 +78,7 @@ class DhPveRuntime:
         self.static_collectors = tuple(static_collectors)
         self.slow_tasks = frozenset(slow_tasks)
         self.version_probe = version_probe
+        self.app_version = app_version
         self._pve_version_fingerprint: str | None = None
         self._subsystems: dict[str, SubsystemState] = {}
         self._published_groups: dict[str, dict[str, object]] = {}
@@ -206,6 +208,7 @@ class DhPveRuntime:
         publisher = getattr(self.bridge, "publish_state_group")
         payload: dict[str, object] = {
             "collected_at": collected_at,
+            "app_version": self.app_version,
             "last_refresh": last_refresh,
             "app_profile": self.presentation_router.profile_summary(),
             "last_publication": {
