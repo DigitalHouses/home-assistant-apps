@@ -21,8 +21,6 @@ class ProblemState:
     value: object | None
     average: float | None
     threshold: float | None
-    summary: str
-    details: str
 
 
 @dataclass(frozen=True)
@@ -36,7 +34,6 @@ class ProblemTransition:
 class ProblemAggregate:
     count: int
     severity: str
-    summary: str
     active: tuple[dict[str, object], ...]
 
 
@@ -50,8 +47,6 @@ class _NumericBinding:
     metric: str
     threshold_key: str
     window_seconds: float
-    unit: str
-    label: str
     average_window: RollingAverage
     first_seen: float | None = None
     last_now: float | None = None
@@ -97,8 +92,6 @@ def _compact(state: ProblemState) -> dict[str, object]:
         "value": state.value,
         "average": state.average,
         "threshold": state.threshold,
-        "summary": state.summary,
-        "details": state.details,
     }
 
 
@@ -137,8 +130,6 @@ class PveProblemEngine:
         metric: str,
         threshold_key: str,
         window_seconds: float,
-        unit: str,
-        label: str,
     ) -> _NumericBinding:
         binding = self._numeric.get(problem_id)
         if binding is None:
@@ -151,14 +142,11 @@ class PveProblemEngine:
                 metric=metric,
                 threshold_key=threshold_key,
                 window_seconds=float(window_seconds),
-                unit=unit,
-                label=label,
                 average_window=RollingAverage(window_seconds),
             )
             self._numeric[problem_id] = binding
         else:
             binding.object_name = object_name
-            binding.label = label
         return binding
 
     @staticmethod
@@ -172,15 +160,6 @@ class PveProblemEngine:
         if average < threshold:
             return False
         return previous.active if previous is not None else False
-
-    @staticmethod
-    def _numeric_text(label: str, active: bool) -> str:
-        return f"{label} high" if active else f"{label} OK"
-
-    @staticmethod
-    def _numeric_details(average: float, threshold: float, unit: str) -> str:
-        suffix = f" {unit}" if unit else ""
-        return f"Average {average:g}{suffix}; threshold {threshold:g}{suffix}"
 
     def _commit(
         self,
@@ -218,8 +197,6 @@ class PveProblemEngine:
         metric: str,
         threshold_key: str,
         window_seconds: float,
-        unit: str,
-        label: str,
     ) -> ProblemTransition | None:
         binding = self._binding(
             problem_id=problem_id,
@@ -230,8 +207,6 @@ class PveProblemEngine:
             metric=metric,
             threshold_key=threshold_key,
             window_seconds=window_seconds,
-            unit=unit,
-            label=label,
         )
         numeric = _finite(value)
         binding.average_window.observe(now, numeric)
@@ -265,8 +240,6 @@ class PveProblemEngine:
             value=binding.last_value,
             average=average,
             threshold=threshold,
-            summary=self._numeric_text(label, active),
-            details=self._numeric_details(average, threshold, unit),
         )
         return self._commit(state)
 
@@ -280,7 +253,6 @@ class PveProblemEngine:
         object_name: str,
         metric: str,
         active: bool,
-        label: str,
         value: object,
     ) -> ProblemTransition | None:
         state = ProblemState(
@@ -294,8 +266,6 @@ class PveProblemEngine:
             value=value,
             average=None,
             threshold=None,
-            summary=f"{label} problem" if active else f"{label} OK",
-            details=f"{label}: {'problem active' if active else 'OK'}",
         )
         return self._commit(state)
 
@@ -322,8 +292,6 @@ class PveProblemEngine:
                 metric="temperature_c",
                 threshold_key="cpu_temperature_threshold",
                 window_seconds=60.0,
-                unit="°C",
-                label="CPU temperature",
             )
             if transition is not None:
                 transitions.append(transition)
@@ -336,7 +304,6 @@ class PveProblemEngine:
                 object_name="CPU",
                 metric="throttling",
                 active=cpu.get("throttling_active") is True,
-                label="CPU throttling",
                 value=cpu.get("throttling_active"),
             )
             if transition is not None:
@@ -360,8 +327,6 @@ class PveProblemEngine:
                 metric="percent_used",
                 threshold_key="storage_percent_used_threshold",
                 window_seconds=300.0,
-                unit="%",
-                label=f"Storage {item.get('name') or sid} percent used",
             )
             if transition is not None:
                 transitions.append(transition)
@@ -387,8 +352,6 @@ class PveProblemEngine:
                 metric="temperature_c",
                 threshold_key=threshold_key,
                 window_seconds=300.0,
-                unit="°C",
-                label=f"Disk {name} temperature",
             )
             if transition is not None:
                 transitions.append(transition)
@@ -412,8 +375,6 @@ class PveProblemEngine:
                 metric="temperature_c",
                 threshold_key="gpu_temperature_threshold",
                 window_seconds=300.0,
-                unit="°C",
-                label=f"GPU {name} temperature",
             )
             if transition is not None:
                 transitions.append(transition)
@@ -434,7 +395,6 @@ class PveProblemEngine:
                 object_name=name,
                 metric="smart_passed",
                 active=passed is False,
-                label=f"SMART {name}",
                 value=passed,
             )
             if transition is not None:
@@ -477,8 +437,6 @@ class PveProblemEngine:
                 value=binding.last_value,
                 average=average,
                 threshold=threshold,
-                summary=self._numeric_text(binding.label, active),
-                details=self._numeric_details(average, threshold, binding.unit),
             )
             transition = self._commit(state, emit_update=True)
             if transition is not None:
@@ -497,15 +455,8 @@ class PveProblemEngine:
             if active_states
             else "ok"
         )
-        if count == 0:
-            summary = "No active problems"
-        elif count == 1:
-            summary = "1 active problem"
-        else:
-            summary = f"{count} active problems"
         return ProblemAggregate(
             count=count,
             severity=severity,
-            summary=summary,
             active=tuple(_compact(state) for state in active_states),
         )
