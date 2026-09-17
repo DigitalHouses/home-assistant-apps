@@ -11,6 +11,7 @@ CONFIG_DIR="/etc/${APP_NAME}"
 CONFIG_FILE="${CONFIG_DIR}/${APP_NAME}.conf"
 STATE_DIR="/var/lib/${APP_NAME}"
 UNIT_FILE="/etc/systemd/system/${SERVICE_NAME}"
+ROOT_GUIDE="/root/dh_app_pve.txt"
 
 if [[ "${EUID}" -ne 0 ]]; then
     echo "Установщик должен быть запущен от root."
@@ -179,6 +180,18 @@ if ! systemctl is-active --quiet "${SERVICE_NAME}"; then
     exit 1
 fi
 
+{
+    printf 'DH PVE APP — УСТАНОВЛЕННАЯ СБОРКА\n'
+    printf '===================================\n'
+    printf 'version = %s\n' "${VERSION}"
+    printf 'source = %s\n' "${SOURCE_REF}"
+    printf 'commit = %s\n' "${SOURCE_SHA}"
+    printf '\n'
+    cat "${APP_DIR}/dh_app_pve.txt"
+} >"${ROOT_GUIDE}"
+chown root:root "${ROOT_GUIDE}"
+chmod 0644 "${ROOT_GUIDE}"
+
 echo
 echo "DH PVE App установлен."
 echo "Версия: ${VERSION}"
@@ -186,3 +199,4 @@ echo "Source: ${SOURCE_REF}"
 echo "Commit: ${SOURCE_SHA}"
 echo "Config: ${CONFIG_FILE}"
 echo "Status: systemctl status ${APP_NAME} --no-pager"
+echo "Guide: ${ROOT_GUIDE}"
