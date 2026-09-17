@@ -29,6 +29,10 @@ from .ups_trigger import SoftwareShutdownController, SoftwareShutdownTriggerResu
 
 
 SHUTDOWN_BUDGET_REFRESH_SECONDS = 60.0
+_PUBLIC_SHUTDOWN_REASON = {
+    "charge_guard": "charge_threshold",
+    "runtime_guard": "runtime_threshold",
+}
 
 
 def _shutdown_budget_payload(budget: ShutdownBudgetResult | None) -> dict[str, object]:
@@ -274,6 +278,37 @@ class ShutdownAwareUpsRuntime(AdaptiveUpsRuntime):
                 self.log.exception("Не удалось сохранить fingerprint shutdown budget")
         return budget
 
+    def _enqueue_shutdown_committed_event(
+        self,
+        result: SoftwareShutdownTriggerResult,
+        budget: ShutdownBudgetResult,
+    ) -> None:
+        outbox = self.machine_event_outbox
+        public_reason = _PUBLIC_SHUTDOWN_REASON.get(result.reason or "")
+        if outbox is None or public_reason is None:
+            return
+
+        observed_at = self.now_iso()
+        policy = self.policy_active
+        payload: dict[str, object] = {
+            "schema_version": 2,
+            "event_type": "shutdown_committed",
+            "observed_at": observed_at,
+            "reason": public_reason,
+            "battery_charge_percent": result.charge_percent,
+            "battery_runtime_seconds": result.runtime_seconds,
+            "shutdown_budget_seconds": budget.shutdown_budget_seconds,
+            "runtime_reserve_seconds": (
+                policy.runtime_reserve_seconds if policy is not None else None
+            ),
+            "runtime_guard_threshold_seconds": result.runtime_guard_threshold_seconds,
+        }
+        outbox.enqueue(
+            f"shutdown_committed:{observed_at}:{public_reason}",
+            payload,
+        )
+        self._flush_machine_event_outbox()
+
     def _evaluate_software_shutdown(self, *, force_budget_refresh: bool = False) -> None:
         controller = self.software_shutdown_controller
         snapshot = self.last_snapshot
@@ -306,6 +341,7 @@ class ShutdownAwareUpsRuntime(AdaptiveUpsRuntime):
                 )
             except Exception:
                 self.log.exception("Не удалось сохранить причину software shutdown UPS")
+            self._enqueue_shutdown_committed_event(result, budget)
 
     def _policy_state_backup(self) -> dict[str, object]:
         return {
@@ -477,16 +513,13 @@ class ShutdownAwareUpsRuntime(AdaptiveUpsRuntime):
             return False
 
         event = {
-            "schema_version": 1,
+            "schema_version": 2,
             "event_type": "config_changed",
-            "category": "policy",
-            "severity": "info",
-            "object_id": "ups_trigger_policy",
-            "object_name": "UPS Trigger Policy",
-            "summary": "UPS Trigger Policy изменена",
-            "details": "Активная политика UPS успешно применена после reload и проверена.",
+            "observed_at": self.now_iso(),
             "old_values": transaction.get("old_values", {}),
             "new_values": target.as_dict(),
+            "previous_revision": transaction.get("old_revision"),
+            "current_revision": target_revision,
         }
         self._pending_policy_config_event = event
         transaction = dict(transaction)
@@ -522,12 +555,7 @@ class ShutdownAwareUpsRuntime(AdaptiveUpsRuntime):
         publish = getattr(self.bridge, "publish_ups_diagnostic_event", None)
         if not callable(publish):
             return
-        payload = dict(event)
-        try:
-            payload["active_problem_count"] = self.problem_engine.aggregate().count
-        except Exception:
-            payload["active_problem_count"] = 0
-        if publish(payload):
+        if publish(dict(event)):
             self._pending_policy_config_event = None
             transaction = self.policy_apply_store.load()
             if transaction.get("phase") == "event_pending":
