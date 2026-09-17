@@ -57,6 +57,7 @@ def test_discovery_only_creates_supported_factual_entities():
     components = payload["components"]
 
     assert "status" in components
+    assert "battery_charger_status" in components
     assert "problems" in components
     assert "available" in components
     assert "refresh" in components
@@ -96,7 +97,7 @@ def test_frequency_entities_are_capability_driven_and_primary():
     assert output_frequency.get("entity_category") is None
 
 
-def test_problems_sensor_remains_available_when_nut_read_fails():
+def test_problems_sensor_remains_machine_only_when_nut_read_fails():
     payload = build_ups_discovery_payload(
         _mqtt(), _identity(), version="0.2.0-alpha", snapshot=None
     )
@@ -106,9 +107,10 @@ def test_problems_sensor_remains_available_when_nut_read_fails():
     assert problems["value_template"] == "{{ value_json.problems_count | default(0) }}"
     assert len(problems["availability"]) == 1
     assert "value_json.available" not in str(problems["availability"])
-    assert "problems_severity" in problems["json_attributes_template"]
-    assert "problems_details" in problems["json_attributes_template"]
-    assert "problems" in problems["json_attributes_template"]
+    attributes = problems["json_attributes_template"]
+    assert "problems_severity" in attributes
+    assert "problems_details" not in attributes
+    assert "value_json.problems |" not in attributes
 
 
 def test_primary_ups_entities_stay_out_of_diagnostics():
@@ -144,6 +146,7 @@ def test_service_ups_entities_are_diagnostic():
         "available",
         "last_refresh",
         "refresh",
+        "battery_charger_status",
         "battery_runtime",
         "battery_voltage",
         "nominal_real_power",
@@ -166,6 +169,7 @@ def test_discovery_omits_capability_not_reported_by_ups():
     components = payload["components"]
 
     assert "status" in components
+    assert "battery_charger_status" in components
     assert "problems" in components
     assert "battery_charge" not in components
     assert "battery_runtime_minutes" not in components
@@ -201,3 +205,5 @@ def test_ups_telemetry_uses_app_and_nut_availability_without_nut_abbreviations()
     assert len(available["availability"]) == 1
     assert "OL" not in status["value_template"]
     assert "value_json.status" in status["value_template"]
+    assert "raw_status_tokens" in status["json_attributes_template"]
+    assert "status_set" in status["json_attributes_template"]
