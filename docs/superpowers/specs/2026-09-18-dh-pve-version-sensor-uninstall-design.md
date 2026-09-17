@@ -174,9 +174,11 @@ A supported uninstall therefore owns Discovery cleanup.
 Before local files are removed, uninstall must publish retained empty payloads (MQTT tombstones) for:
 
 - current canonical PVE Device Discovery topic;
-- current canonical UPS Device Discovery topic when configured/derivable;
+- current canonical UPS Device Discovery topic;
 - all legacy PVE Discovery topics already known by `Topics.legacy_discoveries`;
 - all legacy UPS Discovery topics already known by `UpsTopics.legacy_discoveries`.
+
+Both canonical Discovery topics are derived from the same host identity and are cleaned unconditionally; cleanup does not depend on whether a UPS is currently selected or available.
 
 It must also publish retained `offline` availability for the canonical PVE and UPS availability topics before Discovery removal.
 
@@ -263,9 +265,9 @@ Tests must first fail for absence of the new entity/state, then verify:
 Pure/unit tests with a fake MQTT client must verify:
 
 - canonical PVE availability -> `offline` retained;
-- canonical UPS availability -> `offline` retained when applicable;
+- canonical UPS availability -> `offline` retained;
 - canonical PVE Discovery tombstone;
-- canonical UPS Discovery tombstone when applicable;
+- canonical UPS Discovery tombstone;
 - every legacy Discovery topic is tombstoned;
 - QoS/retain semantics match normal app MQTT publication expectations;
 - cleanup failure produces a non-zero result.
