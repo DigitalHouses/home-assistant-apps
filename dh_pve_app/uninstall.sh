@@ -77,7 +77,20 @@ if ! PYTHONPATH="${APP_DIR}" "${APP_DIR}/.venv/bin/python" -m app.main \
     exit 1
 fi
 
-systemctl disable "${SERVICE_NAME}" >/dev/null 2>&1 || true
+if [[ "${was_enabled}" -eq 1 ]]; then
+    if ! systemctl disable "${SERVICE_NAME}" >/dev/null 2>&1; then
+        echo "Ошибка: не удалось отключить автозапуск ${SERVICE_NAME}."
+        echo "Локальная установка сохранена."
+        if [[ "${was_active}" -eq 1 ]]; then
+            echo "Восстанавливаю ранее запущенный ${SERVICE_NAME}."
+            systemctl start "${SERVICE_NAME}" || true
+        fi
+        exit 1
+    fi
+else
+    systemctl disable "${SERVICE_NAME}" >/dev/null 2>&1 || true
+fi
+
 rm -f -- "${UNIT_FILE}"
 rm -rf -- "${APP_DIR}"
 
