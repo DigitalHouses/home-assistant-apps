@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add canonical `dh_pve_app/dh_app_pve.txt` operational guide. After every successful install/update, `install.sh` regenerates `/root/dh_app_pve.txt` with actual installed version/source/commit plus concise install/update, service/log/config, read-only preflight and uninstall commands.
+- Remove `/root/dh_app_pve.txt` during supported uninstall only after MQTT cleanup succeeds, avoiding a stale operational guide after App removal.
+
 ## 0.5.1
 
 - Add diagnostic `sensor.dh_app_pve_app_version` on the retained PVE diagnostics group. Its state is read from the App `VERSION` file and shares the same resolved release value as MQTT Discovery `device.sw_version` and `origin.sw_version`.
