@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.5.1
+
+- Add diagnostic `sensor.dh_app_pve_app_version` on the retained PVE diagnostics group. Its state is read from the App `VERSION` file and shares the same resolved release value as MQTT Discovery `device.sw_version` and `origin.sw_version`.
+- Show `App <version>` in the standard PVE host summary between the Proxmox version and primary IP, while hiding the segment for unknown/unavailable version state.
+- Add supported `/opt/digitalhouses/dh_pve_app/uninstall.sh`. Normal uninstall removes the service/App only after MQTT cleanup while preserving `/etc/dh_pve_app/` and `/var/lib/dh_pve_app/`; `uninstall.sh --purge` additionally removes configuration/state.
+- Make uninstall fail-safe: publish canonical PVE/UPS availability offline, tombstone canonical plus legacy PVE/UPS MQTT Discovery using the App's Python identity/topic/config path, and abort local removal on any cleanup failure. A service that was active before a failed uninstall is started again.
+- Keep uninstall outside NUT/FSD/UPS-output ownership and leave shared OS dependencies, Home Assistant and the MQTT broker untouched. CI now validates both installer and uninstaller shell syntax.
+
 ## 0.5.0
 
 - **Breaking Event contract:** all new public `dh_pve_app` diagnostic/UPS Events use `schema_version: 2` and carry machine semantics only. App Event payloads no longer generate notification `title`, `message`, `summary`, `details`, `status_ru`, emoji or other localized presentation fields.
