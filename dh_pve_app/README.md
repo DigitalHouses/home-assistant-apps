@@ -2,7 +2,7 @@
 
 `dh_pve_app` is the DigitalHouses native Linux agent for Proxmox VE 8.x. It collects host, CPU, memory, storage, disk/SMART, GPU, fan and VM/LXC state, publishes Home Assistant entities through MQTT Discovery, and can monitor a locally attached UPS through Network UPS Tools (NUT).
 
-`VERSION` is `0.4.0`; the current branch contains unreleased runtime/UPS architecture work described below.
+`VERSION` is `0.5.0`.
 
 MQTT base namespace: `DigitalHouses/Global/dh_pve_app/<instance>`.
 MQTT devices: `DH PVE` and optional `DH PVE UPS`.
@@ -63,11 +63,27 @@ Native MQTT Event entities are used for diagnostic transitions:
 - `event.dh_app_pve_diagnostic`;
 - `event.dh_app_pve_ups_diagnostic`.
 
-Problem event types are `problem_started`, `problem_recovered` and `problem_updated`. UPS policy changes also use `config_changed` with OLD and NEW values. Runtime Event messages are non-retained, published with MQTT QoS 1 after the synchronized metric/threshold/problem/current-state bundle, and Home Assistant subscribes to the Event topics at QoS 1 through MQTT Discovery.
+Generic PVE problem event types are `problem_started`, `problem_recovered` and `problem_updated`. UPS Event Discovery additionally accepts `config_changed`, `ups_status_changed`, `battery_discharge_level_crossed`, `battery_fully_charged` and `shutdown_committed`.
 
-The retained problem binaries and aggregate sensors are the authoritative current-state/reconciliation contract. Event entities describe what just happened; they are not used as retained state.
+New public App events use `schema_version: 2` and contain machine semantics only: IDs/enums, previous/current state, numeric values, thresholds, timestamps and reason codes. App event payloads do not generate notification `title`, `message`, `summary`, `details`, localized labels, emoji or `status_ru`. Runtime Event messages are non-retained, published with MQTT QoS 1 after the synchronized retained current-state bundle, and Home Assistant subscribes to the Event topics at QoS 1 through MQTT Discovery.
+
+The retained problem binaries and aggregate sensors are the authoritative current-state/reconciliation contract. Event entities describe what just happened; they are not used as retained state. Retryable UPS semantic events use a small persisted outbox so an MQTT publish failure does not silently advance semantic state past an undelivered Event.
+
+## UPS status, charger and battery semantics
+
+Canonical UPS status is derived from NUT tokens into stable machine states such as `online`, `on_battery`, `boost`, `trim`, `bypass`, `overload`, `low_battery` and `replace_battery`. Raw NUT status tokens remain available diagnostically.
+
+Canonical charger state is exposed as `sensor.dh_app_pve_ups_battery_charger_status` with machine values `charging`, `discharging`, `floating`, `resting`, `idle` or `unknown`. `battery.charger.status` has priority. `CHRG`/`DISCHRG` are charger fallback evidence only when a direct charger status is not available; a present but unknown direct value is not overridden by token fallback.
+
+Battery discharge notification milestones are fixed machine events at 90, 80, 70, 60, 50, 40, 30, 20 and 10 percent. They are independent from the configurable shutdown charge threshold. A large downward jump may report multiple crossed milestones in one Event, and persisted discharge-session state prevents duplicate milestones after restart.
+
+`battery_fully_charged` means an observed charge-cycle completion. It does not require `battery.charge == 100`. Direct `floating`/`resting` charger states complete an observed charging cycle immediately; legacy token-only devices use the guarded fallback implemented by the App.
+
+`shutdown_committed` is emitted only when the App's software shutdown helper has actually committed the configured shutdown path. Native NUT FSD remains a separate fact and does not by itself imply an App `shutdown_committed` Event.
 
 ## Home Assistant notification layer
+
+App events contain machine semantics only. HA locale packages own notification wording, labels and emoji.
 
 Install exactly one notification locale:
 
@@ -76,10 +92,12 @@ Install exactly one notification locale:
 
 Both files are complete Home Assistant packages. They intentionally expose the same package key, automation IDs and machine contract, so only one may be installed in a Home Assistant instance. The English package is the canonical GitHub/default artifact. For a Russian installation, copy the RU file into the Home Assistant packages directory under the normal installed filename `dh_app_pve_notification_package.yaml`.
 
+**Upgrade order for 0.5.0:** install/update the HA v1+v2-compatible notification package before deploying `dh_pve_app` 0.5.0. The App does not dual-publish v1 and v2. The HA package temporarily retains an explicit schema-v1 fallback while all new App machine events use schema v2.
+
 Live notifications are event-driven:
 
 ```text
-App problem transition
+App machine event
 -> MQTT diagnostic Event (QoS 1, retain=false)
 -> event.dh_app_pve_diagnostic / event.dh_app_pve_ups_diagnostic
 -> HA event.received automation
@@ -93,7 +111,7 @@ Live delivery is gated by `binary_sensor.bs_global_system_boot_completed`. If HA
 
 This gives the notification layer two complementary contracts: Events for live facts and retained aggregates for current-state recovery after HAOS downtime/reconnect. Problem `binary_sensor` entities remain available for UI and user automations, but the reusable live notification path does not infer transitions from their state changes.
 
-Both language packages preserve the same structured diagnostic fields (`event_type`, `category`, `severity`, `object_id`, `object_name`, `metric`, `value`, `average`, `threshold`, `summary`, `details`, `active_problem_count`) and emit the same transport-neutral Home Assistant event `dh_app_pve_notification`. They differ only in human-readable `title` and `message` presentation.
+For schema v2, both language packages derive presentation from structured machine fields such as `event_type`, `category`, `severity`, `object_id`, `object_name`, `metric`, `previous`, `current`, canonical status lists, crossed battery thresholds, charge/runtime values, shutdown reason/budget and config OLD/NEW values. `summary`/`details` remain only in the explicit schema-v1 migration fallback. Both packages emit the same transport-neutral Home Assistant event `dh_app_pve_notification`; they differ only in human-readable `title` and `message` presentation.
 
 The reusable package intentionally does not call `script.write2log`, Telegram, a specific `notify.mobile_app` service or any customer-specific target. A site-local adapter may listen for `dh_app_pve_notification` and deliver its already-formatted `title`/`message` through the site's preferred transport.
 
@@ -207,6 +225,8 @@ Preflight checks the selected UPS, NUT services/PRIMARY path, native Low Battery
 
 The installer deploys the App code, fixed helper and systemd unit. It preserves existing configuration/state where appropriate and does not silently execute destructive UPS commissioning.
 
+For an upgrade to 0.5.0, update the HA notification package first, reload/restart Home Assistant and verify there are no package/template errors. Only then deploy the reviewed App SHA.
+
 For a reviewed ref/commit:
 
 ```bash
@@ -214,7 +234,7 @@ REF=<reviewed-ref-or-sha>
 bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$REF/dh_pve_app/install.sh")
 ```
 
-After deployment verify the exact installed version/ref, service state, MQTT availability and read-only preflight before any UPS shutdown commissioning.
+After deployment verify the exact installed version/ref, service state, MQTT availability, canonical charger-status entity, expanded UPS Event metadata and read-only preflight before any UPS shutdown commissioning.
 
 ## Safety boundary
 
