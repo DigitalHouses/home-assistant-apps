@@ -13,6 +13,11 @@ from .ups_control import (
     parse_upscmd_list_output,
     run_ups_battery_test,
 )
+from .ups_semantics import (
+    normalize_ups_status,
+    primary_ups_status,
+    resolve_charger_status,
+)
 from .ups_shutdown_policy import (
     UpsShutdownPolicy,
     parse_shutdown_policy,
@@ -63,6 +68,10 @@ class UpsSnapshot:
     beeper_status: str | None
     ups_shutdown_delay_seconds: float | None = None
     ups_start_delay_seconds: float | None = None
+    normalized_status: tuple[str, ...] = ()
+    primary_status: str = "unknown"
+    battery_charger_status_raw: str | None = None
+    battery_charger_status: str = "unknown"
 
 
 def _optional_text(raw: dict[str, str], *keys: str) -> str | None:
@@ -106,6 +115,14 @@ def parse_upsc_output(text: str) -> UpsSnapshot:
     status_raw = raw.get("ups.status", "").strip()
     status_tokens = tuple(token for token in status_raw.split() if token)
     token_set = set(status_tokens)
+    line_power = "OL" in token_set
+    normalized_status = normalize_ups_status(status_tokens)
+    battery_charger_status_raw = _optional_text(raw, "battery.charger.status")
+    battery_charger_status = resolve_charger_status(
+        direct_status=battery_charger_status_raw,
+        status_tokens=status_tokens,
+        line_power=line_power,
+    )
 
     return UpsSnapshot(
         raw=raw,
@@ -117,14 +134,14 @@ def parse_upsc_output(text: str) -> UpsSnapshot:
         driver_data=_optional_text(raw, "driver.version.data"),
         status_raw=status_raw,
         status_tokens=status_tokens,
-        line_power="OL" in token_set,
+        line_power=line_power,
         on_battery="OB" in token_set,
         low_battery="LB" in token_set,
         replace_battery="RB" in token_set,
         overload="OVER" in token_set,
         bypass="BYPASS" in token_set,
-        charging="CHRG" in token_set,
-        discharging="DISCHRG" in token_set,
+        charging=battery_charger_status == "charging",
+        discharging=battery_charger_status == "discharging",
         battery_charge_percent=_optional_float(raw, "battery.charge"),
         runtime_seconds=_optional_float(raw, "battery.runtime"),
         battery_voltage_v=_optional_float(raw, "battery.voltage"),
@@ -145,6 +162,10 @@ def parse_upsc_output(text: str) -> UpsSnapshot:
         beeper_status=_optional_text(raw, "ups.beeper.status"),
         ups_shutdown_delay_seconds=_optional_float(raw, "ups.delay.shutdown"),
         ups_start_delay_seconds=_optional_float(raw, "ups.delay.start"),
+        normalized_status=normalized_status,
+        primary_status=primary_ups_status(normalized_status),
+        battery_charger_status_raw=battery_charger_status_raw,
+        battery_charger_status=battery_charger_status,
     )
 
 
@@ -218,6 +239,7 @@ def ups_metrics(snapshot: UpsSnapshot) -> dict[str, MetricValue]:
         "bypass": _metric(snapshot.bypass, "discrete"),
         "charging": _metric(snapshot.charging, "discrete"),
         "discharging": _metric(snapshot.discharging, "discrete"),
+        "battery_charger_status": _metric(snapshot.battery_charger_status, "discrete"),
     }
 
     mode = "battery" if snapshot.on_battery else "online"
