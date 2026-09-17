@@ -54,6 +54,46 @@ sections:
             row:
               entity: sensor.dh_app_pve_ups_battery_voltage
               name: Напряжение батареи
+      - type: custom:mushroom-template-card
+        entity: sensor.dh_app_pve_ups_battery_charger_status
+        primary: >-
+          {% set s = states('sensor.dh_app_pve_ups_battery_charger_status') %}
+          {% set labels = {
+            'charging': 'Заряжается',
+            'floating': 'Поддержание заряда',
+            'resting': 'Заряжена',
+            'idle': 'Ожидание',
+            'discharging': 'Разряжается',
+            'unknown': 'Неизвестно',
+            'unavailable': 'Недоступно'
+          } %}
+          {{ labels.get(s, s) }}
+        secondary: Состояние зарядного устройства
+        icon: >-
+          {% set s = states('sensor.dh_app_pve_ups_battery_charger_status') %}
+          {% set icons = {
+            'charging': 'mdi:battery-charging',
+            'floating': 'mdi:battery-sync',
+            'resting': 'mdi:battery-check',
+            'idle': 'mdi:battery-clock-outline',
+            'discharging': 'mdi:battery-arrow-down',
+            'unknown': 'mdi:battery-unknown',
+            'unavailable': 'mdi:battery-off-outline'
+          } %}
+          {{ icons.get(s, 'mdi:battery-unknown') }}
+        icon_color: >-
+          {% set s = states('sensor.dh_app_pve_ups_battery_charger_status') %}
+          {% set colors = {
+            'charging': 'green',
+            'floating': 'green',
+            'resting': 'green',
+            'idle': 'blue',
+            'discharging': 'amber',
+            'unknown': 'grey',
+            'unavailable': 'grey'
+          } %}
+          {{ colors.get(s, 'grey') }}
+        fill_container: true
       - type: history-graph
         title: Заряд / нагрузка · 24 часа
         hours_to_show: 24
