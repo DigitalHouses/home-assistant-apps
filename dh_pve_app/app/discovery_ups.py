@@ -56,15 +56,30 @@ def build_ups_discovery_payload(
             "unique_id": uid("status"),
             "default_entity_id": "sensor.dh_pve_ups_status",
             "state_topic": topics.state,
-            "value_template": "{{ value_json.status | default('Unknown') }}",
+            "value_template": "{{ value_json.status | default('unknown') }}",
             "availability": telemetry_availability,
             "availability_mode": "all",
             "icon": "mdi:power-plug-battery",
             "json_attributes_topic": topics.state,
             "json_attributes_template": (
-                "{{ {'nut_status': value_json.status_raw | default(''), "
-                "'status_tokens': value_json.status_tokens | default([])} | tojson }}"
+                "{{ {'raw_status': value_json.status_raw | default(''), "
+                "'raw_status_tokens': value_json.raw_status_tokens | default([]), "
+                "'status_set': value_json.status_set | default([])} | tojson }}"
             ),
+        },
+        "battery_charger_status": {
+            "platform": "sensor",
+            "name": "Battery charger status",
+            "unique_id": uid("battery_charger_status"),
+            "default_entity_id": "sensor.dh_app_pve_ups_battery_charger_status",
+            "state_topic": topics.state,
+            "value_template": (
+                "{{ value_json.battery_charger_status | default('unknown') }}"
+            ),
+            "availability": telemetry_availability,
+            "availability_mode": "all",
+            "entity_category": "diagnostic",
+            "icon": "mdi:battery-sync-outline",
         },
         "problems": {
             "platform": "sensor",
@@ -78,9 +93,7 @@ def build_ups_discovery_payload(
             "icon": "mdi:alert-circle-check-outline",
             "json_attributes_topic": topics.state,
             "json_attributes_template": (
-                "{{ {'severity': value_json.problems_severity | default('ok'), "
-                "'details': value_json.problems_details | default(''), "
-                "'problems': value_json.problems | default([])} | tojson }}"
+                "{{ {'severity': value_json.problems_severity | default('ok')} | tojson }}"
             ),
         },
         "available": {
@@ -328,6 +341,41 @@ def build_ups_discovery_payload(
             component["entity_category"] = entity_category
         components[key] = component
 
+    def add_charger_binary(
+        key: str,
+        name: str,
+        entity_id: str,
+        active_status: str,
+        icon: str,
+    ) -> None:
+        charger_known = {
+            "topic": topics.state,
+            "value_template": (
+                "{{ 'online' if value_json.battery_charger_status | default('unknown') "
+                "!= 'unknown' else 'offline' }}"
+            ),
+            "payload_available": "online",
+            "payload_not_available": "offline",
+        }
+        components[key] = {
+            "platform": "binary_sensor",
+            "name": name,
+            "unique_id": uid(key),
+            "default_entity_id": entity_id,
+            "state_topic": topics.state,
+            "value_template": (
+                "{{ 'ON' if value_json.battery_charger_status | default('unknown') == '"
+                + active_status
+                + "' else 'OFF' }}"
+            ),
+            "payload_on": "ON",
+            "payload_off": "OFF",
+            "availability": telemetry_availability + [charger_known],
+            "availability_mode": "all",
+            "entity_category": "diagnostic",
+            "icon": icon,
+        }
+
     def add_button(key: str, name: str, entity_id: str, command_topic: str, icon: str) -> None:
         components[key] = {
             "platform": "button",
@@ -493,13 +541,13 @@ def build_ups_discovery_payload(
                 "bypass", "Bypass", "binary_sensor.dh_pve_ups_bypass",
                 "bypass", "mdi:transit-connection-variant",
             )
-            add_binary(
+            add_charger_binary(
                 "charging", "Charging", "binary_sensor.dh_pve_ups_charging",
-                "charging", "mdi:battery-charging", entity_category="diagnostic",
+                "charging", "mdi:battery-charging",
             )
-            add_binary(
+            add_charger_binary(
                 "discharging", "Discharging", "binary_sensor.dh_pve_ups_discharging",
-                "discharging", "mdi:battery-minus", entity_category="diagnostic",
+                "discharging", "mdi:battery-minus",
             )
 
     device: dict[str, Any] = {
