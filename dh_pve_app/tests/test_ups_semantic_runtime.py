@@ -178,7 +178,18 @@ def test_semantic_events_follow_retained_state_and_problem_publication(tmp_path)
     assert runtime.tick(clock["mono"]) is True
 
     milestone = _index(trace, "event", "battery_discharge_level_crossed")
-    assert _index(trace, "group", "battery") < milestone
+    assert _index(trace, "read") < milestone
+    retained_kinds = {
+        "group",
+        "problem_state",
+        "problem_aggregate",
+        "problem_presentation",
+    }
+    assert all(
+        index < milestone
+        for index, item in enumerate(trace)
+        if item[0] in retained_kinds
+    )
     event_payload = trace[milestone][2]
     assert event_payload["crossed_thresholds"] == [90]
     assert outbox.pending() == ()
