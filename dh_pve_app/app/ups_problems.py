@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .problems import ProblemAggregate, ProblemState, ProblemTransition
-from .ups_health import ups_problem_observations
+from .ups_health import STATUS_DERIVED_UPS_PROBLEM_IDS, ups_problem_observations
 from .ups_nut import UpsSnapshot
 
 
@@ -74,7 +74,10 @@ class UpsProblemEngine:
                 threshold=None,
             )
             transition = self._commit(state)
-            if transition is not None:
+            if (
+                transition is not None
+                and observation.problem_id not in STATUS_DERIVED_UPS_PROBLEM_IDS
+            ):
                 transitions.append(transition)
         return tuple(transitions)
 
