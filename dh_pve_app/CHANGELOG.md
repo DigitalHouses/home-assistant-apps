@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+## 0.5.0
+
+- **Breaking Event contract:** all new public `dh_pve_app` diagnostic/UPS Events use `schema_version: 2` and carry machine semantics only. App Event payloads no longer generate notification `title`, `message`, `summary`, `details`, `status_ru`, emoji or other localized presentation fields.
+- Keep HA-first migration compatibility: install/update the v1+v2-compatible Home Assistant notification locale package before deploying App 0.5.0. The App emits v2 only; HA retains the temporary explicit schema-v1 fallback.
+- Convert generic problem transitions to structured previous/current v2 payloads with machine metadata, numeric value/average/threshold facts, timezone-aware `observed_at` and active-problem count.
+- Convert retained UPS problem observations/aggregates to machine-only facts and de-duplicate status-derived notifications so `on_battery`, `low_battery`, `overload`, `replace_battery` and `bypass` transitions are represented by canonical UPS status Events rather than duplicate generic Events.
+- Add canonical UPS status normalization with deterministic precedence while preserving raw NUT tokens diagnostically. Charger semantics are normalized to `charging`, `discharging`, `floating`, `resting`, `idle` or `unknown`; direct `battery.charger.status` has priority over CHRG/DISCHRG fallback evidence.
+- Add `sensor.dh_app_pve_ups_battery_charger_status` and move its Russian label/icon/color presentation into the standard HA UPS dashboard rather than Python-generated prose.
+- Add persisted `ups_status_changed` transition tracking with previous/current canonical and raw status lists; first observation establishes a baseline and token-only charger noise does not invent a status transition.
+- Add persistent battery discharge sessions with fixed milestones at 90/80/70/60/50/40/30/20/10 percent, aggregate large downward crossings into one `battery_discharge_level_crossed` Event and prevent duplicate milestones across restart.
+- Add charge-cycle completion detection and `battery_fully_charged`. A direct charging -> floating/resting transition completes the cycle without requiring `battery.charge == 100`; legacy token-only devices use a guarded stable-idle fallback.
+- Add a persisted idempotent machine Event outbox. Retained current state is published before transition Events, failed semantic Event publication is retried before advancing to a newer UPS observation, and restart does not lose pending semantic Events.
+- Emit structured `shutdown_committed` only after the fixed software shutdown helper successfully commits, with machine reason/charge/runtime/budget/reserve facts. Native NUT FSD remains distinct and does not by itself create this Event.
+- Emit structured `config_changed` v2 with OLD/NEW policy values and previous/current revisions after the durable Apply/reload/verification transaction completes.
+- Expand UPS MQTT Event Discovery to `problem_started`, `problem_recovered`, `problem_updated`, `config_changed`, `ups_status_changed`, `battery_discharge_level_crossed`, `battery_fully_charged` and `shutdown_committed`; generic PVE Event Discovery remains the three problem transition types.
+- Complete English/Russian HA-owned presentation for canonical UPS status enter/exit transitions, discharge milestones, fully charged, shutdown committed and config changes while preserving `binary_sensor.bs_global_system_boot_completed` as the notification gate.
+- Keep UPS acquisition fixed at 10 seconds, Event QoS 1 / `retain=false`, shutdown predicates/helper ACL and the non-destructive validation boundary unchanged.
+
 ## 0.4.0
 
 - Replace the previous heavy/adaptive collection direction with the canonical Proxmox VE 8.x file/cache-first runtime: `/proc`/`/sys` and `/etc/pve`/PVE caches are primary sources, while expensive subprocess/API paths are reserved for data that has no cheap source and are never used as permanent fallback loops.
