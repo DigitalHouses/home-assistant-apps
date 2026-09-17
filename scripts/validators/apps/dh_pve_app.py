@@ -5,6 +5,7 @@ from typing import Any
 
 from validators.common import fail, require_files
 
+EXPECTED_VERSION = "0.5.0"
 EXPECTED_TOPIC_PREFIX = "DigitalHouses/Global/dh_pve_app"
 EXPECTED_DEVICE_NAME = "DH PVE"
 EXPECTED_REFRESH_ENTITY = "button.dh_app_pve_refresh"
@@ -26,6 +27,7 @@ def validate_dh_pve_app(
     require_files(
         root,
         [
+            app / "VERSION",
             app / "requirements.txt",
             app / "app/config.py",
             app / "app/topics.py",
@@ -62,6 +64,10 @@ def validate_dh_pve_app(
 
     if context.get("type") != "linux_agent":
         fail("DH PVE must remain a linux_agent")
+
+    version = (app / "VERSION").read_text(encoding="utf-8").strip()
+    if context.get("version") != EXPECTED_VERSION or version != EXPECTED_VERSION:
+        fail(f"DH PVE release version must be {EXPECTED_VERSION}")
 
     _require_text(
         app / "app/config.py",
