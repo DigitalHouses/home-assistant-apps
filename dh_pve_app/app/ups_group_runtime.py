@@ -181,7 +181,10 @@ class AdaptiveUpsRuntime(UpsRuntime):
         aggregate = self.problem_engine.aggregate()
         while self._pending_problem_transitions:
             transition = self._pending_problem_transitions[0]
-            if transition_uses_status_event(transition):
+            if (
+                self.machine_event_outbox is not None
+                and transition_uses_status_event(transition)
+            ):
                 self._published_problem_ids.add(transition.current.problem_id)
                 self._pending_problem_transitions.pop(0)
                 continue
@@ -260,7 +263,7 @@ class AdaptiveUpsRuntime(UpsRuntime):
         return self._sync_current_problem_states()
 
     def _observe_status_event(self, snapshot, *, observed_at: str) -> bool:
-        if not self._event_capable():
+        if self.machine_event_outbox is None or not self._event_capable():
             return True
 
         event = self.status_event_tracker.observe(
@@ -272,9 +275,6 @@ class AdaptiveUpsRuntime(UpsRuntime):
             return True
 
         key, payload = event
-        if self.machine_event_outbox is None:
-            return bool(self.bridge.publish_ups_diagnostic_event(payload))
-
         self.machine_event_outbox.enqueue(key, payload)
         for pending in self.machine_event_outbox.pending():
             if not self.bridge.publish_ups_diagnostic_event(pending.payload):
