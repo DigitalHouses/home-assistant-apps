@@ -93,8 +93,6 @@ _STATUS_FIELDS = (
     "discharging",
     "problems_count",
     "problems_severity",
-    "problems",
-    "problems_details",
 )
 
 _CONFIG_FIELDS = (
