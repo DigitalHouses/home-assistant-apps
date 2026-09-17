@@ -186,7 +186,7 @@ def test_problem_transition_bundle_publishes_event_last_in_exact_order():
     assert event["schema_version"] == 2
     assert event["event_type"] == "problem_started"
     assert event["observed_at"] == "2026-09-16T00:00:00+00:00"
-    assert event["previous"]["active"] is False
+    assert event["previous"] is None
     assert event["current"]["active"] is True
     assert event["current"]["average"] == 95.0
     assert event["active_problem_count"] == 1
