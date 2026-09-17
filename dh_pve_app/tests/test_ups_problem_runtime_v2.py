@@ -166,9 +166,7 @@ def test_startup_publishes_current_off_states_without_fake_events(tmp_path):
     assert all(call[2] is False for call in state_calls)
     assert bridge.problem_calls[-2] == ("aggregate", 0)
     presentation = bridge.problem_calls[-1]
-    assert presentation[0] == "presentation"
-    assert presentation[1]["severity"] == "ok"
-    assert presentation[1]["active"] == []
+    assert presentation == ("presentation", {"severity": "ok", "active": []})
     assert not any(call[0] == "event" for call in bridge.problem_calls)
 
 
@@ -191,13 +189,21 @@ def test_on_battery_transition_and_recovery_publish_event_last(tmp_path):
     ]
     assert bridge.problem_calls[0] == ("state", "on_battery", True)
     assert bridge.problem_calls[1] == ("aggregate", 1)
-    assert bridge.problem_calls[2][1]["severity"] == "warning"
+    presentation = bridge.problem_calls[2][1]
+    assert presentation["severity"] == "warning"
+    assert "summary" not in presentation
+    assert "summary" not in presentation["active"][0]
     started = bridge.problem_calls[3][1]
-    assert started["schema_version"] == 1
+    assert started["schema_version"] == 2
     assert started["event_type"] == "problem_started"
+    assert started["observed_at"] == "2026-09-15T20:00:10+05:00"
+    assert started["problem_id"] == "on_battery"
     assert started["category"] == "ups"
     assert started["metric"] == "on_battery"
+    assert started["previous"]["active"] is False
+    assert started["current"]["active"] is True
     assert started["active_problem_count"] == 1
+    assert not ({"summary", "details", "value", "average", "threshold"} & started.keys())
 
     bridge.problem_calls.clear()
     current["snapshot"] = _healthy()
@@ -213,7 +219,11 @@ def test_on_battery_transition_and_recovery_publish_event_last(tmp_path):
     assert bridge.problem_calls[0] == ("state", "on_battery", False)
     assert bridge.problem_calls[1] == ("aggregate", 0)
     recovered = bridge.problem_calls[3][1]
+    assert recovered["schema_version"] == 2
     assert recovered["event_type"] == "problem_recovered"
+    assert recovered["observed_at"] == "2026-09-15T20:00:20+05:00"
+    assert recovered["previous"]["active"] is True
+    assert recovered["current"]["active"] is False
     assert recovered["active_problem_count"] == 0
 
 
@@ -240,10 +250,15 @@ def test_simultaneous_ups_transitions_publish_all_states_before_aggregate_and_ev
     assert {call[1] for call in state_calls} == {"on_battery", "low_battery"}
     assert all(call[2] is True for call in state_calls)
     assert bridge.problem_calls[2] == ("aggregate", 2)
-    assert bridge.problem_calls[3][1]["severity"] == "critical"
+    presentation = bridge.problem_calls[3][1]
+    assert presentation["severity"] == "critical"
+    assert "summary" not in presentation
     events = bridge.problem_calls[4:]
     assert {call[1]["metric"] for call in events} == {"on_battery", "low_battery"}
+    assert all(call[1]["schema_version"] == 2 for call in events)
     assert all(call[1]["event_type"] == "problem_started" for call in events)
+    assert all(call[1]["observed_at"] == "2026-09-15T20:00:10+05:00" for call in events)
+    assert all(call[1]["current"]["active"] is True for call in events)
     assert all(call[1]["active_problem_count"] == 2 for call in events)
 
 
@@ -263,14 +278,18 @@ def test_nut_failure_starts_critical_problem_without_false_recoveries(tmp_path):
     assert bridge.problem_calls[1] == ("aggregate", 2)
     presentation = bridge.problem_calls[2][1]
     assert presentation["severity"] == "critical"
+    assert "summary" not in presentation
     assert {item["problem_id"] for item in presentation["active"]} == {
         "on_battery",
         "nut_unavailable",
     }
     event = bridge.problem_calls[3][1]
+    assert event["schema_version"] == 2
     assert event["event_type"] == "problem_started"
+    assert event["observed_at"] == "2026-09-15T20:00:10+05:00"
     assert event["metric"] == "nut_unavailable"
     assert event["severity"] == "critical"
+    assert event["current"]["active"] is True
     assert event["active_problem_count"] == 2
 
 
@@ -287,6 +306,7 @@ def test_failed_event_is_retried_before_new_observation(tmp_path):
     clock.update(iso="2026-09-15T20:00:10+05:00", mono=10.0)
     assert runtime.tick(clock["mono"]) is False
     assert bridge.problem_calls[-1][0] == "event"
+    assert bridge.problem_calls[-1][1]["schema_version"] == 2
     assert bridge.problem_calls[-1][1]["event_type"] == "problem_started"
 
     reads_before_retry = calls["count"]
@@ -302,6 +322,7 @@ def test_failed_event_is_retried_before_new_observation(tmp_path):
         "event",
     ]
     assert bridge.problem_calls[0] == ("state", "on_battery", True)
+    assert bridge.problem_calls[3][1]["schema_version"] == 2
     assert bridge.problem_calls[3][1]["event_type"] == "problem_started"
     assert [call[0] for call in bridge.problem_calls[4:]] == [
         "state",
@@ -310,6 +331,7 @@ def test_failed_event_is_retried_before_new_observation(tmp_path):
         "event",
     ]
     assert bridge.problem_calls[4] == ("state", "on_battery", False)
+    assert bridge.problem_calls[7][1]["schema_version"] == 2
     assert bridge.problem_calls[7][1]["event_type"] == "problem_recovered"
     assert calls["count"] == reads_before_retry + 1
 
@@ -331,4 +353,5 @@ def test_reconnect_republishes_problem_snapshot_without_event_or_nut_read(tmp_pa
     assert dict((call[1], call[2]) for call in state_calls)["on_battery"] is True
     assert bridge.problem_calls[-2] == ("aggregate", 1)
     assert bridge.problem_calls[-1][0] == "presentation"
+    assert "summary" not in bridge.problem_calls[-1][1]
     assert not any(call[0] == "event" for call in bridge.problem_calls)
