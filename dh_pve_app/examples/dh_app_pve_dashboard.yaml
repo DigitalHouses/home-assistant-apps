@@ -59,8 +59,10 @@ sections:
           {% set manufacturer = state_attr('sensor.dh_app_pve_system', 'manufacturer') %}
           {% set model = state_attr('sensor.dh_app_pve_system', 'model') %}
           {% set pve = state_attr('sensor.dh_app_pve_system', 'proxmox_version') %}
+          {% set app = states('sensor.dh_app_pve_app_version') %}
           {% set ip = state_attr('sensor.dh_app_pve_system', 'primary_ip') %}
-          {{ [manufacturer, model] | reject('in', [none, '', 'unknown']) | join(' ') }}{% if pve %} · PVE {{ pve }}{% endif %}{% if ip %} · {{ ip }}{% endif %}
+          {% set app_segment = '' if app in ['unknown', 'unavailable', 'none', ''] else ' · App ' ~ app %}
+          {{ [manufacturer, model] | reject('in', [none, '', 'unknown']) | join(' ') }}{% if pve %} · PVE {{ pve }}{% endif %}{{ app_segment }}{% if ip %} · {{ ip }}{% endif %}
         icon: mdi:server
         icon_color: blue
         multiline_secondary: true
