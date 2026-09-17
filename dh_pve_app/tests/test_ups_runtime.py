@@ -79,6 +79,13 @@ def _runtime(tmp_path, reader, now=None):
     return bridge, runtime, clock
 
 
+def _assert_machine_only_problem_fields(payload, *, count, severity):
+    assert payload["problems_count"] == count
+    assert payload["problems_severity"] == severity
+    assert "problems" not in payload
+    assert "problems_details" not in payload
+
+
 def test_startup_publishes_discovery_availability_and_state(tmp_path):
     snapshot = parse_upsc_output(
         "device.mfr: CPS\ndevice.model: UT2200E\nups.status: OL\n"
@@ -94,6 +101,7 @@ def test_startup_publishes_discovery_availability_and_state(tmp_path):
     assert bridge.states[-1]["status"] == "Online"
     assert bridge.states[-1]["status_raw"] == "OL"
     assert bridge.states[-1]["battery_charge_percent"] == 100.0
+    _assert_machine_only_problem_fields(bridge.states[-1], count=0, severity="ok")
 
 
 def test_startup_removes_legacy_estimated_power_then_publishes_clean_discovery(tmp_path):
@@ -141,6 +149,7 @@ def test_unchanged_poll_suppressed_but_ol_to_ob_publishes(tmp_path):
     assert len(bridge.states) == 1
     assert bridge.states[-1]["status"] == "On battery"
     assert bridge.states[-1]["on_battery"] is True
+    _assert_machine_only_problem_fields(bridge.states[-1], count=1, severity="warning")
 
 
 def test_runtime_drift_threshold_is_five_minutes_while_online(tmp_path):
@@ -180,6 +189,7 @@ def test_reader_failure_publishes_unavailable_without_losing_capabilities(tmp_pa
 
     assert bridge.states[-1]["available"] is False
     assert "NUT недоступен" in bridge.states[-1]["error"]
+    _assert_machine_only_problem_fields(bridge.states[-1], count=1, severity="critical")
     assert "battery_charge" in first_components
     assert "battery_charge" in runtime.last_discovery_payload["components"]
 
