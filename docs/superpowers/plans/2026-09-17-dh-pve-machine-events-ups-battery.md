@@ -36,7 +36,7 @@
 
 ### Existing files to modify
 
-- `dh_pve_app/app/problems.py` — machine-only problem state; no generated prose.
+- `dh_pve_app/app/problems.py` — machine-only problem state and aggregate; no generated prose.
 - `dh_pve_app/app/diagnostic_events.py` — schema-v2 generic problem event serialization.
 - `dh_pve_app/app/runtime_problems.py` — pass event timestamp and publish structured aggregates.
 - `dh_pve_app/app/ups_health.py` — UPS problem observations become IDs/severity/facts only.
@@ -44,11 +44,11 @@
 - `dh_pve_app/app/ups_nut.py` — parse raw `battery.charger.status`, normalized status/charger fields and canonical compatibility booleans.
 - `dh_pve_app/app/ups_runtime.py` — remove `_human_status()`/text problem fields and publish canonical machine state.
 - `dh_pve_app/app/presentation_ups.py` — route canonical UPS status/charger machine fields; remove text problem payload fields.
-- `dh_pve_app/app/ups_group_runtime.py` — integrate status/battery semantic trackers and retry-safe event outbox after retained-state publication.
+- `dh_pve_app/app/ups_group_runtime.py` — schema-v2 problem events plus status/battery semantic trackers and retry-safe event outbox after retained-state publication.
 - `dh_pve_app/app/shutdown_integration.py` — schema-v2 `config_changed` and `shutdown_committed` event creation.
 - `dh_pve_app/app/discovery_ups.py` / `dh_pve_app/app/discovery_ups_groups.py` — canonical status/charger entities and expanded Event types.
-- `dh_pve_app/app/discovery_groups.py` — schema-v2 generic diagnostic Event metadata where required.
-- `dh_pve_app/app/main.py` — construct/persist semantic event state under `/var/lib/dh_pve_app` if runtime injection is needed.
+- `dh_pve_app/app/discovery_groups.py` — generic diagnostic Event metadata.
+- `dh_pve_app/app/main.py` — construct explicit UPS semantic state stores and inject them into the runtime.
 - `dh_pve_app/examples/packages/dh_app_pve_notification_package.yaml` — English HA presentation, v1+v2 migration compatibility.
 - `dh_pve_app/examples/packages/locales/ru/dh_app_pve_notification_package.yaml` — Russian HA presentation, v1+v2 migration compatibility.
 - `dh_pve_app/examples/dh_app_pve_ups_dashboard.yaml` — expose canonical charger status in standard UPS UI.
@@ -62,18 +62,18 @@
 - `dh_pve_app/app/ups_status_events.py` — previous/current canonical UPS status transition tracker.
 - `dh_pve_app/app/ups_battery_events.py` — persistent discharge session, milestone crossing and fully-charged cycle tracker.
 
-### New/expanded tests
+### New tests
 
 - `dh_pve_app/tests/test_machine_event_outbox.py`
 - `dh_pve_app/tests/test_ups_semantics.py`
 - `dh_pve_app/tests/test_ups_status_events.py`
 - `dh_pve_app/tests/test_ups_battery_events.py`
-- modify existing `test_diagnostic_events.py`, `test_problems.py`, `test_problem_runtime.py`, `test_ups_problems.py`, `test_ups_problem_runtime_v2.py`, `test_ups_runtime.py`, `test_canonical_ups_discovery.py`, `test_ups_policy_transaction_v2.py`, `test_ups_trigger.py` and validator tests as required.
-- add `dh_pve_app/tests/test_ha_notification_machine_events.py` for static HA package migration guarantees.
+- `dh_pve_app/tests/test_ups_semantic_runtime.py`
+- `dh_pve_app/tests/test_ha_notification_machine_events.py`
 
 ---
 
-### Task 1: Deploy HA-first v1/v2 notification compatibility in repository examples
+### Task 1: Prepare HA-first v1/v2 notification compatibility
 
 **Files:**
 - Modify: `dh_pve_app/examples/packages/dh_app_pve_notification_package.yaml`
@@ -81,13 +81,11 @@
 - Create: `dh_pve_app/tests/test_ha_notification_machine_events.py`
 
 **Interfaces:**
-- Consumes: current HA MQTT Event attributes from schema v1 and future schema v2 fields from the approved spec.
-- Produces: one localized `dh_app_pve_notification` event per incoming user-visible machine event, with no dependency on Python-generated prose for v2.
-- Migration invariant: schema v1 and v2 are accepted by the HA package; app never dual-publishes v1+v2.
+- Consumes current schema-v1 Event attributes and future schema-v2 machine fields.
+- Produces one localized `dh_app_pve_notification` event per incoming user-visible machine event.
+- Schema-v1 fallback remains until a later cleanup release; app never dual-publishes v1 and v2.
 
 - [ ] **Step 1: Write failing static contract tests for both locale packages**
-
-Add tests that read both YAML files as text and require the new v2 event types plus schema-aware handling:
 
 ```python
 from pathlib import Path
@@ -114,9 +112,10 @@ def test_notification_packages_accept_machine_event_v2_types():
             assert event_type in text
 
 
-def test_notification_packages_do_not_require_v2_summary_details():
+def test_notification_packages_have_v2_machine_fields():
     for path in PACKAGES:
         text = path.read_text(encoding="utf-8")
+        assert "previous_status" in text
         assert "current_status" in text
         assert "crossed_thresholds" in text
         assert "current_charge_percent" in text
@@ -124,17 +123,15 @@ def test_notification_packages_do_not_require_v2_summary_details():
 
 - [ ] **Step 2: Run RED**
 
-Run:
-
 ```bash
 PYTHONPATH=dh_pve_app python -m pytest dh_pve_app/tests/test_ha_notification_machine_events.py -q
 ```
 
-Expected: FAIL because the current packages only understand v1 problem/config events.
+Expected: FAIL because the packages currently understand only v1 problem/config events.
 
-- [ ] **Step 3: Extend HA event triggers and schema-aware templates**
+- [ ] **Step 3: Extend HA triggers and add schema-aware branches**
 
-For `event.dh_app_pve_ups_diagnostic`, include:
+For `event.dh_app_pve_ups_diagnostic` include:
 
 ```yaml
 event_type:
@@ -148,16 +145,16 @@ event_type:
   - shutdown_committed
 ```
 
-At the top of each action template derive:
+Use:
 
 ```jinja2
 {% set schema = trigger.to_state.attributes.schema_version | int(1) %}
 {% set kind = trigger.to_state.attributes.event_type %}
 ```
 
-Keep the existing schema-v1 `summary/details/value/average/threshold` path only under `schema == 1`. For schema v2, use `previous`, `current`, previous/current status lists and structured numeric fields directly.
+Keep `summary/details/value/average/threshold` only inside the schema-v1 fallback. Schema v2 reads `previous/current`, previous/current status lists and structured numeric fields directly.
 
-Russian exact semantic examples to encode in HA, not Python:
+Russian HA wording to encode here, not in Python:
 
 ```text
 on_battery entered       -> 🔋⚠️ UPS: городское питание отсутствует
@@ -168,15 +165,13 @@ shutdown_committed       -> 🔋🛑 UPS: начато аварийное вык
 config_changed           -> 🔋⚙️ Конфигурация UPS Trigger изменена
 ```
 
-English package gets equivalent English wording. Preserve the HA-only boot-completed gate and the reusable downstream `dh_app_pve_notification` event.
+Preserve `binary_sensor.bs_global_system_boot_completed` as the HA-only notification gate and keep `dh_app_pve_notification` as the reusable downstream event.
 
 - [ ] **Step 4: Run GREEN**
 
 ```bash
 PYTHONPATH=dh_pve_app python -m pytest dh_pve_app/tests/test_ha_notification_machine_events.py -q
 ```
-
-Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
@@ -195,19 +190,19 @@ git commit -m "feat(dh-pve): prepare HA notifications for machine event v2"
 - Modify: `dh_pve_app/app/problems.py`
 - Modify: `dh_pve_app/app/diagnostic_events.py`
 - Modify: `dh_pve_app/app/runtime_problems.py`
+- Modify: `dh_pve_app/app/ups_group_runtime.py`
 - Modify: `dh_pve_app/tests/test_problems.py`
 - Modify: `dh_pve_app/tests/test_diagnostic_events.py`
 - Modify: `dh_pve_app/tests/test_problem_runtime.py`
+- Modify: `dh_pve_app/tests/test_ups_problem_runtime_v2.py`
 
 **Interfaces:**
-- `ProblemState` keeps: `problem_id, category, severity, object_id, object_name, metric, active, value, average, threshold`.
-- `ProblemState` no longer stores `summary` or `details`.
+- `ProblemState` keeps `problem_id, category, severity, object_id, object_name, metric, active, value, average, threshold` and removes `summary/details`.
+- `ProblemAggregate` keeps `count, severity, active` and removes generated summary prose.
 - `DiagnosticEvent.from_transition(transition, *, active_problem_count: int, observed_at: str) -> DiagnosticEvent`.
-- `DiagnosticEvent.as_payload()` emits schema version 2, `problem_id`, machine metadata, `previous`, `current`, and `active_problem_count`.
+- `DiagnosticEvent.as_payload()` emits schema version 2, problem metadata, `previous`, `current`, timestamp and `active_problem_count`.
 
-- [ ] **Step 1: Rewrite tests first for the exact v2 payload**
-
-Representative assertion:
+- [ ] **Step 1: Rewrite tests first for exact v2 payload**
 
 ```python
 payload = DiagnosticEvent.from_transition(
@@ -243,7 +238,7 @@ assert payload == {
 assert not ({"title", "message", "summary", "details", "status_ru"} & payload.keys())
 ```
 
-Also test timezone-naive `observed_at` is rejected and first inactive observation emits no transition.
+Also test timezone-naive `observed_at` rejection and first inactive observation producing no transition.
 
 - [ ] **Step 2: Run RED**
 
@@ -251,14 +246,13 @@ Also test timezone-naive `observed_at` is rejected and first inactive observatio
 PYTHONPATH=dh_pve_app python -m pytest \
   dh_pve_app/tests/test_problems.py \
   dh_pve_app/tests/test_diagnostic_events.py \
-  dh_pve_app/tests/test_problem_runtime.py -q
+  dh_pve_app/tests/test_problem_runtime.py \
+  dh_pve_app/tests/test_ups_problem_runtime_v2.py -q
 ```
 
-Expected: FAIL on v1 fields/schema.
+- [ ] **Step 3: Remove generated prose from problem state and event serialization**
 
-- [ ] **Step 3: Remove generated prose from `ProblemState` and event serialization**
-
-Use a single helper in `diagnostic_events.py`:
+Use one serializer helper:
 
 ```python
 def _transition_state(state: ProblemState | None) -> dict[str, object] | None:
@@ -272,11 +266,11 @@ def _transition_state(state: ProblemState | None) -> dict[str, object] | None:
     }
 ```
 
-Validate `observed_at` with `datetime.fromisoformat()` and require timezone awareness. Set `SCHEMA_VERSION = 2`.
+Set `SCHEMA_VERSION = 2`. Validate `observed_at` with `datetime.fromisoformat()` and require timezone awareness.
 
-- [ ] **Step 4: Update runtime callers to pass `self.now_iso()`**
+- [ ] **Step 4: Update both PVE and UPS runtime callers**
 
-In both normal and UPS problem event creation, the call shape must become:
+Use exactly:
 
 ```python
 event = DiagnosticEvent.from_transition(
@@ -292,40 +286,41 @@ event = DiagnosticEvent.from_transition(
 PYTHONPATH=dh_pve_app python -m pytest \
   dh_pve_app/tests/test_problems.py \
   dh_pve_app/tests/test_diagnostic_events.py \
-  dh_pve_app/tests/test_problem_runtime.py -q
+  dh_pve_app/tests/test_problem_runtime.py \
+  dh_pve_app/tests/test_ups_problem_runtime_v2.py -q
 ```
 
 - [ ] **Step 6: Commit**
 
 ```bash
 git add dh_pve_app/app/problems.py dh_pve_app/app/diagnostic_events.py \
-  dh_pve_app/app/runtime_problems.py dh_pve_app/tests/test_problems.py \
-  dh_pve_app/tests/test_diagnostic_events.py dh_pve_app/tests/test_problem_runtime.py
+  dh_pve_app/app/runtime_problems.py dh_pve_app/app/ups_group_runtime.py \
+  dh_pve_app/tests/test_problems.py dh_pve_app/tests/test_diagnostic_events.py \
+  dh_pve_app/tests/test_problem_runtime.py dh_pve_app/tests/test_ups_problem_runtime_v2.py
 git commit -m "refactor(dh-pve): make problem events machine-only v2"
 ```
 
 ---
 
-### Task 3: Remove prose from retained problem aggregates and UPS problem observations
+### Task 3: Remove prose from retained UPS problem observations/presentation
 
 **Files:**
 - Modify: `dh_pve_app/app/ups_health.py`
 - Modify: `dh_pve_app/app/ups_problems.py`
 - Modify: `dh_pve_app/app/ups_runtime.py`
 - Modify: `dh_pve_app/app/presentation_ups.py`
-- Modify: `dh_pve_app/app/runtime_problems.py`
 - Modify: `dh_pve_app/tests/test_ups_problems.py`
 - Modify: `dh_pve_app/tests/test_ups_problem_runtime_v2.py`
 - Modify: `dh_pve_app/tests/test_ups_runtime.py`
 
 **Interfaces:**
-- `UpsProblemObservation(problem_id, active, severity)` plus factual fields only if required; no message/label.
-- Problem aggregate shape: `count`, `severity`, `active: list[dict]` where each item is structured machine data.
-- Define `STATUS_DERIVED_UPS_PROBLEM_IDS = frozenset({"on_battery", "low_battery", "overload", "replace_battery", "bypass"})` for later notification de-duplication.
+- `UpsProblemObservation` contains `problem_id, active, severity`; no `message` or `label`.
+- Retained aggregate shape is `count`, `severity`, `active: list[dict]` with structured machine fields.
+- Define `STATUS_DERIVED_UPS_PROBLEM_IDS = frozenset({"on_battery", "low_battery", "overload", "replace_battery", "bypass"})` for Task 7 de-duplication.
 
-- [ ] **Step 1: Write RED assertions that retained payloads contain no prose fields**
+- [ ] **Step 1: Write RED assertions that retained UPS payloads contain no prose fields**
 
-Require active entries such as:
+Representative active entry:
 
 ```python
 assert aggregate.active[0] == {
@@ -341,7 +336,7 @@ assert aggregate.active[0] == {
 }
 ```
 
-And assert `summary`, `details`, localized message strings and `problems_details` are absent from grouped retained state.
+Assert `summary`, `details`, localized messages and `problems_details` are absent from retained machine state.
 
 - [ ] **Step 2: Run RED**
 
@@ -352,9 +347,9 @@ PYTHONPATH=dh_pve_app python -m pytest \
   dh_pve_app/tests/test_ups_runtime.py -q
 ```
 
-- [ ] **Step 3: Simplify observations/aggregates**
+- [ ] **Step 3: Simplify observations and retained state**
 
-Remove `message` and `label` from `UpsProblemObservation`; construct `ProblemState` directly from IDs/severity/active values. Remove aggregate `summary` generation from both generic and UPS engines. Replace old UPS `_problem_fields()` text output with structured/count/severity machine fields only.
+Remove `message/label` from `UpsProblemObservation`; construct `ProblemState` from IDs/severity/factual values only. Remove `problems` text lists and `problems_details` from `ups_runtime.py` / `presentation_ups.py` machine payloads.
 
 - [ ] **Step 4: Run GREEN**
 
@@ -370,9 +365,9 @@ PYTHONPATH=dh_pve_app python -m pytest \
 ```bash
 git add dh_pve_app/app/ups_health.py dh_pve_app/app/ups_problems.py \
   dh_pve_app/app/ups_runtime.py dh_pve_app/app/presentation_ups.py \
-  dh_pve_app/app/runtime_problems.py dh_pve_app/tests/test_ups_problems.py \
-  dh_pve_app/tests/test_ups_problem_runtime_v2.py dh_pve_app/tests/test_ups_runtime.py
-git commit -m "refactor(dh-pve): make retained problem state structured"
+  dh_pve_app/tests/test_ups_problems.py dh_pve_app/tests/test_ups_problem_runtime_v2.py \
+  dh_pve_app/tests/test_ups_runtime.py
+git commit -m "refactor(dh-pve): make UPS problem state machine-only"
 ```
 
 ---
@@ -389,11 +384,10 @@ git commit -m "refactor(dh-pve): make retained problem state structured"
 
 ```python
 CANONICAL_STATUS_ORDER: tuple[str, ...]
+PRIMARY_STATUS_PRECEDENCE: tuple[str, ...]
 
 def normalize_ups_status(status_tokens: tuple[str, ...]) -> tuple[str, ...]: ...
-
 def primary_ups_status(status_set: tuple[str, ...]) -> str: ...
-
 def resolve_charger_status(
     *,
     direct_status: str | None,
@@ -402,25 +396,35 @@ def resolve_charger_status(
 ) -> str: ...
 ```
 
-`UpsSnapshot` adds:
+Use this exact primary precedence:
 
 ```python
-normalized_status: tuple[str, ...]
-primary_status: str
-battery_charger_status_raw: str | None
-battery_charger_status: str
+PRIMARY_STATUS_PRECEDENCE = (
+    "forced_shutdown",
+    "alarm",
+    "overload",
+    "replace_battery",
+    "low_battery",
+    "bypass",
+    "calibration",
+    "output_off",
+    "on_battery",
+    "boost",
+    "trim",
+    "high_battery",
+    "online",
+)
 ```
 
-Compatibility fields `charging` and `discharging` are derived from canonical charger status.
+`UpsSnapshot` adds `normalized_status`, `primary_status`, `battery_charger_status_raw`, `battery_charger_status`. Compatibility booleans `charging/discharging` are derived from canonical charger status.
 
 - [ ] **Step 1: Write normalization RED tests**
-
-Tests must cover:
 
 ```python
 assert normalize_ups_status(("OL", "BOOST", "CHRG")) == ("online", "boost")
 assert normalize_ups_status(("OB", "DISCHRG", "LB")) == ("on_battery", "low_battery")
 assert normalize_ups_status(("OL", "FUTURE_TOKEN")) == ("online",)
+assert primary_ups_status(("online", "boost")) == "boost"
 
 assert resolve_charger_status(
     direct_status="floating",
@@ -448,13 +452,10 @@ assert resolve_charger_status(
 
 ```bash
 PYTHONPATH=dh_pve_app python -m pytest \
-  dh_pve_app/tests/test_ups_semantics.py \
-  dh_pve_app/tests/test_ups_nut.py -q
+  dh_pve_app/tests/test_ups_semantics.py dh_pve_app/tests/test_ups_nut.py -q
 ```
 
-- [ ] **Step 3: Implement the pure resolver and parser fields**
-
-Canonical NUT token mapping:
+- [ ] **Step 3: Implement pure resolver and parser fields**
 
 ```python
 _STATUS_MAP = {
@@ -474,14 +475,13 @@ _STATUS_MAP = {
 }
 ```
 
-Do not map `CHRG`/`DISCHRG` into `normalized_status`; they are charger fallback evidence only.
+Do not map CHRG/DISCHRG into `normalized_status`; preserve them only in raw tokens and charger fallback evidence.
 
 - [ ] **Step 4: Run GREEN**
 
 ```bash
 PYTHONPATH=dh_pve_app python -m pytest \
-  dh_pve_app/tests/test_ups_semantics.py \
-  dh_pve_app/tests/test_ups_nut.py -q
+  dh_pve_app/tests/test_ups_semantics.py dh_pve_app/tests/test_ups_nut.py -q
 ```
 
 - [ ] **Step 5: Commit**
@@ -494,7 +494,7 @@ git commit -m "feat(dh-pve): normalize UPS and charger machine state"
 
 ---
 
-### Task 5: Publish canonical UPS status and charger status through MQTT Discovery/UI state
+### Task 5: Publish canonical UPS status and charger state through MQTT Discovery
 
 **Files:**
 - Modify: `dh_pve_app/app/ups_runtime.py`
@@ -505,26 +505,20 @@ git commit -m "feat(dh-pve): normalize UPS and charger machine state"
 - Modify: `dh_pve_app/tests/test_ups_runtime.py`
 
 **Interfaces:**
-- `sensor.dh_app_pve_ups_status` state is `primary_status` machine enum.
-- Attributes/state group include `status_set` and `raw_status_tokens`.
-- New `sensor.dh_app_pve_ups_battery_charger_status` state is one of `charging|discharging|floating|resting|idle|unknown`.
-- Existing charging/discharging binaries remain compatible but derive from canonical charger status; unknown must not be published as false certainty.
+- `sensor.dh_app_pve_ups_status` state is `snapshot.primary_status`.
+- Machine state includes `status_set` and `raw_status_tokens`.
+- New `sensor.dh_app_pve_ups_battery_charger_status` is `charging|discharging|floating|resting|idle|unknown`.
+- Existing charging/discharging binaries derive from canonical charger status; `unknown` must not be converted to a certain OFF state.
 
 - [ ] **Step 1: Write RED Discovery/runtime tests**
-
-Require:
 
 ```python
 assert components["battery_charger_status"]["default_entity_id"] == (
     "sensor.dh_app_pve_ups_battery_charger_status"
 )
 assert "battery_charger_status" in components["battery_charger_status"]["value_template"]
-```
 
-And runtime payload:
-
-```python
-assert payload["status"] == "online"
+assert payload["status"] == "boost"
 assert payload["status_set"] == ["online", "boost"]
 assert payload["raw_status_tokens"] == ["OL", "BOOST", "CHRG"]
 assert payload["battery_charger_status"] == "charging"
@@ -535,20 +529,18 @@ assert "status_ru" not in payload
 
 ```bash
 PYTHONPATH=dh_pve_app python -m pytest \
-  dh_pve_app/tests/test_canonical_ups_discovery.py \
-  dh_pve_app/tests/test_ups_runtime.py -q
+  dh_pve_app/tests/test_canonical_ups_discovery.py dh_pve_app/tests/test_ups_runtime.py -q
 ```
 
-- [ ] **Step 3: Replace `_human_status()` with machine fields and add charger Discovery**
+- [ ] **Step 3: Delete `_human_status()` and publish machine fields**
 
-Delete `_human_status()` from `ups_runtime.py`. Use parsed `snapshot.primary_status`, `snapshot.normalized_status`, raw tokens and charger status. Ensure Discovery templates never reference `status_ru`.
+Use `snapshot.primary_status`, `snapshot.normalized_status`, raw tokens and canonical charger status. Remove Discovery references to `status_ru`.
 
 - [ ] **Step 4: Run GREEN**
 
 ```bash
 PYTHONPATH=dh_pve_app python -m pytest \
-  dh_pve_app/tests/test_canonical_ups_discovery.py \
-  dh_pve_app/tests/test_ups_runtime.py -q
+  dh_pve_app/tests/test_canonical_ups_discovery.py dh_pve_app/tests/test_ups_runtime.py -q
 ```
 
 - [ ] **Step 5: Commit**
@@ -583,9 +575,7 @@ class MachineEventOutbox:
     def acknowledge(self, key: str) -> None: ...
 ```
 
-- `enqueue()` is idempotent by key and persists before returning.
-- `acknowledge()` removes only after MQTT publish succeeds.
-- Persisted shape is versioned, e.g. `{"schema_version": 1, "pending": [...]}`.
+`enqueue()` is idempotent by key and persists before returning. `acknowledge()` removes only after MQTT publish succeeds. Persisted shape is `{"schema_version": 1, "pending": [...]}`.
 
 - [ ] **Step 1: Write RED persistence/idempotency tests**
 
@@ -596,7 +586,6 @@ assert [item.key for item in outbox.pending()] == ["status:1"]
 
 reloaded = MachineEventOutbox(store)
 assert reloaded.pending()[0].payload["event_type"] == "ups_status_changed"
-
 reloaded.acknowledge("status:1")
 assert reloaded.pending() == ()
 ```
@@ -607,9 +596,9 @@ assert reloaded.pending() == ()
 PYTHONPATH=dh_pve_app python -m pytest dh_pve_app/tests/test_machine_event_outbox.py -q
 ```
 
-- [ ] **Step 3: Implement minimal versioned persisted outbox**
+- [ ] **Step 3: Implement minimal versioned outbox**
 
-Reject empty keys and non-dict payloads; do not add retry timers or background threads.
+Reject empty keys and non-dict payloads. Do not add worker threads or retry timers.
 
 - [ ] **Step 4: Run GREEN**
 
@@ -626,7 +615,7 @@ git commit -m "feat(dh-pve): add persisted machine event outbox"
 
 ---
 
-### Task 7: Add UPS previous/current status-change events and suppress duplicate status problem events
+### Task 7: Add UPS previous/current status-change events and suppress duplicate problem events
 
 **Files:**
 - Create: `dh_pve_app/app/ups_status_events.py`
@@ -649,10 +638,10 @@ class UpsStatusEventTracker:
         current_status: tuple[str, ...],
         current_raw_status: tuple[str, ...],
         observed_at: str,
-    ) -> dict[str, object] | None: ...
+    ) -> tuple[str, dict[str, object]] | None: ...
 ```
 
-First observation establishes baseline and returns `None`. A changed canonical set returns:
+First observation establishes baseline and returns `None`. A change returns `(event_key, payload)` where payload is:
 
 ```python
 {
@@ -666,36 +655,30 @@ First observation establishes baseline and returns `None`. A changed canonical s
 }
 ```
 
-Status-derived retained binary problems still update, but their `problem_started/problem_recovered` diagnostic Event is suppressed; `ups_status_changed` is the notification transport for those facts.
-
 - [ ] **Step 1: Write RED transition tests**
 
 Cover OL->OB, OB->OL, BOOST enter/exit, unchanged status, first observation and raw-token preservation.
 
 - [ ] **Step 2: Write RED duplicate-notification test**
 
-For an OB transition, assert the runtime publishes the retained `on_battery` problem state but emits exactly one semantic notification event and it is `ups_status_changed`, not a second `problem_started` for `on_battery`.
+For OB transition, retained `on_battery` problem binary must update, but diagnostic Event transport must contain `ups_status_changed` only; no parallel `problem_started` for `on_battery`.
 
 - [ ] **Step 3: Run RED**
 
 ```bash
 PYTHONPATH=dh_pve_app python -m pytest \
-  dh_pve_app/tests/test_ups_status_events.py \
-  dh_pve_app/tests/test_ups_problem_runtime_v2.py -q
+  dh_pve_app/tests/test_ups_status_events.py dh_pve_app/tests/test_ups_problem_runtime_v2.py -q
 ```
 
-- [ ] **Step 4: Implement tracker and runtime filtering**
+- [ ] **Step 4: Implement tracker and status-derived problem filtering**
 
-Use `STATUS_DERIVED_UPS_PROBLEM_IDS` from `ups_problems.py`. Do not suppress generic events for `nut_unavailable` or app-specific diagnostic failures.
-
-Queue `ups_status_changed` into the persisted outbox only after retained UPS state/problem publication succeeds.
+Use `STATUS_DERIVED_UPS_PROBLEM_IDS`. Do not suppress `nut_unavailable` or app-specific diagnostic events. Enqueue the returned status event only after retained UPS state/problem publication succeeds.
 
 - [ ] **Step 5: Run GREEN**
 
 ```bash
 PYTHONPATH=dh_pve_app python -m pytest \
-  dh_pve_app/tests/test_ups_status_events.py \
-  dh_pve_app/tests/test_ups_problem_runtime_v2.py -q
+  dh_pve_app/tests/test_ups_status_events.py dh_pve_app/tests/test_ups_problem_runtime_v2.py -q
 ```
 
 - [ ] **Step 6: Commit**
@@ -722,7 +705,6 @@ DISCHARGE_THRESHOLDS = (90, 80, 70, 60, 50, 40, 30, 20, 10)
 
 class UpsBatteryEventTracker:
     def __init__(self, state_store: StateStore) -> None: ...
-
     def observe_discharge(
         self,
         *,
@@ -732,24 +714,22 @@ class UpsBatteryEventTracker:
     ) -> tuple[tuple[str, dict[str, object]], ...]: ...
 ```
 
-Persist at least `session_active`, `session_started_at`, `last_observed_charge_percent`, `emitted_thresholds`. Returned tuple entries are `(event_key, payload)` suitable for `MachineEventOutbox.enqueue()`.
+Persist `session_active`, `session_started_at`, `last_observed_charge_percent`, `emitted_thresholds`. Returned entries are `(event_key, payload)` for the outbox.
 
 - [ ] **Step 1: Write RED crossing tests**
 
-Exact required cases:
-
-```python
-94 -> 87 on battery => crossed_thresholds [90]
-94 -> 67 on battery => one event, crossed_thresholds [90, 80, 70]
+```text
+94 -> 87 on battery => [90]
+94 -> 67 on battery => one event with [90, 80, 70]
 91 -> 90             => [90]
 89 -> 87             => no duplicate 90
-87 -> 92 charging/up => no event
+87 -> 92             => no discharge milestone
 94 -> 87 while OL    => no event
 ```
 
 - [ ] **Step 2: Write RED restart tests**
 
-Persist a session after 90 was emitted, reconstruct the tracker from the same `StateStore`, then move from 87 -> 79 and assert only `[80]` is emitted. Startup already at 67 with no persisted crossing evidence establishes baseline and emits nothing.
+After persisted 90 milestone, reload tracker and move 87 -> 79; only `[80]` is emitted. Startup already at 67 with no persisted crossing evidence establishes baseline and emits nothing.
 
 - [ ] **Step 3: Run RED**
 
@@ -759,7 +739,7 @@ PYTHONPATH=dh_pve_app python -m pytest dh_pve_app/tests/test_ups_battery_events.
 
 - [ ] **Step 4: Implement transition/checkpoint persistence**
 
-Generate payload:
+Payload:
 
 ```python
 {
@@ -772,7 +752,7 @@ Generate payload:
 }
 ```
 
-Persist emitted thresholds when the semantic event is created; delivery retry is handled by the outbox, not by recreating the milestone.
+Persist emitted thresholds when semantic event creation succeeds; MQTT delivery retry belongs to the outbox.
 
 - [ ] **Step 5: Run GREEN**
 
@@ -789,15 +769,13 @@ git commit -m "feat(dh-pve): add UPS discharge milestone events"
 
 ---
 
-### Task 9: Add fully-charged cycle detection to the battery tracker
+### Task 9: Add fully-charged charge-cycle detection
 
 **Files:**
 - Modify: `dh_pve_app/app/ups_battery_events.py`
 - Modify: `dh_pve_app/tests/test_ups_battery_events.py`
 
 **Interfaces:**
-
-Extend tracker with:
 
 ```python
 def observe_charge_cycle(
@@ -811,11 +789,9 @@ def observe_charge_cycle(
 ) -> tuple[tuple[str, dict[str, object]], ...]: ...
 ```
 
-Persist cycle state so one charge cycle produces at most one `battery_fully_charged` event.
+Persist cycle state so one observed charging cycle emits at most one `battery_fully_charged` event.
 
-- [ ] **Step 1: Add RED direct charger-status tests**
-
-Required:
+- [ ] **Step 1: Add RED direct-status tests**
 
 ```text
 charging -> floating => one event
@@ -827,15 +803,13 @@ fully charged may emit at 98%
 
 - [ ] **Step 2: Add RED legacy fallback tests**
 
-With no direct `battery.charger.status`:
-
 ```text
 OL+CHRG -> OL(no CHRG/DISCHRG) sample 1 -> no event
 same stable OL sample 2                  -> one event
 one-sample CHRG disappearance then CHRG  -> no event
 ```
 
-Direct charger status must win over conflicting legacy token evidence.
+Direct `battery.charger.status` wins over conflicting CHRG/DISCHRG evidence.
 
 - [ ] **Step 3: Run RED**
 
@@ -843,9 +817,9 @@ Direct charger status must win over conflicting legacy token evidence.
 PYTHONPATH=dh_pve_app python -m pytest dh_pve_app/tests/test_ups_battery_events.py -q
 ```
 
-- [ ] **Step 4: Implement cycle latch and fallback confirmation**
+- [ ] **Step 4: Implement cycle latch and two-sample fallback confirmation**
 
-Use at least two consecutive 10-second fallback idle samples. Payload:
+Payload:
 
 ```python
 {
@@ -856,9 +830,11 @@ Use at least two consecutive 10-second fallback idle samples. Payload:
     "current_charge_percent": current_charge,
     "previous_charger_status": "charging",
     "current_charger_status": current_status,
-    "detection_source": "charger_status",  # or legacy_status_fallback
+    "detection_source": "charger_status",
 }
 ```
+
+Fallback uses `detection_source="legacy_status_fallback"`.
 
 - [ ] **Step 5: Run GREEN**
 
@@ -875,48 +851,55 @@ git commit -m "feat(dh-pve): detect completed UPS charge cycles"
 
 ---
 
-### Task 10: Integrate semantic-event outbox, battery tracker and retry ordering into UPS runtime
+### Task 10: Integrate outbox/status/battery trackers into UPS runtime
 
 **Files:**
 - Modify: `dh_pve_app/app/ups_group_runtime.py`
 - Modify: `dh_pve_app/app/main.py`
+- Create: `dh_pve_app/tests/test_ups_semantic_runtime.py`
 - Modify: `dh_pve_app/tests/test_ups_problem_runtime_v2.py`
-- Modify/Create: `dh_pve_app/tests/test_ups_semantic_runtime.py`
 
 **Interfaces:**
-- Dedicated state files under the UPS state directory:
-  - `ups_machine_event_outbox.json`
-  - `ups_battery_events.json`
-- Runtime flush order:
+- `AdaptiveUpsRuntime.__init__` accepts `machine_event_outbox: MachineEventOutbox` and `battery_event_tracker: UpsBatteryEventTracker`.
+- `UpsStatusEventTracker` remains in-memory; pending delivery survives restart in the persisted outbox.
+- `build_ups_runtime()` constructs exactly:
 
-```text
-1. flush previously pending machine events; stop observation if transport still fails
-2. read fresh NUT snapshot
-3. publish retained UPS state groups
-4. publish retained problem state/aggregate
-5. update status/battery semantic trackers and enqueue new events
-6. flush machine-event outbox in queue order
+```python
+machine_event_outbox=MachineEventOutbox(
+    StateStore(state_dir / "ups_machine_event_outbox.json")
+),
+battery_event_tracker=UpsBatteryEventTracker(
+    StateStore(state_dir / "ups_battery_events.json")
+),
 ```
 
-- [ ] **Step 1: Write RED end-to-end runtime tests**
+- Runtime ordering:
 
-Test one OB transition with charge 87 from previous 94 and assert retained state precedes event publication. Then simulate `publish_ups_diagnostic_event` failing once; verify the event remains pending and is retried before a later snapshot is observed.
+```text
+1. flush old outbox; stop if MQTT still fails
+2. read NUT
+3. publish retained UPS groups
+4. publish retained problem state/aggregate
+5. update status/battery semantic trackers and enqueue events
+6. flush outbox in order
+```
 
-- [ ] **Step 2: Write RED no-double-count tests**
+- [ ] **Step 1: Write RED end-to-end ordering test**
 
-After a failed milestone Event publish, rerun runtime processing and assert no second semantic milestone is created; only the pending outbox event is retried.
+Drive a status transition and battery threshold crossing. Assert retained state calls precede semantic Event calls.
+
+- [ ] **Step 2: Write RED retry/no-double-count test**
+
+Fail `publish_ups_diagnostic_event` once. Assert outbox keeps the event; next runtime pass retries it before observing another NUT snapshot; no second milestone is created.
 
 - [ ] **Step 3: Run RED**
 
 ```bash
 PYTHONPATH=dh_pve_app python -m pytest \
-  dh_pve_app/tests/test_ups_semantic_runtime.py \
-  dh_pve_app/tests/test_ups_problem_runtime_v2.py -q
+  dh_pve_app/tests/test_ups_semantic_runtime.py dh_pve_app/tests/test_ups_problem_runtime_v2.py -q
 ```
 
-- [ ] **Step 4: Integrate stores/trackers and flush helper**
-
-Add runtime helper:
+- [ ] **Step 4: Implement outbox flush helper**
 
 ```python
 def _flush_machine_event_outbox(self) -> bool:
@@ -927,22 +910,20 @@ def _flush_machine_event_outbox(self) -> bool:
     return True
 ```
 
-Do not add a separate thread or timer.
+Do not add a background worker or new scheduling cadence.
 
 - [ ] **Step 5: Run GREEN**
 
 ```bash
 PYTHONPATH=dh_pve_app python -m pytest \
-  dh_pve_app/tests/test_ups_semantic_runtime.py \
-  dh_pve_app/tests/test_ups_problem_runtime_v2.py -q
+  dh_pve_app/tests/test_ups_semantic_runtime.py dh_pve_app/tests/test_ups_problem_runtime_v2.py -q
 ```
 
 - [ ] **Step 6: Commit**
 
 ```bash
 git add dh_pve_app/app/ups_group_runtime.py dh_pve_app/app/main.py \
-  dh_pve_app/tests/test_ups_semantic_runtime.py \
-  dh_pve_app/tests/test_ups_problem_runtime_v2.py
+  dh_pve_app/tests/test_ups_semantic_runtime.py dh_pve_app/tests/test_ups_problem_runtime_v2.py
 git commit -m "feat(dh-pve): integrate retry-safe UPS semantic events"
 ```
 
@@ -957,8 +938,8 @@ git commit -m "feat(dh-pve): integrate retry-safe UPS semantic events"
 - Modify: `dh_pve_app/tests/test_ups_semantic_runtime.py`
 
 **Interfaces:**
-- Internal safety controller/executor reason strings may remain `charge_guard` / `runtime_guard` to avoid changing the fixed helper ACL.
-- Public event reason mapping is stable:
+- Internal executor reason strings stay `charge_guard` / `runtime_guard`; fixed helper ACL is unchanged.
+- Public event reason map:
 
 ```python
 _PUBLIC_SHUTDOWN_REASON = {
@@ -967,18 +948,16 @@ _PUBLIC_SHUTDOWN_REASON = {
 }
 ```
 
-- `shutdown_committed` is enqueued only after the fixed local shutdown helper returns successfully and the controller's commit latch is true.
-- `config_changed` v2 carries only machine OLD/NEW/revision data.
+- `shutdown_committed` is enqueued only after fixed local helper success and controller commit latch.
+- `config_changed` v2 contains OLD/NEW/revision only; no prose.
 
-- [ ] **Step 1: Write RED `shutdown_committed` tests**
-
-Assert exact fields:
+- [ ] **Step 1: Write RED shutdown-commit tests**
 
 ```python
-{
+assert event == {
     "schema_version": 2,
     "event_type": "shutdown_committed",
-    "observed_at": "...+05:00",
+    "observed_at": observed_at,
     "reason": "runtime_threshold",
     "battery_charge_percent": 43.0,
     "battery_runtime_seconds": 390.0,
@@ -988,11 +967,9 @@ Assert exact fields:
 }
 ```
 
-Assert exactly one event after repeated evaluations; helper failure produces no committed event; NUT FSD alone produces no `shutdown_committed`.
+Repeated evaluation emits once. Helper failure emits none. NUT FSD alone emits no `shutdown_committed`.
 
-- [ ] **Step 2: Write RED `config_changed` v2 tests**
-
-Require:
+- [ ] **Step 2: Write RED config-change v2 tests**
 
 ```python
 assert event["schema_version"] == 2
@@ -1014,9 +991,9 @@ PYTHONPATH=dh_pve_app python -m pytest \
   dh_pve_app/tests/test_ups_semantic_runtime.py -q
 ```
 
-- [ ] **Step 4: Implement v2 event creation without altering shutdown authority**
+- [ ] **Step 4: Implement v2 events without changing safety behavior**
 
-Do not change Trigger A/B safety predicates, native LB behavior, helper path or allowed helper commands. Only add structured event data after successful commitment and convert successful config-change event payloads.
+After successful software shutdown helper return, record history, enqueue `shutdown_committed`, and immediately attempt synchronous outbox flush while the process is still alive. Do not alter Trigger A/B predicates, native LB behavior, helper path or allowed helper commands.
 
 - [ ] **Step 5: Run GREEN**
 
@@ -1038,18 +1015,17 @@ git commit -m "feat(dh-pve): emit structured shutdown and policy events"
 
 ---
 
-### Task 12: Expand MQTT Event Discovery, migrate removed localized fields and update standard UPS UI
+### Task 12: Expand Event Discovery and update standard UPS charger UI
 
 **Files:**
 - Modify: `dh_pve_app/app/discovery_ups_groups.py`
 - Modify: `dh_pve_app/app/discovery_groups.py`
-- Modify: Discovery schema/version state file in the existing Discovery migration implementation if current code requires a bump.
 - Modify: `dh_pve_app/examples/dh_app_pve_ups_dashboard.yaml`
 - Modify: `dh_pve_app/tests/test_canonical_ups_discovery.py`
 - Modify: `scripts/validators/apps/dh_pve_app.py`
 
 **Interfaces:**
-- UPS Event entity allowed types:
+- UPS Event allowed types are exactly:
 
 ```text
 problem_started
@@ -1062,12 +1038,14 @@ battery_fully_charged
 shutdown_committed
 ```
 
+- Generic PVE Event remains `problem_started/problem_recovered/problem_updated` but its payload schema is v2.
 - Discovery no longer references `status_ru`, `summary`, `details` or old UPS text problem fields.
-- Standard dashboard charger status reads only `sensor.dh_app_pve_ups_battery_charger_status` and localizes in HA Jinja/UI.
+- Standard dashboard charger UI reads only `sensor.dh_app_pve_ups_battery_charger_status` and localizes in HA.
+- Current 0.4.0 branch has no separate Discovery schema-version store in runtime code. Do not introduce a new migration subsystem solely for this change: startup/reconnect already republishes retained canonical Device Discovery to the same topics, replacing `event_types` and templates idempotently.
 
 - [ ] **Step 1: Write RED Discovery/validator assertions**
 
-Require exact event type list and charger entity. Add validator checks that Python Event serializers do not publish prohibited presentation keys.
+Require exact UPS Event type list, charger entity and absence of removed localized fields.
 
 - [ ] **Step 2: Run RED**
 
@@ -1076,11 +1054,9 @@ PYTHONPATH=dh_pve_app python -m pytest dh_pve_app/tests/test_canonical_ups_disco
 python scripts/validate.py
 ```
 
-Expected: at least the new contract checks fail before implementation.
-
 - [ ] **Step 3: Update Discovery and dashboard**
 
-Dashboard mapping example:
+Dashboard text mapping:
 
 ```jinja2
 {% set s = states('sensor.dh_app_pve_ups_battery_charger_status') %}
@@ -1096,9 +1072,7 @@ Dashboard mapping example:
 {{ labels.get(s, s) }}
 ```
 
-Choose icon/icon color in HAOS from the same machine state; do not add localized status to Python payload.
-
-If Event Discovery metadata requires schema migration, increment the existing Discovery schema once and preserve the existing idempotent manifest/tombstone pattern; do not invent a parallel migration mechanism.
+Choose icon/icon color in HAOS from the same machine state.
 
 - [ ] **Step 4: Run GREEN**
 
@@ -1118,7 +1092,7 @@ git commit -m "feat(dh-pve): publish machine event discovery v2"
 
 ---
 
-### Task 13: Complete HA localized v2 presentation and remove v2 dependency on app prose
+### Task 13: Finish localized v2 HA presentation and enforce no v2 prose dependency
 
 **Files:**
 - Modify: `dh_pve_app/examples/packages/dh_app_pve_notification_package.yaml`
@@ -1127,33 +1101,15 @@ git commit -m "feat(dh-pve): publish machine event discovery v2"
 
 **Interfaces:**
 - v1 fallback remains temporary.
-- v2 path must derive all user wording from machine fields.
-- HA may use source-native `object_name`, IDs and numerical values but never expect `summary/details` in v2.
+- v2 formatting derives entirely from machine fields.
 
-- [ ] **Step 1: Strengthen tests to reject v2 prose-field reads**
+- [ ] **Step 1: Strengthen tests around schema branches**
 
-Add static assertions that v2 branches do not access `trigger.to_state.attributes.summary` or `.details`; any such reference must be confined to explicit schema-v1 fallback blocks.
+Assert v2 branches use `previous/current`, status lists, thresholds and charge/runtime fields. `summary/details` references may exist only in explicit schema-v1 fallback sections.
 
-- [ ] **Step 2: Add exact v2 mappings for user-visible UPS events**
+- [ ] **Step 2: Implement all v2 user-visible mappings**
 
-Russian rules at minimum:
-
-```text
-current contains on_battery, previous did not -> городское питание отсутствует
-previous contains on_battery, current contains online -> городское питание восстановлено
-boost entered/exited -> локализованное BOOST сообщение
-trim entered/exited -> локализованное TRIM сообщение
-bypass entered/exited -> локализованное bypass сообщение
-overload entered/exited -> локализованное overload сообщение
-low_battery entered/exited -> локализованное low-battery сообщение
-replace_battery entered -> локализованное replace-battery сообщение
-battery_discharge_level_crossed -> current charge + crossed levels
-battery_fully_charged -> current charge when available
-shutdown_committed -> reason + runtime/charge/budget/reserve
-config_changed -> OLD -> NEW values/revisions
-```
-
-Generic PVE problem v2 messages use `metric/current.value/current.average/current.threshold` and category/object metadata.
+At minimum cover localized enter/exit messages for `on_battery`, `boost`, `trim`, `bypass`, `overload`, `low_battery`, `replace_battery`, plus discharge milestones, fully charged, shutdown committed and config changed. Generic PVE problem v2 messages use `metric`, `current.value`, `current.average`, `current.threshold` and object/category metadata.
 
 - [ ] **Step 3: Run HA package tests**
 
@@ -1178,24 +1134,22 @@ git commit -m "feat(dh-pve): localize machine event notifications in HA"
 - Modify: `dh_pve_app/VERSION`
 - Modify: `dh_pve_app/README.md`
 - Modify: `dh_pve_app/CHANGELOG.md`
-- Modify: validator/repository contract tests that pin the app version.
+- Modify: `scripts/validators/apps/dh_pve_app.py`
 
 **Interfaces:**
-- Release target: `0.5.0`.
-- README documents machine-event v2, charger status entity, battery milestone semantics, fully-charged semantics and HA-owned localization.
-- CHANGELOG explicitly notes breaking Event schema v2 and HA-first upgrade order.
+- Release target is `0.5.0`.
+- README documents schema-v2 machine events, charger entity, battery milestones, fully-charged semantics and HA-owned localization.
+- CHANGELOG states breaking Event schema v2 and HA-first upgrade order.
 
-- [ ] **Step 1: Update docs/version tests first where version is pinned**
-
-Expected version:
+- [ ] **Step 1: Set release version and validator contract to 0.5.0**
 
 ```text
 0.5.0
 ```
 
-- [ ] **Step 2: Update README/CHANGELOG/VERSION**
+- [ ] **Step 2: Update README/CHANGELOG**
 
-README must include these exact operational points:
+README must state:
 
 ```text
 App events contain machine semantics only.
@@ -1236,41 +1190,37 @@ bash -n dh_pve_app/install.sh
 
 Expected: all commands exit 0.
 
-- [ ] **Step 5: Audit public event payloads for prohibited prose keys**
-
-Run:
+- [ ] **Step 5: Audit event builders for prohibited presentation fields**
 
 ```bash
 grep -RInE '"(title|message|summary|details|recovery_message|status_ru|emoji)"\s*:' \
   dh_pve_app/app || true
 ```
 
-Review every hit. Allowed hits are internal/non-event state only if explicitly justified; no MQTT Event payload builder may contain these user-presentation keys.
-
-Also search localized prose in UPS event production:
+Review every hit. Generic non-event presentation may remain only where it is not notification protocol; MQTT Event builders may not contain these keys.
 
 ```bash
 grep -RInE 'Работа от батареи|состояние нормализовалось|UPS Trigger Policy изменена|No active UPS problems|problem active' \
   dh_pve_app/app || true
 ```
 
-Expected: no user-facing event/presentation generation remains in app code; Russian operational journal errors/logs are allowed.
+Expected: no user-facing event/notification prose generation remains; Russian operational journal log/error text is allowed.
 
 - [ ] **Step 6: Final diff review**
 
-Verify specifically:
+Verify:
 
 ```text
-- no shutdown predicate/helper ACL changed accidentally
-- no new collection cadence or timer introduced
-- Event QoS remains 1 / retain=false
-- retained state publishes before transition events
-- v1 HA compatibility exists before app v2 deployment
-- no duplicate status-derived problem notification events
-- milestone/fully-charged state survives restart
-- failed Event publish is retried from outbox
-- FSD remains distinct from shutdown_committed
-- standard dashboard charger status is HA-localized
+shutdown predicates/helper ACL unchanged
+no faster collector/timer added
+Event QoS=1 and retain=false unchanged
+retained state precedes transition events
+HA v1+v2 compatibility exists before app v2 deployment
+status-derived problem notification events are not duplicated
+milestone/fully-charged state survives restart
+failed semantic Event publish retries from outbox
+FSD remains distinct from shutdown_committed
+charger UI localization is HA-owned
 ```
 
 - [ ] **Step 7: Commit release metadata**
@@ -1285,31 +1235,30 @@ git commit -m "docs(dh-pve): release 0.5.0 machine events"
 
 ## Deployment / Production Verification Gate
 
-Do not deploy before full CI is green and the final diff is reviewed.
+Do not deploy before full CI is green and final diff review is complete.
 
-Production order must be:
+Production order:
 
 ```text
 1. Deploy HAOS notification package that accepts schema v1 + v2.
-2. Reload/restart HA Core and verify package loads with no template errors.
+2. Restart/reload HA Core and verify no package/template errors.
 3. Deploy exact reviewed dh_pve_app 0.5.0 SHA to home PVE 192.168.11.30.
-4. Verify Discovery contains new charger-status sensor and expanded UPS Event types.
-5. Use non-destructive state/event evidence only.
-6. Verify ordinary OL/current charger state and retained machine payloads.
-7. Verify config_changed v2 through a safe policy Apply only if a real configuration change is intended.
-8. Do not unplug mains, force FSD, deep-discharge the UPS or trigger real shutdown merely to test notifications.
+4. Verify new charger-status entity and expanded UPS Event metadata.
+5. Verify ordinary OL/current charger retained machine payloads.
+6. Verify config_changed v2 only through a safe policy Apply when a real config change is intended.
+7. Do not unplug mains, force FSD, deep-discharge the UPS or trigger real shutdown merely for notification testing.
 ```
 
-For battery/status transition behavior that cannot be observed naturally, use unit/integration fixtures and synthetic runtime tests rather than destructive production actions.
+Use fixtures/synthetic runtime tests for transitions that cannot be observed naturally without destructive action.
 
 ## Plan Self-Review Checklist
 
-- Spec sections 3-5 (machine-only problem events/aggregates): Tasks 2-3.
-- Spec sections 6-8 (UPS status + charger semantics/UI): Tasks 4-5, 7, 12.
-- Spec section 9 (discharge milestones): Tasks 8, 10.
-- Spec section 10 (fully charged): Tasks 9-10.
-- Spec sections 11-12 (shutdown/config events): Task 11.
-- Spec sections 13-15 (HA ownership, Event surface, migration): Tasks 1, 12-13.
-- Spec section 17 test contract: distributed across Tasks 1-14.
-- Spec section 18 retry semantics: Tasks 6, 10-11.
+- Spec sections 3-5: Tasks 2-3.
+- Spec sections 6-8: Tasks 4-5, 7, 12.
+- Spec section 9: Tasks 8, 10.
+- Spec section 10: Tasks 9-10.
+- Spec sections 11-12: Task 11.
+- Spec sections 13-15: Tasks 1, 12-13.
+- Spec section 17: covered by Tasks 1-14 tests.
+- Spec section 18: Tasks 6, 10-11.
 - No production task authorizes destructive UPS validation.
