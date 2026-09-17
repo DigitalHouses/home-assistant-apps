@@ -2,7 +2,7 @@
 
 `dh_pve_app` is the DigitalHouses native Linux agent for Proxmox VE 8.x. It collects host, CPU, memory, storage, disk/SMART, GPU, fan and VM/LXC state, publishes Home Assistant entities through MQTT Discovery, and can monitor a locally attached UPS through Network UPS Tools (NUT).
 
-`VERSION` is `0.5.0`.
+`VERSION` is `0.5.1`.
 
 MQTT base namespace: `DigitalHouses/Global/dh_pve_app/<instance>`.
 MQTT devices: `DH PVE` and optional `DH PVE UPS`.
@@ -57,6 +57,8 @@ Legacy MQTT Discovery identities are removed through retained tombstones during 
 Problem calculation is App-owned. Home Assistant does not scan `states.sensor`, wildcard all entities, rebuild topology or calculate thresholds.
 
 Current problems are exposed as `binary_sensor` entities with `device_class: problem`. Aggregate problem state and compact presentation are separate retained sensors.
+
+The installed App release is exposed as diagnostic entity `sensor.dh_app_pve_app_version`. Its state comes from the same `VERSION` value used by MQTT Device Discovery `device.sw_version` and `origin.sw_version`. The standard PVE dashboard shows it in the host summary as `App <version>` and hides that segment if the entity is unavailable or unknown.
 
 Native MQTT Event entities are used for diagnostic transitions:
 
@@ -119,7 +121,7 @@ The reusable package intentionally does not call `script.write2log`, Telegram, a
 
 Recorder configuration is an explicit whitelist. Continuous history is kept only for useful metrics such as CPU, RAM/Swap, fan RPM, storage usage, disk temperature/wear, GPU telemetry and selected UPS telemetry/status.
 
-Rich presentation, debug diagnostics and MQTT Event entities are intentionally not Recorder history.
+Rich presentation, debug diagnostics, the static `sensor.dh_app_pve_app_version` metadata entity and MQTT Event entities are intentionally not Recorder history.
 
 ## UPS / NUT ownership
 
@@ -235,6 +237,33 @@ bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistan
 ```
 
 After deployment verify the exact installed version/ref, service state, MQTT availability, canonical charger-status entity, expanded UPS Event metadata and read-only preflight before any UPS shutdown commissioning.
+
+## Supported uninstall
+
+The installer deploys an executable supported uninstaller at:
+
+```bash
+/opt/digitalhouses/dh_pve_app/uninstall.sh
+```
+
+A normal uninstall stops and removes the App runtime/service only after successful MQTT cleanup. Before local removal it publishes canonical PVE and UPS availability as retained `offline`, then removes canonical and legacy PVE/UPS MQTT Discovery through retained tombstones. It preserves:
+
+- `/etc/dh_pve_app/`;
+- `/var/lib/dh_pve_app/`.
+
+This keeps configuration, identity and persistent state available for a later reinstall.
+
+Full removal is explicit:
+
+```bash
+/opt/digitalhouses/dh_pve_app/uninstall.sh --purge
+```
+
+`uninstall.sh --purge` performs the same MQTT cleanup first, then additionally deletes `/etc/dh_pve_app/` and `/var/lib/dh_pve_app/`.
+
+If MQTT cleanup fails, uninstall aborts with a non-zero status and does not remove the unit, App files, configuration or state. If `dh_pve_app.service` was active before uninstall, it is started again.
+
+Uninstall does not modify NUT configuration/services, does not issue FSD or UPS output/load commands, does not remove shared OS dependencies, and does not modify Home Assistant or the MQTT broker.
 
 ## Safety boundary
 
