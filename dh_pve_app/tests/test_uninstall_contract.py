@@ -93,3 +93,14 @@ def test_uninstaller_uses_installed_python_cleanup_and_never_owns_nut_or_depende
         "mosquitto",
     ):
         assert forbidden not in lowered
+
+
+def test_uninstaller_removes_root_operational_guide_only_after_mqtt_cleanup():
+    text = _text()
+
+    assert 'ROOT_GUIDE="/root/dh_app_pve.txt"' in text
+    assert 'rm -f -- "${ROOT_GUIDE}"' in text
+
+    cleanup_pos = text.index("--uninstall-mqtt-cleanup")
+    guide_remove_pos = text.index('rm -f -- "${ROOT_GUIDE}"')
+    assert cleanup_pos < guide_remove_pos
