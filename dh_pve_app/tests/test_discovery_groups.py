@@ -112,7 +112,7 @@ def _inventory():
 
 def _payload():
     return build_shutdown_aware_pve_discovery_payload(
-        _config(), _identity(), version="0.2.0", inventory=_inventory()
+        _config(), _identity(), version="0.5.1", inventory=_inventory()
     )
 
 
@@ -192,8 +192,9 @@ def test_pve_discovery_exposes_app_version_from_same_release_value():
     assert c["app_version"]["entity_category"] == "diagnostic"
     assert c["app_version"]["icon"] == "mdi:tag-outline"
 
-    assert payload["device"]["sw_version"] == "0.2.0"
-    assert payload["origin"]["sw_version"] == "0.2.0"
+    assert payload["device"]["name"] == "DH PVE"
+    assert payload["device"]["sw_version"] == "0.5.1"
+    assert payload["origin"]["sw_version"] == "0.5.1"
 
 
 def test_continuous_sensor_attributes_do_not_duplicate_volatile_values():
