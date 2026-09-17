@@ -24,6 +24,10 @@ def _compact(state: ProblemState) -> dict[str, object]:
     }
 
 
+def transition_uses_status_event(transition: ProblemTransition) -> bool:
+    return transition.current.problem_id in STATUS_DERIVED_UPS_PROBLEM_IDS
+
+
 @dataclass
 class UpsProblemEngine:
     object_id: str
@@ -74,10 +78,7 @@ class UpsProblemEngine:
                 threshold=None,
             )
             transition = self._commit(state)
-            if (
-                transition is not None
-                and observation.problem_id not in STATUS_DERIVED_UPS_PROBLEM_IDS
-            ):
+            if transition is not None:
                 transitions.append(transition)
         return tuple(transitions)
 
