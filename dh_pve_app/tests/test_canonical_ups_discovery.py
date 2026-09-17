@@ -31,7 +31,7 @@ def _payload():
         "device.mfr: CPS\n"
         "device.model: UT2200E\n"
         "device.serial: TEST123\n"
-        "ups.status: OL\n"
+        "ups.status: OL CHRG\n"
         "battery.charge: 100\n"
         "battery.runtime: 2160\n"
         "ups.load: 5\n"
@@ -69,6 +69,9 @@ def test_canonical_ups_public_entity_ids_are_consistent():
     c = _payload()["components"]
 
     assert c["status"]["default_entity_id"] == "sensor.dh_app_pve_ups_status"
+    assert c["battery_charger_status"]["default_entity_id"] == (
+        "sensor.dh_app_pve_ups_battery_charger_status"
+    )
     assert c["battery_charge"]["default_entity_id"] == "sensor.dh_app_pve_ups_battery_charge"
     assert c["refresh"]["default_entity_id"] == "button.dh_app_pve_ups_refresh"
     assert c["guest_shutdown_budget"]["default_entity_id"] == (
@@ -87,6 +90,32 @@ def test_canonical_ups_public_entity_ids_are_consistent():
         or ".dh_ups_" in component.get("default_entity_id", "")
         for component in c.values()
     )
+
+
+def test_canonical_status_and_charger_discovery_use_machine_fields():
+    c = _payload()["components"]
+
+    status = c["status"]
+    assert "value_json.status" in status["value_template"]
+    assert "status_set" in status["json_attributes_template"]
+    assert "raw_status_tokens" in status["json_attributes_template"]
+    assert "status_ru" not in status["value_template"]
+    assert "status_ru" not in status["json_attributes_template"]
+
+    charger = c["battery_charger_status"]
+    assert "battery_charger_status" in charger["value_template"]
+
+    for key, active_status in (
+        ("charging", "charging"),
+        ("discharging", "discharging"),
+    ):
+        component = c[key]
+        assert "battery_charger_status" in component["value_template"]
+        assert active_status in component["value_template"]
+        assert any(
+            "battery_charger_status" in item.get("value_template", "")
+            for item in component["availability"]
+        )
 
 
 def test_ups_problem_binaries_use_app_owned_retained_topics():
