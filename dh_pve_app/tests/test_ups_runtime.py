@@ -86,9 +86,9 @@ def _assert_machine_only_problem_fields(payload, *, count, severity):
     assert "problems_details" not in payload
 
 
-def test_startup_publishes_discovery_availability_and_state(tmp_path):
+def test_startup_publishes_discovery_availability_and_canonical_machine_state(tmp_path):
     snapshot = parse_upsc_output(
-        "device.mfr: CPS\ndevice.model: UT2200E\nups.status: OL\n"
+        "device.mfr: CPS\ndevice.model: UT2200E\nups.status: OL BOOST CHRG\n"
         "battery.charge: 100\nbattery.runtime: 2160\nups.load: 8\n"
     )
     bridge, runtime, _ = _runtime(tmp_path, lambda config: snapshot)
@@ -97,11 +97,33 @@ def test_startup_publishes_discovery_availability_and_state(tmp_path):
     assert bridge.availability == [True]
     assert len(bridge.discovery) == 2
     assert len(bridge.states) == 1
-    assert bridge.states[-1]["available"] is True
-    assert bridge.states[-1]["status"] == "Online"
-    assert bridge.states[-1]["status_raw"] == "OL"
-    assert bridge.states[-1]["battery_charge_percent"] == 100.0
-    _assert_machine_only_problem_fields(bridge.states[-1], count=0, severity="ok")
+    payload = bridge.states[-1]
+    assert payload["available"] is True
+    assert payload["status"] == "boost"
+    assert payload["status_set"] == ["online", "boost"]
+    assert payload["raw_status_tokens"] == ["OL", "BOOST", "CHRG"]
+    assert payload["status_raw"] == "OL BOOST CHRG"
+    assert payload["battery_charger_status"] == "charging"
+    assert payload["charging"] is True
+    assert payload["discharging"] is False
+    assert "status_ru" not in payload
+    assert payload["battery_charge_percent"] == 100.0
+    _assert_machine_only_problem_fields(payload, count=0, severity="ok")
+
+
+def test_unknown_direct_charger_status_stays_unknown_in_runtime_state(tmp_path):
+    snapshot = parse_upsc_output(
+        "ups.status: OL CHRG\n"
+        "battery.charger.status: vendor-weird\n"
+    )
+    bridge, runtime, _ = _runtime(tmp_path, lambda config: snapshot)
+
+    assert runtime.startup() is True
+    payload = bridge.states[-1]
+    assert payload["status"] == "online"
+    assert payload["battery_charger_status"] == "unknown"
+    assert payload["charging"] is False
+    assert payload["discharging"] is False
 
 
 def test_startup_removes_legacy_estimated_power_then_publishes_clean_discovery(tmp_path):
@@ -147,7 +169,10 @@ def test_unchanged_poll_suppressed_but_ol_to_ob_publishes(tmp_path):
     clock["mono"] = 120.0
     runtime.tick(clock["mono"])
     assert len(bridge.states) == 1
-    assert bridge.states[-1]["status"] == "On battery"
+    assert bridge.states[-1]["status"] == "on_battery"
+    assert bridge.states[-1]["status_set"] == ["on_battery"]
+    assert bridge.states[-1]["raw_status_tokens"] == ["OB", "DISCHRG"]
+    assert bridge.states[-1]["battery_charger_status"] == "discharging"
     assert bridge.states[-1]["on_battery"] is True
     _assert_machine_only_problem_fields(bridge.states[-1], count=1, severity="warning")
 
@@ -188,6 +213,7 @@ def test_reader_failure_publishes_unavailable_without_losing_capabilities(tmp_pa
     runtime.tick(clock["mono"])
 
     assert bridge.states[-1]["available"] is False
+    assert bridge.states[-1]["status"] == "unknown"
     assert "NUT недоступен" in bridge.states[-1]["error"]
     _assert_machine_only_problem_fields(bridge.states[-1], count=1, severity="critical")
     assert "battery_charge" in first_components
