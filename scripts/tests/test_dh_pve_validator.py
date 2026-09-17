@@ -5,7 +5,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from validators.common import discover_applications, is_application_directory_name
+from validators.common import (
+    ValidationError,
+    discover_applications,
+    is_application_directory_name,
+)
 from validators.apps.dh_pve_app import validate_dh_pve_app
 
 
@@ -23,8 +27,16 @@ class DhPveRepositoryContractTests(unittest.TestCase):
         validate_dh_pve_app(
             ROOT,
             ROOT / "dh_pve_app",
-            {"type": "linux_agent", "version": "0.1.0"},
+            {"type": "linux_agent", "version": "0.5.0"},
         )
+
+    def test_dh_pve_validator_rejects_wrong_release_version(self):
+        with self.assertRaisesRegex(ValidationError, "release version"):
+            validate_dh_pve_app(
+                ROOT,
+                ROOT / "dh_pve_app",
+                {"type": "linux_agent", "version": "0.4.0"},
+            )
 
 
 if __name__ == "__main__":
