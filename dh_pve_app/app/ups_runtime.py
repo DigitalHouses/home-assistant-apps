@@ -358,8 +358,6 @@ class UpsRuntime:
         return {
             "problems_count": summary.count,
             "problems_severity": summary.severity,
-            "problems": list(summary.problems),
-            "problems_details": summary.details,
         }
 
     def _capabilities_payload(self) -> dict[str, object]:
