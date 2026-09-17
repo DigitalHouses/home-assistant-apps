@@ -13,6 +13,7 @@ from pathlib import Path
 
 from .config import AppConfig, UpsConfig, load_config
 from .identity import resolve_identity
+from .machine_event_outbox import MachineEventOutbox
 from .mqtt_bridge import MqttBridge
 from .production import _run
 from .publish_policy import PublishPolicy
@@ -29,6 +30,7 @@ from .shutdown_integration import (
 )
 from .state_store import StateStore
 from .topics import build_topics, build_ups_topics
+from .ups_battery_events import UpsBatteryEventTracker
 from .ups_policy_preflight import (
     PreflightCheck,
     UpsPolicyPreflight,
@@ -193,6 +195,12 @@ def build_ups_runtime(
         identity=identity,
         version=_version(),
         state_store=StateStore(state_dir / "ups_runtime.json"),
+        machine_event_outbox=MachineEventOutbox(
+            StateStore(state_dir / "ups_machine_event_outbox.json")
+        ),
+        battery_event_tracker=UpsBatteryEventTracker(
+            StateStore(state_dir / "ups_battery_events.json")
+        ),
         now_iso=_now_iso,
         now_local=_now_local,
         now_monotonic=time.monotonic,
