@@ -138,6 +138,11 @@ def validate_dh_pve_app(
             '"problem_started"',
             '"problem_recovered"',
             '"problem_updated"',
+            '"config_changed"',
+            '"ups_status_changed"',
+            '"battery_discharge_level_crossed"',
+            '"battery_fully_charged"',
+            '"shutdown_committed"',
         ),
         "canonical UPS ready-state Discovery",
     )
@@ -241,6 +246,9 @@ def validate_dh_pve_app(
         (
             "sensor.dh_app_pve_ups_status",
             "sensor.dh_app_pve_ups_problems",
+            "sensor.dh_app_pve_ups_battery_charger_status",
+            "'charging': 'Заряжается'",
+            "'floating': 'Поддержание заряда'",
             "binary_sensor.dh_app_pve_ups_on_battery_problem",
             "button.dh_app_pve_ups_refresh",
         ),
@@ -258,6 +266,18 @@ def validate_dh_pve_app(
         ),
         "shutdown readiness card",
     )
+
+    ups_discovery_source = (app / "app/discovery_ups_groups.py").read_text(
+        encoding="utf-8"
+    )
+    for forbidden in (
+        "status_ru",
+        "problems_details",
+        "value_json.summary",
+        "value_json.details",
+    ):
+        if forbidden in ups_discovery_source:
+            fail(f"DH PVE UPS Discovery depends on removed presentation field: {forbidden}")
 
     package = (app / "examples/packages/dh_app_pve_package.yaml").read_text(
         encoding="utf-8"
