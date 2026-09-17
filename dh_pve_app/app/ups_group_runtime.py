@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from .diagnostic_events import DiagnosticEvent
+from .machine_event_outbox import MachineEventOutbox
 from .presentation_ups import UpsPresentationRouter
 from .problems import ProblemState, ProblemTransition
-from .ups_problems import UpsProblemEngine
+from .ups_problems import UpsProblemEngine, transition_uses_status_event
 from .ups_runtime import UpsRuntime
+from .ups_status_events import UpsStatusEventTracker
 
 
 class AdaptiveUpsRuntime(UpsRuntime):
@@ -20,6 +22,9 @@ class AdaptiveUpsRuntime(UpsRuntime):
     """
 
     def __init__(self, *args, **kwargs) -> None:
+        self.machine_event_outbox: MachineEventOutbox | None = kwargs.pop(
+            "machine_event_outbox", None
+        )
         super().__init__(*args, **kwargs)
         self.presentation = UpsPresentationRouter(
             source_interval_seconds=self.config.poll_interval_seconds
@@ -29,6 +34,7 @@ class AdaptiveUpsRuntime(UpsRuntime):
             object_id=self.config.name,
             object_name=self.config.name,
         )
+        self.status_event_tracker = UpsStatusEventTracker()
         self._published_problem_ids: set[str] = set()
         self._pending_problem_transitions: list[ProblemTransition] = []
         self._problem_snapshot_dirty = False
@@ -46,6 +52,9 @@ class AdaptiveUpsRuntime(UpsRuntime):
                 "publish_ups_diagnostic_event",
             )
         )
+
+    def _event_capable(self) -> bool:
+        return callable(getattr(self.bridge, "publish_ups_diagnostic_event", None))
 
     def _publish_groups(
         self,
@@ -172,6 +181,11 @@ class AdaptiveUpsRuntime(UpsRuntime):
         aggregate = self.problem_engine.aggregate()
         while self._pending_problem_transitions:
             transition = self._pending_problem_transitions[0]
+            if transition_uses_status_event(transition):
+                self._published_problem_ids.add(transition.current.problem_id)
+                self._pending_problem_transitions.pop(0)
+                continue
+
             event = DiagnosticEvent.from_transition(
                 transition,
                 active_problem_count=aggregate.count,
@@ -245,6 +259,29 @@ class AdaptiveUpsRuntime(UpsRuntime):
         self._problem_snapshot_dirty = True
         return self._sync_current_problem_states()
 
+    def _observe_status_event(self, snapshot, *, observed_at: str) -> bool:
+        if not self._event_capable():
+            return True
+
+        event = self.status_event_tracker.observe(
+            current_status=tuple(snapshot.normalized_status),
+            current_raw_status=tuple(snapshot.status_tokens),
+            observed_at=observed_at,
+        )
+        if event is None:
+            return True
+
+        key, payload = event
+        if self.machine_event_outbox is None:
+            return bool(self.bridge.publish_ups_diagnostic_event(payload))
+
+        self.machine_event_outbox.enqueue(key, payload)
+        for pending in self.machine_event_outbox.pending():
+            if not self.bridge.publish_ups_diagnostic_event(pending.payload):
+                return False
+            self.machine_event_outbox.acknowledge(pending.key)
+        return True
+
     def _collect(self, *, force: bool = False, manual_refresh: bool = False) -> bool:
         if not self._group_capable():
             return super()._collect(force=force, manual_refresh=manual_refresh)
@@ -305,6 +342,13 @@ class AdaptiveUpsRuntime(UpsRuntime):
                 nut_available=True,
             )
 
+        status_event_ok = True
+        if state_ok and problem_ok:
+            status_event_ok = self._observe_status_event(
+                snapshot,
+                observed_at=collected_at,
+            )
+
         if state_ok:
             self._last_state_payload = payload
             if manual_refresh or history_changed:
@@ -312,7 +356,7 @@ class AdaptiveUpsRuntime(UpsRuntime):
         elif manual_refresh:
             self.last_refresh = previous_refresh
 
-        return bool(discovery_ok and state_ok and problem_ok)
+        return bool(discovery_ok and state_ok and problem_ok and status_event_ok)
 
     def startup(self) -> bool:
         if not self._group_capable():
