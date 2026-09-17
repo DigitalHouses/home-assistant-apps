@@ -42,6 +42,7 @@ from .ups_scan import UpsScanner
 from .ups_shutdown_budget_reader import read_shutdown_budget
 from .ups_shutdown_executor import execute_fixed_ups_shutdown
 from .ups_shutdown_policy import read_shutdown_policy
+from .uninstall_cleanup import cleanup_mqtt
 
 APP_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG = Path("/etc/dh_pve_app/dh_pve_app.conf")
@@ -382,9 +383,18 @@ def main() -> int:
         action="store_true",
         help="Read UPS/NUT/PVE safety state, print JSON, and exit without MQTT.",
     )
+    parser.add_argument(
+        "--uninstall-mqtt-cleanup",
+        action="store_true",
+        help=argparse.SUPPRESS,
+    )
     args = parser.parse_args()
 
     config = load_config(args.config)
+    if args.uninstall_mqtt_cleanup:
+        identity = resolve_identity(config.general)
+        _configure_logging(config.general.log_level)
+        return 0 if cleanup_mqtt(config, identity) else 3
     if args.check_config:
         resolve_identity(config.general)
         return 0
