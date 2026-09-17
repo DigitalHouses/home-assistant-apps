@@ -103,6 +103,7 @@ def build_runtime(
 ):
     identity = resolve_identity(config.general)
     topics = build_topics(config.mqtt, identity)
+    version = _version()
     runtime_store = StateStore(state_dir / "runtime.json")
     settings = _initial_settings(runtime_store)
     tracker = shutdown_history_tracker or _shutdown_tracker(state_dir)
@@ -110,7 +111,7 @@ def build_runtime(
     discovery_builder = lambda inventory: build_shutdown_aware_pve_discovery_payload(
         config,
         identity,
-        version=_version(),
+        version=version,
         inventory=inventory,
     )
     bridge = MqttBridge(
@@ -152,6 +153,7 @@ def build_runtime(
         static_collectors=("topology", "host"),
         slow_tasks=("guests", "storage", "gpu", "disk_temperature"),
         version_probe=pve_version_fingerprint,
+        app_version=version,
     )
     return bridge, runtime
 
