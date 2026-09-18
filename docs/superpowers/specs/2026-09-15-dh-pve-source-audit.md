@@ -144,7 +144,7 @@ PROBLEM/EVENT        source/detection diagnostic where applicable; no invented R
 
 Raw hwmon discovery is optimistic, but Home Assistant exposure is conservative.
 
-Every readable `fan*_input` is a candidate channel. Candidate state must not be confused with a confirmed physical fan because Super I/O drivers may expose unused tachometer inputs that read `0 RPM` indefinitely.
+Every exported `fan*_input` is a candidate channel, even when its current value is invalid/unreadable. Candidate state must not be confused with a confirmed physical fan because Super I/O drivers may expose unused tachometer inputs that read `0 RPM` indefinitely.
 
 Presence contract:
 
@@ -191,7 +191,7 @@ EC/raw I/O probing
 Canonical summary semantics:
 
 ```text
-candidate_count   = readable current fan*_input channels
+candidate_count   = current exported fan*_input channels
 confirmed_count   = confirmed channels currently present in hwmon
 unconfirmed_count = candidate_count - confirmed_count
 count             = confirmed_count
