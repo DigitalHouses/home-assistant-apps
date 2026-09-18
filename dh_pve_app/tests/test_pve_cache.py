@@ -119,3 +119,48 @@ def test_storage_config_ignores_comments_and_blank_lines(tmp_path: Path):
 
     assert set(cfg) == {"local"}
     assert cfg["local"].options["path"] == "/var/lib/vz"
+
+
+def test_pve_version_fingerprint_ignores_volatile_tasklist_but_tracks_config_revision(
+    tmp_path: Path,
+):
+    path = tmp_path / ".version"
+    base = {
+        "starttime": 1789730467,
+        "clinfo": 0,
+        "vmlist": 1,
+        "storage.cfg": 1,
+        "kvstore": {
+            "pve": {
+                "kv/cpuflags-kvm": 0,
+                "kv/cpuflags-tcg": 0,
+                "kv/static-info": 0,
+                "kv/version-info": 0,
+                "tasklist": 653,
+            }
+        },
+    }
+
+    import json
+
+    path.write_text(json.dumps(base), encoding="utf-8")
+    first = read_pve_version(path)
+
+    noisy = {
+        **base,
+        "kvstore": {
+            "pve": {
+                **base["kvstore"]["pve"],
+                "tasklist": 654,
+            }
+        },
+    }
+    path.write_text(json.dumps(noisy), encoding="utf-8")
+    second = read_pve_version(path)
+
+    changed = {**noisy, "vmlist": 2}
+    path.write_text(json.dumps(changed), encoding="utf-8")
+    third = read_pve_version(path)
+
+    assert first.fingerprint == second.fingerprint
+    assert third.fingerprint != second.fingerprint
