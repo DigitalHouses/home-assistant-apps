@@ -200,6 +200,8 @@ detected          = confirmed_count > 0
 
 Only confirmed current channels enter dynamic MQTT Discovery as fan RPM entities. An unconfirmed channel that later satisfies the two-sample debounce is added by dynamic Discovery without requiring App restart.
 
+The collector may retain the current candidate IDs as internal non-Recorder metadata so Device Discovery can explicitly tombstone retained fan components from older releases. Component removal uses the Home Assistant two-update sequence: empty component config with `platform`, followed by the final payload with the component omitted.
+
 Production evidence for the Beelink S12 Pro / MINI S with IT8613E validates the need for this distinction: the driver exposes a rotating `fan2_input` around 3000-3900 RPM and a persistent `fan3_input = 0` channel. The latter is a valid exported tachometer input but is not, by that zero value alone, evidence of a second physical fan.
 
 ## 7. Host load and uptime
