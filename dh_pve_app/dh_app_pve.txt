@@ -86,6 +86,71 @@ Read-only UPS preflight
     --state-dir /var/lib/dh_pve_app \
     --ups-policy-preflight
 
+Вентиляторы / Fan RPM
+----------------------
+
+dh_app_pve получает обороты вентиляторов напрямую из Linux hwmon:
+
+  /sys/class/hwmon/hwmon*/fan*_input
+
+Для обычного FAST-сбора не запускаются sensors, vendor utilities или другие
+тяжёлые subprocess-команды. Если Linux не создал fan*_input, App не может
+достоверно получить RPM, даже если Windows-утилита на том же компьютере
+показывает обороты.
+
+Реальный пример: Beelink S12 Pro / MINI S с Super I/O ITE IT8613E.
+На тестовой системе с Proxmox VE 8.4 и kernel 6.8.12-13-pve штатный it87
+не предоставлял hwmon для IT8613E, хотя AIDA64 под Windows видела физический
+вентилятор (~3000-3900 RPM). После загрузки более нового внешнего it87 драйвер
+определил:
+
+  IT8613E at 0x0a30, revision 12
+
+и Linux создал hwmon с:
+
+  fan2_input = ~3000-3900 RPM
+  fan3_input = 0 RPM
+
+В этом Beelink fan2 является подтверждённым физическим вентилятором.
+fan3 — дополнительный tachometer input, экспортируемый Super I/O/драйвером;
+нулевое значение само по себе не доказывает наличие второго физического
+вентилятора.
+
+Важно:
+
+- fan*_input отсутствует -> у dh_app_pve нет RPM-источника;
+- fan*_input > 0 -> канал подтверждает реально наблюдаемое вращение;
+- fan*_input = 0 не означает автоматически "канал лишний": настоящий
+  вентилятор может поддерживать fan-stop;
+- наличие pwm* также не доказывает, что к соответствующему tach-input
+  физически подключён вентилятор;
+- /sys/class/thermal/cooling_device* не является источником RPM для App.
+
+Безопасная read-only проверка:
+
+  for h in /sys/class/hwmon/hwmon*; do
+    [ -e "$h" ] || continue
+    echo "=== $h: $(cat "$h/name" 2>/dev/null) ==="
+    for f in "$h"/fan*_input; do
+      [ -r "$f" ] || continue
+      echo "$(basename "$f")=$(cat "$f")"
+    done
+  done
+
+Дополнительно можно посмотреть:
+
+  sensors
+  lsmod | grep -Ei 'it87|nct|coretemp|hwmon'
+  dmesg | grep -Ei 'it87|hwmon|fan'
+
+Не использовать для обычной диагностики fan RPM destructive/изменяющие
+железо инструменты вроде pwmconfig и не писать значения в pwm*/hwmon sysfs.
+
+Если RPM появился только после установки внешнего hwmon-драйвера, после
+обновления kernel обязательно повторно проверить, что модуль собран/загружен
+и fan*_input снова существует. Внешний драйвер — платформенная мера
+совместимости, а не часть dh_app_pve.
+
 Основные пути
 -------------
 
