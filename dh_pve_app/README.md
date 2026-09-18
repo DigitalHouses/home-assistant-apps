@@ -40,7 +40,7 @@ Fan RPM acquisition reads Linux hwmon directly from `/sys/class/hwmon/hwmon*/fan
 
 Every exported tachometer input starts as a candidate channel. A physical fan is confirmed after two consecutive valid `RPM > 0` FAST observations. Confirmed IDs are persisted separately so a real fan remains exposed after an App restart even when it is currently stopped at `0 RPM`. Unconfirmed zero-RPM channels remain internal candidates and do not create Home Assistant RPM entities.
 
-Stable fan identity uses the hwmon chip, resolved underlying device and fan channel rather than the volatile `hwmonN` directory number. The diagnostic fan summary reports confirmed `count` plus `candidate_count`, `confirmed_count` and `unconfirmed_count`.
+Stable fan identity uses the hwmon chip, resolved underlying device and fan channel rather than the volatile `hwmonN` directory number. The diagnostic fan summary reports confirmed `count` plus `candidate_count`, `confirmed_count` and `unconfirmed_count`. During upgrades, unconfirmed fan components retained by an older release are explicitly removed through MQTT Device Discovery tombstones before the clean discovery payload is republished.
 
 `pwm*` and `/sys/class/thermal/cooling_device*` are not used as proof of a physical fan or as RPM sources. The installed `/root/dh_app_pve.txt` guide contains a detailed Beelink S12 Pro / IT8613E example and read-only troubleshooting commands.
 
