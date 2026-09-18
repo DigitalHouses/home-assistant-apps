@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.5.4
+
+- Fix PVE STATIC change detection: `/etc/pve/.version` fingerprinting now ignores the volatile `kvstore.*.tasklist` counter while preserving all other revision fields.
+- Prevent the 60-second SLOW cycle from falsely triggering repeated STATIC full scans (`pveversion`, `lscpu`, `dmidecode`, `lspci`, QGA `qm agent`/guest inventory) when only Proxmox task history changes.
+- Preserve real configuration detection: changes such as `vmlist`, `storage.cfg`, `clinfo` or future non-`tasklist` revision fields still change the STATIC fingerprint.
+
 ## 0.5.3
 
 - Fix startup publication for continuous metrics whose first collector sample is intentionally unavailable. When a numeric value first appears after an earlier missing sample, the publication engine now emits it immediately with reason `value_appeared` instead of waiting for the normal 5/15-minute telemetry window.
