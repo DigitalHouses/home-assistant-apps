@@ -12,7 +12,9 @@ from .collectors.smart import SmartSnapshot, parse_smart_json
 from .daily_disk_stats import DailyDiskStats, update_daily_stats
 from .disk_health import evaluate_disk_health
 from .disk_temperature import DiskTemperatureReader, parse_smart_temperature
+from .fan_presence import FanPresenceTracker
 from .production import ProductionCollectors, _checkpoint, _run
+from .collectors.cooling import collect_fans
 from .publish_policy import MetricValue
 
 MISSING_CONFIRMATIONS = 3
@@ -75,6 +77,7 @@ class ResilientProductionCollectors(ProductionCollectors):
         )
         self.topology = topology
         self._disk_temperature_reader = DiskTemperatureReader(sys_root=self.sys_root)
+        self._fan_presence = FanPresenceTracker()
 
     def host(self) -> CollectorSample:
         sample = super().host()
@@ -100,22 +103,32 @@ class ResilientProductionCollectors(ProductionCollectors):
         return CollectorSample(data=data, metrics=metrics)
 
     def fans(self) -> CollectorSample:
-        sample = super().fans()
-        if not isinstance(sample.data, Mapping):
-            return sample
-
-        fan_items = dict(sample.data)
-        count = len(fan_items)
-        detected = count > 0
+        raw = collect_fans(self.sys_root / "class" / "hwmon")
+        presence = self._fan_presence.observe(raw)
+        fan_items = {
+            fan.fan_id: asdict(fan)
+            for fan in presence.confirmed_fans
+        }
+        detected = presence.confirmed_count > 0
         data: dict[str, object] = {
             "detected": detected,
-            "count": count,
+            "count": presence.confirmed_count,
+            "candidate_count": presence.candidate_count,
+            "confirmed_count": presence.confirmed_count,
+            "unconfirmed_count": presence.unconfirmed_count,
             "status": "Detected" if detected else "Not detected",
             **fan_items,
         }
-        metrics = dict(sample.metrics)
-        metrics["detected"] = _metric(detected, "discrete")
-        metrics["count"] = _metric(count, "discrete")
+        metrics: dict[str, MetricValue] = {
+            "detected": _metric(detected, "discrete"),
+            "count": _metric(presence.confirmed_count, "discrete"),
+            "candidate_count": _metric(presence.candidate_count, "discrete"),
+            "confirmed_count": _metric(presence.confirmed_count, "discrete"),
+            "unconfirmed_count": _metric(presence.unconfirmed_count, "discrete"),
+        }
+        for fan in presence.confirmed_fans:
+            if fan.rpm is not None:
+                metrics[f"{fan.fan_id}.rpm"] = _metric(fan.rpm, "fan_rpm")
         return CollectorSample(data=data, metrics=metrics)
 
     def _smart_scan(self) -> tuple[tuple[str, ...], ...]:
