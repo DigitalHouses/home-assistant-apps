@@ -117,6 +117,7 @@ class ResilientProductionCollectors(ProductionCollectors):
             "candidate_count": presence.candidate_count,
             "confirmed_count": presence.confirmed_count,
             "unconfirmed_count": presence.unconfirmed_count,
+            "candidate_ids": [fan.fan_id for fan in raw],
             "status": "Detected" if detected else "Not detected",
             **fan_items,
         }
