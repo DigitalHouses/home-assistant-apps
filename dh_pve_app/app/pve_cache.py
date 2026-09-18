@@ -110,10 +110,28 @@ def _optional_int(value: object) -> int | None:
     return None
 
 
+def _static_version_payload(raw: Mapping[str, object]) -> dict[str, object]:
+    payload = dict(raw)
+    kvstore = raw.get("kvstore")
+    if isinstance(kvstore, Mapping):
+        normalized: dict[str, object] = {}
+        for node, node_raw in kvstore.items():
+            if isinstance(node_raw, Mapping):
+                normalized[str(node)] = {
+                    str(key): value
+                    for key, value in node_raw.items()
+                    if str(key) != "tasklist"
+                }
+            else:
+                normalized[str(node)] = node_raw
+        payload["kvstore"] = normalized
+    return payload
+
+
 def read_pve_version(path: Path) -> PveVersionSnapshot:
     raw = _read_json_object(path)
     canonical = json.dumps(
-        raw,
+        _static_version_payload(raw),
         ensure_ascii=False,
         sort_keys=True,
         separators=(",", ":"),
