@@ -8,6 +8,7 @@
 - Persist confirmed fan IDs in the PVE App state so confirmed fans survive App restart and continue to publish a valid `0 RPM` during fan-stop; unconfirmed zero-RPM tachometer inputs no longer create ghost Home Assistant entities.
 - Keep fan identity stable across `hwmonN` renumbering by using chip + resolved underlying device + fan channel, while treating labels as presentation metadata.
 - Expand the diagnostic fan summary with `candidate_count`, `confirmed_count` and `unconfirmed_count`; `count`/`detected` now represent confirmed current fans.
+- Explicitly tombstone retained MQTT Device Discovery fan components before omitting them, so zero-RPM ghost fan entities created by older releases are removed during upgrade instead of remaining orphaned in Home Assistant.
 - Document the Beelink S12 Pro / MINI S IT8613E case, where an external/newer `it87` exposes a real rotating `fan2` plus an unused `fan3 = 0` tachometer input, and keep `pwm*`/thermal cooling devices outside the fan-presence contract.
 
 ## 0.5.4
