@@ -114,6 +114,7 @@ def test_python_fan_collector_emits_normalized_summary_when_no_fan_exists(tmp_pa
         "candidate_count": 0,
         "confirmed_count": 0,
         "unconfirmed_count": 0,
+        "candidate_ids": [],
         "status": "Not detected",
     }
     assert sample.metrics["detected"].value is False
@@ -131,6 +132,10 @@ def test_beelink_first_positive_sample_keeps_both_hwmon_channels_unconfirmed(tmp
     assert sample.data["candidate_count"] == 2
     assert sample.data["confirmed_count"] == 0
     assert sample.data["unconfirmed_count"] == 2
+    assert sample.data["candidate_ids"] == [
+        "it8613_it87_2608_fan2",
+        "it8613_it87_2608_fan3",
+    ]
     assert _fan_items(sample) == {}
 
 
