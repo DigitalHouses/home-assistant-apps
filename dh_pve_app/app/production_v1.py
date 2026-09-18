@@ -68,6 +68,7 @@ class ResilientProductionCollectors(ProductionCollectors):
         node_name: str,
         disk_state_store,
         topology=None,
+        fan_state_store=None,
         **kwargs,
     ) -> None:
         super().__init__(
@@ -77,7 +78,7 @@ class ResilientProductionCollectors(ProductionCollectors):
         )
         self.topology = topology
         self._disk_temperature_reader = DiskTemperatureReader(sys_root=self.sys_root)
-        self._fan_presence = FanPresenceTracker()
+        self._fan_presence = FanPresenceTracker(state_store=fan_state_store)
 
     def host(self) -> CollectorSample:
         sample = super().host()
