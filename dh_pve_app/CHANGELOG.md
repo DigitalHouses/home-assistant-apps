@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.5.5
+
+- Make fan RPM discovery conservative while keeping FAST acquisition zero-subprocess: raw `/sys/class/hwmon/hwmon*/fan*_input` channels are candidates, and a physical fan is exposed only after two consecutive valid `RPM > 0` observations.
+- Persist confirmed fan IDs in the PVE App state so confirmed fans survive App restart and continue to publish a valid `0 RPM` during fan-stop; unconfirmed zero-RPM tachometer inputs no longer create ghost Home Assistant entities.
+- Keep fan identity stable across `hwmonN` renumbering by using chip + resolved underlying device + fan channel, while treating labels as presentation metadata.
+- Expand the diagnostic fan summary with `candidate_count`, `confirmed_count` and `unconfirmed_count`; `count`/`detected` now represent confirmed current fans.
+- Document the Beelink S12 Pro / MINI S IT8613E case, where an external/newer `it87` exposes a real rotating `fan2` plus an unused `fan3 = 0` tachometer input, and keep `pwm*`/thermal cooling devices outside the fan-presence contract.
+
 ## 0.5.4
 
 - Fix PVE STATIC change detection: `/etc/pve/.version` fingerprinting now ignores the volatile `kvstore.*.tasklist` counter while preserving all other revision fields.
