@@ -5,7 +5,7 @@ from typing import Any
 
 from validators.common import fail, require_files
 
-EXPECTED_VERSION = "0.5.3"
+EXPECTED_VERSION = "0.5.4"
 EXPECTED_TOPIC_PREFIX = "DigitalHouses/Global/dh_pve_app"
 EXPECTED_DEVICE_NAME = "DH PVE"
 EXPECTED_REFRESH_ENTITY = "button.dh_app_pve_refresh"
@@ -435,6 +435,15 @@ def validate_dh_pve_app(
         ),
         "runtime",
     )
+    _require_text(
+        app / "app/pve_cache.py",
+        (
+            "def _static_version_payload(",
+            'if str(key) != "tasklist"',
+        ),
+        "PVE static version fingerprint",
+    )
+
     _require_text(
         app / "app/presentation.py",
         (
