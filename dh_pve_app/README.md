@@ -2,7 +2,7 @@
 
 `dh_pve_app` is the DigitalHouses native Linux agent for Proxmox VE 8.x. It collects host, CPU, memory, storage, disk/SMART, GPU, fan and VM/LXC state, publishes Home Assistant entities through MQTT Discovery, and can monitor a locally attached UPS through Network UPS Tools (NUT).
 
-`VERSION` is `0.5.1`.
+`VERSION` is `0.5.2`.
 
 MQTT base namespace: `DigitalHouses/Global/dh_pve_app/<instance>`.
 MQTT devices: `DH PVE` and optional `DH PVE UPS`.
