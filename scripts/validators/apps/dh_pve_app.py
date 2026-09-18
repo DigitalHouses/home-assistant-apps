@@ -5,7 +5,7 @@ from typing import Any
 
 from validators.common import fail, require_files
 
-EXPECTED_VERSION = "0.5.2"
+EXPECTED_VERSION = "0.5.3"
 EXPECTED_TOPIC_PREFIX = "DigitalHouses/Global/dh_pve_app"
 EXPECTED_DEVICE_NAME = "DH PVE"
 EXPECTED_REFRESH_ENTITY = "button.dh_app_pve_refresh"
@@ -435,6 +435,14 @@ def validate_dh_pve_app(
         ),
         "runtime",
     )
+    _require_text(
+        app / "app/presentation.py",
+        (
+            '"value_appeared"',
+        ),
+        "first valid metric publication",
+    )
+
     _require_text(
         app / "app/runtime_dynamic.py",
         (
