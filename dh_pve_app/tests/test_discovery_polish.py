@@ -75,40 +75,107 @@ def _collectors(tmp_path: Path) -> ResilientProductionCollectors:
     )
 
 
+def _fan_items(sample) -> dict[str, dict[str, object]]:
+    return {
+        key: value
+        for key, value in sample.data.items()
+        if isinstance(value, dict)
+    }
+
+
+def _write_beelink_fans(tmp_path: Path, *, fan2: str, fan3: str = "0") -> Path:
+    hwmon = tmp_path / "sys" / "class" / "hwmon" / "hwmon3"
+    hwmon.mkdir(parents=True, exist_ok=True)
+    (hwmon / "name").write_text("it8613\n", encoding="utf-8")
+    device = tmp_path / "sys" / "devices" / "platform" / "it87.2608"
+    device.mkdir(parents=True, exist_ok=True)
+    device_link = hwmon / "device"
+    if not device_link.exists():
+        device_link.symlink_to(device, target_is_directory=True)
+    (hwmon / "fan2_input").write_text(f"{fan2}\n", encoding="utf-8")
+    (hwmon / "fan3_input").write_text(f"{fan3}\n", encoding="utf-8")
+    return hwmon
+
+
 def test_python_fan_collector_emits_normalized_summary_when_no_fan_exists(tmp_path: Path):
     sample = _collectors(tmp_path).fans()
 
     assert sample.data == {
         "detected": False,
         "count": 0,
+        "candidate_count": 0,
+        "confirmed_count": 0,
+        "unconfirmed_count": 0,
         "status": "Not detected",
     }
     assert sample.metrics["detected"].value is False
     assert sample.metrics["count"].value == 0
 
 
-def test_python_fan_collector_emits_fans_and_detected_summary(tmp_path: Path):
-    hwmon = tmp_path / "sys" / "class" / "hwmon" / "hwmon4"
-    hwmon.mkdir(parents=True)
-    (hwmon / "name").write_text("nct6798\n", encoding="utf-8")
-    (hwmon / "fan1_input").write_text("1240\n", encoding="utf-8")
-    (hwmon / "fan1_label").write_text("CPU Fan\n", encoding="utf-8")
+def test_beelink_first_positive_sample_keeps_both_hwmon_channels_unconfirmed(tmp_path: Path):
+    _write_beelink_fans(tmp_path, fan2="3792", fan3="0")
+    collectors = _collectors(tmp_path)
 
-    sample = _collectors(tmp_path).fans()
+    sample = collectors.fans()
+
+    assert sample.data["detected"] is False
+    assert sample.data["count"] == 0
+    assert sample.data["candidate_count"] == 2
+    assert sample.data["confirmed_count"] == 0
+    assert sample.data["unconfirmed_count"] == 2
+    assert _fan_items(sample) == {}
+
+
+def test_beelink_second_positive_sample_confirms_only_rotating_fan(tmp_path: Path):
+    _write_beelink_fans(tmp_path, fan2="3792", fan3="0")
+    collectors = _collectors(tmp_path)
+
+    collectors.fans()
+    sample = collectors.fans()
 
     assert sample.data["detected"] is True
     assert sample.data["count"] == 1
-    assert sample.data["status"] == "Detected"
-    fan_items = {
-        key: value
-        for key, value in sample.data.items()
-        if isinstance(value, dict)
-    }
-    assert len(fan_items) == 1
-    fan = next(iter(fan_items.values()))
-    assert fan["rpm"] == 1240
-    assert sample.metrics["detected"].value is True
-    assert sample.metrics["count"].value == 1
+    assert sample.data["candidate_count"] == 2
+    assert sample.data["confirmed_count"] == 1
+    assert sample.data["unconfirmed_count"] == 1
+    fans = _fan_items(sample)
+    assert set(fans) == {"it8613_it87_2608_fan2"}
+    assert fans["it8613_it87_2608_fan2"]["rpm"] == 3792
+
+
+def test_confirmed_fan_remains_exposed_when_rpm_later_becomes_zero(tmp_path: Path):
+    hwmon = _write_beelink_fans(tmp_path, fan2="3792", fan3="0")
+    collectors = _collectors(tmp_path)
+
+    collectors.fans()
+    collectors.fans()
+    (hwmon / "fan2_input").write_text("0\n", encoding="utf-8")
+
+    sample = collectors.fans()
+
+    assert sample.data["detected"] is True
+    assert sample.data["count"] == 1
+    assert sample.data["confirmed_count"] == 1
+    fans = _fan_items(sample)
+    assert set(fans) == {"it8613_it87_2608_fan2"}
+    assert fans["it8613_it87_2608_fan2"]["rpm"] == 0
+
+
+def test_zero_between_positive_samples_resets_fan_confirmation_debounce(tmp_path: Path):
+    hwmon = _write_beelink_fans(tmp_path, fan2="3792", fan3="0")
+    collectors = _collectors(tmp_path)
+
+    assert collectors.fans().data["confirmed_count"] == 0
+
+    (hwmon / "fan2_input").write_text("0\n", encoding="utf-8")
+    assert collectors.fans().data["confirmed_count"] == 0
+
+    (hwmon / "fan2_input").write_text("3813\n", encoding="utf-8")
+    assert collectors.fans().data["confirmed_count"] == 0
+
+    sample = collectors.fans()
+    assert sample.data["confirmed_count"] == 1
+    assert set(_fan_items(sample)) == {"it8613_it87_2608_fan2"}
 
 
 def test_full_discovery_exposes_fan_status_without_template_counting():
@@ -127,5 +194,9 @@ def test_full_discovery_exposes_fan_status_without_template_counting():
     assert fan_status["default_entity_id"] == "sensor.dh_app_pve_fans"
     assert ".status" in fan_status["value_template"]
     assert "| count" not in fan_status["value_template"]
-    assert "count" in fan_status["json_attributes_template"]
+    attrs = fan_status["json_attributes_template"]
+    assert "count" in attrs
+    assert "candidate_count" in attrs
+    assert "confirmed_count" in attrs
+    assert "unconfirmed_count" in attrs
     assert fan_status["entity_category"] == "diagnostic"
