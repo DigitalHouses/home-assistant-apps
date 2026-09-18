@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.5.3
+
+- Fix startup publication for continuous metrics whose first collector sample is intentionally unavailable. When a numeric value first appears after an earlier missing sample, the publication engine now emits it immediately with reason `value_appeared` instead of waiting for the normal 5/15-minute telemetry window.
+- In particular, `sensor.dh_app_pve_cpu_usage` no longer remains `unknown` after App restart while waiting for the next publication window; the second CPU sample can publish the first valid CPU usage value immediately.
+
 ## 0.5.2
 
 - Add canonical `dh_pve_app/dh_app_pve.txt` operational guide. After every successful install/update, `install.sh` regenerates `/root/dh_app_pve.txt` with actual installed version/source/commit plus concise install/update, service/log/config, read-only preflight and uninstall commands.
