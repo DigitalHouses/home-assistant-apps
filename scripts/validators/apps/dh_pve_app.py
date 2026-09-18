@@ -5,7 +5,7 @@ from typing import Any
 
 from validators.common import fail, require_files
 
-EXPECTED_VERSION = "0.5.1"
+EXPECTED_VERSION = "0.5.2"
 EXPECTED_TOPIC_PREFIX = "DigitalHouses/Global/dh_pve_app"
 EXPECTED_DEVICE_NAME = "DH PVE"
 EXPECTED_REFRESH_ENTITY = "button.dh_app_pve_refresh"
@@ -61,6 +61,7 @@ def validate_dh_pve_app(
             app / "examples/packages/dh_app_pve_package.yaml",
             app / "systemd/dh_pve_app.service",
             app / "uninstall.sh",
+            app / "dh_app_pve.txt",
         ],
     )
 
@@ -469,6 +470,8 @@ def validate_dh_pve_app(
         "nano /etc/dh_pve_app/dh_pve_app.conf",
         "--check-config",
         'chmod 0755 "${APP_DIR}/uninstall.sh"',
+        'ROOT_GUIDE="/root/dh_app_pve.txt"',
+        'cat "${APP_DIR}/dh_app_pve.txt"',
     ):
         if expected not in installer:
             fail(f"DH PVE installer contract changed: {expected}")
@@ -506,9 +509,25 @@ def validate_dh_pve_app(
         'systemctl start "${SERVICE_NAME}"',
         'rm -rf -- "${APP_DIR}"',
         'rm -rf -- "${CONFIG_DIR}" "${STATE_DIR}"',
+        'ROOT_GUIDE="/root/dh_app_pve.txt"',
+        'rm -f -- "${ROOT_GUIDE}"',
     ):
         if expected not in uninstaller:
             fail(f"DH PVE uninstaller contract changed: {expected}")
+
+    _require_text(
+        app / "dh_app_pve.txt",
+        (
+            "Установка",
+            "Обновление",
+            "systemctl status dh_pve_app",
+            "/etc/dh_pve_app/dh_pve_app.conf",
+            "--ups-policy-preflight",
+            "/opt/digitalhouses/dh_pve_app/uninstall.sh",
+            "--purge",
+        ),
+        "operational guide",
+    )
 
     uninstaller_lower = uninstaller.lower()
     for forbidden in (
