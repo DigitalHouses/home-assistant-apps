@@ -637,6 +637,10 @@ The fan summary is diagnostic/non-Recorder presentation. It reports confirmed fa
 
 Dynamic Discovery may add a fan RPM entity when an unconfirmed channel becomes confirmed; App restart is not required for that transition.
 
+Fan component removal follows the Home Assistant MQTT Device Discovery update contract. When a previously discovered fan component must disappear, the App first publishes a retained Device Discovery update containing an empty component config with its `platform`, then publishes the final retained payload with that component omitted. Merely omitting a component is not treated as sufficient cleanup.
+
+Current raw candidate IDs may be carried internally from the fan collector to the Discovery builder solely to identify retained pre-0.5.5 fan components that require this cleanup. Candidate IDs are not RPM entities, are not part of Recorder, and are not published in the fan summary group.
+
 ### 9.5 Shutdown history
 
 Preserve app-owned shutdown history and the distinction between:
