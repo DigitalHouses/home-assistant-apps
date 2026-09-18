@@ -48,6 +48,12 @@ def test_installer_validates_proxmox_and_configuration_before_service_restart():
     assert check_pos < restart_pos
 
 
+def test_installer_restores_uninstaller_executable_mode():
+    installer_text = (ROOT / "install.sh").read_text(encoding="utf-8")
+
+    assert 'chmod 0755 "${APP_DIR}/uninstall.sh"' in installer_text
+
+
 def test_static_policy_helper_is_directly_executable_and_installer_restores_mode():
     helper = ROOT / "bin" / "dh-pve-ups-policy-cmd"
     helper_text = helper.read_text(encoding="utf-8")
@@ -57,3 +63,26 @@ def test_static_policy_helper_is_directly_executable_and_installer_restores_mode
     assert helper.stat().st_mode & 0o111
     assert helper_text.startswith("#!/")
     assert 'chmod 0755 "${APP_DIR}/bin/dh-pve-ups-policy-cmd"' in installer_text
+
+
+def test_installer_deploys_root_quick_reference_with_build_metadata():
+    guide = ROOT / "dh_app_pve.txt"
+    installer_text = (ROOT / "install.sh").read_text(encoding="utf-8")
+
+    assert guide.is_file()
+    guide_text = guide.read_text(encoding="utf-8")
+    for token in (
+        "Установка",
+        "Обновление",
+        "systemctl status dh_pve_app",
+        "/etc/dh_pve_app/dh_pve_app.conf",
+        "/opt/digitalhouses/dh_pve_app/uninstall.sh",
+        "--purge",
+    ):
+        assert token in guide_text
+
+    assert 'ROOT_GUIDE="/root/dh_app_pve.txt"' in installer_text
+    assert 'cat "${APP_DIR}/dh_app_pve.txt"' in installer_text
+    assert "version = %s" in installer_text
+    assert "source = %s" in installer_text
+    assert "commit = %s" in installer_text

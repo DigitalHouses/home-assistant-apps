@@ -16,9 +16,15 @@ def test_parse_remote_cyberpower_sample():
     assert snapshot.model == "UT2200E"
     assert snapshot.status_raw == "OL"
     assert snapshot.status_tokens == ("OL",)
+    assert snapshot.normalized_status == ("online",)
+    assert snapshot.primary_status == "online"
+    assert snapshot.battery_charger_status_raw is None
+    assert snapshot.battery_charger_status == "idle"
     assert snapshot.line_power is True
     assert snapshot.on_battery is False
     assert snapshot.low_battery is False
+    assert snapshot.charging is False
+    assert snapshot.discharging is False
     assert snapshot.battery_charge_percent == 100.0
     assert snapshot.runtime_seconds == 2160.0
     assert snapshot.battery_voltage_v == 27.2
@@ -49,21 +55,54 @@ def test_parse_frequency_capabilities():
     assert metrics["output_frequency_hz"].policy == "ups_frequency_online"
 
 
-def test_multi_token_status_is_normalized():
+def test_multi_token_status_is_normalized_and_charger_is_derived():
     snapshot = parse_upsc_output("ups.status: OB LB DISCHRG\n")
 
     assert snapshot.status_tokens == ("OB", "LB", "DISCHRG")
+    assert snapshot.normalized_status == ("on_battery", "low_battery")
+    assert snapshot.primary_status == "low_battery"
     assert snapshot.line_power is False
     assert snapshot.on_battery is True
     assert snapshot.low_battery is True
+    assert snapshot.battery_charger_status_raw is None
+    assert snapshot.battery_charger_status == "discharging"
     assert snapshot.discharging is True
     assert snapshot.charging is False
 
 
-def test_unknown_status_tokens_are_preserved():
+def test_direct_charger_status_overrides_legacy_status_flags():
+    snapshot = parse_upsc_output(
+        "ups.status: OL CHRG\n"
+        "battery.charger.status: floating\n"
+    )
+
+    assert snapshot.status_tokens == ("OL", "CHRG")
+    assert snapshot.normalized_status == ("online",)
+    assert snapshot.primary_status == "online"
+    assert snapshot.battery_charger_status_raw == "floating"
+    assert snapshot.battery_charger_status == "floating"
+    assert snapshot.charging is False
+    assert snapshot.discharging is False
+
+
+def test_unknown_direct_charger_status_is_preserved_and_not_guessed():
+    snapshot = parse_upsc_output(
+        "ups.status: OL CHRG\n"
+        "battery.charger.status: vendor-weird\n"
+    )
+
+    assert snapshot.battery_charger_status_raw == "vendor-weird"
+    assert snapshot.battery_charger_status == "unknown"
+    assert snapshot.charging is False
+    assert snapshot.discharging is False
+
+
+def test_unknown_status_tokens_are_preserved_but_not_normalized():
     snapshot = parse_upsc_output("ups.status: OL X-NEW\n")
 
     assert snapshot.status_tokens == ("OL", "X-NEW")
+    assert snapshot.normalized_status == ("online",)
+    assert snapshot.primary_status == "online"
     assert snapshot.line_power is True
 
 
@@ -87,6 +126,8 @@ def test_ups_metrics_use_expected_publish_policies():
 
     assert metrics["status"].policy == "discrete"
     assert metrics["on_battery"].policy == "discrete"
+    assert metrics["charging"].policy == "discrete"
+    assert metrics["discharging"].policy == "discrete"
     assert metrics["battery_charge_percent"].policy == "ups_charge_online"
     assert metrics["load_percent"].policy == "ups_load_online"
     assert metrics["runtime_seconds"].policy == "ups_runtime_online"
@@ -113,6 +154,8 @@ def test_read_ups_calls_only_upsc_with_bounded_timeout():
     snapshot = read_ups(config, runner=runner)
 
     assert snapshot.status_raw == "OL"
+    assert snapshot.normalized_status == ("online",)
+    assert snapshot.primary_status == "online"
     assert calls == [(
         ["upsc", "rackups@127.0.0.1:3493"],
         {

@@ -5,6 +5,7 @@ from typing import Any
 
 from validators.common import fail, require_files
 
+EXPECTED_VERSION = "0.5.5"
 EXPECTED_TOPIC_PREFIX = "DigitalHouses/Global/dh_pve_app"
 EXPECTED_DEVICE_NAME = "DH PVE"
 EXPECTED_REFRESH_ENTITY = "button.dh_app_pve_refresh"
@@ -26,6 +27,7 @@ def validate_dh_pve_app(
     require_files(
         root,
         [
+            app / "VERSION",
             app / "requirements.txt",
             app / "app/config.py",
             app / "app/topics.py",
@@ -42,6 +44,7 @@ def validate_dh_pve_app(
             app / "app/ups_group_runtime.py",
             app / "app/pve_cache.py",
             app / "app/disk_temperature.py",
+            app / "app/fan_presence.py",
             app / "app/collectors/guests.py",
             app / "app/topology.py",
             app / "app/production_v1.py",
@@ -50,6 +53,7 @@ def validate_dh_pve_app(
             app / "app/shutdown_integration.py",
             app / "app/shutdown_discovery.py",
             app / "app/mqtt_bridge.py",
+            app / "app/uninstall_cleanup.py",
             app / "app/main.py",
             app / "examples/dh_pve_app.conf.example",
             app / "examples/dh_app_pve_dashboard.yaml",
@@ -57,11 +61,17 @@ def validate_dh_pve_app(
             app / "examples/dh_app_pve_shutdown_readiness_card.yaml",
             app / "examples/packages/dh_app_pve_package.yaml",
             app / "systemd/dh_pve_app.service",
+            app / "uninstall.sh",
+            app / "dh_app_pve.txt",
         ],
     )
 
     if context.get("type") != "linux_agent":
         fail("DH PVE must remain a linux_agent")
+
+    version = (app / "VERSION").read_text(encoding="utf-8").strip()
+    if context.get("version") != EXPECTED_VERSION or version != EXPECTED_VERSION:
+        fail(f"DH PVE release version must be {EXPECTED_VERSION}")
 
     _require_text(
         app / "app/config.py",
@@ -122,6 +132,8 @@ def validate_dh_pve_app(
             '"problem_started"',
             '"problem_recovered"',
             '"problem_updated"',
+            '"default_entity_id": "sensor.dh_app_pve_app_version"',
+            "{{ value_json.app_version | default('unknown') }}",
         ),
         "canonical ready-state Discovery",
     )
@@ -138,6 +150,11 @@ def validate_dh_pve_app(
             '"problem_started"',
             '"problem_recovered"',
             '"problem_updated"',
+            '"config_changed"',
+            '"ups_status_changed"',
+            '"battery_discharge_level_crossed"',
+            '"battery_fully_charged"',
+            '"shutdown_committed"',
         ),
         "canonical UPS ready-state Discovery",
     )
@@ -241,6 +258,9 @@ def validate_dh_pve_app(
         (
             "sensor.dh_app_pve_ups_status",
             "sensor.dh_app_pve_ups_problems",
+            "sensor.dh_app_pve_ups_battery_charger_status",
+            "'charging': 'Заряжается'",
+            "'floating': 'Поддержание заряда'",
             "binary_sensor.dh_app_pve_ups_on_battery_problem",
             "button.dh_app_pve_ups_refresh",
         ),
@@ -259,6 +279,18 @@ def validate_dh_pve_app(
         "shutdown readiness card",
     )
 
+    ups_discovery_source = (app / "app/discovery_ups_groups.py").read_text(
+        encoding="utf-8"
+    )
+    for forbidden in (
+        "status_ru",
+        "problems_details",
+        "value_json.summary",
+        "value_json.details",
+    ):
+        if forbidden in ups_discovery_source:
+            fail(f"DH PVE UPS Discovery depends on removed presentation field: {forbidden}")
+
     package = (app / "examples/packages/dh_app_pve_package.yaml").read_text(
         encoding="utf-8"
     )
@@ -274,6 +306,9 @@ def validate_dh_pve_app(
         if forbidden in package:
             fail(f"DH PVE HA package must remain explicit/lightweight: {forbidden}")
 
+    pve_dashboard = (app / "examples/dh_app_pve_dashboard.yaml").read_text(
+        encoding="utf-8"
+    )
     haos_source = "\n".join(
         path.read_text(encoding="utf-8")
         for path in (
@@ -288,10 +323,35 @@ def validate_dh_pve_app(
         "input_number.dh_proxmox_",
         "states.sensor",
         "states.binary_sensor",
-        "custom:auto-entities",
     ):
         if forbidden in haos_source:
             fail(f"DH PVE canonical HAOS examples contain legacy/business logic: {forbidden}")
+
+    # auto-entities is presentation-only and is allowed only for the PVE
+    # inventory collections whose membership is dynamic. It must not return to
+    # the UPS/readiness examples or be used as a problem-discovery mechanism.
+    strict_haos_source = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in (
+            app / "examples/dh_app_pve_ups_dashboard.yaml",
+            app / "examples/dh_app_pve_shutdown_readiness_card.yaml",
+        )
+    )
+    if "custom:auto-entities" in strict_haos_source:
+        fail("DH PVE UPS/readiness UI must not use auto-entities")
+
+    if pve_dashboard.count("type: custom:auto-entities") != 4:
+        fail("DH PVE dashboard must use auto-entities only for 4 dynamic inventory collections")
+    for required in (
+        "proxmox_section: storage",
+        "proxmox_section: disk",
+        "proxmox_section: guests",
+        "proxmox_subject: vm",
+        "proxmox_subject: lxc",
+        "attribute: proxmox_sort_key",
+    ):
+        if required not in pve_dashboard:
+            fail(f"DH PVE inventory auto-entities contract changed: {required}")
 
     for legacy_name in (
         "dh_pve_dashboard.yaml",
@@ -308,9 +368,20 @@ def validate_dh_pve_app(
         fail("DH PVE storage UI contract must remain used/total, not free")
 
     _require_text(
+        app / "app/fan_presence.py",
+        (
+            "class FanPresenceTracker",
+            "streak >= 2",
+            '"schema_version": 1',
+            '"confirmed": sorted(self._confirmed)',
+        ),
+        "fan presence tracker",
+    )
+    _require_text(
         app / "app/production_v1.py",
         (
             "MISSING_CONFIRMATIONS = 3",
+            '"candidate_ids": [fan.fan_id for fan in raw]',
             'item["available"] = False',
             '"disk missing from authoritative SMART inventory"',
             '"source_type": "guest"',
@@ -370,16 +441,40 @@ def validate_dh_pve_app(
             'static_collectors=("topology", "host")',
             'slow_tasks=("guests", "storage", "gpu", "disk_temperature")',
             "read_pve_version(",
+            'fan_state_store=StateStore(state_dir / "fans.json")',
+            "app_version=version",
+            "--uninstall-mqtt-cleanup",
+            "cleanup_mqtt(config, identity)",
         ),
         "runtime",
     )
+    _require_text(
+        app / "app/pve_cache.py",
+        (
+            "def _static_version_payload(",
+            'if str(key) != "tasklist"',
+        ),
+        "PVE static version fingerprint",
+    )
+
+    _require_text(
+        app / "app/presentation.py",
+        (
+            '"value_appeared"',
+        ),
+        "first valid metric publication",
+    )
+
     _require_text(
         app / "app/runtime_dynamic.py",
         (
             '"setting_fast_poll_interval_seconds": "number"',
             '"setting_disk_poll_interval_seconds": "number"',
+            "def _split_component_tombstones(",
+            "def _component_cleanup_payload(",
+            "pending_tombstones",
         ),
-        "retired poll control cleanup",
+        "retired poll control and dynamic component cleanup",
     )
 
     service = app / "systemd/dh_pve_app.service"
@@ -407,6 +502,9 @@ def validate_dh_pve_app(
         'if [[ ! -f "${CONFIG_FILE}" ]]; then',
         "nano /etc/dh_pve_app/dh_pve_app.conf",
         "--check-config",
+        'chmod 0755 "${APP_DIR}/uninstall.sh"',
+        'ROOT_GUIDE="/root/dh_app_pve.txt"',
+        'cat "${APP_DIR}/dh_app_pve.txt"',
     ):
         if expected not in installer:
             fail(f"DH PVE installer contract changed: {expected}")
@@ -417,6 +515,71 @@ def validate_dh_pve_app(
     ):
         if forbidden in installer:
             fail(f"DH PVE Phase 1 installer must not touch legacy agent: {forbidden}")
+
+    cleanup_source = (app / "app/uninstall_cleanup.py").read_text(encoding="utf-8")
+    for expected in (
+        "build_topics(config.mqtt, identity)",
+        "build_ups_topics(config.mqtt, identity)",
+        '(topics.availability, "offline")',
+        '(ups_topics.availability, "offline")',
+        '(topics.discovery, "")',
+        '(ups_topics.discovery, "")',
+        "topics.legacy_discoveries",
+        "ups_topics.legacy_discoveries",
+        "qos=1",
+        "retain=True",
+    ):
+        if expected not in cleanup_source:
+            fail(f"DH PVE uninstall MQTT cleanup contract changed: {expected}")
+
+    uninstaller = (app / "uninstall.sh").read_text(encoding="utf-8")
+    for expected in (
+        'CONFIG_DIR="/etc/${APP_NAME}"',
+        'STATE_DIR="/var/lib/${APP_NAME}"',
+        '"--purge"',
+        'systemctl stop "${SERVICE_NAME}"',
+        "--uninstall-mqtt-cleanup",
+        'systemctl start "${SERVICE_NAME}"',
+        'rm -rf -- "${APP_DIR}"',
+        'rm -rf -- "${CONFIG_DIR}" "${STATE_DIR}"',
+        'ROOT_GUIDE="/root/dh_app_pve.txt"',
+        'rm -f -- "${ROOT_GUIDE}"',
+    ):
+        if expected not in uninstaller:
+            fail(f"DH PVE uninstaller contract changed: {expected}")
+
+    _require_text(
+        app / "dh_app_pve.txt",
+        (
+            "Установка",
+            "Обновление",
+            "systemctl status dh_pve_app",
+            "/etc/dh_pve_app/dh_pve_app.conf",
+            "--ups-policy-preflight",
+            "/opt/digitalhouses/dh_pve_app/uninstall.sh",
+            "--purge",
+        ),
+        "operational guide",
+    )
+
+    uninstaller_lower = uninstaller.lower()
+    for forbidden in (
+        "/etc/nut",
+        "upsmon -c fsd",
+        "upscmd",
+        "load.off",
+        "load.on",
+        "apt-get remove",
+        "apt remove",
+        "apt purge",
+        "haos",
+        "mosquitto",
+    ):
+        if forbidden in uninstaller_lower:
+            fail(f"DH PVE uninstaller crosses ownership/safety boundary: {forbidden}")
+
+    if "sensor.dh_app_pve_app_version" in package:
+        fail("DH PVE App version sensor must not be added to Recorder whitelist")
 
     app_source = "\n".join(
         path.read_text(encoding="utf-8")

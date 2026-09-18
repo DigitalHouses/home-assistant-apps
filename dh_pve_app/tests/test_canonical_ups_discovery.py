@@ -1,7 +1,10 @@
+import json
+from pathlib import Path
+
 from app.config import MqttConfig
 from app.identity import HostIdentity
 from app.shutdown_discovery import build_shutdown_aware_ups_discovery_payload
-from app.topics import build_ups_topics
+from app.topics import build_ups_topics, ups_state_group_topic
 from app.ups_nut import parse_upsc_output
 
 
@@ -31,7 +34,7 @@ def _payload():
         "device.mfr: CPS\n"
         "device.model: UT2200E\n"
         "device.serial: TEST123\n"
-        "ups.status: OL\n"
+        "ups.status: OL CHRG\n"
         "battery.charge: 100\n"
         "battery.runtime: 2160\n"
         "ups.load: 5\n"
@@ -69,6 +72,9 @@ def test_canonical_ups_public_entity_ids_are_consistent():
     c = _payload()["components"]
 
     assert c["status"]["default_entity_id"] == "sensor.dh_app_pve_ups_status"
+    assert c["battery_charger_status"]["default_entity_id"] == (
+        "sensor.dh_app_pve_ups_battery_charger_status"
+    )
     assert c["battery_charge"]["default_entity_id"] == "sensor.dh_app_pve_ups_battery_charge"
     assert c["refresh"]["default_entity_id"] == "button.dh_app_pve_ups_refresh"
     assert c["guest_shutdown_budget"]["default_entity_id"] == (
@@ -87,6 +93,32 @@ def test_canonical_ups_public_entity_ids_are_consistent():
         or ".dh_ups_" in component.get("default_entity_id", "")
         for component in c.values()
     )
+
+
+def test_canonical_status_and_charger_discovery_use_machine_fields():
+    c = _payload()["components"]
+
+    status = c["status"]
+    assert "value_json.status" in status["value_template"]
+    assert "status_set" in status["json_attributes_template"]
+    assert "raw_status_tokens" in status["json_attributes_template"]
+    assert "status_ru" not in status["value_template"]
+    assert "status_ru" not in status["json_attributes_template"]
+
+    charger = c["battery_charger_status"]
+    assert "battery_charger_status" in charger["value_template"]
+
+    for key, active_status in (
+        ("charging", "charging"),
+        ("discharging", "discharging"),
+    ):
+        component = c[key]
+        assert "battery_charger_status" in component["value_template"]
+        assert active_status in component["value_template"]
+        assert any(
+            "battery_charger_status" in item.get("value_template", "")
+            for item in component["availability"]
+        )
 
 
 def test_ups_problem_binaries_use_app_owned_retained_topics():
@@ -144,6 +176,83 @@ def test_ups_problem_aggregate_and_native_event_are_canonical():
         "problem_recovered",
         "problem_updated",
         "config_changed",
+        "ups_status_changed",
+        "battery_discharge_level_crossed",
+        "battery_fully_charged",
+        "shutdown_committed",
     ]
+    assert event["qos"] == 1
     assert event["entity_category"] == "diagnostic"
     assert "json_attributes_topic" not in event
+
+
+def test_ups_discovery_contains_no_removed_presentation_fields():
+    payload = json.dumps(_payload(), sort_keys=True)
+
+    for forbidden in ("status_ru", "summary", "details", "problems_details"):
+        assert forbidden not in payload
+
+
+def test_standard_ups_dashboard_localizes_machine_charger_status():
+    dashboard = (
+        Path(__file__).parents[1] / "examples" / "dh_app_pve_ups_dashboard.yaml"
+    ).read_text(encoding="utf-8")
+
+    assert "sensor.dh_app_pve_ups_battery_charger_status" in dashboard
+    for machine_value, label in (
+        ("charging", "Заряжается"),
+        ("floating", "Поддержание заряда"),
+        ("resting", "Заряжена"),
+        ("idle", "Ожидание"),
+        ("discharging", "Разряжается"),
+        ("unknown", "Неизвестно"),
+        ("unavailable", "Недоступно"),
+    ):
+        assert f"'{machine_value}': '{label}'" in dashboard
+
+    assert "binary_sensor.dh_app_pve_ups_charging" not in dashboard
+    assert "binary_sensor.dh_app_pve_ups_discharging" not in dashboard
+
+
+def test_line_power_monthly_discovery_is_canonical_and_grouped():
+    topics = build_ups_topics(_mqtt(), _identity())
+    c = _payload()["components"]
+    state_topic = ups_state_group_topic(topics, "line_power_statistics")
+
+    expected_ids = {
+        "line_power": "binary_sensor.dh_app_pve_ups_line_power",
+        "line_power_online_month": "sensor.dh_app_pve_ups_line_power_online_month",
+        "line_power_offline_month": "sensor.dh_app_pve_ups_line_power_offline_month",
+        "line_power_outages_month": "sensor.dh_app_pve_ups_line_power_outages_month",
+        "line_power_availability_month": "sensor.dh_app_pve_ups_line_power_availability_month",
+        "line_power_current_outage_started": (
+            "sensor.dh_app_pve_ups_line_power_current_outage_started"
+        ),
+        "line_power_last_failure": "sensor.dh_app_pve_ups_line_power_last_failure",
+        "line_power_last_restore": "sensor.dh_app_pve_ups_line_power_last_restore",
+        "line_power_last_outage_duration": (
+            "sensor.dh_app_pve_ups_line_power_last_outage_duration"
+        ),
+    }
+
+    for key, entity_id in expected_ids.items():
+        assert c[key]["default_entity_id"] == entity_id
+        assert c[key]["state_topic"] == state_topic
+
+    assert c["line_power"]["platform"] == "binary_sensor"
+    assert c["line_power_online_month"]["unit_of_measurement"] == "s"
+    assert c["line_power_online_month"]["device_class"] == "duration"
+    assert c["line_power_offline_month"]["unit_of_measurement"] == "s"
+    assert c["line_power_offline_month"]["device_class"] == "duration"
+    assert c["line_power_availability_month"]["unit_of_measurement"] == "%"
+    assert c["line_power_current_outage_started"]["device_class"] == "timestamp"
+    assert c["line_power_last_failure"]["device_class"] == "timestamp"
+    assert c["line_power_last_restore"]["device_class"] == "timestamp"
+    assert c["line_power_last_outage_duration"]["unit_of_measurement"] == "s"
+    assert c["line_power_last_outage_duration"]["device_class"] == "duration"
+
+    metadata = c["line_power_availability_month"]["json_attributes_template"]
+    assert "month_key" in metadata
+    assert "month_label_ru" in metadata
+    assert "tracking_since" in metadata
+    assert "partial_month" in metadata

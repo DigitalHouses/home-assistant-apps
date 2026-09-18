@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .problems import ProblemAggregate, ProblemState, ProblemTransition
-from .ups_health import ups_problem_observations
+from .ups_health import STATUS_DERIVED_UPS_PROBLEM_IDS, ups_problem_observations
 from .ups_nut import UpsSnapshot
 
 
@@ -21,9 +21,11 @@ def _compact(state: ProblemState) -> dict[str, object]:
         "value": state.value,
         "average": state.average,
         "threshold": state.threshold,
-        "summary": state.summary,
-        "details": state.details,
     }
+
+
+def transition_uses_status_event(transition: ProblemTransition) -> bool:
+    return transition.current.problem_id in STATUS_DERIVED_UPS_PROBLEM_IDS
 
 
 @dataclass
@@ -63,12 +65,6 @@ class UpsProblemEngine:
             snapshot,
             nut_available=nut_available,
         ):
-            if observation.active:
-                summary = observation.message
-                details = observation.message
-            else:
-                summary = f"{observation.label}: OK"
-                details = summary
             state = ProblemState(
                 problem_id=observation.problem_id,
                 category="ups",
@@ -80,8 +76,6 @@ class UpsProblemEngine:
                 value=observation.active,
                 average=None,
                 threshold=None,
-                summary=summary,
-                details=details,
             )
             transition = self._commit(state)
             if transition is not None:
@@ -102,15 +96,8 @@ class UpsProblemEngine:
             if active_states
             else "ok"
         )
-        if count == 0:
-            summary = "No active UPS problems"
-        elif count == 1:
-            summary = "1 active UPS problem"
-        else:
-            summary = f"{count} active UPS problems"
         return ProblemAggregate(
             count=count,
             severity=severity,
-            summary=summary,
             active=tuple(_compact(state) for state in active_states),
         )

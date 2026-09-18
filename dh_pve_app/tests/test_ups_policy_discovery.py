@@ -1,7 +1,8 @@
 from app.config import MqttConfig
 from app.discovery_ups import build_ups_discovery_payload
 from app.identity import HostIdentity
-from app.topics import build_ups_topics
+from app.shutdown_discovery import build_shutdown_aware_ups_discovery_payload
+from app.topics import build_ups_topics, ups_state_group_topic
 
 
 def _mqtt():
@@ -29,6 +30,46 @@ def _components():
     return build_ups_discovery_payload(
         _mqtt(), _identity(), version="0.2.0-alpha", snapshot=None
     )["components"]
+
+
+def _shutdown_components():
+    return build_shutdown_aware_ups_discovery_payload(
+        _mqtt(), _identity(), version="0.2.0-alpha", snapshot=None
+    )["components"]
+
+
+def test_trigger_v2_discovery_exposes_active_policy_read_only():
+    components = _shutdown_components()
+    topics = build_ups_topics(_mqtt(), _identity())
+    config_topic = ups_state_group_topic(topics, "config")
+
+    policy = components["trigger_policy"]
+    assert policy["platform"] == "sensor"
+    assert policy["default_entity_id"] == "sensor.dh_app_pve_ups_trigger_policy"
+    assert policy["state_topic"] == config_topic
+    assert policy["json_attributes_topic"] == config_topic
+    assert "value_json.policy.status" in policy["value_template"]
+    template = policy["json_attributes_template"]
+    for field in (
+        "active_charge_threshold_percent",
+        "active_runtime_reserve_seconds",
+        "draft_charge_threshold_percent",
+        "draft_runtime_reserve_seconds",
+        "policy_revision",
+        "policy_hash",
+        "last_applied",
+        "apply_result",
+    ):
+        assert field in template
+    assert policy["entity_category"] == "diagnostic"
+
+
+def test_trigger_policy_presentation_handles_null_active_and_draft_objects():
+    policy = _shutdown_components()["trigger_policy"]
+    template = policy["json_attributes_template"]
+
+    assert "value_json.policy.active | default({}, true)" in template
+    assert "value_json.policy.draft | default({}, true)" in template
 
 
 def test_trigger_v2_discovery_exposes_draft_numbers_and_explicit_apply_button():

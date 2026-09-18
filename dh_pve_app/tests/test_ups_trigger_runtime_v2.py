@@ -2,6 +2,7 @@ import threading
 
 from app.config import MqttConfig, UpsConfig
 from app.identity import HostIdentity
+from app.machine_event_outbox import MachineEventOutbox
 from app.shutdown_integration import ShutdownAwareUpsRuntime
 from app.state_store import StateStore
 from app.ups_nut import parse_upsc_output
@@ -19,6 +20,7 @@ class Bridge:
         self.discovery = []
         self.states = []
         self.availability = []
+        self.events = []
 
     def publish_ups_discovery(self, payload):
         self.discovery.append(payload)
@@ -32,13 +34,21 @@ class Bridge:
         self.availability.append(online)
         return True
 
+    def publish_ups_diagnostic_event(self, payload):
+        self.events.append(payload)
+        return True
+
 
 class HistoryTracker:
     def __init__(self):
         self.snapshots = []
+        self.software_commits = []
 
     def observe_ups(self, snapshot):
         self.snapshots.append(snapshot)
+
+    def record_software_shutdown_commit(self, reason, snapshot):
+        self.software_commits.append((reason, snapshot))
 
     def payload(self):
         return {"previous_shutdown": None, "history": [], "history_count": 0}
@@ -112,22 +122,28 @@ def _runtime(tmp_path, snapshots, *, active=True, budget=None, executor=None):
         except StopIteration:
             return last
 
-    return ShutdownAwareUpsRuntime(
+    bridge = Bridge()
+    history = HistoryTracker()
+    runtime = ShutdownAwareUpsRuntime(
         config=_config(),
         mqtt_config=_mqtt(),
-        bridge=Bridge(),
+        bridge=bridge,
         identity=_identity(),
-        version="0.2.0",
+        version="0.5.0",
         state_store=state_store,
+        machine_event_outbox=MachineEventOutbox(
+            StateStore(tmp_path / "machine-events.json")
+        ),
         now_iso=lambda: "2026-09-16T01:00:00+05:00",
         now_monotonic=lambda: 100.0,
         reader=reader,
         capability_reader=lambda config: (_ for _ in ()).throw(RuntimeError("skip")),
         shutdown_policy_reader=lambda: (_ for _ in ()).throw(RuntimeError("skip")),
-        shutdown_history_tracker=HistoryTracker(),
+        shutdown_history_tracker=history,
         shutdown_budget_reader=lambda: budget if budget is not None else _budget(),
         software_shutdown_executor=executor,
     )
+    return runtime, bridge, history
 
 
 def _snapshot(status, charge, runtime):
@@ -136,9 +152,13 @@ def _snapshot(status, charge, runtime):
     )
 
 
+def _shutdown_events(bridge):
+    return [event for event in bridge.events if event.get("event_type") == "shutdown_committed"]
+
+
 def test_runtime_commits_charge_guard_once_after_successful_ups_poll(tmp_path):
     calls = []
-    runtime = _runtime(
+    runtime, bridge, history = _runtime(
         tmp_path,
         [_snapshot("OB", 20, 9999), _snapshot("OB", 19, 9999)],
         executor=lambda reason: calls.append(reason),
@@ -146,15 +166,36 @@ def test_runtime_commits_charge_guard_once_after_successful_ups_poll(tmp_path):
 
     assert runtime.startup() is True
     assert calls == ["charge_guard"]
+    assert len(history.software_commits) == 1
+    events = _shutdown_events(bridge)
+    assert len(events) == 1
+    event = events[0]
+    trigger = runtime.last_software_shutdown_trigger
+    budget = runtime.last_shutdown_budget
+    assert trigger is not None
+    assert budget is not None
+    assert event == {
+        "schema_version": 2,
+        "event_type": "shutdown_committed",
+        "observed_at": "2026-09-16T01:00:00+05:00",
+        "reason": "charge_threshold",
+        "battery_charge_percent": 20.0,
+        "battery_runtime_seconds": 9999.0,
+        "shutdown_budget_seconds": budget.shutdown_budget_seconds,
+        "runtime_reserve_seconds": 180,
+        "runtime_guard_threshold_seconds": trigger.runtime_guard_threshold_seconds,
+    }
+
     runtime.manual_refresh()
     assert calls == ["charge_guard"]
+    assert len(_shutdown_events(bridge)) == 1
     assert runtime.software_shutdown_committed is True
     assert runtime.software_shutdown_reason == "charge_guard"
 
 
 def test_runtime_uses_runtime_guard_when_charge_guard_is_not_met(tmp_path):
     calls = []
-    runtime = _runtime(
+    runtime, bridge, _ = _runtime(
         tmp_path,
         [_snapshot("OB", 80, 675)],
         executor=lambda reason: calls.append(reason),
@@ -164,11 +205,20 @@ def test_runtime_uses_runtime_guard_when_charge_guard_is_not_met(tmp_path):
 
     assert calls == ["runtime_guard"]
     assert runtime.software_shutdown_reason == "runtime_guard"
+    events = _shutdown_events(bridge)
+    assert len(events) == 1
+    event = events[0]
+    assert event["schema_version"] == 2
+    assert event["reason"] == "runtime_threshold"
+    assert event["battery_charge_percent"] == 80.0
+    assert event["battery_runtime_seconds"] == 675.0
+    assert "summary" not in event
+    assert "details" not in event
 
 
 def test_runtime_without_active_v2_policy_never_executes_shutdown(tmp_path):
     calls = []
-    runtime = _runtime(
+    runtime, bridge, _ = _runtime(
         tmp_path,
         [_snapshot("OB", 1, 1)],
         active=False,
@@ -178,12 +228,13 @@ def test_runtime_without_active_v2_policy_never_executes_shutdown(tmp_path):
     runtime.startup()
 
     assert calls == []
+    assert _shutdown_events(bridge) == []
     assert runtime.software_shutdown_committed is False
 
 
 def test_unavailable_budget_disables_runtime_guard_but_not_charge_guard(tmp_path):
     calls = []
-    runtime = _runtime(
+    runtime, bridge, _ = _runtime(
         tmp_path,
         [_snapshot("OB", 80, 1), _snapshot("OB", 20, 1)],
         budget=_budget(False),
@@ -192,11 +243,13 @@ def test_unavailable_budget_disables_runtime_guard_but_not_charge_guard(tmp_path
 
     runtime.startup()
     assert calls == []
+    assert _shutdown_events(bridge) == []
     runtime.manual_refresh()
     assert calls == ["charge_guard"]
+    assert [event["reason"] for event in _shutdown_events(bridge)] == ["charge_threshold"]
 
 
-def test_executor_failure_does_not_crash_collection_or_latch_and_retries(tmp_path):
+def test_executor_failure_does_not_crash_collection_or_emit_until_success(tmp_path):
     calls = []
 
     def executor(reason):
@@ -204,7 +257,7 @@ def test_executor_failure_does_not_crash_collection_or_latch_and_retries(tmp_pat
         if len(calls) == 1:
             raise RuntimeError("FSD helper failed")
 
-    runtime = _runtime(
+    runtime, bridge, _ = _runtime(
         tmp_path,
         [_snapshot("OB", 80, 1), _snapshot("OB", 80, 1)],
         executor=executor,
@@ -212,14 +265,16 @@ def test_executor_failure_does_not_crash_collection_or_latch_and_retries(tmp_pat
 
     assert runtime.startup() is True
     assert runtime.software_shutdown_committed is False
+    assert _shutdown_events(bridge) == []
     runtime.manual_refresh()
     assert calls == ["runtime_guard", "runtime_guard"]
     assert runtime.software_shutdown_committed is True
+    assert len(_shutdown_events(bridge)) == 1
 
 
 def test_online_or_native_lb_only_sample_does_not_call_software_executor(tmp_path):
     calls = []
-    runtime = _runtime(
+    runtime, bridge, _ = _runtime(
         tmp_path,
         [_snapshot("OL", 1, 1), _snapshot("OB LB", 80, 9999)],
         executor=lambda reason: calls.append(reason),
@@ -229,3 +284,18 @@ def test_online_or_native_lb_only_sample_does_not_call_software_executor(tmp_pat
     runtime.manual_refresh()
 
     assert calls == []
+    assert _shutdown_events(bridge) == []
+
+
+def test_raw_fsd_alone_does_not_emit_shutdown_committed(tmp_path):
+    calls = []
+    runtime, bridge, _ = _runtime(
+        tmp_path,
+        [_snapshot("OL FSD", 1, 1)],
+        executor=lambda reason: calls.append(reason),
+    )
+
+    runtime.startup()
+
+    assert calls == []
+    assert _shutdown_events(bridge) == []

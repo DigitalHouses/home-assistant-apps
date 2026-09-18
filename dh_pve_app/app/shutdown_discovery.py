@@ -10,7 +10,7 @@ from .discovery_metrics import _path, _sensor, _slug
 from .discovery_ups import build_ups_discovery_payload
 from .discovery_ups_groups import route_ups_discovery_groups
 from .identity import HostIdentity
-from .topics import build_topics, build_ups_topics
+from .topics import build_topics, build_ups_topics, ups_state_group_topic
 from .ups_control import UpsCapabilities
 from .ups_nut import UpsSnapshot
 from .ups_shutdown_policy import UpsShutdownPolicy
@@ -124,14 +124,11 @@ def build_shutdown_aware_pve_discovery_payload(
             guest_id = str(guest_id_raw)
             name = str(raw.get("name") or f"{label} {guest_id}")
             current = _path("host", "guest_config", plural, guest_id)
-            previous_guest = _path(
-                "host",
-                "shutdown_history",
-                "previous_shutdown",
-                "guests",
-                kind,
-                guest_id,
+            previous_kind = (
+                f"((({previous} | default({{}}, true)).guests | default({{}}, true))."
+                f"{kind} | default({{}}, true))"
             )
+            previous_guest = f"({previous_kind}.get({json.dumps(guest_id)}, {{}}))"
             key, item = _sensor(
                 uid=uid,
                 state_topic=topics.state,
@@ -168,7 +165,24 @@ def build_shutdown_aware_pve_discovery_payload(
             )
             components[key] = item
 
-    return route_pve_discovery_groups(payload, topics, inventory=inventory)
+    payload = route_pve_discovery_groups(payload, topics, inventory=inventory)
+
+    # Unconfirmed hwmon channels may already exist as retained MQTT Device
+    # Discovery components from an older release. Emit component tombstones;
+    # DynamicDiscoveryRuntime publishes these once as a cleanup update and then
+    # republishes the final payload with the tombstones omitted.
+    routed_components = payload.get("components")
+    fans = _mapping(inventory.get("fans"))
+    candidate_ids = fans.get("candidate_ids")
+    if isinstance(routed_components, dict) and isinstance(candidate_ids, list):
+        for fan_id in candidate_ids:
+            if not isinstance(fan_id, str) or not fan_id:
+                continue
+            key = f"fan_{_slug(fan_id)}_rpm"
+            if key not in routed_components:
+                routed_components[key] = {"platform": "sensor"}
+
+    return payload
 
 
 def build_shutdown_aware_ups_discovery_payload(
@@ -198,7 +212,31 @@ def build_shutdown_aware_ups_discovery_payload(
             "payload_not_available": "offline",
         }
     ]
+    config_topic = ups_state_group_topic(topics, "config")
 
+    components["trigger_policy"] = {
+        "platform": "sensor",
+        "name": "Trigger policy",
+        "unique_id": f"{topics.device_id}_trigger_policy",
+        "default_entity_id": "sensor.dh_app_pve_ups_trigger_policy",
+        "state_topic": config_topic,
+        "value_template": "{{ value_json.policy.status | default('Unknown') }}",
+        "entity_category": "diagnostic",
+        "availability": availability,
+        "availability_mode": "all",
+        "icon": "mdi:shield-cog-outline",
+        "json_attributes_topic": config_topic,
+        "json_attributes_template": (
+            "{{ {'active_charge_threshold_percent': (value_json.policy.active | default({}, true)).shutdown_battery_charge_threshold_percent | default(none), "
+            "'active_runtime_reserve_seconds': (value_json.policy.active | default({}, true)).runtime_reserve_seconds | default(none), "
+            "'draft_charge_threshold_percent': (value_json.policy.draft | default({}, true)).shutdown_battery_charge_threshold_percent | default(none), "
+            "'draft_runtime_reserve_seconds': (value_json.policy.draft | default({}, true)).runtime_reserve_seconds | default(none), "
+            "'policy_revision': value_json.policy.revision | default(0), "
+            "'policy_hash': value_json.policy.hash | default(none), "
+            "'last_applied': value_json.policy.last_applied | default(none), "
+            "'apply_result': value_json.policy.apply_result | default('Unknown')} | tojson }}"
+        ),
+    }
     components["guest_shutdown_budget"] = {
         "platform": "sensor",
         "name": "Guest shutdown budget",

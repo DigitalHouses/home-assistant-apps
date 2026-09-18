@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 from .diagnostic_events import DiagnosticEvent
+from .machine_event_outbox import MachineEventOutbox
 from .presentation_ups import UpsPresentationRouter
 from .problems import ProblemState, ProblemTransition
-from .ups_problems import UpsProblemEngine
+from .ups_battery_events import UpsBatteryEventTracker
+from .ups_problems import UpsProblemEngine, transition_uses_status_event
 from .ups_runtime import UpsRuntime
+from .ups_status_events import UpsStatusEventTracker
 
 
 class AdaptiveUpsRuntime(UpsRuntime):
@@ -20,6 +23,12 @@ class AdaptiveUpsRuntime(UpsRuntime):
     """
 
     def __init__(self, *args, **kwargs) -> None:
+        self.machine_event_outbox: MachineEventOutbox | None = kwargs.pop(
+            "machine_event_outbox", None
+        )
+        self.battery_event_tracker: UpsBatteryEventTracker | None = kwargs.pop(
+            "battery_event_tracker", None
+        )
         super().__init__(*args, **kwargs)
         self.presentation = UpsPresentationRouter(
             source_interval_seconds=self.config.poll_interval_seconds
@@ -29,6 +38,7 @@ class AdaptiveUpsRuntime(UpsRuntime):
             object_id=self.config.name,
             object_name=self.config.name,
         )
+        self.status_event_tracker = UpsStatusEventTracker()
         self._published_problem_ids: set[str] = set()
         self._pending_problem_transitions: list[ProblemTransition] = []
         self._problem_snapshot_dirty = False
@@ -46,6 +56,24 @@ class AdaptiveUpsRuntime(UpsRuntime):
                 "publish_ups_diagnostic_event",
             )
         )
+
+    def _event_capable(self) -> bool:
+        return callable(getattr(self.bridge, "publish_ups_diagnostic_event", None))
+
+    def _semantic_events_enabled(self) -> bool:
+        return self.machine_event_outbox is not None
+
+    def _flush_machine_event_outbox(self) -> bool:
+        outbox = self.machine_event_outbox
+        if outbox is None:
+            return True
+        if not self._event_capable():
+            return not outbox.pending()
+        for pending in outbox.pending():
+            if not self.bridge.publish_ups_diagnostic_event(pending.payload):
+                return False
+            outbox.acknowledge(pending.key)
+        return True
 
     def _publish_groups(
         self,
@@ -113,7 +141,6 @@ class AdaptiveUpsRuntime(UpsRuntime):
         aggregate = self.problem_engine.aggregate()
         return {
             "severity": aggregate.severity,
-            "summary": aggregate.summary,
             "active": list(aggregate.active),
         }
 
@@ -173,9 +200,15 @@ class AdaptiveUpsRuntime(UpsRuntime):
         aggregate = self.problem_engine.aggregate()
         while self._pending_problem_transitions:
             transition = self._pending_problem_transitions[0]
+            if self._semantic_events_enabled() and transition_uses_status_event(transition):
+                self._published_problem_ids.add(transition.current.problem_id)
+                self._pending_problem_transitions.pop(0)
+                continue
+
             event = DiagnosticEvent.from_transition(
                 transition,
                 active_problem_count=aggregate.count,
+                observed_at=self.now_iso(),
             )
             if not self.bridge.publish_ups_diagnostic_event(event.as_payload()):
                 return False
@@ -245,12 +278,49 @@ class AdaptiveUpsRuntime(UpsRuntime):
         self._problem_snapshot_dirty = True
         return self._sync_current_problem_states()
 
+    def _enqueue_semantic_events(self, snapshot, *, observed_at: str) -> bool:
+        outbox = self.machine_event_outbox
+        if outbox is None or not self._event_capable():
+            return True
+
+        status_event = self.status_event_tracker.observe(
+            current_status=tuple(snapshot.normalized_status),
+            current_raw_status=tuple(snapshot.status_tokens),
+            observed_at=observed_at,
+        )
+        if status_event is not None:
+            outbox.enqueue(*status_event)
+
+        battery_tracker = self.battery_event_tracker
+        if battery_tracker is not None:
+            for event in battery_tracker.observe_discharge(
+                on_battery=snapshot.on_battery,
+                charge_percent=snapshot.battery_charge_percent,
+                observed_at=observed_at,
+            ):
+                outbox.enqueue(*event)
+            for event in battery_tracker.observe_charge_cycle(
+                charger_status=snapshot.battery_charger_status,
+                charge_percent=snapshot.battery_charge_percent,
+                line_power=snapshot.line_power,
+                raw_status_tokens=tuple(snapshot.status_tokens),
+                observed_at=observed_at,
+            ):
+                outbox.enqueue(*event)
+        return True
+
     def _collect(self, *, force: bool = False, manual_refresh: bool = False) -> bool:
         if not self._group_capable():
             return super()._collect(force=force, manual_refresh=manual_refresh)
 
-        # Complete an earlier retained-state/Event transaction before a new NUT
-        # observation can create a later transition.
+        # A pending semantic Event is older than any NUT sample we could read
+        # now. Deliver it first so tracker state cannot advance past undelivered
+        # machine semantics.
+        if not self._flush_machine_event_outbox():
+            return False
+
+        # Complete an earlier retained problem/Event transaction before a new
+        # NUT observation can create a later transition.
         if not self._flush_pending_problem_transitions():
             return False
 
@@ -305,6 +375,15 @@ class AdaptiveUpsRuntime(UpsRuntime):
                 nut_available=True,
             )
 
+        semantic_ok = True
+        if state_ok and problem_ok:
+            semantic_ok = self._enqueue_semantic_events(
+                snapshot,
+                observed_at=collected_at,
+            )
+            if semantic_ok:
+                semantic_ok = self._flush_machine_event_outbox()
+
         if state_ok:
             self._last_state_payload = payload
             if manual_refresh or history_changed:
@@ -312,7 +391,7 @@ class AdaptiveUpsRuntime(UpsRuntime):
         elif manual_refresh:
             self.last_refresh = previous_refresh
 
-        return bool(discovery_ok and state_ok and problem_ok)
+        return bool(discovery_ok and state_ok and problem_ok and semantic_ok)
 
     def startup(self) -> bool:
         if not self._group_capable():
@@ -341,9 +420,11 @@ class AdaptiveUpsRuntime(UpsRuntime):
 
         pending_ok = self._flush_pending_problem_transitions()
         problem_ok = pending_ok and self._republish_problem_snapshot()
+        semantic_ok = self._flush_machine_event_outbox()
         return bool(
             availability_ok
             and discovery_ok
             and state_ok
             and problem_ok
+            and semantic_ok
         )

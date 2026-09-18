@@ -110,10 +110,14 @@ def _inventory():
     }
 
 
-def _components():
+def _payload():
     return build_shutdown_aware_pve_discovery_payload(
-        _config(), _identity(), version="0.2.0", inventory=_inventory()
-    )["components"]
+        _config(), _identity(), version="0.5.1", inventory=_inventory()
+    )
+
+
+def _components():
+    return _payload()["components"]
 
 
 def test_pve_discovery_routes_entities_to_smallest_state_group():
@@ -154,6 +158,37 @@ def test_pve_discovery_routes_entities_to_smallest_state_group():
     )
 
 
+def test_unconfirmed_fan_candidate_emits_device_discovery_tombstone():
+    inventory = _inventory()
+    inventory["fans"] = {
+        "detected": True,
+        "count": 1,
+        "candidate_count": 2,
+        "confirmed_count": 1,
+        "unconfirmed_count": 1,
+        "candidate_ids": [
+            "it8613_it87_2608_fan2",
+            "it8613_it87_2608_fan3",
+        ],
+        "it8613_it87_2608_fan2": {
+            "fan_id": "it8613_it87_2608_fan2",
+            "display_name": "Fan 2 RPM - it8613",
+            "label": "Fan 2",
+            "chip": "it8613",
+            "rpm": 3792,
+        },
+    }
+
+    components = build_shutdown_aware_pve_discovery_payload(
+        _config(), _identity(), version="0.5.5", inventory=inventory
+    )["components"]
+
+    assert "fan_it8613_it87_2608_fan2_rpm" in components
+    assert components["fan_it8613_it87_2608_fan3_rpm"] == {
+        "platform": "sensor"
+    }
+
+
 def test_pve_discovery_exposes_presentation_diagnostics():
     topics = build_topics(_config().mqtt, _identity())
     c = _components()
@@ -170,6 +205,27 @@ def test_pve_discovery_exposes_presentation_diagnostics():
     assert "last_publication.timestamp" in c["last_publication"]["value_template"]
 
     assert c["last_refresh"]["state_topic"] == diagnostics
+
+
+def test_pve_discovery_exposes_app_version_from_same_release_value():
+    topics = build_topics(_config().mqtt, _identity())
+    payload = _payload()
+    c = payload["components"]
+    diagnostics = state_group_topic(topics, "diagnostics")
+
+    assert [key for key in c if key == "app_version"] == ["app_version"]
+    assert c["app_version"]["platform"] == "sensor"
+    assert c["app_version"]["default_entity_id"] == "sensor.dh_app_pve_app_version"
+    assert c["app_version"]["state_topic"] == diagnostics
+    assert c["app_version"]["value_template"] == (
+        "{{ value_json.app_version | default('unknown') }}"
+    )
+    assert c["app_version"]["entity_category"] == "diagnostic"
+    assert c["app_version"]["icon"] == "mdi:tag-outline"
+
+    assert payload["device"]["name"] == "DH PVE"
+    assert payload["device"]["sw_version"] == "0.5.1"
+    assert payload["origin"]["sw_version"] == "0.5.1"
 
 
 def test_continuous_sensor_attributes_do_not_duplicate_volatile_values():
