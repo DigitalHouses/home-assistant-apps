@@ -128,16 +128,79 @@ PROBLEM/EVENT        publication profile input; no default alert threshold curre
 ## 6. Fan RPM
 
 ```text
-CURRENT FIELD       fans.<id>.rpm
+CURRENT FIELD       fans.<id>.rpm plus fan detection summary
 CURRENT SOURCE      /sys/class/hwmon/hwmon*/fan*_input
 CURRENT COST        low, no subprocess
-TARGET CHEAP SOURCE same
-PARSER/FIXTURE      stable fan id from chip/device/index; invalid RPM -> unavailable
+TARGET CHEAP SOURCE same; direct sysfs only
+PARSER/FIXTURE      raw channel parser + stable fan id from chip/resolved device/index;
+                    invalid RPM -> unavailable;
+                    volatile hwmonN is not identity;
+                    fan*_label is display metadata only
 SUBPROCESS REMAINS  no
 CADENCE              FAST 10s
-RECORDER             yes
-PROBLEM/EVENT        availability/data problem where applicable; no invented RPM alert threshold
+RECORDER             confirmed fan RPM yes; fan detection summary no
+PROBLEM/EVENT        source/detection diagnostic where applicable; no invented RPM alert threshold
 ```
+
+Raw hwmon discovery is optimistic, but Home Assistant exposure is conservative.
+
+Every readable `fan*_input` is a candidate channel. Candidate state must not be confused with a confirmed physical fan because Super I/O drivers may expose unused tachometer inputs that read `0 RPM` indefinitely.
+
+Presence contract:
+
+```text
+candidate
+  + first valid RPM > 0
+      -> positive debounce = 1
+
+positive debounce = 1
+  + next consecutive valid RPM > 0
+      -> confirmed
+
+candidate/unconfirmed
+  + RPM == 0 or invalid/unreadable
+      -> remain unconfirmed; reset positive debounce
+
+confirmed
+  + RPM == 0
+      -> keep confirmed; publish 0 RPM
+```
+
+Confirmation therefore requires exactly two consecutive positive FAST observations. No model-specific fan number, chip-specific ignore list, or arbitrary minimum RPM threshold is used.
+
+Confirmed state is persisted by stable identity:
+
+```text
+chip name + resolved underlying device identity + fan channel/index
+```
+
+Persistence survives App restart and is updated only when confirmed inventory changes. A persisted confirmation does not synthesize a fan when its current `fan*_input` source is absent; current Linux source presence remains required for current RPM exposure.
+
+The following are explicitly non-authoritative for physical fan presence/RPM:
+
+```text
+sensors/libsensors subprocess output
+/sys/class/thermal/cooling_device*
+pwm* existence/value
+vendor utilities
+EC/raw I/O probing
+```
+
+`pwm*` may exist without a corresponding physically connected tachometer input.
+
+Canonical summary semantics:
+
+```text
+candidate_count   = readable current fan*_input channels
+confirmed_count   = confirmed channels currently present in hwmon
+unconfirmed_count = candidate_count - confirmed_count
+count             = confirmed_count
+detected          = confirmed_count > 0
+```
+
+Only confirmed current channels enter dynamic MQTT Discovery as fan RPM entities. An unconfirmed channel that later satisfies the two-sample debounce is added by dynamic Discovery without requiring App restart.
+
+Production evidence for the Beelink S12 Pro / MINI S with IT8613E validates the need for this distinction: the driver exposes a rotating `fan2_input` around 3000-3900 RPM and a persistent `fan3_input = 0` channel. The latter is a valid exported tachometer input but is not, by that zero value alone, evidence of a second physical fan.
 
 ## 7. Host load and uptime
 
@@ -590,6 +653,10 @@ PveStorageConfigReader
 
 DiskTemperatureReader
   persisted disk inventory -> sysfs/hwmon first -> bounded SMART temperature fallback
+
+FanPresenceTracker
+  raw sysfs hwmon fan candidates -> two-positive-sample confirmation
+  -> persisted confirmed stable IDs -> confirmed current fan inventory
 ```
 
 Exact Python class/function naming may be reduced during implementation if smaller pure functions make the code clearer, but these responsibilities must remain isolated and fixture-testable.
@@ -602,6 +669,11 @@ The source audit is complete when the implementation obeys all of the following:
 
 ```text
 FAST runtime has zero subprocess acquisition
+fan RPM uses direct sysfs hwmon only
+raw zero-RPM candidate channels do not become fan entities until confirmed
+fan confirmation requires two consecutive valid positive RPM observations
+confirmed fan presence persists across App restart by stable chip/device/channel identity
+confirmed 0 RPM remains valid telemetry
 VM/LXC normal runtime status has zero subprocess acquisition
 storage normal runtime usage has zero subprocess acquisition
 STATIC pmxcfs config reads do not fall back into permanent CLI polling
