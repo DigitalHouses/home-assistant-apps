@@ -65,13 +65,21 @@ def test_collector_names_preserve_known_acronyms():
     assert components["collector_host"]["name"] == "Host collector"
 
 
-def _collectors(tmp_path: Path) -> ResilientProductionCollectors:
+def _collectors(
+    tmp_path: Path,
+    *,
+    fan_state_store: StateStore | None = None,
+) -> ResilientProductionCollectors:
+    kwargs = {}
+    if fan_state_store is not None:
+        kwargs["fan_state_store"] = fan_state_store
     return ResilientProductionCollectors(
         node_name="PVE",
         disk_state_store=StateStore(tmp_path / "disks.json"),
         sys_root=tmp_path / "sys",
         proc_root=tmp_path / "proc",
         pve_root=tmp_path / "pve",
+        **kwargs,
     )
 
 
@@ -176,6 +184,28 @@ def test_zero_between_positive_samples_resets_fan_confirmation_debounce(tmp_path
     sample = collectors.fans()
     assert sample.data["confirmed_count"] == 1
     assert set(_fan_items(sample)) == {"it8613_it87_2608_fan2"}
+
+
+def test_confirmed_fan_survives_collector_restart_with_persistent_store(tmp_path: Path):
+    hwmon = _write_beelink_fans(tmp_path, fan2="3792", fan3="0")
+    fan_store = StateStore(tmp_path / "fans.json")
+    collectors = _collectors(tmp_path, fan_state_store=fan_store)
+
+    collectors.fans()
+    collectors.fans()
+    (hwmon / "fan2_input").write_text("0\n", encoding="utf-8")
+
+    restarted = _collectors(tmp_path, fan_state_store=fan_store)
+    sample = restarted.fans()
+
+    assert sample.data["detected"] is True
+    assert sample.data["count"] == 1
+    assert sample.data["candidate_count"] == 2
+    assert sample.data["confirmed_count"] == 1
+    assert sample.data["unconfirmed_count"] == 1
+    fans = _fan_items(sample)
+    assert set(fans) == {"it8613_it87_2608_fan2"}
+    assert fans["it8613_it87_2608_fan2"]["rpm"] == 0
 
 
 def test_full_discovery_exposes_fan_status_without_template_counting():
