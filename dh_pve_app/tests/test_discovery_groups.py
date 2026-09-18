@@ -158,6 +158,37 @@ def test_pve_discovery_routes_entities_to_smallest_state_group():
     )
 
 
+def test_unconfirmed_fan_candidate_emits_device_discovery_tombstone():
+    inventory = _inventory()
+    inventory["fans"] = {
+        "detected": True,
+        "count": 1,
+        "candidate_count": 2,
+        "confirmed_count": 1,
+        "unconfirmed_count": 1,
+        "candidate_ids": [
+            "it8613_it87_2608_fan2",
+            "it8613_it87_2608_fan3",
+        ],
+        "it8613_it87_2608_fan2": {
+            "fan_id": "it8613_it87_2608_fan2",
+            "display_name": "Fan 2 RPM - it8613",
+            "label": "Fan 2",
+            "chip": "it8613",
+            "rpm": 3792,
+        },
+    }
+
+    components = build_shutdown_aware_pve_discovery_payload(
+        _config(), _identity(), version="0.5.5", inventory=inventory
+    )["components"]
+
+    assert "fan_it8613_it87_2608_fan2_rpm" in components
+    assert components["fan_it8613_it87_2608_fan3_rpm"] == {
+        "platform": "sensor"
+    }
+
+
 def test_pve_discovery_exposes_presentation_diagnostics():
     topics = build_topics(_config().mqtt, _identity())
     c = _components()
