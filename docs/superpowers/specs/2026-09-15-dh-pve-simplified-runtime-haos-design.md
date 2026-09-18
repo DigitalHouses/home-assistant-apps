@@ -198,7 +198,7 @@ Fan summary semantics are based on confirmed current fan channels, not raw expor
 ```text
 detected          = confirmed_count > 0
 count             = confirmed_count
-candidate_count   = current readable fan*_input channels
+candidate_count   = current exported fan*_input channels
 unconfirmed_count = current candidate_count - current confirmed_count
 ```
 
