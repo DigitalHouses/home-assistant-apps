@@ -191,6 +191,101 @@ def test_startup_tombstones_all_retired_runtime_number_components_once():
     assert bridge.discovery[0]["components"] == {}
 
 
+def test_device_discovery_component_tombstone_publishes_cleanup_then_final_payload():
+    bridge = Bridge()
+    settings = RuntimeSettings()
+    runtime = DynamicDiscoveryRuntime(
+        collectors={},
+        bridge=bridge,
+        settings=settings,
+        publish_policy=PublishPolicy(settings),
+        state_store=Store(),
+        scheduler=Scheduler(),
+        now_iso=lambda: "2026-09-18T14:00:00+00:00",
+        discovery_builder=lambda inv: {
+            "device": {"name": "DH PVE"},
+            "components": {
+                "stable": {
+                    "platform": "sensor",
+                    "unique_id": "stable",
+                },
+                "fan_ghost_rpm": {
+                    "platform": "sensor",
+                },
+            },
+        },
+    )
+    runtime._legacy_discovery_cleanup_done = True
+
+    assert runtime.sync_discovery(force=True) is True
+
+    assert len(bridge.discovery) == 2
+    assert bridge.discovery[0]["components"]["fan_ghost_rpm"] == {
+        "platform": "sensor"
+    }
+    assert "stable" in bridge.discovery[0]["components"]
+    assert bridge.discovery[1]["components"] == {
+        "stable": {
+            "platform": "sensor",
+            "unique_id": "stable",
+        }
+    }
+
+
+def test_device_discovery_tombstone_is_rearmed_after_component_becomes_real_again():
+    bridge = Bridge()
+    settings = RuntimeSettings()
+    mode = {"value": "remove"}
+
+    def discovery_builder(_inventory):
+        component = (
+            {
+                "platform": "sensor",
+                "unique_id": "fan_ghost_rpm",
+                "state_topic": "fan/state",
+            }
+            if mode["value"] == "real"
+            else {"platform": "sensor"}
+        )
+        return {
+            "device": {"name": "DH PVE"},
+            "components": {"fan_ghost_rpm": component},
+        }
+
+    runtime = DynamicDiscoveryRuntime(
+        collectors={},
+        bridge=bridge,
+        settings=settings,
+        publish_policy=PublishPolicy(settings),
+        state_store=Store(),
+        scheduler=Scheduler(),
+        now_iso=lambda: "2026-09-18T14:00:00+00:00",
+        discovery_builder=discovery_builder,
+    )
+    runtime._legacy_discovery_cleanup_done = True
+
+    assert runtime.sync_discovery(force=True) is True
+    assert len(bridge.discovery) == 2
+
+    bridge.discovery.clear()
+    assert runtime.sync_discovery() is True
+    assert bridge.discovery == []
+
+    mode["value"] = "real"
+    assert runtime.sync_discovery() is True
+    assert len(bridge.discovery) == 1
+    assert bridge.discovery[0]["components"]["fan_ghost_rpm"]["unique_id"] == "fan_ghost_rpm"
+
+    bridge.discovery.clear()
+    mode["value"] = "remove"
+    assert runtime.sync_discovery() is True
+    assert len(bridge.discovery) == 2
+    assert bridge.discovery[0]["components"]["fan_ghost_rpm"] == {
+        "platform": "sensor"
+    }
+    assert bridge.discovery[1]["components"] == {}
+
+
 def test_same_discovery_shape_is_not_republished_on_metric_change():
     bridge = Bridge()
     settings = RuntimeSettings()
