@@ -5,7 +5,7 @@ from typing import Any
 
 from validators.common import fail, require_files
 
-EXPECTED_VERSION = "0.5.4"
+EXPECTED_VERSION = "0.5.5"
 EXPECTED_TOPIC_PREFIX = "DigitalHouses/Global/dh_pve_app"
 EXPECTED_DEVICE_NAME = "DH PVE"
 EXPECTED_REFRESH_ENTITY = "button.dh_app_pve_refresh"
@@ -44,6 +44,7 @@ def validate_dh_pve_app(
             app / "app/ups_group_runtime.py",
             app / "app/pve_cache.py",
             app / "app/disk_temperature.py",
+            app / "app/fan_presence.py",
             app / "app/collectors/guests.py",
             app / "app/topology.py",
             app / "app/production_v1.py",
@@ -367,9 +368,20 @@ def validate_dh_pve_app(
         fail("DH PVE storage UI contract must remain used/total, not free")
 
     _require_text(
+        app / "app/fan_presence.py",
+        (
+            "class FanPresenceTracker",
+            "streak >= 2",
+            '"schema_version": 1',
+            '"confirmed": sorted(self._confirmed)',
+        ),
+        "fan presence tracker",
+    )
+    _require_text(
         app / "app/production_v1.py",
         (
             "MISSING_CONFIRMATIONS = 3",
+            '"candidate_ids": [fan.fan_id for fan in raw]',
             'item["available"] = False',
             '"disk missing from authoritative SMART inventory"',
             '"source_type": "guest"',
@@ -429,6 +441,7 @@ def validate_dh_pve_app(
             'static_collectors=("topology", "host")',
             'slow_tasks=("guests", "storage", "gpu", "disk_temperature")',
             "read_pve_version(",
+            'fan_state_store=StateStore(state_dir / "fans.json")',
             "app_version=version",
             "--uninstall-mqtt-cleanup",
             "cleanup_mqtt(config, identity)",
@@ -457,8 +470,11 @@ def validate_dh_pve_app(
         (
             '"setting_fast_poll_interval_seconds": "number"',
             '"setting_disk_poll_interval_seconds": "number"',
+            "def _split_component_tombstones(",
+            "def _component_cleanup_payload(",
+            "pending_tombstones",
         ),
-        "retired poll control cleanup",
+        "retired poll control and dynamic component cleanup",
     )
 
     service = app / "systemd/dh_pve_app.service"
