@@ -43,23 +43,44 @@ A machine whose DMI identity does not contain `AZW` or `Beelink` is rejected.
 After driver activation the installer additionally requires a real `it8613`
 hwmon device and readable `fan2_input`.
 
-## Install or repair
+## Standalone use
 
-From a reviewed checkout/ref:
+This hardware profile is independent from the generic App installer. Do not
+assume that an older already-installed `dh_pve_app` release contains
+`hardware/beelink/` under `/opt/digitalhouses/dh_pve_app`.
+
+For normal standalone use on a Beelink/AZW host, run the profile directly from
+a reviewed repository ref or exact commit.
+
+### Install or repair
+
+```bash
+PROFILE_REF=<reviewed-ref-or-sha>
+bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$PROFILE_REF/dh_pve_app/hardware/beelink/install.sh")
+```
+
+From a reviewed local checkout, the equivalent command is:
 
 ```bash
 sudo bash dh_pve_app/hardware/beelink/install.sh
 ```
 
 The operation is idempotent. Re-running it repairs missing packages/source or
-autoload state, verifies the running kernel and every newer installed PVE kernel with matching headers, and
-does not create a second DKMS version.
+autoload state, verifies the running kernel and every newer installed PVE kernel
+with matching headers, and does not create a second DKMS version.
 
 If a different `it87` module is already loaded, the installer does not unload
 it underneath a running host. It finishes the persistent setup and reports
 `REBOOT_REQUIRED=yes`. One normal reboot then activates the pinned DKMS build.
 
-## Read-only check
+### Read-only check
+
+```bash
+PROFILE_REF=<reviewed-ref-or-sha>
+bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$PROFILE_REF/dh_pve_app/hardware/beelink/install.sh") --check
+```
+
+From a reviewed local checkout:
 
 ```bash
 sudo bash dh_pve_app/hardware/beelink/install.sh --check
@@ -75,7 +96,14 @@ The check validates DMI, current-kernel DKMS installation, module resolution,
 autoload, loaded driver version, IT8613E hwmon and the App collector when the App
 is present.
 
-## Uninstall / rollback
+### Uninstall / rollback
+
+```bash
+PROFILE_REF=<reviewed-ref-or-sha>
+bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$PROFILE_REF/dh_pve_app/hardware/beelink/uninstall.sh")
+```
+
+From a reviewed local checkout:
 
 ```bash
 sudo bash dh_pve_app/hardware/beelink/uninstall.sh
