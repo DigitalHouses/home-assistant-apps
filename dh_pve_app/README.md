@@ -44,7 +44,7 @@ Stable fan identity uses the hwmon chip, resolved underlying device and fan chan
 
 Unconfirmed fan candidates are omitted from normal MQTT Discovery. They are never tombstoned merely because they are still in debounce or currently report `0 RPM`: neither condition proves that a physical fan is absent. Explicit Device Discovery tombstones remain reserved for authoritative migrations/removals that are independent of live fan-presence inference.
 
-`pwm*` and `/sys/class/thermal/cooling_device*` are not used as proof of a physical fan or as RPM sources. The installed `/root/dh_app_pve.txt` guide contains a detailed Beelink S12 Pro / IT8613E example and read-only troubleshooting commands.
+`pwm*` and `/sys/class/thermal/cooling_device*` are not used as proof of a physical fan or as RPM sources. The installed `/root/dh_app_pve.txt` guide contains generic read-only fan troubleshooting. Beelink/AZW driver installation, verification and rollback are documented separately in `hardware/beelink/README.md`.
 
 ### Beelink / AZW IT8613E host profile
 
@@ -52,7 +52,7 @@ For Beelink/AZW mini PCs that require the newer upstream `it87` driver to expose
 
 The profile is intentionally separate from the generic App installer. It installs the pinned driver through the native Proxmox/Debian path — APT headers and DKMS, `depmod`, `modules-load.d` and `modprobe` — without replacing the stock Proxmox kernel module. It is idempotent, has a read-only `--check` mode, verifies `fan2_input` and the real `dh_pve_app` collector, and includes a symmetric uninstall path.
 
-See `hardware/beelink/README.md` for install, verification and rollback.
+See `hardware/beelink/README.md` for the standalone install/repair command, read-only `--check`, reboot handling and rollback. The profile is run explicitly from a reviewed repository ref/commit and must not be assumed to exist inside an older already-installed App release.
 
 ## MQTT presentation
 
@@ -245,7 +245,7 @@ Preflight checks the selected UPS, NUT services/PRIMARY path, native Low Battery
 
 ## Installation / update
 
-The installer deploys the App code, fixed helper and systemd unit. It preserves existing configuration/state where appropriate and does not silently execute destructive UPS commissioning.
+The installer deploys the App code, fixed helper and systemd unit. It preserves existing configuration/state where appropriate and does not silently execute destructive UPS commissioning. On first install it validates the MQTT port, collects host/port/username/password interactively, shows a password-safe summary and writes the configuration only after explicit `y/yes` confirmation.
 
 If upgrading from a release older than 0.5.0, complete the 0.5.0 Event-contract migration first: update the HA notification package, reload/restart Home Assistant and verify there are no package/template errors before deploying the reviewed App SHA.
 
@@ -253,8 +253,10 @@ For a reviewed ref/commit:
 
 ```bash
 REF=<reviewed-ref-or-sha>
-bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$REF/dh_pve_app/install.sh")
+DIGITALHOUSES_SOURCE_REF="$REF" bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$REF/dh_pve_app/install.sh")
 ```
+
+When `DIGITALHOUSES_SOURCE_REF` is an exact 40-character commit SHA, the installer fetches the immutable source archive through GitHub codeload instead of requiring a `github.com` Git clone.
 
 After deployment verify the exact installed version/ref, service state, MQTT availability, canonical charger-status entity, expanded UPS Event metadata and read-only preflight before any UPS shutdown commissioning.
 
