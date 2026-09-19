@@ -89,6 +89,44 @@ Read-only UPS preflight
 Вентиляторы / Fan RPM
 ----------------------
 
+Для пользователей Beelink / AZW
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+На поддерживаемых Beelink/AZW с Super I/O ITE IT8613E штатный Proxmox
+может не создавать fan*_input. Для таких машин в составе dh_pve_app есть
+отдельный hardware-profile, который устанавливает проверенный it87 через DKMS
+и делает RPM вентилятора доступными Linux hwmon.
+
+Этот профиль намеренно НЕ запускается автоматически основным install.sh.
+Его нужно запускать отдельно только на Beelink/AZW:
+
+  /opt/digitalhouses/dh_pve_app/hardware/beelink/install.sh
+
+Повторный запуск безопасен и используется также для repair:
+
+  /opt/digitalhouses/dh_pve_app/hardware/beelink/install.sh
+
+Read-only проверка уже установленного профиля:
+
+  /opt/digitalhouses/dh_pve_app/hardware/beelink/install.sh --check
+
+Успешная проверка заканчивается строкой:
+
+  CHECK=PASS
+
+Если installer сообщает:
+
+  REBOOT_REQUIRED=yes
+
+нужно выполнить обычную перезагрузку PVE, затем повторить read-only check.
+
+Удалить только Beelink hardware-profile и вернуть штатный Proxmox it87:
+
+  /opt/digitalhouses/dh_pve_app/hardware/beelink/uninstall.sh
+
+После uninstall может потребоваться reboot, потому что уже загруженный
+kernel-модуль намеренно не выгружается из работающей системы.
+
 dh_app_pve получает обороты вентиляторов напрямую из Linux hwmon:
 
   /sys/class/hwmon/hwmon*/fan*_input
