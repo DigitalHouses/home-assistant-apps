@@ -122,3 +122,30 @@ def test_beelink_readme_documents_scope_reboot_and_stock_module_preservation():
         "bc06d3488439e5fcd725c1bdcfcac994d6d95cac",
     ):
         assert token in text
+
+
+def test_beelink_installer_renders_dkms_version_without_fragile_sed_quoting():
+    text = _text(INSTALLER)
+
+    assert 'render_dkms_conf' in text
+    assert 'awk -v version="${IT87_VERSION}"' in text
+    assert 'sed -i "s/^PACKAGE_VERSION=' not in text
+
+
+def test_beelink_installer_cleanup_is_safe_with_nounset_after_function_return():
+    text = _text(INSTALLER)
+
+    assert 'TMP_DIR=""' in text
+    assert 'cleanup()' in text
+    assert 'trap cleanup EXIT' in text
+    assert 'trap \'rm -rf "$tmp"\' EXIT' not in text
+
+
+def test_beelink_installer_builds_for_all_installed_pve_kernels_with_headers():
+    text = _text(INSTALLER)
+
+    assert 'discover_target_kernels' in text
+    assert '/lib/modules/*-pve' in text
+    assert 'for target_kernel in "${TARGET_KERNELS[@]}"' in text
+    assert 'dkms build -m it87 -v "${IT87_VERSION}" -k "$target_kernel"' in text
+    assert 'dkms install -m it87 -v "${IT87_VERSION}" -k "$target_kernel"' in text
