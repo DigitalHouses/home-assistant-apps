@@ -46,6 +46,14 @@ Unconfirmed fan candidates are omitted from normal MQTT Discovery. They are neve
 
 `pwm*` and `/sys/class/thermal/cooling_device*` are not used as proof of a physical fan or as RPM sources. The installed `/root/dh_app_pve.txt` guide contains a detailed Beelink S12 Pro / IT8613E example and read-only troubleshooting commands.
 
+### Beelink / AZW IT8613E host profile
+
+For Beelink/AZW mini PCs that require the newer upstream `it87` driver to expose IT8613E fan RPM, use the repository-owned host profile in `hardware/beelink/`.
+
+The profile is intentionally separate from the generic App installer. It installs the pinned driver through the native Proxmox/Debian path — APT headers and DKMS, `depmod`, `modules-load.d` and `modprobe` — without replacing the stock Proxmox kernel module. It is idempotent, has a read-only `--check` mode, verifies `fan2_input` and the real `dh_pve_app` collector, and includes a symmetric uninstall path.
+
+See `hardware/beelink/README.md` for install, verification and rollback.
+
 ## MQTT presentation
 
 Collection and Home Assistant publication are separate concerns. Continuous telemetry is published through independent retained groups rather than one monolithic state object.
