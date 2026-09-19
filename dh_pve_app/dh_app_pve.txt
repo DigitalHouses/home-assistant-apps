@@ -89,50 +89,12 @@ Read-only UPS preflight
 Вентиляторы / Fan RPM
 ----------------------
 
-Для пользователей Beelink / AZW
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Для Beelink/AZW с ITE IT8613E может потребоваться отдельный hardware-profile
+`it87`. Он намеренно не является частью автоматической установки App.
 
-На поддерживаемых Beelink/AZW с Super I/O ITE IT8613E штатный Proxmox
-может не создавать fan*_input. Для таких машин в составе dh_pve_app есть
-отдельный hardware-profile, который устанавливает проверенный it87 через DKMS
-и делает RPM вентилятора доступными Linux hwmon.
-
-Этот профиль намеренно НЕ запускается автоматически основным install.sh.
-Его нужно запускать отдельно только на Beelink/AZW.
-
-ВАЖНО: hardware-profile может отсутствовать в каталоге уже установленной старой
-версии dh_pve_app. Поэтому для standalone-запуска используйте проверенный
-GitHub ref/commit профиля, а не наличие локального файла.
-
-Установка / repair профиля:
-
-  PROFILE_REF=<reviewed-ref-or-sha>
-  bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$PROFILE_REF/dh_pve_app/hardware/beelink/install.sh")
-
-Повторный запуск безопасен и используется также для repair.
-
-Read-only проверка уже установленного профиля:
-
-  PROFILE_REF=<reviewed-ref-or-sha>
-  bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$PROFILE_REF/dh_pve_app/hardware/beelink/install.sh") --check
-
-Успешная проверка заканчивается строкой:
-
-  CHECK=PASS
-
-Если installer сообщает:
-
-  REBOOT_REQUIRED=yes
-
-нужно выполнить обычную перезагрузку PVE, затем повторить read-only check.
-
-Удалить только Beelink hardware-profile и вернуть штатный Proxmox it87:
-
-  PROFILE_REF=<reviewed-ref-or-sha>
-  bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$PROFILE_REF/dh_pve_app/hardware/beelink/uninstall.sh")
-
-После uninstall может потребоваться reboot, потому что уже загруженный
-kernel-модуль намеренно не выгружается из работающей системы.
+Актуальные команды установки/repair, read-only проверки и rollback находятся
+в GitHub:
+  dh_pve_app/hardware/beelink/README.md
 
 dh_app_pve получает обороты вентиляторов напрямую из Linux hwmon:
 
