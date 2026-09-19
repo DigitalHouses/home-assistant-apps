@@ -16,6 +16,8 @@ DKMS_SOURCE="/usr/src/it87-${IT87_VERSION}"
 APP_ROOT="/opt/digitalhouses/dh_pve_app"
 
 SUPPORTED_DMI_MARKERS=("AZW" "Beelink")
+TARGET_KERNELS=()
+TMP_DIR=""
 
 MODE="install"
 case "${1:-}" in
@@ -46,6 +48,14 @@ die() {
     exit 1
 }
 
+cleanup() {
+    if [[ -n "${TMP_DIR:-}" && -d "${TMP_DIR}" ]]; then
+        rm -rf -- "${TMP_DIR}"
+    fi
+}
+
+trap cleanup EXIT
+
 read_trimmed() {
     local path="$1"
     if [[ -r "$path" ]]; then
@@ -56,12 +66,14 @@ read_trimmed() {
 git_blob_sha() {
     local path="$1"
     local size
+
     size="$(stat -c '%s' "$path")"
-    { printf 'blob %s\0' "$size"; cat "$path"; } | sha1sum | awk '{print $1}'
+    { printf 'blob %s\0' "$size"; cat "$path"; }         | sha1sum         | awk '{print $1}'
 }
 
 dmi_supported() {
     local combined marker
+
     combined="${SYS_VENDOR} ${PRODUCT_NAME} ${BOARD_VENDOR} ${BOARD_NAME}"
     for marker in "${SUPPORTED_DMI_MARKERS[@]}"; do
         if [[ "${combined,,}" == *"${marker,,}"* ]]; then
@@ -81,7 +93,8 @@ load_host_identity() {
 
 validate_host() {
     [[ "${EUID}" -eq 0 ]] || die "run as root"
-    command -v pveversion >/dev/null 2>&1 || die "this host is not Proxmox VE"
+    command -v pveversion >/dev/null 2>&1         || die "this host is not Proxmox VE"
+
     load_host_identity
 
     log "profile=${PROFILE_NAME}"
@@ -91,49 +104,101 @@ validate_host() {
     log "board_vendor=${BOARD_VENDOR:-unknown}"
     log "board_name=${BOARD_NAME:-unknown}"
 
-    dmi_supported || die "unsupported DMI vendor/product; expected Beelink/AZW hardware"
+    dmi_supported         || die "unsupported DMI vendor/product; expected Beelink/AZW hardware"
+}
+
+discover_target_kernels() {
+    local modules_dir target
+    local found=()
+
+    shopt -s nullglob
+    for modules_dir in /lib/modules/*-pve; do
+        [[ -d "$modules_dir" ]] || continue
+        [[ -e "$modules_dir/build/Makefile" ]] || continue
+        target="${modules_dir##*/}"
+        found+=("$target")
+    done
+    shopt -u nullglob
+
+    (("${#found[@]}" > 0))         || die "no installed PVE kernel with headers was found"
+
+    mapfile -t TARGET_KERNELS < <(
+        printf '%s\n' "${found[@]}" | sort -V -u
+    )
+
+    printf '%s\n' "${TARGET_KERNELS[@]}"         | grep -Fxq "${KERNEL}"         || die "headers for running kernel ${KERNEL} are missing"
+
+    log "target_kernels=$(IFS=,; echo "${TARGET_KERNELS[*]}")"
 }
 
 dkms_status_text() {
     dkms status -m it87 -v "${IT87_VERSION}" 2>/dev/null || true
 }
 
-dkms_current_kernel_installed() {
-    dkms_status_text         | grep -F "${KERNEL}"         | grep -q 'installed'
+dkms_kernel_installed() {
+    local target_kernel="$1"
+
+    dkms_status_text         | grep -F "$target_kernel"         | grep -q 'installed'
 }
 
-verify_module_resolution() {
+dkms_kernel_built() {
+    local target_kernel="$1"
+
+    dkms_status_text         | grep -F "$target_kernel"         | grep -q 'built'
+}
+
+verify_kernel_module_resolution() {
+    local target_kernel="$1"
     local module_path module_version
 
-    module_path="$(modinfo -n it87 2>/dev/null || true)"
-    module_version="$(modinfo -F version it87 2>/dev/null || true)"
+    module_path="$(modinfo -k "$target_kernel" -n it87 2>/dev/null || true)"
+    module_version="$(modinfo -k "$target_kernel" -F version it87 2>/dev/null || true)"
 
-    log "module_path=${module_path:-missing}"
-    log "module_version=${module_version:-missing}"
+    log "kernel=${target_kernel} module_path=${module_path:-missing}"
+    log "kernel=${target_kernel} module_version=${module_version:-missing}"
 
-    [[ "$module_path" == *"/updates/dkms/it87.ko"* ]]         || die "modprobe does not resolve to the DKMS it87 module"
-    [[ "$module_version" == "${IT87_VERSION}" ]]         || die "resolved it87 version is not ${IT87_VERSION}"
+    [[ "$module_path" == *"/updates/dkms/it87.ko"* ]]         || die "kernel ${target_kernel} does not resolve it87 to DKMS"
+    [[ "$module_version" == "${IT87_VERSION}" ]]         || die "kernel ${target_kernel} resolves the wrong it87 version"
+}
+
+verify_all_kernel_modules() {
+    local target_kernel
+
+    for target_kernel in "${TARGET_KERNELS[@]}"; do
+        dkms_kernel_installed "$target_kernel"             || die "it87 ${IT87_VERSION} is not installed for ${target_kernel}"
+        verify_kernel_module_resolution "$target_kernel"
+    done
 }
 
 verify_autoload() {
+    local canonical
+
     [[ -r "${AUTOLOAD_FILE}" ]] || die "autoload file is missing"
-    [[ "$(sed -e '/^[[:space:]]*#/d' -e '/^[[:space:]]*$/d' "${AUTOLOAD_FILE}")" == "it87" ]]         || die "autoload file is not canonical"
+
+    canonical="$(
+        sed -e '/^[[:space:]]*#/d'             -e '/^[[:space:]]*$/d'             "${AUTOLOAD_FILE}"
+    )"
+    [[ "$canonical" == "it87" ]] || die "autoload file is not canonical"
+
     log "autoload=${AUTOLOAD_FILE}"
 }
 
 verify_hwmon() {
-    local h name found fan2 rpm
+    local h name found fan2 rpm input
+
     found=0
     fan2=""
 
     for h in /sys/class/hwmon/hwmon*; do
         [[ -e "$h" ]] || continue
         name="$(cat "$h/name" 2>/dev/null || true)"
+
         if [ "$name" = "it8613" ]; then
             found=1
             log "hwmon=$h"
             log "hwmon_device=$(readlink -f "$h/device" 2>/dev/null || true)"
             fan2="$h/fan2_input"
+
             for input in "$h"/fan*_input; do
                 [[ -r "$input" ]] || continue
                 log "$(basename "$input")=$(cat "$input")"
@@ -189,12 +254,10 @@ run_check() {
     validate_host
 
     command -v dkms >/dev/null 2>&1 || die "dkms is not installed"
-    [[ -e "/lib/modules/${KERNEL}/build/Makefile" ]]         || die "headers for the running kernel are missing"
+    discover_target_kernels
 
     dkms_status_text
-    dkms_current_kernel_installed         || die "it87 ${IT87_VERSION} is not installed by DKMS for ${KERNEL}"
-
-    verify_module_resolution
+    verify_all_kernel_modules
     verify_autoload
     check_running_driver
     verify_hwmon
@@ -206,6 +269,7 @@ run_check() {
 install_packages() {
     log
     log "=== Packages ==="
+
     apt-get update
     DEBIAN_FRONTEND=noninteractive apt-get install -y         ca-certificates         curl         dkms         build-essential         proxmox-default-headers         "proxmox-headers-${KERNEL}"
 
@@ -218,23 +282,49 @@ download_one() {
     local destination="$3"
     local actual
 
-    curl -fsSL --retry 3 --retry-delay 2         "${IT87_RAW_BASE}/${IT87_COMMIT}/${name}"         -o "$destination"
+    curl -fsSL         --retry 3         --retry-delay 2         "${IT87_RAW_BASE}/${IT87_COMMIT}/${name}"         -o "$destination"
 
     actual="$(git_blob_sha "$destination")"
     log "${name}: blob=${actual}"
+
     [[ "$actual" == "$expected" ]]         || die "source verification failed for ${name}"
+}
+
+render_dkms_conf() {
+    local source="$1"
+    local destination="$2"
+
+    awk -v version="${IT87_VERSION}" '
+        BEGIN {
+            replaced = 0
+        }
+        /^PACKAGE_VERSION=/ {
+            print "PACKAGE_VERSION=\"" version "\""
+            replaced = 1
+            next
+        }
+        {
+            print
+        }
+        END {
+            if (!replaced) {
+                exit 42
+            }
+        }
+    ' "$source" >"$destination"
 }
 
 prepare_source() {
     local stage="$1"
 
     install -d -m 0755 "$stage"
+
     download_one "it87.c" "${IT87_C_SHA}" "$stage/it87.c"
     download_one "compat.h" "${COMPAT_H_SHA}" "$stage/compat.h"
     download_one "Makefile" "${MAKEFILE_SHA}" "$stage/Makefile"
-    download_one "dkms.conf" "${DKMS_CONF_SHA}" "$stage/dkms.conf"
+    download_one "dkms.conf" "${DKMS_CONF_SHA}" "$stage/dkms.conf.upstream"
 
-    sed -i "s/^PACKAGE_VERSION=.*/PACKAGE_VERSION=\\"${IT87_VERSION}\\"/" "$stage/dkms.conf"
+    render_dkms_conf "$stage/dkms.conf.upstream" "$stage/dkms.conf"
     printf '%s\n' "${IT87_VERSION}" >"$stage/VERSION"
 
     grep -Fx 'PACKAGE_NAME="it87"' "$stage/dkms.conf" >/dev/null
@@ -242,11 +332,9 @@ prepare_source() {
     grep -Fx 'AUTOINSTALL="yes"' "$stage/dkms.conf" >/dev/null
 }
 
-install_dkms() {
+install_dkms_source() {
     local stage="$1"
-    local status
 
-    rm -rf "${DKMS_SOURCE}"
     install -d -m 0755 "${DKMS_SOURCE}"
     install -m 0644 "$stage/it87.c" "${DKMS_SOURCE}/it87.c"
     install -m 0644 "$stage/compat.h" "${DKMS_SOURCE}/compat.h"
@@ -254,31 +342,37 @@ install_dkms() {
     install -m 0644 "$stage/dkms.conf" "${DKMS_SOURCE}/dkms.conf"
     install -m 0644 "$stage/VERSION" "${DKMS_SOURCE}/VERSION"
 
-    printf 'profile=%s\\nupstream=%s\\ncommit=%s\\nversion=%s\\n' \
-        "${PROFILE_NAME}" \
-        "${IT87_RAW_BASE}" \
-        "${IT87_COMMIT}" \
-        "${IT87_VERSION}" \
-        >"${DKMS_SOURCE}/DIGITALHOUSES_SOURCE"
+    printf 'profile=%s\nupstream=%s\ncommit=%s\nversion=%s\n'         "${PROFILE_NAME}"         "${IT87_RAW_BASE}"         "${IT87_COMMIT}"         "${IT87_VERSION}"         >"${DKMS_SOURCE}/DIGITALHOUSES_SOURCE"
+}
 
-    status="$(dkms_status_text)"
-    if [[ -z "$status" ]]; then
+register_dkms() {
+    if [[ -z "$(dkms_status_text)" ]]; then
         dkms add -m it87 -v "${IT87_VERSION}"
-        status="$(dkms_status_text)"
     else
-        log "DKMS source already registered"
+        log "it87 ${IT87_VERSION} already registered in DKMS"
     fi
+}
 
-    if dkms_current_kernel_installed; then
-        log "it87 ${IT87_VERSION} already installed for ${KERNEL}"
-    else
-        if ! printf '%s\n' "$status"             | grep -F "${KERNEL}"             | grep -q 'built'; then
-            dkms build -m it87 -v "${IT87_VERSION}" -k "${KERNEL}"
+build_all_target_kernels() {
+    local target_kernel
+
+    for target_kernel in "${TARGET_KERNELS[@]}"; do
+        log
+        log "=== DKMS kernel ${target_kernel} ==="
+
+        if dkms_kernel_installed "$target_kernel"; then
+            log "already installed"
+        else
+            if ! dkms_kernel_built "$target_kernel"; then
+                dkms build -m it87 -v "${IT87_VERSION}" -k "$target_kernel"
+            fi
+
+            dkms install -m it87 -v "${IT87_VERSION}" -k "$target_kernel"
         fi
-        dkms install -m it87 -v "${IT87_VERSION}" -k "${KERNEL}"
-    fi
 
-    depmod -a "${KERNEL}"
+        depmod -a "$target_kernel"
+        verify_kernel_module_resolution "$target_kernel"
+    done
 }
 
 enable_autoload() {
@@ -294,11 +388,12 @@ activate_driver() {
         if [[ -r /sys/module/it87/version ]]; then
             running_version="$(cat /sys/module/it87/version)"
         fi
+
         log "it87 already loaded: ${running_version:-version unavailable}"
 
         if [[ "$running_version" != "${IT87_VERSION}" ]]; then
-            log "NOTICE: pinned DKMS driver is installed, but another it87 is currently loaded."
-            log "NOTICE: reboot once to activate the pinned DKMS driver."
+            log "NOTICE: another it87 is currently loaded."
+            log "NOTICE: persistent DKMS setup is ready; reboot once to activate it."
             return 2
         fi
         return 0
@@ -308,26 +403,28 @@ activate_driver() {
 }
 
 run_install() {
-    local tmp stage activation_rc
+    local stage activation_rc
+
     validate_host
     install_packages
+    discover_target_kernels
 
-    tmp="$(mktemp -d /tmp/dh-beelink-it87.XXXXXX)"
-    trap 'rm -rf "$tmp"' EXIT
-    stage="$tmp/source"
+    TMP_DIR="$(mktemp -d /tmp/dh-beelink-it87.XXXXXX)"
+    stage="${TMP_DIR}/source"
 
     log
     log "=== Pinned source ==="
     prepare_source "$stage"
 
     log
-    log "=== DKMS ==="
-    install_dkms "$stage"
+    log "=== DKMS source ==="
+    install_dkms_source "$stage"
+    register_dkms
+    build_all_target_kernels
 
     log
     log "=== Autoload ==="
     enable_autoload
-    verify_module_resolution
     verify_autoload
 
     log
@@ -341,6 +438,7 @@ run_install() {
         log "REBOOT_REQUIRED=yes"
         return 0
     fi
+
     [[ "$activation_rc" -eq 0 ]] || die "failed to activate it87"
 
     sleep 2
