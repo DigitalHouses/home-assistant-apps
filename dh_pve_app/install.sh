@@ -132,26 +132,58 @@ if [[ ! -f "${CONFIG_FILE}" ]]; then
         exit 1
     fi
 
-    mqtt_host=""
-    mqtt_port="1883"
-    mqtt_user=""
-    mqtt_password=""
+    while true; do
+        mqtt_host=""
+        mqtt_port="1883"
+        mqtt_user=""
+        mqtt_password=""
+        confirm=""
 
-    while [[ -z "${mqtt_host}" ]]; do
-        printf "MQTT host: " >/dev/tty
-        IFS= read -r mqtt_host </dev/tty
+        while [[ -z "${mqtt_host}" ]]; do
+            printf "MQTT host: " >/dev/tty
+            IFS= read -r mqtt_host </dev/tty
+        done
+
+        printf "MQTT port [1883]: " >/dev/tty
+        IFS= read -r answer </dev/tty
+        [[ -n "${answer}" ]] && mqtt_port="${answer}"
+
+        if ! [[ "${mqtt_port}" =~ ^[0-9]+$ ]] \
+            || (( mqtt_port < 1 || mqtt_port > 65535 )); then
+            printf "Некорректный MQTT port. Допустимый диапазон: 1-65535.\n" >/dev/tty
+            printf "Повторите ввод MQTT-параметров.\n\n" >/dev/tty
+            continue
+        fi
+
+        printf "MQTT username [optional]: " >/dev/tty
+        IFS= read -r mqtt_user </dev/tty
+
+        printf "MQTT password [optional]: " >/dev/tty
+        IFS= read -r -s mqtt_password </dev/tty
+        printf "\n" >/dev/tty
+
+        printf "\nПроверьте параметры:\n" >/dev/tty
+        printf "  Host:     %s\n" "${mqtt_host}" >/dev/tty
+        printf "  Port:     %s\n" "${mqtt_port}" >/dev/tty
+        printf "  Username: %s\n" "${mqtt_user:-не задан}" >/dev/tty
+        if [[ -n "${mqtt_password}" ]]; then
+            printf "  Password: задан\n" >/dev/tty
+        else
+            printf "  Password: не задан\n" >/dev/tty
+        fi
+
+        printf "\nВсё верно? [y/N]: " >/dev/tty
+        IFS= read -r confirm </dev/tty
+
+        case "${confirm,,}" in
+            y|yes)
+                break
+                ;;
+            *)
+                printf "Повторите ввод MQTT-параметров.\n\n" >/dev/tty
+                ;;
+        esac
     done
-
-    printf "MQTT port [1883]: " >/dev/tty
-    IFS= read -r answer </dev/tty
-    [[ -n "${answer}" ]] && mqtt_port="${answer}"
-
-    printf "MQTT username [optional]: " >/dev/tty
-    IFS= read -r mqtt_user </dev/tty
-
-    printf "MQTT password [optional]: " >/dev/tty
-    IFS= read -r -s mqtt_password </dev/tty
-    printf "\n" >/dev/tty
 
     previous_umask="$(umask)"
     umask 0077
