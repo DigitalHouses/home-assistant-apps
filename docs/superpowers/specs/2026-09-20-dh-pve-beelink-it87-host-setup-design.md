@@ -56,7 +56,7 @@ The installer uses:
 
 - APT for `dkms`, build tools and Proxmox headers;
 - `/usr/src/it87-<version>` for DKMS source;
-- DKMS registration plus build/install for every installed PVE kernel that has a matching headers tree, including the running kernel and any already-installed next boot kernel;
+- DKMS registration plus build/install for the running PVE kernel and every newer installed PVE kernel that has a matching headers tree, including any already-installed next boot kernel;
 - `depmod` for module dependency resolution;
 - `/etc/modules-load.d/digitalhouses-beelink-it87.conf` for boot autoload;
 - normal `modprobe it87` for activation.
@@ -91,7 +91,7 @@ A repeated install:
 
 - revalidates the host;
 - repairs required packages and source files;
-- discovers every installed PVE kernel with matching headers and ensures the pinned DKMS build is installed for each one before reboot;
+- discovers the running kernel and every newer installed PVE kernel with matching headers and ensures the pinned DKMS build is installed for each one before reboot;
 - preserves matching installed DKMS builds;
 - repairs the autoload file;
 - activates the module only when it is not already loaded.
@@ -106,7 +106,7 @@ that one reboot is required.
 
 - host identity;
 - running-kernel headers and the installed PVE kernel/header set;
-- DKMS status for every discovered target kernel;
+- DKMS status for every current/newer discovered target kernel;
 - modprobe resolution;
 - autoload configuration;
 - loaded module version;
@@ -136,3 +136,5 @@ Repository tests must reject changes that:
 - make the scripts non-executable.
 
 GitHub Actions also runs `bash -n` on both hardware scripts.
+
+Older installed PVE kernels are intentionally ignored: they are not future boot targets and driver incompatibility there must not block preparing the current or next kernel.
