@@ -26,11 +26,15 @@ def test_beelink_hardware_profile_files_exist_and_are_executable():
 def test_beelink_installer_pins_known_good_it87_source():
     text = _text(INSTALLER)
 
-    assert 'IT87_REPOSITORY="https://github.com/frankcrawford/it87.git"' in text
+    assert 'IT87_RAW_BASE="https://raw.githubusercontent.com/frankcrawford/it87"' in text
     assert 'IT87_COMMIT="bc06d3488439e5fcd725c1bdcfcac994d6d95cac"' in text
     assert 'IT87_VERSION="v2.0-4-gbc06d34.20260913"' in text
-    assert 'git checkout --detach "${IT87_COMMIT}"' in text
-    assert 'git rev-parse HEAD' in text
+    assert 'IT87_C_SHA="74e790fd9c437df1bee20ab7c5d92e7e186fd1d3"' in text
+    assert 'COMPAT_H_SHA="d6485c20dae9135df6a79d009f5eca2422886461"' in text
+    assert 'MAKEFILE_SHA="5b040b64ee1c7b421b87510b92f6da25bac4a5f3"' in text
+    assert 'DKMS_CONF_SHA="bb6e28058ee35c438618fe167695db9f853469c2"' in text
+    assert 'git_blob_sha' in text
+    assert 'raw.githubusercontent.com' in text
 
 
 def test_beelink_installer_uses_native_proxmox_dkms_pipeline():
