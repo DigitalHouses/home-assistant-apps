@@ -149,7 +149,7 @@ if [[ ! -f "${CONFIG_FILE}" ]]; then
         [[ -n "${answer}" ]] && mqtt_port="${answer}"
 
         if ! [[ "${mqtt_port}" =~ ^[0-9]+$ ]] \
-            || (( mqtt_port < 1 || mqtt_port > 65535 )); then
+            || ! (( mqtt_port >= 1 && mqtt_port <= 65535 )); then
             printf "Некорректный MQTT port. Допустимый диапазон: 1-65535.\n" >/dev/tty
             printf "Повторите ввод MQTT-параметров.\n\n" >/dev/tty
             continue
