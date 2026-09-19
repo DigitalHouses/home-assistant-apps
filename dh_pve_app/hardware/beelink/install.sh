@@ -108,19 +108,28 @@ validate_host() {
 }
 
 discover_target_kernels() {
-    local modules_dir target
+    local modules_dir target running_version candidate_version
     local found=()
+
+    running_version="${KERNEL%-pve}"
 
     shopt -s nullglob
     for modules_dir in /lib/modules/*-pve; do
         [[ -d "$modules_dir" ]] || continue
         [[ -e "$modules_dir/build/Makefile" ]] || continue
+
         target="${modules_dir##*/}"
-        found+=("$target")
+        candidate_version="${target%-pve}"
+
+        if dpkg --compare-versions "$candidate_version" ge "$running_version"; then
+            found+=("$target")
+        else
+            log "skip_old_kernel=${target}"
+        fi
     done
     shopt -u nullglob
 
-    (("${#found[@]}" > 0))         || die "no installed PVE kernel with headers was found"
+    (("${#found[@]}" > 0))         || die "no current/newer installed PVE kernel with headers was found"
 
     mapfile -t TARGET_KERNELS < <(
         printf '%s\n' "${found[@]}" | sort -V -u
