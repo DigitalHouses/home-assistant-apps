@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add a repository-owned Beelink/AZW IT8613E host profile under `hardware/beelink/`. It installs the pinned upstream `it87` driver through Proxmox headers + DKMS, enables native boot autoload through `modules-load.d`, verifies hwmon/`fan2_input` and the App collector, and preserves the stock Proxmox kernel module. The profile includes read-only `--check` and symmetric uninstall/rollback paths.
+
+
 ## 0.5.6
 
 - Fix the 0.5.5 fan Discovery regression where the first positive FAST sample was still unconfirmed and could therefore tombstone a real fan before the two-sample confirmation completed.
