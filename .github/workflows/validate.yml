@@ -156,6 +156,8 @@ jobs:
         run: |
           bash -n dh_pve_app/install.sh
           bash -n dh_pve_app/uninstall.sh
+          bash -n dh_pve_app/hardware/beelink/install.sh
+          bash -n dh_pve_app/hardware/beelink/uninstall.sh
 
       - name: Prepare systemd verification path
         run: |
