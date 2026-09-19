@@ -46,9 +46,9 @@ def test_beelink_installer_uses_native_proxmox_dkms_pipeline():
         "dkms",
         'DKMS_SOURCE="/usr/src/it87-${IT87_VERSION}"',
         'dkms add -m it87 -v "${IT87_VERSION}"',
-        'dkms build -m it87 -v "${IT87_VERSION}" -k "${KERNEL}"',
-        'dkms install -m it87 -v "${IT87_VERSION}" -k "${KERNEL}"',
-        'depmod -a "${KERNEL}"',
+        'dkms build -m it87 -v "${IT87_VERSION}" -k "$target_kernel"',
+        'dkms install -m it87 -v "${IT87_VERSION}" -k "$target_kernel"',
+        'depmod -a "$target_kernel"',
         'modprobe it87',
         "/etc/modules-load.d/digitalhouses-beelink-it87.conf",
     ):
