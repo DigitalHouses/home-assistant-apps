@@ -33,8 +33,11 @@ need_apt=0
 for command_name in git python3 smartctl lspci dmidecode; do
     command -v "${command_name}" >/dev/null 2>&1 || need_apt=1
 done
-if ! dpkg-query -W -f='${Status}' python3-venv 2>/dev/null \
-    | grep -q '^install ok installed
+if ! dpkg-query -W -f='${Status}\n' python3-venv 2>/dev/null \
+    | grep -q 'install ok installed'; then
+    need_apt=1
+fi
+
 if [[ "${need_apt}" -eq 1 ]]; then
     apt-get update
     DEBIAN_FRONTEND=noninteractive apt-get install -y \
