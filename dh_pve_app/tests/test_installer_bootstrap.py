@@ -20,5 +20,4 @@ def test_installer_repairs_existing_venv_when_pip_is_missing():
     text = _installer_text()
 
     assert '"${APP_DIR}/.venv/bin/python" -m pip --version' in text
-    assert 'rm -rf "${APP_DIR}/.venv"' in text
-    assert 'python3 -m venv "${APP_DIR}/.venv"' in text
+    assert 'python3 -m venv --clear "${APP_DIR}/.venv"' in text
