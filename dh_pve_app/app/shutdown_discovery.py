@@ -167,21 +167,6 @@ def build_shutdown_aware_pve_discovery_payload(
 
     payload = route_pve_discovery_groups(payload, topics, inventory=inventory)
 
-    # Unconfirmed hwmon channels may already exist as retained MQTT Device
-    # Discovery components from an older release. Emit component tombstones;
-    # DynamicDiscoveryRuntime publishes these once as a cleanup update and then
-    # republishes the final payload with the tombstones omitted.
-    routed_components = payload.get("components")
-    fans = _mapping(inventory.get("fans"))
-    candidate_ids = fans.get("candidate_ids")
-    if isinstance(routed_components, dict) and isinstance(candidate_ids, list):
-        for fan_id in candidate_ids:
-            if not isinstance(fan_id, str) or not fan_id:
-                continue
-            key = f"fan_{_slug(fan_id)}_rpm"
-            if key not in routed_components:
-                routed_components[key] = {"platform": "sensor"}
-
     return payload
 
 
