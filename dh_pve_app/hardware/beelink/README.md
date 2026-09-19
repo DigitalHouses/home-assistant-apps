@@ -18,7 +18,7 @@ The installer uses the normal Debian/Proxmox kernel-module path:
    `bc06d3488439e5fcd725c1bdcfcac994d6d95cac`;
 4. verifies every downloaded file against its pinned Git blob SHA;
 5. installs the source under `/usr/src/it87-v2.0-4-gbc06d34.20260913`;
-6. registers, builds and installs it through DKMS;
+6. registers it through DKMS and builds/installs it for every installed PVE kernel that has matching headers, including an already-installed next boot kernel;
 7. creates `/etc/modules-load.d/digitalhouses-beelink-it87.conf`;
 8. loads the module with normal `modprobe it87`;
 9. verifies the IT8613E hwmon device and `fan2_input`;
@@ -52,7 +52,8 @@ sudo bash dh_pve_app/hardware/beelink/install.sh
 ```
 
 The operation is idempotent. Re-running it repairs missing packages/source or
-autoload state and does not create a second DKMS version.
+autoload state, verifies every installed PVE kernel with matching headers, and
+does not create a second DKMS version.
 
 If a different `it87` module is already loaded, the installer does not unload
 it underneath a running host. It finishes the persistent setup and reports
