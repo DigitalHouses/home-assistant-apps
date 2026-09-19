@@ -151,6 +151,18 @@ def _diagnostic_components(topics) -> dict[str, dict[str, object]]:
     ]
     uid = lambda suffix: f"{topics.device_id}_{suffix}"
     return {
+        "app_version": {
+            "platform": "sensor",
+            "name": "App version",
+            "unique_id": uid("app_version"),
+            "default_entity_id": "sensor.dh_app_pve_app_version",
+            "state_topic": diagnostics,
+            "value_template": "{{ value_json.app_version | default('unknown') }}",
+            "availability": availability,
+            "availability_mode": "all",
+            "entity_category": "diagnostic",
+            "icon": "mdi:tag-outline",
+        },
         "app_profile": {
             "platform": "sensor",
             "name": "App profile",
@@ -358,6 +370,7 @@ def _problem_summary_components(topics) -> dict[str, dict[str, object]]:
                 "problem_recovered",
                 "problem_updated",
             ],
+            "qos": 1,
             "availability": availability,
             "availability_mode": "all",
             "entity_category": "diagnostic",

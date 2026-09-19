@@ -144,6 +144,7 @@ def test_initial_inactive_problem_state_is_retained_without_recovery_event():
     assert calls[1] == ("setting", "cpu_temperature_threshold", 90.0)
     assert calls[2] == ("problem_state", "cpu_temperature", False)
     assert calls[3] == ("problem_aggregate", 0)
+    assert calls[4][1] == {"severity": "ok", "active": []}
     assert not any(call[0] == "diagnostic_event" for call in calls)
 
     bridge.calls.clear()
@@ -178,9 +179,18 @@ def test_problem_transition_bundle_publishes_event_last_in_exact_order():
     assert calls[2] == ("problem_state", "cpu_temperature", True)
     assert calls[3] == ("problem_aggregate", 1)
     assert calls[4][1]["severity"] == "warning"
+    assert "summary" not in calls[4][1]
     assert calls[4][1]["active"][0]["problem_id"] == "cpu_temperature"
-    assert calls[5][1]["event_type"] == "problem_started"
-    assert calls[5][1]["active_problem_count"] == 1
+    assert "summary" not in calls[4][1]["active"][0]
+    event = calls[5][1]
+    assert event["schema_version"] == 2
+    assert event["event_type"] == "problem_started"
+    assert event["observed_at"] == "2026-09-16T00:00:00+00:00"
+    assert event["previous"] is None
+    assert event["current"]["active"] is True
+    assert event["current"]["average"] == 95.0
+    assert event["active_problem_count"] == 1
+    assert not ({"summary", "details", "value", "average", "threshold"} & event.keys())
 
 
 def test_failed_retained_problem_publish_blocks_event_and_retries_before_new_observation():
@@ -213,6 +223,7 @@ def test_failed_retained_problem_publish_blocks_event_and_retries_before_new_obs
         "diagnostic_event",
     ]
     assert retried[-1][1]["event_type"] == "problem_started"
+    assert retried[-1][1]["schema_version"] == 2
 
 
 def test_threshold_update_reevaluates_persists_and_never_changes_scheduler_interval():
@@ -242,6 +253,7 @@ def test_threshold_update_reevaluates_persists_and_never_changes_scheduler_inter
     ]
     assert calls[1] == ("setting", "cpu_temperature_threshold", 80.0)
     assert calls[-1][1]["event_type"] == "problem_started"
-    assert calls[-1][1]["average"] == 85.0
+    assert calls[-1][1]["schema_version"] == 2
+    assert calls[-1][1]["current"]["average"] == 85.0
     assert scheduler.interval("cpu") == before_interval == 10.0
     assert store.data["runtime_settings"]["cpu_temperature_threshold"] == 80.0

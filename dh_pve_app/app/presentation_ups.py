@@ -15,6 +15,56 @@ class UpsPublication:
     profile: PublicationProfile
 
 
+class LinePowerStatisticsGroup:
+    """Publish monthly line-power statistics independently of NORMAL/DETAIL."""
+
+    ONLINE_INTERVAL_SECONDS = 600.0
+    OFFLINE_INTERVAL_SECONDS = 10.0
+
+    def __init__(self) -> None:
+        self._last_published_at: float | None = None
+        self._last_published_state: str | None = None
+
+    def observe(
+        self,
+        data: Mapping[str, object],
+        *,
+        now: float,
+        force: bool = False,
+        manual: bool = False,
+    ) -> UpsPublication | None:
+        state_value = data.get("state")
+        state = state_value if isinstance(state_value, str) else "unknown"
+
+        reason: str | None = None
+        if manual:
+            reason = "manual_refresh"
+        elif force or self._last_published_at is None:
+            reason = "force"
+        elif state != self._last_published_state:
+            reason = "state_change"
+        else:
+            interval = (
+                self.OFFLINE_INTERVAL_SECONDS
+                if state == "offline"
+                else self.ONLINE_INTERVAL_SECONDS
+            )
+            if now - self._last_published_at >= interval:
+                reason = "interval"
+
+        if reason is None:
+            return None
+
+        self._last_published_at = float(now)
+        self._last_published_state = state
+        return UpsPublication(
+            group="line_power_statistics",
+            payload=dict(data),
+            reason=reason,
+            profile=PublicationProfile.NORMAL,
+        )
+
+
 _TELEMETRY_FIELDS = (
     "battery_charge_percent",
     "battery_runtime_minutes",
@@ -33,6 +83,9 @@ _STATUS_FIELDS = (
     "error",
     "status_raw",
     "status_tokens",
+    "status_set",
+    "raw_status_tokens",
+    "battery_charger_status",
     "line_power",
     "on_battery",
     "low_battery",
@@ -43,8 +96,6 @@ _STATUS_FIELDS = (
     "discharging",
     "problems_count",
     "problems_severity",
-    "problems",
-    "problems_details",
 )
 
 _CONFIG_FIELDS = (
@@ -111,6 +162,7 @@ class UpsPresentationRouter:
             name: AdaptiveGroup(windows=self.windows)
             for name in ("status", "config", "tests", "diagnostics")
         }
+        self.line_power_statistics = LinePowerStatisticsGroup()
         self._profile_reason: str | None = None
 
     @staticmethod
@@ -179,6 +231,17 @@ class UpsPresentationRouter:
             }
             publication = self._publication(
                 "telemetry", telemetry_decision, telemetry_payload
+            )
+            if publication is not None:
+                publications.append(publication)
+
+        line_power_statistics = payload.get("line_power_statistics")
+        if isinstance(line_power_statistics, Mapping):
+            publication = self.line_power_statistics.observe(
+                line_power_statistics,
+                now=now,
+                force=force,
+                manual=manual,
             )
             if publication is not None:
                 publications.append(publication)

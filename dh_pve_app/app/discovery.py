@@ -180,6 +180,9 @@ def build_discovery_payload(
                 extra_fields=(
                     "'count':value_json.subsystems.fans.data.count | default(0)",
                     "'detected':value_json.subsystems.fans.data.detected | default(false)",
+                    "'candidate_count':value_json.subsystems.fans.data.candidate_count | default(0)",
+                    "'confirmed_count':value_json.subsystems.fans.data.confirmed_count | default(0)",
+                    "'unconfirmed_count':value_json.subsystems.fans.data.unconfirmed_count | default(0)",
                 ),
             ),
         },

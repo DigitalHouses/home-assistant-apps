@@ -2,18 +2,93 @@
 
 ## Unreleased
 
+- Harden first-install MQTT setup: validate the port as 1..65535, show a password-safe parameter summary, require explicit `y/yes` confirmation before writing the config, and repeat the full prompt after rejection.
+- Harden installer bootstrap: detect/install `python3-venv`, repair an existing venv that has no pip, and use an immutable GitHub codeload archive for exact-SHA source installs so deployment does not depend on `github.com` Git transport.
+- Document the Beelink/AZW IT8613E profile as a standalone repository workflow. The hardware-profile README now carries the reviewed-ref install/repair, read-only `--check` and rollback commands; the installed operational guide remains generic and links to the repository documentation.
+- Add a repository-owned Beelink/AZW IT8613E host profile under `hardware/beelink/`. It installs the pinned upstream `it87` driver through Proxmox headers + DKMS, enables native boot autoload through `modules-load.d`, verifies hwmon/`fan2_input` and the App collector, and preserves the stock Proxmox kernel module. The profile includes read-only `--check` and symmetric uninstall/rollback paths.
+
+
+## 0.5.6
+
+- Fix the 0.5.5 fan Discovery regression where the first positive FAST sample was still unconfirmed and could therefore tombstone a real fan before the two-sample confirmation completed.
+- Never derive MQTT Device Discovery component removal from the live set of unconfirmed hwmon candidates. Unconfirmed fan channels are omitted from normal Discovery instead of being published as tombstones.
+- Preserve the existing two-consecutive-`RPM > 0` confirmation, persistent confirmed fan IDs and valid `0 RPM` semantics for already confirmed fans.
+- Keep explicit Device Discovery tombstones available for authoritative migrations/removals, but do not infer physical fan absence from `0 RPM` or debounce state.
+- Existing Home Assistant registry damage caused by the 0.5.5 remove/re-add race is treated as a one-time recovery problem; normal 0.5.6 runtime does not edit Home Assistant registry state.
+
+## 0.5.5
+
+- Make fan RPM discovery conservative while keeping FAST acquisition zero-subprocess: raw `/sys/class/hwmon/hwmon*/fan*_input` channels are candidates, and a physical fan is exposed only after two consecutive valid `RPM > 0` observations.
+- Persist confirmed fan IDs in the PVE App state so confirmed fans survive App restart and continue to publish a valid `0 RPM` during fan-stop; unconfirmed zero-RPM tachometer inputs no longer create ghost Home Assistant entities.
+- Keep fan identity stable across `hwmonN` renumbering by using chip + resolved underlying device + fan channel, while treating labels as presentation metadata.
+- Expand the diagnostic fan summary with `candidate_count`, `confirmed_count` and `unconfirmed_count`; `count`/`detected` now represent confirmed current fans.
+- Explicitly tombstone retained MQTT Device Discovery fan components before omitting them, so zero-RPM ghost fan entities created by older releases are removed during upgrade instead of remaining orphaned in Home Assistant.
+- Document the Beelink S12 Pro / MINI S IT8613E case, where an external/newer `it87` exposes a real rotating `fan2` plus an unused `fan3 = 0` tachometer input, and keep `pwm*`/thermal cooling devices outside the fan-presence contract.
+
+## 0.5.4
+
+- Fix PVE STATIC change detection: `/etc/pve/.version` fingerprinting now ignores the volatile `kvstore.*.tasklist` counter while preserving all other revision fields.
+- Prevent the 60-second SLOW cycle from falsely triggering repeated STATIC full scans (`pveversion`, `lscpu`, `dmidecode`, `lspci`, QGA `qm agent`/guest inventory) when only Proxmox task history changes.
+- Preserve real configuration detection: changes such as `vmlist`, `storage.cfg`, `clinfo` or future non-`tasklist` revision fields still change the STATIC fingerprint.
+
+## 0.5.3
+
+- Fix startup publication for continuous metrics whose first collector sample is intentionally unavailable. When a numeric value first appears after an earlier missing sample, the publication engine now emits it immediately with reason `value_appeared` instead of waiting for the normal 5/15-minute telemetry window.
+- In particular, `sensor.dh_app_pve_cpu_usage` no longer remains `unknown` after App restart while waiting for the next publication window; the second CPU sample can publish the first valid CPU usage value immediately.
+
+## 0.5.2
+
+- Add canonical `dh_pve_app/dh_app_pve.txt` operational guide. After every successful install/update, `install.sh` regenerates `/root/dh_app_pve.txt` with actual installed version/source/commit plus concise install/update, service/log/config, read-only preflight and uninstall commands.
+- Remove `/root/dh_app_pve.txt` during supported uninstall only after MQTT cleanup succeeds, avoiding a stale operational guide after App removal.
+
+## 0.5.1
+
+- Add diagnostic `sensor.dh_app_pve_app_version` on the retained PVE diagnostics group. Its state is read from the App `VERSION` file and shares the same resolved release value as MQTT Discovery `device.sw_version` and `origin.sw_version`.
+- Show `App <version>` in the standard PVE host summary between the Proxmox version and primary IP, while hiding the segment for unknown/unavailable version state.
+- Add supported `/opt/digitalhouses/dh_pve_app/uninstall.sh`. Normal uninstall removes the service/App only after MQTT cleanup while preserving `/etc/dh_pve_app/` and `/var/lib/dh_pve_app/`; `uninstall.sh --purge` additionally removes configuration/state.
+- Make uninstall fail-safe: publish canonical PVE/UPS availability offline, tombstone canonical plus legacy PVE/UPS MQTT Discovery using the App's Python identity/topic/config path, and abort local removal on any cleanup failure. A service that was active before a failed uninstall is started again.
+- Keep uninstall outside NUT/FSD/UPS-output ownership and leave shared OS dependencies, Home Assistant and the MQTT broker untouched. CI now validates both installer and uninstaller shell syntax.
+
+## 0.5.0
+
+- **Breaking Event contract:** all new public `dh_pve_app` diagnostic/UPS Events use `schema_version: 2` and carry machine semantics only. App Event payloads no longer generate notification `title`, `message`, `summary`, `details`, `status_ru`, emoji or other localized presentation fields.
+- Keep HA-first migration compatibility: install/update the v1+v2-compatible Home Assistant notification locale package before deploying App 0.5.0. The App emits v2 only; HA retains the temporary explicit schema-v1 fallback.
+- Convert generic problem transitions to structured previous/current v2 payloads with machine metadata, numeric value/average/threshold facts, timezone-aware `observed_at` and active-problem count.
+- Convert retained UPS problem observations/aggregates to machine-only facts and de-duplicate status-derived notifications so `on_battery`, `low_battery`, `overload`, `replace_battery` and `bypass` transitions are represented by canonical UPS status Events rather than duplicate generic Events.
+- Add canonical UPS status normalization with deterministic precedence while preserving raw NUT tokens diagnostically. Charger semantics are normalized to `charging`, `discharging`, `floating`, `resting`, `idle` or `unknown`; direct `battery.charger.status` has priority over CHRG/DISCHRG fallback evidence.
+- Add `sensor.dh_app_pve_ups_battery_charger_status` and move its Russian label/icon/color presentation into the standard HA UPS dashboard rather than Python-generated prose.
+- Add persisted `ups_status_changed` transition tracking with previous/current canonical and raw status lists; first observation establishes a baseline and token-only charger noise does not invent a status transition.
+- Add persistent battery discharge sessions with fixed milestones at 90/80/70/60/50/40/30/20/10 percent, aggregate large downward crossings into one `battery_discharge_level_crossed` Event and prevent duplicate milestones across restart.
+- Add charge-cycle completion detection and `battery_fully_charged`. A direct charging -> floating/resting transition completes the cycle without requiring `battery.charge == 100`; legacy token-only devices use a guarded stable-idle fallback.
+- Add a persisted idempotent machine Event outbox. Retained current state is published before transition Events, failed semantic Event publication is retried before advancing to a newer UPS observation, and restart does not lose pending semantic Events.
+- Emit structured `shutdown_committed` only after the fixed software shutdown helper successfully commits, with machine reason/charge/runtime/budget/reserve facts. Native NUT FSD remains distinct and does not by itself create this Event.
+- Emit structured `config_changed` v2 with OLD/NEW policy values and previous/current revisions after the durable Apply/reload/verification transaction completes.
+- Expand UPS MQTT Event Discovery to `problem_started`, `problem_recovered`, `problem_updated`, `config_changed`, `ups_status_changed`, `battery_discharge_level_crossed`, `battery_fully_charged` and `shutdown_committed`; generic PVE Event Discovery remains the three problem transition types.
+- Complete English/Russian HA-owned presentation for canonical UPS status enter/exit transitions, discharge milestones, fully charged, shutdown committed and config changes while preserving `binary_sensor.bs_global_system_boot_completed` as the notification gate.
+- Keep UPS acquisition fixed at 10 seconds, Event QoS 1 / `retain=false`, shutdown predicates/helper ACL and the non-destructive validation boundary unchanged.
+
+## 0.4.0
+
 - Replace the previous heavy/adaptive collection direction with the canonical Proxmox VE 8.x file/cache-first runtime: `/proc`/`/sys` and `/etc/pve`/PVE caches are primary sources, while expensive subprocess/API paths are reserved for data that has no cheap source and are never used as permanent fallback loops.
 - Freeze collection cadence independently from MQTT presentation: FAST 10 s, UPS 10 s, SLOW 60 s, HEALTH 1 h and event-driven STATIC refresh. Legacy `ups.poll_interval_seconds` remains load-compatible but is ignored and normalized to the fixed 10-second UPS cadence.
 - Separate decision/publication windows from collection and move toward domain-local NORMAL/DETAIL MQTT publication, immediate semantic/problem transitions, retained grouped state and explicit Recorder-safe history.
 - Migrate public MQTT Discovery identity to canonical `dh_app_pve_*` and `dh_app_pve_ups_*` entity IDs with retained legacy Discovery tombstones instead of leaving orphaned old entities.
 - Move problem calculation and threshold semantics into the App, expose App-owned `binary_sensor` problem state and aggregate presentation, and use native MQTT Event entities for `problem_started`, `problem_recovered`, `problem_updated` and UPS `config_changed` transitions.
+- Deliver diagnostic MQTT Events with QoS 1 and `retain=false`; Home Assistant Event Discovery also subscribes at QoS 1, while retained aggregate problem state remains the recovery source after HAOS downtime/reconnect.
+- Add the reusable HAOS notification package: live `event.*` transitions are boot-gated by `binary_sensor.bs_global_system_boot_completed`, startup reconciliation reads only retained aggregate sensors, and the package emits a transport-neutral `dh_app_pve_notification` event with Russian `title`/`message` plus the original structured diagnostic fields.
+- Add the separate HAOS Trigger v2 UI package and dashboard VIEW -> EDIT -> CONFIRM -> APPLY flow. Draft MQTT `number` changes never masquerade as active policy; the read-only `sensor.dh_app_pve_ups_trigger_policy` exposes committed active values and the editor closes only after successful `config_changed` confirmation.
+- Keep reusable HAOS packages independent from site-private delivery such as `script.write2log`, Telegram targets and specific `notify.mobile_app` services; a site-local adapter may consume `dh_app_pve_notification` and choose the actual delivery transport.
 - Preserve capability-driven UPS beeper/test controls while keeping arbitrary shell, arbitrary `upscmd`, UPS load/output-off and generic shutdown commands unavailable to Home Assistant/MQTT.
 - Add UPS Trigger Policy v2: software shutdown is `charge threshold OR runtime <= shutdown_budget + reserve`, while native NUT Low Battery remains an independent emergency path and `ignorelb`/synthetic Low Battery overrides remain forbidden.
 - Add cheap shutdown-budget acquisition from PVE cache/config plus comparable clean shutdown history and configuration fingerprints; regular Trigger B evaluation no longer requires `qm list`/`pct list` polling.
 - Add a fixed immutable FSD boundary through `/opt/digitalhouses/dh_pve_app/bin/dh-pve-ups-policy-cmd dh-pve-ups-shutdown`; a software-trigger shutdown reason is recorded only after the fixed helper succeeds.
 - Replace the former ONBATT/upssched mutation product path and root commissioning CLI with HA draft controls for charge threshold/runtime reserve plus an explicit Apply button. The long-running daemon keeps `/etc/nut` read-only and existing administrator NUT/upssched content is observational only.
 - Make UPS policy Apply a durable two-phase transaction: preserve the previous active policy, request only a fixed `dh_pve_app.service` reload, complete through SIGHUP in the main loop, promote/reread/verify the target policy, publish synchronized state, then emit `config_changed` OLD -> NEW last. No-op Apply performs no reload/revision/event; failed or interrupted transactions roll back conservatively.
+- Make Trigger Policy read-only presentation null-safe for Commissioning state where active/draft policy objects may not yet be populated.
 - Remove the obsolete `ups_commission.py` and `ups_policy_apply.py` timer writer modules and their superseded ONBATT/upssched mutation tests while preserving read-only preflight, native Low Battery checks, fixed-helper ownership validation and the systemd `/etc/nut` sandbox.
+- Add App-owned monthly city line-power statistics persisted on PVE in `line_power_statistics.json`, counting ONLINE, OFFLINE and UNKNOWN time without importing historical Home Assistant data.
+- Publish monthly line-power statistics through dedicated MQTT Discovery entities with ONLINE updates every 600 seconds, OFFLINE updates every 10 seconds and immediate state transitions.
+- Add the permanent UPS dashboard block `Городская сеть` with `Свет был`, `Света не было`, `Отключений` and `Доступность`, using App-owned monthly facts and remaining visible during an outage.
 - Keep routine CI/deploy validation non-destructive: live FSD, UPS output-off, mains-unplug and deep-discharge validation remain a separate reviewed commissioning gate.
 
 ## 0.3.0
@@ -82,7 +157,7 @@
 
 - Introduce `dh_pve_app` as a native Proxmox VE Linux agent.
 - Define the separate `DH PVE` MQTT device and `DigitalHouses/Global/dh_pve_app/<instance>` namespace.
-- Add host, CPU, memory, storage, SMART/disk-health, GPU/transcoding, and fan collectors.
+- Add host, CPU, memory, storage, disk/SMART, GPU/transcoding, and fan collectors.
 - Add autonomous VM/LXC inventory plus a shared passthrough topology cache.
 - Add VM/LXC status polling and targeted guest rescans when a guest transitions to `running`.
 - Collapse VM/LXC status polling to one Proxmox `/cluster/resources` query every 30 seconds instead of separate `qm list` and `pct list` calls every 10 seconds.

@@ -128,6 +128,82 @@ A Manual Refresh also recalculates shutdown-policy derived values from current P
 
 Legacy MQTT controls for collector/poll intervals are removed. Collection cadence is not part of the HA configuration surface.
 
+### 2.3 Fan RPM acquisition and physical-presence confirmation
+
+Fan RPM acquisition remains a zero-subprocess FAST path.
+
+Canonical source:
+
+```text
+/sys/class/hwmon/hwmon*/fan*_input
+```
+
+The raw hwmon collector reports every readable `fan*_input` channel exactly as Linux exposes it. Raw observation and physical-fan inventory are separate concepts: a Super I/O driver may export unused tachometer inputs that permanently read `0 RPM`.
+
+Stable fan identity is derived from:
+
+```text
+hwmon chip name
++ resolved underlying device identity
++ fan channel/index
+```
+
+The volatile `hwmonN` number is not part of stable identity. `fan*_label`, when present, is display metadata only.
+
+A newly observed channel starts as an unconfirmed candidate. It becomes confirmed only after **two consecutive valid FAST observations with RPM > 0**. A zero or invalid/unreadable observation before confirmation resets the positive-observation debounce. No arbitrary minimum RPM threshold such as 100/500 RPM is used.
+
+Confirmed physical presence is persisted by stable fan ID. Persistence semantics are:
+
+- confirmation survives App restart;
+- persistence is updated only when confirmed inventory changes, never every FAST cycle;
+- persistence alone does not synthesize a current fan entity if the corresponding hwmon channel is absent from the current Linux source;
+- a confirmed channel remains a real fan when its current valid reading is `0 RPM`; fan-stop is valid telemetry, not grounds for deleting or hiding the entity.
+
+Exposure rules:
+
+```text
+unconfirmed + RPM == 0
+  -> observe internally
+  -> no RPM MQTT Discovery entity
+
+unconfirmed + two consecutive RPM > 0 observations
+  -> confirm persistently
+  -> expose RPM entity
+
+confirmed + RPM > 0
+  -> publish normal RPM telemetry
+
+confirmed + RPM == 0
+  -> publish 0 RPM; entity remains present
+
+confirmed + invalid/unreadable
+  -> entity remains part of confirmed inventory; current measurement is unavailable
+
+persisted confirmed + current hwmon channel absent
+  -> do not synthesize RPM telemetry from persistence alone
+  -> expose source/detection diagnostics as applicable
+```
+
+The following are not fan-RPM acquisition sources:
+
+- `sensors`/libsensors subprocess output;
+- `/sys/class/thermal/cooling_device*`;
+- `pwm*` presence or values;
+- vendor utilities, EC/raw-I/O probing or hardware-control commands.
+
+`pwm*` may exist for an unconnected tachometer channel and therefore is not physical-presence evidence.
+
+Fan summary semantics are based on confirmed current fan channels, not raw exported hwmon inputs:
+
+```text
+detected          = confirmed_count > 0
+count             = confirmed_count
+candidate_count   = current exported fan*_input channels
+unconfirmed_count = current candidate_count - current confirmed_count
+```
+
+These summary values are diagnostic/presentation data and are not Recorder telemetry. Confirmed RPM entities remain explicit Recorder candidates.
+
 ---
 
 ## 3. Decision averages and MQTT publication
@@ -541,7 +617,33 @@ The app owns topology composition. Lovelace does not build it by looping over al
 
 Per-guest current state and shutdown evidence may remain separate where useful, but joins/summary formatting belong in the app.
 
-### 9.4 Shutdown history
+### 9.4 Fan presentation
+
+Only confirmed current fan channels receive MQTT Discovery RPM entities.
+
+Canonical RPM entity contract:
+
+```text
+sensor.dh_app_pve_fan_<stable-id>_rpm
+```
+
+RPM telemetry uses `state_class: measurement` and `rpm` units and is eligible for the explicit Recorder whitelist. A valid `0 RPM` on a confirmed fan is published as zero and does not remove the entity.
+
+The fan summary is diagnostic/non-Recorder presentation. It reports confirmed fan count and may include raw candidate/unconfirmed counts so users can distinguish:
+
+- no Linux fan source;
+- exported but unconfirmed tachometer channels;
+- confirmed physical fans.
+
+Dynamic Discovery may add a fan RPM entity when an unconfirmed channel becomes confirmed; App restart is not required for that transition.
+
+Fan component removal follows the Home Assistant MQTT Device Discovery update contract only when the App has an authoritative removal decision independent of live fan-presence inference. A removal transaction first publishes a retained Device Discovery update containing an empty component config with its `platform`, then publishes the final retained payload with that component omitted.
+
+The live unconfirmed candidate set is never an authoritative removal source. A channel that is still inside the two-sample debounce, reports `0 RPM`, is temporarily unreadable, or has not yet been confirmed is simply omitted from normal fan RPM Discovery. The App must not tombstone such a channel merely because it is currently unconfirmed, because `0 RPM` and debounce state do not prove physical absence.
+
+Raw candidate IDs may remain internal diagnostic/inventory metadata, but they must not by themselves trigger MQTT component deletion. Candidate IDs are not RPM entities, are not part of Recorder, and are not published in the fan summary group.
+
+### 9.5 Shutdown history
 
 Preserve app-owned shutdown history and the distinction between:
 
@@ -1193,6 +1295,12 @@ no permanent heavy fallback loop
 FAST decision window 60 s
 SLOW decision window 5 min
 missing/invalid != zero
+fan RPM source is sysfs hwmon only; FAST fan acquisition has zero subprocesses
+raw hwmon fan channel != confirmed physical fan
+fan confirmation requires two consecutive valid RPM > 0 observations
+confirmed fan presence is persisted by stable chip/device/channel identity
+confirmed fan 0 RPM remains valid telemetry and does not remove the entity
+unconfirmed zero-RPM fan channels are not exposed through MQTT Discovery
 NORMAL 15m / DETAIL 5m publication only
 DETAIL is per-domain publication only
 HAOS is a light client

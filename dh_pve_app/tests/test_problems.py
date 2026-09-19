@@ -26,6 +26,8 @@ def test_cpu_temperature_uses_fast_rolling_average_and_strict_threshold_semantic
     assert started[0].current.problem_id == "cpu_temperature"
     assert started[0].current.average == 90.5
     assert started[0].current.threshold == 90.0
+    assert not hasattr(started[0].current, "summary")
+    assert not hasattr(started[0].current, "details")
 
     # Equality is neither recovery nor a duplicate update.
     assert engine.observe(121.0, {"cpu": {"temperature_c": 89.0}}, limits) == ()
@@ -153,7 +155,7 @@ def test_threshold_edit_immediately_reevaluates_current_valid_average():
     assert recovered[0].current.active is False
 
 
-def test_aggregate_is_deterministic_and_self_contained():
+def test_aggregate_is_deterministic_and_machine_only():
     engine = PveProblemEngine()
     limits = thresholds()
 
@@ -169,18 +171,22 @@ def test_aggregate_is_deterministic_and_self_contained():
 
     assert aggregate.count == 2
     assert aggregate.severity == "critical"
-    assert aggregate.summary == "2 active problems"
+    assert not hasattr(aggregate, "summary")
     assert [item["problem_id"] for item in aggregate.active] == [
         "cpu_throttling",
         "disk_disk0_smart",
     ]
     for item in aggregate.active:
-        assert set(item) >= {
+        assert set(item) == {
             "problem_id",
             "category",
             "severity",
             "object_id",
             "object_name",
             "metric",
-            "summary",
+            "value",
+            "average",
+            "threshold",
         }
+        assert "summary" not in item
+        assert "details" not in item

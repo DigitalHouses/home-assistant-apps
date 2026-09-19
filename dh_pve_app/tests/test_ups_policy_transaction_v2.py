@@ -139,7 +139,7 @@ def _runtime(tmp_path, *, store_class=StateStore, reload_executor=None):
         mqtt_config=_mqtt(),
         bridge=bridge,
         identity=_identity(),
-        version="0.2.0",
+        version="0.5.0",
         state_store=store,
         now_iso=lambda: "2026-09-16T01:00:00+05:00",
         now_monotonic=lambda: 100.0,
@@ -180,7 +180,7 @@ def test_changed_apply_persists_pending_transaction_and_requests_service_reload(
     assert transaction["target_hash"] == policy_hash(new)
 
 
-def test_reload_completion_promotes_policy_verifies_then_emits_event_last(tmp_path):
+def test_reload_completion_promotes_policy_verifies_then_emits_machine_v2_event_last(tmp_path):
     runtime, bridge, store, reloads = _runtime(tmp_path)
     old = runtime.policy_active
     new = UpsPolicyDraft(25, 240)
@@ -201,13 +201,16 @@ def test_reload_completion_promotes_policy_verifies_then_emits_event_last(tmp_pa
     assert bridge.order[-1] == "event"
     assert len(bridge.events) == 1
     event = bridge.events[0]
-    assert event["schema_version"] == 1
-    assert event["event_type"] == "config_changed"
-    assert event["category"] == "policy"
-    assert event["object_id"] == "ups_trigger_policy"
-    assert event["old_values"] == old.as_dict()
-    assert event["new_values"] == new.as_dict()
-    assert event["active_problem_count"] == 0
+    assert event == {
+        "schema_version": 2,
+        "event_type": "config_changed",
+        "observed_at": "2026-09-16T01:00:00+05:00",
+        "old_values": old.as_dict(),
+        "new_values": new.as_dict(),
+        "previous_revision": 4,
+        "current_revision": 5,
+    }
+    assert not ({"summary", "details", "title", "message", "status_ru"} & event.keys())
 
 
 def test_noop_apply_does_not_reload_increment_revision_or_emit_event(tmp_path):
@@ -288,7 +291,7 @@ def test_startup_rolls_back_interrupted_reload_requested_transaction(tmp_path):
         mqtt_config=_mqtt(),
         bridge=bridge,
         identity=_identity(),
-        version="0.2.0",
+        version="0.5.0",
         state_store=store,
         now_iso=lambda: "2026-09-16T01:01:00+05:00",
         now_monotonic=lambda: 101.0,

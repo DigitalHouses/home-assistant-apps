@@ -88,12 +88,15 @@ def memory_sample(usage=80.0):
     )
 
 
-def make_runtime(collectors, *, mono_values=None, iso_values=None):
+def make_runtime(collectors, *, mono_values=None, iso_values=None, app_version=None):
     bridge = GroupBridge()
     settings = RuntimeSettings()
     policy = PublishPolicy(settings)
     mono = iter(mono_values or [0.0] * 20)
     iso = iter(iso_values or ["2026-09-14T20:00:00+05:00"] * 20)
+    kwargs = {}
+    if app_version is not None:
+        kwargs["app_version"] = app_version
     runtime = DhPveRuntime(
         collectors=collectors,
         bridge=bridge,
@@ -103,6 +106,7 @@ def make_runtime(collectors, *, mono_values=None, iso_values=None):
         scheduler=Scheduler(),
         now_iso=lambda: next(iso),
         now_monotonic=lambda: next(mono),
+        **kwargs,
     )
     return runtime, bridge
 
@@ -118,6 +122,18 @@ def test_group_capable_runtime_does_not_publish_monolithic_state():
         "collector/cpu",
         "diagnostics",
     }
+
+
+def test_group_capable_runtime_publishes_app_version_in_diagnostics():
+    runtime, bridge = make_runtime(
+        {"cpu": lambda: cpu_sample()},
+        app_version="0.5.1",
+    )
+
+    assert runtime.run_collection(force=True) is True
+
+    diagnostics = dict(bridge.group_states)["diagnostics"]
+    assert diagnostics["app_version"] == "0.5.1"
 
 
 def test_group_capable_startup_tombstones_legacy_monolithic_state():

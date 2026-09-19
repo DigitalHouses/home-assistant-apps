@@ -13,6 +13,7 @@ from pathlib import Path
 
 from .config import AppConfig, UpsConfig, load_config
 from .identity import resolve_identity
+from .machine_event_outbox import MachineEventOutbox
 from .mqtt_bridge import MqttBridge
 from .production import _run
 from .publish_policy import PublishPolicy
@@ -29,6 +30,7 @@ from .shutdown_integration import (
 )
 from .state_store import StateStore
 from .topics import build_topics, build_ups_topics
+from .ups_battery_events import UpsBatteryEventTracker
 from .ups_policy_preflight import (
     PreflightCheck,
     UpsPolicyPreflight,
@@ -40,6 +42,7 @@ from .ups_scan import UpsScanner
 from .ups_shutdown_budget_reader import read_shutdown_budget
 from .ups_shutdown_executor import execute_fixed_ups_shutdown
 from .ups_shutdown_policy import read_shutdown_policy
+from .uninstall_cleanup import cleanup_mqtt
 
 APP_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG = Path("/etc/dh_pve_app/dh_pve_app.conf")
@@ -101,6 +104,7 @@ def build_runtime(
 ):
     identity = resolve_identity(config.general)
     topics = build_topics(config.mqtt, identity)
+    version = _version()
     runtime_store = StateStore(state_dir / "runtime.json")
     settings = _initial_settings(runtime_store)
     tracker = shutdown_history_tracker or _shutdown_tracker(state_dir)
@@ -108,7 +112,7 @@ def build_runtime(
     discovery_builder = lambda inventory: build_shutdown_aware_pve_discovery_payload(
         config,
         identity,
-        version=_version(),
+        version=version,
         inventory=inventory,
     )
     bridge = MqttBridge(
@@ -120,8 +124,9 @@ def build_runtime(
 
     topology = ShutdownAwareTopologyManager(runner=_run)
     production = ShutdownAwareProductionCollectors(
-        node_name=identity.node_name,
+        node_name=identity.hostname,
         disk_state_store=StateStore(state_dir / "disks.json"),
+        fan_state_store=StateStore(state_dir / "fans.json"),
         topology=topology,
         shutdown_history_tracker=tracker,
     )
@@ -150,6 +155,7 @@ def build_runtime(
         static_collectors=("topology", "host"),
         slow_tasks=("guests", "storage", "gpu", "disk_temperature"),
         version_probe=pve_version_fingerprint,
+        app_version=version,
     )
     return bridge, runtime
 
@@ -193,6 +199,12 @@ def build_ups_runtime(
         identity=identity,
         version=_version(),
         state_store=StateStore(state_dir / "ups_runtime.json"),
+        machine_event_outbox=MachineEventOutbox(
+            StateStore(state_dir / "ups_machine_event_outbox.json")
+        ),
+        battery_event_tracker=UpsBatteryEventTracker(
+            StateStore(state_dir / "ups_battery_events.json")
+        ),
         now_iso=_now_iso,
         now_local=_now_local,
         now_monotonic=time.monotonic,
@@ -372,9 +384,18 @@ def main() -> int:
         action="store_true",
         help="Read UPS/NUT/PVE safety state, print JSON, and exit without MQTT.",
     )
+    parser.add_argument(
+        "--uninstall-mqtt-cleanup",
+        action="store_true",
+        help=argparse.SUPPRESS,
+    )
     args = parser.parse_args()
 
     config = load_config(args.config)
+    if args.uninstall_mqtt_cleanup:
+        identity = resolve_identity(config.general)
+        _configure_logging(config.general.log_level)
+        return 0 if cleanup_mqtt(config, identity) else 3
     if args.check_config:
         resolve_identity(config.general)
         return 0

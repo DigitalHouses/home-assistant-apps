@@ -192,5 +192,6 @@ def test_problem_aggregate_and_native_mqtt_event_are_canonical():
         "problem_recovered",
         "problem_updated",
     ]
+    assert event["qos"] == 1
     assert event["entity_category"] == "diagnostic"
     assert "json_attributes_topic" not in event

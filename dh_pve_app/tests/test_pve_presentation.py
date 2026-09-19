@@ -210,6 +210,9 @@ def test_fan_summary_is_not_mistaken_for_fan_objects():
         {
             "detected": True,
             "count": 1,
+            "candidate_count": 2,
+            "confirmed_count": 1,
+            "unconfirmed_count": 1,
             "status": "Detected",
             "nct6798_fan1": {
                 "fan_id": "nct6798_fan1",
@@ -227,6 +230,15 @@ def test_fan_summary_is_not_mistaken_for_fan_objects():
     )
 
     assert groups(decision) == {"collector/fans", "fans", "fan/nct6798_fan1"}
+    summary = next(item for item in decision if item.group == "fans")
+    assert summary.payload["subsystems"]["fans"]["data"] == {
+        "detected": True,
+        "count": 1,
+        "candidate_count": 2,
+        "confirmed_count": 1,
+        "unconfirmed_count": 1,
+        "status": "Detected",
+    }
 
 
 def test_host_inventory_and_shutdown_history_publish_as_independent_groups():

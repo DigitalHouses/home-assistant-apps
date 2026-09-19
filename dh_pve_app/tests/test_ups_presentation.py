@@ -40,8 +40,6 @@ def payload(**overrides):
         "beeper_status": "enabled",
         "problems_count": 0,
         "problems_severity": "ok",
-        "problems": [],
-        "problems_details": "",
         "capabilities": {"available": True, "count": 2, "commands": ["test.battery.start.quick"]},
         "shutdown_policy": {"state": "Enabled", "guest_shutdown_budget_seconds": 240},
         "policy": {"status": "Active"},
@@ -67,6 +65,10 @@ def test_startup_partitions_ups_state_into_independent_groups():
     assert "battery_charge_percent" in groups["telemetry"].payload
     assert "status" not in groups["telemetry"].payload
     assert groups["status"].payload["status"] == "Online"
+    assert groups["status"].payload["problems_count"] == 0
+    assert groups["status"].payload["problems_severity"] == "ok"
+    assert "problems" not in groups["status"].payload
+    assert "problems_details" not in groups["status"].payload
     assert "battery_charge_percent" not in groups["status"].payload
     assert groups["config"].payload["model"] == "UT2200E"
     assert groups["tests"].payload["test_result"] == "No test initiated"
@@ -85,11 +87,15 @@ def test_on_battery_transition_publishes_status_immediately_and_enters_detail():
         on_battery=True,
         discharging=True,
         battery_charge_percent=99.0,
+        problems_count=1,
+        problems_severity="warning",
     )
     publications = by_group(router.route(changed, now=10.0))
 
     assert set(publications) == {"status", "telemetry"}
     assert publications["status"].reason == "change"
+    assert publications["status"].payload["problems_count"] == 1
+    assert publications["status"].payload["problems_severity"] == "warning"
     assert publications["telemetry"].reason == "profile_transition"
     assert publications["telemetry"].profile is PublicationProfile.DETAIL
 
@@ -107,11 +113,14 @@ def test_low_battery_transition_is_immediate_detail():
         low_battery=True,
         discharging=True,
         battery_charge_percent=8.0,
+        problems_count=2,
+        problems_severity="critical",
     )
     publications = by_group(router.route(changed, now=10.0))
 
     assert publications["telemetry"].profile is PublicationProfile.DETAIL
     assert publications["status"].payload["low_battery"] is True
+    assert publications["status"].payload["problems_severity"] == "critical"
 
 
 def test_online_numeric_jitter_waits_for_normal_fifteen_minute_average_window():

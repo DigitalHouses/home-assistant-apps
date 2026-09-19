@@ -32,6 +32,7 @@ class DynamicDiscoveryRuntime(DhPveRuntime):
         self._discovery_fingerprint: str | None = None
         self._last_discovery_ok = False
         self._legacy_discovery_cleanup_done = False
+        self._component_tombstones_applied: set[str] = set()
 
     def _inventory(self) -> dict[str, object]:
         return {
@@ -39,6 +40,46 @@ class DynamicDiscoveryRuntime(DhPveRuntime):
             for name, state in self._subsystems.items()
             if state.data is not None
         }
+
+    @staticmethod
+    def _split_component_tombstones(
+        payload: dict[str, object],
+    ) -> tuple[dict[str, object], dict[str, str]]:
+        raw_components = payload.get("components")
+        if not isinstance(raw_components, dict):
+            return payload, {}
+
+        final_components: dict[str, object] = {}
+        tombstones: dict[str, str] = {}
+        for key, component in raw_components.items():
+            if (
+                isinstance(component, dict)
+                and set(component) == {"platform"}
+                and isinstance(component.get("platform"), str)
+            ):
+                tombstones[str(key)] = str(component["platform"])
+                continue
+            final_components[str(key)] = component
+
+        if not tombstones:
+            return payload, {}
+
+        final_payload = dict(payload)
+        final_payload["components"] = final_components
+        return final_payload, tombstones
+
+    @staticmethod
+    def _component_cleanup_payload(
+        payload: dict[str, object],
+        removals: Mapping[str, str],
+    ) -> dict[str, object]:
+        cleanup = dict(payload)
+        raw_components = payload.get("components")
+        components = dict(raw_components) if isinstance(raw_components, dict) else {}
+        for key, platform in removals.items():
+            components[key] = {"platform": platform}
+        cleanup["components"] = components
+        return cleanup
 
     @staticmethod
     def _legacy_cleanup_payload(payload: dict[str, object]) -> dict[str, object] | None:
@@ -61,14 +102,31 @@ class DynamicDiscoveryRuntime(DhPveRuntime):
         return cleanup
 
     def sync_discovery(self, *, force: bool = False) -> bool:
-        payload = self.discovery_builder(self._inventory())
+        built_payload = self.discovery_builder(self._inventory())
+        payload, tombstones = self._split_component_tombstones(built_payload)
+
+        raw_components = payload.get("components")
+        if isinstance(raw_components, dict):
+            self._component_tombstones_applied.difference_update(
+                str(key) for key in raw_components
+            )
+        pending_tombstones = {
+            key: platform
+            for key, platform in tombstones.items()
+            if key not in self._component_tombstones_applied
+        }
+
         fingerprint = json.dumps(
             payload,
             ensure_ascii=False,
             sort_keys=True,
             separators=(",", ":"),
         )
-        if not force and fingerprint == self._discovery_fingerprint:
+        if (
+            not force
+            and fingerprint == self._discovery_fingerprint
+            and not pending_tombstones
+        ):
             return True
 
         setter = getattr(self.bridge, "set_discovery_payload", None)
@@ -84,6 +142,14 @@ class DynamicDiscoveryRuntime(DhPveRuntime):
                     return False
             self._legacy_discovery_cleanup_done = True
 
+        if pending_tombstones:
+            cleanup = self._component_cleanup_payload(payload, pending_tombstones)
+            setter(cleanup)
+            if not self.bridge.publish_discovery():
+                self._last_discovery_ok = False
+                return False
+            self._component_tombstones_applied.update(pending_tombstones)
+
         setter(payload)
         ok = self.bridge.publish_discovery()
         self._last_discovery_ok = ok
@@ -91,10 +157,19 @@ class DynamicDiscoveryRuntime(DhPveRuntime):
             self._discovery_fingerprint = fingerprint
         return ok
 
-    def run_collection(self, *args, **kwargs) -> bool:
-        state_published = super().run_collection(*args, **kwargs)
-        self.sync_discovery(force=self._discovery_fingerprint is None)
-        return state_published
+    def _sync_discovery_before_state(self) -> bool:
+        """Keep retained discovery current before any state uses its templates."""
+        return self.sync_discovery(force=self._discovery_fingerprint is None)
+
+    def _run_group_publication(self, *args, **kwargs) -> bool:
+        if not self._sync_discovery_before_state():
+            return False
+        return super()._run_group_publication(*args, **kwargs)
+
+    def _run_legacy_publication(self, *args, **kwargs) -> bool:
+        if not self._sync_discovery_before_state():
+            return False
+        return super()._run_legacy_publication(*args, **kwargs)
 
     def startup(self) -> bool:
         cleanup_ok = True

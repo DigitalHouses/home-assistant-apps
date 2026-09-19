@@ -153,7 +153,11 @@ jobs:
         run: python -m pytest dh_pve_app/tests -q
 
       - name: Check installer syntax
-        run: bash -n dh_pve_app/install.sh
+        run: |
+          bash -n dh_pve_app/install.sh
+          bash -n dh_pve_app/uninstall.sh
+          bash -n dh_pve_app/hardware/beelink/install.sh
+          bash -n dh_pve_app/hardware/beelink/uninstall.sh
 
       - name: Prepare systemd verification path
         run: |

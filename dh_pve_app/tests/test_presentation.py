@@ -87,3 +87,25 @@ def test_manual_refresh_emits_current_sample_without_waiting_for_window():
     assert decision.publish is True
     assert decision.reason == "manual_refresh"
     assert decision.values["cpu"] == 42.0
+
+
+def test_first_valid_continuous_value_after_missing_startup_sample_publishes_immediately():
+    group = AdaptiveGroup(initial_profile=PublicationProfile.NORMAL)
+
+    startup = group.observe(
+        now=0.0,
+        continuous={"cpu": None, "temperature": 50.0},
+        discrete={"available": True},
+    )
+    assert startup.publish is True
+    assert "cpu" not in startup.values
+
+    decision = group.observe(
+        now=10.0,
+        continuous={"cpu": 12.5, "temperature": 51.0},
+        discrete={"available": True},
+    )
+
+    assert decision.publish is True
+    assert decision.reason == "value_appeared"
+    assert decision.values["cpu"] == 12.5

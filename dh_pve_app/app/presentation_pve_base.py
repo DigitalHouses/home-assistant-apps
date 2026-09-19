@@ -500,7 +500,14 @@ class PvePresentationRouter:
 
         summary = {
             key: raw.get(key)
-            for key in ("detected", "count", "status")
+            for key in (
+                "detected",
+                "count",
+                "candidate_count",
+                "confirmed_count",
+                "unconfirmed_count",
+                "status",
+            )
             if key in raw
         }
         summary_publication = self._change_only(

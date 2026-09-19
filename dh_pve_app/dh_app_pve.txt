@@ -1,0 +1,207 @@
+DH PVE APP — ОПЕРАТИВНАЯ ПАМЯТКА
+===================================
+
+Этот файл устанавливается как:
+  /root/dh_app_pve.txt
+
+Каноническая версия хранится в репозитории:
+  dh_pve_app/dh_app_pve.txt
+
+Installer добавляет выше этой памятки фактические version/source/commit
+установленной сборки. При каждом обновлении /root/dh_app_pve.txt обновляется.
+
+Установка
+---------
+
+Обычная установка из main:
+
+  bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/main/dh_pve_app/install.sh")
+
+Установка проверенного ref/commit:
+
+  REF=<reviewed-ref-or-sha>
+  DIGITALHOUSES_SOURCE_REF="$REF" bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$REF/dh_pve_app/install.sh")
+
+При первой установке installer запросит MQTT-параметры.
+
+Обновление
+----------
+
+Обновление выполняется тем же install.sh. Существующие config/state сохраняются.
+
+Для проверенного commit:
+
+  REF=<reviewed-sha>
+  DIGITALHOUSES_SOURCE_REF="$REF" bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$REF/dh_pve_app/install.sh")
+
+После обновления проверить:
+
+  cat /opt/digitalhouses/dh_pve_app/BUILD_INFO
+  systemctl status dh_pve_app --no-pager
+  journalctl -u dh_pve_app -n 100 --no-pager
+
+Основные команды
+----------------
+
+Статус:
+
+  systemctl status dh_pve_app --no-pager
+
+Перезапуск:
+
+  systemctl restart dh_pve_app
+
+Последние логи:
+
+  journalctl -u dh_pve_app -n 100 --no-pager
+
+Логи online:
+
+  journalctl -u dh_pve_app -f
+
+Установленная версия / source / commit:
+
+  cat /opt/digitalhouses/dh_pve_app/BUILD_INFO
+
+Конфигурация:
+
+  nano /etc/dh_pve_app/dh_pve_app.conf
+
+Проверка конфигурации без запуска второго runtime:
+
+  PYTHONPATH=/opt/digitalhouses/dh_pve_app \
+  /opt/digitalhouses/dh_pve_app/.venv/bin/python -m app.main \
+    --config /etc/dh_pve_app/dh_pve_app.conf \
+    --state-dir /var/lib/dh_pve_app \
+    --check-config
+
+Read-only UPS preflight
+-----------------------
+
+Без FSD и без изменения NUT/UPS:
+
+  PYTHONPATH=/opt/digitalhouses/dh_pve_app \
+  /opt/digitalhouses/dh_pve_app/.venv/bin/python -m app.main \
+    --config /etc/dh_pve_app/dh_pve_app.conf \
+    --state-dir /var/lib/dh_pve_app \
+    --ups-policy-preflight
+
+Вентиляторы / Fan RPM
+----------------------
+
+Для Beelink/AZW с ITE IT8613E может потребоваться отдельный hardware-profile
+`it87`. Он намеренно не является частью автоматической установки App.
+
+Актуальные команды установки/repair, read-only проверки и rollback находятся
+в GitHub:
+  dh_pve_app/hardware/beelink/README.md
+
+dh_app_pve получает обороты вентиляторов напрямую из Linux hwmon:
+
+  /sys/class/hwmon/hwmon*/fan*_input
+
+Для обычного FAST-сбора не запускаются sensors, vendor utilities или другие
+тяжёлые subprocess-команды. Если Linux не создал fan*_input, App не может
+достоверно получить RPM, даже если Windows-утилита на том же компьютере
+показывает обороты.
+
+Реальный пример: Beelink S12 Pro / MINI S с Super I/O ITE IT8613E.
+На тестовой системе с Proxmox VE 8.4 и kernel 6.8.12-13-pve штатный it87
+не предоставлял hwmon для IT8613E, хотя AIDA64 под Windows видела физический
+вентилятор (~3000-3900 RPM). После загрузки более нового внешнего it87 драйвер
+определил:
+
+  IT8613E at 0x0a30, revision 12
+
+и Linux создал hwmon с:
+
+  fan2_input = ~3000-3900 RPM
+  fan3_input = 0 RPM
+
+В этом Beelink fan2 является подтверждённым физическим вентилятором.
+fan3 — дополнительный tachometer input, экспортируемый Super I/O/драйвером;
+нулевое значение само по себе не доказывает наличие второго физического
+вентилятора.
+
+Начиная с 0.5.5 App подтверждает новый fan-канал только после двух
+последовательных положительных RPM-чтений. Подтверждённый вентилятор при
+последующем 0 RPM остаётся entity.
+
+Начиная с 0.5.6 unconfirmed fan-каналы просто не публикуются как RPM entities.
+App не удаляет MQTT entity только потому, что канал сейчас unconfirmed или
+показывает 0 RPM: это не является доказательством отсутствия физического
+вентилятора. Tombstone cleanup допустим только для отдельной достоверной
+migration/removal операции.
+
+Важно:
+
+- fan*_input отсутствует -> у dh_app_pve нет RPM-источника;
+- fan*_input > 0 -> канал подтверждает реально наблюдаемое вращение;
+- fan*_input = 0 не означает автоматически "канал лишний": настоящий
+  вентилятор может поддерживать fan-stop;
+- наличие pwm* также не доказывает, что к соответствующему tach-input
+  физически подключён вентилятор;
+- /sys/class/thermal/cooling_device* не является источником RPM для App.
+
+Безопасная read-only проверка:
+
+  for h in /sys/class/hwmon/hwmon*; do
+    [ -e "$h" ] || continue
+    echo "=== $h: $(cat "$h/name" 2>/dev/null) ==="
+    for f in "$h"/fan*_input; do
+      [ -r "$f" ] || continue
+      echo "$(basename "$f")=$(cat "$f")"
+    done
+  done
+
+Дополнительно можно посмотреть:
+
+  sensors
+  lsmod | grep -Ei 'it87|nct|coretemp|hwmon'
+  dmesg | grep -Ei 'it87|hwmon|fan'
+
+Не использовать для обычной диагностики fan RPM destructive/изменяющие
+железо инструменты вроде pwmconfig и не писать значения в pwm*/hwmon sysfs.
+
+Если RPM появился только после установки внешнего hwmon-драйвера, после
+обновления kernel обязательно повторно проверить, что модуль собран/загружен
+и fan*_input снова существует. Внешний драйвер — платформенная мера
+совместимости, а не часть dh_app_pve.
+
+Основные пути
+-------------
+
+App:
+  /opt/digitalhouses/dh_pve_app/
+
+Config:
+  /etc/dh_pve_app/dh_pve_app.conf
+
+State:
+  /var/lib/dh_pve_app/
+
+Systemd:
+  /etc/systemd/system/dh_pve_app.service
+
+Памятка:
+  /root/dh_app_pve.txt
+
+Удаление
+--------
+
+Обычное удаление сохраняет config/state:
+
+  /opt/digitalhouses/dh_pve_app/uninstall.sh
+
+Полное удаление config/state:
+
+  /opt/digitalhouses/dh_pve_app/uninstall.sh --purge
+
+Uninstall сначала выполняет MQTT cleanup. При ошибке cleanup локальная
+установка сохраняется.
+
+Важно
+-----
+
+Не выполнять для обычной проверки FSD, UPS load/output off или другие
+destructive UPS-команды. Для диагностики использовать read-only preflight.

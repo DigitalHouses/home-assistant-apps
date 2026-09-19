@@ -137,6 +137,15 @@ class AdaptiveGroup:
             self.profile = target_profile
 
         averages = self._averages()
+        current_continuous = self._current_values(continuous)
+        value_appeared = (
+            self._seen
+            and self._last_published_values is not None
+            and any(
+                key not in self._last_published_values
+                for key in current_continuous
+            )
+        )
 
         if first:
             self._seen = True
@@ -166,6 +175,17 @@ class AdaptiveGroup:
             values = self._combined(averages, discrete_values)
             self._mark_published(values)
             return GroupDecision(True, self.profile, "change", values, False)
+
+        if value_appeared:
+            values = self._combined(averages, discrete_values)
+            self._mark_published(values)
+            return GroupDecision(
+                True,
+                self.profile,
+                "value_appeared",
+                values,
+                False,
+            )
 
         elapsed = now - self._bucket_started_at
         if elapsed < self._effective_window():

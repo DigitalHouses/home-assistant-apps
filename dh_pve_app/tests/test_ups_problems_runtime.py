@@ -66,35 +66,30 @@ def _runtime(tmp_path, reader):
     return bridge, runtime
 
 
-def test_success_state_contains_python_problem_summary(tmp_path):
+def _assert_machine_only_summary(state, *, count, severity):
+    assert state["problems_count"] == count
+    assert state["problems_severity"] == severity
+    assert "problems" not in state
+    assert "problems_details" not in state
+
+
+def test_success_state_contains_machine_only_problem_summary(tmp_path):
     snapshot = parse_upsc_output("ups.status: OL\nbattery.charge: 100\n")
     bridge, runtime = _runtime(tmp_path, lambda config: snapshot)
 
     assert runtime.startup() is True
-    state = bridge.states[-1]
-
-    assert state["problems_count"] == 0
-    assert state["problems_severity"] == "ok"
-    assert state["problems"] == []
-    assert state["problems_details"] == "Проблем не обнаружено."
+    _assert_machine_only_summary(bridge.states[-1], count=0, severity="ok")
 
 
-def test_problem_state_contains_all_active_problems(tmp_path):
+def test_problem_state_counts_all_active_problems_without_text(tmp_path):
     snapshot = parse_upsc_output("ups.status: OB LB DISCHRG\n")
     bridge, runtime = _runtime(tmp_path, lambda config: snapshot)
 
     assert runtime.startup() is True
-    state = bridge.states[-1]
-
-    assert state["problems_count"] == 2
-    assert state["problems_severity"] == "critical"
-    assert state["problems"] == [
-        "ИБП работает от батареи.",
-        "Низкий заряд батареи.",
-    ]
+    _assert_machine_only_summary(bridge.states[-1], count=2, severity="critical")
 
 
-def test_nut_failure_still_publishes_critical_problem_summary(tmp_path):
+def test_nut_failure_still_publishes_critical_machine_summary(tmp_path):
     def reader(config):
         raise NutReadError("NUT недоступен")
 
@@ -104,6 +99,4 @@ def test_nut_failure_still_publishes_critical_problem_summary(tmp_path):
     state = bridge.states[-1]
 
     assert state["available"] is False
-    assert state["problems_count"] == 1
-    assert state["problems_severity"] == "critical"
-    assert state["problems"] == ["Данные ИБП через NUT недоступны."]
+    _assert_machine_only_summary(state, count=1, severity="critical")

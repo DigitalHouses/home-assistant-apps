@@ -2,7 +2,7 @@
 
 `dh_pve_app` is the DigitalHouses native Linux agent for Proxmox VE 8.x. It collects host, CPU, memory, storage, disk/SMART, GPU, fan and VM/LXC state, publishes Home Assistant entities through MQTT Discovery, and can monitor a locally attached UPS through Network UPS Tools (NUT).
 
-`VERSION` remains `0.3.0`; the current branch contains unreleased runtime/UPS architecture work described below.
+`VERSION` is `0.5.6`.
 
 MQTT base namespace: `DigitalHouses/Global/dh_pve_app/<instance>`.
 MQTT devices: `DH PVE` and optional `DH PVE UPS`.
@@ -34,6 +34,26 @@ The legacy `[ups] poll_interval_seconds` configuration key is accepted only for 
 
 Manual Refresh executes the relevant current-state collection immediately. Heavy HEALTH operations remain sequential rather than creating a parallel burst.
 
+## Fan RPM discovery
+
+Fan RPM acquisition reads Linux hwmon directly from `/sys/class/hwmon/hwmon*/fan*_input`; it does not add a `sensors`/vendor subprocess to the FAST loop.
+
+Every exported tachometer input starts as a candidate channel. A physical fan is confirmed after two consecutive valid `RPM > 0` FAST observations. Confirmed IDs are persisted separately so a real fan remains exposed after an App restart even when it is currently stopped at `0 RPM`. Unconfirmed zero-RPM channels remain internal candidates and do not create Home Assistant RPM entities.
+
+Stable fan identity uses the hwmon chip, resolved underlying device and fan channel rather than the volatile `hwmonN` directory number. The diagnostic fan summary reports confirmed `count` plus `candidate_count`, `confirmed_count` and `unconfirmed_count`.
+
+Unconfirmed fan candidates are omitted from normal MQTT Discovery. They are never tombstoned merely because they are still in debounce or currently report `0 RPM`: neither condition proves that a physical fan is absent. Explicit Device Discovery tombstones remain reserved for authoritative migrations/removals that are independent of live fan-presence inference.
+
+`pwm*` and `/sys/class/thermal/cooling_device*` are not used as proof of a physical fan or as RPM sources. The installed `/root/dh_app_pve.txt` guide contains generic read-only fan troubleshooting. Beelink/AZW driver installation, verification and rollback are documented separately in `hardware/beelink/README.md`.
+
+### Beelink / AZW IT8613E host profile
+
+For Beelink/AZW mini PCs that require the newer upstream `it87` driver to expose IT8613E fan RPM, use the repository-owned host profile in `hardware/beelink/`.
+
+The profile is intentionally separate from the generic App installer. It installs the pinned driver through the native Proxmox/Debian path — APT headers and DKMS, `depmod`, `modules-load.d` and `modprobe` — without replacing the stock Proxmox kernel module. It is idempotent, has a read-only `--check` mode, verifies `fan2_input` and the real `dh_pve_app` collector, and includes a symmetric uninstall path.
+
+See `hardware/beelink/README.md` for the standalone install/repair command, read-only `--check`, reboot handling and rollback. The profile is run explicitly from a reviewed repository ref/commit and must not be assumed to exist inside an older already-installed App release.
+
 ## MQTT presentation
 
 Collection and Home Assistant publication are separate concerns. Continuous telemetry is published through independent retained groups rather than one monolithic state object.
@@ -56,20 +76,72 @@ Legacy MQTT Discovery identities are removed through retained tombstones during 
 
 Problem calculation is App-owned. Home Assistant does not scan `states.sensor`, wildcard all entities, rebuild topology or calculate thresholds.
 
-Current problems are exposed as `binary_sensor` entities with `device_class: problem`. Aggregate problem state and compact presentation are separate sensors.
+Current problems are exposed as `binary_sensor` entities with `device_class: problem`. Aggregate problem state and compact presentation are separate retained sensors.
+
+The installed App release is exposed as diagnostic entity `sensor.dh_app_pve_app_version`. Its state comes from the same `VERSION` value used by MQTT Device Discovery `device.sw_version` and `origin.sw_version`. The standard PVE dashboard shows it in the host summary as `App <version>` and hides that segment if the entity is unavailable or unknown.
 
 Native MQTT Event entities are used for diagnostic transitions:
 
 - `event.dh_app_pve_diagnostic`;
 - `event.dh_app_pve_ups_diagnostic`.
 
-Problem event types are `problem_started`, `problem_recovered` and `problem_updated`. UPS policy changes also use `config_changed` with OLD and NEW values. Runtime Event messages are non-retained and are published after the synchronized metric/threshold/problem/current-state bundle.
+Generic PVE problem event types are `problem_started`, `problem_recovered` and `problem_updated`. UPS Event Discovery additionally accepts `config_changed`, `ups_status_changed`, `battery_discharge_level_crossed`, `battery_fully_charged` and `shutdown_committed`.
+
+New public App events use `schema_version: 2` and contain machine semantics only: IDs/enums, previous/current state, numeric values, thresholds, timestamps and reason codes. App event payloads do not generate notification `title`, `message`, `summary`, `details`, localized labels, emoji or `status_ru`. Runtime Event messages are non-retained, published with MQTT QoS 1 after the synchronized retained current-state bundle, and Home Assistant subscribes to the Event topics at QoS 1 through MQTT Discovery.
+
+The retained problem binaries and aggregate sensors are the authoritative current-state/reconciliation contract. Event entities describe what just happened; they are not used as retained state. Retryable UPS semantic events use a small persisted outbox so an MQTT publish failure does not silently advance semantic state past an undelivered Event.
+
+## UPS status, charger and battery semantics
+
+Canonical UPS status is derived from NUT tokens into stable machine states such as `online`, `on_battery`, `boost`, `trim`, `bypass`, `overload`, `low_battery` and `replace_battery`. Raw NUT status tokens remain available diagnostically.
+
+Canonical charger state is exposed as `sensor.dh_app_pve_ups_battery_charger_status` with machine values `charging`, `discharging`, `floating`, `resting`, `idle` or `unknown`. `battery.charger.status` has priority. `CHRG`/`DISCHRG` are charger fallback evidence only when a direct charger status is not available; a present but unknown direct value is not overridden by token fallback.
+
+Battery discharge notification milestones are fixed machine events at 90, 80, 70, 60, 50, 40, 30, 20 and 10 percent. They are independent from the configurable shutdown charge threshold. A large downward jump may report multiple crossed milestones in one Event, and persisted discharge-session state prevents duplicate milestones after restart.
+
+`battery_fully_charged` means an observed charge-cycle completion. It does not require `battery.charge == 100`. Direct `floating`/`resting` charger states complete an observed charging cycle immediately; legacy token-only devices use the guarded fallback implemented by the App.
+
+`shutdown_committed` is emitted only when the App's software shutdown helper has actually committed the configured shutdown path. Native NUT FSD remains a separate fact and does not by itself imply an App `shutdown_committed` Event.
+
+## Home Assistant notification layer
+
+App events contain machine semantics only. HA locale packages own notification wording, labels and emoji.
+
+Install exactly one notification locale:
+
+- English default/public package: `examples/packages/dh_app_pve_notification_package.yaml`;
+- Russian client package: `examples/packages/locales/ru/dh_app_pve_notification_package.yaml`.
+
+Both files are complete Home Assistant packages. They intentionally expose the same package key, automation IDs and machine contract, so only one may be installed in a Home Assistant instance. The English package is the canonical GitHub/default artifact. For a Russian installation, copy the RU file into the Home Assistant packages directory under the normal installed filename `dh_app_pve_notification_package.yaml`.
+
+**Upgrade order for 0.5.0:** install/update the HA v1+v2-compatible notification package before deploying `dh_pve_app` 0.5.0. The App does not dual-publish v1 and v2. The HA package temporarily retains an explicit schema-v1 fallback while all new App machine events use schema v2.
+
+Live notifications are event-driven:
+
+```text
+App machine event
+-> MQTT diagnostic Event (QoS 1, retain=false)
+-> event.dh_app_pve_diagnostic / event.dh_app_pve_ups_diagnostic
+-> HA event.received automation
+-> dh_app_pve_notification
+```
+
+Live delivery is gated by `binary_sensor.bs_global_system_boot_completed`. If HAOS was offline when a transition happened, no old Event is replayed as a new transition. When the boot gate becomes `on`, startup reconciliation reads only the retained aggregate sensors:
+
+- `sensor.dh_app_pve_problems`;
+- `sensor.dh_app_pve_ups_problems`.
+
+This gives the notification layer two complementary contracts: Events for live facts and retained aggregates for current-state recovery after HAOS downtime/reconnect. Problem `binary_sensor` entities remain available for UI and user automations, but the reusable live notification path does not infer transitions from their state changes.
+
+For schema v2, both language packages derive presentation from structured machine fields such as `event_type`, `category`, `severity`, `object_id`, `object_name`, `metric`, `previous`, `current`, canonical status lists, crossed battery thresholds, charge/runtime values, shutdown reason/budget and config OLD/NEW values. `summary`/`details` remain only in the explicit schema-v1 migration fallback. Both packages emit the same transport-neutral Home Assistant event `dh_app_pve_notification`; they differ only in human-readable `title` and `message` presentation.
+
+The reusable package intentionally does not call `script.write2log`, Telegram, a specific `notify.mobile_app` service or any customer-specific target. A site-local adapter may listen for `dh_app_pve_notification` and deliver its already-formatted `title`/`message` through the site's preferred transport.
 
 ## Recorder
 
 Recorder configuration is an explicit whitelist. Continuous history is kept only for useful metrics such as CPU, RAM/Swap, fan RPM, storage usage, disk temperature/wear, GPU telemetry and selected UPS telemetry/status.
 
-Rich presentation, debug diagnostics and MQTT Event entities are intentionally not Recorder history.
+Rich presentation, debug diagnostics, the static `sensor.dh_app_pve_app_version` metadata entity and MQTT Event entities are intentionally not Recorder history.
 
 ## UPS / NUT ownership
 
@@ -117,6 +189,8 @@ The UPS trigger controls are MQTT Discovery configuration entities:
 - `button.dh_app_pve_ups_apply_trigger_policy`.
 
 Changing a number changes only the draft. It does **not** change the active shutdown policy.
+
+The reusable presentation package `examples/packages/dh_app_pve_ui_package.yaml` and `examples/dh_app_pve_ups_dashboard.yaml` implement a VIEW -> EDIT -> CONFIRM -> APPLY workflow. `sensor.dh_app_pve_ups_trigger_policy` is the read-only committed-policy presentation entity; draft `number` entities are never shown as if they were active values. Opening the editor snapshots committed values, Cancel restores the draft, and a successful `config_changed` Event closes the editor back to VIEW.
 
 A real Apply is a durable transaction:
 
@@ -171,16 +245,66 @@ Preflight checks the selected UPS, NUT services/PRIMARY path, native Low Battery
 
 ## Installation / update
 
-The installer deploys the App code, fixed helper and systemd unit. It preserves existing configuration/state where appropriate and does not silently execute destructive UPS commissioning.
+The installer deploys the App code, fixed helper and systemd unit. It preserves existing configuration/state where appropriate and does not silently execute destructive UPS commissioning. On first install it validates the MQTT port, collects host/port/username/password interactively, shows a password-safe summary and writes the configuration only after explicit `y/yes` confirmation.
+
+If upgrading from a release older than 0.5.0, complete the 0.5.0 Event-contract migration first: update the HA notification package, reload/restart Home Assistant and verify there are no package/template errors before deploying the reviewed App SHA.
 
 For a reviewed ref/commit:
 
 ```bash
 REF=<reviewed-ref-or-sha>
-bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$REF/dh_pve_app/install.sh")
+DIGITALHOUSES_SOURCE_REF="$REF" bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$REF/dh_pve_app/install.sh")
 ```
 
-After deployment verify the exact installed version/ref, service state, MQTT availability and read-only preflight before any UPS shutdown commissioning.
+When `DIGITALHOUSES_SOURCE_REF` is an exact 40-character commit SHA, the installer fetches the immutable source archive through GitHub codeload instead of requiring a `github.com` Git clone.
+
+After deployment verify the exact installed version/ref, service state, MQTT availability, canonical charger-status entity, expanded UPS Event metadata and read-only preflight before any UPS shutdown commissioning.
+
+## Installed operational guide
+
+After a successful install/update, the installer writes a short operational
+reference to:
+
+```text
+/root/dh_app_pve.txt
+```
+
+The canonical guide is stored in the repository as
+`dh_pve_app/dh_app_pve.txt`. The installed copy is regenerated on every
+successful update and is prefixed with the actual installed `version`,
+`source` and `commit`.
+
+The guide contains the normal install/update commands, service/log/config
+commands, read-only UPS preflight, important paths and supported uninstall
+commands. Supported uninstall removes the root guide after successful MQTT
+cleanup so a stale reference is not left behind.
+
+## Supported uninstall
+
+The installer deploys an executable supported uninstaller at:
+
+```bash
+/opt/digitalhouses/dh_pve_app/uninstall.sh
+```
+
+A normal uninstall records the service state and stops the service gracefully, then runs MQTT cleanup while the installed Python environment and source are still present. Only after cleanup succeeds does it disable/remove the unit and App runtime. The cleanup publishes canonical PVE and UPS availability as retained `offline`, then removes canonical and legacy PVE/UPS MQTT Discovery through retained tombstones. It preserves:
+
+- `/etc/dh_pve_app/`;
+- `/var/lib/dh_pve_app/`.
+
+This keeps configuration, identity and persistent state available for a later reinstall.
+
+Full removal is explicit:
+
+```bash
+/opt/digitalhouses/dh_pve_app/uninstall.sh --purge
+```
+
+`uninstall.sh --purge` performs the same MQTT cleanup first, then additionally deletes `/etc/dh_pve_app/` and `/var/lib/dh_pve_app/`.
+
+If MQTT cleanup fails, uninstall aborts with a non-zero status and does not remove the unit, App files, configuration or state. If `dh_pve_app.service` was active before uninstall, it is started again.
+
+Uninstall does not modify NUT configuration/services, does not issue FSD or UPS output/load commands, does not remove shared OS dependencies, and does not modify Home Assistant or the MQTT broker.
 
 ## Safety boundary
 

@@ -39,17 +39,58 @@ def test_ups_dashboard_uses_app_owned_problem_state():
     ):
         assert entity_id in text
 
+    # Conditional cards are presentation-only in Trigger v2. Problem decisions
+    # still come from App-owned entities; HA must not scan entity registries or
+    # rebuild the problem engine locally.
     assert "states.binary_sensor" not in text
-    assert "type: conditional" not in text
+    assert "custom:auto-entities" not in text
 
 
-def test_ups_dashboard_keeps_current_shutdown_policy_observation_read_only():
+def test_ups_dashboard_keeps_nut_observation_and_uses_trigger_v2_policy_view():
     text = _text()
 
     assert "sensor.dh_app_pve_ups_shutdown_policy" in text
-    assert "sensor.dh_app_pve_ups_policy_on_battery_delay" in text
     assert "sensor.dh_app_pve_ups_policy_power_restore_delay" in text
+    assert "sensor.dh_app_pve_ups_policy_on_battery_delay" not in text
+    assert "Config UPS trigger" in text
     assert "button.dh_app_pve_ups_apply_policy" not in text
+
+
+def test_ups_dashboard_has_permanent_app_owned_line_power_monthly_statistics():
+    text = _text()
+
+    for entity_id in (
+        "binary_sensor.dh_app_pve_ups_line_power",
+        "sensor.dh_app_pve_ups_line_power_online_month",
+        "sensor.dh_app_pve_ups_line_power_offline_month",
+        "sensor.dh_app_pve_ups_line_power_outages_month",
+        "sensor.dh_app_pve_ups_line_power_availability_month",
+        "sensor.dh_app_pve_ups_line_power_current_outage_started",
+    ):
+        assert entity_id in text
+
+    for label in (
+        "Городская сеть работает",
+        "Городская сеть отсутствует",
+        "Состояние городской сети неизвестно",
+        "Статистика за",
+        "Свет был",
+        "Света не было",
+        "Отключений",
+        "Доступность",
+    ):
+        assert label in text
+
+    # The month title/partial-month note come from App metadata. HA only formats
+    # ready state; it must not reconstruct monthly accounting from history.
+    assert "month_label_ru" in text
+    assert "partial_month" in text
+    assert "tracking_since" in text
+    assert "history_stats" not in text
+    assert "recorder" not in text.casefold()
+
+    monthly = text.split("Статистика за", 1)[1]
+    assert "type: conditional" not in monthly.split("heading: UPS Shutdown Trigger", 1)[0]
 
 
 def test_ups_dashboard_contains_no_legacy_public_entity_ids():
