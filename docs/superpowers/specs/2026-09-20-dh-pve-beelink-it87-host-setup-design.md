@@ -56,7 +56,7 @@ The installer uses:
 
 - APT for `dkms`, build tools and Proxmox headers;
 - `/usr/src/it87-<version>` for DKMS source;
-- DKMS add/build/install for the running kernel;
+- DKMS registration plus build/install for every installed PVE kernel that has a matching headers tree, including the running kernel and any already-installed next boot kernel;
 - `depmod` for module dependency resolution;
 - `/etc/modules-load.d/digitalhouses-beelink-it87.conf` for boot autoload;
 - normal `modprobe it87` for activation.
@@ -91,7 +91,8 @@ A repeated install:
 
 - revalidates the host;
 - repairs required packages and source files;
-- preserves a matching installed DKMS build;
+- discovers every installed PVE kernel with matching headers and ensures the pinned DKMS build is installed for each one before reboot;
+- preserves matching installed DKMS builds;
 - repairs the autoload file;
 - activates the module only when it is not already loaded.
 
@@ -104,8 +105,8 @@ that one reboot is required.
 `install.sh --check` performs no writes. It validates:
 
 - host identity;
-- current-kernel headers;
-- DKMS status;
+- running-kernel headers and the installed PVE kernel/header set;
+- DKMS status for every discovered target kernel;
 - modprobe resolution;
 - autoload configuration;
 - loaded module version;
