@@ -234,7 +234,7 @@ prepare_source() {
     download_one "Makefile" "${MAKEFILE_SHA}" "$stage/Makefile"
     download_one "dkms.conf" "${DKMS_CONF_SHA}" "$stage/dkms.conf"
 
-    sed -i         's/^PACKAGE_VERSION=.*/PACKAGE_VERSION="'"\${IT87_VERSION}"'"/'         "$stage/dkms.conf"
+    sed -i "s/^PACKAGE_VERSION=.*/PACKAGE_VERSION=\\"${IT87_VERSION}\\"/" "$stage/dkms.conf"
     printf '%s\n' "${IT87_VERSION}" >"$stage/VERSION"
 
     grep -Fx 'PACKAGE_NAME="it87"' "$stage/dkms.conf" >/dev/null
@@ -254,12 +254,12 @@ install_dkms() {
     install -m 0644 "$stage/dkms.conf" "${DKMS_SOURCE}/dkms.conf"
     install -m 0644 "$stage/VERSION" "${DKMS_SOURCE}/VERSION"
 
-    cat >"${DKMS_SOURCE}/DIGITALHOUSES_SOURCE" <<EOF
-profile=${PROFILE_NAME}
-upstream=${IT87_RAW_BASE}
-commit=${IT87_COMMIT}
-version=${IT87_VERSION}
-EOF
+    printf 'profile=%s\\nupstream=%s\\ncommit=%s\\nversion=%s\\n' \
+        "${PROFILE_NAME}" \
+        "${IT87_RAW_BASE}" \
+        "${IT87_COMMIT}" \
+        "${IT87_VERSION}" \
+        >"${DKMS_SOURCE}/DIGITALHOUSES_SOURCE"
 
     status="$(dkms_status_text)"
     if [[ -z "$status" ]]; then
