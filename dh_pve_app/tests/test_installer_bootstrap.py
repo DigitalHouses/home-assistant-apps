@@ -21,3 +21,12 @@ def test_installer_repairs_existing_venv_when_pip_is_missing():
 
     assert '"${APP_DIR}/.venv/bin/python" -m pip --version' in text
     assert 'python3 -m venv --clear "${APP_DIR}/.venv"' in text
+
+
+def test_installer_uses_codeload_for_exact_commit_without_git_clone():
+    text = _installer_text()
+
+    assert '[[ "${SOURCE_REF}" =~ ^[0-9a-fA-F]{40}$ ]]' in text
+    assert 'https://codeload.github.com/DigitalHouses/home-assistant-apps/tar.gz/${SOURCE_REF}' in text
+    assert 'tar -xzf "${archive}" --strip-components=1 -C "${tmp_dir}/repo"' in text
+    assert 'SOURCE_SHA="${SOURCE_REF}"' in text
