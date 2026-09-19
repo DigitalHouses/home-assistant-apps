@@ -30,7 +30,7 @@ if [[ ! -r /etc/machine-id ]]; then
 fi
 
 need_apt=0
-for command_name in git python3 smartctl lspci dmidecode; do
+for command_name in git curl tar python3 smartctl lspci dmidecode; do
     command -v "${command_name}" >/dev/null 2>&1 || need_apt=1
 done
 if ! dpkg-query -W -f='${Status}\n' python3-venv 2>/dev/null \
@@ -43,6 +43,8 @@ if [[ "${need_apt}" -eq 1 ]]; then
     DEBIAN_FRONTEND=noninteractive apt-get install -y \
         ca-certificates \
         git \
+        curl \
+        tar \
         python3 \
         python3-venv \
         smartmontools \
@@ -61,11 +63,29 @@ cleanup() {
 trap cleanup EXIT
 
 echo "Получение DigitalHouses source ref: ${SOURCE_REF}"
-git clone --quiet --filter=blob:none --no-checkout "${REPO_URL}" "${tmp_dir}/repo"
-git -C "${tmp_dir}/repo" fetch --quiet --depth 1 origin "${SOURCE_REF}"
-git -C "${tmp_dir}/repo" checkout --quiet --detach FETCH_HEAD
 
-SOURCE_SHA="$(git -C "${tmp_dir}/repo" rev-parse HEAD)"
+if [[ "${SOURCE_REF}" =~ ^[0-9a-fA-F]{40}$ ]]; then
+    archive="${tmp_dir}/source.tar.gz"
+    install -d -m 0755 "${tmp_dir}/repo"
+
+    echo "Используется immutable codeload archive для exact SHA."
+    curl -fsSL \
+        --retry 3 \
+        --retry-delay 2 \
+        --connect-timeout 10 \
+        --max-time 120 \
+        "https://codeload.github.com/DigitalHouses/home-assistant-apps/tar.gz/${SOURCE_REF}" \
+        -o "${archive}"
+
+    tar -xzf "${archive}" --strip-components=1 -C "${tmp_dir}/repo"
+    SOURCE_SHA="${SOURCE_REF}"
+else
+    git clone --quiet --filter=blob:none --no-checkout "${REPO_URL}" "${tmp_dir}/repo"
+    git -C "${tmp_dir}/repo" fetch --quiet --depth 1 origin "${SOURCE_REF}"
+    git -C "${tmp_dir}/repo" checkout --quiet --detach FETCH_HEAD
+    SOURCE_SHA="$(git -C "${tmp_dir}/repo" rev-parse HEAD)"
+fi
+
 SOURCE_APP="${tmp_dir}/repo/${APP_NAME}"
 
 if [[ ! -f "${SOURCE_APP}/VERSION" ]]; then
