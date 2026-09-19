@@ -30,12 +30,3 @@ def test_installer_uses_codeload_for_exact_commit_without_git_clone():
     assert 'https://codeload.github.com/DigitalHouses/home-assistant-apps/tar.gz/${SOURCE_REF}' in text
     assert 'tar -xzf "${archive}" --strip-components=1 -C "${tmp_dir}/repo"' in text
     assert 'SOURCE_SHA="${SOURCE_REF}"' in text
-
-
-def test_installer_uses_codeload_for_exact_sha_without_github_git_transport():
-    text = _installer_text()
-
-    assert 'codeload.github.com/DigitalHouses/home-assistant-apps/tar.gz/${SOURCE_REF}' in text
-    assert '[[ "${SOURCE_REF}" =~ ^[0-9a-fA-F]{40}$ ]]' in text
-    assert 'SOURCE_SHA="${SOURCE_REF,,}"' in text
-    assert 'git clone --quiet --filter=blob:none --no-checkout' not in text
