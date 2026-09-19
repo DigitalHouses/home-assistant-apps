@@ -158,7 +158,7 @@ def test_pve_discovery_routes_entities_to_smallest_state_group():
     )
 
 
-def test_unconfirmed_fan_candidate_emits_device_discovery_tombstone():
+def test_unconfirmed_fan_candidate_is_omitted_not_tombstoned():
     inventory = _inventory()
     inventory["fans"] = {
         "detected": True,
@@ -180,13 +180,33 @@ def test_unconfirmed_fan_candidate_emits_device_discovery_tombstone():
     }
 
     components = build_shutdown_aware_pve_discovery_payload(
-        _config(), _identity(), version="0.5.5", inventory=inventory
+        _config(), _identity(), version="0.5.6", inventory=inventory
     )["components"]
 
     assert "fan_it8613_it87_2608_fan2_rpm" in components
-    assert components["fan_it8613_it87_2608_fan3_rpm"] == {
-        "platform": "sensor"
+    assert "fan_it8613_it87_2608_fan3_rpm" not in components
+
+
+def test_first_positive_fan_debounce_does_not_emit_tombstone():
+    inventory = _inventory()
+    inventory["fans"] = {
+        "detected": False,
+        "count": 0,
+        "candidate_count": 2,
+        "confirmed_count": 0,
+        "unconfirmed_count": 2,
+        "candidate_ids": [
+            "it8613_it87_2608_fan2",
+            "it8613_it87_2608_fan3",
+        ],
     }
+
+    components = build_shutdown_aware_pve_discovery_payload(
+        _config(), _identity(), version="0.5.6", inventory=inventory
+    )["components"]
+
+    assert "fan_it8613_it87_2608_fan2_rpm" not in components
+    assert "fan_it8613_it87_2608_fan3_rpm" not in components
 
 
 def test_pve_discovery_exposes_presentation_diagnostics():
