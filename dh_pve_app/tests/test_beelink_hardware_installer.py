@@ -149,3 +149,11 @@ def test_beelink_installer_builds_for_all_installed_pve_kernels_with_headers():
     assert 'for target_kernel in "${TARGET_KERNELS[@]}"' in text
     assert 'dkms build -m it87 -v "${IT87_VERSION}" -k "$target_kernel"' in text
     assert 'dkms install -m it87 -v "${IT87_VERSION}" -k "$target_kernel"' in text
+
+
+def test_beelink_installer_ignores_installed_kernels_older_than_running_kernel():
+    text = _text(INSTALLER)
+
+    assert 'running_version="${KERNEL%-pve}"' in text
+    assert 'candidate_version="${target%-pve}"' in text
+    assert 'dpkg --compare-versions "$candidate_version" ge "$running_version"' in text
