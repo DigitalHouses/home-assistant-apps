@@ -98,17 +98,23 @@ Read-only UPS preflight
 и делает RPM вентилятора доступными Linux hwmon.
 
 Этот профиль намеренно НЕ запускается автоматически основным install.sh.
-Его нужно запускать отдельно только на Beelink/AZW:
+Его нужно запускать отдельно только на Beelink/AZW.
 
-  /opt/digitalhouses/dh_pve_app/hardware/beelink/install.sh
+ВАЖНО: hardware-profile может отсутствовать в каталоге уже установленной старой
+версии dh_pve_app. Поэтому для standalone-запуска используйте проверенный
+GitHub ref/commit профиля, а не наличие локального файла.
 
-Повторный запуск безопасен и используется также для repair:
+Установка / repair профиля:
 
-  /opt/digitalhouses/dh_pve_app/hardware/beelink/install.sh
+  PROFILE_REF=<reviewed-ref-or-sha>
+  bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$PROFILE_REF/dh_pve_app/hardware/beelink/install.sh")
+
+Повторный запуск безопасен и используется также для repair.
 
 Read-only проверка уже установленного профиля:
 
-  /opt/digitalhouses/dh_pve_app/hardware/beelink/install.sh --check
+  PROFILE_REF=<reviewed-ref-or-sha>
+  bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$PROFILE_REF/dh_pve_app/hardware/beelink/install.sh") --check
 
 Успешная проверка заканчивается строкой:
 
@@ -122,7 +128,8 @@ Read-only проверка уже установленного профиля:
 
 Удалить только Beelink hardware-profile и вернуть штатный Proxmox it87:
 
-  /opt/digitalhouses/dh_pve_app/hardware/beelink/uninstall.sh
+  PROFILE_REF=<reviewed-ref-or-sha>
+  bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$PROFILE_REF/dh_pve_app/hardware/beelink/uninstall.sh")
 
 После uninstall может потребоваться reboot, потому что уже загруженный
 kernel-модуль намеренно не выгружается из работающей системы.
