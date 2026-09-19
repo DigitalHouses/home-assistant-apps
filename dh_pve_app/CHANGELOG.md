@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.5.6
+
+- Fix the 0.5.5 fan Discovery regression where the first positive FAST sample was still unconfirmed and could therefore tombstone a real fan before the two-sample confirmation completed.
+- Never derive MQTT Device Discovery component removal from the live set of unconfirmed hwmon candidates. Unconfirmed fan channels are omitted from normal Discovery instead of being published as tombstones.
+- Preserve the existing two-consecutive-`RPM > 0` confirmation, persistent confirmed fan IDs and valid `0 RPM` semantics for already confirmed fans.
+- Keep explicit Device Discovery tombstones available for authoritative migrations/removals, but do not infer physical fan absence from `0 RPM` or debounce state.
+- Existing Home Assistant registry damage caused by the 0.5.5 remove/re-add race is treated as a one-time recovery problem; normal 0.5.6 runtime does not edit Home Assistant registry state.
+
 ## 0.5.5
 
 - Make fan RPM discovery conservative while keeping FAST acquisition zero-subprocess: raw `/sys/class/hwmon/hwmon*/fan*_input` channels are candidates, and a physical fan is exposed only after two consecutive valid `RPM > 0` observations.
