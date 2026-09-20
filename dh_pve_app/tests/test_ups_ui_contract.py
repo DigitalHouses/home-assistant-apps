@@ -93,6 +93,17 @@ def test_ups_dashboard_has_permanent_app_owned_line_power_monthly_statistics():
     assert "type: conditional" not in monthly.split("heading: UPS Shutdown Trigger", 1)[0]
 
 
+def test_ups_dashboard_handles_unconfigured_ups_as_normal_optional_state():
+    text = _text()
+
+    assert "binary_sensor.dh_app_pve_ups_configured" in text
+    assert "ИБП не настроен" in text
+    assert "Мониторинг UPS на этом сервере не настроен" in text
+    assert "state: \"off\"" in text
+    assert "state: \"on\"" in text
+    assert text.count("binary_sensor.dh_app_pve_ups_configured") >= 2
+
+
 def test_ups_dashboard_contains_no_legacy_public_entity_ids():
     text = _text()
 
