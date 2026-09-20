@@ -48,6 +48,8 @@ GitHub is the source of truth for reusable DigitalHouses application code and re
 
 Each product owns its implementation, tests, compatibility contract, and release version. Repository-level validation enforces the common DigitalHouses application contract and dispatches type-specific and product-specific checks.
 
+See [CONTRIBUTING.md](.github/CONTRIBUTING.md) for contribution workflow and [SECURITY.md](.github/SECURITY.md) for responsible vulnerability reporting.
+
 ## Support
 
 DigitalHouses projects are developed independently and provided free of charge.
@@ -58,4 +60,4 @@ Support is optional. Public features remain available to everyone.
 
 ## License
 
-DigitalHouses source code is licensed under the [MIT License](LICENSE). Third-party software retains its own license terms.
+DigitalHouses source code is licensed under the [MIT License](LICENSE). Third-party software retains their own license terms.

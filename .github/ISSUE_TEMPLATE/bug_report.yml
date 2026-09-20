@@ -1,0 +1,81 @@
+name: Bug report
+description: Report a reproducible problem in a DigitalHouses product
+title: "[Bug] "
+labels: []
+body:
+  - type: dropdown
+    id: product
+    attributes:
+      label: Product
+      description: Which DigitalHouses component is affected?
+      options:
+        - DigitalHouses PVE Agent
+        - DigitalHouses Plex Agent
+        - DigitalHouses Recorder App
+        - DigitalHouses Speedtest App
+        - Repository tooling / CI
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Product version or commit SHA, if known.
+      placeholder: "e.g. 0.5.6 or a full commit SHA"
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Home Assistant version and relevant host/platform version.
+      placeholder: "e.g. Home Assistant 2026.x; Proxmox VE 8.x; Debian 12"
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Describe what happened and when.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Provide the smallest repeatable sequence that triggers the problem.
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should have happened instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Paste only the relevant excerpt. Remove secrets, tokens, credentials, and personal data.
+      render: text
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I removed credentials, tokens, personal data, and other sensitive information.
+          required: true
+        - label: I checked the current product documentation and existing issues.
+          required: true

@@ -1,0 +1,48 @@
+name: Feature request
+description: Propose an improvement to a DigitalHouses product
+title: "[Feature] "
+labels: []
+body:
+  - type: dropdown
+    id: product
+    attributes:
+      label: Product
+      description: Which DigitalHouses component should change?
+      options:
+        - DigitalHouses PVE Agent
+        - DigitalHouses Plex Agent
+        - DigitalHouses Recorder App
+        - DigitalHouses Speedtest App
+        - Repository-wide standard / tooling
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: Describe the user problem rather than only the proposed implementation.
+    validations:
+      required: true
+
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: What should the product do?
+    validations:
+      required: true
+
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Constraints or alternatives
+      description: Note compatibility requirements, rejected alternatives, or deployment constraints if relevant.
+
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope check
+      options:
+        - label: I checked that this is not already covered by an existing issue or documented feature.
+          required: true
