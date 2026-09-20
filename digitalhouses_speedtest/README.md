@@ -1,6 +1,12 @@
-# DigitalHouses Speedtest + Internet Monitoring
+# DigitalHouses Speedtest App
 
-Home Assistant internet monitoring with Ookla Speedtest, availability statistics and optional automatic ONT/router recovery.
+[![CI](https://github.com/DigitalHouses/home-assistant-apps/actions/workflows/validate.yml/badge.svg)](https://github.com/DigitalHouses/home-assistant-apps/actions/workflows/validate.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](../LICENSE)
+![Type: Home Assistant App](https://img.shields.io/badge/type-Home%20Assistant%20App-41BDF5.svg)
+
+Home Assistant App for Internet availability, official Ookla Speedtest measurements, quality thresholds, outage statistics and optional ONT/router recovery.
+
+[English quick start](#english--quick-start) · [Русский быстрый старт](#русский--быстрый-старт) · [Technical documentation](DOCS.md) · [Changelog](CHANGELOG.md) · [Issues](https://github.com/DigitalHouses/home-assistant-apps/issues)
 
 ![DigitalHouses Internet dashboard](images/internet-dashboard.png)
 
@@ -116,3 +122,10 @@ dh_router_package.yaml                   # router traffic / Router dashboard
 ```
 
 Телеметрия конкретного роутера и локальные скрипты уведомлений не являются зависимостями публичного Internet package.
+
+
+## Support and license
+
+Report reproducible bugs or feature requests through the repository [Issues](https://github.com/DigitalHouses/home-assistant-apps/issues). Security-sensitive reports follow the repository [security policy](../.github/SECURITY.md).
+
+DigitalHouses Speedtest App is provided under the repository [MIT License](../LICENSE).
