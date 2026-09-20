@@ -101,6 +101,7 @@ def build_runtime(
     *,
     state_dir: Path = DEFAULT_STATE_DIR,
     shutdown_history_tracker: ShutdownHistoryTracker | None = None,
+    ups_configured: bool = False,
 ):
     identity = resolve_identity(config.general)
     topics = build_topics(config.mqtt, identity)
@@ -156,6 +157,7 @@ def build_runtime(
         slow_tasks=("guests", "storage", "gpu", "disk_temperature"),
         version_probe=pve_version_fingerprint,
         app_version=version,
+        ups_configured=ups_configured,
     )
     return bridge, runtime
 
@@ -264,16 +266,18 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
             exc,
         )
 
+    scanner = build_ups_scanner(config, state_dir=state_dir)
+    selected_ups_name = scanner.selected_name()
     bridge, runtime = build_runtime(
         config,
         state_dir=state_dir,
         shutdown_history_tracker=shutdown_history_tracker,
+        ups_configured=selected_ups_name is not None,
     )
-    scanner = build_ups_scanner(config, state_dir=state_dir)
     ups_runtime = build_ups_runtime(
         config,
         bridge,
-        selected_name=scanner.selected_name(),
+        selected_name=selected_ups_name,
         state_dir=state_dir,
         shutdown_history_tracker=shutdown_history_tracker,
     )
@@ -324,6 +328,8 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
                     log.info("Сканирование UPS: %s", outcome.result)
 
                     if outcome.selected_name is not None:
+                        if not runtime.set_ups_configured(True):
+                            log.warning("Не удалось опубликовать факт настройки UPS")
                         if ups_runtime is None or outcome.selection_changed:
                             ups_runtime = build_ups_runtime(
                                 config,
