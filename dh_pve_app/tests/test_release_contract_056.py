@@ -2,7 +2,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 APP = ROOT / "dh_pve_app"
-VALIDATOR = ROOT / "scripts" / "validators" / "apps" / "dh_pve_app.py"
+VALIDATOR = ROOT / "scripts" / "validators" / "products" / "pve_agent.py"
 
 
 def test_056_version_and_repository_validator_contract():

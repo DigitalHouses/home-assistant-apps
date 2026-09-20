@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3, NUT/upsc, Paho MQTT, Home Assistant MQTT Device Discovery/Event entities, YAML/Jinja HA packages, pytest, GitHub Actions.
 
-**Spec:** `docs/superpowers/specs/2026-09-17-dh-pve-machine-events-ups-battery-design.md`
+**Spec:** `docs/digitalhouses_pve_agent/specs/2026-09-17-dh-pve-machine-events-ups-battery-design.md`
 
 ## Global Constraints
 

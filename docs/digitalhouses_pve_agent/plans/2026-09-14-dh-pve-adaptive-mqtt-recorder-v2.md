@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3.13, pytest, paho-mqtt, Home Assistant MQTT Device Discovery, GitHub Actions.
 
-**Spec:** `docs/superpowers/specs/2026-09-14-dh-pve-adaptive-mqtt-recorder-v2-design.md`
+**Spec:** `docs/digitalhouses_pve_agent/specs/2026-09-14-dh-pve-adaptive-mqtt-recorder-v2-design.md`
 
 ## Global Constraints
 

@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3, Paho MQTT, Home Assistant MQTT Device Discovery, Bash, systemd, pytest, repository validators, GitHub Actions.
 
-**Spec:** `docs/superpowers/specs/2026-09-18-dh-pve-version-sensor-uninstall-design.md`
+**Spec:** `docs/digitalhouses_pve_agent/specs/2026-09-18-dh-pve-version-sensor-uninstall-design.md`
 
 ## Global Constraints
 

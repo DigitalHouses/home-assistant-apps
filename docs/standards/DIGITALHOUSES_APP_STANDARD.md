@@ -114,24 +114,22 @@ home-assistant-apps/
 ├── .github/
 │   └── workflows/
 ├── docs/
-│   └── DIGITALHOUSES_APP_STANDARD.md
+│   ├── README.md
+│   ├── standards/
+│   └── <product engineering records>/
 ├── scripts/
 │   ├── validate_repository.py
 │   └── validators/
 │       ├── common.py
 │       ├── types/
-│       │   ├── haos_addon.py
+│       │   ├── haos_app.py
 │       │   └── linux_agent.py
-│       └── apps/
-│           ├── speedtest.py
-│           ├── db_monitoring.py
-│           └── plex_monitoring.py
-├── templates/
-│   ├── haos_addon/
-│   └── linux_agent/
-├── digitalhouses_speedtest/
-├── digitalhouses_db_monitoring/
-├── digitalhouses_plex_monitoring/
+│       └── products/
+│           ├── pve_agent.py
+│           ├── plex_agent.py
+│           ├── recorder_app.py
+│           └── speedtest_app.py
+├── <DigitalHouses application directories>/
 ├── repository.yaml
 ├── README.md
 └── LICENSE
@@ -1015,12 +1013,13 @@ scripts/
 └── validators/
     ├── common.py
     ├── types/
-    │   ├── haos_addon.py
+    │   ├── haos_app.py
     │   └── linux_agent.py
-    └── apps/
-        ├── speedtest.py
-        ├── db_monitoring.py
-        └── plex_monitoring.py
+    └── products/
+        ├── pve_agent.py
+        ├── plex_agent.py
+        ├── recorder_app.py
+        └── speedtest_app.py
 ```
 
 Responsibilities:
@@ -1034,7 +1033,7 @@ Responsibilities:
 - generic metadata parsing;
 - common documentation checks.
 
-### `types/haos_addon.py`
+### `types/haos_app.py`
 
 - `config.yaml`;
 - Dockerfile;
@@ -1056,7 +1055,7 @@ Responsibilities:
 - systemd naming;
 - Linux-agent version contract.
 
-### `apps/*.py`
+### `products/*.py`
 
 Stable application-specific interfaces.
 

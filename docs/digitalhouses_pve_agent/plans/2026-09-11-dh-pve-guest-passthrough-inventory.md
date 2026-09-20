@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3, Proxmox CLI (`qm`, `pct`, `lspci`), QEMU Guest Agent (`qm guest exec`, `qm agent`), smartmontools JSON, Home Assistant MQTT Device Discovery, pytest.
 
-**Spec:** `docs/superpowers/specs/2026-09-11-dh-pve-guest-passthrough-inventory-design.md`
+**Spec:** `docs/digitalhouses_pve_agent/specs/2026-09-11-dh-pve-guest-passthrough-inventory-design.md`
 
 ## Global Constraints
 

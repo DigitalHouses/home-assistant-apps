@@ -5,10 +5,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from validators.apps.db_monitoring import validate_db_monitoring
-from validators.apps.dh_pve_app import validate_dh_pve_app
-from validators.apps.plex_monitoring import validate_plex_monitoring
-from validators.apps.speedtest import validate_speedtest
+from validators.products.recorder_app import validate_db_monitoring
+from validators.products.pve_agent import validate_dh_pve_app
+from validators.products.plex_agent import validate_plex_monitoring
+from validators.products.speedtest_app import validate_speedtest
 from validators.common import (
     ValidationError,
     discover_applications,
@@ -16,7 +16,7 @@ from validators.common import (
     require_files,
     validate_common,
 )
-from validators.types.haos_addon import validate_haos_addon
+from validators.types.haos_app import validate_haos_addon
 from validators.types.linux_agent import validate_linux_agent
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -26,7 +26,7 @@ TYPE_VALIDATORS = {
     "linux_agent": validate_linux_agent,
 }
 
-APP_VALIDATORS = {
+PRODUCT_VALIDATORS = {
     "digitalhouses_speedtest": validate_speedtest,
     "digitalhouses_db_monitoring": validate_db_monitoring,
     "digitalhouses_plex_monitoring": validate_plex_monitoring,
@@ -41,7 +41,7 @@ def validate_repository(root: Path = ROOT) -> list[dict[str, str]]:
             root / "repository.yaml",
             root / "README.md",
             root / "LICENSE",
-            root / "docs/DIGITALHOUSES_APP_STANDARD.md",
+            root / "docs/standards/DIGITALHOUSES_APP_STANDARD.md",
         ],
     )
 
@@ -54,7 +54,7 @@ def validate_repository(root: Path = ROOT) -> list[dict[str, str]]:
         type_validator = TYPE_VALIDATORS[app_type]
         context = type_validator(root, app)
 
-        app_validator = APP_VALIDATORS.get(app.name)
+        app_validator = PRODUCT_VALIDATORS.get(app.name)
         if app_validator is not None:
             app_validator(root, app, context)
 

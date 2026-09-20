@@ -31,8 +31,8 @@ jobs:
       - name: Validate repository contract
         run: python scripts/validate_repository.py
 
-  speedtest:
-    name: Speedtest
+  speedtest-app:
+    name: Speedtest App
     runs-on: ubuntu-latest
 
     steps:
@@ -56,8 +56,8 @@ jobs:
       - name: Check shell syntax
         run: bash -n digitalhouses_speedtest/rootfs/run.sh
 
-  db-monitoring:
-    name: DB Monitoring
+  recorder-app:
+    name: Recorder App
     runs-on: ubuntu-latest
 
     steps:
@@ -81,8 +81,8 @@ jobs:
       - name: Check shell syntax
         run: bash -n digitalhouses_db_monitoring/rootfs/run.sh
 
-  plex-monitoring:
-    name: Plex Monitoring
+  plex-agent:
+    name: Plex Agent
     runs-on: ubuntu-latest
 
     steps:
@@ -123,8 +123,8 @@ jobs:
           systemd-analyze verify \
             digitalhouses_plex_monitoring/systemd/*.service
 
-  dh-pve-app:
-    name: DH PVE App
+  pve-agent:
+    name: PVE Agent
     runs-on: ubuntu-latest
 
     steps:

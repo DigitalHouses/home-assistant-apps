@@ -8,9 +8,9 @@
 
 **Tech Stack:** Python 3.13 CI, pytest, Proxmox VE 8.x, pmxcfs `/etc/pve`, `/proc`, `/sys`, existing MQTT bridge/state-store architecture.
 
-**Spec:** `docs/superpowers/specs/2026-09-15-dh-pve-simplified-runtime-haos-design.md`
+**Spec:** `docs/digitalhouses_pve_agent/specs/2026-09-15-dh-pve-simplified-runtime-haos-design.md`
 
-**Source audit:** `docs/superpowers/specs/2026-09-15-dh-pve-source-audit.md`
+**Source audit:** `docs/digitalhouses_pve_agent/specs/2026-09-15-dh-pve-source-audit.md`
 
 ## Global Constraints
 

@@ -8,9 +8,9 @@
 
 **Tech Stack:** Python 3.13 in CI, pytest, NUT 2.8.x (`upsmon`, `upsc`, `upsrw`, `upscmd`), Debian 12 / Proxmox VE 8, systemd 252, MQTT Discovery, Home Assistant package/dashboard YAML.
 
-**Spec:** `docs/superpowers/specs/2026-09-15-dh-pve-ups-trigger-policy-v2-design.md`
+**Spec:** `docs/digitalhouses_pve_agent/specs/2026-09-15-dh-pve-ups-trigger-policy-v2-design.md`
 
-**Dependency:** Complete, deploy, and non-destructively validate `docs/superpowers/plans/2026-09-15-dh-pve-runtime-observability.md` first. This plan relies on its `UPS_TRIGGER` logging vocabulary and expanded shutdown incident timeline.
+**Dependency:** Complete, deploy, and non-destructively validate `docs/digitalhouses_pve_agent/plans/2026-09-15-dh-pve-runtime-observability.md` first. This plan relies on its `UPS_TRIGGER` logging vocabulary and expanded shutdown incident timeline.
 
 ## Global Constraints
 

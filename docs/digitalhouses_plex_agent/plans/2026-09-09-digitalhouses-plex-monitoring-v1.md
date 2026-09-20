@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3.11+, standard library, `psutil`, `paho-mqtt` 2.x, `unittest`, Bash, systemd, Home Assistant MQTT Device Discovery.
 
-**Spec:** `docs/superpowers/specs/2026-09-09-digitalhouses-plex-monitoring-design.md`
+**Spec:** `docs/digitalhouses_plex_agent/specs/2026-09-09-digitalhouses-plex-monitoring-design.md`
 
 ## Global Constraints
 
@@ -81,13 +81,13 @@ digitalhouses_plex_monitoring/
 Add the approved design document:
 
 ```text
-docs/superpowers/specs/2026-09-09-digitalhouses-plex-monitoring-design.md
+docs/digitalhouses_plex_agent/specs/2026-09-09-digitalhouses-plex-monitoring-design.md
 ```
 
 Save this plan as:
 
 ```text
-docs/superpowers/plans/2026-09-09-digitalhouses-plex-monitoring-v1.md
+docs/digitalhouses_plex_agent/plans/2026-09-09-digitalhouses-plex-monitoring-v1.md
 ```
 
 ---
@@ -1412,8 +1412,8 @@ Confirm the Plex entities explain the workload timeline.
 ```bash
 git add digitalhouses_plex_monitoring/README.md \
   digitalhouses_plex_monitoring/CHANGELOG.md \
-  docs/superpowers/specs/2026-09-09-digitalhouses-plex-monitoring-design.md \
-  docs/superpowers/plans/2026-09-09-digitalhouses-plex-monitoring-v1.md
+  docs/digitalhouses_plex_agent/specs/2026-09-09-digitalhouses-plex-monitoring-design.md \
+  docs/digitalhouses_plex_agent/plans/2026-09-09-digitalhouses-plex-monitoring-v1.md
 git commit -m "docs(plex): document installation and monitoring contract"
 ```
 

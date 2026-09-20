@@ -10,10 +10,10 @@ from validators.common import (
     discover_applications,
     is_application_directory_name,
 )
-from validators.apps.dh_pve_app import validate_dh_pve_app
+from validators.products.pve_agent import validate_dh_pve_app
 
 
-class DhPveRepositoryContractTests(unittest.TestCase):
+class PveAgentRepositoryContractTests(unittest.TestCase):
     def test_compact_dh_pve_name_is_explicitly_supported(self):
         self.assertTrue(is_application_directory_name("dh_pve_app"))
         self.assertTrue(is_application_directory_name("digitalhouses_example"))
