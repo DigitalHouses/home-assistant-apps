@@ -14,7 +14,7 @@ Current source release: `VERSION` is `0.5.7`.
 
 ## Home Assistant dashboard
 
-![DigitalHouses PVE Agent — Home Assistant dashboard](images/dashboard-pve-ru.png)
+![DigitalHouses PVE Agent — Home Assistant dashboard](images/dh_pve_app_dashboard_ru.png)
 
 Example of the DigitalHouses PVE Agent dashboard in Home Assistant.
 
