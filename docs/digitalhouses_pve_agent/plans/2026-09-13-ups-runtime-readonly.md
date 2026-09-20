@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3, NUT, systemd, MQTT Discovery, pytest.
 
-**Spec:** `docs/superpowers/specs/2026-09-13-ups-runtime-readonly-design.md`
+**Spec:** `docs/digitalhouses_pve_agent/specs/2026-09-13-ups-runtime-readonly-design.md`
 
 ## Global Constraints
 

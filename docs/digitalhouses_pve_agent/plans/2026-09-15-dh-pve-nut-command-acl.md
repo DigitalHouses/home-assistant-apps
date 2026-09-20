@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3.13, pytest, configparser, NUT 2.8.x, systemd, Proxmox VE 8.4, GitHub Actions.
 
-**Spec:** `docs/superpowers/specs/2026-09-15-dh-pve-nut-command-acl-design.md`
+**Spec:** `docs/digitalhouses_pve_agent/specs/2026-09-15-dh-pve-nut-command-acl-design.md`
 
 ## Global Constraints
 

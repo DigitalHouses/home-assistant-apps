@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3.13, pytest, paho-mqtt, NUT 2.8.x, Proxmox VE 8.4, GitHub Actions.
 
-**Spec:** `docs/superpowers/specs/2026-09-12-dh-pve-ups-control-shutdown-design.md`
+**Spec:** `docs/digitalhouses_pve_agent/specs/2026-09-12-dh-pve-ups-control-shutdown-design.md`
 
 ## Global Constraints
 

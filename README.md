@@ -1,21 +1,22 @@
 # DigitalHouses Home Assistant Apps
 
-Open-source Home Assistant applications and Linux agents maintained by **DigitalHouses**.
+Open-source applications and Linux agents by **DigitalHouses**, built to extend Home Assistant with infrastructure, media, database, and connectivity observability.
 
-This repository contains both Home Assistant OS Apps and native Linux agents that publish their state to Home Assistant through MQTT Discovery.
+## Products
 
-## Applications
-
-| Application | Type | Purpose |
+| Product | Type | Purpose |
 | --- | --- | --- |
-| [DH PVE App](dh_pve_app/README.md) | Linux agent | Proxmox VE monitoring, hardware diagnostics, VM/LXC state, SMART, fan RPM and optional NUT/UPS monitoring |
-| [DH Recorder Monitor](digitalhouses_db_monitoring/README.md) | HAOS App | Home Assistant Recorder database size, depth, write activity and database diagnostics |
-| [DigitalHouses Speedtest](digitalhouses_speedtest/README.md) | HAOS App | Internet availability, Ookla speed tests and connection-quality monitoring |
-| [DigitalHouses Plex Monitoring](digitalhouses_plex_monitoring/README.md) | Linux agent | Plex workload, playback, transcoding and library monitoring |
+| [DigitalHouses PVE Agent](dh_pve_app/README.md) | Linux agent | Proxmox VE monitoring, hardware diagnostics, VM/LXC state, SMART, fan RPM, and optional NUT/UPS monitoring |
+| [DigitalHouses Plex Agent](digitalhouses_plex_monitoring/README.md) | Linux agent | Plex workload, playback, transcoding, and library monitoring |
+| [DigitalHouses Recorder App](digitalhouses_db_monitoring/README.md) | Home Assistant App | Home Assistant Recorder database size, depth, write activity, and database diagnostics |
+| [DigitalHouses Speedtest App](digitalhouses_speedtest/README.md) | Home Assistant App | Internet availability, Ookla speed tests, and connection-quality monitoring |
 
-Each application has its own README with installation, configuration, Home Assistant entities and operational notes.
+DigitalHouses uses two delivery models:
 
-## Install HAOS Apps
+- **Home Assistant Apps** run under Home Assistant Supervisor and are installed from this repository.
+- **Linux agents** run on the target Linux host and publish their state to Home Assistant through MQTT Discovery.
+
+## Install Home Assistant Apps
 
 Add this repository in Home Assistant:
 
@@ -23,37 +24,29 @@ Add this repository in Home Assistant:
 https://github.com/DigitalHouses/home-assistant-apps
 ```
 
-Then open **Settings → Apps → App store → Repositories**, add the URL above and install the required DigitalHouses App.
+Then open **Settings → Apps → App store → Repositories**, add the URL above, and install the required DigitalHouses App.
 
-## Linux agents
+## Install Linux agents
 
-Linux agents are installed directly on the target Linux or Proxmox host rather than through the Home Assistant App Store.
+Linux agents are installed directly on the target host:
 
-- **DH PVE App:** [installation and documentation](dh_pve_app/README.md)
-- **Plex Monitoring:** [installation and documentation](digitalhouses_plex_monitoring/README.md)
+- [DigitalHouses PVE Agent](dh_pve_app/README.md)
+- [DigitalHouses Plex Agent](digitalhouses_plex_monitoring/README.md)
 
-Hardware-specific procedures are kept with the relevant agent. For example, the Beelink/AZW IT8613E fan profile for DH PVE App is documented in [dh_pve_app/hardware/beelink/README.md](dh_pve_app/hardware/beelink/README.md).
+Installation, configuration, supported platforms, and product-specific operational procedures are documented in each product README.
 
-## Development standard
+## Documentation
 
-DigitalHouses applications in this repository follow the [DigitalHouses Application Standard v1](docs/DIGITALHOUSES_APP_STANDARD.md).
+Engineering documentation is separated into shared standards and product-specific design records:
 
-Repository CI validates application metadata, tests, shell syntax and shared repository contracts.
+- [Documentation index](docs/README.md)
+- [DigitalHouses Application Standard](docs/standards/DIGITALHOUSES_APP_STANDARD.md)
 
-## Repository layout
+GitHub is the source of truth for reusable DigitalHouses application code and release provenance.
 
-```text
-home-assistant-apps/
-├── dh_pve_app/                       # Proxmox VE Linux agent
-├── digitalhouses_db_monitoring/      # HAOS App
-├── digitalhouses_plex_monitoring/    # Plex Linux agent
-├── digitalhouses_speedtest/          # HAOS App
-├── docs/                             # Shared design/development documentation
-├── scripts/                          # Repository validation tooling
-├── .github/                          # GitHub Actions
-├── repository.yaml
-└── LICENSE
-```
+## Development
+
+Each product owns its implementation, tests, compatibility contract, and release version. Repository-level validation enforces the common DigitalHouses application contract and dispatches type-specific and product-specific checks.
 
 ## Support
 

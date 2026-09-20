@@ -2,7 +2,7 @@
 
 Date: 2026-09-16
 Branch: `design/dh-pve-observability-ups-trigger-v2`
-Authority: `docs/superpowers/specs/2026-09-15-dh-pve-simplified-runtime-haos-design.md`
+Authority: `docs/digitalhouses_pve_agent/specs/2026-09-15-dh-pve-simplified-runtime-haos-design.md`
 
 This plan supersedes `2026-09-15-dh-pve-ups-trigger-policy-v2.md` wherever it conflicts with the canonical design. The older plan/spec remain historical implementation input only.
 

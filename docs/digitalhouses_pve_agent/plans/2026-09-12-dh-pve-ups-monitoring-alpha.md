@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3, `subprocess`, existing `Scheduler`, existing MQTT bridge/paho-mqtt, Home Assistant MQTT Device Discovery, pytest, NUT `upsc` client.
 
-**Spec:** `docs/superpowers/specs/2026-09-12-dh-pve-ups-monitoring-design.md`
+**Spec:** `docs/digitalhouses_pve_agent/specs/2026-09-12-dh-pve-ups-monitoring-design.md`
 
 ## Global Constraints
 

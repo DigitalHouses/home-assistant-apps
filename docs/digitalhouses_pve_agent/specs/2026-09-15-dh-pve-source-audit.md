@@ -2,7 +2,7 @@
 
 Date: 2026-09-15
 Status: frozen source contract for implementation
-Canonical design: `docs/superpowers/specs/2026-09-15-dh-pve-simplified-runtime-haos-design.md`
+Canonical design: `docs/digitalhouses_pve_agent/specs/2026-09-15-dh-pve-simplified-runtime-haos-design.md`
 Audited branch/head before this document: `design/dh-pve-observability-ups-trigger-v2` / `b61f0be409ab047a4ce6e3277d6ac8753a8cf2db`
 Target runtime: Proxmox VE 8.x
 

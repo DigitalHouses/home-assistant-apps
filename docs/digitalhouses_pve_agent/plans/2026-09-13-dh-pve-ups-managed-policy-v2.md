@@ -6,7 +6,7 @@
 
 **Architecture:** PVE/NUT owns shutdown. Normal prolonged outage uses `ONBATT -> upssched timer -> local FSD`. Emergency shutdown uses the UPS-native `LB` signal through `upsmon`. Home Assistant edits draft policy only and never decides shutdown. Battery testing is a separate local PVE scheduler.
 
-**Spec:** `docs/superpowers/specs/2026-09-13-dh-pve-ups-policy-testing-revision.md`
+**Spec:** `docs/digitalhouses_pve_agent/specs/2026-09-13-dh-pve-ups-policy-testing-revision.md`
 
 ## Global constraints
 
