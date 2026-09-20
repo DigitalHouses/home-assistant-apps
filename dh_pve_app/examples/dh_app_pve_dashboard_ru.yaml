@@ -1,0 +1,1524 @@
+title: Proxmox
+path: dh_app_pve
+icon: mdi:server
+type: sections
+max_columns: 4
+sections:
+  - type: grid
+    cards:
+      - type: heading
+        heading: Хост
+        heading_style: title
+        icon: mdi:server
+      - type: custom:mushroom-template-card
+        entity: sensor.dh_app_pve_system
+        primary: PVE
+        secondary: |-
+          {% if states(entity) in ['unknown', 'unavailable', 'none', ''] %}
+            Нет данных от Proxmox
+          {% else %}
+            {% set manufacturer = state_attr(entity, 'manufacturer') or '' %}
+            {% set model = state_attr(entity, 'model') or '' %}
+            {% set board_vendor = state_attr(entity, 'board_vendor') or '' %}
+            {% set board_model = state_attr(entity, 'board_model') or '' %}
+
+            {% set cpu_model = state_attr(entity, 'cpu_model') or '' %}
+            {% set cpu_cores = state_attr(entity, 'cpu_cores') %}
+            {% set cpu_threads = state_attr(entity, 'cpu_threads') %}
+
+            {% set memory_type = state_attr(entity, 'memory_type') or '' %}
+            {% set memory_form_factor = state_attr(entity, 'memory_form_factor') or '' %}
+            {% set slots_populated = state_attr(entity, 'memory_slots_populated') %}
+            {% set slots_total = state_attr(entity, 'memory_slots_total') %}
+            {% set memory_speed = state_attr(entity, 'memory_speed_mt_s') %}
+            {% set memory_total =
+              state_attr('sensor.dh_app_pve_memory_usage', 'total_gib')
+            %}
+
+            {% set kernel = state_attr(entity, 'kernel_version') or '' %}
+            {% set pve_raw = state_attr(entity, 'proxmox_version') or '' %}
+            {% set ip = state_attr(entity, 'primary_ip') or '' %}
+            {% set app_version =
+              states('sensor.dh_app_pve_app_version')
+            %}
+
+            {% set lines = namespace(items=[]) %}
+
+            {% if manufacturer %}
+              {% set lines.items =
+                lines.items + ['Manufacturer: ' ~ manufacturer]
+              %}
+            {% endif %}
+
+            {% if model %}
+              {% set lines.items =
+                lines.items + ['Model: ' ~ model]
+              %}
+            {% endif %}
+
+            {% if cpu_model %}
+              {% set cpu =
+                cpu_model
+                | replace('Intel(R)', 'Intel')
+                | replace('Core(TM)', 'Core')
+                | replace('(R)', '')
+                | replace('(TM)', '')
+                | replace('CPU ', '')
+                | replace('  ', ' ')
+                | trim
+              %}
+
+              {% if cpu_cores is not none and cpu_threads is not none %}
+                {% set cpu =
+                  cpu ~ ' · ' ~ cpu_cores ~ 'C/' ~ cpu_threads ~ 'T'
+                %}
+              {% endif %}
+
+              {% set lines.items =
+                lines.items + ['CPU: ' ~ cpu]
+              %}
+            {% endif %}
+
+            {% if board_model or board_vendor %}
+              {% set board = (board_vendor ~ ' ' ~ board_model) | trim %}
+              {% set lines.items =
+                lines.items + ['MB: ' ~ board]
+              %}
+            {% endif %}
+
+            {% set ram = namespace(parts=[]) %}
+
+            {% if memory_total is number %}
+              {% set ram.parts = ram.parts + [
+                ('%.1f' | format(memory_total | float)) ~ ' GiB'
+              ] %}
+            {% endif %}
+
+            {% if memory_type %}
+              {% set ram.parts = ram.parts + [memory_type] %}
+            {% endif %}
+
+            {% if memory_form_factor %}
+              {% set ram.parts = ram.parts + [memory_form_factor] %}
+            {% endif %}
+
+            {% if slots_populated is not none and slots_total is not none %}
+              {% set ram.parts = ram.parts + [
+                'слоты ' ~ slots_populated ~ '/' ~ slots_total
+              ] %}
+            {% endif %}
+
+            {% if memory_speed is number %}
+              {% set ram.parts = ram.parts + [
+                (memory_speed | int) ~ ' MT/s'
+              ] %}
+            {% endif %}
+
+            {% if ram.parts | count > 0 %}
+              {% set lines.items =
+                lines.items + ['RAM: ' ~ (ram.parts | join(' · '))]
+              %}
+            {% endif %}
+
+            {% set pve_version =
+              pve_raw.split('/')[1]
+              if '/' in pve_raw
+              else pve_raw
+            %}
+
+            {% set kernel_short =
+              kernel | replace('-pve', '')
+            %}
+
+            {% set software = namespace(parts=[]) %}
+
+            {% if pve_version %}
+              {% set software.parts =
+                software.parts + [pve_version]
+              %}
+            {% endif %}
+
+            {% if kernel_short %}
+              {% set software.parts =
+                software.parts + ['Kernel ' ~ kernel_short]
+              %}
+            {% endif %}
+
+            {% if software.parts | count > 0 %}
+              {% set lines.items =
+                lines.items + [
+                  'Proxmox ver: ' ~ (software.parts | join(' · '))
+                ]
+              %}
+            {% endif %}
+
+            {# Dynamic cooling inventory. #}
+            {% set fans = namespace(items=[]) %}
+
+            {% for fan in states.sensor | sort(attribute='entity_id') %}
+              {% if
+                state_attr(fan.entity_id, 'proxmox_integration') == 'dh_pve_app'
+                and state_attr(fan.entity_id, 'proxmox_section') == 'cooling'
+                and state_attr(fan.entity_id, 'proxmox_metric') == 'rpm'
+                and fan.state | is_number
+              %}
+                {% set fan_name =
+                  state_attr(fan.entity_id, 'proxmox_display_name')
+                  or state_attr(fan.entity_id, 'label')
+                  or 'Fan'
+                %}
+
+                {% set fans.items = fans.items + [
+                  fan_name ~ ': ' ~ (fan.state | int) ~ ' RPM'
+                ] %}
+              {% endif %}
+            {% endfor %}
+
+            {% if fans.items | count > 0 %}
+              {% set lines.items =
+                lines.items + ['FAN: ' ~ (fans.items | join(' · '))]
+              %}
+            {% else %}
+              {% set lines.items =
+                lines.items + ['FAN: Not detected']
+              %}
+            {% endif %}
+
+            {% if ip %}
+              {% set lines.items =
+                lines.items + ['IP: ' ~ ip]
+              %}
+            {% endif %}
+
+            {% if app_version not in ['unknown', 'unavailable', 'none', ''] %}
+              {% set lines.items =
+                lines.items + ['App ver: ' ~ app_version]
+              %}
+            {% endif %}
+
+            {{ lines.items | join('\n') }}
+          {% endif %}
+        icon: mdi:server
+        icon_color: |-
+          {% if is_state('binary_sensor.dh_app_pve_host_collector', 'on') %}
+            green
+          {% elif is_state('binary_sensor.dh_app_pve_host_collector', 'off') %}
+            red
+          {% else %}
+            grey
+          {% endif %}
+        multiline_secondary: true
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: 12
+      - type: heading
+        heading: Состояние Proxmox
+        heading_style: title
+        icon: phu:proxmox
+      - type: custom:mushroom-template-card
+        entity: sensor.dh_app_pve_problems
+        primary: |-
+          {% set active = state_attr(entity, 'active') or [] %}
+          {% if states(entity) in ['unknown', 'unavailable', 'none', ''] %}
+            Нет данных о проблемах
+          {% elif active | count == 0 %}
+            Проблем не обнаружено
+          {% else %}
+            Обнаружено проблем: {{ active | count }}
+          {% endif %}
+        secondary: |-
+          {% set active = state_attr(entity, 'active') or [] %}
+          {% if states(entity) in ['unknown', 'unavailable', 'none', ''] %}
+            Состояние проблем недоступно.
+          {% elif active | count == 0 %}
+            Система работает штатно.
+          {% else %}
+            {% for item in active %}
+              {% set object_name = item.get('object_name', 'Объект') %}
+              {% set summary = item.get('summary', 'Проблема') %}
+              {% set details = item.get('details', '') %}
+              • {{ object_name }} — {{ summary }}{% if details %} · {{ details }}{% endif %}
+              {% if not loop.last %}
+
+              {% endif %}
+            {% endfor %}
+          {% endif %}
+        icon: |-
+          {% set active = state_attr(entity, 'active') or [] %}
+          {% if states(entity) in ['unknown', 'unavailable', 'none', ''] %}
+            mdi:help-circle-outline
+          {% elif active | count > 0 %}
+            mdi:alert-circle
+          {% else %}
+            mdi:check-circle
+          {% endif %}
+        icon_color: |-
+          {% if states(entity) in ['unknown', 'unavailable', 'none', ''] %}
+            grey
+          {% elif (state_attr(entity, 'active') or []) | count > 0 %}
+            red
+          {% else %}
+            green
+          {% endif %}
+        multiline_secondary: true
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: 12
+      - type: heading
+        heading: Производительность
+        heading_style: subtitle
+        icon: mdi:speedometer
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: custom:mini-graph-card
+            entity: sensor.dh_app_pve_cpu_usage
+            name: CPU
+            icon: mdi:cpu-64-bit
+            entities:
+              - sensor.dh_app_pve_cpu_usage
+            hours_to_show: 12
+            points_per_hour: 4
+            line_width: 2
+            height: 100
+            decimals: 1
+            lower_bound: 0
+            upper_bound: 100
+            show:
+              name: true
+              icon: true
+              state: true
+              graph: line
+              fill: true
+              points: false
+              labels: false
+              extrema: true
+          - type: custom:mini-graph-card
+            entity: sensor.dh_app_pve_memory_usage
+            name: Память
+            icon: mdi:memory
+            entities:
+              - sensor.dh_app_pve_memory_usage
+            hours_to_show: 12
+            points_per_hour: 4
+            line_width: 2
+            height: 100
+            decimals: 1
+            lower_bound: 0
+            upper_bound: 100
+            show:
+              name: true
+              icon: true
+              state: true
+              graph: line
+              fill: true
+              points: false
+              labels: false
+              extrema: true
+        grid_options:
+          columns: 12
+      - type: heading
+        heading_style: subtitle
+        icon: mdi:server
+        heading: Приложение
+      - type: custom:mushroom-template-card
+        entity: button.dh_app_pve_refresh
+        primary: Обновить сейчас
+        secondary: >-
+          {% set last = states('sensor.dh_app_pve_last_refresh') %} {% if last
+          not in ['unknown', 'unavailable', 'none', ''] %}
+            Последнее: {{ as_timestamp(last)
+              | timestamp_custom('%d.%m.%Y %H:%M:%S', true) }}
+          {% else %}
+            Ручное обновление ещё не выполнялось
+          {% endif %}
+        icon: mdi:refresh
+        icon_color: blue
+        tap_action:
+          action: perform-action
+          perform_action: button.press
+          target:
+            entity_id: button.dh_app_pve_refresh
+          confirmation:
+            text: Обновить данные DH PVE Agent?
+        grid_options:
+          columns: 12
+      - type: vertical-stack
+        cards:
+          - type: custom:mushroom-template-card
+            entity: sensor.dh_app_pve_last_refresh
+            primary: Последнее ручное обновление
+            secondary: >-
+              {% set ts = states(entity) %} {% if ts not in ['unknown',
+              'unavailable', 'none', ''] %}
+                {{ as_timestamp(ts)
+                  | timestamp_custom('%d.%m.%Y %H:%M:%S', true) }}
+              {% else %}
+                Нет данных
+              {% endif %}
+            icon: mdi:clock-check-outline
+            icon_color: >-
+              {% if states(entity) not in ['unknown', 'unavailable', 'none', '']
+              %}
+                green
+              {% else %}
+                grey
+              {% endif %}
+            tap_action:
+              action: more-info
+          - type: custom:mushroom-template-card
+            entity: sensor.dh_app_pve_last_boot
+            primary: Последний запуск агента
+            secondary: >-
+              {% set ts = states(entity) %} {% if ts not in ['unknown',
+              'unavailable', 'none', ''] %}
+                {{ as_timestamp(ts)
+                  | timestamp_custom('%d.%m.%Y %H:%M:%S', true) }}
+              {% else %}
+                Нет данных
+              {% endif %}
+            icon: mdi:restart
+            icon_color: >-
+              {% if states(entity) not in ['unknown', 'unavailable', 'none', '']
+              %}
+                blue
+              {% else %}
+                grey
+              {% endif %}
+            tap_action:
+              action: more-info
+        grid_options:
+          columns: 12
+      - type: custom:mushroom-template-card
+        entity: sensor.dh_app_pve_last_boot
+        primary: Время работы PVE сервера
+        secondary: >-
+          {% set boot = states(entity) %} {% if boot not in ['unknown',
+          'unavailable', 'none', ''] %}
+            {% set sec = (as_timestamp(now()) - as_timestamp(boot)) | int %}
+            {% set days = sec // 86400 %}
+            {% set hours = (sec % 86400) // 3600 %}
+            {% set minutes = (sec % 3600) // 60 %}
+
+            {% if days > 0 %}
+              {{ days }} д. {{ '%02d:%02d' | format(hours, minutes) }}
+            {% else %}
+              {{ '%02d:%02d' | format(hours, minutes) }}
+            {% endif %}
+          {% else %}
+            Нет данных
+          {% endif %}
+        icon: mdi:timer-outline
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: 12
+        color: |-
+          {% if states(entity) not in ['unknown', 'unavailable', 'none', ''] %}
+            green
+          {% else %}
+            grey
+          {% endif %}
+        features_position: bottom
+  - type: grid
+    cards:
+      - type: heading
+        heading: Диски и хранилища
+        heading_style: title
+        icon: mdi:harddisk
+      - type: heading
+        heading: Диагностика дисков
+        heading_style: subtitle
+        icon: mdi:harddisk-check
+      - type: custom:mushroom-template-card
+        entity: sensor.dh_app_pve_problems
+        primary: >-
+          {% set problems_available =
+            states(entity) not in ['unknown', 'unavailable', 'none', '']
+          %} {% set active = state_attr(entity, 'active') or [] %} {% set disk =
+            active
+            | selectattr('category', 'equalto', 'disk')
+            | list
+          %} {% set smart = states('binary_sensor.dh_app_pve_smart_collector')
+          %}
+
+          {% if not problems_available or smart in ['unknown', 'unavailable',
+          'none', ''] %}
+            Состояние дисков недоступно
+          {% elif disk | count > 0 %}
+            Обнаружена проблема с дисками
+          {% elif smart == 'off' %}
+            Не удалось проверить диски
+          {% else %}
+            Диски в норме
+          {% endif %}
+        secondary: >-
+          {% set problems_available =
+            states(entity) not in ['unknown', 'unavailable', 'none', '']
+          %} {% set active = state_attr(entity, 'active') or [] %} {% set disk =
+            active
+            | selectattr('category', 'equalto', 'disk')
+            | list
+          %} {% set smart = states('binary_sensor.dh_app_pve_smart_collector')
+          %} {% set ns = namespace(items=[]) %}
+
+          {% if not problems_available %}
+            Список проблем недоступен.
+          {% else %}
+
+            {% for item in disk %}
+              {% set object_name = item.get('object_name', 'Диск') %}
+              {% set summary = item.get('summary', 'Проблема') %}
+              {% set details = item.get('details', '') %}
+
+              {% set ns.items = ns.items + [
+                object_name
+                ~ ': '
+                ~ summary
+                ~ ((' · ' ~ details) if details else '')
+              ] %}
+            {% endfor %}
+
+            {% if smart == 'off' %}
+              {% set ns.items =
+                ns.items + ['SMART не удалось прочитать']
+              %}
+            {% elif smart in ['unknown', 'unavailable', 'none', ''] %}
+              {% set ns.items =
+                ns.items + ['Состояние SMART недоступно']
+              %}
+            {% endif %}
+
+            {{ ns.items | join('\n')
+               if ns.items
+               else 'Перегрева и ошибок SMART не обнаружено.' }}
+
+          {% endif %}
+        icon: >-
+          {% set problems_available =
+            states(entity) not in ['unknown', 'unavailable', 'none', '']
+          %} {% set active = state_attr(entity, 'active') or [] %} {% set disk =
+            active
+            | selectattr('category', 'equalto', 'disk')
+            | list
+          %} {% set smart = states('binary_sensor.dh_app_pve_smart_collector')
+          %}
+
+          {% if not problems_available or smart in ['unknown', 'unavailable',
+          'none', ''] %}
+            mdi:harddisk-question
+          {% elif disk | count > 0 or smart == 'off' %}
+            mdi:harddisk-alert
+          {% else %}
+            mdi:harddisk-check
+          {% endif %}
+        icon_color: >-
+          {% set problems_available =
+            states(entity) not in ['unknown', 'unavailable', 'none', '']
+          %} {% set active = state_attr(entity, 'active') or [] %} {% set disk =
+            active
+            | selectattr('category', 'equalto', 'disk')
+            | list
+          %} {% set smart = states('binary_sensor.dh_app_pve_smart_collector')
+          %}
+
+          {% if not problems_available or smart in ['unknown', 'unavailable',
+          'none', ''] %}
+            grey
+          {% elif disk | count > 0 or smart == 'off' %}
+            red
+          {% else %}
+            green
+          {% endif %}
+        multiline_secondary: true
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: 12
+      - type: heading
+        heading: Физические диски
+        heading_style: subtitle
+        icon: mdi:harddisk
+      - type: custom:auto-entities
+        show_empty: false
+        unique: true
+        card:
+          type: grid
+          columns: 1
+          square: false
+        card_param: cards
+        filter:
+          template: |-
+            {% set ns = namespace(items=[]) %}
+            {% for disk in states.sensor | sort(attribute='entity_id') %}
+              {% if state_attr(disk.entity_id, 'proxmox_integration') == 'dh_pve_app'
+                    and state_attr(disk.entity_id, 'proxmox_section') == 'disk'
+                    and state_attr(disk.entity_id, 'proxmox_subject') == 'disk'
+                    and state_attr(disk.entity_id, 'proxmox_metric') == 'health'
+                    and disk.entity_id.endswith('_health') %}
+
+                {% set health = disk.entity_id %}
+                {% set temp = health | replace('_health', '_temperature') %}
+                {% set wear = health | replace('_health', '_wear') %}
+
+                {% set smart_problem =
+                  health
+                  | replace('sensor.', 'binary_sensor.')
+                  | replace('_health', '_smart_problem')
+                %}
+
+                {% set temp_problem =
+                  health
+                  | replace('sensor.', 'binary_sensor.')
+                  | replace('_health', '_temperature_problem')
+                %}
+
+                {% set name =
+                  state_attr(health, 'proxmox_display_name')
+                  or state_attr(health, 'model')
+                  or state_attr(health, 'friendly_name')
+                  or health
+                %}
+
+                {% set disk_type = state_attr(health, 'disk_type') or 'Disk' %}
+                {% set parts = namespace(items=[disk_type]) %}
+
+                {% if states(temp) not in ['unknown', 'unavailable', 'none', ''] %}
+                  {% set parts.items = parts.items + [
+                    states(temp)
+                    ~ ' '
+                    ~ (state_attr(temp, 'unit_of_measurement') or '°C')
+                  ] %}
+                {% else %}
+                  {% set parts.items = parts.items + ['Температура недоступна'] %}
+                {% endif %}
+
+                {% if states(wear) not in ['unknown', 'unavailable', 'none', ''] %}
+                  {% set parts.items = parts.items + [
+                    'wear ' ~ states(wear) ~ '%'
+                  ] %}
+                {% endif %}
+
+                {% if is_state(smart_problem, 'on') %}
+                  {% set parts.items = parts.items + ['SMART: ERROR'] %}
+                {% elif is_state(smart_problem, 'off') %}
+                  {% set parts.items = parts.items + ['SMART: OK'] %}
+                {% else %}
+                  {% set parts.items = parts.items + ['SMART: нет данных'] %}
+                {% endif %}
+
+                {% if is_state(temp_problem, 'on') %}
+                  {% set parts.items = parts.items + ['ПЕРЕГРЕВ'] %}
+                {% endif %}
+
+                {% set disk_type_upper = disk_type | upper %}
+
+                {% if disk_type_upper == 'NVME' %}
+                  {% set icon = 'mdi:expansion-card' %}
+                {% elif disk_type_upper == 'SSD' %}
+                  {% set icon = 'mdi:chip' %}
+                {% else %}
+                  {% set icon = 'mdi:harddisk' %}
+                {% endif %}
+
+                {% if is_state(smart_problem, 'on')
+                      or is_state(temp_problem, 'on') %}
+                  {% set icon_color = 'red' %}
+                {% elif states(temp) not in ['unknown', 'unavailable', 'none', ''] %}
+                  {% set icon_color = 'blue' %}
+                {% elif states(health) == 'HEALTHY' %}
+                  {% set icon_color = 'green' %}
+                {% else %}
+                  {% set icon_color = 'grey' %}
+                {% endif %}
+
+                {% set ns.items = ns.items + [{
+                  'type': 'custom:mushroom-template-card',
+
+                  'entity': temp,
+
+                  'primary': name,
+                  'secondary': parts.items | join(' · '),
+
+                  'icon': icon,
+                  'icon_color': icon_color,
+
+                  'multiline_secondary': true,
+
+                  'tap_action': {
+                    'action': 'more-info'
+                  }
+                }] %}
+
+              {% endif %}
+            {% endfor %}
+            {{- ns.items -}}
+        sort:
+          method: entity_id
+        grid_options:
+          columns: 12
+      - type: heading
+        heading: Хранилища Proxmox
+        heading_style: subtitle
+        icon: mdi:database
+      - type: custom:auto-entities
+        show_empty: false
+        unique: true
+        card:
+          type: grid
+          columns: 1
+          square: false
+        card_param: cards
+        filter:
+          template: |-
+            {% set ns = namespace(items=[]) %}
+
+            {% for storage in states.sensor | sort(attribute='entity_id') %}
+              {% if state_attr(storage.entity_id, 'proxmox_integration') == 'dh_pve_app'
+                    and state_attr(storage.entity_id, 'proxmox_section') == 'storage'
+                    and state_attr(storage.entity_id, 'proxmox_subject') == 'storage'
+                    and state_attr(storage.entity_id, 'proxmox_metric') == 'usage'
+                    and storage.entity_id.endswith('_percent_used') %}
+
+                {% set problem_entity =
+                  storage.entity_id
+                  | replace('sensor.', 'binary_sensor.')
+                  | replace('_percent_used', '_percent_used_problem')
+                %}
+
+                {% set available = storage.state | is_number %}
+                {% set total = state_attr(storage.entity_id, 'total_gib') %}
+
+                {% set name =
+                  state_attr(storage.entity_id, 'proxmox_display_name')
+                  or storage.name
+                %}
+
+                {% if available %}
+                  {% set used_percent = storage.state | float %}
+
+                  {% if total is number %}
+                    {% set used = total | float * used_percent / 100 %}
+                    {% set secondary =
+                      'Занято '
+                      ~ ('%.2f' | format(used))
+                      ~ ' / '
+                      ~ ('%.2f' | format(total | float))
+                      ~ ' GiB'
+                    %}
+                  {% else %}
+                    {% set secondary =
+                      'Занято ' ~ ('%.1f' | format(used_percent)) ~ '%'
+                    %}
+                  {% endif %}
+
+                  {% set card_name =
+                    name ~ ' · занято ' ~ ('%.1f' | format(used_percent)) ~ '%'
+                  %}
+
+                  {% set percent = '%.2f' | format(used_percent) %}
+
+                  {% if is_state(problem_entity, 'on') %}
+                    {% set color = 'red' %}
+                    {% set icon = 'mdi:database-alert' %}
+                  {% elif is_state(problem_entity, 'off') %}
+                    {% set color = 'green' %}
+                    {% set icon = 'mdi:database-check' %}
+                  {% else %}
+                    {% set color = 'grey' %}
+                    {% set icon = 'mdi:database' %}
+                  {% endif %}
+
+                {% else %}
+                  {% set card_name = name %}
+                  {% set secondary = 'Данные недоступны' %}
+                  {% set percent = '0' %}
+                  {% set color = 'grey' %}
+                  {% set icon = 'mdi:database' %}
+                {% endif %}
+
+                {% set ns.items = ns.items + [{
+                  'type': 'custom:entity-progress-card-template',
+                  'entity': storage.entity_id,
+                  'name': card_name,
+                  'secondary': secondary,
+                  'percent': percent,
+                  'icon': icon,
+                  'color': color,
+                  'bar_color': color,
+                  'bar_size': 'medium',
+                  'tap_action': {
+                    'action': 'more-info'
+                  }
+                }] %}
+
+              {% endif %}
+            {% endfor %}
+
+            {{- ns.items -}}
+        sort:
+          method: entity_id
+        grid_options:
+          columns: 12
+      - type: heading
+        heading: Пороги уведомлений
+        heading_style: subtitle
+        icon: mdi:tune-variant
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: custom:mushroom-number-card
+            entity: number.dh_app_pve_storage_percent_used_threshold
+            name: Заполнение хранилища
+            icon: mdi:database-alert
+            display_mode: buttons
+            fill_container: true
+          - type: custom:mushroom-number-card
+            entity: number.dh_app_pve_cpu_temperature_threshold
+            name: Температура CPU
+            icon: mdi:cpu-64-bit
+            display_mode: buttons
+            fill_container: true
+          - type: custom:mushroom-number-card
+            entity: number.dh_app_pve_hdd_temperature_threshold
+            name: Температура HDD
+            icon: mdi:harddisk
+            display_mode: buttons
+            fill_container: true
+          - type: custom:mushroom-number-card
+            entity: number.dh_app_pve_ssd_temperature_threshold
+            name: Температура SSD
+            icon: mdi:chip
+            display_mode: buttons
+            fill_container: true
+          - type: custom:mushroom-number-card
+            entity: number.dh_app_pve_nvme_temperature_threshold
+            name: Температура NVMe
+            icon: mdi:expansion-card-variant
+            display_mode: buttons
+            fill_container: true
+        grid_options:
+          columns: 12
+      - type: custom:auto-entities
+        show_empty: false
+        unique: true
+        card:
+          type: grid
+          columns: 1
+          square: false
+        card_param: cards
+        filter:
+          template: >-
+            {% set ns = namespace(has_gpu_temp=false) %} {% for e in
+            states.sensor %}
+              {% if state_attr(e.entity_id, 'proxmox_integration') == 'dh_pve_app'
+                    and state_attr(e.entity_id, 'proxmox_section') == 'graphics'
+                    and state_attr(e.entity_id, 'proxmox_subject') == 'gpu'
+                    and state_attr(e.entity_id, 'proxmox_metric') == 'temperature'
+                    and e.state | is_number %}
+                {% set ns.has_gpu_temp = true %}
+              {% endif %}
+            {% endfor %} {% if ns.has_gpu_temp %}
+              {{ [{
+                'type': 'custom:mushroom-number-card',
+                'entity': 'number.dh_app_pve_gpu_temperature_threshold',
+                'name': 'Температура GPU',
+                'icon': 'mdi:expansion-card',
+                'display_mode': 'buttons',
+                'fill_container': true
+              }] }}
+            {% else %}
+              {{ [] }}
+            {% endif %}
+        grid_options:
+          columns: 12
+  - type: grid
+    cards:
+      - type: heading
+        heading: Оборудование
+        heading_style: title
+        icon: mdi:chip
+      - type: heading
+        heading: CPU / RAM / Swap
+        heading_style: subtitle
+        icon: mdi:cpu-64-bit
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: custom:mushroom-entity-card
+            entity: sensor.dh_app_pve_cpu_usage
+            name: CPU
+            icon: mdi:cpu-64-bit
+            layout: horizontal
+            fill_container: true
+            secondary_info: state
+            tap_action:
+              action: more-info
+          - type: custom:mushroom-entity-card
+            entity: sensor.dh_app_pve_memory_usage
+            name: RAM
+            icon: mdi:memory
+            layout: horizontal
+            fill_container: true
+            secondary_info: state
+            tap_action:
+              action: more-info
+          - type: custom:mushroom-entity-card
+            entity: sensor.dh_app_pve_swap_usage
+            name: Swap
+            icon: mdi:swap-horizontal
+            layout: horizontal
+            fill_container: true
+            secondary_info: state
+            tap_action:
+              action: more-info
+        grid_options:
+          columns: 12
+      - type: heading
+        heading: CPU & Throttling
+        heading_style: subtitle
+        icon: mdi:cpu-64-bit
+      - type: custom:entity-progress-card-template
+        entity: sensor.dh_app_pve_cpu_temperature
+        name: >-
+          {% set model =
+            state_attr('sensor.dh_app_pve_system', 'cpu_model')
+            or 'CPU'
+          %} {% set model =
+            model
+            | replace('Intel(R)', 'Intel')
+            | replace('Intel Core(TM)', 'Intel Core')
+            | replace('(R)', '')
+            | replace('(TM)', '')
+            | replace('  ', ' ')
+            | trim
+          %} {% if states(entity) not in ['unknown', 'unavailable', 'none', '']
+          %}
+            CPU ({{ model }}) · {{ '%.1f' | format(states(entity) | float) }}°C
+          {% else %}
+            CPU ({{ model }})
+          {% endif %}
+        secondary: |-
+          {% set threshold =
+            states('number.dh_app_pve_cpu_temperature_threshold')
+          %} {% if states(entity) in ['unknown', 'unavailable', 'none', ''] %}
+            Температура недоступна
+          {% elif threshold not in ['unknown', 'unavailable', 'none', ''] %}
+            Порог {{ threshold }}°C
+          {% else %}
+            Порог недоступен
+          {% endif %}
+        percent: |-
+          {% set temp =
+            states(entity) | float(0)
+          %} {% set threshold =
+            states('number.dh_app_pve_cpu_temperature_threshold') | float(0)
+          %} {% if threshold > 0 %}
+            {{ [0, [(temp / threshold * 100), 100] | min] | max | round(1) }}
+          {% else %}
+            0
+          {% endif %}
+        icon: >-
+          {% if is_state('binary_sensor.dh_app_pve_cpu_temperature_problem',
+          'on') %}
+            mdi:thermometer-alert
+          {% elif is_state('binary_sensor.dh_app_pve_cpu_temperature_problem',
+          'off') %}
+            mdi:thermometer-check
+          {% else %}
+            mdi:thermometer
+          {% endif %}
+        color: >-
+          {% if is_state('binary_sensor.dh_app_pve_cpu_temperature_problem',
+          'on') %}
+            red
+          {% elif is_state('binary_sensor.dh_app_pve_cpu_temperature_problem',
+          'off') %}
+            blue
+          {% else %}
+            grey
+          {% endif %}
+        bar_color: >-
+          {% if is_state('binary_sensor.dh_app_pve_cpu_temperature_problem',
+          'on') %}
+            red
+          {% elif is_state('binary_sensor.dh_app_pve_cpu_temperature_problem',
+          'off') %}
+            blue
+          {% else %}
+            grey
+          {% endif %}
+        bar_size: medium
+        tap_action:
+          action: more-info
+        card_mod:
+          style: |
+            :host {
+              --epb-progress-transition: none;
+            }
+        grid_options:
+          columns: 12
+      - type: custom:mushroom-template-card
+        entity: sensor.dh_app_pve_cpu_frequency
+        primary: Частота CPU
+        secondary: |-
+          {% if states(entity) not in ['unknown', 'unavailable', 'none', ''] %}
+            {{ states(entity) }}
+            {{ state_attr(entity, 'unit_of_measurement') or 'MHz' }}
+            {% if is_state('binary_sensor.dh_app_pve_cpu_throttling_problem', 'on') %}
+              · THROTTLING
+            {% endif %}
+          {% else %}
+            Частота недоступна
+          {% endif %}
+        icon: >-
+          {% if is_state('binary_sensor.dh_app_pve_cpu_throttling_problem',
+          'on') %}
+            mdi:speedometer-slow
+          {% else %}
+            mdi:sine-wave
+          {% endif %}
+        icon_color: >-
+          {% if is_state('binary_sensor.dh_app_pve_cpu_throttling_problem',
+          'on') %}
+            red
+          {% elif is_state('binary_sensor.dh_app_pve_cpu_throttling_problem',
+          'off') %}
+            blue
+          {% else %}
+            grey
+          {% endif %}
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: 12
+      - type: custom:mushroom-template-card
+        entity: binary_sensor.dh_app_pve_cpu_throttling_problem
+        primary: |-
+          {% set model =
+            state_attr('sensor.dh_app_pve_system', 'cpu_model')
+            or 'CPU'
+          %}
+          {% set model =
+            model
+            | replace('Intel(R)', 'Intel')
+            | replace('(R)', '')
+            | replace('(TM)', '')
+            | replace('  ', ' ')
+            | trim
+          %}
+          CPU throttling ({{ model }})
+        secondary: |-
+          {% if is_state(entity, 'on') %}
+            Обнаружен CPU throttling.
+          {% elif is_state(entity, 'off') %}
+            CPU throttling не обнаружен.
+          {% else %}
+            Состояние CPU throttling недоступно.
+          {% endif %}
+        icon: |-
+          {% if is_state(entity, 'on') %}
+            mdi:speedometer-slow
+          {% else %}
+            mdi:speedometer
+          {% endif %}
+        icon_color: |-
+          {% if is_state(entity, 'on') %}
+            red
+          {% elif is_state(entity, 'off') %}
+            blue
+          {% else %}
+            grey
+          {% endif %}
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: 12
+      - type: heading
+        heading: Охлаждение
+        heading_style: subtitle
+        icon: mdi:fan
+      - type: custom:auto-entities
+        show_empty: false
+        unique: true
+        card:
+          type: grid
+          columns: 1
+          square: false
+        card_param: cards
+        filter:
+          template: |-
+            {% set ns = namespace(items=[], count=0) %}
+            {% for fan in states.sensor | sort(attribute='entity_id') %}
+              {% if
+                state_attr(fan.entity_id, 'proxmox_integration') == 'dh_pve_app'
+                and state_attr(fan.entity_id, 'proxmox_section') == 'cooling'
+                and state_attr(fan.entity_id, 'proxmox_metric') == 'rpm'
+              %}
+
+                {% set ns.count = ns.count + 1 %}
+
+                {% set name =
+                  state_attr(fan.entity_id, 'proxmox_display_name')
+                  or state_attr(fan.entity_id, 'label')
+                  or state_attr(fan.entity_id, 'friendly_name')
+                  or 'Fan'
+                %}
+
+                {% set rpm =
+                  fan.state | int(0)
+                  if fan.state not in ['unknown', 'unavailable', 'none', '']
+                  else none
+                %}
+
+                {% if rpm is none %}
+                  {% set color = 'grey' %}
+                  {% set secondary = 'RPM недоступен' %}
+                  {% set icon = 'mdi:fan-alert' %}
+                {% elif rpm == 0 %}
+                  {% set color = 'red' %}
+                  {% set secondary = '0 RPM' %}
+                  {% set icon = 'mdi:fan-off' %}
+                {% else %}
+                  {% set color = 'blue' %}
+                  {% set secondary = rpm ~ ' RPM' %}
+                  {% set icon = 'mdi:fan' %}
+                {% endif %}
+
+                {% set ns.items = ns.items + [{
+                  'type': 'custom:mushroom-template-card',
+                  'entity': fan.entity_id,
+                  'primary': name,
+                  'secondary': secondary,
+                  'icon': icon,
+                  'icon_color': color,
+                  'layout': 'horizontal',
+                  'fill_container': true,
+                  'tap_action': {
+                    'action': 'more-info'
+                  }
+                }] %}
+
+              {% endif %}
+            {% endfor %}
+            {% if ns.count == 0 %}
+              {% set ns.items = ns.items + [{
+                'type': 'custom:mushroom-template-card',
+                'primary': 'Fan: Not detected',
+                'secondary': 'Вентиляторы не обнаружены',
+                'icon': 'mdi:fan-alert',
+                'icon_color': 'red',
+                'layout': 'horizontal',
+                'fill_container': true
+              }] %}
+            {% endif %}
+            {{- ns.items -}}
+        grid_options:
+          columns: 12
+          rows: auto
+      - type: heading
+        heading: Графика
+        heading_style: subtitle
+        icon: mdi:expansion-card
+      - type: custom:auto-entities
+        show_empty: false
+        unique: true
+        card:
+          type: grid
+          columns: 2
+          square: false
+        card_param: cards
+        filter:
+          template: |-
+            {% set ns = namespace(items=[]) %}
+            {% for e in states.sensor | sort(attribute='entity_id') %}
+              {% if
+                state_attr(e.entity_id, 'proxmox_integration') == 'dh_pve_app'
+                and state_attr(e.entity_id, 'proxmox_section') == 'graphics'
+              %}
+
+                {% set metric = state_attr(e.entity_id, 'proxmox_metric') %}
+
+                {% set name =
+                  state_attr(e.entity_id, 'proxmox_display_name')
+                  or state_attr(e.entity_id, 'model')
+                  or e.name
+                %}
+
+                {% if metric == 'temperature' %}
+
+                  {% set problem =
+                    e.entity_id
+                    | replace('sensor.', 'binary_sensor.')
+                    | replace('_temperature', '_temperature_problem')
+                  %}
+
+                  {% if is_state(problem, 'on') %}
+                    {% set color = 'red' %}
+                    {% set icon = 'mdi:thermometer-alert' %}
+                  {% elif is_state(problem, 'off') %}
+                    {% set color = 'blue' %}
+                    {% set icon = 'mdi:thermometer' %}
+                  {% else %}
+                    {% set color = 'grey' %}
+                    {% set icon = 'mdi:thermometer' %}
+                  {% endif %}
+
+                  {% set threshold =
+                    states('number.dh_app_pve_gpu_temperature_threshold')
+                  %}
+
+                  {% if e.state | is_number %}
+                    {% set secondary =
+                      ('%.1f' | format(e.state | float))
+                      ~ '°C'
+                      ~ (
+                        ' · порог ' ~ threshold ~ '°C'
+                        if threshold not in ['unknown', 'unavailable', 'none', '']
+                        else ''
+                      )
+                    %}
+                  {% else %}
+                    {% set secondary = 'Температура недоступна' %}
+                  {% endif %}
+
+                  {% set ns.items = ns.items + [{
+                    'type': 'custom:mushroom-template-card',
+                    'entity': e.entity_id,
+                    'primary': 'GPU · ' ~ name,
+                    'secondary': secondary,
+                    'icon': icon,
+                    'icon_color': color,
+                    'tap_action': {
+                      'action': 'more-info'
+                    }
+                  }] %}
+
+                {% elif metric == 'transcoding' %}
+
+                  {% if e.state | is_number %}
+                    {% set load = e.state | float %}
+                    {% set color = 'blue' %}
+                    {% set secondary = ('%.1f' | format(load)) ~ '%' %}
+                    {% set percent = '%.1f' | format(load) %}
+                  {% else %}
+                    {% set load = 0 %}
+                    {% set color = 'grey' %}
+                    {% set secondary = 'Нагрузка недоступна' %}
+                    {% set percent = '0' %}
+                  {% endif %}
+
+                  {% set ns.items = ns.items + [{
+                    'type': 'custom:entity-progress-card-template',
+                    'entity': e.entity_id,
+                    'name': 'Transcoding · ' ~ name,
+                    'secondary': secondary,
+                    'percent': percent,
+                    'icon': 'mdi:video',
+                    'color': color,
+                    'bar_color': color,
+                    'bar_size': 'small',
+                    'tap_action': {
+                      'action': 'more-info'
+                    }
+                  }] %}
+
+                {% else %}
+
+                  {% set available =
+                    e.state not in ['unknown', 'unavailable', 'none', '']
+                  %}
+
+                  {% set ns.items = ns.items + [{
+                    'type': 'custom:mushroom-template-card',
+                    'entity': e.entity_id,
+                    'primary': name,
+                    'secondary': e.state if available else 'Нет данных',
+                    'icon': state_attr(e.entity_id, 'icon') or 'mdi:expansion-card',
+                    'icon_color': 'blue' if available else 'grey',
+                    'layout': 'horizontal',
+                    'fill_container': true,
+                    'tap_action': {
+                      'action': 'more-info'
+                    }
+                  }] %}
+
+                {% endif %}
+
+              {% endif %}
+            {% endfor %}
+            {{- ns.items -}}
+        sort:
+          method: entity_id
+        grid_options:
+          columns: 12
+      - type: heading
+        heading: VM / LXC
+        heading_style: subtitle
+        icon: mdi:server-network
+      - type: markdown
+        content: >-
+          {%- set ns = namespace(vms=[], lxcs=[], lines=[]) -%} {%- for e in
+          states.sensor -%}
+            {%- if state_attr(e.entity_id, 'proxmox_integration') == 'dh_pve_app'
+                  and state_attr(e.entity_id, 'proxmox_section') == 'guests'
+                  and state_attr(e.entity_id, 'proxmox_subject') in ['vm', 'lxc']
+                  and state_attr(e.entity_id, 'proxmox_metric') == 'status' -%}
+              {%- set item = {
+                'id': state_attr(e.entity_id, 'guest_id') or state_attr(e.entity_id, 'proxmox_object_id'),
+                'name': state_attr(e.entity_id, 'proxmox_display_name') or e.name,
+                'state': e.state | lower,
+                'sort': state_attr(e.entity_id, 'proxmox_sort_key') or e.entity_id
+              } -%}
+              {%- if state_attr(e.entity_id, 'proxmox_subject') == 'vm' -%}
+                {%- set ns.vms = ns.vms + [item] -%}
+              {%- else -%}
+                {%- set ns.lxcs = ns.lxcs + [item] -%}
+              {%- endif -%}
+            {%- endif -%}
+          {%- endfor -%}
+
+          {%- set vm_running = state_attr('sensor.dh_app_pve_vms', 'running') |
+          int(0) -%} {%- set vm_total = state_attr('sensor.dh_app_pve_vms',
+          'total') | int(0) -%} {%- set lxc_running =
+          state_attr('sensor.dh_app_pve_lxcs', 'running') | int(0) -%} {%- set
+          lxc_total = state_attr('sensor.dh_app_pve_lxcs', 'total') | int(0) -%}
+
+          {%- set ns.lines = ns.lines + [
+            'VM ' ~ vm_running ~ '/' ~ vm_total ~ ' · LXC ' ~ lxc_running ~ '/' ~ lxc_total,
+            '├─ VM'
+          ] -%}
+
+          {%- for vm in ns.vms | sort(attribute='sort') -%}
+            {%- set vm_last = loop.last -%}
+            {%- set marker = '🟢' if vm.state == 'running'
+                else '🟠' if vm.state == 'paused'
+                else '⚪' if vm.state == 'stopped'
+                else '🔴' -%}
+            {%- set branch = '└─' if vm_last else '├─' -%}
+            {%- set ns.lines = ns.lines + [
+              '│  ' ~ branch ~ ' ' ~ marker ~ ' ' ~ vm.id ~ ' · ' ~ vm.name
+            ] -%}
+
+            {%- set pt = namespace(items=[]) -%}
+            {%- for p in states.sensor -%}
+              {%- if state_attr(p.entity_id, 'proxmox_integration') == 'dh_pve_app'
+                    and state_attr(p.entity_id, 'proxmox_section') == 'guests'
+                    and state_attr(p.entity_id, 'proxmox_subject') == 'passthrough'
+                    and state_attr(p.entity_id, 'proxmox_metric') == 'owner'
+                    and (state_attr(p.entity_id, 'owner_id') | string) == (vm.id | string) -%}
+                {%- set pt.items = pt.items + [{
+                  'address': state_attr(p.entity_id, 'pci_address') or state_attr(p.entity_id, 'proxmox_object_id'),
+                  'model': state_attr(p.entity_id, 'model')
+                    or state_attr(p.entity_id, 'class_name')
+                    or state_attr(p.entity_id, 'proxmox_display_name')
+                    or p.name,
+                  'sort': state_attr(p.entity_id, 'proxmox_sort_key') or p.entity_id
+                }] -%}
+              {%- endif -%}
+            {%- endfor -%}
+
+            {%- for p in pt.items | sort(attribute='sort') -%}
+              {%- set child = '└─' if loop.last else '├─' -%}
+              {%- set indent = '│     ' if vm_last else '│  │  ' -%}
+              {%- set ns.lines = ns.lines + [
+                indent ~ child ~ ' PCI ' ~ p.address ~ ' · ' ~ p.model
+              ] -%}
+            {%- endfor -%}
+          {%- endfor -%}
+
+          {%- set ns.lines = ns.lines + ['└─ LXC'] -%} {%- for lxc in ns.lxcs |
+          sort(attribute='sort') -%}
+            {%- set marker = '🟢' if lxc.state == 'running'
+                else '🟠' if lxc.state == 'paused'
+                else '⚪' if lxc.state == 'stopped'
+                else '🔴' -%}
+            {%- set branch = '└─' if loop.last else '├─' -%}
+            {%- set ns.lines = ns.lines + [
+              '   ' ~ branch ~ ' ' ~ marker ~ ' ' ~ lxc.id ~ ' · ' ~ lxc.name
+            ] -%}
+          {%- endfor -%}
+
+          {{ '```text\n' ~ (ns.lines | join('\n')) ~ '\n```' }}
+        grid_options:
+          columns: 12
+  - type: grid
+    cards:
+      - type: heading
+        heading: История
+        heading_style: title
+        icon: mdi:chart-line
+      - type: heading
+        heading: Температуры · 24 часа
+        heading_style: subtitle
+        icon: mdi:thermometer
+      - type: custom:auto-entities
+        show_empty: false
+        card:
+          type: grid
+          columns: 1
+          square: false
+        card_param: cards
+        filter:
+          template: >-
+            {% set ns = namespace(entities=[]) %} {% for e in states.sensor |
+            sort(attribute='entity_id') %}
+              {% if state_attr(e.entity_id, 'proxmox_integration') == 'dh_pve_app'
+                    and state_attr(e.entity_id, 'proxmox_metric') == 'temperature'
+                    and e.state not in ['unknown', 'unavailable'] %}
+                {% set label = state_attr(e.entity_id, 'proxmox_display_name')
+                    or state_attr(e.entity_id, 'model') or e.name %}
+                {% if state_attr(e.entity_id, 'proxmox_section') == 'cpu' %}
+                  {% set label = 'CPU' %}
+                {% elif state_attr(e.entity_id, 'proxmox_section') == 'graphics' %}
+                  {% set label = 'GPU ' ~ label %}
+                {% endif %}
+                {% set ns.entities = ns.entities + [{'entity': e.entity_id, 'name': label}] %}
+              {% endif %}
+            {% endfor %} {% if ns.entities | count > 0 %}
+              {{ [{
+                'type': 'custom:mini-graph-card',
+                'name': 'Температуры',
+                'icon': 'mdi:thermometer',
+                'entities': ns.entities,
+                'hours_to_show': 24,
+                'points_per_hour': 2,
+                'line_width': 2,
+                'height': 120,
+                'decimals': 1,
+                'show': {
+                  'name': true,
+                  'icon': true,
+                  'state': false,
+                  'graph': 'line',
+                  'fill': false,
+                  'points': false,
+                  'labels': false,
+                  'legend': true,
+                  'extrema': false
+                }
+              }] }}
+            {% else %}
+              {{ [] }}
+            {% endif %}
+        grid_options:
+          columns: 12
+      - type: heading
+        heading: CPU / RAM / Swap · 24 часа
+        heading_style: subtitle
+        icon: mdi:chart-areaspline
+      - type: custom:mini-graph-card
+        name: CPU / RAM / Swap
+        icon: mdi:chart-areaspline
+        entities:
+          - entity: sensor.dh_app_pve_cpu_usage
+            name: CPU
+          - entity: sensor.dh_app_pve_memory_usage
+            name: RAM
+          - entity: sensor.dh_app_pve_swap_usage
+            name: Swap
+        hours_to_show: 24
+        points_per_hour: 2
+        line_width: 2
+        height: 120
+        decimals: 1
+        lower_bound: 0
+        upper_bound: 100
+        show:
+          name: true
+          icon: true
+          state: false
+          graph: line
+          fill: false
+          points: false
+          labels: false
+          legend: true
+          extrema: false
+        grid_options:
+          columns: 12
+      - type: heading
+        heading: Частота CPU · 24 часа
+        heading_style: subtitle
+        icon: mdi:sine-wave
+      - type: custom:mini-graph-card
+        entity: sensor.dh_app_pve_cpu_frequency
+        name: Частота CPU
+        icon: mdi:sine-wave
+        entities:
+          - sensor.dh_app_pve_cpu_frequency
+        hours_to_show: 24
+        points_per_hour: 2
+        line_width: 2
+        height: 80
+        decimals: 0
+        show:
+          name: true
+          icon: true
+          state: true
+          graph: line
+          fill: true
+          points: false
+          labels: false
+          legend: false
+          extrema: false
+        grid_options:
+          columns: 12
+      - type: heading
+        heading: Использование хранилищ · 7 дней
+        heading_style: subtitle
+        icon: mdi:database-clock
+      - type: custom:auto-entities
+        show_empty: false
+        card:
+          type: grid
+          columns: 1
+          square: false
+        card_param: cards
+        filter:
+          template: >-
+            {% set ns = namespace(entities=[]) %} {% for e in states.sensor |
+            sort(attribute='entity_id') %}
+              {% if state_attr(e.entity_id, 'proxmox_integration') == 'dh_pve_app'
+                    and state_attr(e.entity_id, 'proxmox_section') == 'storage'
+                    and e.entity_id is match('sensor\.dh_app_pve_storage_.*_percent_used')
+                    and e.state not in ['unknown', 'unavailable'] %}
+                {% set label = state_attr(e.entity_id, 'proxmox_display_name') or e.name %}
+                {% set ns.entities = ns.entities + [{'entity': e.entity_id, 'name': label}] %}
+              {% endif %}
+            {% endfor %} {% if ns.entities | count > 0 %}
+              {{ [{
+                'type': 'custom:mini-graph-card',
+                'name': 'Хранилища',
+                'icon': 'mdi:database',
+                'entities': ns.entities,
+                'hours_to_show': 168,
+                'points_per_hour': 0.25,
+                'line_width': 2,
+                'height': 120,
+                'decimals': 1,
+                'lower_bound': 0,
+                'upper_bound': 100,
+                'show': {
+                  'name': true,
+                  'icon': true,
+                  'state': false,
+                  'graph': 'line',
+                  'fill': false,
+                  'points': false,
+                  'labels': false,
+                  'legend': true,
+                  'extrema': false
+                }
+              }] }}
+            {% else %}
+              {{ [] }}
+            {% endif %}
+        grid_options:
+          columns: 12
+cards: []
+badges: []
