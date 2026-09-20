@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3.13, pytest, Paho MQTT 2.x, Home Assistant MQTT Device Discovery, Home Assistant MQTT Event, existing `StateStore`, existing fixed scheduler and presentation routers.
 
-**Spec:** `docs/superpowers/specs/2026-09-15-dh-pve-simplified-runtime-haos-design.md`
+**Spec:** `docs/digitalhouses_pve_agent/specs/2026-09-15-dh-pve-simplified-runtime-haos-design.md`
 
 ## Global Constraints
 
@@ -291,7 +291,7 @@ For every transition the publish order is:
 - Modify only files required by failing integration tests and documentation.
 - Modify: `dh_pve_app/README.md`
 - Modify: `dh_pve_app/CHANGELOG.md`
-- Modify: `docs/superpowers/plans/2026-09-15-dh-pve-ups-trigger-policy-v2.md` only to replace the stale deleted-observability dependency with this completed Plan 2 + canonical spec dependency; do not implement Trigger Policy yet.
+- Modify: `docs/digitalhouses_pve_agent/plans/2026-09-15-dh-pve-ups-trigger-policy-v2.md` only to replace the stale deleted-observability dependency with this completed Plan 2 + canonical spec dependency; do not implement Trigger Policy yet.
 
 **Interfaces:**
 - Delivers the Discovery/problem/event boundary required before UPS Trigger Policy v2.

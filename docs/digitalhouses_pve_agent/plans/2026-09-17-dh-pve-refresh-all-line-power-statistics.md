@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3, pytest, paho-mqtt, Home Assistant MQTT Discovery/Lovelace YAML, existing `StateStore`, grouped MQTT presentation runtime.
 
-**Spec:** `docs/superpowers/specs/2026-09-17-dh-pve-refresh-all-line-power-statistics-design.md`
+**Spec:** `docs/digitalhouses_pve_agent/specs/2026-09-17-dh-pve-refresh-all-line-power-statistics-design.md`
 
 ## Global Constraints
 

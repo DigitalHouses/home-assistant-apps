@@ -9,7 +9,7 @@ Branch: `feature/dh-pve-haos-trigger-v2`
 
 This document amends the canonical design in:
 
-`docs/superpowers/specs/2026-09-15-dh-pve-simplified-runtime-haos-design.md`
+`docs/digitalhouses_pve_agent/specs/2026-09-15-dh-pve-simplified-runtime-haos-design.md`
 
 It refines the Manual Refresh contract and adds app-owned monthly utility/line-power statistics. Where this document is more specific than the canonical design, this document is authoritative for these two features.
 
