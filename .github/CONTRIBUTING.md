@@ -29,6 +29,8 @@ common
 
 The implementation is under `scripts/validators/`.
 
+Repository workflow follows [DigitalHouses Repository Governance](../docs/standards/REPOSITORY_GOVERNANCE.md). Product releases follow [DigitalHouses Release Policy](../docs/standards/RELEASE_POLICY.md).
+
 ## Development
 
 Use the supported Python version from the repository CI workflow.
