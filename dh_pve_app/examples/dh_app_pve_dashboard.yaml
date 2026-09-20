@@ -1485,7 +1485,7 @@ sections:
             sort(attribute='entity_id') %}
               {% if state_attr(e.entity_id, 'proxmox_integration') == 'dh_pve_app'
                     and state_attr(e.entity_id, 'proxmox_section') == 'storage'
-                    and e.entity_id is match('sensor\\.dh_app_pve_storage_.*_percent_used')
+                    and e.entity_id is match('sensor\.dh_app_pve_storage_.*_percent_used')
                     and e.state not in ['unknown', 'unavailable'] %}
                 {% set label = state_attr(e.entity_id, 'proxmox_display_name') or e.name %}
                 {% set ns.entities = ns.entities + [{'entity': e.entity_id, 'name': label}] %}
