@@ -163,6 +163,22 @@ def _diagnostic_components(topics) -> dict[str, dict[str, object]]:
             "entity_category": "diagnostic",
             "icon": "mdi:tag-outline",
         },
+        "ups_configured": {
+            "platform": "binary_sensor",
+            "name": "UPS configured",
+            "unique_id": uid("ups_configured"),
+            "default_entity_id": "binary_sensor.dh_app_pve_ups_configured",
+            "state_topic": diagnostics,
+            "value_template": (
+                "{{ 'ON' if value_json.ups_configured | default(false) else 'OFF' }}"
+            ),
+            "payload_on": "ON",
+            "payload_off": "OFF",
+            "availability": availability,
+            "availability_mode": "all",
+            "entity_category": "diagnostic",
+            "icon": "mdi:power-plug-battery-outline",
+        },
         "app_profile": {
             "platform": "sensor",
             "name": "App profile",

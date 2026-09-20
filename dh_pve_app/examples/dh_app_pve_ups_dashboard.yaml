@@ -5,6 +5,25 @@ path: ups
 icon: mdi:power-plug-battery
 sections:
   - type: grid
+    visibility:
+      - condition: state
+        entity: binary_sensor.dh_app_pve_ups_configured
+        state: "off"
+    cards:
+      - type: custom:mushroom-template-card
+        entity: binary_sensor.dh_app_pve_ups_configured
+        primary: ИБП не настроен
+        secondary: Мониторинг UPS на этом сервере не настроен. Основной мониторинг Proxmox продолжает работать.
+        icon: mdi:power-plug-off-outline
+        icon_color: grey
+        multiline_secondary: true
+        fill_container: true
+
+  - type: grid
+    visibility:
+      - condition: state
+        entity: binary_sensor.dh_app_pve_ups_configured
+        state: "on"
     cards:
       - type: heading
         heading: Состояние UPS
@@ -20,6 +39,10 @@ sections:
         name: Обновить
 
   - type: grid
+    visibility:
+      - condition: state
+        entity: binary_sensor.dh_app_pve_ups_configured
+        state: "on"
     cards:
       - type: heading
         heading: Питание и батарея
@@ -102,6 +125,10 @@ sections:
           - sensor.dh_app_pve_ups_load
 
   - type: grid
+    visibility:
+      - condition: state
+        entity: binary_sensor.dh_app_pve_ups_configured
+        state: "on"
     cards:
       - type: heading
         heading: Диагностика
@@ -124,6 +151,10 @@ sections:
             name: Неизвестное состояние питания
 
   - type: grid
+    visibility:
+      - condition: state
+        entity: binary_sensor.dh_app_pve_ups_configured
+        state: "on"
     cards:
       - type: heading
         heading: Городская сеть
@@ -251,6 +282,10 @@ sections:
             fill_container: true
 
   - type: grid
+    visibility:
+      - condition: state
+        entity: binary_sensor.dh_app_pve_ups_configured
+        state: "on"
     cards:
       - type: heading
         heading: UPS Shutdown Trigger

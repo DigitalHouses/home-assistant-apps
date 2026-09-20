@@ -30,6 +30,10 @@ _STATUS = {
 
 _CONFIG = {
     "capabilities",
+    "quick_test_supported",
+    "deep_test_supported",
+    "stop_test_supported",
+    "beeper_control_supported",
     "shutdown_policy",
     "policy_power_restore_delay_observed",
     "policy_charge_threshold",

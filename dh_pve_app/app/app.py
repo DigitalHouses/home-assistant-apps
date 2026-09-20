@@ -61,6 +61,7 @@ class DhPveRuntime:
         slow_tasks: tuple[str, ...] = (),
         version_probe: Callable[[], str | None] | None = None,
         app_version: str = "unknown",
+        ups_configured: bool = False,
     ) -> None:
         self.collectors = dict(collectors)
         self.bridge = bridge
@@ -79,6 +80,7 @@ class DhPveRuntime:
         self.slow_tasks = frozenset(slow_tasks)
         self.version_probe = version_probe
         self.app_version = app_version
+        self.ups_configured = bool(ups_configured)
         self._pve_version_fingerprint: str | None = None
         self._subsystems: dict[str, SubsystemState] = {}
         self._published_groups: dict[str, dict[str, object]] = {}
@@ -209,6 +211,7 @@ class DhPveRuntime:
         payload: dict[str, object] = {
             "collected_at": collected_at,
             "app_version": self.app_version,
+            "ups_configured": self.ups_configured,
             "last_refresh": last_refresh,
             "app_profile": self.presentation_router.profile_summary(),
             "last_publication": {
@@ -225,6 +228,22 @@ class DhPveRuntime:
         self._published_groups["diagnostics"] = payload
         self._pending_groups.pop("diagnostics", None)
         return True
+
+    def set_ups_configured(self, configured: bool) -> bool:
+        configured = bool(configured)
+        if configured == self.ups_configured:
+            return True
+        self.ups_configured = configured
+        collected_at = self.now_iso()
+        profile = str(self.presentation_router.profile_summary().get("state") or "normal")
+        return self._publish_diagnostics(
+            collected_at=collected_at,
+            last_refresh=self.last_refresh,
+            group="diagnostics",
+            reason="ups_configuration_changed",
+            profile=profile,
+            group_count=1,
+        )
 
     def _retry_pending_groups(self) -> tuple[bool, tuple[str, ...]]:
         if not self._pending_groups:

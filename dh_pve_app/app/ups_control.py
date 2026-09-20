@@ -146,6 +146,10 @@ class UpsCapabilities:
             "shutdown_control": self.shutdown_control,
             "supported_features": list(self.supported_features),
             "test_controls_enabled": self.controls_enabled,
+            "quick_test_supported": self.supports_test("quick"),
+            "deep_test_supported": self.supports_test("deep"),
+            "stop_test_supported": self.supports_test("stop"),
+            "beeper_control_supported": self.supports_beeper_switch(),
         }
 
 

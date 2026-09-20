@@ -5,12 +5,12 @@ APP = ROOT / "dh_pve_app"
 VALIDATOR = ROOT / "scripts" / "validators" / "products" / "pve_agent.py"
 
 
-def test_056_version_and_repository_validator_contract():
-    assert (APP / "VERSION").read_text(encoding="utf-8").strip() == "0.5.6"
+def test_057_version_and_repository_validator_contract():
+    assert (APP / "VERSION").read_text(encoding="utf-8").strip() == "0.5.7"
 
     text = VALIDATOR.read_text(encoding="utf-8")
     for required in (
-        'EXPECTED_VERSION = "0.5.6"',
+        'EXPECTED_VERSION = "0.5.7"',
         'app / "dh_app_pve.txt"',
         'ROOT_GUIDE="/root/dh_app_pve.txt"',
         'cat "${APP_DIR}/dh_app_pve.txt"',
@@ -19,7 +19,7 @@ def test_056_version_and_repository_validator_contract():
         assert required in text
 
 
-def test_056_operational_guide_contract():
+def test_057_operational_guide_contract():
     guide = (APP / "dh_app_pve.txt").read_text(encoding="utf-8")
 
     for required in (
@@ -34,14 +34,14 @@ def test_056_operational_guide_contract():
         assert required in guide
 
 
-def test_056_readme_and_changelog_document_installed_root_guide():
+def test_057_readme_and_changelog_document_installed_root_guide():
     readme = (APP / "README.md").read_text(encoding="utf-8")
     changelog = (APP / "CHANGELOG.md").read_text(encoding="utf-8")
 
-    assert "`VERSION` is `0.5.6`." in readme
+    assert "`VERSION` is `0.5.7`." in readme
     assert "/root/dh_app_pve.txt" in readme
 
-    assert "## 0.5.6" in changelog
+    assert "## 0.5.7" in changelog
     assert "/root/dh_app_pve.txt" in changelog
     assert "version/source/commit" in changelog
     assert "value_appeared" in changelog
@@ -50,3 +50,5 @@ def test_056_readme_and_changelog_document_installed_root_guide():
     assert "STATIC" in changelog
     assert "unconfirmed" in changelog
     assert "tombstone" in changelog
+    assert "binary_sensor.dh_app_pve_ups_configured" in changelog
+    assert "ИБП не настроен" in changelog

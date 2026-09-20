@@ -5,7 +5,7 @@ from typing import Any
 
 from validators.common import fail, require_files
 
-EXPECTED_VERSION = "0.5.6"
+EXPECTED_VERSION = "0.5.7"
 EXPECTED_TOPIC_PREFIX = "DigitalHouses/Global/dh_pve_app"
 EXPECTED_DEVICE_NAME = "DH PVE"
 EXPECTED_REFRESH_ENTITY = "button.dh_app_pve_refresh"
@@ -134,6 +134,8 @@ def validate_dh_pve_app(
             '"problem_updated"',
             '"default_entity_id": "sensor.dh_app_pve_app_version"',
             "{{ value_json.app_version | default('unknown') }}",
+            '"default_entity_id": "binary_sensor.dh_app_pve_ups_configured"',
+            "value_json.ups_configured",
         ),
         "canonical ready-state Discovery",
     )
@@ -155,6 +157,10 @@ def validate_dh_pve_app(
             '"battery_discharge_level_crossed"',
             '"battery_fully_charged"',
             '"shutdown_committed"',
+            '"quick_test_supported"',
+            '"deep_test_supported"',
+            '"stop_test_supported"',
+            '"beeper_control_supported"',
         ),
         "canonical UPS ready-state Discovery",
     )
@@ -263,6 +269,8 @@ def validate_dh_pve_app(
             "'floating': 'Поддержание заряда'",
             "binary_sensor.dh_app_pve_ups_on_battery_problem",
             "button.dh_app_pve_ups_refresh",
+            "binary_sensor.dh_app_pve_ups_configured",
+            "ИБП не настроен",
         ),
         "UPS dashboard",
     )
@@ -443,6 +451,8 @@ def validate_dh_pve_app(
             "read_pve_version(",
             'fan_state_store=StateStore(state_dir / "fans.json")',
             "app_version=version",
+            "ups_configured=selected_ups_name is not None",
+            "runtime.set_ups_configured(True)",
             "--uninstall-mqtt-cleanup",
             "cleanup_mqtt(config, identity)",
         ),
