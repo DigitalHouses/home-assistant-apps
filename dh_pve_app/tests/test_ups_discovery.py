@@ -3,6 +3,7 @@ from pathlib import Path
 from app.config import MqttConfig
 from app.discovery_ups import build_ups_discovery_payload
 from app.identity import HostIdentity
+from app.ups_control import parse_upscmd_list_output
 from app.topics import build_topics, build_ups_topics
 from app.ups_nut import parse_upsc_output
 
@@ -177,6 +178,46 @@ def test_discovery_omits_capability_not_reported_by_ups():
     assert "input_voltage" not in components
     assert "input_frequency" not in components
     assert "output_frequency" not in components
+
+
+def test_discovery_exposes_stable_ui_capability_facts():
+    snapshot = parse_upsc_output(
+        "ups.status: OL\n"
+        "ups.beeper.status: enabled\n"
+    )
+    capabilities = parse_upscmd_list_output(
+        "test.battery.start.quick - Quick test\n"
+        "test.battery.start.deep - Deep test\n"
+        "test.battery.stop - Stop test\n"
+        "beeper.off - Disable beeper\n"
+        "beeper.on - Enable beeper\n"
+    )
+    components = build_ups_discovery_payload(
+        _mqtt(),
+        _identity(),
+        version="0.5.7",
+        snapshot=snapshot,
+        capabilities=capabilities,
+    )["components"]
+
+    expected = {
+        "quick_test_supported": "binary_sensor.dh_app_pve_ups_quick_test_supported",
+        "deep_test_supported": "binary_sensor.dh_app_pve_ups_deep_test_supported",
+        "stop_test_supported": "binary_sensor.dh_app_pve_ups_stop_test_supported",
+        "beeper_control_supported": "binary_sensor.dh_app_pve_ups_beeper_control_supported",
+    }
+    for key, entity_id in expected.items():
+        component = components[key]
+        assert component["platform"] == "binary_sensor"
+        assert component["default_entity_id"] == entity_id
+        assert component["payload_on"] == "ON"
+        assert component["payload_off"] == "OFF"
+        assert component["entity_category"] == "diagnostic"
+
+    assert "quick_test_supported" in components["quick_test_supported"]["value_template"]
+    assert "deep_test_supported" in components["deep_test_supported"]["value_template"]
+    assert "stop_test_supported" in components["stop_test_supported"]["value_template"]
+    assert "beeper_control_supported" in components["beeper_control_supported"]["value_template"]
 
 
 def test_ups_device_metadata_uses_real_hardware_identity():
