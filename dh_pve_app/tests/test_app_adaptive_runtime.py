@@ -88,7 +88,14 @@ def memory_sample(usage=80.0):
     )
 
 
-def make_runtime(collectors, *, mono_values=None, iso_values=None, app_version=None):
+def make_runtime(
+    collectors,
+    *,
+    mono_values=None,
+    iso_values=None,
+    app_version=None,
+    ups_configured=None,
+):
     bridge = GroupBridge()
     settings = RuntimeSettings()
     policy = PublishPolicy(settings)
@@ -97,6 +104,8 @@ def make_runtime(collectors, *, mono_values=None, iso_values=None, app_version=N
     kwargs = {}
     if app_version is not None:
         kwargs["app_version"] = app_version
+    if ups_configured is not None:
+        kwargs["ups_configured"] = ups_configured
     runtime = DhPveRuntime(
         collectors=collectors,
         bridge=bridge,
@@ -134,6 +143,28 @@ def test_group_capable_runtime_publishes_app_version_in_diagnostics():
 
     diagnostics = dict(bridge.group_states)["diagnostics"]
     assert diagnostics["app_version"] == "0.5.1"
+
+
+def test_group_capable_runtime_publishes_and_updates_ups_configuration_fact():
+    runtime, bridge = make_runtime(
+        {"cpu": lambda: cpu_sample()},
+        ups_configured=False,
+        iso_values=[
+            "2026-09-20T19:00:00+05:00",
+            "2026-09-20T19:00:01+05:00",
+        ],
+    )
+
+    assert runtime.run_collection(force=True) is True
+    assert dict(bridge.group_states)["diagnostics"]["ups_configured"] is False
+
+    bridge.group_states.clear()
+    assert runtime.set_ups_configured(True) is True
+
+    assert [group for group, _ in bridge.group_states] == ["diagnostics"]
+    diagnostics = bridge.group_states[-1][1]
+    assert diagnostics["ups_configured"] is True
+    assert diagnostics["last_publication"]["reason"] == "ups_configuration_changed"
 
 
 def test_group_capable_startup_tombstones_legacy_monolithic_state():
