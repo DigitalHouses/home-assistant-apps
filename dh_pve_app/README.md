@@ -10,7 +10,7 @@ Native Linux agent for **Proxmox VE 8.x** that publishes host, CPU, memory, stor
 
 The public product name is **DigitalHouses PVE Agent**. Existing runtime identifiers remain compatible: the implementation directory is `dh_pve_app`, the MQTT base namespace is `DigitalHouses/Global/dh_pve_app/<instance>`, and the Home Assistant devices are `DH PVE` and optional `DH PVE UPS`.
 
-Current source release: `VERSION` is `0.5.6`.
+Current source release: `VERSION` is `0.5.7`.
 
 ## Architecture
 
@@ -95,6 +95,16 @@ Generic PVE problem event types are `problem_started`, `problem_recovered` and `
 New public App events use `schema_version: 2` and contain machine semantics only: IDs/enums, previous/current state, numeric values, thresholds, timestamps and reason codes. App event payloads do not generate notification `title`, `message`, `summary`, `details`, localized labels, emoji or `status_ru`. Runtime Event messages are non-retained, published with MQTT QoS 1 after the synchronized retained current-state bundle, and Home Assistant subscribes to the Event topics at QoS 1 through MQTT Discovery.
 
 The retained problem binaries and aggregate sensors are the authoritative current-state/reconciliation contract. Event entities describe what just happened; they are not used as retained state. Retryable UPS semantic events use a small persisted outbox so an MQTT publish failure does not silently advance semantic state past an undelivered Event.
+
+## Optional UPS UI contract
+
+UPS monitoring is optional. The always-present PVE device exposes `binary_sensor.dh_app_pve_ups_configured` from the persistent UPS selection state:
+
+- `off` — no UPS has been provisioned for this PVE host; the UPS dashboard should show one neutral “UPS not configured” card and hide the UPS-specific view;
+- `on` + `binary_sensor.dh_app_pve_ups_available = off` — a UPS is provisioned but NUT cannot currently read it; this is a real availability problem and must remain visible;
+- `on` + UPS available — show the full UPS dashboard.
+
+UPS controls that depend on hardware capabilities have stable diagnostic facts: `binary_sensor.dh_app_pve_ups_quick_test_supported`, `binary_sensor.dh_app_pve_ups_deep_test_supported`, `binary_sensor.dh_app_pve_ups_stop_test_supported`, and `binary_sensor.dh_app_pve_ups_beeper_control_supported`. UI cards may use these facts for visibility instead of referencing an entity that the UPS does not support.
 
 ## UPS status, charger and battery semantics
 
