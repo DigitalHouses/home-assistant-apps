@@ -159,6 +159,70 @@ def build_ups_discovery_payload(
                 "'supported_features': value_json.capabilities.supported_features | default([])} | tojson }}"
             ),
         },
+        "quick_test_supported": {
+            "platform": "binary_sensor",
+            "name": "Quick battery test supported",
+            "unique_id": uid("quick_test_supported"),
+            "default_entity_id": "binary_sensor.dh_app_pve_ups_quick_test_supported",
+            "state_topic": topics.state,
+            "value_template": (
+                "{{ 'ON' if value_json.capabilities.quick_test_supported | default(false) else 'OFF' }}"
+            ),
+            "payload_on": "ON",
+            "payload_off": "OFF",
+            "availability": [app_availability],
+            "availability_mode": "all",
+            "entity_category": "diagnostic",
+            "icon": "mdi:battery-sync",
+        },
+        "deep_test_supported": {
+            "platform": "binary_sensor",
+            "name": "Deep battery test supported",
+            "unique_id": uid("deep_test_supported"),
+            "default_entity_id": "binary_sensor.dh_app_pve_ups_deep_test_supported",
+            "state_topic": topics.state,
+            "value_template": (
+                "{{ 'ON' if value_json.capabilities.deep_test_supported | default(false) else 'OFF' }}"
+            ),
+            "payload_on": "ON",
+            "payload_off": "OFF",
+            "availability": [app_availability],
+            "availability_mode": "all",
+            "entity_category": "diagnostic",
+            "icon": "mdi:battery-heart-variant",
+        },
+        "stop_test_supported": {
+            "platform": "binary_sensor",
+            "name": "Stop battery test supported",
+            "unique_id": uid("stop_test_supported"),
+            "default_entity_id": "binary_sensor.dh_app_pve_ups_stop_test_supported",
+            "state_topic": topics.state,
+            "value_template": (
+                "{{ 'ON' if value_json.capabilities.stop_test_supported | default(false) else 'OFF' }}"
+            ),
+            "payload_on": "ON",
+            "payload_off": "OFF",
+            "availability": [app_availability],
+            "availability_mode": "all",
+            "entity_category": "diagnostic",
+            "icon": "mdi:stop-circle-outline",
+        },
+        "beeper_control_supported": {
+            "platform": "binary_sensor",
+            "name": "Beeper control supported",
+            "unique_id": uid("beeper_control_supported"),
+            "default_entity_id": "binary_sensor.dh_app_pve_ups_beeper_control_supported",
+            "state_topic": topics.state,
+            "value_template": (
+                "{{ 'ON' if value_json.capabilities.beeper_control_supported | default(false) else 'OFF' }}"
+            ),
+            "payload_on": "ON",
+            "payload_off": "OFF",
+            "availability": [app_availability],
+            "availability_mode": "all",
+            "entity_category": "diagnostic",
+            "icon": "mdi:application-cog-outline",
+        },
         "shutdown_policy": {
             "platform": "sensor",
             "name": "Shutdown policy",
