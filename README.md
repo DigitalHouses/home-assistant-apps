@@ -63,4 +63,4 @@ Support is optional. Public features remain available to everyone.
 
 ## License
 
-DigitalHouses source code is licensed under the [MIT License](LICENSE). Third-party software retains their own license terms.
+DigitalHouses source code is licensed under the [MIT License](LICENSE). Third-party software retains its own license terms.
