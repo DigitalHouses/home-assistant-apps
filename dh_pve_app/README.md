@@ -12,6 +12,12 @@ The public product name is **DigitalHouses PVE Agent**. Existing runtime identif
 
 Current source release: `VERSION` is `0.5.7`.
 
+## Home Assistant dashboard
+
+![DigitalHouses PVE Agent — Home Assistant dashboard](images/dashboard-pve-ru.png)
+
+Example of the DigitalHouses PVE Agent dashboard in Home Assistant.
+
 ## Architecture
 
 The App is the source of truth for acquisition, calculations, thresholds, problem state, topology, UPS interpretation and effective policy. Home Assistant is a light client for UI, explicit Recorder history, notifications and user configuration input.
