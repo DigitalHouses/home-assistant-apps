@@ -5,6 +5,8 @@ This directory separates ecosystem-wide standards from product-specific engineer
 ## Shared standards
 
 - [DigitalHouses Application Standard](standards/DIGITALHOUSES_APP_STANDARD.md) — common contract for DigitalHouses Home Assistant Apps and Linux agents.
+- [DigitalHouses Release Policy](standards/RELEASE_POLICY.md) — product versions, release tags, GitHub Releases, and immutable source provenance.
+- [DigitalHouses Repository Governance](standards/REPOSITORY_GOVERNANCE.md) — `main`, pull requests, CI, merge strategy, and branch lifecycle.
 
 ## Product engineering records
 
