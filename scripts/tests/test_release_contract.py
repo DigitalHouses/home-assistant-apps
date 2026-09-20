@@ -36,13 +36,16 @@ class ReleaseContractTests(unittest.TestCase):
             self.assertEqual(metadata.notes, "- New release.")
             self.assertFalse(metadata.prerelease)
 
-    def test_haos_app_reads_config_version(self):
+    def test_haos_app_reads_top_level_config_version(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             self._write(
                 root,
                 "digitalhouses_db_monitoring/config.yaml",
-                "name: DigitalHouses DB Monitoring\nversion: 0.2.0\n",
+                "name: DigitalHouses DB Monitoring\n"
+                "version: 0.2.0\n"
+                "options:\n"
+                "  version: nested-value-must-be-ignored\n",
             )
             self._write(
                 root,

@@ -127,7 +127,7 @@ def compare_semver(left: str, right: str) -> int:
 
 def _read_haos_config_version(path: Path) -> str:
     version_re = re.compile(
-        r"^\s*version:\s*['\"]?(?P<version>[^'\"\s#]+)['\"]?\s*(?:#.*)?$"
+        r"^version:\s*['\"]?(?P<version>[^'\"\s#]+)['\"]?\s*(?:#.*)?$"
     )
     matches: list[str] = []
     for line in path.read_text(encoding="utf-8").splitlines():
