@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from validators.common import ValidationError, parse_application_metadata
-from validators.types.haos_addon import validate_haos_addon
+from validators.types.haos_app import validate_haos_addon
 from validators.types.linux_agent import validate_linux_agent
 
 
