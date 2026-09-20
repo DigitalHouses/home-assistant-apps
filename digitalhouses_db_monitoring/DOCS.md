@@ -1,4 +1,4 @@
-# DigitalHouses DB Monitoring
+# DigitalHouses Recorder App — Technical documentation
 
 DigitalHouses DB Monitoring publishes Home Assistant Recorder database health and storage metrics through MQTT Discovery.
 
@@ -10,9 +10,11 @@ DigitalHouses DB Monitoring publishes Home Assistant Recorder database health an
 
 ## Storage monitoring
 
-The App can publish:
+When storage monitoring is enabled, the App publishes:
 
 - `sensor.dh_db_disk_free` — free space on the filesystem that stores the Recorder database, in GB.
+- `sensor.dh_db_disk_used` — used space on the filesystem that stores the Recorder database, in GB.
+- `sensor.dh_db_disk_total` — total size of the filesystem that stores the Recorder database, in GB.
 - `sensor.dh_db_disk_used_percentage` — used disk percentage.
 
 ### Automatic
@@ -37,7 +39,7 @@ The resolved path is written to the App log. The first SSH host key is stored in
 
 ### Disabled
 
-Choose `Disabled` to omit the two storage entities.
+Choose `Disabled` to omit the four storage entities.
 
 ## Publishing
 

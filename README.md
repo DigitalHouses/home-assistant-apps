@@ -1,5 +1,8 @@
 # DigitalHouses Home Assistant Apps
 
+[![CI](https://github.com/DigitalHouses/home-assistant-apps/actions/workflows/validate.yml/badge.svg)](https://github.com/DigitalHouses/home-assistant-apps/actions/workflows/validate.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 Open-source applications and Linux agents by **DigitalHouses**, built to extend Home Assistant with infrastructure, media, database, and connectivity observability.
 
 ## Products

@@ -1,4 +1,4 @@
-# DigitalHouses Speedtest — Technical documentation
+# DigitalHouses Speedtest App — Technical documentation
 
 ## Architecture
 
@@ -299,18 +299,18 @@ of every 1.0.0 identity.
 
 ## Field verification checklist
 
-Before updating screenshots:
+Before a release or screenshot refresh:
 
-1. Install 1.1.1 from GitHub over 1.1.0.
-2. Confirm all old entity IDs and Recorder history remain.
-3. Run a manual test.
-4. Change Periodic test interval and confirm the log reports immediate
-   rescheduling without an App restart.
+1. Upgrade the current installed App from the previous published version.
+2. Confirm existing entity IDs and Recorder history remain.
+3. Run a manual Speedtest and verify the current result and Recent results.
+4. Change Periodic test interval and confirm immediate rescheduling without an App restart.
 5. Restart the App and confirm the interval persists.
 6. Change the legacy App option, restart and confirm the Number follows it.
 7. Change all three threshold Numbers and confirm immediate recalculation.
 8. Force low/high thresholds and verify strict equality.
-9. Restart the App and confirm thresholds and Recent results persist.
+9. Restart the App and confirm thresholds, schedule, Recent results and outage state persist.
 10. Test no-connectivity and failed Ookla execution.
 11. Test expiration with a temporarily short `expire_after_seconds`.
-12. Inspect MQTT discovery and App logs.
+12. Verify local-time monthly outage accounting.
+13. Inspect MQTT Discovery and App logs.

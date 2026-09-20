@@ -1,11 +1,14 @@
-# DH PVE App
+# DigitalHouses PVE Agent
 
-`dh_pve_app` is the DigitalHouses native Linux agent for Proxmox VE 8.x. It collects host, CPU, memory, storage, disk/SMART, GPU, fan and VM/LXC state, publishes Home Assistant entities through MQTT Discovery, and can monitor a locally attached UPS through Network UPS Tools (NUT).
+[![CI](https://github.com/DigitalHouses/home-assistant-apps/actions/workflows/validate.yml/badge.svg)](https://github.com/DigitalHouses/home-assistant-apps/actions/workflows/validate.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](../LICENSE)
+![Type: Linux agent](https://img.shields.io/badge/type-Linux%20agent-555555.svg)
 
-`VERSION` is `0.5.6`.
+Native Linux agent for **Proxmox VE 8.x** that publishes host, CPU, memory, storage, disk/SMART, GPU, fan, VM/LXC and optional NUT/UPS observability to Home Assistant through MQTT Discovery.
 
-MQTT base namespace: `DigitalHouses/Global/dh_pve_app/<instance>`.
-MQTT devices: `DH PVE` and optional `DH PVE UPS`.
+[Installation / update](#installation--update) · [Changelog](CHANGELOG.md) · [Engineering docs](../docs/digitalhouses_pve_agent/) · [Issues](https://github.com/DigitalHouses/home-assistant-apps/issues)
+
+The public product name is **DigitalHouses PVE Agent**. Existing runtime identifiers remain compatible: the implementation directory is `dh_pve_app`, the MQTT base namespace is `DigitalHouses/Global/dh_pve_app/<instance>`, and the Home Assistant devices are `DH PVE` and optional `DH PVE UPS`.
 
 ## Architecture
 
@@ -317,3 +320,10 @@ Routine CI/deploy validation is non-destructive. It must not casually perform:
 - Home Assistant initiated host shutdown.
 
 Live shutdown commissioning is a separate reviewed gate after code, configuration, runtime budget and topology are validated.
+
+
+## Support and license
+
+Report reproducible bugs or feature requests through the repository [Issues](https://github.com/DigitalHouses/home-assistant-apps/issues). Security-sensitive reports follow the repository [security policy](../.github/SECURITY.md).
+
+DigitalHouses PVE Agent is provided under the repository [MIT License](../LICENSE).

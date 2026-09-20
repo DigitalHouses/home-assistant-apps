@@ -1,6 +1,14 @@
-# DigitalHouses Plex Monitoring
+# DigitalHouses Plex Agent
 
-Native Linux workload, playback, and library monitoring for Plex Media Server with Home Assistant MQTT Device Discovery.
+[![CI](https://github.com/DigitalHouses/home-assistant-apps/actions/workflows/validate.yml/badge.svg)](https://github.com/DigitalHouses/home-assistant-apps/actions/workflows/validate.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](../LICENSE)
+![Type: Linux agent](https://img.shields.io/badge/type-Linux%20agent-555555.svg)
+
+Native Linux agent for Plex Media Server workload, playback, transcoding and library observability in Home Assistant through MQTT Discovery.
+
+[Install / update](#install--update) · [Changelog](CHANGELOG.md) · [Engineering docs](../docs/digitalhouses_plex_agent/) · [Issues](https://github.com/DigitalHouses/home-assistant-apps/issues)
+
+The public product name is **DigitalHouses Plex Agent**. Existing runtime paths, service names and MQTT identities remain unchanged for compatibility.
 
 ## Purpose
 
@@ -232,3 +240,10 @@ journalctl -u digitalhouses_plex_monitoring -f
 /var/lib/digitalhouses_plex_monitoring/
 journald
 ```
+
+
+## Support and license
+
+Report reproducible bugs or feature requests through the repository [Issues](https://github.com/DigitalHouses/home-assistant-apps/issues). Security-sensitive reports follow the repository [security policy](../.github/SECURITY.md).
+
+DigitalHouses Plex Agent is provided under the repository [MIT License](../LICENSE).

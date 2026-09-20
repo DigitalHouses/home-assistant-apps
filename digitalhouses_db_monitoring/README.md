@@ -1,110 +1,113 @@
-# DH Recorder Monitor
+# DigitalHouses Recorder App
 
-**DH Recorder Monitor** is a Home Assistant OS App for monitoring the main Home Assistant Recorder database parameters.
+[![CI](https://github.com/DigitalHouses/home-assistant-apps/actions/workflows/validate.yml/badge.svg)](https://github.com/DigitalHouses/home-assistant-apps/actions/workflows/validate.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](../LICENSE)
+![Type: Home Assistant App](https://img.shields.io/badge/type-Home%20Assistant%20App-41BDF5.svg)
 
-The App connects to the database used by Home Assistant Recorder, collects key database and Recorder metrics, and publishes them to Home Assistant through MQTT Discovery.
+Home Assistant App for monitoring the health, size, retained history, write activity and storage footprint of the database used by Home Assistant Recorder.
 
-The main goal is to provide a simple and reusable way to monitor the health, size, history depth, and write activity of the Home Assistant database without creating multiple SQL sensors manually in `configuration.yaml`.
+[Quick start](#quick-start) · [Technical documentation](DOCS.md) · [Changelog](CHANGELOG.md) · [Issues](https://github.com/DigitalHouses/home-assistant-apps/issues)
 
-![DH Recorder Monitor](images/dh_db_monitor.png)
+![DigitalHouses Recorder dashboard](images/dh_db_monitor.png)
 
-## Purpose
+## Quick start
 
-Home Assistant Recorder stores entity history and statistics in a database. On installations with long retention periods or a large number of entities, this database becomes an important part of the system.
-
-DH Recorder Monitor provides visibility into the main Recorder database parameters directly from Home Assistant.
-
-Typical use cases include:
-
-* checking whether Recorder is actively writing data;
-* monitoring database growth;
-* checking the available history depth;
-* monitoring the number of stored state records;
-* detecting database connection problems;
-* verifying the timestamp of the latest Recorder entry;
-* monitoring Recorder activity over time.
-
-## Supported Databases
-
-The App is designed to support:
-
-* PostgreSQL
-* MariaDB
-
-PostgreSQL connections are configured manually.
-
-When MariaDB is installed as a Home Assistant OS App and exposes the Supervisor `mysql` service, DH Recorder Monitor can use that connection automatically.
-
-## MQTT Integration
-
-MQTT is obtained automatically through the Home Assistant Supervisor service discovery mechanism.
-
-No MQTT host, username, or password needs to be entered manually when a compatible MQTT service is available in Home Assistant OS.
-
-The App publishes one MQTT device containing all Recorder database monitoring entities.
-
-## Home Assistant Entities
-
-The initial version exposes the following entities:
-
-| Entity ID                           | Description                                              |
-| ----------------------------------- | -------------------------------------------------------- |
-| `sensor.dh_db_start`                | Timestamp of the earliest state stored in the database   |
-| `sensor.dh_db_last`                 | Timestamp of the latest state stored in the database     |
-| `sensor.dh_db_depth`                | Recorder history depth in days                           |
-| `sensor.dh_db_records_per_hour`     | Number of state records written during the last hour     |
-| `sensor.dh_db_records`              | Total number of rows in the `states` table               |
-| `sensor.dh_db_size`                 | Current database size                                    |
-| `sensor.dh_db_version`              | Database server version                                  |
-| `sensor.dh_db_yesterday_records`    | Number of state records written during the previous day  |
-| `sensor.dh_db_name`                 | Current Recorder database name                           |
-| `sensor.dh_db_user`                 | Database user used by the monitor                        |
-| `binary_sensor.dh_db_connected`     | Database connection status                               |
-| `binary_sensor.dh_db_recorder_writing` | Indicates whether Recorder is currently writing data     |
-| `sensor.dh_db_last_age`             | Time elapsed since the latest Recorder state was written |
-
-All entities are grouped under a single Home Assistant device:
-
-**DH Recorder**
-
-## How It Works
+1. In Home Assistant open **Settings → Apps → App store → Repositories**.
+2. Add:
 
 ```text
-Home Assistant Recorder
-        │
-        ▼
-PostgreSQL / MariaDB
-        │
-        ▼
-DH Recorder Monitor
-        │
-        ▼
-MQTT Discovery
-        │
-        ▼
-Home Assistant
+https://github.com/DigitalHouses/home-assistant-apps
 ```
 
-The App periodically queries the Recorder database using different polling intervals.
+3. Install the Recorder monitoring App, currently listed in Home Assistant package metadata as **DigitalHouses DB Monitoring**.
+4. Select `PostgreSQL` or `MariaDB`, configure the database connection, and optionally enable storage monitoring.
+5. Start the App. MQTT credentials are obtained automatically from the Home Assistant Supervisor MQTT service.
 
-Frequently changing health metrics are collected more often, while expensive database queries such as total row counts are executed less frequently.
+The public product name is **DigitalHouses Recorder App**. Existing HAOS slug, MQTT topics, device identity and entity IDs remain unchanged for compatibility.
 
-This reduces unnecessary load on large Recorder databases.
+## What it monitors
 
-## Polling Strategy
+DigitalHouses Recorder App replaces a collection of manually maintained SQL sensors with one reusable App and one MQTT Discovery device.
 
-Default polling intervals:
+It monitors:
 
-| Metric group                      |               Interval |
-| --------------------------------- | ---------------------: |
-| Recorder health and latest state  |             60 seconds |
-| Database size and hourly activity |              5 minutes |
-| History depth and total records   |                 1 hour |
-| Static database information       | On startup / reconnect |
+- database connectivity and Recorder write activity;
+- earliest/latest retained state and history depth;
+- state-record volume and hourly write rate;
+- database size, database name/user and server version;
+- previous-day Recorder writes;
+- optional database-filesystem free, used, total and used percentage;
+- Top 10 Recorder entities for the last 24 hours and all retained history;
+- on-demand full refresh with the timestamp of the last successful refresh.
 
-Polling intervals can be adjusted in the App configuration.
+## Supported databases
 
-## PostgreSQL Configuration
+- **PostgreSQL** — manual database connection.
+- **MariaDB Supervisor App** — automatic Supervisor MySQL service connection.
+- **External MariaDB** — manual database connection.
+
+The App reads Recorder data and database metadata; it does not modify Recorder tables.
+
+## MQTT integration
+
+MQTT is obtained through Home Assistant Supervisor service discovery. No MQTT host, username or password is required in the App configuration when a compatible MQTT service is available.
+
+All entities are grouped under the existing Home Assistant device:
+
+```text
+DH Recorder
+```
+
+## Home Assistant entities
+
+Core entities:
+
+| Entity ID | Purpose |
+| --- | --- |
+| `sensor.dh_db_start` | Earliest retained Recorder state |
+| `sensor.dh_db_last` | Latest Recorder state |
+| `sensor.dh_db_depth` | Retained history depth in days |
+| `sensor.dh_db_records_per_hour` | State records written during the last hour |
+| `sensor.dh_db_records` | Total Recorder `states` rows, reported in thousands |
+| `sensor.dh_db_size` | Database size |
+| `sensor.dh_db_version` | Database server/version |
+| `sensor.dh_db_yesterday_records` | State records written during the previous local day |
+| `sensor.dh_db_name` | Recorder database name |
+| `sensor.dh_db_user` | Database user used by the monitor |
+| `binary_sensor.dh_db_connected` | Database connectivity |
+| `binary_sensor.dh_db_recorder_writing` | Whether Recorder is actively writing |
+| `sensor.dh_db_last_age` | Age of the latest Recorder state |
+| `sensor.dh_db_top_entities_24h` | Top Recorder entities during the last 24 hours |
+| `sensor.dh_db_top_entities_all_time` | Top Recorder entities across retained history |
+| `button.dh_db_refresh` | Run a full on-demand refresh |
+| `sensor.dh_db_last_refresh` | Last successful full manual refresh |
+
+When storage monitoring is enabled, the App also exposes:
+
+| Entity ID | Purpose |
+| --- | --- |
+| `sensor.dh_db_disk_free` | Free filesystem space |
+| `sensor.dh_db_disk_used` | Used filesystem space |
+| `sensor.dh_db_disk_total` | Total filesystem size |
+| `sensor.dh_db_disk_used_percentage` | Used filesystem percentage |
+
+## Polling strategy
+
+Recorder health is refreshed at the configured `publish_interval_minutes` interval, which defaults to one minute. More expensive work is internally rate-limited:
+
+| Metric group | Interval |
+| --- | ---: |
+| Recorder health/latest state | Configured publish interval |
+| Database size/hourly activity | 5 minutes |
+| Storage metrics | 5 minutes |
+| History depth/total records | 1 hour |
+| Top entities — 24h | 1 hour |
+| Top entities — all retained history | 1 day |
+| Static database information | Startup/reconnect |
+
+A manual refresh collects every enabled group immediately without changing the normal background intervals.
+
+## PostgreSQL configuration
 
 Example:
 
@@ -112,18 +115,18 @@ Example:
 database_type: postgresql
 
 postgresql:
-  host: 192.168.11.32
+  host: "db.example.local"
   port: 5432
-  database: hassio
-  username: hauser
-  password: your_password
+  database: homeassistant
+  username: recorder_monitor
+  password: "CHANGE_ME"
 ```
 
-The PostgreSQL account only needs permission to read the required Recorder tables and database metadata.
+The PostgreSQL account only needs read access to the Recorder tables and metadata required by the monitor.
 
-## MariaDB Configuration
+## MariaDB configuration
 
-When the Home Assistant MariaDB App exposes the Supervisor MySQL service:
+For the Home Assistant MariaDB App:
 
 ```yaml
 database_type: mariadb
@@ -132,110 +135,59 @@ mariadb:
   connection: supervisor
 ```
 
-A manual MariaDB connection can also be used:
+For an external MariaDB server:
 
 ```yaml
 database_type: mariadb
 
 mariadb:
   connection: manual
-  host: 192.168.11.32
+  host: "db.example.local"
   port: 3306
   database: homeassistant
-  username: hauser
-  password: your_password
+  username: recorder_monitor
+  password: "CHANGE_ME"
 ```
 
-## Recorder Health Monitoring
+## Recorder health
 
-One of the most useful entities is:
+`binary_sensor.dh_db_recorder_writing` compares the timestamp of the latest Recorder state with the current time.
 
-```text
-binary_sensor.dh_db_recorder_writing
-```
-
-The App compares the latest Recorder state timestamp with the current time.
-
-If no new state has been written within the configured threshold, the Recorder can be reported as not writing.
-
-The default threshold is planned to be:
+The default stale threshold is:
 
 ```text
 300 seconds
 ```
 
-This makes it possible to detect problems where Home Assistant is running normally but Recorder has stopped writing history to the database.
+It can be changed through the App option `recorder_stale_seconds`.
 
-## Why Use This App
+## Storage monitoring
 
-Without DH Recorder Monitor, similar monitoring usually requires multiple SQL sensors in Home Assistant configuration.
+Storage collection can be automatic, explicit SSH, or disabled.
 
-For example:
+For the Home Assistant MariaDB App, automatic mode uses Supervisor host storage information. For an external PostgreSQL or MariaDB server, storage can be collected over SSH using a normal user that can log in and run `df`; root access is not required.
 
-```yaml
-sensor:
-  - platform: sql
-    queries:
-      ...
-```
+See [Technical documentation](DOCS.md) for storage path autodetection and PostgreSQL cluster selection details.
 
-This becomes difficult to maintain across multiple Home Assistant installations.
+## Top Recorder entities
 
-DH Recorder Monitor moves the database monitoring logic into a reusable Home Assistant OS App and automatically creates all required entities through MQTT Discovery.
+The App publishes two retained ranking sensors:
 
-This provides:
+- `sensor.dh_db_top_entities_24h`;
+- `sensor.dh_db_top_entities_all_time`.
 
-* one installation method;
-* one configuration interface;
-* consistent `dh_*` entity IDs;
-* PostgreSQL and MariaDB support;
-* no manual SQL sensors;
-* no cron jobs;
-* no overlapping shell scripts;
-* centralized database monitoring logic.
+Their state is the record count of the highest-ranked entity. Attributes include the current Top 10 list, generation timestamp and period. Ranking failures keep the previous successful ranking and do not interrupt normal Recorder monitoring.
 
 ## Security
 
-The App does not modify the Home Assistant Recorder database.
+The App does not require privileged container access, Docker socket access, Home Assistant configuration-directory access, `secrets.yaml`, or a Home Assistant API token.
 
-It is intended to use read-only database access wherever possible.
+Database credentials remain in Home Assistant App configuration and are never published to MQTT.
 
-The App does not require:
+For an external database, use the least-privileged database account and SSH account that satisfy the documented read-only requirements.
 
-* privileged container access;
-* Docker socket access;
-* Home Assistant configuration directory access;
-* access to `secrets.yaml`;
-* Home Assistant API tokens.
+## Support and license
 
-Database credentials are stored in the Home Assistant App configuration and are never published to MQTT.
+Report reproducible bugs or feature requests through the repository [Issues](https://github.com/DigitalHouses/home-assistant-apps/issues). Security-sensitive reports follow the repository [security policy](../.github/SECURITY.md).
 
-## Project Status
-
-Current status:
-
-**Initial development / V1**
-
-The first release focuses on the main Home Assistant Recorder database metrics and reliable MQTT Discovery integration.
-
-Additional PostgreSQL and MariaDB diagnostics may be added in future versions.
-
-## Future Metrics
-
-Possible future additions include:
-
-* `states` table size;
-* `statistics` table size;
-* `statistics_short_term` table size;
-* active database connections;
-* maximum database connections;
-* database uptime;
-* cache hit ratio;
-* deadlocks;
-* transaction rollbacks;
-* database growth per day;
-* Recorder write rate trends.
-
-## License
-
-License information will be added before the first public release.
+DigitalHouses Recorder App is provided under the repository [MIT License](../LICENSE).
