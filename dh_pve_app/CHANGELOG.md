@@ -2,11 +2,15 @@
 
 ## Unreleased
 
+## 0.5.7
+
+- Treat UPS as a first-class optional subsystem in Home Assistant: the always-present PVE device now exposes `binary_sensor.dh_app_pve_ups_configured` from persistent UPS selection state, so “no UPS on this host” is distinct from “configured UPS/NUT unavailable”.
+- Make the standard UPS dashboard collapse to one neutral “ИБП не настроен” card when no UPS is provisioned, while preserving the full dashboard for configured installations.
+- Add stable capability facts for Quick, Deep and Stop battery tests plus beeper control so HA presentation can hide unsupported controls without referencing missing entities.
 - Harden first-install MQTT setup: validate the port as 1..65535, show a password-safe parameter summary, require explicit `y/yes` confirmation before writing the config, and repeat the full prompt after rejection.
 - Harden installer bootstrap: detect/install `python3-venv`, repair an existing venv that has no pip, and use an immutable GitHub codeload archive for exact-SHA source installs so deployment does not depend on `github.com` Git transport.
-- Document the Beelink/AZW IT8613E profile as a standalone repository workflow. The hardware-profile README now carries the reviewed-ref install/repair, read-only `--check` and rollback commands; the installed operational guide remains generic and links to the repository documentation.
-- Add a repository-owned Beelink/AZW IT8613E host profile under `hardware/beelink/`. It installs the pinned upstream `it87` driver through Proxmox headers + DKMS, enables native boot autoload through `modules-load.d`, verifies hwmon/`fan2_input` and the App collector, and preserves the stock Proxmox kernel module. The profile includes read-only `--check` and symmetric uninstall/rollback paths.
-
+- Document the Beelink/AZW IT8613E profile as a standalone repository workflow. The hardware-profile README carries reviewed-ref install/repair, read-only `--check` and rollback commands; the installed operational guide remains generic and links to the repository documentation.
+- Add the repository-owned Beelink/AZW IT8613E host profile under `hardware/beelink/`: pinned upstream `it87` through Proxmox headers + DKMS, native boot autoload, hwmon/`fan2_input` verification, App collector verification and symmetric rollback while preserving the stock Proxmox kernel module.
 
 ## 0.5.6
 
