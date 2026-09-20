@@ -248,6 +248,23 @@ def test_pve_discovery_exposes_app_version_from_same_release_value():
     assert payload["origin"]["sw_version"] == "0.5.1"
 
 
+def test_pve_discovery_exposes_optional_ups_configuration_fact():
+    topics = build_topics(_config().mqtt, _identity())
+    c = _components()
+    diagnostics = state_group_topic(topics, "diagnostics")
+
+    component = c["ups_configured"]
+    assert component["platform"] == "binary_sensor"
+    assert component["default_entity_id"] == "binary_sensor.dh_app_pve_ups_configured"
+    assert component["state_topic"] == diagnostics
+    assert component["value_template"] == (
+        "{{ 'ON' if value_json.ups_configured | default(false) else 'OFF' }}"
+    )
+    assert component["payload_on"] == "ON"
+    assert component["payload_off"] == "OFF"
+    assert component["entity_category"] == "diagnostic"
+
+
 def test_continuous_sensor_attributes_do_not_duplicate_volatile_values():
     c = _components()
 
