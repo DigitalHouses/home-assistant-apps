@@ -248,6 +248,23 @@ def test_pve_discovery_exposes_app_version_from_same_release_value():
     assert payload["origin"]["sw_version"] == "0.5.1"
 
 
+def test_pve_discovery_exposes_agent_started_as_timestamp():
+    topics = build_topics(_config().mqtt, _identity())
+    c = _components()
+    diagnostics = state_group_topic(topics, "diagnostics")
+
+    component = c["agent_started"]
+    assert component["platform"] == "sensor"
+    assert component["default_entity_id"] == "sensor.dh_app_pve_agent_started"
+    assert component["state_topic"] == diagnostics
+    assert component["value_template"] == (
+        "{{ value_json.agent_started_at | default(none) }}"
+    )
+    assert component["device_class"] == "timestamp"
+    assert component["entity_category"] == "diagnostic"
+    assert component["icon"] == "mdi:clock-start"
+
+
 def test_pve_discovery_exposes_optional_ups_configuration_fact():
     topics = build_topics(_config().mqtt, _identity())
     c = _components()
