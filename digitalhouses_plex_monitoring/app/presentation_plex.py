@@ -95,6 +95,7 @@ def _playback_payload(api: Mapping[str, object]) -> dict[str, object]:
         "video_playback_active",
         "audio_playback_active",
         "hardware_transcode_active",
+        "playback_started_at",
         "playback_sessions",
     )
     return {key: copy.deepcopy(api.get(key)) for key in keys}
@@ -123,6 +124,7 @@ def _playback_semantic(payload: Mapping[str, object]) -> dict[str, object]:
         "video_playback_active": payload.get("video_playback_active"),
         "audio_playback_active": payload.get("audio_playback_active"),
         "hardware_transcode_active": payload.get("hardware_transcode_active"),
+        "playback_started_at": payload.get("playback_started_at"),
         "sessions": compact,
     }
 
@@ -232,18 +234,12 @@ class PlexPresentationRouter:
             values = cpu_decision.values
             cpu_payload: dict[str, object] = {
                 "cpu": _round(float(values.get("cpu", snapshot.cpu.total.current))),
-                "cpu_avg": _round(snapshot.cpu.total.average),
-                "cpu_max": _round(snapshot.cpu.total.maximum),
                 "scanner_cpu": _round(
                     float(values.get("scanner_cpu", snapshot.cpu.scanner.current))
                 ),
-                "scanner_cpu_avg": _round(snapshot.cpu.scanner.average),
-                "scanner_cpu_max": _round(snapshot.cpu.scanner.maximum),
                 "transcoder_cpu": _round(
                     float(values.get("transcoder_cpu", snapshot.cpu.transcoder.current))
                 ),
-                "transcoder_cpu_avg": _round(snapshot.cpu.transcoder.average),
-                "transcoder_cpu_max": _round(snapshot.cpu.transcoder.maximum),
             }
             result.append(
                 Publication(

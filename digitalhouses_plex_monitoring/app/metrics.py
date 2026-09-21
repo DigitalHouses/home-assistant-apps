@@ -9,7 +9,11 @@ from .process_identity import process_role
 
 def group_current_cpu(
     processes: Sequence[ProcessSample],
+    *,
+    logical_cpu_count: int,
 ) -> tuple[float, float, float]:
+    if logical_cpu_count <= 0:
+        raise ValueError("logical_cpu_count must be > 0")
     total = 0.0
     scanner = 0.0
     transcoder = 0.0
@@ -22,7 +26,12 @@ def group_current_cpu(
             scanner += process.cpu_percent
         if role == "transcoder":
             transcoder += process.cpu_percent
-    return total, scanner, transcoder
+    capacity = float(logical_cpu_count)
+
+    def normalized(value: float) -> float:
+        return min(100.0, max(0.0, float(value) / capacity))
+
+    return normalized(total), normalized(scanner), normalized(transcoder)
 
 
 class RollingCpuMetrics:

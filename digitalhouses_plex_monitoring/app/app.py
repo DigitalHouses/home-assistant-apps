@@ -40,6 +40,9 @@ DEFAULT_CONFIG = Path(
     "digitalhouses_plex_monitoring.conf"
 )
 UPTIME_HEARTBEAT_SECONDS = 60.0
+PLAYBACK_STATE_PATH = Path(
+    "/var/lib/digitalhouses_plex_monitoring/playback_session_starts.json"
+)
 
 
 def _utc_now() -> str:
@@ -93,7 +96,10 @@ def run(config: AppConfig) -> int:
     verify_proc_visibility()
 
     topics = build_topics(config)
-    api_runtime = PlexApiRuntime(config.plex_api)
+    api_runtime = PlexApiRuntime(
+        config.plex_api,
+        playback_state_path=PLAYBACK_STATE_PATH,
+    )
     gpu_collector = GpuStateReader()
     server_boot_time = datetime.fromtimestamp(
         psutil.boot_time(),
@@ -110,6 +116,7 @@ def run(config: AppConfig) -> int:
         high_cpu_threshold=config.telemetry.high_load_threshold,
         now_monotonic=time.monotonic,
         server_boot_time=server_boot_time,
+        agent_started_at=_utc_now(),
     )
 
     stop_event = threading.Event()
@@ -205,7 +212,10 @@ def run(config: AppConfig) -> int:
                     sample_time = time.monotonic()
                     samples = sampler.sample(raw, sample_time)
                     activity = classify_activity(samples)
-                    total, scanner, transcoder = group_current_cpu(samples)
+                    total, scanner, transcoder = group_current_cpu(
+                        samples,
+                        logical_cpu_count=psutil.cpu_count(logical=True) or 1,
+                    )
                     cpu = rolling.update(
                         sample_time,
                         total,

@@ -114,15 +114,10 @@ def _route_grouped_components(
         "transcoder_count": "activity",
         "scanner_actions": "activity",
         "cpu": "cpu",
-        "cpu_avg": "cpu",
-        "cpu_max": "cpu",
         "scanner_cpu": "cpu",
-        "scanner_cpu_avg": "cpu",
-        "scanner_cpu_max": "cpu",
         "transcoder_cpu": "cpu",
-        "transcoder_cpu_avg": "cpu",
-        "transcoder_cpu_max": "cpu",
         "playback_count": "playback",
+        "playback_started_at": "playback",
         "playback_sessions": "playback",
         "playback_active": "playback",
         "video_playback_active": "playback",
@@ -143,6 +138,7 @@ def _route_grouped_components(
         "last_boot": "diagnostics",
         "agent_version": "diagnostics",
         "agent_uptime": "diagnostics",
+        "agent_started_at": "diagnostics",
         "publication_profile": "diagnostics",
         "last_publication": "diagnostics",
     }
@@ -282,38 +278,13 @@ def build_discovery_payload(
         "cpu": sensor(
             "cpu", "Plex CPU", "cpu", icon="mdi:cpu-64-bit", **cpu_extra
         ),
-        "cpu_avg": sensor(
-            "cpu_avg", "Plex CPU 1m average", "cpu_avg",
-            icon="mdi:chart-line", **cpu_extra
-        ),
-        "cpu_max": sensor(
-            "cpu_max", "Plex CPU 1m maximum", "cpu_max",
-            icon="mdi:chart-bell-curve-cumulative", **cpu_extra
-        ),
         "scanner_cpu": sensor(
             "scanner_cpu", "Plex scanner CPU", "scanner_cpu",
             icon="mdi:cpu-64-bit", **cpu_extra
         ),
-        "scanner_cpu_avg": sensor(
-            "scanner_cpu_avg", "Plex scanner CPU 1m average", "scanner_cpu_avg",
-            icon="mdi:chart-line", **cpu_extra
-        ),
-        "scanner_cpu_max": sensor(
-            "scanner_cpu_max", "Plex scanner CPU 1m maximum", "scanner_cpu_max",
-            icon="mdi:chart-bell-curve-cumulative", **cpu_extra
-        ),
         "transcoder_cpu": sensor(
             "transcoder_cpu", "Plex transcoder CPU", "transcoder_cpu",
             icon="mdi:cpu-64-bit", **cpu_extra
-        ),
-        "transcoder_cpu_avg": sensor(
-            "transcoder_cpu_avg", "Plex transcoder CPU 1m average",
-            "transcoder_cpu_avg", icon="mdi:chart-line", **cpu_extra
-        ),
-        "transcoder_cpu_max": sensor(
-            "transcoder_cpu_max", "Plex transcoder CPU 1m maximum",
-            "transcoder_cpu_max", icon="mdi:chart-bell-curve-cumulative",
-            **cpu_extra
         ),
         "scanner_actions": sensor(
             "scanner_actions", "Plex scanner actions", "scanner_actions",
@@ -336,6 +307,11 @@ def build_discovery_payload(
             "playback_count", "Plex playback count", "playback_count",
             collector=False, plex_api=True, icon="mdi:play-network",
             state_class="measurement",
+        ),
+        "playback_started_at": sensor(
+            "playback_started_at", "Plex playback started at",
+            "playback_started_at", collector=False, plex_api=True,
+            device_class="timestamp", icon="mdi:play-circle-outline",
         ),
         "playback_sessions": sensor(
             "playback_sessions", "Plex playback sessions",
@@ -541,6 +517,19 @@ def build_discovery_payload(
         device_class="duration",
         unit_of_measurement="s",
         icon="mdi:timer-outline",
+    )
+
+    components["agent_started_at"] = _component(
+        platform="sensor",
+        name="Agent started at",
+        key=uid("agent_started_at"),
+        entity_id=f"sensor.{prefix}_agent_started_at",
+        state_topic=state_group_topic(topics, "diagnostics"),
+        value_template="{{ value_json.agent_started_at | default(none) }}",
+        app_availability=topics.app_availability,
+        diagnostic=True,
+        device_class="timestamp",
+        icon="mdi:clock-start",
     )
 
     components["publication_profile"] = _component(

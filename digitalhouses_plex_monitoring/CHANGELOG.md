@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.5.0
+
+- Normalize Plex, Scanner, and Transcoder CPU sensors to 0-100% of the complete logical CPU capacity available to the machine instead of Linux per-core `top` semantics.
+- Remove the six public 1-minute CPU average/maximum entities and their MQTT payload fields; Home Assistant keeps the historical time series of the three primary CPU sensors.
+- Keep adaptive Recorder-facing publication unchanged: 10-second acquisition with 30-second PLAYBACK, 5-minute DETAIL, and 15-minute NORMAL presentation windows.
+- Add diagnostic `sensor.dh_plex_agent_started_at` as a timestamp while retaining the low-level `sensor.dh_plex_agent_uptime` compatibility entity.
+- Add `sensor.dh_plex_playback_started_at` for the earliest currently active Plex playback session.
+- Persist internal playback-session start timestamps under `/var/lib/digitalhouses_plex_monitoring/` so an agent restart does not reset an ongoing session timestamp.
+- Update the example dashboard and repository compatibility contract for the simplified CPU model and timestamp sensors.
+
 ## 0.4.1
 
 - Add the `PLAYBACK` publication profile for active playback or Plex Transcoder activity.

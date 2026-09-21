@@ -226,9 +226,7 @@ sections:
         icon: mdi:cpu-64-bit
         entities:
           - entity: sensor.dh_plex_cpu
-            name: Current
-          - entity: sensor.dh_plex_cpu_avg
-            name: Avg
+            name: CPU
         hours_to_show: 6
         points_per_hour: 6
         line_width: 2
@@ -244,9 +242,7 @@ sections:
         icon: mdi:magnify-scan
         entities:
           - entity: sensor.dh_plex_scanner_cpu
-            name: Current
-          - entity: sensor.dh_plex_scanner_cpu_avg
-            name: Avg
+            name: CPU
         hours_to_show: 6
         points_per_hour: 6
         line_width: 2
@@ -262,9 +258,7 @@ sections:
         icon: mdi:movie-cog
         entities:
           - entity: sensor.dh_plex_transcoder_cpu
-            name: Current
-          - entity: sensor.dh_plex_transcoder_cpu_avg
-            name: Avg
+            name: CPU
         hours_to_show: 6
         points_per_hour: 6
         line_width: 2
@@ -311,6 +305,8 @@ sections:
             name: Video
           - entity: binary_sensor.dh_plex_audio_playback_active
             name: Audio
+          - entity: sensor.dh_plex_playback_started_at
+            name: Запущено
       - type: markdown
         title: Активные сессии
         content: >
@@ -404,27 +400,14 @@ sections:
             name: Libraries
           - entity: sensor.dh_plex_agent_version
             name: Версия агента
-          - entity: sensor.dh_plex_agent_uptime
-            name: Uptime агента
+          - entity: sensor.dh_plex_agent_started_at
+            name: Агент запущен
           - entity: sensor.dh_plex_publication_profile
             name: Профиль публикации
           - entity: sensor.dh_plex_last_publication
             name: Последняя публикация
           - entity: sensor.dh_plex_last_refresh
             name: Последний Refresh
-      - type: heading
-        heading_style: title
-        icon: mdi:stethoscope
-        heading: Нагрузка за минуту
-      - type: entities
-        title: CPU Peaks
-        entities:
-          - entity: sensor.dh_plex_cpu_max
-            name: Plex max / 60 s
-          - entity: sensor.dh_plex_scanner_cpu_max
-            name: Scanner max / 60 s
-          - entity: sensor.dh_plex_transcoder_cpu_max
-            name: Transcoder max / 60 s
 badges:
   - type: entity
     entity: binary_sensor.dh_plex_server_running
