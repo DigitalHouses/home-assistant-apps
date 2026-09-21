@@ -33,7 +33,7 @@ def test_package_records_only_explicit_canonical_time_series():
         assert entity_id in text
 
     for entity_glob in (
-        "sensor.dh_app_pve_fan_*_rpm",
+        "sensor.dh_app_pve_fan_*_speed",
         "sensor.dh_app_pve_disk_*_temperature",
         "sensor.dh_app_pve_disk_*_wear",
         "sensor.dh_app_pve_storage_*_percent_used",
