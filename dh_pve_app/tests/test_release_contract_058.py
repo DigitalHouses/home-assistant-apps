@@ -38,7 +38,7 @@ def test_058_readme_and_changelog_document_installed_root_guide():
     readme = (APP / "README.md").read_text(encoding="utf-8")
     changelog = (APP / "CHANGELOG.md").read_text(encoding="utf-8")
 
-    assert "`VERSION` is `0.5.7`." in readme
+    assert "`VERSION` is `0.5.8`." in readme
     assert "/root/dh_app_pve.txt" in readme
 
     assert "## 0.5.7" in changelog
