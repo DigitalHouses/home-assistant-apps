@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime, timezone
+import json
+from pathlib import Path
 
 from .config import PlexApiConfig
 from .plex_api import (
@@ -29,6 +33,8 @@ class PlexApiRuntime:
         config: PlexApiConfig,
         *,
         collector: PlexApiCollector | None = None,
+        playback_state_path: Path | None = None,
+        now_utc: Callable[[], str] | None = None,
     ) -> None:
         self.config = config
         self.collector = collector or PlexApiCollector(config)
@@ -38,17 +44,85 @@ class PlexApiRuntime:
         self._next_library_refresh = 0.0
         self._libraries_initialized = False
         self.last_error: str | None = None
+        self.playback_state_path = playback_state_path
+        self._now_utc = now_utc or (
+            lambda: datetime.now(timezone.utc).isoformat()
+        )
+        self._session_started_at = self._load_session_starts()
+        self.playback_started_at: str | None = None
 
     @property
     def failed(self) -> bool:
         return self.status == "error"
 
+    def _load_session_starts(self) -> dict[str, str]:
+        path = self.playback_state_path
+        if path is None or not path.is_file():
+            return {}
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return {}
+        sessions = raw.get("sessions") if isinstance(raw, dict) else None
+        if not isinstance(sessions, dict):
+            return {}
+        return {
+            str(session_id): str(started_at)
+            for session_id, started_at in sessions.items()
+            if session_id and isinstance(started_at, str) and started_at
+        }
+
+    def _save_session_starts(self) -> None:
+        path = self.playback_state_path
+        if path is None:
+            return
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = path.with_name(path.name + ".tmp")
+            tmp.write_text(
+                json.dumps(
+                    {"sessions": self._session_started_at},
+                    ensure_ascii=False,
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            tmp.chmod(0o600)
+            tmp.replace(path)
+        except OSError:
+            return
+
+    def _reconcile_session_starts(
+        self,
+        sessions: tuple[PlaybackSession, ...],
+    ) -> None:
+        observed_at = self._now_utc()
+        active_ids = {session.session_id for session in sessions}
+        reconciled = {
+            session_id: started_at
+            for session_id, started_at in self._session_started_at.items()
+            if session_id in active_ids
+        }
+        for session in sessions:
+            reconciled.setdefault(session.session_id, observed_at)
+
+        if reconciled != self._session_started_at:
+            self._session_started_at = reconciled
+            self._save_session_starts()
+
+        self.playback_started_at = (
+            min(reconciled.values()) if reconciled else None
+        )
+
     def payload(self) -> dict[str, object]:
-        return build_plex_api_payload(
+        payload = build_plex_api_payload(
             self.sessions,
             self.libraries,
             self.status,
         )
+        payload["playback_started_at"] = self.playback_started_at
+        return payload
 
     def collect(
         self,
@@ -93,6 +167,7 @@ class PlexApiRuntime:
             )
 
         self.sessions = sessions
+        self._reconcile_session_starts(sessions)
         self.libraries = libraries
         self.status = "ok"
         self.last_error = None

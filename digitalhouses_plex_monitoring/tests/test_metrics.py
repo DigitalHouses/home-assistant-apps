@@ -17,7 +17,10 @@ class MetricsTests(unittest.TestCase):
             ProcessSample(3, 1, "Plex Transcoder", (), 40),
             ProcessSample(4, 1, "python3", (), 90),
         ]
-        self.assertEqual(group_current_cpu(processes), (166.0, 106.0, 40.0))
+        self.assertEqual(
+            group_current_cpu(processes, logical_cpu_count=4),
+            (41.5, 26.5, 10.0),
+        )
 
     def test_rolling_average_and_max(self):
         metrics = RollingCpuMetrics(60)

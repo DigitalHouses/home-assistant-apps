@@ -25,6 +25,7 @@ def test_existing_entities_are_routed_to_semantic_state_groups():
     assert components["current_item"]["state_topic"] == state_group_topic(topics, "activity")
     assert components["cpu"]["state_topic"] == state_group_topic(topics, "cpu")
     assert components["playback_count"]["state_topic"] == state_group_topic(topics, "playback")
+    assert components["playback_started_at"]["state_topic"] == state_group_topic(topics, "playback")
     assert components["libraries"]["state_topic"] == state_group_topic(topics, "libraries")
     assert components["collector_status"]["state_topic"] == state_group_topic(topics, "diagnostics")
     assert components["api_status"]["state_topic"] == state_group_topic(topics, "diagnostics")
@@ -49,6 +50,17 @@ def test_discovery_exposes_agent_diagnostics_without_commit_sensor():
     assert components["agent_uptime"]["state_topic"] == diagnostics
     assert components["agent_uptime"]["device_class"] == "duration"
     assert components["agent_uptime"]["unit_of_measurement"] == "s"
+
+    assert components["agent_started_at"]["default_entity_id"] == (
+        "sensor.dh_plex_agent_started_at"
+    )
+    assert components["agent_started_at"]["state_topic"] == diagnostics
+    assert components["agent_started_at"]["device_class"] == "timestamp"
+
+    assert components["playback_started_at"]["default_entity_id"] == (
+        "sensor.dh_plex_playback_started_at"
+    )
+    assert components["playback_started_at"]["device_class"] == "timestamp"
 
     assert components["publication_profile"]["default_entity_id"] == (
         "sensor.dh_plex_publication_profile"

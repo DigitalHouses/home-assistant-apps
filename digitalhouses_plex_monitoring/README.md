@@ -31,13 +31,13 @@ Lovelace example: [plex-dashboard.yaml](examples/lovelace/plex-dashboard.yaml)
 Production install/update is pinned to the canonical release tag. Current release:
 
 ```text
-digitalhouses_plex_agent-v0.4.1
+digitalhouses_plex_agent-v0.5.0
 ```
 
 From a root shell:
 
 ```bash
-RELEASE_TAG="digitalhouses_plex_agent-v0.4.1"
+RELEASE_TAG="digitalhouses_plex_agent-v0.5.0"
 curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/${RELEASE_TAG}/digitalhouses_plex_monitoring/install.sh" \
   | DIGITALHOUSES_SOURCE_REF="${RELEASE_TAG}" bash
 ```
@@ -45,7 +45,7 @@ curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/
 From a sudo-capable user:
 
 ```bash
-RELEASE_TAG="digitalhouses_plex_agent-v0.4.1"
+RELEASE_TAG="digitalhouses_plex_agent-v0.5.0"
 curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/${RELEASE_TAG}/digitalhouses_plex_monitoring/install.sh" \
   | sudo env DIGITALHOUSES_SOURCE_REF="${RELEASE_TAG}" bash
 ```
@@ -115,7 +115,7 @@ timeout_seconds = 3
 library_refresh_seconds = 3600
 ```
 
-CPU follows Linux `top` semantics: **100% means one logical CPU**. Values above 100% are valid on a multi-vCPU Plex guest.
+CPU sensors use a machine-wide **0-100%** scale. The agent sums Plex process CPU time and divides it by the number of logical CPUs available to the Plex host/VM. On a 4-vCPU VM, one fully occupied logical CPU therefore appears as 25%. The configured `high_load_threshold = 80` means 80% of the whole machine CPU capacity.
 
 ## Playback contract
 
@@ -177,18 +177,13 @@ sensor.dh_plex_playback_sessions
 binary_sensor.dh_plex_playback_active
 binary_sensor.dh_plex_video_playback_active
 binary_sensor.dh_plex_audio_playback_active
+sensor.dh_plex_playback_started_at
 sensor.dh_plex_libraries
 sensor.dh_plex_library_<section_id>
 
 sensor.dh_plex_cpu
-sensor.dh_plex_cpu_avg
-sensor.dh_plex_cpu_max
 sensor.dh_plex_scanner_cpu
-sensor.dh_plex_scanner_cpu_avg
-sensor.dh_plex_scanner_cpu_max
 sensor.dh_plex_transcoder_cpu
-sensor.dh_plex_transcoder_cpu_avg
-sensor.dh_plex_transcoder_cpu_max
 
 sensor.dh_plex_gpu_video
 sensor.dh_plex_gpu_render
@@ -206,6 +201,7 @@ sensor.dh_plex_collector_status
 sensor.dh_plex_api_status
 sensor.dh_plex_agent_version
 sensor.dh_plex_agent_uptime
+sensor.dh_plex_agent_started_at
 sensor.dh_plex_last_boot
 sensor.dh_plex_publication_profile
 sensor.dh_plex_last_publication
@@ -223,7 +219,11 @@ GPU temperature is published only when Linux exposes a real hwmon sensor attache
 
 `binary_sensor.dh_plex_hardware_transcode_active` comes from Plex playback-session semantics; the GPU sensors independently show measured hardware activity.
 
-`sensor.dh_plex_last_boot` is the Linux host/VM boot timestamp and therefore survives Plex Agent restarts. `sensor.dh_plex_agent_uptime` remains a separate diagnostic process-uptime sensor.\n\nOn Linux hosts where i915 PMU access requires elevated privilege, only the dedicated `digitalhouses_plex_gpu_helper.service` receives `CAP_SYS_ADMIN`. The main `digitalhouses_plex_monitoring.service` remains unprivileged. The helper has no MQTT or Plex API responsibility; it writes a timestamped local state file that the main agent reads and rejects when stale.
+`sensor.dh_plex_last_boot` is the Linux host/VM boot timestamp and therefore survives Plex Agent restarts. `sensor.dh_plex_agent_started_at` is the current agent process start timestamp; `sensor.dh_plex_agent_uptime` remains a separate low-level duration diagnostic for compatibility.
+
+`sensor.dh_plex_playback_started_at` is the earliest first-observed start timestamp among the currently active Plex playback sessions. Internal session identities remain private to the agent and are persisted only under `/var/lib/digitalhouses_plex_monitoring/` so an agent restart does not reset an ongoing session timestamp. When no playback is active, no playback-start timestamp is reported.
+
+On Linux hosts where i915 PMU access requires elevated privilege, only the dedicated `digitalhouses_plex_gpu_helper.service` receives `CAP_SYS_ADMIN`. The main `digitalhouses_plex_monitoring.service` remains unprivileged. The helper has no MQTT or Plex API responsibility; it writes a timestamped local state file that the main agent reads and rejects when stale.
 
 ## Publication policy
 
@@ -234,11 +234,11 @@ The process namespace and playback endpoint are sampled every 10 seconds by defa
 MQTT state is split into retained semantic groups:
 
 - `activity` — Plex Server / Scanner / Transcoder state and current workload;
-- `cpu` — total, scanner and transcoder CPU;
-- `playback` — playback sessions, video/audio activity and hardware-transcode state;
+- `cpu` — total, scanner and transcoder CPU on a machine-wide 0-100% scale;
+- `playback` — playback sessions, playback start timestamp, video/audio activity and hardware-transcode state;
 - `libraries` — library inventory and counters;
 - `gpu` — local Intel GPU engine/frequency/temperature telemetry when available;
-- `diagnostics` — collector/API state, agent version, agent uptime, server boot timestamp, publication profile and last publication.
+- `diagnostics` — collector/API state, agent version, agent start/uptime, server boot timestamp, publication profile and last publication.
 
 Continuous CPU and GPU samples use adaptive Recorder-facing presentation windows without changing the fixed acquisition cadence:
 
