@@ -6,7 +6,29 @@ SERVICE_NAME="${APP_NAME}.service"
 SERVICE_USER="${APP_NAME}"
 SERVICE_GROUP="${APP_NAME}"
 REPO_URL="https://github.com/DigitalHouses/home-assistant-apps.git"
-SOURCE_REF="${DIGITALHOUSES_SOURCE_REF:-main}"
+RELEASE_IDENTIFIER="digitalhouses_plex_agent"
+SOURCE_REF="${DIGITALHOUSES_SOURCE_REF:-}"
+ALLOW_NON_RELEASE_REF="${DIGITALHOUSES_ALLOW_NON_RELEASE_REF:-0}"
+EXPECTED_VERSION=""
+
+SEMVER_RE='(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\\.[0-9A-Za-z-]+)*)?(\\+[0-9A-Za-z-]+(\\.[0-9A-Za-z-]+)*)?'
+
+if [[ -z "${SOURCE_REF}" ]]; then
+    echo "DIGITALHOUSES_SOURCE_REF is required."
+    echo "Production installs must use: ${RELEASE_IDENTIFIER}-v<version>"
+    exit 1
+fi
+
+if [[ "${SOURCE_REF}" =~ ^${RELEASE_IDENTIFIER}-v(${SEMVER_RE})$ ]]; then
+    EXPECTED_VERSION="${BASH_REMATCH[1]}"
+elif [[ "${ALLOW_NON_RELEASE_REF}" != "1" ]]; then
+    echo "Ref ${SOURCE_REF} is not a canonical DigitalHouses Plex Agent release tag."
+    echo "Production installs require: ${RELEASE_IDENTIFIER}-v<version>"
+    echo "For explicit development/testing only, set DIGITALHOUSES_ALLOW_NON_RELEASE_REF=1."
+    exit 1
+else
+    echo "WARNING: installing non-release source ref ${SOURCE_REF} (development/testing override)."
+fi
 
 APP_DIR="/opt/digitalhouses/${APP_NAME}"
 CONFIG_DIR="/etc/${APP_NAME}"
@@ -20,7 +42,7 @@ TOKEN_DROPIN_FILE="${TOKEN_DROPIN_DIR}/plex-local-token.conf"
 
 if [[ "${EUID}" -ne 0 ]]; then
     echo "This installer must run as root."
-    echo "Example: curl -fsSL https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/main/${APP_NAME}/install.sh | sudo bash"
+    echo "See the product README for the canonical release-tag install command."
     exit 1
 fi
 
@@ -51,14 +73,27 @@ trap cleanup EXIT
 
 echo "Fetching DigitalHouses source ref: ${SOURCE_REF}"
 git clone --quiet --filter=blob:none --no-checkout "${REPO_URL}" "${tmp_dir}/repo"
-git -C "${tmp_dir}/repo" fetch --quiet --depth 1 origin "${SOURCE_REF}"
-git -C "${tmp_dir}/repo" checkout --quiet --detach FETCH_HEAD
+
+if [[ -n "${EXPECTED_VERSION}" ]]; then
+    git -C "${tmp_dir}/repo" fetch --quiet --depth 1 origin \
+        "refs/tags/${SOURCE_REF}:refs/tags/${SOURCE_REF}"
+    git -C "${tmp_dir}/repo" checkout --quiet --detach "refs/tags/${SOURCE_REF}"
+else
+    git -C "${tmp_dir}/repo" fetch --quiet --depth 1 origin "${SOURCE_REF}"
+    git -C "${tmp_dir}/repo" checkout --quiet --detach FETCH_HEAD
+fi
 
 SOURCE_SHA="$(git -C "${tmp_dir}/repo" rev-parse HEAD)"
 SOURCE_APP="${tmp_dir}/repo/${APP_NAME}"
 
 if [[ ! -f "${SOURCE_APP}/VERSION" ]]; then
     echo "Application ${APP_NAME} not found at source ref ${SOURCE_REF}."
+    exit 1
+fi
+
+SOURCE_VERSION="$(tr -d '[:space:]' <"${SOURCE_APP}/VERSION")"
+if [[ -n "${EXPECTED_VERSION}" && "${SOURCE_VERSION}" != "${EXPECTED_VERSION}" ]]; then
+    echo "Release tag/version mismatch: ${SOURCE_REF} contains VERSION=${SOURCE_VERSION}."
     exit 1
 fi
 
@@ -176,7 +211,7 @@ PYTHONPATH="${APP_DIR}" "${APP_DIR}/.venv/bin/python" -c \
     'from pathlib import Path; from app.config import load_config; load_config(Path("'"${CONFIG_FILE}"'"))'
 "${APP_DIR}/.venv/bin/python" -m compileall -q "${APP_DIR}/app"
 
-VERSION="$(tr -d '[:space:]' <"${APP_DIR}/VERSION")"
+VERSION="${SOURCE_VERSION}"
 {
     printf 'version = %s\n' "${VERSION}"
     printf 'source = %s\n' "${SOURCE_REF}"
