@@ -396,6 +396,9 @@ def build_plex_api_payload(
         "audio_playback_count": audio_count,
         "video_playback_active": video_count > 0,
         "audio_playback_active": audio_count > 0,
+        "hardware_transcode_active": any(
+            session.hardware_transcode for session in sessions
+        ),
         "playback_sessions": [_playback_dict(session) for session in sessions],
         "library_count": len(libraries),
         "libraries": serialized_libraries,

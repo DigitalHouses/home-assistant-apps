@@ -6,6 +6,8 @@ import signal
 import threading
 import time
 from dataclasses import replace
+
+import psutil
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -14,6 +16,7 @@ from .api_runtime import PlexApiRuntime
 from .build_info import load_build_info
 from .config import AppConfig, load_config
 from .discovery import build_discovery_payload, build_topics
+from .gpu_collector import IntelGpuCollector
 from .metrics import RollingCpuMetrics, group_current_cpu
 from .models import (
     ActivityState,
@@ -91,6 +94,11 @@ def run(config: AppConfig) -> int:
 
     topics = build_topics(config)
     api_runtime = PlexApiRuntime(config.plex_api)
+    gpu_collector = IntelGpuCollector()
+    server_boot_time = datetime.fromtimestamp(
+        psutil.boot_time(),
+        timezone.utc,
+    ).isoformat()
     discovery = build_discovery_payload(config, build)
     mqtt = MqttBridge(config, topics, discovery)
     sampler = CpuSampler()
@@ -101,6 +109,7 @@ def run(config: AppConfig) -> int:
         source_interval_seconds=config.general.poll_interval_seconds,
         high_cpu_threshold=config.telemetry.high_load_threshold,
         now_monotonic=time.monotonic,
+        server_boot_time=server_boot_time,
     )
 
     stop_event = threading.Event()
@@ -131,6 +140,19 @@ def run(config: AppConfig) -> int:
     next_poll = time.monotonic()
     next_uptime_heartbeat = time.monotonic() + UPTIME_HEARTBEAT_SECONDS
     legacy_state_cleared = False
+    gpu_payload: dict[str, object] = {
+        "supported": False,
+        "available": False,
+        "status": "starting",
+        "source": None,
+        "pci_address": None,
+        "video_busy_percent": None,
+        "render_busy_percent": None,
+        "video_enhance_busy_percent": None,
+        "frequency_mhz": None,
+        "rc6_percent": None,
+        "temperature_c": None,
+    }
 
     try:
         while not stop_event.is_set():
@@ -237,6 +259,8 @@ def run(config: AppConfig) -> int:
                         + config.general.poll_interval_seconds
                     )
 
+                gpu_payload = gpu_collector.collect()
+
                 scanner_finished = bool(
                     previous_scanner_running
                     and not collector_failed
@@ -294,6 +318,7 @@ def run(config: AppConfig) -> int:
                 if publication.publish_snapshot(
                     state_snapshot,
                     api_runtime.payload(),
+                    gpu_payload=gpu_payload,
                     manual_refresh=refresh,
                 ):
                     next_uptime_heartbeat = (

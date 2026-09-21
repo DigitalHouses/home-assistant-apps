@@ -1,7 +1,8 @@
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
-from app.gpu_collector import parse_intel_gpu_top_json, read_gpu_temperature
+from app.gpu_collector import IntelGpuCollector, parse_intel_gpu_top_json, read_gpu_temperature
 
 
 INTEL_GPU_TOP = r"""
@@ -60,3 +61,57 @@ def test_gpu_temperature_is_none_when_guest_exposes_no_hwmon_sensor():
         (root / "class/hwmon").mkdir(parents=True)
 
         assert read_gpu_temperature("0000:00:10.0", sys_root=root) is None
+
+
+def test_parser_ignores_incomplete_trailing_sample():
+    metrics = parse_intel_gpu_top_json(
+        INTEL_GPU_TOP + ',{"period":{"duration":1000},"engines":'
+    )
+
+    assert metrics["sample_count"] == 1
+    assert metrics["render_busy_percent"] == 77.7
+
+
+def test_collector_is_fail_soft_without_intel_gpu():
+    with patch("app.gpu_collector.detect_intel_gpu_pci", return_value=None):
+        payload = IntelGpuCollector().collect()
+
+    assert payload["status"] == "unsupported"
+    assert payload["supported"] is False
+    assert payload["available"] is False
+
+
+def test_collector_is_fail_soft_without_intel_gpu_top():
+    with (
+        patch(
+            "app.gpu_collector.detect_intel_gpu_pci",
+            return_value="0000:00:10.0",
+        ),
+        patch("app.gpu_collector.read_gpu_temperature", return_value=None),
+        patch("app.gpu_collector.shutil.which", return_value=None),
+    ):
+        payload = IntelGpuCollector().collect()
+
+    assert payload["status"] == "tool_missing"
+    assert payload["supported"] is True
+    assert payload["available"] is False
+
+
+def test_collector_is_fail_soft_when_intel_gpu_top_fails():
+    with (
+        patch(
+            "app.gpu_collector.detect_intel_gpu_pci",
+            return_value="0000:00:10.0",
+        ),
+        patch("app.gpu_collector.read_gpu_temperature", return_value=None),
+        patch("app.gpu_collector.shutil.which", return_value="/usr/bin/intel_gpu_top"),
+        patch(
+            "app.gpu_collector._capture_intel_gpu_top",
+            side_effect=RuntimeError("permission denied"),
+        ),
+    ):
+        payload = IntelGpuCollector().collect()
+
+    assert payload["status"] == "error"
+    assert payload["supported"] is True
+    assert payload["available"] is False

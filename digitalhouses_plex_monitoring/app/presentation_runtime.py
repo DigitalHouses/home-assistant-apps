@@ -23,12 +23,14 @@ class PlexPublicationRuntime:
         source_interval_seconds: float,
         high_cpu_threshold: float = 80.0,
         now_monotonic: Callable[[], float] = time.monotonic,
+        server_boot_time: str | None = None,
     ) -> None:
         self.bridge = bridge
         self.build = build
         self.source_interval_seconds = float(source_interval_seconds)
         self.now_monotonic = now_monotonic
         self.started_at = float(now_monotonic())
+        self.server_boot_time = server_boot_time
         self.router = PlexPresentationRouter(
             source_interval_seconds=self.source_interval_seconds,
             high_cpu_threshold=high_cpu_threshold,
@@ -60,6 +62,7 @@ class PlexPublicationRuntime:
         return {
             "agent_version": self.build.version,
             "agent_uptime_seconds": max(0, int(float(now) - self.started_at)),
+            "server_boot_time": self.server_boot_time,
             "collector_status": self._collector_status,
             "plex_api_status": self._plex_api_status,
             "process_count": self._process_count,
@@ -108,6 +111,7 @@ class PlexPublicationRuntime:
         snapshot: MonitorSnapshot,
         api_payload: Mapping[str, object],
         *,
+        gpu_payload: Mapping[str, object] | None = None,
         force: bool = False,
         manual_refresh: bool = False,
     ) -> bool:
@@ -128,6 +132,7 @@ class PlexPublicationRuntime:
             self.router.route(
                 snapshot,
                 api_payload,
+                gpu_payload,
                 now=now,
                 force=force,
                 manual=manual_refresh,

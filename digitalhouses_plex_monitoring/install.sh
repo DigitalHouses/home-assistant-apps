@@ -65,6 +65,25 @@ if [[ "${need_apt}" -eq 1 ]]; then
         python3-venv
 fi
 
+intel_gpu_present=0
+for vendor_path in /sys/class/drm/renderD*/device/vendor; do
+    if [[ -r "${vendor_path}" ]] && grep -qi '0x8086' "${vendor_path}"; then
+        intel_gpu_present=1
+        break
+    fi
+done
+
+if [[ "${intel_gpu_present}" -eq 1 ]] && ! command -v intel_gpu_top >/dev/null 2>&1; then
+    if command -v apt-get >/dev/null 2>&1; then
+        echo "Intel GPU detected; installing optional intel-gpu-tools telemetry dependency."
+        if ! apt-get update || ! DEBIAN_FRONTEND=noninteractive apt-get install -y intel-gpu-tools; then
+            echo "Warning: unable to install intel-gpu-tools; GPU telemetry will remain unavailable."
+        fi
+    else
+        echo "Warning: Intel GPU detected but intel_gpu_top is unavailable."
+    fi
+fi
+
 tmp_dir="$(mktemp -d)"
 cleanup() {
     rm -rf "${tmp_dir}"
@@ -109,6 +128,12 @@ if ! id -u "${SERVICE_USER}" >/dev/null 2>&1; then
         --shell /usr/sbin/nologin \
         "${SERVICE_USER}"
 fi
+
+for supplemental_group in render video; do
+    if getent group "${supplemental_group}" >/dev/null 2>&1; then
+        usermod -a -G "${supplemental_group}" "${SERVICE_USER}"
+    fi
+done
 
 install -d -o root -g root -m 0755 /opt/digitalhouses
 install -d -o root -g root -m 0755 "${APP_DIR}"

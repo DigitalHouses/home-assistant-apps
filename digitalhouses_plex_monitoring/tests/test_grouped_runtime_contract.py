@@ -92,7 +92,7 @@ def test_startup_publishes_independent_groups_and_diagnostics():
     assert runtime.publish_snapshot(snapshot(), api_payload(), force=True) is True
 
     groups = [group for group, _ in bridge.groups]
-    assert groups == ["activity", "cpu", "playback", "libraries", "diagnostics"]
+    assert groups == ["activity", "cpu", "playback", "libraries", "gpu", "diagnostics"]
 
 
 def test_diagnostics_expose_version_uptime_and_no_commit():
@@ -158,3 +158,17 @@ def test_uptime_heartbeat_updates_only_diagnostics():
     assert runtime.publish_uptime_heartbeat() is True
     assert [group for group, _ in bridge.groups] == ["diagnostics"]
     assert bridge.groups[0][1]["agent_uptime_seconds"] == 61
+
+
+def test_failed_gpu_group_is_retried_independently():
+    runtime, bridge = make_runtime([0.0, 0.0, 10.0, 10.0])
+    bridge.failed_group = "gpu"
+
+    assert runtime.publish_snapshot(snapshot(), api_payload(), force=True) is False
+    assert "gpu" in runtime.pending_groups
+    bridge.groups.clear()
+
+    bridge.failed_group = None
+    assert runtime.retry_pending() is True
+
+    assert [group for group, _ in bridge.groups] == ["gpu", "diagnostics"]

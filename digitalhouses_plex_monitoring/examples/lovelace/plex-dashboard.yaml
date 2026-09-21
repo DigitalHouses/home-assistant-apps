@@ -29,6 +29,33 @@ sections:
         tap_action:
           action: more-info
       - type: custom:mushroom-template-card
+        entity: sensor.dh_plex_last_boot
+        primary: Время работы Plex сервера
+        secondary: >-
+          {% set boot = states(entity) %}
+          {% if boot not in ['unknown', 'unavailable', 'none', ''] %}
+            {% set sec = (as_timestamp(now()) - as_timestamp(boot)) | int %}
+            {% set days = sec // 86400 %}
+            {% set hours = (sec % 86400) // 3600 %}
+            {% set minutes = (sec % 3600) // 60 %}
+            {% if days > 0 %}
+              {{ days }} д. {{ '%02d:%02d' | format(hours, minutes) }}
+            {% else %}
+              {{ '%02d:%02d' | format(hours, minutes) }}
+            {% endif %}
+          {% else %}
+            Нет данных
+          {% endif %}
+        icon: mdi:timer-outline
+        icon_color: >-
+          {% if states(entity) not in ['unknown', 'unavailable', 'none', ''] %}
+            green
+          {% else %}
+            grey
+          {% endif %}
+        tap_action:
+          action: more-info
+      - type: custom:mushroom-template-card
         entity: sensor.dh_plex_playback_count
         primary: Воспроизведение
         secondary: >-
@@ -248,6 +275,26 @@ sections:
           legend: true
           extrema: true
           fill: fade
+      - type: heading
+        heading: GPU / Транскодинг
+        heading_style: title
+        icon: mdi:gpu
+      - type: entities
+        state_color: true
+        show_header_toggle: false
+        entities:
+          - entity: binary_sensor.dh_plex_hardware_transcode_active
+            name: Hardware transcode
+          - entity: sensor.dh_plex_gpu_video
+            name: GPU Video
+          - entity: sensor.dh_plex_gpu_render
+            name: GPU Render
+          - entity: sensor.dh_plex_gpu_video_enhance
+            name: GPU Video Enhance
+          - entity: sensor.dh_plex_gpu_frequency
+            name: GPU Frequency
+          - entity: sensor.dh_plex_gpu_temperature
+            name: GPU Temperature
   - type: grid
     cards:
       - type: heading

@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.4.0
+
+- Add standalone Intel GPU telemetry from the Plex Linux host/VM: Video, Render/3D, Video Enhance, GPU frequency, RC6 and real GPU temperature when the kernel exposes it.
+- Add `binary_sensor.dh_plex_hardware_transcode_active` from Plex session semantics and keep it distinct from measured GPU utilization.
+- Add `sensor.dh_plex_last_boot` for host/VM uptime while retaining `sensor.dh_plex_agent_uptime` as process diagnostics.
+- Add the retained `gpu` MQTT state group using the existing NORMAL/DETAIL adaptive publication model.
+- Update the Plex dashboard with server uptime and GPU/transcoding telemetry without any DH PVE dependency.
+- Prepare the installer for optional `intel-gpu-tools` and existing render/video group access on supported Debian/Ubuntu Intel GPU hosts.
+
 ## 0.3.0
 
 - Align Plex with the DH PVE Linux Agent runtime model: fixed collection cadence, semantic grouped MQTT state, adaptive NORMAL/DETAIL presentation, retained cache republish, and per-group retry.
