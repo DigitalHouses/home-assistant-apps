@@ -31,13 +31,13 @@ Lovelace example: [plex-dashboard.yaml](examples/lovelace/plex-dashboard.yaml)
 Production install/update is pinned to the canonical release tag. Current release:
 
 ```text
-digitalhouses_plex_agent-v0.2.3
+digitalhouses_plex_agent-v0.3.0
 ```
 
 From a root shell:
 
 ```bash
-RELEASE_TAG="digitalhouses_plex_agent-v0.2.3"
+RELEASE_TAG="digitalhouses_plex_agent-v0.3.0"
 curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/${RELEASE_TAG}/digitalhouses_plex_monitoring/install.sh" \
   | DIGITALHOUSES_SOURCE_REF="${RELEASE_TAG}" bash
 ```
@@ -45,7 +45,7 @@ curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/
 From a sudo-capable user:
 
 ```bash
-RELEASE_TAG="digitalhouses_plex_agent-v0.2.3"
+RELEASE_TAG="digitalhouses_plex_agent-v0.3.0"
 curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/${RELEASE_TAG}/digitalhouses_plex_monitoring/install.sh" \
   | sudo env DIGITALHOUSES_SOURCE_REF="${RELEASE_TAG}" bash
 ```
@@ -195,7 +195,10 @@ sensor.dh_plex_scanner_actions
 sensor.dh_plex_process_count
 sensor.dh_plex_collector_status
 sensor.dh_plex_api_status
-sensor.dh_plex_build
+sensor.dh_plex_agent_version
+sensor.dh_plex_agent_uptime
+sensor.dh_plex_publication_profile
+sensor.dh_plex_last_publication
 sensor.dh_plex_last_refresh
 button.dh_plex_refresh
 ```
@@ -204,19 +207,28 @@ button.dh_plex_refresh
 
 ## Publication policy
 
-The process namespace and playback endpoint are sampled on the normal poll interval, default 10 seconds. MQTT is not published on every sample.
+Plex uses the same Linux Agent runtime model as DH PVE: **collection cadence and Recorder publication cadence are independent**.
 
-A full state is published:
+The process namespace and playback endpoint are sampled every 10 seconds by default. Sampling remains fixed when the publication profile changes.
 
-- at startup/reconnect/Home Assistant birth;
-- on manual Refresh;
-- when Plex workload activity changes;
-- when playback sessions change semantically, including start/stop, title, client, state, or playback mode;
-- when current total/scanner/transcoder CPU crosses the existing publication thresholds;
-- when Plex API or process collector availability changes;
-- when library counters change.
+MQTT state is split into retained semantic groups:
 
-Playback bandwidth alone does not trigger publication. Playback position is deliberately not published, avoiding high-frequency Recorder writes.
+- `activity` — Plex Server / Scanner / Transcoder state and current workload;
+- `cpu` — total, scanner and transcoder CPU;
+- `playback` — playback sessions and video/audio activity;
+- `libraries` — library inventory and counters;
+- `diagnostics` — collector/API state, agent version, agent uptime, publication profile and last publication.
+
+Continuous CPU samples use the same adaptive presentation windows as DH PVE:
+
+- `NORMAL` — one averaged publication per 15 minutes;
+- `DETAIL` — one averaged publication per 5 minutes.
+
+Plex enters `DETAIL` when Scanner, Transcoder or playback is active, or when the 60-second CPU decision average exceeds the configured high-load threshold. Activity, playback and library semantic changes publish immediately and do not wait for an averaging window.
+
+Manual Refresh publishes a current snapshot of all groups. MQTT/Home Assistant reconnect republishes the retained group cache without forcing a new collection. Failed group publications are retried independently.
+
+The diagnostics group publishes a lightweight uptime heartbeat once per minute when no other publication refreshes diagnostics. Playback bandwidth alone does not trigger a playback publication. Playback position is deliberately not published, avoiding high-frequency Recorder writes.
 
 ## Collector independence
 

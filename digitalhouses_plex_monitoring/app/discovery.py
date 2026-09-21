@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 from typing import Any
 
 from .config import AppConfig, entity_prefix
@@ -19,6 +20,19 @@ class Topics:
     discovery: str
     ha_status: str
     device_id: str
+
+
+_GROUP_SEGMENT = re.compile(r"^[A-Za-z0-9_.-]+$")
+
+
+def state_group_topic(topics: Topics, group: str) -> str:
+    parts = group.split("/")
+    if not group or any(
+        not part or part in {".", ".."} or _GROUP_SEGMENT.fullmatch(part) is None
+        for part in parts
+    ):
+        raise ValueError(f"invalid MQTT state group: {group!r}")
+    return f"{topics.state}/{'/'.join(parts)}"
 
 
 def build_topics(config: AppConfig) -> Topics:
@@ -82,6 +96,56 @@ def _component(
         payload["entity_category"] = "diagnostic"
     payload.update(extra)
     return payload
+
+
+def _route_grouped_components(
+    components: dict[str, Any],
+    topics: Topics,
+) -> None:
+    groups = {
+        "activity": "activity",
+        "current_item": "activity",
+        "server_running": "activity",
+        "scanner_running": "activity",
+        "credits_detection": "activity",
+        "intro_detection": "activity",
+        "thumbnail_generation": "activity",
+        "transcoder_running": "activity",
+        "transcoder_count": "activity",
+        "scanner_actions": "activity",
+        "cpu": "cpu",
+        "cpu_avg": "cpu",
+        "cpu_max": "cpu",
+        "scanner_cpu": "cpu",
+        "scanner_cpu_avg": "cpu",
+        "scanner_cpu_max": "cpu",
+        "transcoder_cpu": "cpu",
+        "transcoder_cpu_avg": "cpu",
+        "transcoder_cpu_max": "cpu",
+        "playback_count": "playback",
+        "playback_sessions": "playback",
+        "playback_active": "playback",
+        "video_playback_active": "playback",
+        "audio_playback_active": "playback",
+        "libraries": "libraries",
+        "process_count": "diagnostics",
+        "collector_status": "diagnostics",
+        "api_status": "diagnostics",
+        "last_refresh": "diagnostics",
+        "agent_version": "diagnostics",
+        "agent_uptime": "diagnostics",
+        "publication_profile": "diagnostics",
+        "last_publication": "diagnostics",
+    }
+    for key, component in components.items():
+        group = "libraries" if key.startswith("library_") else groups.get(key)
+        if group is None or not isinstance(component, dict):
+            continue
+        target = state_group_topic(topics, group)
+        if component.get("state_topic") == topics.state:
+            component["state_topic"] = target
+        if component.get("json_attributes_topic") == topics.state:
+            component["json_attributes_topic"] = target
 
 
 def build_discovery_payload(
@@ -339,22 +403,66 @@ def build_discovery_payload(
             ),
         )
 
-    components["build"] = _component(
+    components["agent_version"] = _component(
         platform="sensor",
-        name="Plex build",
-        key=uid("build"),
-        entity_id=f"sensor.{prefix}_build",
+        name="Agent version",
+        key=uid("agent_version"),
+        entity_id=f"sensor.{prefix}_agent_version",
         state_topic=topics.state,
-        value_template="{{ value_json.build_commit_short }}",
+        value_template="{{ value_json.agent_version | default('unknown') }}",
         app_availability=topics.app_availability,
-        collector_availability=None,
         diagnostic=True,
-        icon="mdi:source-commit",
+        icon="mdi:tag-outline",
+    )
+
+    components["agent_uptime"] = _component(
+        platform="sensor",
+        name="Agent uptime",
+        key=uid("agent_uptime"),
+        entity_id=f"sensor.{prefix}_agent_uptime",
+        state_topic=topics.state,
+        value_template="{{ value_json.agent_uptime_seconds | default(0) }}",
+        app_availability=topics.app_availability,
+        diagnostic=True,
+        device_class="duration",
+        unit_of_measurement="s",
+        icon="mdi:timer-outline",
+    )
+
+    components["publication_profile"] = _component(
+        platform="sensor",
+        name="Publication profile",
+        key=uid("publication_profile"),
+        entity_id=f"sensor.{prefix}_publication_profile",
+        state_topic=topics.state,
+        value_template="{{ value_json.publication_profile.state | default('normal') }}",
+        app_availability=topics.app_availability,
+        diagnostic=True,
+        icon="mdi:speedometer-medium",
         json_attributes_topic=topics.state,
         json_attributes_template=(
-            "{{ {'version': value_json.build_version, "
-            "'source': value_json.build_source, "
-            "'commit': value_json.build_commit} | tojson }}"
+            "{{ {'resources': value_json.publication_profile.resources | default({}), "
+            "'reason': value_json.publication_profile.reason | default(none)} | tojson }}"
+        ),
+    )
+
+    components["last_publication"] = _component(
+        platform="sensor",
+        name="Last publication",
+        key=uid("last_publication"),
+        entity_id=f"sensor.{prefix}_last_publication",
+        state_topic=topics.state,
+        value_template="{{ value_json.last_publication.timestamp | default(none) }}",
+        app_availability=topics.app_availability,
+        diagnostic=True,
+        device_class="timestamp",
+        icon="mdi:publish",
+        json_attributes_topic=topics.state,
+        json_attributes_template=(
+            "{{ {'group': value_json.last_publication.group | default(none), "
+            "'reason': value_json.last_publication.reason | default(none), "
+            "'profile': value_json.last_publication.profile | default(none), "
+            "'group_count': value_json.last_publication.group_count | default(0)} | tojson }}"
         ),
     )
 
@@ -370,6 +478,8 @@ def build_discovery_payload(
         "entity_category": "diagnostic",
         "icon": "mdi:refresh",
     }
+
+    _route_grouped_components(components, topics)
 
     return {
         "device": {

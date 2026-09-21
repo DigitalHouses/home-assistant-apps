@@ -8,7 +8,7 @@ from typing import Any
 import paho.mqtt.client as mqtt
 
 from .config import AppConfig
-from .discovery import Topics
+from .discovery import Topics, state_group_topic
 
 
 class MqttBridge:
@@ -125,11 +125,11 @@ class MqttBridge:
     def set_discovery_payload(self, payload: dict[str, Any]) -> None:
         self.discovery_payload = payload
 
-    def publish_discovery(self) -> bool:
+    def _publish_json(self, topic: str, payload: dict[str, object]) -> bool:
         info = self.client.publish(
-            self.topics.discovery,
+            topic,
             payload=json.dumps(
-                self.discovery_payload,
+                payload,
                 ensure_ascii=False,
                 separators=(",", ":"),
             ),
@@ -138,14 +138,20 @@ class MqttBridge:
         )
         return info.rc == mqtt.MQTT_ERR_SUCCESS
 
+    def publish_discovery(self) -> bool:
+        return self._publish_json(self.topics.discovery, self.discovery_payload)
+
     def publish_state(self, payload: dict[str, object]) -> bool:
+        """Legacy monolithic publisher retained for compatibility tests/tools."""
+        return self._publish_json(self.topics.state, payload)
+
+    def publish_state_group(self, group: str, payload: dict[str, object]) -> bool:
+        return self._publish_json(state_group_topic(self.topics, group), payload)
+
+    def clear_legacy_state(self) -> bool:
         info = self.client.publish(
             self.topics.state,
-            payload=json.dumps(
-                payload,
-                ensure_ascii=False,
-                separators=(",", ":"),
-            ),
+            payload="",
             qos=0,
             retain=True,
         )

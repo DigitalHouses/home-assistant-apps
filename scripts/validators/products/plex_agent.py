@@ -41,7 +41,10 @@ EXPECTED_ENTITY_IDS = {
     "audio_playback_active": "binary_sensor.dh_plex_audio_playback_active",
     "libraries": "sensor.dh_plex_libraries",
     "api_status": "sensor.dh_plex_api_status",
-    "build": "sensor.dh_plex_build",
+    "agent_version": "sensor.dh_plex_agent_version",
+    "agent_uptime": "sensor.dh_plex_agent_uptime",
+    "publication_profile": "sensor.dh_plex_publication_profile",
+    "last_publication": "sensor.dh_plex_last_publication",
     "refresh": "button.dh_plex_refresh",
 }
 
@@ -103,6 +106,11 @@ def validate_plex_monitoring(
             app / "app/plex_api.py",
             app / "app/api_runtime.py",
             app / "app/build_info.py",
+            app / "app/presentation.py",
+            app / "app/runtime_windows.py",
+            app / "app/presentation_policy.py",
+            app / "app/presentation_plex.py",
+            app / "app/presentation_runtime.py",
             app / "examples/digitalhouses_plex_monitoring.conf.example",
             app / "systemd/digitalhouses_plex_monitoring.service",
         ],
@@ -189,6 +197,20 @@ def validate_plex_monitoring(
             fail(f"Plex Monitoring missing discovery component {key}")
         if component.get("default_entity_id") != expected_entity_id:
             fail(f"Plex Monitoring default_entity_id changed for {key}")
+
+    grouped = {
+        "activity": "activity",
+        "cpu": "cpu",
+        "playback_count": "playback",
+        "libraries": "libraries",
+        "collector_status": "diagnostics",
+        "agent_version": "diagnostics",
+        "agent_uptime": "diagnostics",
+    }
+    for key, group in grouped.items():
+        expected_topic = discovery_module.state_group_topic(topics, group)
+        if components[key].get("state_topic") != expected_topic:
+            fail(f"Plex Monitoring grouped state routing changed for {key}")
 
     sample_library = plex_api_module.LibraryInfo(
         section_id="3",
