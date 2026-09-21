@@ -11,14 +11,17 @@ from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 
+from .collectors.cooling import collect_fans
 from .config import AppConfig, UpsConfig, load_config
+from .fan_calibration import FanCalibrationManager, FanCalibrationRegistry
+from .fan_hardware_beelink import BeelinkIt8613FanAdapter
+from .fan_runtime import FanAwareRuntime
 from .identity import resolve_identity
 from .machine_event_outbox import MachineEventOutbox
 from .mqtt_bridge import MqttBridge
 from .production import _run
 from .publish_policy import PublishPolicy
 from .pve_cache import read_pve_version
-from .runtime_problems import ProblemAwareRuntime
 from .runtime_settings import RuntimeSettings
 from .scheduler import Scheduler
 from .shutdown_discovery import build_shutdown_aware_pve_discovery_payload
@@ -29,6 +32,7 @@ from .shutdown_integration import (
     ShutdownAwareUpsRuntime,
 )
 from .state_store import StateStore
+from .telemetry import TelemetryClient
 from .topics import build_topics, build_ups_topics
 from .ups_battery_events import UpsBatteryEventTracker
 from .ups_policy_preflight import (
@@ -125,10 +129,17 @@ def build_runtime(
     )
 
     topology = ShutdownAwareTopologyManager(runner=_run)
+    fan_presence_store = StateStore(state_dir / "fans.json")
+    fan_calibration_registry = FanCalibrationRegistry(
+        StateStore(state_dir / "fan_calibration.json")
+    )
+    fan_adapter = BeelinkIt8613FanAdapter()
     production = ShutdownAwareProductionCollectors(
         node_name=identity.hostname,
         disk_state_store=StateStore(state_dir / "disks.json"),
-        fan_state_store=StateStore(state_dir / "fans.json"),
+        fan_state_store=fan_presence_store,
+        fan_calibration_registry=fan_calibration_registry,
+        fan_calibration_adapters=(fan_adapter,),
         topology=topology,
         shutdown_history_tracker=tracker,
     )
@@ -145,7 +156,13 @@ def build_runtime(
     def pve_version_fingerprint() -> str:
         return read_pve_version(topology.pve_root / ".version").fingerprint
 
-    runtime = ProblemAwareRuntime(
+    fan_calibration_manager = FanCalibrationManager(
+        registry=fan_calibration_registry,
+        adapters=(fan_adapter,),
+        now_iso=_now_iso,
+    )
+
+    runtime = FanAwareRuntime(
         collectors=collectors,
         bridge=bridge,
         settings=settings,
@@ -160,6 +177,9 @@ def build_runtime(
         app_version=version,
         agent_started_at=PROCESS_STARTED_AT,
         ups_configured=ups_configured,
+        fan_calibration_manager=fan_calibration_manager,
+        fan_source=lambda: collect_fans(production.sys_root / "class" / "hwmon"),
+        fan_presence_state_store=fan_presence_store,
     )
     return bridge, runtime
 
@@ -257,6 +277,15 @@ def build_ups_policy_preflight(
     return preflight_reader(runtime_config)
 
 
+def _telemetry_client(config: AppConfig, state_dir: Path) -> TelemetryClient:
+    return TelemetryClient(
+        enabled=config.telemetry.enabled,
+        version=_version(),
+        state_store=StateStore(state_dir / "telemetry.json"),
+        build_info_path=APP_ROOT / "BUILD_INFO",
+    )
+
+
 def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
     log = logging.getLogger("dh_pve_app")
     shutdown_history_tracker = _shutdown_tracker(state_dir)
@@ -283,6 +312,11 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
         state_dir=state_dir,
         shutdown_history_tracker=shutdown_history_tracker,
     )
+    telemetry = _telemetry_client(config, state_dir)
+    recovery = runtime.recover_fan_control()
+    if recovery:
+        log.warning("Fan control recovery: %s", recovery)
+
     stop_event = threading.Event()
     reload_event = threading.Event()
     initialized = False
@@ -291,6 +325,7 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
     def stop(signum: int, frame: object) -> None:
         log.info("Получен сигнал остановки %s", signum)
         stop_event.set()
+        runtime.cancel_fan_calibration()
         bridge.wake_requested.set()
 
     def reload_policy(signum: int, frame: object) -> None:
@@ -369,6 +404,7 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
                     reload_event.clear()
                     log.debug("SIGHUP обработан до инициализации UPS runtime")
 
+            telemetry.tick()
             bridge.wake_requested.wait(1.0)
             bridge.wake_requested.clear()
     finally:
@@ -397,6 +433,11 @@ def main() -> int:
         action="store_true",
         help=argparse.SUPPRESS,
     )
+    parser.add_argument(
+        "--telemetry-delete",
+        action="store_true",
+        help="Delete this installation's retained product telemetry record.",
+    )
     args = parser.parse_args()
 
     config = load_config(args.config)
@@ -407,6 +448,9 @@ def main() -> int:
     if args.check_config:
         resolve_identity(config.general)
         return 0
+    if args.telemetry_delete:
+        _configure_logging(config.general.log_level)
+        return 0 if _telemetry_client(config, args.state_dir).delete() else 3
     if args.ups_policy_preflight:
         report = build_ups_policy_preflight(config, state_dir=args.state_dir)
         print(json.dumps(report.as_dict(), ensure_ascii=False, indent=2))
