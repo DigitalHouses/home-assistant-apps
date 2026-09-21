@@ -21,6 +21,7 @@ class Topics:
     device_id: str
     ups_scan: str
     ups_scan_state: str
+    fan_calibrate: str
     legacy_discoveries: tuple[str, ...] = ()
 
 
