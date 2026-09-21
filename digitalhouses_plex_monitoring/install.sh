@@ -3,6 +3,7 @@ set -euo pipefail
 
 APP_NAME="digitalhouses_plex_monitoring"
 SERVICE_NAME="${APP_NAME}.service"
+GPU_SERVICE_NAME="digitalhouses_plex_gpu_helper.service"
 SERVICE_USER="${APP_NAME}"
 SERVICE_GROUP="${APP_NAME}"
 REPO_URL="https://github.com/DigitalHouses/home-assistant-apps.git"
@@ -35,6 +36,7 @@ CONFIG_DIR="/etc/${APP_NAME}"
 CONFIG_FILE="${CONFIG_DIR}/${APP_NAME}.conf"
 STATE_DIR="/var/lib/${APP_NAME}"
 UNIT_FILE="/etc/systemd/system/${SERVICE_NAME}"
+GPU_UNIT_FILE="/etc/systemd/system/${GPU_SERVICE_NAME}"
 PLEX_LOCAL_ADMIN_TOKEN="/var/lib/plexmediaserver/Library/Application Support/Plex Media Server/.LocalAdminToken"
 PLEX_API_TOKEN_FILE="${CONFIG_DIR}/plex_local_admin_token"
 TOKEN_DROPIN_DIR="/etc/systemd/system/${SERVICE_NAME}.d"
@@ -63,6 +65,25 @@ if [[ "${need_apt}" -eq 1 ]]; then
         git \
         python3 \
         python3-venv
+fi
+
+intel_gpu_present=0
+for vendor_path in /sys/class/drm/renderD*/device/vendor; do
+    if [[ -r "${vendor_path}" ]] && grep -qi '0x8086' "${vendor_path}"; then
+        intel_gpu_present=1
+        break
+    fi
+done
+
+if [[ "${intel_gpu_present}" -eq 1 ]] && ! command -v intel_gpu_top >/dev/null 2>&1; then
+    if command -v apt-get >/dev/null 2>&1; then
+        echo "Intel GPU detected; installing optional intel-gpu-tools telemetry dependency."
+        if ! apt-get update || ! DEBIAN_FRONTEND=noninteractive apt-get install -y intel-gpu-tools; then
+            echo "Warning: unable to install intel-gpu-tools; GPU telemetry will remain unavailable."
+        fi
+    else
+        echo "Warning: Intel GPU detected but intel_gpu_top is unavailable."
+    fi
 fi
 
 tmp_dir="$(mktemp -d)"
@@ -109,6 +130,12 @@ if ! id -u "${SERVICE_USER}" >/dev/null 2>&1; then
         --shell /usr/sbin/nologin \
         "${SERVICE_USER}"
 fi
+
+for supplemental_group in render video; do
+    if getent group "${supplemental_group}" >/dev/null 2>&1; then
+        usermod -a -G "${supplemental_group}" "${SERVICE_USER}"
+    fi
+done
 
 install -d -o root -g root -m 0755 /opt/digitalhouses
 install -d -o root -g root -m 0755 "${APP_DIR}"
@@ -223,12 +250,28 @@ chmod 0644 "${APP_DIR}/BUILD_INFO"
 install -o root -g root -m 0644 \
     "${APP_DIR}/systemd/${SERVICE_NAME}" \
     "${UNIT_FILE}"
+install -o root -g root -m 0644 \
+    "${APP_DIR}/systemd/${GPU_SERVICE_NAME}" \
+    "${GPU_UNIT_FILE}"
 
 # 0.2.0 used a systemd LoadCredential drop-in. Remove it during upgrade.
 rm -f "${TOKEN_DROPIN_FILE}"
 rmdir "${TOKEN_DROPIN_DIR}" 2>/dev/null || true
 
 systemctl daemon-reload
+
+if [[ "${intel_gpu_present}" -eq 1 ]] && command -v intel_gpu_top >/dev/null 2>&1; then
+    systemctl enable "${GPU_SERVICE_NAME}" >/dev/null
+    if ! systemctl restart "${GPU_SERVICE_NAME}"; then
+        echo "Warning: DigitalHouses Plex GPU Helper failed to start; GPU telemetry will remain unavailable."
+        systemctl status "${GPU_SERVICE_NAME}" --no-pager || true
+        journalctl -u "${GPU_SERVICE_NAME}" -n 50 --no-pager || true
+    fi
+else
+    systemctl disable --now "${GPU_SERVICE_NAME}" >/dev/null 2>&1 || true
+    rm -f "${STATE_DIR}/gpu_state.json"
+fi
+
 systemctl enable "${SERVICE_NAME}" >/dev/null
 systemctl restart "${SERVICE_NAME}"
 
@@ -246,3 +289,6 @@ echo "Source: ${SOURCE_REF}"
 echo "Commit: ${SOURCE_SHA}"
 echo "Config: ${CONFIG_FILE}"
 echo "Status: systemctl status ${APP_NAME}"
+if [[ "${intel_gpu_present}" -eq 1 ]] && command -v intel_gpu_top >/dev/null 2>&1; then
+    echo "GPU helper: systemctl status ${GPU_SERVICE_NAME}"
+fi

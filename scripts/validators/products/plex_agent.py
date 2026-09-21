@@ -39,10 +39,19 @@ EXPECTED_ENTITY_IDS = {
     "playback_active": "binary_sensor.dh_plex_playback_active",
     "video_playback_active": "binary_sensor.dh_plex_video_playback_active",
     "audio_playback_active": "binary_sensor.dh_plex_audio_playback_active",
+    "hardware_transcode_active": "binary_sensor.dh_plex_hardware_transcode_active",
     "libraries": "sensor.dh_plex_libraries",
+    "gpu_video": "sensor.dh_plex_gpu_video",
+    "gpu_render": "sensor.dh_plex_gpu_render",
+    "gpu_video_enhance": "sensor.dh_plex_gpu_video_enhance",
+    "gpu_frequency": "sensor.dh_plex_gpu_frequency",
+    "gpu_temperature": "sensor.dh_plex_gpu_temperature",
+    "gpu_rc6": "sensor.dh_plex_gpu_rc6",
+    "gpu_status": "sensor.dh_plex_gpu_status",
     "api_status": "sensor.dh_plex_api_status",
     "agent_version": "sensor.dh_plex_agent_version",
     "agent_uptime": "sensor.dh_plex_agent_uptime",
+    "last_boot": "sensor.dh_plex_last_boot",
     "publication_profile": "sensor.dh_plex_publication_profile",
     "last_publication": "sensor.dh_plex_last_publication",
     "refresh": "button.dh_plex_refresh",
@@ -102,6 +111,7 @@ def validate_plex_monitoring(
             app / "requirements.txt",
             app / "app/config.py",
             app / "app/models.py",
+            app / "app/gpu_collector.py",
             app / "app/discovery.py",
             app / "app/plex_api.py",
             app / "app/api_runtime.py",
@@ -113,6 +123,7 @@ def validate_plex_monitoring(
             app / "app/presentation_runtime.py",
             app / "examples/digitalhouses_plex_monitoring.conf.example",
             app / "systemd/digitalhouses_plex_monitoring.service",
+            app / "systemd/digitalhouses_plex_gpu_helper.service",
         ],
     )
 
@@ -202,10 +213,14 @@ def validate_plex_monitoring(
         "activity": "activity",
         "cpu": "cpu",
         "playback_count": "playback",
+        "hardware_transcode_active": "playback",
         "libraries": "libraries",
+        "gpu_video": "gpu",
+        "gpu_render": "gpu",
         "collector_status": "diagnostics",
         "agent_version": "diagnostics",
         "agent_uptime": "diagnostics",
+        "last_boot": "diagnostics",
     }
     for key, group in grouped.items():
         expected_topic = discovery_module.state_group_topic(topics, group)
@@ -256,6 +271,9 @@ def validate_plex_monitoring(
     service = (
         app / "systemd/digitalhouses_plex_monitoring.service"
     ).read_text(encoding="utf-8")
+    gpu_helper_service = (
+        app / "systemd/digitalhouses_plex_gpu_helper.service"
+    ).read_text(encoding="utf-8")
     for expected in (
         "User=digitalhouses_plex_monitoring",
         "Group=digitalhouses_plex_monitoring",
@@ -269,6 +287,20 @@ def validate_plex_monitoring(
     ):
         if expected not in service:
             fail(f"Plex Monitoring systemd contract changed: {expected}")
+
+    if "CAP_SYS_ADMIN" in service:
+        fail("Plex Monitoring main service must not receive CAP_SYS_ADMIN")
+
+    for expected in (
+        "User=digitalhouses_plex_monitoring",
+        "Group=digitalhouses_plex_monitoring",
+        "CapabilityBoundingSet=CAP_SYS_ADMIN",
+        "AmbientCapabilities=CAP_SYS_ADMIN",
+        "NoNewPrivileges=true",
+        "ReadWritePaths=/var/lib/digitalhouses_plex_monitoring",
+    ):
+        if expected not in gpu_helper_service:
+            fail(f"Plex GPU helper service contract changed: {expected}")
 
     installer = (app / "install.sh").read_text(encoding="utf-8")
     for expected in (

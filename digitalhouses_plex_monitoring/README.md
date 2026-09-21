@@ -31,13 +31,13 @@ Lovelace example: [plex-dashboard.yaml](examples/lovelace/plex-dashboard.yaml)
 Production install/update is pinned to the canonical release tag. Current release:
 
 ```text
-digitalhouses_plex_agent-v0.3.0
+digitalhouses_plex_agent-v0.4.0
 ```
 
 From a root shell:
 
 ```bash
-RELEASE_TAG="digitalhouses_plex_agent-v0.3.0"
+RELEASE_TAG="digitalhouses_plex_agent-v0.4.0"
 curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/${RELEASE_TAG}/digitalhouses_plex_monitoring/install.sh" \
   | DIGITALHOUSES_SOURCE_REF="${RELEASE_TAG}" bash
 ```
@@ -45,7 +45,7 @@ curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/
 From a sudo-capable user:
 
 ```bash
-RELEASE_TAG="digitalhouses_plex_agent-v0.3.0"
+RELEASE_TAG="digitalhouses_plex_agent-v0.4.0"
 curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/${RELEASE_TAG}/digitalhouses_plex_monitoring/install.sh" \
   | sudo env DIGITALHOUSES_SOURCE_REF="${RELEASE_TAG}" bash
 ```
@@ -190,6 +190,15 @@ sensor.dh_plex_transcoder_cpu
 sensor.dh_plex_transcoder_cpu_avg
 sensor.dh_plex_transcoder_cpu_max
 
+sensor.dh_plex_gpu_video
+sensor.dh_plex_gpu_render
+sensor.dh_plex_gpu_video_enhance
+sensor.dh_plex_gpu_frequency
+sensor.dh_plex_gpu_temperature
+sensor.dh_plex_gpu_rc6
+sensor.dh_plex_gpu_status
+binary_sensor.dh_plex_hardware_transcode_active
+
 sensor.dh_plex_transcoder_count
 sensor.dh_plex_scanner_actions
 sensor.dh_plex_process_count
@@ -197,6 +206,7 @@ sensor.dh_plex_collector_status
 sensor.dh_plex_api_status
 sensor.dh_plex_agent_version
 sensor.dh_plex_agent_uptime
+sensor.dh_plex_last_boot
 sensor.dh_plex_publication_profile
 sensor.dh_plex_last_publication
 sensor.dh_plex_last_refresh
@@ -204,6 +214,16 @@ button.dh_plex_refresh
 ```
 
 `sensor.dh_plex_current_item` remains a Linux **workload** sensor. It describes media files currently being processed by Plex processes; it is not a list of user playback sessions.
+
+## Standalone Intel GPU telemetry
+
+Plex Agent collects Intel GPU engine telemetry locally on the same Linux host/VM as Plex. It does not require DH PVE or the Proxmox API. On supported Intel DRM/i915 systems it exposes Video, Render/3D, Video Enhance, actual GPU frequency and RC6 residency from `intel_gpu_top`.
+
+GPU temperature is published only when Linux exposes a real hwmon sensor attached to the GPU. CPU/SoC temperature is never relabeled as GPU temperature. On systems such as the current Alder Lake-N Plex VM, GPU load can be available while GPU temperature remains unavailable.
+
+`binary_sensor.dh_plex_hardware_transcode_active` comes from Plex playback-session semantics; the GPU sensors independently show measured hardware activity.
+
+`sensor.dh_plex_last_boot` is the Linux host/VM boot timestamp and therefore survives Plex Agent restarts. `sensor.dh_plex_agent_uptime` remains a separate diagnostic process-uptime sensor.\n\nOn Linux hosts where i915 PMU access requires elevated privilege, only the dedicated `digitalhouses_plex_gpu_helper.service` receives `CAP_SYS_ADMIN`. The main `digitalhouses_plex_monitoring.service` remains unprivileged. The helper has no MQTT or Plex API responsibility; it writes a timestamped local state file that the main agent reads and rejects when stale.
 
 ## Publication policy
 
@@ -215,9 +235,10 @@ MQTT state is split into retained semantic groups:
 
 - `activity` — Plex Server / Scanner / Transcoder state and current workload;
 - `cpu` — total, scanner and transcoder CPU;
-- `playback` — playback sessions and video/audio activity;
+- `playback` — playback sessions, video/audio activity and hardware-transcode state;
 - `libraries` — library inventory and counters;
-- `diagnostics` — collector/API state, agent version, agent uptime, publication profile and last publication.
+- `gpu` — local Intel GPU engine/frequency/temperature telemetry when available;
+- `diagnostics` — collector/API state, agent version, agent uptime, server boot timestamp, publication profile and last publication.
 
 Continuous CPU samples use the same adaptive presentation windows as DH PVE:
 

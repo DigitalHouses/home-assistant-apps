@@ -94,6 +94,7 @@ def _playback_payload(api: Mapping[str, object]) -> dict[str, object]:
         "audio_playback_count",
         "video_playback_active",
         "audio_playback_active",
+        "hardware_transcode_active",
         "playback_sessions",
     )
     return {key: copy.deepcopy(api.get(key)) for key in keys}
@@ -121,6 +122,7 @@ def _playback_semantic(payload: Mapping[str, object]) -> dict[str, object]:
         "audio_playback_count": payload.get("audio_playback_count"),
         "video_playback_active": payload.get("video_playback_active"),
         "audio_playback_active": payload.get("audio_playback_active"),
+        "hardware_transcode_active": payload.get("hardware_transcode_active"),
         "sessions": compact,
     }
 
@@ -143,6 +145,11 @@ class PlexPresentationRouter:
         self.source_interval_seconds = float(source_interval_seconds)
         self.windows = windows or ProfileWindows()
         self._cpu = AdaptiveGroup(
+            windows=self.windows,
+            source_interval_seconds=self.source_interval_seconds,
+            round_digits=1,
+        )
+        self._gpu = AdaptiveGroup(
             windows=self.windows,
             source_interval_seconds=self.source_interval_seconds,
             round_digits=1,
@@ -182,6 +189,7 @@ class PlexPresentationRouter:
         self,
         snapshot: MonitorSnapshot,
         api_payload: Mapping[str, object],
+        gpu_payload: Mapping[str, object] | None = None,
         *,
         now: float,
         force: bool = False,
@@ -267,6 +275,40 @@ class PlexPresentationRouter:
         )
         if libraries is not None:
             result.append(libraries)
+
+        gpu_source = dict(gpu_payload or {})
+        gpu_decision = self._gpu.observe(
+            now=now,
+            continuous={
+                "video_busy_percent": gpu_source.get("video_busy_percent"),
+                "render_busy_percent": gpu_source.get("render_busy_percent"),
+                "video_enhance_busy_percent": gpu_source.get(
+                    "video_enhance_busy_percent"
+                ),
+                "frequency_mhz": gpu_source.get("frequency_mhz"),
+                "rc6_percent": gpu_source.get("rc6_percent"),
+                "temperature_c": gpu_source.get("temperature_c"),
+            },
+            discrete={
+                "supported": bool(gpu_source.get("supported", False)),
+                "available": bool(gpu_source.get("available", False)),
+                "status": str(gpu_source.get("status") or "unsupported"),
+                "source": gpu_source.get("source"),
+                "pci_address": gpu_source.get("pci_address"),
+            },
+            requested_profile=choice.profile,
+            force=force,
+            manual=manual,
+        )
+        if gpu_decision.publish:
+            result.append(
+                Publication(
+                    "gpu",
+                    gpu_decision.values,
+                    gpu_decision.reason or "change",
+                    gpu_decision.profile,
+                )
+            )
 
         return tuple(result)
 

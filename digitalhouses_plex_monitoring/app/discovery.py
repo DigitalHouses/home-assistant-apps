@@ -127,11 +127,20 @@ def _route_grouped_components(
         "playback_active": "playback",
         "video_playback_active": "playback",
         "audio_playback_active": "playback",
+        "hardware_transcode_active": "playback",
         "libraries": "libraries",
+        "gpu_video": "gpu",
+        "gpu_render": "gpu",
+        "gpu_video_enhance": "gpu",
+        "gpu_frequency": "gpu",
+        "gpu_temperature": "gpu",
+        "gpu_rc6": "gpu",
+        "gpu_status": "gpu",
         "process_count": "diagnostics",
         "collector_status": "diagnostics",
         "api_status": "diagnostics",
         "last_refresh": "diagnostics",
+        "last_boot": "diagnostics",
         "agent_version": "diagnostics",
         "agent_uptime": "diagnostics",
         "publication_profile": "diagnostics",
@@ -356,6 +365,11 @@ def build_discovery_payload(
             "audio_playback_active", "mdi:music-circle",
             collector=False, plex_api=True,
         ),
+        "hardware_transcode_active": binary(
+            "hardware_transcode_active", "Plex hardware transcode active",
+            "hardware_transcode_active", "mdi:video-check",
+            collector=False, plex_api=True,
+        ),
         "libraries": sensor(
             "libraries", "Plex libraries", "library_count",
             collector=False, plex_api=True, icon="mdi:folder-multiple-play",
@@ -402,6 +416,106 @@ def build_discovery_payload(
                 + "'] | tojson }}"
             ),
         )
+
+    gpu_topic = state_group_topic(topics, "gpu")
+    gpu_metric_availability = [
+        _availability(topics.app_availability),
+        {
+            "topic": gpu_topic,
+            "value_template": (
+                "{{ 'online' if value_json.available | default(false) "
+                "else 'offline' }}"
+            ),
+            "payload_available": "online",
+            "payload_not_available": "offline",
+        },
+    ]
+
+    def gpu_sensor(
+        component: str,
+        name: str,
+        field: str,
+        *,
+        unit: str,
+        icon: str,
+        device_class: str | None = None,
+    ) -> dict[str, Any]:
+        extra: dict[str, Any] = {
+            "unit_of_measurement": unit,
+            "state_class": "measurement",
+            "suggested_display_precision": 1,
+            "icon": icon,
+            "availability": gpu_metric_availability,
+        }
+        if device_class is not None:
+            extra["device_class"] = device_class
+        return _component(
+            platform="sensor",
+            name=name,
+            key=uid(component),
+            entity_id=f"sensor.{prefix}_{component}",
+            state_topic=gpu_topic,
+            value_template=f"{{{{ value_json.{field} | default(none) }}}}",
+            app_availability=topics.app_availability,
+            diagnostic=False,
+            **extra,
+        )
+
+    components["gpu_video"] = gpu_sensor(
+        "gpu_video", "GPU Video", "video_busy_percent",
+        unit="%", icon="mdi:video",
+    )
+    components["gpu_render"] = gpu_sensor(
+        "gpu_render", "GPU Render", "render_busy_percent",
+        unit="%", icon="mdi:gpu",
+    )
+    components["gpu_video_enhance"] = gpu_sensor(
+        "gpu_video_enhance", "GPU Video Enhance", "video_enhance_busy_percent",
+        unit="%", icon="mdi:image-filter-hdr",
+    )
+    components["gpu_frequency"] = gpu_sensor(
+        "gpu_frequency", "GPU frequency", "frequency_mhz",
+        unit="MHz", icon="mdi:speedometer",
+    )
+    components["gpu_temperature"] = gpu_sensor(
+        "gpu_temperature", "GPU temperature", "temperature_c",
+        unit="°C", icon="mdi:thermometer", device_class="temperature",
+    )
+    components["gpu_rc6"] = gpu_sensor(
+        "gpu_rc6", "GPU RC6", "rc6_percent",
+        unit="%", icon="mdi:leaf",
+    )
+    components["gpu_status"] = _component(
+        platform="sensor",
+        name="GPU status",
+        key=uid("gpu_status"),
+        entity_id=f"sensor.{prefix}_gpu_status",
+        state_topic=gpu_topic,
+        value_template="{{ value_json.status | default('unknown') }}",
+        app_availability=topics.app_availability,
+        diagnostic=True,
+        icon="mdi:gpu",
+        json_attributes_topic=gpu_topic,
+        json_attributes_template=(
+            "{{ {'supported': value_json.supported | default(false), "
+            "'available': value_json.available | default(false), "
+            "'source': value_json.source | default(none), "
+            "'pci_address': value_json.pci_address | default(none)} | tojson }}"
+        ),
+    )
+
+    components["last_boot"] = _component(
+        platform="sensor",
+        name="Last boot",
+        key=uid("last_boot"),
+        entity_id=f"sensor.{prefix}_last_boot",
+        state_topic=state_group_topic(topics, "diagnostics"),
+        value_template="{{ value_json.server_boot_time | default(none) }}",
+        app_availability=topics.app_availability,
+        diagnostic=True,
+        device_class="timestamp",
+        icon="mdi:restart",
+    )
 
     components["agent_version"] = _component(
         platform="sensor",
