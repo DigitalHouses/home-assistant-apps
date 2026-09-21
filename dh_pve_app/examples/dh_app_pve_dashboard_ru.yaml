@@ -152,7 +152,7 @@ sections:
               %}
             {% endif %}
 
-            {# Dynamic cooling inventory. #}
+            {# Dynamic cooling inventory. Percent is primary; RPM is fallback. #}
             {% set fans = namespace(items=[]) %}
 
             {% for fan in states.sensor | sort(attribute='entity_id') %}
@@ -167,9 +167,19 @@ sections:
                   or state_attr(fan.entity_id, 'label')
                   or 'Fan'
                 %}
+                {% set speed_id =
+                  fan.entity_id | replace('_rpm', '_speed')
+                %}
+                {% set speed = states(speed_id) %}
+
+                {% if speed | is_number %}
+                  {% set fan_value = (speed | int) ~ '%' %}
+                {% else %}
+                  {% set fan_value = (fan.state | int) ~ ' RPM' %}
+                {% endif %}
 
                 {% set fans.items = fans.items + [
-                  fan_name ~ ': ' ~ (fan.state | int) ~ ' RPM'
+                  fan_name ~ ': ' ~ fan_value
                 ] %}
               {% endif %}
             {% endfor %}
@@ -1060,6 +1070,15 @@ sections:
                   if fan.state not in ['unknown', 'unavailable', 'none', '']
                   else none
                 %}
+                {% set speed_id =
+                  fan.entity_id | replace('_rpm', '_speed')
+                %}
+                {% set speed_raw = states(speed_id) %}
+                {% set speed =
+                  speed_raw | int
+                  if speed_raw | is_number
+                  else none
+                %}
 
                 {% if rpm is none %}
                   {% set color = 'grey' %}
@@ -1067,17 +1086,22 @@ sections:
                   {% set icon = 'mdi:fan-alert' %}
                 {% elif rpm == 0 %}
                   {% set color = 'red' %}
-                  {% set secondary = '0 RPM' %}
+                  {% set secondary =
+                    ('0% · ' if speed is not none else '') ~ '0 RPM'
+                  %}
                   {% set icon = 'mdi:fan-off' %}
                 {% else %}
                   {% set color = 'blue' %}
-                  {% set secondary = rpm ~ ' RPM' %}
+                  {% set secondary =
+                    ((speed ~ '% · ') if speed is not none else '')
+                    ~ rpm ~ ' RPM'
+                  %}
                   {% set icon = 'mdi:fan' %}
                 {% endif %}
 
                 {% set ns.items = ns.items + [{
                   'type': 'custom:mushroom-template-card',
-                  'entity': fan.entity_id,
+                  'entity': speed_id if speed is not none else fan.entity_id,
                   'primary': name,
                   'secondary': secondary,
                   'icon': icon,
@@ -1103,6 +1127,34 @@ sections:
               }] %}
             {% endif %}
             {{- ns.items -}}
+        grid_options:
+          columns: 12
+          rows: auto
+      - type: custom:auto-entities
+        show_empty: false
+        card:
+          type: vertical-stack
+        card_param: cards
+        filter:
+          include:
+            - entity_id: button.dh_app_pve_calibrate_fans
+              options:
+                type: custom:mushroom-template-card
+                entity: button.dh_app_pve_calibrate_fans
+                primary: Калибровать вентиляторы
+                secondary: Кратковременно включает максимальную скорость
+                icon: mdi:fan-chevron-up
+                icon_color: blue
+                tap_action:
+                  action: perform-action
+                  perform_action: button.press
+                  target:
+                    entity_id: button.dh_app_pve_calibrate_fans
+                  confirmation:
+                    text: >-
+                      Вентилятор на несколько секунд будет переведён на
+                      максимальную скорость. После измерения автоматическое
+                      управление будет восстановлено. Запустить калибровку?
         grid_options:
           columns: 12
           rows: auto
