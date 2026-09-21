@@ -188,39 +188,42 @@ The resolved SHA is verification metadata. The release tag remains the canonical
 
 ### 7.2 Home Assistant Apps
 
-For a Home Assistant App, the production version must correspond to a published canonical release tag and GitHub Release.
+The production delivery contract for a Home Assistant App is an immutable container artifact built from the exact released source.
 
-The tag and GitHub Release define release provenance:
+The required provenance chain is:
 
 ```text
 App version
     ↕
 Release tag
     ↓
-Exact main commit
+Exact main commit SHA
+    ↓
+GHCR image version tag
+    ↓
+GHCR image digest
 ```
 
-The current Home Assistant App repository delivery mechanism may distribute an App from repository state and its package version rather than installing source directly from the Git release tag.
+The following identities must describe the same release:
 
-Therefore, until an immutable release artifact is used, do not claim that a deployed Home Assistant App was physically built from the release tag solely because the matching tag and GitHub Release exist.
+- App package version;
+- GitHub Release version;
+- canonical release tag;
+- exact Git commit SHA;
+- GHCR version tag;
+- GHCR image digest.
 
-The required current contract is:
+Production Home Assistant Apps must be installable through the DigitalHouses App repository and must use published registry images instead of relying on locally built production images.
 
-- the App version in the package source matches the released version;
-- the release tag points to the exact `main` commit containing that version;
-- the GitHub Release is associated with that tag;
-- repository validation and release validation pass before publication.
+Production deployment must not use `latest` or another floating image tag.
 
-The target architecture for Home Assistant Apps is an immutable container artifact built from the exact released source and linked to:
+Once a versioned image has been published, that version must not be overwritten with different image content or reused for another commit. New code requires a new product version.
 
-```text
-Version
-Release tag
-Exact commit SHA
-Immutable container artifact
-```
+The human-readable version tag is required for operations. The digest is the exact immutable artifact identity used for provenance and verification.
 
-When that delivery model is implemented, the release workflow and App metadata must preserve this provenance end to end. Prefer immutable artifact identity, such as an image digest, over a mutable container tag when exact artifact pinning is available.
+Released images should remain available for disaster recovery of valid historical Home Assistant backups. Routine cleanup must not make a previously valid released backup unrecoverable.
+
+Home Assistant App delivery and backup behavior must also satisfy [DigitalHouses Immutable Delivery, Compact Backup and Telemetry Standard](IMMUTABLE_DELIVERY_AND_TELEMETRY_STANDARD.md).
 
 ## 8. Historical tags and adoption baselines
 
@@ -275,6 +278,10 @@ Before publishing, the workflow validates:
 
 After validation, the workflow creates the tag and GitHub Release from the exact checked-out `main` commit and verifies that the published tag resolves back to that commit.
 
+For Home Assistant Apps, the release mechanism must additionally build and publish the versioned GHCR artifact from the exact release source, resolve its digest, and verify the complete version/tag/commit/image relationship. The successful release record must retain the image name and digest.
+
+The implementation may order publication steps transactionally to avoid partial releases, but it must not represent a release as complete until every artifact and provenance check required for that product type has passed.
+
 Manual creation of new-format release tags is reserved for explicit recovery work.
 
 ## 11. Policy enforcement
@@ -316,4 +323,11 @@ CI:
 
 For Linux Agents, production deployment instructions should use the release tag.
 
-For Home Assistant Apps, the record must distinguish release provenance from the current delivery mechanism until immutable release artifacts are implemented.
+For Home Assistant Apps, the release completion record must additionally identify:
+
+```text
+Image:
+Image digest:
+```
+
+The image digest is required exact-artifact provenance and must remain associated with the release record.
