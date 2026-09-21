@@ -6,6 +6,7 @@ import logging
 import re
 import secrets
 import time
+import threading
 import urllib.request
 import uuid
 from pathlib import Path
@@ -20,6 +21,7 @@ BASE_URL = "https://telemetry.digitalhouses.vip"
 NORMAL_INTERVAL_SECONDS = 24 * 60 * 60
 JITTER_SECONDS = 30 * 60
 FAILURE_BACKOFF_SECONDS = 60 * 60
+RUNNER_CHECK_SECONDS = 60.0
 HTTP_TIMEOUT_SECONDS = 5.0
 _RELEASE_SOURCE_RE = re.compile(
     r"^digitalhouses_pve_agent-v(?P<version>"
@@ -139,6 +141,7 @@ class TelemetryClient:
         self.now_epoch = now_epoch
         self.log = logging.getLogger(__name__)
         self._state = self._load_or_create_state()
+        self.released_build = is_released_build(self.version, self.build_info_path)
 
     def _load_or_create_state(self) -> dict[str, object]:
         try:
@@ -161,6 +164,10 @@ class TelemetryClient:
             changed = True
         if changed:
             self.state_store.save(state)
+        try:
+            self.state_store.path.chmod(0o600)
+        except OSError:
+            pass
         return dict(state)
 
     @property
@@ -173,6 +180,10 @@ class TelemetryClient:
 
     def _save(self) -> None:
         self.state_store.save(self._state)
+        try:
+            self.state_store.path.chmod(0o600)
+        except OSError:
+            pass
 
     def payload(self) -> dict[str, object]:
         return {
@@ -214,7 +225,7 @@ class TelemetryClient:
     def tick(self) -> bool:
         if not self.enabled:
             return False
-        if not is_released_build(self.version, self.build_info_path):
+        if not self.released_build:
             return False
 
         now = float(self.now_epoch())
@@ -274,3 +285,41 @@ class TelemetryClient:
         self._state.pop("last_attempt_epoch", None)
         self._save()
         return True
+
+
+
+class TelemetryRunner:
+    """Run best-effort telemetry outside all product monitoring loops."""
+
+    def __init__(
+        self,
+        client: TelemetryClient,
+        *,
+        check_seconds: float = RUNNER_CHECK_SECONDS,
+    ) -> None:
+        self.client = client
+        self.check_seconds = float(check_seconds)
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+
+    def start(self) -> None:
+        if self._thread is not None and self._thread.is_alive():
+            return
+        self._stop.clear()
+        self._thread = threading.Thread(
+            target=self._run,
+            name="dh-pve-telemetry",
+            daemon=False,
+        )
+        self._thread.start()
+
+    def _run(self) -> None:
+        while not self._stop.is_set():
+            self.client.tick()
+            self._stop.wait(self.check_seconds)
+
+    def stop(self) -> None:
+        self._stop.set()
+        thread = self._thread
+        if thread is not None and thread.is_alive():
+            thread.join()
