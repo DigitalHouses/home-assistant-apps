@@ -234,6 +234,7 @@ class MqttBridge(MqttEvents):
         client.subscribe(self.topics.ha_status, qos=1)
         client.subscribe(self.topics.refresh, qos=1)
         client.subscribe(self.topics.ups_scan, qos=1)
+        client.subscribe(self.topics.fan_calibrate, qos=1)
         client.subscribe(f"{self.topics.base}/ups/refresh", qos=1)
         client.subscribe(f"{self.topics.base}/ups/beeper/set", qos=1)
         client.subscribe(f"{self.topics.base}/ups/test/quick", qos=1)
