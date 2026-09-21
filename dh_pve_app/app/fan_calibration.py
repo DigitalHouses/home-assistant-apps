@@ -38,6 +38,7 @@ class FanCalibrationAdapter(Protocol):
 class FanCalibrationRegistry:
     def __init__(self, state_store: StateStore) -> None:
         self.state_store = state_store
+        self._lock = threading.RLock()
         self._observed_high: dict[str, list[int]] = {}
 
     def _load(self) -> dict[str, object]:
@@ -81,22 +82,28 @@ class FanCalibrationRegistry:
         adapter: FanCalibrationAdapter,
         values: Mapping[str, object],
     ) -> None:
-        data = self._load()
-        fans = data["fans"]  # type: ignore[assignment]
-        current = self._raw_record(fan.fan_id)
-        current.update(
-            {
-                "fan_id": fan.fan_id,
-                "profile": adapter.profile_name,
-                "hardware_identity": adapter.hardware_identity(fan),
-                "chip": fan.chip,
-                "source_device": fan.source_device,
-                "fan_index": fan.fan_index,
-            }
-        )
-        current.update(dict(values))
-        fans[fan.fan_id] = current  # type: ignore[index]
-        self._save(data)
+        with self._lock:
+            data = self._load()
+            fans = data["fans"]  # type: ignore[assignment]
+            current_raw = fans.get(fan.fan_id)  # type: ignore[union-attr]
+            current = (
+                dict(current_raw)
+                if isinstance(current_raw, Mapping)
+                else {}
+            )
+            current.update(
+                {
+                    "fan_id": fan.fan_id,
+                    "profile": adapter.profile_name,
+                    "hardware_identity": adapter.hardware_identity(fan),
+                    "chip": fan.chip,
+                    "source_device": fan.source_device,
+                    "fan_index": fan.fan_index,
+                }
+            )
+            current.update(dict(values))
+            fans[fan.fan_id] = current  # type: ignore[index]
+            self._save(data)
 
     def needs_automatic_calibration(
         self, fan: FanSnapshot, adapter: FanCalibrationAdapter
@@ -135,20 +142,21 @@ class FanCalibrationRegistry:
         max_rpm: int,
         calibrated_at: str,
     ) -> None:
-        self._replace(
-            fan,
-            adapter,
-            {
-                "max_rpm": int(max_rpm),
-                "calibrated_at": calibrated_at,
-                "max_rpm_updated_at": calibrated_at,
-                "max_rpm_source": "calibration",
-                "calibration_status": "calibrated",
-                "error": None,
-                "pending_restore": None,
-            },
-        )
-        self._observed_high.pop(fan.fan_id, None)
+        with self._lock:
+            self._replace(
+                fan,
+                adapter,
+                {
+                    "max_rpm": int(max_rpm),
+                    "calibrated_at": calibrated_at,
+                    "max_rpm_updated_at": calibrated_at,
+                    "max_rpm_source": "calibration",
+                    "calibration_status": "calibrated",
+                    "error": None,
+                    "pending_restore": None,
+                },
+            )
+            self._observed_high.pop(fan.fan_id, None)
 
     def mark_failed(
         self,
@@ -212,37 +220,45 @@ class FanCalibrationRegistry:
         *,
         observed_at: str | None,
     ) -> dict[str, object]:
-        max_rpm = record.get("max_rpm")
-        rpm = fan.rpm
-        if (
-            not isinstance(max_rpm, int)
-            or max_rpm <= 0
-            or not isinstance(rpm, int)
-            or rpm <= int(max_rpm * (1.0 + OBSERVED_MAX_TOLERANCE))
-        ):
+        with self._lock:
+            latest = self._matching_record(fan, adapter)
+            if latest:
+                record = latest
+            if record.get("calibration_status") != "calibrated":
+                self._observed_high.pop(fan.fan_id, None)
+                return record
+
+            max_rpm = record.get("max_rpm")
+            rpm = fan.rpm
+            if (
+                not isinstance(max_rpm, int)
+                or max_rpm <= 0
+                or not isinstance(rpm, int)
+                or rpm <= int(max_rpm * (1.0 + OBSERVED_MAX_TOLERANCE))
+            ):
+                self._observed_high.pop(fan.fan_id, None)
+                return record
+
+            samples = self._observed_high.setdefault(fan.fan_id, [])
+            samples.append(rpm)
+            if len(samples) > OBSERVED_MAX_CONFIRMATIONS:
+                del samples[:-OBSERVED_MAX_CONFIRMATIONS]
+            candidate = self._stable(samples)
+            if candidate is None or candidate <= max_rpm:
+                return record
+
+            updated_at = observed_at
+            self._replace(
+                fan,
+                adapter,
+                {
+                    "max_rpm": candidate,
+                    "max_rpm_source": "observed",
+                    "max_rpm_updated_at": updated_at,
+                },
+            )
             self._observed_high.pop(fan.fan_id, None)
-            return record
-
-        samples = self._observed_high.setdefault(fan.fan_id, [])
-        samples.append(rpm)
-        if len(samples) > OBSERVED_MAX_CONFIRMATIONS:
-            del samples[:-OBSERVED_MAX_CONFIRMATIONS]
-        candidate = self._stable(samples)
-        if candidate is None or candidate <= max_rpm:
-            return record
-
-        updated_at = observed_at
-        self._replace(
-            fan,
-            adapter,
-            {
-                "max_rpm": candidate,
-                "max_rpm_source": "observed",
-                "max_rpm_updated_at": updated_at,
-            },
-        )
-        self._observed_high.pop(fan.fan_id, None)
-        return self._matching_record(fan, adapter)
+            return self._matching_record(fan, adapter)
 
     def presentation(
         self,
