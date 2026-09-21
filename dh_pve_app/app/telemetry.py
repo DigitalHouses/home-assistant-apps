@@ -27,6 +27,7 @@ _RELEASE_SOURCE_RE = re.compile(
     r"^digitalhouses_pve_agent-v(?P<version>"
     r"(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)"
     r"(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?"
+    r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?"
     r")$"
 )
 _SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
@@ -70,7 +71,7 @@ class UrllibTelemetryTransport:
                 "Authorization": f"Bearer {token}",
                 "Content-Type": "application/json",
                 "Accept": "application/json",
-                "User-Agent": f"DigitalHouses-PVE-Agent/{payload.get('version', 'unknown')}",
+                "User-Agent": "DigitalHouses-Telemetry/1",
             },
         )
         with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
