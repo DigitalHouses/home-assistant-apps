@@ -9,7 +9,7 @@
 - Add `sensor.dh_plex_last_boot` for host/VM uptime while retaining `sensor.dh_plex_agent_uptime` as process diagnostics.
 - Add the retained `gpu` MQTT state group using the existing NORMAL/DETAIL adaptive publication model.
 - Update the Plex dashboard with server uptime and GPU/transcoding telemetry without any DH PVE dependency.
-- Prepare the installer for optional `intel-gpu-tools` and existing render/video group access on supported Debian/Ubuntu Intel GPU hosts.
+- Prepare the installer for optional `intel-gpu-tools` and existing render/video group access on supported Debian/Ubuntu Intel GPU hosts.\n- Isolate the i915 PMU privilege in `digitalhouses_plex_gpu_helper.service`: the main Plex Agent remains unprivileged, while the helper alone receives `CAP_SYS_ADMIN` and publishes a timestamped local GPU snapshot.
 
 ## 0.3.0
 

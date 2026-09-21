@@ -223,7 +223,7 @@ GPU temperature is published only when Linux exposes a real hwmon sensor attache
 
 `binary_sensor.dh_plex_hardware_transcode_active` comes from Plex playback-session semantics; the GPU sensors independently show measured hardware activity.
 
-`sensor.dh_plex_last_boot` is the Linux host/VM boot timestamp and therefore survives Plex Agent restarts. `sensor.dh_plex_agent_uptime` remains a separate diagnostic process-uptime sensor.
+`sensor.dh_plex_last_boot` is the Linux host/VM boot timestamp and therefore survives Plex Agent restarts. `sensor.dh_plex_agent_uptime` remains a separate diagnostic process-uptime sensor.\n\nOn Linux hosts where i915 PMU access requires elevated privilege, only the dedicated `digitalhouses_plex_gpu_helper.service` receives `CAP_SYS_ADMIN`. The main `digitalhouses_plex_monitoring.service` remains unprivileged. The helper has no MQTT or Plex API responsibility; it writes a timestamped local state file that the main agent reads and rejects when stale.
 
 ## Publication policy
 

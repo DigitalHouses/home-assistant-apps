@@ -16,7 +16,7 @@ from .api_runtime import PlexApiRuntime
 from .build_info import load_build_info
 from .config import AppConfig, load_config
 from .discovery import build_discovery_payload, build_topics
-from .gpu_collector import IntelGpuCollector
+from .gpu_collector import GpuStateReader
 from .metrics import RollingCpuMetrics, group_current_cpu
 from .models import (
     ActivityState,
@@ -94,7 +94,7 @@ def run(config: AppConfig) -> int:
 
     topics = build_topics(config)
     api_runtime = PlexApiRuntime(config.plex_api)
-    gpu_collector = IntelGpuCollector()
+    gpu_collector = GpuStateReader()
     server_boot_time = datetime.fromtimestamp(
         psutil.boot_time(),
         timezone.utc,

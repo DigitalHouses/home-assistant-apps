@@ -123,6 +123,7 @@ def validate_plex_monitoring(
             app / "app/presentation_runtime.py",
             app / "examples/digitalhouses_plex_monitoring.conf.example",
             app / "systemd/digitalhouses_plex_monitoring.service",
+            app / "systemd/digitalhouses_plex_gpu_helper.service",
         ],
     )
 
@@ -270,6 +271,9 @@ def validate_plex_monitoring(
     service = (
         app / "systemd/digitalhouses_plex_monitoring.service"
     ).read_text(encoding="utf-8")
+    gpu_helper_service = (
+        app / "systemd/digitalhouses_plex_gpu_helper.service"
+    ).read_text(encoding="utf-8")
     for expected in (
         "User=digitalhouses_plex_monitoring",
         "Group=digitalhouses_plex_monitoring",
@@ -283,6 +287,20 @@ def validate_plex_monitoring(
     ):
         if expected not in service:
             fail(f"Plex Monitoring systemd contract changed: {expected}")
+
+    if "CAP_SYS_ADMIN" in service:
+        fail("Plex Monitoring main service must not receive CAP_SYS_ADMIN")
+
+    for expected in (
+        "User=digitalhouses_plex_monitoring",
+        "Group=digitalhouses_plex_monitoring",
+        "CapabilityBoundingSet=CAP_SYS_ADMIN",
+        "AmbientCapabilities=CAP_SYS_ADMIN",
+        "NoNewPrivileges=true",
+        "ReadWritePaths=/var/lib/digitalhouses_plex_monitoring",
+    ):
+        if expected not in gpu_helper_service:
+            fail(f"Plex GPU helper service contract changed: {expected}")
 
     installer = (app / "install.sh").read_text(encoding="utf-8")
     for expected in (

@@ -1,13 +1,29 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import re
 import shutil
 import subprocess
+import time
+from typing import Callable, Mapping
 
 
 _PCI_RE = re.compile(r"^[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}[.][0-7]$")
+DEFAULT_GPU_STATE_FILE = Path(
+    "/var/lib/digitalhouses_plex_monitoring/gpu_state.json"
+)
+DEFAULT_GPU_STATE_MAX_AGE_SECONDS = 30.0
+
+_GPU_VALUE_FIELDS = (
+    "video_busy_percent",
+    "render_busy_percent",
+    "video_enhance_busy_percent",
+    "frequency_mhz",
+    "rc6_percent",
+    "temperature_c",
+)
 
 
 def _round_or_none(value: object) -> float | None:
@@ -235,4 +251,101 @@ class IntelGpuCollector:
             **metrics,
             "pci_address": pci,
             "temperature_c": temperature,
+        }
+
+
+
+def write_gpu_state_atomic(
+    path: Path,
+    payload: Mapping[str, object],
+    *,
+    now_epoch: Callable[[], float] = time.time,
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    state = dict(payload)
+    state["collected_at_epoch"] = float(now_epoch())
+    temporary = path.with_name(path.name + ".tmp")
+    temporary.write_text(
+        json.dumps(state, ensure_ascii=False, separators=(",", ":")) + "\n",
+        encoding="utf-8",
+    )
+    os.chmod(temporary, 0o640)
+    os.replace(temporary, path)
+
+
+class GpuStateReader:
+    def __init__(
+        self,
+        path: Path = DEFAULT_GPU_STATE_FILE,
+        *,
+        max_age_seconds: float = DEFAULT_GPU_STATE_MAX_AGE_SECONDS,
+        now_epoch: Callable[[], float] = time.time,
+    ) -> None:
+        self.path = path
+        self.max_age_seconds = float(max_age_seconds)
+        self.now_epoch = now_epoch
+
+    @staticmethod
+    def _unavailable(
+        status: str,
+        *,
+        supported: bool,
+        source: object = None,
+        pci_address: object = None,
+    ) -> dict[str, object]:
+        return {
+            "supported": supported,
+            "available": False,
+            "status": status,
+            "source": source,
+            "pci_address": pci_address,
+            **{field: None for field in _GPU_VALUE_FIELDS},
+        }
+
+    def collect(self) -> dict[str, object]:
+        try:
+            raw = json.loads(self.path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            pci = detect_intel_gpu_pci()
+            return self._unavailable(
+                "helper_unavailable",
+                supported=pci is not None,
+                pci_address=pci,
+            )
+        except (OSError, json.JSONDecodeError):
+            return self._unavailable("helper_error", supported=True)
+
+        if not isinstance(raw, dict):
+            return self._unavailable("helper_error", supported=True)
+
+        supported = bool(raw.get("supported", False))
+        source = raw.get("source")
+        pci_address = raw.get("pci_address")
+        collected_at = raw.get("collected_at_epoch")
+        if not isinstance(collected_at, (int, float)) or isinstance(
+            collected_at, bool
+        ):
+            return self._unavailable(
+                "helper_error",
+                supported=supported,
+                source=source,
+                pci_address=pci_address,
+            )
+
+        age = max(0.0, float(self.now_epoch()) - float(collected_at))
+        if age > self.max_age_seconds:
+            return self._unavailable(
+                "stale",
+                supported=supported,
+                source=source,
+                pci_address=pci_address,
+            )
+
+        return {
+            "supported": supported,
+            "available": bool(raw.get("available", False)),
+            "status": str(raw.get("status") or "unknown"),
+            "source": source,
+            "pci_address": pci_address,
+            **{field: raw.get(field) for field in _GPU_VALUE_FIELDS},
         }

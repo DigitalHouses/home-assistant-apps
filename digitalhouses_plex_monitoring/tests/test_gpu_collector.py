@@ -2,7 +2,12 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
-from app.gpu_collector import IntelGpuCollector, parse_intel_gpu_top_json, read_gpu_temperature
+from app.gpu_collector import (
+    IntelGpuCollector,
+    parse_intel_gpu_top_json,
+    read_gpu_temperature,
+    write_gpu_state_atomic,
+)
 
 
 INTEL_GPU_TOP = r"""
@@ -115,3 +120,25 @@ def test_collector_is_fail_soft_when_intel_gpu_top_fails():
     assert payload["status"] == "error"
     assert payload["supported"] is True
     assert payload["available"] is False
+
+
+
+def test_gpu_state_writer_is_atomic_and_timestamped():
+    with TemporaryDirectory() as tmp:
+        path = Path(tmp) / "gpu_state.json"
+        write_gpu_state_atomic(
+            path,
+            {
+                "supported": True,
+                "available": True,
+                "status": "ok",
+                "video_busy_percent": 12.3,
+            },
+            now_epoch=lambda: 1234.5,
+        )
+
+        payload = __import__("json").loads(path.read_text(encoding="utf-8"))
+
+        assert payload["collected_at_epoch"] == 1234.5
+        assert payload["video_busy_percent"] == 12.3
+        assert not path.with_name(path.name + ".tmp").exists()
