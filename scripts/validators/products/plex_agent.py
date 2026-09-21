@@ -145,7 +145,7 @@ def validate_plex_monitoring(
     )
     build = models_module.BuildInfo(
         version=str(context["version"]),
-        source="main",
+        source=f"digitalhouses_plex_agent-v{context['version']}",
         commit="0123456789abcdef0123456789abcdef01234567",
     )
 
@@ -251,11 +251,17 @@ def validate_plex_monitoring(
     installer = (app / "install.sh").read_text(encoding="utf-8")
     for expected in (
         'APP_NAME="digitalhouses_plex_monitoring"',
+        'RELEASE_IDENTIFIER="digitalhouses_plex_agent"',
+        'SOURCE_REF="${DIGITALHOUSES_SOURCE_REF:-}"',
+        'ALLOW_NON_RELEASE_REF="${DIGITALHOUSES_ALLOW_NON_RELEASE_REF:-0}"',
+        'EXPECTED_VERSION="${BASH_REMATCH[1]}"',
         'APP_DIR="/opt/digitalhouses/${APP_NAME}"',
         'CONFIG_DIR="/etc/${APP_NAME}"',
         'STATE_DIR="/var/lib/${APP_NAME}"',
         'if [[ ! -f "${CONFIG_FILE}" ]]; then',
         'SOURCE_SHA="$(git -C "${tmp_dir}/repo" rev-parse HEAD)"',
+        'SOURCE_VERSION="$(tr -d \'[:space:]\' <"${SOURCE_APP}/VERSION")"',
+        'if [[ -n "${EXPECTED_VERSION}" && "${SOURCE_VERSION}" != "${EXPECTED_VERSION}" ]]; then',
         '} >"${APP_DIR}/BUILD_INFO"',
         'PLEX_API_TOKEN_FILE="${CONFIG_DIR}/plex_local_admin_token"',
         'install -o root -g "${SERVICE_GROUP}" -m 0640',
@@ -264,5 +270,28 @@ def validate_plex_monitoring(
         if expected not in installer:
             fail(f"Plex Monitoring installer contract changed: {expected}")
 
+    if 'SOURCE_REF="${DIGITALHOUSES_SOURCE_REF:-main}"' in installer:
+        fail("Plex Monitoring production installer must not default to main")
+
     if "LoadCredential=" in installer:
         fail("Plex Monitoring installer must not install a systemd credential drop-in")
+
+    readme = (app / "README.md").read_text(encoding="utf-8")
+    release_tag = f"digitalhouses_plex_agent-v{context['version']}"
+    for expected in (
+        f'RELEASE_TAG="{release_tag}"',
+        (
+            "raw.githubusercontent.com/DigitalHouses/home-assistant-apps/"
+            "${RELEASE_TAG}/digitalhouses_plex_monitoring/install.sh"
+        ),
+        'DIGITALHOUSES_SOURCE_REF="${RELEASE_TAG}"',
+        "digitalhouses_plex_monitoring/BUILD_INFO",
+    ):
+        if expected not in readme:
+            fail(f"Plex Monitoring release deployment docs changed: {expected}")
+
+    if (
+        "raw.githubusercontent.com/DigitalHouses/home-assistant-apps/main/"
+        "digitalhouses_plex_monitoring/install.sh"
+    ) in readme:
+        fail("Plex Monitoring README must not present main as production install source")

@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+## 0.2.3
+
+- Align production install/update with the repository Release Policy: the normal deployment source is the canonical `digitalhouses_plex_agent-v<version>` release tag, never `main`.
+- Require an explicit source ref and reject non-release refs by default; retain an explicit development/testing override without changing production behavior.
+- Verify that a canonical release tag contains the matching product `VERSION` before installation and continue recording version, source tag/ref, and exact commit SHA in `BUILD_INFO`.
+- Preserve all existing runtime identities, including the `digitalhouses_plex_monitoring` service/path names, MQTT namespace/device identifiers, and Home Assistant entity IDs.
+
 ## 0.2.2
 
 - Keep Plex playback session identifiers internal for change detection and omit them from MQTT/Home Assistant playback attributes.
