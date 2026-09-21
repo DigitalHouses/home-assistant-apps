@@ -40,5 +40,7 @@ fan_delta_rpm = 100
 
 [telemetry]
 # Voluntary product telemetry. Default is OFF.
-# When enabled, a released build sends only protocol-v1 installation/product/version data.
+# When enabled, a canonical released build sends only:
+# schema, telemetry_policy_version, installation_id, product, version.
+# Policy: docs/standards/PRODUCT_TELEMETRY_POLICY.md
 enabled = false
