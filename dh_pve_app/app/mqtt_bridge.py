@@ -66,6 +66,7 @@ class MqttEvents:
         self.refresh_requested = threading.Event()
         self.reconnect_requested = threading.Event()
         self.ups_scan_requested = threading.Event()
+        self.fan_calibration_requested = threading.Event()
         self.ups_refresh_requested = threading.Event()
         self.ups_test_quick_requested = threading.Event()
         self.ups_test_deep_requested = threading.Event()
@@ -95,6 +96,11 @@ class MqttEvents:
         if topic == self.topics.ups_scan:
             if text.upper() == "PRESS":
                 self.ups_scan_requested.set()
+                return True
+            return False
+        if topic == self.topics.fan_calibrate:
+            if text.upper() == "PRESS":
+                self.fan_calibration_requested.set()
                 return True
             return False
         if self.ups_topics is not None and topic == self.ups_topics.refresh:
