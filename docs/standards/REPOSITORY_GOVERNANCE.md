@@ -120,3 +120,22 @@ The cleanup process should be mechanical:
 5. never resolve ambiguity by branch name alone.
 
 This keeps the public repository navigable without sacrificing unreconciled history.
+
+
+## 10. Normative shared architecture
+
+The following shared documents are normative repository contracts and apply to product development in their stated scope:
+
+- [DigitalHouses Application Standard](DIGITALHOUSES_APP_STANDARD.md)
+- [DigitalHouses Release Policy](RELEASE_POLICY.md)
+- [DigitalHouses Immutable Delivery, Compact Backup and Telemetry Standard](IMMUTABLE_DELIVERY_AND_TELEMETRY_STANDARD.md)
+- [DigitalHouses Product Telemetry Policy](PRODUCT_TELEMETRY_POLICY.md)
+- [DigitalHouses Telemetry Protocol v1](TELEMETRY_PROTOCOL_V1.md)
+
+Developers must implement product changes consistently with these contracts.
+
+Product-specific code or documentation may add stricter requirements, but must not silently weaken or contradict a shared normative contract.
+
+When a shared architecture contract changes intentionally, update the normative document and the corresponding validation, workflow, tests, and affected product implementations together.
+
+A product is not considered migrated to a new shared contract merely because documentation was added. Repository validation and product acceptance tests must eventually enforce the contract mechanically.

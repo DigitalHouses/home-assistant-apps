@@ -44,6 +44,8 @@ Engineering documentation is separated into shared standards and product-specifi
 
 - [Documentation index](docs/README.md)
 - [DigitalHouses Application Standard](docs/standards/DIGITALHOUSES_APP_STANDARD.md)
+- [DigitalHouses Release Policy](docs/standards/RELEASE_POLICY.md)
+- [Immutable Delivery, Compact Backup and Telemetry Standard](docs/standards/IMMUTABLE_DELIVERY_AND_TELEMETRY_STANDARD.md)
 
 GitHub is the source of truth for reusable DigitalHouses application code and release provenance.
 
