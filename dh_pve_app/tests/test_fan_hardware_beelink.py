@@ -23,7 +23,7 @@ def _fan(hwmon: Path, *, fan_index: int = 2) -> FanSnapshot:
 
 def _profile(tmp_path: Path, *, vendor: str = "AZW"):
     dmi = tmp_path / "dmi"
-    dmi.mkdir()
+    dmi.mkdir(parents=True)
     (dmi / "sys_vendor").write_text(vendor + "\n", encoding="utf-8")
     (dmi / "product_name").write_text("MINI S\n", encoding="utf-8")
     (dmi / "board_vendor").write_text(vendor + "\n", encoding="utf-8")
