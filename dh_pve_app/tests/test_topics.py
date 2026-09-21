@@ -52,3 +52,4 @@ def test_build_topics_is_exact():
     assert topics.device_id == "dh_app_pve_shahristan"
     assert topics.discovery == "homeassistant/device/dh_app_pve_shahristan/config"
     assert topics.ha_status == "homeassistant/status"
+    assert topics.fan_calibrate == topics.base + "/fans/calibrate"
