@@ -11,7 +11,7 @@ SOURCE_REF="${DIGITALHOUSES_SOURCE_REF:-}"
 ALLOW_NON_RELEASE_REF="${DIGITALHOUSES_ALLOW_NON_RELEASE_REF:-0}"
 EXPECTED_VERSION=""
 
-SEMVER_RE='(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\\.[0-9A-Za-z-]+)*)?(\\+[0-9A-Za-z-]+(\\.[0-9A-Za-z-]+)*)?'
+SEMVER_RE='(0|[1-9][0-9]*)[.](0|[1-9][0-9]*)[.](0|[1-9][0-9]*)(-[0-9A-Za-z-]+([.][0-9A-Za-z-]+)*)?([+][0-9A-Za-z-]+([.][0-9A-Za-z-]+)*)?'
 
 if [[ -z "${SOURCE_REF}" ]]; then
     echo "DIGITALHOUSES_SOURCE_REF is required."
