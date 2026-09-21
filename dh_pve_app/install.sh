@@ -201,6 +201,9 @@ if [[ ! -f "${CONFIG_FILE}" ]]; then
         printf '%s\n' "topic_prefix = DigitalHouses/Global/dh_pve_app"
         printf '%s\n' "discovery_prefix = homeassistant"
         printf '%s\n' "keepalive_seconds = 60"
+        printf '\n'
+        printf '%s\n' "[telemetry]"
+        printf '%s\n' "enabled = false"
     } >"${CONFIG_FILE}"
     umask "${previous_umask}"
 fi
