@@ -106,6 +106,7 @@ def test_transport_uses_retained_qos1_lwt_and_subscriptions():
     assert (topics.ha_status, 1) in client.subscriptions
     assert (topics.refresh, 1) in client.subscriptions
     assert (topics.ups_scan, 1) in client.subscriptions
+    assert (topics.fan_calibrate, 1) in client.subscriptions
     assert (f"{topics.base}/ups/refresh", 1) in client.subscriptions
     assert (f"{topics.settings_prefix}/+/set", 1) in client.subscriptions
     assert (topics.availability, "online", 1, True) in client.published
