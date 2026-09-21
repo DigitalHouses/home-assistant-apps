@@ -14,8 +14,10 @@ class BeelinkIt8613FanAdapter:
         self,
         *,
         dmi_root: Path = Path("/sys/class/dmi/id"),
+        machine_id_path: Path = Path("/etc/machine-id"),
     ) -> None:
         self.dmi_root = dmi_root
+        self.machine_id_path = machine_id_path
 
     @staticmethod
     def _read(path: Path) -> str:
@@ -66,9 +68,14 @@ class BeelinkIt8613FanAdapter:
         )
 
     def hardware_identity(self, fan: FanSnapshot) -> str:
+        try:
+            machine_id = self._read(self.machine_id_path)
+        except OSError:
+            machine_id = ""
         material = "|".join(
             (
                 self.profile_name,
+                machine_id,
                 *self._dmi_values(),
                 fan.chip,
                 fan.source_device,
