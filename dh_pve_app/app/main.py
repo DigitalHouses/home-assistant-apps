@@ -15,7 +15,7 @@ from .collectors.cooling import collect_fans
 from .config import AppConfig, UpsConfig, load_config
 from .fan_calibration import FanCalibrationManager, FanCalibrationRegistry
 from .fan_hardware_beelink import BeelinkIt8613FanAdapter
-from .fan_runtime import FanAwareRuntime
+from .fan_runtime import FanAwareRuntime as ProblemAwareRuntime
 from .identity import resolve_identity
 from .machine_event_outbox import MachineEventOutbox
 from .mqtt_bridge import MqttBridge
@@ -162,7 +162,7 @@ def build_runtime(
         now_iso=_now_iso,
     )
 
-    runtime = FanAwareRuntime(
+    runtime = ProblemAwareRuntime(
         collectors=collectors,
         bridge=bridge,
         settings=settings,
