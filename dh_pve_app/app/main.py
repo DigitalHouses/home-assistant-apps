@@ -32,7 +32,7 @@ from .shutdown_integration import (
     ShutdownAwareUpsRuntime,
 )
 from .state_store import StateStore
-from .telemetry import TelemetryClient
+from .telemetry import TelemetryClient, TelemetryRunner
 from .topics import build_topics, build_ups_topics
 from .ups_battery_events import UpsBatteryEventTracker
 from .ups_policy_preflight import (
@@ -312,7 +312,7 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
         state_dir=state_dir,
         shutdown_history_tracker=shutdown_history_tracker,
     )
-    telemetry = _telemetry_client(config, state_dir)
+    telemetry_runner = TelemetryRunner(_telemetry_client(config, state_dir))
     recovery = runtime.recover_fan_control()
     if recovery:
         log.warning("Fan control recovery: %s", recovery)
@@ -337,6 +337,7 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
     signal.signal(signal.SIGHUP, reload_policy)
 
     log.info("Запуск DH PVE App %s", _version())
+    telemetry_runner.start()
     if ups_runtime is not None:
         log.info("Найден сохраненный UPS %s", ups_runtime.config.name)
     bridge.start()
@@ -404,10 +405,12 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
                     reload_event.clear()
                     log.debug("SIGHUP обработан до инициализации UPS runtime")
 
-            telemetry.tick()
             bridge.wake_requested.wait(1.0)
             bridge.wake_requested.clear()
     finally:
+        runtime.cancel_fan_calibration()
+        runtime.wait_fan_calibration()
+        telemetry_runner.stop()
         bridge.stop()
         log.info("DH PVE App остановлен")
 
