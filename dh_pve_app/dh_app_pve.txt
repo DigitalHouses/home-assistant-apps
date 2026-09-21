@@ -219,6 +219,9 @@ Config:
 State:
   /var/lib/dh_pve_app/
 
+Telemetry identity/state:
+  /var/lib/digitalhouses/digitalhouses_pve_agent/telemetry.json
+
 Systemd:
   /etc/systemd/system/dh_pve_app.service
 
