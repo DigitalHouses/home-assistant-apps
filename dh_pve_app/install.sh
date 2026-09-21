@@ -203,6 +203,8 @@ if [[ ! -f "${CONFIG_FILE}" ]]; then
         printf '%s\n' "keepalive_seconds = 60"
         printf '\n'
         printf '%s\n' "[telemetry]"
+        printf '%s\n' "# Voluntary product telemetry. Default is OFF."
+        printf '%s\n' "# Policy: https://github.com/DigitalHouses/home-assistant-apps/blob/main/docs/standards/PRODUCT_TELEMETRY_POLICY.md"
         printf '%s\n' "enabled = false"
     } >"${CONFIG_FILE}"
     umask "${previous_umask}"
