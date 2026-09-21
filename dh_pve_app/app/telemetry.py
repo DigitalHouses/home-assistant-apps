@@ -197,10 +197,13 @@ class TelemetryClient:
 
     def _due(self, now: float) -> bool:
         last_attempt = self._number(self._state.get("last_attempt_epoch"))
-        if last_attempt is not None and now - last_attempt < FAILURE_BACKOFF_SECONDS:
-            last_success = self._number(self._state.get("last_success_epoch"))
-            if last_success is None or self._state.get("last_reported_version") != self.version:
-                return False
+        last_success = self._number(self._state.get("last_success_epoch"))
+        if (
+            last_attempt is not None
+            and (last_success is None or last_attempt > last_success)
+            and now - last_attempt < FAILURE_BACKOFF_SECONDS
+        ):
+            return False
 
         last_success = self._number(self._state.get("last_success_epoch"))
         last_version = self._state.get("last_reported_version")
