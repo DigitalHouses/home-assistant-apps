@@ -10,7 +10,7 @@ Native Linux agent for **Proxmox VE 8.x** that publishes host, CPU, memory, stor
 
 The public product name is **DigitalHouses PVE Agent**. Existing runtime identifiers remain compatible: the implementation directory is `dh_pve_app`, the MQTT base namespace is `DigitalHouses/Global/dh_pve_app/<instance>`, and the Home Assistant devices are `DH PVE` and optional `DH PVE UPS`.
 
-Current source release: `VERSION` is `0.5.7`.
+Current source release: `VERSION` is `0.5.8`.
 
 ## Home Assistant dashboard
 
@@ -45,7 +45,7 @@ The legacy `[ups] poll_interval_seconds` configuration key is accepted only for 
 
 Manual Refresh executes the relevant current-state collection immediately. Heavy HEALTH operations remain sequential rather than creating a parallel burst.
 
-## Fan RPM discovery
+## Fan monitoring and calibration
 
 Fan RPM acquisition reads Linux hwmon directly from `/sys/class/hwmon/hwmon*/fan*_input`; it does not add a `sensors`/vendor subprocess to the FAST loop.
 
@@ -56,6 +56,14 @@ Stable fan identity uses the hwmon chip, resolved underlying device and fan chan
 Unconfirmed fan candidates are omitted from normal MQTT Discovery. They are never tombstoned merely because they are still in debounce or currently report `0 RPM`: neither condition proves that a physical fan is absent. Explicit Device Discovery tombstones remain reserved for authoritative migrations/removals that are independent of live fan-presence inference.
 
 `pwm*` and `/sys/class/thermal/cooling_device*` are not used as proof of a physical fan or as RPM sources. The installed `/root/dh_app_pve.txt` guide contains generic read-only fan troubleshooting. Beelink/AZW driver installation, verification and rollback are documented separately in `hardware/beelink/README.md`.
+
+For an explicitly supported write-capable hardware profile, the App can calibrate each confirmed physical fan against its measured maximum RPM. Calibration state is persisted separately from fan-presence state. The user-facing sensor is `Fan speed % = current RPM / calibrated max RPM × 100`, rounded to the nearest integer and clamped to 0..100%; the raw RPM sensor remains diagnostic.
+
+Calibration is a guarded transaction: capture the original PWM/control state, persist a pending restore record, drive only the matched supported channel to maximum, detect a stable RPM plateau, and restore/verify the original control state in all normal failure paths. An interrupted transaction is recovered on the next App start. A restore failure becomes a serious App-owned problem rather than being hidden.
+
+The first write-capable profile is the tested Beelink/AZW IT8613 `it87.2608 fan2 ↔ pwm2` path. The measured ~5400 RPM value from the test machine is a reference only and is never hardcoded as a production maximum. Unsupported fans remain read-only: RPM stays available, Fan Speed % is unavailable, and no calibration button is exposed.
+
+A calibrated maximum may increase automatically if ordinary operation produces three stable RPM samples more than the tolerance above the stored ceiling. A single spike never changes calibration, and the automatic learning path never decreases `max_rpm`. Manual recalibration uses the same backend use-case as first-run calibration.
 
 ### Beelink / AZW IT8613E host profile
 
@@ -160,9 +168,32 @@ For schema v2, both language packages derive presentation from structured machin
 
 The reusable package intentionally does not call `script.write2log`, Telegram, a specific `notify.mobile_app` service or any customer-specific target. A site-local adapter may listen for `dh_app_pve_notification` and deliver its already-formatted `title`/`message` through the site's preferred transport.
 
+## Product telemetry
+
+DigitalHouses product telemetry is explicit opt-in and defaults to OFF:
+
+```ini
+[telemetry]
+enabled = false
+```
+
+When enabled, only a canonical released build may send protocol-v1 heartbeat data to `telemetry.digitalhouses.vip`. The payload contains exactly: protocol schema version, telemetry policy version, a random per-product installation UUID, canonical product identifier and product version. The per-installation token is sent only as the HTTP Bearer credential. Hostname, machine ID, customer/site identity, IP address as payload data, hardware inventory, Home Assistant UUID, commit SHA, release tag and uptime are not transmitted.
+
+Telemetry identity and scheduling state are persisted in `/var/lib/dh_pve_app/telemetry.json`. Telemetry HTTP runs in an isolated worker so DNS/TLS/server failure cannot block PVE, UPS or MQTT monitoring. Branch, `main` and arbitrary-SHA builds are not allowed to send production telemetry even if the config flag is enabled.
+
+The shared privacy/consent contract is documented in [DigitalHouses Product Telemetry Policy](../docs/standards/PRODUCT_TELEMETRY_POLICY.md). The current installation can request authenticated deletion with:
+
+```bash
+PYTHONPATH=/opt/digitalhouses/dh_pve_app \
+/opt/digitalhouses/dh_pve_app/.venv/bin/python -m app.main \
+  --config /etc/dh_pve_app/dh_pve_app.conf \
+  --state-dir /var/lib/dh_pve_app \
+  --telemetry-delete
+```
+
 ## Recorder
 
-Recorder configuration is an explicit whitelist. Continuous history is kept only for useful metrics such as CPU, RAM/Swap, fan RPM, storage usage, disk temperature/wear, GPU telemetry and selected UPS telemetry/status.
+Recorder configuration is an explicit whitelist. Continuous history is kept only for useful metrics such as CPU, RAM/Swap, fan speed %, storage usage, disk temperature/wear, GPU telemetry and selected UPS telemetry/status.
 
 Rich presentation, debug diagnostics, the static `sensor.dh_app_pve_app_version` and `sensor.dh_app_pve_agent_started` metadata entities, and MQTT Event entities are intentionally not Recorder history.
 

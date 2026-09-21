@@ -379,6 +379,27 @@ class PveProblemEngine:
             if transition is not None:
                 transitions.append(transition)
 
+        fans = _mapping(subsystem_states.get("fans"))
+        for fan_id, raw in sorted(fans.items(), key=lambda item: str(item[0])):
+            item = _mapping(raw)
+            status = item.get("calibration_status")
+            if not isinstance(status, str):
+                continue
+            fid = str(fan_id)
+            name = str(item.get("label") or item.get("display_name") or fid)
+            transition = self._observe_discrete(
+                problem_id=f"fan_{_slug(fid)}_control_restore",
+                category="fan",
+                severity="critical",
+                object_id=fid,
+                object_name=name,
+                metric="calibration_restore",
+                active=status == "restore_failed",
+                value=status,
+            )
+            if transition is not None:
+                transitions.append(transition)
+
         smart = _mapping(subsystem_states.get("smart"))
         for disk_id, raw in sorted(smart.items(), key=lambda item: str(item[0])):
             item = _mapping(raw)

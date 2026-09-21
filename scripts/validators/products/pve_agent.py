@@ -5,7 +5,7 @@ from typing import Any
 
 from validators.common import fail, require_files
 
-EXPECTED_VERSION = "0.5.7"
+EXPECTED_VERSION = "0.5.8"
 EXPECTED_TOPIC_PREFIX = "DigitalHouses/Global/dh_pve_app"
 EXPECTED_DEVICE_NAME = "DH PVE"
 EXPECTED_REFRESH_ENTITY = "button.dh_app_pve_refresh"
@@ -45,6 +45,10 @@ def validate_dh_pve_app(
             app / "app/pve_cache.py",
             app / "app/disk_temperature.py",
             app / "app/fan_presence.py",
+            app / "app/fan_calibration.py",
+            app / "app/fan_hardware_beelink.py",
+            app / "app/fan_runtime.py",
+            app / "app/telemetry.py",
             app / "app/collectors/guests.py",
             app / "app/topology.py",
             app / "app/production_v1.py",
@@ -246,6 +250,7 @@ def validate_dh_pve_app(
         (
             "sensor.dh_app_pve_cpu_usage",
             "sensor.dh_app_pve_storage_*_percent_used",
+            "sensor.dh_app_pve_fan_*_speed",
             "sensor.dh_app_pve_ups_status",
             "logbook:",
         ),
@@ -451,7 +456,17 @@ def validate_dh_pve_app(
             'static_collectors=("topology", "host")',
             'slow_tasks=("guests", "storage", "gpu", "disk_temperature")',
             "read_pve_version(",
-            'fan_state_store=StateStore(state_dir / "fans.json")',
+            'fan_presence_store = StateStore(state_dir / "fans.json")',
+            'StateStore(state_dir / "fan_calibration.json")',
+            'StateStore(state_dir / "telemetry.json")',
+            "BeelinkIt8613FanAdapter()",
+            "FanCalibrationManager(",
+            "TelemetryClient(",
+            "TelemetryRunner(",
+            "telemetry_runner.start()",
+            "telemetry_runner.stop()",
+            "runtime.recover_fan_control()",
+            "runtime.wait_fan_calibration()",
             "app_version=version",
             "ups_configured=selected_ups_name is not None",
             "runtime.set_ups_configured(True)",
@@ -460,6 +475,49 @@ def validate_dh_pve_app(
         ),
         "runtime",
     )
+    _require_text(
+        app / "app/telemetry.py",
+        (
+            'PRODUCT = "digitalhouses_pve_agent"',
+            '"schema": SCHEMA_VERSION',
+            '"telemetry_policy_version": TELEMETRY_POLICY_VERSION',
+            '"installation_id": self.installation_id',
+            '"product": PRODUCT',
+            '"version": self.version',
+            'path="/v1/heartbeat"',
+            'method="DELETE"',
+            'path="/v1/installation"',
+            "is_released_build(self.version, self.build_info_path)",
+            "class TelemetryRunner",
+        ),
+        "telemetry client",
+    )
+    _require_text(
+        app / "app/fan_calibration.py",
+        (
+            "class FanCalibrationRegistry",
+            "class FanCalibrationManager",
+            '"calibration_status": "calibrating"',
+            '"calibration_status": "restore_failed"',
+            '"max_rpm_source": "observed"',
+            "OBSERVED_MAX_CONFIRMATIONS = 3",
+            "self._lock.acquire(blocking=False)",
+            "recover_pending",
+        ),
+        "fan calibration",
+    )
+    _require_text(
+        app / "app/fan_hardware_beelink.py",
+        (
+            'profile_name = "beelink_it8613_v1"',
+            'fan.chip == "it8613"',
+            'fan.source_device == "it87.2608"',
+            "fan.fan_index == 2",
+            'self._write(pwm_path, "255")',
+        ),
+        "Beelink fan calibration profile",
+    )
+
     _require_text(
         app / "app/pve_cache.py",
         (
@@ -504,6 +562,10 @@ def validate_dh_pve_app(
         ),
         "systemd",
     )
+
+    config_example = (app / "examples/dh_pve_app.conf.example").read_text(encoding="utf-8")
+    if "[telemetry]" not in config_example or "enabled = false" not in config_example:
+        fail("DH PVE telemetry must remain explicit opt-in and default OFF")
 
     installer = (app / "install.sh").read_text(encoding="utf-8")
     for expected in (

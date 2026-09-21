@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.5.8
+
+- Add opt-in DigitalHouses telemetry client using protocol v1. Telemetry remains OFF by default, sends only schema/policy version, random installation ID, product and product version, authenticates with a per-installation token, persists scheduling identity, never sends unreleased branch/SHA builds, and performs network work outside the PVE/UPS monitoring loop.
+- Add fan calibration and user-facing Fan Speed %. Supported hardware is calibrated once against real maximum RPM with persistent crash recovery and unconditional control restore; current RPM remains diagnostic. The first write-capable profile is the explicitly matched Beelink/AZW IT8613 `it87.2608 fan2/pwm2`; unsupported hwmon devices remain read-only.
+- Add persistent upward-only max-RPM learning after three stable ordinary-operation samples above the calibrated ceiling, while ignoring isolated spikes and never automatically lowering the maximum.
+- Add Home Assistant fan calibration diagnostics, serious restore-failure problem state, one shared manual calibration button, and Russian dashboard confirmation before the fan is driven to maximum speed.
 - Add diagnostic `sensor.dh_app_pve_agent_started` as a Home Assistant timestamp representing the current agent process start, replacing the need for a continuously changing duration-style agent uptime value.
 
 ## 0.5.7

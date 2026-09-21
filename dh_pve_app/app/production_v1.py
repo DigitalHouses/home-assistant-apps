@@ -12,6 +12,7 @@ from .collectors.smart import SmartSnapshot, parse_smart_json
 from .daily_disk_stats import DailyDiskStats, update_daily_stats
 from .disk_health import evaluate_disk_health
 from .disk_temperature import DiskTemperatureReader, parse_smart_temperature
+from .fan_calibration import FanCalibrationAdapter, FanCalibrationRegistry
 from .fan_presence import FanPresenceTracker
 from .production import ProductionCollectors, _checkpoint, _run
 from .collectors.cooling import collect_fans
@@ -69,6 +70,8 @@ class ResilientProductionCollectors(ProductionCollectors):
         disk_state_store,
         topology=None,
         fan_state_store=None,
+        fan_calibration_registry: FanCalibrationRegistry | None = None,
+        fan_calibration_adapters: tuple[FanCalibrationAdapter, ...] = (),
         **kwargs,
     ) -> None:
         super().__init__(
@@ -79,6 +82,8 @@ class ResilientProductionCollectors(ProductionCollectors):
         self.topology = topology
         self._disk_temperature_reader = DiskTemperatureReader(sys_root=self.sys_root)
         self._fan_presence = FanPresenceTracker(state_store=fan_state_store)
+        self._fan_calibration_registry = fan_calibration_registry
+        self._fan_calibration_adapters = tuple(fan_calibration_adapters)
 
     def host(self) -> CollectorSample:
         sample = super().host()
@@ -106,10 +111,26 @@ class ResilientProductionCollectors(ProductionCollectors):
     def fans(self) -> CollectorSample:
         raw = collect_fans(self.sys_root / "class" / "hwmon")
         presence = self._fan_presence.observe(raw)
-        fan_items = {
-            fan.fan_id: asdict(fan)
-            for fan in presence.confirmed_fans
-        }
+        fan_items: dict[str, dict[str, object]] = {}
+        for fan in presence.confirmed_fans:
+            item: dict[str, object] = asdict(fan)
+            if self._fan_calibration_registry is not None:
+                adapter = next(
+                    (
+                        candidate
+                        for candidate in self._fan_calibration_adapters
+                        if candidate.supports(fan)
+                    ),
+                    None,
+                )
+                item.update(
+                    self._fan_calibration_registry.presentation(
+                        fan,
+                        adapter,
+                        observed_at=datetime.now(timezone.utc).isoformat(),
+                    )
+                )
+            fan_items[fan.fan_id] = item
         detected = presence.confirmed_count > 0
         data: dict[str, object] = {
             "detected": detected,
@@ -131,6 +152,12 @@ class ResilientProductionCollectors(ProductionCollectors):
         for fan in presence.confirmed_fans:
             if fan.rpm is not None:
                 metrics[f"{fan.fan_id}.rpm"] = _metric(fan.rpm, "fan_rpm")
+            item = fan_items.get(fan.fan_id, {})
+            speed = item.get("speed_percent")
+            if isinstance(speed, int):
+                metrics[f"{fan.fan_id}.speed_percent"] = _metric(
+                    speed, "fan_percent"
+                )
         return CollectorSample(data=data, metrics=metrics)
 
     def _smart_scan(self) -> tuple[tuple[str, ...], ...]:

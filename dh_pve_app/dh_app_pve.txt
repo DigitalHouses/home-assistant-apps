@@ -133,6 +133,22 @@ App не удаляет MQTT entity только потому, что канал
 вентилятора. Tombstone cleanup допустим только для отдельной достоверной
 migration/removal операции.
 
+Для явно поддержанного hardware profile App один раз определяет реальный
+max RPM и публикует основной пользовательский Fan Speed в процентах.
+RPM остаётся diagnostic. Calibration хранится в:
+
+  /var/lib/dh_pve_app/fan_calibration.json
+
+Первый write-capable профиль: Beelink/AZW IT8613, it87.2608, fan2 <-> pwm2.
+Для неизвестного hardware App никогда не пишет pwm*.
+
+Ручная calibration запускается кнопкой Home Assistant
+"Калибровать вентиляторы". Dashboard требует подтверждение. Backend в любом
+случае сохраняет исходный control state и восстанавливает его после измерения.
+
+Если реальный RPM устойчиво превышает сохранённый max, App может уточнить
+max RPM только вверх. Одиночный пик max не изменяет.
+
 Важно:
 
 - fan*_input отсутствует -> у dh_app_pve нет RPM-источника;
@@ -167,6 +183,29 @@ migration/removal операции.
 обновления kernel обязательно повторно проверить, что модуль собран/загружен
 и fan*_input снова существует. Внешний драйвер — платформенная мера
 совместимости, а не часть dh_app_pve.
+
+Telemetry
+---------
+
+По умолчанию выключена:
+
+  [telemetry]
+  enabled = false
+
+При включении canonical release отправляет только protocol-v1 поля:
+schema, telemetry_policy_version, installation_id, product, version.
+Unreleased main/branch/SHA build telemetry не отправляет.
+
+Удалить сохранённую на telemetry-сервере запись этой установки:
+
+  PYTHONPATH=/opt/digitalhouses/dh_pve_app \
+  /opt/digitalhouses/dh_pve_app/.venv/bin/python -m app.main \
+    --config /etc/dh_pve_app/dh_pve_app.conf \
+    --state-dir /var/lib/dh_pve_app \
+    --telemetry-delete
+
+Локальная identity/token остаются persistent, чтобы переустановка/upgrade не
+создавали новую installation identity.
 
 Основные пути
 -------------

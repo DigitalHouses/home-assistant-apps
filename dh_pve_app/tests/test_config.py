@@ -21,6 +21,7 @@ def test_load_config_uses_expected_defaults(tmp_path: Path):
     assert config.mqtt.topic_prefix == "DigitalHouses/Global/dh_pve_app"
     assert config.mqtt.discovery_prefix == "homeassistant"
     assert config.mqtt.keepalive_seconds == 60
+    assert config.telemetry.enabled is False
 
 
 def test_load_config_requires_mqtt_host(tmp_path: Path):
@@ -94,3 +95,28 @@ policy_apply_enabled = maybe
     )
     config = load_config(path)
     assert not hasattr(config.ups, "policy_apply_enabled")
+
+
+def test_telemetry_requires_explicit_true_opt_in(tmp_path: Path):
+    path = write_config(
+        tmp_path,
+        """[mqtt]
+host = broker
+[telemetry]
+enabled = true
+""",
+    )
+    assert load_config(path).telemetry.enabled is True
+
+
+def test_telemetry_rejects_non_boolean_value(tmp_path: Path):
+    path = write_config(
+        tmp_path,
+        """[mqtt]
+host = broker
+[telemetry]
+enabled = maybe
+""",
+    )
+    with pytest.raises(ConfigError, match="telemetry.enabled"):
+        load_config(path)

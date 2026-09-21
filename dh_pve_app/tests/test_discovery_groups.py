@@ -294,3 +294,67 @@ def test_continuous_sensor_attributes_do_not_duplicate_volatile_values():
     assert '"status"' not in storage_attrs
     assert "total_gib" in storage_attrs
     assert "storage_type" in storage_attrs
+
+
+def test_calibrated_fan_discovery_exposes_speed_primary_and_rpm_diagnostics():
+    inventory = _inventory()
+    inventory["fans"]["nct6798_fan1"].update(
+        {
+            "speed_percent": 69,
+            "max_rpm": 5400,
+            "calibrated_at": "2026-09-22T01:00:00+05:00",
+            "max_rpm_updated_at": "2026-09-22T01:00:00+05:00",
+            "max_rpm_source": "calibration",
+            "calibration_status": "calibrated",
+            "calibration_supported": True,
+            "calibration_error": None,
+            "source_device": "nct6775.656",
+        }
+    )
+    payload = build_shutdown_aware_pve_discovery_payload(
+        _config(), _identity(), version="0.5.7", inventory=inventory
+    )
+    c = payload["components"]
+    topics = build_topics(_config().mqtt, _identity())
+    fan_topic = state_group_topic(topics, "fan/nct6798_fan1")
+
+    speed = c["fan_nct6798_fan1_speed"]
+    assert speed["default_entity_id"] == "sensor.dh_app_pve_fan_nct6798_fan1_speed"
+    assert speed["state_topic"] == fan_topic
+    assert speed["unit_of_measurement"] == "%"
+    assert speed["state_class"] == "measurement"
+    assert "entity_category" not in speed
+    assert "speed_percent" in speed["value_template"]
+
+    rpm = c["fan_nct6798_fan1_rpm"]
+    assert rpm["default_entity_id"] == "sensor.dh_app_pve_fan_nct6798_fan1_rpm"
+    assert rpm["entity_category"] == "diagnostic"
+
+    assert c["fan_nct6798_fan1_max_rpm"]["entity_category"] == "diagnostic"
+    assert c["fan_nct6798_fan1_calibration_status"]["entity_category"] == "diagnostic"
+    assert c["fan_nct6798_fan1_calibrated_at"]["device_class"] == "timestamp"
+
+    button = c["calibrate_fans"]
+    assert button["platform"] == "button"
+    assert button["default_entity_id"] == "button.dh_app_pve_calibrate_fans"
+    assert button["command_topic"] == topics.fan_calibrate
+
+
+def test_unsupported_fan_keeps_rpm_but_hides_calibration_button():
+    inventory = _inventory()
+    inventory["fans"]["nct6798_fan1"].update(
+        {
+            "speed_percent": None,
+            "max_rpm": None,
+            "calibrated_at": None,
+            "calibration_status": "unsupported",
+            "calibration_supported": False,
+        }
+    )
+    c = build_shutdown_aware_pve_discovery_payload(
+        _config(), _identity(), version="0.5.7", inventory=inventory
+    )["components"]
+
+    assert "fan_nct6798_fan1_rpm" in c
+    assert "fan_nct6798_fan1_speed" in c
+    assert "calibrate_fans" not in c

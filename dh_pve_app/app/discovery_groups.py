@@ -50,6 +50,7 @@ def _component_groups(inventory: Mapping[str, object]) -> dict[str, str]:
         "memory_usage": "memory",
         "swap_usage": "memory",
         "fans_status": "fans",
+        "calibrate_fans": "fans",
         "last_refresh": "diagnostics",
         "refresh": "diagnostics",
         "vms_summary": "guest/summary",
@@ -94,9 +95,19 @@ def _component_groups(inventory: Mapping[str, object]) -> dict[str, str]:
         groups[f"gpu_{entity}_temperature"] = f"gpu/{runtime}/telemetry"
         groups[f"gpu_{entity}_transcoding"] = f"gpu/{runtime}/telemetry"
 
-    for fan_id in _mapping(inventory.get("fans")):
+    for fan_id, raw in _mapping(inventory.get("fans")).items():
+        if not isinstance(raw, Mapping):
+            continue
         entity = _entity_slug(fan_id)
-        groups[f"fan_{entity}_rpm"] = f"fan/{_state_slug(fan_id)}"
+        group = f"fan/{_state_slug(fan_id)}"
+        for suffix in (
+            "speed",
+            "rpm",
+            "max_rpm",
+            "calibration_status",
+            "calibrated_at",
+        ):
+            groups[f"fan_{entity}_{suffix}"] = group
 
     guests = _mapping(inventory.get("guests"))
     for plural, singular in (("vms", "vm"), ("lxcs", "lxc")):
@@ -361,6 +372,19 @@ def _problem_components(
             problem_id=f"gpu_{slug}_temperature",
             name=f"GPU {gpu_id} temperature problem",
             entity_id=f"binary_sensor.dh_app_pve_gpu_{slug}_temperature_problem",
+        )
+
+    for fan_id, raw in _mapping(inventory.get("fans")).items():
+        if not isinstance(raw, Mapping):
+            continue
+        slug = _entity_slug(fan_id)
+        key = f"fan_{slug}_control_restore_problem"
+        result[key] = _problem_binary(
+            topics,
+            key=key,
+            problem_id=f"fan_{slug}_control_restore",
+            name=f"Fan {fan_id} control restore problem",
+            entity_id=f"binary_sensor.dh_app_pve_fan_{slug}_control_restore_problem",
         )
 
     return result

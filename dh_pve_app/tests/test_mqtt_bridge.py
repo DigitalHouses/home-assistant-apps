@@ -47,6 +47,15 @@ def test_refresh_press_sets_event():
     assert events.refresh_requested.is_set()
 
 
+def test_fan_calibration_press_sets_dedicated_event():
+    topics = _topics()
+    events = MqttEvents(topics, RuntimeSettings())
+
+    assert events.handle_message(topics.fan_calibrate, b"PRESS") is True
+    assert events.fan_calibration_requested.is_set()
+    assert not events.refresh_requested.is_set()
+
+
 def test_retired_poll_setting_command_is_not_accepted():
     topics = _topics()
     settings = RuntimeSettings()

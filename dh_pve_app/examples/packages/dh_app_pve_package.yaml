@@ -34,7 +34,7 @@ dh_app_pve_package:
         - sensor.dh_app_pve_ups_input_frequency
         - sensor.dh_app_pve_ups_output_frequency
       entity_globs:
-        - sensor.dh_app_pve_fan_*_rpm
+        - sensor.dh_app_pve_fan_*_speed
         - sensor.dh_app_pve_disk_*_temperature
         - sensor.dh_app_pve_disk_*_wear
         - sensor.dh_app_pve_storage_*_percent_used

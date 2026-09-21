@@ -35,6 +35,11 @@ class MqttConfig:
 
 
 @dataclass(frozen=True)
+class TelemetryConfig:
+    enabled: bool = False
+
+
+@dataclass(frozen=True)
 class UpsConfig:
     enabled: bool = False
     name: str = "ups"
@@ -60,6 +65,7 @@ class AppConfig:
     general: GeneralConfig
     mqtt: MqttConfig
     ups: UpsConfig = field(default_factory=UpsConfig)
+    telemetry: TelemetryConfig = field(default_factory=TelemetryConfig)
 
 
 def _get(parser: configparser.ConfigParser, section: str, key: str, default: str) -> str:
@@ -159,6 +165,8 @@ def load_config(path: Path) -> AppConfig:
     if not 10 <= keepalive_seconds <= 3600:
         raise ConfigError("mqtt.keepalive_seconds must be between 10 and 3600")
 
+    telemetry_enabled = _get_bool(parser, "telemetry", "enabled", False)
+
     ups_enabled = _get_bool(parser, "ups", "enabled", False)
     ups_name = _get(parser, "ups", "name", "ups").strip()
     ups_host = _get(parser, "ups", "host", "127.0.0.1").strip()
@@ -204,4 +212,5 @@ def load_config(path: Path) -> AppConfig:
             command_username=ups_command_username,
             command_password=ups_command_password,
         ),
+        telemetry=TelemetryConfig(enabled=telemetry_enabled),
     )
