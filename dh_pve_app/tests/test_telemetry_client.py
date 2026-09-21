@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from app.state_store import StateStore
-from app.telemetry import TelemetryClient
+from app.telemetry import DEFAULT_TELEMETRY_STATE_FILE, TelemetryClient
 
 
 class FakeTransport:
@@ -210,3 +210,9 @@ def test_authenticated_delete_uses_same_installation_identity(tmp_path: Path):
         "product": "digitalhouses_pve_agent",
     }
     assert call["token"] == client.installation_token
+
+
+def test_linux_agent_telemetry_identity_uses_canonical_persistent_path():
+    assert str(DEFAULT_TELEMETRY_STATE_FILE) == (
+        "/var/lib/digitalhouses/digitalhouses_pve_agent/telemetry.json"
+    )

@@ -32,7 +32,11 @@ from .shutdown_integration import (
     ShutdownAwareUpsRuntime,
 )
 from .state_store import StateStore
-from .telemetry import TelemetryClient, TelemetryRunner
+from .telemetry import (
+    DEFAULT_TELEMETRY_STATE_FILE,
+    TelemetryClient,
+    TelemetryRunner,
+)
 from .topics import build_topics, build_ups_topics
 from .ups_battery_events import UpsBatteryEventTracker
 from .ups_policy_preflight import (
@@ -277,11 +281,17 @@ def build_ups_policy_preflight(
     return preflight_reader(runtime_config)
 
 
+def _telemetry_state_file(state_dir: Path) -> Path:
+    if state_dir == DEFAULT_STATE_DIR:
+        return DEFAULT_TELEMETRY_STATE_FILE
+    return state_dir / "telemetry.json"
+
+
 def _telemetry_client(config: AppConfig, state_dir: Path) -> TelemetryClient:
     return TelemetryClient(
         enabled=config.telemetry.enabled,
         version=_version(),
-        state_store=StateStore(state_dir / "telemetry.json"),
+        state_store=StateStore(_telemetry_state_file(state_dir)),
         build_info_path=APP_ROOT / "BUILD_INFO",
     )
 

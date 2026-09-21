@@ -18,6 +18,9 @@ PRODUCT = "digitalhouses_pve_agent"
 SCHEMA_VERSION = 1
 TELEMETRY_POLICY_VERSION = 1
 BASE_URL = "https://telemetry.digitalhouses.vip"
+DEFAULT_TELEMETRY_STATE_FILE = Path(
+    "/var/lib/digitalhouses/digitalhouses_pve_agent/telemetry.json"
+)
 NORMAL_INTERVAL_SECONDS = 24 * 60 * 60
 JITTER_SECONDS = 30 * 60
 FAILURE_BACKOFF_SECONDS = 60 * 60
@@ -165,10 +168,7 @@ class TelemetryClient:
             changed = True
         if changed:
             self.state_store.save(state)
-        try:
-            self.state_store.path.chmod(0o600)
-        except OSError:
-            pass
+        self._secure_state_permissions()
         return dict(state)
 
     @property
@@ -179,12 +179,19 @@ class TelemetryClient:
     def installation_token(self) -> str:
         return str(self._state["installation_token"])
 
-    def _save(self) -> None:
-        self.state_store.save(self._state)
+    def _secure_state_permissions(self) -> None:
+        try:
+            self.state_store.path.parent.chmod(0o700)
+        except OSError:
+            pass
         try:
             self.state_store.path.chmod(0o600)
         except OSError:
             pass
+
+    def _save(self) -> None:
+        self.state_store.save(self._state)
+        self._secure_state_permissions()
 
     def payload(self) -> dict[str, object]:
         return {

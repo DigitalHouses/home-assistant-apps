@@ -10,6 +10,7 @@ APP_DIR="/opt/digitalhouses/${APP_NAME}"
 CONFIG_DIR="/etc/${APP_NAME}"
 CONFIG_FILE="${CONFIG_DIR}/${APP_NAME}.conf"
 STATE_DIR="/var/lib/${APP_NAME}"
+TELEMETRY_STATE_DIR="/var/lib/digitalhouses/digitalhouses_pve_agent"
 UNIT_FILE="/etc/systemd/system/${SERVICE_NAME}"
 ROOT_GUIDE="/root/dh_app_pve.txt"
 
@@ -97,6 +98,7 @@ install -d -o root -g root -m 0755 /opt/digitalhouses
 install -d -o root -g root -m 0755 "${APP_DIR}"
 install -d -o root -g root -m 0750 "${CONFIG_DIR}"
 install -d -o root -g root -m 0750 "${STATE_DIR}"
+install -d -o root -g root -m 0700 "${TELEMETRY_STATE_DIR}"
 
 find "${APP_DIR}" \
     -mindepth 1 -maxdepth 1 \
