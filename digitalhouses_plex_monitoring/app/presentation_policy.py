@@ -14,7 +14,7 @@ class ProfileChoice:
 
 
 class PlexProfileSelector:
-    """Choose NORMAL/DETAIL without changing the process sampling cadence."""
+    """Choose NORMAL/DETAIL/PLAYBACK without changing acquisition cadence."""
 
     def __init__(
         self,
@@ -39,18 +39,22 @@ class PlexProfileSelector:
         self._cpu.observe(now, cpu_percent)
         average = self._cpu.average(now)
 
-        immediate_reason = None
         if transcoder_running:
-            immediate_reason = "transcoder_running"
-        elif scanner_running:
-            immediate_reason = "scanner_running"
-        elif playback_active:
-            immediate_reason = "playback_active"
-
-        if immediate_reason is not None:
-            self.profile = PublicationProfile.DETAIL
-            self.reason = immediate_reason
+            self.profile = PublicationProfile.PLAYBACK
+            self.reason = "transcoder_running"
             return ProfileChoice(self.profile, self.reason, average)
+
+        if playback_active:
+            self.profile = PublicationProfile.PLAYBACK
+            self.reason = "playback_active"
+            return ProfileChoice(self.profile, self.reason, average)
+
+        if scanner_running:
+            self.profile = PublicationProfile.DETAIL
+            self.reason = "scanner_running"
+            return ProfileChoice(self.profile, self.reason, average)
+
+        previous_profile = self.profile
 
         if average is None:
             return ProfileChoice(self.profile, self.reason, None)
@@ -59,7 +63,7 @@ class PlexProfileSelector:
             self.profile = PublicationProfile.DETAIL
             self.reason = "high_cpu"
         elif average < self.high_cpu_threshold:
-            recovered = self.profile is PublicationProfile.DETAIL
+            recovered = previous_profile is not PublicationProfile.NORMAL
             self.profile = PublicationProfile.NORMAL
             self.reason = "recovered" if recovered else None
 

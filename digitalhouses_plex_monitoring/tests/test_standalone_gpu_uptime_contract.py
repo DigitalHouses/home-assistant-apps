@@ -14,13 +14,10 @@ INSTALLER = (ROOT / "install.sh").read_text(encoding="utf-8")
 
 
 def config():
-    tmp = TemporaryDirectory()
-    path = Path(tmp.name) / "app.conf"
-    path.write_text("[mqtt]\nhost = mqtt\n", encoding="utf-8")
-    value = load_config(path)
-    value._test_tmp = tmp
-    return value
-
+    with TemporaryDirectory() as tmp:
+        path = Path(tmp) / "app.conf"
+        path.write_text("[mqtt]\nhost = mqtt\n", encoding="utf-8")
+        return load_config(path)
 
 def snapshot():
     return MonitorSnapshot(

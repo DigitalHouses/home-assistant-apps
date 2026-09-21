@@ -12,18 +12,22 @@ from typing import Mapping
 class PublicationProfile(str, Enum):
     NORMAL = "normal"
     DETAIL = "detail"
+    PLAYBACK = "playback"
 
 
 @dataclass(frozen=True)
 class ProfileWindows:
     normal_seconds: float = 900.0
     detail_seconds: float = 300.0
+    playback_seconds: float = 30.0
 
     def seconds(self, profile: PublicationProfile) -> float:
         if profile is PublicationProfile.NORMAL:
             return float(self.normal_seconds)
         if profile is PublicationProfile.DETAIL:
             return float(self.detail_seconds)
+        if profile is PublicationProfile.PLAYBACK:
+            return float(self.playback_seconds)
         raise ValueError(f"unsupported publication profile: {profile!r}")
 
 
