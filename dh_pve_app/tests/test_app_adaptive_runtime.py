@@ -94,6 +94,7 @@ def make_runtime(
     mono_values=None,
     iso_values=None,
     app_version=None,
+    agent_started_at=None,
     ups_configured=None,
 ):
     bridge = GroupBridge()
@@ -104,6 +105,8 @@ def make_runtime(
     kwargs = {}
     if app_version is not None:
         kwargs["app_version"] = app_version
+    if agent_started_at is not None:
+        kwargs["agent_started_at"] = agent_started_at
     if ups_configured is not None:
         kwargs["ups_configured"] = ups_configured
     runtime = DhPveRuntime(
@@ -143,6 +146,23 @@ def test_group_capable_runtime_publishes_app_version_in_diagnostics():
 
     diagnostics = dict(bridge.group_states)["diagnostics"]
     assert diagnostics["app_version"] == "0.5.1"
+
+
+def test_group_capable_runtime_publishes_fixed_agent_started_timestamp_in_diagnostics():
+    runtime, bridge = make_runtime(
+        {"cpu": lambda: cpu_sample()},
+        agent_started_at="2026-09-22T00:15:00+00:00",
+        iso_values=["2026-09-22T00:30:00+00:00", "2026-09-22T00:45:00+00:00"],
+    )
+
+    assert runtime.run_collection(force=True) is True
+    first = dict(bridge.group_states)["diagnostics"]
+    assert first["agent_started_at"] == "2026-09-22T00:15:00+00:00"
+
+    bridge.group_states.clear()
+    assert runtime.run_collection(force=True) is True
+    second = dict(bridge.group_states)["diagnostics"]
+    assert second["agent_started_at"] == first["agent_started_at"]
 
 
 def test_group_capable_runtime_publishes_and_updates_ups_configuration_fact():

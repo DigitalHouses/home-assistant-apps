@@ -61,6 +61,7 @@ class DhPveRuntime:
         slow_tasks: tuple[str, ...] = (),
         version_probe: Callable[[], str | None] | None = None,
         app_version: str = "unknown",
+        agent_started_at: str = "unknown",
         ups_configured: bool = False,
     ) -> None:
         self.collectors = dict(collectors)
@@ -80,6 +81,7 @@ class DhPveRuntime:
         self.slow_tasks = frozenset(slow_tasks)
         self.version_probe = version_probe
         self.app_version = app_version
+        self.agent_started_at = agent_started_at
         self.ups_configured = bool(ups_configured)
         self._pve_version_fingerprint: str | None = None
         self._subsystems: dict[str, SubsystemState] = {}
@@ -211,6 +213,7 @@ class DhPveRuntime:
         payload: dict[str, object] = {
             "collected_at": collected_at,
             "app_version": self.app_version,
+            "agent_started_at": self.agent_started_at,
             "ups_configured": self.ups_configured,
             "last_refresh": last_refresh,
             "app_profile": self.presentation_router.profile_summary(),

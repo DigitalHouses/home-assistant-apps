@@ -134,6 +134,8 @@ def validate_dh_pve_app(
             '"problem_updated"',
             '"default_entity_id": "sensor.dh_app_pve_app_version"',
             "{{ value_json.app_version | default('unknown') }}",
+            '"default_entity_id": "sensor.dh_app_pve_agent_started"',
+            "{{ value_json.agent_started_at | default(none) }}",
             '"default_entity_id": "binary_sensor.dh_app_pve_ups_configured"',
             "value_json.ups_configured",
         ),
@@ -588,8 +590,15 @@ def validate_dh_pve_app(
         if forbidden in uninstaller_lower:
             fail(f"DH PVE uninstaller crosses ownership/safety boundary: {forbidden}")
 
-    if "sensor.dh_app_pve_app_version" in package:
-        fail("DH PVE App version sensor must not be added to Recorder whitelist")
+    for diagnostic_metadata_entity in (
+        "sensor.dh_app_pve_app_version",
+        "sensor.dh_app_pve_agent_started",
+    ):
+        if diagnostic_metadata_entity in package:
+            fail(
+                "DH PVE diagnostic metadata sensor must not be added to Recorder whitelist: "
+                f"{diagnostic_metadata_entity}"
+            )
 
     app_source = "\n".join(
         path.read_text(encoding="utf-8")
