@@ -250,6 +250,7 @@ def validate_dh_pve_app(
         (
             "sensor.dh_app_pve_cpu_usage",
             "sensor.dh_app_pve_storage_*_percent_used",
+            "sensor.dh_app_pve_fan_*_speed",
             "sensor.dh_app_pve_ups_status",
             "logbook:",
         ),
