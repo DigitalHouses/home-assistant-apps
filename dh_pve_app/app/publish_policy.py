@@ -32,6 +32,7 @@ class PublishPolicy:
         "temperature_c": 1.0,
         "storage_percent": 0.5,
         "fan_rpm": 100.0,
+        "fan_percent": 1.0,
         "gpu_percent": 5.0,
         "frequency_mhz": 100.0,
         # Legacy/general UPS policies kept for compatibility with existing callers/tests.
