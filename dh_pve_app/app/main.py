@@ -51,6 +51,7 @@ DEFAULT_STATE_DIR = Path("/var/lib/dh_pve_app")
 FAST_SECONDS = 10.0
 SLOW_SECONDS = 60.0
 HEALTH_SECONDS = 3600.0
+PROCESS_STARTED_AT = datetime.now(timezone.utc).isoformat()
 
 
 def _version() -> str:
@@ -157,6 +158,7 @@ def build_runtime(
         slow_tasks=("guests", "storage", "gpu", "disk_temperature"),
         version_probe=pve_version_fingerprint,
         app_version=version,
+        agent_started_at=PROCESS_STARTED_AT,
         ups_configured=ups_configured,
     )
     return bridge, runtime
