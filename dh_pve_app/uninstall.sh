@@ -7,6 +7,7 @@ APP_DIR="/opt/digitalhouses/${APP_NAME}"
 CONFIG_DIR="/etc/${APP_NAME}"
 CONFIG_FILE="${CONFIG_DIR}/${APP_NAME}.conf"
 STATE_DIR="/var/lib/${APP_NAME}"
+TELEMETRY_STATE_DIR="/var/lib/digitalhouses/digitalhouses_pve_agent"
 UNIT_FILE="/etc/systemd/system/${SERVICE_NAME}"
 ROOT_GUIDE="/root/dh_app_pve.txt"
 
@@ -98,11 +99,12 @@ rm -rf -- "${APP_DIR}"
 
 if [[ "${purge}" -eq 1 ]]; then
     echo "Полное удаление: удаляю config/state."
-    rm -rf -- "${CONFIG_DIR}" "${STATE_DIR}"
+    rm -rf -- "${CONFIG_DIR}" "${STATE_DIR}" "${TELEMETRY_STATE_DIR}"
 else
     echo "Config/state сохранены:"
     echo "  ${CONFIG_DIR}/"
     echo "  ${STATE_DIR}/"
+    echo "  ${TELEMETRY_STATE_DIR}/"
 fi
 
 systemctl daemon-reload
