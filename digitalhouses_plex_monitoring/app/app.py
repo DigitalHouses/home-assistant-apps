@@ -20,23 +20,23 @@ from .models import (
     CpuGroupMetrics,
     CpuMetrics,
     MonitorSnapshot,
-    build_state_payload,
     next_last_refresh,
 )
 from .mqtt_bridge import MqttBridge
+from .presentation_runtime import PlexPublicationRuntime
 from .process_collector import (
     CollectorError,
     CpuSampler,
     collect_raw_processes,
     verify_proc_visibility,
 )
-from .publish_policy import PublishPolicy
 
 APP_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG = Path(
     "/etc/digitalhouses_plex_monitoring/"
     "digitalhouses_plex_monitoring.conf"
 )
+UPTIME_HEARTBEAT_SECONDS = 60.0
 
 
 def _utc_now() -> str:
@@ -95,10 +95,12 @@ def run(config: AppConfig) -> int:
     mqtt = MqttBridge(config, topics, discovery)
     sampler = CpuSampler()
     rolling = RollingCpuMetrics(config.general.cpu_window_seconds)
-    policy = PublishPolicy(
-        config.telemetry.cpu_change_threshold,
-        config.telemetry.high_load_threshold,
-        config.telemetry.high_load_publish_interval_seconds,
+    publication = PlexPublicationRuntime(
+        bridge=mqtt,
+        build=build,
+        source_interval_seconds=config.general.poll_interval_seconds,
+        high_cpu_threshold=config.telemetry.high_load_threshold,
+        now_monotonic=time.monotonic,
     )
 
     stop_event = threading.Event()
@@ -112,8 +114,8 @@ def run(config: AppConfig) -> int:
     signal.signal(signal.SIGINT, request_stop)
 
     log.info(
-        "Starting DigitalHouses Plex Monitoring %s | source=%s commit=%s "
-        "instance=%s poll=%.1fs cpu_window=%.1fs plex_api=%s",
+        "Starting DigitalHouses Plex Agent %s | source=%s commit=%s "
+        "instance=%s sampling=%.1fs cpu_window=%.1fs plex_api=%s",
         build.version,
         build.source,
         build.commit[:12] if build.commit != "unknown" else "unknown",
@@ -127,6 +129,8 @@ def run(config: AppConfig) -> int:
     last_snapshot: MonitorSnapshot | None = None
     collector_failed = False
     next_poll = time.monotonic()
+    next_uptime_heartbeat = time.monotonic() + UPTIME_HEARTBEAT_SECONDS
+    legacy_state_cleared = False
 
     try:
         while not stop_event.is_set():
@@ -134,10 +138,12 @@ def run(config: AppConfig) -> int:
             refresh = mqtt.refresh_requested.is_set()
             republish = mqtt.republish_requested.is_set()
             due = now >= next_poll
+            uptime_due = now >= next_uptime_heartbeat
 
-            if not (refresh or republish or due):
+            if not (refresh or republish or due or uptime_due):
                 wait_for = min(
                     max(0.0, next_poll - now),
+                    max(0.0, next_uptime_heartbeat - now),
                     config.general.poll_interval_seconds,
                 )
                 mqtt.wake_requested.wait(wait_for)
@@ -148,6 +154,8 @@ def run(config: AppConfig) -> int:
                 mqtt.republish_requested.clear()
                 if mqtt.connected.is_set():
                     mqtt.publish_discovery()
+                    if not legacy_state_cleared:
+                        legacy_state_cleared = mqtt.clear_legacy_state()
                     mqtt.set_collector_available(
                         not collector_failed and last_snapshot is not None,
                         force=True,
@@ -156,13 +164,12 @@ def run(config: AppConfig) -> int:
                         api_runtime.status == "ok",
                         force=True,
                     )
+                    if publication.has_cache and publication.republish_cached():
+                        next_uptime_heartbeat = (
+                            time.monotonic() + UPTIME_HEARTBEAT_SECONDS
+                        )
 
             should_collect = due or refresh or last_snapshot is None
-            recovered = False
-            process_failure_transition = False
-            api_changed = False
-            api_recovered = False
-            api_failure_transition = False
 
             if should_collect:
                 previous_scanner_running = (
@@ -203,18 +210,14 @@ def run(config: AppConfig) -> int:
                         last_refresh=last_refresh,
                     )
                     collector_failed = False
-                    recovered = was_failed
-                    if recovered:
+                    if was_failed:
                         log.info("Plex process collector recovered")
                     if mqtt.connected.is_set():
                         mqtt.set_collector_available(
                             True,
-                            force=republish or recovered,
+                            force=republish or was_failed,
                         )
-                    next_poll = (
-                        sample_time
-                        + config.general.poll_interval_seconds
-                    )
+                    next_poll = sample_time + config.general.poll_interval_seconds
                 except CollectorError:
                     if not was_failed:
                         log.exception("Plex process collector failed")
@@ -224,11 +227,10 @@ def run(config: AppConfig) -> int:
                             exc_info=True,
                         )
                     collector_failed = True
-                    process_failure_transition = not was_failed
                     if mqtt.connected.is_set():
                         mqtt.set_collector_available(
                             False,
-                            force=republish or process_failure_transition,
+                            force=republish or not was_failed,
                         )
                     next_poll = (
                         time.monotonic()
@@ -246,16 +248,13 @@ def run(config: AppConfig) -> int:
                     refresh=refresh,
                     scanner_finished=scanner_finished,
                 )
-                api_changed = api_result.changed
-                api_recovered = api_result.recovered
-                api_failure_transition = api_result.failure_transition
 
-                if api_failure_transition:
+                if api_result.failure_transition:
                     log.warning(
                         "Plex API collector failed: %s",
                         api_runtime.last_error or "unknown error",
                     )
-                elif api_recovered:
+                elif api_result.recovered:
                     log.info("Plex API collector recovered")
 
                 if mqtt.connected.is_set():
@@ -263,8 +262,8 @@ def run(config: AppConfig) -> int:
                         api_runtime.status == "ok",
                         force=(
                             republish
-                            or api_recovered
-                            or api_failure_transition
+                            or api_result.recovered
+                            or api_result.failure_transition
                         ),
                     )
 
@@ -287,50 +286,32 @@ def run(config: AppConfig) -> int:
             else:
                 state_snapshot = last_snapshot
 
-            if state_snapshot is not None and mqtt.connected.is_set():
-                force_publish = (
-                    refresh
-                    or republish
-                    or recovered
-                    or process_failure_transition
-                    or api_changed
-                )
-                decision = policy.evaluate(
+            if (
+                should_collect
+                and state_snapshot is not None
+                and mqtt.connected.is_set()
+            ):
+                if publication.publish_snapshot(
                     state_snapshot,
-                    time.monotonic(),
-                    force=force_publish,
-                )
-                if decision.publish:
-                    payload = build_state_payload(state_snapshot, build)
-                    payload.update(api_runtime.payload())
-                    if mqtt.publish_state(payload):
-                        policy.mark_published(
-                            state_snapshot,
-                            time.monotonic(),
-                        )
-                        reasons = list(decision.reasons)
-                        if refresh:
-                            reasons.append("manual_refresh")
-                        if republish:
-                            reasons.append("republish")
-                        if recovered:
-                            reasons.append("collector_recovery")
-                        if process_failure_transition:
-                            reasons.append("collector_failure")
-                        if api_changed:
-                            reasons.append("plex_api_change")
-                        if api_recovered:
-                            reasons.append("plex_api_recovery")
-                        if api_failure_transition:
-                            reasons.append("plex_api_failure")
-                        log.info(
-                            "Published Plex state (%s)",
-                            ",".join(dict.fromkeys(reasons)),
-                        )
+                    api_runtime.payload(),
+                    manual_refresh=refresh,
+                ):
+                    next_uptime_heartbeat = (
+                        time.monotonic() + UPTIME_HEARTBEAT_SECONDS
+                    )
+
+            if (
+                mqtt.connected.is_set()
+                and time.monotonic() >= next_uptime_heartbeat
+            ):
+                if publication.publish_uptime_heartbeat():
+                    next_uptime_heartbeat = (
+                        time.monotonic() + UPTIME_HEARTBEAT_SECONDS
+                    )
 
     finally:
         mqtt.stop()
-        log.info("DigitalHouses Plex Monitoring stopped")
+        log.info("DigitalHouses Plex Agent stopped")
 
     return 0
 

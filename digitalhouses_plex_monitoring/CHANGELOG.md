@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.3.0
+
+- Align Plex with the DH PVE Linux Agent runtime model: fixed collection cadence, semantic grouped MQTT state, adaptive NORMAL/DETAIL presentation, retained cache republish, and per-group retry.
+- Publish activity, playback and library semantic changes immediately while averaging continuous CPU telemetry over the common 15-minute NORMAL / 5-minute DETAIL windows.
+- Add diagnostic `sensor.dh_plex_agent_version`, `sensor.dh_plex_agent_uptime`, `sensor.dh_plex_publication_profile`, and `sensor.dh_plex_last_publication`.
+- Remove the commit/build sensor from Home Assistant UI; release provenance remains available in on-host `BUILD_INFO` and logs.
+- Preserve existing service/path, MQTT base namespace, device ID, and existing workload/playback/library entity IDs.
+
 ## 0.2.3
 
 - Align production install/update with the repository Release Policy: the normal deployment source is the canonical `digitalhouses_plex_agent-v<version>` release tag, never `main`.

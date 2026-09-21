@@ -7,7 +7,7 @@ from tempfile import TemporaryDirectory
 import unittest
 
 from app.config import load_config
-from app.discovery import build_discovery_payload, build_topics
+from app.discovery import build_discovery_payload, build_topics, state_group_topic
 from app.models import BuildInfo
 
 
@@ -70,7 +70,7 @@ class DiscoveryTests(unittest.TestCase):
         current = components["current_item"]
         self.assertEqual(
             current.get("json_attributes_topic"),
-            build_topics(config).state,
+            state_group_topic(build_topics(config), "activity"),
         )
         template = current.get("json_attributes_template", "")
         self.assertIn("current_items", template)

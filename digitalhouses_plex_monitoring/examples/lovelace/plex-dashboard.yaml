@@ -355,8 +355,14 @@ sections:
             name: Plex API
           - entity: sensor.dh_plex_libraries
             name: Libraries
-          - entity: sensor.dh_plex_build
-            name: Build
+          - entity: sensor.dh_plex_agent_version
+            name: Версия агента
+          - entity: sensor.dh_plex_agent_uptime
+            name: Uptime агента
+          - entity: sensor.dh_plex_publication_profile
+            name: Профиль публикации
+          - entity: sensor.dh_plex_last_publication
+            name: Последняя публикация
           - entity: sensor.dh_plex_last_refresh
             name: Последний Refresh
       - type: heading
