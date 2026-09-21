@@ -532,9 +532,24 @@ class PvePresentationRouter:
                 continue
             fan = _mapping(fan_raw)
             rpm = _number(fan.get("rpm"))
+            speed_percent = _number(fan.get("speed_percent"))
             stable = {
                 key: fan.get(key)
-                for key in ("fan_id", "name", "label", "source")
+                for key in (
+                    "fan_id",
+                    "name",
+                    "label",
+                    "source",
+                    "chip",
+                    "source_device",
+                    "calibration_supported",
+                    "calibration_status",
+                    "max_rpm",
+                    "calibrated_at",
+                    "max_rpm_updated_at",
+                    "max_rpm_source",
+                    "calibration_error",
+                )
                 if fan.get(key) is not None
             }
             group_name = f"fan/{_slug(fan_id)}"
@@ -542,7 +557,7 @@ class PvePresentationRouter:
                 group_name, source_interval_seconds=10.0, round_digits=0
             ).observe(
                 now=now,
-                continuous={"rpm": rpm},
+                continuous={"rpm": rpm, "speed_percent": speed_percent},
                 discrete={"available": state.available, "error": state.error, **stable},
                 force=force,
                 manual=manual,
@@ -551,6 +566,8 @@ class PvePresentationRouter:
                 data = {**stable}
                 if "rpm" in decision.values:
                     data["rpm"] = decision.values["rpm"]
+                if "speed_percent" in decision.values:
+                    data["speed_percent"] = decision.values["speed_percent"]
                 publication = self._publication(
                     group_name, decision, "fans", state, {str(fan_id): data},
                     collected_at=collected_at, last_refresh=last_refresh,
