@@ -8,7 +8,7 @@ Native Linux agent for Plex Media Server workload, playback, transcoding and lib
 
 [Install / update](#install--update) · [Changelog](CHANGELOG.md) · [Engineering docs](../docs/digitalhouses_plex_agent/) · [Issues](https://github.com/DigitalHouses/home-assistant-apps/issues)
 
-The public product name is **DigitalHouses Plex Agent**. Existing runtime paths, service names and MQTT identities remain unchanged for compatibility.
+The public product name is **DigitalHouses Plex Agent**. Its GitHub release identifier is `digitalhouses_plex_agent`. Existing runtime paths, service names and MQTT identities remain unchanged for compatibility.
 
 ## Purpose
 
@@ -28,19 +28,39 @@ Lovelace example: [plex-dashboard.yaml](examples/lovelace/plex-dashboard.yaml)
 
 ## Install / update
 
+Production install/update is pinned to the canonical release tag. Current release:
+
+```text
+digitalhouses_plex_agent-v0.2.3
+```
+
 From a root shell:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/main/digitalhouses_plex_monitoring/install.sh | bash
+RELEASE_TAG="digitalhouses_plex_agent-v0.2.3"
+curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/${RELEASE_TAG}/digitalhouses_plex_monitoring/install.sh" \
+  | DIGITALHOUSES_SOURCE_REF="${RELEASE_TAG}" bash
 ```
 
 From a sudo-capable user:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/main/digitalhouses_plex_monitoring/install.sh | sudo bash
+RELEASE_TAG="digitalhouses_plex_agent-v0.2.3"
+curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/${RELEASE_TAG}/digitalhouses_plex_monitoring/install.sh" \
+  | sudo env DIGITALHOUSES_SOURCE_REF="${RELEASE_TAG}" bash
 ```
 
-Run the same command again to update from `main`. Existing configuration is preserved.
+Run the same release-tag command to reinstall that exact release. To update, change `RELEASE_TAG` to a newer published DigitalHouses Plex Agent release. Existing configuration is preserved.
+
+The installer records the deployed product version, source tag/ref, and exact resolved commit SHA in:
+
+```text
+/opt/digitalhouses/digitalhouses_plex_monitoring/BUILD_INFO
+```
+
+Normal production installation rejects `main`, development branches, temporary refs, and arbitrary SHAs as the source ref. A non-release ref is available only through the explicit `DIGITALHOUSES_ALLOW_NON_RELEASE_REF=1` development/testing override.
+
+Release provenance and publication follow the repository [Release Policy](../docs/standards/RELEASE_POLICY.md).
 
 ## Local Plex API authentication
 
