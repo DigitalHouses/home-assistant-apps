@@ -37,3 +37,8 @@ frequency_delta_mhz = 100
 storage_delta_percent = 0.5
 gpu_delta_percent = 5
 fan_delta_rpm = 100
+
+[telemetry]
+# Voluntary product telemetry. Default is OFF.
+# When enabled, a released build sends only protocol-v1 installation/product/version data.
+enabled = false
