@@ -374,6 +374,19 @@ def _problem_components(
             entity_id=f"binary_sensor.dh_app_pve_gpu_{slug}_temperature_problem",
         )
 
+    for fan_id, raw in _mapping(inventory.get("fans")).items():
+        if not isinstance(raw, Mapping):
+            continue
+        slug = _entity_slug(fan_id)
+        key = f"fan_{slug}_control_restore_problem"
+        result[key] = _problem_binary(
+            topics,
+            key=key,
+            problem_id=f"fan_{slug}_control_restore",
+            name=f"Fan {fan_id} control restore problem",
+            entity_id=f"binary_sensor.dh_app_pve_fan_{slug}_control_restore_problem",
+        )
+
     return result
 
 
