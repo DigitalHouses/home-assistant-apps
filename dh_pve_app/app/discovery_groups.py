@@ -50,6 +50,7 @@ def _component_groups(inventory: Mapping[str, object]) -> dict[str, str]:
         "memory_usage": "memory",
         "swap_usage": "memory",
         "fans_status": "fans",
+        "calibrate_fans": "fans",
         "last_refresh": "diagnostics",
         "refresh": "diagnostics",
         "vms_summary": "guest/summary",
@@ -94,9 +95,19 @@ def _component_groups(inventory: Mapping[str, object]) -> dict[str, str]:
         groups[f"gpu_{entity}_temperature"] = f"gpu/{runtime}/telemetry"
         groups[f"gpu_{entity}_transcoding"] = f"gpu/{runtime}/telemetry"
 
-    for fan_id in _mapping(inventory.get("fans")):
+    for fan_id, raw in _mapping(inventory.get("fans")).items():
+        if not isinstance(raw, Mapping):
+            continue
         entity = _entity_slug(fan_id)
-        groups[f"fan_{entity}_rpm"] = f"fan/{_state_slug(fan_id)}"
+        group = f"fan/{_state_slug(fan_id)}"
+        for suffix in (
+            "speed",
+            "rpm",
+            "max_rpm",
+            "calibration_status",
+            "calibrated_at",
+        ):
+            groups[f"fan_{entity}_{suffix}"] = group
 
     guests = _mapping(inventory.get("guests"))
     for plural, singular in (("vms", "vm"), ("lxcs", "lxc")):
