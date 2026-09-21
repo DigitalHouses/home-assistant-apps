@@ -35,9 +35,15 @@ The profile does **not** replace or delete the stock Proxmox
 priority DKMS module location, and `depmod`/modprobe select it through the
 system module database.
 
-The profile does not use `force_id`, `fix_pwm_polarity`,
-`ignore_resource_conflict`, direct `insmod`, direct `rmmod`, or any PWM
-control. It only enables hwmon telemetry.
+The host-profile installer does not use `force_id`, `fix_pwm_polarity`,
+`ignore_resource_conflict`, direct `insmod`, direct `rmmod`, or PWM
+control. It only prepares the pinned driver and hwmon telemetry.
+
+A newer `dh_pve_app` release may separately use the explicitly supported
+Beelink IT8613 `fan2/pwm2` adapter for guarded fan calibration. That runtime
+path is hardware-profile-aware, persists the original control state before the
+first write, drives the fan only to maximum, restores/verifies the original
+state, and never writes PWM on an unmatched hwmon device.
 
 A machine whose DMI identity does not contain `AZW` or `Beelink` is rejected.
 After driver activation the installer additionally requires a real `it8613`
