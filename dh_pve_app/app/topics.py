@@ -92,6 +92,7 @@ def build_topics(mqtt: MqttConfig, identity: HostIdentity) -> Topics:
         device_id=device_id,
         ups_scan=f"{base}/ups/scan",
         ups_scan_state=f"{base}/ups/scan/state",
+        fan_calibrate=f"{base}/fans/calibrate",
         legacy_discoveries=(
             f"{discovery_prefix}/device/{previous_device_id}/config",
         ),
