@@ -236,3 +236,55 @@ def test_sustained_observed_rpm_can_raise_but_never_lower_max(tmp_path: Path):
 
     registry.presentation(_fan(4000), adapter, observed_at="2026-09-22T03:00:00+05:00")
     assert registry.record(_fan(), adapter)["max_rpm"] == 5600
+
+
+def test_hardware_identity_change_invalidates_existing_calibration(tmp_path: Path):
+    registry = FanCalibrationRegistry(StateStore(tmp_path / "fan_calibration.json"))
+    adapter = FakeAdapter([0])
+    registry.save_calibration(
+        _fan(), adapter, max_rpm=5400, calibrated_at="2026-09-22T01:00:00+05:00"
+    )
+    adapter.hardware_identity = lambda fan: "hardware-B"
+
+    assert registry.needs_automatic_calibration(_fan(), adapter) is True
+    assert registry.presentation(_fan(2700), adapter)["speed_percent"] is None
+
+
+def test_interrupted_calibration_is_restored_on_startup(tmp_path: Path):
+    registry = FanCalibrationRegistry(StateStore(tmp_path / "fan_calibration.json"))
+    adapter = FakeAdapter([3729])
+    fan = _fan()
+    registry.begin(
+        fan,
+        adapter,
+        original=adapter.original,
+        started_at="2026-09-22T01:00:00+05:00",
+    )
+    manager = FanCalibrationManager(
+        registry=registry,
+        adapters=(adapter,),
+        now_iso=lambda: "2026-09-22T01:10:00+05:00",
+        sleep=lambda _seconds: None,
+    )
+
+    assert manager.recover_pending((fan,))[fan.fan_id] == "recovered"
+    assert adapter.restores == 1
+    record = registry.record(fan, adapter)
+    assert record["calibration_status"] == "failed"
+    assert record["pending_restore"] is None
+
+
+def test_failed_calibration_is_not_automatically_repeated_forever(tmp_path: Path):
+    registry = FanCalibrationRegistry(StateStore(tmp_path / "fan_calibration.json"))
+    adapter = FakeAdapter([3729, 3729, 3729, 3729, 3729, 3729] * 3)
+    manager = FanCalibrationManager(
+        registry=registry,
+        adapters=(adapter,),
+        now_iso=lambda: "2026-09-22T01:10:00+05:00",
+        sleep=lambda _seconds: None,
+    )
+
+    assert manager.calibrate((_fan(),), automatic=True)[_fan().fan_id] == "failed"
+    writes_after_failure = list(adapter.writes)
+    assert manager.calibrate((_fan(),), automatic=True) == {}
+    assert adapter.writes == writes_after_failure
