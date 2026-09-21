@@ -175,9 +175,36 @@ The installer should make Intel GPU telemetry work on supported Debian/Ubuntu Pl
 
 If Intel DRM hardware is present and `intel_gpu_top` is absent, the installer may install the Debian/Ubuntu `intel-gpu-tools` package.
 
-The service user should be granted existing `render` and/or `video` supplementary groups when needed. No broad root runtime privilege is introduced.
+The service user is granted existing `render` and/or `video` supplementary groups when needed.
 
-If the platform still denies GPU performance counters, the GPU collector reports unavailable and the rest of Plex Agent continues normally.
+Production validation on Debian 12 / kernel 6.1 / Alder Lake-N established that:
+
+- `kernel.perf_event_paranoid = 3`;
+- `CAP_PERFMON` is present in effective and ambient capability sets but `intel_gpu_top` still fails to initialize the i915 PMU;
+- `CAP_SYS_ADMIN` allows `intel_gpu_top` to read the GPU PMU successfully.
+
+Therefore the main `digitalhouses_plex_monitoring.service` must remain unprivileged and must not receive `CAP_SYS_ADMIN`.
+
+GPU PMU access is isolated in a separate helper service:
+
+```text
+digitalhouses_plex_gpu_helper.service
+```
+
+The helper:
+
+- runs as the existing `digitalhouses_plex_monitoring` service user;
+- receives only `CAP_SYS_ADMIN` in its capability bounding/effective/ambient path;
+- keeps `NoNewPrivileges=true`;
+- has no MQTT, Plex API or network responsibility;
+- executes the local GPU collector and writes an atomic state snapshot under `/var/lib/digitalhouses_plex_monitoring`;
+- is hardened independently with read-only system paths and a single writable application-state path.
+
+The main Plex Agent reads the helper snapshot without any elevated capability.
+
+The helper state contains a collection timestamp. The main agent rejects stale state instead of presenting old GPU utilization as current data.
+
+If the helper is unavailable, stale, unsupported, or cannot read the PMU, GPU telemetry becomes unavailable while the rest of Plex Agent continues normally.
 
 ## 11. Compatibility
 
@@ -201,4 +228,8 @@ Tests must cover:
 - hardware-transcode aggregate;
 - server boot timestamp independent of agent uptime;
 - dashboard references for GPU metrics and human-readable server uptime;
-- installer contract for optional Intel GPU tooling and service-group access.
+- installer contract for optional Intel GPU tooling and service-group access;
+- main service has no `CAP_SYS_ADMIN`;
+- helper service has the isolated `CAP_SYS_ADMIN` capability and `NoNewPrivileges=true`;
+- fresh helper-state reading and stale-state rejection;
+- helper atomic state publication.
