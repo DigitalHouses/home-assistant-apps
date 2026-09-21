@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add diagnostic `sensor.dh_app_pve_agent_started` as a Home Assistant timestamp representing the current agent process start, replacing the need for a continuously changing duration-style agent uptime value.
+
 ## 0.5.7
 
 - Treat UPS as a first-class optional subsystem in Home Assistant: the always-present PVE device now exposes `binary_sensor.dh_app_pve_ups_configured` from persistent UPS selection state, so “no UPS on this host” is distinct from “configured UPS/NUT unavailable”.

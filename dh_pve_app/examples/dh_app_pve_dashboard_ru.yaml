@@ -369,25 +369,10 @@ sections:
               {% endif %}
             tap_action:
               action: more-info
-          - type: custom:mushroom-template-card
-            entity: sensor.dh_app_pve_last_boot
-            primary: Последний запуск агента
-            secondary: >-
-              {% set ts = states(entity) %} {% if ts not in ['unknown',
-              'unavailable', 'none', ''] %}
-                {{ as_timestamp(ts)
-                  | timestamp_custom('%d.%m.%Y %H:%M:%S', true) }}
-              {% else %}
-                Нет данных
-              {% endif %}
-            icon: mdi:restart
-            icon_color: >-
-              {% if states(entity) not in ['unknown', 'unavailable', 'none', '']
-              %}
-                blue
-              {% else %}
-                grey
-              {% endif %}
+          - type: custom:mushroom-entity-card
+            entity: sensor.dh_app_pve_agent_started
+            name: Агент запущен
+            icon: mdi:clock-start
             tap_action:
               action: more-info
         grid_options:

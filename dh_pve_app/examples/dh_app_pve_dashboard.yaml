@@ -73,6 +73,10 @@ sections:
         entity: sensor.dh_app_pve_last_boot
         name: Последний запуск
 
+      - type: tile
+        entity: sensor.dh_app_pve_agent_started
+        name: Агент запущен
+
       - type: custom:mushroom-template-card
         entity: button.dh_app_pve_refresh
         primary: Обновить

@@ -91,6 +91,8 @@ Current problems are exposed as `binary_sensor` entities with `device_class: pro
 
 The installed App release is exposed as diagnostic entity `sensor.dh_app_pve_app_version`. Its state comes from the same `VERSION` value used by MQTT Device Discovery `device.sw_version` and `origin.sw_version`. The standard PVE dashboard shows it in the host summary as `App <version>` and hides that segment if the entity is unavailable or unknown.
 
+The current agent process start is exposed as `sensor.dh_app_pve_agent_started` with Home Assistant `device_class: timestamp`. Its value is fixed for the lifetime of the running agent process and changes only after an agent restart, allowing Home Assistant to present the age natively instead of publishing a continuously changing uptime duration.
+
 Native MQTT Event entities are used for diagnostic transitions:
 
 - `event.dh_app_pve_diagnostic`;
@@ -162,7 +164,7 @@ The reusable package intentionally does not call `script.write2log`, Telegram, a
 
 Recorder configuration is an explicit whitelist. Continuous history is kept only for useful metrics such as CPU, RAM/Swap, fan RPM, storage usage, disk temperature/wear, GPU telemetry and selected UPS telemetry/status.
 
-Rich presentation, debug diagnostics, the static `sensor.dh_app_pve_app_version` metadata entity and MQTT Event entities are intentionally not Recorder history.
+Rich presentation, debug diagnostics, the static `sensor.dh_app_pve_app_version` and `sensor.dh_app_pve_agent_started` metadata entities, and MQTT Event entities are intentionally not Recorder history.
 
 ## UPS / NUT ownership
 

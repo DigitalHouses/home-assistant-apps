@@ -17,6 +17,7 @@ def test_canonical_pve_dashboard_exists_and_uses_app_owned_state():
         "sensor.dh_app_pve_problems",
         "sensor.dh_app_pve_system",
         "sensor.dh_app_pve_last_boot",
+        "sensor.dh_app_pve_agent_started",
         "sensor.dh_app_pve_cpu_usage",
         "sensor.dh_app_pve_cpu_temperature",
         "sensor.dh_app_pve_cpu_frequency",
