@@ -107,7 +107,7 @@ def test_diagnostics_expose_version_uptime_and_no_commit():
     assert "build_commit" not in diagnostics
 
 
-def test_transcoding_moves_cpu_presentation_to_detail_without_changing_collection_interval():
+def test_transcoding_moves_cpu_presentation_to_playback_without_changing_collection_interval():
     runtime, bridge = make_runtime([0.0, 0.0, 10.0])
 
     runtime.publish_snapshot(snapshot(cpu=10.0), api_payload(), force=True)
@@ -119,7 +119,7 @@ def test_transcoding_moves_cpu_presentation_to_detail_without_changing_collectio
     )
 
     published = dict(bridge.groups)
-    assert published["diagnostics"]["publication_profile"]["state"] == "detail"
+    assert published["diagnostics"]["publication_profile"]["state"] == "playback"
     assert published["diagnostics"]["publication_profile"]["reason"] == "transcoder_running"
     assert runtime.source_interval_seconds == 10.0
 

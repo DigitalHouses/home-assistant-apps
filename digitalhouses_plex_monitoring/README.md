@@ -31,13 +31,13 @@ Lovelace example: [plex-dashboard.yaml](examples/lovelace/plex-dashboard.yaml)
 Production install/update is pinned to the canonical release tag. Current release:
 
 ```text
-digitalhouses_plex_agent-v0.4.0
+digitalhouses_plex_agent-v0.4.1
 ```
 
 From a root shell:
 
 ```bash
-RELEASE_TAG="digitalhouses_plex_agent-v0.4.0"
+RELEASE_TAG="digitalhouses_plex_agent-v0.4.1"
 curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/${RELEASE_TAG}/digitalhouses_plex_monitoring/install.sh" \
   | DIGITALHOUSES_SOURCE_REF="${RELEASE_TAG}" bash
 ```
@@ -45,7 +45,7 @@ curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/
 From a sudo-capable user:
 
 ```bash
-RELEASE_TAG="digitalhouses_plex_agent-v0.4.0"
+RELEASE_TAG="digitalhouses_plex_agent-v0.4.1"
 curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/${RELEASE_TAG}/digitalhouses_plex_monitoring/install.sh" \
   | sudo env DIGITALHOUSES_SOURCE_REF="${RELEASE_TAG}" bash
 ```
@@ -240,12 +240,13 @@ MQTT state is split into retained semantic groups:
 - `gpu` — local Intel GPU engine/frequency/temperature telemetry when available;
 - `diagnostics` — collector/API state, agent version, agent uptime, server boot timestamp, publication profile and last publication.
 
-Continuous CPU samples use the same adaptive presentation windows as DH PVE:
+Continuous CPU and GPU samples use adaptive Recorder-facing presentation windows without changing the fixed acquisition cadence:
 
-- `NORMAL` — one averaged publication per 15 minutes;
-- `DETAIL` — one averaged publication per 5 minutes.
+- `NORMAL` — one averaged publication per 15 minutes while idle;
+- `DETAIL` — one averaged publication per 5 minutes for Scanner activity or sustained high CPU without playback;
+- `PLAYBACK` — one averaged publication per 30 seconds while Plex playback is active or Plex Transcoder is running.
 
-Plex enters `DETAIL` when Scanner, Transcoder or playback is active, or when the 60-second CPU decision average exceeds the configured high-load threshold. Activity, playback and library semantic changes publish immediately and do not wait for an averaging window.
+Entering or leaving `PLAYBACK` publishes CPU and GPU immediately. Activity, playback and library semantic changes also publish immediately and do not wait for an averaging window.
 
 Manual Refresh publishes a current snapshot of all groups. MQTT/Home Assistant reconnect republishes the retained group cache without forcing a new collection. Failed group publications are retried independently.
 

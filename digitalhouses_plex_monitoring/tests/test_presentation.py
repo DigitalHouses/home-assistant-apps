@@ -2,7 +2,11 @@ from app.presentation import AdaptiveGroup, ProfileWindows, PublicationProfile
 
 
 def test_publication_profiles_match_linux_agent_contract():
-    assert {item.value for item in PublicationProfile} == {"normal", "detail"}
+    assert {item.value for item in PublicationProfile} == {
+        "normal",
+        "detail",
+        "playback",
+    }
 
 
 def test_publication_windows_match_linux_agent_contract():
@@ -10,6 +14,7 @@ def test_publication_windows_match_linux_agent_contract():
 
     assert windows.normal_seconds == 900.0
     assert windows.detail_seconds == 300.0
+    assert windows.playback_seconds == 30.0
 
 
 def test_normal_profile_publishes_window_average():

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.4.1
+
+- Add the `PLAYBACK` publication profile for active playback or Plex Transcoder activity.
+- Publish averaged CPU and GPU telemetry every 30 seconds during `PLAYBACK` while keeping the 10-second acquisition cadence unchanged.
+- Keep `DETAIL` at 5 minutes for scanner/high-CPU activity without playback and `NORMAL` at 15 minutes for idle operation.
+- Publish CPU/GPU immediately when entering or leaving `PLAYBACK`; semantic playback/activity changes remain immediate.
+- Run the Plex test suite with pytest so the existing pytest-style contract tests are executed by CI.
+
 ## 0.4.0
 
 - Add standalone Intel GPU telemetry from the Plex Linux host/VM: Video, Render/3D, Video Enhance, GPU frequency, RC6 and real GPU temperature when the kernel exposes it.
@@ -9,7 +17,8 @@
 - Add `sensor.dh_plex_last_boot` for host/VM uptime while retaining `sensor.dh_plex_agent_uptime` as process diagnostics.
 - Add the retained `gpu` MQTT state group using the existing NORMAL/DETAIL adaptive publication model.
 - Update the Plex dashboard with server uptime and GPU/transcoding telemetry without any DH PVE dependency.
-- Prepare the installer for optional `intel-gpu-tools` and existing render/video group access on supported Debian/Ubuntu Intel GPU hosts.\n- Isolate the i915 PMU privilege in `digitalhouses_plex_gpu_helper.service`: the main Plex Agent remains unprivileged, while the helper alone receives `CAP_SYS_ADMIN` and publishes a timestamped local GPU snapshot.
+- Prepare the installer for optional `intel-gpu-tools` and existing render/video group access on supported Debian/Ubuntu Intel GPU hosts.
+- Isolate the i915 PMU privilege in `digitalhouses_plex_gpu_helper.service`: the main Plex Agent remains unprivileged, while the helper alone receives `CAP_SYS_ADMIN` and publishes a timestamped local GPU snapshot.
 
 ## 0.3.0
 

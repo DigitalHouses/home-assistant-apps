@@ -316,5 +316,8 @@ class PlexPresentationRouter:
         return {
             "state": self._selector.profile.value,
             "reason": self._selector.reason,
-            "resources": {"cpu": self._selector.profile.value},
+            "resources": {
+                "cpu": self._selector.profile.value,
+                "gpu": self._selector.profile.value,
+            },
         }
