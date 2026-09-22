@@ -15,6 +15,7 @@ class ConfigTests(unittest.TestCase):
         })
         self.assertEqual(config.refresh_interval_hours, 6)
         self.assertEqual(config.log_level, "info")
+        self.assertFalse(config.telemetry_enabled)
 
     def test_credentials_are_required(self):
         with self.assertRaises(ValueError):
