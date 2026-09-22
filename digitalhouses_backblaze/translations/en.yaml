@@ -8,6 +8,9 @@ configuration:
   refresh_interval_hours:
     name: Refresh interval, hours
     description: Interval between full scans of all visible Backblaze buckets.
+  telemetry_enabled:
+    name: Usage telemetry
+    description: Send minimal pseudonymous DigitalHouses product telemetry. Disabled by default.
   log_level:
     name: Log level
     description: Application logging verbosity.
