@@ -17,9 +17,11 @@ options:
   application_key_id: ""
   application_key: ""
   refresh_interval_hours: 6
+  telemetry_enabled: false
   log_level: info
 schema:
   application_key_id: str
   application_key: password
   refresh_interval_hours: int(1,168)
+  telemetry_enabled: bool
   log_level: list(debug|info|warning|error)
