@@ -149,10 +149,10 @@ class BackblazeApp:
 
     def _telemetry_worker(self) -> None:
         ensure_identity()
-        if not self.settings.telemetry_enabled:
-            return
-        if heartbeat_if_due(APP_VERSION):
-            self.log.info("Usage telemetry heartbeat sent")
+        while not self.stop_event.is_set():
+            if self.settings.telemetry_enabled and heartbeat_if_due(APP_VERSION):
+                self.log.info("Usage telemetry heartbeat sent")
+            self.stop_event.wait(15 * 60)
 
     def run(self) -> None:
         host = os.getenv("MQTT_HOST", "")
