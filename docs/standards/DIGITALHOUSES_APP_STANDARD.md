@@ -36,6 +36,7 @@ Current applications:
 ```text
 digitalhouses_speedtest       -> haos_addon
 digitalhouses_db_monitoring   -> haos_addon
+digitalhouses_backblaze        -> haos_addon
 ```
 
 Planned first `linux_agent`:
