@@ -19,6 +19,10 @@ class DiscoveryTests(unittest.TestCase):
             components["total_used"]["default_entity_id"],
             "sensor.dh_backblaze_storage_used",
         )
+        self.assertNotIn("entity_category", components["total_used"])
+        self.assertNotIn("entity_category", components["bucket_count"])
+        self.assertNotIn("entity_category", components["total_files"])
+        self.assertNotIn("entity_category", components["total_versions"])
         self.assertEqual(
             components["app_version"]["default_entity_id"],
             "sensor.dh_backblaze_app_version",
@@ -37,6 +41,10 @@ class DiscoveryTests(unittest.TestCase):
             "button.dh_backblaze_refresh",
         )
         self.assertEqual(
+            components["refresh"]["entity_category"],
+            "config",
+        )
+        self.assertEqual(
             components["telemetry_delete"]["default_entity_id"],
             "button.dh_backblaze_delete_telemetry",
         )
@@ -53,6 +61,7 @@ class DiscoveryTests(unittest.TestCase):
             "sensor.dh_backblaze_ha_backups_used",
         )
         self.assertEqual(used["unit_of_measurement"], "B")
+        self.assertNotIn("entity_category", used)
         self.assertEqual(
             components["bucket_bucket-id_files"]["default_entity_id"],
             "sensor.dh_backblaze_ha_backups_files",

@@ -70,6 +70,34 @@ def validate_backblaze(
                 f"{component.get('default_entity_id')!r}"
             )
 
+
+    primary_components = (
+        "total_used",
+        "bucket_count",
+        "total_files",
+        "total_versions",
+        "bucket_bucket-id_used",
+        "bucket_bucket-id_files",
+        "bucket_bucket-id_versions",
+    )
+    for key in primary_components:
+        if components[key].get("entity_category") is not None:
+            fail(f"Backblaze primary entity must not have entity_category: {key}")
+
+    diagnostic_components = (
+        "last_update",
+        "api_connected",
+        "app_version",
+        "app_started_at",
+    )
+    for key in diagnostic_components:
+        if components[key].get("entity_category") != "diagnostic":
+            fail(f"Backblaze diagnostic entity category changed: {key}")
+
+    for key in ("refresh", "telemetry_delete"):
+        if components[key].get("entity_category") != "config":
+            fail(f"Backblaze config entity category changed: {key}")
+
     started = components["app_started_at"]
     if started.get("device_class") != "timestamp":
         fail("Backblaze started-at diagnostic must use timestamp device class")
