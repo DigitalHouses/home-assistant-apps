@@ -1,0 +1,28 @@
+name: DigitalHouses Backblaze
+version: 0.1.0
+slug: digitalhouses_backblaze
+description: Backblaze B2 account and bucket storage monitoring through MQTT Discovery.
+url: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_backblaze
+arch:
+  - amd64
+  - aarch64
+startup: application
+boot: auto
+init: false
+stage: experimental
+backup: hot
+hassio_api: true
+services:
+  - mqtt:need
+options:
+  application_key_id: ""
+  application_key: ""
+  refresh_interval_hours: 6
+  telemetry_enabled: false
+  log_level: info
+schema:
+  application_key_id: str
+  application_key: password
+  refresh_interval_hours: int(1,24)
+  telemetry_enabled: bool
+  log_level: list(debug|info|warning|error)
