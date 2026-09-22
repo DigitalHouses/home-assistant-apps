@@ -194,3 +194,54 @@ jobs:
 
       - name: Validate systemd unit
         run: systemd-analyze verify dh_pve_app/systemd/*.service
+
+
+  stats-server:
+    name: Stats Server
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: digitalhouses_stats
+          POSTGRES_USER: digitalhouses_stats
+          POSTGRES_PASSWORD: test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U digitalhouses_stats -d digitalhouses_stats"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql+psycopg://digitalhouses_stats:test_password@127.0.0.1:5432/digitalhouses_stats
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install Stats Server
+        working-directory: digitalhouses-stats
+        run: python -m pip install --disable-pip-version-check -e '.[dev]'
+
+      - name: Compile Python
+        run: |
+          python -m compileall -q \
+            digitalhouses-stats/digitalhouses_stats \
+            digitalhouses-stats/tests \
+            digitalhouses-stats/migrations
+
+      - name: Apply database migration
+        working-directory: digitalhouses-stats
+        run: alembic upgrade head
+
+      - name: Run tests
+        working-directory: digitalhouses-stats
+        run: python -m pytest tests -q
