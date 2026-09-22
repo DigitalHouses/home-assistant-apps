@@ -84,6 +84,14 @@ def validate_backblaze(
         if components[key].get("entity_category") is not None:
             fail(f"Backblaze primary entity must not have entity_category: {key}")
 
+    for key in ("total_used", "bucket_bucket-id_used"):
+        if components[key].get("unit_of_measurement") != "GiB":
+            fail(f"Backblaze storage unit changed: {key}")
+        if components[key].get("suggested_display_precision") != 1:
+            fail(f"Backblaze storage precision changed: {key}")
+        if components[key].get("json_attributes_topic") is not None:
+            fail(f"Backblaze storage entity must not expose bucket attributes: {key}")
+
     diagnostic_components = (
         "last_update",
         "api_connected",
