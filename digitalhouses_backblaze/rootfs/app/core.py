@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 _GIB = 1024 ** 3
@@ -28,14 +28,14 @@ class BucketAccumulator:
     current_file_count: int = 0
     version_count: int = 0
     hide_marker_count: int = 0
-    _seen_names: set[str] = field(default_factory=set, repr=False)
+    _last_name: str | None = None
 
     def consume(self, item: dict[str, Any]) -> None:
         name = str(item.get("fileName") or "")
         action = str(item.get("action") or "")
 
-        if name and name not in self._seen_names:
-            self._seen_names.add(name)
+        if name and name != self._last_name:
+            self._last_name = name
             if action == "upload":
                 self.current_file_count += 1
 
