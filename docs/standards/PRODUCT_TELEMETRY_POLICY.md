@@ -4,7 +4,7 @@ Status: normative architecture policy. Public activation remains subject to fina
 
 This policy applies to products in `DigitalHouses/home-assistant-apps`.
 
-Initial mandatory scope:
+Current mandatory scope:
 
 - `digitalhouses_pve_agent`
 - `digitalhouses_plex_agent`
