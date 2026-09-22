@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import (
+    BigInteger,
     DateTime,
     ForeignKeyConstraint,
     Index,
@@ -59,7 +60,7 @@ class Heartbeat(Base):
         ),
     )
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
     received_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
