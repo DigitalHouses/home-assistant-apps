@@ -71,6 +71,11 @@ def validate_backblaze(
             )
 
 
+    if components["total_files"].get("name") != "Total files":
+        fail("Backblaze account file-count sensor must be named Total files")
+    if components["total_files"].get("value_template") != "{{ value_json.current_files }}":
+        fail("Backblaze Total files must consume the pre-aggregated account total")
+
     if components["total_used"].get("name") != "Total used":
         fail("Backblaze account storage sensor must be named Total used")
     if components["total_used"].get("value_template") != (
@@ -119,6 +124,16 @@ def validate_backblaze(
     if started.get("entity_category") != "diagnostic":
         fail("Backblaze started-at diagnostic must be diagnostic")
 
+
+    discovery_source = (app / "rootfs/app/discovery.py").read_text(
+        encoding="utf-8"
+    )
+    for expected in (
+        'DISCOVERY_SCHEMA_VERSION = 2',
+        'DISCOVERY_SCHEMA_PATH = Path("/data/discovery_schema_version")',
+    ):
+        if expected not in discovery_source:
+            fail(f"Backblaze discovery migration contract missing: {expected}")
 
     options = context["config"].get("options") or {}
     if options.get("telemetry_enabled") is not False:

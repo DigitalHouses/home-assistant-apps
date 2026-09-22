@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from pathlib import Path
 from typing import Any, Iterable
 
 DEVICE_ID = "digitalhouses_backblaze"
@@ -13,6 +14,22 @@ REFRESH_COMMAND_TOPIC = f"{BASE_TOPIC}/refresh"
 TELEMETRY_DELETE_COMMAND_TOPIC = f"{BASE_TOPIC}/telemetry/delete"
 HA_STATUS_TOPIC = "homeassistant/status"
 STATE_RETAIN = True
+DISCOVERY_SCHEMA_VERSION = 2
+DISCOVERY_SCHEMA_PATH = Path("/data/discovery_schema_version")
+
+
+def needs_discovery_reset(path: Path = DISCOVERY_SCHEMA_PATH) -> bool:
+    try:
+        value = int(path.read_text(encoding="utf-8").strip())
+    except (FileNotFoundError, OSError, ValueError):
+        return True
+    return value < DISCOVERY_SCHEMA_VERSION
+
+
+def mark_discovery_schema(path: Path = DISCOVERY_SCHEMA_PATH) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(str(DISCOVERY_SCHEMA_VERSION), encoding="utf-8")
+
 
 
 def bucket_state_topic(bucket_id: str) -> str:
@@ -110,7 +127,7 @@ def build_discovery_payload(
         ),
         "total_files": _component(
             "sensor",
-            "Current files",
+            "Total files",
             "total_files",
             "sensor.dh_backblaze_files",
             "{{ value_json.current_files }}",

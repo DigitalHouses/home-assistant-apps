@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.4
+
+- Rename the account file-count sensor to Total files.
+- Add a one-time retained MQTT Device Discovery reset so existing Home Assistant entity-registry categories are re-read.
+- Preserve existing MQTT unique IDs and entity IDs while moving primary metrics out of Diagnostics and controls into Configuration.
+
 ## 0.1.3
 
 - Rename the account aggregate storage sensor to Total used.
