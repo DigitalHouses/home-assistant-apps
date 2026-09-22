@@ -71,6 +71,13 @@ def validate_backblaze(
             )
 
 
+    if components["total_used"].get("name") != "Total used":
+        fail("Backblaze account storage sensor must be named Total used")
+    if components["total_used"].get("value_template") != (
+        "{{ (value_json.stored_bytes / 1073741824) | round(1) }}"
+    ):
+        fail("Backblaze Total used must consume the pre-aggregated account total")
+
     primary_components = (
         "total_used",
         "bucket_count",
