@@ -30,7 +30,7 @@ from discovery import (
 )
 from telemetry import TelemetryClient, TelemetryRunner
 
-APP_VERSION = os.getenv("APP_VERSION", "0.1.4-local")
+APP_VERSION = os.getenv("APP_VERSION", "0.1.5-local")
 
 
 class BackblazeMonitorApp:

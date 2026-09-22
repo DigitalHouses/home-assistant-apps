@@ -6,7 +6,7 @@ The App authorizes against the Backblaze B2 Native API v4, discovers all buckets
 
 ## Status
 
-Version 0.1.4 is the current experimental implementation.
+Version 0.1.5 is the current experimental implementation.
 
 ## Backblaze key
 
@@ -32,6 +32,49 @@ Account entities include:
 - sensor.dh_backblaze_app_started_at
 
 Every discovered bucket also gets used, files, and versions sensors under the same Home Assistant device.
+
+## Home Assistant package
+
+Reusable Recorder package:
+
+```text
+examples/packages/dh_app_backblaze_package.yaml
+```
+
+Recommended Home Assistant target:
+
+```text
+/config/packages/Global/DH_APP/dh_app_backblaze_package.yaml
+```
+
+The package intentionally records only:
+
+- `sensor.dh_backblaze_storage_used` — account Total used;
+- `sensor.dh_backblaze_files` — account Total files.
+
+Bucket-level entities remain live but are not recorded by the reusable package.
+
+## Dashboard
+
+Reusable Sections dashboard:
+
+```text
+examples/lovelace/dh_app_backblaze_dashboard.yaml
+```
+
+The dashboard contains account totals, dynamic bucket cards, diagnostics, manual refresh, and a 30-day daily bar chart for Total used.
+
+The daily chart uses the same aggregation pattern as the DigitalHouses Recorder UI:
+
+```yaml
+hours_to_show: 720
+group_by: date
+aggregate_func: max
+show:
+  graph: bar
+```
+
+Recorder history from `dh_app_backblaze_package.yaml` is required for the chart.
 
 ## Refresh model
 

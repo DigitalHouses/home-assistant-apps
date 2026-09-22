@@ -1,0 +1,21 @@
+# =============================================================================
+# DigitalHouses Backblaze Package
+# =============================================================================
+# Recommended target:
+#   /config/packages/Global/DH_APP/dh_app_backblaze_package.yaml
+#
+# Recorder is intentionally narrow:
+#   - account-wide Total used
+#   - account-wide Total files
+#
+# Bucket details remain available live through MQTT Discovery but are not
+# recorded by this reusable package.
+# =============================================================================
+
+dh_app_backblaze_package:
+
+  recorder:
+    include:
+      entities:
+        - sensor.dh_backblaze_storage_used
+        - sensor.dh_backblaze_files

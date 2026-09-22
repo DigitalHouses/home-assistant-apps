@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.5
+
+- Add a reusable Home Assistant Backblaze dashboard example.
+- Add a 30-day daily bar chart for account Total used using Recorder history.
+- Add dynamic per-bucket storage, files, and stored-version cards.
+- Add a narrow Home Assistant package that records only Total used and Total files.
+
 ## 0.1.4
 
 - Rename the account file-count sensor to Total files.
