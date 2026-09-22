@@ -4,12 +4,13 @@ Status: normative architecture policy. Public activation remains subject to fina
 
 This policy applies to products in `DigitalHouses/home-assistant-apps`.
 
-Initial mandatory scope:
+Current mandatory scope:
 
 - `digitalhouses_pve_agent`
 - `digitalhouses_plex_agent`
 - `digitalhouses_recorder_app`
 - `digitalhouses_speedtest_app`
+- `digitalhouses_backblaze_app`
 
 Future DigitalHouses products in this repository must follow the same telemetry contract unless an explicit repository-level exemption is documented.
 

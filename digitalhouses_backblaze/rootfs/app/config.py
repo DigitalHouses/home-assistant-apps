@@ -13,6 +13,7 @@ class AppConfig:
     application_key_id: str
     application_key: str
     refresh_interval_hours: int
+    telemetry_enabled: bool
     log_level: str
 
 
@@ -28,6 +29,8 @@ def parse_config(raw: dict[str, Any]) -> AppConfig:
     if not 1 <= refresh_interval_hours <= 168:
         raise ValueError("refresh_interval_hours must be between 1 and 168")
 
+    telemetry_enabled = bool(raw.get("telemetry_enabled", False))
+
     log_level = str(raw.get("log_level") or "info").strip().lower()
     if log_level not in {"debug", "info", "warning", "error"}:
         raise ValueError("unsupported log_level")
@@ -36,6 +39,7 @@ def parse_config(raw: dict[str, Any]) -> AppConfig:
         application_key_id=application_key_id,
         application_key=application_key,
         refresh_interval_hours=refresh_interval_hours,
+        telemetry_enabled=telemetry_enabled,
         log_level=log_level,
     )
 

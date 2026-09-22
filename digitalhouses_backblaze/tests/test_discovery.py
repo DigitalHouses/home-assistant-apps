@@ -36,6 +36,10 @@ class DiscoveryTests(unittest.TestCase):
             components["refresh"]["default_entity_id"],
             "button.dh_backblaze_refresh",
         )
+        self.assertEqual(
+            components["telemetry_delete"]["default_entity_id"],
+            "button.dh_backblaze_delete_telemetry",
+        )
 
     def test_bucket_entities_are_dynamic_and_named(self):
         payload = build_discovery_payload(

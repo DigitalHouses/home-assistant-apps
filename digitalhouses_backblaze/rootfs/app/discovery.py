@@ -10,6 +10,7 @@ STATE_TOPIC = f"{BASE_TOPIC}/state"
 APP_AVAILABILITY_TOPIC = f"{BASE_TOPIC}/availability"
 DISCOVERY_TOPIC = f"homeassistant/device/{DEVICE_ID}/config"
 REFRESH_COMMAND_TOPIC = f"{BASE_TOPIC}/refresh"
+TELEMETRY_DELETE_COMMAND_TOPIC = f"{BASE_TOPIC}/telemetry/delete"
 HA_STATUS_TOPIC = "homeassistant/status"
 STATE_RETAIN = True
 
@@ -63,6 +64,9 @@ def _button(
     unique_suffix: str,
     entity_id: str,
     command_topic: str,
+    *,
+    icon: str = "mdi:refresh",
+    entity_category: str = "diagnostic",
 ) -> dict[str, Any]:
     return {
         "platform": "button",
@@ -73,8 +77,8 @@ def _button(
         "payload_press": "PRESS",
         "availability": _availability(),
         "availability_mode": "all",
-        "entity_category": "diagnostic",
-        "icon": "mdi:refresh",
+        "entity_category": entity_category,
+        "icon": icon,
     }
 
 
@@ -161,6 +165,14 @@ def build_discovery_payload(
             "refresh",
             "button.dh_backblaze_refresh",
             REFRESH_COMMAND_TOPIC,
+        ),
+        "telemetry_delete": _button(
+            "Delete telemetry data",
+            "telemetry_delete",
+            "button.dh_backblaze_delete_telemetry",
+            TELEMETRY_DELETE_COMMAND_TOPIC,
+            icon="mdi:database-remove-outline",
+            entity_category="config",
         ),
     }
 

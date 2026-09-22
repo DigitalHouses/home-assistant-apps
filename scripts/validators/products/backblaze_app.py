@@ -9,6 +9,7 @@ from validators.common import fail
 EXPECTED_BASE_TOPIC = "DigitalHouses/Global/backblaze"
 EXPECTED_DEVICE_ID = "digitalhouses_backblaze"
 EXPECTED_REFRESH_TOPIC = f"{EXPECTED_BASE_TOPIC}/refresh"
+EXPECTED_TELEMETRY_DELETE_TOPIC = f"{EXPECTED_BASE_TOPIC}/telemetry/delete"
 
 
 def _import_discovery(app: Path):
@@ -29,7 +30,7 @@ def validate_backblaze(
     app: Path,
     context: dict[str, Any],
 ) -> None:
-    del root, context
+    del root
     discovery = _import_discovery(app)
 
     if discovery.BASE_TOPIC != EXPECTED_BASE_TOPIC:
@@ -38,6 +39,8 @@ def validate_backblaze(
         fail("Backblaze discovery device identifier changed")
     if discovery.REFRESH_COMMAND_TOPIC != EXPECTED_REFRESH_TOPIC:
         fail("Backblaze refresh command topic changed")
+    if discovery.TELEMETRY_DELETE_COMMAND_TOPIC != EXPECTED_TELEMETRY_DELETE_TOPIC:
+        fail("Backblaze telemetry delete command topic changed")
 
     payload = discovery.build_discovery_payload(
         app_version="validation",
@@ -55,6 +58,7 @@ def validate_backblaze(
         "app_version": "sensor.dh_backblaze_app_version",
         "app_started_at": "sensor.dh_backblaze_app_started_at",
         "refresh": "button.dh_backblaze_refresh",
+        "telemetry_delete": "button.dh_backblaze_delete_telemetry",
     }
     for key, expected_entity_id in required_entities.items():
         component = components.get(key)
@@ -71,3 +75,20 @@ def validate_backblaze(
         fail("Backblaze started-at diagnostic must use timestamp device class")
     if started.get("entity_category") != "diagnostic":
         fail("Backblaze started-at diagnostic must be diagnostic")
+
+
+    options = context["config"].get("options") or {}
+    if options.get("telemetry_enabled") is not False:
+        fail("Backblaze telemetry must be disabled by default")
+
+    telemetry = (app / "rootfs/app/telemetry.py").read_text(encoding="utf-8")
+    required_telemetry_contract = (
+        'PRODUCT = "digitalhouses_backblaze_app"',
+        'path="/v1/heartbeat"',
+        'method="DELETE"',
+        'path="/v1/installation"',
+        'STATE_FILE = Path("/data/telemetry_state.json")',
+    )
+    for expected in required_telemetry_contract:
+        if expected not in telemetry:
+            fail(f"Backblaze telemetry contract missing: {expected}")

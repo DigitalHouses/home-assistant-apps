@@ -10,6 +10,7 @@ Required:
 Optional:
 
 - refresh_interval_hours: full account scan interval, default 6 hours.
+- telemetry_enabled: DigitalHouses product telemetry opt-in, default false.
 - log_level: debug, info, warning, or error.
 
 The key should have listBuckets and listFiles and no write/delete capabilities.
@@ -36,8 +37,24 @@ Discovery device ID: digitalhouses_backblaze
 
 Home Assistant status is observed so retained discovery/state can be republished after Home Assistant starts.
 
+## Product telemetry
+
+Telemetry is independent of Backblaze collection and disabled by default.
+
+When enabled, a separate worker targets one successful heartbeat per 24 hours with deterministic jitter of up to 30 minutes. Failures use backoff and never affect B2 collection, MQTT, startup or manual refresh.
+
+Persistent telemetry identity is stored in:
+
+```text
+/data/telemetry_state.json
+```
+
+The heartbeat payload is restricted to the common protocol-v1 fields. Backblaze credentials and storage/account/bucket data are never sent to the DigitalHouses telemetry service.
+
+The Home Assistant `Delete telemetry data` button sends the authenticated protocol-v1 DELETE request using the persistent per-installation token.
+
 ## Security
 
-The Backblaze secret is read from Home Assistant App options and is never published through MQTT or written to logs.
+The Backblaze secret is read from Home Assistant App options and is never published through MQTT, telemetry, or logs.
 
 Use a dedicated read-only application key rather than the master key.

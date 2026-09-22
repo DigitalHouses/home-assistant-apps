@@ -43,6 +43,46 @@ Stored bytes are calculated from content-bearing file versions returned by b2_li
 
 Version 0.1.0 does not add uploaded parts belonging to unfinished large-file uploads. The displayed value should therefore be treated as completed stored file-version usage, not as a byte-perfect billing meter when unfinished multipart uploads exist.
 
+## DigitalHouses telemetry
+
+Usage telemetry is optional and disabled by default:
+
+```yaml
+telemetry_enabled: false
+```
+
+When explicitly enabled, the App follows the shared DigitalHouses Telemetry Protocol v1. It sends only:
+
+- protocol schema version;
+- telemetry policy version;
+- a random per-installation UUID;
+- product identifier `digitalhouses_backblaze_app`;
+- App version.
+
+Backblaze credentials, account ID, bucket names, bucket IDs, file names, storage values, Home Assistant identity, hostname, LAN/WAN addresses and MQTT configuration are not telemetry payload fields. Country is derived server-side from request network metadata. The DigitalHouses telemetry system does not retain source IP addresses.
+
+The installation identity and token are stored in `/data/telemetry_state.json` and survive restart, upgrade and supported Home Assistant backup/restore.
+
+Use `button.dh_backblaze_delete_telemetry` to request authenticated deletion of this installation's retained telemetry record. Disabling telemetry stops future heartbeats; deletion and disabling are separate operations.
+
+See `docs/standards/PRODUCT_TELEMETRY_POLICY.md` and `docs/standards/TELEMETRY_PROTOCOL_V1.md`.
+
+## Release identity
+
+Repository directory and Home Assistant App slug:
+
+```text
+digitalhouses_backblaze
+```
+
+Canonical public release identifier:
+
+```text
+digitalhouses_backblaze_app
+```
+
+The App remains experimental and must not be treated as a production release until the repository's immutable GHCR delivery contract is implemented for it.
+
 ## Compatibility
 
 The App follows the DigitalHouses Application Standard and publishes one MQTT Discovery device. GitHub is the source of truth.

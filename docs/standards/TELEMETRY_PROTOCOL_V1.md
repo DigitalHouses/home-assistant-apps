@@ -43,6 +43,7 @@ digitalhouses_pve_agent
 digitalhouses_plex_agent
 digitalhouses_recorder_app
 digitalhouses_speedtest_app
+digitalhouses_backblaze_app
 ```
 
 The server rejects unknown product identifiers.
