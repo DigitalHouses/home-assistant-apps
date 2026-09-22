@@ -40,7 +40,7 @@ def _component(
     value_template: str,
     *,
     state_topic: str = STATE_TOPIC,
-    diagnostic: bool = True,
+    diagnostic: bool = False,
     **extra: Any,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
@@ -66,7 +66,7 @@ def _button(
     command_topic: str,
     *,
     icon: str = "mdi:refresh",
-    entity_category: str = "diagnostic",
+    entity_category: str = "config",
 ) -> dict[str, Any]:
     return {
         "platform": "button",
@@ -132,6 +132,7 @@ def build_discovery_payload(
             "last_update",
             "sensor.dh_backblaze_last_update",
             "{{ value_json.last_update }}",
+            diagnostic=True,
             device_class="timestamp",
             icon="mdi:cloud-sync-outline",
         ),
@@ -141,6 +142,7 @@ def build_discovery_payload(
             "api_connected",
             "binary_sensor.dh_backblaze_api",
             "{{ 'ON' if value_json.api_connected else 'OFF' }}",
+            diagnostic=True,
             device_class="connectivity",
         ),
         "app_version": _component(
@@ -149,6 +151,7 @@ def build_discovery_payload(
             "app_version",
             "sensor.dh_backblaze_app_version",
             "{{ value_json.app_version }}",
+            diagnostic=True,
             icon="mdi:tag-outline",
         ),
         "app_started_at": _component(
@@ -157,6 +160,7 @@ def build_discovery_payload(
             "app_started_at",
             "sensor.dh_backblaze_app_started_at",
             "{{ value_json.app_started_at }}",
+            diagnostic=True,
             device_class="timestamp",
             icon="mdi:clock-start",
         ),
