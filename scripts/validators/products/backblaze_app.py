@@ -52,11 +52,12 @@ def validate_backblaze(
     dashboard_text = required_examples[1].read_text(encoding="utf-8")
     for expected in (
         "sensor.dh_backblaze_storage_used",
-        "name: Total used by day",
-        "hours_to_show: 240",
-        "group_by: date",
-        "aggregate_func: max",
-        "graph: bar",
+        "title: Total used by day",
+        "type: statistics-graph",
+        "chart_type: bar",
+        "period: day",
+        "days_to_show: 10",
+        "- max",
     ):
         if expected not in dashboard_text:
             fail(f"Backblaze dashboard contract missing: {expected}")
