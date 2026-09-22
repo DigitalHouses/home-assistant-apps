@@ -19,6 +19,14 @@ class DiscoveryTests(unittest.TestCase):
             components["total_used"]["default_entity_id"],
             "sensor.dh_backblaze_storage_used",
         )
+        self.assertEqual(
+            components["total_used"]["name"],
+            "Total used",
+        )
+        self.assertEqual(
+            components["total_used"]["value_template"],
+            "{{ (value_json.stored_bytes / 1073741824) | round(1) }}",
+        )
         self.assertNotIn("entity_category", components["total_used"])
         self.assertNotIn("entity_category", components["bucket_count"])
         self.assertNotIn("entity_category", components["total_files"])
