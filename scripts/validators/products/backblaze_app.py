@@ -73,6 +73,8 @@ def validate_backblaze(
 
     if components["total_files"].get("name") != "Total files":
         fail("Backblaze account file-count sensor must be named Total files")
+    if components["total_files"].get("value_template") != "{{ value_json.current_files }}":
+        fail("Backblaze Total files must consume the pre-aggregated account total")
 
     if components["total_used"].get("name") != "Total used":
         fail("Backblaze account storage sensor must be named Total used")
