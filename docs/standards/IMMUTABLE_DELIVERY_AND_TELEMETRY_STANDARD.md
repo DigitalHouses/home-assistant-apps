@@ -17,9 +17,10 @@ digitalhouses_pve_agent
 digitalhouses_plex_agent
 digitalhouses_recorder_app
 digitalhouses_speedtest_app
+digitalhouses_backblaze_app
 ```
 
-The Home Assistant image/backup requirements apply only to Home Assistant Apps. The release identity and telemetry requirements apply to all four products.
+The Home Assistant image/backup requirements apply only to Home Assistant Apps. The release identity and telemetry requirements apply to all participating products.
 
 ## 1. Architecture goal
 
@@ -97,6 +98,7 @@ digitalhouses_pve_agent
 digitalhouses_plex_agent
 digitalhouses_recorder_app
 digitalhouses_speedtest_app
+digitalhouses_backblaze_app
 ```
 
 Do not combine the first immutable-delivery migration of a Home Assistant App with its first telemetry implementation in the same product release unless a documented exception is approved.
@@ -303,7 +305,8 @@ All products use one service:
 PVE Agent ─────────┐
 Plex Agent ────────┤
 Recorder App ──────┼── HTTPS ──> telemetry.digitalhouses.vip
-Speedtest App ─────┘
+Speedtest App ─────┤
+Backblaze App ──────┘
 ```
 
 All products use one wire contract:
@@ -605,7 +608,7 @@ Home Assistant Apps:
 - no longer duplicate locally built application images into normal backups
 - historical released images remain recoverable
 
-All four products:
+All participating products:
 - implement opt-in telemetry with default OFF
 - use the same protocol and semantics
 - preserve installation identity correctly
