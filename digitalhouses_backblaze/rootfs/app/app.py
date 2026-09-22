@@ -24,6 +24,8 @@ from discovery import (
     STATE_TOPIC,
     bucket_state_topic,
     build_discovery_payload,
+    mark_discovery_schema,
+    needs_discovery_reset,
 )
 from telemetry import TelemetryClient, TelemetryRunner
 
@@ -49,6 +51,7 @@ class BackblazeMonitorApp:
         self.refresh_requested = threading.Event()
         self.refresh_in_progress = threading.Event()
         self.state_lock = threading.RLock()
+        self.discovery_sync_lock = threading.Lock()
         self.buckets: list[dict[str, Any]] = []
         self.state: dict[str, Any] = {
             "api_connected": False,
@@ -90,10 +93,59 @@ class BackblazeMonitorApp:
         client.subscribe(REFRESH_COMMAND_TOPIC, qos=1)
         client.subscribe(TELEMETRY_DELETE_COMMAND_TOPIC, qos=1)
         self.publish_text(APP_AVAILABILITY_TOPIC, "online", retain=True)
-        self.publish_discovery()
-        self.publish_state()
-        self.publish_buckets()
-        self.log.info("MQTT connected; discovery published")
+        threading.Thread(
+            target=self._sync_discovery_after_connect,
+            name="dh-backblaze-discovery-sync",
+            daemon=True,
+        ).start()
+
+    def _sync_discovery_after_connect(self) -> None:
+        with self.discovery_sync_lock:
+            reset = needs_discovery_reset()
+            if reset:
+                info = self.client.publish(
+                    DISCOVERY_TOPIC,
+                    "",
+                    qos=1,
+                    retain=True,
+                )
+                if info.rc != mqtt.MQTT_ERR_SUCCESS:
+                    self.log.warning(
+                        "MQTT discovery migration could not clear old config: rc=%s",
+                        info.rc,
+                    )
+                    return
+                try:
+                    info.wait_for_publish(timeout=5.0)
+                except (RuntimeError, ValueError) as exc:
+                    self.log.warning(
+                        "MQTT discovery migration clear was not confirmed: %s",
+                        exc,
+                    )
+                    return
+                self.log.info(
+                    "MQTT discovery migration: old retained device config cleared"
+                )
+
+            self.publish_discovery()
+            self.publish_state()
+            self.publish_buckets()
+
+            if reset:
+                try:
+                    mark_discovery_schema()
+                except OSError as exc:
+                    self.log.warning(
+                        "Unable to persist discovery schema version: %s",
+                        exc,
+                    )
+                else:
+                    self.log.info(
+                        "MQTT discovery migration complete: schema=%s",
+                        2,
+                    )
+
+            self.log.info("MQTT connected; discovery published")
 
     def _on_disconnect(self, client, userdata, return_code) -> None:
         del client, userdata
