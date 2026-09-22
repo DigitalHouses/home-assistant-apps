@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.1
+
+- Split Home Assistant entities into primary metrics, configuration controls, and diagnostics.
+- Keep account totals and per-bucket storage/file/version metrics in the normal device entity group.
+- Move Refresh and telemetry deletion controls to the configuration category.
+- Keep API, Last update, App version, and Started at in diagnostics.
+
 ## 0.1.0
 
 - Initial DigitalHouses Backblaze Home Assistant App.
