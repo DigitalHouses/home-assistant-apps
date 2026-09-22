@@ -10,6 +10,7 @@ Initial mandatory scope:
 - `digitalhouses_plex_agent`
 - `digitalhouses_recorder_app`
 - `digitalhouses_speedtest_app`
+- `digitalhouses_backblaze_app`
 
 Future DigitalHouses products in this repository must follow the same telemetry contract unless an explicit repository-level exemption is documented.
 
