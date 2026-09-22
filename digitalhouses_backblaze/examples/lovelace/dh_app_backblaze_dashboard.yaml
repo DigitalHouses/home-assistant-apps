@@ -1,0 +1,212 @@
+# ==============================================================================
+# DIGITALHOUSES BACKBLAZE DASHBOARD
+#
+# Dependencies:
+# - DigitalHouses Backblaze App
+# - dh_app_backblaze_package.yaml
+# - Mushroom cards
+# - mini-graph-card
+# - auto-entities
+#
+# Recorder history for the daily chart:
+# - sensor.dh_backblaze_storage_used
+# ==============================================================================
+
+title: Backblaze
+path: backblaze
+icon: mdi:cloud
+type: sections
+max_columns: 4
+
+sections:
+  - type: grid
+    cards:
+      - type: heading
+        heading: Backblaze B2
+        heading_style: title
+        icon: mdi:cloud
+
+      - type: custom:mushroom-entity-card
+        entity: sensor.dh_backblaze_storage_used
+        name: Total used
+        icon: mdi:cloud-outline
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: 6
+
+      - type: custom:mushroom-entity-card
+        entity: sensor.dh_backblaze_files
+        name: Total files
+        icon: mdi:file-multiple-outline
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: 6
+
+      - type: custom:mushroom-entity-card
+        entity: sensor.dh_backblaze_bucket_count
+        name: Buckets
+        icon: mdi:bucket-outline
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: 6
+
+      - type: custom:mushroom-entity-card
+        entity: sensor.dh_backblaze_versions
+        name: Stored versions
+        icon: mdi:file-clock-outline
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: 6
+
+      - type: heading
+        heading: Storage history
+        heading_style: subtitle
+        icon: mdi:chart-bar
+
+      - type: custom:mini-graph-card
+        name: Total used by day
+        icon: mdi:chart-bar
+        entities:
+          - entity: sensor.dh_backblaze_storage_used
+            name: Total used
+        hours_to_show: 720
+        group_by: date
+        aggregate_func: max
+        decimals: 1
+        lower_bound: 0
+        show:
+          name: true
+          icon: true
+          state: true
+          graph: bar
+          labels: true
+          points: false
+          legend: false
+          extrema: false
+        grid_options:
+          columns: 12
+
+      - type: custom:mushroom-template-card
+        entity: button.dh_backblaze_refresh
+        primary: Refresh
+        secondary: >-
+          {% set ts = states('sensor.dh_backblaze_last_update') %}
+          {% if ts not in ['unknown', 'unavailable', 'none', ''] %}
+            Last update:
+            {{ as_timestamp(ts) | timestamp_custom('%d.%m.%Y %H:%M:%S', true) }}
+          {% else %}
+            No update data
+          {% endif %}
+        icon: mdi:refresh
+        icon_color: blue
+        tap_action:
+          action: perform-action
+          perform_action: button.press
+          target:
+            entity_id: button.dh_backblaze_refresh
+        grid_options:
+          columns: 12
+
+  - type: grid
+    cards:
+      - type: heading
+        heading: Buckets
+        heading_style: title
+        icon: mdi:bucket-multiple-outline
+
+      - type: custom:auto-entities
+        show_empty: true
+        card:
+          type: entities
+          title: Storage used
+          show_header_toggle: false
+        filter:
+          include:
+            - entity_id: sensor.dh_backblaze_*_used
+          exclude:
+            - entity_id: sensor.dh_backblaze_storage_used
+        sort:
+          method: name
+
+      - type: custom:auto-entities
+        show_empty: true
+        card:
+          type: entities
+          title: Files
+          show_header_toggle: false
+        filter:
+          include:
+            - entity_id: sensor.dh_backblaze_*_files
+        sort:
+          method: name
+
+      - type: custom:auto-entities
+        show_empty: true
+        card:
+          type: entities
+          title: Stored versions
+          show_header_toggle: false
+        filter:
+          include:
+            - entity_id: sensor.dh_backblaze_*_versions
+        sort:
+          method: name
+
+  - type: grid
+    cards:
+      - type: heading
+        heading: Diagnostics
+        heading_style: title
+        icon: mdi:stethoscope
+
+      - type: custom:mushroom-template-card
+        entity: binary_sensor.dh_backblaze_api
+        primary: Backblaze API
+        secondary: >-
+          {% if is_state(entity, 'on') %}
+            Connected
+          {% elif is_state(entity, 'off') %}
+            Unavailable
+          {% else %}
+            Unknown
+          {% endif %}
+        icon: mdi:cloud-check-outline
+        icon_color: >-
+          {% if is_state(entity, 'on') %}
+            green
+          {% elif is_state(entity, 'off') %}
+            red
+          {% else %}
+            grey
+          {% endif %}
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: 12
+
+      - type: entities
+        show_header_toggle: false
+        entities:
+          - entity: sensor.dh_backblaze_last_update
+            name: Last update
+          - entity: sensor.dh_backblaze_app_version
+            name: App version
+          - entity: sensor.dh_backblaze_app_started_at
+            name: Started at
+
+      - type: button
+        entity: button.dh_backblaze_delete_telemetry
+        name: Delete telemetry data
+        icon: mdi:database-remove-outline
+        show_state: false
+        tap_action:
+          action: perform-action
+          perform_action: button.press
+          target:
+            entity_id: button.dh_backblaze_delete_telemetry
+          confirmation:
+            text: Delete retained DigitalHouses telemetry data for this installation?
