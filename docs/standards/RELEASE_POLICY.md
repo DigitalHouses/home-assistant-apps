@@ -18,6 +18,7 @@ Public release identifiers use the public product name, not an internal runtime 
 | DigitalHouses Plex Agent | `digitalhouses_plex_agent` |
 | DigitalHouses Recorder App | `digitalhouses_recorder_app` |
 | DigitalHouses Speedtest App | `digitalhouses_speedtest_app` |
+| DigitalHouses Backblaze App | `digitalhouses_backblaze_app` |
 
 Release identifiers describe GitHub release provenance only.
 
