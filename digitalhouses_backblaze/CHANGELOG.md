@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.3
+
+- Rename the account aggregate storage sensor to Total used.
+- Keep Total used in the normal Sensors group.
+- Explicitly consume the pre-aggregated account storage total so dashboards never need to sum bucket sensors.
+
 ## 0.1.2
 
 - Display account and per-bucket storage in GiB with one decimal place.
