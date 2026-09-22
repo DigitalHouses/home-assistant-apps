@@ -273,7 +273,7 @@ def build_full_discovery_payload(
             entity_id=f"binary_sensor.dh_pve_{subsystem}_collector",
             expression="'ON' if value_json.subsystems." + subsystem + ".available | default(false) else 'OFF'",
             subsystem=None, section="diagnostic", subject="collector", metric="availability",
-            object_id=subsystem, display_name=f"{fan_name} RPM", sort_key=f"900_{subsystem}",
+            object_id=subsystem, display_name=display, sort_key=f"900_{subsystem}",
             device_class="connectivity", entity_category="diagnostic",
         )
         components[key] = item
@@ -492,7 +492,7 @@ def build_full_discovery_payload(
 
             key, item = _sensor(
                 uid=uid, state_topic=topics.state, app_topic=topics.availability,
-                key=f"fan_{slug}_rpm", name=display,
+                key=f"fan_{slug}_rpm", name=f"{fan_name} RPM",
                 entity_id=f"sensor.dh_pve_fan_{slug}_rpm",
                 expression=obj + ".rpm | default(none)",
                 subsystem="fans", section="cooling", subject="fan", metric="rpm",
