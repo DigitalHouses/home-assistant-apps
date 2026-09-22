@@ -62,6 +62,35 @@ class ReleaseContractTests(unittest.TestCase):
             self.assertEqual(metadata.tag, "digitalhouses_recorder_app-v0.2.0")
             self.assertEqual(metadata.notes, "- Recorder release.")
 
+    def test_backblaze_release_metadata(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            self._write(
+                root,
+                "digitalhouses_backblaze/config.yaml",
+                "name: DigitalHouses Backblaze\nversion: 0.1.0\n",
+            )
+            self._write(
+                root,
+                "digitalhouses_backblaze/CHANGELOG.md",
+                "# Changelog\n\n## 0.1.0\n\n- Initial release.\n",
+            )
+
+            metadata = release_metadata(
+                root,
+                product="digitalhouses_backblaze_app",
+                version="0.1.0",
+            )
+
+            self.assertEqual(
+                metadata.tag,
+                "digitalhouses_backblaze_app-v0.1.0",
+            )
+            self.assertEqual(
+                metadata.title,
+                "DigitalHouses Backblaze App v0.1.0",
+            )
+
     def test_rejects_version_at_or_before_policy_baseline(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
