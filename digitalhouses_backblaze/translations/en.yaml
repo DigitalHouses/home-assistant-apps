@@ -1,0 +1,16 @@
+configuration:
+  application_key_id:
+    name: Application key ID
+    description: Backblaze B2 application key ID. Use a dedicated read-only key with listBuckets and listFiles.
+  application_key:
+    name: Application key
+    description: Secret for the Backblaze B2 application key.
+  refresh_interval_hours:
+    name: Refresh interval
+    description: Hours between automatic full storage scans. Manual refresh is also available in Home Assistant.
+  telemetry_enabled:
+    name: Usage telemetry
+    description: Send optional minimal pseudonymous DigitalHouses product telemetry. Disabled by default.
+  log_level:
+    name: Log level
+    description: Application logging verbosity.
