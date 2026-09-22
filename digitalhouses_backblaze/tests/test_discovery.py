@@ -37,6 +37,10 @@ class DiscoveryTests(unittest.TestCase):
         self.assertNotIn("entity_category", components["bucket_count"])
         self.assertNotIn("entity_category", components["total_files"])
         self.assertEqual(components["total_files"]["name"], "Total files")
+        self.assertEqual(
+            components["total_files"]["value_template"],
+            "{{ value_json.current_files }}",
+        )
         self.assertNotIn("entity_category", components["total_versions"])
         self.assertEqual(
             components["total_used"]["unit_of_measurement"],
