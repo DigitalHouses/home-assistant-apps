@@ -52,7 +52,7 @@ def validate_backblaze(
     dashboard_text = required_examples[1].read_text(encoding="utf-8")
     for expected in (
         "sensor.dh_backblaze_storage_used",
-        "name: Total used by day",
+        "title: Total used by day",
         "type: statistics-graph",
         "chart_type: bar",
         "period: day",
