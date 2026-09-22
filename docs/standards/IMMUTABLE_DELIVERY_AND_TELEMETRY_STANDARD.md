@@ -17,6 +17,7 @@ digitalhouses_pve_agent
 digitalhouses_plex_agent
 digitalhouses_recorder_app
 digitalhouses_speedtest_app
+digitalhouses_backblaze_app
 ```
 
 The Home Assistant image/backup requirements apply only to Home Assistant Apps. The release identity and telemetry requirements apply to all four products.
@@ -605,7 +606,7 @@ Home Assistant Apps:
 - no longer duplicate locally built application images into normal backups
 - historical released images remain recoverable
 
-All four products:
+All participating products:
 - implement opt-in telemetry with default OFF
 - use the same protocol and semantics
 - preserve installation identity correctly
