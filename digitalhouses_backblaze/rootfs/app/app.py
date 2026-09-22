@@ -16,6 +16,7 @@ from backblaze import BackblazeClient
 from config import AppConfig, load_config
 from discovery import (
     APP_AVAILABILITY_TOPIC,
+    DISCOVERY_SCHEMA_VERSION,
     DISCOVERY_TOPIC,
     HA_STATUS_TOPIC,
     REFRESH_COMMAND_TOPIC,
@@ -142,7 +143,7 @@ class BackblazeMonitorApp:
                 else:
                     self.log.info(
                         "MQTT discovery migration complete: schema=%s",
-                        2,
+                        DISCOVERY_SCHEMA_VERSION,
                     )
 
             self.log.info("MQTT connected; discovery published")
