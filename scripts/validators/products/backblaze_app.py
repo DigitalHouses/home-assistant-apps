@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -20,7 +21,12 @@ def _import_module(app: Path, name: str):
     if spec is None or spec.loader is None:
         fail(f"Unable to import Backblaze {name}.py")
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    app_path = str(path.parent)
+    sys.path.insert(0, app_path)
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        sys.path.remove(app_path)
     return module
 
 
