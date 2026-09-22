@@ -30,7 +30,7 @@ def validate_backblaze(
     app: Path,
     context: dict[str, Any],
 ) -> None:
-    del root, context
+    del root
     discovery = _import_discovery(app)
 
     if discovery.BASE_TOPIC != EXPECTED_BASE_TOPIC:
