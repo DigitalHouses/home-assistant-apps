@@ -1,5 +1,5 @@
 name: DigitalHouses Backblaze
-version: 0.1.0
+version: 0.1.1
 slug: digitalhouses_backblaze
 description: Monitor Backblaze B2 bucket storage usage through MQTT Discovery.
 url: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_backblaze
