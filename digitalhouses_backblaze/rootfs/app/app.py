@@ -19,11 +19,13 @@ from discovery import (
     DISCOVERY_TOPIC,
     HA_STATUS_TOPIC,
     REFRESH_COMMAND_TOPIC,
+    TELEMETRY_DELETE_COMMAND_TOPIC,
     STATE_RETAIN,
     STATE_TOPIC,
     bucket_state_topic,
     build_discovery_payload,
 )
+from telemetry import TelemetryClient, TelemetryRunner
 
 APP_VERSION = os.getenv("APP_VERSION", "0.1.0-local")
 
@@ -59,6 +61,11 @@ class BackblazeMonitorApp:
             "app_version": APP_VERSION,
             "app_started_at": self.started_at,
         }
+        self.telemetry = TelemetryClient(
+            enabled=self.config.telemetry_enabled,
+            version=APP_VERSION,
+        )
+        self.telemetry_runner = TelemetryRunner(self.telemetry)
         self.client = self._build_mqtt_client()
 
     def _build_mqtt_client(self) -> mqtt.Client:
@@ -81,6 +88,7 @@ class BackblazeMonitorApp:
         self.mqtt_connected.set()
         client.subscribe(HA_STATUS_TOPIC, qos=1)
         client.subscribe(REFRESH_COMMAND_TOPIC, qos=1)
+        client.subscribe(TELEMETRY_DELETE_COMMAND_TOPIC, qos=1)
         self.publish_text(APP_AVAILABILITY_TOPIC, "online", retain=True)
         self.publish_discovery()
         self.publish_state()
@@ -100,12 +108,25 @@ class BackblazeMonitorApp:
                 self.refresh_requested.set()
                 self.log.info("Manual refresh requested")
             return
+        if message.topic == TELEMETRY_DELETE_COMMAND_TOPIC:
+            threading.Thread(
+                target=self._delete_telemetry,
+                name="dh-backblaze-telemetry-delete",
+                daemon=True,
+            ).start()
+            return
         if message.topic == HA_STATUS_TOPIC:
             payload = message.payload.decode("utf-8", errors="replace").strip().lower()
             if payload == "online":
                 self.publish_discovery()
                 self.publish_state()
                 self.publish_buckets()
+
+    def _delete_telemetry(self) -> None:
+        if self.telemetry.delete():
+            self.log.info("Retained DigitalHouses telemetry record deleted")
+        else:
+            self.log.warning("Unable to delete retained DigitalHouses telemetry record")
 
     def publish_text(self, topic: str, payload: str, *, retain: bool) -> None:
         if not self.mqtt_connected.is_set():
@@ -207,6 +228,7 @@ class BackblazeMonitorApp:
         port = int(os.getenv("MQTT_PORT", "1883"))
         self.client.connect_async(host, port, keepalive=60)
         self.client.loop_start()
+        self.telemetry_runner.start()
         next_refresh = 0.0
         try:
             while not self.stop_event.is_set():
@@ -216,6 +238,7 @@ class BackblazeMonitorApp:
                     next_refresh = time.monotonic() + interval_seconds
                 self.stop_event.wait(1.0)
         finally:
+            self.telemetry_runner.stop()
             self.publish_text(APP_AVAILABILITY_TOPIC, "offline", retain=True)
             self.client.disconnect()
             self.client.loop_stop()
