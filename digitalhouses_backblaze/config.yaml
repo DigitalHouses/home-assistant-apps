@@ -1,0 +1,25 @@
+name: DigitalHouses Backblaze
+version: 0.1.0
+slug: digitalhouses_backblaze
+description: Monitor Backblaze B2 bucket storage usage through MQTT Discovery.
+url: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_backblaze
+arch:
+  - amd64
+  - aarch64
+startup: application
+boot: auto
+init: false
+stage: experimental
+backup: hot
+services:
+  - mqtt:need
+options:
+  application_key_id: ""
+  application_key: ""
+  refresh_interval_hours: 6
+  log_level: info
+schema:
+  application_key_id: str
+  application_key: password
+  refresh_interval_hours: int(1,168)
+  log_level: list(debug|info|warning|error)

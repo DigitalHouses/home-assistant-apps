@@ -1,0 +1,1 @@
+type = haos_addon

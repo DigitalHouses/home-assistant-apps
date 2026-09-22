@@ -1,0 +1,13 @@
+configuration:
+  application_key_id:
+    name: Application key ID
+    description: Backblaze B2 application key ID with listBuckets and listFiles capabilities.
+  application_key:
+    name: Application key
+    description: Backblaze B2 application key secret. Use a dedicated read-only key.
+  refresh_interval_hours:
+    name: Refresh interval, hours
+    description: Interval between full scans of all visible Backblaze buckets.
+  log_level:
+    name: Log level
+    description: Application logging verbosity.

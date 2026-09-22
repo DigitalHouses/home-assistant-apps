@@ -81,6 +81,31 @@ jobs:
       - name: Check shell syntax
         run: bash -n digitalhouses_db_monitoring/rootfs/run.sh
 
+  backblaze-app:
+    name: Backblaze App
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Compile Python
+        run: |
+          python -m compileall -q \
+            digitalhouses_backblaze/rootfs/app \
+            digitalhouses_backblaze/tests
+
+      - name: Run unit tests
+        run: python -m unittest discover -s digitalhouses_backblaze/tests -v
+
+      - name: Check shell syntax
+        run: bash -n digitalhouses_backblaze/rootfs/run.sh
+
   plex-agent:
     name: Plex Agent
     runs-on: ubuntu-latest
