@@ -12,6 +12,7 @@ Open-source applications and Linux agents by **DigitalHouses**, built to extend 
 | [DigitalHouses PVE Agent](dh_pve_app/README.md) | Linux agent | Proxmox VE monitoring, hardware diagnostics, VM/LXC state, SMART, fan RPM, and optional NUT/UPS monitoring |
 | [DigitalHouses Plex Agent](digitalhouses_plex_monitoring/README.md) | Linux agent | Plex workload, playback, transcoding, and library monitoring |
 | [DigitalHouses Recorder App](digitalhouses_db_monitoring/README.md) | Home Assistant App | Home Assistant Recorder database size, depth, write activity, and database diagnostics |
+| [DigitalHouses Backblaze](digitalhouses_backblaze/README.md) | Home Assistant App | Backblaze B2 account totals and per-bucket storage usage through MQTT Discovery |
 | [DigitalHouses Speedtest App](digitalhouses_speedtest/README.md) | Home Assistant App | Internet availability, Ookla speed tests, and connection-quality monitoring |
 
 DigitalHouses uses two delivery models:
