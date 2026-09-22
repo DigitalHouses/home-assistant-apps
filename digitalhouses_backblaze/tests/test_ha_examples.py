@@ -28,7 +28,7 @@ class HomeAssistantExamplesTests(unittest.TestCase):
 
         self.assertIn("entity: sensor.dh_backblaze_storage_used", text)
         self.assertIn("name: Total used by day", text)
-        self.assertIn("hours_to_show: 720", text)
+        self.assertIn("hours_to_show: 240", text)
         self.assertIn("group_by: date", text)
         self.assertIn("aggregate_func: max", text)
         self.assertIn("graph: bar", text)

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.6
+
+- Reduce the daily Total used chart history window from 30 days to the proven 10-day DB Monitoring pattern.
+- Keep daily grouping, max aggregation, and bar rendering unchanged to avoid long mini-graph-card history loads.
+
 ## 0.1.5
 
 - Add a reusable Home Assistant Backblaze dashboard example.

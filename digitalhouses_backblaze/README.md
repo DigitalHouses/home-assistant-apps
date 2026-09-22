@@ -6,7 +6,7 @@ The App authorizes against the Backblaze B2 Native API v4, discovers all buckets
 
 ## Status
 
-Version 0.1.5 is the current experimental implementation.
+Version 0.1.6 is the current experimental implementation.
 
 ## Backblaze key
 
@@ -62,12 +62,12 @@ Reusable Sections dashboard:
 examples/lovelace/dh_app_backblaze_dashboard.yaml
 ```
 
-The dashboard contains account totals, dynamic bucket cards, diagnostics, manual refresh, and a 30-day daily bar chart for Total used.
+The dashboard contains account totals, dynamic bucket cards, diagnostics, manual refresh, and a 10-day daily bar chart for Total used.
 
 The daily chart uses the same aggregation pattern as the DigitalHouses Recorder UI:
 
 ```yaml
-hours_to_show: 720
+hours_to_show: 240
 group_by: date
 aggregate_func: max
 show:
