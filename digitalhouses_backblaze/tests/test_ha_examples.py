@@ -28,10 +28,11 @@ class HomeAssistantExamplesTests(unittest.TestCase):
 
         self.assertIn("entity: sensor.dh_backblaze_storage_used", text)
         self.assertIn("name: Total used by day", text)
-        self.assertIn("hours_to_show: 240", text)
-        self.assertIn("group_by: date", text)
-        self.assertIn("aggregate_func: max", text)
-        self.assertIn("graph: bar", text)
+        self.assertIn("type: statistics-graph", text)
+        self.assertIn("chart_type: bar", text)
+        self.assertIn("period: day", text)
+        self.assertIn("days_to_show: 10", text)
+        self.assertIn("- max", text)
 
     def test_dashboard_uses_account_totals_and_dynamic_buckets(self):
         text = DASHBOARD.read_text(encoding="utf-8")
