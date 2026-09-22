@@ -27,7 +27,7 @@ class HomeAssistantExamplesTests(unittest.TestCase):
         text = DASHBOARD.read_text(encoding="utf-8")
 
         self.assertIn("entity: sensor.dh_backblaze_storage_used", text)
-        self.assertIn("name: Total used by day", text)
+        self.assertIn("title: Total used by day", text)
         self.assertIn("type: statistics-graph", text)
         self.assertIn("chart_type: bar", text)
         self.assertIn("period: day", text)
