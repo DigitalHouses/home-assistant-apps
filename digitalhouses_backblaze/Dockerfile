@@ -23,6 +23,7 @@ RUN chmod a+x /run.sh \
         /app/app.py \
         /app/backblaze.py \
         /app/config.py \
-        /app/discovery.py
+        /app/discovery.py \
+        /app/telemetry.py
 
 CMD ["/run.sh"]
