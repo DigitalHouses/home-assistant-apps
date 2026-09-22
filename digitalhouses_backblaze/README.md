@@ -6,7 +6,7 @@ The App authorizes against the Backblaze B2 Native API v4, discovers all buckets
 
 ## Status
 
-Version 0.1.6 is the current experimental implementation.
+Version 0.1.7 is the current experimental implementation.
 
 ## Backblaze key
 
@@ -64,17 +64,18 @@ examples/lovelace/dh_app_backblaze_dashboard.yaml
 
 The dashboard contains account totals, dynamic bucket cards, diagnostics, manual refresh, and a 10-day daily bar chart for Total used.
 
-The daily chart uses the same aggregation pattern as the DigitalHouses Recorder UI:
+The daily chart uses Home Assistant's native statistics graph:
 
 ```yaml
-hours_to_show: 240
-group_by: date
-aggregate_func: max
-show:
-  graph: bar
+type: statistics-graph
+chart_type: bar
+period: day
+days_to_show: 10
+stat_types:
+  - max
 ```
 
-Recorder history from `dh_app_backblaze_package.yaml` is required for the chart.
+Recorder history from `dh_app_backblaze_package.yaml` is required for the chart. On a new installation the chart fills naturally as statistics accumulate.
 
 ## Refresh model
 
