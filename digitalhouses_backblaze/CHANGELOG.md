@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.7
+
+- Replace the custom mini-graph-card daily storage chart with Home Assistant's native statistics-graph.
+- Render Total used as daily max bars for the last 10 days.
+- Allow the chart to render naturally while history is still sparse on a new installation.
+
 ## 0.1.6
 
 - Reduce the daily Total used chart history window from 30 days to the proven 10-day DB Monitoring pattern.
