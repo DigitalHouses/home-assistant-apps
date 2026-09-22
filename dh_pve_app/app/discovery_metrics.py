@@ -454,8 +454,8 @@ def build_full_discovery_payload(
             fan_id = str(fan_id)
             slug = _slug(fan_id)
             obj = _path("fans", fan_id)
-            display = str(raw.get("display_name") or raw.get("label") or fan_id)
             user_display = str(raw.get("label") or fan_id)
+            fan_name = f"Fan {index}"
             calibratable = calibratable or raw.get("calibration_supported") is True
             common_attrs = {
                 "chip": obj + ".chip | default(none)",
@@ -468,7 +468,7 @@ def build_full_discovery_payload(
 
             key, item = _sensor(
                 uid=uid, state_topic=topics.state, app_topic=topics.availability,
-                key=f"fan_{slug}_speed", name=f"Fan speed - {user_display}",
+                key=f"fan_{slug}_speed", name=fan_name,
                 entity_id=f"sensor.dh_pve_fan_{slug}_speed",
                 expression=obj + ".speed_percent | default(none)",
                 subsystem="fans", section="cooling", subject="fan", metric="speed_percent",
@@ -492,7 +492,7 @@ def build_full_discovery_payload(
 
             key, item = _sensor(
                 uid=uid, state_topic=topics.state, app_topic=topics.availability,
-                key=f"fan_{slug}_rpm", name=display,
+                key=f"fan_{slug}_rpm", name=f"{fan_name} RPM",
                 entity_id=f"sensor.dh_pve_fan_{slug}_rpm",
                 expression=obj + ".rpm | default(none)",
                 subsystem="fans", section="cooling", subject="fan", metric="rpm",
@@ -504,7 +504,7 @@ def build_full_discovery_payload(
 
             key, item = _sensor(
                 uid=uid, state_topic=topics.state, app_topic=topics.availability,
-                key=f"fan_{slug}_max_rpm", name=f"Fan max RPM - {user_display}",
+                key=f"fan_{slug}_max_rpm", name=f"{fan_name} Max RPM",
                 entity_id=f"sensor.dh_pve_fan_{slug}_max_rpm",
                 expression=obj + ".max_rpm | default(none)",
                 subsystem="fans", section="cooling", subject="fan", metric="max_rpm",
@@ -517,7 +517,7 @@ def build_full_discovery_payload(
             key, item = _sensor(
                 uid=uid, state_topic=topics.state, app_topic=topics.availability,
                 key=f"fan_{slug}_calibration_status",
-                name=f"Fan calibration status - {user_display}",
+                name=f"{fan_name} Calibration status",
                 entity_id=f"sensor.dh_pve_fan_{slug}_calibration_status",
                 expression=obj + ".calibration_status | default('unsupported')",
                 subsystem="fans", section="cooling", subject="fan",
@@ -534,7 +534,7 @@ def build_full_discovery_payload(
             key, item = _sensor(
                 uid=uid, state_topic=topics.state, app_topic=topics.availability,
                 key=f"fan_{slug}_calibrated_at",
-                name=f"Fan calibrated at - {user_display}",
+                name=f"{fan_name} Calibrated at",
                 entity_id=f"sensor.dh_pve_fan_{slug}_calibrated_at",
                 expression=obj + ".calibrated_at | default(none)",
                 subsystem="fans", section="cooling", subject="fan",
