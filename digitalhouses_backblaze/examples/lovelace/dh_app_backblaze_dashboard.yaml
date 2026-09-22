@@ -73,7 +73,7 @@ sections:
         entities:
           - entity: sensor.dh_backblaze_storage_used
             name: Total used
-        hours_to_show: 720
+        hours_to_show: 240
         group_by: date
         aggregate_func: max
         decimals: 1
