@@ -195,3 +195,54 @@ def test_problem_aggregate_and_native_mqtt_event_are_canonical():
     assert event["qos"] == 1
     assert event["entity_category"] == "diagnostic"
     assert "json_attributes_topic" not in event
+
+
+def test_fan_discovery_uses_short_sequential_friendly_names():
+    inventory = _inventory()
+    inventory["fans"] = {
+        "it8613_it87_2608_fan2": {
+            "display_name": "it8613 fan2",
+            "label": "fan2",
+            "chip": "it8613",
+            "rpm": 4200,
+            "speed_percent": 77.0,
+            "max_rpm": 5450,
+            "calibration_status": "calibrated",
+            "calibrated_at": "2026-09-23T00:00:00+00:00",
+        },
+        "it8613_it87_2608_fan3": {
+            "display_name": "it8613 fan3",
+            "label": "fan3",
+            "chip": "it8613",
+            "rpm": 3200,
+            "speed_percent": 59.0,
+            "max_rpm": 5400,
+            "calibration_status": "calibrated",
+            "calibrated_at": "2026-09-23T00:00:00+00:00",
+        },
+    }
+    components = build_shutdown_aware_pve_discovery_payload(
+        _config(), _identity(), version="0.5.8", inventory=inventory
+    )["components"]
+
+    assert components["fan_it8613_it87_2608_fan2_speed"]["name"] == "Fan 1"
+    assert components["fan_it8613_it87_2608_fan2_rpm"]["name"] == "Fan 1 RPM"
+    assert components["fan_it8613_it87_2608_fan2_max_rpm"]["name"] == "Fan 1 Max RPM"
+    assert (
+        components["fan_it8613_it87_2608_fan2_calibration_status"]["name"]
+        == "Fan 1 Calibration status"
+    )
+    assert (
+        components["fan_it8613_it87_2608_fan2_calibrated_at"]["name"]
+        == "Fan 1 Calibrated at"
+    )
+
+    assert components["fan_it8613_it87_2608_fan3_speed"]["name"] == "Fan 2"
+    assert components["fan_it8613_it87_2608_fan3_rpm"]["name"] == "Fan 2 RPM"
+
+    assert components["fan_it8613_it87_2608_fan2_speed"]["default_entity_id"] == (
+        "sensor.dh_app_pve_fan_it8613_it87_2608_fan2_speed"
+    )
+    assert components["fan_it8613_it87_2608_fan3_speed"]["default_entity_id"] == (
+        "sensor.dh_app_pve_fan_it8613_it87_2608_fan3_speed"
+    )
