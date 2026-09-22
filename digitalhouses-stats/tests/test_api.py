@@ -133,3 +133,14 @@ def test_token_cannot_take_over_existing_installation() -> None:
         count = connection.execute(text("SELECT count(*) FROM heartbeats")).scalar_one()
 
     assert count == 1
+
+def test_oversized_telemetry_body_is_rejected() -> None:
+    response = client.post(
+        "/v1/heartbeat",
+        content=b"x" * 2049,
+        headers={
+            "Authorization": f"Bearer {'aa' * 32}",
+            "Content-Type": "application/json",
+        },
+    )
+    assert response.status_code == 413
