@@ -275,7 +275,8 @@ Tests should cover, where applicable:
 - installation/update behavior;
 - adapters;
 - failure handling;
-- compatibility contracts.
+- compatibility contracts;
+- common runtime diagnostics, including canonical version and process started-at timestamp.
 
 ---
 
@@ -353,6 +354,120 @@ Manual production-only edits must either:
 
 - be intentionally local configuration; or
 - be returned to GitHub before they are treated as part of the product.
+
+### Common runtime diagnostics contract
+
+Every DigitalHouses application that publishes a Home Assistant device must expose two common diagnostic facts for its own running process:
+
+1. the application or agent release version;
+2. the timestamp when the current application or agent process started.
+
+The purpose is to give every DigitalHouses device the same operator-visible answer to:
+
+```text
+Which version is running?
+When did this App/Agent process start?
+```
+
+The common semantic contract is:
+
+```text
+Version
+Started at
+```
+
+These are application-runtime facts. They are not host boot time, installation time, container creation time, database start time, or Home Assistant start time.
+
+#### Version diagnostic
+
+The version diagnostic must:
+
+- be a Home Assistant `sensor`;
+- use `entity_category: diagnostic`;
+- expose the canonical product release version;
+- use the same resolved release value as the product's MQTT Discovery `device.sw_version` and, where present, `origin.sw_version`;
+- remain static for the lifetime of that running release;
+- come from the product's authoritative version source defined by its type contract, not from an independent hard-coded value.
+
+For a Home Assistant App, this is the App version.
+
+For a Linux Agent, this is the Agent version.
+
+The exact Home Assistant entity ID may remain product-specific where a stable released ID already exists. Existing entity IDs must not be renamed merely to make strings look uniform.
+
+#### Started-at diagnostic
+
+The runtime start diagnostic must:
+
+- be a Home Assistant `sensor`;
+- use `entity_category: diagnostic`;
+- use `device_class: timestamp`;
+- expose the start time of the current App/Agent process;
+- be generated once for the current process lifetime;
+- remain unchanged during normal polling/publication;
+- change only when the App/Agent process starts again;
+- publish an ISO 8601 timestamp with timezone information.
+
+Example:
+
+```text
+2026-09-22T05:47:13+00:00
+```
+
+Home Assistant should derive and present the human-readable age from this timestamp, for example:
+
+```text
+10 minutes ago
+2 hours ago
+the day before yesterday
+```
+
+Do not publish a continuously changing uptime-duration sensor solely to obtain this presentation.
+
+If a duration-style uptime entity already exists as a released compatibility interface, it may remain for backward compatibility or low-level diagnostics, but dashboards and new integrations should prefer the started-at timestamp.
+
+#### MQTT and device placement
+
+Where MQTT Discovery is used:
+
+- both diagnostics belong to the primary Home Assistant device representing the App/Agent;
+- they must not be attached to a subordinate hardware or optional subsystem device;
+- the version and started-at values should be available through retained state or another mechanism that restores them promptly after Home Assistant restart;
+- their publication must not create a continuously changing Recorder workload.
+
+The version and started-at diagnostics are runtime metadata. They should normally be excluded from Recorder history unless a product has an explicit reason to retain that history.
+
+#### Compatibility and naming
+
+The common contract standardizes semantics, not necessarily legacy entity-ID spelling.
+
+Examples of valid existing product-specific identities include:
+
+```text
+sensor.dh_app_pve_app_version
+sensor.dh_app_pve_agent_started
+
+sensor.dh_plex_agent_version
+sensor.dh_plex_agent_started_at
+```
+
+New products should use a clear pair of product-scoped diagnostic IDs for version and started-at time.
+
+Released products that do not yet expose both diagnostics must add them without renaming unrelated stable MQTT, device, service, slug, or entity identities.
+
+#### Validation
+
+Product tests and repository validation must protect this contract as implementation proceeds.
+
+At minimum, product regression tests should verify:
+
+- the version diagnostic exists;
+- the version value comes from the canonical product version;
+- the started-at diagnostic exists;
+- the started-at diagnostic has `device_class: timestamp`;
+- both diagnostics are categorized as diagnostic entities;
+- process start time does not change during ordinary publication cycles;
+- existing stable entity IDs are preserved.
 
 ---
 
@@ -1288,7 +1403,8 @@ A release is ready only when:
 - application-specific regression checks pass;
 - release documentation is current;
 - changelog is current;
-- no private site dependencies are embedded in reusable public code.
+- no private site dependencies are embedded in reusable public code;
+- the product exposes the common runtime Version and Started-at diagnostics required by this standard.
 
 ---
 
