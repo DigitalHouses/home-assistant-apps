@@ -10,7 +10,7 @@ DigitalHouses/home-assistant-apps
 
 This standard defines the target production architecture for release artifacts, Home Assistant App backups, and product telemetry.
 
-It is mandatory for the initial product set:
+It is mandatory for the participating product set:
 
 ```text
 digitalhouses_pve_agent
@@ -76,6 +76,8 @@ Required outcome:
 - application code is delivered through versioned GHCR images;
 - local-image backup duplication is removed;
 - old released images remain recoverable.
+
+DigitalHouses Backblaze App was introduced after this rollout sequence was written. It must satisfy the same immutable Home Assistant App delivery contract before its first production release; its experimental source-only implementation is not a completed production release.
 
 ### Stage B — shared telemetry service and protocol
 
