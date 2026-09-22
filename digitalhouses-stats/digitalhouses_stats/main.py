@@ -24,6 +24,28 @@ app = FastAPI(
     redoc_url=None,
 )
 
+MAX_TELEMETRY_BODY_BYTES = 2048
+
+
+@app.middleware("http")
+async def enforce_telemetry_body_limit(request: Request, call_next):
+    if request.url.path in {"/v1/heartbeat", "/v1/installation"}:
+        content_length = request.headers.get("content-length")
+        if content_length is None:
+            return Response(status_code=status.HTTP_411_LENGTH_REQUIRED)
+        try:
+            length = int(content_length)
+        except ValueError:
+            return Response(status_code=status.HTTP_400_BAD_REQUEST)
+        if length < 0 or length > MAX_TELEMETRY_BODY_BYTES:
+            return Response(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE)
+
+        body = await request.body()
+        if len(body) > MAX_TELEMETRY_BODY_BYTES:
+            return Response(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE)
+
+    return await call_next(request)
+
 
 def require_json(content_type: str | None = Header(default=None)) -> None:
     media_type = (content_type or "").split(";", 1)[0].strip().lower()
