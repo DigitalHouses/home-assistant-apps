@@ -1,10 +1,16 @@
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "rootfs" / "app"))
 
-from discovery import BASE_TOPIC, build_discovery_payload
+from discovery import (
+    BASE_TOPIC,
+    build_discovery_payload,
+    mark_discovery_schema,
+    needs_discovery_reset,
+)
 
 
 class DiscoveryTests(unittest.TestCase):
@@ -30,6 +36,7 @@ class DiscoveryTests(unittest.TestCase):
         self.assertNotIn("entity_category", components["total_used"])
         self.assertNotIn("entity_category", components["bucket_count"])
         self.assertNotIn("entity_category", components["total_files"])
+        self.assertEqual(components["total_files"]["name"], "Total files")
         self.assertNotIn("entity_category", components["total_versions"])
         self.assertEqual(
             components["total_used"]["unit_of_measurement"],
@@ -84,6 +91,13 @@ class DiscoveryTests(unittest.TestCase):
             components["bucket_bucket-id_files"]["default_entity_id"],
             "sensor.dh_backblaze_ha_backups_files",
         )
+
+    def test_discovery_schema_reset_is_one_time(self):
+        with tempfile.TemporaryDirectory() as temp:
+            marker = Path(temp) / "discovery_schema_version"
+            self.assertTrue(needs_discovery_reset(marker))
+            mark_discovery_schema(marker)
+            self.assertFalse(needs_discovery_reset(marker))
 
 
 if __name__ == "__main__":
