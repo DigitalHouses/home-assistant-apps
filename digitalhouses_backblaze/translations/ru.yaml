@@ -1,0 +1,13 @@
+configuration:
+  application_key_id:
+    name: ID ключа приложения
+    description: ID ключа Backblaze B2 с правами listBuckets и listFiles.
+  application_key:
+    name: Ключ приложения
+    description: Секретный ключ Backblaze B2. Используйте отдельный ключ только для чтения.
+  refresh_interval_hours:
+    name: Интервал обновления, ч
+    description: Интервал между полными сканированиями всех доступных bucket.
+  log_level:
+    name: Уровень логирования
+    description: Детальность журнала приложения.
