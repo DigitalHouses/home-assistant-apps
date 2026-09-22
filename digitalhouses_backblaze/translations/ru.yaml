@@ -1,0 +1,16 @@
+configuration:
+  application_key_id:
+    name: ID ключа приложения
+    description: ID ключа Backblaze B2. Используйте отдельный ключ только для чтения с правами listBuckets и listFiles.
+  application_key:
+    name: Ключ приложения
+    description: Секрет ключа приложения Backblaze B2.
+  refresh_interval_hours:
+    name: Интервал обновления
+    description: Интервал в часах между полными пересчётами объёма. Ручное обновление доступно из Home Assistant.
+  telemetry_enabled:
+    name: Телеметрия использования
+    description: Отправлять минимальную псевдонимную телеметрию DigitalHouses. По умолчанию выключено.
+  log_level:
+    name: Уровень логирования
+    description: Подробность журналирования приложения.
