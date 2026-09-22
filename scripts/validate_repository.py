@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from validators.products.backblaze_app import validate_backblaze
 from validators.products.recorder_app import validate_db_monitoring
 from validators.products.pve_agent import validate_dh_pve_app
 from validators.products.plex_agent import validate_plex_monitoring
@@ -27,6 +28,7 @@ TYPE_VALIDATORS = {
 }
 
 PRODUCT_VALIDATORS = {
+    "digitalhouses_backblaze": validate_backblaze,
     "digitalhouses_speedtest": validate_speedtest,
     "digitalhouses_db_monitoring": validate_db_monitoring,
     "digitalhouses_plex_monitoring": validate_plex_monitoring,
