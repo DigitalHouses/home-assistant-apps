@@ -89,7 +89,7 @@ def build_discovery_payload(
     components: dict[str, dict[str, Any]] = {
         "total_used": _component(
             "sensor",
-            "Storage used",
+            "Total used",
             "total_used",
             "sensor.dh_backblaze_storage_used",
             "{{ (value_json.stored_bytes / 1073741824) | round(1) }}",
