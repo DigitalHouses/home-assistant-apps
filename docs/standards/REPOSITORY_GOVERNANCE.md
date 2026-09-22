@@ -20,6 +20,7 @@ PVE Agent
 Plex Agent
 Recorder App
 Speedtest App
+Backblaze App
 ```
 
 The checks may evolve as products are added or removed, but the rule remains: the complete repository contract must be green before merge.
