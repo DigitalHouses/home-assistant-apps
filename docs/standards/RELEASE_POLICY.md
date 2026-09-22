@@ -240,6 +240,7 @@ The adoption baselines are:
 | DigitalHouses Plex Agent | `0.2.2` |
 | DigitalHouses Recorder App | `0.1.8` |
 | DigitalHouses Speedtest App | `1.2.1` |
+| DigitalHouses Backblaze App | `0.0.0` |
 
 The first tag under the new convention for each product must be newer than its baseline.
 
