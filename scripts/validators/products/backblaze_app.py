@@ -53,7 +53,7 @@ def validate_backblaze(
     for expected in (
         "sensor.dh_backblaze_storage_used",
         "name: Total used by day",
-        "hours_to_show: 720",
+        "hours_to_show: 240",
         "group_by: date",
         "aggregate_func: max",
         "graph: bar",
