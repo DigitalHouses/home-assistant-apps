@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.2
+
+- Display account and per-bucket storage in GiB with one decimal place.
+- Remove bucket state attributes from storage entities.
+
 ## 0.1.1
 
 - Split Home Assistant entities into primary metrics, configuration controls, and diagnostics.

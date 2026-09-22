@@ -6,7 +6,7 @@ The App authorizes against the Backblaze B2 Native API v4, discovers all buckets
 
 ## Status
 
-Version 0.1.1 is the current experimental implementation.
+Version 0.1.2 is the current experimental implementation.
 
 ## Backblaze key
 

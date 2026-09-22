@@ -24,6 +24,14 @@ class DiscoveryTests(unittest.TestCase):
         self.assertNotIn("entity_category", components["total_files"])
         self.assertNotIn("entity_category", components["total_versions"])
         self.assertEqual(
+            components["total_used"]["unit_of_measurement"],
+            "GiB",
+        )
+        self.assertEqual(
+            components["total_used"]["suggested_display_precision"],
+            1,
+        )
+        self.assertEqual(
             components["app_version"]["default_entity_id"],
             "sensor.dh_backblaze_app_version",
         )
@@ -60,7 +68,9 @@ class DiscoveryTests(unittest.TestCase):
             used["default_entity_id"],
             "sensor.dh_backblaze_ha_backups_used",
         )
-        self.assertEqual(used["unit_of_measurement"], "B")
+        self.assertEqual(used["unit_of_measurement"], "GiB")
+        self.assertEqual(used["suggested_display_precision"], 1)
+        self.assertNotIn("json_attributes_topic", used)
         self.assertNotIn("entity_category", used)
         self.assertEqual(
             components["bucket_bucket-id_files"]["default_entity_id"],
