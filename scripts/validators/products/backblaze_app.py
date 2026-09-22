@@ -31,6 +31,36 @@ def validate_backblaze(
     context: dict[str, Any],
 ) -> None:
     del root
+    required_examples = (
+        app / "examples/packages/dh_app_backblaze_package.yaml",
+        app / "examples/lovelace/dh_app_backblaze_dashboard.yaml",
+    )
+    for path in required_examples:
+        if not path.is_file():
+            fail(f"Backblaze example missing: {path.relative_to(app)}")
+
+    package_text = required_examples[0].read_text(encoding="utf-8")
+    for entity_id in (
+        "sensor.dh_backblaze_storage_used",
+        "sensor.dh_backblaze_files",
+    ):
+        if entity_id not in package_text:
+            fail(f"Backblaze Recorder package missing: {entity_id}")
+    if package_text.count("- sensor.") != 2:
+        fail("Backblaze Recorder package must record exactly two sensors")
+
+    dashboard_text = required_examples[1].read_text(encoding="utf-8")
+    for expected in (
+        "sensor.dh_backblaze_storage_used",
+        "name: Total used by day",
+        "hours_to_show: 720",
+        "group_by: date",
+        "aggregate_func: max",
+        "graph: bar",
+    ):
+        if expected not in dashboard_text:
+            fail(f"Backblaze dashboard contract missing: {expected}")
+
     discovery = _import_discovery(app)
 
     if discovery.BASE_TOPIC != EXPECTED_BASE_TOPIC:
