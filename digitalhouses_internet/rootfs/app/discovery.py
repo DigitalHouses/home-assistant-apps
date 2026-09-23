@@ -66,6 +66,30 @@ def build_discovery_payload(
         "sw_version": app_version,
     }
     components: dict[str, Any] = {
+        "google_connectivity": {
+            "platform": "binary_sensor",
+            "name": "Google connectivity",
+            "unique_id": f"{ENTITY_PREFIX}_google_connectivity",
+            "default_entity_id": f"binary_sensor.{ENTITY_PREFIX}_google_connectivity",
+            "device_class": "connectivity",
+            "state_topic": TOPICS["state"],
+            "value_template": "{{ 'ON' if value_json.google_up else 'OFF' }}",
+            "payload_on": "ON",
+            "payload_off": "OFF",
+            "availability": availability,
+        },
+        "cloudflare_connectivity": {
+            "platform": "binary_sensor",
+            "name": "Cloudflare connectivity",
+            "unique_id": f"{ENTITY_PREFIX}_cloudflare_connectivity",
+            "default_entity_id": f"binary_sensor.{ENTITY_PREFIX}_cloudflare_connectivity",
+            "device_class": "connectivity",
+            "state_topic": TOPICS["state"],
+            "value_template": "{{ 'ON' if value_json.cloudflare_up else 'OFF' }}",
+            "payload_on": "ON",
+            "payload_off": "OFF",
+            "availability": availability,
+        },
         "internet_status": {
             "platform": "binary_sensor",
             "name": "Internet",
@@ -81,8 +105,8 @@ def build_discovery_payload(
         "router_status": {
             "platform": "binary_sensor",
             "name": "Router",
-            "unique_id": f"{ENTITY_PREFIX}_router",
-            "default_entity_id": f"binary_sensor.{ENTITY_PREFIX}_router",
+            "unique_id": f"{ENTITY_PREFIX}_router_connectivity",
+            "default_entity_id": f"binary_sensor.{ENTITY_PREFIX}_router_connectivity",
             "device_class": "connectivity",
             "state_topic": TOPICS["state"],
             "value_template": "{{ 'ON' if value_json.router_up else 'OFF' }}",

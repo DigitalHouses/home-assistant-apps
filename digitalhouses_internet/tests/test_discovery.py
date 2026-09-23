@@ -14,6 +14,21 @@ class DiscoveryTests(unittest.TestCase):
     def test_event_schema_version(self) -> None:
         self.assertEqual(EVENT_SCHEMA_VERSION, 2)
 
+    def test_connectivity_entity_ids(self) -> None:
+        components = build_discovery_payload("0.1.0")["components"]
+        expected = {
+            "google_connectivity": "binary_sensor.dh_internet_app_google_connectivity",
+            "cloudflare_connectivity": "binary_sensor.dh_internet_app_cloudflare_connectivity",
+            "internet_status": "binary_sensor.dh_internet_app_internet",
+            "router_status": "binary_sensor.dh_internet_app_router_connectivity",
+        }
+        for key, entity_id in expected.items():
+            with self.subTest(component=key):
+                self.assertEqual(
+                    components[key]["default_entity_id"],
+                    entity_id,
+                )
+
     def test_traffic_entities_are_conditional(self) -> None:
         without_traffic = build_discovery_payload("0.1.0")
         self.assertNotIn(

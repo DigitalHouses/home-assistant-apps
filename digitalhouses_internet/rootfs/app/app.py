@@ -208,6 +208,8 @@ class InternetApp:
         with self.lock:
             return {
                 "internet_up": self.snapshot.internet_up,
+                "google_up": self.snapshot.google_up,
+                "cloudflare_up": self.snapshot.cloudflare_up,
                 "router_up": self.snapshot.router_up,
                 "app_version": APP_VERSION,
                 "started_at": self.started_at,
