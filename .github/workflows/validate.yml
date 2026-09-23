@@ -56,6 +56,31 @@ jobs:
       - name: Check shell syntax
         run: bash -n digitalhouses_speedtest/rootfs/run.sh
 
+  internet-app:
+    name: Internet App
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Compile Python
+        run: |
+          python -m compileall -q \
+            digitalhouses_internet/rootfs/app \
+            digitalhouses_internet/tests
+
+      - name: Run unit tests
+        run: python -m unittest discover -s digitalhouses_internet/tests -v
+
+      - name: Check shell syntax
+        run: bash -n digitalhouses_internet/rootfs/run.sh
+
   recorder-app:
     name: Recorder App
     runs-on: ubuntu-latest
