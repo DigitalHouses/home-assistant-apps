@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.5.9
+
+- Shorten Home Assistant MQTT Discovery fan friendly names to sequential `Fan 1`, `Fan 2`, ... labels. Fan diagnostic entities use the same short prefix while existing `unique_id` and `default_entity_id` values remain unchanged, preserving entity identity, history and automations.
+
 ## 0.5.8
 
 - Add opt-in DigitalHouses telemetry client using protocol v1. Telemetry remains OFF by default, sends only schema/policy version, random installation ID, product and product version, authenticates with a per-installation token, persists scheduling identity, never sends unreleased branch/SHA builds, and performs network work outside the PVE/UPS monitoring loop.
