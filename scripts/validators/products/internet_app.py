@@ -20,6 +20,21 @@ def validate_internet(root: Path, app: Path, context: dict[str, Any]) -> None:
         fail(f"{app.name}: speedtest must be an App option")
     if "traffic" not in options:
         fail(f"{app.name}: traffic must be an App option")
+    traffic = options.get("traffic")
+    if not isinstance(traffic, dict):
+        fail(f"{app.name}: traffic options must be a mapping")
+    expected_traffic_keys = {
+        "traffic_download_total",
+        "traffic_upload_total",
+        "router_wan_status",
+        "router_download_rate",
+        "router_upload_rate",
+    }
+    if set(traffic) != expected_traffic_keys:
+        fail(
+            f"{app.name}: traffic binding contract must contain exactly "
+            f"{sorted(expected_traffic_keys)!r}"
+        )
 
     recovery = options.get("recovery")
     if not isinstance(recovery, dict):

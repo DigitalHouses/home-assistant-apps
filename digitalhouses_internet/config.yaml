@@ -29,6 +29,9 @@ options:
   traffic:
     traffic_download_total: ""
     traffic_upload_total: ""
+    router_wan_status: ""
+    router_download_rate: ""
+    router_upload_rate: ""
   recovery:
     enabled: false
     mode: smart
@@ -58,6 +61,9 @@ schema:
   traffic:
     traffic_download_total: str
     traffic_upload_total: str
+    router_wan_status: str
+    router_download_rate: str
+    router_upload_rate: str
   recovery:
     enabled: bool
     mode: list(smart|both)

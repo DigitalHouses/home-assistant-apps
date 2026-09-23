@@ -33,17 +33,29 @@ class SpeedtestConfig:
 class TrafficConfig:
     traffic_download_total: str
     traffic_upload_total: str
-
-    @property
-    def configured(self) -> bool:
-        return bool(
-            self.traffic_download_total
-            and self.traffic_upload_total
-        )
+    router_wan_status: str
+    router_download_rate: str
+    router_upload_rate: str
 
     @property
     def enabled(self) -> bool:
-        return self.configured
+        return bool(self.traffic_download_total and self.traffic_upload_total)
+
+    @property
+    def configured(self) -> bool:
+        return self.enabled
+
+    @property
+    def has_bindings(self) -> bool:
+        return any(
+            (
+                self.traffic_download_total,
+                self.traffic_upload_total,
+                self.router_wan_status,
+                self.router_download_rate,
+                self.router_upload_rate,
+            )
+        )
 
 
 @dataclass(frozen=True)
@@ -136,6 +148,14 @@ def parse_options(raw: Any) -> AppConfig:
     traffic_upload_total = str(
         traffic_raw.get("traffic_upload_total", "")
     ).strip()
+    router_wan_status = str(traffic_raw.get("router_wan_status", "")).strip()
+    router_download_rate = str(
+        traffic_raw.get("router_download_rate", "")
+    ).strip()
+    router_upload_rate = str(
+        traffic_raw.get("router_upload_rate", "")
+    ).strip()
+
     if bool(traffic_download_total) != bool(traffic_upload_total):
         raise ConfigError(
             "traffic download/upload total entity IDs must be configured together"
@@ -143,9 +163,17 @@ def parse_options(raw: Any) -> AppConfig:
     for name, entity_id in (
         ("traffic_download_total", traffic_download_total),
         ("traffic_upload_total", traffic_upload_total),
+        ("router_download_rate", router_download_rate),
+        ("router_upload_rate", router_upload_rate),
     ):
         if entity_id and not entity_id.startswith("sensor."):
             raise ConfigError(f"traffic.{name} must be a sensor.* entity")
+    if router_wan_status and not router_wan_status.startswith(
+        ("sensor.", "binary_sensor.")
+    ):
+        raise ConfigError(
+            "traffic.router_wan_status must be sensor.* or binary_sensor.*"
+        )
 
     enabled = bool(recovery_raw.get("enabled", False))
     mode = str(recovery_raw.get("mode", "smart")).strip().lower()
@@ -188,6 +216,9 @@ def parse_options(raw: Any) -> AppConfig:
         traffic=TrafficConfig(
             traffic_download_total=traffic_download_total,
             traffic_upload_total=traffic_upload_total,
+            router_wan_status=router_wan_status,
+            router_download_rate=router_download_rate,
+            router_upload_rate=router_upload_rate,
         ),
         recovery=RecoveryConfig(
             enabled=enabled,
