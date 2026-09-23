@@ -18,7 +18,7 @@ Public release identifiers use the public product name, not an internal runtime 
 | DigitalHouses Plex Agent | `digitalhouses_plex_agent` |
 | DigitalHouses Recorder App | `digitalhouses_recorder_app` |
 | DigitalHouses Speedtest App | `digitalhouses_speedtest_app` |
-| DigitalHouses Backblaze App | `digitalhouses_backblaze_app` |
+| DigitalHouses Backblaze App | `digitalhouses_backblaze_app` |\n| DigitalHouses Internet App | `digitalhouses_internet_app` |
 
 Release identifiers describe GitHub release provenance only.
 
@@ -76,7 +76,7 @@ Examples:
 digitalhouses_pve_agent-v0.6.0
 digitalhouses_plex_agent-v0.3.0
 digitalhouses_recorder_app-v0.2.0
-digitalhouses_speedtest_app-v1.3.0
+digitalhouses_speedtest_app-v1.3.0\ndigitalhouses_internet_app-v0.1.0
 ```
 
 A release tag must point to the commit on `main` that contains the released product version and corresponding changelog entry.
@@ -240,7 +240,7 @@ The adoption baselines are:
 | DigitalHouses Plex Agent | `0.2.2` |
 | DigitalHouses Recorder App | `0.1.8` |
 | DigitalHouses Speedtest App | `1.2.1` |
-| DigitalHouses Backblaze App | `0.0.0` |
+| DigitalHouses Backblaze App | `0.0.0` |\n| DigitalHouses Internet App | `0.0.0` |
 
 The first tag under the new convention for each product must be newer than its baseline.
 
