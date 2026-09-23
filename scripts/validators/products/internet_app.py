@@ -136,7 +136,7 @@ def validate_presentation_examples(
             fail(f"{app.name}: notification package must consume canonical Event")
         if "dh_internet_app_notification" not in text:
             fail(f"{app.name}: notification package must emit neutral event")
-        for private_dependency in ("write2log", "notify.mobile_app", "telegram_bot"):
+        for private_dependency in ("script.write2log", "notify.mobile_app", "telegram_bot."):
             if private_dependency in text:
                 fail(
                     f"{app.name}: notification package contains private dependency "
