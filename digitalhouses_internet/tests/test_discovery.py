@@ -33,6 +33,12 @@ class DiscoveryTests(unittest.TestCase):
         self.assertEqual(
             components["app_version"]["entity_category"], "diagnostic"
         )
+        self.assertEqual(
+            components["performance_problem"]["device_class"], "problem"
+        )
+        self.assertEqual(
+            components["problems"]["entity_category"], "diagnostic"
+        )
 
 
 if __name__ == "__main__":

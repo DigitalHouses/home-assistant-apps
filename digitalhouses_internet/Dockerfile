@@ -54,6 +54,7 @@ RUN chmod a+x /run.sh \
         /app/connectivity.py \
         /app/discovery.py \
         /app/ha_api.py \
+        /app/quality.py \
         /app/recovery.py \
         /app/speedtest.py \
         /app/state.py

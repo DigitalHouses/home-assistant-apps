@@ -44,6 +44,6 @@ Version `0.1.0` establishes the new product identity and the recovery/availabili
 - Ookla Download, Upload, Ping, Jitter and Packet loss measurements;
 - manual and periodic Speedtest with compact status metadata.
 
-Quality thresholds, monthly traffic statistics and final dashboard/package presentation are subsequent milestones before a production release.
+Quality thresholds and App-owned performance problem evaluation are implemented. Monthly traffic statistics and final dashboard/package presentation remain subsequent milestones before a production release.
 
 See [DOCS.md](DOCS.md) for configuration semantics.

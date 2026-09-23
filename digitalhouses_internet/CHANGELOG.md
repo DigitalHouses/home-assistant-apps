@@ -11,3 +11,5 @@
 - Added Version and Started-at runtime diagnostics.
 - Added Ookla Speedtest runtime with periodic and manual execution.
 - Added Download, Upload, Ping, Jitter, Packet loss and compact Speedtest status entities.
+- Added persistent Speedtest quality thresholds and low download/upload/high ping problem evaluation.
+- Added aggregate Problems diagnostics and structured performance problem transition events.

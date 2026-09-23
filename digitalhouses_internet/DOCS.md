@@ -53,3 +53,10 @@ The App runs the official Ookla CLI. Periodic execution is controlled by App con
 The main graphable entities are Download, Upload, Ping, Jitter and Packet loss. Provider, external IP, selected server, result URL, last successful test timestamp and the last error are attributes of the compact Speedtest status entity rather than separate entities.
 
 A failed test does not overwrite the last successful measurement values. Runtime status becomes error or no_connectivity and the last successful result remains persisted under /data/runtime.
+
+
+## Quality thresholds
+
+The three user-editable MQTT Number entities are Minimum download speed, Minimum upload speed and Maximum ping. Their values are persisted under /data/runtime and immediately recalculate the last successful Speedtest result.
+
+The App owns low-download, low-upload, high-ping and aggregate performance-problem state. Home Assistant does not recalculate these thresholds with templates. Structured schema-v2 Events are emitted only on meaningful performance-problem transitions.

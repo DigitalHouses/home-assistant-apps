@@ -22,6 +22,11 @@ from discovery import (
     build_discovery_payload,
 )
 from ha_api import HomeAssistantApi
+from quality import (
+    evaluate_performance,
+    load_thresholds,
+    set_threshold,
+)
 from recovery import (
     RecoveryExecutor,
     RecoveryStopped,
@@ -34,6 +39,7 @@ from state import OutageTracker, iso, now_local
 APP_VERSION = os.getenv("APP_VERSION", "0.1.0-local")
 OUTAGES_FILE = Path("/data/runtime/outages.json")
 SPEEDTEST_FILE = Path("/data/runtime/speedtest.json")
+THRESHOLDS_FILE = Path("/data/runtime/thresholds.json")
 
 
 class InternetApp:
@@ -62,6 +68,10 @@ class InternetApp:
 
         self.outages = OutageTracker.load(OUTAGES_FILE)
         self.speedtest = load_last_result(SPEEDTEST_FILE)
+        self.thresholds = load_thresholds(THRESHOLDS_FILE)
+        self.performance = evaluate_performance(
+            self.speedtest, self.thresholds
+        )
         self.ha_api = HomeAssistantApi()
 
         self.mqtt = mqtt.Client(
@@ -91,6 +101,9 @@ class InternetApp:
             self.log.error("MQTT connection failed: %s", reason_code)
             return
         client.subscribe(TOPICS["command"], qos=1)
+        client.subscribe(TOPICS["minimum_download_command"], qos=1)
+        client.subscribe(TOPICS["minimum_upload_command"], qos=1)
+        client.subscribe(TOPICS["maximum_ping_command"], qos=1)
         client.publish(
             DISCOVERY_TOPIC,
             json.dumps(build_discovery_payload(APP_VERSION)),
@@ -98,6 +111,12 @@ class InternetApp:
             retain=True,
         )
         client.publish(TOPICS["availability"], "online", qos=1, retain=True)
+        client.publish(
+            TOPICS["result_availability"],
+            "online" if self.performance["available"] else "offline",
+            qos=1,
+            retain=True,
+        )
         self._publish_all()
         self.log.info("MQTT connected")
 
@@ -108,6 +127,17 @@ class InternetApp:
         message: mqtt.MQTTMessage,
     ) -> None:
         del client, userdata
+        threshold_topics = {
+            TOPICS["minimum_download_command"]: "minimum_download_mbps",
+            TOPICS["minimum_upload_command"]: "minimum_upload_mbps",
+            TOPICS["maximum_ping_command"]: "maximum_ping_ms",
+        }
+        if message.topic in threshold_topics:
+            self._handle_threshold_command(
+                threshold_topics[message.topic],
+                message.payload,
+            )
+            return
         if message.topic != TOPICS["command"]:
             return
         payload = message.payload.decode("utf-8", errors="replace").strip()
@@ -117,6 +147,7 @@ class InternetApp:
                 if self.incident_active:
                     self.recovery_state = "stopped"
             self._publish_state()
+        self._publish_problems()
             self._event("recovery_stopped", reason="user")
         elif payload == "RUN_SPEEDTEST":
             threading.Thread(
@@ -162,9 +193,59 @@ class InternetApp:
             retain=True,
         )
 
+    def _publish_thresholds(self) -> None:
+        if not self.mqtt.is_connected():
+            return
+        self.mqtt.publish(
+            TOPICS["thresholds"],
+            json.dumps(self.thresholds),
+            qos=1,
+            retain=True,
+        )
+
+    def _publish_performance(self) -> None:
+        if not self.mqtt.is_connected():
+            return
+        self.mqtt.publish(
+            TOPICS["performance"],
+            json.dumps(self.performance),
+            qos=1,
+            retain=True,
+        )
+
+    def _problems_payload(self) -> dict[str, Any]:
+        with self.lock:
+            problems: list[str] = []
+            if not self.snapshot.internet_up:
+                problems.append("internet_unavailable")
+            if not self.snapshot.router_up:
+                problems.append("router_unavailable")
+            if self.recovery_state == "error":
+                problems.append("recovery_error")
+            if self.performance.get("available"):
+                problems.extend(self.performance.get("problem_reasons", []))
+        return {
+            "state": len(problems),
+            "problems": problems,
+            "updated_at": iso(now_local()),
+        }
+
+    def _publish_problems(self) -> None:
+        if not self.mqtt.is_connected():
+            return
+        self.mqtt.publish(
+            TOPICS["problems"],
+            json.dumps(self._problems_payload()),
+            qos=1,
+            retain=True,
+        )
+
     def _publish_all(self) -> None:
         self._publish_state()
         self._publish_outages()
+        self._publish_thresholds()
+        self._publish_performance()
+        self._publish_problems()
 
     def _event(self, event_type: str, **data: Any) -> None:
         if not self.mqtt.is_connected():
@@ -207,6 +288,77 @@ class InternetApp:
         self._set_recovery_state(state, countdown=0)
         return True
 
+    def _refresh_performance(self, *, emit_events: bool) -> None:
+        previous = dict(self.performance)
+        current = evaluate_performance(self.speedtest, self.thresholds)
+        self.performance = current
+
+        if self.mqtt.is_connected():
+            self.mqtt.publish(
+                TOPICS["result_availability"],
+                "online" if current["available"] else "offline",
+                qos=1,
+                retain=True,
+            )
+        self._publish_performance()
+        self._publish_problems()
+
+        if not emit_events or not current["available"]:
+            return
+
+        was_problem = bool(
+            previous.get("available")
+            and previous.get("performance_problem")
+        )
+        is_problem = bool(current["performance_problem"])
+        old_reasons = list(previous.get("problem_reasons") or [])
+        new_reasons = list(current.get("problem_reasons") or [])
+
+        if is_problem and not was_problem:
+            self._event(
+                "performance_problem_started",
+                reasons=new_reasons,
+                download_mbps=current["download_mbps"],
+                upload_mbps=current["upload_mbps"],
+                ping_ms=current["ping_ms"],
+                minimum_download_mbps=current["minimum_download_mbps"],
+                minimum_upload_mbps=current["minimum_upload_mbps"],
+                maximum_ping_ms=current["maximum_ping_ms"],
+            )
+        elif was_problem and not is_problem:
+            self._event(
+                "performance_problem_recovered",
+                previous_reasons=old_reasons,
+                download_mbps=current["download_mbps"],
+                upload_mbps=current["upload_mbps"],
+                ping_ms=current["ping_ms"],
+            )
+        elif is_problem and old_reasons != new_reasons:
+            self._event(
+                "performance_problem_updated",
+                previous_reasons=old_reasons,
+                reasons=new_reasons,
+                download_mbps=current["download_mbps"],
+                upload_mbps=current["upload_mbps"],
+                ping_ms=current["ping_ms"],
+            )
+
+    def _handle_threshold_command(self, key: str, payload: bytes) -> None:
+        raw = payload.decode("utf-8", errors="replace").strip()
+        try:
+            updated = set_threshold(self.thresholds, key, raw)
+        except ValueError as exc:
+            self.log.warning("Ignoring invalid threshold: %s", exc)
+            self._publish_thresholds()
+            return
+        self.thresholds = updated
+        from state import atomic_write_json
+
+        atomic_write_json(THRESHOLDS_FILE, self.thresholds)
+        self.log.info("Quality threshold changed: %s=%s", key, self.thresholds[key])
+        self._publish_thresholds()
+        self._refresh_performance(emit_events=True)
+
     def _set_speedtest_status(
         self, status: str, *, error: str | None = None
     ) -> None:
@@ -247,6 +399,7 @@ class InternetApp:
                 self.speedtest = result
                 save_last_result(SPEEDTEST_FILE, result)
             self._publish_state()
+            self._refresh_performance(emit_events=True)
             self._event(
                 "speedtest_completed",
                 download_mbps=result["download_mbps"],
