@@ -1,6 +1,6 @@
 # =============================================================================
-# DigitalHouses Internet App notification presentation - Russian
-# Install this instead of the default English notification package.
+# DigitalHouses Internet App notification contract — Russian presentation
+# Install this instead of the English notification package.
 # =============================================================================
 
 dh_internet_app_notification_package_ru:
@@ -35,7 +35,14 @@ dh_internet_app_notification_package_ru:
             kind: "{{ trigger.to_state.attributes.event_type }}"
             severity: >-
               {% set kind = trigger.to_state.attributes.event_type %}
-              {{ 'warning' if kind in ['connection_lost','recovery_error','recovery_exhausted','speedtest_failed','performance_problem_started','performance_problem_updated'] else 'info' }}
+              {{ 'warning' if kind in [
+                'connection_lost',
+                'recovery_exhausted',
+                'recovery_error',
+                'speedtest_failed',
+                'performance_problem_started',
+                'performance_problem_updated'
+              ] else 'info' }}
             title: >-
               {% set kind = trigger.to_state.attributes.event_type %}
               {% set target = trigger.to_state.attributes.target | default('', true) %}
@@ -44,7 +51,8 @@ dh_internet_app_notification_package_ru:
               {% elif kind == 'connection_restored' %}
                 🌐✅ Интернет восстановлен
               {% elif kind == 'recovery_action' %}
-                🔄 Восстановление Internet: {{ 'ONT' if target == 'ont' else ('Router' if target == 'router' else target) }}
+                🔄 Восстановление Internet:
+                {{ 'ONT' if target == 'ont' else ('Router' if target == 'router' else target) }}
               {% elif kind == 'recovery_stopped' %}
                 ⏹️ Восстановление Internet остановлено
               {% elif kind == 'recovery_exhausted' %}
@@ -66,29 +74,42 @@ dh_internet_app_notification_package_ru:
               {% set a = trigger.to_state.attributes %}
               {% set kind = a.event_type %}
               {% if kind == 'connection_lost' %}
-                Интернет недоступен. Роутер отвечает: {{ 'да' if a.router_up | default(false) else 'нет' }}.
+                Интернет недоступен. Роутер отвечает:
+                {{ 'да' if a.router_up | default(false) else 'нет' }}.
               {% elif kind == 'connection_restored' %}
                 {% set s = a.duration_seconds | int(0) %}
                 {% set h = s // 3600 %}
                 {% set m = (s % 3600) // 60 %}
                 {% set sec = s % 60 %}
-                Связь восстановлена через {{ ('%d:%02d:%02d' | format(h,m,sec)) if h else ('%02d:%02d' | format(m,sec)) }}.
+                Связь восстановлена через
+                {{ ('%d:%02d:%02d' | format(h,m,sec)) if h else ('%02d:%02d' | format(m,sec)) }}.
               {% elif kind == 'recovery_action' %}
-                Цикл {{ a.cycle | default('—') }}: {{ a.target | default('устройство') }} · {{ a.action | default('action') }}.
+                Цикл {{ a.cycle | default('—') }}:
+                {{ a.target | default('устройство') }} ·
+                {{ a.action | default('action') }}.
               {% elif kind == 'recovery_stopped' %}
                 Дальнейшие попытки восстановления в текущем инциденте остановлены.
               {% elif kind == 'recovery_exhausted' %}
-                Выполнено циклов: {{ a.cycles | default('—') }}. Cooldown: {{ a.cooldown_seconds | default('—') }} с.
+                Выполнено циклов: {{ a.cycles | default('—') }}.
+                Cooldown: {{ a.cooldown_seconds | default('—') }} с.
               {% elif kind == 'recovery_error' %}
                 {{ a.error | default('Неизвестная ошибка восстановления', true) }}
               {% elif kind == 'speedtest_failed' %}
                 {{ a.reason | default('Ошибка Ookla Speedtest', true) }}
               {% elif kind == 'performance_problem_started' %}
-                Проблемы: {{ (a.reasons | default([], true)) | join(', ') }}. Download {{ a.download_mbps | default('—') }} Mbit/s · Upload {{ a.upload_mbps | default('—') }} Mbit/s · Ping {{ a.ping_ms | default('—') }} ms.
+                Проблемы: {{ (a.reasons | default([], true)) | join(', ') }}.
+                Download {{ a.download_mbps | default('—') }} Mbit/s ·
+                Upload {{ a.upload_mbps | default('—') }} Mbit/s ·
+                Ping {{ a.ping_ms | default('—') }} ms.
               {% elif kind == 'performance_problem_recovered' %}
-                Предыдущие проблемы: {{ (a.previous_reasons | default([], true)) | join(', ') }}. Текущие значения в заданных пределах.
+                Предыдущие проблемы:
+                {{ (a.previous_reasons | default([], true)) | join(', ') }}.
+                Текущие значения находятся в заданных пределах.
               {% elif kind == 'performance_problem_updated' %}
-                Проблемы: {{ (a.previous_reasons | default([], true)) | join(', ') }} → {{ (a.reasons | default([], true)) | join(', ') }}.
+                Проблемы:
+                {{ (a.previous_reasons | default([], true)) | join(', ') }}
+                →
+                {{ (a.reasons | default([], true)) | join(', ') }}.
               {% else %}
                 Событие Internet App: {{ kind }}.
               {% endif %}

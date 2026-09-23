@@ -1,6 +1,10 @@
 # =============================================================================
-# DigitalHouses Internet App package
-# Recommended target: /config/packages/Global/DH_APP/dh_internet_app_global_package.yaml
+# DigitalHouses Internet App — global Home Assistant package
+# Recommended target:
+#   /config/packages/Global/DH_APP/dh_internet_app_global_package.yaml
+#
+# App owns acquisition and calculations. Home Assistant only records useful
+# time-series entities here.
 # =============================================================================
 
 dh_internet_app_global_package:

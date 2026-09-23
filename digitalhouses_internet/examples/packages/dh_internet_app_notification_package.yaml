@@ -1,6 +1,6 @@
 # =============================================================================
-# DigitalHouses Internet App notification presentation - English
-# Reusable layer only. No Telegram, write2log or specific notify target.
+# DigitalHouses Internet App notification contract — English presentation
+# Reusable HAOS layer only. No Telegram, write2log or specific notify target.
 # Consumers listen for Home Assistant event: dh_internet_app_notification.
 # Install exactly one notification locale.
 # =============================================================================
@@ -37,13 +37,14 @@ dh_internet_app_notification_package:
             kind: "{{ trigger.to_state.attributes.event_type }}"
             severity: >-
               {% set kind = trigger.to_state.attributes.event_type %}
-              {% if kind in ['recovery_error', 'connection_lost'] %}
-                warning
-              {% elif kind in ['performance_problem_started', 'performance_problem_updated', 'speedtest_failed', 'recovery_exhausted'] %}
-                warning
-              {% else %}
-                info
-              {% endif %}
+              {{ 'warning' if kind in [
+                'connection_lost',
+                'recovery_exhausted',
+                'recovery_error',
+                'speedtest_failed',
+                'performance_problem_started',
+                'performance_problem_updated'
+              ] else 'info' }}
             title: >-
               {% set kind = trigger.to_state.attributes.event_type %}
               {% set target = trigger.to_state.attributes.target | default('', true) | upper %}
@@ -74,29 +75,41 @@ dh_internet_app_notification_package:
               {% set a = trigger.to_state.attributes %}
               {% set kind = a.event_type %}
               {% if kind == 'connection_lost' %}
-                Internet connectivity is unavailable. Router reachable: {{ 'yes' if a.router_up | default(false) else 'no' }}.
+                Internet connectivity is unavailable. Router reachable:
+                {{ 'yes' if a.router_up | default(false) else 'no' }}.
               {% elif kind == 'connection_restored' %}
                 {% set s = a.duration_seconds | int(0) %}
                 {% set h = s // 3600 %}
                 {% set m = (s % 3600) // 60 %}
                 {% set sec = s % 60 %}
-                Connectivity restored after {{ ('%d:%02d:%02d' | format(h,m,sec)) if h else ('%02d:%02d' | format(m,sec)) }}.
+                Connectivity restored after
+                {{ ('%d:%02d:%02d' | format(h,m,sec)) if h else ('%02d:%02d' | format(m,sec)) }}.
               {% elif kind == 'recovery_action' %}
-                Cycle {{ a.cycle | default('—') }}: {{ a.action | default('action') }} on {{ a.target | default('device') }}.
+                Cycle {{ a.cycle | default('—') }}:
+                {{ a.action | default('action') }} on {{ a.target | default('device') }}.
               {% elif kind == 'recovery_stopped' %}
                 Further recovery attempts for the current outage were stopped.
               {% elif kind == 'recovery_exhausted' %}
-                {{ a.cycles | default('—') }} recovery cycles completed. Cooldown: {{ a.cooldown_seconds | default('—') }} s.
+                {{ a.cycles | default('—') }} recovery cycles completed.
+                Cooldown: {{ a.cooldown_seconds | default('—') }} s.
               {% elif kind == 'recovery_error' %}
                 {{ a.error | default('Unknown recovery error', true) }}
               {% elif kind == 'speedtest_failed' %}
                 {{ a.reason | default('Ookla Speedtest failed', true) }}
               {% elif kind == 'performance_problem_started' %}
-                Problems: {{ (a.reasons | default([], true)) | join(', ') }}. Download {{ a.download_mbps | default('—') }} Mbit/s · Upload {{ a.upload_mbps | default('—') }} Mbit/s · Ping {{ a.ping_ms | default('—') }} ms.
+                Problems: {{ (a.reasons | default([], true)) | join(', ') }}.
+                Download {{ a.download_mbps | default('—') }} Mbit/s ·
+                Upload {{ a.upload_mbps | default('—') }} Mbit/s ·
+                Ping {{ a.ping_ms | default('—') }} ms.
               {% elif kind == 'performance_problem_recovered' %}
-                Previous problems: {{ (a.previous_reasons | default([], true)) | join(', ') }}. Current connection quality is within configured thresholds.
+                Previous problems:
+                {{ (a.previous_reasons | default([], true)) | join(', ') }}.
+                Current connection quality is within configured thresholds.
               {% elif kind == 'performance_problem_updated' %}
-                Problems changed: {{ (a.previous_reasons | default([], true)) | join(', ') }} → {{ (a.reasons | default([], true)) | join(', ') }}.
+                Problems changed:
+                {{ (a.previous_reasons | default([], true)) | join(', ') }}
+                →
+                {{ (a.reasons | default([], true)) | join(', ') }}.
               {% else %}
                 Internet App event: {{ kind }}.
               {% endif %}
