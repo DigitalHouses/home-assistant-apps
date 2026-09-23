@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from validators.common import fail
+from validators.common import fail, load_yaml, require_files
 
 
 def validate_internet(root: Path, app: Path, context: dict[str, Any]) -> None:
@@ -71,3 +71,27 @@ def validate_internet(root: Path, app: Path, context: dict[str, Any]) -> None:
     )
     if '"script"' in recovery_source or "'script'" in recovery_source:
         fail(f"{app.name}: script recovery action is forbidden")
+
+    validate_presentation_examples(root, app)
+
+
+def validate_presentation_examples(root: Path, app: Path) -> None:
+    package_path = app / "examples" / "packages" / "dh_internet_app_global_package.yaml"
+    dashboard_path = app / "examples" / "lovelace" / "dh_internet_app_dashboard.yaml"
+    require_files(root, [package_path, dashboard_path])
+
+    package = load_yaml(package_path, root)
+    dashboard = load_yaml(dashboard_path, root)
+    if not isinstance(package, dict) or "dh_internet_app_global_package" not in package:
+        fail(f"{app.name}: invalid global presentation package")
+    if not isinstance(dashboard, dict) or dashboard.get("path") != "internet":
+        fail(f"{app.name}: invalid reference dashboard")
+
+    package_text = package_path.read_text(encoding="utf-8")
+    dashboard_text = dashboard_path.read_text(encoding="utf-8")
+    if "event.dh_internet_app_event" not in package_text:
+        fail(f"{app.name}: package must consume canonical Event entity")
+    if "digitalhouses_internet" not in package_text:
+        fail(f"{app.name}: package must emit neutral notification event")
+    if "dh_internet_app_" not in dashboard_text:
+        fail(f"{app.name}: dashboard must use canonical entities")
