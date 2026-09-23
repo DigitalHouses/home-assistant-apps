@@ -121,6 +121,32 @@ sections:
           - number.dh_internet_app_minimum_upload
           - number.dh_internet_app_maximum_ping
 
+      - type: horizontal-stack
+        cards:
+          - type: button
+            entity: button.dh_internet_app_refresh_servers
+            name: Refresh servers
+            icon: mdi:server-plus
+          - type: entity
+            entity: sensor.dh_internet_app_available_servers
+            name: Available servers
+            icon: mdi:server-network
+
+      - type: markdown
+        content: |-
+          {% set servers = state_attr('sensor.dh_internet_app_available_servers', 'servers') or [] %}
+          ### Ookla servers
+
+          | ID | Provider | Location |
+          |---:|:---|:---|
+          {% for s in servers[:10] %}
+          | {{ s['id'] }} | {{ s['provider'] }} | {{ [s.get('location',''), s.get('country','')] | reject('equalto','') | join(', ') }} |
+          {% else %}
+          | — | — | Press Refresh servers |
+          {% endfor %}
+        grid_options:
+          columns: 12
+
   - type: grid
     cards:
       - type: heading
@@ -188,6 +214,25 @@ sections:
               name: Upload this month
             - entity: sensor.dh_internet_app_traffic_history
               name: History
+
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: sensor.dh_internet_app_traffic_history
+            state_not: unavailable
+        card:
+          type: markdown
+          content: |-
+            {% set rows = state_attr('sensor.dh_internet_app_traffic_history', 'history') or [] %}
+            ### Traffic history
+
+            | Month | Download | Upload | Total |
+            |:---|---:|---:|---:|
+            {% for r in rows %}
+            | {{ r['month'] }} | {{ r['download_gib'] }} GiB | {{ r['upload_gib'] }} GiB | {{ r['total_gib'] }} GiB |
+            {% else %}
+            | — | — | — | No data |
+            {% endfor %}
 
   - type: grid
     cards:
