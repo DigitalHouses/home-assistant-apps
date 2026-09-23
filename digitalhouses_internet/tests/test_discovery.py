@@ -7,10 +7,13 @@ from pathlib import Path
 APP_DIR = Path(__file__).resolve().parents[1] / "rootfs" / "app"
 sys.path.insert(0, str(APP_DIR))
 
-from discovery import build_discovery_payload
+from discovery import EVENT_SCHEMA_VERSION, build_discovery_payload
 
 
 class DiscoveryTests(unittest.TestCase):
+    def test_event_schema_version(self) -> None:
+        self.assertEqual(EVENT_SCHEMA_VERSION, 2)
+
     def test_canonical_identity_and_runtime_diagnostics(self) -> None:
         payload = build_discovery_payload("0.1.0")
         self.assertEqual(
