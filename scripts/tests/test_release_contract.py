@@ -91,6 +91,35 @@ class ReleaseContractTests(unittest.TestCase):
                 "DigitalHouses Backblaze App v0.1.0",
             )
 
+    def test_internet_app_release_metadata(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            self._write(
+                root,
+                "digitalhouses_internet/config.yaml",
+                "name: DigitalHouses Internet App\nversion: 0.1.0\n",
+            )
+            self._write(
+                root,
+                "digitalhouses_internet/CHANGELOG.md",
+                "# Changelog\n\n## 0.1.0\n\n- Initial development release.\n",
+            )
+
+            metadata = release_metadata(
+                root,
+                product="digitalhouses_internet_app",
+                version="0.1.0",
+            )
+
+            self.assertEqual(
+                metadata.tag,
+                "digitalhouses_internet_app-v0.1.0",
+            )
+            self.assertEqual(
+                metadata.title,
+                "DigitalHouses Internet App v0.1.0",
+            )
+
     def test_rejects_version_at_or_before_policy_baseline(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
