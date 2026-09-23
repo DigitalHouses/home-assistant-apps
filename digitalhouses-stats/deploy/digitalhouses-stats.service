@@ -1,0 +1,22 @@
+[Unit]
+Description=DigitalHouses Stats telemetry server
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=digitalhouses-stats
+Group=digitalhouses-stats
+WorkingDirectory=/opt/digitalhouses/digitalhouses-stats
+EnvironmentFile=/etc/digitalhouses-stats/digitalhouses-stats.env
+ExecStart=/opt/digitalhouses/digitalhouses-stats/.venv/bin/uvicorn digitalhouses_stats.main:app --host 127.0.0.1 --port 8080 --no-access-log
+Restart=on-failure
+RestartSec=5
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+NoNewPrivileges=true
+ReadWritePaths=/var/lib/digitalhouses-stats
+
+[Install]
+WantedBy=multi-user.target
