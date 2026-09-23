@@ -199,23 +199,7 @@ active 30d
 
 Version-adoption and country reports should default to active installations in a defined window, normally 7 days.
 
-## 9. Retention
-
-Individual telemetry installation records are retained for a configurable period after `last_seen`.
-
-Default:
-
-```text
-TELEMETRY_RETENTION_DAYS=60
-```
-
-After the retention window, the installation record is deleted.
-
-Therefore "observed installations" means observed within the configured retention horizon, not an all-time installed-base count.
-
-If lifetime aggregate metrics are ever required, they must be maintained without retaining expired installation-level records.
-
-## 10. Deletion
+## 9. Deletion
 
 The telemetry API must provide an authenticated mechanism for an installation to delete its own telemetry record.
 
@@ -228,7 +212,7 @@ Disabling telemetry and deleting the server-side record are separate actions:
 - disable: stop future heartbeats;
 - delete: remove the current retained telemetry record.
 
-## 11. Security boundaries
+## 10. Security boundaries
 
 Telemetry uses HTTPS only.
 
@@ -248,7 +232,7 @@ A shared secret embedded in open-source clients must not be treated as meaningfu
 
 Per-installation credentials protect mutation of an installation record. They do not prove that a request came from an unmodified official binary, so public-endpoint abuse protections remain necessary.
 
-## 12. Transparency
+## 11. Transparency
 
 All products must use materially equivalent user-facing disclosure.
 
@@ -270,7 +254,6 @@ The published policy must state:
 - fields sent;
 - purpose;
 - frequency;
-- retention;
 - country derivation;
 - IP handling;
 - how to disable telemetry;
@@ -281,7 +264,7 @@ The public legal wording must be reviewed for applicable jurisdictions before te
 
 Do not ship a placeholder operator/controller identity in the public policy.
 
-## 13. Protocol ownership
+## 12. Protocol ownership
 
 Wire behavior is defined by [DigitalHouses Telemetry Protocol v1](TELEMETRY_PROTOCOL_V1.md).
 

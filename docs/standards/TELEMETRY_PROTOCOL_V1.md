@@ -292,7 +292,7 @@ Source IP must not be a telemetry database column.
 Required metrics:
 
 ```text
-observed installations within retention
+observed installations
 active 24h
 active 7d
 active 30d
@@ -319,19 +319,7 @@ PL     7
 
 Do not label these values as users or total installations.
 
-## 14. Retention
-
-Default installation-level retention:
-
-```text
-TELEMETRY_RETENTION_DAYS=60
-```
-
-Records whose `last_seen` is older than the configured retention period are deleted automatically.
-
-Retention cleanup must not depend on client availability.
-
-## 15. Security and abuse resistance
+## 14. Security and abuse resistance
 
 At minimum:
 
@@ -348,7 +336,7 @@ At minimum:
 
 Per-installation credentials protect an existing record from unauthorized mutation/deletion. They are not software attestation and do not prove that a request originated from an official unmodified build.
 
-## 16. Versioning
+## 15. Versioning
 
 `schema: 1` identifies this wire contract.
 
