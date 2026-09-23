@@ -1,0 +1,10 @@
+configuration:
+  router_ip:
+    name: IP роутера
+    description: LAN IP-адрес для проверки доступности самого роутера.
+  connectivity_check:
+    name: Проверка соединения
+  recovery:
+    name: Восстановление
+  log_level:
+    name: Уровень логирования
