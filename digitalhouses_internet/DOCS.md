@@ -86,3 +86,22 @@ The App retains exactly the current month plus up to 11 previous monthly buckets
 ## Monthly availability
 
 Current-month Internet availability is calculated by the App from elapsed local calendar-month time minus accumulated outage time. The Home Assistant availability-percent sensor is presentation only; no template automation owns the calculation.
+
+
+## Traffic accounting
+
+Traffic accounting is optional and uses Home Assistant entity mappings from the App configuration. The two cumulative mappings `traffic_download_total` and `traffic_upload_total` must either both be empty or both be configured. Optional mappings `router_wan_status`, `router_download_rate` and `router_upload_rate` are reserved for router presentation without changing the accounting source.
+
+The App samples cumulative counters once per minute and persists only calculated state under `/data/runtime`. A missing or unavailable source observation is not interpreted as zero. The next valid cumulative sample continues the delta calculation.
+
+The first valid sample establishes a baseline and is not counted as historical traffic. Normal growth adds the counter delta. If the same source counter resets, the App treats the new current counter value as post-reset traffic and records the reset diagnostically. If the configured source entity changes, the App preserves accumulated totals/history but establishes a fresh baseline to avoid a false jump.
+
+Home Assistant exposes five traffic entities only when both cumulative mappings are configured:
+
+- `sensor.dh_internet_app_traffic_download_total`
+- `sensor.dh_internet_app_traffic_upload_total`
+- `sensor.dh_internet_app_traffic_download_month`
+- `sensor.dh_internet_app_traffic_upload_month`
+- `sensor.dh_internet_app_traffic_history`
+
+Traffic history retains the current month plus up to 11 previous observed months.

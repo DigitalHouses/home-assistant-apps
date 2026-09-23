@@ -45,6 +45,6 @@ Version `0.1.0` establishes the new product identity and the recovery/availabili
 - manual and periodic Speedtest with compact status metadata;
 - Recent Results as one diagnostic entity with the last 20 successful tests and the thresholds that were active for each test.
 
-Quality thresholds and App-owned performance problem evaluation are implemented. Router traffic accounting uses only two optional cumulative source bindings and retains the current month plus 11 previous months. Final dashboard/package presentation remains a subsequent milestone before a production release.
+Quality thresholds and App-owned performance problem evaluation are implemented. Optional cumulative router counters provide restart-safe current-month totals and 12-month traffic history. Router traffic accounting uses only two optional cumulative source bindings and retains the current month plus 11 previous months. Final dashboard/package presentation remains a subsequent milestone before a production release.
 
 See [DOCS.md](DOCS.md) for configuration semantics.

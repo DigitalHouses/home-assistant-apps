@@ -18,6 +18,13 @@ def base_options() -> dict:
             "attempts": 3,
             "timeout_seconds": 2,
         },
+        "traffic": {
+            "traffic_download_total": "",
+            "traffic_upload_total": "",
+            "router_wan_status": "",
+            "router_download_rate": "",
+            "router_upload_rate": "",
+        },
         "recovery": {
             "enabled": False,
             "mode": "smart",
@@ -51,6 +58,19 @@ class ConfigTests(unittest.TestCase):
         self.assertTrue(config.speedtest.periodic_enabled)
         self.assertEqual(config.speedtest.interval_seconds, 1800)
         self.assertEqual(config.speedtest.timeout_seconds, 240)
+
+    def test_traffic_mappings_must_be_paired(self) -> None:
+        raw = base_options()
+        raw["traffic"]["traffic_download_total"] = "sensor.router_download_total"
+        with self.assertRaises(ConfigError):
+            parse_options(raw)
+
+    def test_traffic_is_enabled_with_both_cumulative_mappings(self) -> None:
+        raw = base_options()
+        raw["traffic"]["traffic_download_total"] = "sensor.router_download_total"
+        raw["traffic"]["traffic_upload_total"] = "sensor.router_upload_total"
+        config = parse_options(raw)
+        self.assertTrue(config.traffic.enabled)
 
     def test_recovery_requires_both_targets_when_enabled(self) -> None:
         raw = base_options()

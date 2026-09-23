@@ -29,7 +29,7 @@ TOPICS = {
 }
 
 
-def build_discovery_payload(app_version: str) -> dict[str, Any]:
+def build_discovery_payload(app_version: str, *, traffic_enabled: bool = False) -> dict[str, Any]:
     availability = {
         "topic": TOPICS["availability"],
         "payload_available": "online",
@@ -512,6 +512,90 @@ def build_discovery_payload(app_version: str) -> dict[str, Any]:
             "availability": availability,
         },
     }
+    if traffic_enabled:
+        components.update(
+            {
+                "traffic_download_total": {
+                    "platform": "sensor",
+                    "name": "Traffic download total",
+                    "unique_id": f"{ENTITY_PREFIX}_traffic_download_total",
+                    "default_entity_id": f"sensor.{ENTITY_PREFIX}_traffic_download_total",
+                    "state_topic": TOPICS["traffic"],
+                    "value_template": "{{ value_json.download_total_gib }}",
+                    "device_class": "data_size",
+                    "state_class": "total_increasing",
+                    "unit_of_measurement": "GiB",
+                    "suggested_display_precision": 3,
+                    "availability": traffic_availability,
+                    "availability_mode": "all",
+                },
+                "traffic_upload_total": {
+                    "platform": "sensor",
+                    "name": "Traffic upload total",
+                    "unique_id": f"{ENTITY_PREFIX}_traffic_upload_total",
+                    "default_entity_id": f"sensor.{ENTITY_PREFIX}_traffic_upload_total",
+                    "state_topic": TOPICS["traffic"],
+                    "value_template": "{{ value_json.upload_total_gib }}",
+                    "device_class": "data_size",
+                    "state_class": "total_increasing",
+                    "unit_of_measurement": "GiB",
+                    "suggested_display_precision": 3,
+                    "availability": traffic_availability,
+                    "availability_mode": "all",
+                },
+                "traffic_download_month": {
+                    "platform": "sensor",
+                    "name": "Traffic download this month",
+                    "unique_id": f"{ENTITY_PREFIX}_traffic_download_month",
+                    "default_entity_id": f"sensor.{ENTITY_PREFIX}_traffic_download_month",
+                    "state_topic": TOPICS["traffic"],
+                    "value_template": "{{ value_json.download_month_gib }}",
+                    "device_class": "data_size",
+                    "state_class": "total_increasing",
+                    "unit_of_measurement": "GiB",
+                    "suggested_display_precision": 3,
+                    "availability": traffic_availability,
+                    "availability_mode": "all",
+                },
+                "traffic_upload_month": {
+                    "platform": "sensor",
+                    "name": "Traffic upload this month",
+                    "unique_id": f"{ENTITY_PREFIX}_traffic_upload_month",
+                    "default_entity_id": f"sensor.{ENTITY_PREFIX}_traffic_upload_month",
+                    "state_topic": TOPICS["traffic"],
+                    "value_template": "{{ value_json.upload_month_gib }}",
+                    "device_class": "data_size",
+                    "state_class": "total_increasing",
+                    "unit_of_measurement": "GiB",
+                    "suggested_display_precision": 3,
+                    "availability": traffic_availability,
+                    "availability_mode": "all",
+                },
+                "traffic_history": {
+                    "platform": "sensor",
+                    "name": "Traffic history",
+                    "unique_id": f"{ENTITY_PREFIX}_traffic_history",
+                    "default_entity_id": f"sensor.{ENTITY_PREFIX}_traffic_history",
+                    "state_topic": TOPICS["traffic"],
+                    "value_template": "{{ value_json.history_count }}",
+                    "unit_of_measurement": "months",
+                    "json_attributes_topic": TOPICS["traffic"],
+                    "json_attributes_template": (
+                        "{{ {'month': value_json.month, "
+                        "'history': value_json.history, "
+                        "'updated_at': value_json.updated_at, "
+                        "'counter_resets': value_json.counter_resets, "
+                        "'source_changes': value_json.source_changes, "
+                        "'source': value_json.source} | tojson }}"
+                    ),
+                    "entity_category": "diagnostic",
+                    "icon": "mdi:chart-bar",
+                    "availability": traffic_availability,
+                    "availability_mode": "all",
+                },
+            }
+        )
+
     return {
         "device": device,
         "origin": {

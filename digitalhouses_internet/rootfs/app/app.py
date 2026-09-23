@@ -42,6 +42,12 @@ from recovery import (
 )
 from speedtest import load_last_result, run_speedtest, save_last_result
 from state import OutageTracker, atomic_write_json, iso, now_local
+from traffic import (
+    entity_total_bytes,
+    load_traffic_state,
+    save_traffic_state,
+    traffic_payload,
+)
 from traffic import TrafficStore, parse_counter_state
 
 APP_VERSION = os.getenv("APP_VERSION", "0.1.0-local")
@@ -51,6 +57,7 @@ THRESHOLDS_FILE = Path("/data/runtime/thresholds.json")
 TRAFFIC_FILE = Path("/data/runtime/traffic.json")
 TRAFFIC_POLL_SECONDS = 60
 RECENT_RESULTS_FILE = Path("/data/runtime/recent_results.json")
+TRAFFIC_FILE = Path("/data/runtime/traffic.json")
 
 
 class InternetApp:
@@ -83,6 +90,11 @@ class InternetApp:
         self.recent_results = load_recent_results(RECENT_RESULTS_FILE)
         self.performance = evaluate_performance(
             self.speedtest, self.thresholds
+        )
+        self.traffic = load_traffic_state(
+            TRAFFIC_FILE,
+            self.config.traffic.traffic_download_total,
+            self.config.traffic.traffic_upload_total,
         )
         self.traffic = TrafficStore.load(TRAFFIC_FILE)
         self.traffic_available = False
@@ -120,7 +132,7 @@ class InternetApp:
         client.subscribe(TOPICS["maximum_ping_command"], qos=1)
         client.publish(
             DISCOVERY_TOPIC,
-            json.dumps(build_discovery_payload(APP_VERSION)),
+            json.dumps(build_discovery_payload(APP_VERSION, traffic_enabled=self.config.traffic.enabled)),
             qos=1,
             retain=True,
         )
@@ -339,6 +351,7 @@ class InternetApp:
         self._publish_outages()
         self._publish_thresholds()
         self._publish_recent_results()
+        self._publish_traffic()
         self._publish_performance()
         self._publish_traffic()
         self._publish_problems()
@@ -693,6 +706,12 @@ class InternetApp:
             daemon=True,
         )
         periodic_speedtest.start()
+        traffic_thread = threading.Thread(
+            target=self._traffic_loop,
+            name="traffic-accounting",
+            daemon=True,
+        )
+        traffic_thread.start()
         traffic_thread = threading.Thread(
             target=self._traffic_loop,
             name="traffic",

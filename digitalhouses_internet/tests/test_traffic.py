@@ -9,63 +9,72 @@ from pathlib import Path
 APP_DIR = Path(__file__).resolve().parents[1] / "rootfs" / "app"
 sys.path.insert(0, str(APP_DIR))
 
-from traffic import TRAFFIC_HISTORY_MONTHS, TrafficStore, parse_counter_state
+from traffic import (
+    HISTORY_MONTHS,
+    default_traffic_state,
+    entity_total_bytes,
+    load_traffic_state,
+    save_traffic_state,
+    traffic_payload,
+    update_traffic,
+)
 
 
 class TrafficTests(unittest.TestCase):
     def test_unit_conversion(self) -> None:
         self.assertEqual(
-            parse_counter_state(
+            entity_total_bytes(
                 {"state": "1.5", "attributes": {"unit_of_measurement": "GiB"}}
             ),
-            int(1.5 * 1024**3),
+            int(1.5 * 1024 ** 3),
         )
         self.assertEqual(
-            parse_counter_state(
+            entity_total_bytes(
                 {"state": "2", "attributes": {"unit_of_measurement": "GB"}}
             ),
             2_000_000_000,
         )
 
-    def test_monthly_delta_and_counter_reset(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            store = TrafficStore.load(Path(tmp) / "traffic.json")
-            when = datetime(2026, 9, 23, 12, 0, tzinfo=timezone.utc)
-            store.update(1_000, 2_000, when)
-            store.update(1_500, 2_500, when)
-            store.update(100, 200, when)  # source counters reset
-            payload = store.payload(
-                configured=True,
-                available=True,
-                download_entity_id="sensor.down",
-                upload_entity_id="sensor.up",
-                when=when,
-            )
-            self.assertEqual(store.months["2026-09"]["download_bytes"], 600)
-            self.assertEqual(store.months["2026-09"]["upload_bytes"], 700)
-            self.assertEqual(payload["history_count"], 1)
+    def test_first_sample_is_baseline_not_usage(self) -> None:
+        state = default_traffic_state("sensor.down", "sensor.up")
+        now = datetime(2026, 9, 23, 10, 0, tzinfo=timezone.utc)
+        update_traffic(state, 1000, 500, when=now)
+        payload = traffic_payload(state, when=now)
+        self.assertEqual(payload["download_total_gib"], 0)
+        self.assertEqual(payload["upload_total_gib"], 0)
 
-    def test_new_month_establishes_new_baseline(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            store = TrafficStore.load(Path(tmp) / "traffic.json")
-            sep = datetime(2026, 9, 30, 23, 59, tzinfo=timezone.utc)
-            octo = datetime(2026, 10, 1, 0, 1, tzinfo=timezone.utc)
-            store.update(1_000, 1_000, sep)
-            store.update(2_000, 3_000, octo)
-            self.assertEqual(
-                store.months["2026-10"],
-                {"download_bytes": 0, "upload_bytes": 0},
-            )
+    def test_deltas_survive_counter_reset(self) -> None:
+        state = default_traffic_state("sensor.down", "sensor.up")
+        now = datetime(2026, 9, 23, 10, 0, tzinfo=timezone.utc)
+        update_traffic(state, 1000, 500, when=now)
+        update_traffic(state, 1600, 900, when=now)
+        update_traffic(state, 200, 100, when=now)
+        self.assertEqual(state["total"]["download_bytes"], 800)
+        self.assertEqual(state["total"]["upload_bytes"], 500)
+        self.assertEqual(state["counter_resets"], 1)
 
-    def test_retains_only_twelve_months(self) -> None:
+    def test_source_change_keeps_history_but_rebaselines(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            store = TrafficStore.load(Path(tmp) / "traffic.json")
-            for index in range(1, 14):
-                year = 2025 + (index // 12)
-                month = (index % 12) + 1
-                when = datetime(year, month, 15, 12, 0, tzinfo=timezone.utc)
-                store.update(index * 1_000, index * 2_000, when)
-            self.assertLessEqual(len(store.months), TRAFFIC_HISTORY_MONTHS)
+            path = Path(tmp) / "traffic.json"
+            state = default_traffic_state("sensor.old_down", "sensor.old_up")
+            now = datetime(2026, 9, 23, 10, 0, tzinfo=timezone.utc)
+            update_traffic(state, 1000, 500, when=now)
+            update_traffic(state, 2000, 1000, when=now)
+            save_traffic_state(path, state)
+
+            changed = load_traffic_state(path, "sensor.new_down", "sensor.new_up")
+            self.assertEqual(changed["total"]["download_bytes"], 1000)
+            self.assertIsNone(changed["last"]["download_bytes"])
+            self.assertEqual(changed["source_changes"], 1)
+
+    def test_history_is_limited_to_twelve_months(self) -> None:
+        state = default_traffic_state("sensor.down", "sensor.up")
+        for index in range(14):
+            year = 2025 + (index // 12)
+            month = (index % 12) + 1
+            when = datetime(year, month, 1, tzinfo=timezone.utc)
+            update_traffic(state, index * 100 + 100, index * 50 + 50, when=when)
+        self.assertLessEqual(len(state["months"]), HISTORY_MONTHS)
 
 
 if __name__ == "__main__":

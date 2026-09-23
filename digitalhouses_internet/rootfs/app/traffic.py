@@ -1,234 +1,244 @@
-"""Monthly router traffic accounting from cumulative Home Assistant sensors."""
+"""Persistent traffic accounting from Home Assistant cumulative counters."""
 
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from state import atomic_write_json, iso, now_local
+from state import atomic_write_json, iso, month_key, now_local
 
-TRAFFIC_HISTORY_MONTHS = 12
-TRAFFIC_SCHEMA_VERSION = 1
+HISTORY_MONTHS = 12
+GIB = 1024 ** 3
 
-_UNIT_FACTORS: dict[str, float] = {
-    "B": 1.0,
-    "kB": 1_000.0,
-    "KB": 1_000.0,
-    "MB": 1_000_000.0,
-    "GB": 1_000_000_000.0,
-    "TB": 1_000_000_000_000.0,
-    "KiB": 1024.0,
-    "MiB": 1024.0**2,
-    "GiB": 1024.0**3,
-    "TiB": 1024.0**4,
-    "bit": 1.0 / 8.0,
-    "kbit": 1_000.0 / 8.0,
-    "Mbit": 1_000_000.0 / 8.0,
-    "Gbit": 1_000_000_000.0 / 8.0,
+_UNIT_MULTIPLIERS: dict[str, float] = {
+    "b": 1,
+    "byte": 1,
+    "bytes": 1,
+    "kb": 1000,
+    "kib": 1024,
+    "mb": 1000 ** 2,
+    "mib": 1024 ** 2,
+    "gb": 1000 ** 3,
+    "gib": 1024 ** 3,
+    "tb": 1000 ** 4,
+    "tib": 1024 ** 4,
 }
 
 
-def month_key(value: datetime) -> str:
-    return value.astimezone().strftime("%Y-%m")
-
-
-def parse_counter_state(payload: Any) -> int:
-    if not isinstance(payload, dict):
-        raise ValueError("Home Assistant state payload must be an object")
-    raw = payload.get("state")
+def entity_total_bytes(payload: dict[str, Any]) -> int:
+    state = str(payload.get("state", "")).strip().lower()
+    if state in {"", "unknown", "unavailable", "none"}:
+        raise ValueError("traffic source state is unavailable")
     try:
-        value = float(raw)
-    except (TypeError, ValueError) as exc:
-        raise ValueError(f"counter state is not numeric: {raw!r}") from exc
+        value = float(state)
+    except ValueError as exc:
+        raise ValueError(f"traffic source state is not numeric: {state!r}") from exc
     if value < 0:
-        raise ValueError("counter state must not be negative")
+        raise ValueError("traffic source state must not be negative")
 
     attributes = payload.get("attributes")
     if not isinstance(attributes, dict):
         attributes = {}
-    unit = str(attributes.get("unit_of_measurement") or "B").strip()
-    factor = _UNIT_FACTORS.get(unit)
-    if factor is None:
-        raise ValueError(f"unsupported traffic counter unit: {unit!r}")
-    return max(0, int(round(value * factor)))
+    unit = str(attributes.get("unit_of_measurement") or "B").strip().lower()
+    multiplier = _UNIT_MULTIPLIERS.get(unit)
+    if multiplier is None:
+        raise ValueError(f"unsupported traffic unit: {unit!r}")
+    return max(0, int(round(value * multiplier)))
 
 
-def _delta(current: int, previous: int) -> int:
-    if current >= previous:
-        return current - previous
-    # Source counter reset (typically router/integration restart).
-    return current
+def _empty_month() -> dict[str, int]:
+    return {
+        "download_bytes": 0,
+        "upload_bytes": 0,
+        "samples": 0,
+        "counter_resets": 0,
+    }
 
 
-@dataclass
-class TrafficStore:
-    path: Path
-    months: dict[str, dict[str, int]]
-    last_month: str | None
-    last_download_bytes: int | None
-    last_upload_bytes: int | None
-    last_sample_at: str | None
+def default_traffic_state(
+    download_entity_id: str,
+    upload_entity_id: str,
+) -> dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "source": {
+            "download_entity_id": download_entity_id,
+            "upload_entity_id": upload_entity_id,
+        },
+        "last": {
+            "download_bytes": None,
+            "upload_bytes": None,
+            "observed_at": None,
+        },
+        "total": {
+            "download_bytes": 0,
+            "upload_bytes": 0,
+        },
+        "months": {},
+        "counter_resets": 0,
+        "source_changes": 0,
+        "updated_at": None,
+    }
 
-    @classmethod
-    def load(cls, path: Path) -> "TrafficStore":
-        try:
-            raw = json.loads(path.read_text(encoding="utf-8"))
-        except (FileNotFoundError, json.JSONDecodeError, OSError):
-            raw = {}
-        if not isinstance(raw, dict):
-            raw = {}
 
-        months_raw = raw.get("months")
-        months: dict[str, dict[str, int]] = {}
-        if isinstance(months_raw, dict):
-            for key, value in months_raw.items():
-                if not isinstance(key, str) or not isinstance(value, dict):
-                    continue
-                try:
-                    download = max(0, int(value.get("download_bytes", 0)))
-                    upload = max(0, int(value.get("upload_bytes", 0)))
-                except (TypeError, ValueError):
-                    continue
-                months[key] = {
-                    "download_bytes": download,
-                    "upload_bytes": upload,
-                }
+def load_traffic_state(
+    path: Path,
+    download_entity_id: str,
+    upload_entity_id: str,
+) -> dict[str, Any]:
+    expected = default_traffic_state(download_entity_id, upload_entity_id)
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return expected
+    if not isinstance(raw, dict):
+        return expected
 
-        last = raw.get("last")
-        if not isinstance(last, dict):
-            last = {}
+    total = raw.get("total")
+    months = raw.get("months")
+    last = raw.get("last")
+    source = raw.get("source")
+    if not isinstance(total, dict):
+        total = {}
+    if not isinstance(months, dict):
+        months = {}
+    if not isinstance(last, dict):
+        last = {}
+    if not isinstance(source, dict):
+        source = {}
 
-        def optional_int(name: str) -> int | None:
-            value = last.get(name)
-            if value is None:
-                return None
-            try:
-                return max(0, int(value))
-            except (TypeError, ValueError):
-                return None
-
-        store = cls(
-            path=path,
-            months=months,
-            last_month=(
-                str(last.get("month"))
-                if isinstance(last.get("month"), str)
-                else None
-            ),
-            last_download_bytes=optional_int("download_bytes"),
-            last_upload_bytes=optional_int("upload_bytes"),
-            last_sample_at=(
-                str(last.get("sampled_at"))
-                if isinstance(last.get("sampled_at"), str)
-                else None
-            ),
-        )
-        store._trim()
-        return store
-
-    def _trim(self) -> None:
-        keep = sorted(self.months)[-TRAFFIC_HISTORY_MONTHS:]
-        self.months = {key: self.months[key] for key in keep}
-
-    def update(
-        self,
-        download_bytes: int,
-        upload_bytes: int,
-        when: datetime | None = None,
-    ) -> None:
-        when = when or now_local()
-        month = month_key(when)
-        bucket = self.months.setdefault(
-            month,
-            {"download_bytes": 0, "upload_bytes": 0},
-        )
-
-        if (
-            self.last_month == month
-            and self.last_download_bytes is not None
-            and self.last_upload_bytes is not None
-        ):
-            bucket["download_bytes"] += _delta(
-                download_bytes, self.last_download_bytes
-            )
-            bucket["upload_bytes"] += _delta(
-                upload_bytes, self.last_upload_bytes
-            )
-
-        # At a calendar-month boundary the first sample establishes the new
-        # baseline. This avoids assigning an unknown cross-boundary delta to the
-        # wrong month. With the normal 60 s poll, continuous operation loses at
-        # most one polling interval at the boundary.
-        self.last_month = month
-        self.last_download_bytes = download_bytes
-        self.last_upload_bytes = upload_bytes
-        self.last_sample_at = iso(when)
-        self._trim()
-        self.save()
-
-    def payload(
-        self,
-        *,
-        configured: bool,
-        available: bool,
-        download_entity_id: str,
-        upload_entity_id: str,
-        when: datetime | None = None,
-    ) -> dict[str, Any]:
-        when = when or now_local()
-        month = month_key(when)
-        bucket = self.months.get(
-            month,
-            {"download_bytes": 0, "upload_bytes": 0},
-        )
-
-        def gib(value: int) -> float:
-            return round(value / (1024.0**3), 3)
-
-        history = []
-        for key in sorted(self.months, reverse=True)[:TRAFFIC_HISTORY_MONTHS]:
-            item = self.months[key]
-            download = int(item.get("download_bytes", 0))
-            upload = int(item.get("upload_bytes", 0))
-            history.append(
-                {
-                    "month": key,
-                    "download_gib": gib(download),
-                    "upload_gib": gib(upload),
-                    "total_gib": gib(download + upload),
-                }
-            )
-
-        download = int(bucket.get("download_bytes", 0))
-        upload = int(bucket.get("upload_bytes", 0))
-        return {
-            "configured": configured,
-            "available": available,
-            "month": month,
-            "download_gib": gib(download),
-            "upload_gib": gib(upload),
-            "total_gib": gib(download + upload),
-            "months": history,
-            "history_count": len(history),
-            "last_update": self.last_sample_at,
-            "download_source": download_entity_id,
-            "upload_source": upload_entity_id,
+    result = default_traffic_state(download_entity_id, upload_entity_id)
+    result["total"] = {
+        "download_bytes": max(0, int(total.get("download_bytes") or 0)),
+        "upload_bytes": max(0, int(total.get("upload_bytes") or 0)),
+    }
+    result["months"] = {
+        str(key): {
+            "download_bytes": max(0, int(value.get("download_bytes") or 0)),
+            "upload_bytes": max(0, int(value.get("upload_bytes") or 0)),
+            "samples": max(0, int(value.get("samples") or 0)),
+            "counter_resets": max(0, int(value.get("counter_resets") or 0)),
         }
+        for key, value in months.items()
+        if isinstance(value, dict)
+    }
+    result["counter_resets"] = max(0, int(raw.get("counter_resets") or 0))
+    result["source_changes"] = max(0, int(raw.get("source_changes") or 0))
+    result["updated_at"] = raw.get("updated_at")
 
-    def save(self) -> None:
-        atomic_write_json(
-            self.path,
+    same_source = (
+        source.get("download_entity_id") == download_entity_id
+        and source.get("upload_entity_id") == upload_entity_id
+    )
+    if same_source:
+        result["last"] = {
+            "download_bytes": last.get("download_bytes"),
+            "upload_bytes": last.get("upload_bytes"),
+            "observed_at": last.get("observed_at"),
+        }
+    else:
+        result["source_changes"] += 1
+    _trim_months(result)
+    return result
+
+
+def _trim_months(state: dict[str, Any]) -> None:
+    months = state["months"]
+    keep = sorted(months)[-HISTORY_MONTHS:]
+    state["months"] = {key: months[key] for key in keep}
+
+
+def _delta(current: int, previous: Any) -> tuple[int, bool]:
+    if previous is None:
+        return 0, False
+    previous_int = max(0, int(previous))
+    if current >= previous_int:
+        return current - previous_int, False
+    # Same source counter restarted. The current value is traffic accumulated
+    # since the reset; traffic between the last observation and reset is unknowable.
+    return current, True
+
+
+def update_traffic(
+    state: dict[str, Any],
+    download_bytes: int,
+    upload_bytes: int,
+    *,
+    when: datetime | None = None,
+) -> dict[str, Any]:
+    when = when or now_local()
+    current_month = month_key(when)
+    months = state["months"]
+    if current_month not in months:
+        months[current_month] = _empty_month()
+
+    download_delta, download_reset = _delta(
+        download_bytes, state["last"].get("download_bytes")
+    )
+    upload_delta, upload_reset = _delta(
+        upload_bytes, state["last"].get("upload_bytes")
+    )
+    reset = download_reset or upload_reset
+
+    state["total"]["download_bytes"] += download_delta
+    state["total"]["upload_bytes"] += upload_delta
+    months[current_month]["download_bytes"] += download_delta
+    months[current_month]["upload_bytes"] += upload_delta
+    months[current_month]["samples"] += 1
+    if reset:
+        months[current_month]["counter_resets"] += 1
+        state["counter_resets"] += 1
+
+    state["last"] = {
+        "download_bytes": download_bytes,
+        "upload_bytes": upload_bytes,
+        "observed_at": iso(when),
+    }
+    state["updated_at"] = iso(when)
+    _trim_months(state)
+    return state
+
+
+def save_traffic_state(path: Path, state: dict[str, Any]) -> None:
+    atomic_write_json(path, state)
+
+
+def _gib(value: int) -> float:
+    return round(max(0, int(value)) / GIB, 3)
+
+
+def traffic_payload(state: dict[str, Any], *, when: datetime | None = None) -> dict[str, Any]:
+    when = when or now_local()
+    current_month = month_key(when)
+    month = state["months"].get(current_month) or _empty_month()
+    history = []
+    for key in sorted(state["months"])[-HISTORY_MONTHS:]:
+        item = state["months"][key]
+        download = int(item.get("download_bytes") or 0)
+        upload = int(item.get("upload_bytes") or 0)
+        history.append(
             {
-                "schema_version": TRAFFIC_SCHEMA_VERSION,
-                "months": self.months,
-                "last": {
-                    "month": self.last_month,
-                    "download_bytes": self.last_download_bytes,
-                    "upload_bytes": self.last_upload_bytes,
-                    "sampled_at": self.last_sample_at,
-                },
-            },
+                "month": key,
+                "download_gib": _gib(download),
+                "upload_gib": _gib(upload),
+                "total_gib": _gib(download + upload),
+                "samples": int(item.get("samples") or 0),
+                "counter_resets": int(item.get("counter_resets") or 0),
+            }
         )
+
+    return {
+        "download_total_gib": _gib(state["total"]["download_bytes"]),
+        "upload_total_gib": _gib(state["total"]["upload_bytes"]),
+        "download_month_gib": _gib(month.get("download_bytes", 0)),
+        "upload_month_gib": _gib(month.get("upload_bytes", 0)),
+        "history_count": len(history),
+        "history": history,
+        "month": current_month,
+        "updated_at": state.get("updated_at"),
+        "counter_resets": int(state.get("counter_resets") or 0),
+        "source_changes": int(state.get("source_changes") or 0),
+        "source": dict(state.get("source") or {}),
+    }

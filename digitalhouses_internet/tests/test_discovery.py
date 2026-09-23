@@ -14,6 +14,23 @@ class DiscoveryTests(unittest.TestCase):
     def test_event_schema_version(self) -> None:
         self.assertEqual(EVENT_SCHEMA_VERSION, 2)
 
+    def test_traffic_entities_are_conditional(self) -> None:
+        without_traffic = build_discovery_payload("0.1.0")
+        self.assertNotIn(
+            "traffic_download_total", without_traffic["components"]
+        )
+        with_traffic = build_discovery_payload(
+            "0.1.0", traffic_enabled=True
+        )
+        self.assertIn("traffic_download_total", with_traffic["components"])
+        self.assertIn("traffic_history", with_traffic["components"])
+        self.assertEqual(
+            with_traffic["components"]["traffic_download_total"][
+                "default_entity_id"
+            ],
+            "sensor.dh_internet_app_traffic_download_total",
+        )
+
     def test_canonical_identity_and_runtime_diagnostics(self) -> None:
         payload = build_discovery_payload("0.1.0")
         self.assertEqual(
