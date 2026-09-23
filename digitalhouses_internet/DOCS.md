@@ -44,3 +44,12 @@ The App publishes machine-readable MQTT Events only. Initial event types are:
 - `recovery_error`
 
 Human-readable notification text belongs in the reusable Home Assistant notification package, with site-specific delivery kept in a local adapter.
+
+
+## Speedtest
+
+The App runs the official Ookla CLI. Periodic execution is controlled by App configuration with a 5..720 minute interval and may be disabled. A manual MQTT Discovery button runs the same backend path.
+
+The main graphable entities are Download, Upload, Ping, Jitter and Packet loss. Provider, external IP, selected server, result URL, last successful test timestamp and the last error are attributes of the compact Speedtest status entity rather than separate entities.
+
+A failed test does not overwrite the last successful measurement values. Runtime status becomes error or no_connectivity and the last successful result remains persisted under /data/runtime.

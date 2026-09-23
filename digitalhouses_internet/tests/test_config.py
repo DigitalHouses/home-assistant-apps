@@ -48,6 +48,9 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.recovery.retry_interval_seconds, 300)
         self.assertEqual(config.recovery.boot_wait_seconds, 180)
         self.assertEqual(config.recovery.cooldown_seconds, 900)
+        self.assertTrue(config.speedtest.periodic_enabled)
+        self.assertEqual(config.speedtest.interval_seconds, 1800)
+        self.assertEqual(config.speedtest.timeout_seconds, 240)
 
     def test_recovery_requires_both_targets_when_enabled(self) -> None:
         raw = base_options()

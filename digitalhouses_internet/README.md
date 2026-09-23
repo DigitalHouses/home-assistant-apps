@@ -1,6 +1,6 @@
 # DigitalHouses Internet App
 
-Home Assistant App for Internet availability monitoring, current-month outage history and automatic ONT/router recovery.
+Home Assistant App for Internet availability monitoring, Ookla Speedtest, current-month outage history and automatic ONT/router recovery.
 
 This is a new product. It does not migrate or reuse the stable MQTT identities or Recorder history of `digitalhouses_speedtest`.
 
@@ -40,8 +40,10 @@ Version `0.1.0` establishes the new product identity and the recovery/availabili
 - `button | switch` recovery actions via the Home Assistant Core API;
 - recovery countdown and Stop button;
 - structured MQTT Event entity;
-- Version and Started-at diagnostics.
+- Version and Started-at diagnostics;
+- Ookla Download, Upload, Ping, Jitter and Packet loss measurements;
+- manual and periodic Speedtest with compact status metadata.
 
-Ookla measurements, quality thresholds, monthly traffic statistics and final dashboard/package presentation are subsequent milestones before a production release.
+Quality thresholds, monthly traffic statistics and final dashboard/package presentation are subsequent milestones before a production release.
 
 See [DOCS.md](DOCS.md) for configuration semantics.

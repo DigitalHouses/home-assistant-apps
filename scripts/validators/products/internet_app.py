@@ -16,6 +16,8 @@ def validate_internet(root: Path, app: Path, context: dict[str, Any]) -> None:
 
     if "router_ip" not in options:
         fail(f"{app.name}: router_ip must be an App option")
+    if "speedtest" not in options:
+        fail(f"{app.name}: speedtest must be an App option")
 
     recovery = options.get("recovery")
     if not isinstance(recovery, dict):

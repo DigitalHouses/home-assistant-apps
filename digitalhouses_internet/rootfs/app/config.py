@@ -23,6 +23,13 @@ class ConnectivityConfig:
 
 
 @dataclass(frozen=True)
+class SpeedtestConfig:
+    periodic_enabled: bool
+    interval_seconds: int
+    timeout_seconds: int
+
+
+@dataclass(frozen=True)
 class RecoveryTarget:
     action: str
     entity_id: str
@@ -45,6 +52,7 @@ class RecoveryConfig:
 class AppConfig:
     router_ip: str
     connectivity: ConnectivityConfig
+    speedtest: SpeedtestConfig
     recovery: RecoveryConfig
     log_level: str
 
@@ -92,6 +100,10 @@ def parse_options(raw: Any) -> AppConfig:
     if not isinstance(connectivity_raw, dict):
         connectivity_raw = {}
 
+    speedtest_raw = raw.get("speedtest")
+    if not isinstance(speedtest_raw, dict):
+        speedtest_raw = {}
+
     recovery_raw = raw.get("recovery")
     if not isinstance(recovery_raw, dict):
         recovery_raw = {}
@@ -124,6 +136,14 @@ def parse_options(raw: Any) -> AppConfig:
             attempts=_bounded_int(connectivity_raw.get("attempts"), 1, 10, 3),
             timeout_seconds=_bounded_int(
                 connectivity_raw.get("timeout_seconds"), 1, 30, 2
+            ),
+        ),
+        speedtest=SpeedtestConfig(
+            periodic_enabled=bool(speedtest_raw.get("periodic_enabled", True)),
+            interval_seconds=60
+            * _bounded_int(speedtest_raw.get("interval_minutes"), 5, 720, 30),
+            timeout_seconds=_bounded_int(
+                speedtest_raw.get("timeout_seconds"), 30, 600, 240
             ),
         ),
         recovery=RecoveryConfig(

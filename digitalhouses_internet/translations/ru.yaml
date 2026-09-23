@@ -4,6 +4,9 @@ configuration:
     description: LAN IP-адрес для проверки доступности самого роутера.
   connectivity_check:
     name: Проверка соединения
+  speedtest:
+    name: Speedtest
+    description: Интервал и таймаут периодического Ookla Speedtest.
   recovery:
     name: Восстановление
   log_level:

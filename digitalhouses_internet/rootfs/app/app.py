@@ -28,10 +28,12 @@ from recovery import (
     choose_targets,
     target_by_name,
 )
+from speedtest import load_last_result, run_speedtest, save_last_result
 from state import OutageTracker, iso, now_local
 
 APP_VERSION = os.getenv("APP_VERSION", "0.1.0-local")
 OUTAGES_FILE = Path("/data/runtime/outages.json")
+SPEEDTEST_FILE = Path("/data/runtime/speedtest.json")
 
 
 class InternetApp:
@@ -49,6 +51,7 @@ class InternetApp:
         self.stop_recovery = threading.Event()
         self.recovery_thread: threading.Thread | None = None
         self.lock = threading.RLock()
+        self.speedtest_lock = threading.Lock()
 
         self.snapshot = ConnectivitySnapshot(False, False)
         self.failure_count = 0
@@ -58,6 +61,7 @@ class InternetApp:
         self.recovery_countdown = 0
 
         self.outages = OutageTracker.load(OUTAGES_FILE)
+        self.speedtest = load_last_result(SPEEDTEST_FILE)
         self.ha_api = HomeAssistantApi()
 
         self.mqtt = mqtt.Client(
@@ -114,6 +118,12 @@ class InternetApp:
                     self.recovery_state = "stopped"
             self._publish_state()
             self._event("recovery_stopped", reason="user")
+        elif payload == "RUN_SPEEDTEST":
+            threading.Thread(
+                target=self._run_speedtest,
+                name="speedtest-manual",
+                daemon=True,
+            ).start()
 
     def _state_payload(self) -> dict[str, Any]:
         with self.lock:
@@ -122,6 +132,7 @@ class InternetApp:
                 "router_up": self.snapshot.router_up,
                 "app_version": APP_VERSION,
                 "started_at": self.started_at,
+                "speedtest": dict(self.speedtest),
                 "recovery": {
                     "enabled": self.config.recovery.enabled,
                     "mode": self.config.recovery.mode,
@@ -195,6 +206,73 @@ class InternetApp:
                 return False
         self._set_recovery_state(state, countdown=0)
         return True
+
+    def _set_speedtest_status(
+        self, status: str, *, error: str | None = None
+    ) -> None:
+        with self.lock:
+            self.speedtest["status"] = status
+            self.speedtest["error"] = error
+        self._publish_state()
+
+    def _run_speedtest(self) -> None:
+        if not self.speedtest_lock.acquire(blocking=False):
+            self.log.info("Speedtest is already running")
+            return
+        try:
+            latest = sample(
+                self.config.router_ip,
+                self.config.connectivity.timeout_seconds,
+            )
+            with self.lock:
+                self.snapshot = latest
+            if not latest.internet_up:
+                self._set_speedtest_status(
+                    "no_connectivity", error="Internet unavailable"
+                )
+                self.log.warning("Speedtest skipped: Internet unavailable")
+                return
+
+            self._set_speedtest_status("running", error=None)
+            self.log.info("Running Ookla Speedtest")
+            try:
+                result = run_speedtest(self.config.speedtest.timeout_seconds)
+            except RuntimeError as exc:
+                self._set_speedtest_status("error", error=str(exc))
+                self.log.error("Speedtest failed: %s", exc)
+                self._event("speedtest_failed", reason=str(exc))
+                return
+
+            with self.lock:
+                self.speedtest = result
+                save_last_result(SPEEDTEST_FILE, result)
+            self._publish_state()
+            self._event(
+                "speedtest_completed",
+                download_mbps=result["download_mbps"],
+                upload_mbps=result["upload_mbps"],
+                ping_ms=result["ping_ms"],
+                jitter_ms=result["jitter_ms"],
+                packet_loss_pct=result["packet_loss_pct"],
+            )
+            self.log.info(
+                "Speedtest completed: download %.1f Mbit/s, "
+                "upload %.1f Mbit/s, ping %.1f ms",
+                result["download_mbps"],
+                result["upload_mbps"],
+                result["ping_ms"],
+            )
+        finally:
+            self.speedtest_lock.release()
+
+    def _periodic_speedtest_loop(self) -> None:
+        if not self.config.speedtest.periodic_enabled:
+            self.log.info("Periodic Speedtest is disabled")
+            return
+        interval = self.config.speedtest.interval_seconds
+        self.log.info("Periodic Speedtest interval: %s minutes", interval // 60)
+        while not self.stop_app.wait(interval):
+            self._run_speedtest()
 
     def _recovery_worker(self) -> None:
         cfg = self.config.recovery
@@ -350,6 +428,12 @@ class InternetApp:
         port = int(os.getenv("MQTT_PORT", "1883"))
         self.mqtt.connect(host, port, keepalive=60)
         self.mqtt.loop_start()
+        periodic_speedtest = threading.Thread(
+            target=self._periodic_speedtest_loop,
+            name="speedtest-periodic",
+            daemon=True,
+        )
+        periodic_speedtest.start()
         try:
             while not self.stop_app.is_set():
                 snapshot = sample(

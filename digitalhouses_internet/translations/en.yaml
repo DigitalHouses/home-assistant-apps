@@ -4,6 +4,9 @@ configuration:
     description: LAN IP address used to check whether the router itself is reachable.
   connectivity_check:
     name: Connectivity check
+  speedtest:
+    name: Speedtest
+    description: Ookla Speedtest periodic interval and timeout.
   recovery:
     name: Recovery
   log_level:

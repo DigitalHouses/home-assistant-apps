@@ -22,6 +22,10 @@ options:
     interval_seconds: 10
     attempts: 3
     timeout_seconds: 2
+  speedtest:
+    periodic_enabled: true
+    interval_minutes: 30
+    timeout_seconds: 240
   recovery:
     enabled: false
     mode: smart
@@ -44,6 +48,10 @@ schema:
     interval_seconds: int(5,3600)
     attempts: int(1,10)
     timeout_seconds: int(1,30)
+  speedtest:
+    periodic_enabled: bool
+    interval_minutes: int(5,720)
+    timeout_seconds: int(30,600)
   recovery:
     enabled: bool
     mode: list(smart|both)

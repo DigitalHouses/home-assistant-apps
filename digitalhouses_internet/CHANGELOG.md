@@ -9,3 +9,5 @@
 - Limited recovery actions to Home Assistant `button` and `switch` entities.
 - Added guarded switch power restoration, recovery countdown, Stop control and structured events.
 - Added Version and Started-at runtime diagnostics.
+- Added Ookla Speedtest runtime with periodic and manual execution.
+- Added Download, Upload, Ping, Jitter, Packet loss and compact Speedtest status entities.
