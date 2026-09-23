@@ -49,3 +49,14 @@ Version `0.1.0` establishes the new product identity and the recovery/availabili
 Quality thresholds and App-owned performance problem evaluation are implemented. Router integration uses at most five optional HA bindings: cumulative Download/Upload totals, WAN state and current Download/Upload rates. Together with two recovery entities the App stays within seven external HA bindings. Monthly traffic retains the current month plus 11 previous months. Final dashboard/package presentation remains a subsequent milestone before a production release.
 
 See [DOCS.md](DOCS.md) for configuration semantics.
+
+## Home Assistant presentation
+
+The App owns all monitoring and recovery logic. The optional reusable Home Assistant layer is deliberately small:
+
+- `examples/packages/dh_internet_app_global_package.yaml` — Recorder whitelist plus schema-v2 Event formatting into the neutral `digitalhouses_internet` Home Assistant event.
+- `examples/lovelace/dh_internet_app_dashboard.yaml` — reference Sections dashboard using the canonical `dh_internet_app_*` entities.
+
+A site-local notification package may listen for `digitalhouses_internet` and deliver its prepared `title` / `message` through Telegram, mobile app or another local transport. The reusable package does not contain customer-specific notification targets.
+
+The reference dashboard uses Mushroom and mini-graph-card for presentation. Optional router/traffic cards remain hidden when the corresponding mappings are not configured.
