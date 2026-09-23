@@ -7,6 +7,16 @@ from validators.common import fail, load_yaml, require_files
 
 
 def validate_internet(root: Path, app: Path, context: dict[str, Any]) -> None:
+    required_examples = (
+        app / "examples" / "packages" / "dh_app_internet_package.yaml",
+        app / "examples" / "packages" / "dh_app_internet_notification_package.yaml",
+        app / "examples" / "packages" / "locales" / "dh_app_internet_notification_package_ru.yaml",
+        app / "examples" / "lovelace" / "dh_app_internet_dashboard.yaml",
+    )
+    for path in required_examples:
+        if not path.is_file():
+            fail(f"{app.name}: missing presentation example {path.relative_to(root)}")
+
     config = context["config"]
     options = config.get("options")
     schema = config.get("schema")

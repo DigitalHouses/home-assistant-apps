@@ -1,0 +1,30 @@
+# =============================================================================
+# DigitalHouses Internet App package
+# Recommended target: /config/packages/Global/DH_APP/dh_app_internet_package.yaml
+# =============================================================================
+
+dh_app_internet_package:
+
+  recorder:
+    include:
+      entities:
+        - binary_sensor.dh_internet_app_internet
+        - binary_sensor.dh_internet_app_router
+        - binary_sensor.dh_internet_app_google_connectivity
+        - binary_sensor.dh_internet_app_cloudflare_connectivity
+        - sensor.dh_internet_app_download
+        - sensor.dh_internet_app_upload
+        - sensor.dh_internet_app_ping
+        - sensor.dh_internet_app_jitter
+        - sensor.dh_internet_app_packet_loss
+        - sensor.dh_internet_app_availability_month
+        - binary_sensor.dh_internet_app_low_download
+        - binary_sensor.dh_internet_app_low_upload
+        - binary_sensor.dh_internet_app_high_ping
+        - binary_sensor.dh_internet_app_performance_problem
+        - sensor.dh_internet_app_router_download_rate
+        - sensor.dh_internet_app_router_upload_rate
+        - sensor.dh_internet_app_traffic_download_total
+        - sensor.dh_internet_app_traffic_upload_total
+        - sensor.dh_internet_app_traffic_download_month
+        - sensor.dh_internet_app_traffic_upload_month

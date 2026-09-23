@@ -85,3 +85,12 @@ Temperature, connected-client count, uptime and last-boot bindings are intention
 The App publishes machine-readable MQTT Event entities using schema version 2. Event payloads contain semantics such as event type, target, cycle, reason, values and timestamps.
 
 Human-readable notification text belongs in the reusable Home Assistant package. Site-specific delivery such as Telegram or mobile notifications remains a local adapter and is not a dependency of the App.
+
+
+## Home Assistant presentation layer
+
+The reusable package does not calculate Internet state, recovery decisions, quality thresholds, outages or traffic. Those remain App-owned.
+
+`dh_app_internet_package.yaml` whitelists only useful time-series entities for Recorder. Rich list/history attributes, Event entities, Version/Started-at metadata and aggregate presentation sensors are intentionally not recorded.
+
+The notification package converts machine schema-v2 Event entities into a stable Home Assistant event named `dh_internet_app_notification` containing `title`, `message`, `severity` and machine context. It has no dependency on Telegram, `write2log`, a mobile app or a customer-specific service.
