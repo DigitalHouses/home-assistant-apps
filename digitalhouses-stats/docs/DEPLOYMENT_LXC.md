@@ -44,7 +44,7 @@ The password belongs only in:
 Example:
 
 ```text
-DATABASE_URL=postgresql+psycopg://digitalhouses_stats:CHANGE_ME@127.0.0.1/digitalhouses_stats
+DATABASE_URL=postgresql+psycopg://digitalhouses_stats:CHANGE_ME@127.0.0.1/digitalhouses_stats?client_encoding=utf8
 LOG_LEVEL=INFO
 ```
 
