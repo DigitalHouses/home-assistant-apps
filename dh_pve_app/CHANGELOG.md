@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.5.10
+
+- Fix sequential fan friendly-name numbering in Home Assistant MQTT Discovery by excluding fan-summary metadata from the index. A host with one confirmed fan now correctly publishes `Fan 1` instead of `Fan 6`; additional real fans are numbered `Fan 2`, `Fan 3`, ... while entity identities remain unchanged.
+
 ## 0.5.9
 
 - Shorten Home Assistant MQTT Discovery fan friendly names to sequential `Fan 1`, `Fan 2`, ... labels. Fan diagnostic entities use the same short prefix while existing `unique_id` and `default_entity_id` values remain unchanged, preserving entity identity, history and automations.
