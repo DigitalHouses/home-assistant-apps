@@ -86,11 +86,12 @@ The App publishes machine-readable MQTT Event entities using schema version 2. E
 
 Human-readable notification text belongs in the reusable Home Assistant package. Site-specific delivery such as Telegram or mobile notifications remains a local adapter and is not a dependency of the App.
 
-
 ## Home Assistant presentation layer
 
-The reusable package does not calculate Internet state, recovery decisions, quality thresholds, outages or traffic. Those remain App-owned.
+The reusable Home Assistant layer does not calculate Internet state, recovery decisions, quality thresholds, outages or traffic. Those remain App-owned.
 
-`dh_app_internet_package.yaml` whitelists only useful time-series entities for Recorder. Rich list/history attributes, Event entities, Version/Started-at metadata and aggregate presentation sensors are intentionally not recorded.
+`dh_internet_app_global_package.yaml` contains only the Recorder whitelist for useful time-series entities. Rich list/history attributes, MQTT Event entities, Version/Started-at metadata and aggregate presentation sensors are intentionally not recorded.
 
-The notification package converts machine schema-v2 Event entities into a stable Home Assistant event named `dh_internet_app_notification` containing `title`, `message`, `severity` and machine context. It has no dependency on Telegram, `write2log`, a mobile app or a customer-specific service.
+`dh_internet_app_notification_package.yaml` and its Russian alternative convert machine schema-v2 Events from `event.dh_internet_app_event` into the stable neutral Home Assistant event `dh_internet_app_notification` with `title`, `message`, `severity` and machine context. Install exactly one notification locale.
+
+Site-specific delivery such as Telegram, `mobile_app` or `write2log` stays outside the reusable package.

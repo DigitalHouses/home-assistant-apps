@@ -52,11 +52,13 @@ See [DOCS.md](DOCS.md) for configuration semantics.
 
 ## Home Assistant presentation
 
-The App owns all monitoring and recovery logic. The optional reusable Home Assistant layer is deliberately small:
+The reusable Home Assistant layer is deliberately split by responsibility:
 
-- `examples/packages/dh_internet_app_global_package.yaml` — Recorder whitelist plus schema-v2 Event formatting into the neutral `digitalhouses_internet` Home Assistant event.
-- `examples/lovelace/dh_internet_app_dashboard.yaml` — reference Sections dashboard using the canonical `dh_internet_app_*` entities.
+- `examples/packages/dh_internet_app_global_package.yaml` — Recorder whitelist only;
+- `examples/packages/dh_internet_app_notification_package.yaml` — English schema-v2 Event presentation;
+- `examples/packages/locales/dh_internet_app_notification_package_ru.yaml` — Russian notification presentation; install exactly one notification locale;
+- `examples/lovelace/dh_internet_app_dashboard.yaml` — reference Sections dashboard.
 
-A site-local notification package may listen for `digitalhouses_internet` and deliver its prepared `title` / `message` through Telegram, mobile app or another local transport. The reusable package does not contain customer-specific notification targets.
+Both notification locales emit the neutral Home Assistant event `dh_internet_app_notification`. A site-local adapter may deliver that event through Telegram, `mobile_app` or another transport. The reusable packages contain no customer-specific notification target, `write2log` dependency or private service.
 
-The reference dashboard uses Mushroom and mini-graph-card for presentation. Optional router/traffic cards remain hidden when the corresponding mappings are not configured.
+The reference dashboard uses Mushroom and mini-graph-card. Optional Router and traffic sections remain hidden when their mappings are not configured.

@@ -1,91 +1,30 @@
-# DigitalHouses Internet App — reusable Home Assistant package
-#
-# App owns monitoring, recovery, outage accounting, Speedtest, thresholds,
-# traffic accounting and structured events. Home Assistant only records useful
-# history and converts machine events to a neutral notification event.
+# =============================================================================
+# DigitalHouses Internet App package
+# Recommended target: /config/packages/Global/DH_APP/dh_internet_app_global_package.yaml
+# =============================================================================
+
 dh_internet_app_global_package:
-  automation:
-    - id: dh_internet_app__notification_event_adapter
-      alias: "_[dh_internet_app] - notification event adapter"
-      description: "Formats DigitalHouses Internet App schema-v2 events for a site-local notifier."
-      mode: queued
-      max: 20
-      trigger:
-        - platform: state
-          entity_id: event.dh_internet_app_event
-      condition:
-        - condition: template
-          value_template: >-
-            {{ trigger.to_state is not none
-               and trigger.to_state.attributes.get('event_type', '') != ''
-               and trigger.to_state.attributes.get('event_type') != 'speedtest_completed' }}
-      variables:
-        event_type: "{{ trigger.to_state.attributes.get('event_type', 'unknown') }}"
-        a: "{{ trigger.to_state.attributes }}"
-        title: >-
-          {% if event_type == 'connection_lost' %}🌐 Интернет недоступен
-          {% elif event_type == 'connection_restored' %}✅ Интернет восстановлен
-          {% elif event_type == 'recovery_started' %}🔄 Recovery запущен
-          {% elif event_type == 'recovery_action' %}🔄 Recovery: действие
-          {% elif event_type == 'recovery_stopped' %}⏹️ Recovery остановлен
-          {% elif event_type == 'recovery_exhausted' %}⚠️ Recovery: попытки исчерпаны
-          {% elif event_type == 'recovery_error' %}❌ Ошибка Recovery
-          {% elif event_type == 'speedtest_failed' %}❌ Ошибка Speedtest
-          {% elif event_type == 'performance_problem_started' %}📉 Качество Internet ухудшилось
-          {% elif event_type == 'performance_problem_recovered' %}📈 Качество Internet восстановилось
-          {% elif event_type == 'performance_problem_updated' %}📊 Изменилось состояние качества Internet
-          {% else %}Internet App
-          {% endif %}
-        message: >-
-          {% if event_type == 'connection_lost' %}
-            Internet недоступен. Router: {{ 'доступен' if a.get('router_up') else 'недоступен' }}.
-          {% elif event_type == 'connection_restored' %}
-            Internet восстановлен. Длительность сбоя: {{ a.get('duration_seconds', 0) | int }} с.
-          {% elif event_type == 'recovery_started' %}
-            Цикл {{ a.get('cycle', '?') }}. Режим: {{ a.get('mode', '?') }}. Цели: {{ a.get('targets', []) | join(', ') }}.
-          {% elif event_type == 'recovery_action' %}
-            {{ a.get('target', '?') | upper }}: {{ a.get('action', '?') }}. Цикл {{ a.get('cycle', '?') }}.
-          {% elif event_type == 'recovery_stopped' %}
-            Дальнейшие попытки Recovery остановлены для текущего сбоя.
-          {% elif event_type == 'recovery_exhausted' %}
-            Выполнено циклов: {{ a.get('cycles', '?') }}. Cooldown: {{ a.get('cooldown_seconds', 0) | int }} с.
-          {% elif event_type == 'recovery_error' %}
-            {{ a.get('error', a.get('reason', 'Неизвестная ошибка')) }}
-          {% elif event_type == 'speedtest_failed' %}
-            {{ a.get('reason', 'Ookla Speedtest завершился ошибкой') }}
-          {% elif event_type in ['performance_problem_started', 'performance_problem_updated'] %}
-            Причины: {{ a.get('reasons', []) | join(', ') }}.
-            Download {{ a.get('download_mbps', '?') }} Mbit/s · Upload {{ a.get('upload_mbps', '?') }} Mbit/s · Ping {{ a.get('ping_ms', '?') }} ms.
-          {% elif event_type == 'performance_problem_recovered' %}
-            Download {{ a.get('download_mbps', '?') }} Mbit/s · Upload {{ a.get('upload_mbps', '?') }} Mbit/s · Ping {{ a.get('ping_ms', '?') }} ms.
-          {% else %}
-            {{ event_type }}
-          {% endif %}
-      action:
-        - event: digitalhouses_internet
-          event_data:
-            event: "{{ event_type }}"
-            title: "{{ title | trim }}"
-            message: "{{ message | trim }}"
 
   recorder:
     include:
       entities:
-        - binary_sensor.dh_internet_app_google_connectivity
-        - binary_sensor.dh_internet_app_cloudflare_connectivity
         - binary_sensor.dh_internet_app_internet
         - binary_sensor.dh_internet_app_router_connectivity
-        - sensor.dh_internet_app_availability_month
+        - binary_sensor.dh_internet_app_google_connectivity
+        - binary_sensor.dh_internet_app_cloudflare_connectivity
         - sensor.dh_internet_app_download
         - sensor.dh_internet_app_upload
         - sensor.dh_internet_app_ping
         - sensor.dh_internet_app_jitter
         - sensor.dh_internet_app_packet_loss
+        - sensor.dh_internet_app_availability_month
         - binary_sensor.dh_internet_app_low_download
         - binary_sensor.dh_internet_app_low_upload
         - binary_sensor.dh_internet_app_high_ping
         - binary_sensor.dh_internet_app_performance_problem
-        - sensor.dh_internet_app_traffic_download_month
-        - sensor.dh_internet_app_traffic_upload_month
         - sensor.dh_internet_app_router_download_rate
         - sensor.dh_internet_app_router_upload_rate
+        - sensor.dh_internet_app_traffic_download_total
+        - sensor.dh_internet_app_traffic_upload_total
+        - sensor.dh_internet_app_traffic_download_month
+        - sensor.dh_internet_app_traffic_upload_month

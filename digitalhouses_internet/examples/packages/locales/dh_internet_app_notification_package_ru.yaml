@@ -3,7 +3,7 @@
 # Install this instead of the default English notification package.
 # =============================================================================
 
-dh_app_internet_notification_package_ru:
+dh_internet_app_notification_package_ru:
 
   automation:
     - id: dh_internet_app_notifications_ru

@@ -5,7 +5,7 @@
 # Install exactly one notification locale.
 # =============================================================================
 
-dh_app_internet_notification_package:
+dh_internet_app_notification_package:
 
   automation:
     - id: dh_internet_app_notifications

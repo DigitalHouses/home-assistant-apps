@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -7,16 +8,6 @@ from validators.common import fail, load_yaml, require_files
 
 
 def validate_internet(root: Path, app: Path, context: dict[str, Any]) -> None:
-    required_examples = (
-        app / "examples" / "packages" / "dh_app_internet_package.yaml",
-        app / "examples" / "packages" / "dh_app_internet_notification_package.yaml",
-        app / "examples" / "packages" / "locales" / "dh_app_internet_notification_package_ru.yaml",
-        app / "examples" / "lovelace" / "dh_app_internet_dashboard.yaml",
-    )
-    for path in required_examples:
-        if not path.is_file():
-            fail(f"{app.name}: missing presentation example {path.relative_to(root)}")
-
     config = context["config"]
     options = config.get("options")
     schema = config.get("schema")
@@ -29,6 +20,7 @@ def validate_internet(root: Path, app: Path, context: dict[str, Any]) -> None:
         fail(f"{app.name}: speedtest must be an App option")
     if "traffic" not in options:
         fail(f"{app.name}: traffic must be an App option")
+
     traffic = options.get("traffic")
     if not isinstance(traffic, dict):
         fail(f"{app.name}: traffic options must be a mapping")
@@ -60,9 +52,8 @@ def validate_internet(root: Path, app: Path, context: dict[str, Any]) -> None:
                 f"{app.name}: recovery.{name}.action must be button or switch"
             )
 
-    discovery = (app / "rootfs" / "app" / "discovery.py").read_text(
-        encoding="utf-8"
-    )
+    discovery_path = app / "rootfs" / "app" / "discovery.py"
+    discovery = discovery_path.read_text(encoding="utf-8")
     required = (
         'DEVICE_ID = "dh_internet_app"',
         'ENTITY_PREFIX = "dh_internet_app"',
@@ -81,26 +72,97 @@ def validate_internet(root: Path, app: Path, context: dict[str, Any]) -> None:
     if '"script"' in recovery_source or "'script'" in recovery_source:
         fail(f"{app.name}: script recovery action is forbidden")
 
-    validate_presentation_examples(root, app)
+    validate_presentation_examples(root, app, discovery)
 
 
-def validate_presentation_examples(root: Path, app: Path) -> None:
-    package_path = app / "examples" / "packages" / "dh_internet_app_global_package.yaml"
-    dashboard_path = app / "examples" / "lovelace" / "dh_internet_app_dashboard.yaml"
-    require_files(root, [package_path, dashboard_path])
+def validate_presentation_examples(
+    root: Path,
+    app: Path,
+    discovery: str,
+) -> None:
+    global_path = (
+        app / "examples" / "packages" / "dh_internet_app_global_package.yaml"
+    )
+    notification_path = (
+        app / "examples" / "packages" / "dh_internet_app_notification_package.yaml"
+    )
+    notification_ru_path = (
+        app
+        / "examples"
+        / "packages"
+        / "locales"
+        / "dh_internet_app_notification_package_ru.yaml"
+    )
+    dashboard_path = (
+        app / "examples" / "lovelace" / "dh_internet_app_dashboard.yaml"
+    )
+    require_files(
+        root,
+        [global_path, notification_path, notification_ru_path, dashboard_path],
+    )
 
-    package = load_yaml(package_path, root)
+    global_package = load_yaml(global_path, root)
+    notification = load_yaml(notification_path, root)
+    notification_ru = load_yaml(notification_ru_path, root)
     dashboard = load_yaml(dashboard_path, root)
-    if not isinstance(package, dict) or "dh_internet_app_global_package" not in package:
+
+    if (
+        not isinstance(global_package, dict)
+        or "dh_internet_app_global_package" not in global_package
+    ):
         fail(f"{app.name}: invalid global presentation package")
+    if (
+        not isinstance(notification, dict)
+        or "dh_internet_app_notification_package" not in notification
+    ):
+        fail(f"{app.name}: invalid notification package")
+    if (
+        not isinstance(notification_ru, dict)
+        or "dh_internet_app_notification_package_ru" not in notification_ru
+    ):
+        fail(f"{app.name}: invalid Russian notification package")
     if not isinstance(dashboard, dict) or dashboard.get("path") != "internet":
         fail(f"{app.name}: invalid reference dashboard")
 
-    package_text = package_path.read_text(encoding="utf-8")
+    global_text = global_path.read_text(encoding="utf-8")
+    notification_text = notification_path.read_text(encoding="utf-8")
+    notification_ru_text = notification_ru_path.read_text(encoding="utf-8")
     dashboard_text = dashboard_path.read_text(encoding="utf-8")
-    if "event.dh_internet_app_event" not in package_text:
-        fail(f"{app.name}: package must consume canonical Event entity")
-    if "digitalhouses_internet" not in package_text:
-        fail(f"{app.name}: package must emit neutral notification event")
+
+    if "automation:" in global_text:
+        fail(f"{app.name}: global package must remain Recorder-only")
+    for text in (notification_text, notification_ru_text):
+        if "event.dh_internet_app_event" not in text:
+            fail(f"{app.name}: notification package must consume canonical Event")
+        if "dh_internet_app_notification" not in text:
+            fail(f"{app.name}: notification package must emit neutral event")
+        for private_dependency in ("write2log", "notify.mobile_app", "telegram_bot"):
+            if private_dependency in text:
+                fail(
+                    f"{app.name}: notification package contains private dependency "
+                    f"{private_dependency!r}"
+                )
+
     if "dh_internet_app_" not in dashboard_text:
         fail(f"{app.name}: dashboard must use canonical entities")
+
+    discovered = {
+        item.replace("{ENTITY_PREFIX}", "dh_internet_app")
+        for item in re.findall(
+            r'"default_entity_id":\s*f?"([^"]+)"',
+            discovery,
+        )
+    }
+    dashboard_entities = set(
+        re.findall(
+            r"\b(?:sensor|binary_sensor|button|number|event)\."
+            r"dh_internet_app_[a-z0-9_]+",
+            dashboard_text,
+        )
+    )
+    missing = sorted(dashboard_entities - discovered)
+    if missing:
+        fail(
+            f"{app.name}: dashboard references undiscovered entities: "
+            + ", ".join(missing)
+        )
