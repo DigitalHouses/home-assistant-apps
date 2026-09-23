@@ -18,12 +18,14 @@ def base_options() -> dict:
             "attempts": 3,
             "timeout_seconds": 2,
         },
+        "speedtest": {
+            "periodic_enabled": True,
+            "interval_minutes": 30,
+            "timeout_seconds": 240,
+        },
         "traffic": {
-            "traffic_download_total": "",
-            "traffic_upload_total": "",
-            "router_wan_status": "",
-            "router_download_rate": "",
-            "router_upload_rate": "",
+            "download_total_entity_id": "",
+            "upload_total_entity_id": "",
         },
         "recovery": {
             "enabled": False,
@@ -58,19 +60,29 @@ class ConfigTests(unittest.TestCase):
         self.assertTrue(config.speedtest.periodic_enabled)
         self.assertEqual(config.speedtest.interval_seconds, 1800)
         self.assertEqual(config.speedtest.timeout_seconds, 240)
+        self.assertFalse(config.traffic.configured)
 
-    def test_traffic_mappings_must_be_paired(self) -> None:
+    def test_traffic_bindings_are_optional_but_paired(self) -> None:
         raw = base_options()
-        raw["traffic"]["traffic_download_total"] = "sensor.router_download_total"
+        raw["traffic"] = {
+            "download_total_entity_id": "sensor.router_download_total",
+            "upload_total_entity_id": "sensor.router_upload_total",
+        }
+        config = parse_options(raw)
+        self.assertTrue(config.traffic.configured)
+
+        raw["traffic"]["upload_total_entity_id"] = ""
         with self.assertRaises(ConfigError):
             parse_options(raw)
 
-    def test_traffic_is_enabled_with_both_cumulative_mappings(self) -> None:
+    def test_traffic_bindings_must_be_sensor_entities(self) -> None:
         raw = base_options()
-        raw["traffic"]["traffic_download_total"] = "sensor.router_download_total"
-        raw["traffic"]["traffic_upload_total"] = "sensor.router_upload_total"
-        config = parse_options(raw)
-        self.assertTrue(config.traffic.enabled)
+        raw["traffic"] = {
+            "download_total_entity_id": "input_number.download",
+            "upload_total_entity_id": "sensor.router_upload_total",
+        }
+        with self.assertRaises(ConfigError):
+            parse_options(raw)
 
     def test_recovery_requires_both_targets_when_enabled(self) -> None:
         raw = base_options()
@@ -87,19 +99,6 @@ class ConfigTests(unittest.TestCase):
     def test_only_smart_and_both_modes_are_supported(self) -> None:
         raw = base_options()
         raw["recovery"]["mode"] = "sequential"
-        with self.assertRaises(ConfigError):
-            parse_options(raw)
-
-    def test_traffic_bindings_are_optional_but_paired(self) -> None:
-        raw = base_options()
-        raw["traffic"] = {
-            "download_total_entity_id": "sensor.router_download_total",
-            "upload_total_entity_id": "sensor.router_upload_total",
-        }
-        config = parse_options(raw)
-        self.assertTrue(config.traffic.configured)
-
-        raw["traffic"]["upload_total_entity_id"] = ""
         with self.assertRaises(ConfigError):
             parse_options(raw)
 
