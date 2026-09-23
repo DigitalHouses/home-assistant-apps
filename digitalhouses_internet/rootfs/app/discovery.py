@@ -17,6 +17,7 @@ TOPICS = {
     "thresholds": f"{MQTT_BASE_TOPIC}/thresholds",
     "performance": f"{MQTT_BASE_TOPIC}/performance",
     "problems": f"{MQTT_BASE_TOPIC}/problems",
+    "recent_results": f"{MQTT_BASE_TOPIC}/recent_results",
     "result_availability": f"{MQTT_BASE_TOPIC}/result_availability",
     "minimum_download_command": f"{MQTT_BASE_TOPIC}/thresholds/minimum_download/set",
     "minimum_upload_command": f"{MQTT_BASE_TOPIC}/thresholds/minimum_upload/set",
@@ -340,6 +341,24 @@ def build_discovery_payload(app_version: str) -> dict[str, Any]:
             "json_attributes_topic": TOPICS["performance"],
             "availability": result_availability,
             "availability_mode": "all",
+        },
+        "recent_results": {
+            "platform": "sensor",
+            "name": "Recent results",
+            "unique_id": f"{ENTITY_PREFIX}_recent_results",
+            "default_entity_id": f"sensor.{ENTITY_PREFIX}_recent_results",
+            "state_topic": TOPICS["recent_results"],
+            "value_template": "{{ value_json.count }}",
+            "unit_of_measurement": "tests",
+            "json_attributes_topic": TOPICS["recent_results"],
+            "json_attributes_template": (
+                "{{ {'updated_at': value_json.updated_at, "
+                "'limit': value_json.limit, "
+                "'results': value_json.results} | tojson }}"
+            ),
+            "entity_category": "diagnostic",
+            "icon": "mdi:history",
+            "availability": availability,
         },
         "problems": {
             "platform": "sensor",

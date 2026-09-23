@@ -42,7 +42,8 @@ Version `0.1.0` establishes the new product identity and the recovery/availabili
 - structured MQTT Event entity;
 - Version and Started-at diagnostics;
 - Ookla Download, Upload, Ping, Jitter and Packet loss measurements;
-- manual and periodic Speedtest with compact status metadata.
+- manual and periodic Speedtest with compact status metadata;
+- Recent Results as one diagnostic entity with the last 20 successful tests and the thresholds that were active for each test.
 
 Quality thresholds and App-owned performance problem evaluation are implemented. Monthly traffic statistics and final dashboard/package presentation remain subsequent milestones before a production release.
 

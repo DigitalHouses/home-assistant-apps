@@ -60,3 +60,10 @@ A failed test does not overwrite the last successful measurement values. Runtime
 The three user-editable MQTT Number entities are Minimum download speed, Minimum upload speed and Maximum ping. Their values are persisted under /data/runtime and immediately recalculate the last successful Speedtest result.
 
 The App owns low-download, low-upload, high-ping and aggregate performance-problem state. Home Assistant does not recalculate these thresholds with templates. Structured schema-v2 Events are emitted only on meaningful performance-problem transitions.
+
+
+## Recent Results
+
+The App persists the latest 20 successful Speedtest records under `/data/runtime`. Home Assistant receives them through one diagnostic `Recent results` sensor whose state is the number of retained tests and whose `results` attribute contains the records.
+
+Each record stores the measured values plus the quality thresholds and evaluated problem flags that were active when that test completed. Later threshold changes recalculate current problem state but do not rewrite historical Recent Results.

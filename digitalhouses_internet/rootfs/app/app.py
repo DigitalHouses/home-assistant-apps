@@ -27,6 +27,13 @@ from quality import (
     load_thresholds,
     set_threshold,
 )
+from recent_results import (
+    append_recent_result,
+    build_recent_record,
+    load_recent_results,
+    recent_results_payload,
+    save_recent_results,
+)
 from recovery import (
     RecoveryExecutor,
     RecoveryStopped,
@@ -40,6 +47,7 @@ APP_VERSION = os.getenv("APP_VERSION", "0.1.0-local")
 OUTAGES_FILE = Path("/data/runtime/outages.json")
 SPEEDTEST_FILE = Path("/data/runtime/speedtest.json")
 THRESHOLDS_FILE = Path("/data/runtime/thresholds.json")
+RECENT_RESULTS_FILE = Path("/data/runtime/recent_results.json")
 
 
 class InternetApp:
@@ -69,6 +77,7 @@ class InternetApp:
         self.outages = OutageTracker.load(OUTAGES_FILE)
         self.speedtest = load_last_result(SPEEDTEST_FILE)
         self.thresholds = load_thresholds(THRESHOLDS_FILE)
+        self.recent_results = load_recent_results(RECENT_RESULTS_FILE)
         self.performance = evaluate_performance(
             self.speedtest, self.thresholds
         )
@@ -203,6 +212,16 @@ class InternetApp:
             retain=True,
         )
 
+    def _publish_recent_results(self) -> None:
+        if not self.mqtt.is_connected():
+            return
+        self.mqtt.publish(
+            TOPICS["recent_results"],
+            json.dumps(recent_results_payload(self.recent_results)),
+            qos=1,
+            retain=True,
+        )
+
     def _publish_performance(self) -> None:
         if not self.mqtt.is_connected():
             return
@@ -244,6 +263,7 @@ class InternetApp:
         self._publish_state()
         self._publish_outages()
         self._publish_thresholds()
+        self._publish_recent_results()
         self._publish_performance()
         self._publish_problems()
 
@@ -399,6 +419,17 @@ class InternetApp:
                 save_last_result(SPEEDTEST_FILE, result)
             self._publish_state()
             self._refresh_performance(emit_events=True)
+            record = build_recent_record(
+                self.speedtest,
+                self.thresholds,
+                self.performance,
+            )
+            self.recent_results = append_recent_result(
+                self.recent_results,
+                record,
+            )
+            save_recent_results(RECENT_RESULTS_FILE, self.recent_results)
+            self._publish_recent_results()
             self._event(
                 "speedtest_completed",
                 download_mbps=result["download_mbps"],

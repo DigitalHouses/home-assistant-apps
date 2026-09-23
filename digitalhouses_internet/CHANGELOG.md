@@ -13,3 +13,4 @@
 - Added Download, Upload, Ping, Jitter, Packet loss and compact Speedtest status entities.
 - Added persistent Speedtest quality thresholds and low download/upload/high ping problem evaluation.
 - Added aggregate Problems diagnostics and structured performance problem transition events.
+- Added Recent Results persistence with the latest 20 successful tests and per-test quality thresholds.
