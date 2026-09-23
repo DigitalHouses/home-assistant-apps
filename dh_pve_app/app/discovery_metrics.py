@@ -448,9 +448,12 @@ def build_full_discovery_payload(
     fans = inventory.get("fans")
     if isinstance(fans, Mapping):
         calibratable = False
-        for index, (fan_id, raw) in enumerate(sorted(fans.items()), start=1):
-            if not isinstance(raw, Mapping):
-                continue
+        fan_items = [
+            (fan_id, raw)
+            for fan_id, raw in sorted(fans.items())
+            if isinstance(raw, Mapping)
+        ]
+        for index, (fan_id, raw) in enumerate(fan_items, start=1):
             fan_id = str(fan_id)
             slug = _slug(fan_id)
             obj = _path("fans", fan_id)
