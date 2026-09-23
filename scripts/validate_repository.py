@@ -10,6 +10,7 @@ from validators.products.recorder_app import validate_db_monitoring
 from validators.products.pve_agent import validate_dh_pve_app
 from validators.products.plex_agent import validate_plex_monitoring
 from validators.products.speedtest_app import validate_speedtest
+from validators.products.internet_app import validate_internet
 from validators.common import (
     ValidationError,
     discover_applications,
@@ -30,6 +31,7 @@ TYPE_VALIDATORS = {
 PRODUCT_VALIDATORS = {
     "digitalhouses_backblaze": validate_backblaze,
     "digitalhouses_speedtest": validate_speedtest,
+    "digitalhouses_internet": validate_internet,
     "digitalhouses_db_monitoring": validate_db_monitoring,
     "digitalhouses_plex_monitoring": validate_plex_monitoring,
     "dh_pve_app": validate_dh_pve_app,
