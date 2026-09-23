@@ -14,7 +14,13 @@ import paho.mqtt.client as mqtt
 
 from config import AppConfig, ConfigError, load_config
 from connectivity import ConnectivitySnapshot, sample
-from discovery import (\n    DISCOVERY_TOPIC,\n    DEVICE_ID,\n    EVENT_SCHEMA_VERSION,\n    TOPICS,\n    build_discovery_payload,\n)
+from discovery import (
+    DISCOVERY_TOPIC,
+    DEVICE_ID,
+    EVENT_SCHEMA_VERSION,
+    TOPICS,
+    build_discovery_payload,
+)
 from ha_api import HomeAssistantApi
 from recovery import (
     RecoveryExecutor,
