@@ -34,7 +34,7 @@ from recovery import (
     target_by_name,
 )
 from speedtest import load_last_result, run_speedtest, save_last_result
-from state import OutageTracker, iso, now_local
+from state import OutageTracker, atomic_write_json, iso, now_local
 
 APP_VERSION = os.getenv("APP_VERSION", "0.1.0-local")
 OUTAGES_FILE = Path("/data/runtime/outages.json")
@@ -147,7 +147,7 @@ class InternetApp:
                 if self.incident_active:
                     self.recovery_state = "stopped"
             self._publish_state()
-        self._publish_problems()
+            self._publish_problems()
             self._event("recovery_stopped", reason="user")
         elif payload == "RUN_SPEEDTEST":
             threading.Thread(
@@ -273,6 +273,7 @@ class InternetApp:
             if countdown is not None:
                 self.recovery_countdown = countdown
         self._publish_state()
+        self._publish_problems()
 
     def _countdown(self, state: str, seconds: int) -> bool:
         for remaining in range(max(0, seconds), 0, -1):
@@ -352,8 +353,6 @@ class InternetApp:
             self._publish_thresholds()
             return
         self.thresholds = updated
-        from state import atomic_write_json
-
         atomic_write_json(THRESHOLDS_FILE, self.thresholds)
         self.log.info("Quality threshold changed: %s=%s", key, self.thresholds[key])
         self._publish_thresholds()
