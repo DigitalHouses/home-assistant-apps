@@ -12,6 +12,7 @@ sys.path.insert(0, str(APP_DIR))
 from traffic import (
     HISTORY_MONTHS,
     default_traffic_state,
+    entity_rate_mbps,
     entity_total_bytes,
     load_traffic_state,
     save_traffic_state,
@@ -33,6 +34,20 @@ class TrafficTests(unittest.TestCase):
                 {"state": "2", "attributes": {"unit_of_measurement": "GB"}}
             ),
             2_000_000_000,
+        )
+
+    def test_rate_conversion(self) -> None:
+        self.assertEqual(
+            entity_rate_mbps(
+                {"state": "100", "attributes": {"unit_of_measurement": "Mbit/s"}}
+            ),
+            100.0,
+        )
+        self.assertEqual(
+            entity_rate_mbps(
+                {"state": "1", "attributes": {"unit_of_measurement": "MB/s"}}
+            ),
+            8.0,
         )
 
     def test_first_sample_is_baseline_not_usage(self) -> None:
@@ -66,6 +81,16 @@ class TrafficTests(unittest.TestCase):
             self.assertEqual(changed["total"]["download_bytes"], 1000)
             self.assertIsNone(changed["last"]["download_bytes"])
             self.assertEqual(changed["source_changes"], 1)
+
+    def test_new_month_rebaselines_cross_boundary_delta(self) -> None:
+        state = default_traffic_state("sensor.down", "sensor.up")
+        sep = datetime(2026, 9, 30, 23, 59, tzinfo=timezone.utc)
+        octo = datetime(2026, 10, 1, 0, 1, tzinfo=timezone.utc)
+        update_traffic(state, 1000, 500, when=sep)
+        update_traffic(state, 5000, 3000, when=octo)
+        payload = traffic_payload(state, when=octo)
+        self.assertEqual(payload["download_month_gib"], 0)
+        self.assertEqual(payload["upload_month_gib"], 0)
 
     def test_history_is_limited_to_twelve_months(self) -> None:
         state = default_traffic_state("sensor.down", "sensor.up")

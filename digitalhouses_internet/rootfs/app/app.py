@@ -43,6 +43,7 @@ from recovery import (
 from speedtest import load_last_result, run_speedtest, save_last_result
 from state import OutageTracker, atomic_write_json, iso, now_local
 from traffic import (
+    entity_rate_mbps,
     entity_total_bytes,
     load_traffic_state,
     save_traffic_state,
@@ -96,6 +97,11 @@ class InternetApp:
             self.config.traffic.traffic_upload_total,
         )
         self.traffic_available = False
+        self.router_telemetry: dict[str, Any] = {
+            "wan_status": None,
+            "download_rate_mbps": None,
+            "upload_rate_mbps": None,
+        }
         self.ha_api = HomeAssistantApi()
 
         self.mqtt = mqtt.Client(
@@ -133,7 +139,14 @@ class InternetApp:
             json.dumps(
                 build_discovery_payload(
                     APP_VERSION,
-                    traffic_enabled=self.config.traffic.configured,
+                    traffic_enabled=self.config.traffic.enabled,
+                    wan_enabled=bool(self.config.traffic.router_wan_status),
+                    download_rate_enabled=bool(
+                        self.config.traffic.router_download_rate
+                    ),
+                    upload_rate_enabled=bool(
+                        self.config.traffic.router_upload_rate
+                    ),
                 )
             ),
             qos=1,
@@ -276,7 +289,9 @@ class InternetApp:
         }
 
     def _traffic_payload(self) -> dict[str, Any]:
-        return traffic_payload(self.traffic)
+        payload = traffic_payload(self.traffic)
+        payload["router"] = dict(self.router_telemetry)
+        return payload
 
     def _publish_traffic(self) -> None:
         if not self.mqtt.is_connected():
@@ -295,38 +310,78 @@ class InternetApp:
             retain=True,
         )
 
+    def _optional_router_state(self, entity_id: str) -> str | None:
+        if not entity_id:
+            return None
+        try:
+            payload = self.ha_api.get_state(entity_id)
+        except Exception as exc:
+            self.log.debug(
+                "Optional router state unavailable (%s): %s",
+                entity_id,
+                exc,
+            )
+            return None
+        state = str(payload.get("state", "")).strip()
+        if state.lower() in {"", "unknown", "unavailable", "none"}:
+            return None
+        return state
+
+    def _optional_router_rate(self, entity_id: str) -> float | None:
+        if not entity_id:
+            return None
+        try:
+            return entity_rate_mbps(self.ha_api.get_state(entity_id))
+        except Exception as exc:
+            self.log.debug(
+                "Optional router rate unavailable (%s): %s",
+                entity_id,
+                exc,
+            )
+            return None
+
     def _traffic_sample_once(self) -> None:
         cfg = self.config.traffic
-        if not cfg.configured:
-            self.traffic_available = False
-            self._publish_traffic()
-            return
-        try:
-            download = entity_total_bytes(
-                self.ha_api.get_state(cfg.traffic_download_total)
-            )
-            upload = entity_total_bytes(
-                self.ha_api.get_state(cfg.traffic_upload_total)
-            )
-        except Exception as exc:
-            if self.traffic_available:
-                self.log.warning("Traffic sources became unavailable: %s", exc)
-            else:
-                self.log.debug("Traffic sources unavailable: %s", exc)
-            self.traffic_available = False
-            self._publish_traffic()
-            return
+        self.router_telemetry = {
+            "wan_status": self._optional_router_state(cfg.router_wan_status),
+            "download_rate_mbps": self._optional_router_rate(
+                cfg.router_download_rate
+            ),
+            "upload_rate_mbps": self._optional_router_rate(
+                cfg.router_upload_rate
+            ),
+        }
 
-        update_traffic(self.traffic, download, upload)
-        save_traffic_state(TRAFFIC_FILE, self.traffic)
-        if not self.traffic_available:
-            self.log.info("Traffic sources are available")
-        self.traffic_available = True
+        if cfg.enabled:
+            try:
+                download = entity_total_bytes(
+                    self.ha_api.get_state(cfg.traffic_download_total)
+                )
+                upload = entity_total_bytes(
+                    self.ha_api.get_state(cfg.traffic_upload_total)
+                )
+            except Exception as exc:
+                if self.traffic_available:
+                    self.log.warning(
+                        "Traffic sources became unavailable: %s", exc
+                    )
+                else:
+                    self.log.debug("Traffic sources unavailable: %s", exc)
+                self.traffic_available = False
+            else:
+                update_traffic(self.traffic, download, upload)
+                save_traffic_state(TRAFFIC_FILE, self.traffic)
+                if not self.traffic_available:
+                    self.log.info("Traffic sources are available")
+                self.traffic_available = True
+        else:
+            self.traffic_available = False
+
         self._publish_traffic()
 
     def _traffic_loop(self) -> None:
-        if not self.config.traffic.configured:
-            self.log.info("Router traffic accounting is not configured")
+        if not self.config.traffic.has_bindings:
+            self.log.info("Router telemetry is not configured")
             self._publish_traffic()
             return
         while not self.stop_app.is_set():

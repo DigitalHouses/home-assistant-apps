@@ -31,6 +31,18 @@ class DiscoveryTests(unittest.TestCase):
             "sensor.dh_internet_app_traffic_download_total",
         )
 
+    def test_optional_router_entities_are_conditional(self) -> None:
+        payload = build_discovery_payload(
+            "0.1.0",
+            wan_enabled=True,
+            download_rate_enabled=True,
+            upload_rate_enabled=True,
+        )
+        components = payload["components"]
+        self.assertIn("router_wan_status", components)
+        self.assertIn("router_download_rate", components)
+        self.assertIn("router_upload_rate", components)
+
     def test_canonical_identity_and_runtime_diagnostics(self) -> None:
         payload = build_discovery_payload("0.1.0")
         self.assertEqual(

@@ -48,6 +48,41 @@ def entity_total_bytes(payload: dict[str, Any]) -> int:
     return max(0, int(round(value * multiplier)))
 
 
+_RATE_TO_MBIT: dict[str, float] = {
+    "bit/s": 1.0 / 1_000_000.0,
+    "kbit/s": 1.0 / 1_000.0,
+    "mbit/s": 1.0,
+    "gbit/s": 1_000.0,
+    "b/s": 8.0 / 1_000_000.0,
+    "kb/s": 8.0 / 1_000.0,
+    "mb/s": 8.0,
+    "gb/s": 8_000.0,
+    "kib/s": (1024.0 * 8.0) / 1_000_000.0,
+    "mib/s": (1024.0**2 * 8.0) / 1_000_000.0,
+    "gib/s": (1024.0**3 * 8.0) / 1_000_000.0,
+}
+
+
+def entity_rate_mbps(payload: dict[str, Any]) -> float:
+    state = str(payload.get("state", "")).strip().lower()
+    if state in {"", "unknown", "unavailable", "none"}:
+        raise ValueError("rate source state is unavailable")
+    try:
+        value = float(state)
+    except ValueError as exc:
+        raise ValueError(f"rate source state is not numeric: {state!r}") from exc
+    if value < 0:
+        raise ValueError("rate source state must not be negative")
+    attributes = payload.get("attributes")
+    if not isinstance(attributes, dict):
+        attributes = {}
+    unit = str(attributes.get("unit_of_measurement") or "Mbit/s").strip().lower()
+    multiplier = _RATE_TO_MBIT.get(unit)
+    if multiplier is None:
+        raise ValueError(f"unsupported router rate unit: {unit!r}")
+    return round(value * multiplier, 3)
+
+
 def _empty_month() -> dict[str, int]:
     return {
         "download_bytes": 0,
@@ -161,6 +196,18 @@ def _delta(current: int, previous: Any) -> tuple[int, bool]:
     return current, True
 
 
+def _observed_month(value: Any) -> str | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=now_local().tzinfo)
+    return month_key(parsed)
+
+
 def update_traffic(
     state: dict[str, Any],
     download_bytes: int,
@@ -174,12 +221,19 @@ def update_traffic(
     if current_month not in months:
         months[current_month] = _empty_month()
 
-    download_delta, download_reset = _delta(
-        download_bytes, state["last"].get("download_bytes")
-    )
-    upload_delta, upload_reset = _delta(
-        upload_bytes, state["last"].get("upload_bytes")
-    )
+    previous_month = _observed_month(state["last"].get("observed_at"))
+    if previous_month is not None and previous_month != current_month:
+        # Cumulative counters cannot tell how a cross-midnight delta splits
+        # between months. The first sample of a new month is a fresh baseline.
+        download_delta, download_reset = 0, False
+        upload_delta, upload_reset = 0, False
+    else:
+        download_delta, download_reset = _delta(
+            download_bytes, state["last"].get("download_bytes")
+        )
+        upload_delta, upload_reset = _delta(
+            upload_bytes, state["last"].get("upload_bytes")
+        )
     reset = download_reset or upload_reset
 
     state["total"]["download_bytes"] += download_delta
@@ -214,7 +268,7 @@ def traffic_payload(state: dict[str, Any], *, when: datetime | None = None) -> d
     current_month = month_key(when)
     month = state["months"].get(current_month) or _empty_month()
     history = []
-    for key in sorted(state["months"])[-HISTORY_MONTHS:]:
+    for key in sorted(state["months"], reverse=True)[:HISTORY_MONTHS]:
         item = state["months"][key]
         download = int(item.get("download_bytes") or 0)
         upload = int(item.get("upload_bytes") or 0)

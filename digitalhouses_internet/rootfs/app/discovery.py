@@ -29,7 +29,14 @@ TOPICS = {
 }
 
 
-def build_discovery_payload(app_version: str, *, traffic_enabled: bool = False) -> dict[str, Any]:
+def build_discovery_payload(
+    app_version: str,
+    *,
+    traffic_enabled: bool = False,
+    wan_enabled: bool = False,
+    download_rate_enabled: bool = False,
+    upload_rate_enabled: bool = False,
+) -> dict[str, Any]:
     availability = {
         "topic": TOPICS["availability"],
         "payload_available": "online",
@@ -535,6 +542,47 @@ def build_discovery_payload(app_version: str, *, traffic_enabled: bool = False) 
                 },
             }
         )
+
+    if wan_enabled:
+        components["router_wan_status"] = {
+            "platform": "sensor",
+            "name": "Router WAN status",
+            "unique_id": f"{ENTITY_PREFIX}_router_wan_status",
+            "default_entity_id": f"sensor.{ENTITY_PREFIX}_router_wan_status",
+            "state_topic": TOPICS["traffic"],
+            "value_template": "{{ value_json.router.wan_status }}",
+            "entity_category": "diagnostic",
+            "icon": "mdi:wan",
+            "availability": availability,
+        }
+    if download_rate_enabled:
+        components["router_download_rate"] = {
+            "platform": "sensor",
+            "name": "Router download rate",
+            "unique_id": f"{ENTITY_PREFIX}_router_download_rate",
+            "default_entity_id": f"sensor.{ENTITY_PREFIX}_router_download_rate",
+            "state_topic": TOPICS["traffic"],
+            "value_template": "{{ value_json.router.download_rate_mbps }}",
+            "device_class": "data_rate",
+            "state_class": "measurement",
+            "unit_of_measurement": "Mbit/s",
+            "suggested_display_precision": 1,
+            "availability": availability,
+        }
+    if upload_rate_enabled:
+        components["router_upload_rate"] = {
+            "platform": "sensor",
+            "name": "Router upload rate",
+            "unique_id": f"{ENTITY_PREFIX}_router_upload_rate",
+            "default_entity_id": f"sensor.{ENTITY_PREFIX}_router_upload_rate",
+            "state_topic": TOPICS["traffic"],
+            "value_template": "{{ value_json.router.upload_rate_mbps }}",
+            "device_class": "data_rate",
+            "state_class": "measurement",
+            "unit_of_measurement": "Mbit/s",
+            "suggested_display_precision": 1,
+            "availability": availability,
+        }
 
     return {
         "device": device,
