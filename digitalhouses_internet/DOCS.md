@@ -105,3 +105,6 @@ Home Assistant exposes five traffic entities only when both cumulative mappings 
 - `sensor.dh_internet_app_traffic_history`
 
 Traffic history retains the current month plus up to 11 previous observed months.
+
+
+Canonical mapping names for cumulative traffic are `traffic_download_total` and `traffic_upload_total`. They are Home Assistant `sensor.*` entity IDs and must be configured as a pair.

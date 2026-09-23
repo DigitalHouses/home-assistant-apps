@@ -31,15 +31,19 @@ class SpeedtestConfig:
 
 @dataclass(frozen=True)
 class TrafficConfig:
-    download_total_entity_id: str
-    upload_total_entity_id: str
+    traffic_download_total: str
+    traffic_upload_total: str
 
     @property
     def configured(self) -> bool:
         return bool(
-            self.download_total_entity_id
-            and self.upload_total_entity_id
+            self.traffic_download_total
+            and self.traffic_upload_total
         )
+
+    @property
+    def enabled(self) -> bool:
+        return self.configured
 
 
 @dataclass(frozen=True)
@@ -126,19 +130,19 @@ def parse_options(raw: Any) -> AppConfig:
     if not isinstance(recovery_raw, dict):
         recovery_raw = {}
 
-    download_total_entity_id = str(
-        traffic_raw.get("download_total_entity_id", "")
+    traffic_download_total = str(
+        traffic_raw.get("traffic_download_total", "")
     ).strip()
-    upload_total_entity_id = str(
-        traffic_raw.get("upload_total_entity_id", "")
+    traffic_upload_total = str(
+        traffic_raw.get("traffic_upload_total", "")
     ).strip()
-    if bool(download_total_entity_id) != bool(upload_total_entity_id):
+    if bool(traffic_download_total) != bool(traffic_upload_total):
         raise ConfigError(
             "traffic download/upload total entity IDs must be configured together"
         )
     for name, entity_id in (
-        ("download_total_entity_id", download_total_entity_id),
-        ("upload_total_entity_id", upload_total_entity_id),
+        ("traffic_download_total", traffic_download_total),
+        ("traffic_upload_total", traffic_upload_total),
     ):
         if entity_id and not entity_id.startswith("sensor."):
             raise ConfigError(f"traffic.{name} must be a sensor.* entity")
@@ -182,8 +186,8 @@ def parse_options(raw: Any) -> AppConfig:
             ),
         ),
         traffic=TrafficConfig(
-            download_total_entity_id=download_total_entity_id,
-            upload_total_entity_id=upload_total_entity_id,
+            traffic_download_total=traffic_download_total,
+            traffic_upload_total=traffic_upload_total,
         ),
         recovery=RecoveryConfig(
             enabled=enabled,

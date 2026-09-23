@@ -92,8 +92,8 @@ class InternetApp:
         )
         self.traffic = load_traffic_state(
             TRAFFIC_FILE,
-            self.config.traffic.download_total_entity_id,
-            self.config.traffic.upload_total_entity_id,
+            self.config.traffic.traffic_download_total,
+            self.config.traffic.traffic_upload_total,
         )
         self.traffic_available = False
         self.ha_api = HomeAssistantApi()
@@ -303,10 +303,10 @@ class InternetApp:
             return
         try:
             download = entity_total_bytes(
-                self.ha_api.get_state(cfg.download_total_entity_id)
+                self.ha_api.get_state(cfg.traffic_download_total)
             )
             upload = entity_total_bytes(
-                self.ha_api.get_state(cfg.upload_total_entity_id)
+                self.ha_api.get_state(cfg.traffic_upload_total)
             )
         except Exception as exc:
             if self.traffic_available:
