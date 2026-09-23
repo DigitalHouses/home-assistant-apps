@@ -200,6 +200,14 @@ def test_problem_aggregate_and_native_mqtt_event_are_canonical():
 def test_fan_discovery_uses_short_sequential_friendly_names():
     inventory = _inventory()
     inventory["fans"] = {
+        "candidate_count": 2,
+        "candidate_ids": [
+            "it8613_it87_2608_fan2",
+            "it8613_it87_2608_fan3",
+        ],
+        "confirmed_count": 2,
+        "count": 2,
+        "detected": True,
         "it8613_it87_2608_fan2": {
             "display_name": "it8613 fan2",
             "label": "fan2",
@@ -220,6 +228,8 @@ def test_fan_discovery_uses_short_sequential_friendly_names():
             "calibration_status": "calibrated",
             "calibrated_at": "2026-09-23T00:00:00+00:00",
         },
+        "status": "Detected",
+        "unconfirmed_count": 0,
     }
     components = build_shutdown_aware_pve_discovery_payload(
         _config(), _identity(), version="0.5.8", inventory=inventory
