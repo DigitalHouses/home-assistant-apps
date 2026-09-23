@@ -14,3 +14,4 @@
 - Added persistent Speedtest quality thresholds and low download/upload/high ping problem evaluation.
 - Added aggregate Problems diagnostics and structured performance problem transition events.
 - Added Recent Results persistence with the latest 20 successful tests and per-test quality thresholds.
+- Added optional router cumulative traffic bindings and App-owned monthly accounting with 12-month history.

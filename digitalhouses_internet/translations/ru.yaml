@@ -7,6 +7,9 @@ configuration:
   speedtest:
     name: Speedtest
     description: Интервал и таймаут периодического Ookla Speedtest.
+  traffic:
+    name: Трафик роутера
+    description: Опциональные накопительные сенсоры Download и Upload для статистики за 12 месяцев.
   recovery:
     name: Восстановление
   log_level:

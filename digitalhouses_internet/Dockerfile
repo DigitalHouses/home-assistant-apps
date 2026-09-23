@@ -58,6 +58,7 @@ RUN chmod a+x /run.sh \
         /app/recent_results.py \
         /app/recovery.py \
         /app/speedtest.py \
-        /app/state.py
+        /app/state.py \
+        /app/traffic.py
 
 CMD ["/run.sh"]

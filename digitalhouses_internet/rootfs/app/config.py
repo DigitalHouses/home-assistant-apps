@@ -30,6 +30,19 @@ class SpeedtestConfig:
 
 
 @dataclass(frozen=True)
+class TrafficConfig:
+    download_total_entity_id: str
+    upload_total_entity_id: str
+
+    @property
+    def configured(self) -> bool:
+        return bool(
+            self.download_total_entity_id
+            and self.upload_total_entity_id
+        )
+
+
+@dataclass(frozen=True)
 class RecoveryTarget:
     action: str
     entity_id: str
@@ -53,6 +66,7 @@ class AppConfig:
     router_ip: str
     connectivity: ConnectivityConfig
     speedtest: SpeedtestConfig
+    traffic: TrafficConfig
     recovery: RecoveryConfig
     log_level: str
 
@@ -104,9 +118,30 @@ def parse_options(raw: Any) -> AppConfig:
     if not isinstance(speedtest_raw, dict):
         speedtest_raw = {}
 
+    traffic_raw = raw.get("traffic")
+    if not isinstance(traffic_raw, dict):
+        traffic_raw = {}
+
     recovery_raw = raw.get("recovery")
     if not isinstance(recovery_raw, dict):
         recovery_raw = {}
+
+    download_total_entity_id = str(
+        traffic_raw.get("download_total_entity_id", "")
+    ).strip()
+    upload_total_entity_id = str(
+        traffic_raw.get("upload_total_entity_id", "")
+    ).strip()
+    if bool(download_total_entity_id) != bool(upload_total_entity_id):
+        raise ConfigError(
+            "traffic download/upload total entity IDs must be configured together"
+        )
+    for name, entity_id in (
+        ("download_total_entity_id", download_total_entity_id),
+        ("upload_total_entity_id", upload_total_entity_id),
+    ):
+        if entity_id and not entity_id.startswith("sensor."):
+            raise ConfigError(f"traffic.{name} must be a sensor.* entity")
 
     enabled = bool(recovery_raw.get("enabled", False))
     mode = str(recovery_raw.get("mode", "smart")).strip().lower()
@@ -145,6 +180,10 @@ def parse_options(raw: Any) -> AppConfig:
             timeout_seconds=_bounded_int(
                 speedtest_raw.get("timeout_seconds"), 30, 600, 240
             ),
+        ),
+        traffic=TrafficConfig(
+            download_total_entity_id=download_total_entity_id,
+            upload_total_entity_id=upload_total_entity_id,
         ),
         recovery=RecoveryConfig(
             enabled=enabled,

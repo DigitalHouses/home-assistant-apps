@@ -67,3 +67,17 @@ The App owns low-download, low-upload, high-ping and aggregate performance-probl
 The App persists the latest 20 successful Speedtest records under `/data/runtime`. Home Assistant receives them through one diagnostic `Recent results` sensor whose state is the number of retained tests and whose `results` attribute contains the records.
 
 Each record stores the measured values plus the quality thresholds and evaluated problem flags that were active when that test completed. Later threshold changes recalculate current problem state but do not rewrite historical Recent Results.
+
+
+## Router traffic
+
+Traffic accounting is optional and deliberately uses only two Home Assistant bindings:
+
+- traffic.download_total_entity_id
+- traffic.upload_total_entity_id
+
+Both must reference cumulative sensor.* counters, or both must be left empty. The App reads them through the Home Assistant Core API every 60 seconds, normalizes common decimal/binary data-size units to bytes, and owns the monthly delta calculation.
+
+Router/integration counter resets are handled by treating the new cumulative value as post-reset traffic rather than producing a negative delta. At a calendar-month boundary the first sample establishes a new baseline, preventing cross-month traffic from being assigned to the wrong month. During continuous operation this can omit at most one 60-second polling interval.
+
+The App retains exactly the current month plus up to 11 previous monthly buckets in /data/runtime. Home Assistant receives current Download/Upload GiB sensors plus one compact Traffic history diagnostic entity.

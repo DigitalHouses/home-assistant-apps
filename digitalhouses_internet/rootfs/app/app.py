@@ -42,11 +42,14 @@ from recovery import (
 )
 from speedtest import load_last_result, run_speedtest, save_last_result
 from state import OutageTracker, atomic_write_json, iso, now_local
+from traffic import TrafficStore, parse_counter_state
 
 APP_VERSION = os.getenv("APP_VERSION", "0.1.0-local")
 OUTAGES_FILE = Path("/data/runtime/outages.json")
 SPEEDTEST_FILE = Path("/data/runtime/speedtest.json")
 THRESHOLDS_FILE = Path("/data/runtime/thresholds.json")
+TRAFFIC_FILE = Path("/data/runtime/traffic.json")
+TRAFFIC_POLL_SECONDS = 60
 RECENT_RESULTS_FILE = Path("/data/runtime/recent_results.json")
 
 
@@ -81,6 +84,8 @@ class InternetApp:
         self.performance = evaluate_performance(
             self.speedtest, self.thresholds
         )
+        self.traffic = TrafficStore.load(TRAFFIC_FILE)
+        self.traffic_available = False
         self.ha_api = HomeAssistantApi()
 
         self.mqtt = mqtt.Client(
@@ -120,6 +125,12 @@ class InternetApp:
             retain=True,
         )
         client.publish(TOPICS["availability"], "online", qos=1, retain=True)
+        client.publish(
+            TOPICS["traffic_availability"],
+            "online" if self.traffic_available else "offline",
+            qos=1,
+            retain=True,
+        )
         client.publish(
             TOPICS["result_availability"],
             "online" if self.performance["available"] else "offline",
@@ -249,6 +260,70 @@ class InternetApp:
             "updated_at": iso(now_local()),
         }
 
+    def _traffic_payload(self) -> dict[str, Any]:
+        cfg = self.config.traffic
+        return self.traffic.payload(
+            configured=cfg.configured,
+            available=self.traffic_available,
+            download_entity_id=cfg.download_total_entity_id,
+            upload_entity_id=cfg.upload_total_entity_id,
+        )
+
+    def _publish_traffic(self) -> None:
+        if not self.mqtt.is_connected():
+            return
+        configured = self.config.traffic.configured
+        self.mqtt.publish(
+            TOPICS["traffic_availability"],
+            "online" if configured and self.traffic_available else "offline",
+            qos=1,
+            retain=True,
+        )
+        self.mqtt.publish(
+            TOPICS["traffic"],
+            json.dumps(self._traffic_payload()),
+            qos=1,
+            retain=True,
+        )
+
+    def _traffic_sample_once(self) -> None:
+        cfg = self.config.traffic
+        if not cfg.configured:
+            self.traffic_available = False
+            self._publish_traffic()
+            return
+        try:
+            download = parse_counter_state(
+                self.ha_api.get_state(cfg.download_total_entity_id)
+            )
+            upload = parse_counter_state(
+                self.ha_api.get_state(cfg.upload_total_entity_id)
+            )
+        except Exception as exc:
+            if self.traffic_available:
+                self.log.warning("Traffic sources became unavailable: %s", exc)
+            else:
+                self.log.debug("Traffic sources unavailable: %s", exc)
+            self.traffic_available = False
+            self._publish_traffic()
+            return
+
+        self.traffic.update(download, upload)
+        if not self.traffic_available:
+            self.log.info("Traffic sources are available")
+        self.traffic_available = True
+        self._publish_traffic()
+
+    def _traffic_loop(self) -> None:
+        if not self.config.traffic.configured:
+            self.log.info("Router traffic accounting is not configured")
+            self._publish_traffic()
+            return
+        while not self.stop_app.is_set():
+            self._traffic_sample_once()
+            if self.stop_app.wait(TRAFFIC_POLL_SECONDS):
+                break
+
     def _publish_problems(self) -> None:
         if not self.mqtt.is_connected():
             return
@@ -265,6 +340,7 @@ class InternetApp:
         self._publish_thresholds()
         self._publish_recent_results()
         self._publish_performance()
+        self._publish_traffic()
         self._publish_problems()
 
     def _event(self, event_type: str, **data: Any) -> None:
@@ -617,6 +693,12 @@ class InternetApp:
             daemon=True,
         )
         periodic_speedtest.start()
+        traffic_thread = threading.Thread(
+            target=self._traffic_loop,
+            name="traffic",
+            daemon=True,
+        )
+        traffic_thread.start()
         try:
             while not self.stop_app.is_set():
                 snapshot = sample(

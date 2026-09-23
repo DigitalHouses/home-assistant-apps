@@ -17,6 +17,8 @@ TOPICS = {
     "thresholds": f"{MQTT_BASE_TOPIC}/thresholds",
     "performance": f"{MQTT_BASE_TOPIC}/performance",
     "problems": f"{MQTT_BASE_TOPIC}/problems",
+    "traffic": f"{MQTT_BASE_TOPIC}/traffic",
+    "traffic_availability": f"{MQTT_BASE_TOPIC}/traffic_availability",
     "recent_results": f"{MQTT_BASE_TOPIC}/recent_results",
     "result_availability": f"{MQTT_BASE_TOPIC}/result_availability",
     "minimum_download_command": f"{MQTT_BASE_TOPIC}/thresholds/minimum_download/set",
@@ -37,6 +39,14 @@ def build_discovery_payload(app_version: str) -> dict[str, Any]:
         availability,
         {
             "topic": TOPICS["result_availability"],
+            "payload_available": "online",
+            "payload_not_available": "offline",
+        },
+    ]
+    traffic_availability = [
+        availability,
+        {
+            "topic": TOPICS["traffic_availability"],
             "payload_available": "online",
             "payload_not_available": "offline",
         },
@@ -374,6 +384,66 @@ def build_discovery_payload(app_version: str) -> dict[str, Any]:
             ),
             "entity_category": "diagnostic",
             "icon": "mdi:alert-circle-outline",
+            "availability": availability,
+        },
+        "traffic_configured": {
+            "platform": "binary_sensor",
+            "name": "Traffic configured",
+            "unique_id": f"{ENTITY_PREFIX}_traffic_configured",
+            "default_entity_id": f"binary_sensor.{ENTITY_PREFIX}_traffic_configured",
+            "state_topic": TOPICS["traffic"],
+            "value_template": "{{ 'ON' if value_json.configured else 'OFF' }}",
+            "payload_on": "ON",
+            "payload_off": "OFF",
+            "entity_category": "diagnostic",
+            "availability": availability,
+        },
+        "traffic_download_month": {
+            "platform": "sensor",
+            "name": "Traffic download month",
+            "unique_id": f"{ENTITY_PREFIX}_traffic_download_month",
+            "default_entity_id": f"sensor.{ENTITY_PREFIX}_traffic_download_month",
+            "state_topic": TOPICS["traffic"],
+            "value_template": "{{ value_json.download_gib }}",
+            "device_class": "data_size",
+            "state_class": "total_increasing",
+            "unit_of_measurement": "GiB",
+            "suggested_display_precision": 2,
+            "availability": traffic_availability,
+            "availability_mode": "all",
+        },
+        "traffic_upload_month": {
+            "platform": "sensor",
+            "name": "Traffic upload month",
+            "unique_id": f"{ENTITY_PREFIX}_traffic_upload_month",
+            "default_entity_id": f"sensor.{ENTITY_PREFIX}_traffic_upload_month",
+            "state_topic": TOPICS["traffic"],
+            "value_template": "{{ value_json.upload_gib }}",
+            "device_class": "data_size",
+            "state_class": "total_increasing",
+            "unit_of_measurement": "GiB",
+            "suggested_display_precision": 2,
+            "availability": traffic_availability,
+            "availability_mode": "all",
+        },
+        "traffic_history": {
+            "platform": "sensor",
+            "name": "Traffic history",
+            "unique_id": f"{ENTITY_PREFIX}_traffic_history",
+            "default_entity_id": f"sensor.{ENTITY_PREFIX}_traffic_history",
+            "state_topic": TOPICS["traffic"],
+            "value_template": "{{ value_json.history_count }}",
+            "json_attributes_topic": TOPICS["traffic"],
+            "json_attributes_template": (
+                "{{ {'month': value_json.month, "
+                "'months': value_json.months, "
+                "'total_gib': value_json.total_gib, "
+                "'last_update': value_json.last_update, "
+                "'download_source': value_json.download_source, "
+                "'upload_source': value_json.upload_source} | tojson }}"
+            ),
+            "entity_category": "diagnostic",
+            "icon": "mdi:chart-bar",
             "availability": availability,
         },
         "app_version": {

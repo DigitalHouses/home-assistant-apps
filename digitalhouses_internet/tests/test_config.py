@@ -70,6 +70,19 @@ class ConfigTests(unittest.TestCase):
         with self.assertRaises(ConfigError):
             parse_options(raw)
 
+    def test_traffic_bindings_are_optional_but_paired(self) -> None:
+        raw = base_options()
+        raw["traffic"] = {
+            "download_total_entity_id": "sensor.router_download_total",
+            "upload_total_entity_id": "sensor.router_upload_total",
+        }
+        config = parse_options(raw)
+        self.assertTrue(config.traffic.configured)
+
+        raw["traffic"]["upload_total_entity_id"] = ""
+        with self.assertRaises(ConfigError):
+            parse_options(raw)
+
 
 if __name__ == "__main__":
     unittest.main()

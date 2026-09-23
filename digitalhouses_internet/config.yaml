@@ -26,6 +26,9 @@ options:
     periodic_enabled: true
     interval_minutes: 30
     timeout_seconds: 240
+  traffic:
+    download_total_entity_id: ""
+    upload_total_entity_id: ""
   recovery:
     enabled: false
     mode: smart
@@ -52,6 +55,9 @@ schema:
     periodic_enabled: bool
     interval_minutes: int(5,720)
     timeout_seconds: int(30,600)
+  traffic:
+    download_total_entity_id: str
+    upload_total_entity_id: str
   recovery:
     enabled: bool
     mode: list(smart|both)
