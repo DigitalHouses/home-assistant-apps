@@ -8,6 +8,7 @@ DEVICE_ID = "dh_internet_app"
 ENTITY_PREFIX = "dh_internet_app"
 MQTT_BASE_TOPIC = "DigitalHouses/Global/dh_internet_app"
 DISCOVERY_TOPIC = f"homeassistant/device/{DEVICE_ID}/config"
+EVENT_SCHEMA_VERSION = 2
 
 TOPICS = {
     "availability": f"{MQTT_BASE_TOPIC}/availability",
