@@ -135,14 +135,14 @@ class OutageTracker:
                 }
             )
             total += seconds
-        month_start = now.replace(
+        month_start = when.replace(
             day=1,
             hour=0,
             minute=0,
             second=0,
             microsecond=0,
         )
-        elapsed = max(0, int((now - month_start).total_seconds()))
+        elapsed = max(0, int((when - month_start).total_seconds()))
         offline = min(total, elapsed)
         online = max(0, elapsed - offline)
         availability = (
