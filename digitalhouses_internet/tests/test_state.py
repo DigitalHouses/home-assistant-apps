@@ -40,6 +40,29 @@ class OutageTests(unittest.TestCase):
             self.assertEqual(record["duration"], "02:05")
             self.assertEqual(tracker.payload(end)["state"], 1)
 
+    def test_month_availability(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "outages.json"
+            tracker = OutageTracker(
+                path=path,
+                month="2026-09",
+                outages=[
+                    {
+                        "from": "2026-09-01T00:00:00+00:00",
+                        "to": "2026-09-01T01:00:00+00:00",
+                        "duration_seconds": 3600,
+                        "duration": "1:00:00",
+                    }
+                ],
+                active_from=None,
+            )
+            now = datetime(2026, 9, 2, 0, 0, tzinfo=timezone.utc)
+            payload = tracker.payload(now)
+            self.assertEqual(payload["elapsed_seconds"], 86400)
+            self.assertEqual(payload["offline_seconds"], 3600)
+            self.assertEqual(payload["online_seconds"], 82800)
+            self.assertAlmostEqual(payload["availability_percent"], 95.833, places=3)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -15,3 +15,4 @@
 - Added aggregate Problems diagnostics and structured performance problem transition events.
 - Added Recent Results persistence with the latest 20 successful tests and per-test quality thresholds.
 - Added optional router cumulative traffic bindings and App-owned monthly accounting with 12-month history.
+- Added App-owned current-month Internet availability percentage from outage accounting.

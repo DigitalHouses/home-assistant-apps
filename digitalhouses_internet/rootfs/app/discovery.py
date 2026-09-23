@@ -141,6 +141,26 @@ def build_discovery_payload(app_version: str) -> dict[str, Any]:
             ),
             "availability": availability,
         },
+        "availability_month": {
+            "platform": "sensor",
+            "name": "Internet availability month",
+            "unique_id": f"{ENTITY_PREFIX}_availability_month",
+            "default_entity_id": f"sensor.{ENTITY_PREFIX}_availability_month",
+            "state_topic": TOPICS["outages"],
+            "value_template": "{{ value_json.availability_percent }}",
+            "unit_of_measurement": "%",
+            "state_class": "measurement",
+            "suggested_display_precision": 2,
+            "json_attributes_topic": TOPICS["outages"],
+            "json_attributes_template": (
+                "{{ {'month': value_json.month, "
+                "'online_seconds': value_json.online_seconds, "
+                "'offline_seconds': value_json.offline_seconds, "
+                "'elapsed_seconds': value_json.elapsed_seconds} | tojson }}"
+            ),
+            "icon": "mdi:percent-circle-outline",
+            "availability": availability,
+        },
         "download": {
             "platform": "sensor",
             "name": "Download",

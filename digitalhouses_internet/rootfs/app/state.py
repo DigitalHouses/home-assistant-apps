@@ -135,12 +135,31 @@ class OutageTracker:
                 }
             )
             total += seconds
+        month_start = now.replace(
+            day=1,
+            hour=0,
+            minute=0,
+            second=0,
+            microsecond=0,
+        )
+        elapsed = max(0, int((now - month_start).total_seconds()))
+        offline = min(total, elapsed)
+        online = max(0, elapsed - offline)
+        availability = (
+            round((online / elapsed) * 100, 3)
+            if elapsed > 0
+            else 100.0
+        )
         return {
             "state": len(rows),
             "month": self.month,
             "outages": rows,
             "total_duration_seconds": total,
             "total_duration": duration_text(total),
+            "elapsed_seconds": elapsed,
+            "online_seconds": online,
+            "offline_seconds": offline,
+            "availability_percent": availability,
         }
 
     def save(self) -> None:

@@ -81,3 +81,8 @@ Both must reference cumulative sensor.* counters, or both must be left empty. Th
 Router/integration counter resets are handled by treating the new cumulative value as post-reset traffic rather than producing a negative delta. At a calendar-month boundary the first sample establishes a new baseline, preventing cross-month traffic from being assigned to the wrong month. During continuous operation this can omit at most one 60-second polling interval.
 
 The App retains exactly the current month plus up to 11 previous monthly buckets in /data/runtime. Home Assistant receives current Download/Upload GiB sensors plus one compact Traffic history diagnostic entity.
+
+
+## Monthly availability
+
+Current-month Internet availability is calculated by the App from elapsed local calendar-month time minus accumulated outage time. The Home Assistant availability-percent sensor is presentation only; no template automation owns the calculation.
