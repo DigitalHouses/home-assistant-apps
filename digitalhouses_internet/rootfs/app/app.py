@@ -40,7 +40,14 @@ from recovery import (
     choose_targets,
     target_by_name,
 )
-from speedtest import load_last_result, run_speedtest, save_last_result
+from speedtest import (
+    list_servers,
+    load_last_result,
+    load_servers_state,
+    run_speedtest,
+    save_last_result,
+    save_servers_state,
+)
 from state import OutageTracker, atomic_write_json, iso, now_local
 from traffic import (
     entity_rate_mbps,
@@ -58,6 +65,7 @@ THRESHOLDS_FILE = Path("/data/runtime/thresholds.json")
 TRAFFIC_FILE = Path("/data/runtime/traffic.json")
 TRAFFIC_POLL_SECONDS = 60
 RECENT_RESULTS_FILE = Path("/data/runtime/recent_results.json")
+SERVERS_FILE = Path("/data/runtime/servers.json")
 
 
 class InternetApp:
@@ -88,6 +96,7 @@ class InternetApp:
         self.speedtest = load_last_result(SPEEDTEST_FILE)
         self.thresholds = load_thresholds(THRESHOLDS_FILE)
         self.recent_results = load_recent_results(RECENT_RESULTS_FILE)
+        self.servers = load_servers_state(SERVERS_FILE)
         self.performance = evaluate_performance(
             self.speedtest, self.thresholds
         )
@@ -203,6 +212,12 @@ class InternetApp:
                 name="speedtest-manual",
                 daemon=True,
             ).start()
+        elif payload == "REFRESH_SERVERS":
+            threading.Thread(
+                target=self._refresh_servers,
+                name="speedtest-servers",
+                daemon=True,
+            ).start()
 
     def _state_payload(self) -> dict[str, Any]:
         with self.lock:
@@ -249,6 +264,21 @@ class InternetApp:
         self.mqtt.publish(
             TOPICS["thresholds"],
             json.dumps(self.thresholds),
+            qos=1,
+            retain=True,
+        )
+
+    def _publish_servers(self) -> None:
+        if not self.mqtt.is_connected():
+            return
+        payload = dict(self.servers)
+        payload["configured_server_ids"] = list(self.config.speedtest.server_ids)
+        payload["automatic_server_fallback"] = (
+            self.config.speedtest.automatic_server_fallback
+        )
+        self.mqtt.publish(
+            TOPICS["servers"],
+            json.dumps(payload),
             qos=1,
             retain=True,
         )
@@ -405,6 +435,7 @@ class InternetApp:
         self._publish_state()
         self._publish_outages()
         self._publish_thresholds()
+        self._publish_servers()
         self._publish_recent_results()
         self._publish_performance()
         self._publish_traffic()
@@ -529,6 +560,39 @@ class InternetApp:
             self.speedtest["error"] = error
         self._publish_state()
 
+    def _refresh_servers(self) -> None:
+        if not self.speedtest_lock.acquire(blocking=False):
+            self.log.info("Speedtest operation is already running")
+            return
+        try:
+            latest = sample(
+                self.config.router_ip,
+                self.config.connectivity.timeout_seconds,
+            )
+            if not latest.internet_up:
+                self.servers["error"] = "Internet unavailable"
+                self._publish_servers()
+                return
+            try:
+                servers = list_servers()
+            except RuntimeError as exc:
+                self.servers["error"] = str(exc)
+                save_servers_state(SERVERS_FILE, self.servers)
+                self._publish_servers()
+                self.log.error("Ookla server refresh failed: %s", exc)
+                return
+            self.servers = {
+                "count": len(servers),
+                "updated_at": iso(now_local()),
+                "servers": servers,
+                "error": None,
+            }
+            save_servers_state(SERVERS_FILE, self.servers)
+            self._publish_servers()
+            self.log.info("Ookla server list refreshed: %s servers", len(servers))
+        finally:
+            self.speedtest_lock.release()
+
     def _run_speedtest(self) -> None:
         if not self.speedtest_lock.acquire(blocking=False):
             self.log.info("Speedtest is already running")
@@ -548,13 +612,32 @@ class InternetApp:
                 return
 
             self._set_speedtest_status("running", error=None)
-            self.log.info("Running Ookla Speedtest")
-            try:
-                result = run_speedtest(self.config.speedtest.timeout_seconds)
-            except RuntimeError as exc:
-                self._set_speedtest_status("error", error=str(exc))
-                self.log.error("Speedtest failed: %s", exc)
-                self._event("speedtest_failed", reason=str(exc))
+            candidates: list[int | None] = list(self.config.speedtest.server_ids)
+            if not candidates or self.config.speedtest.automatic_server_fallback:
+                candidates.append(None)
+
+            errors: list[str] = []
+            result: dict[str, Any] | None = None
+            for server_id in candidates:
+                selection = "automatic" if server_id is None else f"server {server_id}"
+                self.log.info("Running Ookla Speedtest: %s", selection)
+                try:
+                    result = run_speedtest(
+                        self.config.speedtest.timeout_seconds,
+                        server_id=server_id,
+                    )
+                    break
+                except RuntimeError as exc:
+                    errors.append(f"{selection}: {exc}")
+                    self.log.warning(
+                        "Speedtest attempt failed: %s: %s",
+                        selection,
+                        exc,
+                    )
+            if result is None:
+                message = " | ".join(errors)[-1800:]
+                self._set_speedtest_status("error", error=message)
+                self._event("speedtest_failed", reason=message)
                 return
 
             with self.lock:

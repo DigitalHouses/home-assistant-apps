@@ -20,6 +20,7 @@ TOPICS = {
     "traffic": f"{MQTT_BASE_TOPIC}/traffic",
     "traffic_availability": f"{MQTT_BASE_TOPIC}/traffic_availability",
     "recent_results": f"{MQTT_BASE_TOPIC}/recent_results",
+    "servers": f"{MQTT_BASE_TOPIC}/servers",
     "result_availability": f"{MQTT_BASE_TOPIC}/result_availability",
     "minimum_download_command": f"{MQTT_BASE_TOPIC}/thresholds/minimum_download/set",
     "minimum_upload_command": f"{MQTT_BASE_TOPIC}/thresholds/minimum_upload/set",
@@ -283,6 +284,7 @@ def build_discovery_payload(
                 "{{ {'provider': value_json.speedtest.provider, "
                 "'external_ip': value_json.speedtest.external_ip, "
                 "'server': value_json.speedtest.server, "
+                "'server_id': value_json.speedtest.server_id, "
                 "'result_url': value_json.speedtest.result_url, "
                 "'tested_at': value_json.speedtest.tested_at, "
                 "'error': value_json.speedtest.error} | tojson }}"
@@ -402,6 +404,36 @@ def build_discovery_payload(
             "json_attributes_topic": TOPICS["performance"],
             "availability": result_availability,
             "availability_mode": "all",
+        },
+        "available_servers": {
+            "platform": "sensor",
+            "name": "Available servers",
+            "unique_id": f"{ENTITY_PREFIX}_available_servers",
+            "default_entity_id": f"sensor.{ENTITY_PREFIX}_available_servers",
+            "state_topic": TOPICS["servers"],
+            "value_template": "{{ value_json.count }}",
+            "unit_of_measurement": "servers",
+            "json_attributes_topic": TOPICS["servers"],
+            "json_attributes_template": (
+                "{{ {'updated_at': value_json.updated_at, "
+                "'servers': value_json.servers, 'error': value_json.error, "
+                "'configured_server_ids': value_json.configured_server_ids, "
+                "'automatic_server_fallback': value_json.automatic_server_fallback} | tojson }}"
+            ),
+            "entity_category": "diagnostic",
+            "icon": "mdi:server-network",
+            "availability": availability,
+        },
+        "refresh_servers": {
+            "platform": "button",
+            "name": "Refresh servers",
+            "unique_id": f"{ENTITY_PREFIX}_refresh_servers",
+            "default_entity_id": f"button.{ENTITY_PREFIX}_refresh_servers",
+            "command_topic": TOPICS["command"],
+            "payload_press": "REFRESH_SERVERS",
+            "entity_category": "config",
+            "icon": "mdi:refresh",
+            "availability": availability,
         },
         "recent_results": {
             "platform": "sensor",

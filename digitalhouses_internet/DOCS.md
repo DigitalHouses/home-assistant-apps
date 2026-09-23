@@ -34,6 +34,12 @@ Graphable entities are Download, Upload, Ping, Jitter and Packet loss. Provider,
 
 A failed test does not overwrite the last successful measurements. The runtime status becomes `error` or `no_connectivity` while the last successful result remains persisted under `/data/runtime`.
 
+### Server selection
+
+`speedtest.server_ids` is an ordered list of preferred Ookla server IDs. Empty means automatic selection. Configured IDs are tried in order; when `automatic_server_fallback` is enabled, one final automatic-selection attempt follows them.
+
+The server catalog is on-demand: `button.dh_internet_app_refresh_servers` updates one diagnostic `sensor.dh_internet_app_available_servers`. There is no background server-catalog polling.
+
 ## Quality thresholds
 
 The three user-editable MQTT Number entities are Minimum download speed, Minimum upload speed and Maximum ping. Their values are persisted under `/data/runtime` and immediately recalculate the last successful Speedtest result.

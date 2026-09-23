@@ -43,6 +43,7 @@ Version `0.1.0` establishes the new product identity and the recovery/availabili
 - Version and Started-at diagnostics;
 - Ookla Download, Upload, Ping, Jitter and Packet loss measurements;
 - manual and periodic Speedtest with compact status metadata;
+- preferred Ookla server IDs with optional automatic fallback and on-demand server catalog;
 - Recent Results as one diagnostic entity with the last 20 successful tests and the thresholds that were active for each test.
 
 Quality thresholds and App-owned performance problem evaluation are implemented. Router integration uses at most five optional HA bindings: cumulative Download/Upload totals, WAN state and current Download/Upload rates. Together with two recovery entities the App stays within seven external HA bindings. Monthly traffic retains the current month plus 11 previous months. Final dashboard/package presentation remains a subsequent milestone before a production release.

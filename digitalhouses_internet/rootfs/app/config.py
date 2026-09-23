@@ -27,6 +27,8 @@ class SpeedtestConfig:
     periodic_enabled: bool
     interval_seconds: int
     timeout_seconds: int
+    server_ids: tuple[int, ...]
+    automatic_server_fallback: bool
 
 
 @dataclass(frozen=True)
@@ -134,6 +136,20 @@ def parse_options(raw: Any) -> AppConfig:
     if not isinstance(speedtest_raw, dict):
         speedtest_raw = {}
 
+    server_ids_raw = speedtest_raw.get("server_ids", [])
+    if not isinstance(server_ids_raw, list):
+        raise ConfigError("speedtest.server_ids must be a list")
+    server_ids: list[int] = []
+    for raw_server_id in server_ids_raw:
+        try:
+            server_id = int(raw_server_id)
+        except (TypeError, ValueError) as exc:
+            raise ConfigError("speedtest.server_ids must contain integers") from exc
+        if server_id <= 0:
+            raise ConfigError("speedtest.server_ids must contain positive integers")
+        if server_id not in server_ids:
+            server_ids.append(server_id)
+
     traffic_raw = raw.get("traffic")
     if not isinstance(traffic_raw, dict):
         traffic_raw = {}
@@ -211,6 +227,10 @@ def parse_options(raw: Any) -> AppConfig:
             * _bounded_int(speedtest_raw.get("interval_minutes"), 5, 720, 30),
             timeout_seconds=_bounded_int(
                 speedtest_raw.get("timeout_seconds"), 30, 600, 240
+            ),
+            server_ids=tuple(server_ids),
+            automatic_server_fallback=bool(
+                speedtest_raw.get("automatic_server_fallback", True)
             ),
         ),
         traffic=TrafficConfig(

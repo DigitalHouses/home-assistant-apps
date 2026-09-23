@@ -22,6 +22,8 @@ def base_options() -> dict:
             "periodic_enabled": True,
             "interval_minutes": 30,
             "timeout_seconds": 240,
+            "server_ids": [],
+            "automatic_server_fallback": True,
         },
         "traffic": {
             "traffic_download_total": "",
@@ -65,6 +67,16 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.speedtest.timeout_seconds, 240)
         self.assertFalse(config.traffic.enabled)
         self.assertFalse(config.traffic.has_bindings)
+
+    def test_speedtest_server_ids_are_positive_and_deduplicated(self) -> None:
+        raw = base_options()
+        raw["speedtest"]["server_ids"] = [123, 456, 123]
+        config = parse_options(raw)
+        self.assertEqual(config.speedtest.server_ids, (123, 456))
+        self.assertTrue(config.speedtest.automatic_server_fallback)
+        raw["speedtest"]["server_ids"] = [0]
+        with self.assertRaises(ConfigError):
+            parse_options(raw)
 
     def test_traffic_cumulative_bindings_must_be_paired(self) -> None:
         raw = base_options()

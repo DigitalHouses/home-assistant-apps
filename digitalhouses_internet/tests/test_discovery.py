@@ -58,6 +58,17 @@ class DiscoveryTests(unittest.TestCase):
         self.assertIn("router_download_rate", components)
         self.assertIn("router_upload_rate", components)
 
+    def test_compact_server_discovery(self) -> None:
+        components = build_discovery_payload("0.1.0")["components"]
+        self.assertEqual(
+            components["available_servers"]["default_entity_id"],
+            "sensor.dh_internet_app_available_servers",
+        )
+        self.assertEqual(
+            components["refresh_servers"]["default_entity_id"],
+            "button.dh_internet_app_refresh_servers",
+        )
+
     def test_canonical_identity_and_runtime_diagnostics(self) -> None:
         payload = build_discovery_payload("0.1.0")
         self.assertEqual(

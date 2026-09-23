@@ -26,6 +26,8 @@ options:
     periodic_enabled: true
     interval_minutes: 30
     timeout_seconds: 240
+    server_ids: []
+    automatic_server_fallback: true
   traffic:
     traffic_download_total: ""
     traffic_upload_total: ""
@@ -58,6 +60,9 @@ schema:
     periodic_enabled: bool
     interval_minutes: int(5,720)
     timeout_seconds: int(30,600)
+    server_ids:
+      - int
+    automatic_server_fallback: bool
   traffic:
     traffic_download_total: str
     traffic_upload_total: str
