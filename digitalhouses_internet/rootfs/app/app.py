@@ -14,7 +14,7 @@ import paho.mqtt.client as mqtt
 
 from config import AppConfig, ConfigError, load_config
 from connectivity import ConnectivitySnapshot, sample
-from discovery import DISCOVERY_TOPIC, DEVICE_ID, TOPICS, build_discovery_payload
+from discovery import (\n    DISCOVERY_TOPIC,\n    DEVICE_ID,\n    EVENT_SCHEMA_VERSION,\n    TOPICS,\n    build_discovery_payload,\n)
 from ha_api import HomeAssistantApi
 from recovery import (
     RecoveryExecutor,
@@ -153,7 +153,7 @@ class InternetApp:
         if not self.mqtt.is_connected():
             return
         payload = {
-            "schema_version": 1,
+            "schema_version": EVENT_SCHEMA_VERSION,
             "event_type": event_type,
             "timestamp": iso(now_local()),
             **data,
