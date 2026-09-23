@@ -7,7 +7,6 @@ from validators.common import fail, load_yaml, require_files
 
 
 def validate_internet(root: Path, app: Path, context: dict[str, Any]) -> None:
-    del root
     config = context["config"]
     options = config.get("options")
     schema = config.get("schema")
