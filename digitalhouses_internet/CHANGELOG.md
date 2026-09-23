@@ -10,3 +10,4 @@
 - Added persistent quality thresholds, low download/upload/high ping evaluation, aggregate Problems diagnostics and schema-v2 performance events.
 - Added Recent Results persistence with the latest 20 successful tests and per-test quality thresholds.
 - Added optional cumulative router traffic accounting with current-month totals and 12-month history.
+- Added optional WAN state and current Router Download/Upload rate bindings while keeping the total external HA binding contract at seven including recovery.

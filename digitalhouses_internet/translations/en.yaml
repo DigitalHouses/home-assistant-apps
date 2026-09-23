@@ -8,8 +8,8 @@ configuration:
     name: Speedtest
     description: Ookla Speedtest periodic interval and timeout.
   traffic:
-    name: Router traffic
-    description: Optional cumulative download and upload sensor bindings for 12-month traffic accounting.
+    name: Router telemetry
+    description: Optional cumulative traffic, WAN state and current rate bindings. All fields may be empty.
   recovery:
     name: Recovery
   log_level:

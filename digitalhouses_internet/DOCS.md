@@ -52,26 +52,27 @@ The App persists current-month outages, including an active outage. Each record 
 
 Current-month availability is calculated by the App from elapsed local calendar-month time minus accumulated outage time. Home Assistant exposes the result but does not own the calculation.
 
-## Router traffic
+## Router telemetry and traffic
 
-Traffic accounting is optional and deliberately uses only two Home Assistant bindings:
+All Router Home Assistant bindings are optional. The public contract contains at most five:
 
 - `traffic.traffic_download_total`
 - `traffic.traffic_upload_total`
+- `traffic.router_wan_status`
+- `traffic.router_download_rate`
+- `traffic.router_upload_rate`
 
-Both values must be cumulative `sensor.*` entity IDs, or both must be left empty.
+Together with the two optional recovery target entities, this keeps the external Home Assistant binding surface at a maximum of seven. No Home Assistant entity binding is mandatory.
 
-The App samples both counters every 60 seconds through the Home Assistant Core API, normalizes common decimal/binary data-size units to bytes, calculates deltas and persists its own accounting state under `/data/runtime`.
+The two cumulative counters are a pair: configure both or neither. They enable App-owned monthly traffic accounting. WAN state and current Download/Upload rates are independent optional bindings and do not affect recovery decisions.
 
-The first valid sample establishes a baseline and is not counted as historical traffic. Normal growth adds the delta. If the source counter resets, the new counter value is treated as post-reset traffic and the reset is recorded diagnostically. If configured source IDs change, accumulated totals/history are kept but a fresh baseline is established to avoid a false jump. A missing/unavailable source is never interpreted as zero.
+The App samples configured Router sources every 60 seconds through the Home Assistant Core API. Common decimal/binary data-size counters are normalized to bytes. Common bit/s and byte/s rate units are normalized to Mbit/s.
 
-Traffic history keeps the current month plus up to 11 previous observed months. Home Assistant traffic entities are created only when both source mappings are configured:
+The first cumulative sample establishes a baseline. Normal growth adds only the delta. A source counter reset does not create negative traffic. If the cumulative source IDs change, history is retained but a fresh baseline is established. At a calendar-month boundary the first observation is also a fresh baseline because cumulative counters cannot reveal the exact cross-boundary split.
 
-- `sensor.dh_internet_app_traffic_download_total`
-- `sensor.dh_internet_app_traffic_upload_total`
-- `sensor.dh_internet_app_traffic_download_month`
-- `sensor.dh_internet_app_traffic_upload_month`
-- `sensor.dh_internet_app_traffic_history`
+Traffic history keeps the current month plus up to 11 previous observed months under `/data/runtime`. Traffic entities are created only when the cumulative pair is configured. WAN state and current rate entities are created only when their own mapping is configured.
+
+Temperature, connected-client count, uptime and last-boot bindings are intentionally outside the new App contract.
 
 ## Events and notifications
 
