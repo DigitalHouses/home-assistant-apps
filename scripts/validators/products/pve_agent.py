@@ -170,6 +170,12 @@ def validate_dh_pve_app(
         ),
         "canonical ready-state Discovery",
     )
+    pve_discovery_source = (app / "app/discovery_groups.py").read_text(
+        encoding="utf-8"
+    )
+    if '"problem_updated"' in pve_discovery_source:
+        fail("DH PVE public Event Discovery must remain semantic-only")
+
     _require_text(
         app / "app/discovery_ups_groups.py",
         (
@@ -371,6 +377,7 @@ def validate_dh_pve_app(
             "id: ups_status_changed",
             "id: problem_started",
             "id: problem_recovered",
+            "id: problem_updated",
             "notification_schema_version",
             "contract_error",
             "failure_class",
