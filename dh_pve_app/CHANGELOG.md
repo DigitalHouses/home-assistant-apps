@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.5.11
+
 - Record UPS line-power state explicitly in Home Assistant Recorder and Logbook so mains-loss timelines can be reconstructed independently of the normalized UPS status sensor.
 - Gate HA startup problem reconciliation on a publication from the current PVE agent process, localize retained UPS problems from schema-v2 `problem_id` values, and prevent blank live notification title/message delivery.
 - Harden shutdown-history parser v3 against stale same-boot guest completion records and negative timestamps; a newer guest shutdown start resets old completion state instead of producing a false zero-second success, and an explicit host-shutdown-start boundary discards unrelated earlier guest operations from the same boot.
