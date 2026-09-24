@@ -19,7 +19,7 @@ logging.basicConfig(level=settings.log_level.upper())
 
 app = FastAPI(
     title="DigitalHouses Stats",
-    version="0.3.1",
+    version="0.4.0",
     docs_url=None,
     redoc_url=None,
 )
