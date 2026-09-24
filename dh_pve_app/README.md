@@ -138,7 +138,7 @@ Battery discharge notification milestones are fixed machine events at 90, 80, 70
 
 App events contain machine semantics only. HA locale packages own notification wording, labels and emoji.
 
-The Home Assistant side uses two PVE packages:
+The Home Assistant side uses two PVE packages. Install exactly one notification locale:
 
 - `examples/packages/dh_app_pve_package.yaml` — all non-language helpers, Recorder and Logbook;
 - exactly one notification locale:
