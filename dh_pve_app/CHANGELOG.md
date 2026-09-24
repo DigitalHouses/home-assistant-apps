@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.5.16
+
+- Fix invalid YAML indentation in the English and Russian Home Assistant notification packages introduced in 0.5.15. The strict startup-reconciliation contract itself is unchanged; only the malformed block-scalar formatting is corrected.
+- Add repository validation that parses every shipped PVE Home Assistant package as YAML before merge/release, so syntactically invalid package artifacts cannot pass the repository contract again.
+- Keep PVE/NUT runtime, UPS policy and FSD/shutdown behavior unchanged.
+
+
 ## 0.5.15
 
 - Harden Home Assistant startup problem reconciliation under the repository Contract Data Policy: fresh-publication timestamps, aggregate count/severity, active-list shape and required problem fields are validated before any notification is rendered.
