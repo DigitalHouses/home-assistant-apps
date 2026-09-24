@@ -2,8 +2,8 @@
 # DigitalHouses PVE local notifications — English example
 # =============================================================================
 # Machine events come from dh_pve_app.
-# Keep this file simple: event -> trigger.id -> choose -> direct action.
-# Replace persistent_notification.create with any delivery service you prefer.
+# User rule: find the trigger.id you need and edit only title/message below it.
+# Flow: machine event -> trigger.id -> choose -> direct action.
 # =============================================================================
 
 dh_app_pve_notification_local_package:
@@ -12,14 +12,13 @@ dh_app_pve_notification_local_package:
     - id: dh_app_pve_notifications
       alias: DH PVE · Notifications
       mode: queued
-      max: 20
+      max: 50
 
       triggers:
+        # PVE: generic problem lifecycle
         - trigger: event.received
           target:
-            entity_id:
-              - event.dh_app_pve_diagnostic
-              - event.dh_app_pve_ups_diagnostic
+            entity_id: event.dh_app_pve_diagnostic
           options:
             event_type:
               - problem_started
@@ -27,9 +26,7 @@ dh_app_pve_notification_local_package:
 
         - trigger: event.received
           target:
-            entity_id:
-              - event.dh_app_pve_diagnostic
-              - event.dh_app_pve_ups_diagnostic
+            entity_id: event.dh_app_pve_diagnostic
           options:
             event_type:
               - problem_updated
@@ -37,22 +34,266 @@ dh_app_pve_notification_local_package:
 
         - trigger: event.received
           target:
-            entity_id:
-              - event.dh_app_pve_diagnostic
-              - event.dh_app_pve_ups_diagnostic
+            entity_id: event.dh_app_pve_diagnostic
           options:
             event_type:
               - problem_recovered
           id: problem_recovered
 
+        # UPS: explicit user-semantic events
+        # NUT unavailable
         - trigger: event.received
           target:
             entity_id: event.dh_app_pve_ups_diagnostic
           options:
             event_type:
-              - ups_status_changed
-          id: ups_status_changed
+              - nut_unavailable
+          id: nut_unavailable
 
+        # NUT restored
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - nut_restored
+          id: nut_restored
+
+        # Power state unknown
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - power_state_unknown
+          id: power_state_unknown
+
+        # Power state restored
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - power_state_restored
+          id: power_state_restored
+
+        # Line power lost
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - line_power_lost
+          id: line_power_lost
+
+        # Line power restored
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - line_power_restored
+          id: line_power_restored
+
+        # Low battery started
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - low_battery_started
+          id: low_battery_started
+
+        # Low battery cleared
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - low_battery_cleared
+          id: low_battery_cleared
+
+        # High battery started
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - high_battery_started
+          id: high_battery_started
+
+        # High battery cleared
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - high_battery_cleared
+          id: high_battery_cleared
+
+        # Replace battery started
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - replace_battery_started
+          id: replace_battery_started
+
+        # Replace battery cleared
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - replace_battery_cleared
+          id: replace_battery_cleared
+
+        # Bypass started
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - bypass_started
+          id: bypass_started
+
+        # Bypass ended
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - bypass_ended
+          id: bypass_ended
+
+        # Calibration started
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - calibration_started
+          id: calibration_started
+
+        # Calibration ended
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - calibration_ended
+          id: calibration_ended
+
+        # Output off
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - output_off
+          id: output_off
+
+        # Output restored
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - output_restored
+          id: output_restored
+
+        # Overload started
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - overload_started
+          id: overload_started
+
+        # Overload cleared
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - overload_cleared
+          id: overload_cleared
+
+        # AVR Trim started
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - trim_started
+          id: trim_started
+
+        # AVR Trim ended
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - trim_ended
+          id: trim_ended
+
+        # AVR Boost started
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - boost_started
+          id: boost_started
+
+        # AVR Boost ended
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - boost_ended
+          id: boost_ended
+
+        # NUT FSD started
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - forced_shutdown_started
+          id: forced_shutdown_started
+
+        # NUT FSD cleared
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - forced_shutdown_cleared
+          id: forced_shutdown_cleared
+
+        # Alarm started
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - alarm_started
+          id: alarm_started
+
+        # Alarm cleared
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - alarm_cleared
+          id: alarm_cleared
+
+        # battery_discharge_level_crossed
         - trigger: event.received
           target:
             entity_id: event.dh_app_pve_ups_diagnostic
@@ -61,6 +302,7 @@ dh_app_pve_notification_local_package:
               - battery_discharge_level_crossed
           id: battery_discharge_level_crossed
 
+        # battery_fully_charged
         - trigger: event.received
           target:
             entity_id: event.dh_app_pve_ups_diagnostic
@@ -69,6 +311,7 @@ dh_app_pve_notification_local_package:
               - battery_fully_charged
           id: battery_fully_charged
 
+        # shutdown_committed
         - trigger: event.received
           target:
             entity_id: event.dh_app_pve_ups_diagnostic
@@ -77,6 +320,7 @@ dh_app_pve_notification_local_package:
               - shutdown_committed
           id: shutdown_committed
 
+        # config_changed
         - trigger: event.received
           target:
             entity_id: event.dh_app_pve_ups_diagnostic
@@ -89,6 +333,7 @@ dh_app_pve_notification_local_package:
 
       actions:
         - choose:
+            # PVE: problem_started
             - conditions:
                 - condition: trigger
                   id:
@@ -96,11 +341,10 @@ dh_app_pve_notification_local_package:
               sequence:
                 - action: persistent_notification.create
                   data:
-                    title: "⚠️ {{ trigger.to_state.attributes.object_name }}: problem detected"
-                    message: >-
-                      {{ trigger.to_state.attributes.metric }}:
-                      {{ trigger.to_state.attributes.current.value }}
+                    title: "🖥️⚠️ {{ trigger.to_state.attributes.object_name }}: problem detected"
+                    message: "{{ trigger.to_state.attributes.metric }}: {{ trigger.to_state.attributes.current.value }}"
 
+            # PVE: problem_updated
             - conditions:
                 - condition: trigger
                   id:
@@ -108,11 +352,10 @@ dh_app_pve_notification_local_package:
               sequence:
                 - action: persistent_notification.create
                   data:
-                    title: "⚠️ {{ trigger.to_state.attributes.object_name }}: problem changed"
-                    message: >-
-                      {{ trigger.to_state.attributes.metric }}:
-                      {{ trigger.to_state.attributes.current.value }}
+                    title: "🖥️⚠️ {{ trigger.to_state.attributes.object_name }}: problem changed"
+                    message: "{{ trigger.to_state.attributes.metric }}: {{ trigger.to_state.attributes.current.value }}"
 
+            # PVE: problem_recovered
             - conditions:
                 - condition: trigger
                   id:
@@ -120,24 +363,318 @@ dh_app_pve_notification_local_package:
               sequence:
                 - action: persistent_notification.create
                   data:
-                    title: "✅ {{ trigger.to_state.attributes.object_name }}: back to normal"
-                    message: >-
-                      {{ trigger.to_state.attributes.metric }}:
-                      {{ trigger.to_state.attributes.current.value }}
+                    title: "🖥️✅ {{ trigger.to_state.attributes.object_name }}: back to normal"
+                    message: "{{ trigger.to_state.attributes.metric }}: {{ trigger.to_state.attributes.current.value }}"
 
+            # NUT unavailable
             - conditions:
                 - condition: trigger
                   id:
-                    - ups_status_changed
+                    - nut_unavailable
               sequence:
                 - action: persistent_notification.create
                   data:
-                    title: "🔋 UPS: status changed"
-                    message: >-
-                      {{ trigger.to_state.attributes.previous_status | join(', ') }}
-                      →
-                      {{ trigger.to_state.attributes.current_status | join(', ') }}
+                    title: "🔋❌ UPS: NUT unavailable"
+                    message: "UPS data is unavailable through NUT."
 
+            # NUT restored
+            - conditions:
+                - condition: trigger
+                  id:
+                    - nut_restored
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "🔋✅ UPS: NUT connection restored"
+                    message: "UPS monitoring is available again."
+
+            # Power state unknown
+            - conditions:
+                - condition: trigger
+                  id:
+                    - power_state_unknown
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "🔋⚠️ UPS: power state unknown"
+                    message: "Cannot determine whether the UPS is on line power or battery."
+
+            # Power state restored
+            - conditions:
+                - condition: trigger
+                  id:
+                    - power_state_restored
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "🔋✅ UPS: power state restored"
+                    message: "The UPS is reporting a valid power state again."
+
+            # Line power lost
+            - conditions:
+                - condition: trigger
+                  id:
+                    - line_power_lost
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "🔌⚠️ Line power lost"
+                    message: "UPS switched to battery power."
+
+            # Line power restored
+            - conditions:
+                - condition: trigger
+                  id:
+                    - line_power_restored
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "🔌✅ Line power restored"
+                    message: "UPS returned to line power."
+
+            # Low battery started
+            - conditions:
+                - condition: trigger
+                  id:
+                    - low_battery_started
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "🔋❗ UPS: low battery"
+                    message: "UPS reported LOW BATTERY."
+
+            # Low battery cleared
+            - conditions:
+                - condition: trigger
+                  id:
+                    - low_battery_cleared
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "🔋✅ UPS: low-battery warning cleared"
+                    message: "LOW BATTERY is no longer active."
+
+            # High battery started
+            - conditions:
+                - condition: trigger
+                  id:
+                    - high_battery_started
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "🔋⚠️ UPS: high battery"
+                    message: "UPS reported HIGH BATTERY."
+
+            # High battery cleared
+            - conditions:
+                - condition: trigger
+                  id:
+                    - high_battery_cleared
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "🔋✅ UPS: high-battery warning cleared"
+                    message: "HIGH BATTERY is no longer active."
+
+            # Replace battery started
+            - conditions:
+                - condition: trigger
+                  id:
+                    - replace_battery_started
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "🔋⚠️ UPS: replace battery"
+                    message: "UPS reported REPLACE BATTERY."
+
+            # Replace battery cleared
+            - conditions:
+                - condition: trigger
+                  id:
+                    - replace_battery_cleared
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "🔋✅ UPS: replace-battery warning cleared"
+                    message: "REPLACE BATTERY is no longer active."
+
+            # Bypass started
+            - conditions:
+                - condition: trigger
+                  id:
+                    - bypass_started
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "🔋⚠️ UPS: bypass enabled"
+                    message: "UPS load is in bypass mode."
+
+            # Bypass ended
+            - conditions:
+                - condition: trigger
+                  id:
+                    - bypass_ended
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "🔋✅ UPS: bypass ended"
+                    message: "UPS left bypass mode."
+
+            # Calibration started
+            - conditions:
+                - condition: trigger
+                  id:
+                    - calibration_started
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "🔋🧪 UPS: calibration started"
+                    message: "UPS calibration is running."
+
+            # Calibration ended
+            - conditions:
+                - condition: trigger
+                  id:
+                    - calibration_ended
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "🔋✅ UPS: calibration ended"
+                    message: "UPS left calibration mode."
+
+            # Output off
+            - conditions:
+                - condition: trigger
+                  id:
+                    - output_off
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "🔋⏹️ UPS: output off"
+                    message: "UPS reported OUTPUT OFF."
+
+            # Output restored
+            - conditions:
+                - condition: trigger
+                  id:
+                    - output_restored
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "🔋✅ UPS: output restored"
+                    message: "OUTPUT OFF is no longer active."
+
+            # Overload started
+            - conditions:
+                - condition: trigger
+                  id:
+                    - overload_started
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "🔋❌ UPS: overload"
+                    message: "UPS reported OVERLOAD."
+
+            # Overload cleared
+            - conditions:
+                - condition: trigger
+                  id:
+                    - overload_cleared
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "🔋✅ UPS: overload cleared"
+                    message: "OVERLOAD is no longer active."
+
+            # AVR Trim started
+            - conditions:
+                - condition: trigger
+                  id:
+                    - trim_started
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "🔋⚠️ UPS: AVR Trim enabled"
+                    message: "UPS is reducing high input voltage without switching to battery."
+
+            # AVR Trim ended
+            - conditions:
+                - condition: trigger
+                  id:
+                    - trim_ended
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "🔋✅ UPS: AVR Trim ended"
+                    message: "AVR Trim mode ended."
+
+            # AVR Boost started
+            - conditions:
+                - condition: trigger
+                  id:
+                    - boost_started
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "🔋⚠️ UPS: AVR Boost enabled"
+                    message: "UPS is boosting low input voltage without switching to battery."
+
+            # AVR Boost ended
+            - conditions:
+                - condition: trigger
+                  id:
+                    - boost_ended
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "🔋✅ UPS: AVR Boost ended"
+                    message: "AVR Boost mode ended."
+
+            # NUT FSD started
+            - conditions:
+                - condition: trigger
+                  id:
+                    - forced_shutdown_started
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "🔋🛑 UPS: Forced Shutdown started"
+                    message: "NUT activated FSD, the forced-shutdown procedure."
+
+            # NUT FSD cleared
+            - conditions:
+                - condition: trigger
+                  id:
+                    - forced_shutdown_cleared
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "🔋✅ UPS: Forced Shutdown cleared"
+                    message: "NUT FSD is no longer active."
+
+            # Alarm started
+            - conditions:
+                - condition: trigger
+                  id:
+                    - alarm_started
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "🔋🚨 UPS: alarm active"
+                    message: "UPS reported ALARM."
+
+            # Alarm cleared
+            - conditions:
+                - condition: trigger
+                  id:
+                    - alarm_cleared
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "🔋✅ UPS: alarm cleared"
+                    message: "ALARM is no longer active."
+
+            # Battery crossed a discharge milestone
             - conditions:
                 - condition: trigger
                   id:
@@ -145,11 +682,10 @@ dh_app_pve_notification_local_package:
               sequence:
                 - action: persistent_notification.create
                   data:
-                    title: "🔋 UPS: battery {{ trigger.to_state.attributes.current_charge_percent }}%"
-                    message: >-
-                      Crossed levels:
-                      {{ trigger.to_state.attributes.crossed_thresholds | join(', ') }}%.
+                    title: "🔋⚠️ UPS: battery {{ trigger.to_state.attributes.current_charge_percent }}%"
+                    message: "Crossed levels: {{ trigger.to_state.attributes.crossed_thresholds | join(', ') }}%."
 
+            # Battery fully charged
             - conditions:
                 - condition: trigger
                   id:
@@ -158,12 +694,9 @@ dh_app_pve_notification_local_package:
                 - action: persistent_notification.create
                   data:
                     title: "🔋✅ UPS: battery charged"
-                    message: >-
-                      Charge:
-                      {{ trigger.to_state.attributes.previous_charge_percent }}%
-                      →
-                      {{ trigger.to_state.attributes.current_charge_percent }}%.
+                    message: "Battery charge cycle completed."
 
+            # PVE Agent committed emergency shutdown
             - conditions:
                 - condition: trigger
                   id:
@@ -171,12 +704,10 @@ dh_app_pve_notification_local_package:
               sequence:
                 - action: persistent_notification.create
                   data:
-                    title: "🔋🛑 UPS: emergency shutdown started"
-                    message: >-
-                      Reason: {{ trigger.to_state.attributes.reason }}.
-                      Charge: {{ trigger.to_state.attributes.battery_charge_percent }}%.
-                      Runtime: {{ trigger.to_state.attributes.battery_runtime_seconds }} s.
+                    title: "🔋🛑 PVE: emergency shutdown started"
+                    message: "Reason: {{ trigger.to_state.attributes.reason }}. Charge: {{ trigger.to_state.attributes.battery_charge_percent }}%. Runtime: {{ trigger.to_state.attributes.battery_runtime_seconds }} s."
 
+            # UPS Trigger parameters changed
             - conditions:
                 - condition: trigger
                   id:
@@ -185,12 +716,4 @@ dh_app_pve_notification_local_package:
                 - action: persistent_notification.create
                   data:
                     title: "🔋⚙️ UPS Trigger configuration changed"
-                    message: >-
-                      Charge:
-                      {{ trigger.to_state.attributes.old_values.shutdown_battery_charge_threshold_percent }}%
-                      →
-                      {{ trigger.to_state.attributes.new_values.shutdown_battery_charge_threshold_percent }}%.
-                      Reserve:
-                      {{ trigger.to_state.attributes.old_values.runtime_reserve_seconds }} s
-                      →
-                      {{ trigger.to_state.attributes.new_values.runtime_reserve_seconds }} s.
+                    message: "Charge: {{ trigger.to_state.attributes.old_values.shutdown_battery_charge_threshold_percent }}% → {{ trigger.to_state.attributes.new_values.shutdown_battery_charge_threshold_percent }}%. Reserve: {{ trigger.to_state.attributes.old_values.runtime_reserve_seconds }} s → {{ trigger.to_state.attributes.new_values.runtime_reserve_seconds }} s."
