@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.4
+
+- Persist pending Internet outage detection from the first failed connectivity check, including the debounce attempt count, so App restarts do not lose the true outage start time or restart confirmation from zero.
+- Confirmed outages now start at the first failed check; transient failures that recover before confirmation are discarded.
+
 ## 0.1.3
 
 - Backfilled Recent Results `updated_at` from the newest persisted `tested_at` when upgrading legacy runtime state created before 0.1.2.
