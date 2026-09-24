@@ -35,7 +35,7 @@ class AutoMergeWorkflowTests(unittest.TestCase):
         text = self._text()
 
         self.assertIn(
-            'release_base_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${merge_sha}" --jq '.parents[0].sha')"',
+            "release_base_sha=\"$(gh api \"repos/${GITHUB_REPOSITORY}/git/commits/${merge_sha}\" --jq '.parents[0].sha')\"",
             text,
         )
         self.assertIn('echo "release_base_sha=$release_base_sha" >> "$GITHUB_OUTPUT"', text)
