@@ -625,6 +625,7 @@ class InternetApp:
             self.speedtest["error"] = error
             if last_result is not None:
                 self.speedtest["last_result"] = last_result
+                save_last_result(SPEEDTEST_FILE, self.speedtest)
         self._publish_state()
 
     def _refresh_servers(self) -> None:
