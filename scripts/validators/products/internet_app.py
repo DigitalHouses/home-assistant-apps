@@ -16,6 +16,15 @@ def validate_internet(root: Path, app: Path, context: dict[str, Any]) -> None:
 
     if "router_ip" not in options:
         fail(f"{app.name}: router_ip must be an App option")
+    try:
+        shutdown_timeout = int(config.get("timeout") or 0)
+    except (TypeError, ValueError):
+        shutdown_timeout = 0
+    if shutdown_timeout < 35:
+        fail(
+            f"{app.name}: timeout must allow guarded switch power restore "
+            "(minimum 35 seconds)"
+        )
     if "speedtest" not in options:
         fail(f"{app.name}: speedtest must be an App option")
     if "traffic" not in options:
@@ -215,6 +224,16 @@ def validate_presentation_examples(
 
     if "dh_internet_app_" not in dashboard_text:
         fail(f"{app.name}: dashboard must use canonical entities")
+    for required_filter in (
+        'state: "unavailable"',
+        'state: "unknown"',
+        "condition: numeric_state",
+    ):
+        if required_filter not in dashboard_text:
+            fail(
+                f"{app.name}: dashboard optional-entity visibility contract "
+                f"is missing {required_filter!r}"
+            )
 
     discovered = {
         item.replace("{ENTITY_PREFIX}", "dh_internet_app")

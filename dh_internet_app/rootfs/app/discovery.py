@@ -59,6 +59,22 @@ def build_discovery_payload(
             "payload_not_available": "offline",
         },
     ]
+
+    def optional_router_availability(field: str) -> list[dict[str, Any]]:
+        return [
+            availability,
+            {
+                "topic": TOPICS["traffic"],
+                "payload_available": "online",
+                "payload_not_available": "offline",
+                "value_template": (
+                    "{{ 'online' if value_json.router."
+                    + field
+                    + " is not none else 'offline' }}"
+                ),
+            },
+        ]
+
     device = {
         "identifiers": [DEVICE_ID],
         "name": "DigitalHouses Internet App",
@@ -607,7 +623,8 @@ def build_discovery_payload(
             "value_template": "{{ value_json.router.wan_status }}",
             "entity_category": "diagnostic",
             "icon": "mdi:wan",
-            "availability": availability,
+            "availability": optional_router_availability("wan_status"),
+            "availability_mode": "all",
         }
     if download_rate_enabled:
         components["router_download_rate"] = {
@@ -621,7 +638,10 @@ def build_discovery_payload(
             "state_class": "measurement",
             "unit_of_measurement": "Mbit/s",
             "suggested_display_precision": 1,
-            "availability": availability,
+            "availability": optional_router_availability(
+                "download_rate_mbps"
+            ),
+            "availability_mode": "all",
         }
     if upload_rate_enabled:
         components["router_upload_rate"] = {
@@ -635,7 +655,10 @@ def build_discovery_payload(
             "state_class": "measurement",
             "unit_of_measurement": "Mbit/s",
             "suggested_display_precision": 1,
-            "availability": availability,
+            "availability": optional_router_availability(
+                "upload_rate_mbps"
+            ),
+            "availability_mode": "all",
         }
 
     return {

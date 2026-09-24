@@ -61,6 +61,25 @@ class PresentationTests(unittest.TestCase):
                 f"{path.relative_to(APP_ROOT)} references unknown entities",
             )
 
+    def test_optional_router_and_traffic_cards_hide_unavailable(self) -> None:
+        dashboard = (
+            APP_ROOT
+            / "examples"
+            / "lovelace"
+            / "dh_internet_app_dashboard.yaml"
+        ).read_text(encoding="utf-8")
+        router_section = dashboard.split("title: Router telemetry", 1)[1].split(
+            "title: Traffic", 1
+        )[0]
+        traffic_section = dashboard.split("title: Traffic", 1)[1].split(
+            "- type: conditional", 1
+        )[0]
+        for section in (router_section, traffic_section):
+            self.assertIn('state: "unavailable"', section)
+            self.assertIn('state: "unknown"', section)
+        self.assertNotIn("heading: Router & Traffic", dashboard)
+        self.assertIn("condition: numeric_state", dashboard)
+
     def test_examples_contain_no_legacy_speedtest_entities(self) -> None:
         examples = APP_ROOT / "examples"
         for path in examples.rglob("*.yaml"):

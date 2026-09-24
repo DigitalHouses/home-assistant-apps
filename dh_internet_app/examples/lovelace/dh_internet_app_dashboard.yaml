@@ -328,11 +328,6 @@ sections:
 
           **Total this month:** {{ state_attr('sensor.dh_internet_app_outages_month','total_duration') or '00:00' }}
 
-      - type: heading
-        heading: Router & Traffic
-        heading_style: subtitle
-        icon: mdi:router-network
-
       - type: custom:auto-entities
         show_empty: false
         card:
@@ -343,6 +338,9 @@ sections:
             - entity_id: sensor.dh_internet_app_router_wan_status
             - entity_id: sensor.dh_internet_app_router_download_rate
             - entity_id: sensor.dh_internet_app_router_upload_rate
+          exclude:
+            - state: "unavailable"
+            - state: "unknown"
 
       - type: custom:auto-entities
         show_empty: false
@@ -355,15 +353,15 @@ sections:
             - entity_id: sensor.dh_internet_app_traffic_upload_month
             - entity_id: sensor.dh_internet_app_traffic_download_total
             - entity_id: sensor.dh_internet_app_traffic_upload_total
+          exclude:
+            - state: "unavailable"
+            - state: "unknown"
 
       - type: conditional
         conditions:
-          - condition: state
+          - condition: numeric_state
             entity: sensor.dh_internet_app_traffic_history
-            state_not: unavailable
-          - condition: state
-            entity: sensor.dh_internet_app_traffic_history
-            state_not: unknown
+            above: -1
         card:
           type: markdown
           content: |

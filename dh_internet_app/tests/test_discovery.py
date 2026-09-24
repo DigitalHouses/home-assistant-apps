@@ -63,6 +63,26 @@ class DiscoveryTests(unittest.TestCase):
         self.assertIn("router_wan_status", components)
         self.assertIn("router_download_rate", components)
         self.assertIn("router_upload_rate", components)
+        for key, field in (
+            ("router_wan_status", "wan_status"),
+            ("router_download_rate", "download_rate_mbps"),
+            ("router_upload_rate", "upload_rate_mbps"),
+        ):
+            with self.subTest(component=key):
+                availability = components[key]["availability"]
+                self.assertEqual(len(availability), 2)
+                self.assertEqual(
+                    availability[1]["topic"],
+                    "DigitalHouses/Global/dh_internet_app/traffic",
+                )
+                self.assertIn(
+                    f"value_json.router.{field}",
+                    availability[1]["value_template"],
+                )
+                self.assertEqual(
+                    components[key]["availability_mode"],
+                    "all",
+                )
 
     def test_compact_server_discovery(self) -> None:
         components = build_discovery_payload("0.1.0")["components"]

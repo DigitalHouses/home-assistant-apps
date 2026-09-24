@@ -15,7 +15,7 @@ Recovery is disabled by default.
 - `smart`: Internet down + Router up -> ONT; Router down -> Router.
 - `both`: ONT -> Router on every recovery attempt.
 
-Each target supports only `button` or `switch`. A button target must reference a `button.*` entity and is executed with `button.press`. A switch target must reference a `switch.*` entity; the App turns it off for `power_off_seconds` and always attempts to restore power before the action completes or a Stop request propagates.
+Each target supports only `button` or `switch`. A button target must reference a `button.*` entity and is executed with `button.press`. A switch target must reference a `switch.*` entity; the App turns it off for `power_off_seconds` and always attempts to restore power before the action completes or a Stop request propagates. The App declares a 45-second Supervisor shutdown timeout so a normal App Stop/Restart leaves enough time for the guarded restore path.
 
 When recovery is enabled, both ONT and Router target entities must be configured. All recovery timing belongs to App configuration:
 
@@ -76,7 +76,7 @@ The App samples configured Router sources every 60 seconds through the Home Assi
 
 The first cumulative sample establishes a baseline. Normal growth adds only the delta. A source counter reset does not create negative traffic. If the cumulative source IDs change, history is retained but a fresh baseline is established. At a calendar-month boundary the first observation is also a fresh baseline because cumulative counters cannot reveal the exact cross-boundary split.
 
-Traffic history keeps the current month plus up to 11 previous observed months under `/data/runtime`. Traffic entities are created only when the cumulative pair is configured. WAN state and current rate entities are created only when their own mapping is configured.
+Traffic history keeps the current month plus up to 11 previous observed months under `/data/runtime`. Traffic entities are created only when the cumulative pair is configured. WAN state and current rate entities are created only when their own mapping is configured. If an optional mapped source is currently missing, `unknown` or `unavailable`, the corresponding MQTT entity is marked unavailable until the source returns; the reference dashboard filters such entities out.
 
 Temperature, connected-client count, uptime and last-boot bindings are intentionally outside the new App contract.
 

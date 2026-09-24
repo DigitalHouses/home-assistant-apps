@@ -9,6 +9,8 @@
 - Hardened MQTT v2 connection callback handling and documented all dashboard card dependencies.
 - Persisted Stop Recovery, completed recovery cycles and active cooldown across App restarts for the same outage.
 - Hardened switch recovery so a power-restore attempt is made even if the turn-off API response fails.
+- Marked optional Router telemetry unavailable when its mapped HA source is absent/unavailable and filtered it from the reference dashboard.
+- Extended the HAOS shutdown timeout to protect switch power restoration during normal App Stop/Restart.
 
 - Created DigitalHouses Internet App as a new Home Assistant App product with canonical `dh_internet_app_` MQTT/Home Assistant identity.
 - Added Internet/router reachability, current-month outage history and App-owned monthly availability calculation.

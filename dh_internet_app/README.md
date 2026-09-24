@@ -29,7 +29,7 @@ Arbitrary scripts and shell commands are not part of the recovery contract.
 
 All recovery timing belongs to App configuration: maximum cycles, retry interval, boot wait, cooldown and switch power-off duration. `router_ip` is a top-level network fact used by both monitoring and smart recovery.
 
-`Stop recovery` stops further attempts for the current outage. Stop state, completed recovery cycles and an active cooldown survive an App restart, so restarting the App does not bypass recovery limits. If a switch has already been turned off, the App always attempts to turn it back on before the stop propagates.
+`Stop recovery` stops further attempts for the current outage. Stop state, completed recovery cycles and an active cooldown survive an App restart, so restarting the App does not bypass recovery limits. If a switch has already been turned off, the App always attempts to turn it back on before the stop propagates. The HAOS App shutdown timeout is extended to 45 seconds so normal Stop/Restart operations can complete that restore path.
 
 ## Current development milestone
 
@@ -62,4 +62,4 @@ The reusable Home Assistant layer is deliberately split by responsibility:
 
 Both notification locales emit the neutral Home Assistant event `dh_internet_app_notification`. A site-local adapter may deliver that event through Telegram, `mobile_app` or another transport. The reusable packages contain no customer-specific notification target, `write2log` dependency or private service.
 
-The reference dashboard uses Mushroom, mini-graph-card and auto-entities. Optional Router and traffic sections remain hidden when their mappings are not configured.
+The reference dashboard uses Mushroom, mini-graph-card and auto-entities. Optional Router and traffic entities are hidden when their mappings are not configured or their mapped source is currently unavailable.
