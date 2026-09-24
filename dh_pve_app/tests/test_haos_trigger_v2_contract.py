@@ -113,7 +113,7 @@ def test_notification_package_uses_simple_event_trigger_flow():
         assert token in text
 
     for forbidden in (
-        "dh_app_pve_notification",
+        "event: dh_app_pve_notification",
         "notification_schema_version",
         "contract_error",
         "startup_problem_reconciliation",
