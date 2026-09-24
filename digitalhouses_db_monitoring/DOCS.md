@@ -45,6 +45,8 @@ Choose `Disabled` to omit the four storage entities.
 
 `Publish interval, min` controls how often Recorder health/state is refreshed and MQTT state is published. More expensive database queries and storage checks are internally rate-limited.
 
+`sensor.dh_db_last_refresh` is event-driven rather than part of the minute-by-minute primary state payload. A successful manual full refresh publishes the real timestamp to the dedicated retained `DigitalHouses/Global/db_monitoring/last_refresh` topic. Before the first successful manual refresh there is no synthetic timestamp.
+
 ### PostgreSQL cluster selection
 
 When the SSH storage path is left empty, the App checks installed PostgreSQL clusters and selects the **online** cluster whose port matches the configured Recorder database port. Stopped clusters are ignored. If no matching cluster can be identified, the normal fallback detection is used.

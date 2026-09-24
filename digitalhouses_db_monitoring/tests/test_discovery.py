@@ -4,7 +4,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'rootfs' / 'app'))
 
-from discovery import REFRESH_COMMAND_TOPIC, STATE_RETAIN, build_discovery_payload
+from discovery import (
+    LAST_REFRESH_TOPIC,
+    REFRESH_COMMAND_TOPIC,
+    STATE_RETAIN,
+    STATE_TOPIC,
+    build_discovery_payload,
+)
 
 
 class DiscoveryTests(unittest.TestCase):
@@ -29,7 +35,13 @@ class DiscoveryTests(unittest.TestCase):
             'sensor.dh_db_last_refresh',
         )
         self.assertEqual(payload['components']['db_last_refresh']['device_class'], 'timestamp')
+        self.assertEqual(
+            payload['components']['db_last_refresh']['state_topic'],
+            LAST_REFRESH_TOPIC,
+        )
+        self.assertNotEqual(LAST_REFRESH_TOPIC, STATE_TOPIC)
         self.assertTrue(STATE_RETAIN)
+
 
 
 class StorageDiscoveryTests(unittest.TestCase):
