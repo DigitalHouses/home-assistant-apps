@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from validators.common import fail, require_files
+from validators.common import fail, load_yaml, require_files
 
 EXPECTED_VERSION = "0.5.15"
 EXPECTED_TOPIC_PREFIX = "DigitalHouses/Global/dh_pve_app"
@@ -75,6 +75,16 @@ def validate_dh_pve_app(
 
     if context.get("type") != "linux_agent":
         fail("DH PVE must remain a linux_agent")
+
+    for ha_package in (
+        app / "examples/packages/dh_app_pve_package.yaml",
+        app / "examples/packages/dh_app_pve_notification_package.yaml",
+        app / "examples/packages/locales/ru/dh_app_pve_notification_package.yaml",
+        app / "examples/packages/dh_app_pve_ui_package.yaml",
+    ):
+        parsed = load_yaml(ha_package, root)
+        if not isinstance(parsed, dict):
+            fail(f"DH PVE HA package root must be a mapping: {ha_package}")
 
     version = (app / "VERSION").read_text(encoding="utf-8").strip()
     if context.get("version") != EXPECTED_VERSION or version != EXPECTED_VERSION:
