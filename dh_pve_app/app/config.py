@@ -40,6 +40,11 @@ class TelemetryConfig:
 
 
 @dataclass(frozen=True)
+class EventConfig:
+    pve_problem_debounce_seconds: float = 30.0
+
+
+@dataclass(frozen=True)
 class UpsConfig:
     enabled: bool = False
     name: str = "ups"
@@ -66,6 +71,7 @@ class AppConfig:
     mqtt: MqttConfig
     ups: UpsConfig = field(default_factory=UpsConfig)
     telemetry: TelemetryConfig = field(default_factory=TelemetryConfig)
+    events: EventConfig = field(default_factory=EventConfig)
 
 
 def _get(parser: configparser.ConfigParser, section: str, key: str, default: str) -> str:
@@ -167,6 +173,17 @@ def load_config(path: Path) -> AppConfig:
 
     telemetry_enabled = _get_bool(parser, "telemetry", "enabled", False)
 
+    pve_problem_debounce_seconds = _get_float(
+        parser,
+        "events",
+        "pve_problem_debounce_seconds",
+        30.0,
+    )
+    if not 0.0 <= pve_problem_debounce_seconds <= 3600.0:
+        raise ConfigError(
+            "events.pve_problem_debounce_seconds must be between 0 and 3600"
+        )
+
     ups_enabled = _get_bool(parser, "ups", "enabled", False)
     ups_name = _get(parser, "ups", "name", "ups").strip()
     ups_host = _get(parser, "ups", "host", "127.0.0.1").strip()
@@ -213,4 +230,7 @@ def load_config(path: Path) -> AppConfig:
             command_password=ups_command_password,
         ),
         telemetry=TelemetryConfig(enabled=telemetry_enabled),
+        events=EventConfig(
+            pve_problem_debounce_seconds=pve_problem_debounce_seconds,
+        ),
     )
