@@ -5,7 +5,7 @@ from typing import Any
 
 from validators.common import fail, require_files
 
-EXPECTED_VERSION = "0.5.16"
+EXPECTED_VERSION = "0.5.17"
 EXPECTED_TOPIC_PREFIX = "DigitalHouses/Global/dh_pve_app"
 EXPECTED_DEVICE_NAME = "DH PVE"
 EXPECTED_REFRESH_ENTITY = "button.dh_app_pve_refresh"
@@ -64,8 +64,8 @@ def validate_dh_pve_app(
             app / "examples/dh_app_pve_ups_dashboard.yaml",
             app / "examples/dh_app_pve_shutdown_readiness_card.yaml",
             app / "examples/packages/dh_app_pve_package.yaml",
-            app / "examples/packages/dh_app_pve_notification_package.yaml",
-            app / "examples/packages/locales/ru/dh_app_pve_notification_package.yaml",
+            app / "examples/packages/dh_app_pve_notification_local_package.yaml",
+            app / "examples/packages/locales/ru/dh_app_pve_notification_local_package.yaml",
             app / "systemd/dh_pve_app.service",
             app / "uninstall.sh",
             app / "dh_app_pve.txt",
@@ -251,60 +251,53 @@ def validate_dh_pve_app(
         "UPS MQTT transport",
     )
 
-    for notification_package in (
-        app / "examples/packages/dh_app_pve_notification_package.yaml",
-        app / "examples/packages/locales/ru/dh_app_pve_notification_package.yaml",
-    ):
+    notification_packages = (
+        app / "examples/packages/dh_app_pve_notification_local_package.yaml",
+        app / "examples/packages/locales/ru/dh_app_pve_notification_local_package.yaml",
+    )
+    for notification_package in notification_packages:
         notification_source = notification_package.read_text(encoding="utf-8")
-        live, notification_remainder = notification_source.split(
-            "- id: dh_app_pve_ups_config_changed_notification",
-            1,
-        )
-        config_changed, startup = notification_remainder.split(
-            "- id: dh_app_pve_startup_problem_reconciliation",
-            1,
-        )
-        for contract_block in (live, config_changed):
-            if "| default(" in contract_block or "| int(1)" in contract_block:
+        for required in (
+            "trigger: event.received",
+            "condition: trigger",
+            "trigger.to_state.attributes",
+            "choose:",
+            "id: problem_started",
+            "id: problem_updated",
+            "id: problem_recovered",
+            "id: ups_status_changed",
+            "id: battery_discharge_level_crossed",
+            "id: battery_fully_charged",
+            "id: shutdown_committed",
+            "id: config_changed",
+        ):
+            if required not in notification_source:
                 fail(
-                    "DH PVE HA machine-event contract must not silently default "
-                    f"required fields: {notification_package}"
+                    "DH PVE local notification flow changed: "
+                    f"{notification_package}: {required}"
                 )
-            for required in ("choose:", "kind: contract_error", "severity: error"):
-                if required not in contract_block:
-                    fail(
-                        "DH PVE HA machine-event contract must fail visibly: "
-                        f"{notification_package}: {required}"
-                    )
 
         for forbidden in (
-            "| default(",
-            "| int(0)",
-            "as_timestamp(started, 0)",
-            "as_timestamp(published, 0)",
-            "attrs.schema_version == 1",
-            "get('metric', '')",
-            "get('problem_id', '')",
+            "dh_app_pve_notification",
+            "notification_schema_version",
+            "contract_error",
+            "failure_class",
+            "source_schema_version",
+            "startup_problem_reconciliation",
+            "attrs.schema_version",
         ):
             if forbidden in notification_source:
                 fail(
-                    "DH PVE HA notification package violates strict contract policy: "
+                    "DH PVE local notification package is unnecessarily complex: "
                     f"{notification_package}: {forbidden}"
                 )
-        for required in (
-            "as_timestamp(started, none)",
-            "as_timestamp(published, none)",
-            "is_number(problem_count)",
-            "failure_class: freshness_timeout",
-            "failure_class: invalid_retained_aggregate",
-            "kind: contract_error",
-            "severity: error",
-        ):
-            if required not in startup:
-                fail(
-                    "DH PVE startup reconciliation contract is incomplete: "
-                    f"{notification_package}: {required}"
-                )
+
+    en_notification = notification_packages[0].read_text(encoding="utf-8")
+    ru_notification = notification_packages[1].read_text(encoding="utf-8")
+    if "action: persistent_notification.create" not in en_notification:
+        fail("DH PVE English local notification example must use a direct action")
+    if "action: script.write2log" not in ru_notification:
+        fail("DH PVE Russian site notification package must call write2log directly")
 
     ui_package = (
         app / "examples/packages/dh_app_pve_package.yaml"
