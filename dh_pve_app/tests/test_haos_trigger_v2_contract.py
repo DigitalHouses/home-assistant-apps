@@ -81,7 +81,8 @@ def test_ui_open_and_cancel_wait_for_app_owned_draft_ack_before_state_transition
         assert "draft_charge_threshold_percent" in section
         assert "draft_runtime_reserve_seconds" in section
         assert 'timeout: "00:00:30"' in section
-        assert "continue_on_timeout: false" in section
+        assert "continue_on_timeout: true" in section
+        assert "error: true" in section
         assert section.index("wait_template:") < section.index(f"option: {final_option}")
 
     assert "delay:" not in open_section
@@ -235,11 +236,10 @@ def test_ui_numeric_contract_is_validated_before_float_conversion():
         assert unsafe not in text
 
 
-def test_ui_contract_failures_are_explicit_notifications():
+def test_ui_contract_failures_stop_explicitly_instead_of_coercing_values():
     text = UI_PACKAGE.read_text(encoding="utf-8")
 
-    assert text.count("kind: contract_error") >= 3
-    assert "contract: ups_trigger_ui" in text
-    assert "failure_class: invalid_required_state" in text
-    assert "failure_class: acknowledgement_timeout" in text
-    assert "event: dh_app_pve_notification" in text
+    assert text.count("DH PVE UPS Trigger UI contract error:") >= 4
+    assert text.count("error: true") >= 4
+    assert "acknowledgement timeout" in text
+    assert "missing or invalid" in text
