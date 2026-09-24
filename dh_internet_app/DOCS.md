@@ -84,7 +84,7 @@ Temperature, connected-client count, uptime and last-boot bindings are intention
 
 The App publishes machine-readable MQTT Event entities using schema version 2. Event payloads contain semantics such as event type, target, cycle, reason, values and timestamps.
 
-Human-readable notification text belongs in the reusable Home Assistant package. Site-specific delivery such as Telegram or mobile notifications remains a local adapter and is not a dependency of the App.
+Human-readable notification text and final delivery belong to the local Home Assistant package. The App publishes machine events only and has no dependency on `script.write2log`, Telegram, mobile notifications or another delivery service.
 
 ## Home Assistant presentation layer
 
@@ -92,6 +92,6 @@ The reusable Home Assistant layer does not calculate Internet state, recovery de
 
 `dh_internet_app_global_package.yaml` contains only the Recorder whitelist for useful time-series entities. It records connectivity, Speedtest measurements/status, quality thresholds/problem flags, recovery state/cycle and optional Router WAN/rates plus cumulative/current-month traffic. Rich list/history entities such as monthly outage rows, Recent Results, server catalogs and traffic-history aggregates are intentionally not recorded because their attributes are App-persisted and can be large.
 
-`dh_internet_app_notification_package.yaml` and `locales/ru/dh_internet_app_notification_package.yaml` validate event-specific machine schema-v2 Events from `event.dh_internet_app_event`, localize them, and emit the stable transport-neutral Home Assistant event `dh_internet_app_notification` using DigitalHouses Notification Envelope v1. Every normal notification contains `notification_schema_version`, `source`, `kind`, `severity`, `title` and `message`. Invalid required machine data emits an explicit `contract_error`; the source payload is never forwarded wholesale through `raw` or an equivalent catch-all field. Install exactly one notification locale.
+`dh_internet_app_notification_local_package.yaml` and `locales/ru/dh_internet_app_notification_local_package.yaml` consume schema-v2 machine Events from `event.dh_internet_app_event` directly. Each user-visible `event_type` has a readable `trigger.id` and one matching `choose` branch. The English example calls `persistent_notification.create`; the Russian site package calls `script.write2log` directly.
 
-Site-specific delivery such as Telegram, `mobile_app` or `write2log` stays outside the reusable package.
+There is no Notification Envelope, secondary notification event, adapter or duplicated schema-validation layer in Home Assistant. If the producer violates a required event contract, fix the producer and its tests rather than manufacturing fallback notification data.
