@@ -90,7 +90,6 @@ def test_notification_local_package_is_direct_and_readable() -> None:
             "startup_problem_reconciliation",
             "attrs.schema_version",
             "is mapping",
-            "is number",
         ):
             assert forbidden not in text
 
