@@ -34,6 +34,116 @@ dh_app_pve_notification_package:
           entity_id: binary_sensor.bs_global_system_boot_completed
           state: "on"
       actions:
+        - variables:
+            notification_title: >-
+              {% set kind = trigger.to_state.attributes.event_type %}
+              {% set is_ups = trigger.entity_id == 'event.dh_app_pve_ups_diagnostic' %}
+              {% set name = 'UPS' if is_ups else (trigger.to_state.attributes.object_name | default('Proxmox', true)) %}
+              {% set previous_status = trigger.to_state.attributes.previous_status | default([], true) %}
+              {% set current_status = trigger.to_state.attributes.current_status | default([], true) %}
+              {% set charge = trigger.to_state.attributes.current_charge_percent | default(none) %}
+              {% if kind == 'problem_started' %}
+                {{ '🔋' if is_ups else '🖥️' }}⚠️ {{ name }}: problem detected
+              {% elif kind == 'problem_updated' %}
+                {{ '🔋' if is_ups else '🖥️' }}⚠️ {{ name }}: problem parameters changed
+              {% elif kind == 'problem_recovered' %}
+                {{ '🔋' if is_ups else '🖥️' }}✅ {{ name }}: state returned to normal
+              {% elif kind == 'ups_status_changed' and 'overload' in current_status and 'overload' not in previous_status %}
+                🔋⚠️ UPS: overload detected
+              {% elif kind == 'ups_status_changed' and 'overload' in previous_status and 'overload' not in current_status %}
+                🔋✅ UPS: overload cleared
+              {% elif kind == 'ups_status_changed' and 'low_battery' in current_status and 'low_battery' not in previous_status %}
+                🔋⚠️ UPS: low battery
+              {% elif kind == 'ups_status_changed' and 'low_battery' in previous_status and 'low_battery' not in current_status %}
+                🔋✅ UPS: low-battery warning cleared
+              {% elif kind == 'ups_status_changed' and 'replace_battery' in current_status and 'replace_battery' not in previous_status %}
+                🔋⚠️ UPS: battery replacement required
+              {% elif kind == 'ups_status_changed' and 'replace_battery' in previous_status and 'replace_battery' not in current_status %}
+                🔋✅ UPS: battery-replacement warning cleared
+              {% elif kind == 'ups_status_changed' and 'bypass' in current_status and 'bypass' not in previous_status %}
+                🔋⚠️ UPS: bypass active
+              {% elif kind == 'ups_status_changed' and 'bypass' in previous_status and 'bypass' not in current_status %}
+                🔋✅ UPS: bypass cleared
+              {% elif kind == 'ups_status_changed' and 'on_battery' in current_status and 'on_battery' not in previous_status %}
+                🔋⚠️ UPS: utility power unavailable
+              {% elif kind == 'ups_status_changed' and 'on_battery' in previous_status and 'on_battery' not in current_status %}
+                🔋✅ UPS: utility power restored
+              {% elif kind == 'ups_status_changed' and 'boost' in current_status and 'boost' not in previous_status %}
+                🔋⚠️ UPS: AVR boost active
+              {% elif kind == 'ups_status_changed' and 'boost' in previous_status and 'boost' not in current_status %}
+                🔋✅ UPS: AVR boost cleared
+              {% elif kind == 'ups_status_changed' and 'trim' in current_status and 'trim' not in previous_status %}
+                🔋⚠️ UPS: AVR trim active
+              {% elif kind == 'ups_status_changed' and 'trim' in previous_status and 'trim' not in current_status %}
+                🔋✅ UPS: AVR trim cleared
+              {% elif kind == 'ups_status_changed' %}
+                🔋ℹ️ UPS: status changed
+              {% elif kind == 'battery_discharge_level_crossed' %}
+                🔋⚠️ UPS: battery charge {{ charge if charge is not none else '—' }}%
+              {% elif kind == 'battery_fully_charged' %}
+                🔋✅ UPS: battery charged
+              {% elif kind == 'shutdown_committed' %}
+                🔋🛑 UPS: emergency shutdown started
+              {% else %}
+                🔋ℹ️ UPS: event
+              {% endif %}
+            notification_message: >-
+              {% set schema = trigger.to_state.attributes.schema_version | int(1) %}
+              {% set kind = trigger.to_state.attributes.event_type %}
+              {% set is_ups = trigger.entity_id == 'event.dh_app_pve_ups_diagnostic' %}
+              {% set metric = trigger.to_state.attributes.metric | default('', true) %}
+              {% if schema == 1 %}
+                {% set value = trigger.to_state.attributes.value | default(none) %}
+                {% set average = trigger.to_state.attributes.average | default(none) %}
+                {% set threshold = trigger.to_state.attributes.threshold | default(none) %}
+                {% set summary = trigger.to_state.attributes.summary | default('', true) %}
+                {% if is_ups %}
+                  {{ summary }}
+                {% elif metric == 'temperature_c' %}
+                  Temperature: {{ value if value is not none else '—' }} °C{% if average is not none %} · average {{ average }} °C{% endif %}{% if threshold is not none %} · threshold {{ threshold }} °C{% endif %}
+                {% elif metric == 'percent_used' %}
+                  Used: {{ value if value is not none else '—' }}%{% if average is not none %} · average {{ average }}%{% endif %}{% if threshold is not none %} · threshold {{ threshold }}%{% endif %}
+                {% elif metric == 'throttling' %}
+                  Throttling: {{ 'active' if value else 'normal' }}
+                {% elif metric == 'smart_passed' %}
+                  SMART: {{ 'normal' if value else 'error' }}
+                {% else %}
+                  {{ summary }}
+                {% endif %}
+              {% elif kind in ['problem_started', 'problem_updated', 'problem_recovered'] %}
+                {% set current = trigger.to_state.attributes.current | default({}, true) %}
+                {% set value = current.get('value') %}
+                {% set average = current.get('average') %}
+                {% set threshold = current.get('threshold') %}
+                {% if metric == 'temperature_c' %}
+                  Temperature: {{ value if value is not none else '—' }} °C{% if average is not none %} · average {{ average }} °C{% endif %}{% if threshold is not none %} · threshold {{ threshold }} °C{% endif %}
+                {% elif metric == 'percent_used' %}
+                  Used: {{ value if value is not none else '—' }}%{% if average is not none %} · average {{ average }}%{% endif %}{% if threshold is not none %} · threshold {{ threshold }}%{% endif %}
+                {% elif metric == 'throttling' %}
+                  Throttling: {{ 'active' if value else 'normal' }}
+                {% elif metric == 'smart_passed' %}
+                  SMART: {{ 'normal' if value else 'error' }}
+                {% else %}
+                  {{ trigger.to_state.attributes.object_name | default(trigger.to_state.attributes.object_id, true) }} · {{ metric }}: {{ value if value is not none else '—' }}
+                {% endif %}
+              {% elif kind == 'ups_status_changed' %}
+                {% set previous_status = trigger.to_state.attributes.previous_status | default([], true) %}
+                {% set current_status = trigger.to_state.attributes.current_status | default([], true) %}
+                Status: {{ previous_status | join(', ') if previous_status else '—' }} → {{ current_status | join(', ') if current_status else '—' }}.
+              {% elif kind == 'battery_discharge_level_crossed' %}
+                {% set crossed = trigger.to_state.attributes.crossed_thresholds | default([], true) %}
+                {% set previous_charge = trigger.to_state.attributes.previous_charge_percent | default(none) %}
+                {% set current_charge = trigger.to_state.attributes.current_charge_percent | default(none) %}
+                Charge: {{ (previous_charge ~ '%') if previous_charge is not none else '—' }} → {{ (current_charge ~ '%') if current_charge is not none else '—' }} · crossed level(s): {{ crossed | join(', ') }}%.
+              {% elif kind == 'battery_fully_charged' %}
+                {% set previous_charge = trigger.to_state.attributes.previous_charge_percent | default(none) %}
+                {% set current_charge = trigger.to_state.attributes.current_charge_percent | default(none) %}
+                Charge: {{ (previous_charge ~ '%') if previous_charge is not none else '—' }} → {{ (current_charge ~ '%') if current_charge is not none else '—' }} · charger: {{ trigger.to_state.attributes.previous_charger_status | default('unknown', true) }} → {{ trigger.to_state.attributes.current_charger_status | default('unknown', true) }}.
+              {% elif kind == 'shutdown_committed' %}
+                Reason: {{ trigger.to_state.attributes.reason | default('unknown', true) }} · charge {{ trigger.to_state.attributes.battery_charge_percent | default('—', true) }}% · runtime {{ trigger.to_state.attributes.battery_runtime_seconds | default('—', true) }} s · shutdown budget {{ trigger.to_state.attributes.shutdown_budget_seconds | default('—', true) }} s · reserve {{ trigger.to_state.attributes.runtime_reserve_seconds | default('—', true) }} s · runtime guard {{ trigger.to_state.attributes.runtime_guard_threshold_seconds | default('—', true) }} s.
+              {% else %}
+                Machine event: {{ kind }}.
+              {% endif %}
         - event: dh_app_pve_notification
           event_data:
             source: dh_app_pve
@@ -108,114 +218,9 @@ dh_app_pve_notification_package:
             observed_at: "{{ trigger.to_state.attributes.observed_at | default('', true) }}"
             active_problem_count: "{{ trigger.to_state.attributes.active_problem_count | int(0) }}"
             title: >-
-              {% set kind = trigger.to_state.attributes.event_type %}
-              {% set is_ups = trigger.entity_id == 'event.dh_app_pve_ups_diagnostic' %}
-              {% set name = 'UPS' if is_ups else (trigger.to_state.attributes.object_name | default('Proxmox', true)) %}
-              {% set previous_status = trigger.to_state.attributes.previous_status | default([], true) %}
-              {% set current_status = trigger.to_state.attributes.current_status | default([], true) %}
-              {% set charge = trigger.to_state.attributes.current_charge_percent | default(none) %}
-              {% if kind == 'problem_started' %}
-                {{ '🔋' if is_ups else '🖥️' }}⚠️ {{ name }}: problem detected
-              {% elif kind == 'problem_updated' %}
-                {{ '🔋' if is_ups else '🖥️' }}⚠️ {{ name }}: problem parameters changed
-              {% elif kind == 'problem_recovered' %}
-                {{ '🔋' if is_ups else '🖥️' }}✅ {{ name }}: state returned to normal
-              {% elif kind == 'ups_status_changed' and 'overload' in current_status and 'overload' not in previous_status %}
-                🔋⚠️ UPS: overload detected
-              {% elif kind == 'ups_status_changed' and 'overload' in previous_status and 'overload' not in current_status %}
-                🔋✅ UPS: overload cleared
-              {% elif kind == 'ups_status_changed' and 'low_battery' in current_status and 'low_battery' not in previous_status %}
-                🔋⚠️ UPS: low battery
-              {% elif kind == 'ups_status_changed' and 'low_battery' in previous_status and 'low_battery' not in current_status %}
-                🔋✅ UPS: low-battery warning cleared
-              {% elif kind == 'ups_status_changed' and 'replace_battery' in current_status and 'replace_battery' not in previous_status %}
-                🔋⚠️ UPS: battery replacement required
-              {% elif kind == 'ups_status_changed' and 'replace_battery' in previous_status and 'replace_battery' not in current_status %}
-                🔋✅ UPS: battery-replacement warning cleared
-              {% elif kind == 'ups_status_changed' and 'bypass' in current_status and 'bypass' not in previous_status %}
-                🔋⚠️ UPS: bypass active
-              {% elif kind == 'ups_status_changed' and 'bypass' in previous_status and 'bypass' not in current_status %}
-                🔋✅ UPS: bypass cleared
-              {% elif kind == 'ups_status_changed' and 'on_battery' in current_status and 'on_battery' not in previous_status %}
-                🔋⚠️ UPS: utility power unavailable
-              {% elif kind == 'ups_status_changed' and 'on_battery' in previous_status and 'on_battery' not in current_status %}
-                🔋✅ UPS: utility power restored
-              {% elif kind == 'ups_status_changed' and 'boost' in current_status and 'boost' not in previous_status %}
-                🔋⚠️ UPS: AVR boost active
-              {% elif kind == 'ups_status_changed' and 'boost' in previous_status and 'boost' not in current_status %}
-                🔋✅ UPS: AVR boost cleared
-              {% elif kind == 'ups_status_changed' and 'trim' in current_status and 'trim' not in previous_status %}
-                🔋⚠️ UPS: AVR trim active
-              {% elif kind == 'ups_status_changed' and 'trim' in previous_status and 'trim' not in current_status %}
-                🔋✅ UPS: AVR trim cleared
-              {% elif kind == 'ups_status_changed' %}
-                🔋ℹ️ UPS: status changed
-              {% elif kind == 'battery_discharge_level_crossed' %}
-                🔋⚠️ UPS: battery charge {{ charge if charge is not none else '—' }}%
-              {% elif kind == 'battery_fully_charged' %}
-                🔋✅ UPS: battery charged
-              {% elif kind == 'shutdown_committed' %}
-                🔋🛑 UPS: emergency shutdown started
-              {% else %}
-                🔋ℹ️ UPS: event
-              {% endif %}
+              {{ notification_title | trim if notification_title | trim else 'DH PVE: machine event' }}
             message: >-
-              {% set schema = trigger.to_state.attributes.schema_version | int(1) %}
-              {% set kind = trigger.to_state.attributes.event_type %}
-              {% set is_ups = trigger.entity_id == 'event.dh_app_pve_ups_diagnostic' %}
-              {% set metric = trigger.to_state.attributes.metric | default('', true) %}
-              {% if schema == 1 %}
-                {% set value = trigger.to_state.attributes.value | default(none) %}
-                {% set average = trigger.to_state.attributes.average | default(none) %}
-                {% set threshold = trigger.to_state.attributes.threshold | default(none) %}
-                {% set summary = trigger.to_state.attributes.summary | default('', true) %}
-                {% if is_ups %}
-                  {{ summary }}
-                {% elif metric == 'temperature_c' %}
-                  Temperature: {{ value if value is not none else '—' }} °C{% if average is not none %} · average {{ average }} °C{% endif %}{% if threshold is not none %} · threshold {{ threshold }} °C{% endif %}
-                {% elif metric == 'percent_used' %}
-                  Used: {{ value if value is not none else '—' }}%{% if average is not none %} · average {{ average }}%{% endif %}{% if threshold is not none %} · threshold {{ threshold }}%{% endif %}
-                {% elif metric == 'throttling' %}
-                  Throttling: {{ 'active' if value else 'normal' }}
-                {% elif metric == 'smart_passed' %}
-                  SMART: {{ 'normal' if value else 'error' }}
-                {% else %}
-                  {{ summary }}
-                {% endif %}
-              {% elif kind in ['problem_started', 'problem_updated', 'problem_recovered'] %}
-                {% set current = trigger.to_state.attributes.current | default({}, true) %}
-                {% set value = current.get('value') %}
-                {% set average = current.get('average') %}
-                {% set threshold = current.get('threshold') %}
-                {% if metric == 'temperature_c' %}
-                  Temperature: {{ value if value is not none else '—' }} °C{% if average is not none %} · average {{ average }} °C{% endif %}{% if threshold is not none %} · threshold {{ threshold }} °C{% endif %}
-                {% elif metric == 'percent_used' %}
-                  Used: {{ value if value is not none else '—' }}%{% if average is not none %} · average {{ average }}%{% endif %}{% if threshold is not none %} · threshold {{ threshold }}%{% endif %}
-                {% elif metric == 'throttling' %}
-                  Throttling: {{ 'active' if value else 'normal' }}
-                {% elif metric == 'smart_passed' %}
-                  SMART: {{ 'normal' if value else 'error' }}
-                {% else %}
-                  {{ trigger.to_state.attributes.object_name | default(trigger.to_state.attributes.object_id, true) }} · {{ metric }}: {{ value if value is not none else '—' }}
-                {% endif %}
-              {% elif kind == 'ups_status_changed' %}
-                {% set previous_status = trigger.to_state.attributes.previous_status | default([], true) %}
-                {% set current_status = trigger.to_state.attributes.current_status | default([], true) %}
-                Status: {{ previous_status | join(', ') if previous_status else '—' }} → {{ current_status | join(', ') if current_status else '—' }}.
-              {% elif kind == 'battery_discharge_level_crossed' %}
-                {% set crossed = trigger.to_state.attributes.crossed_thresholds | default([], true) %}
-                {% set previous_charge = trigger.to_state.attributes.previous_charge_percent | default(none) %}
-                {% set current_charge = trigger.to_state.attributes.current_charge_percent | default(none) %}
-                Charge: {{ (previous_charge ~ '%') if previous_charge is not none else '—' }} → {{ (current_charge ~ '%') if current_charge is not none else '—' }} · crossed level(s): {{ crossed | join(', ') }}%.
-              {% elif kind == 'battery_fully_charged' %}
-                {% set previous_charge = trigger.to_state.attributes.previous_charge_percent | default(none) %}
-                {% set current_charge = trigger.to_state.attributes.current_charge_percent | default(none) %}
-                Charge: {{ (previous_charge ~ '%') if previous_charge is not none else '—' }} → {{ (current_charge ~ '%') if current_charge is not none else '—' }} · charger: {{ trigger.to_state.attributes.previous_charger_status | default('unknown', true) }} → {{ trigger.to_state.attributes.current_charger_status | default('unknown', true) }}.
-              {% elif kind == 'shutdown_committed' %}
-                Reason: {{ trigger.to_state.attributes.reason | default('unknown', true) }} · charge {{ trigger.to_state.attributes.battery_charge_percent | default('—', true) }}% · runtime {{ trigger.to_state.attributes.battery_runtime_seconds | default('—', true) }} s · shutdown budget {{ trigger.to_state.attributes.shutdown_budget_seconds | default('—', true) }} s · reserve {{ trigger.to_state.attributes.runtime_reserve_seconds | default('—', true) }} s · runtime guard {{ trigger.to_state.attributes.runtime_guard_threshold_seconds | default('—', true) }} s.
-              {% else %}
-                Machine event: {{ kind }}.
-              {% endif %}
+              {{ notification_message | trim if notification_message | trim else 'Machine event presentation unavailable.' }}
             startup_reconciliation: false
 
     - id: dh_app_pve_ups_config_changed_notification
@@ -266,9 +271,15 @@ dh_app_pve_notification_package:
           entity_id: binary_sensor.bs_global_system_boot_completed
           to: "on"
       actions:
+        - wait_template: >-
+            {% set started = states('sensor.dh_app_pve_agent_started') %}
+            {% set published = states('sensor.dh_app_pve_last_publication') %}
+            {{ as_timestamp(started, 0) > 0 and as_timestamp(published, 0) >= as_timestamp(started, 0) }}
+          timeout: "00:05:00"
+          continue_on_timeout: true
         - if:
             - condition: template
-              value_template: "{{ states('sensor.dh_app_pve_problems') | int(0) > 0 }}"
+              value_template: "{{ wait.completed and states('sensor.dh_app_pve_problems') | int(0) > 0 }}"
           then:
             - event: dh_app_pve_notification
               event_data:
@@ -302,9 +313,19 @@ dh_app_pve_notification_package:
                 summary: "{{ state_attr('sensor.dh_app_pve_problems', 'summary') | default('', true) }}"
                 active: "{{ state_attr('sensor.dh_app_pve_problems', 'active') | default([], true) }}"
                 startup_reconciliation: true
+        - wait_template: >-
+            {% if not is_state('binary_sensor.dh_app_pve_ups_configured', 'on') %}
+              true
+            {% else %}
+              {% set started = states('sensor.dh_app_pve_agent_started') %}
+              {% set published = states('sensor.dh_app_pve_ups_last_publication') %}
+              {{ as_timestamp(started, 0) > 0 and as_timestamp(published, 0) >= as_timestamp(started, 0) }}
+            {% endif %}
+          timeout: "00:05:00"
+          continue_on_timeout: true
         - if:
             - condition: template
-              value_template: "{{ states('sensor.dh_app_pve_ups_problems') | int(0) > 0 }}"
+              value_template: "{{ wait.completed and states('sensor.dh_app_pve_ups_problems') | int(0) > 0 }}"
           then:
             - event: dh_app_pve_notification
               event_data:
@@ -316,9 +337,19 @@ dh_app_pve_notification_package:
                 title: "🔋⚠️ UPS: active problems after startup"
                 message: >-
                   {% set active = state_attr('sensor.dh_app_pve_ups_problems', 'active') | default([], true) %}
+                  {% set labels = {
+                    'nut_unavailable': 'NUT unavailable',
+                    'on_battery': 'Utility power unavailable',
+                    'low_battery': 'Low battery',
+                    'overload': 'UPS overload',
+                    'replace_battery': 'Battery replacement required',
+                    'bypass': 'UPS bypass active',
+                    'power_state_unknown': 'UPS power state unknown'
+                  } %}
                   Active problems detected after startup: {{ active | count }}.
                   {% for item in active %}
-                    {{ loop.index }}. {{ item.get('summary', 'Active UPS problem') }}
+                    {% set problem_id = item.get('problem_id', '') %}
+                    {{ loop.index }}. {{ labels.get(problem_id, problem_id if problem_id else 'Unknown UPS problem') }}
                   {% endfor %}
                 summary: "{{ state_attr('sensor.dh_app_pve_ups_problems', 'summary') | default('', true) }}"
                 active: "{{ state_attr('sensor.dh_app_pve_ups_problems', 'active') | default([], true) }}"

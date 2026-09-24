@@ -25,6 +25,7 @@ dh_app_pve_package:
         - sensor.dh_app_pve_memory_usage
         - sensor.dh_app_pve_swap_usage
         - sensor.dh_app_pve_ups_status
+        - binary_sensor.dh_app_pve_ups_line_power
         - sensor.dh_app_pve_ups_battery_charge
         - sensor.dh_app_pve_ups_battery_runtime_minutes
         - sensor.dh_app_pve_ups_load
@@ -45,3 +46,4 @@ dh_app_pve_package:
     include:
       entities:
         - sensor.dh_app_pve_ups_status
+        - binary_sensor.dh_app_pve_ups_line_power

@@ -23,6 +23,7 @@ def test_package_records_only_explicit_canonical_time_series():
         "sensor.dh_app_pve_memory_usage",
         "sensor.dh_app_pve_swap_usage",
         "sensor.dh_app_pve_ups_status",
+        "binary_sensor.dh_app_pve_ups_line_power",
         "sensor.dh_app_pve_ups_battery_charge",
         "sensor.dh_app_pve_ups_battery_runtime_minutes",
         "sensor.dh_app_pve_ups_load",
@@ -49,11 +50,12 @@ def test_package_records_only_explicit_canonical_time_series():
     assert "binary_sensor.dh_pve_" not in text
 
 
-def test_ups_status_is_explicitly_kept_in_logbook():
+def test_ups_status_and_line_power_are_explicitly_kept_in_logbook():
     text = _text()
 
     assert "logbook:" in text
     assert "sensor.dh_app_pve_ups_status" in text
+    assert "binary_sensor.dh_app_pve_ups_line_power" in text
 
 
 def test_package_has_no_ha_side_problem_or_threshold_logic():
