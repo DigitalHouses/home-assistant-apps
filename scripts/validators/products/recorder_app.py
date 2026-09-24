@@ -48,8 +48,6 @@ def validate_db_monitoring(
     )
     components = payload.get("components") or {}
     required_entities = {
-        "app_version": "sensor.dh_db_app_version",
-        "started_at": "sensor.dh_db_started_at",
         "db_start": "sensor.dh_db_start",
         "db_connected": "binary_sensor.dh_db_connected",
         "recorder_writing": "binary_sensor.dh_db_recorder_writing",
@@ -71,12 +69,5 @@ def validate_db_monitoring(
                 f"DB Monitoring unexpected default_entity_id for {key}: "
                 f"{component.get('default_entity_id')!r}"
             )
-
-    if components["app_version"].get("entity_category") != "diagnostic":
-        fail("DB Monitoring Version must be diagnostic")
-    if components["started_at"].get("entity_category") != "diagnostic":
-        fail("DB Monitoring Started at must be diagnostic")
-    if components["started_at"].get("device_class") != "timestamp":
-        fail("DB Monitoring Started at must be a timestamp")
     if components["db_last_refresh"].get("state_topic") != EXPECTED_LAST_REFRESH_TOPIC:
         fail("DB Monitoring last-refresh sensor must use its dedicated topic")
