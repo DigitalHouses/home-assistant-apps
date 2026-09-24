@@ -7,6 +7,7 @@ import logging
 import os
 import signal
 import threading
+from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
@@ -50,11 +51,10 @@ from speedtest import (
 )
 from state import (
     OutageTracker,
+    RecoveryRuntimeState,
     atomic_write_json,
     iso,
-    load_recovery_stopped,
     now_local,
-    save_recovery_stopped,
 )
 from traffic import (
     entity_rate_mbps,
@@ -102,12 +102,28 @@ class InternetApp:
 
         self.outages = OutageTracker.load(OUTAGES_FILE)
         self.incident_active = self.outages.active_from is not None
-        recovery_stopped = load_recovery_stopped(RECOVERY_STATE_FILE)
-        if self.incident_active and recovery_stopped:
-            self.stop_recovery.set()
-            self.recovery_state = "stopped"
-        elif recovery_stopped:
-            save_recovery_stopped(RECOVERY_STATE_FILE, False)
+        self.recovery_runtime = RecoveryRuntimeState.load(
+            RECOVERY_STATE_FILE
+        )
+        if self.incident_active:
+            self.recovery_cycle = min(
+                self.config.recovery.max_cycles,
+                self.recovery_runtime.cycle,
+            )
+            cooldown_remaining = self.recovery_runtime.cooldown_remaining()
+            if self.recovery_runtime.stopped:
+                self.stop_recovery.set()
+                self.recovery_state = "stopped"
+            elif cooldown_remaining > 0:
+                self.recovery_state = "cooldown"
+                self.recovery_countdown = cooldown_remaining
+            elif self.recovery_runtime.cooldown_until is not None:
+                self.recovery_runtime.reset()
+                self.recovery_runtime.save(RECOVERY_STATE_FILE)
+                self.recovery_cycle = 0
+        else:
+            self.recovery_runtime.reset()
+            self.recovery_runtime.save(RECOVERY_STATE_FILE)
         self.speedtest = load_last_result(SPEEDTEST_FILE)
         self.thresholds = load_thresholds(THRESHOLDS_FILE)
         self.recent_results = load_recent_results(RECENT_RESULTS_FILE)
@@ -218,7 +234,8 @@ class InternetApp:
             with self.lock:
                 if self.incident_active:
                     self.recovery_state = "stopped"
-                    save_recovery_stopped(RECOVERY_STATE_FILE, True)
+                    self.recovery_runtime.stopped = True
+                    self.recovery_runtime.save(RECOVERY_STATE_FILE)
             self._publish_state()
             self._publish_problems()
             self._event("recovery_stopped", reason="user")
@@ -703,12 +720,56 @@ class InternetApp:
         cfg = self.config.recovery
         executor = RecoveryExecutor(self.ha_api, self.stop_recovery)
         try:
+            cooldown_remaining = self.recovery_runtime.cooldown_remaining()
+            if cooldown_remaining > 0:
+                self._set_recovery_state(
+                    "cooldown",
+                    cycle=self.recovery_runtime.cycle,
+                    countdown=cooldown_remaining,
+                )
+                if not self._countdown("cooldown", cooldown_remaining):
+                    return
+                self.recovery_runtime.reset()
+                self.recovery_runtime.save(RECOVERY_STATE_FILE)
+                self._set_recovery_state("running", cycle=0, countdown=0)
+            elif self.recovery_runtime.cooldown_until is not None:
+                self.recovery_runtime.reset()
+                self.recovery_runtime.save(RECOVERY_STATE_FILE)
+                self._set_recovery_state("running", cycle=0, countdown=0)
+            elif self.recovery_runtime.cycle >= cfg.max_cycles:
+                self.recovery_runtime.cooldown_until = (
+                    now_local() + timedelta(seconds=cfg.cooldown_seconds)
+                )
+                self.recovery_runtime.save(RECOVERY_STATE_FILE)
+                self._set_recovery_state(
+                    "cooldown",
+                    cycle=cfg.max_cycles,
+                    countdown=cfg.cooldown_seconds,
+                )
+                if not self._countdown("cooldown", cfg.cooldown_seconds):
+                    return
+                self.recovery_runtime.reset()
+                self.recovery_runtime.save(RECOVERY_STATE_FILE)
+                self._set_recovery_state("running", cycle=0, countdown=0)
+            elif self.recovery_runtime.cycle > 0:
+                # A restart during boot/retry wait must not immediately repeat
+                # a power action. Reapply a full retry guard before continuing.
+                if not self._countdown(
+                    "retry_wait", cfg.retry_interval_seconds
+                ):
+                    return
+
             while (
                 self.incident_active
                 and not self.stop_app.is_set()
                 and not self.stop_recovery.is_set()
             ):
-                for cycle in range(1, cfg.max_cycles + 1):
+                start_cycle = min(
+                    cfg.max_cycles,
+                    self.recovery_runtime.cycle,
+                ) + 1
+
+                for cycle in range(start_cycle, cfg.max_cycles + 1):
                     if (
                         not self.incident_active
                         or self.stop_app.is_set()
@@ -730,6 +791,10 @@ class InternetApp:
                         internet_up=latest.internet_up,
                         router_up=latest.router_up,
                     )
+                    self.recovery_runtime.stopped = False
+                    self.recovery_runtime.cycle = cycle
+                    self.recovery_runtime.cooldown_until = None
+                    self.recovery_runtime.save(RECOVERY_STATE_FILE)
                     self._set_recovery_state(
                         "running", cycle=cycle, countdown=0
                     )
@@ -771,8 +836,15 @@ class InternetApp:
                         ):
                             return
 
+                self.recovery_runtime.cycle = cfg.max_cycles
+                self.recovery_runtime.cooldown_until = (
+                    now_local() + timedelta(seconds=cfg.cooldown_seconds)
+                )
+                self.recovery_runtime.save(RECOVERY_STATE_FILE)
                 self._set_recovery_state(
-                    "cooldown", cycle=cfg.max_cycles, countdown=cfg.cooldown_seconds
+                    "cooldown",
+                    cycle=cfg.max_cycles,
+                    countdown=cfg.cooldown_seconds,
                 )
                 self._event(
                     "recovery_exhausted",
@@ -781,6 +853,8 @@ class InternetApp:
                 )
                 if not self._countdown("cooldown", cfg.cooldown_seconds):
                     return
+                self.recovery_runtime.reset()
+                self.recovery_runtime.save(RECOVERY_STATE_FILE)
                 self._set_recovery_state("running", cycle=0, countdown=0)
 
         except RecoveryStopped:
@@ -820,7 +894,8 @@ class InternetApp:
             if self.incident_active:
                 record = self.outages.recover()
                 self.incident_active = False
-                save_recovery_stopped(RECOVERY_STATE_FILE, False)
+                self.recovery_runtime.reset()
+                self.recovery_runtime.save(RECOVERY_STATE_FILE)
                 self.stop_recovery.set()
                 self._event(
                     "connection_restored",
@@ -839,7 +914,8 @@ class InternetApp:
         if not self.incident_active:
             self.incident_active = True
             self.stop_recovery.clear()
-            save_recovery_stopped(RECOVERY_STATE_FILE, False)
+            self.recovery_runtime.reset()
+            self.recovery_runtime.save(RECOVERY_STATE_FILE)
             self.outages.start()
             self._event(
                 "connection_lost",

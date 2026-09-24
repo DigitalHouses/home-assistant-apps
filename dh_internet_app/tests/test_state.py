@@ -11,12 +11,7 @@ from unittest.mock import patch
 APP_DIR = Path(__file__).resolve().parents[1] / "rootfs" / "app"
 sys.path.insert(0, str(APP_DIR))
 
-from state import (
-    OutageTracker,
-    duration_text,
-    load_recovery_stopped,
-    save_recovery_stopped,
-)
+from state import OutageTracker, RecoveryRuntimeState, duration_text
 
 
 class OutageTests(unittest.TestCase):
@@ -24,14 +19,43 @@ class OutageTests(unittest.TestCase):
         self.assertEqual(duration_text(65), "01:05")
         self.assertEqual(duration_text(3661), "1:01:01")
 
-    def test_recovery_stop_state_round_trip(self) -> None:
+    def test_recovery_runtime_state_round_trip(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "recovery.json"
-            self.assertFalse(load_recovery_stopped(path))
-            save_recovery_stopped(path, True)
-            self.assertTrue(load_recovery_stopped(path))
-            save_recovery_stopped(path, False)
-            self.assertFalse(load_recovery_stopped(path))
+            deadline = datetime(
+                2026, 9, 23, 10, 15, tzinfo=timezone.utc
+            )
+            state = RecoveryRuntimeState(
+                stopped=True,
+                cycle=3,
+                cooldown_until=deadline,
+            )
+            state.save(path)
+
+            loaded = RecoveryRuntimeState.load(path)
+
+            self.assertTrue(loaded.stopped)
+            self.assertEqual(loaded.cycle, 3)
+            self.assertEqual(loaded.cooldown_until, deadline)
+            self.assertEqual(
+                loaded.cooldown_remaining(
+                    datetime(2026, 9, 23, 10, 14, 30, tzinfo=timezone.utc)
+                ),
+                30,
+            )
+
+    def test_recovery_runtime_reset(self) -> None:
+        state = RecoveryRuntimeState(
+            stopped=True,
+            cycle=3,
+            cooldown_until=datetime(
+                2026, 9, 23, 10, 15, tzinfo=timezone.utc
+            ),
+        )
+        state.reset()
+        self.assertFalse(state.stopped)
+        self.assertEqual(state.cycle, 0)
+        self.assertIsNone(state.cooldown_until)
 
     def test_current_outage_is_visible_and_then_closed(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

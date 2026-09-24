@@ -51,16 +51,70 @@ def atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
             pass
 
 
-def load_recovery_stopped(path: Path) -> bool:
-    try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-    except (FileNotFoundError, json.JSONDecodeError, OSError):
-        return False
-    return bool(raw.get("stopped")) if isinstance(raw, dict) else False
+@dataclass
+class RecoveryRuntimeState:
+    stopped: bool = False
+    cycle: int = 0
+    cooldown_until: datetime | None = None
 
+    @classmethod
+    def load(cls, path: Path) -> "RecoveryRuntimeState":
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except (FileNotFoundError, json.JSONDecodeError, OSError):
+            return cls()
+        if not isinstance(raw, dict):
+            return cls()
 
-def save_recovery_stopped(path: Path, stopped: bool) -> None:
-    atomic_write_json(path, {"stopped": bool(stopped)})
+        cooldown_until = None
+        raw_deadline = raw.get("cooldown_until")
+        if isinstance(raw_deadline, str) and raw_deadline:
+            try:
+                cooldown_until = datetime.fromisoformat(raw_deadline)
+                if cooldown_until.tzinfo is None:
+                    cooldown_until = cooldown_until.replace(
+                        tzinfo=now_local().tzinfo
+                    )
+            except ValueError:
+                cooldown_until = None
+
+        try:
+            cycle = max(0, int(raw.get("cycle") or 0))
+        except (TypeError, ValueError):
+            cycle = 0
+
+        return cls(
+            stopped=bool(raw.get("stopped")),
+            cycle=cycle,
+            cooldown_until=cooldown_until,
+        )
+
+    def save(self, path: Path) -> None:
+        atomic_write_json(
+            path,
+            {
+                "schema_version": 1,
+                "stopped": self.stopped,
+                "cycle": self.cycle,
+                "cooldown_until": (
+                    iso(self.cooldown_until)
+                    if self.cooldown_until is not None
+                    else None
+                ),
+            },
+        )
+
+    def reset(self) -> None:
+        self.stopped = False
+        self.cycle = 0
+        self.cooldown_until = None
+
+    def cooldown_remaining(self, when: datetime | None = None) -> int:
+        if self.cooldown_until is None:
+            return 0
+        when = when or now_local()
+        seconds = (self.cooldown_until - when).total_seconds()
+        return max(0, int(seconds + 0.999))
 
 
 @dataclass

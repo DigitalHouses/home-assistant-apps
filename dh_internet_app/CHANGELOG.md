@@ -7,7 +7,7 @@
 - Preserved active outage state across App restarts and calendar-month rollover.
 - Expanded EN/RU App configuration descriptions for all user-facing options using the official nested `fields` translation format.
 - Hardened MQTT v2 connection callback handling and documented all dashboard card dependencies.
-- Persisted Stop Recovery across App restarts for the same active outage.
+- Persisted Stop Recovery, completed recovery cycles and active cooldown across App restarts for the same outage.
 - Hardened switch recovery so a power-restore attempt is made even if the turn-off API response fails.
 
 - Created DigitalHouses Internet App as a new Home Assistant App product with canonical `dh_internet_app_` MQTT/Home Assistant identity.

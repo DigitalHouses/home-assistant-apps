@@ -29,7 +29,7 @@ Arbitrary scripts and shell commands are not part of the recovery contract.
 
 All recovery timing belongs to App configuration: maximum cycles, retry interval, boot wait, cooldown and switch power-off duration. `router_ip` is a top-level network fact used by both monitoring and smart recovery.
 
-`Stop recovery` stops further attempts for the current outage. If a switch has already been turned off, the App always attempts to turn it back on before the stop propagates.
+`Stop recovery` stops further attempts for the current outage. Stop state, completed recovery cycles and an active cooldown survive an App restart, so restarting the App does not bypass recovery limits. If a switch has already been turned off, the App always attempts to turn it back on before the stop propagates.
 
 ## Current development milestone
 
