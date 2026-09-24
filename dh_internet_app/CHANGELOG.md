@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.1
+
+- Fixed startup on Home Assistant base images that provide paho-mqtt 1.x by adding runtime compatibility with both paho-mqtt 1.x and 2.x callback APIs.
+- Kept the MQTT v2 callback API when available while accepting the legacy four-argument `on_connect` callback on paho-mqtt 1.x.
+
 ## 0.1.0
 
 - Renamed repository directory to `dh_internet_app` while keeping HA App slug `digitalhouses_internet`.
