@@ -1,0 +1,239 @@
+# =============================================================================
+# DigitalHouses Internet App local notifications — Russian site package
+# =============================================================================
+# Machine events come directly from event.dh_internet_app_event.
+# Flow: machine event -> trigger.id -> choose -> direct action.
+# =============================================================================
+
+dh_internet_app_notification_local_package:
+
+  automation:
+    - id: dh_internet_app_notifications
+      alias: DH Internet · Уведомления
+      mode: queued
+      max: 20
+
+      triggers:
+        - trigger: event.received
+          target:
+            entity_id: event.dh_internet_app_event
+          options:
+            event_type:
+              - connection_lost
+          id: connection_lost
+
+        - trigger: event.received
+          target:
+            entity_id: event.dh_internet_app_event
+          options:
+            event_type:
+              - connection_restored
+          id: connection_restored
+
+        - trigger: event.received
+          target:
+            entity_id: event.dh_internet_app_event
+          options:
+            event_type:
+              - recovery_action
+          id: recovery_action
+
+        - trigger: event.received
+          target:
+            entity_id: event.dh_internet_app_event
+          options:
+            event_type:
+              - recovery_stopped
+          id: recovery_stopped
+
+        - trigger: event.received
+          target:
+            entity_id: event.dh_internet_app_event
+          options:
+            event_type:
+              - recovery_exhausted
+          id: recovery_exhausted
+
+        - trigger: event.received
+          target:
+            entity_id: event.dh_internet_app_event
+          options:
+            event_type:
+              - recovery_error
+          id: recovery_error
+
+        - trigger: event.received
+          target:
+            entity_id: event.dh_internet_app_event
+          options:
+            event_type:
+              - speedtest_failed
+          id: speedtest_failed
+
+        - trigger: event.received
+          target:
+            entity_id: event.dh_internet_app_event
+          options:
+            event_type:
+              - performance_problem_started
+          id: performance_problem_started
+
+        - trigger: event.received
+          target:
+            entity_id: event.dh_internet_app_event
+          options:
+            event_type:
+              - performance_problem_recovered
+          id: performance_problem_recovered
+
+        - trigger: event.received
+          target:
+            entity_id: event.dh_internet_app_event
+          options:
+            event_type:
+              - performance_problem_updated
+          id: performance_problem_updated
+
+      conditions: []
+
+      actions:
+        - choose:
+            - conditions:
+                - condition: trigger
+                  id:
+                    - connection_lost
+              sequence:
+                - action: script.write2log
+                  data:
+                    title: "🌐⚠️ Интернет недоступен"
+                    message: >-
+                      Интернет недоступен.
+                      Роутер отвечает: {{ 'да' if trigger.to_state.attributes.router_up else 'нет' }}.
+                      Неудачных проверок: {{ trigger.to_state.attributes.attempts }}.
+
+            - conditions:
+                - condition: trigger
+                  id:
+                    - connection_restored
+              sequence:
+                - action: script.write2log
+                  data:
+                    title: "🌐✅ Интернет восстановлен"
+                    message: >-
+                      {% set s = trigger.to_state.attributes.duration_seconds | int %}
+                      {% set h = s // 3600 %}
+                      {% set m = (s % 3600) // 60 %}
+                      {% set sec = s % 60 %}
+                      Связь восстановлена через
+                      {{ ('%d:%02d:%02d' | format(h,m,sec)) if h else ('%02d:%02d' | format(m,sec)) }}.
+
+            - conditions:
+                - condition: trigger
+                  id:
+                    - recovery_action
+              sequence:
+                - action: script.write2log
+                  data:
+                    title: >-
+                      🔄 Восстановление Internet: {{ trigger.to_state.attributes.target | upper }}
+                    message: >-
+                      Цикл {{ trigger.to_state.attributes.cycle }}:
+                      {{ trigger.to_state.attributes.action }} ·
+                      {{ trigger.to_state.attributes.entity_id }}.
+
+            - conditions:
+                - condition: trigger
+                  id:
+                    - recovery_stopped
+              sequence:
+                - action: script.write2log
+                  data:
+                    title: "⏹️ Восстановление Internet остановлено"
+                    message: >-
+                      Дальнейшие попытки восстановления в текущем инциденте остановлены.
+                      Причина: {{ trigger.to_state.attributes.reason }}.
+
+            - conditions:
+                - condition: trigger
+                  id:
+                    - recovery_exhausted
+              sequence:
+                - action: script.write2log
+                  data:
+                    title: "🌐⚠️ Попытки восстановления исчерпаны"
+                    message: >-
+                      Выполнено циклов: {{ trigger.to_state.attributes.cycles }}.
+                      Пауза: {{ trigger.to_state.attributes.cooldown_seconds }} с.
+
+            - conditions:
+                - condition: trigger
+                  id:
+                    - recovery_error
+              sequence:
+                - action: script.write2log
+                  data:
+                    title: "🌐❌ Ошибка восстановления"
+                    message: >-
+                      Автоматическое восстановление Internet завершилось ошибкой:
+                      {{ trigger.to_state.attributes.error }}.
+
+            - conditions:
+                - condition: trigger
+                  id:
+                    - speedtest_failed
+              sequence:
+                - action: script.write2log
+                  data:
+                    title: "📶⚠️ Ошибка Speedtest"
+                    message: >-
+                      Тест Ookla Speedtest не был успешно завершён:
+                      {{ trigger.to_state.attributes.reason }}.
+
+            - conditions:
+                - condition: trigger
+                  id:
+                    - performance_problem_started
+              sequence:
+                - action: script.write2log
+                  data:
+                    title: "📉⚠️ Проблема качества Internet"
+                    message: >-
+                      {% set labels = {'low_download':'низкая скорость Download','low_upload':'низкая скорость Upload','high_ping':'высокий Ping'} %}
+                      Проблемы:
+                      {% for reason in trigger.to_state.attributes.reasons %}{{ labels[reason] }}{{ ', ' if not loop.last else '.' }}{% endfor %}
+                      Download {{ trigger.to_state.attributes.download_mbps }} Мбит/с
+                      (минимум {{ trigger.to_state.attributes.minimum_download_mbps }}) ·
+                      Upload {{ trigger.to_state.attributes.upload_mbps }} Мбит/с
+                      (минимум {{ trigger.to_state.attributes.minimum_upload_mbps }}) ·
+                      Ping {{ trigger.to_state.attributes.ping_ms }} мс
+                      (максимум {{ trigger.to_state.attributes.maximum_ping_ms }}).
+
+            - conditions:
+                - condition: trigger
+                  id:
+                    - performance_problem_recovered
+              sequence:
+                - action: script.write2log
+                  data:
+                    title: "📈✅ Качество Internet восстановлено"
+                    message: >-
+                      Download {{ trigger.to_state.attributes.download_mbps }} Мбит/с ·
+                      Upload {{ trigger.to_state.attributes.upload_mbps }} Мбит/с ·
+                      Ping {{ trigger.to_state.attributes.ping_ms }} мс.
+                      Текущие значения находятся в заданных пределах.
+
+            - conditions:
+                - condition: trigger
+                  id:
+                    - performance_problem_updated
+              sequence:
+                - action: script.write2log
+                  data:
+                    title: "📉⚠️ Параметры проблемы Internet изменились"
+                    message: >-
+                      {% set labels = {'low_download':'низкая скорость Download','low_upload':'низкая скорость Upload','high_ping':'высокий Ping'} %}
+                      Проблемы:
+                      {% for reason in trigger.to_state.attributes.reasons %}{{ labels[reason] }}{{ ', ' if not loop.last else '.' }}{% endfor %}
+                      Download {{ trigger.to_state.attributes.download_mbps }} Мбит/с ·
+                      Upload {{ trigger.to_state.attributes.upload_mbps }} Мбит/с ·
+                      Ping {{ trigger.to_state.attributes.ping_ms }} мс.
