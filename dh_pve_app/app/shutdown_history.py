@@ -13,7 +13,7 @@ from .ups_nut import UpsSnapshot
 
 HISTORY_LIMIT = 50
 PUBLISHED_HISTORY_LIMIT = 10
-HISTORY_PARSER_VERSION = 3
+HISTORY_PARSER_VERSION = 4
 
 _TIMESTAMP_RE = re.compile(r"^(?P<ts>\S+)")
 _START_RE = re.compile(
@@ -137,6 +137,8 @@ def parse_guest_shutdown_journal(text: str) -> dict[str, Any]:
             active_guests.clear()
             first_started = None
             all_stopped_at = None
+            clean_shutdown = False
+            clean_shutdown_at = None
 
         if any(marker in lowered for marker in _CLEAN_MARKERS):
             clean_shutdown = True
@@ -260,7 +262,9 @@ def parse_guest_shutdown_journal(text: str) -> dict[str, Any]:
             latest_finished = finished
         guests[kind][guest_id] = item
 
-    stop_boundary = all_stopped_at or latest_finished
+    stop_boundary = all_stopped_at or (
+        latest_finished if not active_guests else None
+    )
     total = _seconds(first_started, stop_boundary)
     clean_result: bool | None = clean_shutdown if journal_has_evidence else None
     return {

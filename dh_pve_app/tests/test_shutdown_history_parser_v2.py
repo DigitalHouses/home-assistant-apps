@@ -81,10 +81,10 @@ def test_same_boot_startup_reconciles_legacy_previous_shutdown_parser_result(tmp
     assert previous["history_parser_version"] >= 2
     assert payload["history"][-1]["history_parser_version"] >= 2
 
-def test_v3_reconciliation_replaces_stale_derived_shutdown_fields(tmp_path):
+def test_v4_reconciliation_replaces_stale_v3_shutdown_scope_evidence(tmp_path):
     store = StateStore(tmp_path / "shutdown_history.json")
     stale_previous = {
-        "history_parser_version": 2,
+        "history_parser_version": 3,
         "boot_id": "old-boot",
         "boot_at": "2026-09-23T13:27:59+05:00",
         "shutdown_at": "2026-09-24T04:44:34+05:00",
@@ -132,6 +132,8 @@ def test_v3_reconciliation_replaces_stale_derived_shutdown_fields(tmp_path):
     )
 
     journal = (
+        "2026-09-23T18:18:13.252074+05:00 pve some-service[9]: "
+        "referenced systemd-shutdown helper during normal runtime\n"
         "2026-09-23T10:54:30.000000+05:00 pve pve-guests[1]: "
         "Stopping CT 100 (timeout = 30 seconds)\n"
         "2026-09-23T10:55:02.000000+05:00 pve pve-guests[1]: "
@@ -153,7 +155,7 @@ def test_v3_reconciliation_replaces_stale_derived_shutdown_fields(tmp_path):
 
     previous = tracker.startup()["previous_shutdown"]
 
-    assert previous["history_parser_version"] == 3
+    assert previous["history_parser_version"] == 4
     assert previous["shutdown_class"] == "ups_power"
     assert previous["shutdown_reason"] == "on_battery_fsd"
     assert previous["shutdown_clean"] is False

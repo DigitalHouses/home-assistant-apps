@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.5.13
+
+- Fix shutdown-history parser v4 scope handling so a strong-clean marker seen earlier in a long previous-boot journal cannot survive into the final host-shutdown transaction. Entering the final shutdown scope now resets prior clean evidence, and an unfinished guest sequence no longer reports a completed total duration.
+- Force v4 reconciliation of deployed parser-v3 state so the 2026-09-24 incident is reparsed on upgrade instead of retaining the incorrect pre-FSD shutdown timestamp produced by 0.5.12.
+
 ## 0.5.12
 
 - Fix shutdown-history parser upgrades so reparsing a previous boot replaces stale parser-derived shutdown timestamps and guest results instead of falling back to or merging legacy evidence. UPS/FSD context is preserved, while unproven clean shutdown, guest completion and zero-duration artifacts are cleared conservatively.

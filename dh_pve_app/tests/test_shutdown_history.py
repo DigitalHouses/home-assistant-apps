@@ -339,3 +339,24 @@ def test_shutdown_request_boundary_discards_earlier_same_boot_guest_operations()
     assert parsed["guests"]["vm"]["110"]["result"] == "unknown"
     assert parsed["guests"]["vm"]["110"]["finished_at"] is None
 
+def test_shutdown_scope_resets_earlier_clean_marker_and_incomplete_total():
+    parsed = parse_guest_shutdown_journal(
+        "2026-09-23T18:18:13.252074+05:00 pve some-service[1]: "
+        "referenced systemd-shutdown helper during normal runtime\n"
+        "2026-09-24T04:44:34.000000+05:00 pve systemd-logind[2]: "
+        "The system will power off now!\n"
+        "2026-09-24T04:44:38.720856+05:00 pve pve-guests[3]: "
+        "Stopping VM 501 (timeout = 30 seconds)\n"
+        "2026-09-24T04:45:06.801121+05:00 pve pve-guests[3]: "
+        "end task UPID:pve:1:2:3:4:qmshutdown:501:root@pam:\n"
+        "2026-09-24T04:45:40.871419+05:00 pve pve-guests[3]: "
+        "Stopping VM 110 (timeout = 125 seconds)\n"
+    )
+
+    assert parsed["clean_shutdown"] is False
+    assert parsed["shutdown_at"] is None
+    assert parsed["guest_shutdown_total_seconds"] is None
+    assert parsed["guests"]["vm"]["501"]["result"] == "clean"
+    assert parsed["guests"]["vm"]["110"]["result"] == "unknown"
+    assert parsed["guests"]["vm"]["110"]["finished_at"] is None
+
