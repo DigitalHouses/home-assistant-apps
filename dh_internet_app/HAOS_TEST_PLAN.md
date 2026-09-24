@@ -27,10 +27,10 @@ Press `button.dh_internet_app_run_speedtest`.
 
 Verify:
 
-- status changes to `running`, then `success`;
+- status changes from `idle` to `running`, then returns to `idle`;
 - Download, Upload and Ping contain numeric values;
 - Jitter and Packet loss are populated when supplied by Ookla;
-- provider/server/result metadata appear on Speedtest status;
+- `last_result` becomes `success` and provider/server/result metadata appear on Speedtest status;
 - Recent Results gains one record.
 
 Change one threshold temporarily so the last result violates it, then restore the threshold.
@@ -77,6 +77,7 @@ Verify:
 
 - the outage closes once;
 - duration and monthly availability update;
+- the Outages sensor still contains every outage recorded in the current month; only dashboard presentation may limit the visible rows;
 - `connection_restored` is emitted.
 
 ## 5. Notification presentation
