@@ -4,14 +4,14 @@ ROOT = Path(__file__).parents[1]
 DASHBOARD = ROOT / "examples" / "dh_app_pve_ups_dashboard.yaml"
 UI_PACKAGE = ROOT / "examples" / "packages" / "dh_app_pve_package.yaml"
 LEGACY_UI_PACKAGE = ROOT / "examples" / "packages" / "dh_app_pve_ui_package.yaml"
-NOTIFICATION_PACKAGE = ROOT / "examples" / "packages" / "dh_app_pve_notification_package.yaml"
+NOTIFICATION_PACKAGE = ROOT / "examples" / "packages" / "dh_app_pve_notification_local_package.yaml"
 RU_NOTIFICATION_PACKAGE = (
     ROOT
     / "examples"
     / "packages"
     / "locales"
     / "ru"
-    / "dh_app_pve_notification_package.yaml"
+    / "dh_app_pve_notification_local_package.yaml"
 )
 
 
@@ -95,67 +95,53 @@ def test_ui_open_and_cancel_wait_for_app_owned_draft_ack_before_state_transition
     assert "delay:" not in cancel_section
 
 
-def test_notification_package_uses_events_gate_and_retained_aggregates_only():
+def test_notification_package_uses_simple_event_trigger_flow():
     assert NOTIFICATION_PACKAGE.exists()
     text = NOTIFICATION_PACKAGE.read_text(encoding="utf-8")
+
     for token in (
         "event.dh_app_pve_diagnostic",
         "event.dh_app_pve_ups_diagnostic",
-        "binary_sensor.bs_global_system_boot_completed",
-        "sensor.dh_app_pve_problems",
-        "sensor.dh_app_pve_ups_problems",
-        "problem_started",
-        "problem_updated",
-        "problem_recovered",
-        "config_changed",
-        "event: dh_app_pve_notification",
         "trigger: event.received",
-        "state_attr('sensor.dh_app_pve_problems', 'severity')",
-        "state_attr('sensor.dh_app_pve_problems', 'active')",
-        "state_attr('sensor.dh_app_pve_ups_problems', 'severity')",
-        "state_attr('sensor.dh_app_pve_ups_problems', 'active')",
+        "condition: trigger",
+        "trigger.to_state.attributes",
+        "id: problem_started",
+        "id: problem_updated",
+        "id: problem_recovered",
+        "id: config_changed",
     ):
         assert token in text
+
     for forbidden in (
-        "states.sensor",
-        "states.binary_sensor",
-        "custom:auto-entities",
-        "script.write2log",
-        "notify.mobile_app",
+        "dh_app_pve_notification",
+        "notification_schema_version",
+        "contract_error",
+        "startup_problem_reconciliation",
+        "binary_sensor.bs_global_system_boot_completed",
         "time_pattern",
     ):
         assert forbidden not in text
 
 
-def test_live_notification_presentation_is_localized_from_structured_event_fields():
+def test_russian_notification_package_calls_write2log_directly():
     assert RU_NOTIFICATION_PACKAGE.exists()
     text = RU_NOTIFICATION_PACKAGE.read_text(encoding="utf-8")
-    for token in (
-        "trigger.to_state.attributes.metric",
-        "attrs.current is mapping",
-        "current['value']",
-        "current['average']",
-        "current['threshold']",
-        "Температура",
-        "Занято",
-        "Троттлинг",
-        "SMART",
-        "обнаружена проблема",
-        "параметры проблемы изменились",
-        "состояние нормализовалось",
-    ):
-        assert token in text
+
+    assert "action: script.write2log" in text
+    assert "обнаружена проблема" in text
+    assert "параметры проблемы изменились" in text
+    assert "состояние нормализовалось" in text
+    assert "батарея заряжена" in text
 
 
-def test_config_and_startup_notification_messages_are_localized():
+def test_config_changed_notification_is_direct_and_localized():
     assert RU_NOTIFICATION_PACKAGE.exists()
     text = RU_NOTIFICATION_PACKAGE.read_text(encoding="utf-8")
-    for token in (
-        "Было:",
-        "Стало:",
-        "После запуска обнаружено активных проблем",
-    ):
-        assert token in text
+
+    assert "id: config_changed" in text
+    assert "Конфигурация UPS Trigger изменена" in text
+    assert "trigger.to_state.attributes.old_values" in text
+    assert "trigger.to_state.attributes.new_values" in text
 
 
 def test_ui_closes_trigger_editor_only_for_valid_v2_config_changed_contract():
