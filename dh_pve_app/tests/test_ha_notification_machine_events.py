@@ -195,8 +195,6 @@ def _between(text: str, start: str, end: str) -> str:
 
 V2_REQUIRED_FIELDS = {
     "problem": (
-        "event_type",
-        "schema_version",
         "observed_at",
         "problem_id",
         "category",
@@ -209,8 +207,6 @@ V2_REQUIRED_FIELDS = {
         "active_problem_count",
     ),
     "ups_status_changed": (
-        "event_type",
-        "schema_version",
         "observed_at",
         "previous_status",
         "current_status",
@@ -218,16 +214,12 @@ V2_REQUIRED_FIELDS = {
         "current_raw_status",
     ),
     "battery_discharge_level_crossed": (
-        "event_type",
-        "schema_version",
         "observed_at",
         "previous_charge_percent",
         "current_charge_percent",
         "crossed_thresholds",
     ),
     "battery_fully_charged": (
-        "event_type",
-        "schema_version",
         "observed_at",
         "previous_charge_percent",
         "current_charge_percent",
@@ -236,8 +228,6 @@ V2_REQUIRED_FIELDS = {
         "detection_source",
     ),
     "shutdown_committed": (
-        "event_type",
-        "schema_version",
         "observed_at",
         "reason",
         "battery_charge_percent",
@@ -277,6 +267,9 @@ def test_each_v2_machine_schema_rejects_every_missing_required_field():
         text = path.read_text(encoding="utf-8")
         live, _config_changed = _machine_event_blocks(text)
         branches = _v2_live_branches(live)
+
+        assert live.count("'event_type' in attrs") >= len(V2_REQUIRED_FIELDS)
+        assert live.count("'schema_version' in attrs") >= len(V2_REQUIRED_FIELDS)
 
         for schema, required_fields in V2_REQUIRED_FIELDS.items():
             branch = branches[schema]
