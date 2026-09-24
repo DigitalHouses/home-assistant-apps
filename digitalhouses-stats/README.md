@@ -12,6 +12,11 @@ The wire contract is defined by:
 - `POST /v1/heartbeat`
 - `DELETE /v1/installation`
 - `GET /healthz`
+- `GET /v1/stats/summary`
+- `GET /v1/stats/products`
+- `GET /v1/stats/versions`
+- `GET /v1/stats/countries`
+- `GET /v1/stats/history`
 - PostgreSQL storage
 - append-only heartbeat history
 - server-side timestamps
@@ -47,4 +52,4 @@ alembic upgrade head
 uvicorn digitalhouses_stats.main:app --host 127.0.0.1 --port 8080
 ```
 
-See `docs/DEPLOYMENT_LXC.md` for the intended Debian 12 LXC deployment.
+See `docs/DEPLOYMENT_LXC.md` for the intended Debian 12 LXC deployment and `docs/PUBLIC_STATS_API.md` for public aggregate API semantics.
