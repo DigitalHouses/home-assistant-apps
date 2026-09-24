@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.5.16
+
+- Fix invalid YAML indentation in both English and Russian notification packages that made the published 0.5.15 HA package fail `ha core check`.
+- Adopt DigitalHouses Notification Envelope v1 for every `dh_app_pve_notification`: required `notification_schema_version`, `source`, `kind`, `severity`, `title` and `message`; every `contract_error` also carries `contract` and `failure_class`.
+- Rename propagated machine-event schema metadata in localized notifications to explicit `source_schema_version`, keeping it independent from the notification envelope version.
+- Consolidate UPS Trigger UI helpers into `dh_app_pve_package.yaml`; the standalone `dh_app_pve_ui_package.yaml` is removed. PVE HA installation now consists of the base package plus exactly one notification locale.
+- Keep notification delivery installation-owned. Public packages do not depend on private `script.write2log`, Telegram, mobile notification targets or other site-specific delivery.
+- Add CI coverage for final shipped HA package YAML syntax and the two-package artifact layout.
+- Keep PVE/NUT as the sole shutdown/FSD authority; runtime UPS/FSD policy is unchanged.
+
+
 ## 0.5.15
 
 - Harden Home Assistant startup problem reconciliation under the repository Contract Data Policy: fresh-publication timestamps, aggregate count/severity, active-list shape and required problem fields are validated before any notification is rendered.
