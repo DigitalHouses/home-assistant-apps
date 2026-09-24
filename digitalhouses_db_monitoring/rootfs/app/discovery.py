@@ -7,6 +7,7 @@ BASE_TOPIC = "DigitalHouses/Global/db_monitoring"
 STATE_TOPIC = f"{BASE_TOPIC}/state"
 TOP_ENTITIES_24H_TOPIC = f"{BASE_TOPIC}/top_entities_24h"
 TOP_ENTITIES_ALL_TIME_TOPIC = f"{BASE_TOPIC}/top_entities_all_time"
+LAST_REFRESH_TOPIC = f"{BASE_TOPIC}/last_refresh"
 APP_AVAILABILITY_TOPIC = f"{BASE_TOPIC}/availability"
 DB_AVAILABILITY_TOPIC = f"{BASE_TOPIC}/database_availability"
 STORAGE_AVAILABILITY_TOPIC = f"{BASE_TOPIC}/storage_availability"
@@ -84,6 +85,16 @@ def _button_component(
 
 def build_discovery_payload(app_version: str, include_storage: bool = False) -> dict[str, Any]:
     components = {
+        "app_version": _component(
+            "sensor", "Version", "app_version", "sensor.dh_db_app_version",
+            "{{ value_json.app_version }}", diagnostic=True, db_required=False,
+            icon="mdi:package-variant-closed",
+        ),
+        "started_at": _component(
+            "sensor", "Started at", "started_at", "sensor.dh_db_started_at",
+            "{{ value_json.started_at }}", diagnostic=True, db_required=False,
+            device_class="timestamp", icon="mdi:clock-start",
+        ),
         "db_start": _component(
             "sensor", "DB start", "db_start", "sensor.dh_db_start",
             "{{ value_json.db_start }}", diagnostic=True,
@@ -97,6 +108,7 @@ def build_discovery_payload(app_version: str, include_storage: bool = False) -> 
         "db_last_refresh": _component(
             "sensor", "DB last refresh", "db_last_refresh", "sensor.dh_db_last_refresh",
             "{{ value_json.db_last_refresh }}", diagnostic=True, db_required=False,
+            state_topic=LAST_REFRESH_TOPIC,
             device_class="timestamp", icon="mdi:database-sync",
         ),
         "db_depth": _component(
