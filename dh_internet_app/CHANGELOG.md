@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.9
+
+- Reduce Home Assistant Recorder churn from `sensor.dh_internet_app_problems` by removing the per-publish `updated_at` attribute; the entity now changes only when the problem count/list changes.
+- Reduce Recorder churn from `sensor.dh_internet_app_availability_month` by exposing only the stable `month` attribute and rounding the HA entity state to two decimals.
+- Keep the full outage payload and exact `elapsed_seconds`, `online_seconds`, `offline_seconds` and outage durations on the App-owned outage MQTT payload; only the Recorder-facing availability entity is made low-noise.
+
 ## 0.1.8
 
 - Simplify Home Assistant notifications to the same direct model used by `dh_pve_app`: machine event → `trigger.id` → `choose` → direct local action.
