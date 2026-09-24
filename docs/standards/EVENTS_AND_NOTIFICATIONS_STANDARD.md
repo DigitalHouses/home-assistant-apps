@@ -356,7 +356,7 @@ Contract rules:
 - `title` must be a non-empty localized human-readable string;
 - `message` must be a non-empty localized human-readable string.
 
-A delivery adapter may therefore consume notifications from different DigitalHouses products without product-specific field mapping.
+A delivery adapter may therefore consume notification payloads from different DigitalHouses products without product-specific payload field mapping. The Home Assistant event types themselves remain product-specific and the installation subscribes to the event types it chooses to consume.
 
 Conceptually:
 
@@ -443,20 +443,41 @@ This rule is governed by [DigitalHouses Contract Data Policy](CONTRACT_DATA_POLI
 
 If a locale package receives an invalid event, it must fail visibly.
 
-Recommended diagnostic fields include:
+Every `contract_error` notification must satisfy Notification Envelope v1 and must additionally contain:
 
-```text
+```yaml
 kind: contract_error
-category: diagnostic
 severity: error
-contract
-event_type
-failure_class
-field
-source_entity
+contract: <stable machine-readable contract identifier>
+failure_class: <stable machine-readable failure class>
 ```
 
-Typical `failure_class` values:
+Therefore a `contract_error` always contains at least:
+
+```text
+notification_schema_version
+source
+kind = contract_error
+severity = error
+title
+message
+contract
+failure_class
+```
+
+`contract` and `failure_class` must be non-empty machine-readable identifiers. They must not be localized prose.
+
+The following diagnostic context is optional when applicable:
+
+```text
+field
+event_type
+source_entity
+category
+observed_at
+```
+
+Typical `failure_class` values include:
 
 ```text
 missing_required_field
@@ -731,7 +752,31 @@ The repository must not require the maintainer's private notification-delivery i
 
 New notification-capable products must follow this standard from their first release.
 
-Existing products must converge when their notification architecture is next materially changed. A product is not considered migrated merely because this document exists; product validation/tests must enforce the applicable contract.
+Existing products must converge when their notification architecture is next materially changed. A product is not considered migrated merely because this document exists; its product tests must enforce the applicable behavioral contract.
+
+### Validation responsibility
+
+Repository validation and product testing have different responsibilities.
+
+The repository validator checks repository structure and shared repository metadata. It may require that mandatory files, tests, packages and normative documents exist, but it must not attempt to prove notification behavior by duplicating product implementation tests or by becoming a parser for every product's Home Assistant/Jinja logic.
+
+The product developer is responsible for implementing this standard and for proving compliance in the product's own automated tests.
+
+CI enforces the standard by running those product tests as part of the complete repository test suite.
+
+Product-specific compatibility validators may protect stable released identifiers or other repository-level compatibility facts, but they must not replace behavioral notification tests or become a second implementation of the product's notification logic.
+
+In short:
+
+```text
+shared policy
+    ↓
+product implementation
+    ↓
+product tests prove behavior
+    ↓
+repository CI runs the tests
+```
 
 ---
 
@@ -756,7 +801,8 @@ Every product using this architecture must test at least:
 15. `notification_schema_version` is the integer `1` in every locale variant;
 16. `severity` is restricted to the common vocabulary;
 17. `title` and `message` are non-empty;
-18. locale packages do not blindly forward the complete source machine payload through `raw` or an equivalent catch-all field.
+18. locale packages do not blindly forward the complete source machine payload through `raw` or an equivalent catch-all field;
+19. every `contract_error` contains non-empty machine-readable `contract` and `failure_class`, uses `kind: contract_error`, and uses `severity: error`.
 
 All locale variants must test the same notification envelope version and required-field semantics.
 
