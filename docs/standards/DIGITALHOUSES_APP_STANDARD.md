@@ -22,7 +22,7 @@ This standard defines:
 
 Runtime contract-data handling for all application types is governed by [DigitalHouses Contract Data Policy](CONTRACT_DATA_POLICY.md).
 
-Notification-capable products must also follow [DigitalHouses Events and Multilingual Notifications Standard](EVENTS_AND_NOTIFICATIONS_STANDARD.md): producers emit machine facts, Home Assistant locale packages own human-readable presentation, and reusable products do not own site-specific delivery.
+Notification-capable products must also follow [DigitalHouses Events and Multilingual Notifications Standard](EVENTS_AND_NOTIFICATIONS_STANDARD.md): producers emit machine facts, Home Assistant locale packages own human-readable presentation, localized output uses the common Notification Envelope v1, and reusable products do not own site-specific delivery.
 
 Initial supported application types:
 
