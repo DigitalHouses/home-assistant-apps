@@ -18,6 +18,7 @@ from discovery import (
     STORAGE_AVAILABILITY_TOPIC,
     DISCOVERY_TOPIC,
     HA_STATUS_TOPIC,
+    LAST_REFRESH_TOPIC,
     REFRESH_COMMAND_TOPIC,
     STATE_RETAIN,
     STATE_TOPIC,
@@ -60,7 +61,10 @@ class DatabaseMonitorApp:
         self.log = logging.getLogger('digitalhouses_db_monitoring')
         self.adapter = create_adapter(self.config.database)
         self.storage = StorageCollector(self.config.storage, self.adapter)
+        self.started_at = iso_from_epoch(time.time())
         self.state: dict[str, Any] = {
+            'app_version': APP_VERSION,
+            'started_at': self.started_at,
             'db_connected': False,
             'recorder_writing': False,
         }
@@ -94,7 +98,6 @@ class DatabaseMonitorApp:
             return
         self.mqtt_connected.set()
         client.subscribe(HA_STATUS_TOPIC, qos=1)
-        client.subscribe(REFRESH_COMMAND_TOPIC, qos=1)
         client.subscribe(REFRESH_COMMAND_TOPIC, qos=1)
         self.publish_json(
             DISCOVERY_TOPIC,
@@ -303,7 +306,12 @@ class DatabaseMonitorApp:
                 refresh_results.append(self.collect_storage())
             full_success = all(refresh_results)
             if full_success:
-                self.update_state({'db_last_refresh': iso_from_epoch(time.time())})
+                refreshed_at = iso_from_epoch(time.time())
+                self.publish_json(
+                    LAST_REFRESH_TOPIC,
+                    {'db_last_refresh': refreshed_at},
+                    retain=True,
+                )
             self.publish_state()
             if full_success:
                 self.log.info('Manual full refresh completed')
