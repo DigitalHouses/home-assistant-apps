@@ -149,14 +149,16 @@ class DiscoveryTests(unittest.TestCase):
             download_rate_enabled=True,
             upload_rate_enabled=True,
         )["components"]
-        self.assertIn(
-            "| round(1)",
-            components["router_download_rate"]["value_template"],
-        )
-        self.assertIn(
-            "| round(1)",
-            components["router_upload_rate"]["value_template"],
-        )
+        for key, field in (
+            ("router_download_rate", "download_rate_mbps"),
+            ("router_upload_rate", "upload_rate_mbps"),
+        ):
+            template = components[key]["value_template"]
+            self.assertIn("| round(1)", template)
+            self.assertIn(
+                f"value_json.router.{field} is not none",
+                template,
+            )
 
     def test_compact_server_discovery(self) -> None:
         components = build_discovery_payload("0.1.0")["components"]
