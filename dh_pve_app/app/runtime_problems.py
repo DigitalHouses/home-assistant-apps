@@ -5,6 +5,11 @@ from collections.abc import Mapping
 
 from .diagnostic_events import DiagnosticEvent
 from .problems import PveProblemEngine, ProblemState, ProblemTransition
+from .pve_problem_events import (
+    PveProblemEventDebouncer,
+    pve_problem_context,
+    semantic_pve_problem_event,
+)
 from .runtime_dynamic import DynamicDiscoveryRuntime
 
 
@@ -27,8 +32,14 @@ class ProblemAwareRuntime(DynamicDiscoveryRuntime):
     """
 
     def __init__(self, *args, **kwargs) -> None:
+        problem_event_debounce_seconds = float(
+            kwargs.pop("problem_event_debounce_seconds", 0.0)
+        )
         super().__init__(*args, **kwargs)
         self.problem_engine = _RuntimeProblemEngine()
+        self.problem_event_debouncer = PveProblemEventDebouncer(
+            delay_seconds=problem_event_debounce_seconds
+        )
         self._published_problem_ids: set[str] = set()
         self._pending_problem_transitions: list[ProblemTransition] = []
         self._problem_snapshot_dirty = False
@@ -85,17 +96,28 @@ class ProblemAwareRuntime(DynamicDiscoveryRuntime):
         if not self._publish_aggregate_bundle():
             return False
 
-        aggregate = self.problem_engine.aggregate()
-        event = DiagnosticEvent.from_transition(
-            transition,
-            active_problem_count=aggregate.count,
-            observed_at=self.now_iso(),
-        )
-        if not self.bridge.publish_diagnostic_event(event.as_payload()):
-            return False
-
         self._published_problem_ids.add(state.problem_id)
         self._problem_snapshot_dirty = False
+
+        if transition.event_type == "problem_updated":
+            aggregate = self.problem_engine.aggregate()
+            event = DiagnosticEvent.from_transition(
+                transition,
+                active_problem_count=aggregate.count,
+                observed_at=self.now_iso(),
+            ).as_payload()
+            event.update(
+                pve_problem_context(
+                    state,
+                    self._problem_inputs(tuple(self._subsystems)),
+                )
+            )
+            return bool(self.bridge.publish_diagnostic_event(event))
+
+        self.problem_event_debouncer.observe(
+            transition,
+            now=self.now_monotonic(),
+        )
         return True
 
     def _flush_pending_transitions(self) -> bool:
@@ -104,6 +126,35 @@ class ProblemAwareRuntime(DynamicDiscoveryRuntime):
             if not self._publish_transition(transition):
                 return False
             self._pending_problem_transitions.pop(0)
+        return True
+
+    def _current_problem_states(self) -> dict[str, ProblemState]:
+        return {
+            state.problem_id: state
+            for state in self.problem_engine.states()
+        }
+
+    def _flush_due_problem_events(self, now: float | None = None) -> bool:
+        current_states = self._current_problem_states()
+        due = self.problem_event_debouncer.due(
+            now=self.now_monotonic() if now is None else float(now),
+            current_states=current_states,
+        )
+        if not due:
+            return True
+
+        inputs = self._problem_inputs(tuple(self._subsystems))
+        aggregate = self.problem_engine.aggregate()
+        for transition in due:
+            payload = semantic_pve_problem_event(
+                transition,
+                observed_at=self.now_iso(),
+                context=pve_problem_context(transition.current, inputs),
+                active_problem_count=aggregate.count,
+            )
+            if not self.bridge.publish_diagnostic_event(payload):
+                return False
+            self.problem_event_debouncer.acknowledge(transition)
         return True
 
     def _sync_current_problem_states(self) -> bool:
@@ -155,6 +206,8 @@ class ProblemAwareRuntime(DynamicDiscoveryRuntime):
         pending_ok = self._flush_pending_transitions()
         if not pending_ok:
             return False
+        if not self._flush_due_problem_events():
+            return False
 
         selected = tuple(self.collectors) if names is None else tuple(names)
         state_ok = super().run_collection(
@@ -172,8 +225,20 @@ class ProblemAwareRuntime(DynamicDiscoveryRuntime):
         self._pending_problem_transitions.extend(transitions)
 
         transitions_ok = self._flush_pending_transitions()
+        events_ok = self._flush_due_problem_events()
         snapshot_ok = self._sync_current_problem_states()
-        return state_ok and transitions_ok and snapshot_ok
+        return state_ok and transitions_ok and events_ok and snapshot_ok
+
+
+    def tick(self, now_monotonic: float) -> bool:
+        if not self._flush_pending_transitions():
+            return False
+        if not self._flush_due_problem_events(now_monotonic):
+            return False
+        published = super().tick(now_monotonic)
+        if not self._flush_due_problem_events(now_monotonic):
+            return False
+        return published
 
     def _republish_problem_snapshot(self) -> bool:
         self._published_problem_ids.clear()
@@ -181,6 +246,8 @@ class ProblemAwareRuntime(DynamicDiscoveryRuntime):
         return self._sync_current_problem_states()
 
     def process_events(self) -> bool:
+        if not self._flush_due_problem_events():
+            return False
         handled = False
 
         if self.bridge.reconnect_requested.is_set():
@@ -208,6 +275,7 @@ class ProblemAwareRuntime(DynamicDiscoveryRuntime):
             if transitions:
                 self._pending_problem_transitions.extend(transitions)
                 self._flush_pending_transitions()
+                self._flush_due_problem_events()
             else:
                 self.bridge.publish_setting_value(update.key, update.value)
 
@@ -217,3 +285,4 @@ class ProblemAwareRuntime(DynamicDiscoveryRuntime):
             handled = True
 
         return handled
+
