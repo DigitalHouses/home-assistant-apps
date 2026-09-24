@@ -1,0 +1,245 @@
+# =============================================================================
+# DigitalHouses Internet App local notifications — English example
+# =============================================================================
+# Machine events come directly from event.dh_internet_app_event.
+# Flow: machine event -> trigger.id -> choose -> direct action.
+# Replace persistent_notification.create with the local delivery service if needed.
+# =============================================================================
+
+dh_internet_app_notification_local_package:
+
+  automation:
+    - id: dh_internet_app_notifications
+      alias: DH Internet · Notifications
+      mode: queued
+      max: 20
+
+      triggers:
+        - trigger: event.received
+          target:
+            entity_id: event.dh_internet_app_event
+          options:
+            event_type:
+              - connection_lost
+          id: connection_lost
+
+        - trigger: event.received
+          target:
+            entity_id: event.dh_internet_app_event
+          options:
+            event_type:
+              - connection_restored
+          id: connection_restored
+
+        - trigger: event.received
+          target:
+            entity_id: event.dh_internet_app_event
+          options:
+            event_type:
+              - recovery_action
+          id: recovery_action
+
+        - trigger: event.received
+          target:
+            entity_id: event.dh_internet_app_event
+          options:
+            event_type:
+              - recovery_stopped
+          id: recovery_stopped
+
+        - trigger: event.received
+          target:
+            entity_id: event.dh_internet_app_event
+          options:
+            event_type:
+              - recovery_exhausted
+          id: recovery_exhausted
+
+        - trigger: event.received
+          target:
+            entity_id: event.dh_internet_app_event
+          options:
+            event_type:
+              - recovery_error
+          id: recovery_error
+
+        - trigger: event.received
+          target:
+            entity_id: event.dh_internet_app_event
+          options:
+            event_type:
+              - speedtest_failed
+          id: speedtest_failed
+
+        - trigger: event.received
+          target:
+            entity_id: event.dh_internet_app_event
+          options:
+            event_type:
+              - performance_problem_started
+          id: performance_problem_started
+
+        - trigger: event.received
+          target:
+            entity_id: event.dh_internet_app_event
+          options:
+            event_type:
+              - performance_problem_recovered
+          id: performance_problem_recovered
+
+        - trigger: event.received
+          target:
+            entity_id: event.dh_internet_app_event
+          options:
+            event_type:
+              - performance_problem_updated
+          id: performance_problem_updated
+
+      conditions: []
+
+      actions:
+        - choose:
+            - conditions:
+                - condition: trigger
+                  id:
+                    - connection_lost
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "🌐⚠️ Internet unavailable"
+                    message: >-
+                      Internet connectivity is unavailable.
+                      Router reachable: {{ 'yes' if trigger.to_state.attributes.router_up else 'no' }}.
+                      Failed checks: {{ trigger.to_state.attributes.attempts }}.
+
+            - conditions:
+                - condition: trigger
+                  id:
+                    - connection_restored
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "🌐✅ Internet restored"
+                    message: >-
+                      {% set s = trigger.to_state.attributes.duration_seconds | int %}
+                      {% set h = s // 3600 %}
+                      {% set m = (s % 3600) // 60 %}
+                      {% set sec = s % 60 %}
+                      Connectivity restored after
+                      {{ ('%d:%02d:%02d' | format(h,m,sec)) if h else ('%02d:%02d' | format(m,sec)) }}.
+
+            - conditions:
+                - condition: trigger
+                  id:
+                    - recovery_action
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: >-
+                      🔄 Internet recovery: {{ trigger.to_state.attributes.target | upper }}
+                    message: >-
+                      Cycle {{ trigger.to_state.attributes.cycle }}:
+                      {{ trigger.to_state.attributes.action }} on
+                      {{ trigger.to_state.attributes.entity_id }}.
+
+            - conditions:
+                - condition: trigger
+                  id:
+                    - recovery_stopped
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "⏹️ Internet recovery stopped"
+                    message: >-
+                      Further recovery attempts for the current outage were stopped.
+                      Reason: {{ trigger.to_state.attributes.reason }}.
+
+            - conditions:
+                - condition: trigger
+                  id:
+                    - recovery_exhausted
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "🌐⚠️ Recovery attempts exhausted"
+                    message: >-
+                      {{ trigger.to_state.attributes.cycles }} recovery cycle(s) completed.
+                      Cooldown: {{ trigger.to_state.attributes.cooldown_seconds }} s.
+
+            - conditions:
+                - condition: trigger
+                  id:
+                    - recovery_error
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "🌐❌ Recovery error"
+                    message: >-
+                      Automatic Internet recovery failed:
+                      {{ trigger.to_state.attributes.error }}.
+
+            - conditions:
+                - condition: trigger
+                  id:
+                    - speedtest_failed
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "📶⚠️ Speedtest failed"
+                    message: >-
+                      Ookla Speedtest did not complete successfully:
+                      {{ trigger.to_state.attributes.reason }}.
+
+            - conditions:
+                - condition: trigger
+                  id:
+                    - performance_problem_started
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "📉⚠️ Internet performance problem"
+                    message: >-
+                      {% set labels = {'low_download':'low download','low_upload':'low upload','high_ping':'high ping'} %}
+                      Problems:
+                      {% for reason in trigger.to_state.attributes.reasons %}{{ labels[reason] }}{{ ', ' if not loop.last else '.' }}{% endfor %}
+                      Download {{ trigger.to_state.attributes.download_mbps }} Mbit/s
+                      (minimum {{ trigger.to_state.attributes.minimum_download_mbps }}) ·
+                      Upload {{ trigger.to_state.attributes.upload_mbps }} Mbit/s
+                      (minimum {{ trigger.to_state.attributes.minimum_upload_mbps }}) ·
+                      Ping {{ trigger.to_state.attributes.ping_ms }} ms
+                      (maximum {{ trigger.to_state.attributes.maximum_ping_ms }}).
+
+            - conditions:
+                - condition: trigger
+                  id:
+                    - performance_problem_recovered
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "📈✅ Internet performance restored"
+                    message: >-
+                      {% set labels = {'low_download':'low download','low_upload':'low upload','high_ping':'high ping'} %}
+                      Recovered from:
+                      {% for reason in trigger.to_state.attributes.previous_reasons %}{{ labels[reason] }}{{ ', ' if not loop.last else '.' }}{% endfor %}
+                      Download {{ trigger.to_state.attributes.download_mbps }} Mbit/s ·
+                      Upload {{ trigger.to_state.attributes.upload_mbps }} Mbit/s ·
+                      Ping {{ trigger.to_state.attributes.ping_ms }} ms.
+                      Current values are within configured thresholds.
+
+            - conditions:
+                - condition: trigger
+                  id:
+                    - performance_problem_updated
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "📉⚠️ Internet performance changed"
+                    message: >-
+                      {% set labels = {'low_download':'low download','low_upload':'low upload','high_ping':'high ping'} %}
+                      Previous:
+                      {% for reason in trigger.to_state.attributes.previous_reasons %}{{ labels[reason] }}{{ ', ' if not loop.last else '.' }}{% endfor %}
+                      Current:
+                      {% for reason in trigger.to_state.attributes.reasons %}{{ labels[reason] }}{{ ', ' if not loop.last else '.' }}{% endfor %}
+                      Download {{ trigger.to_state.attributes.download_mbps }} Mbit/s ·
+                      Upload {{ trigger.to_state.attributes.upload_mbps }} Mbit/s ·
+                      Ping {{ trigger.to_state.attributes.ping_ms }} ms.
