@@ -37,6 +37,22 @@ systemctl daemon-reload
 systemctl enable digitalhouses-stats-dashboard-api nginx >/dev/null
 systemctl restart digitalhouses-stats-dashboard-api
 
+dashboard_ready=0
+for attempt in $(seq 1 20); do
+    if curl -fsS http://127.0.0.1:8081/healthz >/dev/null 2>&1; then
+        dashboard_ready=1
+        break
+    fi
+    sleep 0.5
+done
+
+if [[ "${dashboard_ready}" -ne 1 ]]; then
+    echo "Dashboard API failed to become ready."
+    systemctl status digitalhouses-stats-dashboard-api --no-pager || true
+    journalctl -u digitalhouses-stats-dashboard-api -n 80 --no-pager || true
+    exit 1
+fi
+
 nginx -t
 systemctl restart nginx
 
