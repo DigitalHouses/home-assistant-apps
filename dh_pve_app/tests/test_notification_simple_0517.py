@@ -73,10 +73,5 @@ def test_notification_standard_uses_simple_direct_flow() -> None:
     assert "choose" in text
     assert "direct action" in text
 
-    for forbidden in (
-        "Notification Envelope",
-        "localized notification event",
-        "contract_error",
-        "delivery adapter",
-    ):
-        assert forbidden not in text
+    assert "There is no intermediate DigitalHouses notification protocol." in text
+    assert "call the final delivery action directly" in text
