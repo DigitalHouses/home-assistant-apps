@@ -18,6 +18,8 @@ digitalhouses_plex_agent
 digitalhouses_recorder_app
 digitalhouses_speedtest_app
 digitalhouses_backblaze_app
+digitalhouses_internet_app
+digitalhouses_internet_app
 ```
 
 The Home Assistant image/backup requirements apply only to Home Assistant Apps. The release identity and telemetry requirements apply to all participating products.
@@ -77,7 +79,7 @@ Required outcome:
 - local-image backup duplication is removed;
 - old released images remain recoverable.
 
-DigitalHouses Backblaze App was introduced after this rollout sequence was written. It must satisfy the same immutable Home Assistant App delivery contract before its first production release; its experimental source-only implementation is not a completed production release.
+DigitalHouses Backblaze App and DigitalHouses Internet App were introduced after this rollout sequence was written. Each must satisfy the same immutable Home Assistant App delivery contract before its first production release; an experimental source-only implementation is not a completed production release.
 
 ### Stage B — shared telemetry service and protocol
 

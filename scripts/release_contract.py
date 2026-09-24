@@ -72,6 +72,13 @@ PRODUCTS = {
         version_source="haos_config",
         policy_baseline="1.2.1",
     ),
+    "digitalhouses_internet_app": ProductSpec(
+        identifier="digitalhouses_internet_app",
+        title="DigitalHouses Internet App",
+        directory="dh_internet_app",
+        version_source="haos_config",
+        policy_baseline="0.0.0",
+    ),
     "digitalhouses_backblaze_app": ProductSpec(
         identifier="digitalhouses_backblaze_app",
         title="DigitalHouses Backblaze App",

@@ -1,0 +1,696 @@
+"""MQTT Device Discovery payload for DigitalHouses Internet App."""
+
+from __future__ import annotations
+
+from typing import Any
+
+DEVICE_ID = "dh_internet_app"
+ENTITY_PREFIX = "dh_internet_app"
+MQTT_BASE_TOPIC = "DigitalHouses/Global/dh_internet_app"
+DISCOVERY_TOPIC = f"homeassistant/device/{DEVICE_ID}/config"
+EVENT_SCHEMA_VERSION = 2
+
+OPTIONAL_COMPONENT_PLATFORMS = {
+    "traffic_download_total": "sensor",
+    "traffic_upload_total": "sensor",
+    "traffic_download_month": "sensor",
+    "traffic_upload_month": "sensor",
+    "traffic_history": "sensor",
+    "router_wan_status": "sensor",
+    "router_download_rate": "sensor",
+    "router_upload_rate": "sensor",
+}
+
+TOPICS = {
+    "availability": f"{MQTT_BASE_TOPIC}/availability",
+    "state": f"{MQTT_BASE_TOPIC}/state",
+    "outages": f"{MQTT_BASE_TOPIC}/outages",
+    "thresholds": f"{MQTT_BASE_TOPIC}/thresholds",
+    "performance": f"{MQTT_BASE_TOPIC}/performance",
+    "problems": f"{MQTT_BASE_TOPIC}/problems",
+    "traffic": f"{MQTT_BASE_TOPIC}/traffic",
+    "traffic_availability": f"{MQTT_BASE_TOPIC}/traffic_availability",
+    "recent_results": f"{MQTT_BASE_TOPIC}/recent_results",
+    "servers": f"{MQTT_BASE_TOPIC}/servers",
+    "result_availability": f"{MQTT_BASE_TOPIC}/result_availability",
+    "minimum_download_command": f"{MQTT_BASE_TOPIC}/thresholds/minimum_download/set",
+    "minimum_upload_command": f"{MQTT_BASE_TOPIC}/thresholds/minimum_upload/set",
+    "maximum_ping_command": f"{MQTT_BASE_TOPIC}/thresholds/maximum_ping/set",
+    "event": f"{MQTT_BASE_TOPIC}/event",
+    "command": f"{MQTT_BASE_TOPIC}/command",
+}
+
+
+def build_discovery_cleanup_payload(
+    payload: dict[str, Any],
+    removed_components: set[str],
+) -> dict[str, Any]:
+    cleanup = dict(payload)
+    components = dict(payload.get("components") or {})
+    for component in sorted(removed_components):
+        platform = OPTIONAL_COMPONENT_PLATFORMS.get(component)
+        if platform is not None:
+            components[component] = {"platform": platform}
+    cleanup["components"] = components
+    return cleanup
+
+
+def build_discovery_payload(
+    app_version: str,
+    *,
+    traffic_enabled: bool = False,
+    wan_enabled: bool = False,
+    download_rate_enabled: bool = False,
+    upload_rate_enabled: bool = False,
+) -> dict[str, Any]:
+    availability = {
+        "topic": TOPICS["availability"],
+        "payload_available": "online",
+        "payload_not_available": "offline",
+    }
+    result_availability = [
+        availability,
+        {
+            "topic": TOPICS["result_availability"],
+            "payload_available": "online",
+            "payload_not_available": "offline",
+        },
+    ]
+    traffic_availability = [
+        availability,
+        {
+            "topic": TOPICS["traffic_availability"],
+            "payload_available": "online",
+            "payload_not_available": "offline",
+        },
+    ]
+
+    def optional_router_availability(field: str) -> list[dict[str, Any]]:
+        return [
+            availability,
+            {
+                "topic": TOPICS["traffic"],
+                "payload_available": "online",
+                "payload_not_available": "offline",
+                "value_template": (
+                    "{{ 'online' if value_json.router."
+                    + field
+                    + " is not none else 'offline' }}"
+                ),
+            },
+        ]
+
+    device = {
+        "identifiers": [DEVICE_ID],
+        "name": "DigitalHouses Internet App",
+        "manufacturer": "DigitalHouses",
+        "model": "Internet App",
+        "sw_version": app_version,
+    }
+    components: dict[str, Any] = {
+        "google_connectivity": {
+            "platform": "binary_sensor",
+            "name": "Google connectivity",
+            "unique_id": f"{ENTITY_PREFIX}_google_connectivity",
+            "default_entity_id": f"binary_sensor.{ENTITY_PREFIX}_google_connectivity",
+            "device_class": "connectivity",
+            "state_topic": TOPICS["state"],
+            "value_template": "{{ 'ON' if value_json.google_up else 'OFF' }}",
+            "payload_on": "ON",
+            "payload_off": "OFF",
+            "availability": availability,
+        },
+        "cloudflare_connectivity": {
+            "platform": "binary_sensor",
+            "name": "Cloudflare connectivity",
+            "unique_id": f"{ENTITY_PREFIX}_cloudflare_connectivity",
+            "default_entity_id": f"binary_sensor.{ENTITY_PREFIX}_cloudflare_connectivity",
+            "device_class": "connectivity",
+            "state_topic": TOPICS["state"],
+            "value_template": "{{ 'ON' if value_json.cloudflare_up else 'OFF' }}",
+            "payload_on": "ON",
+            "payload_off": "OFF",
+            "availability": availability,
+        },
+        "internet_status": {
+            "platform": "binary_sensor",
+            "name": "Internet",
+            "unique_id": f"{ENTITY_PREFIX}_internet",
+            "default_entity_id": f"binary_sensor.{ENTITY_PREFIX}_internet",
+            "device_class": "connectivity",
+            "state_topic": TOPICS["state"],
+            "value_template": "{{ 'ON' if value_json.internet_up else 'OFF' }}",
+            "payload_on": "ON",
+            "payload_off": "OFF",
+            "availability": availability,
+        },
+        "router_status": {
+            "platform": "binary_sensor",
+            "name": "Router",
+            "unique_id": f"{ENTITY_PREFIX}_router_connectivity",
+            "default_entity_id": f"binary_sensor.{ENTITY_PREFIX}_router_connectivity",
+            "device_class": "connectivity",
+            "state_topic": TOPICS["state"],
+            "value_template": "{{ 'ON' if value_json.router_up else 'OFF' }}",
+            "payload_on": "ON",
+            "payload_off": "OFF",
+            "availability": availability,
+        },
+        "recovery_state": {
+            "platform": "sensor",
+            "name": "Recovery state",
+            "unique_id": f"{ENTITY_PREFIX}_recovery_state",
+            "default_entity_id": f"sensor.{ENTITY_PREFIX}_recovery_state",
+            "state_topic": TOPICS["state"],
+            "value_template": "{{ value_json.recovery.state }}",
+            "entity_category": "diagnostic",
+            "availability": availability,
+        },
+        "recovery_cycle": {
+            "platform": "sensor",
+            "name": "Recovery cycle",
+            "unique_id": f"{ENTITY_PREFIX}_recovery_cycle",
+            "default_entity_id": f"sensor.{ENTITY_PREFIX}_recovery_cycle",
+            "state_topic": TOPICS["state"],
+            "value_template": "{{ value_json.recovery.cycle }}",
+            "entity_category": "diagnostic",
+            "availability": availability,
+        },
+        "recovery_countdown": {
+            "platform": "sensor",
+            "name": "Recovery countdown",
+            "unique_id": f"{ENTITY_PREFIX}_recovery_countdown",
+            "default_entity_id": f"sensor.{ENTITY_PREFIX}_recovery_countdown",
+            "state_topic": TOPICS["state"],
+            "value_template": "{{ value_json.recovery.countdown_seconds }}",
+            "unit_of_measurement": "s",
+            "entity_category": "diagnostic",
+            "availability": availability,
+        },
+        "recovery_stop": {
+            "platform": "button",
+            "name": "Stop recovery",
+            "unique_id": f"{ENTITY_PREFIX}_recovery_stop",
+            "default_entity_id": f"button.{ENTITY_PREFIX}_recovery_stop",
+            "command_topic": TOPICS["command"],
+            "payload_press": "STOP_RECOVERY",
+            "icon": "mdi:stop-circle-outline",
+            "availability": availability,
+        },
+        "outages_month": {
+            "platform": "sensor",
+            "name": "Internet outages this month",
+            "unique_id": f"{ENTITY_PREFIX}_outages_month",
+            "default_entity_id": f"sensor.{ENTITY_PREFIX}_outages_month",
+            "state_topic": TOPICS["outages"],
+            "value_template": "{{ value_json.state }}",
+            "unit_of_measurement": "outages",
+            "json_attributes_topic": TOPICS["outages"],
+            "json_attributes_template": (
+                "{{ {'month': value_json.month, "
+                "'outages': value_json.outages, "
+                "'total_duration': value_json.total_duration, "
+                "'total_duration_seconds': value_json.total_duration_seconds} | tojson }}"
+            ),
+            "availability": availability,
+        },
+        "availability_month": {
+            "platform": "sensor",
+            "name": "Internet availability month",
+            "unique_id": f"{ENTITY_PREFIX}_availability_month",
+            "default_entity_id": f"sensor.{ENTITY_PREFIX}_availability_month",
+            "state_topic": TOPICS["outages"],
+            "value_template": "{{ value_json.availability_percent }}",
+            "unit_of_measurement": "%",
+            "state_class": "measurement",
+            "suggested_display_precision": 2,
+            "json_attributes_topic": TOPICS["outages"],
+            "json_attributes_template": (
+                "{{ {'month': value_json.month, "
+                "'online_seconds': value_json.online_seconds, "
+                "'offline_seconds': value_json.offline_seconds, "
+                "'elapsed_seconds': value_json.elapsed_seconds} | tojson }}"
+            ),
+            "icon": "mdi:percent-circle-outline",
+            "availability": availability,
+        },
+        "download": {
+            "platform": "sensor",
+            "name": "Download",
+            "unique_id": f"{ENTITY_PREFIX}_download",
+            "default_entity_id": f"sensor.{ENTITY_PREFIX}_download",
+            "state_topic": TOPICS["state"],
+            "value_template": "{{ value_json.speedtest.download_mbps }}",
+            "device_class": "data_rate",
+            "state_class": "measurement",
+            "unit_of_measurement": "Mbit/s",
+            "suggested_display_precision": 1,
+            "availability": result_availability,
+            "availability_mode": "all",
+        },
+        "upload": {
+            "platform": "sensor",
+            "name": "Upload",
+            "unique_id": f"{ENTITY_PREFIX}_upload",
+            "default_entity_id": f"sensor.{ENTITY_PREFIX}_upload",
+            "state_topic": TOPICS["state"],
+            "value_template": "{{ value_json.speedtest.upload_mbps }}",
+            "device_class": "data_rate",
+            "state_class": "measurement",
+            "unit_of_measurement": "Mbit/s",
+            "suggested_display_precision": 1,
+            "availability": result_availability,
+            "availability_mode": "all",
+        },
+        "ping": {
+            "platform": "sensor",
+            "name": "Ping",
+            "unique_id": f"{ENTITY_PREFIX}_ping",
+            "default_entity_id": f"sensor.{ENTITY_PREFIX}_ping",
+            "state_topic": TOPICS["state"],
+            "value_template": "{{ value_json.speedtest.ping_ms }}",
+            "device_class": "duration",
+            "state_class": "measurement",
+            "unit_of_measurement": "ms",
+            "suggested_display_precision": 1,
+            "availability": result_availability,
+            "availability_mode": "all",
+        },
+        "jitter": {
+            "platform": "sensor",
+            "name": "Jitter",
+            "unique_id": f"{ENTITY_PREFIX}_jitter",
+            "default_entity_id": f"sensor.{ENTITY_PREFIX}_jitter",
+            "state_topic": TOPICS["state"],
+            "value_template": "{{ value_json.speedtest.jitter_ms }}",
+            "device_class": "duration",
+            "state_class": "measurement",
+            "unit_of_measurement": "ms",
+            "suggested_display_precision": 1,
+            "entity_category": "diagnostic",
+            "availability": result_availability,
+            "availability_mode": "all",
+        },
+        "packet_loss": {
+            "platform": "sensor",
+            "name": "Packet loss",
+            "unique_id": f"{ENTITY_PREFIX}_packet_loss",
+            "default_entity_id": f"sensor.{ENTITY_PREFIX}_packet_loss",
+            "state_topic": TOPICS["state"],
+            "value_template": "{{ value_json.speedtest.packet_loss_pct }}",
+            "state_class": "measurement",
+            "unit_of_measurement": "%",
+            "suggested_display_precision": 1,
+            "entity_category": "diagnostic",
+            "availability": result_availability,
+            "availability_mode": "all",
+        },
+        "speedtest_status": {
+            "platform": "sensor",
+            "name": "Speedtest status",
+            "unique_id": f"{ENTITY_PREFIX}_speedtest_status",
+            "default_entity_id": f"sensor.{ENTITY_PREFIX}_speedtest_status",
+            "state_topic": TOPICS["state"],
+            "value_template": "{{ value_json.speedtest.status }}",
+            "device_class": "enum",
+            "options": [
+                "ready",
+                "running",
+                "success",
+                "error",
+                "no_connectivity",
+            ],
+            "json_attributes_topic": TOPICS["state"],
+            "json_attributes_template": (
+                "{{ {'provider': value_json.speedtest.provider, "
+                "'external_ip': value_json.speedtest.external_ip, "
+                "'server': value_json.speedtest.server, "
+                "'server_id': value_json.speedtest.server_id, "
+                "'result_url': value_json.speedtest.result_url, "
+                "'tested_at': value_json.speedtest.tested_at, "
+                "'error': value_json.speedtest.error} | tojson }}"
+            ),
+            "availability": availability,
+        },
+        "run_speedtest": {
+            "platform": "button",
+            "name": "Run speed test",
+            "unique_id": f"{ENTITY_PREFIX}_run_speedtest",
+            "default_entity_id": f"button.{ENTITY_PREFIX}_run_speedtest",
+            "command_topic": TOPICS["command"],
+            "payload_press": "RUN_SPEEDTEST",
+            "icon": "mdi:speedometer",
+            "availability": availability,
+        },
+        "minimum_download": {
+            "platform": "number",
+            "name": "Minimum download speed",
+            "unique_id": f"{ENTITY_PREFIX}_minimum_download",
+            "default_entity_id": f"number.{ENTITY_PREFIX}_minimum_download",
+            "state_topic": TOPICS["thresholds"],
+            "value_template": "{{ value_json.minimum_download_mbps }}",
+            "command_topic": TOPICS["minimum_download_command"],
+            "unit_of_measurement": "Mbit/s",
+            "min": 1,
+            "max": 10000,
+            "step": 1,
+            "mode": "box",
+            "entity_category": "config",
+            "availability": availability,
+        },
+        "minimum_upload": {
+            "platform": "number",
+            "name": "Minimum upload speed",
+            "unique_id": f"{ENTITY_PREFIX}_minimum_upload",
+            "default_entity_id": f"number.{ENTITY_PREFIX}_minimum_upload",
+            "state_topic": TOPICS["thresholds"],
+            "value_template": "{{ value_json.minimum_upload_mbps }}",
+            "command_topic": TOPICS["minimum_upload_command"],
+            "unit_of_measurement": "Mbit/s",
+            "min": 1,
+            "max": 10000,
+            "step": 1,
+            "mode": "box",
+            "entity_category": "config",
+            "availability": availability,
+        },
+        "maximum_ping": {
+            "platform": "number",
+            "name": "Maximum ping",
+            "unique_id": f"{ENTITY_PREFIX}_maximum_ping",
+            "default_entity_id": f"number.{ENTITY_PREFIX}_maximum_ping",
+            "state_topic": TOPICS["thresholds"],
+            "value_template": "{{ value_json.maximum_ping_ms }}",
+            "command_topic": TOPICS["maximum_ping_command"],
+            "unit_of_measurement": "ms",
+            "min": 1,
+            "max": 1000,
+            "step": 1,
+            "mode": "box",
+            "entity_category": "config",
+            "availability": availability,
+        },
+        "low_download": {
+            "platform": "binary_sensor",
+            "name": "Low download speed",
+            "unique_id": f"{ENTITY_PREFIX}_low_download",
+            "default_entity_id": f"binary_sensor.{ENTITY_PREFIX}_low_download",
+            "device_class": "problem",
+            "state_topic": TOPICS["performance"],
+            "value_template": "{{ 'ON' if value_json.low_download else 'OFF' }}",
+            "payload_on": "ON",
+            "payload_off": "OFF",
+            "json_attributes_topic": TOPICS["performance"],
+            "availability": result_availability,
+            "availability_mode": "all",
+        },
+        "low_upload": {
+            "platform": "binary_sensor",
+            "name": "Low upload speed",
+            "unique_id": f"{ENTITY_PREFIX}_low_upload",
+            "default_entity_id": f"binary_sensor.{ENTITY_PREFIX}_low_upload",
+            "device_class": "problem",
+            "state_topic": TOPICS["performance"],
+            "value_template": "{{ 'ON' if value_json.low_upload else 'OFF' }}",
+            "payload_on": "ON",
+            "payload_off": "OFF",
+            "json_attributes_topic": TOPICS["performance"],
+            "availability": result_availability,
+            "availability_mode": "all",
+        },
+        "high_ping": {
+            "platform": "binary_sensor",
+            "name": "High ping",
+            "unique_id": f"{ENTITY_PREFIX}_high_ping",
+            "default_entity_id": f"binary_sensor.{ENTITY_PREFIX}_high_ping",
+            "device_class": "problem",
+            "state_topic": TOPICS["performance"],
+            "value_template": "{{ 'ON' if value_json.high_ping else 'OFF' }}",
+            "payload_on": "ON",
+            "payload_off": "OFF",
+            "json_attributes_topic": TOPICS["performance"],
+            "availability": result_availability,
+            "availability_mode": "all",
+        },
+        "performance_problem": {
+            "platform": "binary_sensor",
+            "name": "Performance problem",
+            "unique_id": f"{ENTITY_PREFIX}_performance_problem",
+            "default_entity_id": f"binary_sensor.{ENTITY_PREFIX}_performance_problem",
+            "device_class": "problem",
+            "state_topic": TOPICS["performance"],
+            "value_template": "{{ 'ON' if value_json.performance_problem else 'OFF' }}",
+            "payload_on": "ON",
+            "payload_off": "OFF",
+            "json_attributes_topic": TOPICS["performance"],
+            "availability": result_availability,
+            "availability_mode": "all",
+        },
+        "available_servers": {
+            "platform": "sensor",
+            "name": "Available servers",
+            "unique_id": f"{ENTITY_PREFIX}_available_servers",
+            "default_entity_id": f"sensor.{ENTITY_PREFIX}_available_servers",
+            "state_topic": TOPICS["servers"],
+            "value_template": "{{ value_json.count }}",
+            "unit_of_measurement": "servers",
+            "json_attributes_topic": TOPICS["servers"],
+            "json_attributes_template": (
+                "{{ {'updated_at': value_json.updated_at, "
+                "'servers': value_json.servers, 'error': value_json.error, "
+                "'configured_server_ids': value_json.configured_server_ids, "
+                "'automatic_server_fallback': value_json.automatic_server_fallback} | tojson }}"
+            ),
+            "entity_category": "diagnostic",
+            "icon": "mdi:server-network",
+            "availability": availability,
+        },
+        "refresh_servers": {
+            "platform": "button",
+            "name": "Refresh servers",
+            "unique_id": f"{ENTITY_PREFIX}_refresh_servers",
+            "default_entity_id": f"button.{ENTITY_PREFIX}_refresh_servers",
+            "command_topic": TOPICS["command"],
+            "payload_press": "REFRESH_SERVERS",
+            "entity_category": "config",
+            "icon": "mdi:refresh",
+            "availability": availability,
+        },
+        "recent_results": {
+            "platform": "sensor",
+            "name": "Recent results",
+            "unique_id": f"{ENTITY_PREFIX}_recent_results",
+            "default_entity_id": f"sensor.{ENTITY_PREFIX}_recent_results",
+            "state_topic": TOPICS["recent_results"],
+            "value_template": "{{ value_json.count }}",
+            "unit_of_measurement": "tests",
+            "json_attributes_topic": TOPICS["recent_results"],
+            "json_attributes_template": (
+                "{{ {'updated_at': value_json.updated_at, "
+                "'limit': value_json.limit, "
+                "'results': value_json.results} | tojson }}"
+            ),
+            "entity_category": "diagnostic",
+            "icon": "mdi:history",
+            "availability": availability,
+        },
+        "problems": {
+            "platform": "sensor",
+            "name": "Problems",
+            "unique_id": f"{ENTITY_PREFIX}_problems",
+            "default_entity_id": f"sensor.{ENTITY_PREFIX}_problems",
+            "state_topic": TOPICS["problems"],
+            "value_template": "{{ value_json.state }}",
+            "json_attributes_topic": TOPICS["problems"],
+            "json_attributes_template": (
+                "{{ {'problems': value_json.problems, "
+                "'updated_at': value_json.updated_at} | tojson }}"
+            ),
+            "entity_category": "diagnostic",
+            "icon": "mdi:alert-circle-outline",
+            "availability": availability,
+        },
+        "app_version": {
+            "platform": "sensor",
+            "name": "Version",
+            "unique_id": f"{ENTITY_PREFIX}_version",
+            "default_entity_id": f"sensor.{ENTITY_PREFIX}_version",
+            "state_topic": TOPICS["state"],
+            "value_template": "{{ value_json.app_version }}",
+            "entity_category": "diagnostic",
+            "availability": availability,
+        },
+        "started_at": {
+            "platform": "sensor",
+            "name": "Started at",
+            "unique_id": f"{ENTITY_PREFIX}_started_at",
+            "default_entity_id": f"sensor.{ENTITY_PREFIX}_started_at",
+            "state_topic": TOPICS["state"],
+            "value_template": "{{ value_json.started_at }}",
+            "device_class": "timestamp",
+            "entity_category": "diagnostic",
+            "availability": availability,
+        },
+        "event": {
+            "platform": "event",
+            "name": "Event",
+            "unique_id": f"{ENTITY_PREFIX}_event",
+            "default_entity_id": f"event.{ENTITY_PREFIX}_event",
+            "state_topic": TOPICS["event"],
+            "event_types": [
+                "connection_lost",
+                "connection_restored",
+                "recovery_started",
+                "recovery_action",
+                "recovery_stopped",
+                "recovery_exhausted",
+                "recovery_error",
+                "speedtest_completed",
+                "speedtest_failed",
+                "performance_problem_started",
+                "performance_problem_recovered",
+                "performance_problem_updated",
+            ],
+            "availability": availability,
+        },
+    }
+    if traffic_enabled:
+        components.update(
+            {
+                "traffic_download_total": {
+                    "platform": "sensor",
+                    "name": "Traffic download total",
+                    "unique_id": f"{ENTITY_PREFIX}_traffic_download_total",
+                    "default_entity_id": f"sensor.{ENTITY_PREFIX}_traffic_download_total",
+                    "state_topic": TOPICS["traffic"],
+                    "value_template": "{{ value_json.download_total_gib }}",
+                    "device_class": "data_size",
+                    "state_class": "total_increasing",
+                    "unit_of_measurement": "GiB",
+                    "suggested_display_precision": 3,
+                    "availability": traffic_availability,
+                    "availability_mode": "all",
+                },
+                "traffic_upload_total": {
+                    "platform": "sensor",
+                    "name": "Traffic upload total",
+                    "unique_id": f"{ENTITY_PREFIX}_traffic_upload_total",
+                    "default_entity_id": f"sensor.{ENTITY_PREFIX}_traffic_upload_total",
+                    "state_topic": TOPICS["traffic"],
+                    "value_template": "{{ value_json.upload_total_gib }}",
+                    "device_class": "data_size",
+                    "state_class": "total_increasing",
+                    "unit_of_measurement": "GiB",
+                    "suggested_display_precision": 3,
+                    "availability": traffic_availability,
+                    "availability_mode": "all",
+                },
+                "traffic_download_month": {
+                    "platform": "sensor",
+                    "name": "Traffic download this month",
+                    "unique_id": f"{ENTITY_PREFIX}_traffic_download_month",
+                    "default_entity_id": f"sensor.{ENTITY_PREFIX}_traffic_download_month",
+                    "state_topic": TOPICS["traffic"],
+                    "value_template": "{{ value_json.download_month_gib }}",
+                    "device_class": "data_size",
+                    "state_class": "total_increasing",
+                    "unit_of_measurement": "GiB",
+                    "suggested_display_precision": 3,
+                    "availability": traffic_availability,
+                    "availability_mode": "all",
+                },
+                "traffic_upload_month": {
+                    "platform": "sensor",
+                    "name": "Traffic upload this month",
+                    "unique_id": f"{ENTITY_PREFIX}_traffic_upload_month",
+                    "default_entity_id": f"sensor.{ENTITY_PREFIX}_traffic_upload_month",
+                    "state_topic": TOPICS["traffic"],
+                    "value_template": "{{ value_json.upload_month_gib }}",
+                    "device_class": "data_size",
+                    "state_class": "total_increasing",
+                    "unit_of_measurement": "GiB",
+                    "suggested_display_precision": 3,
+                    "availability": traffic_availability,
+                    "availability_mode": "all",
+                },
+                "traffic_history": {
+                    "platform": "sensor",
+                    "name": "Traffic history",
+                    "unique_id": f"{ENTITY_PREFIX}_traffic_history",
+                    "default_entity_id": f"sensor.{ENTITY_PREFIX}_traffic_history",
+                    "state_topic": TOPICS["traffic"],
+                    "value_template": "{{ value_json.history_count }}",
+                    "unit_of_measurement": "months",
+                    "json_attributes_topic": TOPICS["traffic"],
+                    "json_attributes_template": (
+                        "{{ {'month': value_json.month, "
+                        "'history': value_json.history, "
+                        "'updated_at': value_json.updated_at, "
+                        "'counter_resets': value_json.counter_resets, "
+                        "'source_changes': value_json.source_changes, "
+                        "'source': value_json.source} | tojson }}"
+                    ),
+                    "entity_category": "diagnostic",
+                    "icon": "mdi:chart-bar",
+                    "availability": traffic_availability,
+                    "availability_mode": "all",
+                },
+            }
+        )
+
+    if wan_enabled:
+        components["router_wan_status"] = {
+            "platform": "sensor",
+            "name": "Router WAN status",
+            "unique_id": f"{ENTITY_PREFIX}_router_wan_status",
+            "default_entity_id": f"sensor.{ENTITY_PREFIX}_router_wan_status",
+            "state_topic": TOPICS["traffic"],
+            "value_template": "{{ value_json.router.wan_status }}",
+            "entity_category": "diagnostic",
+            "icon": "mdi:wan",
+            "availability": optional_router_availability("wan_status"),
+            "availability_mode": "all",
+        }
+    if download_rate_enabled:
+        components["router_download_rate"] = {
+            "platform": "sensor",
+            "name": "Router download rate",
+            "unique_id": f"{ENTITY_PREFIX}_router_download_rate",
+            "default_entity_id": f"sensor.{ENTITY_PREFIX}_router_download_rate",
+            "state_topic": TOPICS["traffic"],
+            "value_template": "{{ value_json.router.download_rate_mbps }}",
+            "device_class": "data_rate",
+            "state_class": "measurement",
+            "unit_of_measurement": "Mbit/s",
+            "suggested_display_precision": 1,
+            "availability": optional_router_availability(
+                "download_rate_mbps"
+            ),
+            "availability_mode": "all",
+        }
+    if upload_rate_enabled:
+        components["router_upload_rate"] = {
+            "platform": "sensor",
+            "name": "Router upload rate",
+            "unique_id": f"{ENTITY_PREFIX}_router_upload_rate",
+            "default_entity_id": f"sensor.{ENTITY_PREFIX}_router_upload_rate",
+            "state_topic": TOPICS["traffic"],
+            "value_template": "{{ value_json.router.upload_rate_mbps }}",
+            "device_class": "data_rate",
+            "state_class": "measurement",
+            "unit_of_measurement": "Mbit/s",
+            "suggested_display_precision": 1,
+            "availability": optional_router_availability(
+                "upload_rate_mbps"
+            ),
+            "availability_mode": "all",
+        }
+
+    return {
+        "device": device,
+        "origin": {
+            "name": "DigitalHouses Internet App",
+            "sw_version": app_version,
+        },
+        "components": components,
+    }

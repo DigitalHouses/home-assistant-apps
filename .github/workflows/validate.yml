@@ -56,6 +56,41 @@ jobs:
       - name: Check shell syntax
         run: bash -n digitalhouses_speedtest/rootfs/run.sh
 
+  internet-app:
+    name: Internet App
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Compile Python
+        run: |
+          python -m compileall -q \
+            dh_internet_app/rootfs/app \
+            dh_internet_app/tests
+
+      - name: Run unit tests
+        run: python -m unittest discover -s dh_internet_app/tests -v
+
+      - name: Check shell syntax
+        run: bash -n dh_internet_app/rootfs/run.sh
+
+      - name: Build Internet App image
+        run: |
+          APP_VERSION="$(awk '$1 == "version:" {print $2; exit}' dh_internet_app/config.yaml)"
+          test -n "$APP_VERSION"
+          docker build \
+            --build-arg BUILD_VERSION="$APP_VERSION" \
+            --build-arg BUILD_ARCH=amd64 \
+            --tag digitalhouses-internet-ci:"$APP_VERSION" \
+            dh_internet_app
+
   recorder-app:
     name: Recorder App
     runs-on: ubuntu-latest

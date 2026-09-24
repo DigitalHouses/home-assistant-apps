@@ -35,6 +35,7 @@ Current applications:
 
 ```text
 digitalhouses_speedtest       -> haos_addon
+dh_internet_app               -> haos_addon
 digitalhouses_db_monitoring   -> haos_addon
 digitalhouses_backblaze       -> haos_addon
 ```
@@ -129,7 +130,8 @@ home-assistant-apps/
 │           ├── pve_agent.py
 │           ├── plex_agent.py
 │           ├── recorder_app.py
-│           └── speedtest_app.py
+│           ├── speedtest_app.py
+│           └── internet_app.py
 ├── <DigitalHouses application directories>/
 ├── repository.yaml
 ├── README.md

@@ -1,0 +1,445 @@
+# DigitalHouses Internet App — Home Assistant Sections dashboard
+# Requires Mushroom, mini-graph-card and auto-entities.
+
+title: Internet
+path: internet
+icon: mdi:web
+type: sections
+max_columns: 4
+
+sections:
+  - type: grid
+    cards:
+      - type: heading
+        heading: Internet Status
+        heading_style: title
+        icon: mdi:web
+
+      - type: custom:mushroom-template-card
+        entity: binary_sensor.dh_internet_app_internet
+        primary: >-
+          {% if is_state('binary_sensor.dh_internet_app_internet','on') %}
+            Internet Connected
+          {% elif is_state('binary_sensor.dh_internet_app_internet','off') %}
+            Internet Unavailable
+          {% else %}
+            Internet Status Unknown
+          {% endif %}
+        secondary: >-
+          {% set p = state_attr('sensor.dh_internet_app_speedtest_status','provider') %}
+          {% set ip = state_attr('sensor.dh_internet_app_speedtest_status','external_ip') %}
+          {{ p or 'Provider unknown' }}{% if ip %} · {{ ip }}{% endif %}
+        icon: >-
+          {{ 'mdi:check-network' if is_state('binary_sensor.dh_internet_app_internet','on') else 'mdi:network-off' }}
+        icon_color: >-
+          {% if is_state('binary_sensor.dh_internet_app_internet','on') %}
+            green
+          {% elif is_state('binary_sensor.dh_internet_app_internet','off') %}
+            red
+          {% else %}
+            grey
+          {% endif %}
+        multiline_secondary: true
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: 12
+
+      - type: custom:mushroom-chips-card
+        alignment: justify
+        chips:
+          - type: template
+            entity: binary_sensor.dh_internet_app_google_connectivity
+            icon: mdi:google
+            content: Google
+            icon_color: >-
+              {{ 'green' if is_state('binary_sensor.dh_internet_app_google_connectivity','on') else 'red' }}
+            tap_action:
+              action: more-info
+          - type: template
+            entity: binary_sensor.dh_internet_app_cloudflare_connectivity
+            icon: mdi:cloud-check
+            content: Cloudflare
+            icon_color: >-
+              {{ 'green' if is_state('binary_sensor.dh_internet_app_cloudflare_connectivity','on') else 'red' }}
+            tap_action:
+              action: more-info
+          - type: template
+            entity: binary_sensor.dh_internet_app_router_connectivity
+            icon: mdi:router-wireless
+            content: Router
+            icon_color: >-
+              {{ 'green' if is_state('binary_sensor.dh_internet_app_router_connectivity','on') else 'red' }}
+            tap_action:
+              action: more-info
+          - type: template
+            entity: sensor.dh_internet_app_speedtest_status
+            icon: mdi:speedometer
+            content: "{{ states('sensor.dh_internet_app_speedtest_status') }}"
+            icon_color: >-
+              {% if is_state('sensor.dh_internet_app_speedtest_status','success') %}
+                green
+              {% elif states('sensor.dh_internet_app_speedtest_status') in ['unknown','unavailable'] %}
+                grey
+              {% else %}
+                orange
+              {% endif %}
+            tap_action:
+              action: more-info
+
+      - type: heading
+        heading: Current Performance
+        heading_style: subtitle
+        icon: mdi:speedometer
+
+      - type: custom:mushroom-template-card
+        entity: sensor.dh_internet_app_download
+        primary: Download
+        secondary: "{{ states('sensor.dh_internet_app_download') }} Mbit/s"
+        icon: mdi:download-network
+        icon_color: >-
+          {{ 'red' if is_state('binary_sensor.dh_internet_app_low_download','on') else 'blue' }}
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: 6
+
+      - type: custom:mushroom-template-card
+        entity: sensor.dh_internet_app_upload
+        primary: Upload
+        secondary: "{{ states('sensor.dh_internet_app_upload') }} Mbit/s"
+        icon: mdi:upload-network
+        icon_color: >-
+          {{ 'red' if is_state('binary_sensor.dh_internet_app_low_upload','on') else 'blue' }}
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: 6
+
+      - type: custom:mushroom-template-card
+        entity: sensor.dh_internet_app_ping
+        primary: Ping
+        secondary: "{{ states('sensor.dh_internet_app_ping') }} ms"
+        icon: mdi:timer-outline
+        icon_color: >-
+          {{ 'red' if is_state('binary_sensor.dh_internet_app_high_ping','on') else 'green' }}
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: 6
+
+      - type: custom:mushroom-template-card
+        entity: sensor.dh_internet_app_jitter
+        primary: Jitter
+        secondary: "{{ states('sensor.dh_internet_app_jitter') }} ms"
+        icon: mdi:pulse
+        icon_color: blue
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: 6
+
+      - type: custom:mushroom-template-card
+        entity: sensor.dh_internet_app_packet_loss
+        primary: Packet Loss
+        secondary: "{{ states('sensor.dh_internet_app_packet_loss') }} %"
+        icon: mdi:package-variant-closed-remove
+        icon_color: >-
+          {{ 'orange' if states('sensor.dh_internet_app_packet_loss') | float(0) > 0 else 'green' }}
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: 6
+
+      - type: custom:mushroom-template-card
+        entity: sensor.dh_internet_app_speedtest_status
+        primary: Last Speedtest
+        secondary: >-
+          {% set t = state_attr('sensor.dh_internet_app_speedtest_status','tested_at') %}
+          {% set server = state_attr('sensor.dh_internet_app_speedtest_status','server') %}
+          {{ relative_time(as_datetime(t)) if t else 'No successful test' }}
+          {% if server %} · {{ server }}{% endif %}
+        icon: mdi:clock-check-outline
+        icon_color: blue
+        multiline_secondary: true
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: 6
+
+      - type: custom:mushroom-template-card
+        entity: button.dh_internet_app_run_speedtest
+        primary: Run Speedtest
+        secondary: Run Ookla test now
+        icon: mdi:speedometer
+        icon_color: blue
+        tap_action:
+          action: perform-action
+          perform_action: button.press
+          target:
+            entity_id: button.dh_internet_app_run_speedtest
+        grid_options:
+          columns: 6
+
+      - type: custom:mushroom-template-card
+        entity: button.dh_internet_app_refresh_servers
+        primary: Refresh Servers
+        secondary: >-
+          {{ states('sensor.dh_internet_app_available_servers') }} cached
+        icon: mdi:server-refresh
+        icon_color: blue
+        tap_action:
+          action: perform-action
+          perform_action: button.press
+          target:
+            entity_id: button.dh_internet_app_refresh_servers
+        grid_options:
+          columns: 6
+
+      - type: markdown
+        content: |
+          {% set rows = state_attr('sensor.dh_internet_app_recent_results','results') or [] %}
+          ## Recent Speedtests
+
+          | Date | Download | Upload | Ping |
+          |:--|--:|--:|--:|
+          {% for r in rows[:10] %}
+          {% set dt = as_datetime(r.get('tested_at')) %}
+          | {{ as_local(dt).strftime('%d.%m %H:%M') if dt else '—' }} | {{ r.get('download_mbps','—') }} | {{ r.get('upload_mbps','—') }} | {{ r.get('ping_ms','—') }} |
+          {% endfor %}
+
+  - type: grid
+    cards:
+      - type: heading
+        heading: Quality
+        heading_style: title
+        icon: mdi:tune-variant
+
+      - type: custom:mushroom-template-card
+        entity: binary_sensor.dh_internet_app_performance_problem
+        primary: >-
+          {% if is_state('binary_sensor.dh_internet_app_performance_problem','on') %}
+            Performance Problem
+          {% elif is_state('binary_sensor.dh_internet_app_performance_problem','off') %}
+            Connection Quality OK
+          {% else %}
+            Quality Status Unknown
+          {% endif %}
+        secondary: >-
+          ↓ {{ states('number.dh_internet_app_minimum_download') }} Mbit/s ·
+          ↑ {{ states('number.dh_internet_app_minimum_upload') }} Mbit/s ·
+          Ping ≤ {{ states('number.dh_internet_app_maximum_ping') }} ms
+        icon: >-
+          {{ 'mdi:alert-circle' if is_state('binary_sensor.dh_internet_app_performance_problem','on') else 'mdi:check-circle' }}
+        icon_color: >-
+          {{ 'red' if is_state('binary_sensor.dh_internet_app_performance_problem','on') else 'green' }}
+        multiline_secondary: true
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: 12
+
+      - type: custom:mushroom-number-card
+        entity: number.dh_internet_app_minimum_download
+        name: Minimum Download
+        icon: mdi:download-network
+        display_mode: buttons
+        grid_options:
+          columns: 6
+
+      - type: custom:mushroom-number-card
+        entity: number.dh_internet_app_minimum_upload
+        name: Minimum Upload
+        icon: mdi:upload-network
+        display_mode: buttons
+        grid_options:
+          columns: 6
+
+      - type: custom:mushroom-number-card
+        entity: number.dh_internet_app_maximum_ping
+        name: Maximum Ping
+        icon: mdi:timer-outline
+        display_mode: buttons
+        grid_options:
+          columns: 12
+
+      - type: custom:mini-graph-card
+        name: Download — 24 hours
+        entities:
+          - sensor.dh_internet_app_download
+        hours_to_show: 24
+        points_per_hour: 2
+        line_width: 2
+        height: 90
+        show:
+          points: false
+          extrema: true
+        grid_options:
+          columns: 6
+
+      - type: custom:mini-graph-card
+        name: Upload — 24 hours
+        entities:
+          - sensor.dh_internet_app_upload
+        hours_to_show: 24
+        points_per_hour: 2
+        line_width: 2
+        height: 90
+        show:
+          points: false
+          extrema: true
+        grid_options:
+          columns: 6
+
+  - type: grid
+    cards:
+      - type: heading
+        heading: Availability
+        heading_style: title
+        icon: mdi:network-outline
+
+      - type: custom:mushroom-template-card
+        entity: sensor.dh_internet_app_availability_month
+        primary: This Month
+        secondary: >-
+          {{ states('sensor.dh_internet_app_availability_month') }}% ·
+          {{ states('sensor.dh_internet_app_outages_month') }} outages ·
+          {{ state_attr('sensor.dh_internet_app_outages_month','total_duration') or '00:00' }} offline
+        icon: mdi:percent-circle-outline
+        icon_color: green
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: 12
+
+      - type: markdown
+        content: |
+          {% set outages = state_attr('sensor.dh_internet_app_outages_month', 'outages') or [] %}
+          {% set rows = outages | reverse | list %}
+          ## Internet outages — last 10
+
+          | # | From | To | Duration |
+          |:--:|:--|:--|--:|
+          {% for r in rows[:10] %}
+          {% set f = as_datetime(r.get('from')) %}
+          {% set t = as_datetime(r.get('to')) if r.get('to') else none %}
+          | {{ loop.index }} | {{ as_local(f).strftime('%d.%m %H:%M:%S') if f else '—' }} | {{ as_local(t).strftime('%d.%m %H:%M:%S') if t else 'now' }} | {{ r.get('duration','—') }} |
+          {% endfor %}
+
+          **Total this month:** {{ state_attr('sensor.dh_internet_app_outages_month','total_duration') or '00:00' }}
+
+      - type: custom:auto-entities
+        show_empty: false
+        card:
+          type: entities
+          title: Router telemetry
+        filter:
+          include:
+            - entity_id: sensor.dh_internet_app_router_wan_status
+            - entity_id: sensor.dh_internet_app_router_download_rate
+            - entity_id: sensor.dh_internet_app_router_upload_rate
+          exclude:
+            - state: "unavailable"
+            - state: "unknown"
+
+      - type: custom:auto-entities
+        show_empty: false
+        card:
+          type: entities
+          title: Traffic
+        filter:
+          include:
+            - entity_id: sensor.dh_internet_app_traffic_download_month
+            - entity_id: sensor.dh_internet_app_traffic_upload_month
+            - entity_id: sensor.dh_internet_app_traffic_download_total
+            - entity_id: sensor.dh_internet_app_traffic_upload_total
+          exclude:
+            - state: "unavailable"
+            - state: "unknown"
+
+      - type: conditional
+        conditions:
+          - condition: numeric_state
+            entity: sensor.dh_internet_app_traffic_history
+            above: -1
+        card:
+          type: markdown
+          content: |
+            {% set rows = state_attr('sensor.dh_internet_app_traffic_history','history') or [] %}
+            ## Traffic history
+
+            | Month | Download | Upload | Total |
+            |:--|--:|--:|--:|
+            {% for r in rows | reverse %}
+            | {{ r.get('month','—') }} | {{ r.get('download_gib','—') }} GiB | {{ r.get('upload_gib','—') }} GiB | {{ r.get('total_gib','—') }} GiB |
+            {% endfor %}
+
+  - type: grid
+    cards:
+      - type: heading
+        heading: Recovery & Diagnostics
+        heading_style: title
+        icon: mdi:auto-fix
+
+      - type: custom:mushroom-template-card
+        entity: sensor.dh_internet_app_recovery_state
+        primary: Recovery
+        secondary: >-
+          {{ states('sensor.dh_internet_app_recovery_state') }} ·
+          cycle {{ states('sensor.dh_internet_app_recovery_cycle') }} ·
+          {{ states('sensor.dh_internet_app_recovery_countdown') }} s
+        icon: mdi:auto-fix
+        icon_color: >-
+          {{ 'orange' if states('sensor.dh_internet_app_recovery_state') not in ['idle','disabled'] else 'green' }}
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: 12
+
+      - type: custom:mushroom-template-card
+        entity: button.dh_internet_app_recovery_stop
+        primary: Stop Recovery
+        secondary: Stop further attempts for this outage
+        icon: mdi:stop-circle-outline
+        icon_color: red
+        tap_action:
+          action: perform-action
+          perform_action: button.press
+          target:
+            entity_id: button.dh_internet_app_recovery_stop
+        grid_options:
+          columns: 12
+
+      - type: custom:mushroom-template-card
+        entity: sensor.dh_internet_app_problems
+        primary: Problems
+        secondary: >-
+          {% set p = state_attr('sensor.dh_internet_app_problems','problems') or [] %}
+          {{ p | join(', ') if p else 'No active problems' }}
+        icon: >-
+          {{ 'mdi:alert-circle' if states('sensor.dh_internet_app_problems') | int(0) > 0 else 'mdi:check-circle' }}
+        icon_color: >-
+          {{ 'red' if states('sensor.dh_internet_app_problems') | int(0) > 0 else 'green' }}
+        multiline_secondary: true
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: 12
+
+      - type: custom:mushroom-chips-card
+        alignment: justify
+        chips:
+          - type: template
+            entity: sensor.dh_internet_app_version
+            icon: mdi:package-variant-closed
+            content: "App {{ states('sensor.dh_internet_app_version') }}"
+            tap_action:
+              action: more-info
+          - type: template
+            entity: sensor.dh_internet_app_started_at
+            icon: mdi:clock-start
+            content: >-
+              {% set t = states('sensor.dh_internet_app_started_at') %}
+              {{ relative_time(as_datetime(t)) if t not in ['unknown','unavailable'] else 'unknown' }}
+            tap_action:
+              action: more-info

@@ -1,0 +1,88 @@
+name: DigitalHouses Internet App
+version: 0.1.0
+slug: digitalhouses_internet
+description: Internet availability, Ookla Speedtest, traffic accounting and automatic ONT/router recovery through MQTT Discovery.
+url: https://github.com/DigitalHouses/home-assistant-apps/tree/main/dh_internet_app
+arch:
+  - amd64
+  - aarch64
+startup: application
+boot: auto
+init: false
+stage: experimental
+backup: hot
+timeout: 45
+hassio_api: true
+hassio_role: default
+homeassistant_api: true
+services:
+  - mqtt:need
+options:
+  router_ip: "192.168.1.1"
+  connectivity_check:
+    interval_seconds: 10
+    attempts: 3
+    timeout_seconds: 2
+  speedtest:
+    periodic_enabled: true
+    interval_minutes: 30
+    timeout_seconds: 240
+    server_ids: []
+    automatic_server_fallback: true
+  traffic:
+    traffic_download_total: ""
+    traffic_upload_total: ""
+    router_wan_status: ""
+    router_download_rate: ""
+    router_upload_rate: ""
+  recovery:
+    enabled: false
+    mode: smart
+    max_cycles: 3
+    retry_interval_minutes: 5
+    boot_wait_minutes: 3
+    cooldown_minutes: 15
+    ont:
+      action: switch
+      entity_id: ""
+      power_off_seconds: 10
+    router:
+      action: switch
+      entity_id: ""
+      power_off_seconds: 10
+  log_level: info
+schema:
+  router_ip: str
+  connectivity_check:
+    interval_seconds: int(5,3600)
+    attempts: int(1,10)
+    timeout_seconds: int(1,30)
+  speedtest:
+    periodic_enabled: bool
+    interval_minutes: int(5,720)
+    timeout_seconds: int(30,600)
+    server_ids:
+      - int
+    automatic_server_fallback: bool
+  traffic:
+    traffic_download_total: str
+    traffic_upload_total: str
+    router_wan_status: str
+    router_download_rate: str
+    router_upload_rate: str
+  recovery:
+    enabled: bool
+    mode: list(smart|both)
+    max_cycles: int(1,10)
+    retry_interval_minutes: int(1,60)
+    boot_wait_minutes: int(1,30)
+    cooldown_minutes: int(1,1440)
+    ont:
+      action: list(button|switch)
+      entity_id: str
+      power_off_seconds: int(1,120)
+    router:
+      action: list(button|switch)
+      entity_id: str
+      power_off_seconds: int(1,120)
+  log_level: list(debug|info|warning|error)

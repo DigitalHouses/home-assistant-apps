@@ -13,6 +13,7 @@ Open-source applications and Linux agents by **DigitalHouses**, built to extend 
 | [DigitalHouses Plex Agent](digitalhouses_plex_monitoring/README.md) | Linux agent | Plex workload, playback, transcoding, and library monitoring |
 | [DigitalHouses Recorder App](digitalhouses_db_monitoring/README.md) | Home Assistant App | Home Assistant Recorder database size, depth, write activity, and database diagnostics |
 | [DigitalHouses Backblaze](digitalhouses_backblaze/README.md) | Home Assistant App | Backblaze B2 account totals and per-bucket storage usage through MQTT Discovery |
+| [DigitalHouses Internet App](dh_internet_app/README.md) | Home Assistant App | Internet availability, outage history, and automatic ONT/router recovery |
 | [DigitalHouses Speedtest App](digitalhouses_speedtest/README.md) | Home Assistant App | Internet availability, Ookla speed tests, and connection-quality monitoring |
 
 DigitalHouses uses two delivery models:

@@ -1,0 +1,106 @@
+configuration:
+  router_ip:
+    name: IP роутера
+    description: LAN IP для различения сбоя роутера и внешней проблемы Internet/ONT.
+  connectivity_check:
+    name: Проверка соединения
+    description: Параметры проверки Internet и роутера.
+    fields:
+      interval_seconds:
+        name: Интервал проверки, с
+        description: Пауза между обычными проверками соединения.
+      attempts:
+        name: Неудачных проверок
+        description: Сколько подряд проверок Internet должны завершиться ошибкой до начала инцидента.
+      timeout_seconds:
+        name: Таймаут ping, с
+        description: Таймаут одной проверки доступности.
+  speedtest:
+    name: Speedtest
+    description: Расписание, таймаут и выбор серверов Ookla Speedtest.
+    fields:
+      periodic_enabled:
+        name: Периодический Speedtest
+        description: Автоматически запускать Ookla Speedtest по заданному интервалу.
+      interval_minutes:
+        name: Интервал Speedtest, мин
+        description: Минут между автоматическими тестами.
+      timeout_seconds:
+        name: Таймаут Speedtest, с
+        description: Максимальное время одной попытки Ookla Speedtest.
+      server_ids:
+        name: Предпочтительные server ID
+        description: Упорядоченный список Ookla server ID. Пусто — автоматический выбор.
+      automatic_server_fallback:
+        name: Автоматический fallback
+        description: После ошибок выбранных серверов выполнить одну попытку автоматического выбора.
+  traffic:
+    name: Телеметрия роутера
+    description: Опциональные HA-привязки роутера и учёта трафика.
+    fields:
+      traffic_download_total:
+        name: Накопительный Download
+        description: Накопительный sensor Download. Заполняется вместе с Upload или оба поля пустые.
+      traffic_upload_total:
+        name: Накопительный Upload
+        description: Накопительный sensor Upload. Заполняется вместе с Download или оба поля пустые.
+      router_wan_status:
+        name: WAN status
+        description: Опциональный sensor или binary_sensor состояния WAN роутера.
+      router_download_rate:
+        name: Текущий Download
+        description: Опциональный sensor текущей скорости Download роутера.
+      router_upload_rate:
+        name: Текущий Upload
+        description: Опциональный sensor текущей скорости Upload роутера.
+  recovery:
+    name: Восстановление
+    description: Автоматическое восстановление ONT и роутера. По умолчанию выключено.
+    fields:
+      enabled:
+        name: Включить Recovery
+        description: Разрешить App выполнять настроенные действия восстановления ONT и роутера.
+      mode:
+        name: Режим Recovery
+        description: smart перезагружает проблемный элемент; both всегда выполняет ONT, затем Router.
+      max_cycles:
+        name: Максимум циклов
+        description: Число циклов восстановления до перехода в cooldown.
+      retry_interval_minutes:
+        name: Интервал повтора, мин
+        description: Пауза до следующего цикла, если Internet всё ещё недоступен.
+      boot_wait_minutes:
+        name: Ожидание загрузки, мин
+        description: Пауза на стабилизацию после каждого цикла восстановления.
+      cooldown_minutes:
+        name: Cooldown, мин
+        description: Пауза после максимума циклов перед возможной новой серией.
+      ont:
+        name: Recovery ONT
+        description: HA button или switch для восстановления ONT.
+        fields:
+          action:
+            name: Действие ONT
+            description: button нажимает reboot entity; switch выполняет power-cycle.
+          entity_id:
+            name: Entity ONT
+            description: button.* или switch.* в соответствии с выбранным действием.
+          power_off_seconds:
+            name: ONT выключен, с
+            description: Только для switch — сколько держать питание выключенным.
+      router:
+        name: Recovery Router
+        description: HA button или switch для восстановления роутера.
+        fields:
+          action:
+            name: Действие Router
+            description: button нажимает reboot entity; switch выполняет power-cycle.
+          entity_id:
+            name: Entity Router
+            description: button.* или switch.* в соответствии с выбранным действием.
+          power_off_seconds:
+            name: Router выключен, с
+            description: Только для switch — сколько держать питание выключенным.
+  log_level:
+    name: Уровень логирования
+    description: Подробность логов приложения.
