@@ -43,6 +43,7 @@ RUN apk add --no-cache \
     echo "${OOKLA_SHA256} /tmp/ookla-speedtest.tgz" | sha256sum -c -; \
     tar -xzf /tmp/ookla-speedtest.tgz -C /tmp speedtest; \
     install -m 0755 /tmp/speedtest /usr/local/bin/speedtest; \
+    /usr/local/bin/speedtest --version; \
     rm -f /tmp/speedtest /tmp/ookla-speedtest.tgz
 
 COPY rootfs /
