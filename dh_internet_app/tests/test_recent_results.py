@@ -19,6 +19,16 @@ from recent_results import (
 
 
 class RecentResultsTests(unittest.TestCase):
+    def test_payload_does_not_change_updated_at_on_publish(self) -> None:
+        store = {
+            "results": [{"tested_at": "2026-09-23T10:00:00+00:00"}],
+            "updated_at": "2026-09-23T10:00:01+00:00",
+        }
+        first = recent_results_payload(store)
+        second = recent_results_payload(store)
+        self.assertEqual(first["updated_at"], "2026-09-23T10:00:01+00:00")
+        self.assertEqual(second["updated_at"], first["updated_at"])
+
     def test_record_keeps_thresholds_at_test_time(self) -> None:
         record = build_recent_record(
             {
@@ -58,6 +68,7 @@ class RecentResultsTests(unittest.TestCase):
             store = append_recent_result(store, record)
         self.assertEqual(len(store["results"]), RECENT_RESULTS_LIMIT)
         self.assertEqual(store["results"][0]["result_url"], "https://example/22")
+        self.assertIsNotNone(store["updated_at"])
 
         store = append_recent_result(
             store,
@@ -72,12 +83,19 @@ class RecentResultsTests(unittest.TestCase):
     def test_round_trip(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "recent.json"
-            store = {"results": [{"tested_at": "2026-09-23T10:00:00+00:00"}]}
+            store = {
+                "results": [{"tested_at": "2026-09-23T10:00:00+00:00"}],
+                "updated_at": "2026-09-23T10:00:01+00:00",
+            }
             save_recent_results(path, store)
             loaded = load_recent_results(path)
             payload = recent_results_payload(loaded)
             self.assertEqual(payload["count"], 1)
             self.assertEqual(payload["limit"], RECENT_RESULTS_LIMIT)
+            self.assertEqual(
+                payload["updated_at"],
+                "2026-09-23T10:00:01+00:00",
+            )
 
 
 if __name__ == "__main__":
