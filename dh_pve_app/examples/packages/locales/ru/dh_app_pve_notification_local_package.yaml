@@ -2,7 +2,8 @@
 # DigitalHouses PVE local notifications — Russian site package
 # =============================================================================
 # Machine events come from dh_pve_app.
-# User rule: find the trigger.id you need and edit only title/message below it.
+# Find the trigger.id you need and edit only title/message below it.
+# Event payload already contains the measurements captured for that event.
 # Flow: machine event -> trigger.id -> choose -> direct action.
 # =============================================================================
 
@@ -12,35 +13,137 @@ dh_app_pve_notification_local_package:
     - id: dh_app_pve_notifications
       alias: DH PVE · Notifications
       mode: queued
-      max: 50
+      max: 60
 
       triggers:
-        # PVE: generic problem lifecycle
+        # PVE semantic events
+        # Высокая температура CPU
         - trigger: event.received
           target:
             entity_id: event.dh_app_pve_diagnostic
           options:
             event_type:
-              - problem_started
-          id: problem_started
+              - cpu_temperature_high
+          id: cpu_temperature_high
 
+        # Температура CPU вернулась в норму
         - trigger: event.received
           target:
             entity_id: event.dh_app_pve_diagnostic
           options:
             event_type:
-              - problem_updated
-          id: problem_updated
+              - cpu_temperature_normal
+          id: cpu_temperature_normal
 
+        # CPU throttling обнаружен
         - trigger: event.received
           target:
             entity_id: event.dh_app_pve_diagnostic
           options:
             event_type:
-              - problem_recovered
-          id: problem_recovered
+              - cpu_throttling_started
+          id: cpu_throttling_started
 
-        # UPS: explicit user-semantic events
+        # CPU throttling прекратился
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_diagnostic
+          options:
+            event_type:
+              - cpu_throttling_cleared
+          id: cpu_throttling_cleared
+
+        # Хранилище превысило порог заполнения
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_diagnostic
+          options:
+            event_type:
+              - storage_usage_high
+          id: storage_usage_high
+
+        # Заполнение хранилища вернулось в норму
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_diagnostic
+          options:
+            event_type:
+              - storage_usage_normal
+          id: storage_usage_normal
+
+        # Высокая температура диска
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_diagnostic
+          options:
+            event_type:
+              - disk_temperature_high
+          id: disk_temperature_high
+
+        # Температура диска вернулась в норму
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_diagnostic
+          options:
+            event_type:
+              - disk_temperature_normal
+          id: disk_temperature_normal
+
+        # Высокая температура GPU
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_diagnostic
+          options:
+            event_type:
+              - gpu_temperature_high
+          id: gpu_temperature_high
+
+        # Температура GPU вернулась в норму
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_diagnostic
+          options:
+            event_type:
+              - gpu_temperature_normal
+          id: gpu_temperature_normal
+
+        # Не удалось восстановить управление вентилятором
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_diagnostic
+          options:
+            event_type:
+              - fan_control_restore_failed
+          id: fan_control_restore_failed
+
+        # Управление вентилятором восстановлено
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_diagnostic
+          options:
+            event_type:
+              - fan_control_restored
+          id: fan_control_restored
+
+        # SMART диска сообщил проблему
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_diagnostic
+          options:
+            event_type:
+              - disk_smart_failed
+          id: disk_smart_failed
+
+        # SMART диска вернулся в норму
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_diagnostic
+          options:
+            event_type:
+              - disk_smart_restored
+          id: disk_smart_restored
+
+        # UPS semantic events
         # NUT недоступен
         - trigger: event.received
           target:
@@ -113,7 +216,7 @@ dh_app_pve_notification_local_package:
               - low_battery_cleared
           id: low_battery_cleared
 
-        # Высокое напряжение батареи
+        # Высокий уровень батареи
         - trigger: event.received
           target:
             entity_id: event.dh_app_pve_ups_diagnostic
@@ -122,7 +225,7 @@ dh_app_pve_notification_local_package:
               - high_battery_started
           id: high_battery_started
 
-        # Высокий уровень снят
+        # HIGH BATTERY снят
         - trigger: event.received
           target:
             entity_id: event.dh_app_pve_ups_diagnostic
@@ -293,7 +396,7 @@ dh_app_pve_notification_local_package:
               - alarm_cleared
           id: alarm_cleared
 
-        # battery_discharge_level_crossed
+        # Батарея пересекла очередной уровень разряда
         - trigger: event.received
           target:
             entity_id: event.dh_app_pve_ups_diagnostic
@@ -302,7 +405,7 @@ dh_app_pve_notification_local_package:
               - battery_discharge_level_crossed
           id: battery_discharge_level_crossed
 
-        # battery_fully_charged
+        # Батарея полностью заряжена
         - trigger: event.received
           target:
             entity_id: event.dh_app_pve_ups_diagnostic
@@ -311,7 +414,7 @@ dh_app_pve_notification_local_package:
               - battery_fully_charged
           id: battery_fully_charged
 
-        # shutdown_committed
+        # PVE Agent начал аварийное выключение
         - trigger: event.received
           target:
             entity_id: event.dh_app_pve_ups_diagnostic
@@ -320,7 +423,7 @@ dh_app_pve_notification_local_package:
               - shutdown_committed
           id: shutdown_committed
 
-        # config_changed
+        # Изменены параметры UPS Trigger
         - trigger: event.received
           target:
             entity_id: event.dh_app_pve_ups_diagnostic
@@ -333,38 +436,173 @@ dh_app_pve_notification_local_package:
 
       actions:
         - choose:
-            # PVE: problem_started
+            # Высокая температура CPU
             - conditions:
                 - condition: trigger
                   id:
-                    - problem_started
+                    - cpu_temperature_high
               sequence:
                 - action: script.write2log
                   data:
-                    title: "🖥️⚠️ {{ trigger.to_state.attributes.object_name }}: обнаружена проблема"
-                    message: "{{ trigger.to_state.attributes.metric }}: {{ trigger.to_state.attributes.current.value }}"
+                    title: "🌡️⚠️ PVE: высокая температура CPU"
+                    message: >-
+                      Температура: {{ trigger.to_state.attributes.temperature_c | default('—', true) }} °C · среднее: {{ trigger.to_state.attributes.average_temperature_c | default('—', true) }} °C · порог: {{ trigger.to_state.attributes.threshold_c | default('—', true) }} °C · частота: {{ trigger.to_state.attributes.cpu_frequency_mhz | default('—', true) }} MHz · загрузка: {{ trigger.to_state.attributes.cpu_usage_percent | default('—', true) }}%.
 
-            # PVE: problem_updated
+            # Температура CPU вернулась в норму
             - conditions:
                 - condition: trigger
                   id:
-                    - problem_updated
+                    - cpu_temperature_normal
               sequence:
                 - action: script.write2log
                   data:
-                    title: "🖥️⚠️ {{ trigger.to_state.attributes.object_name }}: параметры проблемы изменились"
-                    message: "{{ trigger.to_state.attributes.metric }}: {{ trigger.to_state.attributes.current.value }}"
+                    title: "🌡️✅ PVE: температура CPU в норме"
+                    message: >-
+                      Температура: {{ trigger.to_state.attributes.temperature_c | default('—', true) }} °C · среднее: {{ trigger.to_state.attributes.average_temperature_c | default('—', true) }} °C · порог: {{ trigger.to_state.attributes.threshold_c | default('—', true) }} °C.
 
-            # PVE: problem_recovered
+            # CPU throttling обнаружен
             - conditions:
                 - condition: trigger
                   id:
-                    - problem_recovered
+                    - cpu_throttling_started
               sequence:
                 - action: script.write2log
                   data:
-                    title: "🖥️✅ {{ trigger.to_state.attributes.object_name }}: состояние нормализовалось"
-                    message: "{{ trigger.to_state.attributes.metric }}: {{ trigger.to_state.attributes.current.value }}"
+                    title: "⚙️⚠️ PVE: CPU throttling"
+                    message: >-
+                      Обнаружен CPU throttling. Температура: {{ trigger.to_state.attributes.temperature_c | default('—', true) }} °C · частота: {{ trigger.to_state.attributes.cpu_frequency_mhz | default('—', true) }} MHz · загрузка: {{ trigger.to_state.attributes.cpu_usage_percent | default('—', true) }}%.
+
+            # CPU throttling прекратился
+            - conditions:
+                - condition: trigger
+                  id:
+                    - cpu_throttling_cleared
+              sequence:
+                - action: script.write2log
+                  data:
+                    title: "⚙️✅ PVE: CPU throttling прекратился"
+                    message: >-
+                      Температура: {{ trigger.to_state.attributes.temperature_c | default('—', true) }} °C · частота: {{ trigger.to_state.attributes.cpu_frequency_mhz | default('—', true) }} MHz · загрузка: {{ trigger.to_state.attributes.cpu_usage_percent | default('—', true) }}%.
+
+            # Хранилище превысило порог заполнения
+            - conditions:
+                - condition: trigger
+                  id:
+                    - storage_usage_high
+              sequence:
+                - action: script.write2log
+                  data:
+                    title: "💾⚠️ PVE: заполнение хранилища {{ trigger.to_state.attributes.object_name }}"
+                    message: >-
+                      Заполнено: {{ trigger.to_state.attributes.used_percent | default('—', true) }}% · среднее: {{ trigger.to_state.attributes.average_used_percent | default('—', true) }}% · порог: {{ trigger.to_state.attributes.threshold_percent | default('—', true) }}% · свободно: {{ trigger.to_state.attributes.available_gib | default('—', true) }} GiB из {{ trigger.to_state.attributes.total_gib | default('—', true) }} GiB.
+
+            # Заполнение хранилища вернулось в норму
+            - conditions:
+                - condition: trigger
+                  id:
+                    - storage_usage_normal
+              sequence:
+                - action: script.write2log
+                  data:
+                    title: "💾✅ PVE: хранилище {{ trigger.to_state.attributes.object_name }} в норме"
+                    message: >-
+                      Заполнено: {{ trigger.to_state.attributes.used_percent | default('—', true) }}% · порог: {{ trigger.to_state.attributes.threshold_percent | default('—', true) }}% · свободно: {{ trigger.to_state.attributes.available_gib | default('—', true) }} GiB.
+
+            # Высокая температура диска
+            - conditions:
+                - condition: trigger
+                  id:
+                    - disk_temperature_high
+              sequence:
+                - action: script.write2log
+                  data:
+                    title: "🌡️⚠️ PVE: высокая температура {{ trigger.to_state.attributes.object_name }}"
+                    message: >-
+                      Температура: {{ trigger.to_state.attributes.temperature_c | default('—', true) }} °C · среднее: {{ trigger.to_state.attributes.average_temperature_c | default('—', true) }} °C · порог: {{ trigger.to_state.attributes.threshold_c | default('—', true) }} °C · тип: {{ trigger.to_state.attributes.disk_type | default('—', true) }} · устройство: {{ trigger.to_state.attributes.device_path | default('—', true) }}.
+
+            # Температура диска вернулась в норму
+            - conditions:
+                - condition: trigger
+                  id:
+                    - disk_temperature_normal
+              sequence:
+                - action: script.write2log
+                  data:
+                    title: "🌡️✅ PVE: температура {{ trigger.to_state.attributes.object_name }} в норме"
+                    message: >-
+                      Температура: {{ trigger.to_state.attributes.temperature_c | default('—', true) }} °C · порог: {{ trigger.to_state.attributes.threshold_c | default('—', true) }} °C.
+
+            # Высокая температура GPU
+            - conditions:
+                - condition: trigger
+                  id:
+                    - gpu_temperature_high
+              sequence:
+                - action: script.write2log
+                  data:
+                    title: "🎮🌡️⚠️ PVE: высокая температура {{ trigger.to_state.attributes.object_name }}"
+                    message: >-
+                      Температура: {{ trigger.to_state.attributes.temperature_c | default('—', true) }} °C · среднее: {{ trigger.to_state.attributes.average_temperature_c | default('—', true) }} °C · порог: {{ trigger.to_state.attributes.threshold_c | default('—', true) }} °C · владелец: {{ trigger.to_state.attributes.owner | default('—', true) }}.
+
+            # Температура GPU вернулась в норму
+            - conditions:
+                - condition: trigger
+                  id:
+                    - gpu_temperature_normal
+              sequence:
+                - action: script.write2log
+                  data:
+                    title: "🎮🌡️✅ PVE: температура {{ trigger.to_state.attributes.object_name }} в норме"
+                    message: >-
+                      Температура: {{ trigger.to_state.attributes.temperature_c | default('—', true) }} °C · порог: {{ trigger.to_state.attributes.threshold_c | default('—', true) }} °C.
+
+            # Не удалось восстановить управление вентилятором
+            - conditions:
+                - condition: trigger
+                  id:
+                    - fan_control_restore_failed
+              sequence:
+                - action: script.write2log
+                  data:
+                    title: "🌀❌ PVE: не восстановлено управление {{ trigger.to_state.attributes.object_name }}"
+                    message: >-
+                      Статус: {{ trigger.to_state.attributes.calibration_status | default('—', true) }} · скорость: {{ trigger.to_state.attributes.rpm | default('—', true) }} RPM.
+
+            # Управление вентилятором восстановлено
+            - conditions:
+                - condition: trigger
+                  id:
+                    - fan_control_restored
+              sequence:
+                - action: script.write2log
+                  data:
+                    title: "🌀✅ PVE: управление {{ trigger.to_state.attributes.object_name }} восстановлено"
+                    message: >-
+                      Статус: {{ trigger.to_state.attributes.calibration_status | default('—', true) }} · скорость: {{ trigger.to_state.attributes.rpm | default('—', true) }} RPM.
+
+            # SMART диска сообщил проблему
+            - conditions:
+                - condition: trigger
+                  id:
+                    - disk_smart_failed
+              sequence:
+                - action: script.write2log
+                  data:
+                    title: "💾🔴 PVE: SMART CRITICAL {{ trigger.to_state.attributes.object_name }}"
+                    message: >-
+                      {% set reasons = trigger.to_state.attributes.health_reasons | default([], true) %}SMART: FAILED{% if reasons %} · причина: {{ reasons | join(', ') }}{% endif %} · температура: {{ trigger.to_state.attributes.temperature_c | default('—', true) }} °C · износ: {{ trigger.to_state.attributes.wear_used_percent | default('—', true) }}% · media errors: {{ trigger.to_state.attributes.media_errors | default('—', true) }} · unsafe shutdowns: {{ trigger.to_state.attributes.unsafe_shutdowns | default('—', true) }} · CRC errors: {{ trigger.to_state.attributes.crc_errors | default('—', true) }}.
+
+            # SMART диска вернулся в норму
+            - conditions:
+                - condition: trigger
+                  id:
+                    - disk_smart_restored
+              sequence:
+                - action: script.write2log
+                  data:
+                    title: "💾✅ PVE: SMART {{ trigger.to_state.attributes.object_name }} в норме"
+                    message: >-
+                      SMART снова в нормальном состоянии · температура: {{ trigger.to_state.attributes.temperature_c | default('—', true) }} °C · износ: {{ trigger.to_state.attributes.wear_used_percent | default('—', true) }}%.
 
             # NUT недоступен
             - conditions:
@@ -375,7 +613,8 @@ dh_app_pve_notification_local_package:
                 - action: script.write2log
                   data:
                     title: "🔋❌ UPS: NUT недоступен"
-                    message: "Нет связи с UPS через NUT."
+                    message: >-
+                      Нет связи с UPS через NUT.
 
             # NUT снова доступен
             - conditions:
@@ -386,7 +625,8 @@ dh_app_pve_notification_local_package:
                 - action: script.write2log
                   data:
                     title: "🔋✅ UPS: связь с NUT восстановлена"
-                    message: "Мониторинг UPS снова доступен."
+                    message: >-
+                      Мониторинг UPS снова доступен · заряд: {{ trigger.to_state.attributes.battery_charge_percent | default('—', true) }}% · нагрузка: {{ trigger.to_state.attributes.load_percent | default('—', true) }}% · вход: {{ trigger.to_state.attributes.input_voltage_v | default('—', true) }} В.
 
             # Состояние питания неизвестно
             - conditions:
@@ -397,7 +637,8 @@ dh_app_pve_notification_local_package:
                 - action: script.write2log
                   data:
                     title: "🔋⚠️ UPS: состояние питания неизвестно"
-                    message: "Нельзя определить, работает UPS от сети или батареи."
+                    message: >-
+                      Нельзя определить источник питания · вход: {{ trigger.to_state.attributes.input_voltage_v | default('—', true) }} В · выход: {{ trigger.to_state.attributes.output_voltage_v | default('—', true) }} В · заряд: {{ trigger.to_state.attributes.battery_charge_percent | default('—', true) }}%.
 
             # Состояние питания снова известно
             - conditions:
@@ -408,7 +649,8 @@ dh_app_pve_notification_local_package:
                 - action: script.write2log
                   data:
                     title: "🔋✅ UPS: состояние питания определено"
-                    message: "UPS снова сообщает корректное состояние питания."
+                    message: >-
+                      UPS снова сообщает корректное состояние питания · вход: {{ trigger.to_state.attributes.input_voltage_v | default('—', true) }} В · заряд: {{ trigger.to_state.attributes.battery_charge_percent | default('—', true) }}%.
 
             # Пропало городское питание
             - conditions:
@@ -419,7 +661,8 @@ dh_app_pve_notification_local_package:
                 - action: script.write2log
                   data:
                     title: "🔌⚠️ Электричество отключено"
-                    message: "UPS перешёл на батарею."
+                    message: >-
+                      {% set r = trigger.to_state.attributes.battery_runtime_seconds | default(none) %}{% if r is number %}{% set rs = r | int %}{% set rh = rs // 3600 %}{% set rm = (rs % 3600) // 60 %}{% endif %}UPS перешёл на батарею · заряд: {{ trigger.to_state.attributes.battery_charge_percent | default('—', true) }}%{% if r is number %} · оставшееся время: {{ '%d:%02d' | format(rh, rm) }}{% endif %} · нагрузка: {{ trigger.to_state.attributes.load_percent | default('—', true) }}%.
 
             # Городское питание восстановлено
             - conditions:
@@ -430,7 +673,8 @@ dh_app_pve_notification_local_package:
                 - action: script.write2log
                   data:
                     title: "🔌✅ Электричество восстановлено"
-                    message: "UPS вернулся к работе от сети."
+                    message: >-
+                      {% set d = trigger.to_state.attributes.outage_duration_seconds | default(none) %}{% if d is number %}{% set ds = d | int %}{% set dh = ds // 3600 %}{% set dm = (ds % 3600) // 60 %}{% set dsec = ds % 60 %}{% endif %}UPS вернулся к работе от сети{% if d is number %} · перерыв: {{ '%02d:%02d:%02d' | format(dh, dm, dsec) }}{% endif %} · заряд: {{ trigger.to_state.attributes.battery_charge_percent | default('—', true) }}% · вход: {{ trigger.to_state.attributes.input_voltage_v | default('—', true) }} В · нагрузка: {{ trigger.to_state.attributes.load_percent | default('—', true) }}%.
 
             # Низкий заряд батареи
             - conditions:
@@ -441,7 +685,8 @@ dh_app_pve_notification_local_package:
                 - action: script.write2log
                   data:
                     title: "🔋❗ UPS: низкий заряд батареи"
-                    message: "UPS сообщил состояние LOW BATTERY."
+                    message: >-
+                      {% set r = trigger.to_state.attributes.battery_runtime_seconds | default(none) %}{% if r is number %}{% set rs = r | int %}{% set rh = rs // 3600 %}{% set rm = (rs % 3600) // 60 %}{% endif %}Заряд: {{ trigger.to_state.attributes.battery_charge_percent | default('—', true) }}%{% if r is number %} · оставшееся время: {{ '%d:%02d' | format(rh, rm) }}{% endif %} · нагрузка: {{ trigger.to_state.attributes.load_percent | default('—', true) }}% · порог NUT: {{ trigger.to_state.attributes.low_charge_percent | default('—', true) }}%.
 
             # Низкий заряд снят
             - conditions:
@@ -451,10 +696,11 @@ dh_app_pve_notification_local_package:
               sequence:
                 - action: script.write2log
                   data:
-                    title: "🔋✅ UPS: предупреждение о низком заряде снято"
-                    message: "Состояние LOW BATTERY больше не активно."
+                    title: "🔋✅ UPS: низкий заряд батареи снят"
+                    message: >-
+                      Заряд: {{ trigger.to_state.attributes.battery_charge_percent | default('—', true) }}% · оставшееся время: {{ trigger.to_state.attributes.battery_runtime_seconds | default('—', true) }} с · нагрузка: {{ trigger.to_state.attributes.load_percent | default('—', true) }}%.
 
-            # Высокое напряжение батареи
+            # Высокий уровень батареи
             - conditions:
                 - condition: trigger
                   id:
@@ -462,10 +708,11 @@ dh_app_pve_notification_local_package:
               sequence:
                 - action: script.write2log
                   data:
-                    title: "🔋⚠️ UPS: высокий уровень батареи"
-                    message: "UPS сообщил состояние HIGH BATTERY."
+                    title: "🔋⚠️ UPS: HIGH BATTERY"
+                    message: >-
+                      Заряд: {{ trigger.to_state.attributes.battery_charge_percent | default('—', true) }}% · напряжение батареи: {{ trigger.to_state.attributes.battery_voltage_v | default('—', true) }} В.
 
-            # Высокий уровень снят
+            # HIGH BATTERY снят
             - conditions:
                 - condition: trigger
                   id:
@@ -473,8 +720,9 @@ dh_app_pve_notification_local_package:
               sequence:
                 - action: script.write2log
                   data:
-                    title: "🔋✅ UPS: предупреждение HIGH BATTERY снято"
-                    message: "Состояние HIGH BATTERY больше не активно."
+                    title: "🔋✅ UPS: HIGH BATTERY снят"
+                    message: >-
+                      Заряд: {{ trigger.to_state.attributes.battery_charge_percent | default('—', true) }}% · напряжение батареи: {{ trigger.to_state.attributes.battery_voltage_v | default('—', true) }} В.
 
             # Требуется замена батареи
             - conditions:
@@ -485,7 +733,8 @@ dh_app_pve_notification_local_package:
                 - action: script.write2log
                   data:
                     title: "🔋⚠️ UPS: требуется замена батареи"
-                    message: "UPS сообщил REPLACE BATTERY."
+                    message: >-
+                      UPS сообщил REPLACE BATTERY · заряд: {{ trigger.to_state.attributes.battery_charge_percent | default('—', true) }}% · напряжение батареи: {{ trigger.to_state.attributes.battery_voltage_v | default('—', true) }} В.
 
             # Предупреждение о замене снято
             - conditions:
@@ -496,7 +745,8 @@ dh_app_pve_notification_local_package:
                 - action: script.write2log
                   data:
                     title: "🔋✅ UPS: предупреждение о замене батареи снято"
-                    message: "Состояние REPLACE BATTERY больше не активно."
+                    message: >-
+                      Заряд: {{ trigger.to_state.attributes.battery_charge_percent | default('—', true) }}% · напряжение батареи: {{ trigger.to_state.attributes.battery_voltage_v | default('—', true) }} В.
 
             # Включён bypass
             - conditions:
@@ -506,8 +756,9 @@ dh_app_pve_notification_local_package:
               sequence:
                 - action: script.write2log
                   data:
-                    title: "🔋⚠️ UPS: включён bypass"
-                    message: "Нагрузка переведена в режим bypass."
+                    title: "🔋⚠️ UPS: включён Bypass"
+                    message: >-
+                      Нагрузка: {{ trigger.to_state.attributes.load_percent | default('—', true) }}% · вход: {{ trigger.to_state.attributes.input_voltage_v | default('—', true) }} В · выход: {{ trigger.to_state.attributes.output_voltage_v | default('—', true) }} В.
 
             # Bypass отключён
             - conditions:
@@ -517,8 +768,9 @@ dh_app_pve_notification_local_package:
               sequence:
                 - action: script.write2log
                   data:
-                    title: "🔋✅ UPS: bypass отключён"
-                    message: "UPS вышел из режима bypass."
+                    title: "🔋✅ UPS: Bypass отключён"
+                    message: >-
+                      Нагрузка: {{ trigger.to_state.attributes.load_percent | default('—', true) }}% · вход: {{ trigger.to_state.attributes.input_voltage_v | default('—', true) }} В · выход: {{ trigger.to_state.attributes.output_voltage_v | default('—', true) }} В.
 
             # Начата калибровка UPS
             - conditions:
@@ -529,7 +781,8 @@ dh_app_pve_notification_local_package:
                 - action: script.write2log
                   data:
                     title: "🔋🧪 UPS: начата калибровка"
-                    message: "UPS выполняет калибровку."
+                    message: >-
+                      Заряд: {{ trigger.to_state.attributes.battery_charge_percent | default('—', true) }}% · нагрузка: {{ trigger.to_state.attributes.load_percent | default('—', true) }}%.
 
             # Калибровка завершена
             - conditions:
@@ -540,7 +793,8 @@ dh_app_pve_notification_local_package:
                 - action: script.write2log
                   data:
                     title: "🔋✅ UPS: калибровка завершена"
-                    message: "UPS вышел из режима калибровки."
+                    message: >-
+                      Заряд: {{ trigger.to_state.attributes.battery_charge_percent | default('—', true) }}% · нагрузка: {{ trigger.to_state.attributes.load_percent | default('—', true) }}%.
 
             # Выход UPS отключён
             - conditions:
@@ -551,7 +805,8 @@ dh_app_pve_notification_local_package:
                 - action: script.write2log
                   data:
                     title: "🔋⏹️ UPS: выход отключён"
-                    message: "UPS сообщил состояние OUTPUT OFF."
+                    message: >-
+                      Вход: {{ trigger.to_state.attributes.input_voltage_v | default('—', true) }} В · выход: {{ trigger.to_state.attributes.output_voltage_v | default('—', true) }} В · нагрузка: {{ trigger.to_state.attributes.load_percent | default('—', true) }}%.
 
             # Выход UPS восстановлен
             - conditions:
@@ -562,7 +817,8 @@ dh_app_pve_notification_local_package:
                 - action: script.write2log
                   data:
                     title: "🔋✅ UPS: выход восстановлен"
-                    message: "Состояние OUTPUT OFF больше не активно."
+                    message: >-
+                      Вход: {{ trigger.to_state.attributes.input_voltage_v | default('—', true) }} В · выход: {{ trigger.to_state.attributes.output_voltage_v | default('—', true) }} В · нагрузка: {{ trigger.to_state.attributes.load_percent | default('—', true) }}%.
 
             # Перегрузка UPS
             - conditions:
@@ -573,7 +829,8 @@ dh_app_pve_notification_local_package:
                 - action: script.write2log
                   data:
                     title: "🔋❌ UPS: перегрузка"
-                    message: "UPS сообщил состояние OVERLOAD."
+                    message: >-
+                      Нагрузка: {{ trigger.to_state.attributes.load_percent | default('—', true) }}% · номинальная мощность UPS: {{ trigger.to_state.attributes.nominal_real_power_w | default('—', true) }} Вт · выход: {{ trigger.to_state.attributes.output_voltage_v | default('—', true) }} В.
 
             # Перегрузка устранена
             - conditions:
@@ -584,7 +841,8 @@ dh_app_pve_notification_local_package:
                 - action: script.write2log
                   data:
                     title: "🔋✅ UPS: перегрузка устранена"
-                    message: "Состояние OVERLOAD больше не активно."
+                    message: >-
+                      Нагрузка: {{ trigger.to_state.attributes.load_percent | default('—', true) }}% · выход: {{ trigger.to_state.attributes.output_voltage_v | default('—', true) }} В.
 
             # Включён AVR Trim
             - conditions:
@@ -594,8 +852,9 @@ dh_app_pve_notification_local_package:
               sequence:
                 - action: script.write2log
                   data:
-                    title: "🔋⚠️ UPS: включён AVR Trim"
-                    message: "UPS понижает входное напряжение без перехода на батарею."
+                    title: "⚡⚠️ UPS: включён AVR Trim"
+                    message: >-
+                      Высокое входное напряжение: {{ trigger.to_state.attributes.input_voltage_v | default('—', true) }} В · выход: {{ trigger.to_state.attributes.output_voltage_v | default('—', true) }} В · верхний порог: {{ trigger.to_state.attributes.input_transfer_high_v | default('—', true) }} В.
 
             # AVR Trim отключён
             - conditions:
@@ -605,8 +864,9 @@ dh_app_pve_notification_local_package:
               sequence:
                 - action: script.write2log
                   data:
-                    title: "🔋✅ UPS: AVR Trim отключён"
-                    message: "Режим AVR Trim завершён."
+                    title: "⚡✅ UPS: AVR Trim отключён"
+                    message: >-
+                      Входное напряжение нормализовалось: {{ trigger.to_state.attributes.input_voltage_v | default('—', true) }} В · выход: {{ trigger.to_state.attributes.output_voltage_v | default('—', true) }} В.
 
             # Включён AVR Boost
             - conditions:
@@ -616,8 +876,9 @@ dh_app_pve_notification_local_package:
               sequence:
                 - action: script.write2log
                   data:
-                    title: "🔋⚠️ UPS: включён AVR Boost"
-                    message: "UPS повышает низкое входное напряжение без перехода на батарею."
+                    title: "⚡⚠️ UPS: включён AVR Boost"
+                    message: >-
+                      Низкое входное напряжение: {{ trigger.to_state.attributes.input_voltage_v | default('—', true) }} В · выход: {{ trigger.to_state.attributes.output_voltage_v | default('—', true) }} В · нижний порог: {{ trigger.to_state.attributes.input_transfer_low_v | default('—', true) }} В.
 
             # AVR Boost отключён
             - conditions:
@@ -627,8 +888,9 @@ dh_app_pve_notification_local_package:
               sequence:
                 - action: script.write2log
                   data:
-                    title: "🔋✅ UPS: AVR Boost отключён"
-                    message: "Режим AVR Boost завершён."
+                    title: "⚡✅ UPS: AVR Boost отключён"
+                    message: >-
+                      Входное напряжение нормализовалось: {{ trigger.to_state.attributes.input_voltage_v | default('—', true) }} В · выход: {{ trigger.to_state.attributes.output_voltage_v | default('—', true) }} В.
 
             # NUT FSD активирован
             - conditions:
@@ -639,7 +901,8 @@ dh_app_pve_notification_local_package:
                 - action: script.write2log
                   data:
                     title: "🔋🛑 UPS: начат Forced Shutdown"
-                    message: "NUT активировал FSD — процедуру принудительного выключения."
+                    message: >-
+                      NUT активировал FSD · заряд: {{ trigger.to_state.attributes.battery_charge_percent | default('—', true) }}% · оставшееся время: {{ trigger.to_state.attributes.battery_runtime_seconds | default('—', true) }} с · нагрузка: {{ trigger.to_state.attributes.load_percent | default('—', true) }}%.
 
             # NUT FSD снят
             - conditions:
@@ -650,7 +913,8 @@ dh_app_pve_notification_local_package:
                 - action: script.write2log
                   data:
                     title: "🔋✅ UPS: Forced Shutdown завершён"
-                    message: "Состояние NUT FSD больше не активно."
+                    message: >-
+                      Заряд: {{ trigger.to_state.attributes.battery_charge_percent | default('—', true) }}% · вход: {{ trigger.to_state.attributes.input_voltage_v | default('—', true) }} В.
 
             # Аварийная сигнализация UPS
             - conditions:
@@ -661,7 +925,8 @@ dh_app_pve_notification_local_package:
                 - action: script.write2log
                   data:
                     title: "🔋🚨 UPS: активна аварийная сигнализация"
-                    message: "UPS сообщил состояние ALARM."
+                    message: >-
+                      Заряд: {{ trigger.to_state.attributes.battery_charge_percent | default('—', true) }}% · нагрузка: {{ trigger.to_state.attributes.load_percent | default('—', true) }}% · вход: {{ trigger.to_state.attributes.input_voltage_v | default('—', true) }} В · выход: {{ trigger.to_state.attributes.output_voltage_v | default('—', true) }} В.
 
             # Аварийная сигнализация снята
             - conditions:
@@ -672,7 +937,8 @@ dh_app_pve_notification_local_package:
                 - action: script.write2log
                   data:
                     title: "🔋✅ UPS: аварийная сигнализация снята"
-                    message: "Состояние ALARM больше не активно."
+                    message: >-
+                      Заряд: {{ trigger.to_state.attributes.battery_charge_percent | default('—', true) }}% · нагрузка: {{ trigger.to_state.attributes.load_percent | default('—', true) }}%.
 
             # Батарея пересекла очередной уровень разряда
             - conditions:
@@ -683,7 +949,8 @@ dh_app_pve_notification_local_package:
                 - action: script.write2log
                   data:
                     title: "🔋⚠️ UPS: заряд {{ trigger.to_state.attributes.current_charge_percent }}%"
-                    message: "Пересечены уровни: {{ trigger.to_state.attributes.crossed_thresholds | join(', ') }}%."
+                    message: >-
+                      {% set r = trigger.to_state.attributes.battery_runtime_seconds | default(none) %}{% if r is number %}{% set rs = r | int %}{% set rh = rs // 3600 %}{% set rm = (rs % 3600) // 60 %}{% endif %}Оставшееся время: {% if r is number %}{{ '%d:%02d' | format(rh, rm) }}{% else %}—{% endif %} · нагрузка: {{ trigger.to_state.attributes.load_percent | default('—', true) }}% · пересечён уровень: {{ trigger.to_state.attributes.crossed_thresholds | join(', ') }}%.
 
             # Батарея полностью заряжена
             - conditions:
@@ -694,9 +961,10 @@ dh_app_pve_notification_local_package:
                 - action: script.write2log
                   data:
                     title: "🔋✅ UPS: батарея заряжена"
-                    message: "Цикл зарядки батареи завершён."
+                    message: >-
+                      Заряд: {{ trigger.to_state.attributes.current_charge_percent | default(trigger.to_state.attributes.battery_charge_percent, true) }}% · нагрузка: {{ trigger.to_state.attributes.load_percent | default('—', true) }}% · вход: {{ trigger.to_state.attributes.input_voltage_v | default('—', true) }} В.
 
-            # PVE Agent принял решение об аварийном выключении
+            # PVE Agent начал аварийное выключение
             - conditions:
                 - condition: trigger
                   id:
@@ -705,7 +973,8 @@ dh_app_pve_notification_local_package:
                 - action: script.write2log
                   data:
                     title: "🔋🛑 PVE: начато аварийное выключение"
-                    message: "Причина: {{ trigger.to_state.attributes.reason }}. Заряд: {{ trigger.to_state.attributes.battery_charge_percent }}%. Runtime: {{ trigger.to_state.attributes.battery_runtime_seconds }} s."
+                    message: >-
+                      {% set r = trigger.to_state.attributes.battery_runtime_seconds | default(none) %}{% if r is number %}{% set rs = r | int %}{% set rh = rs // 3600 %}{% set rm = (rs % 3600) // 60 %}{% endif %}Причина: {{ trigger.to_state.attributes.reason }} · заряд: {{ trigger.to_state.attributes.battery_charge_percent | default('—', true) }}%{% if r is number %} · оставшееся время: {{ '%d:%02d' | format(rh, rm) }}{% endif %} · нагрузка: {{ trigger.to_state.attributes.load_percent | default('—', true) }}% · бюджет shutdown: {{ trigger.to_state.attributes.shutdown_budget_seconds | default('—', true) }} с · дополнительный запас: {{ trigger.to_state.attributes.runtime_reserve_seconds | default('—', true) }} с.
 
             # Изменены параметры UPS Trigger
             - conditions:
@@ -716,4 +985,5 @@ dh_app_pve_notification_local_package:
                 - action: script.write2log
                   data:
                     title: "🔋⚙️ Конфигурация UPS Trigger изменена"
-                    message: "Заряд: {{ trigger.to_state.attributes.old_values.shutdown_battery_charge_threshold_percent }}% → {{ trigger.to_state.attributes.new_values.shutdown_battery_charge_threshold_percent }}%. Резерв: {{ trigger.to_state.attributes.old_values.runtime_reserve_seconds }} s → {{ trigger.to_state.attributes.new_values.runtime_reserve_seconds }} s."
+                    message: >-
+                      Заряд: {{ trigger.to_state.attributes.old_values.shutdown_battery_charge_threshold_percent }}% → {{ trigger.to_state.attributes.new_values.shutdown_battery_charge_threshold_percent }}% · дополнительный запас: {{ trigger.to_state.attributes.old_values.runtime_reserve_seconds }} с → {{ trigger.to_state.attributes.new_values.runtime_reserve_seconds }} с.
