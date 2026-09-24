@@ -79,6 +79,19 @@ def notification_paths() -> tuple[Path, Path]:
 
 
 class PresentationTests(unittest.TestCase):
+    def test_legacy_notification_envelope_packages_are_removed(self) -> None:
+        legacy_paths = (
+            APP_ROOT / "examples" / "packages" / "dh_internet_app_notification_package.yaml",
+            APP_ROOT
+            / "examples"
+            / "packages"
+            / "locales"
+            / "ru"
+            / "dh_internet_app_notification_package.yaml",
+        )
+        for path in legacy_paths:
+            self.assertFalse(path.exists(), f"legacy notification package still exists: {path}")
+
     def test_examples_reference_only_discovered_entities(self) -> None:
         payload = build_discovery_payload(
             "0.1.5",
