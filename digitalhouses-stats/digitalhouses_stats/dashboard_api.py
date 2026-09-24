@@ -16,7 +16,7 @@ logging.basicConfig(level=settings.log_level.upper())
 
 app = FastAPI(
     title="DigitalHouses Stats Local API",
-    version="0.3.1",
+    version="0.4.0",
     docs_url=None,
     redoc_url=None,
 )
@@ -37,7 +37,7 @@ def healthz() -> dict[str, str]:
 
 
 @app.get("/v1/stats/summary")
-def stats_summary(db: Session = Depends(get_db)) -> dict[str, int]:
+def stats_summary(db: Session = Depends(get_db)) -> dict[str, object]:
     return summary(db)
 
 
