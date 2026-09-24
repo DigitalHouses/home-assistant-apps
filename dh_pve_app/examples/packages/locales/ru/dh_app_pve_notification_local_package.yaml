@@ -1,9 +1,9 @@
 # =============================================================================
 # DigitalHouses PVE local notifications — Russian site package
 # =============================================================================
-# Машинные события приходят от dh_pve_app.
-# Логика намеренно простая: event -> trigger.id -> choose -> прямой action.
-# Для этой инсталляции сообщения отправляются через script.write2log.
+# Machine events come from dh_pve_app.
+# User rule: find the trigger.id you need and edit only title/message below it.
+# Flow: machine event -> trigger.id -> choose -> direct action.
 # =============================================================================
 
 dh_app_pve_notification_local_package:
@@ -12,14 +12,13 @@ dh_app_pve_notification_local_package:
     - id: dh_app_pve_notifications
       alias: DH PVE · Notifications
       mode: queued
-      max: 20
+      max: 50
 
       triggers:
+        # PVE: generic problem lifecycle
         - trigger: event.received
           target:
-            entity_id:
-              - event.dh_app_pve_diagnostic
-              - event.dh_app_pve_ups_diagnostic
+            entity_id: event.dh_app_pve_diagnostic
           options:
             event_type:
               - problem_started
@@ -27,9 +26,7 @@ dh_app_pve_notification_local_package:
 
         - trigger: event.received
           target:
-            entity_id:
-              - event.dh_app_pve_diagnostic
-              - event.dh_app_pve_ups_diagnostic
+            entity_id: event.dh_app_pve_diagnostic
           options:
             event_type:
               - problem_updated
@@ -37,22 +34,266 @@ dh_app_pve_notification_local_package:
 
         - trigger: event.received
           target:
-            entity_id:
-              - event.dh_app_pve_diagnostic
-              - event.dh_app_pve_ups_diagnostic
+            entity_id: event.dh_app_pve_diagnostic
           options:
             event_type:
               - problem_recovered
           id: problem_recovered
 
+        # UPS: explicit user-semantic events
+        # NUT недоступен
         - trigger: event.received
           target:
             entity_id: event.dh_app_pve_ups_diagnostic
           options:
             event_type:
-              - ups_status_changed
-          id: ups_status_changed
+              - nut_unavailable
+          id: nut_unavailable
 
+        # NUT снова доступен
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - nut_restored
+          id: nut_restored
+
+        # Состояние питания неизвестно
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - power_state_unknown
+          id: power_state_unknown
+
+        # Состояние питания снова известно
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - power_state_restored
+          id: power_state_restored
+
+        # Пропало городское питание
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - line_power_lost
+          id: line_power_lost
+
+        # Городское питание восстановлено
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - line_power_restored
+          id: line_power_restored
+
+        # Низкий заряд батареи
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - low_battery_started
+          id: low_battery_started
+
+        # Низкий заряд снят
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - low_battery_cleared
+          id: low_battery_cleared
+
+        # Высокое напряжение батареи
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - high_battery_started
+          id: high_battery_started
+
+        # Высокий уровень снят
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - high_battery_cleared
+          id: high_battery_cleared
+
+        # Требуется замена батареи
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - replace_battery_started
+          id: replace_battery_started
+
+        # Предупреждение о замене снято
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - replace_battery_cleared
+          id: replace_battery_cleared
+
+        # Включён bypass
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - bypass_started
+          id: bypass_started
+
+        # Bypass отключён
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - bypass_ended
+          id: bypass_ended
+
+        # Начата калибровка UPS
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - calibration_started
+          id: calibration_started
+
+        # Калибровка завершена
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - calibration_ended
+          id: calibration_ended
+
+        # Выход UPS отключён
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - output_off
+          id: output_off
+
+        # Выход UPS восстановлен
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - output_restored
+          id: output_restored
+
+        # Перегрузка UPS
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - overload_started
+          id: overload_started
+
+        # Перегрузка устранена
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - overload_cleared
+          id: overload_cleared
+
+        # Включён AVR Trim
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - trim_started
+          id: trim_started
+
+        # AVR Trim отключён
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - trim_ended
+          id: trim_ended
+
+        # Включён AVR Boost
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - boost_started
+          id: boost_started
+
+        # AVR Boost отключён
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - boost_ended
+          id: boost_ended
+
+        # NUT FSD активирован
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - forced_shutdown_started
+          id: forced_shutdown_started
+
+        # NUT FSD снят
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - forced_shutdown_cleared
+          id: forced_shutdown_cleared
+
+        # Аварийная сигнализация UPS
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - alarm_started
+          id: alarm_started
+
+        # Аварийная сигнализация снята
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - alarm_cleared
+          id: alarm_cleared
+
+        # battery_discharge_level_crossed
         - trigger: event.received
           target:
             entity_id: event.dh_app_pve_ups_diagnostic
@@ -61,6 +302,7 @@ dh_app_pve_notification_local_package:
               - battery_discharge_level_crossed
           id: battery_discharge_level_crossed
 
+        # battery_fully_charged
         - trigger: event.received
           target:
             entity_id: event.dh_app_pve_ups_diagnostic
@@ -69,6 +311,7 @@ dh_app_pve_notification_local_package:
               - battery_fully_charged
           id: battery_fully_charged
 
+        # shutdown_committed
         - trigger: event.received
           target:
             entity_id: event.dh_app_pve_ups_diagnostic
@@ -77,6 +320,7 @@ dh_app_pve_notification_local_package:
               - shutdown_committed
           id: shutdown_committed
 
+        # config_changed
         - trigger: event.received
           target:
             entity_id: event.dh_app_pve_ups_diagnostic
@@ -89,6 +333,7 @@ dh_app_pve_notification_local_package:
 
       actions:
         - choose:
+            # PVE: problem_started
             - conditions:
                 - condition: trigger
                   id:
@@ -96,11 +341,10 @@ dh_app_pve_notification_local_package:
               sequence:
                 - action: script.write2log
                   data:
-                    title: "⚠️ {{ trigger.to_state.attributes.object_name }}: обнаружена проблема"
-                    message: >-
-                      {{ trigger.to_state.attributes.metric }}:
-                      {{ trigger.to_state.attributes.current.value }}
+                    title: "🖥️⚠️ {{ trigger.to_state.attributes.object_name }}: обнаружена проблема"
+                    message: "{{ trigger.to_state.attributes.metric }}: {{ trigger.to_state.attributes.current.value }}"
 
+            # PVE: problem_updated
             - conditions:
                 - condition: trigger
                   id:
@@ -108,11 +352,10 @@ dh_app_pve_notification_local_package:
               sequence:
                 - action: script.write2log
                   data:
-                    title: "⚠️ {{ trigger.to_state.attributes.object_name }}: параметры проблемы изменились"
-                    message: >-
-                      {{ trigger.to_state.attributes.metric }}:
-                      {{ trigger.to_state.attributes.current.value }}
+                    title: "🖥️⚠️ {{ trigger.to_state.attributes.object_name }}: параметры проблемы изменились"
+                    message: "{{ trigger.to_state.attributes.metric }}: {{ trigger.to_state.attributes.current.value }}"
 
+            # PVE: problem_recovered
             - conditions:
                 - condition: trigger
                   id:
@@ -120,24 +363,318 @@ dh_app_pve_notification_local_package:
               sequence:
                 - action: script.write2log
                   data:
-                    title: "✅ {{ trigger.to_state.attributes.object_name }}: состояние нормализовалось"
-                    message: >-
-                      {{ trigger.to_state.attributes.metric }}:
-                      {{ trigger.to_state.attributes.current.value }}
+                    title: "🖥️✅ {{ trigger.to_state.attributes.object_name }}: состояние нормализовалось"
+                    message: "{{ trigger.to_state.attributes.metric }}: {{ trigger.to_state.attributes.current.value }}"
 
+            # NUT недоступен
             - conditions:
                 - condition: trigger
                   id:
-                    - ups_status_changed
+                    - nut_unavailable
               sequence:
                 - action: script.write2log
                   data:
-                    title: "🔋 UPS: состояние изменилось"
-                    message: >-
-                      {{ trigger.to_state.attributes.previous_status | join(', ') }}
-                      →
-                      {{ trigger.to_state.attributes.current_status | join(', ') }}
+                    title: "🔋❌ UPS: NUT недоступен"
+                    message: "Нет связи с UPS через NUT."
 
+            # NUT снова доступен
+            - conditions:
+                - condition: trigger
+                  id:
+                    - nut_restored
+              sequence:
+                - action: script.write2log
+                  data:
+                    title: "🔋✅ UPS: связь с NUT восстановлена"
+                    message: "Мониторинг UPS снова доступен."
+
+            # Состояние питания неизвестно
+            - conditions:
+                - condition: trigger
+                  id:
+                    - power_state_unknown
+              sequence:
+                - action: script.write2log
+                  data:
+                    title: "🔋⚠️ UPS: состояние питания неизвестно"
+                    message: "Нельзя определить, работает UPS от сети или батареи."
+
+            # Состояние питания снова известно
+            - conditions:
+                - condition: trigger
+                  id:
+                    - power_state_restored
+              sequence:
+                - action: script.write2log
+                  data:
+                    title: "🔋✅ UPS: состояние питания определено"
+                    message: "UPS снова сообщает корректное состояние питания."
+
+            # Пропало городское питание
+            - conditions:
+                - condition: trigger
+                  id:
+                    - line_power_lost
+              sequence:
+                - action: script.write2log
+                  data:
+                    title: "🔌⚠️ Электричество отключено"
+                    message: "UPS перешёл на батарею."
+
+            # Городское питание восстановлено
+            - conditions:
+                - condition: trigger
+                  id:
+                    - line_power_restored
+              sequence:
+                - action: script.write2log
+                  data:
+                    title: "🔌✅ Электричество восстановлено"
+                    message: "UPS вернулся к работе от сети."
+
+            # Низкий заряд батареи
+            - conditions:
+                - condition: trigger
+                  id:
+                    - low_battery_started
+              sequence:
+                - action: script.write2log
+                  data:
+                    title: "🔋❗ UPS: низкий заряд батареи"
+                    message: "UPS сообщил состояние LOW BATTERY."
+
+            # Низкий заряд снят
+            - conditions:
+                - condition: trigger
+                  id:
+                    - low_battery_cleared
+              sequence:
+                - action: script.write2log
+                  data:
+                    title: "🔋✅ UPS: предупреждение о низком заряде снято"
+                    message: "Состояние LOW BATTERY больше не активно."
+
+            # Высокое напряжение батареи
+            - conditions:
+                - condition: trigger
+                  id:
+                    - high_battery_started
+              sequence:
+                - action: script.write2log
+                  data:
+                    title: "🔋⚠️ UPS: высокий уровень батареи"
+                    message: "UPS сообщил состояние HIGH BATTERY."
+
+            # Высокий уровень снят
+            - conditions:
+                - condition: trigger
+                  id:
+                    - high_battery_cleared
+              sequence:
+                - action: script.write2log
+                  data:
+                    title: "🔋✅ UPS: предупреждение HIGH BATTERY снято"
+                    message: "Состояние HIGH BATTERY больше не активно."
+
+            # Требуется замена батареи
+            - conditions:
+                - condition: trigger
+                  id:
+                    - replace_battery_started
+              sequence:
+                - action: script.write2log
+                  data:
+                    title: "🔋⚠️ UPS: требуется замена батареи"
+                    message: "UPS сообщил REPLACE BATTERY."
+
+            # Предупреждение о замене снято
+            - conditions:
+                - condition: trigger
+                  id:
+                    - replace_battery_cleared
+              sequence:
+                - action: script.write2log
+                  data:
+                    title: "🔋✅ UPS: предупреждение о замене батареи снято"
+                    message: "Состояние REPLACE BATTERY больше не активно."
+
+            # Включён bypass
+            - conditions:
+                - condition: trigger
+                  id:
+                    - bypass_started
+              sequence:
+                - action: script.write2log
+                  data:
+                    title: "🔋⚠️ UPS: включён bypass"
+                    message: "Нагрузка переведена в режим bypass."
+
+            # Bypass отключён
+            - conditions:
+                - condition: trigger
+                  id:
+                    - bypass_ended
+              sequence:
+                - action: script.write2log
+                  data:
+                    title: "🔋✅ UPS: bypass отключён"
+                    message: "UPS вышел из режима bypass."
+
+            # Начата калибровка UPS
+            - conditions:
+                - condition: trigger
+                  id:
+                    - calibration_started
+              sequence:
+                - action: script.write2log
+                  data:
+                    title: "🔋🧪 UPS: начата калибровка"
+                    message: "UPS выполняет калибровку."
+
+            # Калибровка завершена
+            - conditions:
+                - condition: trigger
+                  id:
+                    - calibration_ended
+              sequence:
+                - action: script.write2log
+                  data:
+                    title: "🔋✅ UPS: калибровка завершена"
+                    message: "UPS вышел из режима калибровки."
+
+            # Выход UPS отключён
+            - conditions:
+                - condition: trigger
+                  id:
+                    - output_off
+              sequence:
+                - action: script.write2log
+                  data:
+                    title: "🔋⏹️ UPS: выход отключён"
+                    message: "UPS сообщил состояние OUTPUT OFF."
+
+            # Выход UPS восстановлен
+            - conditions:
+                - condition: trigger
+                  id:
+                    - output_restored
+              sequence:
+                - action: script.write2log
+                  data:
+                    title: "🔋✅ UPS: выход восстановлен"
+                    message: "Состояние OUTPUT OFF больше не активно."
+
+            # Перегрузка UPS
+            - conditions:
+                - condition: trigger
+                  id:
+                    - overload_started
+              sequence:
+                - action: script.write2log
+                  data:
+                    title: "🔋❌ UPS: перегрузка"
+                    message: "UPS сообщил состояние OVERLOAD."
+
+            # Перегрузка устранена
+            - conditions:
+                - condition: trigger
+                  id:
+                    - overload_cleared
+              sequence:
+                - action: script.write2log
+                  data:
+                    title: "🔋✅ UPS: перегрузка устранена"
+                    message: "Состояние OVERLOAD больше не активно."
+
+            # Включён AVR Trim
+            - conditions:
+                - condition: trigger
+                  id:
+                    - trim_started
+              sequence:
+                - action: script.write2log
+                  data:
+                    title: "🔋⚠️ UPS: включён AVR Trim"
+                    message: "UPS понижает входное напряжение без перехода на батарею."
+
+            # AVR Trim отключён
+            - conditions:
+                - condition: trigger
+                  id:
+                    - trim_ended
+              sequence:
+                - action: script.write2log
+                  data:
+                    title: "🔋✅ UPS: AVR Trim отключён"
+                    message: "Режим AVR Trim завершён."
+
+            # Включён AVR Boost
+            - conditions:
+                - condition: trigger
+                  id:
+                    - boost_started
+              sequence:
+                - action: script.write2log
+                  data:
+                    title: "🔋⚠️ UPS: включён AVR Boost"
+                    message: "UPS повышает низкое входное напряжение без перехода на батарею."
+
+            # AVR Boost отключён
+            - conditions:
+                - condition: trigger
+                  id:
+                    - boost_ended
+              sequence:
+                - action: script.write2log
+                  data:
+                    title: "🔋✅ UPS: AVR Boost отключён"
+                    message: "Режим AVR Boost завершён."
+
+            # NUT FSD активирован
+            - conditions:
+                - condition: trigger
+                  id:
+                    - forced_shutdown_started
+              sequence:
+                - action: script.write2log
+                  data:
+                    title: "🔋🛑 UPS: начат Forced Shutdown"
+                    message: "NUT активировал FSD — процедуру принудительного выключения."
+
+            # NUT FSD снят
+            - conditions:
+                - condition: trigger
+                  id:
+                    - forced_shutdown_cleared
+              sequence:
+                - action: script.write2log
+                  data:
+                    title: "🔋✅ UPS: Forced Shutdown завершён"
+                    message: "Состояние NUT FSD больше не активно."
+
+            # Аварийная сигнализация UPS
+            - conditions:
+                - condition: trigger
+                  id:
+                    - alarm_started
+              sequence:
+                - action: script.write2log
+                  data:
+                    title: "🔋🚨 UPS: активна аварийная сигнализация"
+                    message: "UPS сообщил состояние ALARM."
+
+            # Аварийная сигнализация снята
+            - conditions:
+                - condition: trigger
+                  id:
+                    - alarm_cleared
+              sequence:
+                - action: script.write2log
+                  data:
+                    title: "🔋✅ UPS: аварийная сигнализация снята"
+                    message: "Состояние ALARM больше не активно."
+
+            # Батарея пересекла очередной уровень разряда
             - conditions:
                 - condition: trigger
                   id:
@@ -145,11 +682,10 @@ dh_app_pve_notification_local_package:
               sequence:
                 - action: script.write2log
                   data:
-                    title: "🔋 UPS: заряд {{ trigger.to_state.attributes.current_charge_percent }}%"
-                    message: >-
-                      Пересечены уровни:
-                      {{ trigger.to_state.attributes.crossed_thresholds | join(', ') }}%.
+                    title: "🔋⚠️ UPS: заряд {{ trigger.to_state.attributes.current_charge_percent }}%"
+                    message: "Пересечены уровни: {{ trigger.to_state.attributes.crossed_thresholds | join(', ') }}%."
 
+            # Батарея полностью заряжена
             - conditions:
                 - condition: trigger
                   id:
@@ -158,12 +694,9 @@ dh_app_pve_notification_local_package:
                 - action: script.write2log
                   data:
                     title: "🔋✅ UPS: батарея заряжена"
-                    message: >-
-                      Заряд:
-                      {{ trigger.to_state.attributes.previous_charge_percent }}%
-                      →
-                      {{ trigger.to_state.attributes.current_charge_percent }}%.
+                    message: "Цикл зарядки батареи завершён."
 
+            # PVE Agent принял решение об аварийном выключении
             - conditions:
                 - condition: trigger
                   id:
@@ -171,12 +704,10 @@ dh_app_pve_notification_local_package:
               sequence:
                 - action: script.write2log
                   data:
-                    title: "🔋🛑 UPS: начато аварийное выключение"
-                    message: >-
-                      Причина: {{ trigger.to_state.attributes.reason }}.
-                      Заряд: {{ trigger.to_state.attributes.battery_charge_percent }}%.
-                      Runtime: {{ trigger.to_state.attributes.battery_runtime_seconds }} s.
+                    title: "🔋🛑 PVE: начато аварийное выключение"
+                    message: "Причина: {{ trigger.to_state.attributes.reason }}. Заряд: {{ trigger.to_state.attributes.battery_charge_percent }}%. Runtime: {{ trigger.to_state.attributes.battery_runtime_seconds }} s."
 
+            # Изменены параметры UPS Trigger
             - conditions:
                 - condition: trigger
                   id:
@@ -185,12 +716,4 @@ dh_app_pve_notification_local_package:
                 - action: script.write2log
                   data:
                     title: "🔋⚙️ Конфигурация UPS Trigger изменена"
-                    message: >-
-                      Заряд:
-                      {{ trigger.to_state.attributes.old_values.shutdown_battery_charge_threshold_percent }}%
-                      →
-                      {{ trigger.to_state.attributes.new_values.shutdown_battery_charge_threshold_percent }}%.
-                      Резерв:
-                      {{ trigger.to_state.attributes.old_values.runtime_reserve_seconds }} s
-                      →
-                      {{ trigger.to_state.attributes.new_values.runtime_reserve_seconds }} s.
+                    message: "Заряд: {{ trigger.to_state.attributes.old_values.shutdown_battery_charge_threshold_percent }}% → {{ trigger.to_state.attributes.new_values.shutdown_battery_charge_threshold_percent }}%. Резерв: {{ trigger.to_state.attributes.old_values.runtime_reserve_seconds }} s → {{ trigger.to_state.attributes.new_values.runtime_reserve_seconds }} s."
