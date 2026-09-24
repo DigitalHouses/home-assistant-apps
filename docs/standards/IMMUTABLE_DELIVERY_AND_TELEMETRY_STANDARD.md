@@ -322,6 +322,10 @@ All products use one privacy/consent model:
 
 [DigitalHouses Product Telemetry Policy](PRODUCT_TELEMETRY_POLICY.md)
 
+Product-specific implementation work follows:
+
+[DigitalHouses Telemetry Implementation Guide](TELEMETRY_IMPLEMENTATION_GUIDE.md)
+
 Product-specific telemetry protocols are prohibited unless a future standard explicitly introduces them.
 
 ## 11. Telemetry defaults
