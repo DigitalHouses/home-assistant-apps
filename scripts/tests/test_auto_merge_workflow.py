@@ -9,16 +9,25 @@ class AutoMergeWorkflowTests(unittest.TestCase):
     def _text(self) -> str:
         return WORKFLOW.read_text(encoding="utf-8")
 
-    def test_merge_refuses_a_validated_pr_when_main_advanced_after_validation(self):
+    def test_stale_validated_base_updates_branch_instead_of_merging(self):
         text = self._text()
 
         self.assertIn(
             'current_base_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)"',
             text,
         )
-        self.assertIn('test "$current_base_sha" = "$VALIDATED_BASE_SHA"', text)
+        self.assertIn(
+            'if [ "$current_base_sha" != "$VALIDATED_BASE_SHA" ]; then',
+            text,
+        )
+        self.assertIn(
+            'gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/update-branch"',
+            text,
+        )
+        self.assertIn('-f "expected_head_sha=${head_sha}"', text)
+        self.assertIn('echo "merged=false" >> "$GITHUB_OUTPUT"', text)
         self.assertLess(
-            text.index('test "$current_base_sha" = "$VALIDATED_BASE_SHA"'),
+            text.index('if [ "$current_base_sha" != "$VALIDATED_BASE_SHA" ]; then'),
             text.index('gh pr merge "$PR_NUMBER"'),
         )
 
@@ -26,7 +35,7 @@ class AutoMergeWorkflowTests(unittest.TestCase):
         text = self._text()
 
         self.assertIn(
-            'release_base_sha="$(git rev-parse "${MERGE_SHA}^1")"',
+            'release_base_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${merge_sha}" --jq '.parents[0].sha')"',
             text,
         )
         self.assertIn('echo "release_base_sha=$release_base_sha" >> "$GITHUB_OUTPUT"', text)
@@ -38,6 +47,23 @@ class AutoMergeWorkflowTests(unittest.TestCase):
             'BASE_SHA: ${{ steps.merge.outputs.base_sha }}',
             text,
         )
+
+    def test_post_merge_steps_run_only_after_an_actual_merge(self):
+        text = self._text()
+
+        self.assertIn('echo "merged=true" >> "$GITHUB_OUTPUT"', text)
+        for step_name in (
+            "Check out exact merged main revision",
+            "Set up Python",
+            "Detect and validate releases",
+            "Publish product releases",
+            "Verify published releases",
+        ):
+            marker = f"- name: {step_name}"
+            start = text.index(marker)
+            end = text.find("\n      - name:", start + len(marker))
+            block = text[start:] if end == -1 else text[start:end]
+            self.assertIn("if: steps.merge.outputs.merged == 'true'", block)
 
 
 if __name__ == "__main__":
