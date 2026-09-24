@@ -33,6 +33,15 @@ This preserves meaningful branch history, including TDD and implementation histo
 
 Do not squash or rewrite substantive product history unless there is an explicit reason to do so for that change.
 
+
+### 3.1 Automatic merge for owner-authored PRs
+
+Pull requests authored by `DigitalHouses`, targeting `main`, from a branch in this repository are merged automatically after the complete `Validate repository` workflow succeeds.
+
+Automatic merge must verify that the PR head SHA is exactly the SHA that passed validation. Draft PRs, external/fork PRs, failed validation, stale validation runs, and conflicting PRs must not be merged automatically.
+
+The repository owner is not part of the normal mechanical merge path. Manual merge remains an exception for recovery or intentionally held changes.
+
 ## 4. Protection target for main
 
 Repository settings should enforce the following controls for `main`:
