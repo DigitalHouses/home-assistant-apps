@@ -150,6 +150,8 @@ class OutageTracker:
     month: str
     outages: list[dict[str, Any]]
     active_from: datetime | None
+    pending_from: datetime | None = None
+    pending_attempts: int = 0
 
     @classmethod
     def load(cls, path: Path) -> "OutageTracker":
@@ -173,6 +175,25 @@ class OutageTracker:
             except ValueError:
                 active_from = None
 
+        pending_from = None
+        pending_raw = raw.get("pending_from")
+        if isinstance(pending_raw, str) and pending_raw:
+            try:
+                pending_from = datetime.fromisoformat(pending_raw)
+                if pending_from.tzinfo is None:
+                    pending_from = pending_from.replace(tzinfo=now.tzinfo)
+            except ValueError:
+                pending_from = None
+        try:
+            pending_attempts = max(0, int(raw.get("pending_attempts") or 0))
+        except (TypeError, ValueError):
+            pending_attempts = 0
+        if pending_from is None:
+            pending_attempts = 0
+        if active_from is not None:
+            pending_from = None
+            pending_attempts = 0
+
         if raw.get("month") != current_month:
             month_start = now.replace(
                 day=1,
@@ -183,14 +204,30 @@ class OutageTracker:
             )
             if active_from is not None and active_from < month_start:
                 active_from = month_start
-            tracker = cls(path, current_month, [], active_from)
+            if pending_from is not None and pending_from < month_start:
+                pending_from = month_start
+            tracker = cls(
+                path,
+                current_month,
+                [],
+                active_from,
+                pending_from,
+                pending_attempts,
+            )
             tracker.save()
             return tracker
 
         outages = raw.get("outages")
         if not isinstance(outages, list):
             outages = []
-        return cls(path, current_month, outages, active_from)
+        return cls(
+            path,
+            current_month,
+            outages,
+            active_from,
+            pending_from,
+            pending_attempts,
+        )
 
     def _roll_month(self, now: datetime) -> None:
         current = month_key(now)
@@ -198,15 +235,50 @@ class OutageTracker:
             return
         self.month = current
         self.outages = []
+        month_start = now.replace(
+            day=1,
+            hour=0,
+            minute=0,
+            second=0,
+            microsecond=0,
+        )
         if self.active_from is not None:
-            self.active_from = now.replace(
-                day=1,
-                hour=0,
-                minute=0,
-                second=0,
-                microsecond=0,
-            )
+            self.active_from = month_start
+        if self.pending_from is not None:
+            self.pending_from = month_start
         self.save()
+
+    def note_pending_failure(self, when: datetime | None = None) -> int:
+        when = when or now_local()
+        self._roll_month(when)
+        if self.active_from is not None:
+            return self.pending_attempts
+        if self.pending_from is None:
+            self.pending_from = when
+            self.pending_attempts = 1
+        else:
+            self.pending_attempts += 1
+        self.save()
+        return self.pending_attempts
+
+    def clear_pending(self) -> None:
+        if self.pending_from is None and self.pending_attempts == 0:
+            return
+        self.pending_from = None
+        self.pending_attempts = 0
+        self.save()
+
+    def confirm_pending(self, when: datetime | None = None) -> bool:
+        when = when or now_local()
+        self._roll_month(when)
+        if self.active_from is not None:
+            return False
+        started = self.pending_from or when
+        self.active_from = started
+        self.pending_from = None
+        self.pending_attempts = 0
+        self.save()
+        return True
 
     def start(self, when: datetime | None = None) -> bool:
         when = when or now_local()
@@ -214,6 +286,8 @@ class OutageTracker:
         if self.active_from is not None:
             return False
         self.active_from = when
+        self.pending_from = None
+        self.pending_attempts = 0
         self.save()
         return True
 
@@ -287,5 +361,9 @@ class OutageTracker:
                 "active_from": iso(self.active_from)
                 if self.active_from is not None
                 else None,
+                "pending_from": iso(self.pending_from)
+                if self.pending_from is not None
+                else None,
+                "pending_attempts": self.pending_attempts,
             },
         )
