@@ -2,17 +2,11 @@
 
 Status: normative protocol contract.
 
-This document defines one telemetry protocol for all DigitalHouses products in `DigitalHouses/home-assistant-apps`.
-
-It must be implemented consistently by:
-
-- `digitalhouses_pve_agent`
-- `digitalhouses_plex_agent`
-- `digitalhouses_recorder_app`
-- `digitalhouses_speedtest_app`
-- future products that participate in DigitalHouses telemetry.
+This document defines one telemetry protocol for DigitalHouses products in `DigitalHouses/home-assistant-apps`.
 
 Privacy and consent requirements are defined by [DigitalHouses Product Telemetry Policy](PRODUCT_TELEMETRY_POLICY.md).
+
+Implementation guidance and current rollout status are defined by [DigitalHouses Telemetry Implementation Guide](TELEMETRY_IMPLEMENTATION_GUIDE.md).
 
 ## 1. Design goals
 
@@ -21,10 +15,10 @@ Protocol v1 is intentionally small.
 It provides:
 
 - opt-in installation heartbeat;
-- current product/version observation;
-- country aggregation;
-- active-window reporting;
-- authenticated deletion of one installation record.
+- released product/version observation;
+- server-derived country aggregation;
+- activity history;
+- authenticated deletion of one installation and its retained heartbeat history.
 
 It does not provide:
 
@@ -34,25 +28,52 @@ It does not provide:
 - software update control;
 - arbitrary server-to-client messages.
 
-## 2. Product identifiers
+## 2. Production endpoint
 
-Allowed v1 product identifiers:
+Base URL:
+
+```text
+https://telemetry.digitalhouses.vip
+```
+
+Public protocol endpoints:
+
+```text
+POST   /v1/heartbeat
+DELETE /v1/installation
+GET    /healthz
+```
+
+Statistics/reporting endpoints are not part of the public telemetry protocol.
+
+## 3. Product identifiers
+
+Current production protocol-v1 allowlist:
 
 ```text
 digitalhouses_pve_agent
 digitalhouses_plex_agent
 digitalhouses_recorder_app
 digitalhouses_speedtest_app
-digitalhouses_backblaze_app
 ```
 
 The server rejects unknown product identifiers.
 
+Adding a product requires one coordinated repository change covering:
+
+- this allowlist;
+- stats-server allowlist;
+- Release Policy when applicable;
+- product payload;
+- product tests/documentation.
+
+Target products may be listed in repository policy before they are admitted to the production server allowlist.
+
 Product identifiers are release/product identities. They do not require runtime service names, App slugs, MQTT identifiers, or repository directories to be renamed.
 
-## 3. Installation credentials
+## 4. Installation credentials
 
-Every installation creates:
+Every fresh product installation creates:
 
 ```text
 installation_id
@@ -65,13 +86,13 @@ Requirements:
 - `installation_token`: at least 256 bits from a cryptographically secure random generator;
 - both created once per fresh installation;
 - both persisted across restart and upgrade;
-- both restored with the installation backup where applicable.
+- both restored with supported product backup/restore.
 
 The token must not be logged or included in analytics output.
 
 The server stores only a one-way cryptographic hash of the token.
 
-## 4. Heartbeat request
+## 5. Heartbeat request
 
 Endpoint:
 
@@ -94,14 +115,22 @@ Payload:
   "schema": 1,
   "telemetry_policy_version": 1,
   "installation_id": "550e8400-e29b-41d4-a716-446655440000",
-  "product": "digitalhouses_recorder_app",
-  "version": "0.1.9"
+  "product": "digitalhouses_pve_agent",
+  "version": "0.5.10"
 }
 ```
 
 No additional product-specific data is permitted in protocol v1.
 
-The preferred success response is:
+The client does not send:
+
+- timestamp;
+- country;
+- source/public IP;
+- hostname or customer/site identity;
+- product diagnostics or inventory.
+
+Preferred success response:
 
 ```http
 204 No Content
@@ -109,41 +138,46 @@ The preferred success response is:
 
 The client must not depend on a response body.
 
-## 5. First heartbeat and authentication
+## 6. First heartbeat and authentication
 
 For a previously unseen `(product, installation_id)`:
 
 1. validate request structure and public-endpoint limits;
-2. derive the permitted country code;
+2. derive/normalize country;
 3. hash the supplied installation token;
-4. create the installation record;
-5. set `first_seen = now` and `last_seen = now`.
+4. create the installation credential record;
+5. append one heartbeat observation with server receive time.
 
 For an existing `(product, installation_id)`:
 
 1. verify the supplied token against the stored token hash;
 2. reject the request if verification fails;
-3. update mutable telemetry fields;
-4. keep `first_seen` unchanged.
+3. append one heartbeat observation with server receive time.
 
-A random UUID makes accidental installation-ID collision negligible. Rate limiting and abuse controls are still required because this is a public endpoint.
+The server must not create a new installation merely because product version or country changes.
 
-## 6. Heartbeat update semantics
+A random UUID makes accidental installation-ID collision negligible. Public endpoint abuse protections remain necessary.
 
-On accepted heartbeat:
+## 7. Append-only heartbeat semantics
+
+Every accepted heartbeat appends a new immutable observation:
 
 ```text
-version                  = current product version
-country                  = current derived ISO country code
-telemetry_policy_version = current client policy version
-last_seen                = now
+received_at
+product
+installation_id
+version
+country
+telemetry_policy_version
 ```
 
-`first_seen` never changes after record creation.
+`received_at` is generated by the server.
 
-The server must not create a new record merely because product version changes.
+The client timestamp is not part of protocol v1.
 
-## 7. Delete request
+Version/country changes are represented by later heartbeat rows. Previous observations are retained under the current no-retention policy.
+
+## 8. Delete request
 
 Endpoint:
 
@@ -165,31 +199,42 @@ Payload:
 {
   "schema": 1,
   "installation_id": "550e8400-e29b-41d4-a716-446655440000",
-  "product": "digitalhouses_recorder_app"
+  "product": "digitalhouses_pve_agent"
 }
 ```
 
 The server verifies the token for that `(product, installation_id)` before deletion.
 
-Preferred successful result:
+Successful deletion:
 
 ```http
 204 No Content
 ```
 
-Deletion must be idempotent from the client's operational perspective.
+A missing installation may return:
+
+```http
+404 Not Found
+```
+
+Clients may treat both successful 2xx and 404 as operational completion of deletion.
+
+Authenticated deletion removes:
+
+- installation credential record;
+- all retained heartbeat rows for that installation.
 
 `installation_id` alone must never authorize deletion.
 
-## 8. Client timing
+## 9. Client timing
 
 Normal target:
 
 ```text
-1 heartbeat / 24h
+1 successful heartbeat / 24h
 ```
 
-Recommended jitter:
+Recommended deterministic or random jitter:
 
 ```text
 24h ± 30 min
@@ -198,13 +243,13 @@ Recommended jitter:
 A client may additionally send one best-effort heartbeat:
 
 - immediately after telemetry becomes enabled;
-- after a successful upgrade that changes the product version.
+- after a successful upgrade that changes the released product version.
 
-The client must persist enough scheduling state to prevent repeated restart-triggered heartbeats.
+The client must persist enough scheduling state to prevent restart-triggered heartbeat storms.
 
-After a failed attempt, use a reasonable backoff or wait until the next normal window. Do not retry aggressively.
+After failure, use a reasonable backoff. Current implementation guidance recommends at least one hour before retry eligibility.
 
-## 9. Client failure behavior
+## 10. Client failure behavior
 
 Telemetry runs outside the critical product path.
 
@@ -222,9 +267,9 @@ server unavailable
 
 must not alter normal product operation.
 
-A diagnostic log entry is allowed. Repeated errors must not flood logs.
+A concise diagnostic log entry is allowed. Repeated errors must not flood logs.
 
-## 10. Server validation
+## 11. Server validation
 
 The server must validate at least:
 
@@ -237,106 +282,118 @@ The server must validate at least:
 - valid Semantic Version product version;
 - supported telemetry policy version;
 - required Authorization bearer token;
-- token length/format;
-- no unsupported payload expansion when strict schema validation is used.
+- token format/strength expectations;
+- no unsupported payload expansion.
 
 Malformed requests are rejected without creating telemetry records.
 
-## 11. Country derivation
+## 12. Country derivation
 
 Country is server-derived and stored as a two-letter ISO code.
 
-The client does not send country.
+The client never sends country.
 
-The telemetry application must not persist source IP.
-
-If a trusted edge/CDN already derives country, the preferred flow is:
+Production trust path:
 
 ```text
 source request
     ↓
-trusted edge derives country
+Cloudflare derives CF-IPCountry
     ↓
-telemetry service receives trusted country code
+Cloudflare Tunnel
     ↓
-telemetry database stores ISO code only
+telemetry service validates/normalizes country
+    ↓
+PostgreSQL stores country code
 ```
 
-Any edge header used for country must be accepted only from the trusted proxy path and must not be trusted directly from arbitrary internet clients.
-
-## 12. Data model
-
-Minimum installation record:
+Missing, malformed, or non-country values are normalized to:
 
 ```text
-installation_id
-product
-version
-country
-first_seen
-last_seen
-telemetry_policy_version
-installation_token_hash
+XX
 ```
 
-Unique key:
+The telemetry database must not contain a source-IP column.
+
+The application must trust country metadata only from the controlled proxy path.
+
+## 13. Data model
+
+Current minimum installation credential record:
+
+```text
+product
+installation_id
+installation_token_hash
+created_at
+```
+
+Unique/primary key:
 
 ```text
 (product, installation_id)
 ```
 
-Source IP must not be a telemetry database column.
-
-## 13. Required aggregate views
-
-Required metrics:
+Current heartbeat observation record:
 
 ```text
-observed installations within retention
+id
+received_at
+product
+installation_id
+version
+country
+telemetry_policy_version
+```
+
+Heartbeat rows reference the installation record and are deleted with it.
+
+Source IP is not part of either telemetry table.
+
+## 14. Aggregate semantics
+
+Required installation metrics:
+
+```text
+observed installations
 active 24h
 active 7d
 active 30d
 ```
 
-Required version report, normally scoped to active 7d:
+Definitions:
+
+- observed installation = retained installation credential row;
+- active N = installation with at least one accepted heartbeat in the corresponding time window;
+- version distribution = latest accepted heartbeat version for each retained installation;
+- country distribution = latest accepted heartbeat country for each retained installation;
+- daily history = unique installations and heartbeat count grouped by server UTC day.
+
+Operator views may scope version/country distributions to an active window, normally 7 days.
+
+Do not label telemetry counts as users, all installations, or complete installed base.
+
+## 15. Retention
+
+Current protocol-v1 production behavior:
 
 ```text
-digitalhouses_pve_agent
-
-0.5.8    143
-0.5.7     18
-0.5.6      4
+No automatic time-based retention cleanup is enabled.
 ```
 
-Required country report, normally scoped to active 7d:
+Heartbeat history remains retained until:
 
-```text
-KZ   126
-DE    21
-US    18
-PL     7
-```
+- authenticated installation deletion; or
+- a future repository-level policy/protocol revision introduces retention.
 
-Do not label these values as users or total installations.
+A future retention rule is a data-lifecycle change and must not be introduced only in one product or only in the server implementation.
 
-## 14. Retention
-
-Default installation-level retention:
-
-```text
-TELEMETRY_RETENTION_DAYS=60
-```
-
-Records whose `last_seen` is older than the configured retention period are deleted automatically.
-
-Retention cleanup must not depend on client availability.
-
-## 15. Security and abuse resistance
+## 16. Security and abuse resistance
 
 At minimum:
 
 - HTTPS only;
-- endpoint rate limiting;
+- endpoint rate limiting at the public boundary;
 - strict request-size limit;
 - product allowlist;
 - strict schema validation;
@@ -346,14 +403,20 @@ At minimum:
 - no remote command response;
 - no trust in a shared secret shipped with open-source clients.
 
-Per-installation credentials protect an existing record from unauthorized mutation/deletion. They are not software attestation and do not prove that a request originated from an official unmodified build.
+Per-installation credentials protect an existing identity from unauthorized mutation/deletion. They are not software attestation and do not prove that a request originated from an official unmodified build.
 
-## 16. Versioning
+Production adoption statistics should be protected from development noise by product-side release-build gating as described in the implementation guide and Release Policy.
+
+## 17. Versioning
 
 `schema: 1` identifies this wire contract.
 
+`telemetry_policy_version: 1` identifies the client privacy/telemetry policy contract currently accepted by the server.
+
 Backward-incompatible wire changes require a new protocol schema.
 
-Adding a new telemetry data field also requires privacy-policy review before protocol adoption.
+Adding a telemetry payload field requires policy review before adoption.
+
+Changing the production product allowlist requires coordinated server/protocol/product updates but does not by itself require a new wire schema.
 
 Product release versions remain governed by [DigitalHouses Release Policy](RELEASE_POLICY.md).

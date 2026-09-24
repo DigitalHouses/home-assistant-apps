@@ -132,6 +132,7 @@ The following shared documents are normative repository contracts and apply to p
 - [DigitalHouses Immutable Delivery, Compact Backup and Telemetry Standard](IMMUTABLE_DELIVERY_AND_TELEMETRY_STANDARD.md)
 - [DigitalHouses Product Telemetry Policy](PRODUCT_TELEMETRY_POLICY.md)
 - [DigitalHouses Telemetry Protocol v1](TELEMETRY_PROTOCOL_V1.md)
+- [DigitalHouses Telemetry Implementation Guide](TELEMETRY_IMPLEMENTATION_GUIDE.md)
 
 Developers must implement product changes consistently with these contracts.
 
