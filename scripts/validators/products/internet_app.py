@@ -163,7 +163,7 @@ def validate_presentation_examples(
         app / "examples" / "packages" / "dh_internet_app_global_package.yaml"
     )
     notification_path = (
-        app / "examples" / "packages" / "dh_internet_app_notification_package.yaml"
+        app / "examples" / "packages" / "dh_internet_app_notification_local_package.yaml"
     )
     notification_ru_path = (
         app
@@ -171,7 +171,7 @@ def validate_presentation_examples(
         / "packages"
         / "locales"
         / "ru"
-        / "dh_internet_app_notification_package.yaml"
+        / "dh_internet_app_notification_local_package.yaml"
     )
     dashboard_path = (
         app / "examples" / "lovelace" / "dh_internet_app_dashboard.yaml"
@@ -193,12 +193,12 @@ def validate_presentation_examples(
         fail(f"{app.name}: invalid global presentation package")
     if (
         not isinstance(notification, dict)
-        or "dh_internet_app_notification_package" not in notification
+        or "dh_internet_app_notification_local_package" not in notification
     ):
         fail(f"{app.name}: invalid notification package")
     if (
         not isinstance(notification_ru, dict)
-        or "dh_internet_app_notification_package" not in notification_ru
+        or "dh_internet_app_notification_local_package" not in notification_ru
     ):
         fail(f"{app.name}: invalid Russian notification package")
     if not isinstance(dashboard, dict) or dashboard.get("path") != "internet":
@@ -212,30 +212,35 @@ def validate_presentation_examples(
     if "automation:" in global_text:
         fail(f"{app.name}: global package must remain Recorder-only")
     for text in (notification_text, notification_ru_text):
-        if "event.dh_internet_app_event" not in text:
-            fail(f"{app.name}: notification package must consume canonical Event")
-        if "dh_internet_app_notification" not in text:
-            fail(f"{app.name}: notification package must emit neutral event")
-        for required_contract_marker in (
-            "notification_schema_version: 1",
+        for required_marker in (
+            "event.dh_internet_app_event",
             "- id: dh_internet_app_notifications",
-            "kind: contract_error",
-            "contract: dh_internet_app_machine_event_v2",
-            "failure_class:",
+            "trigger: event.received",
+            "condition: trigger",
+            "trigger.to_state.attributes",
         ):
-            if required_contract_marker not in text:
+            if required_marker not in text:
                 fail(
                     f"{app.name}: notification package is missing "
-                    f"{required_contract_marker!r}"
+                    f"{required_marker!r}"
                 )
-        if "raw:" in text:
-            fail(f"{app.name}: notification package must not forward raw payload")
-        for private_dependency in ("script.write2log", "notify.mobile_app", "telegram_bot."):
-            if private_dependency in text:
+        for forbidden_marker in (
+            "event: dh_internet_app_notification",
+            "notification_schema_version",
+            "kind: contract_error",
+            "failure_class:",
+            "machine_schema_version",
+        ):
+            if forbidden_marker in text:
                 fail(
-                    f"{app.name}: notification package contains private dependency "
-                    f"{private_dependency!r}"
+                    f"{app.name}: notification package must use direct delivery; "
+                    f"found legacy marker {forbidden_marker!r}"
                 )
+
+    if "persistent_notification.create" not in notification_text:
+        fail(f"{app.name}: English notification example must deliver directly")
+    if "script.write2log" not in notification_ru_text:
+        fail(f"{app.name}: Russian local notification package must deliver directly")
 
     if "dh_internet_app_" not in dashboard_text:
         fail(f"{app.name}: dashboard must use canonical entities")
