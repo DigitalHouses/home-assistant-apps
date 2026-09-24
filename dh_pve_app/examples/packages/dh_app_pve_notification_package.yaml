@@ -696,13 +696,13 @@ dh_app_pve_notification_package:
                         title: "🔋⚠️ UPS: active problems after startup"
                         message: >-
                           {% set labels = {
-                        'nut_unavailable': 'NUT unavailable',
-                        'on_battery': 'Utility power unavailable',
-                        'low_battery': 'Low battery',
-                        'overload': 'UPS overload',
-                        'replace_battery': 'Battery replacement required',
-                        'bypass': 'UPS bypass active',
-                        'power_state_unknown': 'UPS power state unknown'
+                          'nut_unavailable': 'NUT unavailable',
+                          'on_battery': 'Utility power unavailable',
+                          'low_battery': 'Low battery',
+                          'overload': 'UPS overload',
+                          'replace_battery': 'Battery replacement required',
+                          'bypass': 'UPS bypass active',
+                          'power_state_unknown': 'UPS power state unknown'
                           } %}
                           Active problems detected after startup: {{ problem_count | int }}.
                           {% for item in active %}
