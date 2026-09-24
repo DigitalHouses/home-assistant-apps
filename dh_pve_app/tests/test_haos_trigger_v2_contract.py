@@ -182,3 +182,64 @@ def test_ui_closes_trigger_editor_only_for_valid_v2_config_changed_contract():
         assert token in section
 
     assert section.index("condition: template") < section.index("option: view")
+
+
+def test_ui_numeric_contract_is_validated_before_float_conversion():
+    text = UI_PACKAGE.read_text(encoding="utf-8")
+    open_section = text.split("    dh_app_pve_ups_trigger_open:", 1)[1].split(
+        "    dh_app_pve_ups_trigger_cancel:", 1
+    )[0]
+    cancel_section = text.split("    dh_app_pve_ups_trigger_cancel:", 1)[1].split(
+        "    dh_app_pve_ups_trigger_review:", 1
+    )[0]
+    apply_section = text.split("    dh_app_pve_ups_trigger_apply:", 1)[1].split(
+        "  automation:", 1
+    )[0]
+
+    for token in (
+        "is_number(active_charge)",
+        "is_number(active_reserve)",
+        "is_number(draft_charge)",
+        "is_number(draft_reserve)",
+    ):
+        assert token in open_section
+
+    for token in (
+        "snapshot_charge:",
+        "snapshot_reserve:",
+        "is_number(snapshot_charge)",
+        "is_number(snapshot_reserve)",
+        "is_number(draft_charge)",
+        "is_number(draft_reserve)",
+    ):
+        assert token in cancel_section
+
+    for token in (
+        "current_charge_raw:",
+        "current_reserve_raw:",
+        "active_charge_raw:",
+        "active_reserve_raw:",
+        "is_number(current_charge_raw)",
+        "is_number(current_reserve_raw)",
+        "is_number(active_charge_raw)",
+        "is_number(active_reserve_raw)",
+    ):
+        assert token in apply_section
+
+    for unsafe in (
+        "states('number.dh_app_pve_ups_shutdown_battery_charge_threshold') | float",
+        "states('number.dh_app_pve_ups_shutdown_runtime_reserve') | float",
+        "states('input_number.dh_app_pve_ups_trigger_snapshot_charge') | float",
+        "states('input_number.dh_app_pve_ups_trigger_snapshot_reserve') | float",
+    ):
+        assert unsafe not in text
+
+
+def test_ui_contract_failures_are_explicit_notifications():
+    text = UI_PACKAGE.read_text(encoding="utf-8")
+
+    assert text.count("kind: contract_error") >= 3
+    assert "contract: ups_trigger_ui" in text
+    assert "failure_class: invalid_required_state" in text
+    assert "failure_class: acknowledgement_timeout" in text
+    assert "event: dh_app_pve_notification" in text
