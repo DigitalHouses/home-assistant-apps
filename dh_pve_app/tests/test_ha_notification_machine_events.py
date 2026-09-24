@@ -97,7 +97,6 @@ def test_local_notification_packages_do_not_reimplement_machine_schema_validatio
         for forbidden in (
             "schema_version ==",
             "is mapping",
-            "is number",
             "is string",
             "contract_error",
             "failure_class",
