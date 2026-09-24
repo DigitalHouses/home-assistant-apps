@@ -279,3 +279,31 @@ jobs:
       - name: Run tests
         working-directory: digitalhouses-stats
         run: python -m pytest tests -q
+
+
+  release-readiness:
+    name: Release readiness
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out exact PR head
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Validate automatic release candidates
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          python scripts/release_candidates.py \
+            --base "$BASE_SHA" \
+            --head "$HEAD_SHA" \
+            --validate
