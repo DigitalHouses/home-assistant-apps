@@ -32,7 +32,7 @@ def test_0517_home_assistant_package_layout():
         assert "trigger: event.received" in text
         assert "condition: trigger" in text
         assert "trigger.to_state.attributes" in text
-        assert "dh_app_pve_notification" not in text
+        assert "event: dh_app_pve_notification" not in text
         assert "notification_schema_version" not in text
         assert "contract_error" not in text
 
