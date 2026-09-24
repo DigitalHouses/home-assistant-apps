@@ -168,23 +168,33 @@ class PresentationTests(unittest.TestCase):
             content = path.read_text(encoding="utf-8")
             for index, event_type in enumerate(NOTIFICATION_EVENTS):
                 marker = f"a.event_type == '{event_type}'"
-                start = content.find(marker)
+                marker_pos = content.find(marker)
+                self.assertNotEqual(
+                    marker_pos,
+                    -1,
+                    f"{path.name}: missing validation for {event_type}",
+                )
+                start = content.rfind(
+                    "                  value_template: >-",
+                    0,
+                    marker_pos,
+                )
                 self.assertNotEqual(
                     start,
                     -1,
-                    f"{path.name}: missing validation for {event_type}",
+                    f"{path.name}: missing validation template for {event_type}",
                 )
                 next_positions = [
                     content.find(
                         f"a.event_type == '{other}'",
-                        start + len(marker),
+                        marker_pos + len(marker),
                     )
                     for other in NOTIFICATION_EVENTS[index + 1 :]
                 ]
                 next_positions = [pos for pos in next_positions if pos != -1]
                 end = min(next_positions) if next_positions else content.find(
                     "          default:",
-                    start,
+                    marker_pos,
                 )
                 branch = content[start:end]
                 self.assertIn("a.schema_version == 2", branch)
