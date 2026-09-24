@@ -1,78 +1,43 @@
-# DigitalHouses Events and Multilingual Notifications Standard
+# DigitalHouses Events & Notifications Standard
 
 **Status:** Normative repository policy
 
-**Scope:** All DigitalHouses Apps, Linux agents, Home Assistant Apps/packages and other products that generate user-visible notifications.
+**Scope:** All DigitalHouses Apps, Linux agents and other products that publish machine events intended for Home Assistant automation.
 
-This standard complements [DigitalHouses Contract Data Policy](CONTRACT_DATA_POLICY.md). Contract data validation rules from that policy apply at every boundary defined here.
+This standard complements [DigitalHouses Contract Data Policy](CONTRACT_DATA_POLICY.md).
 
 ---
 
-## 1. Purpose
+## 1. Principle
 
-DigitalHouses products must separate three concerns:
-
-1. **machine event** — factual machine-readable information about what happened;
-2. **localized presentation** — human-readable text in the selected installation language;
-3. **delivery** — mobile notification, Telegram, file log, persistent notification, email, TTS or another site-specific mechanism.
-
-Canonical flow:
+DigitalHouses uses the shortest possible notification path:
 
 ```text
-App / Agent
-    ↓
 machine event
-    ↓
-Home Assistant locale package
-    ↓
-localized notification event
-    ↓
-installation-owned delivery
+→ trigger.id
+→ choose
+→ direct action
 ```
 
-Core rule:
+The public product publishes facts.
 
-> **The product describes facts. The locale package describes those facts to a human. The installation decides how the notification is delivered.**
+The local Home Assistant installation decides:
 
-The App/Agent must not know the user's presentation language or notification transport.
+- language;
+- human-readable text;
+- formatting;
+- destination;
+- delivery service.
+
+There is no intermediate DigitalHouses notification protocol.
 
 ---
 
-## 2. Terminology
+## 2. Product boundary
 
-This standard distinguishes two event layers.
+A DigitalHouses App or Agent publishes **machine events only**.
 
-### Machine event
-
-A machine event is emitted by the product and carries machine semantics only.
-
-For MQTT-based products the normal Home Assistant representation is an MQTT Event entity such as:
-
-```text
-event.dh_app_pve_ups_diagnostic
-```
-
-### Localized notification event
-
-A localized notification event is a Home Assistant event-bus event produced by a locale package after machine-contract validation and localization.
-
-Example:
-
-```text
-dh_app_pve_notification
-```
-
-It is transport-neutral and may be consumed by any installation-owned delivery automation.
-
-Do not confuse the MQTT Event entity with the localized Home Assistant notification event.
-
----
-
-## 3. Machine events contain facts, not prose
-
-An App or Agent must emit machine semantics only.
-
-A machine event may contain:
+The product may publish fields such as:
 
 ```text
 schema_version
@@ -82,14 +47,36 @@ identifiers
 category
 severity
 previous/current values
-numeric measurements
+measurements
 thresholds
 reason codes
 state lists
 revision numbers
-source/provenance codes
 other event-specific machine fields
 ```
+
+The product must not publish localized or user-facing presentation as part of the machine-event contract.
+
+Examples of presentation that belongs outside the producer:
+
+```text
+localized title
+localized message
+emoji chosen for presentation
+translated status text
+user-specific delivery target
+Telegram/mobile/write2log routing
+```
+
+The prohibition is semantic, not based on literal field names. If an upstream machine protocol genuinely defines a field named `message`, it may remain machine data when that meaning is documented.
+
+---
+
+## 3. Event-specific machine contracts
+
+Each `event_type` has its own machine schema.
+
+Do not create one universal event payload containing unrelated fields.
 
 Example:
 
@@ -104,66 +91,19 @@ current_charger_status: idle
 detection_source: charger_transition
 ```
 
-The product must not emit **user-facing or localized presentation semantics** as part of the machine-event contract.
+The producer owns correctness of this payload.
 
-Presentation-oriented fields commonly include:
+Required/optional semantics and the prohibition of silent fallback are governed by [DigitalHouses Contract Data Policy](CONTRACT_DATA_POLICY.md).
 
-```text
-title
-message
-summary
-details
-emoji
-localized labels
-status_ru
-status_en
-problem_text
-human-readable translated reason
-```
+A local notification automation consumes the published event contract directly. It does not create a second validation layer for the same event.
 
-The prohibition is semantic, not a ban on a literal key name. If an upstream machine protocol genuinely defines a field named `message` or `details` as machine data, the product may preserve it when that field is part of the documented machine contract. It must not turn that field into localized user-facing prose inside the producer.
-
-Forbidden presentation example:
-
-```yaml
-event_type: battery_fully_charged
-title: "UPS battery charged"
-message: "Battery charge reached 100%"
-```
+If a required field is missing or invalid, that is a producer/product defect. The local package must not hide it by inventing a replacement value.
 
 ---
 
-## 4. Event-specific schemas
+## 4. MQTT Event transport
 
-Each `event_type` has its own schema.
-
-Do not create one universal payload that requires every field used by every event.
-
-For example:
-
-```text
-battery_fully_charged
-```
-
-must contain only the fields required to describe charge-cycle completion. It must not require unrelated fields such as:
-
-```text
-active_problem_count
-shutdown_budget_seconds
-cpu_temperature
-```
-
-unless those fields are explicitly part of that event contract.
-
-Required and optional fields are governed by [DigitalHouses Contract Data Policy](CONTRACT_DATA_POLICY.md).
-
-Missing or invalid required fields are contract errors and must never be replaced with silent fallback values.
-
----
-
-## 5. Machine event transport
-
-For MQTT-based DigitalHouses products, transient machine events should normally use Home Assistant MQTT Event Discovery.
+For MQTT-based products, transient machine events should normally use Home Assistant MQTT Event Discovery.
 
 Canonical event publication:
 
@@ -172,15 +112,13 @@ QoS: 1
 retain: false
 ```
 
-A machine event represents:
+A machine event means:
 
-> **something that happened**
+> something happened
 
-It is not the authoritative current state.
+It is not authoritative current state.
 
 Current state that must survive reconnects must be published separately through retained sensors, binary sensors or another explicit state contract.
-
-Therefore:
 
 ```text
 Event       = transition / occurrence
@@ -188,15 +126,13 @@ State       = current fact
 Retained    = current-state recovery
 ```
 
-Retained machine-event payloads must not be used as a substitute for authoritative current state.
-
-MQTT Discovery configuration itself may be retained according to normal Home Assistant discovery practice; this rule concerns the transient machine-event payload.
+MQTT Discovery configuration may be retained according to normal Home Assistant discovery practice. The `retain: false` rule above concerns the transient machine-event payload.
 
 ---
 
-## 6. Publication ordering
+## 5. Publication ordering
 
-When one operation changes current state and generates an event, preferred publication order is:
+When one operation changes current state and emits an event, preferred order is:
 
 ```text
 1. update authoritative current state
@@ -204,663 +140,346 @@ When one operation changes current state and generates an event, preferred publi
 3. publish transient machine event
 ```
 
-This allows a consumer that receives the event to observe already-synchronized current state.
-
-If the product uses durable event retry/outbox logic, it must preserve the same semantic ordering and must not advance authoritative event processing in a way that makes a later event overtake an earlier required event.
+If durable event retry/outbox logic is used, it must preserve event ordering.
 
 ---
 
-## 7. Localization belongs outside the App/Agent
+## 6. Local Home Assistant notification package
 
-Human-readable notification text belongs in the Home Assistant presentation layer.
+Human-readable notification logic belongs to the **local Home Assistant installation**.
 
-Canonical package layout:
+A local package may use any language and any delivery mechanism required by that installation.
 
-```text
-examples/packages/
-    <product>_notification_package.yaml
-
-examples/packages/locales/
-    ru/
-        <product>_notification_package.yaml
-    de/
-        <product>_notification_package.yaml
-    <locale>/
-        <product>_notification_package.yaml
-```
-
-The default public locale should normally be English.
-
-Example:
+Examples:
 
 ```text
-examples/packages/dh_app_pve_notification_package.yaml
-examples/packages/locales/ru/dh_app_pve_notification_package.yaml
+script.write2log
+notify.mobile_app_*
+Telegram
+persistent_notification
+email
+Slack
+TTS
+Node-RED
+webhook
+other local service
 ```
 
-Only one locale package for a product is installed in one Home Assistant instance.
+This package is installation-specific. It is not part of the public DigitalHouses product contract.
 
-Language selection is installation-scoped. The App/Agent must not inspect or depend on Home Assistant user-language settings.
-
-Existing products with an older locale-file layout should converge on the canonical layout during their next relevant notification-contract change; the path change alone must not alter runtime event identities.
+The public App/Agent must work correctly without that package.
 
 ---
 
-## 8. Locale packages are interchangeable
+## 7. Canonical Home Assistant pattern
 
-Different language versions of one notification package must expose the same:
+For each machine event used for notification:
 
-```text
-package key
-automation IDs
-input machine-event contract
-output notification-event contract
-```
-
-They may differ only in presentation:
-
-```text
-title
-message
-labels
-human-readable formatting
-emoji
-```
-
-Changing language must not require changing the App/Agent.
-
-Conceptually:
-
-```text
-same machine event
-       ↓
- ┌─────┴─────┐
- EN locale   RU locale
- └─────┬─────┘
-       ↓
-same notification contract
-```
-
----
-
-## 9. Locale package responsibilities
-
-The locale package must:
-
-1. receive the product machine event;
-2. identify its `event_type`;
-3. validate the schema for that exact event type;
-4. format valid machine fields;
-5. create localized `title` and `message`;
-6. emit a product-specific Home Assistant notification event.
-
-Example:
-
-```text
-event.dh_app_pve_ups_diagnostic
-        ↓
-RU notification package
-        ↓
-dh_app_pve_notification
-```
-
-Every normal localized notification event must use the common DigitalHouses Notification Envelope defined in §10.
+1. create an `event.received` trigger;
+2. give it a clear `trigger.id`;
+3. route actions using `choose` by `trigger.id`;
+4. read event data directly from `trigger.to_state.attributes`;
+5. call the final delivery action directly.
 
 Example:
 
 ```yaml
-notification_schema_version: 1
-source: dh_app_pve
-kind: battery_fully_charged
-severity: info
-title: "🔋✅ UPS: батарея заряжена"
-message: "Заряд: 99% → 100% · режим зарядки: charging → idle."
-source_entity: event.dh_app_pve_ups_diagnostic
-category: ups
-observed_at: "2026-09-24T20:25:56+05:00"
+automation:
+  - id: dh_local_pve_notifications
+    alias: DH PVE · Notifications
+
+    triggers:
+      - trigger: event.received
+        target:
+          entity_id: event.dh_app_pve_ups_diagnostic
+        options:
+          event_type:
+            - battery_fully_charged
+        id: battery_full
+
+    actions:
+      - choose:
+          - conditions:
+              - condition: trigger
+                id:
+                  - battery_full
+            sequence:
+              - action: script.write2log
+                data:
+                  title: "🔋✅ UPS: батарея заряжена"
+                  message: >-
+                    Заряд: {{ trigger.to_state.attributes.current_charge_percent }}%.
 ```
 
-At this boundary `title` and `message` are presentation data and are required.
+The important property is direct traceability:
 
-The source machine `schema_version` may be propagated only as explicitly named provenance data when useful, but it must not replace or masquerade as `notification_schema_version`.
+```text
+event
+→ trigger.id
+→ choose branch
+→ final action
+```
 
-Locale packages must not blindly copy the complete machine payload into the notification event through fields such as `raw`, `attributes`, `payload`, `context` or equivalent catch-all passthrough objects. Additional machine context may be exposed only through explicitly selected, documented notification fields. This prevents accidental coupling of the delivery contract to the producer schema and prevents unintended data from crossing the presentation boundary.
+A person opening the YAML should immediately see which event produces which message and where it is delivered.
 
 ---
 
-## 10. DigitalHouses Notification Envelope v1
+## 8. Trigger IDs
 
-The localized Home Assistant notification event is a public cross-product contract independent from the source machine-event schema.
+Every notification trigger must have an explicit, readable `id`.
 
-All notification-capable DigitalHouses products use the same mandatory envelope.
-
-### Required fields
-
-```yaml
-notification_schema_version: 1
-source: <stable product notification source>
-kind: <stable notification kind>
-severity: <info|warning|error|critical>
-title: <non-empty localized string>
-message: <non-empty localized string>
-```
-
-The six fields above are mandatory for every normal notification and for every `contract_error` notification.
-
-Contract rules:
-
-- `notification_schema_version` must be the integer `1` for Envelope v1;
-- `source` must be a non-empty stable machine identifier for the producing DigitalHouses product, for example `dh_app_pve` or `dh_internet_app`;
-- `kind` must be a non-empty stable machine-readable notification kind;
-- `severity` must be exactly one of `info`, `warning`, `error`, `critical`;
-- `title` must be a non-empty localized human-readable string;
-- `message` must be a non-empty localized human-readable string.
-
-A delivery adapter may therefore consume notification payloads from different DigitalHouses products without product-specific payload field mapping. The Home Assistant event types themselves remain product-specific and the installation subscribes to the event types it chooses to consume.
-
-Conceptually:
+Examples:
 
 ```text
-PVE ──────┐
-Internet ─┼→ Notification Envelope v1 → installation-owned delivery
-Plex ─────┘
+battery_full
+power_lost
+power_restored
+problem_started
+problem_recovered
+shutdown_committed
 ```
 
-### Optional common fields
+The ID is local Home Assistant routing metadata. It is not part of the machine-event schema and does not need to equal `event_type`.
 
-The following common fields are optional when their facts exist and are useful:
-
-```text
-source_entity
-category
-observed_at
-```
-
-Products may define additional explicit notification fields for structured context, provided that:
-
-- they do not replace any required Envelope v1 field;
-- they are documented;
-- all locale variants expose the same field semantics;
-- they are selected explicitly rather than copied wholesale from the machine payload;
-- absence follows the Contract Data Policy and is never repaired with a fabricated value.
-
-### Version independence
-
-`notification_schema_version` versions the localized notification envelope only.
-
-It is independent from:
-
-- machine-event `schema_version`;
-- product release version;
-- telemetry schema version;
-- MQTT Discovery metadata.
-
-A compatibility-breaking change to required envelope fields or their semantics requires a new notification envelope version.
-
-All locale variants of one product must expose the same notification envelope version and semantics.
-
-### Migration
-
-New notification-capable products must implement Notification Envelope v1 from their first release.
-
-Existing products that already emit localized notification events must converge on Envelope v1 in their next notification-contract change. Until migrated, their legacy output is compatibility debt and must not be used as precedent for new products.
-
-A product currently changing its notification architecture is considered in-scope for this migration and must implement Envelope v1 as part of that work.
+Use IDs that make the `choose` block understandable without tracing unrelated templates.
 
 ---
 
-## 11. Contract validation happens before presentation
+## 9. Direct event data access
 
-A locale package must never repair an invalid machine event.
-
-Forbidden when the value is required contract data:
+Notification text should use the machine event directly:
 
 ```jinja
-{{ title | default('DigitalHouses') }}
-{{ count | int(0) }}
-{{ reason | default('Unknown') }}
+{{ trigger.to_state.attributes.current_charge_percent }}
 ```
 
-Correct behavior:
+Do not introduce:
 
-```text
-valid event
-    ↓
-normal localized notification
+- Notification Envelope;
+- a second DigitalHouses notification event;
+- adapters between locale and delivery;
+- copies of the whole event payload;
+- a second schema-validation layer in Home Assistant.
 
-invalid event
-    ↓
-explicit contract_error diagnostic
-```
-
-An invalid event must never accidentally become a normal user notification.
-
-This rule is governed by [DigitalHouses Contract Data Policy](CONTRACT_DATA_POLICY.md).
+Jinja may format valid event data for presentation, but it must not silently manufacture missing required machine data.
 
 ---
 
-## 12. Contract errors
+## 10. No notification Envelope
 
-If a locale package receives an invalid event, it must fail visibly.
+DigitalHouses does **not** define a shared notification Envelope.
 
-Every `contract_error` notification must satisfy Notification Envelope v1 and must additionally contain:
+The following architecture is not used:
 
-```yaml
-kind: contract_error
-severity: error
-contract: <stable machine-readable contract identifier>
-failure_class: <stable machine-readable failure class>
+```text
+machine event
+→ locale package
+→ <product>_notification event
+→ adapter
+→ delivery
 ```
 
-Therefore a `contract_error` always contains at least:
+Fields such as these are not required as an intermediate notification protocol:
 
 ```text
 notification_schema_version
 source
-kind = contract_error
-severity = error
+kind
 title
 message
 contract
 failure_class
 ```
 
-`contract` and `failure_class` must be non-empty machine-readable identifiers. They must not be localized prose.
-
-The following diagnostic context is optional when applicable:
-
-```text
-field
-event_type
-source_entity
-category
-observed_at
-```
-
-Typical `failure_class` values include:
-
-```text
-missing_required_field
-invalid_type
-invalid_value
-invalid_schema_version
-invalid_retained_aggregate
-freshness_timeout
-```
-
-The diagnostic must provide enough context to locate the broken contract without exposing credentials, secrets or private payload content.
-
-A contract error is not a substitute for a normal domain event and must be distinguishable from ordinary operational notifications.
+If a final delivery service itself requires `title` and `message`, the local automation creates them directly for that action.
 
 ---
 
-## 13. Startup reconciliation
+## 11. No secondary notification events
 
-Transient Events are not a recovery mechanism for Home Assistant downtime.
+A local package must not create an additional DigitalHouses Home Assistant event merely to transport already-localized notification data.
 
-A product that needs startup/reconnect notification reconciliation must maintain a separate authoritative retained state.
+For notification delivery, the original machine Event is the trigger and the chosen service is the destination.
 
-Example:
-
-```text
-live transition
-    → transient Event
-
-HA restart / reconnect
-    → retained current-state aggregate
-    → startup reconciliation
-```
-
-Startup reconciliation must never fabricate a healthy state.
-
-For example:
-
-```text
-missing problem count != 0
-missing active list    != []
-missing severity       != warning
-missing timestamp      != now()
-```
-
-Unknown, stale or malformed retained state must become an explicit diagnostic condition according to the Contract Data Policy.
-
-Where freshness matters, retained state must expose enough timestamp/age information to distinguish current, stale and unknown state.
+This avoids duplicated contracts and duplicated event routing.
 
 ---
 
-## 14. Notification delivery is outside the product contract
+## 12. No adapters
 
-The public DigitalHouses notification architecture ends at the localized notification event.
+No DigitalHouses notification adapter layer is required.
 
-Example:
-
-```text
-dh_app_pve_notification
-```
-
-What happens after that is controlled by the Home Assistant installation.
-
-Possible consumers include:
-
-```text
-notify.mobile_app_*
-Telegram
-persistent_notification
-email
-Slack
-file logging
-Node-RED
-custom automation
-speech/TTS
-external webhook
-```
-
-The product must not require any particular delivery mechanism.
-
----
-
-## 15. `write2log` is private installation infrastructure
-
-`script.write2log` is not part of the public DigitalHouses repository contract.
-
-It is a private/site-local mechanism used by the repository owner in his own Home Assistant installation.
-
-Therefore:
-
-- `write2log` is not distributed with Apps or Agents;
-- public DigitalHouses packages must not depend on it;
-- public product documentation must not require it;
-- a product must work without `write2log`;
-- the `script.write2log` implementation is not published as part of a DigitalHouses product.
-
-A private installation may connect:
-
-```text
-dh_app_pve_notification
-        ↓
-script.write2log
-        ↓
-private delivery stack
-```
-
-but this is installation-owned delivery, not part of `dh_app_pve`.
-
----
-
-## 16. User-owned notification delivery
-
-Every user must be free to connect a preferred notification mechanism.
-
-Example:
-
-```yaml
-automation:
-  - alias: PVE notifications to mobile
-    triggers:
-      - trigger: event
-        event_type: dh_app_pve_notification
-    actions:
-      - action: notify.mobile_app_phone
-        data:
-          title: "{{ trigger.event.data.title }}"
-          message: "{{ trigger.event.data.message }}"
-```
-
-This adapter is intentionally outside the reusable product package.
-
-DigitalHouses exposes a stable localized notification event contract instead of forcing users to adopt a DigitalHouses delivery service.
-
-Installation-owned adapters are still contract consumers: they must validate any fields they require and must not repair missing required notification data with silent fallbacks.
-
----
-
-## 17. No direct delivery from Apps or Agents
-
-Apps and Linux agents must not directly send:
-
-```text
-Telegram messages
-Home Assistant mobile notifications
-emails
-persistent notifications
-write2log calls
-user-facing localized messages
-```
-
-unless direct notification delivery is itself the explicit purpose of that product.
-
-For normal DigitalHouses infrastructure products:
-
-```text
-App/Agent → machine event
-```
-
-is the presentation boundary.
-
----
-
-## 18. No direct delivery from reusable locale packages
-
-Reusable public locale packages must stop at:
-
-```text
-<product>_notification
-```
-
-They must not call:
-
-```text
-script.write2log
-notify.mobile_app_*
-notify.telegram
-telegram_bot.*
-persistent_notification.create
-```
-
-as part of the reusable contract.
-
-This keeps localization reusable and delivery installation-specific.
-
----
-
-## 19. Naming
-
-Each notification-capable product should define stable names for three distinct interfaces.
-
-### Machine event entities
+The local Home Assistant automation calls the desired service directly.
 
 Examples:
 
 ```text
-event.dh_app_pve_diagnostic
-event.dh_app_pve_ups_diagnostic
+machine Event → script.write2log
+machine Event → notify.mobile_app_phone
+machine Event → Telegram action
+machine Event → persistent_notification.create
 ```
 
-### Machine `event_type`
+Changing the delivery mechanism is a local Home Assistant change and does not require changing the App/Agent.
 
-Examples:
+---
+
+## 13. No repeated machine-event validation in the local package
+
+The App/Agent is responsible for publishing a valid event according to its machine schema and tests.
+
+The local package should not duplicate that schema with large Jinja validation trees.
+
+Therefore the normal path is:
 
 ```text
-problem_started
-problem_updated
-problem_recovered
-config_changed
-ups_status_changed
-battery_discharge_level_crossed
-battery_fully_charged
-shutdown_committed
+valid producer event
+→ trigger
+→ presentation
+→ delivery
 ```
 
-### Localized notification event
+not:
 
-Use a product-specific stable Home Assistant event.
+```text
+producer event
+→ duplicate schema validator
+→ contract_error notification protocol
+→ adapter
+→ delivery
+```
+
+If the producer violates its own required event contract, fix the producer and its product tests.
+
+Do not hide the defect with default values in the local package.
+
+---
+
+## 14. Event absence
+
+If a transient event does not arrive while Home Assistant is unavailable, no live notification is generated for that event.
+
+That is expected Event semantics.
+
+Do not recreate missed transient notifications by replaying retained Event payloads.
+
+---
+
+## 15. Startup reconciliation
+
+If a product requires reconciliation after Home Assistant restart/reconnect, implement it as a **separate automation** from live event notifications.
 
 Example:
 
 ```text
-dh_app_pve_notification
+live notification automation
+    ← transient machine Events
+
+startup reconciliation automation
+    ← authoritative retained current state
 ```
 
-Do not use machine `event_type` values as localized text.
+Do not mix startup reconciliation into every live-event branch.
 
-Once released, these identifiers are compatibility interfaces and must not be renamed casually.
+Startup reconciliation must still respect the Contract Data Policy and must not turn unknown state into a fabricated healthy state.
 
 ---
 
-## 20. Severity
+## 16. Public vs local responsibility
 
-Notification Envelope v1 uses the canonical severity vocabulary:
+### Public DigitalHouses product
 
-```text
-info
-warning
-error
-critical
-```
+Owns:
 
-Machine-event contracts should use the same vocabulary when severity is part of their machine semantics.
+- machine-event semantics;
+- machine-event schemas;
+- Event Discovery;
+- authoritative state used for recovery where needed;
+- product tests proving machine-event correctness.
 
-A locale may change presentation:
+Must not depend on:
 
-```text
-info     → ℹ️
-warning  → ⚠️
-error    → ❌
-critical → 🚨
-```
+- `script.write2log`;
+- Telegram;
+- a specific `notify.*`;
+- a local language;
+- a customer-specific Home Assistant automation.
 
-but must not change the underlying semantic severity.
+### Local Home Assistant installation
 
-Severity is machine semantics only when the producer can determine it from the product contract. A locale package must not silently upgrade or downgrade semantic severity for presentation convenience.
+Owns:
 
----
-
-## 21. Repository requirements
-
-For every product that supports user notifications, the repository must contain:
-
-```text
-machine-event producer
-machine-event schema/tests
-default locale package
-negative contract tests
-```
-
-Additional locale packages are optional and may be supplied where maintained.
-
-The repository must not require the maintainer's private notification-delivery implementation.
-
-New notification-capable products must follow this standard from their first release.
-
-Existing products must converge when their notification architecture is next materially changed. A product is not considered migrated merely because this document exists; its product tests must enforce the applicable behavioral contract.
-
-### Validation responsibility
-
-Repository validation and product testing have different responsibilities.
-
-The repository validator checks repository structure and shared repository metadata. It may require that mandatory files, tests, packages and normative documents exist, but it must not attempt to prove notification behavior by duplicating product implementation tests or by becoming a parser for every product's Home Assistant/Jinja logic.
-
-The product developer is responsible for implementing this standard and for proving compliance in the product's own automated tests.
-
-CI enforces the standard by running those product tests as part of the complete repository test suite.
-
-Product-specific compatibility validators may protect stable released identifiers or other repository-level compatibility facts, but they must not replace behavioral notification tests or become a second implementation of the product's notification logic.
-
-In short:
-
-```text
-shared policy
-    ↓
-product implementation
-    ↓
-product tests prove behavior
-    ↓
-repository CI runs the tests
-```
+- which events are interesting to the user;
+- `trigger.id` naming;
+- notification language;
+- title/message text;
+- formatting and emoji;
+- final delivery action;
+- optional startup reconciliation automation.
 
 ---
 
-## 22. Required tests
+## 17. Public examples
 
-Every product using this architecture must test at least:
+A product may include optional notification examples for documentation.
 
-1. valid machine event → expected machine payload;
-2. machine event contains no localized text;
-3. every required field is validated;
-4. missing required field → explicit contract error;
-5. invalid type → explicit contract error;
-6. valid falsy values survive unchanged;
-7. each locale consumes the same machine contract;
-8. each locale exposes the same package key, automation IDs and output contract;
-9. malformed events cannot generate a normal notification;
-10. notification packages contain no dependency on private delivery mechanisms such as `write2log`;
-11. startup reconciliation does not convert unknown state into a healthy state;
-12. shipped Home Assistant YAML packages parse successfully;
-13. stable public event/entity identifiers are protected by compatibility tests where applicable;
-14. every normal localized notification and every `contract_error` notification contains all six required Notification Envelope v1 fields;
-15. `notification_schema_version` is the integer `1` in every locale variant;
-16. `severity` is restricted to the common vocabulary;
-17. `title` and `message` are non-empty;
-18. locale packages do not blindly forward the complete source machine payload through `raw` or an equivalent catch-all field;
-19. every `contract_error` contains non-empty machine-readable `contract` and `failure_class`, uses `kind: contract_error`, and uses `severity: error`.
+An example is not a reusable notification protocol and must not introduce an intermediate DigitalHouses event or Envelope.
 
-All locale variants must test the same notification envelope version and required-field semantics.
+Public examples should use a replaceable placeholder/familiar Home Assistant delivery action rather than depend on a private service that users do not have.
+
+The repository owner's actual `script.write2log` package remains private and installation-specific.
 
 ---
 
-## 23. Canonical architecture
+## 18. Tests and validation
 
-```text
-┌──────────────────────────────────────────┐
-│ App / Agent                              │
-│                                          │
-│ authoritative state + machine semantics  │
-└───────────────────┬──────────────────────┘
-                    │
-                    │ machine event
-                    │ schema_version + event_type + facts
-                    ▼
-┌──────────────────────────────────────────┐
-│ Home Assistant locale package            │
-│                                          │
-│ validation + localization                │
-│ EN / RU / other locale                   │
-└───────────────────┬──────────────────────┘
-                    │
-                    │ <product>_notification
-                    │ Notification Envelope v1
-                    ▼
-┌──────────────────────────────────────────┐
-│ Installation-owned delivery              │
-│                                          │
-│ mobile / Telegram / log / TTS / etc.     │
-└──────────────────────────────────────────┘
-```
+Product tests must prove the **machine-event contract**:
 
-For the repository owner's private installation:
+1. correct `event_type`;
+2. required machine fields;
+3. correct values/types;
+4. no localized presentation generated by the producer;
+5. event ordering/persistence behavior where relevant.
 
-```text
-<product>_notification
-        ↓
-script.write2log
-        ↓
-private delivery stack
-```
+The shared repository validator does not validate local notification text, local delivery services or installation-specific Home Assistant automations.
 
-`write2log` is intentionally outside the public DigitalHouses product contract.
+Local notification packages may be checked by Home Assistant configuration validation in the installation where they are used.
 
 ---
 
-## 24. Review rule
+## 19. Migration
 
-When reviewing a notification-capable App or Agent, ask three questions:
+New notification-capable products must use this architecture immediately.
 
-> **Does the producer emit facts rather than prose?**
+Existing products that currently implement:
 
-> **Can the language be changed without modifying the producer?**
+- Notification Envelope;
+- secondary `<product>_notification` events;
+- reusable EN/RU notification-contract packages;
+- notification adapters;
+- duplicated machine-schema validation in HA;
 
-> **Can the user replace the delivery mechanism without modifying the product?**
+must remove those layers during their next notification-related product change.
 
-If all three answers are yes, the design follows the DigitalHouses notification architecture.
+A product already undergoing notification development is in scope for this migration now.
 
-Implementation must additionally satisfy the Contract Data Policy: required data fails visibly, optional data remains absent/null according to schema, and presentation never invents domain values.
+Machine-event interfaces remain stable unless a separate product change intentionally modifies them.
+
+---
+
+## 20. Review rule
+
+For notification architecture, ask:
+
+> **Can I open the Home Assistant YAML and immediately see which machine event produces which human message and which final action receives it?**
+
+The preferred shape is:
+
+```text
+machine event
+→ trigger.id
+→ choose
+→ direct action
+```
+
+If additional DigitalHouses notification events, Envelopes, adapters or validation layers appear between the machine event and the final action, the design should be simplified unless there is a concrete product-specific reason for that extra layer.
