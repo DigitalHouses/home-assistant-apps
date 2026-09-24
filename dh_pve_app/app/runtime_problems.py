@@ -3,7 +3,6 @@ from __future__ import annotations
 import queue
 from collections.abc import Mapping
 
-from .diagnostic_events import DiagnosticEvent
 from .problems import PveProblemEngine, ProblemState, ProblemTransition
 from .pve_problem_events import (
     PveProblemEventDebouncer,
@@ -100,19 +99,10 @@ class ProblemAwareRuntime(DynamicDiscoveryRuntime):
         self._problem_snapshot_dirty = False
 
         if transition.event_type == "problem_updated":
-            aggregate = self.problem_engine.aggregate()
-            event = DiagnosticEvent.from_transition(
-                transition,
-                active_problem_count=aggregate.count,
-                observed_at=self.now_iso(),
-            ).as_payload()
-            event.update(
-                pve_problem_context(
-                    state,
-                    self._problem_inputs(tuple(self._subsystems)),
-                )
-            )
-            return bool(self.bridge.publish_diagnostic_event(event))
+            # Retained problem/metric state already carries the changed values.
+            # Do not emit an immediate generic transient Event: the public PVE
+            # Event contract is semantic start/recovery after debounce.
+            return True
 
         self.problem_event_debouncer.observe(
             transition,
