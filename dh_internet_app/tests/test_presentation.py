@@ -68,13 +68,13 @@ def notification_paths() -> tuple[Path, Path]:
         APP_ROOT
         / "examples"
         / "packages"
-        / "dh_internet_app_notification_package.yaml",
+        / "dh_internet_app_notification_local_package.yaml",
         APP_ROOT
         / "examples"
         / "packages"
         / "locales"
         / "ru"
-        / "dh_internet_app_notification_package.yaml",
+        / "dh_internet_app_notification_local_package.yaml",
     )
 
 
@@ -113,14 +113,14 @@ class PresentationTests(unittest.TestCase):
                 f"{path.relative_to(APP_ROOT)} references unknown entities",
             )
 
-    def test_notification_locales_share_contract_identity(self) -> None:
-        contents = [
+    def test_notification_locales_use_direct_flow(self) -> None:
+        en, ru = [
             path.read_text(encoding="utf-8")
             for path in notification_paths()
         ]
-        for content in contents:
+        for content in (en, ru):
             self.assertIn(
-                "dh_internet_app_notification_package:\n",
+                "dh_internet_app_notification_local_package:\n",
                 content,
             )
             self.assertIn(
@@ -131,99 +131,41 @@ class PresentationTests(unittest.TestCase):
                 "entity_id: event.dh_internet_app_event",
                 content,
             )
-            self.assertIn(
-                "- event: dh_internet_app_notification",
-                content,
-            )
+            self.assertIn("trigger: event.received", content)
+            self.assertIn("condition: trigger", content)
+            self.assertIn("trigger.to_state.attributes", content)
             for event_type in NOTIFICATION_EVENTS:
                 self.assertIn(f"- {event_type}", content)
-        self.assertNotIn(
-            "dh_internet_app_notification_package_ru:",
-            contents[1],
-        )
+                self.assertIn(f"id: {event_type}", content)
 
-    def test_notification_envelope_v1_is_complete(self) -> None:
+            for forbidden in (
+                "event: dh_internet_app_notification",
+                "notification_schema_version",
+                "contract_error",
+                "failure_class",
+                "machine_schema_version",
+                "attrs.schema_version",
+                "is mapping",
+            ):
+                self.assertNotIn(forbidden, content)
+
+        self.assertIn("action: persistent_notification.create", en)
+        self.assertNotIn("script.write2log", en)
+        self.assertIn("action: script.write2log", ru)
+
+    def test_notification_text_reads_required_machine_fields_directly(self) -> None:
         for path in notification_paths():
             content = path.read_text(encoding="utf-8")
-            # Ten normal notification branches plus the contract-error branch.
-            self.assertEqual(content.count("notification_schema_version: 1"), 11)
-            self.assertEqual(content.count("source: dh_internet_app"), 11)
-            self.assertEqual(
-                content.count("- event: dh_internet_app_notification"),
-                11,
-            )
-            self.assertNotIn("raw:", content)
+            for event_type, fields in NOTIFICATION_REQUIRED_FIELDS.items():
+                self.assertIn(f"id: {event_type}", content)
+                for field in fields:
+                    self.assertIn(
+                        f"trigger.to_state.attributes.{field}",
+                        content,
+                        f"{path.name}: {event_type} does not use {field}",
+                    )
             self.assertNotIn("default(", content)
             self.assertNotIn("int(0)", content)
-            for private_dependency in (
-                "script.write2log",
-                "notify.mobile_app",
-                "telegram_bot.",
-                "persistent_notification.create",
-            ):
-                self.assertNotIn(private_dependency, content)
-
-    def test_each_notification_event_has_schema_validation(self) -> None:
-        for path in notification_paths():
-            content = path.read_text(encoding="utf-8")
-            for index, event_type in enumerate(NOTIFICATION_EVENTS):
-                marker = f"a.event_type == '{event_type}'"
-                marker_pos = content.find(marker)
-                self.assertNotEqual(
-                    marker_pos,
-                    -1,
-                    f"{path.name}: missing validation for {event_type}",
-                )
-                start = content.rfind(
-                    "                  value_template: >-",
-                    0,
-                    marker_pos,
-                )
-                self.assertNotEqual(
-                    start,
-                    -1,
-                    f"{path.name}: missing validation template for {event_type}",
-                )
-                next_positions = [
-                    content.find(
-                        f"a.event_type == '{other}'",
-                        marker_pos + len(marker),
-                    )
-                    for other in NOTIFICATION_EVENTS[index + 1 :]
-                ]
-                next_positions = [pos for pos in next_positions if pos != -1]
-                end = min(next_positions) if next_positions else content.find(
-                    "          default:",
-                    marker_pos,
-                )
-                branch = content[start:end]
-                self.assertIn("a.schema_version == 2", branch)
-                self.assertIn("'timestamp' in a", branch)
-                self.assertIn("a.timestamp is string", branch)
-                for field in NOTIFICATION_REQUIRED_FIELDS[event_type]:
-                    self.assertIn(
-                        field,
-                        branch,
-                        f"{path.name}: {event_type} does not validate {field}",
-                    )
-
-    def test_invalid_machine_event_emits_contract_error(self) -> None:
-        for path in notification_paths():
-            content = path.read_text(encoding="utf-8")
-            default = content.split("          default:", 1)[1]
-            for required in (
-                "notification_schema_version: 1",
-                "source: dh_internet_app",
-                "kind: contract_error",
-                "severity: error",
-                "contract: dh_internet_app_machine_event_v2",
-                "failure_class:",
-                "missing_required_field",
-                "invalid_schema_version",
-                "invalid_type",
-                "invalid_event_payload",
-            ):
-                self.assertIn(required, default)
 
     def test_machine_event_producer_contains_no_presentation_fields(self) -> None:
         source = (APP_DIR / "app.py").read_text(encoding="utf-8")
