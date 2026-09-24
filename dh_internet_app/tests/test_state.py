@@ -101,6 +101,11 @@ class OutageTests(unittest.TestCase):
             self.assertEqual(loaded.pending_attempts, 2)
             self.assertIsNone(loaded.active_from)
 
+            third = datetime(2026, 9, 24, 20, 34, 54, tzinfo=timezone.utc)
+            self.assertEqual(loaded.note_pending_failure(third), 3)
+            self.assertTrue(loaded.confirm_pending(third))
+            self.assertEqual(loaded.active_from, first)
+
     def test_confirmed_outage_starts_at_first_failed_check(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "outages.json"
@@ -142,7 +147,8 @@ class OutageTests(unittest.TestCase):
             tracker.note_pending_failure(first)
             tracker.clear_pending()
 
-            loaded = OutageTracker.load(path)
+            with patch("state.now_local", return_value=first):
+                loaded = OutageTracker.load(path)
             self.assertIsNone(loaded.pending_from)
             self.assertEqual(loaded.pending_attempts, 0)
             self.assertIsNone(loaded.active_from)
