@@ -57,9 +57,9 @@ The reusable Home Assistant layer is deliberately split by responsibility:
 
 - `examples/packages/dh_internet_app_global_package.yaml` — Recorder whitelist only;
 - `examples/packages/dh_internet_app_notification_package.yaml` — English schema-v2 Event presentation;
-- `examples/packages/locales/dh_internet_app_notification_package_ru.yaml` — Russian notification presentation; install exactly one notification locale;
+- `examples/packages/locales/ru/dh_internet_app_notification_package.yaml` — Russian notification presentation; install exactly one notification locale;
 - `examples/lovelace/dh_internet_app_dashboard.yaml` — reference Sections dashboard.
 
-Both notification locales emit the neutral Home Assistant event `dh_internet_app_notification`. A site-local adapter may deliver that event through Telegram, `mobile_app` or another transport. The reusable packages contain no customer-specific notification target, `write2log` dependency or private service.
+Both locale packages validate event-specific schema-v2 machine payloads and emit the same transport-neutral Home Assistant event `dh_internet_app_notification` using DigitalHouses Notification Envelope v1 (`notification_schema_version: 1`). Missing or invalid required machine fields produce an explicit `contract_error`; raw machine payloads are not forwarded. A site-local adapter may deliver the localized event through Telegram, `mobile_app` or another transport. The reusable packages contain no customer-specific notification target, `write2log` dependency or private service.
 
 The reference dashboard uses Mushroom, mini-graph-card and auto-entities. Optional Router and traffic entities are hidden when their mappings are not configured or their mapped source is currently unavailable.
