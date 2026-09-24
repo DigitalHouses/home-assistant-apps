@@ -328,6 +328,38 @@ def validate_dh_pve_app(
         if required not in close_after_success:
             fail(f"DH PVE UPS Trigger UI acknowledgement contract changed: {required}")
 
+    for required in (
+        "is_number(active_charge)",
+        "is_number(active_reserve)",
+        "is_number(draft_charge)",
+        "is_number(draft_reserve)",
+        "snapshot_charge:",
+        "snapshot_reserve:",
+        "is_number(snapshot_charge)",
+        "is_number(snapshot_reserve)",
+        "current_charge_raw:",
+        "current_reserve_raw:",
+        "active_charge_raw:",
+        "active_reserve_raw:",
+        "is_number(current_charge_raw)",
+        "is_number(current_reserve_raw)",
+        "is_number(active_charge_raw)",
+        "is_number(active_reserve_raw)",
+        "DH PVE UPS Trigger UI contract error:",
+        "error: true",
+    ):
+        if required not in ui_package:
+            fail(f"DH PVE UPS Trigger UI numeric contract changed: {required}")
+
+    for forbidden in (
+        "states('number.dh_app_pve_ups_shutdown_battery_charge_threshold') | float",
+        "states('number.dh_app_pve_ups_shutdown_runtime_reserve') | float",
+        "states('input_number.dh_app_pve_ups_trigger_snapshot_charge') | float",
+        "states('input_number.dh_app_pve_ups_trigger_snapshot_reserve') | float",
+    ):
+        if forbidden in ui_package:
+            fail(f"DH PVE UPS Trigger UI silently coerces required state: {forbidden}")
+
     _require_text(
         app / "examples/packages/dh_app_pve_package.yaml",
         (
