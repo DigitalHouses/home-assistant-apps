@@ -46,6 +46,7 @@ Engineering documentation is separated into shared standards and product-specifi
 
 - [Documentation index](docs/README.md)
 - [DigitalHouses Application Standard](docs/standards/DIGITALHOUSES_APP_STANDARD.md)
+- [DigitalHouses Contract Data Policy](docs/standards/CONTRACT_DATA_POLICY.md)
 - [DigitalHouses Release Policy](docs/standards/RELEASE_POLICY.md)
 - [Immutable Delivery, Compact Backup and Telemetry Standard](docs/standards/IMMUTABLE_DELIVERY_AND_TELEMETRY_STANDARD.md)
 - [Product Telemetry Policy](docs/standards/PRODUCT_TELEMETRY_POLICY.md)
@@ -70,4 +71,4 @@ Support is optional. Public features remain available to everyone.
 
 ## License
 
-DigitalHouses source code is licensed under the [MIT License](LICENSE). Third-party software retains its own license terms.
+DigitalHouses source code is licensed under the [MIT License](LICENSE). Third-party software retains their own license terms.
