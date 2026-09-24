@@ -174,7 +174,7 @@ def test_runtime_commits_charge_guard_once_after_successful_ups_poll(tmp_path):
     budget = runtime.last_shutdown_budget
     assert trigger is not None
     assert budget is not None
-    assert event == {
+    expected = {
         "schema_version": 2,
         "event_type": "shutdown_committed",
         "observed_at": "2026-09-16T01:00:00+05:00",
@@ -185,6 +185,11 @@ def test_runtime_commits_charge_guard_once_after_successful_ups_poll(tmp_path):
         "runtime_reserve_seconds": 180,
         "runtime_guard_threshold_seconds": trigger.runtime_guard_threshold_seconds,
     }
+    for key, value in expected.items():
+        assert event[key] == value
+    assert event["battery_charger_status"] == "unknown"
+    assert event["outages_month"] == 1
+    assert event["outage_started_at"] == "2026-09-16T01:00:00+05:00"
 
     runtime.manual_refresh()
     assert calls == ["charge_guard"]
