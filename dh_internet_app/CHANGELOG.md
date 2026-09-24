@@ -6,6 +6,7 @@
 - Fixed MQTT Event discovery to pass schema-v2 JSON events directly to Home Assistant.
 - Preserved active outage state across App restarts and calendar-month rollover.
 - Expanded EN/RU App configuration descriptions for all user-facing options.
+- Hardened MQTT v2 connection callback handling and documented all dashboard card dependencies.
 
 - Created DigitalHouses Internet App as a new Home Assistant App product with canonical `dh_internet_app_` MQTT/Home Assistant identity.
 - Added Internet/router reachability, current-month outage history and App-owned monthly availability calculation.

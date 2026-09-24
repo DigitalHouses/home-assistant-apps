@@ -62,4 +62,4 @@ The reusable Home Assistant layer is deliberately split by responsibility:
 
 Both notification locales emit the neutral Home Assistant event `dh_internet_app_notification`. A site-local adapter may deliver that event through Telegram, `mobile_app` or another transport. The reusable packages contain no customer-specific notification target, `write2log` dependency or private service.
 
-The reference dashboard uses Mushroom and mini-graph-card. Optional Router and traffic sections remain hidden when their mappings are not configured.
+The reference dashboard uses Mushroom, mini-graph-card and auto-entities. Optional Router and traffic sections remain hidden when their mappings are not configured.

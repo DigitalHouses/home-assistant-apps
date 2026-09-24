@@ -137,7 +137,7 @@ class InternetApp:
         properties: Any,
     ) -> None:
         del userdata, flags, properties
-        if int(reason_code) != 0:
+        if reason_code != 0:
             self.log.error("MQTT connection failed: %s", reason_code)
             return
         client.subscribe(TOPICS["command"], qos=1)
