@@ -77,21 +77,14 @@ def test_v2_live_problem_branch_uses_machine_fields_not_app_prose():
         text = path.read_text(encoding="utf-8")
         live = text.split("- id: dh_app_pve_ups_config_changed_notification", 1)[0]
 
-        assert "{% if schema == 1 %}" in live
-        assert "trigger.to_state.attributes.summary" in live
-        assert "trigger.to_state.attributes.details" in live
-        assert "{% elif kind in ['problem_started', 'problem_updated', 'problem_recovered'] %}" in live
-        assert "trigger.to_state.attributes.current | default({}, true)" in live
-        assert "current.get('value')" in live
-        assert "current.get('average')" in live
-        assert "current.get('threshold')" in live
-
-        v2_problem_branch = live.split(
-            "{% elif kind in ['problem_started', 'problem_updated', 'problem_recovered'] %}",
-            1,
-        )[1].split("{% elif kind == 'ups_status_changed' %}", 1)[0]
-        assert "trigger.to_state.attributes.summary" not in v2_problem_branch
-        assert "trigger.to_state.attributes.details" not in v2_problem_branch
+        assert "attrs.schema_version == 1" in live
+        assert "trigger.to_state.attributes.get('summary')" in live
+        assert "trigger.to_state.attributes.get('details')" in live
+        assert "attrs.schema_version == 2" in live
+        assert "attrs.current is mapping" in live
+        assert "current['value']" in live
+        assert "current['average']" in live
+        assert "current['threshold']" in live
 
 
 def test_shutdown_committed_and_config_changed_use_structured_v2_fields():
@@ -170,3 +163,27 @@ def test_config_changed_contract_has_explicit_contract_error_path():
 
         assert "kind: contract_error" in config_changed
         assert "severity: error" in config_changed
+
+
+def test_battery_fully_charged_contract_does_not_read_unrelated_problem_fields():
+    for path in PACKAGES:
+        text = path.read_text(encoding="utf-8")
+        live, _config_changed = _machine_event_blocks(text)
+        charged = live.split(
+            "attrs.event_type == 'battery_fully_charged'",
+            1,
+        )[1].split(
+            "attrs.event_type == 'shutdown_committed'",
+            1,
+        )[0]
+
+        for unrelated in (
+            "active_problem_count",
+            "current_status",
+            "current_raw_status",
+            "shutdown_budget_seconds",
+            "runtime_reserve_seconds",
+        ):
+            assert unrelated not in charged, (
+                f"{path}: battery_fully_charged must not read unrelated field {unrelated}"
+            )
