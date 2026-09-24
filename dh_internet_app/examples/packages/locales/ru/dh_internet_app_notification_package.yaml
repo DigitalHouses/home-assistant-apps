@@ -1,5 +1,5 @@
 # =============================================================================
-# DigitalHouses Internet App notification contract — English presentation
+# DigitalHouses Internet App notification contract — Russian presentation
 # =============================================================================
 # Reusable HAOS locale layer only. It validates schema-v2 machine events and
 # emits Notification Envelope v1 through dh_internet_app_notification.
@@ -11,7 +11,7 @@ dh_internet_app_notification_package:
 
   automation:
     - id: dh_internet_app_notifications
-      alias: DH Internet · Notifications
+      alias: DH Internet · Уведомления
       mode: queued
       max: 20
       triggers:
@@ -48,10 +48,10 @@ dh_internet_app_notification_package:
                     source: dh_internet_app
                     kind: connection_lost
                     severity: warning
-                    title: "🌐⚠️ Internet unavailable"
+                    title: "🌐⚠️ Интернет недоступен"
                     message: >-
-                      Internet connectivity is unavailable.
-                      Router reachable: {{ 'yes' if trigger.to_state.attributes.router_up else 'no' }}.
+                      Интернет недоступен.
+                      Роутер отвечает: {{ 'да' if trigger.to_state.attributes.router_up else 'нет' }}.
                     source_entity: event.dh_internet_app_event
                     category: connectivity
                     observed_at: "{{ trigger.to_state.attributes.timestamp }}"
@@ -76,13 +76,13 @@ dh_internet_app_notification_package:
                     source: dh_internet_app
                     kind: connection_restored
                     severity: info
-                    title: "🌐✅ Internet restored"
+                    title: "🌐✅ Интернет восстановлен"
                     message: >-
                       {% set s = trigger.to_state.attributes.duration_seconds | int %}
                       {% set h = s // 3600 %}
                       {% set m = (s % 3600) // 60 %}
                       {% set sec = s % 60 %}
-                      Connectivity restored after
+                      Связь восстановлена через
                       {{ ('%d:%02d:%02d' | format(h,m,sec)) if h else ('%02d:%02d' | format(m,sec)) }}.
                     source_entity: event.dh_internet_app_event
                     category: connectivity
@@ -109,11 +109,11 @@ dh_internet_app_notification_package:
                     kind: recovery_action
                     severity: info
                     title: >-
-                      🔄 Internet recovery: {{ trigger.to_state.attributes.target | upper }}
+                      🔄 Восстановление Internet: {{ trigger.to_state.attributes.target | upper }}
                     message: >-
-                      Cycle {{ trigger.to_state.attributes.cycle }}:
-                      {{ trigger.to_state.attributes.action }} on
-                      {{ trigger.to_state.attributes.target }}.
+                      Цикл {{ trigger.to_state.attributes.cycle }}:
+                      {{ trigger.to_state.attributes.target }} ·
+                      {{ trigger.to_state.attributes.action }}.
                     source_entity: event.dh_internet_app_event
                     category: recovery
                     observed_at: "{{ trigger.to_state.attributes.timestamp }}"
@@ -138,8 +138,8 @@ dh_internet_app_notification_package:
                     source: dh_internet_app
                     kind: recovery_stopped
                     severity: info
-                    title: "⏹️ Internet recovery stopped"
-                    message: "Further recovery attempts for the current outage were stopped."
+                    title: "⏹️ Восстановление Internet остановлено"
+                    message: "Дальнейшие попытки восстановления в текущем инциденте остановлены."
                     source_entity: event.dh_internet_app_event
                     category: recovery
                     observed_at: "{{ trigger.to_state.attributes.timestamp }}"
@@ -164,10 +164,10 @@ dh_internet_app_notification_package:
                     source: dh_internet_app
                     kind: recovery_exhausted
                     severity: warning
-                    title: "🌐⚠️ Recovery attempts exhausted"
+                    title: "🌐⚠️ Попытки восстановления исчерпаны"
                     message: >-
-                      {{ trigger.to_state.attributes.cycles }} recovery cycle(s) completed.
-                      Cooldown: {{ trigger.to_state.attributes.cooldown_seconds }} s.
+                      Выполнено циклов: {{ trigger.to_state.attributes.cycles }}.
+                      Пауза: {{ trigger.to_state.attributes.cooldown_seconds }} с.
                     source_entity: event.dh_internet_app_event
                     category: recovery
                     observed_at: "{{ trigger.to_state.attributes.timestamp }}"
@@ -190,8 +190,8 @@ dh_internet_app_notification_package:
                     source: dh_internet_app
                     kind: recovery_error
                     severity: error
-                    title: "🌐❌ Recovery error"
-                    message: "Automatic Internet recovery failed."
+                    title: "🌐❌ Ошибка восстановления"
+                    message: "Автоматическое восстановление Internet завершилось ошибкой."
                     source_entity: event.dh_internet_app_event
                     category: recovery
                     observed_at: "{{ trigger.to_state.attributes.timestamp }}"
@@ -213,8 +213,8 @@ dh_internet_app_notification_package:
                     source: dh_internet_app
                     kind: speedtest_failed
                     severity: warning
-                    title: "📶⚠️ Speedtest failed"
-                    message: "Ookla Speedtest did not complete successfully."
+                    title: "📶⚠️ Ошибка Speedtest"
+                    message: "Тест Ookla Speedtest не был успешно завершён."
                     source_entity: event.dh_internet_app_event
                     category: speedtest
                     observed_at: "{{ trigger.to_state.attributes.timestamp }}"
@@ -252,14 +252,14 @@ dh_internet_app_notification_package:
                     source: dh_internet_app
                     kind: performance_problem_started
                     severity: warning
-                    title: "📉⚠️ Internet performance problem"
+                    title: "📉⚠️ Проблема качества Internet"
                     message: >-
-                      {% set labels = {'low_download':'low download','low_upload':'low upload','high_ping':'high ping'} %}
-                      Problems:
+                      {% set labels = {'low_download':'низкая скорость Download','low_upload':'низкая скорость Upload','high_ping':'высокий Ping'} %}
+                      Проблемы:
                       {% for reason in trigger.to_state.attributes.reasons %}{{ labels[reason] }}{{ ', ' if not loop.last else '.' }}{% endfor %}
-                      Download {{ trigger.to_state.attributes.download_mbps }} Mbit/s ·
-                      Upload {{ trigger.to_state.attributes.upload_mbps }} Mbit/s ·
-                      Ping {{ trigger.to_state.attributes.ping_ms }} ms.
+                      Download {{ trigger.to_state.attributes.download_mbps }} Мбит/с ·
+                      Upload {{ trigger.to_state.attributes.upload_mbps }} Мбит/с ·
+                      Ping {{ trigger.to_state.attributes.ping_ms }} мс.
                     source_entity: event.dh_internet_app_event
                     category: performance
                     observed_at: "{{ trigger.to_state.attributes.timestamp }}"
@@ -300,12 +300,12 @@ dh_internet_app_notification_package:
                     source: dh_internet_app
                     kind: performance_problem_recovered
                     severity: info
-                    title: "📈✅ Internet performance restored"
+                    title: "📈✅ Качество Internet восстановлено"
                     message: >-
-                      Download {{ trigger.to_state.attributes.download_mbps }} Mbit/s ·
-                      Upload {{ trigger.to_state.attributes.upload_mbps }} Mbit/s ·
-                      Ping {{ trigger.to_state.attributes.ping_ms }} ms.
-                      Current values are within configured thresholds.
+                      Download {{ trigger.to_state.attributes.download_mbps }} Мбит/с ·
+                      Upload {{ trigger.to_state.attributes.upload_mbps }} Мбит/с ·
+                      Ping {{ trigger.to_state.attributes.ping_ms }} мс.
+                      Текущие значения находятся в заданных пределах.
                     source_entity: event.dh_internet_app_event
                     category: performance
                     observed_at: "{{ trigger.to_state.attributes.timestamp }}"
@@ -345,14 +345,14 @@ dh_internet_app_notification_package:
                     source: dh_internet_app
                     kind: performance_problem_updated
                     severity: warning
-                    title: "📉⚠️ Internet performance changed"
+                    title: "📉⚠️ Параметры проблемы Internet изменились"
                     message: >-
-                      {% set labels = {'low_download':'low download','low_upload':'low upload','high_ping':'high ping'} %}
-                      Problems:
+                      {% set labels = {'low_download':'низкая скорость Download','low_upload':'низкая скорость Upload','high_ping':'высокий Ping'} %}
+                      Проблемы:
                       {% for reason in trigger.to_state.attributes.reasons %}{{ labels[reason] }}{{ ', ' if not loop.last else '.' }}{% endfor %}
-                      Download {{ trigger.to_state.attributes.download_mbps }} Mbit/s ·
-                      Upload {{ trigger.to_state.attributes.upload_mbps }} Mbit/s ·
-                      Ping {{ trigger.to_state.attributes.ping_ms }} ms.
+                      Download {{ trigger.to_state.attributes.download_mbps }} Мбит/с ·
+                      Upload {{ trigger.to_state.attributes.upload_mbps }} Мбит/с ·
+                      Ping {{ trigger.to_state.attributes.ping_ms }} мс.
                     source_entity: event.dh_internet_app_event
                     category: performance
                     observed_at: "{{ trigger.to_state.attributes.timestamp }}"
@@ -369,8 +369,8 @@ dh_internet_app_notification_package:
                 source: dh_internet_app
                 kind: contract_error
                 severity: error
-                title: "🧩❌ Internet App: machine-event contract error"
-                message: "The Internet App machine event is missing required data or contains invalid data."
+                title: "🧩❌ Internet App: ошибка контракта события"
+                message: "Событие Internet App не содержит обязательные данные или содержит некорректные данные."
                 source_entity: event.dh_internet_app_event
                 category: diagnostic
                 contract: dh_internet_app_machine_event_v2

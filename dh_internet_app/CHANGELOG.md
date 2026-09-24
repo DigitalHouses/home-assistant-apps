@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.5
+
+- Migrated Internet App notifications to the repository Events and Multilingual Notifications Standard and DigitalHouses Notification Envelope v1.
+- Added strict event-specific schema validation before localization; malformed machine events now emit explicit `contract_error` notifications instead of receiving silent fallback values.
+- Made English and Russian locale packages contract-identical, moved Russian presentation to the canonical `examples/packages/locales/ru/` layout, and removed raw machine-payload forwarding.
+- Kept notification delivery installation-owned: reusable locale packages stop at the transport-neutral `dh_internet_app_notification` Home Assistant event.
+
 ## 0.1.4
 
 - Persist pending Internet outage detection from the first failed connectivity check, including the debounce attempt count, so App restarts do not lose the true outage start time or restart confirmation from zero.

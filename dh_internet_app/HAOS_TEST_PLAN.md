@@ -83,9 +83,11 @@ Verify:
 
 Install exactly one notification locale package.
 
-Verify that `event.dh_internet_app_event` triggers the neutral HA event:
+Verify that a valid `event.dh_internet_app_event` triggers the neutral HA event:
 
 `dh_internet_app_notification`
+
+The emitted event must contain Notification Envelope v1 (`notification_schema_version: 1`, `source`, `kind`, `severity`, non-empty localized `title` and `message`). Also inject one malformed machine event and verify it becomes `kind: contract_error` with `severity: error`, `contract` and `failure_class` instead of a normal notification.
 
 The reusable package must not call Telegram, `mobile_app`, `write2log` or another site-local delivery mechanism.
 
