@@ -223,3 +223,19 @@ def test_contract_error_notifications_have_required_diagnostics() -> None:
             assert "contract:" in block
             assert "failure_class:" in block
 
+def test_notification_locales_do_not_expose_catch_all_or_private_delivery() -> None:
+    forbidden = (
+        "raw:",
+        "payload:",
+        "attributes:",
+        "context:",
+        "script.write2log",
+        "notify.mobile_app",
+        "telegram_bot.",
+        "persistent_notification.create",
+    )
+    for path in (EN_PACKAGE, RU_PACKAGE):
+        text = _read(path)
+        for token in forbidden:
+            assert token not in text, f"{path}: forbidden notification boundary token {token}"
+
