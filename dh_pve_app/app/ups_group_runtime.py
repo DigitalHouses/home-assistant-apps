@@ -5,6 +5,10 @@ from .machine_event_outbox import MachineEventOutbox
 from .presentation_ups import UpsPresentationRouter
 from .problems import ProblemState, ProblemTransition
 from .ups_battery_events import UpsBatteryEventTracker
+from .ups_event_context import (
+    line_power_event_context,
+    ups_snapshot_event_context,
+)
 from .ups_problem_events import semantic_ups_problem_event
 from .ups_problems import UpsProblemEngine, transition_uses_status_event
 from .ups_runtime import UpsRuntime
@@ -210,6 +214,11 @@ class AdaptiveUpsRuntime(UpsRuntime):
             semantic_event = semantic_ups_problem_event(
                 transition,
                 observed_at=observed_at,
+                context=(
+                    ups_snapshot_event_context(self.last_snapshot)
+                    if self.nut_available
+                    else {}
+                ),
             )
             if semantic_event is not None:
                 _key, payload = semantic_event
@@ -294,6 +303,13 @@ class AdaptiveUpsRuntime(UpsRuntime):
         if outbox is None or not self._event_capable():
             return True
 
+        context = ups_snapshot_event_context(snapshot)
+        context.update(
+            line_power_event_context(
+                getattr(self, "line_power_statistics_tracker", None)
+            )
+        )
+
         status_event = self.status_event_tracker.observe(
             current_status=tuple(snapshot.normalized_status),
             current_raw_status=tuple(snapshot.status_tokens),
@@ -309,25 +325,28 @@ class AdaptiveUpsRuntime(UpsRuntime):
                 observed_at=observed_at,
                 battery_charge_percent=snapshot.battery_charge_percent,
                 battery_runtime_seconds=snapshot.runtime_seconds,
+                context=context,
             ):
                 outbox.enqueue(*semantic_event)
 
         battery_tracker = self.battery_event_tracker
         if battery_tracker is not None:
-            for event in battery_tracker.observe_discharge(
+            for key, payload in battery_tracker.observe_discharge(
                 on_battery=snapshot.on_battery,
                 charge_percent=snapshot.battery_charge_percent,
                 observed_at=observed_at,
             ):
-                outbox.enqueue(*event)
-            for event in battery_tracker.observe_charge_cycle(
+                payload.update(context)
+                outbox.enqueue(key, payload)
+            for key, payload in battery_tracker.observe_charge_cycle(
                 charger_status=snapshot.battery_charger_status,
                 charge_percent=snapshot.battery_charge_percent,
                 line_power=snapshot.line_power,
                 raw_status_tokens=tuple(snapshot.status_tokens),
                 observed_at=observed_at,
             ):
-                outbox.enqueue(*event)
+                payload.update(context)
+                outbox.enqueue(key, payload)
         return True
 
     def _collect(self, *, force: bool = False, manual_refresh: bool = False) -> bool:
