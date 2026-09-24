@@ -79,6 +79,75 @@ class OutageTests(unittest.TestCase):
         self.assertEqual(state.cycle, 0)
         self.assertIsNone(state.cooldown_until)
 
+    def test_pending_outage_round_trip_preserves_first_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "outages.json"
+            tracker = OutageTracker(
+                path=path,
+                month="2026-09",
+                outages=[],
+                active_from=None,
+            )
+            first = datetime(2026, 9, 24, 20, 34, 34, tzinfo=timezone.utc)
+            second = datetime(2026, 9, 24, 20, 34, 44, tzinfo=timezone.utc)
+
+            self.assertEqual(tracker.note_pending_failure(first), 1)
+            self.assertEqual(tracker.note_pending_failure(second), 2)
+
+            with patch("state.now_local", return_value=second):
+                loaded = OutageTracker.load(path)
+
+            self.assertEqual(loaded.pending_from, first)
+            self.assertEqual(loaded.pending_attempts, 2)
+            self.assertIsNone(loaded.active_from)
+
+    def test_confirmed_outage_starts_at_first_failed_check(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "outages.json"
+            tracker = OutageTracker(
+                path=path,
+                month="2026-09",
+                outages=[],
+                active_from=None,
+            )
+            first = datetime(2026, 9, 24, 20, 34, 34, tzinfo=timezone.utc)
+            second = datetime(2026, 9, 24, 20, 34, 44, tzinfo=timezone.utc)
+            third = datetime(2026, 9, 24, 20, 34, 54, tzinfo=timezone.utc)
+            recovered = datetime(2026, 9, 24, 20, 35, 46, tzinfo=timezone.utc)
+
+            tracker.note_pending_failure(first)
+            tracker.note_pending_failure(second)
+            tracker.note_pending_failure(third)
+            self.assertTrue(tracker.confirm_pending(third))
+            self.assertEqual(tracker.active_from, first)
+            self.assertIsNone(tracker.pending_from)
+            self.assertEqual(tracker.pending_attempts, 0)
+
+            record = tracker.recover(recovered)
+            self.assertIsNotNone(record)
+            self.assertEqual(record["from"], "2026-09-24T20:34:34+00:00")
+            self.assertEqual(record["duration_seconds"], 72)
+
+    def test_pending_outage_is_cleared_if_connection_recovers(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "outages.json"
+            tracker = OutageTracker(
+                path=path,
+                month="2026-09",
+                outages=[],
+                active_from=None,
+            )
+            first = datetime(2026, 9, 24, 20, 34, 34, tzinfo=timezone.utc)
+
+            tracker.note_pending_failure(first)
+            tracker.clear_pending()
+
+            loaded = OutageTracker.load(path)
+            self.assertIsNone(loaded.pending_from)
+            self.assertEqual(loaded.pending_attempts, 0)
+            self.assertIsNone(loaded.active_from)
+            self.assertEqual(loaded.outages, [])
+
     def test_current_outage_is_visible_and_then_closed(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "outages.json"
