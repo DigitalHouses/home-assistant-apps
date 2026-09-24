@@ -181,6 +181,7 @@ def build_runtime(
         app_version=version,
         agent_started_at=PROCESS_STARTED_AT,
         ups_configured=ups_configured,
+        problem_event_debounce_seconds=config.events.pve_problem_debounce_seconds,
         fan_calibration_manager=fan_calibration_manager,
         fan_source=lambda: collect_fans(production.sys_root / "class" / "hwmon"),
         fan_presence_state_store=fan_presence_store,

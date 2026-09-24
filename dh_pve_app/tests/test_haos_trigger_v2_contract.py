@@ -105,9 +105,13 @@ def test_notification_package_uses_simple_event_trigger_flow():
         "trigger: event.received",
         "condition: trigger",
         "trigger.to_state.attributes",
-        "id: problem_started",
-        "id: problem_updated",
-        "id: problem_recovered",
+        "id: cpu_temperature_high",
+        "id: cpu_temperature_normal",
+        "id: cpu_throttling_started",
+        "id: storage_usage_high",
+        "id: disk_smart_failed",
+        "id: line_power_lost",
+        "id: boost_started",
         "id: config_changed",
     ):
         assert token in text
@@ -128,9 +132,10 @@ def test_russian_notification_package_calls_write2log_directly():
     text = RU_NOTIFICATION_PACKAGE.read_text(encoding="utf-8")
 
     assert "action: script.write2log" in text
-    assert "обнаружена проблема" in text
-    assert "параметры проблемы изменились" in text
-    assert "состояние нормализовалось" in text
+    assert "высокая температура CPU" in text
+    assert "CPU throttling" in text
+    assert "заполнение хранилища" in text
+    assert "Входное напряжение" in text or "входное напряжение" in text
     assert "батарея заряжена" in text
 
 

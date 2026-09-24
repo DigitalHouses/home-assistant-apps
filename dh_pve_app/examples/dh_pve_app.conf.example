@@ -38,6 +38,11 @@ storage_delta_percent = 0.5
 gpu_delta_percent = 5
 fan_delta_rpm = 100
 
+[events]
+# Delay user-facing PVE problem/recovery events until the state remains
+# unchanged for this many seconds. 0 disables debounce.
+pve_problem_debounce_seconds = 30
+
 [telemetry]
 # Voluntary product telemetry. Default is OFF.
 # When enabled, a canonical released build sends only:

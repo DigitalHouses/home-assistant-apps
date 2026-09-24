@@ -2,6 +2,8 @@ from pathlib import Path
 
 from app.problems import ProblemState, ProblemTransition
 from app.ups_status_events import semantic_status_events
+from app.ups_event_context import ups_snapshot_event_context
+from app.ups_nut import parse_upsc_output
 from app.ups_problem_events import semantic_ups_problem_event
 
 
@@ -137,10 +139,58 @@ def test_local_packages_expose_every_user_event_as_a_named_trigger():
         assert "id: ups_status_changed" not in text
 
 
-def test_generic_problem_triggers_are_pve_only():
+def test_pve_generic_problem_triggers_are_not_user_facing():
     for path in PACKAGES:
         text = path.read_text(encoding="utf-8")
-        first_problem = text.index("id: problem_started")
-        prefix = text[max(0, first_problem - 500):first_problem]
-        assert "event.dh_app_pve_diagnostic" in prefix
-        assert "event.dh_app_pve_ups_diagnostic" not in prefix
+        assert "id: problem_started" not in text
+        assert "id: problem_recovered" not in text
+        assert "id: ups_status_changed" not in text
+
+
+def test_ups_snapshot_context_contains_assessment_measurements():
+    snapshot = parse_upsc_output(
+        "ups.status: OB DISCHRG\n"
+        "battery.charge: 96\n"
+        "battery.runtime: 3720\n"
+        "ups.load: 8\n"
+        "ups.realpower.nominal: 1320\n"
+        "input.voltage: 199\n"
+        "output.voltage: 220\n"
+        "input.frequency: 49.9\n"
+        "output.frequency: 50.0\n"
+        "input.transfer.low: 200\n"
+    )
+    context = ups_snapshot_event_context(snapshot)
+
+    assert context["battery_charge_percent"] == 96.0
+    assert context["battery_runtime_seconds"] == 3720.0
+    assert context["load_percent"] == 8.0
+    assert context["nominal_real_power_w"] == 1320.0
+    assert context["input_voltage_v"] == 199.0
+    assert context["output_voltage_v"] == 220.0
+    assert context["input_transfer_low_v"] == 200.0
+
+
+def test_semantic_status_event_carries_event_time_assessment_context():
+    events = semantic_status_events(
+        previous_status=("online",),
+        current_status=("on_battery",),
+        previous_raw_status=("OL",),
+        current_raw_status=("OB",),
+        observed_at="2026-09-25T03:00:00+05:00",
+        battery_charge_percent=96.0,
+        battery_runtime_seconds=3720.0,
+        context={
+            "load_percent": 8.0,
+            "input_voltage_v": 199.0,
+            "output_voltage_v": 220.0,
+        },
+    )
+    assert len(events) == 1
+    payload = events[0][1]
+    assert payload["event_type"] == "line_power_lost"
+    assert payload["battery_charge_percent"] == 96.0
+    assert payload["battery_runtime_seconds"] == 3720.0
+    assert payload["load_percent"] == 8.0
+    assert payload["input_voltage_v"] == 199.0
+    assert payload["output_voltage_v"] == 220.0

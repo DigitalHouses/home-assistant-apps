@@ -5,7 +5,7 @@ from typing import Any
 
 from validators.common import fail, require_files
 
-EXPECTED_VERSION = "0.5.18"
+EXPECTED_VERSION = "0.5.19"
 EXPECTED_TOPIC_PREFIX = "DigitalHouses/Global/dh_pve_app"
 EXPECTED_DEVICE_NAME = "DH PVE"
 EXPECTED_REFRESH_ENTITY = "button.dh_app_pve_refresh"
@@ -39,6 +39,8 @@ def validate_dh_pve_app(
             app / "app/diagnostic_events.py",
             app / "app/runtime_dynamic.py",
             app / "app/runtime_problems.py",
+            app / "app/pve_problem_events.py",
+            app / "app/ups_event_context.py",
             app / "app/ups_health.py",
             app / "app/ups_problems.py",
             app / "app/ups_problem_events.py",
@@ -86,8 +88,13 @@ def validate_dh_pve_app(
 
     _require_text(
         app / "app/config.py",
-        (f'DEFAULT_TOPIC_PREFIX = "{EXPECTED_TOPIC_PREFIX}"',),
-        "MQTT",
+        (
+            f'DEFAULT_TOPIC_PREFIX = "{EXPECTED_TOPIC_PREFIX}"',
+            "class EventConfig:",
+            "pve_problem_debounce_seconds: float = 30.0",
+            '"pve_problem_debounce_seconds"',
+        ),
+        "MQTT/events",
     )
     _require_text(
         app / "app/topics.py",
@@ -140,8 +147,20 @@ def validate_dh_pve_app(
             'entity_id=f"binary_sensor.dh_app_pve_storage_{slug}_percent_used_problem"',
             'entity_id=f"binary_sensor.dh_app_pve_disk_{slug}_smart_problem"',
             'entity_id=f"binary_sensor.dh_app_pve_gpu_{slug}_temperature_problem"',
-            '"problem_started"',
-            '"problem_recovered"',
+            '"cpu_temperature_high"',
+            '"cpu_temperature_normal"',
+            '"cpu_throttling_started"',
+            '"cpu_throttling_cleared"',
+            '"storage_usage_high"',
+            '"storage_usage_normal"',
+            '"disk_temperature_high"',
+            '"disk_temperature_normal"',
+            '"gpu_temperature_high"',
+            '"gpu_temperature_normal"',
+            '"fan_control_restore_failed"',
+            '"fan_control_restored"',
+            '"disk_smart_failed"',
+            '"disk_smart_restored"',
             '"problem_updated"',
             '"default_entity_id": "sensor.dh_app_pve_app_version"',
             "{{ value_json.app_version | default('unknown') }}",
@@ -287,9 +306,20 @@ def validate_dh_pve_app(
             "condition: trigger",
             "trigger.to_state.attributes",
             "choose:",
-            "id: problem_started",
-            "id: problem_updated",
-            "id: problem_recovered",
+            "id: cpu_temperature_high",
+            "id: cpu_temperature_normal",
+            "id: cpu_throttling_started",
+            "id: cpu_throttling_cleared",
+            "id: storage_usage_high",
+            "id: storage_usage_normal",
+            "id: disk_temperature_high",
+            "id: disk_temperature_normal",
+            "id: gpu_temperature_high",
+            "id: gpu_temperature_normal",
+            "id: fan_control_restore_failed",
+            "id: fan_control_restored",
+            "id: disk_smart_failed",
+            "id: disk_smart_restored",
             "id: nut_unavailable",
             "id: nut_restored",
             "id: power_state_unknown",
@@ -322,6 +352,14 @@ def validate_dh_pve_app(
             "id: battery_fully_charged",
             "id: shutdown_committed",
             "id: config_changed",
+            "temperature_c",
+            "threshold_c",
+            "cpu_frequency_mhz",
+            "available_gib",
+            "battery_runtime_seconds",
+            "load_percent",
+            "input_voltage_v",
+            "output_voltage_v",
         ):
             if required not in notification_source:
                 fail(
@@ -332,6 +370,8 @@ def validate_dh_pve_app(
         for forbidden in (
             "event: dh_app_pve_notification",
             "id: ups_status_changed",
+            "id: problem_started",
+            "id: problem_recovered",
             "notification_schema_version",
             "contract_error",
             "failure_class",
@@ -604,6 +644,7 @@ def validate_dh_pve_app(
         app / "app/main.py",
         (
             "ProblemAwareRuntime(",
+            "problem_event_debounce_seconds=config.events.pve_problem_debounce_seconds",
             "ShutdownAwareProductionCollectors(",
             "ShutdownAwareTopologyManager(runner=_run)",
             "build_shutdown_aware_pve_discovery_payload(",
@@ -729,6 +770,12 @@ def validate_dh_pve_app(
     config_example = (app / "examples/dh_pve_app.conf.example").read_text(encoding="utf-8")
     if "[telemetry]" not in config_example or "enabled = false" not in config_example:
         fail("DH PVE telemetry must remain explicit opt-in and default OFF")
+    for expected in (
+        "[events]",
+        "pve_problem_debounce_seconds = 30",
+    ):
+        if expected not in config_example:
+            fail(f"DH PVE event debounce example contract changed: {expected}")
 
     installer = (app / "install.sh").read_text(encoding="utf-8")
     for expected in (
@@ -743,6 +790,8 @@ def validate_dh_pve_app(
         'chmod 0755 "${APP_DIR}/uninstall.sh"',
         'ROOT_GUIDE="/root/dh_app_pve.txt"',
         'cat "${APP_DIR}/dh_app_pve.txt"',
+        '"[events]"',
+        '"pve_problem_debounce_seconds = 30"',
     ):
         if expected not in installer:
             fail(f"DH PVE installer contract changed: {expected}")

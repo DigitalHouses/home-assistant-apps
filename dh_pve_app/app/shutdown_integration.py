@@ -16,6 +16,10 @@ from .shutdown_history import ShutdownHistoryTracker, evaluate_shutdown_readines
 from .state_store import StateStore
 from .topology import TopologyManager
 from .ups_group_runtime import AdaptiveUpsRuntime
+from .ups_event_context import (
+    line_power_event_context,
+    ups_snapshot_event_context,
+)
 from .ups_nut import read_ups
 from .ups_policy import (
     PolicyValidationError,
@@ -303,6 +307,8 @@ class ShutdownAwareUpsRuntime(AdaptiveUpsRuntime):
             ),
             "runtime_guard_threshold_seconds": result.runtime_guard_threshold_seconds,
         }
+        payload.update(ups_snapshot_event_context(self.last_snapshot))
+        payload.update(line_power_event_context(self.line_power_statistics_tracker))
         outbox.enqueue(
             f"shutdown_committed:{observed_at}:{public_reason}",
             payload,

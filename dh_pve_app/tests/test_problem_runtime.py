@@ -90,7 +90,7 @@ class CpuCollector:
         )
 
 
-def make_runtime(*, temperature=95.0):
+def make_runtime(*, temperature=95.0, debounce_seconds=0.0):
     bridge = RecordingBridge()
     settings = RuntimeSettings()
     store = FakeStore()
@@ -108,6 +108,7 @@ def make_runtime(*, temperature=95.0):
         now_iso=lambda: "2026-09-16T00:00:00+00:00",
         now_monotonic=lambda: clock["now"],
         discovery_builder=lambda inventory: {"device": {}, "components": {}},
+        problem_event_debounce_seconds=debounce_seconds,
     )
     return runtime, bridge, store, scheduler, clock, cpu
 
@@ -184,13 +185,18 @@ def test_problem_transition_bundle_publishes_event_last_in_exact_order():
     assert "summary" not in calls[4][1]["active"][0]
     event = calls[5][1]
     assert event["schema_version"] == 2
-    assert event["event_type"] == "problem_started"
+    assert event["event_type"] == "cpu_temperature_high"
     assert event["observed_at"] == "2026-09-16T00:00:00+00:00"
     assert event["previous"] is None
     assert event["current"]["active"] is True
     assert event["current"]["average"] == 95.0
     assert event["active_problem_count"] == 1
-    assert not ({"summary", "details", "value", "average", "threshold"} & event.keys())
+    assert event["value"] == 95.0
+    assert event["average"] == 95.0
+    assert event["threshold"] == 90.0
+    assert event["temperature_c"] == 95.0
+    assert event["average_temperature_c"] == 95.0
+    assert event["threshold_c"] == 90.0
 
 
 def test_failed_retained_problem_publish_blocks_event_and_retries_before_new_observation():
@@ -222,7 +228,7 @@ def test_failed_retained_problem_publish_blocks_event_and_retries_before_new_obs
         "problem_presentation",
         "diagnostic_event",
     ]
-    assert retried[-1][1]["event_type"] == "problem_started"
+    assert retried[-1][1]["event_type"] == "cpu_temperature_high"
     assert retried[-1][1]["schema_version"] == 2
 
 
@@ -252,8 +258,40 @@ def test_threshold_update_reevaluates_persists_and_never_changes_scheduler_inter
         "diagnostic_event",
     ]
     assert calls[1] == ("setting", "cpu_temperature_threshold", 80.0)
-    assert calls[-1][1]["event_type"] == "problem_started"
+    assert calls[-1][1]["event_type"] == "cpu_temperature_high"
     assert calls[-1][1]["schema_version"] == 2
     assert calls[-1][1]["current"]["average"] == 85.0
     assert scheduler.interval("cpu") == before_interval == 10.0
     assert store.data["runtime_settings"]["cpu_temperature_threshold"] == 80.0
+
+
+def test_runtime_delays_user_event_but_retains_problem_state_immediately():
+    runtime, bridge, _store, _scheduler, clock, _cpu = make_runtime(
+        temperature=95.0,
+        debounce_seconds=30.0,
+    )
+
+    runtime.run_collection(("cpu",), force=True)
+    bridge.calls.clear()
+
+    clock["now"] = 60.0
+    runtime.run_collection(("cpu",), force=True)
+
+    calls = problem_calls(bridge)
+    assert ("problem_state", "cpu_temperature", True) in calls
+    assert any(call[0] == "problem_aggregate" and call[1] == 1 for call in calls)
+    assert not any(call[0] == "diagnostic_event" for call in calls)
+
+    bridge.calls.clear()
+    clock["now"] = 89.9
+    runtime.process_events()
+    assert not any(call[0] == "diagnostic_event" for call in problem_calls(bridge))
+
+    bridge.calls.clear()
+    clock["now"] = 90.0
+    runtime.process_events()
+    events = [call[1] for call in problem_calls(bridge) if call[0] == "diagnostic_event"]
+    assert len(events) == 1
+    assert events[0]["event_type"] == "cpu_temperature_high"
+    assert events[0]["temperature_c"] == 95.0
+    assert events[0]["threshold_c"] == 90.0

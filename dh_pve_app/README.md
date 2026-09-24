@@ -10,7 +10,7 @@ Native Linux agent for **Proxmox VE 8.x** that publishes host, CPU, memory, stor
 
 The public product name is **DigitalHouses PVE Agent**. Existing runtime identifiers remain compatible: the implementation directory is `dh_pve_app`, the MQTT base namespace is `DigitalHouses/Global/dh_pve_app/<instance>`, and the Home Assistant devices are `DH PVE` and optional `DH PVE UPS`.
 
-Current source release: `VERSION` is `0.5.18`.
+Current source release: `VERSION` is `0.5.19`.
 
 ## Home Assistant dashboard
 
@@ -82,7 +82,7 @@ The normal publication windows are:
 - `NORMAL` — 15 min;
 - `DETAIL` — 5 min.
 
-`DETAIL` is selected per domain and only changes MQTT presentation frequency. It never increases collector frequency, SMART frequency, NUT polling cost or command/API depth. Meaningful discrete changes and problem transitions publish immediately.
+`DETAIL` is selected per domain and only changes MQTT presentation frequency. It never increases collector frequency, SMART frequency, NUT polling cost or command/API depth. Meaningful discrete changes publish immediately. Retained PVE problem state also updates immediately; only user-facing PVE problem/recovery machine events are delayed by the configured debounce.
 
 Canonical Home Assistant entity prefixes are:
 
@@ -106,11 +106,20 @@ Native MQTT Event entities are used for diagnostic transitions:
 - `event.dh_app_pve_diagnostic`;
 - `event.dh_app_pve_ups_diagnostic`.
 
-Generic PVE problem event types are `problem_started`, `problem_recovered` and `problem_updated`. UPS Event Discovery uses explicit user-semantic events: NUT unavailable/restored, power-state unknown/restored, line-power lost/restored, enter/clear events for low/high battery, replace-battery, bypass, calibration, output-off, overload, AVR Trim/Boost, Forced Shutdown and alarm, plus `battery_discharge_level_crossed`, `battery_fully_charged`, `shutdown_committed` and `config_changed`.
+User-facing PVE problem events are semantic: CPU temperature high/normal, CPU throttling started/cleared, storage usage high/normal, disk/GPU temperature high/normal, fan-control restore failed/restored and disk SMART failed/restored. Internal `problem_updated` remains a machine diagnostic event and is not a default notification trigger. UPS Event Discovery uses explicit user-semantic events: NUT unavailable/restored, power-state unknown/restored, line-power lost/restored, enter/clear events for low/high battery, replace-battery, bypass, calibration, output-off, overload, AVR Trim/Boost, Forced Shutdown and alarm, plus `battery_discharge_level_crossed`, `battery_fully_charged`, `shutdown_committed` and `config_changed`.
 
-New public App events use `schema_version: 2` and contain machine semantics only: IDs/enums, previous/current state, numeric values, thresholds, timestamps and reason codes. App event payloads do not generate notification `title`, `message`, `summary`, `details`, localized labels, emoji or `status_ru`. Runtime Event messages are non-retained, published with MQTT QoS 1 after the synchronized retained current-state bundle, and Home Assistant subscribes to the Event topics at QoS 1 through MQTT Discovery.
+New public App events use `schema_version: 2` and contain machine semantics only: IDs/enums, previous/current state, numeric values, thresholds, timestamps and reason codes. Events also carry an event-time assessment snapshot when relevant. For example, an UPS line-power event carries charge/runtime/load/voltage facts captured with that event, while a PVE temperature or storage event carries the current value plus threshold and useful capacity/CPU context. Home Assistant therefore does not reread mutable telemetry sensors to explain an old event. App event payloads do not generate notification `title`, `message`, `summary`, `details`, localized labels, emoji or `status_ru`. Runtime Event messages are non-retained, published with MQTT QoS 1 after the synchronized retained current-state bundle, and Home Assistant subscribes to the Event topics at QoS 1 through MQTT Discovery.
 
 The retained problem binaries and aggregate sensors are the authoritative current-state/reconciliation contract. Event entities describe what just happened; they are not used as retained state. Retryable UPS semantic events use a small persisted outbox so an MQTT publish failure does not silently advance semantic state past an undelivered Event.
+
+PVE start/recovery events are debounced independently from retained state:
+
+```ini
+[events]
+pve_problem_debounce_seconds = 30
+```
+
+The default is 30 seconds; valid values are 0..3600 seconds and 0 disables debounce. The problem binary/aggregate changes as soon as the App confirms the collector state. A user-facing start or recovery Event is published only if that state remains unchanged for the full debounce interval. If it flips back during the interval, the pending Event is cancelled.
 
 ## Optional UPS UI contract
 
@@ -151,7 +160,7 @@ The PVE HA examples are:
 - `examples/packages/dh_app_pve_notification_local_package.yaml` — English local notification example;
 - `examples/packages/locales/ru/dh_app_pve_notification_local_package.yaml` — Russian site-local notification package.
 
-Install the base package and one local notification package. The local package gives every user-visible situation its own `event.received` trigger and matching `trigger.id`, routes it through `choose`, and calls the delivery service directly. For example, `line_power_lost` is the exact place to edit the text shown when the UPS switches to battery, and `line_power_restored` is the exact place to edit the restore message.
+Install the base package and one local notification package. The local package gives every user-visible situation its own `event.received` trigger and matching `trigger.id`, routes it through `choose`, and calls the delivery service directly. For example, `line_power_lost` is the exact place to edit the text shown when the UPS switches to battery, `line_power_restored` is the restore event, `boost_started` is the exact place for AVR Boost, and `cpu_throttling_started` or `storage_usage_high` are the exact places for those PVE alerts. The bundled text demonstrates the event-time context fields, such as UPS charge/runtime/load/input voltage or PVE temperature/frequency/threshold/free space.
 
 The English example uses `persistent_notification.create`. The Russian site package calls `script.write2log` directly. A user may replace the direct action with any local `notify.*`, script or other Home Assistant service.
 

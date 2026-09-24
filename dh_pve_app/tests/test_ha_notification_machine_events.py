@@ -8,9 +8,20 @@ PACKAGES = (
 )
 
 EVENT_TYPES = (
-    "problem_started",
-    "problem_updated",
-    "problem_recovered",
+    "cpu_temperature_high",
+    "cpu_temperature_normal",
+    "cpu_throttling_started",
+    "cpu_throttling_cleared",
+    "storage_usage_high",
+    "storage_usage_normal",
+    "disk_temperature_high",
+    "disk_temperature_normal",
+    "gpu_temperature_high",
+    "gpu_temperature_normal",
+    "fan_control_restore_failed",
+    "fan_control_restored",
+    "disk_smart_failed",
+    "disk_smart_restored",
     "nut_unavailable",
     "nut_restored",
     "power_state_unknown",
@@ -57,13 +68,19 @@ def test_local_notification_packages_trigger_on_all_supported_machine_events():
 def test_local_notification_packages_read_machine_fields_directly():
     required = (
         "object_name",
-        "metric",
-        "current.value",
+        "temperature_c",
+        "threshold_c",
+        "cpu_frequency_mhz",
+        "used_percent",
+        "available_gib",
         "crossed_thresholds",
         "current_charge_percent",
         "reason",
         "battery_charge_percent",
         "battery_runtime_seconds",
+        "load_percent",
+        "input_voltage_v",
+        "output_voltage_v",
         "old_values",
         "new_values",
     )
@@ -80,7 +97,6 @@ def test_local_notification_packages_do_not_reimplement_machine_schema_validatio
         for forbidden in (
             "schema_version ==",
             "is mapping",
-            "is number",
             "is string",
             "contract_error",
             "failure_class",

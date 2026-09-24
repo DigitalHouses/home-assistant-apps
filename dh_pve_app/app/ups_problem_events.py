@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from .problems import ProblemTransition
 
 
@@ -15,6 +17,7 @@ def semantic_ups_problem_event(
     transition: ProblemTransition,
     *,
     observed_at: str,
+    context: Mapping[str, object] | None = None,
 ) -> tuple[str, dict[str, object]] | None:
     event_type = _PROBLEM_EVENTS.get(
         (transition.current.problem_id, transition.event_type)
@@ -32,4 +35,12 @@ def semantic_ups_problem_event(
         "object_id": state.object_id,
         "object_name": state.object_name,
     }
+    if context:
+        payload.update(
+            {
+                str(key): value
+                for key, value in context.items()
+                if value is not None
+            }
+        )
     return f"{event_type}:{observed_at}", payload
