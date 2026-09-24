@@ -295,3 +295,27 @@ def test_runtime_delays_user_event_but_retains_problem_state_immediately():
     assert events[0]["event_type"] == "cpu_temperature_high"
     assert events[0]["temperature_c"] == 95.0
     assert events[0]["threshold_c"] == 90.0
+
+
+def test_active_problem_detail_update_stays_in_retained_state_without_transient_event():
+    runtime, bridge, _store, _scheduler, clock, _cpu = make_runtime(
+        temperature=95.0,
+        debounce_seconds=0.0,
+    )
+
+    runtime.run_collection(("cpu",), force=True)
+    clock["now"] = 60.0
+    runtime.run_collection(("cpu",), force=True)
+    assert any(call[0] == "diagnostic_event" for call in problem_calls(bridge))
+
+    bridge.calls.clear()
+    value = runtime.settings.apply("cpu_temperature_threshold", "92")
+    bridge.setting_updates.put(
+        SettingUpdate(key="cpu_temperature_threshold", value=value)
+    )
+
+    assert runtime.process_events() is True
+    calls = problem_calls(bridge)
+    assert ("setting", "cpu_temperature_threshold", 92.0) in calls
+    assert ("problem_state", "cpu_temperature", True) in calls
+    assert not any(call[0] == "diagnostic_event" for call in calls)
