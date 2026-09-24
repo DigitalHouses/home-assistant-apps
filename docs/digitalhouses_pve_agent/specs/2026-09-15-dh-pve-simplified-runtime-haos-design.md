@@ -1386,7 +1386,7 @@ Negative durations are invalid evidence and must remain unknown; they are never 
 
 If the previous boot journal ends before a strong clean-shutdown marker, `shutdown_clean` must not be reported as true. Incomplete guest operations remain `unknown`/incomplete and must not be converted to successful zero-second shutdowns.
 
-When a newer parser reparses a previous boot, parser-derived evidence is replaced from the new parse rather than merged with or filled from legacy parser output. Context facts captured independently at runtime (for example FSD reason, battery charge/runtime/load at FSD and budget fingerprint) may be preserved. Legacy shutdown timestamps, guest completion/result records and clean/unclean conclusions are not fallback evidence.
+When a newer parser reparses a previous boot, parser-derived evidence is replaced from the new parse rather than merged with or filled from legacy parser output. Entering the final host-shutdown scope also resets any clean-shutdown marker accumulated earlier in that boot journal; only clean evidence at or after the final shutdown boundary may classify that transaction as clean. An unfinished guest transaction means the aggregate guest-shutdown duration remains unknown. Context facts captured independently at runtime (for example FSD reason, battery charge/runtime/load at FSD and budget fingerprint) may be preserved. Legacy shutdown timestamps, guest completion/result records and clean/unclean conclusions are not fallback evidence.
 
 Only structurally valid, comparable, clean shutdown evidence may contribute observed timing to the shutdown-budget engine.
 
