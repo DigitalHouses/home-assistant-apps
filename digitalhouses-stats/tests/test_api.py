@@ -26,6 +26,21 @@ def test_healthz() -> None:
     assert response.json() == {"status": "ok"}
 
 
+def test_empty_dashboard_summary() -> None:
+    reset_database()
+
+    response = dashboard_client.get("/v1/stats/summary")
+    assert response.status_code == 200
+    assert response.json() == {
+        "observed_installations": 0,
+        "active_24h": 0,
+        "active_7d": 0,
+        "active_30d": 0,
+        "heartbeats": 0,
+        "last_heartbeat": None,
+    }
+
+
 def test_heartbeat_history_and_authenticated_delete() -> None:
     reset_database()
 
@@ -225,13 +240,14 @@ def test_local_stats_use_latest_installation_state() -> None:
 
     summary = dashboard_client.get("/v1/stats/summary")
     assert summary.status_code == 200
-    assert summary.json() == {
-        "observed_installations": 3,
-        "active_24h": 2,
-        "active_7d": 2,
-        "active_30d": 3,
-        "heartbeats": 4,
-    }
+    summary_payload = summary.json()
+    assert summary_payload["observed_installations"] == 3
+    assert summary_payload["active_24h"] == 2
+    assert summary_payload["active_7d"] == 2
+    assert summary_payload["active_30d"] == 3
+    assert summary_payload["heartbeats"] == 4
+    assert isinstance(summary_payload["last_heartbeat"], str)
+    assert summary_payload["last_heartbeat"].endswith("+00:00")
 
     products = dashboard_client.get("/v1/stats/products")
     assert products.status_code == 200
