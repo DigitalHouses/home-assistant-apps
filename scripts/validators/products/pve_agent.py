@@ -5,7 +5,7 @@ from typing import Any
 
 from validators.common import fail, require_files
 
-EXPECTED_VERSION = "0.5.19"
+EXPECTED_VERSION = "0.5.20"
 EXPECTED_TOPIC_PREFIX = "DigitalHouses/Global/dh_pve_app"
 EXPECTED_DEVICE_NAME = "DH PVE"
 EXPECTED_REFRESH_ENTITY = "button.dh_app_pve_refresh"
@@ -161,7 +161,6 @@ def validate_dh_pve_app(
             '"fan_control_restored"',
             '"disk_smart_failed"',
             '"disk_smart_restored"',
-            '"problem_updated"',
             '"default_entity_id": "sensor.dh_app_pve_app_version"',
             "{{ value_json.app_version | default('unknown') }}",
             '"default_entity_id": "sensor.dh_app_pve_agent_started"',
@@ -171,6 +170,12 @@ def validate_dh_pve_app(
         ),
         "canonical ready-state Discovery",
     )
+    pve_discovery_source = (app / "app/discovery_groups.py").read_text(
+        encoding="utf-8"
+    )
+    if '"problem_updated"' in pve_discovery_source:
+        fail("DH PVE public Event Discovery must remain semantic-only")
+
     _require_text(
         app / "app/discovery_ups_groups.py",
         (
@@ -372,6 +377,7 @@ def validate_dh_pve_app(
             "id: ups_status_changed",
             "id: problem_started",
             "id: problem_recovered",
+            "id: problem_updated",
             "notification_schema_version",
             "contract_error",
             "failure_class",

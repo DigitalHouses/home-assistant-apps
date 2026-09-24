@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.5.20
+
+- Remove the remaining generic immediate PVE `problem_updated` MQTT Event from the public Event Discovery contract.
+- Keep active-problem value changes immediate in retained problem/telemetry state while reserving transient PVE Events for explicit semantic start/recovery events after the configured debounce.
+- No UPS/NUT, shutdown/FSD, threshold, collection-cadence or notification-delivery behavior changes from 0.5.19.
+
 ## 0.5.19
 
 - Add event-time assessment snapshots to UPS machine events so notifications can show charge, remaining runtime, load, input/output voltage, transfer thresholds and outage duration from the actual event rather than rereading mutable Home Assistant sensor state.

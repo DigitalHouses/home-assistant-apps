@@ -6,14 +6,14 @@ APP = ROOT / "dh_pve_app"
 VALIDATOR = ROOT / "scripts" / "validators" / "products" / "pve_agent.py"
 
 
-def test_0519_version_and_repository_validator_contract():
-    assert (APP / "VERSION").read_text(encoding="utf-8").strip() == "0.5.19"
+def test_0520_version_and_repository_validator_contract():
+    assert (APP / "VERSION").read_text(encoding="utf-8").strip() == "0.5.20"
 
     text = VALIDATOR.read_text(encoding="utf-8")
-    assert 'EXPECTED_VERSION = "0.5.19"' in text
+    assert 'EXPECTED_VERSION = "0.5.20"' in text
 
 
-def test_0519_home_assistant_package_layout():
+def test_0520_home_assistant_package_layout():
     packages = APP / "examples" / "packages"
     base = packages / "dh_app_pve_package.yaml"
     en = packages / "dh_app_pve_notification_local_package.yaml"
@@ -37,11 +37,11 @@ def test_0519_home_assistant_package_layout():
         assert "contract_error" not in text
 
 
-def test_0519_readme_and_changelog_document_simple_notifications():
+def test_0520_readme_and_changelog_document_simple_notifications():
     readme = (APP / "README.md").read_text(encoding="utf-8")
     changelog = (APP / "CHANGELOG.md").read_text(encoding="utf-8")
 
-    assert "`VERSION` is `0.5.19`." in readme
+    assert "`VERSION` is `0.5.20`." in readme
     assert "dh_app_pve_notification_local_package.yaml" in readme
     assert "line_power_lost" in readme
     assert "line_power_restored" in readme
@@ -53,15 +53,16 @@ def test_0519_readme_and_changelog_document_simple_notifications():
     assert "trigger.id" in readme
     assert "direct action" in readme
 
-    assert "## 0.5.19" in changelog
-    assert "pve_problem_debounce_seconds" in changelog
-    assert "event-time assessment snapshots" in changelog
+    assert "## 0.5.20" in changelog
+    assert "## 0.5.20" in changelog
+    assert "problem_updated" in changelog
+    assert "semantic start/recovery" in changelog
     assert "trigger.id" in changelog
     assert "Notification Envelope" in changelog  # historical 0.5.16 entry remains
     assert "/root/dh_app_pve.txt" in changelog
 
 
-def test_0519_operational_guide_contract():
+def test_0520_operational_guide_contract():
     guide = (APP / "dh_app_pve.txt").read_text(encoding="utf-8")
     for required in (
         "Установка",

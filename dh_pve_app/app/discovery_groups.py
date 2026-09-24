@@ -433,7 +433,6 @@ def _problem_summary_components(topics) -> dict[str, dict[str, object]]:
                 "fan_control_restored",
                 "disk_smart_failed",
                 "disk_smart_restored",
-                "problem_updated",
             ],
             "qos": 1,
             "availability": availability,
