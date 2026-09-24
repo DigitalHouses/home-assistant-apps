@@ -4,6 +4,9 @@ from typing import Any
 
 
 _UPS_SNAPSHOT_FIELDS = (
+    "manufacturer",
+    "model",
+    "serial",
     "battery_charge_percent",
     "runtime_seconds",
     "battery_voltage_v",
