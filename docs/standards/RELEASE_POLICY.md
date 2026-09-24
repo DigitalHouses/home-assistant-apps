@@ -116,7 +116,7 @@ GitHub Releases are the public release boundary and provenance record.
 
 ## 5. Release flow
 
-Normal release flow:
+Normal release flow is automatic:
 
 ```text
 development branch
@@ -129,18 +129,22 @@ pull request
     ↓
 required repository CI
     ↓
-merge to main
+release-readiness validation
     ↓
-Actions → Release product
+automatic merge to main
     ↓
-validated tag + GitHub Release
+automatic canonical tag + GitHub Release
     ↓
 product-specific production delivery
 ```
 
+The developer expresses release intent by changing the product version source and matching changelog in the pull request. No repository-owner button press or manual release approval is part of the normal mechanical path.
+
+If a pull request does not change a product version, it does not create a release for that product.
+
 Do not create a public release tag from an unmerged feature, fix, design, TDD, or temporary branch.
 
-A successful merge or GREEN CI result is not by itself a production release. A production release boundary exists only after the canonical release tag and GitHub Release have been published.
+A successful merge or GREEN CI result is not by itself a production release. A production release boundary exists only after the canonical release tag and GitHub Release have been published successfully.
 
 ## 6. Exact source identity
 
@@ -265,35 +269,40 @@ A shared commit does not create a shared product version.
 
 ## 10. Supported release mechanism
 
-New releases are published through the repository workflow:
+New releases are published automatically by the repository integration workflow after a pull request has passed the complete repository validation and release-readiness checks.
 
-```text
-Actions → Release product → Run workflow
-```
+Release-readiness compares the pull request base and head revisions and identifies products whose canonical version source changed:
 
-The workflow must be run from `main` and accepts exactly two inputs:
+- Linux Agent: product `VERSION`;
+- Home Assistant App: product `config.yaml` version.
 
-- product release identifier;
-- exact Semantic Version already present on `main`.
+A version source change is release intent. Before merge, the repository validates:
 
-Before publishing, the workflow validates:
-
-- the complete repository contract;
 - the requested Semantic Version;
 - that the version is newer than the policy-adoption baseline;
-- that the product source version exactly matches the requested version;
+- that the product source version exactly matches the candidate version;
 - that any `Unreleased` changelog section is empty;
-- that a non-empty changelog section exists for the requested version;
+- that a non-empty changelog section exists for the candidate version;
 - that the new-format tag does not already exist;
-- that the requested version is newer than every existing new-format tag for that product.
+- that the candidate version is newer than every existing new-format tag for that product.
 
-After validation, the workflow creates the tag and GitHub Release from the exact checked-out `main` commit and verifies that the published tag resolves back to that commit.
+The automatic integration workflow merges only the exact PR head SHA against the exact base SHA that passed CI. If either revision changed, the stale validation result is not sufficient for automatic merge.
+
+After merge, the workflow:
+
+1. checks out the exact merge commit on `main`;
+2. determines the release candidates introduced by that merge;
+3. re-validates all candidates before publication;
+4. creates each canonical tag and GitHub Release from that exact merge commit;
+5. verifies that every published tag resolves back to the merge commit.
+
+For products that already have canonical release history, the integration workflow may also reconcile a newer current source version that predates adoption of automatic release. This is limited to products with an existing canonical `<release_identifier>-v*` tag so enabling automation cannot unexpectedly create a first release for an unadopted product.
 
 For Home Assistant Apps, the release mechanism must additionally build and publish the versioned GHCR artifact from the exact release source, resolve its digest, and verify the complete version/tag/commit/image relationship. The successful release record must retain the image name and digest.
 
 The implementation may order publication steps transactionally to avoid partial releases, but it must not represent a release as complete until every artifact and provenance check required for that product type has passed.
 
-Manual creation of new-format release tags is reserved for explicit recovery work.
+Manual `workflow_dispatch` release is not part of the normal repository workflow. Manual creation of new-format release tags is reserved for explicit recovery work.
 
 ## 11. Policy enforcement
 

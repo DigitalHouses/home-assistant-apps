@@ -49,7 +49,9 @@ def validate_repository(root: Path = ROOT) -> list[dict[str, str]]:
             root / "docs/standards/RELEASE_POLICY.md",
             root / "docs/standards/REPOSITORY_GOVERNANCE.md",
             root / "scripts/release_contract.py",
-            root / ".github/workflows/release.yml",
+            root / "scripts/release_candidates.py",
+            root / ".github/workflows/validate.yml",
+            root / ".github/workflows/auto-merge.yml",
         ],
     )
 

@@ -36,11 +36,13 @@ Do not squash or rewrite substantive product history unless there is an explicit
 
 ### 3.1 Automatic merge for owner-authored PRs
 
-Pull requests authored by `DigitalHouses`, targeting `main`, from a branch in this repository are merged automatically after the complete `Validate repository` workflow succeeds.
+Pull requests authored by `DigitalHouses`, targeting `main`, from a branch in this repository are integrated automatically after the complete `Validate repository` workflow succeeds.
 
-Automatic merge must verify that the PR head SHA is exactly the SHA that passed validation. Draft PRs, external/fork PRs, failed validation, stale validation runs, and conflicting PRs must not be merged automatically.
+Automatic integration must verify that both the PR head SHA and the target-base SHA are exactly the revisions that passed validation. Draft PRs, external/fork PRs, failed validation, stale validation runs, and conflicting PRs must not be merged automatically.
 
-The repository owner is not part of the normal mechanical merge path. Manual merge remains an exception for recovery or intentionally held changes.
+When the validated PR changes a product's canonical version source, release-readiness validation is mandatory before merge. After merge, the integration workflow publishes the corresponding canonical tag and GitHub Release automatically according to [DigitalHouses Release Policy](RELEASE_POLICY.md).
+
+The repository owner is not part of the normal mechanical validation, merge, or release path. Manual merge or release remains an exception for recovery or intentionally held changes.
 
 ## 4. Protection target for main
 

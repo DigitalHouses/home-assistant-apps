@@ -1,4 +1,4 @@
-name: Auto merge owner PR
+name: Integrate validated owner PR
 
 on:
   workflow_run:
@@ -12,8 +12,8 @@ permissions:
   pull-requests: write
 
 jobs:
-  merge:
-    name: Merge validated DigitalHouses PR
+  integrate:
+    name: Merge and release validated DigitalHouses PR
     if: >
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'pull_request' &&
@@ -21,11 +21,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Validate PR and merge
+      - name: Validate exact PR revision and merge
+        id: merge
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
-          VALIDATED_SHA: ${{ github.event.workflow_run.head_sha }}
+          VALIDATED_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          VALIDATED_BASE_SHA: ${{ github.event.workflow_run.pull_requests[0].base.sha }}
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -35,19 +37,135 @@ jobs:
           author="$(jq -r '.user.login' <<<"$pr_json")"
           state="$(jq -r '.state' <<<"$pr_json")"
           draft="$(jq -r '.draft' <<<"$pr_json")"
-          base="$(jq -r '.base.ref' <<<"$pr_json")"
+          base_ref="$(jq -r '.base.ref' <<<"$pr_json")"
+          base_sha="$(jq -r '.base.sha' <<<"$pr_json")"
           head_repo="$(jq -r '.head.repo.full_name' <<<"$pr_json")"
           head_sha="$(jq -r '.head.sha' <<<"$pr_json")"
 
           test "$author" = "DigitalHouses"
           test "$state" = "open"
           test "$draft" = "false"
-          test "$base" = "main"
+          test "$base_ref" = "main"
           test "$head_repo" = "$GITHUB_REPOSITORY"
-          test "$head_sha" = "$VALIDATED_SHA"
+          test "$head_sha" = "$VALIDATED_HEAD_SHA"
+          test "$base_sha" = "$VALIDATED_BASE_SHA"
 
           gh pr merge "$PR_NUMBER" \
             --repo "$GITHUB_REPOSITORY" \
             --merge \
             --delete-branch \
-            --match-head-commit "$VALIDATED_SHA"
+            --match-head-commit "$VALIDATED_HEAD_SHA"
+
+          merged_json="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
+          merged="$(jq -r '.merged' <<<"$merged_json")"
+          merge_sha="$(jq -r '.merge_commit_sha' <<<"$merged_json")"
+
+          test "$merged" = "true"
+          test -n "$merge_sha"
+          test "$merge_sha" != "null"
+
+          echo "base_sha=$base_sha" >> "$GITHUB_OUTPUT"
+          echo "merge_sha=$merge_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Check out exact merged main revision
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.merge.outputs.merge_sha }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Detect and validate releases
+        env:
+          BASE_SHA: ${{ steps.merge.outputs.base_sha }}
+          MERGE_SHA: ${{ steps.merge.outputs.merge_sha }}
+        run: |
+          python scripts/release_candidates.py \
+            --base "$BASE_SHA" \
+            --head "$MERGE_SHA" \
+            --include-pending-existing \
+            --validate \
+            --json-output release-candidates.json
+
+          cat release-candidates.json
+
+      - name: Publish product releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MERGE_SHA: ${{ steps.merge.outputs.merge_sha }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          count="$(jq 'length' release-candidates.json)"
+          if [ "$count" -eq 0 ]; then
+            echo "No product release required."
+            exit 0
+          fi
+
+          workdir="$(mktemp -d)"
+          trap 'rm -rf "$workdir"' EXIT
+
+          for index in $(seq 0 $((count - 1))); do
+            product="$(jq -r ".[$index].product" release-candidates.json)"
+            version="$(jq -r ".[$index].version" release-candidates.json)"
+            notes_file="$workdir/${product}-${version}.md"
+            output_file="$workdir/${product}-${version}.out"
+
+            python scripts/release_contract.py \
+              --product "$product" \
+              --version "$version" \
+              --notes-file "$notes_file" \
+              --github-output "$output_file"
+
+            tag="$(sed -n 's/^tag=//p' "$output_file")"
+            title="$(sed -n 's/^title=//p' "$output_file")"
+            prerelease="$(sed -n 's/^prerelease=//p' "$output_file")"
+
+            test -n "$tag"
+            test -n "$title"
+
+            args=(
+              release create "$tag"
+              --repo "$GITHUB_REPOSITORY"
+              --target "$MERGE_SHA"
+              --title "$title"
+              --notes-file "$notes_file"
+            )
+
+            if [ "$prerelease" = "true" ]; then
+              args+=(--prerelease)
+            fi
+
+            gh "${args[@]}"
+          done
+
+      - name: Verify published releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MERGE_SHA: ${{ steps.merge.outputs.merge_sha }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          count="$(jq 'length' release-candidates.json)"
+          if [ "$count" -eq 0 ]; then
+            exit 0
+          fi
+
+          for index in $(seq 0 $((count - 1))); do
+            product="$(jq -r ".[$index].product" release-candidates.json)"
+            version="$(jq -r ".[$index].version" release-candidates.json)"
+            tag="${product}-v${version}"
+
+            git fetch origin "refs/tags/${tag}:refs/tags/${tag}" --force
+            actual="$(git rev-list -n 1 "$tag")"
+            test "$actual" = "$MERGE_SHA"
+
+            gh release view "$tag" \
+              --repo "$GITHUB_REPOSITORY" \
+              --json tagName,isDraft,isPrerelease
+          done
