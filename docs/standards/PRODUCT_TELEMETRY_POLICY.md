@@ -14,6 +14,8 @@ Current mandatory scope:
 
 Future DigitalHouses products in this repository must follow the same telemetry contract unless an explicit repository-level exemption is documented.
 
+Mandatory scope describes the repository target. It does not mean every listed product is already enabled in the production telemetry server. Production enablement additionally requires the shared protocol/server allowlist and the product implementation to be updated together. Current operational status is maintained in [DigitalHouses Telemetry Implementation Guide](TELEMETRY_IMPLEMENTATION_GUIDE.md).
+
 ## 1. Purpose
 
 DigitalHouses telemetry exists only to measure product adoption and support release operations.
@@ -197,23 +199,28 @@ active 7d
 active 30d
 ```
 
-Version-adoption and country reports should default to active installations in a defined window, normally 7 days.
+Version and country distributions must count each retained installation once, using the latest accepted heartbeat for that installation. Operator views may additionally scope those distributions to a defined active window, normally 7 days.
 
 ## 9. Retention
 
-Individual telemetry installation records are retained for a configurable period after `last_seen`.
+Current production policy does not enable automatic time-based telemetry retention cleanup.
 
-Default:
+Accepted heartbeat observations are retained to support long-term product/version/country dynamics until:
 
-```text
-TELEMETRY_RETENTION_DAYS=60
-```
+- the installation performs authenticated deletion; or
+- a future repository-level policy revision introduces an explicit retention rule.
 
-After the retention window, the installation record is deleted.
+Therefore "observed installations" means retained telemetry-enabled installation identities, not the complete installed base and not a count of users.
 
-Therefore "observed installations" means observed within the configured retention horizon, not an all-time installed-base count.
+No product may implement its own assumption that the server expires telemetry after a fixed number of days.
 
-If lifetime aggregate metrics are ever required, they must be maintained without retaining expired installation-level records.
+A future time-based retention policy is a material data-lifecycle change. It must update together:
+
+- this policy;
+- the shared telemetry protocol;
+- the stats server implementation;
+- tests;
+- operator/user-facing wording.
 
 ## 10. Deletion
 
@@ -223,10 +230,12 @@ The telemetry API must provide an authenticated mechanism for an installation to
 
 Deletion must require the installation token or an equivalent per-installation credential defined by the telemetry protocol.
 
+Authenticated deletion removes the installation credential record and all retained heartbeat history associated with that installation.
+
 Disabling telemetry and deleting the server-side record are separate actions:
 
 - disable: stop future heartbeats;
-- delete: remove the current retained telemetry record.
+- delete: remove the retained installation identity and its heartbeat history.
 
 ## 11. Security boundaries
 
@@ -270,7 +279,7 @@ The published policy must state:
 - fields sent;
 - purpose;
 - frequency;
-- retention;
+- current history-retention behavior;
 - country derivation;
 - IP handling;
 - how to disable telemetry;
