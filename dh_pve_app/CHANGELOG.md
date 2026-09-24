@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.5.19
+
+- Add event-time assessment snapshots to UPS machine events so notifications can show charge, remaining runtime, load, input/output voltage, transfer thresholds and outage duration from the actual event rather than rereading mutable Home Assistant sensor state.
+- Replace generic user-facing PVE problem start/recovery notifications with semantic events for CPU temperature, CPU throttling, storage usage, disk/GPU temperature, fan-control restore failure and disk SMART health.
+- Enrich PVE problem events with the measurements needed to assess them immediately: value/average/threshold, CPU temperature/frequency/load, storage free/used capacity, disk/GPU identity and temperature, fan state/RPM, and detailed SMART health evidence where available.
+- Add configurable PVE problem-event debounce via `[events] pve_problem_debounce_seconds`, default 30 seconds. Retained problem state updates immediately; start/recovery machine events are emitted only after the state remains unchanged for the configured delay. Set 0 to disable.
+- Debounce both problem start and recovery so short threshold crossings and rapid recovery flaps do not generate user notifications.
+- Keep UPS/NUT collection cadence, FSD/shutdown ownership, shutdown thresholds and Home Assistant direct-delivery architecture unchanged.
+
 ## 0.5.18
 
 - Replace the user-facing umbrella `ups_status_changed` notification path with explicit semantic UPS machine events and matching Home Assistant `trigger.id` values.
