@@ -1,0 +1,196 @@
+# =============================================================================
+# DigitalHouses PVE local notifications — English example
+# =============================================================================
+# Machine events come from dh_pve_app.
+# Keep this file simple: event -> trigger.id -> choose -> direct action.
+# Replace persistent_notification.create with any delivery service you prefer.
+# =============================================================================
+
+dh_app_pve_notification_local_package:
+
+  automation:
+    - id: dh_app_pve_notifications
+      alias: DH PVE · Notifications
+      mode: queued
+      max: 20
+
+      triggers:
+        - trigger: event.received
+          target:
+            entity_id:
+              - event.dh_app_pve_diagnostic
+              - event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - problem_started
+          id: problem_started
+
+        - trigger: event.received
+          target:
+            entity_id:
+              - event.dh_app_pve_diagnostic
+              - event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - problem_updated
+          id: problem_updated
+
+        - trigger: event.received
+          target:
+            entity_id:
+              - event.dh_app_pve_diagnostic
+              - event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - problem_recovered
+          id: problem_recovered
+
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - ups_status_changed
+          id: ups_status_changed
+
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - battery_discharge_level_crossed
+          id: battery_discharge_level_crossed
+
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - battery_fully_charged
+          id: battery_fully_charged
+
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - shutdown_committed
+          id: shutdown_committed
+
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - config_changed
+          id: config_changed
+
+      conditions: []
+
+      actions:
+        - choose:
+            - conditions:
+                - condition: trigger
+                  id:
+                    - problem_started
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "⚠️ {{ trigger.to_state.attributes.object_name }}: problem detected"
+                    message: >-
+                      {{ trigger.to_state.attributes.metric }}:
+                      {{ trigger.to_state.attributes.current.value }}
+
+            - conditions:
+                - condition: trigger
+                  id:
+                    - problem_updated
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "⚠️ {{ trigger.to_state.attributes.object_name }}: problem changed"
+                    message: >-
+                      {{ trigger.to_state.attributes.metric }}:
+                      {{ trigger.to_state.attributes.current.value }}
+
+            - conditions:
+                - condition: trigger
+                  id:
+                    - problem_recovered
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "✅ {{ trigger.to_state.attributes.object_name }}: back to normal"
+                    message: >-
+                      {{ trigger.to_state.attributes.metric }}:
+                      {{ trigger.to_state.attributes.current.value }}
+
+            - conditions:
+                - condition: trigger
+                  id:
+                    - ups_status_changed
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "🔋 UPS: status changed"
+                    message: >-
+                      {{ trigger.to_state.attributes.previous_status | join(', ') }}
+                      →
+                      {{ trigger.to_state.attributes.current_status | join(', ') }}
+
+            - conditions:
+                - condition: trigger
+                  id:
+                    - battery_discharge_level_crossed
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "🔋 UPS: battery {{ trigger.to_state.attributes.current_charge_percent }}%"
+                    message: >-
+                      Crossed levels:
+                      {{ trigger.to_state.attributes.crossed_thresholds | join(', ') }}%.
+
+            - conditions:
+                - condition: trigger
+                  id:
+                    - battery_fully_charged
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "🔋✅ UPS: battery charged"
+                    message: >-
+                      Charge:
+                      {{ trigger.to_state.attributes.previous_charge_percent }}%
+                      →
+                      {{ trigger.to_state.attributes.current_charge_percent }}%.
+
+            - conditions:
+                - condition: trigger
+                  id:
+                    - shutdown_committed
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "🔋🛑 UPS: emergency shutdown started"
+                    message: >-
+                      Reason: {{ trigger.to_state.attributes.reason }}.
+                      Charge: {{ trigger.to_state.attributes.battery_charge_percent }}%.
+                      Runtime: {{ trigger.to_state.attributes.battery_runtime_seconds }} s.
+
+            - conditions:
+                - condition: trigger
+                  id:
+                    - config_changed
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "🔋⚙️ UPS Trigger configuration changed"
+                    message: >-
+                      Charge:
+                      {{ trigger.to_state.attributes.old_values.shutdown_battery_charge_threshold_percent }}%
+                      →
+                      {{ trigger.to_state.attributes.new_values.shutdown_battery_charge_threshold_percent }}%.
+                      Reserve:
+                      {{ trigger.to_state.attributes.old_values.runtime_reserve_seconds }} s
+                      →
+                      {{ trigger.to_state.attributes.new_values.runtime_reserve_seconds }} s.

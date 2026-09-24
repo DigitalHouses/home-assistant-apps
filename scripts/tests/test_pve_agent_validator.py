@@ -28,15 +28,15 @@ class PveAgentRepositoryContractTests(unittest.TestCase):
         validate_dh_pve_app(
             ROOT,
             ROOT / "dh_pve_app",
-            {"type": "linux_agent", "version": "0.5.16"},
+            {"type": "linux_agent", "version": "0.5.17"},
         )
 
     def test_dh_pve_shipped_ha_packages_are_valid_yaml(self):
         app = ROOT / "dh_pve_app"
         for relative in (
             "examples/packages/dh_app_pve_package.yaml",
-            "examples/packages/dh_app_pve_notification_package.yaml",
-            "examples/packages/locales/ru/dh_app_pve_notification_package.yaml",
+            "examples/packages/dh_app_pve_notification_local_package.yaml",
+            "examples/packages/locales/ru/dh_app_pve_notification_local_package.yaml",
         ):
             loaded = load_yaml(app / relative, ROOT)
             self.assertIsInstance(loaded, dict, relative)
