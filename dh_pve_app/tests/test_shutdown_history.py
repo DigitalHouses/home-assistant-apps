@@ -321,3 +321,21 @@ def test_powering_down_message_is_not_final_clean_shutdown_evidence():
     assert parsed["clean_shutdown"] is False
     assert parsed["shutdown_at"] is None
 
+def test_shutdown_request_boundary_discards_earlier_same_boot_guest_operations():
+    parsed = parse_guest_shutdown_journal(
+        "2026-09-23T10:54:30.000000+05:00 pve pve-guests[1]: "
+        "Stopping CT 100 (timeout = 30 seconds)\n"
+        "2026-09-23T10:55:02.000000+05:00 pve pve-guests[1]: "
+        "end task UPID:pve:1:2:3:4:vzshutdown:100:root@pam:\n"
+        "2026-09-24T04:44:34.000000+05:00 pve systemd-logind[2]: "
+        "The system will power off now!\n"
+        "2026-09-24T04:44:34.100000+05:00 pve systemd-logind[2]: "
+        "System is powering down.\n"
+        "2026-09-24T04:45:40.000000+05:00 pve pve-guests[3]: "
+        "Stopping VM 110 (timeout = 125 seconds)\n"
+    )
+
+    assert "100" not in parsed["guests"]["lxc"]
+    assert parsed["guests"]["vm"]["110"]["result"] == "unknown"
+    assert parsed["guests"]["vm"]["110"]["finished_at"] is None
+
