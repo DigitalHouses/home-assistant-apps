@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.5.17
+
+- Simplify Home Assistant notifications to the direct flow: machine event → `trigger.id` → `choose` → direct action.
+- Replace the previous notification-event/envelope layer with `dh_app_pve_notification_local_package.yaml`.
+- English example calls `persistent_notification.create` directly; the Russian site-local package calls `script.write2log` directly.
+- Remove notification-layer schema revalidation and startup reconciliation from the live notification package. The producer owns machine-event correctness; no event means no notification.
+- Keep PVE/NUT as the sole shutdown authority; runtime UPS/FSD behavior is unchanged.
+
 ## 0.5.16
 
 - Fix invalid YAML indentation in both English and Russian notification packages that made the published 0.5.15 HA package fail `ha core check`.
