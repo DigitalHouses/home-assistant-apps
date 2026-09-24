@@ -9,6 +9,7 @@ from validators.common import (
     ValidationError,
     discover_applications,
     is_application_directory_name,
+    load_yaml,
 )
 from validators.products.pve_agent import validate_dh_pve_app
 
@@ -29,6 +30,17 @@ class PveAgentRepositoryContractTests(unittest.TestCase):
             ROOT / "dh_pve_app",
             {"type": "linux_agent", "version": "0.5.15"},
         )
+
+    def test_dh_pve_ha_packages_are_valid_yaml(self):
+        app = ROOT / "dh_pve_app"
+        for relative in (
+            "examples/packages/dh_app_pve_package.yaml",
+            "examples/packages/dh_app_pve_notification_package.yaml",
+            "examples/packages/locales/ru/dh_app_pve_notification_package.yaml",
+            "examples/packages/dh_app_pve_ui_package.yaml",
+        ):
+            loaded = load_yaml(app / relative, ROOT)
+            self.assertIsInstance(loaded, dict, relative)
 
     def test_dh_pve_validator_rejects_wrong_release_version(self):
         with self.assertRaisesRegex(ValidationError, "release version"):
