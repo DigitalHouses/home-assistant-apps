@@ -208,6 +208,10 @@ if [[ ! -f "${CONFIG_FILE}" ]]; then
         printf '%s\n' "# Voluntary product telemetry. Default is OFF."
         printf '%s\n' "# Policy: https://github.com/DigitalHouses/home-assistant-apps/blob/main/docs/standards/PRODUCT_TELEMETRY_POLICY.md"
         printf '%s\n' "enabled = false"
+        printf '\n'
+        printf '%s\n' "[events]"
+        printf '%s\n' "# PVE problem/recovery notification debounce. 0 disables debounce."
+        printf '%s\n' "pve_problem_debounce_seconds = 30"
     } >"${CONFIG_FILE}"
     umask "${previous_umask}"
 fi
