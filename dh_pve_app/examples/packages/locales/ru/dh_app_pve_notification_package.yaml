@@ -443,7 +443,7 @@ dh_app_pve_notification_package:
                         {% if item is not mapping
                               or 'problem_id' not in item or item.problem_id is not string
                               or 'category' not in item or item.category is not string
-                              or 'severity' not in item or item.severity is not string
+                              or 'severity' not in item or item.severity is not string or item.severity not in ['info', 'warning', 'critical']
                               or 'object_id' not in item or item.object_id is not string
                               or 'object_name' not in item or item.object_name is not string
                               or 'metric' not in item or item.metric is not string
@@ -459,8 +459,12 @@ dh_app_pve_notification_package:
                     {{ not (
                          is_number(problem_count)
                          and (problem_count | int) >= 0
+                         and (problem_count | float) == (problem_count | int)
                          and severity is string
-                         and severity in ['ok', 'info', 'warning', 'critical']
+                         and (
+                           ((problem_count | int) == 0 and severity == 'ok')
+                           or ((problem_count | int) > 0 and severity in ['info', 'warning', 'critical'])
+                         )
                          and active is sequence
                          and active is not string
                          and active is not mapping
@@ -490,7 +494,7 @@ dh_app_pve_notification_package:
                         {% if item is not mapping
                               or 'problem_id' not in item or item.problem_id is not string
                               or 'category' not in item or item.category is not string
-                              or 'severity' not in item or item.severity is not string
+                              or 'severity' not in item or item.severity is not string or item.severity not in ['info', 'warning', 'critical']
                               or 'object_id' not in item or item.object_id is not string
                               or 'object_name' not in item or item.object_name is not string
                               or 'metric' not in item or item.metric is not string
