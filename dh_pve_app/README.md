@@ -10,7 +10,7 @@ Native Linux agent for **Proxmox VE 8.x** that publishes host, CPU, memory, stor
 
 The public product name is **DigitalHouses PVE Agent**. Existing runtime identifiers remain compatible: the implementation directory is `dh_pve_app`, the MQTT base namespace is `DigitalHouses/Global/dh_pve_app/<instance>`, and the Home Assistant devices are `DH PVE` and optional `DH PVE UPS`.
 
-Current source release: `VERSION` is `0.5.15`.
+Current source release: `VERSION` is `0.5.16`.
 
 ## Home Assistant dashboard
 
@@ -138,12 +138,14 @@ Battery discharge notification milestones are fixed machine events at 90, 80, 70
 
 App events contain machine semantics only. HA locale packages own notification wording, labels and emoji.
 
-Install exactly one notification locale:
+The Home Assistant side uses two PVE packages:
 
-- English default/public package: `examples/packages/dh_app_pve_notification_package.yaml`;
-- Russian client package: `examples/packages/locales/ru/dh_app_pve_notification_package.yaml`.
+- `examples/packages/dh_app_pve_package.yaml` — all non-language helpers, Recorder and Logbook;
+- exactly one notification locale:
+  - English default/public package: `examples/packages/dh_app_pve_notification_package.yaml`;
+  - Russian client package: `examples/packages/locales/ru/dh_app_pve_notification_package.yaml`.
 
-Both files are complete Home Assistant packages. They intentionally expose the same package key, automation IDs and machine contract, so only one may be installed in a Home Assistant instance. The English package is the canonical GitHub/default artifact. For a Russian installation, copy the RU file into the Home Assistant packages directory under the normal installed filename `dh_app_pve_notification_package.yaml`.
+The locale files intentionally expose the same package key, automation IDs and machine contract, so only one locale may be installed in a Home Assistant instance. The English package is the canonical GitHub/default artifact. For a Russian installation, copy the RU file into the Home Assistant packages directory under the normal installed filename `dh_app_pve_notification_package.yaml`. The former standalone `dh_app_pve_ui_package.yaml` was consolidated into `dh_app_pve_package.yaml` in 0.5.16.
 
 **Schema-v1 migration cleanup:** the App has emitted only schema-v2 machine events since 0.5.0. Starting with 0.5.15, the HA notification packages no longer accept the temporary schema-v1 fallback; an unexpected legacy/malformed event follows the explicit `contract_error` path.
 
@@ -164,9 +166,11 @@ Live delivery is gated by `binary_sensor.bs_global_system_boot_completed`. If HA
 
 This gives the notification layer two complementary contracts: Events for live facts and retained aggregates for current-state recovery after HAOS downtime/reconnect. Problem `binary_sensor` entities remain available for UI and user automations, but the reusable live notification path does not infer transitions from their state changes.
 
-For schema v2, both language packages derive presentation from structured machine fields such as `event_type`, `category`, `severity`, `object_id`, `object_name`, `metric`, `previous`, `current`, canonical status lists, crossed battery thresholds, charge/runtime values, shutdown reason/budget and config OLD/NEW values. Live machine events are handled by event-specific contract branches: a branch reads only fields defined for that event type. Required fields are never synthesized through `default(...)`, defaulted type conversion, `unknown`, zero, empty-string or similar fallbacks. A missing required field is a contract violation and emits an explicit `contract_error` notification; explicit null remains distinct from absence. Startup reconciliation applies the same rule to retained aggregates: freshness, count, severity, active-list shape and required problem fields are validated before presentation; timeout or malformed retained state becomes an explicit `contract_error` instead of `0`, an empty list, a generic severity or generic problem text. Both language packages emit the same transport-neutral Home Assistant event `dh_app_pve_notification`; they differ only in human-readable `title` and `message` presentation.
+For schema v2, both language packages derive presentation from structured machine fields such as `event_type`, `category`, `severity`, `object_id`, `object_name`, `metric`, `previous`, `current`, canonical status lists, crossed battery thresholds, charge/runtime values, shutdown reason/budget and config OLD/NEW values. Live machine events are handled by event-specific contract branches: a branch reads only fields defined for that event type. Required fields are never synthesized through `default(...)`, defaulted type conversion, `unknown`, zero, empty-string or similar fallbacks. A missing required field is a contract violation and emits an explicit `contract_error` notification; explicit null remains distinct from absence. Startup reconciliation applies the same rule to retained aggregates: freshness, count, severity, active-list shape and required problem fields are validated before presentation; timeout or malformed retained state becomes an explicit `contract_error` instead of `0`, an empty list, a generic severity or generic problem text.
 
-The reusable package intentionally does not call `script.write2log`, Telegram, a specific `notify.mobile_app` service or any customer-specific target. A site-local adapter may listen for `dh_app_pve_notification` and deliver its already-formatted `title`/`message` through the site's preferred transport. Such an adapter must validate its required delivery fields and must not repair a missing title/message/source/severity with silent defaults.
+Every localized `dh_app_pve_notification` follows DigitalHouses Notification Envelope v1 with required `notification_schema_version: 1`, `source`, `kind`, `severity`, non-empty localized `title` and `message`. A `contract_error` additionally carries non-empty machine-readable `contract` and `failure_class`, with `kind: contract_error` and `severity: error`. The source machine schema may be carried only as explicit provenance such as `source_schema_version`; it is independent from the notification envelope version.
+
+The reusable package intentionally does not call `script.write2log`, Telegram, a specific `notify.mobile_app` service or any customer-specific target. Notification delivery is installation-owned: a user may listen for `dh_app_pve_notification` and route Notification Envelope v1 to any preferred transport. The repository owner's private `script.write2log` implementation is not distributed as part of this product. Installation-owned delivery must validate required envelope fields and must not repair missing contract data with silent defaults.
 
 ## Product telemetry
 
@@ -244,7 +248,7 @@ The UPS trigger controls are MQTT Discovery configuration entities:
 
 Changing a number changes only the draft. It does **not** change the active shutdown policy.
 
-The reusable presentation package `examples/packages/dh_app_pve_ui_package.yaml` and `examples/dh_app_pve_ups_dashboard.yaml` implement a VIEW -> EDIT -> CONFIRM -> APPLY workflow. `sensor.dh_app_pve_ups_trigger_policy` is the read-only committed-policy presentation entity; draft `number` entities are never shown as if they were active values. Opening the editor snapshots committed values, Cancel restores the draft, and only a complete validated schema-v2 `config_changed` Event closes the editor back to VIEW. UI state is validated as numeric before conversion; missing/invalid state or a draft acknowledgement timeout stops the script explicitly instead of coercing the value to zero or implying success.
+The consolidated base package `examples/packages/dh_app_pve_package.yaml` and `examples/dh_app_pve_ups_dashboard.yaml` implement a VIEW -> EDIT -> CONFIRM -> APPLY workflow. `sensor.dh_app_pve_ups_trigger_policy` is the read-only committed-policy presentation entity; draft `number` entities are never shown as if they were active values. Opening the editor snapshots committed values, Cancel restores the draft, and only a complete validated schema-v2 `config_changed` Event closes the editor back to VIEW. UI state is validated as numeric before conversion; missing/invalid state or a draft acknowledgement timeout stops the script explicitly instead of coercing the value to zero or implying success.
 
 A real Apply is a durable transaction:
 
