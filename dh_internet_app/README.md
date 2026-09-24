@@ -49,7 +49,7 @@ Version `0.1.0` establishes the new product identity and the recovery/availabili
 
 Quality thresholds and App-owned performance problem evaluation are implemented. Router integration uses at most five optional HA bindings: cumulative Download/Upload totals, WAN state and current Download/Upload rates. Together with two recovery entities the App stays within seven external HA bindings. Monthly traffic retains the current month plus 11 previous months. The reusable package, notification presentation and reference dashboard are included in this development milestone.
 
-See [DOCS.md](DOCS.md) for configuration semantics.
+See [DOCS.md](DOCS.md) for configuration semantics and [HAOS_TEST_PLAN.md](HAOS_TEST_PLAN.md) for the first real installation test sequence.
 
 ## Home Assistant presentation
 
