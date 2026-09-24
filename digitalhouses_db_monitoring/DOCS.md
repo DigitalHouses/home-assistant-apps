@@ -45,13 +45,6 @@ Choose `Disabled` to omit the four storage entities.
 
 `Publish interval, min` controls how often Recorder health/state is refreshed and MQTT state is published. More expensive database queries and storage checks are internally rate-limited.
 
-The primary retained state also carries two static App-runtime diagnostics required by the DigitalHouses Application Standard:
-
-- `sensor.dh_db_app_version` — the canonical running App release version;
-- `sensor.dh_db_started_at` — timestamp when the current App process started.
-
-These are operational diagnostics and are not intended for Recorder history.
-
 `sensor.dh_db_last_refresh` is event-driven rather than part of the minute-by-minute primary state payload. A successful manual full refresh publishes the real timestamp to the dedicated retained `DigitalHouses/Global/db_monitoring/last_refresh` topic. Before the first successful manual refresh there is no synthetic timestamp.
 
 ### PostgreSQL cluster selection
