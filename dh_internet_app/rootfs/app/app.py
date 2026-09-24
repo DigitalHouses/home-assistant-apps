@@ -378,7 +378,6 @@ class InternetApp:
         return {
             "state": len(problems),
             "problems": problems,
-            "updated_at": iso(now_local()),
         }
 
     def _traffic_payload(self) -> dict[str, Any]:
