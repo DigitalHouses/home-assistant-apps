@@ -92,6 +92,6 @@ The reusable Home Assistant layer does not calculate Internet state, recovery de
 
 `dh_internet_app_global_package.yaml` contains only the Recorder whitelist for useful time-series entities. Rich list/history attributes, MQTT Event entities, Version/Started-at metadata and aggregate presentation sensors are intentionally not recorded.
 
-`dh_internet_app_notification_package.yaml` and its Russian alternative convert machine schema-v2 Events from `event.dh_internet_app_event` into the stable neutral Home Assistant event `dh_internet_app_notification` with `title`, `message`, `severity` and machine context. Install exactly one notification locale.
+`dh_internet_app_notification_package.yaml` and `locales/ru/dh_internet_app_notification_package.yaml` validate event-specific machine schema-v2 Events from `event.dh_internet_app_event`, localize them, and emit the stable transport-neutral Home Assistant event `dh_internet_app_notification` using DigitalHouses Notification Envelope v1. Every normal notification contains `notification_schema_version`, `source`, `kind`, `severity`, `title` and `message`. Invalid required machine data emits an explicit `contract_error`; the source payload is never forwarded wholesale through `raw` or an equivalent catch-all field. Install exactly one notification locale.
 
 Site-specific delivery such as Telegram, `mobile_app` or `write2log` stays outside the reusable package.
