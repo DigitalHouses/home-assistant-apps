@@ -217,6 +217,9 @@ dh_internet_app_notification_local_package:
                   data:
                     title: "📈✅ Качество Internet восстановлено"
                     message: >-
+                      {% set labels = {'low_download':'низкая скорость Download','low_upload':'низкая скорость Upload','high_ping':'высокий Ping'} %}
+                      Устранено:
+                      {% for reason in trigger.to_state.attributes.previous_reasons %}{{ labels[reason] }}{{ ', ' if not loop.last else '.' }}{% endfor %}
                       Download {{ trigger.to_state.attributes.download_mbps }} Мбит/с ·
                       Upload {{ trigger.to_state.attributes.upload_mbps }} Мбит/с ·
                       Ping {{ trigger.to_state.attributes.ping_ms }} мс.
@@ -232,7 +235,9 @@ dh_internet_app_notification_local_package:
                     title: "📉⚠️ Параметры проблемы Internet изменились"
                     message: >-
                       {% set labels = {'low_download':'низкая скорость Download','low_upload':'низкая скорость Upload','high_ping':'высокий Ping'} %}
-                      Проблемы:
+                      Было:
+                      {% for reason in trigger.to_state.attributes.previous_reasons %}{{ labels[reason] }}{{ ', ' if not loop.last else '.' }}{% endfor %}
+                      Сейчас:
                       {% for reason in trigger.to_state.attributes.reasons %}{{ labels[reason] }}{{ ', ' if not loop.last else '.' }}{% endfor %}
                       Download {{ trigger.to_state.attributes.download_mbps }} Мбит/с ·
                       Upload {{ trigger.to_state.attributes.upload_mbps }} Мбит/с ·
