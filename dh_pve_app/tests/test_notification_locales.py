@@ -165,8 +165,8 @@ def test_startup_reconciliation_surfaces_freshness_failure() -> None:
 
         assert "as_timestamp(started, none)" in startup
         assert "as_timestamp(published, none)" in startup
-        assert "not wait.completed" in startup
-        assert "freshness_timeout" in startup
+        assert "continue_on_timeout: true" in startup
+        assert "failure_class: freshness_timeout" in startup
         assert "kind: contract_error" in startup
 
 
