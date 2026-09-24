@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.2
+
+- Fixed Recent Results `updated_at` so it changes only when the persisted Speedtest history changes, not on every MQTT state publish.
+
 ## 0.1.1
 
 - Fixed startup on Home Assistant base images that provide paho-mqtt 1.x by adding runtime compatibility with both paho-mqtt 1.x and 2.x callback APIs.
