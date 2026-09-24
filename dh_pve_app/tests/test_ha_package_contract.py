@@ -43,11 +43,12 @@ def test_package_records_only_explicit_canonical_time_series():
     ):
         assert entity_glob in text
 
-    assert "sensor.dh_app_pve_*" not in text
-    assert "binary_sensor.dh_app_pve_*" not in text
-    assert "event.dh_app_pve_" not in text
-    assert "sensor.dh_pve_" not in text
-    assert "binary_sensor.dh_pve_" not in text
+    recorder = text.split("  logbook:", 1)[0]
+    assert "sensor.dh_app_pve_*" not in recorder
+    assert "binary_sensor.dh_app_pve_*" not in recorder
+    assert "event.dh_app_pve_" not in recorder
+    assert "sensor.dh_pve_" not in recorder
+    assert "binary_sensor.dh_pve_" not in recorder
 
 
 def test_ups_status_and_line_power_are_explicitly_kept_in_logbook():
