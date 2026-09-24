@@ -6,7 +6,8 @@
 #
 # Home Assistant is a light client:
 #   - dh_pve_app owns acquisition, averages, thresholds and problem decisions;
-#   - HA owns presentation, Recorder, Logbook and notification delivery;
+#   - this package owns non-language HA helpers, Recorder and Logbook;
+#   - the locale notification package owns localized notification presentation;
 #   - PVE/NUT remains the only shutdown authority.
 #
 # Recorder deliberately stores only useful time-series telemetry. Rich
@@ -47,3 +48,279 @@ dh_app_pve_package:
       entities:
         - sensor.dh_app_pve_ups_status
         - binary_sensor.dh_app_pve_ups_line_power
+
+  # =============================================================================
+  # UPS Trigger Policy UI helpers
+  # PVE/NUT remains the shutdown authority.
+  # =============================================================================
+  input_select:
+    dh_app_pve_ups_trigger_ui_state:
+      name: DH PVE UPS Trigger UI state
+      options:
+        - view
+        - edit
+        - confirm
+      initial: view
+      icon: mdi:tune-variant
+
+  input_number:
+    dh_app_pve_ups_trigger_snapshot_charge:
+      name: DH PVE UPS Trigger snapshot charge
+      min: 10
+      max: 30
+      step: 5
+      mode: box
+      unit_of_measurement: "%"
+      icon: mdi:battery-arrow-down-outline
+
+    dh_app_pve_ups_trigger_snapshot_reserve:
+      name: DH PVE UPS Trigger snapshot reserve
+      min: 60
+      max: 900
+      step: 60
+      mode: box
+      unit_of_measurement: s
+      icon: mdi:timer-sand
+
+  script:
+    dh_app_pve_ups_trigger_open:
+      alias: DH PVE · Config UPS trigger
+      mode: restart
+      sequence:
+        - variables:
+            active_charge: >-
+              {{ state_attr('sensor.dh_app_pve_ups_trigger_policy',
+                            'active_charge_threshold_percent') }}
+            active_reserve: >-
+              {{ state_attr('sensor.dh_app_pve_ups_trigger_policy',
+                            'active_runtime_reserve_seconds') }}
+        - if:
+            - condition: template
+              value_template: >-
+                {{ is_number(active_charge) and is_number(active_reserve) }}
+          then:
+            # Every edit session starts from the committed ACTIVE policy. This
+            # also discards any stale uncommitted draft from an interrupted UI session.
+            - action: input_number.set_value
+              target:
+                entity_id: input_number.dh_app_pve_ups_trigger_snapshot_charge
+              data:
+                value: "{{ active_charge | float }}"
+            - action: input_number.set_value
+              target:
+                entity_id: input_number.dh_app_pve_ups_trigger_snapshot_reserve
+              data:
+                value: "{{ active_reserve | float }}"
+            - action: number.set_value
+              target:
+                entity_id: number.dh_app_pve_ups_shutdown_battery_charge_threshold
+              data:
+                value: "{{ active_charge | float }}"
+            - action: number.set_value
+              target:
+                entity_id: number.dh_app_pve_ups_shutdown_runtime_reserve
+              data:
+                value: "{{ active_reserve | float }}"
+            # MQTT number commands are asynchronous. Do not expose EDIT until the
+            # App-owned policy sensor confirms that DRAFT really equals ACTIVE.
+            - wait_template: >-
+                {% set draft_charge = state_attr('sensor.dh_app_pve_ups_trigger_policy',
+                                                 'draft_charge_threshold_percent') %}
+                {% set draft_reserve = state_attr('sensor.dh_app_pve_ups_trigger_policy',
+                                                  'draft_runtime_reserve_seconds') %}
+                {{ is_number(draft_charge)
+                   and is_number(draft_reserve)
+                   and (draft_charge | float) == (active_charge | float)
+                   and (draft_reserve | float) == (active_reserve | float) }}
+              timeout: "00:00:30"
+              continue_on_timeout: true
+            - if:
+                - condition: template
+                  value_template: "{{ wait.completed }}"
+              then:
+                - action: input_select.select_option
+                  target:
+                    entity_id: input_select.dh_app_pve_ups_trigger_ui_state
+                  data:
+                    option: edit
+              else:
+                - stop: >-
+                    DH PVE UPS Trigger UI contract error:
+                    draft acknowledgement timeout while opening editor.
+                  error: true
+          else:
+            - stop: >-
+                DH PVE UPS Trigger UI contract error:
+                active policy values are missing or invalid.
+              error: true
+
+    dh_app_pve_ups_trigger_cancel:
+      alias: DH PVE · Cancel UPS trigger edit
+      mode: restart
+      sequence:
+        - variables:
+            snapshot_charge: >-
+              {{ states('input_number.dh_app_pve_ups_trigger_snapshot_charge') }}
+            snapshot_reserve: >-
+              {{ states('input_number.dh_app_pve_ups_trigger_snapshot_reserve') }}
+        - if:
+            - condition: template
+              value_template: >-
+                {{ is_number(snapshot_charge) and is_number(snapshot_reserve) }}
+          then:
+            - action: number.set_value
+              target:
+                entity_id: number.dh_app_pve_ups_shutdown_battery_charge_threshold
+              data:
+                value: "{{ snapshot_charge | float }}"
+            - action: number.set_value
+              target:
+                entity_id: number.dh_app_pve_ups_shutdown_runtime_reserve
+              data:
+                value: "{{ snapshot_reserve | float }}"
+            # Keep the editor visible until the App confirms the rollback.
+            - wait_template: >-
+                {% set draft_charge = state_attr('sensor.dh_app_pve_ups_trigger_policy',
+                                                 'draft_charge_threshold_percent') %}
+                {% set draft_reserve = state_attr('sensor.dh_app_pve_ups_trigger_policy',
+                                                  'draft_runtime_reserve_seconds') %}
+                {{ is_number(draft_charge)
+                   and is_number(draft_reserve)
+                   and (draft_charge | float) == (snapshot_charge | float)
+                   and (draft_reserve | float) == (snapshot_reserve | float) }}
+              timeout: "00:00:30"
+              continue_on_timeout: true
+            - if:
+                - condition: template
+                  value_template: "{{ wait.completed }}"
+              then:
+                - action: input_select.select_option
+                  target:
+                    entity_id: input_select.dh_app_pve_ups_trigger_ui_state
+                  data:
+                    option: view
+              else:
+                - stop: >-
+                    DH PVE UPS Trigger UI contract error:
+                    draft acknowledgement timeout while cancelling editor.
+                  error: true
+          else:
+            - stop: >-
+                DH PVE UPS Trigger UI contract error:
+                saved policy snapshot is missing or invalid.
+              error: true
+
+    dh_app_pve_ups_trigger_review:
+      alias: DH PVE · Review UPS trigger changes
+      mode: restart
+      sequence:
+        - action: input_select.select_option
+          target:
+            entity_id: input_select.dh_app_pve_ups_trigger_ui_state
+          data:
+            option: confirm
+
+    dh_app_pve_ups_trigger_back_to_edit:
+      alias: DH PVE · Back to UPS trigger edit
+      mode: restart
+      sequence:
+        - action: input_select.select_option
+          target:
+            entity_id: input_select.dh_app_pve_ups_trigger_ui_state
+          data:
+            option: edit
+
+    dh_app_pve_ups_trigger_apply:
+      alias: DH PVE · Apply UPS trigger policy
+      mode: single
+      sequence:
+        - variables:
+            current_charge_raw: >-
+              {{ states('number.dh_app_pve_ups_shutdown_battery_charge_threshold') }}
+            current_reserve_raw: >-
+              {{ states('number.dh_app_pve_ups_shutdown_runtime_reserve') }}
+            active_charge_raw: >-
+              {{ states('input_number.dh_app_pve_ups_trigger_snapshot_charge') }}
+            active_reserve_raw: >-
+              {{ states('input_number.dh_app_pve_ups_trigger_snapshot_reserve') }}
+        - if:
+            - condition: template
+              value_template: >-
+                {{ is_number(current_charge_raw)
+                   and is_number(current_reserve_raw)
+                   and is_number(active_charge_raw)
+                   and is_number(active_reserve_raw) }}
+          then:
+            - variables:
+                current_charge: "{{ current_charge_raw | float }}"
+                current_reserve: "{{ current_reserve_raw | float }}"
+                active_charge: "{{ active_charge_raw | float }}"
+                active_reserve: "{{ active_reserve_raw | float }}"
+            - choose:
+                - conditions:
+                    - condition: template
+                      value_template: >-
+                        {{ current_charge == active_charge
+                           and current_reserve == active_reserve }}
+                  sequence:
+                    - action: input_select.select_option
+                      target:
+                        entity_id: input_select.dh_app_pve_ups_trigger_ui_state
+                      data:
+                        option: view
+              default:
+                # Keep edit visible if Apply fails. A successful committed Apply
+                # emits a validated config_changed event and closes the editor below.
+                - action: input_select.select_option
+                  target:
+                    entity_id: input_select.dh_app_pve_ups_trigger_ui_state
+                  data:
+                    option: edit
+                - action: button.press
+                  target:
+                    entity_id: button.dh_app_pve_ups_apply_trigger_policy
+          else:
+            - stop: >-
+                DH PVE UPS Trigger UI contract error:
+                draft or saved policy values are missing or invalid.
+              error: true
+
+  automation:
+    - id: dh_app_pve_ups_trigger_close_after_success
+      alias: DH PVE · Close UPS Trigger editor after successful Apply
+      mode: restart
+      triggers:
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_ups_diagnostic
+          options:
+            event_type:
+              - config_changed
+      conditions:
+        - condition: template
+          value_template: >-
+            {% set attrs = trigger.to_state.attributes %}
+            {{ 'event_type' in attrs
+               and attrs.event_type == 'config_changed'
+               and 'schema_version' in attrs
+               and attrs.schema_version == 2
+               and 'observed_at' in attrs
+               and attrs.observed_at is string
+               and 'old_values' in attrs
+               and attrs.old_values is mapping
+               and 'new_values' in attrs
+               and attrs.new_values is mapping
+               and 'shutdown_battery_charge_threshold_percent' in attrs.new_values
+               and attrs.new_values.shutdown_battery_charge_threshold_percent is number
+               and 'runtime_reserve_seconds' in attrs.new_values
+               and attrs.new_values.runtime_reserve_seconds is number
+               and 'previous_revision' in attrs
+               and attrs.previous_revision is number
+               and 'current_revision' in attrs
+               and attrs.current_revision is number }}
+      actions:
+        - action: input_select.select_option
+          target:
+            entity_id: input_select.dh_app_pve_ups_trigger_ui_state
+          data:
+            option: view

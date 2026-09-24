@@ -5,7 +5,7 @@ from typing import Any
 
 from validators.common import fail, require_files
 
-EXPECTED_VERSION = "0.5.15"
+EXPECTED_VERSION = "0.5.16"
 EXPECTED_TOPIC_PREFIX = "DigitalHouses/Global/dh_pve_app"
 EXPECTED_DEVICE_NAME = "DH PVE"
 EXPECTED_REFRESH_ENTITY = "button.dh_app_pve_refresh"
@@ -64,7 +64,6 @@ def validate_dh_pve_app(
             app / "examples/dh_app_pve_ups_dashboard.yaml",
             app / "examples/dh_app_pve_shutdown_readiness_card.yaml",
             app / "examples/packages/dh_app_pve_package.yaml",
-            app / "examples/packages/dh_app_pve_ui_package.yaml",
             app / "examples/packages/dh_app_pve_notification_package.yaml",
             app / "examples/packages/locales/ru/dh_app_pve_notification_package.yaml",
             app / "systemd/dh_pve_app.service",
@@ -75,6 +74,10 @@ def validate_dh_pve_app(
 
     if context.get("type") != "linux_agent":
         fail("DH PVE must remain a linux_agent")
+
+    legacy_ui_package = app / "examples/packages/dh_app_pve_ui_package.yaml"
+    if legacy_ui_package.exists():
+        fail("DH PVE HA helpers must be consolidated into dh_app_pve_package.yaml")
 
     version = (app / "VERSION").read_text(encoding="utf-8").strip()
     if context.get("version") != EXPECTED_VERSION or version != EXPECTED_VERSION:
@@ -304,7 +307,7 @@ def validate_dh_pve_app(
                 )
 
     ui_package = (
-        app / "examples/packages/dh_app_pve_ui_package.yaml"
+        app / "examples/packages/dh_app_pve_package.yaml"
     ).read_text(encoding="utf-8")
     close_after_success = ui_package.split(
         "- id: dh_app_pve_ups_trigger_close_after_success",
@@ -429,9 +432,6 @@ def validate_dh_pve_app(
         "binary_sensor.dh_app_pve_*",
         "sensor.dh_pve_",
         "binary_sensor.dh_pve_",
-        "event.dh_app_pve_",
-        "input_number:",
-        "automation:",
     ):
         if forbidden in package:
             fail(f"DH PVE HA package must remain explicit/lightweight: {forbidden}")

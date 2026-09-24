@@ -175,3 +175,67 @@ def test_notification_package_no_longer_accepts_legacy_schema_v1_events() -> Non
         live = text.split("- id: dh_app_pve_ups_config_changed_notification", 1)[0]
         assert "attrs.schema_version == 1" not in live
         assert "attrs.schema_version == 2" in live
+
+def _notification_event_blocks(text: str) -> list[str]:
+    lines = text.splitlines()
+    blocks: list[str] = []
+    for index, line in enumerate(lines):
+        if "- event: dh_app_pve_notification" not in line:
+            continue
+        indent = len(line) - len(line.lstrip())
+        end = index + 1
+        while end < len(lines):
+            current = lines[end]
+            if current.strip():
+                current_indent = len(current) - len(current.lstrip())
+                if current_indent <= indent:
+                    break
+            end += 1
+        blocks.append("\n".join(lines[index:end]))
+    return blocks
+
+
+def test_localized_notifications_use_notification_envelope_v1() -> None:
+    required = (
+        "notification_schema_version: 1",
+        "source:",
+        "kind:",
+        "severity:",
+        "title:",
+        "message:",
+    )
+    for path in (EN_PACKAGE, RU_PACKAGE):
+        blocks = _notification_event_blocks(_read(path))
+        assert blocks, f"{path}: expected localized notification events"
+        for block in blocks:
+            for token in required:
+                assert token in block, f"{path}: notification envelope missing {token}"
+
+
+def test_contract_error_notifications_have_required_diagnostics() -> None:
+    for path in (EN_PACKAGE, RU_PACKAGE):
+        blocks = _notification_event_blocks(_read(path))
+        contract_errors = [block for block in blocks if "kind: contract_error" in block]
+        assert contract_errors, f"{path}: expected contract_error notifications"
+        for block in contract_errors:
+            assert "notification_schema_version: 1" in block
+            assert "severity: error" in block
+            assert "contract:" in block
+            assert "failure_class:" in block
+
+def test_notification_locales_do_not_expose_catch_all_or_private_delivery() -> None:
+    forbidden = (
+        "raw:",
+        "payload:",
+        "attributes:",
+        "context:",
+        "script.write2log",
+        "notify.mobile_app",
+        "telegram_bot.",
+        "persistent_notification.create",
+    )
+    for path in (EN_PACKAGE, RU_PACKAGE):
+        text = _read(path)
+        for token in forbidden:
+            assert token not in text, f"{path}: forbidden notification boundary token {token}"
+
