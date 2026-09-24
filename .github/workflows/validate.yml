@@ -81,6 +81,16 @@ jobs:
       - name: Check shell syntax
         run: bash -n dh_internet_app/rootfs/run.sh
 
+      - name: Build Internet App image
+        run: |
+          APP_VERSION="$(awk '$1 == "version:" {print $2; exit}' dh_internet_app/config.yaml)"
+          test -n "$APP_VERSION"
+          docker build \
+            --build-arg BUILD_VERSION="$APP_VERSION" \
+            --build-arg BUILD_ARCH=amd64 \
+            --tag digitalhouses-internet-ci:"$APP_VERSION" \
+            dh_internet_app
+
   recorder-app:
     name: Recorder App
     runs-on: ubuntu-latest
