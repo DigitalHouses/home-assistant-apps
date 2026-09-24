@@ -71,9 +71,10 @@ dh_app_pve_notification_package:
               sequence:
                 - event: dh_app_pve_notification
                   event_data:
+                    notification_schema_version: 1
                     source: dh_app_pve
                     source_entity: "{{ trigger.entity_id }}"
-                    schema_version: "{{ trigger.to_state.attributes.schema_version }}"
+                    source_schema_version: "{{ trigger.to_state.attributes.schema_version }}"
                     kind: "{{ trigger.to_state.attributes.event_type }}"
                     observed_at: "{{ trigger.to_state.attributes.observed_at }}"
                     problem_id: "{{ trigger.to_state.attributes.problem_id }}"
@@ -140,9 +141,10 @@ dh_app_pve_notification_package:
               sequence:
                 - event: dh_app_pve_notification
                   event_data:
+                    notification_schema_version: 1
                     source: dh_app_pve
                     source_entity: "{{ trigger.entity_id }}"
-                    schema_version: "{{ trigger.to_state.attributes.schema_version }}"
+                    source_schema_version: "{{ trigger.to_state.attributes.schema_version }}"
                     kind: ups_status_changed
                     category: ups
                     severity: warning
@@ -209,9 +211,10 @@ dh_app_pve_notification_package:
               sequence:
                 - event: dh_app_pve_notification
                   event_data:
+                    notification_schema_version: 1
                     source: dh_app_pve
                     source_entity: "{{ trigger.entity_id }}"
-                    schema_version: "{{ trigger.to_state.attributes.schema_version }}"
+                    source_schema_version: "{{ trigger.to_state.attributes.schema_version }}"
                     kind: battery_discharge_level_crossed
                     category: ups
                     severity: warning
@@ -247,9 +250,10 @@ dh_app_pve_notification_package:
               sequence:
                 - event: dh_app_pve_notification
                   event_data:
+                    notification_schema_version: 1
                     source: dh_app_pve
                     source_entity: "{{ trigger.entity_id }}"
-                    schema_version: "{{ trigger.to_state.attributes.schema_version }}"
+                    source_schema_version: "{{ trigger.to_state.attributes.schema_version }}"
                     kind: battery_fully_charged
                     category: ups
                     severity: info
@@ -291,9 +295,10 @@ dh_app_pve_notification_package:
               sequence:
                 - event: dh_app_pve_notification
                   event_data:
+                    notification_schema_version: 1
                     source: dh_app_pve
                     source_entity: "{{ trigger.entity_id }}"
-                    schema_version: "{{ trigger.to_state.attributes.schema_version }}"
+                    source_schema_version: "{{ trigger.to_state.attributes.schema_version }}"
                     kind: shutdown_committed
                     category: ups
                     severity: critical
@@ -316,11 +321,14 @@ dh_app_pve_notification_package:
           default:
             - event: dh_app_pve_notification
               event_data:
+                notification_schema_version: 1
                 source: dh_app_pve
                 source_entity: "{{ trigger.entity_id }}"
                 kind: contract_error
                 category: diagnostic
                 severity: error
+                contract: machine_event_v2
+                failure_class: invalid_event_payload
                 title: "🧩❌ DH PVE: ошибка контракта machine event"
                 message: >-
                   Некорректный payload события {{ trigger.to_state.attributes.event_type }} from {{ trigger.entity_id }}.
@@ -369,9 +377,10 @@ dh_app_pve_notification_package:
               sequence:
                 - event: dh_app_pve_notification
                   event_data:
+                    notification_schema_version: 1
                     source: dh_app_pve
                     source_entity: event.dh_app_pve_ups_diagnostic
-                    schema_version: "{{ trigger.to_state.attributes.schema_version }}"
+                    source_schema_version: "{{ trigger.to_state.attributes.schema_version }}"
                     kind: config_changed
                     category: policy
                     severity: info
@@ -395,11 +404,14 @@ dh_app_pve_notification_package:
           default:
             - event: dh_app_pve_notification
               event_data:
+                notification_schema_version: 1
                 source: dh_app_pve
                 source_entity: event.dh_app_pve_ups_diagnostic
                 kind: contract_error
                 category: diagnostic
                 severity: error
+                contract: config_changed_v2
+                failure_class: invalid_event_payload
                 title: "🧩❌ DH PVE: ошибка контракта machine event"
                 message: >-
                   Некорректный payload события config_changed from event.dh_app_pve_ups_diagnostic.
@@ -474,6 +486,7 @@ dh_app_pve_notification_package:
               then:
                 - event: dh_app_pve_notification
                   event_data:
+                    notification_schema_version: 1
                     source: dh_app_pve
                     source_entity: sensor.dh_app_pve_problems
                     kind: contract_error
@@ -519,6 +532,7 @@ dh_app_pve_notification_package:
               then:
                 - event: dh_app_pve_notification
                   event_data:
+                    notification_schema_version: 1
                     source: dh_app_pve
                     source_entity: sensor.dh_app_pve_problems
                     kind: startup_reconciliation
@@ -551,6 +565,7 @@ dh_app_pve_notification_package:
           else:
             - event: dh_app_pve_notification
               event_data:
+                notification_schema_version: 1
                 source: dh_app_pve
                 source_entity: sensor.dh_app_pve_last_publication
                 kind: contract_error
@@ -569,6 +584,7 @@ dh_app_pve_notification_package:
           then:
             - event: dh_app_pve_notification
               event_data:
+                notification_schema_version: 1
                 source: dh_app_pve
                 source_entity: binary_sensor.dh_app_pve_ups_configured
                 kind: contract_error
@@ -642,6 +658,7 @@ dh_app_pve_notification_package:
                   then:
                     - event: dh_app_pve_notification
                       event_data:
+                        notification_schema_version: 1
                         source: dh_app_pve
                         source_entity: sensor.dh_app_pve_ups_problems
                         kind: contract_error
@@ -688,6 +705,7 @@ dh_app_pve_notification_package:
                   then:
                     - event: dh_app_pve_notification
                       event_data:
+                        notification_schema_version: 1
                         source: dh_app_pve
                         source_entity: sensor.dh_app_pve_ups_problems
                         kind: startup_reconciliation
@@ -696,13 +714,13 @@ dh_app_pve_notification_package:
                         title: "🔋⚠️ UPS: активные проблемы после запуска"
                         message: >-
                           {% set labels = {
-                        'nut_unavailable': 'NUT недоступен',
-                        'on_battery': 'Городское питание отсутствует',
-                        'low_battery': 'Низкий заряд батареи',
-                        'overload': 'Перегрузка UPS',
-                        'replace_battery': 'Требуется замена батареи',
-                        'bypass': 'UPS работает в bypass',
-                        'power_state_unknown': 'Состояние питания UPS неизвестно'
+                          'nut_unavailable': 'NUT недоступен',
+                          'on_battery': 'Городское питание отсутствует',
+                          'low_battery': 'Низкий заряд батареи',
+                          'overload': 'Перегрузка UPS',
+                          'replace_battery': 'Требуется замена батареи',
+                          'bypass': 'UPS работает в bypass',
+                          'power_state_unknown': 'Состояние питания UPS неизвестно'
                           } %}
                           После запуска обнаружено активных проблем: {{ problem_count | int }}.
                           {% for item in active %}
@@ -715,6 +733,7 @@ dh_app_pve_notification_package:
               else:
                 - event: dh_app_pve_notification
                   event_data:
+                    notification_schema_version: 1
                     source: dh_app_pve
                     source_entity: sensor.dh_app_pve_ups_last_publication
                     kind: contract_error
