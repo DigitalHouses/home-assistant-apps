@@ -1,6 +1,6 @@
 FROM ghcr.io/home-assistant/base:latest
 
-ARG BUILD_VERSION="0.1.0"
+ARG BUILD_VERSION="0.1.1"
 ARG BUILD_ARCH
 ARG OOKLA_VERSION="1.2.0"
 
@@ -55,6 +55,7 @@ RUN chmod a+x /run.sh \
         /app/connectivity.py \
         /app/discovery.py \
         /app/ha_api.py \
+        /app/mqtt_compat.py \
         /app/quality.py \
         /app/recent_results.py \
         /app/recovery.py \

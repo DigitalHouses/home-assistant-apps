@@ -25,6 +25,7 @@ from discovery import (
     build_discovery_payload,
 )
 from ha_api import HomeAssistantApi
+from mqtt_compat import create_mqtt_client
 from quality import (
     evaluate_performance,
     load_thresholds,
@@ -69,7 +70,7 @@ from traffic import (
     update_traffic,
 )
 
-APP_VERSION = os.getenv("APP_VERSION", "0.1.0-local")
+APP_VERSION = os.getenv("APP_VERSION", "0.1.1-local")
 OUTAGES_FILE = Path("/data/runtime/outages.json")
 SPEEDTEST_FILE = Path("/data/runtime/speedtest.json")
 THRESHOLDS_FILE = Path("/data/runtime/thresholds.json")
@@ -149,10 +150,7 @@ class InternetApp:
         }
         self.ha_api = HomeAssistantApi()
 
-        self.mqtt = mqtt.Client(
-            mqtt.CallbackAPIVersion.VERSION2,
-            client_id=DEVICE_ID,
-        )
+        self.mqtt = create_mqtt_client(mqtt, client_id=DEVICE_ID)
         username = os.getenv("MQTT_USER", "")
         password = os.getenv("MQTT_PASSWORD", "")
         if username:
@@ -169,7 +167,7 @@ class InternetApp:
         userdata: Any,
         flags: Any,
         reason_code: Any,
-        properties: Any,
+        properties: Any = None,
     ) -> None:
         del userdata, flags, properties
         if reason_code != 0:
