@@ -13,7 +13,7 @@ from .ups_nut import UpsSnapshot
 
 HISTORY_LIMIT = 50
 PUBLISHED_HISTORY_LIMIT = 10
-HISTORY_PARSER_VERSION = 2
+HISTORY_PARSER_VERSION = 4
 
 _TIMESTAMP_RE = re.compile(r"^(?P<ts>\S+)")
 _START_RE = re.compile(
@@ -44,12 +44,14 @@ _FORCE_STOP_MARKERS = (
     "vm still running - terminating now with sigkill",
 )
 _GENERIC_TIMEOUT_MARKER = "vm quit/powerdown failed - got timeout"
+_SHUTDOWN_START_MARKERS = (
+    "the system will power off now",
+    "system is powering down",
+)
 _CLEAN_MARKERS = (
     "reached target shutdown.target",
     "reached target system power off",
     "systemd-shutdown",
-    "system is powering down",
-    "powering off",
 )
 _FSD_REASONS = {
     "on_battery_fsd",
@@ -78,9 +80,9 @@ def _iso(value: datetime | None) -> str | None:
 
 
 def _seconds(start: datetime | None, end: datetime | None) -> int | None:
-    if start is None or end is None:
+    if start is None or end is None or end < start:
         return None
-    return max(0, int(round((end - start).total_seconds())))
+    return int(round((end - start).total_seconds()))
 
 
 def _guest_kind(token: str) -> str:
@@ -110,6 +112,7 @@ def parse_guest_shutdown_journal(text: str) -> dict[str, Any]:
     all_stopped_at: datetime | None = None
     clean_shutdown = False
     journal_has_evidence = False
+    shutdown_scope_started = False
 
     for raw in text.splitlines():
         line = raw.strip()
@@ -121,6 +124,22 @@ def parse_guest_shutdown_journal(text: str) -> dict[str, Any]:
             last_timestamp = timestamp
 
         lowered = line.casefold()
+        if (
+            not shutdown_scope_started
+            and any(marker in lowered for marker in _SHUTDOWN_START_MARKERS)
+        ):
+            # The previous-boot journal covers the entire boot and may contain
+            # unrelated manual guest shutdowns. Once host shutdown begins,
+            # only guest operations from this final shutdown sequence are
+            # relevant to shutdown-history evidence.
+            shutdown_scope_started = True
+            records.clear()
+            active_guests.clear()
+            first_started = None
+            all_stopped_at = None
+            clean_shutdown = False
+            clean_shutdown_at = None
+
         if any(marker in lowered for marker in _CLEAN_MARKERS):
             clean_shutdown = True
             if timestamp is not None:
@@ -135,8 +154,24 @@ def parse_guest_shutdown_journal(text: str) -> dict[str, Any]:
             item = records.setdefault(key, _empty_guest(kind, guest_id, timeout))
             item["timeout_seconds"] = timeout
             active_guests.add(key)
-            if item["started_at"] is None and timestamp is not None:
-                item["started_at"] = timestamp.isoformat()
+            if timestamp is not None:
+                previous_start = None
+                if isinstance(item.get("started_at"), str):
+                    try:
+                        previous_start = datetime.fromisoformat(item["started_at"])
+                    except ValueError:
+                        previous_start = None
+                if previous_start is None or timestamp > previous_start:
+                    item.update(
+                        {
+                            "started_at": timestamp.isoformat(),
+                            "finished_at": None,
+                            "duration_seconds": None,
+                            "timeout_ratio": None,
+                            "result": "unknown",
+                            "forced": False,
+                        }
+                    )
                 if first_started is None or timestamp < first_started:
                     first_started = timestamp
             continue
@@ -213,6 +248,11 @@ def parse_guest_shutdown_journal(text: str) -> dict[str, Any]:
                 finished = datetime.fromisoformat(item["finished_at"])
             except ValueError:
                 finished = None
+        if started is not None and finished is not None and finished < started:
+            finished = None
+            item["finished_at"] = None
+            if item.get("result") == "clean":
+                item["result"] = "unknown"
         duration = _seconds(started, finished)
         item["duration_seconds"] = duration
         timeout = item.get("timeout_seconds")
@@ -222,7 +262,9 @@ def parse_guest_shutdown_journal(text: str) -> dict[str, Any]:
             latest_finished = finished
         guests[kind][guest_id] = item
 
-    stop_boundary = all_stopped_at or latest_finished
+    stop_boundary = all_stopped_at or (
+        latest_finished if not active_guests else None
+    )
     total = _seconds(first_started, stop_boundary)
     clean_result: bool | None = clean_shutdown if journal_has_evidence else None
     return {
@@ -338,22 +380,20 @@ def _duration_between(start: object, end: object) -> int | None:
     return max(0, int(round((end_dt - start_dt).total_seconds())))
 
 
-def _merge_guest_history(
-    existing: object,
+def _parsed_guest_history(
     parsed: object,
 ) -> dict[str, dict[str, dict[str, Any]]]:
-    merged: dict[str, dict[str, dict[str, Any]]] = {"vm": {}, "lxc": {}}
-    for source in (existing, parsed):
-        if not isinstance(source, Mapping):
+    guests: dict[str, dict[str, dict[str, Any]]] = {"vm": {}, "lxc": {}}
+    if not isinstance(parsed, Mapping):
+        return guests
+    for kind in ("vm", "lxc"):
+        records = parsed.get(kind)
+        if not isinstance(records, Mapping):
             continue
-        for kind in ("vm", "lxc"):
-            records = source.get(kind)
-            if not isinstance(records, Mapping):
-                continue
-            for guest_id, raw in records.items():
-                if isinstance(raw, Mapping):
-                    merged[kind][str(guest_id)] = dict(raw)
-    return merged
+        for guest_id, raw in records.items():
+            if isinstance(raw, Mapping):
+                guests[kind][str(guest_id)] = dict(raw)
+    return guests
 
 
 def _previous_from_parsed(
@@ -363,9 +403,9 @@ def _previous_from_parsed(
     next_boot_at: object,
 ) -> dict[str, Any]:
     raw_shutdown_clean = parsed.get("clean_shutdown")
-    shutdown_clean = raw_shutdown_clean if isinstance(raw_shutdown_clean, bool) else source.get("shutdown_clean")
-    if not isinstance(shutdown_clean, bool):
-        shutdown_clean = None
+    shutdown_clean = (
+        raw_shutdown_clean if isinstance(raw_shutdown_clean, bool) else None
+    )
 
     raw_reason = source.get("fsd_reason")
     if not isinstance(raw_reason, str):
@@ -377,8 +417,12 @@ def _previous_from_parsed(
         fsd_reason=raw_reason,
     )
 
-    shutdown_at = parsed.get("shutdown_at") or source.get("shutdown_at")
-    all_guests_stopped_at = parsed.get("all_guests_stopped_at") or source.get("all_guests_stopped_at")
+    shutdown_at = parsed.get("shutdown_at")
+    if not isinstance(shutdown_at, str):
+        shutdown_at = None
+    all_guests_stopped_at = parsed.get("all_guests_stopped_at")
+    if not isinstance(all_guests_stopped_at, str):
+        all_guests_stopped_at = None
     outage_started_at = source.get("outage_started_at")
     fsd_at = source.get("fsd_at")
     parsed_total = parsed.get("guest_shutdown_total_seconds")
@@ -388,7 +432,7 @@ def _previous_from_parsed(
         "boot_id": source.get("boot_id"),
         "boot_at": source.get("boot_at"),
         "shutdown_at": shutdown_at,
-        "last_journal_at": parsed.get("last_journal_at") or source.get("last_journal_at"),
+        "last_journal_at": parsed.get("last_journal_at"),
         "shutdown_class": shutdown_class,
         "shutdown_reason": shutdown_reason,
         "shutdown_clean": shutdown_clean,
@@ -403,14 +447,14 @@ def _previous_from_parsed(
         "ups_load_at_fsd": source.get("ups_load_at_fsd"),
         "all_guests_stopped_at": all_guests_stopped_at,
         "guest_shutdown_total_seconds": (
-            parsed_total if isinstance(parsed_total, int) else source.get("guest_shutdown_total_seconds")
+            parsed_total if isinstance(parsed_total, int) else None
         ),
         "outage_to_fsd_seconds": _duration_between(outage_started_at, fsd_at),
         "fsd_to_all_guests_stopped_seconds": _duration_between(fsd_at, all_guests_stopped_at),
         "fsd_to_shutdown_seconds": _duration_between(fsd_at, shutdown_at),
         "all_guests_stopped_to_shutdown_seconds": _duration_between(all_guests_stopped_at, shutdown_at),
         "outage_to_shutdown_seconds": _duration_between(outage_started_at, shutdown_at),
-        "guests": _merge_guest_history(source.get("guests"), parsed.get("guests")),
+        "guests": _parsed_guest_history(parsed.get("guests")),
     }
 
 

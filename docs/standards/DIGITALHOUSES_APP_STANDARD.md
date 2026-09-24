@@ -35,7 +35,7 @@ Current applications:
 
 ```text
 digitalhouses_speedtest       -> haos_addon
-dh_internet_app              -> haos_addon
+dh_internet_app               -> haos_addon
 digitalhouses_db_monitoring   -> haos_addon
 digitalhouses_backblaze       -> haos_addon
 ```
@@ -1566,7 +1566,8 @@ This application standard is complemented by repository-wide normative contracts
 - [DigitalHouses Release Policy](RELEASE_POLICY.md);
 - [DigitalHouses Immutable Delivery, Compact Backup and Telemetry Standard](IMMUTABLE_DELIVERY_AND_TELEMETRY_STANDARD.md);
 - [DigitalHouses Product Telemetry Policy](PRODUCT_TELEMETRY_POLICY.md);
-- [DigitalHouses Telemetry Protocol v1](TELEMETRY_PROTOCOL_V1.md).
+- [DigitalHouses Telemetry Protocol v1](TELEMETRY_PROTOCOL_V1.md);
+- [DigitalHouses Telemetry Implementation Guide](TELEMETRY_IMPLEMENTATION_GUIDE.md).
 
 All current DigitalHouses products must implement the portions of those contracts that apply to their product type.
 
@@ -1574,7 +1575,7 @@ In particular:
 
 - Home Assistant Apps must migrate to immutable versioned registry artifacts and compact recoverable backups;
 - Linux Agents retain their native delivery model unless changed separately;
-- all current products must implement the same opt-in telemetry semantics and protocol;
+- all target products must converge on the same opt-in telemetry semantics and protocol; production enablement follows the rollout/allowlist status in the shared implementation guide;
 - product-specific implementations must not silently fork the shared release or telemetry contract.
 
 Repository validation and product acceptance tests should enforce these requirements as implementation proceeds.

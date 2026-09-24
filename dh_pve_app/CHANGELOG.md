@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+## 0.5.13
+
+- Fix shutdown-history parser v4 scope handling so a strong-clean marker seen earlier in a long previous-boot journal cannot survive into the final host-shutdown transaction. Entering the final shutdown scope now resets prior clean evidence, and an unfinished guest sequence no longer reports a completed total duration.
+- Force v4 reconciliation of deployed parser-v3 state so the 2026-09-24 incident is reparsed on upgrade instead of retaining the incorrect pre-FSD shutdown timestamp produced by 0.5.12.
+
+## 0.5.12
+
+- Fix shutdown-history parser upgrades so reparsing a previous boot replaces stale parser-derived shutdown timestamps and guest results instead of falling back to or merging legacy evidence. UPS/FSD context is preserved, while unproven clean shutdown, guest completion and zero-duration artifacts are cleared conservatively.
+
+## 0.5.11
+
+- Record UPS line-power state explicitly in Home Assistant Recorder and Logbook so mains-loss timelines can be reconstructed independently of the normalized UPS status sensor.
+- Gate HA startup problem reconciliation on a publication from the current PVE agent process, localize retained UPS problems from schema-v2 `problem_id` values, and prevent blank live notification title/message delivery.
+- Harden shutdown-history parser v3 against stale same-boot guest completion records and negative timestamps; a newer guest shutdown start resets old completion state instead of producing a false zero-second success, and an explicit host-shutdown-start boundary discards unrelated earlier guest operations from the same boot.
+- Treat only strong final shutdown markers as clean-host evidence; `System is powering down` alone no longer marks a boot clean or supplies an optimistic host-shutdown timestamp.
+
 ## 0.5.10
 
 - Fix sequential fan friendly-name numbering in Home Assistant MQTT Discovery by excluding fan-summary metadata from the index. A host with one confirmed fan now correctly publishes `Fan 1` instead of `Fan 6`; additional real fans are numbered `Fan 2`, `Fan 3`, ... while entity identities remain unchanged.

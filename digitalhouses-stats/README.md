@@ -1,6 +1,6 @@
 # DigitalHouses Stats
 
-Backend for DigitalHouses opt-in product telemetry and public statistics.
+Backend for DigitalHouses opt-in product telemetry and LAN-only statistics.
 
 The wire contract is defined by:
 
@@ -12,6 +12,8 @@ The wire contract is defined by:
 - `POST /v1/heartbeat`
 - `DELETE /v1/installation`
 - `GET /healthz`
+- local dashboard API on `127.0.0.1:8081`
+- LAN dashboard on `http://192.168.11.254/`
 - PostgreSQL storage
 - append-only heartbeat history
 - server-side timestamps
@@ -47,4 +49,4 @@ alembic upgrade head
 uvicorn digitalhouses_stats.main:app --host 127.0.0.1 --port 8080
 ```
 
-See `docs/DEPLOYMENT_LXC.md` for the intended Debian 12 LXC deployment.
+See `docs/DEPLOYMENT_LXC.md` for the Debian 12 LXC deployment and `docs/LOCAL_DASHBOARD.md` for the LAN-only dashboard.

@@ -1328,3 +1328,71 @@ no destructive validation in ordinary CI/deploy
 ```
 
 Any future change to one of these invariants requires an explicit design revision before implementation.
+
+---
+
+## 22. 2026-09-24 production UPS incident amendment
+
+This section is canonical for the production defects exposed by the 2026-09-24 mains-loss incident and supersedes older wording where it conflicts.
+
+### 22.1 Line-power history
+
+`binary_sensor.dh_app_pve_ups_line_power` is a first-class incident-reconstruction signal. It is explicitly whitelisted in both Recorder and Logbook together with `sensor.dh_app_pve_ups_status`.
+
+The App remains the source of truth for line-power statistics; HA Recorder history is an additional operator-facing timeline, not the source for monthly statistics.
+
+### 22.2 Startup reconciliation freshness
+
+Startup reconciliation must never treat a retained problem aggregate from a previous PVE/App boot as fresh current evidence.
+
+When HAOS becomes boot-ready, retained current-state entities may already exist while the PVE host and NUT driver are still recovering. HA therefore waits for evidence of a publication from the current App process before evaluating retained problem aggregates.
+
+The canonical freshness relation is:
+
+```text
+fresh publication timestamp >= current agent_started timestamp
+```
+
+Use the PVE and UPS last-publication diagnostics for their respective reconciliation paths. If freshness cannot be established within a bounded timeout, reconciliation is skipped rather than sending a stale alert. No fixed sleep is a correctness mechanism.
+
+If HAOS restarts while the App process remains continuously running, a retained publication newer than that same `agent_started` remains valid.
+
+### 22.3 Notification presentation
+
+Machine Events remain localization-free. HA locale packages own all human-facing `title` and `message` rendering.
+
+For every supported live event type, the locale package must emit a non-empty title and message. Empty `DH PVE |` delivery is a contract failure, not a valid fallback.
+
+UPS startup problem presentation maps stable machine `problem_id` values to localized operator text. It must not depend on legacy `summary` fields that are absent from schema-v2 retained problem objects.
+
+### 22.4 Shutdown-history evidence boundaries
+
+Shutdown history must preserve the difference between:
+
+```text
+shutdown requested
+guest shutdown operation started
+guest shutdown operation completed
+all guests stopped
+host entered final shutdown/power-off handoff
+next boot
+```
+
+A log line such as `System is powering down` is evidence that shutdown has started; it is not by itself proof that the host reached a clean final handoff.
+
+A guest completion timestamp is valid only for the matching shutdown transaction and only when it is not earlier than that transaction's start timestamp. Starting a newer shutdown transaction for the same guest resets stale completion/result fields from earlier operations in the same boot. Once an explicit host-shutdown-start marker is observed, unrelated guest operations from earlier in the same boot are outside the final shutdown-history scope.
+
+Negative durations are invalid evidence and must remain unknown; they are never clamped to zero.
+
+If the previous boot journal ends before a strong clean-shutdown marker, `shutdown_clean` must not be reported as true. Incomplete guest operations remain `unknown`/incomplete and must not be converted to successful zero-second shutdowns.
+
+When a newer parser reparses a previous boot, parser-derived evidence is replaced from the new parse rather than merged with or filled from legacy parser output. Entering the final host-shutdown scope also resets any clean-shutdown marker accumulated earlier in that boot journal; only clean evidence at or after the final shutdown boundary may classify that transaction as clean. An unfinished guest transaction means the aggregate guest-shutdown duration remains unknown. Context facts captured independently at runtime (for example FSD reason, battery charge/runtime/load at FSD and budget fingerprint) may be preserved. Legacy shutdown timestamps, guest completion/result records and clean/unclean conclusions are not fallback evidence.
+
+Only structurally valid, comparable, clean shutdown evidence may contribute observed timing to the shutdown-budget engine.
+
+### 22.5 UPS telemetry plausibility
+
+Raw NUT telemetry remains factual even when the device reports suspicious values. The App must not silently replace a reported `ups.load = 0` or recompute a different `battery.runtime` merely because the pair appears implausible.
+
+A future diagnostic may flag sustained suspicious telemetry, but any such diagnostic is separate from the recorded raw/averaged measurement and from shutdown-trigger inputs.
+

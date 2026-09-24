@@ -19,7 +19,7 @@ logging.basicConfig(level=settings.log_level.upper())
 
 app = FastAPI(
     title="DigitalHouses Stats",
-    version="0.1.0",
+    version="0.4.0",
     docs_url=None,
     redoc_url=None,
 )
@@ -164,3 +164,4 @@ def delete_installation(
     db.commit()
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+

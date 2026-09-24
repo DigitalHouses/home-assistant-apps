@@ -80,3 +80,94 @@ def test_same_boot_startup_reconciles_legacy_previous_shutdown_parser_result(tmp
     assert previous["guests"]["vm"]["700"]["result"] == "clean"
     assert previous["history_parser_version"] >= 2
     assert payload["history"][-1]["history_parser_version"] >= 2
+
+def test_v4_reconciliation_replaces_stale_v3_shutdown_scope_evidence(tmp_path):
+    store = StateStore(tmp_path / "shutdown_history.json")
+    stale_previous = {
+        "history_parser_version": 3,
+        "boot_id": "old-boot",
+        "boot_at": "2026-09-23T13:27:59+05:00",
+        "shutdown_at": "2026-09-24T04:44:34+05:00",
+        "last_journal_at": "2026-09-24T04:45:40+05:00",
+        "shutdown_class": "ups_power",
+        "shutdown_reason": "on_battery_fsd",
+        "shutdown_clean": True,
+        "outage_started_at": "2026-09-24T04:19:41+05:00",
+        "fsd_at": "2026-09-24T04:44:29+05:00",
+        "battery_charge_at_fsd": 30.0,
+        "battery_runtime_at_fsd": 2520.0,
+        "ups_load_at_fsd": 5.0,
+        "all_guests_stopped_at": "2026-09-21T19:36:32+05:00",
+        "guest_shutdown_total_seconds": 0,
+        "guests": {
+            "vm": {
+                "110": {
+                    "started_at": "2026-09-24T04:45:40+05:00",
+                    "finished_at": "2026-09-21T19:36:32+05:00",
+                    "duration_seconds": 0,
+                    "result": "clean",
+                    "forced": False,
+                }
+            },
+            "lxc": {
+                "100": {
+                    "started_at": "2026-09-23T10:54:30+05:00",
+                    "finished_at": "2026-09-23T10:55:02+05:00",
+                    "duration_seconds": 32,
+                    "result": "clean",
+                    "forced": False,
+                }
+            },
+        },
+    }
+    store.save(
+        {
+            "current_boot": {
+                "boot_id": "current-boot",
+                "boot_at": "2026-09-24T05:20:20+05:00",
+            },
+            "previous_shutdown": stale_previous,
+            "history": [stale_previous],
+        }
+    )
+
+    journal = (
+        "2026-09-23T18:18:13.252074+05:00 pve some-service[9]: "
+        "referenced systemd-shutdown helper during normal runtime\n"
+        "2026-09-23T10:54:30.000000+05:00 pve pve-guests[1]: "
+        "Stopping CT 100 (timeout = 30 seconds)\n"
+        "2026-09-23T10:55:02.000000+05:00 pve pve-guests[1]: "
+        "end task UPID:pve:1:2:3:4:vzshutdown:100:root@pam:\n"
+        "2026-09-24T04:44:34.000000+05:00 pve systemd-logind[2]: "
+        "The system will power off now!\n"
+        "2026-09-24T04:44:34.100000+05:00 pve systemd-logind[2]: "
+        "System is powering down.\n"
+        "2026-09-24T04:45:40.871419+05:00 pve pve-guests[3]: "
+        "Stopping VM 110 (timeout = 125 seconds)\n"
+    )
+
+    tracker = ShutdownHistoryTracker(
+        state_store=store,
+        boot_id_reader=lambda: "current-boot",
+        boot_time_reader=lambda: "2026-09-24T05:20:20+05:00",
+        previous_boot_journal_reader=lambda: journal,
+    )
+
+    previous = tracker.startup()["previous_shutdown"]
+
+    assert previous["history_parser_version"] == 4
+    assert previous["shutdown_class"] == "ups_power"
+    assert previous["shutdown_reason"] == "on_battery_fsd"
+    assert previous["shutdown_clean"] is False
+    assert previous["shutdown_at"] is None
+    assert previous["all_guests_stopped_at"] is None
+    assert previous["guest_shutdown_total_seconds"] is None
+    assert previous["fsd_to_shutdown_seconds"] is None
+    assert previous["guests"]["lxc"] == {}
+    assert set(previous["guests"]["vm"]) == {"110"}
+    vm110 = previous["guests"]["vm"]["110"]
+    assert vm110["started_at"] == "2026-09-24T04:45:40.871419+05:00"
+    assert vm110["finished_at"] is None
+    assert vm110["duration_seconds"] is None
+    assert vm110["result"] == "unknown"
+

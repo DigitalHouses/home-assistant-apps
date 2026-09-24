@@ -21,7 +21,9 @@ Public release identifiers use the public product name, not an internal runtime 
 | DigitalHouses Backblaze App | `digitalhouses_backblaze_app` |
 | DigitalHouses Internet App | `digitalhouses_internet_app` |
 
-Release identifiers describe GitHub release provenance only.
+Release identifiers describe GitHub release provenance.
+
+For products participating in shared telemetry, the release identifier is also the default canonical telemetry `product` identifier. A different telemetry identifier requires an explicit repository-level compatibility decision and coordinated updates to the telemetry protocol/server allowlist.
 
 They do not require runtime identities to change. In particular, adopting or changing a release identifier must not by itself rename:
 
@@ -34,6 +36,10 @@ They do not require runtime identities to change. In particular, adopting or cha
 - other installed or compatibility-sensitive identities.
 
 A runtime identity may change only through a separate product-specific compatibility decision.
+
+Before enabling telemetry for a renamed or replacement product, resolve the canonical release/telemetry identifier in that product's implementation work and update the shared contracts together. Do not rename only the App slug, telemetry payload, release identifier, or server allowlist in isolation.
+
+Product-specific telemetry implementation must follow [DigitalHouses Telemetry Implementation Guide](TELEMETRY_IMPLEMENTATION_GUIDE.md).
 
 ## 2. Version source of truth
 

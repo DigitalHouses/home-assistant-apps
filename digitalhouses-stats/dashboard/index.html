@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>DigitalHouses Stats</title>
+  <link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body>
+  <main class="page">
+    <header class="topbar">
+      <div>
+        <div class="eyebrow">DigitalHouses</div>
+        <h1>Product telemetry</h1>
+        <p>Local statistics dashboard</p>
+      </div>
+      <div class="status">
+        <span id="status-dot" class="dot"></span>
+        <span id="status-text">Loading</span>
+      </div>
+    </header>
+
+    <section class="cards" aria-label="Summary">
+      <article class="card">
+        <span>Known</span>
+        <strong id="known">—</strong>
+        <small>installations</small>
+      </article>
+      <article class="card">
+        <span>Active 24h</span>
+        <strong id="active24">—</strong>
+        <small>installations</small>
+      </article>
+      <article class="card">
+        <span>Active 7d</span>
+        <strong id="active7">—</strong>
+        <small>installations</small>
+      </article>
+      <article class="card">
+        <span>Active 30d</span>
+        <strong id="active30">—</strong>
+        <small>installations</small>
+      </article>
+      <article class="card">
+        <span>Heartbeats</span>
+        <strong id="heartbeats">—</strong>
+        <small>accepted total</small>
+      </article>
+      <article class="card">
+        <span>Last heartbeat</span>
+        <strong id="last-heartbeat" class="time-value">—</strong>
+        <small id="last-heartbeat-exact">No data</small>
+      </article>
+    </section>
+
+    <section class="panel chart-panel">
+      <div class="panel-head">
+        <div>
+          <h2>Activity</h2>
+          <p>Active installations and heartbeat volume by UTC day</p>
+        </div>
+        <select id="history-days" aria-label="History period">
+          <option value="30" selected>30 days</option>
+          <option value="90">90 days</option>
+          <option value="180">180 days</option>
+          <option value="365">365 days</option>
+        </select>
+      </div>
+
+      <div class="chart-meta">
+        <div><strong id="period-heartbeats">—</strong><span>Heartbeats</span></div>
+        <div><strong id="period-active-days">—</strong><span>Active days</span></div>
+        <div><strong id="period-peak">—</strong><span>Peak active</span></div>
+        <div class="legend">
+          <span><i class="legend-active"></i>Active</span>
+          <span><i class="legend-heartbeats"></i>Heartbeats</span>
+        </div>
+      </div>
+
+      <div id="chart" class="chart" aria-label="Activity history chart"></div>
+    </section>
+
+    <section class="grid">
+      <article class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>Products</h2>
+            <p>Known and active installations</p>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Product</th><th>Known</th><th>24h</th><th>7d</th><th>30d</th></tr></thead>
+            <tbody id="products"></tbody>
+          </table>
+        </div>
+      </article>
+
+      <article class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>Versions</h2>
+            <p>Latest reported version per installation</p>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Product</th><th>Version</th><th>Known</th><th>7d</th></tr></thead>
+            <tbody id="versions"></tbody>
+          </table>
+        </div>
+      </article>
+
+      <article class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>Countries</h2>
+            <p>Latest reported country per installation</p>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Country</th><th>Known</th><th>7d</th><th>30d</th></tr></thead>
+            <tbody id="countries"></tbody>
+          </table>
+        </div>
+      </article>
+    </section>
+
+    <footer>
+      <span id="updated">Not updated yet</span>
+      <button id="refresh" type="button">Refresh</button>
+    </footer>
+  </main>
+  <script src="/assets/app.js"></script>
+</body>
+</html>
