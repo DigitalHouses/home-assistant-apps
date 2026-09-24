@@ -22,7 +22,7 @@ This standard defines:
 
 Runtime contract-data handling for all application types is governed by [DigitalHouses Contract Data Policy](CONTRACT_DATA_POLICY.md).
 
-Notification-capable products must also follow [DigitalHouses Events and Notifications Standard](EVENTS_AND_NOTIFICATIONS_STANDARD.md): producers emit machine facts, while local Home Assistant packages map clear `trigger.id` values through `choose` directly to the installation-owned notification action.
+Notification-capable products must also follow [DigitalHouses Events & Notifications Standard](EVENTS_AND_NOTIFICATIONS_STANDARD.md): the public product emits machine events only; local Home Assistant automations own language, human-readable presentation and direct delivery. DigitalHouses does not add an intermediate notification Envelope, secondary notification event or adapter layer.
 
 Initial supported application types:
 
@@ -1567,7 +1567,7 @@ This explicit type declaration is mandatory and stable.
 
 This application standard is complemented by repository-wide normative contracts:
 
-- [DigitalHouses Events and Multilingual Notifications Standard](EVENTS_AND_NOTIFICATIONS_STANDARD.md);
+- [DigitalHouses Events & Notifications Standard](EVENTS_AND_NOTIFICATIONS_STANDARD.md);
 - [DigitalHouses Release Policy](RELEASE_POLICY.md);
 - [DigitalHouses Immutable Delivery, Compact Backup and Telemetry Standard](IMMUTABLE_DELIVERY_AND_TELEMETRY_STANDARD.md);
 - [DigitalHouses Product Telemetry Policy](PRODUCT_TELEMETRY_POLICY.md);
