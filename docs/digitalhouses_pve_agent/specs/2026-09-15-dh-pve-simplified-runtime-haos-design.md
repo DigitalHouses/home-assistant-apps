@@ -1380,7 +1380,7 @@ next boot
 
 A log line such as `System is powering down` is evidence that shutdown has started; it is not by itself proof that the host reached a clean final handoff.
 
-A guest completion timestamp is valid only for the matching shutdown transaction and only when it is not earlier than that transaction's start timestamp. Starting a newer shutdown transaction for the same guest resets stale completion/result fields from earlier operations in the same boot.
+A guest completion timestamp is valid only for the matching shutdown transaction and only when it is not earlier than that transaction's start timestamp. Starting a newer shutdown transaction for the same guest resets stale completion/result fields from earlier operations in the same boot. Once an explicit host-shutdown-start marker is observed, unrelated guest operations from earlier in the same boot are outside the final shutdown-history scope.
 
 Negative durations are invalid evidence and must remain unknown; they are never clamped to zero.
 
