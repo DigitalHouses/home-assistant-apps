@@ -73,6 +73,76 @@ def validate_internet(root: Path, app: Path, context: dict[str, Any]) -> None:
         fail(f"{app.name}: script recovery action is forbidden")
 
     validate_presentation_examples(root, app, discovery)
+    validate_config_translations(root, app, schema)
+
+
+def validate_config_translations(
+    root: Path,
+    app: Path,
+    schema: dict[str, Any],
+) -> None:
+    paths = [
+        app / "translations" / "en.yaml",
+        app / "translations" / "ru.yaml",
+    ]
+    require_files(root, paths)
+
+    def validate_level(
+        schema_level: dict[str, Any],
+        translations_level: dict[str, Any],
+        *,
+        locale: str,
+        prefix: str = "",
+    ) -> None:
+        for key, value in schema_level.items():
+            option_path = f"{prefix}.{key}" if prefix else key
+            entry = translations_level.get(key)
+            if not isinstance(entry, dict):
+                fail(
+                    f"{app.name}: {locale} translation missing "
+                    f"{option_path!r}"
+                )
+            if not str(entry.get("name") or "").strip():
+                fail(
+                    f"{app.name}: {locale} translation {option_path!r} "
+                    "must have a name"
+                )
+            if not str(entry.get("description") or "").strip():
+                fail(
+                    f"{app.name}: {locale} translation {option_path!r} "
+                    "must have a description"
+                )
+            if isinstance(value, dict):
+                fields = entry.get("fields")
+                if not isinstance(fields, dict):
+                    fail(
+                        f"{app.name}: {locale} translation {option_path!r} "
+                        "must use nested fields"
+                    )
+                validate_level(
+                    value,
+                    fields,
+                    locale=locale,
+                    prefix=option_path,
+                )
+
+    for path in paths:
+        payload = load_yaml(path, root)
+        configuration = (
+            payload.get("configuration")
+            if isinstance(payload, dict)
+            else None
+        )
+        if not isinstance(configuration, dict):
+            fail(
+                f"{app.name}: invalid configuration translations in "
+                f"{path.name}"
+            )
+        validate_level(
+            schema,
+            configuration,
+            locale=path.stem,
+        )
 
 
 def validate_presentation_examples(
