@@ -160,6 +160,20 @@ class DiscoveryTests(unittest.TestCase):
                 template,
             )
 
+    def test_recorder_noise_is_suppressed(self) -> None:
+        components = build_discovery_payload("0.1.9")["components"]
+
+        availability = components["availability_month"]
+        self.assertIn("| round(2)", availability["value_template"])
+        self.assertIn("'month': value_json.month", availability["json_attributes_template"])
+        self.assertNotIn("online_seconds", availability["json_attributes_template"])
+        self.assertNotIn("offline_seconds", availability["json_attributes_template"])
+        self.assertNotIn("elapsed_seconds", availability["json_attributes_template"])
+
+        problems = components["problems"]
+        self.assertIn("'problems': value_json.problems", problems["json_attributes_template"])
+        self.assertNotIn("updated_at", problems["json_attributes_template"])
+
     def test_compact_server_discovery(self) -> None:
         components = build_discovery_payload("0.1.0")["components"]
         self.assertEqual(
