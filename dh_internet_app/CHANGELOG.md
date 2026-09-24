@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.8
+
+- Simplify Home Assistant notifications to the same direct model used by `dh_pve_app`: machine event → `trigger.id` → `choose` → direct local action.
+- Replace the Notification Envelope / secondary `dh_internet_app_notification` layer with `dh_internet_app_notification_local_package.yaml`.
+- English example calls `persistent_notification.create` directly; the Russian site-local package calls `script.write2log` directly.
+- Remove duplicated machine-event schema validation and `contract_error` presentation logic from Home Assistant. Required machine-event correctness remains producer-owned.
+- Keep the Internet App machine-event schema and MQTT Event entity unchanged.
+
 ## 0.1.7
 
 - Guard Router Download/Upload one-decimal MQTT templates against optional `null` telemetry values so an unavailable mapped source becomes unavailable cleanly instead of rendering an invalid numeric template.
