@@ -3,13 +3,22 @@
 Target architecture:
 
 ```text
-Internet
+Internet agents
   -> Cloudflare
   -> Cloudflare Tunnel
   -> 127.0.0.1:8080
-  -> DigitalHouses Stats
+  -> telemetry ingestion API
+  -> PostgreSQL
+
+LAN browser
+  -> 192.168.11.254:80
+  -> nginx
+  -> 127.0.0.1:8081
+  -> local statistics API
   -> PostgreSQL
 ```
+
+Statistics are intentionally absent from the public telemetry process.
 
 The application must not be published directly on a WAN interface.
 
@@ -122,3 +131,22 @@ After the Cloudflare hostname is active, test the public health endpoint separat
 
 Do not enable production telemetry clients until the public privacy/operator wording
 has completed the review required by the repository telemetry policy.
+
+
+## Local dashboard
+
+Install the dashboard after the application has been deployed:
+
+```bash
+cd /opt/digitalhouses/digitalhouses-stats
+bash deploy/install-local-dashboard.sh
+```
+
+The dashboard is then available only from the LAN at:
+
+```text
+http://192.168.11.254/
+```
+
+The nginx virtual host binds specifically to `192.168.11.254:80`; it does not
+listen on wildcard interfaces.
