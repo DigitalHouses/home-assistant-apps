@@ -5,96 +5,102 @@ configuration:
   connectivity_check:
     name: Connectivity check
     description: Internet and router probe timing.
-  connectivity_check.interval_seconds:
-    name: Check interval, s
-    description: Seconds between normal connectivity checks.
-  connectivity_check.attempts:
-    name: Failed checks
-    description: Consecutive failed Internet checks required before an outage starts.
-  connectivity_check.timeout_seconds:
-    name: Ping timeout, s
-    description: Timeout for each connectivity probe.
+    fields:
+      interval_seconds:
+        name: Check interval, s
+        description: Seconds between normal connectivity checks.
+      attempts:
+        name: Failed checks
+        description: Consecutive failed Internet checks required before an outage starts.
+      timeout_seconds:
+        name: Ping timeout, s
+        description: Timeout for each connectivity probe.
   speedtest:
     name: Speedtest
     description: Ookla Speedtest scheduling, timeout and server selection.
-  speedtest.periodic_enabled:
-    name: Periodic Speedtest
-    description: Run Ookla Speedtest automatically on the configured interval.
-  speedtest.interval_minutes:
-    name: Speedtest interval, min
-    description: Minutes between automatic Speedtest runs.
-  speedtest.timeout_seconds:
-    name: Speedtest timeout, s
-    description: Maximum time allowed for one Ookla Speedtest attempt.
-  speedtest.server_ids:
-    name: Preferred server IDs
-    description: Ordered Ookla server IDs. Leave empty for automatic selection.
-  speedtest.automatic_server_fallback:
-    name: Automatic server fallback
-    description: After preferred servers fail, try one automatic Ookla server selection.
+    fields:
+      periodic_enabled:
+        name: Periodic Speedtest
+        description: Run Ookla Speedtest automatically on the configured interval.
+      interval_minutes:
+        name: Speedtest interval, min
+        description: Minutes between automatic Speedtest runs.
+      timeout_seconds:
+        name: Speedtest timeout, s
+        description: Maximum time allowed for one Ookla Speedtest attempt.
+      server_ids:
+        name: Preferred server IDs
+        description: Ordered Ookla server IDs. Leave empty for automatic selection.
+      automatic_server_fallback:
+        name: Automatic server fallback
+        description: After preferred servers fail, try one automatic Ookla server selection.
   traffic:
     name: Router telemetry
     description: Optional Router and traffic Home Assistant bindings.
-  traffic.traffic_download_total:
-    name: Download total entity
-    description: Cumulative download sensor. Configure together with Upload total or leave both empty.
-  traffic.traffic_upload_total:
-    name: Upload total entity
-    description: Cumulative upload sensor. Configure together with Download total or leave both empty.
-  traffic.router_wan_status:
-    name: WAN status entity
-    description: Optional sensor or binary_sensor containing Router WAN status.
-  traffic.router_download_rate:
-    name: Download rate entity
-    description: Optional sensor containing current Router download rate.
-  traffic.router_upload_rate:
-    name: Upload rate entity
-    description: Optional sensor containing current Router upload rate.
+    fields:
+      traffic_download_total:
+        name: Download total entity
+        description: Cumulative download sensor. Configure together with Upload total or leave both empty.
+      traffic_upload_total:
+        name: Upload total entity
+        description: Cumulative upload sensor. Configure together with Download total or leave both empty.
+      router_wan_status:
+        name: WAN status entity
+        description: Optional sensor or binary_sensor containing Router WAN status.
+      router_download_rate:
+        name: Download rate entity
+        description: Optional sensor containing current Router download rate.
+      router_upload_rate:
+        name: Upload rate entity
+        description: Optional sensor containing current Router upload rate.
   recovery:
     name: Recovery
     description: Automatic ONT and Router recovery. Disabled by default.
-  recovery.enabled:
-    name: Enable recovery
-    description: Allow the App to execute configured ONT and Router recovery actions.
-  recovery.mode:
-    name: Recovery mode
-    description: smart targets the failed element; both always runs ONT then Router.
-  recovery.max_cycles:
-    name: Maximum cycles
-    description: Recovery cycles before entering cooldown.
-  recovery.retry_interval_minutes:
-    name: Retry interval, min
-    description: Delay before the next recovery cycle when Internet is still down.
-  recovery.boot_wait_minutes:
-    name: Boot wait, min
-    description: Stabilization wait after each recovery action cycle.
-  recovery.cooldown_minutes:
-    name: Cooldown, min
-    description: Pause after maximum cycles before a new series may start.
-  recovery.ont:
-    name: ONT recovery target
-    description: Home Assistant button or switch used to recover the ONT.
-  recovery.ont.action:
-    name: ONT action
-    description: button presses a reboot entity; switch performs a power cycle.
-  recovery.ont.entity_id:
-    name: ONT entity
-    description: button.* or switch.* entity matching the selected action.
-  recovery.ont.power_off_seconds:
-    name: ONT power-off, s
-    description: Switch-only off duration before power is restored.
-  recovery.router:
-    name: Router recovery target
-    description: Home Assistant button or switch used to recover the Router.
-  recovery.router.action:
-    name: Router action
-    description: button presses a reboot entity; switch performs a power cycle.
-  recovery.router.entity_id:
-    name: Router entity
-    description: button.* or switch.* entity matching the selected action.
-  recovery.router.power_off_seconds:
-    name: Router power-off, s
-    description: Switch-only off duration before power is restored.
+    fields:
+      enabled:
+        name: Enable recovery
+        description: Allow the App to execute configured ONT and Router recovery actions.
+      mode:
+        name: Recovery mode
+        description: smart targets the failed element; both always runs ONT then Router.
+      max_cycles:
+        name: Maximum cycles
+        description: Recovery cycles before entering cooldown.
+      retry_interval_minutes:
+        name: Retry interval, min
+        description: Delay before the next recovery cycle when Internet is still down.
+      boot_wait_minutes:
+        name: Boot wait, min
+        description: Stabilization wait after each recovery action cycle.
+      cooldown_minutes:
+        name: Cooldown, min
+        description: Pause after maximum cycles before a new series may start.
+      ont:
+        name: ONT recovery target
+        description: Home Assistant button or switch used to recover the ONT.
+        fields:
+          action:
+            name: ONT action
+            description: button presses a reboot entity; switch performs a power cycle.
+          entity_id:
+            name: ONT entity
+            description: button.* or switch.* entity matching the selected action.
+          power_off_seconds:
+            name: ONT power-off, s
+            description: Switch-only off duration before power is restored.
+      router:
+        name: Router recovery target
+        description: Home Assistant button or switch used to recover the Router.
+        fields:
+          action:
+            name: Router action
+            description: button presses a reboot entity; switch performs a power cycle.
+          entity_id:
+            name: Router entity
+            description: button.* or switch.* entity matching the selected action.
+          power_off_seconds:
+            name: Router power-off, s
+            description: Switch-only off duration before power is restored.
   log_level:
     name: Log level
     description: Application logging verbosity.
