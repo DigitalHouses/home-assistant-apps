@@ -13,7 +13,7 @@ from .ups_nut import UpsSnapshot
 
 HISTORY_LIMIT = 50
 PUBLISHED_HISTORY_LIMIT = 10
-HISTORY_PARSER_VERSION = 2
+HISTORY_PARSER_VERSION = 3
 
 _TIMESTAMP_RE = re.compile(r"^(?P<ts>\S+)")
 _START_RE = re.compile(
@@ -48,8 +48,6 @@ _CLEAN_MARKERS = (
     "reached target shutdown.target",
     "reached target system power off",
     "systemd-shutdown",
-    "system is powering down",
-    "powering off",
 )
 _FSD_REASONS = {
     "on_battery_fsd",
@@ -78,9 +76,9 @@ def _iso(value: datetime | None) -> str | None:
 
 
 def _seconds(start: datetime | None, end: datetime | None) -> int | None:
-    if start is None or end is None:
+    if start is None or end is None or end < start:
         return None
-    return max(0, int(round((end - start).total_seconds())))
+    return int(round((end - start).total_seconds()))
 
 
 def _guest_kind(token: str) -> str:
@@ -135,8 +133,24 @@ def parse_guest_shutdown_journal(text: str) -> dict[str, Any]:
             item = records.setdefault(key, _empty_guest(kind, guest_id, timeout))
             item["timeout_seconds"] = timeout
             active_guests.add(key)
-            if item["started_at"] is None and timestamp is not None:
-                item["started_at"] = timestamp.isoformat()
+            if timestamp is not None:
+                previous_start = None
+                if isinstance(item.get("started_at"), str):
+                    try:
+                        previous_start = datetime.fromisoformat(item["started_at"])
+                    except ValueError:
+                        previous_start = None
+                if previous_start is None or timestamp > previous_start:
+                    item.update(
+                        {
+                            "started_at": timestamp.isoformat(),
+                            "finished_at": None,
+                            "duration_seconds": None,
+                            "timeout_ratio": None,
+                            "result": "unknown",
+                            "forced": False,
+                        }
+                    )
                 if first_started is None or timestamp < first_started:
                     first_started = timestamp
             continue
@@ -213,6 +227,11 @@ def parse_guest_shutdown_journal(text: str) -> dict[str, Any]:
                 finished = datetime.fromisoformat(item["finished_at"])
             except ValueError:
                 finished = None
+        if started is not None and finished is not None and finished < started:
+            finished = None
+            item["finished_at"] = None
+            if item.get("result") == "clean":
+                item["result"] = "unknown"
         duration = _seconds(started, finished)
         item["duration_seconds"] = duration
         timeout = item.get("timeout_seconds")
