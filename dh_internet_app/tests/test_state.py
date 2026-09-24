@@ -228,6 +228,29 @@ class OutageTests(unittest.TestCase):
                 "2026-09-01T00:00:00+00:00",
             )
 
+    def test_payload_keeps_all_current_month_outages(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "outages.json"
+            outages = [
+                {
+                    "from": "2026-09-01T00:00:00+00:00",
+                    "to": "2026-09-01T00:00:01+00:00",
+                    "duration_seconds": 1,
+                    "duration": "00:01",
+                }
+                for _ in range(1500)
+            ]
+            tracker = OutageTracker(
+                path=path,
+                month="2026-09",
+                outages=outages,
+                active_from=None,
+            )
+            now = datetime(2026, 9, 30, 12, 0, tzinfo=timezone.utc)
+            payload = tracker.payload(now)
+            self.assertEqual(payload["state"], 1500)
+            self.assertEqual(len(payload["outages"]), 1500)
+
     def test_month_availability(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "outages.json"
