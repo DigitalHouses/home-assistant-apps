@@ -166,7 +166,7 @@ def test_semantic_events_follow_retained_state_and_problem_publication(tmp_path)
     clock.update(iso="2026-09-17T14:00:10+05:00", mono=10.0)
     assert runtime.tick(clock["mono"]) is True
 
-    status_event = _index(trace, "event", "ups_status_changed")
+    status_event = _index(trace, "event", "line_power_lost")
     assert _index(trace, "group", "status") < status_event
     assert _index(trace, "problem_state", "on_battery") < status_event
     assert _index(trace, "problem_aggregate") < status_event

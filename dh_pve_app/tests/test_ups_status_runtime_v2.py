@@ -129,7 +129,7 @@ def test_on_battery_transition_updates_retained_problem_but_emits_only_status_ev
 
     assert ("state", "on_battery", True) in bridge.problem_calls
     events = [call[1] for call in bridge.problem_calls if call[0] == "event"]
-    assert [event["event_type"] for event in events] == ["ups_status_changed"]
+    assert [event["event_type"] for event in events] == ["line_power_lost"]
     assert events[0]["previous_status"] == ["online"]
     assert events[0]["current_status"] == ["on_battery"]
     assert not any(

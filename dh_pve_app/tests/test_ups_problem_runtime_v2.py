@@ -204,7 +204,7 @@ def test_on_battery_transition_and_recovery_use_status_event_transport(tmp_path)
     assert "summary" not in presentation
     status_event = bridge.problem_calls[3][1]
     assert status_event["schema_version"] == 2
-    assert status_event["event_type"] == "ups_status_changed"
+    assert status_event["event_type"] == "line_power_lost"
     assert status_event["observed_at"] == "2026-09-15T20:00:10+05:00"
     assert status_event["previous_status"] == ["online"]
     assert status_event["current_status"] == ["on_battery"]
@@ -226,7 +226,7 @@ def test_on_battery_transition_and_recovery_use_status_event_transport(tmp_path)
     assert bridge.problem_calls[0] == ("state", "on_battery", False)
     assert bridge.problem_calls[1] == ("aggregate", 0)
     recovered = bridge.problem_calls[3][1]
-    assert recovered["event_type"] == "ups_status_changed"
+    assert recovered["event_type"] == "line_power_restored"
     assert recovered["previous_status"] == ["on_battery"]
     assert recovered["current_status"] == ["online"]
 
@@ -248,6 +248,7 @@ def test_simultaneous_status_problems_publish_retained_state_then_one_status_eve
         "aggregate",
         "presentation",
         "event",
+        "event",
     ]
     state_calls = bridge.problem_calls[:2]
     assert {call[1] for call in state_calls} == {"on_battery", "low_battery"}
@@ -255,10 +256,16 @@ def test_simultaneous_status_problems_publish_retained_state_then_one_status_eve
     assert bridge.problem_calls[2] == ("aggregate", 2)
     presentation = bridge.problem_calls[3][1]
     assert presentation["severity"] == "critical"
-    event = bridge.problem_calls[4][1]
-    assert event["event_type"] == "ups_status_changed"
-    assert event["previous_status"] == ["online"]
-    assert event["current_status"] == ["on_battery", "low_battery"]
+    events = [call[1] for call in bridge.problem_calls[4:6]]
+    assert [event["event_type"] for event in events] == [
+        "line_power_lost",
+        "low_battery_started",
+    ]
+    assert all(event["previous_status"] == ["online"] for event in events)
+    assert all(
+        event["current_status"] == ["on_battery", "low_battery"]
+        for event in events
+    )
     assert not any(
         call[0] == "event" and call[1].get("event_type") == "problem_started"
         for call in bridge.problem_calls
@@ -287,11 +294,9 @@ def test_nut_failure_starts_generic_critical_problem_without_false_recoveries(tm
     }
     event = bridge.problem_calls[3][1]
     assert event["schema_version"] == 2
-    assert event["event_type"] == "problem_started"
-    assert event["metric"] == "nut_unavailable"
+    assert event["event_type"] == "nut_unavailable"
+    assert event["problem_id"] == "nut_unavailable"
     assert event["severity"] == "critical"
-    assert event["current"]["active"] is True
-    assert event["active_problem_count"] == 2
 
 
 def test_failed_status_event_is_retried_before_new_observation(tmp_path):
@@ -307,7 +312,7 @@ def test_failed_status_event_is_retried_before_new_observation(tmp_path):
     clock.update(iso="2026-09-15T20:00:10+05:00", mono=10.0)
     assert runtime.tick(clock["mono"]) is False
     assert bridge.problem_calls[-1][0] == "event"
-    assert bridge.problem_calls[-1][1]["event_type"] == "ups_status_changed"
+    assert bridge.problem_calls[-1][1]["event_type"] == "line_power_lost"
 
     reads_before_retry = calls["count"]
     bridge.problem_calls.clear()
@@ -316,7 +321,7 @@ def test_failed_status_event_is_retried_before_new_observation(tmp_path):
     assert runtime.tick(clock["mono"]) is True
 
     assert bridge.problem_calls[0][0] == "event"
-    assert bridge.problem_calls[0][1]["event_type"] == "ups_status_changed"
+    assert bridge.problem_calls[0][1]["event_type"] == "line_power_lost"
     assert bridge.problem_calls[0][1]["current_status"] == ["on_battery"]
     assert [call[0] for call in bridge.problem_calls[1:]] == [
         "state",
@@ -325,7 +330,7 @@ def test_failed_status_event_is_retried_before_new_observation(tmp_path):
         "event",
     ]
     assert bridge.problem_calls[1] == ("state", "on_battery", False)
-    assert bridge.problem_calls[4][1]["event_type"] == "ups_status_changed"
+    assert bridge.problem_calls[4][1]["event_type"] == "line_power_restored"
     assert bridge.problem_calls[4][1]["current_status"] == ["online"]
     assert calls["count"] == reads_before_retry + 1
 
