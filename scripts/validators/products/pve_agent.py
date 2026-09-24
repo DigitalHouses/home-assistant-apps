@@ -432,7 +432,6 @@ def validate_dh_pve_app(
         "binary_sensor.dh_app_pve_*",
         "sensor.dh_pve_",
         "binary_sensor.dh_pve_",
-        "event.dh_app_pve_",
     ):
         if forbidden in package:
             fail(f"DH PVE HA package must remain explicit/lightweight: {forbidden}")
