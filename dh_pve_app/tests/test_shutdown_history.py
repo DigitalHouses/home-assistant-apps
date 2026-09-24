@@ -295,3 +295,29 @@ def test_readiness_ok_for_clean_fast_guests():
 
     assert result["status"] == "ok"
     assert result["issues"] == []
+
+def test_incident_parser_discards_stale_guest_completion_before_new_shutdown_start():
+    parsed = parse_guest_shutdown_journal(
+        "2026-09-21T19:36:32.560792+05:00 pve pve-guests[1]: "
+        "end task UPID:pve:1:2:3:4:qmshutdown:110:root@pam:\n"
+        "2026-09-24T04:45:40.871419+05:00 pve pve-guests[2]: "
+        "Stopping VM 110 (timeout = 125 seconds)\n"
+    )
+
+    guest = parsed["guests"]["vm"]["110"]
+    assert guest["started_at"] == "2026-09-24T04:45:40.871419+05:00"
+    assert guest["finished_at"] is None
+    assert guest["duration_seconds"] is None
+    assert guest["timeout_ratio"] is None
+    assert guest["result"] == "unknown"
+
+
+def test_powering_down_message_is_not_final_clean_shutdown_evidence():
+    parsed = parse_guest_shutdown_journal(
+        "2026-09-24T04:44:34.000000+05:00 pve systemd-logind[1]: "
+        "System is powering down.\n"
+    )
+
+    assert parsed["clean_shutdown"] is False
+    assert parsed["shutdown_at"] is None
+
