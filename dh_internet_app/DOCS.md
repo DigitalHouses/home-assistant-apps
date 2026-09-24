@@ -30,9 +30,9 @@ The MQTT Stop button suppresses further attempts for the current incident, inclu
 
 The App runs the official Ookla CLI. Periodic execution is controlled by App configuration with a 5..720 minute interval and may be disabled. The MQTT Discovery Run speed test button uses the same backend path.
 
-Graphable entities are Download, Upload, Ping, Jitter and Packet loss. Provider, external IP, selected server, result URL, last successful timestamp and the last error are attributes of the compact Speedtest status entity rather than separate entities.
+Graphable entities are Download, Upload, Ping, Jitter and Packet loss. Provider, external IP, selected server, result URL, last successful timestamp, last result and the last error are attributes of the compact Speedtest status entity rather than separate entities.
 
-A failed test does not overwrite the last successful measurements. The runtime status becomes `error` or `no_connectivity` while the last successful result remains persisted under `/data/runtime`.
+The Speedtest status is an execution-state sensor: it is normally `idle`, becomes `running` while Ookla is executing, then returns to `idle`. The `last_result` attribute records `success`, `error` or `no_connectivity`. A failed or skipped test does not overwrite the last successful measurements, which remain persisted under `/data/runtime`.
 
 ### Server selection
 
@@ -54,7 +54,7 @@ Each record stores measured values plus the thresholds and problem flags active 
 
 ## Monthly outages and availability
 
-The App persists current-month outages, including an active outage. Each record contains From, To and duration; the current outage has no To value until recovery.
+The App persists every outage in the current local calendar month, including an active outage; the monthly list is not truncated. Each record contains From, To and duration; the current outage has no To value until recovery. Presentation may show only the latest rows without changing the retained monthly history.
 
 Current-month availability is calculated by the App from elapsed local calendar-month time minus accumulated outage time. An active outage is persisted across App restarts; if it spans a month boundary, the new month is anchored at local month start. Home Assistant exposes the result but does not own the calculation.
 
@@ -90,7 +90,7 @@ Human-readable notification text belongs in the reusable Home Assistant package.
 
 The reusable Home Assistant layer does not calculate Internet state, recovery decisions, quality thresholds, outages or traffic. Those remain App-owned.
 
-`dh_internet_app_global_package.yaml` contains only the Recorder whitelist for useful time-series entities. Rich list/history attributes, MQTT Event entities, Version/Started-at metadata and aggregate presentation sensors are intentionally not recorded.
+`dh_internet_app_global_package.yaml` contains only the Recorder whitelist for useful time-series entities. It records connectivity, Speedtest measurements/status, quality thresholds/problem flags, recovery state/cycle and optional Router WAN/rates plus cumulative/current-month traffic. Rich list/history entities such as monthly outage rows, Recent Results, server catalogs and traffic-history aggregates are intentionally not recorded because their attributes are App-persisted and can be large.
 
 `dh_internet_app_notification_package.yaml` and `locales/ru/dh_internet_app_notification_package.yaml` validate event-specific machine schema-v2 Events from `event.dh_internet_app_event`, localize them, and emit the stable transport-neutral Home Assistant event `dh_internet_app_notification` using DigitalHouses Notification Envelope v1. Every normal notification contains `notification_schema_version`, `source`, `kind`, `severity`, `title` and `message`. Invalid required machine data emits an explicit `contract_error`; the source payload is never forwarded wholesale through `raw` or an equivalent catch-all field. Install exactly one notification locale.
 
