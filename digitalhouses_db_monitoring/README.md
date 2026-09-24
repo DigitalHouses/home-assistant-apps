@@ -64,6 +64,8 @@ Core entities:
 
 | Entity ID | Purpose |
 | --- | --- |
+| `sensor.dh_db_app_version` | Running Recorder App release version |
+| `sensor.dh_db_started_at` | Timestamp when the current App process started |
 | `sensor.dh_db_start` | Earliest retained Recorder state |
 | `sensor.dh_db_last` | Latest Recorder state |
 | `sensor.dh_db_depth` | Retained history depth in days |
@@ -105,7 +107,7 @@ Recorder health is refreshed at the configured `publish_interval_minutes` interv
 | Top entities — all retained history | 1 day |
 | Static database information | Startup/reconnect |
 
-A manual refresh collects every enabled group immediately without changing the normal background intervals.
+A manual refresh collects every enabled group immediately without changing the normal background intervals. The last successful manual refresh timestamp is published on its own retained MQTT topic, so normal one-minute state publications do not generate missing-field template warnings and the last real refresh time is restored after Home Assistant reconnects.
 
 ## PostgreSQL configuration
 
