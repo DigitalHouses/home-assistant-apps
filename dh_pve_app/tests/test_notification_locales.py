@@ -11,9 +11,20 @@ RU_PACKAGE = PACKAGES / "locales" / "ru" / "dh_app_pve_notification_local_packag
 README = APP_ROOT / "README.md"
 
 EXPECTED_TRIGGER_IDS = {
-    "problem_started",
-    "problem_updated",
-    "problem_recovered",
+    "cpu_temperature_high",
+    "cpu_temperature_normal",
+    "cpu_throttling_started",
+    "cpu_throttling_cleared",
+    "storage_usage_high",
+    "storage_usage_normal",
+    "disk_temperature_high",
+    "disk_temperature_normal",
+    "gpu_temperature_high",
+    "gpu_temperature_normal",
+    "fan_control_restore_failed",
+    "fan_control_restored",
+    "disk_smart_failed",
+    "disk_smart_restored",
     "nut_unavailable",
     "nut_restored",
     "power_state_unknown",
