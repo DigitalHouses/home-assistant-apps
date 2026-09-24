@@ -61,10 +61,7 @@ class DatabaseMonitorApp:
         self.log = logging.getLogger('digitalhouses_db_monitoring')
         self.adapter = create_adapter(self.config.database)
         self.storage = StorageCollector(self.config.storage, self.adapter)
-        self.started_at = iso_from_epoch(time.time())
         self.state: dict[str, Any] = {
-            'app_version': APP_VERSION,
-            'started_at': self.started_at,
             'db_connected': False,
             'recorder_writing': False,
         }
