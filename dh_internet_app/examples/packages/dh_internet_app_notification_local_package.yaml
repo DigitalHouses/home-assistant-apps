@@ -218,6 +218,9 @@ dh_internet_app_notification_local_package:
                   data:
                     title: "📈✅ Internet performance restored"
                     message: >-
+                      {% set labels = {'low_download':'low download','low_upload':'low upload','high_ping':'high ping'} %}
+                      Recovered from:
+                      {% for reason in trigger.to_state.attributes.previous_reasons %}{{ labels[reason] }}{{ ', ' if not loop.last else '.' }}{% endfor %}
                       Download {{ trigger.to_state.attributes.download_mbps }} Mbit/s ·
                       Upload {{ trigger.to_state.attributes.upload_mbps }} Mbit/s ·
                       Ping {{ trigger.to_state.attributes.ping_ms }} ms.
@@ -233,7 +236,9 @@ dh_internet_app_notification_local_package:
                     title: "📉⚠️ Internet performance changed"
                     message: >-
                       {% set labels = {'low_download':'low download','low_upload':'low upload','high_ping':'high ping'} %}
-                      Problems:
+                      Previous:
+                      {% for reason in trigger.to_state.attributes.previous_reasons %}{{ labels[reason] }}{{ ', ' if not loop.last else '.' }}{% endfor %}
+                      Current:
                       {% for reason in trigger.to_state.attributes.reasons %}{{ labels[reason] }}{{ ', ' if not loop.last else '.' }}{% endfor %}
                       Download {{ trigger.to_state.attributes.download_mbps }} Mbit/s ·
                       Upload {{ trigger.to_state.attributes.upload_mbps }} Mbit/s ·
