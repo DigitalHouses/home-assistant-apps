@@ -72,3 +72,35 @@ def test_readme_requires_exactly_one_notification_locale() -> None:
     assert "examples/packages/dh_app_pve_notification_package.yaml" in readme
     assert "examples/packages/locales/ru/dh_app_pve_notification_package.yaml" in readme
     assert "Install exactly one notification locale" in readme
+
+def test_startup_reconciliation_requires_fresh_current_process_publication() -> None:
+    for text in (_read(EN_PACKAGE), _read(RU_PACKAGE)):
+        assert "sensor.dh_app_pve_agent_started" in text
+        assert "sensor.dh_app_pve_last_publication" in text
+        assert "sensor.dh_app_pve_ups_last_publication" in text
+        assert "wait_template:" in text
+        assert "wait.completed" in text
+
+
+def test_live_notification_presentation_has_explicit_nonempty_guard() -> None:
+    for text in (_read(EN_PACKAGE), _read(RU_PACKAGE)):
+        assert "notification_title" in text
+        assert "notification_message" in text
+        assert "notification_title | trim" in text
+        assert "notification_message | trim" in text
+
+
+def test_ru_startup_ups_problems_use_problem_ids_not_legacy_summary() -> None:
+    ru = _read(RU_PACKAGE)
+    assert "Активная проблема UPS" not in ru
+    for problem_id in (
+        "nut_unavailable",
+        "on_battery",
+        "low_battery",
+        "overload",
+        "replace_battery",
+        "bypass",
+        "power_state_unknown",
+    ):
+        assert problem_id in ru
+
