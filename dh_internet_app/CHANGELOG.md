@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.7
+
+- Guard Router Download/Upload one-decimal MQTT templates against optional `null` telemetry values so an unavailable mapped source becomes unavailable cleanly instead of rendering an invalid numeric template.
+
 ## 0.1.6
 
 - Simplified Speedtest runtime status to `idle | running`; the last attempt outcome is now exposed separately as `last_result=success|error|no_connectivity` while successful measurements remain persistent.

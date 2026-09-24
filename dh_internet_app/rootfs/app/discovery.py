@@ -656,7 +656,10 @@ def build_discovery_payload(
             "unique_id": f"{ENTITY_PREFIX}_router_download_rate",
             "default_entity_id": f"sensor.{ENTITY_PREFIX}_router_download_rate",
             "state_topic": TOPICS["traffic"],
-            "value_template": "{{ value_json.router.download_rate_mbps | round(1) }}",
+            "value_template": (
+                "{{ value_json.router.download_rate_mbps | round(1) "
+                "if value_json.router.download_rate_mbps is not none else none }}"
+            ),
             "device_class": "data_rate",
             "state_class": "measurement",
             "unit_of_measurement": "Mbit/s",
@@ -673,7 +676,10 @@ def build_discovery_payload(
             "unique_id": f"{ENTITY_PREFIX}_router_upload_rate",
             "default_entity_id": f"sensor.{ENTITY_PREFIX}_router_upload_rate",
             "state_topic": TOPICS["traffic"],
-            "value_template": "{{ value_json.router.upload_rate_mbps | round(1) }}",
+            "value_template": (
+                "{{ value_json.router.upload_rate_mbps | round(1) "
+                "if value_json.router.upload_rate_mbps is not none else none }}"
+            ),
             "device_class": "data_rate",
             "state_class": "measurement",
             "unit_of_measurement": "Mbit/s",

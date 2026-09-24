@@ -1,5 +1,5 @@
 name: DigitalHouses Internet App
-version: 0.1.6
+version: 0.1.7
 slug: digitalhouses_internet
 description: Internet availability, Ookla Speedtest, traffic accounting and automatic ONT/router recovery through MQTT Discovery.
 url: https://github.com/DigitalHouses/home-assistant-apps/tree/main/dh_internet_app
