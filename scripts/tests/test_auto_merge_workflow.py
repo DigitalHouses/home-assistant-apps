@@ -6,6 +6,7 @@ WORKFLOW = ROOT / ".github" / "workflows" / "auto-merge.yml"
 
 
 class AutoMergeWorkflowTests(unittest.TestCase):
+    # These tests protect the exact-base invariant under concurrent owner PRs.
     def _text(self) -> str:
         return WORKFLOW.read_text(encoding="utf-8")
 
