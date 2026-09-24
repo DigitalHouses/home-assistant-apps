@@ -35,6 +35,8 @@ Owner-authored same-repository PRs targeting `main` are integrated automatically
 
 Runtime contract handling must follow [DigitalHouses Contract Data Policy](../docs/standards/CONTRACT_DATA_POLICY.md): required data fails explicitly, optional data remains absent/null according to schema, and contract boundaries must not invent fallback domain values.
 
+Notification-capable products must follow [DigitalHouses Events and Multilingual Notifications Standard](../docs/standards/EVENTS_AND_NOTIFICATIONS_STANDARD.md): Apps/Agents emit machine semantics, locale packages own presentation, and delivery remains installation-specific. Public reusable packages must not depend on private mechanisms such as `script.write2log`.
+
 ## Development
 
 Use the supported Python version from the repository CI workflow.
