@@ -77,12 +77,18 @@ sections:
             icon: mdi:speedometer
             content: "{{ states('sensor.dh_internet_app_speedtest_status') }}"
             icon_color: >-
-              {% if is_state('sensor.dh_internet_app_speedtest_status','success') %}
-                green
-              {% elif states('sensor.dh_internet_app_speedtest_status') in ['unknown','unavailable'] %}
+              {% set s = states('sensor.dh_internet_app_speedtest_status') %}
+              {% set last = state_attr('sensor.dh_internet_app_speedtest_status','last_result') %}
+              {% if s == 'running' %}
+                blue
+              {% elif s in ['unknown','unavailable'] %}
                 grey
-              {% else %}
+              {% elif last == 'success' %}
+                green
+              {% elif last in ['error','no_connectivity'] %}
                 orange
+              {% else %}
+                grey
               {% endif %}
             tap_action:
               action: more-info
@@ -197,16 +203,20 @@ sections:
           columns: 6
 
       - type: markdown
-        content: |
-          {% set rows = state_attr('sensor.dh_internet_app_recent_results','results') or [] %}
-          ## Recent Speedtests
+        title: Recent Speedtests
+        content: >
+          {% set results = state_attr('sensor.dh_internet_app_recent_results',
+          'results') or [] %}
 
-          | Date | Download | Upload | Ping |
-          |:--|--:|--:|--:|
-          {% for r in rows[:10] %}
-          {% set dt = as_datetime(r.get('tested_at')) %}
-          | {{ as_local(dt).strftime('%d.%m %H:%M') if dt else '—' }} | {{ r.get('download_mbps','—') }} | {{ r.get('upload_mbps','—') }} | {{ r.get('ping_ms','—') }} |
-          {% endfor %}
+          | Date | ⬇️ Mbps | ⬆️ Mbps | 📶 ms | Server | Status |
+
+          | :--- | :---: | :---: | :---: | :--- | :--- |
+
+          {%- for r in results[:10] %}
+
+          | {{ as_local(as_datetime(r['tested_at'])).strftime('%d.%m %H:%M') }} | {{ r['download_mbps'] | round(0) }} | {{ r['upload_mbps'] | round(0) }} | {{ r['ping_ms'] | round(1) }} | {{ r['server'] | replace('|', '&#124;') }} | {% if r['performance_problem'] %}❌{% if r['low_download'] %} DL{% endif %}{% if r['low_upload'] %} UL{% endif %}{% if r['high_ping'] %} Ping{% endif %}{% else %}✅ OK{% endif %} |
+
+          {%- endfor %}
 
   - type: grid
     cards:

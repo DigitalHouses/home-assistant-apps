@@ -21,11 +21,19 @@ dh_internet_app_global_package:
         - sensor.dh_internet_app_ping
         - sensor.dh_internet_app_jitter
         - sensor.dh_internet_app_packet_loss
+        - sensor.dh_internet_app_speedtest_status
+        - number.dh_internet_app_minimum_download
+        - number.dh_internet_app_minimum_upload
+        - number.dh_internet_app_maximum_ping
         - sensor.dh_internet_app_availability_month
         - binary_sensor.dh_internet_app_low_download
         - binary_sensor.dh_internet_app_low_upload
         - binary_sensor.dh_internet_app_high_ping
         - binary_sensor.dh_internet_app_performance_problem
+        - sensor.dh_internet_app_recovery_state
+        - sensor.dh_internet_app_recovery_cycle
+        - sensor.dh_internet_app_problems
+        - sensor.dh_internet_app_router_wan_status
         - sensor.dh_internet_app_router_download_rate
         - sensor.dh_internet_app_router_upload_rate
         - sensor.dh_internet_app_traffic_download_total

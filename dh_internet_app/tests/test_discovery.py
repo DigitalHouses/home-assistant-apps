@@ -136,6 +136,28 @@ class DiscoveryTests(unittest.TestCase):
                     "all",
                 )
 
+    def test_speedtest_status_is_idle_or_running(self) -> None:
+        component = build_discovery_payload("0.1.6")["components"][
+            "speedtest_status"
+        ]
+        self.assertEqual(component["options"], ["idle", "running"])
+        self.assertIn("last_result", component["json_attributes_template"])
+
+    def test_router_rate_precision_is_one_decimal(self) -> None:
+        components = build_discovery_payload(
+            "0.1.6",
+            download_rate_enabled=True,
+            upload_rate_enabled=True,
+        )["components"]
+        self.assertIn(
+            "| round(1)",
+            components["router_download_rate"]["value_template"],
+        )
+        self.assertIn(
+            "| round(1)",
+            components["router_upload_rate"]["value_template"],
+        )
+
     def test_compact_server_discovery(self) -> None:
         components = build_discovery_payload("0.1.0")["components"]
         self.assertEqual(

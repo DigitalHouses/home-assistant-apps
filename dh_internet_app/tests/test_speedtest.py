@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
 APP_DIR = Path(__file__).resolve().parents[1] / "rootfs" / "app"
 sys.path.insert(0, str(APP_DIR))
 
-from speedtest import parse_result, parse_server_list
+from speedtest import load_last_result, parse_result, parse_server_list
 
 
 class SpeedtestTests(unittest.TestCase):
@@ -38,8 +40,28 @@ class SpeedtestTests(unittest.TestCase):
         self.assertEqual(result["provider"], "Example ISP")
         self.assertEqual(result["server_id"], 12345)
         self.assertEqual(result["server"], "Example Server — Almaty, Kazakhstan")
-        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["status"], "idle")
+        self.assertEqual(result["last_result"], "success")
         self.assertIsNotNone(result["tested_at"])
+
+    def test_legacy_last_success_loads_as_idle(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "speedtest.json"
+            path.write_text(
+                json.dumps(
+                    {
+                        "status": "success",
+                        "download_mbps": 100.0,
+                        "upload_mbps": 50.0,
+                        "ping_ms": 10.0,
+                        "tested_at": "2026-09-24T20:00:00+05:00",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            state = load_last_result(path)
+            self.assertEqual(state["status"], "idle")
+            self.assertEqual(state["last_result"], "success")
 
     def test_parse_server_list(self) -> None:
         servers = parse_server_list(

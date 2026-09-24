@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.6
+
+- Simplified Speedtest runtime status to `idle | running`; the last attempt outcome is now exposed separately as `last_result=success|error|no_connectivity` while successful measurements remain persistent.
+- Rounded Router Download/Upload rate entity states to one decimal place.
+- Expanded the Recorder whitelist with Speedtest status metadata, quality thresholds, recovery state/cycle, aggregate Problems and Router WAN state while keeping rich list/history entities out of Recorder.
+- Explicitly regression-tested that the current-month outage sensor publishes the complete monthly outage list without truncation.
+- Restored a robust one-row-per-result Markdown pattern for the Recent Speedtests reference table.
+
 ## 0.1.5
 
 - Migrated Internet App notifications to the repository Events and Multilingual Notifications Standard and DigitalHouses Notification Envelope v1.

@@ -13,7 +13,8 @@ from state import atomic_write_json, iso, now_local
 
 def default_speedtest_state() -> dict[str, Any]:
     return {
-        "status": "ready",
+        "status": "idle",
+        "last_result": None,
         "download_mbps": None,
         "upload_mbps": None,
         "ping_ms": None,
@@ -40,9 +41,9 @@ def load_last_result(path: Path) -> dict[str, Any]:
     for key in state:
         if key in raw:
             state[key] = raw[key]
-    if state["tested_at"]:
-        state["status"] = "success"
-        state["error"] = None
+    state["status"] = "idle"
+    if state["tested_at"] and not state["last_result"]:
+        state["last_result"] = "success"
     return state
 
 
@@ -76,7 +77,8 @@ def parse_result(payload: Any) -> dict[str, Any]:
 
     packet_loss = payload.get("packetLoss")
     return {
-        "status": "success",
+        "status": "idle",
+        "last_result": "success",
         "download_mbps": round(float(download["bandwidth"]) * 8 / 1_000_000, 2),
         "upload_mbps": round(float(upload["bandwidth"]) * 8 / 1_000_000, 2),
         "ping_ms": round(float(ping["latency"]), 2),
