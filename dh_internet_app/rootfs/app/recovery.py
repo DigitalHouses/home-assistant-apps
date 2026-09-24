@@ -62,8 +62,8 @@ class RecoveryExecutor:
         if target.action != "switch":
             raise ValueError(f"unsupported recovery action: {target.action}")
 
-        self.api.call_service("switch", "turn_off", target.entity_id)
         try:
+            self.api.call_service("switch", "turn_off", target.entity_id)
             remaining = target.power_off_seconds
             while remaining > 0:
                 if self.stop_event.is_set():
@@ -72,6 +72,8 @@ class RecoveryExecutor:
                 self.sleep(step)
                 remaining -= step
         finally:
+            # turn_off may have reached Home Assistant even when its HTTP
+            # response fails, so always make a best-effort restore attempt.
             self.api.call_service("switch", "turn_on", target.entity_id)
 
 

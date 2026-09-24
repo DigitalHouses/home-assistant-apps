@@ -45,6 +45,34 @@ class RecoveryPolicyTests(unittest.TestCase):
         )
         self.assertEqual(selected.targets, ())
 
+    def test_switch_restore_is_attempted_when_turn_off_errors(self) -> None:
+        class FailingApi(FakeApi):
+            def call_service(
+                self, domain: str, service: str, entity_id: str
+            ) -> None:
+                super().call_service(domain, service, entity_id)
+                if service == "turn_off":
+                    raise RuntimeError("response lost")
+
+        api = FailingApi()
+        executor = RecoveryExecutor(api, threading.Event(), sleep=lambda _: None)
+        target = RecoveryTarget(
+            action="switch",
+            entity_id="switch.ont",
+            power_off_seconds=10,
+        )
+
+        with self.assertRaises(RuntimeError):
+            executor.execute(target)
+
+        self.assertEqual(
+            api.calls,
+            [
+                ("switch", "turn_off", "switch.ont"),
+                ("switch", "turn_on", "switch.ont"),
+            ],
+        )
+
     def test_switch_is_restored_when_stop_arrives(self) -> None:
         api = FakeApi()
         stop = threading.Event()

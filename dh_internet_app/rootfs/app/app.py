@@ -879,7 +879,11 @@ class InternetApp:
         finally:
             self.stop_recovery.set()
             if self.recovery_thread is not None:
-                self.recovery_thread.join(timeout=10)
+                # A stopped switch recovery may need to finish both HA API
+                # service calls before the process exits.
+                self.recovery_thread.join(
+                    timeout=(self.ha_api.timeout_seconds * 2) + 5
+                )
             if self.mqtt.is_connected():
                 self.mqtt.publish(
                     TOPICS["availability"], "offline", qos=1, retain=True
