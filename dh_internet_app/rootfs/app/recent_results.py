@@ -26,7 +26,13 @@ def load_recent_results(path: Path) -> dict[str, Any]:
     if not isinstance(rows, list):
         rows = []
     rows = [row for row in rows if isinstance(row, dict)]
-    updated_at = raw.get("updated_at")\n    if not isinstance(updated_at, str):\n        updated_at = None\n    return {"results": rows[:RECENT_RESULTS_LIMIT], "updated_at": updated_at}
+    updated_at = raw.get("updated_at")
+    if not isinstance(updated_at, str):
+        updated_at = None
+    return {
+        "results": rows[:RECENT_RESULTS_LIMIT],
+        "updated_at": updated_at,
+    }
 
 
 def save_recent_results(path: Path, store: dict[str, Any]) -> None:
@@ -74,7 +80,10 @@ def append_recent_result(
         )
     ]
     rows.insert(0, dict(record))
-    return {"results": rows[:RECENT_RESULTS_LIMIT]}
+    return {
+        "results": rows[:RECENT_RESULTS_LIMIT],
+        "updated_at": iso(now_local()),
+    }
 
 
 def recent_results_payload(store: dict[str, Any]) -> dict[str, Any]:
