@@ -56,7 +56,7 @@ Each record stores measured values plus the thresholds and problem flags active 
 
 The App persists current-month outages, including an active outage. Each record contains From, To and duration; the current outage has no To value until recovery.
 
-Current-month availability is calculated by the App from elapsed local calendar-month time minus accumulated outage time. Home Assistant exposes the result but does not own the calculation.
+Current-month availability is calculated by the App from elapsed local calendar-month time minus accumulated outage time. An active outage is persisted across App restarts; if it spans a month boundary, the new month is anchored at local month start. Home Assistant exposes the result but does not own the calculation.
 
 ## Router telemetry and traffic
 

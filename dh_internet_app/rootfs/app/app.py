@@ -93,6 +93,7 @@ class InternetApp:
         self.recovery_countdown = 0
 
         self.outages = OutageTracker.load(OUTAGES_FILE)
+        self.incident_active = self.outages.active_from is not None
         self.speedtest = load_last_result(SPEEDTEST_FILE)
         self.thresholds = load_thresholds(THRESHOLDS_FILE)
         self.recent_results = load_recent_results(RECENT_RESULTS_FILE)

@@ -31,7 +31,7 @@ TYPE_VALIDATORS = {
 PRODUCT_VALIDATORS = {
     "digitalhouses_backblaze": validate_backblaze,
     "digitalhouses_speedtest": validate_speedtest,
-    "digitalhouses_internet": validate_internet,
+    "dh_internet_app": validate_internet,
     "digitalhouses_db_monitoring": validate_db_monitoring,
     "digitalhouses_plex_monitoring": validate_plex_monitoring,
     "dh_pve_app": validate_dh_pve_app,

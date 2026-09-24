@@ -72,14 +72,14 @@ jobs:
       - name: Compile Python
         run: |
           python -m compileall -q \
-            digitalhouses_internet/rootfs/app \
-            digitalhouses_internet/tests
+            dh_internet_app/rootfs/app \
+            dh_internet_app/tests
 
       - name: Run unit tests
-        run: python -m unittest discover -s digitalhouses_internet/tests -v
+        run: python -m unittest discover -s dh_internet_app/tests -v
 
       - name: Check shell syntax
-        run: bash -n digitalhouses_internet/rootfs/run.sh
+        run: bash -n dh_internet_app/rootfs/run.sh
 
   recorder-app:
     name: Recorder App

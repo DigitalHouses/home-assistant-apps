@@ -7,12 +7,18 @@ from pathlib import Path
 APP_DIR = Path(__file__).resolve().parents[1] / "rootfs" / "app"
 sys.path.insert(0, str(APP_DIR))
 
-from discovery import EVENT_SCHEMA_VERSION, build_discovery_payload
+from discovery import EVENT_SCHEMA_VERSION, TOPICS, build_discovery_payload
 
 
 class DiscoveryTests(unittest.TestCase):
     def test_event_schema_version(self) -> None:
         self.assertEqual(EVENT_SCHEMA_VERSION, 2)
+
+    def test_event_uses_raw_json_payload(self) -> None:
+        event = build_discovery_payload("0.1.0")["components"]["event"]
+        self.assertEqual(event["state_topic"], TOPICS["event"])
+        self.assertNotIn("value_template", event)
+        self.assertNotIn("json_attributes_topic", event)
 
     def test_connectivity_entity_ids(self) -> None:
         components = build_discovery_payload("0.1.0")["components"]

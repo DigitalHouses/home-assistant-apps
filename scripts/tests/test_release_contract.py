@@ -96,12 +96,12 @@ class ReleaseContractTests(unittest.TestCase):
             root = Path(temp)
             self._write(
                 root,
-                "digitalhouses_internet/config.yaml",
+                "dh_internet_app/config.yaml",
                 "name: DigitalHouses Internet App\nversion: 0.1.0\n",
             )
             self._write(
                 root,
-                "digitalhouses_internet/CHANGELOG.md",
+                "dh_internet_app/CHANGELOG.md",
                 "# Changelog\n\n## 0.1.0\n\n- Initial development release.\n",
             )
 

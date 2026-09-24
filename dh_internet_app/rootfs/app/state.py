@@ -67,20 +67,36 @@ class OutageTracker:
         except (FileNotFoundError, json.JSONDecodeError, OSError):
             raw = {}
 
-        if not isinstance(raw, dict) or raw.get("month") != current_month:
-            return cls(path, current_month, [], None)
-
-        outages = raw.get("outages")
-        if not isinstance(outages, list):
-            outages = []
+        if not isinstance(raw, dict):
+            raw = {}
 
         active_from = None
         active_raw = raw.get("active_from")
         if isinstance(active_raw, str) and active_raw:
             try:
                 active_from = datetime.fromisoformat(active_raw)
+                if active_from.tzinfo is None:
+                    active_from = active_from.replace(tzinfo=now.tzinfo)
             except ValueError:
                 active_from = None
+
+        if raw.get("month") != current_month:
+            month_start = now.replace(
+                day=1,
+                hour=0,
+                minute=0,
+                second=0,
+                microsecond=0,
+            )
+            if active_from is not None and active_from < month_start:
+                active_from = month_start
+            tracker = cls(path, current_month, [], active_from)
+            tracker.save()
+            return tracker
+
+        outages = raw.get("outages")
+        if not isinstance(outages, list):
+            outages = []
         return cls(path, current_month, outages, active_from)
 
     def _roll_month(self, now: datetime) -> None:
@@ -89,7 +105,14 @@ class OutageTracker:
             return
         self.month = current
         self.outages = []
-        self.active_from = now if self.active_from is not None else None
+        if self.active_from is not None:
+            self.active_from = now.replace(
+                day=1,
+                hour=0,
+                minute=0,
+                second=0,
+                microsecond=0,
+            )
         self.save()
 
     def start(self, when: datetime | None = None) -> bool:

@@ -75,7 +75,7 @@ PRODUCTS = {
     "digitalhouses_internet_app": ProductSpec(
         identifier="digitalhouses_internet_app",
         title="DigitalHouses Internet App",
-        directory="digitalhouses_internet",
+        directory="dh_internet_app",
         version_source="haos_config",
         policy_baseline="0.0.0",
     ),

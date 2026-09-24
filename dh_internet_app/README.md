@@ -6,7 +6,8 @@ This is a new product. It does not migrate or reuse the stable MQTT identities o
 
 ## Canonical identities
 
-- repository directory / HA App slug: `digitalhouses_internet`
+- repository directory: `dh_internet_app`
+- HA App slug: `digitalhouses_internet`
 - public product name: **DigitalHouses Internet App**
 - release identifier: `digitalhouses_internet_app`
 - MQTT base: `DigitalHouses/Global/dh_internet_app`
@@ -46,7 +47,7 @@ Version `0.1.0` establishes the new product identity and the recovery/availabili
 - preferred Ookla server IDs with optional automatic fallback and on-demand server catalog;
 - Recent Results as one diagnostic entity with the last 20 successful tests and the thresholds that were active for each test.
 
-Quality thresholds and App-owned performance problem evaluation are implemented. Router integration uses at most five optional HA bindings: cumulative Download/Upload totals, WAN state and current Download/Upload rates. Together with two recovery entities the App stays within seven external HA bindings. Monthly traffic retains the current month plus 11 previous months. Final dashboard/package presentation remains a subsequent milestone before a production release.
+Quality thresholds and App-owned performance problem evaluation are implemented. Router integration uses at most five optional HA bindings: cumulative Download/Upload totals, WAN state and current Download/Upload rates. Together with two recovery entities the App stays within seven external HA bindings. Monthly traffic retains the current month plus 11 previous months. The reusable package, notification presentation and reference dashboard are included in this development milestone.
 
 See [DOCS.md](DOCS.md) for configuration semantics.
 

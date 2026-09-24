@@ -35,7 +35,7 @@ Current applications:
 
 ```text
 digitalhouses_speedtest       -> haos_addon
-digitalhouses_internet        -> haos_addon
+dh_internet_app              -> haos_addon
 digitalhouses_db_monitoring   -> haos_addon
 digitalhouses_backblaze       -> haos_addon
 ```

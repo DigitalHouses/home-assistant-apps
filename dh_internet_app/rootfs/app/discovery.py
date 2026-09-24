@@ -510,8 +510,6 @@ def build_discovery_payload(
                 "performance_problem_recovered",
                 "performance_problem_updated",
             ],
-            "value_template": "{{ value_json.event_type }}",
-            "json_attributes_topic": TOPICS["event"],
             "availability": availability,
         },
     }

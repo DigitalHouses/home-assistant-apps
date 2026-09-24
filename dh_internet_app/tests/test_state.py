@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import json
 import sys
 import tempfile
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
+from unittest.mock import patch
 
 APP_DIR = Path(__file__).resolve().parents[1] / "rootfs" / "app"
 sys.path.insert(0, str(APP_DIR))
@@ -39,6 +41,57 @@ class OutageTests(unittest.TestCase):
             self.assertIsNotNone(record)
             self.assertEqual(record["duration"], "02:05")
             self.assertEqual(tracker.payload(end)["state"], 1)
+
+    def test_active_outage_rolls_to_exact_month_start(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "outages.json"
+            tracker = OutageTracker(
+                path=path,
+                month="2026-08",
+                outages=[],
+                active_from=datetime(
+                    2026, 8, 31, 23, 55, tzinfo=timezone.utc
+                ),
+            )
+            now = datetime(2026, 9, 1, 0, 0, 10, tzinfo=timezone.utc)
+
+            payload = tracker.payload(now)
+
+            self.assertEqual(tracker.month, "2026-09")
+            self.assertEqual(
+                tracker.active_from,
+                datetime(2026, 9, 1, 0, 0, tzinfo=timezone.utc),
+            )
+            self.assertEqual(payload["offline_seconds"], 10)
+
+    def test_load_preserves_active_outage_across_month_restart(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "outages.json"
+            path.write_text(
+                json.dumps(
+                    {
+                        "month": "2026-08",
+                        "outages": [],
+                        "active_from": "2026-08-31T23:55:00+00:00",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            now = datetime(2026, 9, 1, 0, 0, 10, tzinfo=timezone.utc)
+            with patch("state.now_local", return_value=now):
+                tracker = OutageTracker.load(path)
+
+            self.assertEqual(tracker.month, "2026-09")
+            self.assertEqual(
+                tracker.active_from,
+                datetime(2026, 9, 1, 0, 0, tzinfo=timezone.utc),
+            )
+            persisted = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(persisted["month"], "2026-09")
+            self.assertEqual(
+                persisted["active_from"],
+                "2026-09-01T00:00:00+00:00",
+            )
 
     def test_month_availability(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

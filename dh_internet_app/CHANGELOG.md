@@ -2,6 +2,11 @@
 
 ## 0.1.0
 
+- Renamed repository directory to `dh_internet_app` while keeping HA App slug `digitalhouses_internet`.
+- Fixed MQTT Event discovery to pass schema-v2 JSON events directly to Home Assistant.
+- Preserved active outage state across App restarts and calendar-month rollover.
+- Expanded EN/RU App configuration descriptions for all user-facing options.
+
 - Created DigitalHouses Internet App as a new Home Assistant App product with canonical `dh_internet_app_` MQTT/Home Assistant identity.
 - Added Internet/router reachability, current-month outage history and App-owned monthly availability calculation.
 - Added `smart` and `both` recovery modes with guarded `button` / `switch` actions, countdown, Stop control and structured events.
