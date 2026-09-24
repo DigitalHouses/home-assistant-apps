@@ -181,7 +181,6 @@ class ManualRefreshTests(unittest.TestCase):
             {'db_last_refresh': '2026-09-08T12:00:00+00:00'},
             retain=True,
         )
-        app.publish_json.assert_not_called()
         app.update_state.assert_not_called()
 
     def test_failed_manual_refresh_does_not_update_last_refresh_timestamp(self):
@@ -190,6 +189,7 @@ class ManualRefreshTests(unittest.TestCase):
 
         app.manual_refresh()
 
+        app.publish_json.assert_not_called()
         app.update_state.assert_not_called()
 
 
