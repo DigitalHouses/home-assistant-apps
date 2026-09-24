@@ -58,11 +58,15 @@ def test_ups_status_and_line_power_are_explicitly_kept_in_logbook():
     assert "binary_sensor.dh_app_pve_ups_line_power" in text
 
 
-def test_package_has_no_ha_side_problem_or_threshold_logic():
+def test_package_keeps_problem_and_threshold_decisions_in_app():
     text = _text()
 
-    assert "input_number:" not in text
-    assert "automation:" not in text
+    # UI-only snapshot helpers and the config_changed acknowledgement automation
+    # are allowed in the consolidated base package. They must not recreate
+    # problem calculation, polling or threshold decision logic in HA.
+    assert "dh_app_pve_ups_trigger_snapshot_charge:" in text
+    assert "dh_app_pve_ups_trigger_snapshot_reserve:" in text
+    assert "dh_app_pve_ups_trigger_close_after_success" in text
     assert "template:" not in text
     assert "recorder.purge_entities" not in text
     assert "time_pattern" not in text
