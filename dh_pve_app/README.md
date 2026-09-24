@@ -145,7 +145,7 @@ The Home Assistant side uses two PVE packages. Install exactly one notification 
   - English default/public package: `examples/packages/dh_app_pve_notification_package.yaml`;
   - Russian client package: `examples/packages/locales/ru/dh_app_pve_notification_package.yaml`.
 
-The locale files intentionally expose the same package key, automation IDs and machine contract, so only one locale may be installed in a Home Assistant instance. The English package is the canonical GitHub/default artifact. For a Russian installation, copy the RU file into the Home Assistant packages directory under the normal installed filename `dh_app_pve_notification_package.yaml`. The former standalone `dh_app_pve_ui_package.yaml` was consolidated into `dh_app_pve_package.yaml` in 0.5.16.
+The locale files intentionally expose the same package key, automation IDs and machine contract, so only one locale may be installed in a Home Assistant instance. The English package is the canonical GitHub/default artifact. For a Russian installation, copy the RU file into the Home Assistant packages directory under the normal installed filename `dh_app_pve_notification_package.yaml`. The former standalone `dh_app_pve_ui_package.yaml` was consolidated into `dh_app_pve_package.yaml` in 0.5.16. When upgrading from 0.5.15 or earlier, remove the old standalone UI package before loading the consolidated base package; keeping both would define the same UI helpers twice.
 
 **Schema-v1 migration cleanup:** the App has emitted only schema-v2 machine events since 0.5.0. Starting with 0.5.15, the HA notification packages no longer accept the temporary schema-v1 fallback; an unexpected legacy/malformed event follows the explicit `contract_error` path.
 
