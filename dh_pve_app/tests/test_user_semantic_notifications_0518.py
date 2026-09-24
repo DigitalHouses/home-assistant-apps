@@ -137,10 +137,9 @@ def test_local_packages_expose_every_user_event_as_a_named_trigger():
         assert "id: ups_status_changed" not in text
 
 
-def test_generic_problem_triggers_are_pve_only():
+def test_pve_generic_problem_triggers_are_not_user_facing():
     for path in PACKAGES:
         text = path.read_text(encoding="utf-8")
-        first_problem = text.index("id: problem_started")
-        prefix = text[max(0, first_problem - 500):first_problem]
-        assert "event.dh_app_pve_diagnostic" in prefix
-        assert "event.dh_app_pve_ups_diagnostic" not in prefix
+        assert "id: problem_started" not in text
+        assert "id: problem_recovered" not in text
+        assert "id: ups_status_changed" not in text
