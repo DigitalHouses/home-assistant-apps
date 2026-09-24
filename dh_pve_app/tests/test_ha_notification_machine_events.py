@@ -114,3 +114,59 @@ def test_shutdown_committed_and_config_changed_use_structured_v2_fields():
             "current_revision",
         ):
             assert f"trigger.to_state.attributes.{field}" in text
+
+
+def _machine_event_blocks(text: str) -> tuple[str, str]:
+    live, remainder = text.split(
+        "- id: dh_app_pve_ups_config_changed_notification",
+        1,
+    )
+    config_changed = remainder.split(
+        "- id: dh_app_pve_startup_problem_reconciliation",
+        1,
+    )[0]
+    return live, config_changed
+
+
+def test_machine_event_notification_contract_has_no_silent_defaults():
+    for path in PACKAGES:
+        text = path.read_text(encoding="utf-8")
+        live, config_changed = _machine_event_blocks(text)
+
+        for block in (live, config_changed):
+            assert "| default(" not in block, (
+                f"{path}: machine-event contract must not silently default missing fields"
+            )
+            assert "| int(1)" not in block, (
+                f"{path}: schema_version must be required, not defaulted"
+            )
+
+
+def test_live_machine_events_use_event_specific_contract_branches():
+    for path in PACKAGES:
+        text = path.read_text(encoding="utf-8")
+        live, _config_changed = _machine_event_blocks(text)
+
+        assert "choose:" in live
+        for event_type in (
+            "problem_started",
+            "problem_updated",
+            "problem_recovered",
+            "ups_status_changed",
+            "battery_discharge_level_crossed",
+            "battery_fully_charged",
+            "shutdown_committed",
+        ):
+            assert event_type in live
+
+        assert "kind: contract_error" in live
+        assert "severity: error" in live
+
+
+def test_config_changed_contract_has_explicit_contract_error_path():
+    for path in PACKAGES:
+        text = path.read_text(encoding="utf-8")
+        _live, config_changed = _machine_event_blocks(text)
+
+        assert "kind: contract_error" in config_changed
+        assert "severity: error" in config_changed
