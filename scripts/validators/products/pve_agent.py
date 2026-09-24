@@ -278,7 +278,7 @@ def validate_dh_pve_app(
                 )
 
         for forbidden in (
-            "dh_app_pve_notification",
+            "event: dh_app_pve_notification",
             "notification_schema_version",
             "contract_error",
             "failure_class",
