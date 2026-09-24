@@ -696,13 +696,13 @@ dh_app_pve_notification_package:
                         title: "🔋⚠️ UPS: активные проблемы после запуска"
                         message: >-
                           {% set labels = {
-                        'nut_unavailable': 'NUT недоступен',
-                        'on_battery': 'Городское питание отсутствует',
-                        'low_battery': 'Низкий заряд батареи',
-                        'overload': 'Перегрузка UPS',
-                        'replace_battery': 'Требуется замена батареи',
-                        'bypass': 'UPS работает в bypass',
-                        'power_state_unknown': 'Состояние питания UPS неизвестно'
+                          'nut_unavailable': 'NUT недоступен',
+                          'on_battery': 'Городское питание отсутствует',
+                          'low_battery': 'Низкий заряд батареи',
+                          'overload': 'Перегрузка UPS',
+                          'replace_battery': 'Требуется замена батареи',
+                          'bypass': 'UPS работает в bypass',
+                          'power_state_unknown': 'Состояние питания UPS неизвестно'
                           } %}
                           После запуска обнаружено активных проблем: {{ problem_count | int }}.
                           {% for item in active %}
