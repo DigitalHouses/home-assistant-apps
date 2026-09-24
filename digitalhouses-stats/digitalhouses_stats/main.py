@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, Response, status
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -10,9 +10,8 @@ from .config import get_settings
 from .country import country_from_cloudflare
 from .db import get_db
 from .models import Heartbeat, Installation
-from .protocol import ALLOWED_PRODUCTS, DeletePayload, HeartbeatPayload
+from .protocol import DeletePayload, HeartbeatPayload
 from .security import bearer_token, token_hash, token_matches
-from .stats import countries, history, products, summary, versions
 
 
 settings = get_settings()
@@ -20,7 +19,7 @@ logging.basicConfig(level=settings.log_level.upper())
 
 app = FastAPI(
     title="DigitalHouses Stats",
-    version="0.2.0",
+    version="0.3.0",
     docs_url=None,
     redoc_url=None,
 )
@@ -166,51 +165,3 @@ def delete_installation(
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
-
-
-def _validate_stats_product(product: str | None) -> str | None:
-    if product is not None and product not in ALLOWED_PRODUCTS:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="unsupported product",
-        )
-    return product
-
-
-@app.get("/v1/stats/summary")
-def stats_summary(db: Session = Depends(get_db)) -> dict[str, int]:
-    return summary(db)
-
-
-@app.get("/v1/stats/products")
-def stats_products(db: Session = Depends(get_db)) -> list[dict[str, object]]:
-    return products(db)
-
-
-@app.get("/v1/stats/versions")
-def stats_versions(
-    product: str | None = Query(default=None),
-    db: Session = Depends(get_db),
-) -> list[dict[str, object]]:
-    return versions(db, product=_validate_stats_product(product))
-
-
-@app.get("/v1/stats/countries")
-def stats_countries(
-    product: str | None = Query(default=None),
-    db: Session = Depends(get_db),
-) -> list[dict[str, object]]:
-    return countries(db, product=_validate_stats_product(product))
-
-
-@app.get("/v1/stats/history")
-def stats_history(
-    days: int = Query(default=30, ge=1, le=3650),
-    product: str | None = Query(default=None),
-    db: Session = Depends(get_db),
-) -> list[dict[str, object]]:
-    return history(
-        db,
-        days=days,
-        product=_validate_stats_product(product),
-    )
