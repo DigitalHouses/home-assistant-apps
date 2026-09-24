@@ -5,6 +5,7 @@ This directory separates ecosystem-wide standards from product-specific engineer
 ## Shared standards
 
 - [DigitalHouses Application Standard](standards/DIGITALHOUSES_APP_STANDARD.md) — common contract for DigitalHouses Home Assistant Apps and Linux agents.
+- [DigitalHouses Contract Data Policy](standards/CONTRACT_DATA_POLICY.md) — required/optional runtime data semantics, explicit contract failures, and repository-wide prohibition of silent fallback across contract boundaries.
 - [DigitalHouses Release Policy](standards/RELEASE_POLICY.md) — product versions, release tags, GitHub Releases, immutable artifacts, and release provenance.
 - [Immutable Delivery, Compact Backup and Telemetry Standard](standards/IMMUTABLE_DELIVERY_AND_TELEMETRY_STANDARD.md) — mandatory target architecture and rollout for all current DigitalHouses products.
 - [DigitalHouses Product Telemetry Policy](standards/PRODUCT_TELEMETRY_POLICY.md) — consent, privacy, retained-history lifecycle, deletion, and telemetry boundaries.
