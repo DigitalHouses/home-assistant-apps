@@ -2,7 +2,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).parents[1]
 DASHBOARD = ROOT / "examples" / "dh_app_pve_ups_dashboard.yaml"
-UI_PACKAGE = ROOT / "examples" / "packages" / "dh_app_pve_ui_package.yaml"
+UI_PACKAGE = ROOT / "examples" / "packages" / "dh_app_pve_package.yaml"
+LEGACY_UI_PACKAGE = ROOT / "examples" / "packages" / "dh_app_pve_ui_package.yaml"
 NOTIFICATION_PACKAGE = ROOT / "examples" / "packages" / "dh_app_pve_notification_package.yaml"
 RU_NOTIFICATION_PACKAGE = (
     ROOT
@@ -38,6 +39,11 @@ def test_trigger_dashboard_has_view_edit_confirm_apply_flow():
         assert token in text
     assert "sensor.dh_app_pve_ups_policy_on_battery_delay" not in text
     assert "custom:auto-entities" not in text
+
+
+def test_ui_helpers_are_consolidated_into_base_package():
+    assert UI_PACKAGE.exists()
+    assert not LEGACY_UI_PACKAGE.exists()
 
 
 def test_ui_package_snapshots_real_active_policy_reverts_cancel_and_closes_on_success():
