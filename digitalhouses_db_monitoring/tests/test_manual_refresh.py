@@ -10,7 +10,7 @@ from unittest.mock import Mock, patch
 APP_DIR = Path(__file__).resolve().parents[1] / 'rootfs' / 'app'
 sys.path.insert(0, str(APP_DIR))
 
-from discovery import REFRESH_COMMAND_TOPIC
+from discovery import LAST_REFRESH_TOPIC, REFRESH_COMMAND_TOPIC
 
 
 def load_app_module():
@@ -93,6 +93,7 @@ class ManualRefreshTests(unittest.TestCase):
         app.collect_top_entities = Mock(return_value=True)
         app.collect_storage = Mock(return_value=True)
         app.publish_state = Mock()
+        app.publish_json = Mock()
         app.update_state = Mock()
         return app
 
@@ -175,9 +176,13 @@ class ManualRefreshTests(unittest.TestCase):
         ):
             app.manual_refresh()
 
-        app.update_state.assert_called_once_with({
-            'db_last_refresh': '2026-09-08T12:00:00+00:00'
-        })
+        app.publish_json.assert_called_once_with(
+            LAST_REFRESH_TOPIC,
+            {'db_last_refresh': '2026-09-08T12:00:00+00:00'},
+            retain=True,
+        )
+        app.publish_json.assert_not_called()
+        app.update_state.assert_not_called()
 
     def test_failed_manual_refresh_does_not_update_last_refresh_timestamp(self):
         app = self.make_app()
