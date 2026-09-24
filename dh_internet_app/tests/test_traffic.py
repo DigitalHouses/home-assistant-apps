@@ -35,6 +35,12 @@ class TrafficTests(unittest.TestCase):
             ),
             2_000_000_000,
         )
+        self.assertEqual(
+            entity_total_bytes(
+                {"state": "8", "attributes": {"unit_of_measurement": "Gbit"}}
+            ),
+            1_000_000_000,
+        )
 
     def test_rate_conversion(self) -> None:
         self.assertEqual(
@@ -48,6 +54,30 @@ class TrafficTests(unittest.TestCase):
                 {"state": "1", "attributes": {"unit_of_measurement": "MB/s"}}
             ),
             8.0,
+        )
+        self.assertEqual(
+            entity_rate_mbps(
+                {"state": "1", "attributes": {"unit_of_measurement": "B/s"}}
+            ),
+            0.000008,
+        )
+        self.assertEqual(
+            entity_rate_mbps(
+                {"state": "1", "attributes": {"unit_of_measurement": "bit/s"}}
+            ),
+            0.000001,
+        )
+        self.assertEqual(
+            entity_rate_mbps(
+                {"state": "100", "attributes": {"unit_of_measurement": "Mbps"}}
+            ),
+            100.0,
+        )
+        self.assertEqual(
+            entity_rate_mbps(
+                {"state": "100", "attributes": {"unit_of_measurement": "Mb/s"}}
+            ),
+            100.0,
         )
 
     def test_first_sample_is_baseline_not_usage(self) -> None:

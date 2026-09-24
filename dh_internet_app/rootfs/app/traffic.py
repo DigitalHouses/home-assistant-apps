@@ -12,19 +12,44 @@ from state import atomic_write_json, iso, month_key, now_local
 HISTORY_MONTHS = 12
 GIB = 1024 ** 3
 
-_UNIT_MULTIPLIERS: dict[str, float] = {
-    "b": 1,
-    "byte": 1,
-    "bytes": 1,
-    "kb": 1000,
-    "kib": 1024,
-    "mb": 1000 ** 2,
-    "mib": 1024 ** 2,
-    "gb": 1000 ** 3,
-    "gib": 1024 ** 3,
-    "tb": 1000 ** 4,
-    "tib": 1024 ** 4,
+_SIZE_TO_BYTES: dict[str, float] = {
+    "bit": 1.0 / 8.0,
+    "kbit": 1000.0 / 8.0,
+    "Mbit": 1000.0**2 / 8.0,
+    "Gbit": 1000.0**3 / 8.0,
+    "B": 1.0,
+    "kB": 1000.0,
+    "MB": 1000.0**2,
+    "GB": 1000.0**3,
+    "TB": 1000.0**4,
+    "PB": 1000.0**5,
+    "KiB": 1024.0,
+    "MiB": 1024.0**2,
+    "GiB": 1024.0**3,
+    "TiB": 1024.0**4,
+    "PiB": 1024.0**5,
 }
+
+_SIZE_ALIASES_TO_BYTES: dict[str, float] = {
+    "byte": 1.0,
+    "bytes": 1.0,
+    "b": 1.0 / 8.0,
+    "kb": 1000.0 / 8.0,
+    "mb": 1000.0**2 / 8.0,
+    "gb": 1000.0**3 / 8.0,
+    "kib": 1024.0,
+    "mib": 1024.0**2,
+    "gib": 1024.0**3,
+    "tib": 1024.0**4,
+    "pib": 1024.0**5,
+}
+
+
+def _size_multiplier(unit: str) -> float | None:
+    multiplier = _SIZE_TO_BYTES.get(unit)
+    if multiplier is not None:
+        return multiplier
+    return _SIZE_ALIASES_TO_BYTES.get(unit.lower())
 
 
 def entity_total_bytes(payload: dict[str, Any]) -> int:
@@ -41,8 +66,8 @@ def entity_total_bytes(payload: dict[str, Any]) -> int:
     attributes = payload.get("attributes")
     if not isinstance(attributes, dict):
         attributes = {}
-    unit = str(attributes.get("unit_of_measurement") or "B").strip().lower()
-    multiplier = _UNIT_MULTIPLIERS.get(unit)
+    unit = str(attributes.get("unit_of_measurement") or "B").strip()
+    multiplier = _size_multiplier(unit)
     if multiplier is None:
         raise ValueError(f"unsupported traffic unit: {unit!r}")
     return max(0, int(round(value * multiplier)))
@@ -51,16 +76,34 @@ def entity_total_bytes(payload: dict[str, Any]) -> int:
 _RATE_TO_MBIT: dict[str, float] = {
     "bit/s": 1.0 / 1_000_000.0,
     "kbit/s": 1.0 / 1_000.0,
-    "mbit/s": 1.0,
-    "gbit/s": 1_000.0,
-    "b/s": 8.0 / 1_000_000.0,
-    "kb/s": 8.0 / 1_000.0,
-    "mb/s": 8.0,
-    "gb/s": 8_000.0,
-    "kib/s": (1024.0 * 8.0) / 1_000_000.0,
-    "mib/s": (1024.0**2 * 8.0) / 1_000_000.0,
-    "gib/s": (1024.0**3 * 8.0) / 1_000_000.0,
+    "Mbit/s": 1.0,
+    "Gbit/s": 1_000.0,
+    "B/s": 8.0 / 1_000_000.0,
+    "kB/s": 8.0 / 1_000.0,
+    "MB/s": 8.0,
+    "GB/s": 8_000.0,
+    "KiB/s": (1024.0 * 8.0) / 1_000_000.0,
+    "MiB/s": (1024.0**2 * 8.0) / 1_000_000.0,
+    "GiB/s": (1024.0**3 * 8.0) / 1_000_000.0,
 }
+
+_RATE_ALIASES_TO_MBIT: dict[str, float] = {
+    "bps": 1.0 / 1_000_000.0,
+    "kbps": 1.0 / 1_000.0,
+    "mbps": 1.0,
+    "gbps": 1_000.0,
+    "b/s": 1.0 / 1_000_000.0,
+    "kb/s": 1.0 / 1_000.0,
+    "mb/s": 1.0,
+    "gb/s": 1_000.0,
+}
+
+
+def _rate_multiplier(unit: str) -> float | None:
+    multiplier = _RATE_TO_MBIT.get(unit)
+    if multiplier is not None:
+        return multiplier
+    return _RATE_ALIASES_TO_MBIT.get(unit.lower())
 
 
 def entity_rate_mbps(payload: dict[str, Any]) -> float:
@@ -76,11 +119,11 @@ def entity_rate_mbps(payload: dict[str, Any]) -> float:
     attributes = payload.get("attributes")
     if not isinstance(attributes, dict):
         attributes = {}
-    unit = str(attributes.get("unit_of_measurement") or "Mbit/s").strip().lower()
-    multiplier = _RATE_TO_MBIT.get(unit)
+    unit = str(attributes.get("unit_of_measurement") or "Mbit/s").strip()
+    multiplier = _rate_multiplier(unit)
     if multiplier is None:
         raise ValueError(f"unsupported router rate unit: {unit!r}")
-    return round(value * multiplier, 3)
+    return round(value * multiplier, 6)
 
 
 def _empty_month() -> dict[str, int]:

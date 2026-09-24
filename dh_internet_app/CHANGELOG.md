@@ -12,6 +12,7 @@
 - Marked optional Router telemetry unavailable when its mapped HA source is absent/unavailable and filtered it from the reference dashboard.
 - Extended the HAOS shutdown timeout to protect switch power restoration during normal App Stop/Restart.
 - Added explicit MQTT Device Discovery cleanup when optional Router/Traffic mappings are removed.
+- Fixed Router traffic unit normalization so bit/s and byte/s units cannot collapse into the same lowercase key.
 
 - Created DigitalHouses Internet App as a new Home Assistant App product with canonical `dh_internet_app_` MQTT/Home Assistant identity.
 - Added Internet/router reachability, current-month outage history and App-owned monthly availability calculation.

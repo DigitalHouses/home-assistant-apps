@@ -72,7 +72,7 @@ Together with the two optional recovery target entities, this keeps the external
 
 The two cumulative counters are a pair: configure both or neither. They enable App-owned monthly traffic accounting. WAN state and current Download/Upload rates are independent optional bindings and do not affect recovery decisions.
 
-The App samples configured Router sources every 60 seconds through the Home Assistant Core API. Common decimal/binary data-size counters are normalized to bytes. Common bit/s and byte/s rate units are normalized to Mbit/s.
+The App samples configured Router sources every 60 seconds through the Home Assistant Core API. Home Assistant data-size units are normalized to bytes and data-rate units are normalized to Mbit/s while preserving the distinction between bit (`bit/s`, `Mbit/s`) and byte (`B/s`, `MB/s`) units. Common `Mbps/Gbps` aliases are also accepted.
 
 The first cumulative sample establishes a baseline. Normal growth adds only the delta. A source counter reset does not create negative traffic. If the cumulative source IDs change, history is retained but a fresh baseline is established. At a calendar-month boundary the first observation is also a fresh baseline because cumulative counters cannot reveal the exact cross-boundary split.
 
