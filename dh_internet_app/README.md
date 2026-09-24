@@ -43,7 +43,7 @@ Version `0.1.0` establishes the new product identity and the recovery/availabili
 - structured MQTT Event entity;
 - Version and Started-at diagnostics;
 - Ookla Download, Upload, Ping, Jitter and Packet loss measurements;
-- manual and periodic Speedtest with compact status metadata;
+- manual and periodic Speedtest with `idle | running` execution status and last-result metadata;
 - preferred Ookla server IDs with optional automatic fallback and on-demand server catalog;
 - Recent Results as one diagnostic entity with the last 20 successful tests and the thresholds that were active for each test.
 
