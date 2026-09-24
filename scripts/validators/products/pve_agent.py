@@ -5,7 +5,7 @@ from typing import Any
 
 from validators.common import fail, require_files
 
-EXPECTED_VERSION = "0.5.13"
+EXPECTED_VERSION = "0.5.14"
 EXPECTED_TOPIC_PREFIX = "DigitalHouses/Global/dh_pve_app"
 EXPECTED_DEVICE_NAME = "DH PVE"
 EXPECTED_REFRESH_ENTITY = "button.dh_app_pve_refresh"
@@ -64,6 +64,8 @@ def validate_dh_pve_app(
             app / "examples/dh_app_pve_ups_dashboard.yaml",
             app / "examples/dh_app_pve_shutdown_readiness_card.yaml",
             app / "examples/packages/dh_app_pve_package.yaml",
+            app / "examples/packages/dh_app_pve_notification_package.yaml",
+            app / "examples/packages/locales/ru/dh_app_pve_notification_package.yaml",
             app / "systemd/dh_pve_app.service",
             app / "uninstall.sh",
             app / "dh_app_pve.txt",
@@ -244,6 +246,32 @@ def validate_dh_pve_app(
         ),
         "UPS MQTT transport",
     )
+
+    for notification_package in (
+        app / "examples/packages/dh_app_pve_notification_package.yaml",
+        app / "examples/packages/locales/ru/dh_app_pve_notification_package.yaml",
+    ):
+        notification_source = notification_package.read_text(encoding="utf-8")
+        live, notification_remainder = notification_source.split(
+            "- id: dh_app_pve_ups_config_changed_notification",
+            1,
+        )
+        config_changed = notification_remainder.split(
+            "- id: dh_app_pve_startup_problem_reconciliation",
+            1,
+        )[0]
+        for contract_block in (live, config_changed):
+            if "| default(" in contract_block or "| int(1)" in contract_block:
+                fail(
+                    "DH PVE HA machine-event contract must not silently default "
+                    f"required fields: {notification_package}"
+                )
+            for required in ("choose:", "kind: contract_error", "severity: error"):
+                if required not in contract_block:
+                    fail(
+                        "DH PVE HA machine-event contract must fail visibly: "
+                        f"{notification_package}: {required}"
+                    )
 
     _require_text(
         app / "examples/packages/dh_app_pve_package.yaml",

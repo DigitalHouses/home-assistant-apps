@@ -125,9 +125,10 @@ def test_live_notification_presentation_is_localized_from_structured_event_field
     text = RU_NOTIFICATION_PACKAGE.read_text(encoding="utf-8")
     for token in (
         "trigger.to_state.attributes.metric",
-        "trigger.to_state.attributes.value",
-        "trigger.to_state.attributes.average",
-        "trigger.to_state.attributes.threshold",
+        "attrs.current is mapping",
+        "current['value']",
+        "current['average']",
+        "current['threshold']",
         "Температура",
         "Занято",
         "Троттлинг",

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.5.14
+
+- Fix the Home Assistant live machine-event notification path so sparse valid UPS events such as `battery_fully_charged` no longer render unrelated fields and collapse the entire `dh_app_pve_notification` event into an empty payload.
+- Replace the universal live notification payload with event-specific schema branches. Required v2 fields are validated before presentation; a malformed machine event produces an explicit `contract_error` notification instead of synthesized defaults or a superficially successful blank message.
+- Remove silent `default(...)` / defaulted schema-version handling from the live and `config_changed` machine-event contract boundary. Explicit null remains distinct from a missing required field; the legacy schema-v1 problem branch keeps only its documented optional values nullable.
+- Keep PVE/NUT shutdown ownership and all FSD/UPS trigger behavior unchanged; this release changes only the Home Assistant presentation contract and its tests.
+
+
 ## 0.5.13
 
 - Fix shutdown-history parser v4 scope handling so a strong-clean marker seen earlier in a long previous-boot journal cannot survive into the final host-shutdown transaction. Entering the final shutdown scope now resets prior clean evidence, and an unfinished guest sequence no longer reports a completed total duration.

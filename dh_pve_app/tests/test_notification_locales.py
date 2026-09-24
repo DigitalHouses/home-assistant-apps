@@ -82,12 +82,13 @@ def test_startup_reconciliation_requires_fresh_current_process_publication() -> 
         assert "wait.completed" in text
 
 
-def test_live_notification_presentation_has_explicit_nonempty_guard() -> None:
+def test_live_notification_presentation_fails_visibly_on_contract_error() -> None:
     for text in (_read(EN_PACKAGE), _read(RU_PACKAGE)):
-        assert "notification_title" in text
-        assert "notification_message" in text
-        assert "notification_title | trim" in text
-        assert "notification_message | trim" in text
+        live = text.split("- id: dh_app_pve_ups_config_changed_notification", 1)[0]
+        assert "kind: contract_error" in live
+        assert "severity: error" in live
+        assert "notification_title | trim" not in live
+        assert "notification_message | trim" not in live
 
 
 def test_ru_startup_ups_problems_use_problem_ids_not_legacy_summary() -> None:
