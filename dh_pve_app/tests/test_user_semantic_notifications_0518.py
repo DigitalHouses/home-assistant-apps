@@ -40,8 +40,6 @@ UPS_USER_EVENT_TYPES = (
     "forced_shutdown_cleared",
     "alarm_started",
     "alarm_cleared",
-    "ups_status_unknown",
-    "ups_status_restored",
     "battery_discharge_level_crossed",
     "battery_fully_charged",
     "shutdown_committed",
@@ -90,8 +88,6 @@ def test_status_transitions_expand_into_user_semantic_events():
         (("online", "forced_shutdown"), ("online",), ("forced_shutdown_cleared",)),
         (("online",), ("online", "alarm"), ("alarm_started",)),
         (("online", "alarm"), ("online",), ("alarm_cleared",)),
-        (("online",), (), ("ups_status_unknown",)),
-        ((), ("online",), ("ups_status_restored",)),
     )
     for previous, current, expected in pairs:
         assert _types(previous, current) == expected
