@@ -11,13 +11,35 @@ from unittest.mock import patch
 APP_DIR = Path(__file__).resolve().parents[1] / "rootfs" / "app"
 sys.path.insert(0, str(APP_DIR))
 
-from state import OutageTracker, RecoveryRuntimeState, duration_text
+from state import (
+    OutageTracker,
+    RecoveryRuntimeState,
+    duration_text,
+    load_discovery_components,
+    save_discovery_components,
+)
 
 
 class OutageTests(unittest.TestCase):
     def test_duration_text(self) -> None:
         self.assertEqual(duration_text(65), "01:05")
         self.assertEqual(duration_text(3661), "1:01:01")
+
+    def test_discovery_component_state_round_trip(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "discovery.json"
+            self.assertEqual(load_discovery_components(path), set())
+
+            expected = {
+                "router_wan_status",
+                "traffic_download_total",
+            }
+            save_discovery_components(path, expected)
+
+            self.assertEqual(
+                load_discovery_components(path),
+                expected,
+            )
 
     def test_recovery_runtime_state_round_trip(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

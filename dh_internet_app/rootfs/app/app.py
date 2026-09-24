@@ -19,7 +19,9 @@ from discovery import (
     DISCOVERY_TOPIC,
     DEVICE_ID,
     EVENT_SCHEMA_VERSION,
+    OPTIONAL_COMPONENT_PLATFORMS,
     TOPICS,
+    build_discovery_cleanup_payload,
     build_discovery_payload,
 )
 from ha_api import HomeAssistantApi
@@ -54,7 +56,9 @@ from state import (
     RecoveryRuntimeState,
     atomic_write_json,
     iso,
+    load_discovery_components,
     now_local,
+    save_discovery_components,
 )
 from traffic import (
     entity_rate_mbps,
@@ -74,6 +78,7 @@ TRAFFIC_POLL_SECONDS = 60
 RECENT_RESULTS_FILE = Path("/data/runtime/recent_results.json")
 SERVERS_FILE = Path("/data/runtime/servers.json")
 RECOVERY_STATE_FILE = Path("/data/runtime/recovery.json")
+DISCOVERY_STATE_FILE = Path("/data/runtime/discovery.json")
 
 
 class InternetApp:
@@ -174,23 +179,47 @@ class InternetApp:
         client.subscribe(TOPICS["minimum_download_command"], qos=1)
         client.subscribe(TOPICS["minimum_upload_command"], qos=1)
         client.subscribe(TOPICS["maximum_ping_command"], qos=1)
+        discovery_payload = build_discovery_payload(
+            APP_VERSION,
+            traffic_enabled=self.config.traffic.enabled,
+            wan_enabled=bool(self.config.traffic.router_wan_status),
+            download_rate_enabled=bool(
+                self.config.traffic.router_download_rate
+            ),
+            upload_rate_enabled=bool(
+                self.config.traffic.router_upload_rate
+            ),
+        )
+        current_optional = (
+            set(discovery_payload["components"])
+            & set(OPTIONAL_COMPONENT_PLATFORMS)
+        )
+        previous_optional = load_discovery_components(DISCOVERY_STATE_FILE)
+        removed_optional = previous_optional - current_optional
+        if removed_optional:
+            cleanup_payload = build_discovery_cleanup_payload(
+                discovery_payload,
+                removed_optional,
+            )
+            client.publish(
+                DISCOVERY_TOPIC,
+                json.dumps(cleanup_payload),
+                qos=1,
+                retain=True,
+            )
+            self.log.info(
+                "Removing stale MQTT Discovery components: %s",
+                ", ".join(sorted(removed_optional)),
+            )
         client.publish(
             DISCOVERY_TOPIC,
-            json.dumps(
-                build_discovery_payload(
-                    APP_VERSION,
-                    traffic_enabled=self.config.traffic.enabled,
-                    wan_enabled=bool(self.config.traffic.router_wan_status),
-                    download_rate_enabled=bool(
-                        self.config.traffic.router_download_rate
-                    ),
-                    upload_rate_enabled=bool(
-                        self.config.traffic.router_upload_rate
-                    ),
-                )
-            ),
+            json.dumps(discovery_payload),
             qos=1,
             retain=True,
+        )
+        save_discovery_components(
+            DISCOVERY_STATE_FILE,
+            current_optional,
         )
         client.publish(TOPICS["availability"], "online", qos=1, retain=True)
         client.publish(

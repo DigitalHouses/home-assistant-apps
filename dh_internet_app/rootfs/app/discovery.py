@@ -10,6 +10,17 @@ MQTT_BASE_TOPIC = "DigitalHouses/Global/dh_internet_app"
 DISCOVERY_TOPIC = f"homeassistant/device/{DEVICE_ID}/config"
 EVENT_SCHEMA_VERSION = 2
 
+OPTIONAL_COMPONENT_PLATFORMS = {
+    "traffic_download_total": "sensor",
+    "traffic_upload_total": "sensor",
+    "traffic_download_month": "sensor",
+    "traffic_upload_month": "sensor",
+    "traffic_history": "sensor",
+    "router_wan_status": "sensor",
+    "router_download_rate": "sensor",
+    "router_upload_rate": "sensor",
+}
+
 TOPICS = {
     "availability": f"{MQTT_BASE_TOPIC}/availability",
     "state": f"{MQTT_BASE_TOPIC}/state",
@@ -28,6 +39,20 @@ TOPICS = {
     "event": f"{MQTT_BASE_TOPIC}/event",
     "command": f"{MQTT_BASE_TOPIC}/command",
 }
+
+
+def build_discovery_cleanup_payload(
+    payload: dict[str, Any],
+    removed_components: set[str],
+) -> dict[str, Any]:
+    cleanup = dict(payload)
+    components = dict(payload.get("components") or {})
+    for component in sorted(removed_components):
+        platform = OPTIONAL_COMPONENT_PLATFORMS.get(component)
+        if platform is not None:
+            components[component] = {"platform": platform}
+    cleanup["components"] = components
+    return cleanup
 
 
 def build_discovery_payload(

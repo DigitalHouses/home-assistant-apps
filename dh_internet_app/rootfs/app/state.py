@@ -51,6 +51,33 @@ def atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
             pass
 
 
+def load_discovery_components(path: Path) -> set[str]:
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return set()
+    if not isinstance(raw, dict):
+        return set()
+    components = raw.get("optional_components")
+    if not isinstance(components, list):
+        return set()
+    return {
+        str(item)
+        for item in components
+        if isinstance(item, str) and item
+    }
+
+
+def save_discovery_components(path: Path, components: set[str]) -> None:
+    atomic_write_json(
+        path,
+        {
+            "schema_version": 1,
+            "optional_components": sorted(components),
+        },
+    )
+
+
 @dataclass
 class RecoveryRuntimeState:
     stopped: bool = False

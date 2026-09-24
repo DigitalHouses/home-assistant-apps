@@ -76,7 +76,7 @@ The App samples configured Router sources every 60 seconds through the Home Assi
 
 The first cumulative sample establishes a baseline. Normal growth adds only the delta. A source counter reset does not create negative traffic. If the cumulative source IDs change, history is retained but a fresh baseline is established. At a calendar-month boundary the first observation is also a fresh baseline because cumulative counters cannot reveal the exact cross-boundary split.
 
-Traffic history keeps the current month plus up to 11 previous observed months under `/data/runtime`. Traffic entities are created only when the cumulative pair is configured. WAN state and current rate entities are created only when their own mapping is configured. If an optional mapped source is currently missing, `unknown` or `unavailable`, the corresponding MQTT entity is marked unavailable until the source returns; the reference dashboard filters such entities out.
+Traffic history keeps the current month plus up to 11 previous observed months under `/data/runtime`. Traffic entities are created only when the cumulative pair is configured. WAN state and current rate entities are created only when their own mapping is configured. If an optional mapped source is currently missing, `unknown` or `unavailable`, the corresponding MQTT entity is marked unavailable until the source returns; the reference dashboard filters such entities out. When a mapping is removed from App configuration, the App explicitly removes the previously discovered optional MQTT component before publishing the reduced device configuration.
 
 Temperature, connected-client count, uptime and last-boot bindings are intentionally outside the new App contract.
 
