@@ -38,6 +38,8 @@ A runtime identity may change only through a separate product-specific compatibi
 
 Before enabling telemetry for a renamed or replacement product, resolve the canonical release/telemetry identifier in that product's implementation work and update the shared contracts together. Do not rename only the App slug, telemetry payload, release identifier, or server allowlist in isolation.
 
+Product-specific telemetry implementation must follow [DigitalHouses Telemetry Implementation Guide](TELEMETRY_IMPLEMENTATION_GUIDE.md).
+
 ## 2. Version source of truth
 
 Each product owns its own Semantic Version.
