@@ -41,73 +41,6 @@ dh_app_pve_notification_package:
                     {% set attrs = trigger.to_state.attributes %}
                     {{ 'event_type' in attrs
                        and 'schema_version' in attrs
-                       and attrs.schema_version == 1
-                       and attrs.event_type in ['problem_started', 'problem_updated', 'problem_recovered']
-                       and 'category' in attrs
-                       and attrs.category is string
-                       and 'severity' in attrs
-                       and attrs.severity is string
-                       and 'object_id' in attrs
-                       and attrs.object_id is string
-                       and 'object_name' in attrs
-                       and attrs.object_name is string
-                       and 'metric' in attrs
-                       and attrs.metric is string }}
-              sequence:
-                - event: dh_app_pve_notification
-                  event_data:
-                    source: dh_app_pve
-                    source_entity: "{{ trigger.entity_id }}"
-                    schema_version: "{{ trigger.to_state.attributes.schema_version }}"
-                    kind: "{{ trigger.to_state.attributes.event_type }}"
-                    category: "{{ trigger.to_state.attributes.category }}"
-                    severity: "{{ trigger.to_state.attributes.severity }}"
-                    object_id: "{{ trigger.to_state.attributes.object_id }}"
-                    object_name: "{{ trigger.to_state.attributes.object_name }}"
-                    metric: "{{ trigger.to_state.attributes.metric }}"
-                    value: "{{ trigger.to_state.attributes.get('value') }}"
-                    average: "{{ trigger.to_state.attributes.get('average') }}"
-                    threshold: "{{ trigger.to_state.attributes.get('threshold') }}"
-                    summary: "{{ trigger.to_state.attributes.get('summary') }}"
-                    details: "{{ trigger.to_state.attributes.get('details') }}"
-                    active_problem_count: "{{ trigger.to_state.attributes.get('active_problem_count') }}"
-                    title: >-
-                      {% set kind = trigger.to_state.attributes.event_type %}
-                      {% set name = trigger.to_state.attributes.object_name %}
-                      {% if kind == 'problem_started' %}
-                        {{ '🔋' if trigger.entity_id == 'event.dh_app_pve_ups_diagnostic' else '🖥️' }}⚠️ {{ name }}: обнаружена проблема
-                      {% elif kind == 'problem_updated' %}
-                        {{ '🔋' if trigger.entity_id == 'event.dh_app_pve_ups_diagnostic' else '🖥️' }}⚠️ {{ name }}: параметры проблемы изменились
-                      {% else %}
-                        {{ '🔋' if trigger.entity_id == 'event.dh_app_pve_ups_diagnostic' else '🖥️' }}✅ {{ name }}: состояние нормализовалось
-                      {% endif %}
-                    message: >-
-                      {% set attrs = trigger.to_state.attributes %}
-                      {% set metric = attrs.metric %}
-                      {% set value = attrs.get('value') %}
-                      {% set average = attrs.get('average') %}
-                      {% set threshold = attrs.get('threshold') %}
-                      {% if trigger.entity_id == 'event.dh_app_pve_ups_diagnostic' %}
-                        {{ attrs.get('summary') }}
-                      {% elif metric == 'temperature_c' %}
-                        Температура: {{ value if value is not none else '—' }} °C{% if average is not none %} · среднее {{ average }} °C{% endif %}{% if threshold is not none %} · порог {{ threshold }} °C{% endif %}
-                      {% elif metric == 'percent_used' %}
-                        Занято: {{ value if value is not none else '—' }}%{% if average is not none %} · среднее {{ average }}%{% endif %}{% if threshold is not none %} · порог {{ threshold }}%{% endif %}
-                      {% elif metric == 'throttling' %}
-                        Троттлинг: {{ 'активен' if value else 'норма' }}
-                      {% elif metric == 'smart_passed' %}
-                        SMART: {{ 'норма' if value else 'ошибка' }}
-                      {% else %}
-                        {{ attrs.get('summary') }}
-                      {% endif %}
-                    startup_reconciliation: false
-
-            - conditions:
-                - condition: template
-                  value_template: >-
-                    {% set attrs = trigger.to_state.attributes %}
-                    {{ 'event_type' in attrs
-                       and 'schema_version' in attrs
                        and attrs.schema_version == 2
                        and attrs.event_type in ['problem_started', 'problem_updated', 'problem_recovered']
                        and 'observed_at' in attrs
@@ -484,83 +417,311 @@ dh_app_pve_notification_package:
         - wait_template: >-
             {% set started = states('sensor.dh_app_pve_agent_started') %}
             {% set published = states('sensor.dh_app_pve_last_publication') %}
-            {{ as_timestamp(started, 0) > 0 and as_timestamp(published, 0) >= as_timestamp(started, 0) }}
+            {% set started_ts = as_timestamp(started, none) %}
+            {% set published_ts = as_timestamp(published, none) %}
+            {{ started_ts is not none
+               and published_ts is not none
+               and published_ts >= started_ts }}
           timeout: "00:05:00"
           continue_on_timeout: true
+
         - if:
             - condition: template
-              value_template: "{{ wait.completed and states('sensor.dh_app_pve_problems') | int(0) > 0 }}"
+              value_template: "{{ wait.completed }}"
           then:
-            - event: dh_app_pve_notification
-              event_data:
-                source: dh_app_pve
-                source_entity: sensor.dh_app_pve_problems
-                kind: startup_reconciliation
-                category: diagnostic
-                severity: "{{ state_attr('sensor.dh_app_pve_problems', 'severity') | default('warning', true) }}"
-                title: "🖥️⚠️ Proxmox: активные проблемы после запуска"
-                message: >-
-                  {% set active = state_attr('sensor.dh_app_pve_problems', 'active') | default([], true) %}
-                  После запуска обнаружено активных проблем: {{ active | count }}.
-                  {% for item in active %}
-                    {% set metric = item.get('metric', '') %}
-                    {% set name = item.get('object_name', item.get('object_id', 'Proxmox')) %}
-                    {% set value = item.get('value') %}
-                    {% set average = item.get('average') %}
-                    {% set threshold = item.get('threshold') %}
-                    {% if metric == 'temperature_c' %}
-                      {{ loop.index }}. {{ name }} · Температура: {{ value if value is not none else '—' }} °C{% if average is not none %} · среднее {{ average }} °C{% endif %}{% if threshold is not none %} · порог {{ threshold }} °C{% endif %}
-                    {% elif metric == 'percent_used' %}
-                      {{ loop.index }}. {{ name }} · Занято: {{ value if value is not none else '—' }}%{% if average is not none %} · среднее {{ average }}%{% endif %}{% if threshold is not none %} · порог {{ threshold }}%{% endif %}
-                    {% elif metric == 'throttling' %}
-                      {{ loop.index }}. {{ name }} · Троттлинг активен
-                    {% elif metric == 'smart_passed' %}
-                      {{ loop.index }}. {{ name }} · SMART: ошибка
+            - variables:
+                problem_count: "{{ states('sensor.dh_app_pve_problems') }}"
+                severity: "{{ state_attr('sensor.dh_app_pve_problems', 'severity') }}"
+                active: "{{ state_attr('sensor.dh_app_pve_problems', 'active') }}"
+
+            - if:
+                - condition: template
+                  value_template: >-
+                    {% set ns = namespace(valid=true) %}
+                    {% if active is sequence and active is not string and active is not mapping %}
+                      {% for item in active %}
+                        {% if item is not mapping
+                              or 'problem_id' not in item or item.problem_id is not string
+                              or 'category' not in item or item.category is not string
+                              or 'severity' not in item or item.severity is not string or item.severity not in ['info', 'warning', 'critical']
+                              or 'object_id' not in item or item.object_id is not string
+                              or 'object_name' not in item or item.object_name is not string
+                              or 'metric' not in item or item.metric is not string
+                              or 'value' not in item
+                              or 'average' not in item
+                              or 'threshold' not in item %}
+                          {% set ns.valid = false %}
+                        {% endif %}
+                      {% endfor %}
                     {% else %}
-                      {{ loop.index }}. {{ name }} · {{ item.get('summary', 'Активная проблема') }}
+                      {% set ns.valid = false %}
                     {% endif %}
-                  {% endfor %}
-                summary: "{{ state_attr('sensor.dh_app_pve_problems', 'summary') | default('', true) }}"
-                active: "{{ state_attr('sensor.dh_app_pve_problems', 'active') | default([], true) }}"
+                    {{ not (
+                         is_number(problem_count)
+                         and (problem_count | int) >= 0
+                         and (problem_count | float) == (problem_count | int)
+                         and severity is string
+                         and (
+                           ((problem_count | int) == 0 and severity == 'ok')
+                           or ((problem_count | int) > 0 and severity in ['info', 'warning', 'critical'])
+                         )
+                         and active is sequence
+                         and active is not string
+                         and active is not mapping
+                         and active | count == problem_count | int
+                         and ns.valid
+                       ) }}
+              then:
+                - event: dh_app_pve_notification
+                  event_data:
+                    source: dh_app_pve
+                    source_entity: sensor.dh_app_pve_problems
+                    kind: contract_error
+                    category: diagnostic
+                    severity: error
+                    contract: startup_problem_reconciliation
+                    failure_class: invalid_retained_aggregate
+                    title: "🧩❌ DH PVE: ошибка контракта startup reconciliation"
+                    message: "Некорректный retained aggregate sensor.dh_app_pve_problems."
+                    startup_reconciliation: true
+
+            - if:
+                - condition: template
+                  value_template: >-
+                    {% set ns = namespace(valid=true) %}
+                    {% if active is sequence and active is not string and active is not mapping %}
+                      {% for item in active %}
+                        {% if item is not mapping
+                              or 'problem_id' not in item or item.problem_id is not string
+                              or 'category' not in item or item.category is not string
+                              or 'severity' not in item or item.severity is not string or item.severity not in ['info', 'warning', 'critical']
+                              or 'object_id' not in item or item.object_id is not string
+                              or 'object_name' not in item or item.object_name is not string
+                              or 'metric' not in item or item.metric is not string
+                              or 'value' not in item
+                              or 'average' not in item
+                              or 'threshold' not in item %}
+                          {% set ns.valid = false %}
+                        {% endif %}
+                      {% endfor %}
+                    {% else %}
+                      {% set ns.valid = false %}
+                    {% endif %}
+                    {{ is_number(problem_count)
+                       and (problem_count | int) > 0
+                       and severity is string
+                       and severity in ['info', 'warning', 'critical']
+                       and active is sequence
+                       and active is not string
+                       and active is not mapping
+                       and active | count == problem_count | int
+                       and ns.valid }}
+              then:
+                - event: dh_app_pve_notification
+                  event_data:
+                    source: dh_app_pve
+                    source_entity: sensor.dh_app_pve_problems
+                    kind: startup_reconciliation
+                    category: diagnostic
+                    severity: "{{ severity }}"
+                    title: "🖥️⚠️ Proxmox: активные проблемы после запуска"
+                    message: >-
+                      После запуска обнаружено активных проблем: {{ problem_count | int }}.
+                      {% for item in active %}
+                        {% set metric = item['metric'] %}
+                        {% set name = item['object_name'] %}
+                        {% set value = item['value'] %}
+                        {% set average = item['average'] %}
+                        {% set threshold = item['threshold'] %}
+                        {% if metric == 'temperature_c' %}
+                          {{ loop.index }}. {{ name }} · Температура: {{ value if value is not none else '—' }} °C{% if average is not none %} · среднее {{ average }} °C{% endif %}{% if threshold is not none %} · порог {{ threshold }} °C{% endif %}
+                        {% elif metric == 'percent_used' %}
+                          {{ loop.index }}. {{ name }} · Занято: {{ value if value is not none else '—' }}%{% if average is not none %} · среднее {{ average }}%{% endif %}{% if threshold is not none %} · порог {{ threshold }}%{% endif %}
+                        {% elif metric == 'throttling' %}
+                          {{ loop.index }}. {{ name }} · Троттлинг активен
+                        {% elif metric == 'smart_passed' %}
+                          {{ loop.index }}. {{ name }} · SMART: ошибка
+                        {% else %}
+                          {{ loop.index }}. {{ name }} · {{ metric }}: {{ value if value is not none else '—' }}
+                        {% endif %}
+                      {% endfor %}
+                    active_problem_count: "{{ problem_count | int }}"
+                    active: "{{ active }}"
+                    startup_reconciliation: true
+          else:
+            - event: dh_app_pve_notification
+              event_data:
+                source: dh_app_pve
+                source_entity: sensor.dh_app_pve_last_publication
+                kind: contract_error
+                category: diagnostic
+                severity: error
+                contract: startup_problem_reconciliation
+                failure_class: freshness_timeout
+                title: "🧩❌ DH PVE: ошибка контракта startup reconciliation"
+                message: "Не получена свежая публикация PVE текущего процесса в течение 5 минут."
                 startup_reconciliation: true
-        - wait_template: >-
-            {% if not is_state('binary_sensor.dh_app_pve_ups_configured', 'on') %}
-              true
-            {% else %}
-              {% set started = states('sensor.dh_app_pve_agent_started') %}
-              {% set published = states('sensor.dh_app_pve_ups_last_publication') %}
-              {{ as_timestamp(started, 0) > 0 and as_timestamp(published, 0) >= as_timestamp(started, 0) }}
-            {% endif %}
-          timeout: "00:05:00"
-          continue_on_timeout: true
+
         - if:
             - condition: template
-              value_template: "{{ wait.completed and states('sensor.dh_app_pve_ups_problems') | int(0) > 0 }}"
+              value_template: >-
+                {{ not has_value('binary_sensor.dh_app_pve_ups_configured') }}
           then:
             - event: dh_app_pve_notification
               event_data:
                 source: dh_app_pve
-                source_entity: sensor.dh_app_pve_ups_problems
-                kind: startup_reconciliation
+                source_entity: binary_sensor.dh_app_pve_ups_configured
+                kind: contract_error
                 category: diagnostic
-                severity: "{{ state_attr('sensor.dh_app_pve_ups_problems', 'severity') | default('warning', true) }}"
-                title: "🔋⚠️ UPS: активные проблемы после запуска"
-                message: >-
-                  {% set active = state_attr('sensor.dh_app_pve_ups_problems', 'active') | default([], true) %}
-                  {% set labels = {
-                    'nut_unavailable': 'NUT недоступен',
-                    'on_battery': 'Городское питание отсутствует',
-                    'low_battery': 'Низкий заряд батареи',
-                    'overload': 'Перегрузка UPS',
-                    'replace_battery': 'Требуется замена батареи',
-                    'bypass': 'UPS работает в bypass',
-                    'power_state_unknown': 'Состояние питания UPS неизвестно'
-                  } %}
-                  После запуска обнаружено активных проблем: {{ active | count }}.
-                  {% for item in active %}
-                    {% set problem_id = item.get('problem_id', '') %}
-                    {{ loop.index }}. {{ labels.get(problem_id, problem_id if problem_id else 'Неизвестная проблема UPS') }}
-                  {% endfor %}
-                summary: "{{ state_attr('sensor.dh_app_pve_ups_problems', 'summary') | default('', true) }}"
-                active: "{{ state_attr('sensor.dh_app_pve_ups_problems', 'active') | default([], true) }}"
+                severity: error
+                contract: startup_problem_reconciliation
+                failure_class: missing_required_state
+                title: "🧩❌ DH PVE: ошибка контракта startup reconciliation"
+                message: "Состояние binary_sensor.dh_app_pve_ups_configured неизвестно или недоступно."
                 startup_reconciliation: true
+
+        - if:
+            - condition: state
+              entity_id: binary_sensor.dh_app_pve_ups_configured
+              state: "on"
+          then:
+            - wait_template: >-
+                {% set started = states('sensor.dh_app_pve_agent_started') %}
+                {% set published = states('sensor.dh_app_pve_ups_last_publication') %}
+                {% set started_ts = as_timestamp(started, none) %}
+                {% set published_ts = as_timestamp(published, none) %}
+                {{ started_ts is not none
+                   and published_ts is not none
+                   and published_ts >= started_ts }}
+              timeout: "00:05:00"
+              continue_on_timeout: true
+
+            - if:
+                - condition: template
+                  value_template: "{{ wait.completed }}"
+              then:
+                - variables:
+                    problem_count: "{{ states('sensor.dh_app_pve_ups_problems') }}"
+                    severity: "{{ state_attr('sensor.dh_app_pve_ups_problems', 'severity') }}"
+                    active: "{{ state_attr('sensor.dh_app_pve_ups_problems', 'active') }}"
+
+                - if:
+                    - condition: template
+                      value_template: >-
+                        {% set known = ['nut_unavailable', 'on_battery', 'low_battery', 'overload', 'replace_battery', 'bypass', 'power_state_unknown'] %}
+                        {% set ns = namespace(valid=true) %}
+                        {% if active is sequence and active is not string and active is not mapping %}
+                          {% for item in active %}
+                            {% if item is not mapping
+                                  or 'problem_id' not in item or item.problem_id is not string or item.problem_id not in known
+                                  or 'category' not in item or item.category is not string
+                                  or 'severity' not in item or item.severity is not string
+                                  or 'object_id' not in item or item.object_id is not string
+                                  or 'object_name' not in item or item.object_name is not string
+                                  or 'metric' not in item or item.metric is not string
+                                  or 'value' not in item
+                                  or 'average' not in item
+                                  or 'threshold' not in item %}
+                              {% set ns.valid = false %}
+                            {% endif %}
+                          {% endfor %}
+                        {% else %}
+                          {% set ns.valid = false %}
+                        {% endif %}
+                        {{ not (
+                             is_number(problem_count)
+                             and (problem_count | int) >= 0
+                             and severity is string
+                             and severity in ['ok', 'info', 'warning', 'critical']
+                             and active is sequence
+                             and active is not string
+                             and active is not mapping
+                             and active | count == problem_count | int
+                             and ns.valid
+                           ) }}
+                  then:
+                    - event: dh_app_pve_notification
+                      event_data:
+                        source: dh_app_pve
+                        source_entity: sensor.dh_app_pve_ups_problems
+                        kind: contract_error
+                        category: diagnostic
+                        severity: error
+                        contract: startup_problem_reconciliation
+                        failure_class: invalid_retained_aggregate
+                        title: "🧩❌ DH PVE: ошибка контракта startup reconciliation"
+                        message: "Некорректный retained aggregate sensor.dh_app_pve_ups_problems."
+                        startup_reconciliation: true
+
+                - if:
+                    - condition: template
+                      value_template: >-
+                        {% set known = ['nut_unavailable', 'on_battery', 'low_battery', 'overload', 'replace_battery', 'bypass', 'power_state_unknown'] %}
+                        {% set ns = namespace(valid=true) %}
+                        {% if active is sequence and active is not string and active is not mapping %}
+                          {% for item in active %}
+                            {% if item is not mapping
+                                  or 'problem_id' not in item or item.problem_id is not string or item.problem_id not in known
+                                  or 'category' not in item or item.category is not string
+                                  or 'severity' not in item or item.severity is not string
+                                  or 'object_id' not in item or item.object_id is not string
+                                  or 'object_name' not in item or item.object_name is not string
+                                  or 'metric' not in item or item.metric is not string
+                                  or 'value' not in item
+                                  or 'average' not in item
+                                  or 'threshold' not in item %}
+                              {% set ns.valid = false %}
+                            {% endif %}
+                          {% endfor %}
+                        {% else %}
+                          {% set ns.valid = false %}
+                        {% endif %}
+                        {{ is_number(problem_count)
+                           and (problem_count | int) > 0
+                           and severity is string
+                           and severity in ['info', 'warning', 'critical']
+                           and active is sequence
+                           and active is not string
+                           and active is not mapping
+                           and active | count == problem_count | int
+                           and ns.valid }}
+                  then:
+                    - event: dh_app_pve_notification
+                      event_data:
+                        source: dh_app_pve
+                        source_entity: sensor.dh_app_pve_ups_problems
+                        kind: startup_reconciliation
+                        category: diagnostic
+                        severity: "{{ severity }}"
+                        title: "🔋⚠️ UPS: активные проблемы после запуска"
+                        message: >-
+                          {% set labels = {
+                        'nut_unavailable': 'NUT недоступен',
+                        'on_battery': 'Городское питание отсутствует',
+                        'low_battery': 'Низкий заряд батареи',
+                        'overload': 'Перегрузка UPS',
+                        'replace_battery': 'Требуется замена батареи',
+                        'bypass': 'UPS работает в bypass',
+                        'power_state_unknown': 'Состояние питания UPS неизвестно'
+                          } %}
+                          После запуска обнаружено активных проблем: {{ problem_count | int }}.
+                          {% for item in active %}
+                            {% set problem_id = item['problem_id'] %}
+                            {{ loop.index }}. {{ labels[problem_id] }}
+                          {% endfor %}
+                        active_problem_count: "{{ problem_count | int }}"
+                        active: "{{ active }}"
+                        startup_reconciliation: true
+              else:
+                - event: dh_app_pve_notification
+                  event_data:
+                    source: dh_app_pve
+                    source_entity: sensor.dh_app_pve_ups_last_publication
+                    kind: contract_error
+                    category: diagnostic
+                    severity: error
+                    contract: startup_problem_reconciliation
+                    failure_class: freshness_timeout
+                    title: "🧩❌ DH PVE: ошибка контракта startup reconciliation"
+                    message: "Не получена свежая публикация UPS текущего процесса в течение 5 минут."
+                    startup_reconciliation: true

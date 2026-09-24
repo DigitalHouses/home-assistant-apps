@@ -81,7 +81,8 @@ def test_ui_open_and_cancel_wait_for_app_owned_draft_ack_before_state_transition
         assert "draft_charge_threshold_percent" in section
         assert "draft_runtime_reserve_seconds" in section
         assert 'timeout: "00:00:30"' in section
-        assert "continue_on_timeout: false" in section
+        assert "continue_on_timeout: true" in section
+        assert "error: true" in section
         assert section.index("wait_template:") < section.index(f"option: {final_option}")
 
     assert "delay:" not in open_section
@@ -103,9 +104,9 @@ def test_notification_package_uses_events_gate_and_retained_aggregates_only():
         "config_changed",
         "event: dh_app_pve_notification",
         "trigger: event.received",
-        "state_attr('sensor.dh_app_pve_problems', 'summary')",
+        "state_attr('sensor.dh_app_pve_problems', 'severity')",
         "state_attr('sensor.dh_app_pve_problems', 'active')",
-        "state_attr('sensor.dh_app_pve_ups_problems', 'summary')",
+        "state_attr('sensor.dh_app_pve_ups_problems', 'severity')",
         "state_attr('sensor.dh_app_pve_ups_problems', 'active')",
     ):
         assert token in text
@@ -149,3 +150,96 @@ def test_config_and_startup_notification_messages_are_localized():
         "После запуска обнаружено активных проблем",
     ):
         assert token in text
+
+
+def test_ui_closes_trigger_editor_only_for_valid_v2_config_changed_contract():
+    text = UI_PACKAGE.read_text(encoding="utf-8")
+    section = text.split(
+        "- id: dh_app_pve_ups_trigger_close_after_success",
+        1,
+    )[1]
+
+    for token in (
+        "condition: template",
+        "'event_type' in attrs",
+        "attrs.event_type == 'config_changed'",
+        "'schema_version' in attrs",
+        "attrs.schema_version == 2",
+        "'observed_at' in attrs",
+        "attrs.observed_at is string",
+        "'old_values' in attrs",
+        "attrs.old_values is mapping",
+        "'new_values' in attrs",
+        "attrs.new_values is mapping",
+        "'shutdown_battery_charge_threshold_percent' in attrs.new_values",
+        "attrs.new_values.shutdown_battery_charge_threshold_percent is number",
+        "'runtime_reserve_seconds' in attrs.new_values",
+        "attrs.new_values.runtime_reserve_seconds is number",
+        "'previous_revision' in attrs",
+        "attrs.previous_revision is number",
+        "'current_revision' in attrs",
+        "attrs.current_revision is number",
+    ):
+        assert token in section
+
+    assert section.index("condition: template") < section.index("option: view")
+
+
+def test_ui_numeric_contract_is_validated_before_float_conversion():
+    text = UI_PACKAGE.read_text(encoding="utf-8")
+    open_section = text.split("    dh_app_pve_ups_trigger_open:", 1)[1].split(
+        "    dh_app_pve_ups_trigger_cancel:", 1
+    )[0]
+    cancel_section = text.split("    dh_app_pve_ups_trigger_cancel:", 1)[1].split(
+        "    dh_app_pve_ups_trigger_review:", 1
+    )[0]
+    apply_section = text.split("    dh_app_pve_ups_trigger_apply:", 1)[1].split(
+        "  automation:", 1
+    )[0]
+
+    for token in (
+        "is_number(active_charge)",
+        "is_number(active_reserve)",
+        "is_number(draft_charge)",
+        "is_number(draft_reserve)",
+    ):
+        assert token in open_section
+
+    for token in (
+        "snapshot_charge:",
+        "snapshot_reserve:",
+        "is_number(snapshot_charge)",
+        "is_number(snapshot_reserve)",
+        "is_number(draft_charge)",
+        "is_number(draft_reserve)",
+    ):
+        assert token in cancel_section
+
+    for token in (
+        "current_charge_raw:",
+        "current_reserve_raw:",
+        "active_charge_raw:",
+        "active_reserve_raw:",
+        "is_number(current_charge_raw)",
+        "is_number(current_reserve_raw)",
+        "is_number(active_charge_raw)",
+        "is_number(active_reserve_raw)",
+    ):
+        assert token in apply_section
+
+    for unsafe in (
+        "states('number.dh_app_pve_ups_shutdown_battery_charge_threshold') | float",
+        "states('number.dh_app_pve_ups_shutdown_runtime_reserve') | float",
+        "states('input_number.dh_app_pve_ups_trigger_snapshot_charge') | float",
+        "states('input_number.dh_app_pve_ups_trigger_snapshot_reserve') | float",
+    ):
+        assert unsafe not in text
+
+
+def test_ui_contract_failures_stop_explicitly_instead_of_coercing_values():
+    text = UI_PACKAGE.read_text(encoding="utf-8")
+
+    assert text.count("DH PVE UPS Trigger UI contract error:") >= 4
+    assert text.count("error: true") >= 4
+    assert "acknowledgement timeout" in text
+    assert "missing or invalid" in text

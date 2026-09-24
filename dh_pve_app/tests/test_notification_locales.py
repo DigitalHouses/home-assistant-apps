@@ -105,3 +105,73 @@ def test_ru_startup_ups_problems_use_problem_ids_not_legacy_summary() -> None:
     ):
         assert problem_id in ru
 
+
+
+def _startup_section(text: str) -> str:
+    return text.split("- id: dh_app_pve_startup_problem_reconciliation", 1)[1]
+
+
+def test_startup_reconciliation_has_no_silent_contract_fallbacks() -> None:
+    forbidden = (
+        "as_timestamp(started, 0)",
+        "as_timestamp(published, 0)",
+        "| int(0)",
+        "| default(",
+        "get('metric', '')",
+        "get('object_id', 'Proxmox')",
+        "get('summary', 'Active problem')",
+        "get('problem_id', '')",
+        "Unknown UPS problem",
+        "Неизвестная проблема UPS",
+    )
+
+    for text in (_read(EN_PACKAGE), _read(RU_PACKAGE)):
+        startup = _startup_section(text)
+        for token in forbidden:
+            assert token not in startup, (
+                f"startup reconciliation must not silently fallback contract data: {token}"
+            )
+
+
+def test_startup_reconciliation_validates_retained_aggregate_contract() -> None:
+    for text in (_read(EN_PACKAGE), _read(RU_PACKAGE)):
+        startup = _startup_section(text)
+
+        for token in (
+            "is_number(problem_count)",
+            "severity is string",
+            "active is sequence",
+            "active is not string",
+            "active | count == problem_count | int",
+            "item is not mapping",
+            "'problem_id' not in item",
+            "'category' not in item",
+            "'severity' not in item",
+            "'object_id' not in item",
+            "'object_name' not in item",
+            "'metric' not in item",
+            "'value' not in item",
+            "'average' not in item",
+            "'threshold' not in item",
+            "kind: contract_error",
+            "severity: error",
+        ):
+            assert token in startup
+
+
+def test_startup_reconciliation_surfaces_freshness_failure() -> None:
+    for text in (_read(EN_PACKAGE), _read(RU_PACKAGE)):
+        startup = _startup_section(text)
+
+        assert "as_timestamp(started, none)" in startup
+        assert "as_timestamp(published, none)" in startup
+        assert "continue_on_timeout: true" in startup
+        assert "failure_class: freshness_timeout" in startup
+        assert "kind: contract_error" in startup
+
+
+def test_notification_package_no_longer_accepts_legacy_schema_v1_events() -> None:
+    for text in (_read(EN_PACKAGE), _read(RU_PACKAGE)):
+        live = text.split("- id: dh_app_pve_ups_config_changed_notification", 1)[0]
+        assert "attrs.schema_version == 1" not in live
+        assert "attrs.schema_version == 2" in live

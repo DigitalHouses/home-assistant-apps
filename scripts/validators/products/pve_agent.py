@@ -5,7 +5,7 @@ from typing import Any
 
 from validators.common import fail, require_files
 
-EXPECTED_VERSION = "0.5.14"
+EXPECTED_VERSION = "0.5.15"
 EXPECTED_TOPIC_PREFIX = "DigitalHouses/Global/dh_pve_app"
 EXPECTED_DEVICE_NAME = "DH PVE"
 EXPECTED_REFRESH_ENTITY = "button.dh_app_pve_refresh"
@@ -64,6 +64,7 @@ def validate_dh_pve_app(
             app / "examples/dh_app_pve_ups_dashboard.yaml",
             app / "examples/dh_app_pve_shutdown_readiness_card.yaml",
             app / "examples/packages/dh_app_pve_package.yaml",
+            app / "examples/packages/dh_app_pve_ui_package.yaml",
             app / "examples/packages/dh_app_pve_notification_package.yaml",
             app / "examples/packages/locales/ru/dh_app_pve_notification_package.yaml",
             app / "systemd/dh_pve_app.service",
@@ -256,10 +257,10 @@ def validate_dh_pve_app(
             "- id: dh_app_pve_ups_config_changed_notification",
             1,
         )
-        config_changed = notification_remainder.split(
+        config_changed, startup = notification_remainder.split(
             "- id: dh_app_pve_startup_problem_reconciliation",
             1,
-        )[0]
+        )
         for contract_block in (live, config_changed):
             if "| default(" in contract_block or "| int(1)" in contract_block:
                 fail(
@@ -272,6 +273,92 @@ def validate_dh_pve_app(
                         "DH PVE HA machine-event contract must fail visibly: "
                         f"{notification_package}: {required}"
                     )
+
+        for forbidden in (
+            "| default(",
+            "| int(0)",
+            "as_timestamp(started, 0)",
+            "as_timestamp(published, 0)",
+            "attrs.schema_version == 1",
+            "get('metric', '')",
+            "get('problem_id', '')",
+        ):
+            if forbidden in notification_source:
+                fail(
+                    "DH PVE HA notification package violates strict contract policy: "
+                    f"{notification_package}: {forbidden}"
+                )
+        for required in (
+            "as_timestamp(started, none)",
+            "as_timestamp(published, none)",
+            "is_number(problem_count)",
+            "failure_class: freshness_timeout",
+            "failure_class: invalid_retained_aggregate",
+            "kind: contract_error",
+            "severity: error",
+        ):
+            if required not in startup:
+                fail(
+                    "DH PVE startup reconciliation contract is incomplete: "
+                    f"{notification_package}: {required}"
+                )
+
+    ui_package = (
+        app / "examples/packages/dh_app_pve_ui_package.yaml"
+    ).read_text(encoding="utf-8")
+    close_after_success = ui_package.split(
+        "- id: dh_app_pve_ups_trigger_close_after_success",
+        1,
+    )[1]
+    for required in (
+        "condition: template",
+        "'event_type' in attrs",
+        "attrs.event_type == 'config_changed'",
+        "'schema_version' in attrs",
+        "attrs.schema_version == 2",
+        "'observed_at' in attrs",
+        "attrs.observed_at is string",
+        "'old_values' in attrs",
+        "attrs.old_values is mapping",
+        "'new_values' in attrs",
+        "attrs.new_values is mapping",
+        "attrs.previous_revision is number",
+        "attrs.current_revision is number",
+    ):
+        if required not in close_after_success:
+            fail(f"DH PVE UPS Trigger UI acknowledgement contract changed: {required}")
+
+    for required in (
+        "is_number(active_charge)",
+        "is_number(active_reserve)",
+        "is_number(draft_charge)",
+        "is_number(draft_reserve)",
+        "snapshot_charge:",
+        "snapshot_reserve:",
+        "is_number(snapshot_charge)",
+        "is_number(snapshot_reserve)",
+        "current_charge_raw:",
+        "current_reserve_raw:",
+        "active_charge_raw:",
+        "active_reserve_raw:",
+        "is_number(current_charge_raw)",
+        "is_number(current_reserve_raw)",
+        "is_number(active_charge_raw)",
+        "is_number(active_reserve_raw)",
+        "DH PVE UPS Trigger UI contract error:",
+        "error: true",
+    ):
+        if required not in ui_package:
+            fail(f"DH PVE UPS Trigger UI numeric contract changed: {required}")
+
+    for forbidden in (
+        "states('number.dh_app_pve_ups_shutdown_battery_charge_threshold') | float",
+        "states('number.dh_app_pve_ups_shutdown_runtime_reserve') | float",
+        "states('input_number.dh_app_pve_ups_trigger_snapshot_charge') | float",
+        "states('input_number.dh_app_pve_ups_trigger_snapshot_reserve') | float",
+    ):
+        if forbidden in ui_package:
+            fail(f"DH PVE UPS Trigger UI silently coerces required state: {forbidden}")
 
     _require_text(
         app / "examples/packages/dh_app_pve_package.yaml",

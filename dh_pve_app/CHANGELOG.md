@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.5.15
+
+- Harden Home Assistant startup problem reconciliation under the repository Contract Data Policy: fresh-publication timestamps, aggregate count/severity, active-list shape and required problem fields are validated before any notification is rendered.
+- Replace startup reconciliation fallbacks such as timestamp/count zero, empty problem lists, generic warning severity and generic problem text with explicit `contract_error` diagnostics for freshness timeout, missing required state or malformed retained aggregates.
+- Retire the temporary schema-v1 live problem notification fallback. The App has emitted schema-v2 machine events since 0.5.0; unexpected legacy events now fail visibly through the contract-error path.
+- Require the UPS Trigger UI to close the editor only after a complete valid schema-v2 `config_changed` event, preventing malformed acknowledgements from being shown as a successful Apply.
+- Keep PVE/NUT as the sole shutdown/FSD authority; this release changes only Home Assistant package validation/presentation contracts and release metadata.
+
+
 ## 0.5.14
 
 - Fix the Home Assistant live machine-event notification path so sparse valid UPS events such as `battery_fully_charged` no longer render unrelated fields and collapse the entire `dh_app_pve_notification` event into an empty payload.
