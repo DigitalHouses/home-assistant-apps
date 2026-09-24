@@ -28,6 +28,7 @@ def semantic_status_events(
     observed_at: str,
     battery_charge_percent: float | None,
     battery_runtime_seconds: float | None,
+    context: dict[str, object] | None = None,
 ) -> tuple[tuple[str, dict[str, object]], ...]:
     """Expand one canonical UPS status transition into user-semantic Events."""
 
@@ -47,6 +48,14 @@ def semantic_status_events(
             "battery_charge_percent": battery_charge_percent,
             "battery_runtime_seconds": battery_runtime_seconds,
         }
+        if context:
+            payload.update(
+                {
+                    str(key): value
+                    for key, value in context.items()
+                    if value is not None
+                }
+            )
         events.append((f"{event_type}:{observed_at}", payload))
 
     for status, (entered_event, cleared_event) in _STATUS_USER_EVENTS.items():
