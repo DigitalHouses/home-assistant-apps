@@ -82,15 +82,11 @@ Verify:
 
 ## 5. Notification presentation
 
-Install exactly one notification locale package.
+Install exactly one local notification package.
 
-Verify that a valid `event.dh_internet_app_event` triggers the neutral HA event:
+Verify that each supported `event.dh_internet_app_event` machine event activates the matching `trigger.id` branch and calls the final delivery action directly. The Russian site package must call `script.write2log` directly; the English example uses `persistent_notification.create`.
 
-`dh_internet_app_notification`
-
-The emitted event must contain Notification Envelope v1 (`notification_schema_version: 1`, `source`, `kind`, `severity`, non-empty localized `title` and `message`). Also inject one malformed machine event and verify it becomes `kind: contract_error` with `severity: error`, `contract` and `failure_class` instead of a normal notification.
-
-The reusable package must not call Telegram, `mobile_app`, `write2log` or another site-local delivery mechanism.
+Verify there is no secondary `dh_internet_app_notification` event, Notification Envelope, adapter layer or duplicated machine-schema validation. Notification text must read required event data directly from `trigger.to_state.attributes`.
 
 ## 6. Optional Router and traffic bindings
 
