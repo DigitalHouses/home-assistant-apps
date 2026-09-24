@@ -465,3 +465,33 @@ As of the current repository implementation:
 | DigitalHouses Backblaze App | `digitalhouses_backblaze_app` | client implemented; production server allowlist update required before enablement |
 
 This table is operational status, not a replacement for the normative protocol or Release Policy.
+
+
+## 17. Product-chat handoff template
+
+Use this when starting telemetry work in a product-specific development discussion:
+
+```text
+Implement/review telemetry for <PRODUCT> according to the repository shared contract:
+
+docs/standards/TELEMETRY_IMPLEMENTATION_GUIDE.md
+docs/standards/TELEMETRY_PROTOCOL_V1.md
+docs/standards/PRODUCT_TELEMETRY_POLICY.md
+docs/standards/RELEASE_POLICY.md
+
+First audit the current product implementation and report any contract mismatch.
+
+Required constraints:
+- telemetry remains opt-in and default OFF;
+- protocol v1 payload is exact; do not add product-specific fields;
+- country is never sent by the client;
+- persistent UUIDv4 + 256-bit token survive restart/upgrade/restore;
+- 24h ±30m heartbeat with persisted scheduling and non-aggressive failure backoff;
+- telemetry failure cannot affect core product operation;
+- production adoption must not be polluted by development builds;
+- authenticated deletion uses the shared endpoint;
+- tests cover identity, payload, timing, failure isolation and deletion.
+
+Before enabling real telemetry, confirm the canonical product/release identifier is present in the shared stats-server allowlist.
+Do not change shared telemetry semantics inside the product without updating the repository-level contract first.
+```
