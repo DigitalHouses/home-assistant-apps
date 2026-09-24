@@ -50,6 +50,15 @@ jobs:
           test "$head_sha" = "$VALIDATED_HEAD_SHA"
           test "$base_sha" = "$VALIDATED_BASE_SHA"
 
+          current_base_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)"
+          if [ "$current_base_sha" != "$VALIDATED_BASE_SHA" ]; then
+            echo "main advanced after this PR revision was validated; updating the PR branch and waiting for fresh validation"
+            gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/update-branch" \
+              -f "expected_head_sha=${head_sha}"
+            echo "merged=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           gh pr merge "$PR_NUMBER" \
             --repo "$GITHUB_REPOSITORY" \
             --merge \
@@ -64,23 +73,31 @@ jobs:
           test -n "$merge_sha"
           test "$merge_sha" != "null"
 
-          echo "base_sha=$base_sha" >> "$GITHUB_OUTPUT"
+          release_base_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/commits/${merge_sha}" --jq '.parents[0].sha')"
+          test -n "$release_base_sha"
+          test "$release_base_sha" != "null"
+
+          echo "merged=true" >> "$GITHUB_OUTPUT"
+          echo "release_base_sha=$release_base_sha" >> "$GITHUB_OUTPUT"
           echo "merge_sha=$merge_sha" >> "$GITHUB_OUTPUT"
 
       - name: Check out exact merged main revision
+        if: steps.merge.outputs.merged == 'true'
         uses: actions/checkout@v6
         with:
           ref: ${{ steps.merge.outputs.merge_sha }}
           fetch-depth: 0
 
       - name: Set up Python
+        if: steps.merge.outputs.merged == 'true'
         uses: actions/setup-python@v6
         with:
           python-version: "3.13"
 
       - name: Detect and validate releases
+        if: steps.merge.outputs.merged == 'true'
         env:
-          BASE_SHA: ${{ steps.merge.outputs.base_sha }}
+          BASE_SHA: ${{ steps.merge.outputs.release_base_sha }}
           MERGE_SHA: ${{ steps.merge.outputs.merge_sha }}
         run: |
           python scripts/release_candidates.py \
@@ -93,6 +110,7 @@ jobs:
           cat release-candidates.json
 
       - name: Publish product releases
+        if: steps.merge.outputs.merged == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           MERGE_SHA: ${{ steps.merge.outputs.merge_sha }}
@@ -144,6 +162,7 @@ jobs:
           done
 
       - name: Verify published releases
+        if: steps.merge.outputs.merged == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           MERGE_SHA: ${{ steps.merge.outputs.merge_sha }}
