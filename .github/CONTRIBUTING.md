@@ -31,6 +31,8 @@ The implementation is under `scripts/validators/`.
 
 Repository workflow follows [DigitalHouses Repository Governance](../docs/standards/REPOSITORY_GOVERNANCE.md). Product releases follow [DigitalHouses Release Policy](../docs/standards/RELEASE_POLICY.md).
 
+Runtime contract handling must follow [DigitalHouses Contract Data Policy](../docs/standards/CONTRACT_DATA_POLICY.md): required data fails explicitly, optional data remains absent/null according to schema, and contract boundaries must not invent fallback domain values.
+
 ## Development
 
 Use the supported Python version from the repository CI workflow.
@@ -43,6 +45,8 @@ python -m unittest discover -s scripts/tests -v
 ```
 
 Also run the tests for the product you changed. The complete required checks are defined in `.github/workflows/validate.yml`.
+
+When changing event/state/API/telemetry/notification/recovery contracts, include negative tests that remove or invalidate required fields and verify that no misleading downstream payload is emitted.
 
 ## Documentation
 
