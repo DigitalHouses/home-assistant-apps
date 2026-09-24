@@ -5,9 +5,10 @@ from .machine_event_outbox import MachineEventOutbox
 from .presentation_ups import UpsPresentationRouter
 from .problems import ProblemState, ProblemTransition
 from .ups_battery_events import UpsBatteryEventTracker
+from .ups_problem_events import semantic_ups_problem_event
 from .ups_problems import UpsProblemEngine, transition_uses_status_event
 from .ups_runtime import UpsRuntime
-from .ups_status_events import UpsStatusEventTracker
+from .ups_status_events import UpsStatusEventTracker, semantic_status_events
 
 
 class AdaptiveUpsRuntime(UpsRuntime):
@@ -205,13 +206,23 @@ class AdaptiveUpsRuntime(UpsRuntime):
                 self._pending_problem_transitions.pop(0)
                 continue
 
-            event = DiagnosticEvent.from_transition(
+            observed_at = self.now_iso()
+            semantic_event = semantic_ups_problem_event(
                 transition,
-                active_problem_count=aggregate.count,
-                observed_at=self.now_iso(),
+                observed_at=observed_at,
             )
-            if not self.bridge.publish_ups_diagnostic_event(event.as_payload()):
-                return False
+            if semantic_event is not None:
+                _key, payload = semantic_event
+                if not self.bridge.publish_ups_diagnostic_event(payload):
+                    return False
+            else:
+                event = DiagnosticEvent.from_transition(
+                    transition,
+                    active_problem_count=aggregate.count,
+                    observed_at=observed_at,
+                )
+                if not self.bridge.publish_ups_diagnostic_event(event.as_payload()):
+                    return False
             self._published_problem_ids.add(transition.current.problem_id)
             self._pending_problem_transitions.pop(0)
 
@@ -289,7 +300,17 @@ class AdaptiveUpsRuntime(UpsRuntime):
             observed_at=observed_at,
         )
         if status_event is not None:
-            outbox.enqueue(*status_event)
+            _key, payload = status_event
+            for semantic_event in semantic_status_events(
+                previous_status=tuple(payload["previous_status"]),
+                current_status=tuple(payload["current_status"]),
+                previous_raw_status=tuple(payload["previous_raw_status"]),
+                current_raw_status=tuple(payload["current_raw_status"]),
+                observed_at=observed_at,
+                battery_charge_percent=snapshot.battery_charge_percent,
+                battery_runtime_seconds=snapshot.runtime_seconds,
+            ):
+                outbox.enqueue(*semantic_event)
 
         battery_tracker = self.battery_event_tracker
         if battery_tracker is not None:
