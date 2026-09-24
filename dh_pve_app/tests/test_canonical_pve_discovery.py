@@ -188,8 +188,20 @@ def test_problem_aggregate_and_native_mqtt_event_are_canonical():
     assert event["default_entity_id"] == "event.dh_app_pve_diagnostic"
     assert event["state_topic"] == topics.diagnostic_event
     assert event["event_types"] == [
-        "problem_started",
-        "problem_recovered",
+        "cpu_temperature_high",
+        "cpu_temperature_normal",
+        "cpu_throttling_started",
+        "cpu_throttling_cleared",
+        "storage_usage_high",
+        "storage_usage_normal",
+        "disk_temperature_high",
+        "disk_temperature_normal",
+        "gpu_temperature_high",
+        "gpu_temperature_normal",
+        "fan_control_restore_failed",
+        "fan_control_restored",
+        "disk_smart_failed",
+        "disk_smart_restored",
         "problem_updated",
     ]
     assert event["qos"] == 1
