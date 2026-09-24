@@ -27,7 +27,7 @@ class PveAgentRepositoryContractTests(unittest.TestCase):
         validate_dh_pve_app(
             ROOT,
             ROOT / "dh_pve_app",
-            {"type": "linux_agent", "version": "0.5.11"},
+            {"type": "linux_agent", "version": "0.5.12"},
         )
 
     def test_dh_pve_validator_rejects_wrong_release_version(self):
