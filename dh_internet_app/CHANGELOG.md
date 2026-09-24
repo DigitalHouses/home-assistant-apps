@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.3
+
+- Backfilled Recent Results `updated_at` from the newest persisted `tested_at` when upgrading legacy runtime state created before 0.1.2.
+
 ## 0.1.2
 
 - Fixed Recent Results `updated_at` so it changes only when the persisted Speedtest history changes, not on every MQTT state publish.
