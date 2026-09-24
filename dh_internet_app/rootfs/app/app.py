@@ -108,6 +108,7 @@ class InternetApp:
 
         self.outages = OutageTracker.load(OUTAGES_FILE)
         self.incident_active = self.outages.active_from is not None
+        self.failure_count = self.outages.pending_attempts
         self.recovery_runtime = RecoveryRuntimeState.load(
             RECOVERY_STATE_FILE
         )
@@ -932,24 +933,29 @@ class InternetApp:
                 )
                 self._set_recovery_state("idle", cycle=0, countdown=0)
                 self._publish_outages()
+            else:
+                self.outages.clear_pending()
             return
 
-        self.failure_count += 1
+        if self.incident_active:
+            self._ensure_recovery()
+            return
+
+        self.failure_count = self.outages.note_pending_failure()
         if self.failure_count < self.config.connectivity.attempts:
             return
 
-        if not self.incident_active:
-            self.incident_active = True
-            self.stop_recovery.clear()
-            self.recovery_runtime.reset()
-            self.recovery_runtime.save(RECOVERY_STATE_FILE)
-            self.outages.start()
-            self._event(
-                "connection_lost",
-                router_up=snapshot.router_up,
-                attempts=self.failure_count,
-            )
-            self._publish_outages()
+        self.incident_active = True
+        self.stop_recovery.clear()
+        self.recovery_runtime.reset()
+        self.recovery_runtime.save(RECOVERY_STATE_FILE)
+        self.outages.confirm_pending()
+        self._event(
+            "connection_lost",
+            router_up=snapshot.router_up,
+            attempts=self.failure_count,
+        )
+        self._publish_outages()
 
         self._ensure_recovery()
 
