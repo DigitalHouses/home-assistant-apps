@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.5.12
+
+- Fix shutdown-history parser upgrades so reparsing a previous boot replaces stale parser-derived shutdown timestamps and guest results instead of falling back to or merging legacy evidence. UPS/FSD context is preserved, while unproven clean shutdown, guest completion and zero-duration artifacts are cleared conservatively.
+
 ## 0.5.11
 
 - Record UPS line-power state explicitly in Home Assistant Recorder and Logbook so mains-loss timelines can be reconstructed independently of the normalized UPS status sensor.
