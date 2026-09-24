@@ -44,6 +44,10 @@ _FORCE_STOP_MARKERS = (
     "vm still running - terminating now with sigkill",
 )
 _GENERIC_TIMEOUT_MARKER = "vm quit/powerdown failed - got timeout"
+_SHUTDOWN_START_MARKERS = (
+    "the system will power off now",
+    "system is powering down",
+)
 _CLEAN_MARKERS = (
     "reached target shutdown.target",
     "reached target system power off",
@@ -108,6 +112,7 @@ def parse_guest_shutdown_journal(text: str) -> dict[str, Any]:
     all_stopped_at: datetime | None = None
     clean_shutdown = False
     journal_has_evidence = False
+    shutdown_scope_started = False
 
     for raw in text.splitlines():
         line = raw.strip()
@@ -119,6 +124,20 @@ def parse_guest_shutdown_journal(text: str) -> dict[str, Any]:
             last_timestamp = timestamp
 
         lowered = line.casefold()
+        if (
+            not shutdown_scope_started
+            and any(marker in lowered for marker in _SHUTDOWN_START_MARKERS)
+        ):
+            # The previous-boot journal covers the entire boot and may contain
+            # unrelated manual guest shutdowns. Once host shutdown begins,
+            # only guest operations from this final shutdown sequence are
+            # relevant to shutdown-history evidence.
+            shutdown_scope_started = True
+            records.clear()
+            active_guests.clear()
+            first_started = None
+            all_stopped_at = None
+
         if any(marker in lowered for marker in _CLEAN_MARKERS):
             clean_shutdown = True
             if timestamp is not None:
