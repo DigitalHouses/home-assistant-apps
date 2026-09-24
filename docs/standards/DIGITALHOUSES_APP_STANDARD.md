@@ -20,6 +20,8 @@ This standard defines:
 - templates for creating new applications;
 - GitHub as the source of truth.
 
+Runtime contract-data handling for all application types is governed by [DigitalHouses Contract Data Policy](CONTRACT_DATA_POLICY.md).
+
 Initial supported application types:
 
 ```text
