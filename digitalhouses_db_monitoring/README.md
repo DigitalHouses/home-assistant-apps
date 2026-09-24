@@ -64,8 +64,6 @@ Core entities:
 
 | Entity ID | Purpose |
 | --- | --- |
-| `sensor.dh_db_app_version` | Running Recorder App release version |
-| `sensor.dh_db_started_at` | Timestamp when the current App process started |
 | `sensor.dh_db_start` | Earliest retained Recorder state |
 | `sensor.dh_db_last` | Latest Recorder state |
 | `sensor.dh_db_depth` | Retained history depth in days |
