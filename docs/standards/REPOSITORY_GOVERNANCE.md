@@ -34,7 +34,7 @@ This preserves meaningful branch history, including TDD and implementation histo
 Do not squash or rewrite substantive product history unless there is an explicit reason to do so for that change.
 
 
-### 3.1 Automatic merge for owner-authored PRs
+### 3.1 Automatic integration for owner-authored PRs
 
 Pull requests authored by `DigitalHouses`, targeting `main`, from a branch in this repository are integrated automatically after the complete `Validate repository` workflow succeeds.
 
