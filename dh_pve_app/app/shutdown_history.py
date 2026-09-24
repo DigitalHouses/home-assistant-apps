@@ -13,7 +13,7 @@ from .ups_nut import UpsSnapshot
 
 HISTORY_LIMIT = 50
 PUBLISHED_HISTORY_LIMIT = 10
-HISTORY_PARSER_VERSION = 3
+HISTORY_PARSER_VERSION = 4
 
 _TIMESTAMP_RE = re.compile(r"^(?P<ts>\S+)")
 _START_RE = re.compile(
