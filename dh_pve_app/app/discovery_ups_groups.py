@@ -381,8 +381,6 @@ def _problem_components(topics) -> dict[str, dict[str, object]]:
             "forced_shutdown_cleared",
             "alarm_started",
             "alarm_cleared",
-            "ups_status_unknown",
-            "ups_status_restored",
             "battery_discharge_level_crossed",
             "battery_fully_charged",
             "shutdown_committed",
