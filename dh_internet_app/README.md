@@ -63,3 +63,5 @@ The Home Assistant layer is deliberately split by responsibility:
 Install one local notification package. It consumes `event.dh_internet_app_event` directly, gives every user-visible machine event its own `trigger.id`, routes through `choose`, and calls the final delivery action directly. There is no Notification Envelope, secondary `dh_internet_app_notification` event, adapter layer or repeated machine-schema validation in Home Assistant. The producer owns the machine-event contract.
 
 The reference dashboard uses Mushroom, mini-graph-card and auto-entities. Optional Router and traffic entities are hidden when their mappings are not configured or their mapped source is currently unavailable.
+
+Recorder-facing diagnostics are intentionally low-noise: `sensor.dh_internet_app_problems` changes only when the actual problem list changes, and `sensor.dh_internet_app_availability_month` exposes a two-decimal state plus the stable calendar month while exact outage timing remains App-owned.
