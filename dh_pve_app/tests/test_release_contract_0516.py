@@ -57,3 +57,25 @@ def test_0516_readme_and_changelog_document_installed_root_guide():
     assert "tombstone" in changelog
     assert "binary_sensor.dh_app_pve_ups_configured" in changelog
     assert "ИБП не настроен" in changelog
+
+
+def test_0516_home_assistant_package_layout_and_envelope():
+    packages = APP / "examples" / "packages"
+    base = packages / "dh_app_pve_package.yaml"
+    en = packages / "dh_app_pve_notification_package.yaml"
+    ru = packages / "locales" / "ru" / "dh_app_pve_notification_package.yaml"
+    legacy_ui = packages / "dh_app_pve_ui_package.yaml"
+
+    assert base.is_file()
+    assert en.is_file()
+    assert ru.is_file()
+    assert not legacy_ui.exists()
+
+    for notification in (en, ru):
+        text = notification.read_text(encoding="utf-8")
+        assert "notification_schema_version: 1" in text
+        assert "kind: contract_error" in text
+        assert "contract:" in text
+        assert "failure_class:" in text
+        assert "script.write2log" not in text
+
