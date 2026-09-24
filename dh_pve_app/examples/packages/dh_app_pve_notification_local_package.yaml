@@ -2,7 +2,8 @@
 # DigitalHouses PVE local notifications — English example
 # =============================================================================
 # Machine events come from dh_pve_app.
-# User rule: find the trigger.id you need and edit only title/message below it.
+# Find the trigger.id you need and edit only title/message below it.
+# Event payload already contains the measurements captured for that event.
 # Flow: machine event -> trigger.id -> choose -> direct action.
 # =============================================================================
 
@@ -12,35 +13,137 @@ dh_app_pve_notification_local_package:
     - id: dh_app_pve_notifications
       alias: DH PVE · Notifications
       mode: queued
-      max: 50
+      max: 60
 
       triggers:
-        # PVE: generic problem lifecycle
+        # PVE semantic events
+        # High CPU temperature
         - trigger: event.received
           target:
             entity_id: event.dh_app_pve_diagnostic
           options:
             event_type:
-              - problem_started
-          id: problem_started
+              - cpu_temperature_high
+          id: cpu_temperature_high
 
+        # CPU temperature normal
         - trigger: event.received
           target:
             entity_id: event.dh_app_pve_diagnostic
           options:
             event_type:
-              - problem_updated
-          id: problem_updated
+              - cpu_temperature_normal
+          id: cpu_temperature_normal
 
+        # CPU throttling started
         - trigger: event.received
           target:
             entity_id: event.dh_app_pve_diagnostic
           options:
             event_type:
-              - problem_recovered
-          id: problem_recovered
+              - cpu_throttling_started
+          id: cpu_throttling_started
 
-        # UPS: explicit user-semantic events
+        # CPU throttling cleared
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_diagnostic
+          options:
+            event_type:
+              - cpu_throttling_cleared
+          id: cpu_throttling_cleared
+
+        # Storage usage high
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_diagnostic
+          options:
+            event_type:
+              - storage_usage_high
+          id: storage_usage_high
+
+        # Storage usage normal
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_diagnostic
+          options:
+            event_type:
+              - storage_usage_normal
+          id: storage_usage_normal
+
+        # High disk temperature
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_diagnostic
+          options:
+            event_type:
+              - disk_temperature_high
+          id: disk_temperature_high
+
+        # Disk temperature normal
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_diagnostic
+          options:
+            event_type:
+              - disk_temperature_normal
+          id: disk_temperature_normal
+
+        # High GPU temperature
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_diagnostic
+          options:
+            event_type:
+              - gpu_temperature_high
+          id: gpu_temperature_high
+
+        # GPU temperature normal
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_diagnostic
+          options:
+            event_type:
+              - gpu_temperature_normal
+          id: gpu_temperature_normal
+
+        # Fan control restore failed
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_diagnostic
+          options:
+            event_type:
+              - fan_control_restore_failed
+          id: fan_control_restore_failed
+
+        # Fan control restored
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_diagnostic
+          options:
+            event_type:
+              - fan_control_restored
+          id: fan_control_restored
+
+        # Disk SMART failed
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_diagnostic
+          options:
+            event_type:
+              - disk_smart_failed
+          id: disk_smart_failed
+
+        # Disk SMART restored
+        - trigger: event.received
+          target:
+            entity_id: event.dh_app_pve_diagnostic
+          options:
+            event_type:
+              - disk_smart_restored
+          id: disk_smart_restored
+
+        # UPS semantic events
         # NUT unavailable
         - trigger: event.received
           target:
@@ -293,7 +396,7 @@ dh_app_pve_notification_local_package:
               - alarm_cleared
           id: alarm_cleared
 
-        # battery_discharge_level_crossed
+        # Battery discharge milestone
         - trigger: event.received
           target:
             entity_id: event.dh_app_pve_ups_diagnostic
@@ -302,7 +405,7 @@ dh_app_pve_notification_local_package:
               - battery_discharge_level_crossed
           id: battery_discharge_level_crossed
 
-        # battery_fully_charged
+        # Battery fully charged
         - trigger: event.received
           target:
             entity_id: event.dh_app_pve_ups_diagnostic
@@ -311,7 +414,7 @@ dh_app_pve_notification_local_package:
               - battery_fully_charged
           id: battery_fully_charged
 
-        # shutdown_committed
+        # Emergency shutdown committed
         - trigger: event.received
           target:
             entity_id: event.dh_app_pve_ups_diagnostic
@@ -320,7 +423,7 @@ dh_app_pve_notification_local_package:
               - shutdown_committed
           id: shutdown_committed
 
-        # config_changed
+        # UPS Trigger configuration changed
         - trigger: event.received
           target:
             entity_id: event.dh_app_pve_ups_diagnostic
@@ -333,38 +436,173 @@ dh_app_pve_notification_local_package:
 
       actions:
         - choose:
-            # PVE: problem_started
+            # High CPU temperature
             - conditions:
                 - condition: trigger
                   id:
-                    - problem_started
+                    - cpu_temperature_high
               sequence:
                 - action: persistent_notification.create
                   data:
-                    title: "🖥️⚠️ {{ trigger.to_state.attributes.object_name }}: problem detected"
-                    message: "{{ trigger.to_state.attributes.metric }}: {{ trigger.to_state.attributes.current.value }}"
+                    title: "🌡️⚠️ PVE: high CPU temperature"
+                    message: >-
+                      Temperature: {{ trigger.to_state.attributes.temperature_c | default('—', true) }} °C · average: {{ trigger.to_state.attributes.average_temperature_c | default('—', true) }} °C · threshold: {{ trigger.to_state.attributes.threshold_c | default('—', true) }} °C · frequency: {{ trigger.to_state.attributes.cpu_frequency_mhz | default('—', true) }} MHz · load: {{ trigger.to_state.attributes.cpu_usage_percent | default('—', true) }}%.
 
-            # PVE: problem_updated
+            # CPU temperature normal
             - conditions:
                 - condition: trigger
                   id:
-                    - problem_updated
+                    - cpu_temperature_normal
               sequence:
                 - action: persistent_notification.create
                   data:
-                    title: "🖥️⚠️ {{ trigger.to_state.attributes.object_name }}: problem changed"
-                    message: "{{ trigger.to_state.attributes.metric }}: {{ trigger.to_state.attributes.current.value }}"
+                    title: "🌡️✅ PVE: CPU temperature normal"
+                    message: >-
+                      Temperature: {{ trigger.to_state.attributes.temperature_c | default('—', true) }} °C · average: {{ trigger.to_state.attributes.average_temperature_c | default('—', true) }} °C · threshold: {{ trigger.to_state.attributes.threshold_c | default('—', true) }} °C.
 
-            # PVE: problem_recovered
+            # CPU throttling started
             - conditions:
                 - condition: trigger
                   id:
-                    - problem_recovered
+                    - cpu_throttling_started
               sequence:
                 - action: persistent_notification.create
                   data:
-                    title: "🖥️✅ {{ trigger.to_state.attributes.object_name }}: back to normal"
-                    message: "{{ trigger.to_state.attributes.metric }}: {{ trigger.to_state.attributes.current.value }}"
+                    title: "⚙️⚠️ PVE: CPU throttling"
+                    message: >-
+                      CPU throttling detected. Temperature: {{ trigger.to_state.attributes.temperature_c | default('—', true) }} °C · frequency: {{ trigger.to_state.attributes.cpu_frequency_mhz | default('—', true) }} MHz · load: {{ trigger.to_state.attributes.cpu_usage_percent | default('—', true) }}%.
+
+            # CPU throttling cleared
+            - conditions:
+                - condition: trigger
+                  id:
+                    - cpu_throttling_cleared
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "⚙️✅ PVE: CPU throttling cleared"
+                    message: >-
+                      Temperature: {{ trigger.to_state.attributes.temperature_c | default('—', true) }} °C · frequency: {{ trigger.to_state.attributes.cpu_frequency_mhz | default('—', true) }} MHz · load: {{ trigger.to_state.attributes.cpu_usage_percent | default('—', true) }}%.
+
+            # Storage usage high
+            - conditions:
+                - condition: trigger
+                  id:
+                    - storage_usage_high
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "💾⚠️ PVE: storage {{ trigger.to_state.attributes.object_name }} usage high"
+                    message: >-
+                      Used: {{ trigger.to_state.attributes.used_percent | default('—', true) }}% · average: {{ trigger.to_state.attributes.average_used_percent | default('—', true) }}% · threshold: {{ trigger.to_state.attributes.threshold_percent | default('—', true) }}% · free: {{ trigger.to_state.attributes.available_gib | default('—', true) }} GiB of {{ trigger.to_state.attributes.total_gib | default('—', true) }} GiB.
+
+            # Storage usage normal
+            - conditions:
+                - condition: trigger
+                  id:
+                    - storage_usage_normal
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "💾✅ PVE: storage {{ trigger.to_state.attributes.object_name }} normal"
+                    message: >-
+                      Used: {{ trigger.to_state.attributes.used_percent | default('—', true) }}% · threshold: {{ trigger.to_state.attributes.threshold_percent | default('—', true) }}% · free: {{ trigger.to_state.attributes.available_gib | default('—', true) }} GiB.
+
+            # High disk temperature
+            - conditions:
+                - condition: trigger
+                  id:
+                    - disk_temperature_high
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "🌡️⚠️ PVE: high temperature {{ trigger.to_state.attributes.object_name }}"
+                    message: >-
+                      Temperature: {{ trigger.to_state.attributes.temperature_c | default('—', true) }} °C · average: {{ trigger.to_state.attributes.average_temperature_c | default('—', true) }} °C · threshold: {{ trigger.to_state.attributes.threshold_c | default('—', true) }} °C · type: {{ trigger.to_state.attributes.disk_type | default('—', true) }} · device: {{ trigger.to_state.attributes.device_path | default('—', true) }}.
+
+            # Disk temperature normal
+            - conditions:
+                - condition: trigger
+                  id:
+                    - disk_temperature_normal
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "🌡️✅ PVE: temperature {{ trigger.to_state.attributes.object_name }} normal"
+                    message: >-
+                      Temperature: {{ trigger.to_state.attributes.temperature_c | default('—', true) }} °C · threshold: {{ trigger.to_state.attributes.threshold_c | default('—', true) }} °C.
+
+            # High GPU temperature
+            - conditions:
+                - condition: trigger
+                  id:
+                    - gpu_temperature_high
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "🎮🌡️⚠️ PVE: high temperature {{ trigger.to_state.attributes.object_name }}"
+                    message: >-
+                      Temperature: {{ trigger.to_state.attributes.temperature_c | default('—', true) }} °C · average: {{ trigger.to_state.attributes.average_temperature_c | default('—', true) }} °C · threshold: {{ trigger.to_state.attributes.threshold_c | default('—', true) }} °C · owner: {{ trigger.to_state.attributes.owner | default('—', true) }}.
+
+            # GPU temperature normal
+            - conditions:
+                - condition: trigger
+                  id:
+                    - gpu_temperature_normal
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "🎮🌡️✅ PVE: temperature {{ trigger.to_state.attributes.object_name }} normal"
+                    message: >-
+                      Temperature: {{ trigger.to_state.attributes.temperature_c | default('—', true) }} °C · threshold: {{ trigger.to_state.attributes.threshold_c | default('—', true) }} °C.
+
+            # Fan control restore failed
+            - conditions:
+                - condition: trigger
+                  id:
+                    - fan_control_restore_failed
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "🌀❌ PVE: fan control restore failed for {{ trigger.to_state.attributes.object_name }}"
+                    message: >-
+                      Status: {{ trigger.to_state.attributes.calibration_status | default('—', true) }} · speed: {{ trigger.to_state.attributes.rpm | default('—', true) }} RPM.
+
+            # Fan control restored
+            - conditions:
+                - condition: trigger
+                  id:
+                    - fan_control_restored
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "🌀✅ PVE: fan control restored for {{ trigger.to_state.attributes.object_name }}"
+                    message: >-
+                      Status: {{ trigger.to_state.attributes.calibration_status | default('—', true) }} · speed: {{ trigger.to_state.attributes.rpm | default('—', true) }} RPM.
+
+            # Disk SMART failed
+            - conditions:
+                - condition: trigger
+                  id:
+                    - disk_smart_failed
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "💾🔴 PVE: SMART CRITICAL {{ trigger.to_state.attributes.object_name }}"
+                    message: >-
+                      {% set reasons = trigger.to_state.attributes.health_reasons | default([], true) %}SMART: FAILED{% if reasons %} · reason: {{ reasons | join(', ') }}{% endif %} · temperature: {{ trigger.to_state.attributes.temperature_c | default('—', true) }} °C · wear: {{ trigger.to_state.attributes.wear_used_percent | default('—', true) }}% · media errors: {{ trigger.to_state.attributes.media_errors | default('—', true) }} · unsafe shutdowns: {{ trigger.to_state.attributes.unsafe_shutdowns | default('—', true) }} · CRC errors: {{ trigger.to_state.attributes.crc_errors | default('—', true) }}.
+
+            # Disk SMART restored
+            - conditions:
+                - condition: trigger
+                  id:
+                    - disk_smart_restored
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "💾✅ PVE: SMART {{ trigger.to_state.attributes.object_name }} normal"
+                    message: >-
+                      SMART is normal again · temperature: {{ trigger.to_state.attributes.temperature_c | default('—', true) }} °C · wear: {{ trigger.to_state.attributes.wear_used_percent | default('—', true) }}%.
 
             # NUT unavailable
             - conditions:
@@ -375,7 +613,8 @@ dh_app_pve_notification_local_package:
                 - action: persistent_notification.create
                   data:
                     title: "🔋❌ UPS: NUT unavailable"
-                    message: "UPS data is unavailable through NUT."
+                    message: >-
+                      UPS data is unavailable through NUT.
 
             # NUT restored
             - conditions:
@@ -386,7 +625,8 @@ dh_app_pve_notification_local_package:
                 - action: persistent_notification.create
                   data:
                     title: "🔋✅ UPS: NUT connection restored"
-                    message: "UPS monitoring is available again."
+                    message: >-
+                      UPS monitoring is available again · charge: {{ trigger.to_state.attributes.battery_charge_percent | default('—', true) }}% · load: {{ trigger.to_state.attributes.load_percent | default('—', true) }}% · input: {{ trigger.to_state.attributes.input_voltage_v | default('—', true) }} V.
 
             # Power state unknown
             - conditions:
@@ -397,7 +637,8 @@ dh_app_pve_notification_local_package:
                 - action: persistent_notification.create
                   data:
                     title: "🔋⚠️ UPS: power state unknown"
-                    message: "Cannot determine whether the UPS is on line power or battery."
+                    message: >-
+                      Cannot determine power source · input: {{ trigger.to_state.attributes.input_voltage_v | default('—', true) }} V · output: {{ trigger.to_state.attributes.output_voltage_v | default('—', true) }} V · charge: {{ trigger.to_state.attributes.battery_charge_percent | default('—', true) }}%.
 
             # Power state restored
             - conditions:
@@ -408,7 +649,8 @@ dh_app_pve_notification_local_package:
                 - action: persistent_notification.create
                   data:
                     title: "🔋✅ UPS: power state restored"
-                    message: "The UPS is reporting a valid power state again."
+                    message: >-
+                      UPS reports a valid power state again · input: {{ trigger.to_state.attributes.input_voltage_v | default('—', true) }} V · charge: {{ trigger.to_state.attributes.battery_charge_percent | default('—', true) }}%.
 
             # Line power lost
             - conditions:
@@ -419,7 +661,8 @@ dh_app_pve_notification_local_package:
                 - action: persistent_notification.create
                   data:
                     title: "🔌⚠️ Line power lost"
-                    message: "UPS switched to battery power."
+                    message: >-
+                      {% set r = trigger.to_state.attributes.battery_runtime_seconds | default(none) %}{% if r is number %}{% set rs = r | int %}{% set rh = rs // 3600 %}{% set rm = (rs % 3600) // 60 %}{% endif %}UPS switched to battery · charge: {{ trigger.to_state.attributes.battery_charge_percent | default('—', true) }}%{% if r is number %} · runtime: {{ '%d:%02d' | format(rh, rm) }}{% endif %} · load: {{ trigger.to_state.attributes.load_percent | default('—', true) }}%.
 
             # Line power restored
             - conditions:
@@ -430,7 +673,8 @@ dh_app_pve_notification_local_package:
                 - action: persistent_notification.create
                   data:
                     title: "🔌✅ Line power restored"
-                    message: "UPS returned to line power."
+                    message: >-
+                      {% set d = trigger.to_state.attributes.outage_duration_seconds | default(none) %}{% if d is number %}{% set ds = d | int %}{% set dh = ds // 3600 %}{% set dm = (ds % 3600) // 60 %}{% set dsec = ds % 60 %}{% endif %}UPS returned to line power{% if d is number %} · outage: {{ '%02d:%02d:%02d' | format(dh, dm, dsec) }}{% endif %} · charge: {{ trigger.to_state.attributes.battery_charge_percent | default('—', true) }}% · input: {{ trigger.to_state.attributes.input_voltage_v | default('—', true) }} V · load: {{ trigger.to_state.attributes.load_percent | default('—', true) }}%.
 
             # Low battery started
             - conditions:
@@ -441,7 +685,8 @@ dh_app_pve_notification_local_package:
                 - action: persistent_notification.create
                   data:
                     title: "🔋❗ UPS: low battery"
-                    message: "UPS reported LOW BATTERY."
+                    message: >-
+                      {% set r = trigger.to_state.attributes.battery_runtime_seconds | default(none) %}{% if r is number %}{% set rs = r | int %}{% set rh = rs // 3600 %}{% set rm = (rs % 3600) // 60 %}{% endif %}Charge: {{ trigger.to_state.attributes.battery_charge_percent | default('—', true) }}%{% if r is number %} · runtime: {{ '%d:%02d' | format(rh, rm) }}{% endif %} · load: {{ trigger.to_state.attributes.load_percent | default('—', true) }}% · NUT threshold: {{ trigger.to_state.attributes.low_charge_percent | default('—', true) }}%.
 
             # Low battery cleared
             - conditions:
@@ -452,7 +697,8 @@ dh_app_pve_notification_local_package:
                 - action: persistent_notification.create
                   data:
                     title: "🔋✅ UPS: low-battery warning cleared"
-                    message: "LOW BATTERY is no longer active."
+                    message: >-
+                      Charge: {{ trigger.to_state.attributes.battery_charge_percent | default('—', true) }}% · runtime: {{ trigger.to_state.attributes.battery_runtime_seconds | default('—', true) }} s · load: {{ trigger.to_state.attributes.load_percent | default('—', true) }}%.
 
             # High battery started
             - conditions:
@@ -462,8 +708,9 @@ dh_app_pve_notification_local_package:
               sequence:
                 - action: persistent_notification.create
                   data:
-                    title: "🔋⚠️ UPS: high battery"
-                    message: "UPS reported HIGH BATTERY."
+                    title: "🔋⚠️ UPS: HIGH BATTERY"
+                    message: >-
+                      Charge: {{ trigger.to_state.attributes.battery_charge_percent | default('—', true) }}% · battery voltage: {{ trigger.to_state.attributes.battery_voltage_v | default('—', true) }} V.
 
             # High battery cleared
             - conditions:
@@ -473,8 +720,9 @@ dh_app_pve_notification_local_package:
               sequence:
                 - action: persistent_notification.create
                   data:
-                    title: "🔋✅ UPS: high-battery warning cleared"
-                    message: "HIGH BATTERY is no longer active."
+                    title: "🔋✅ UPS: HIGH BATTERY cleared"
+                    message: >-
+                      Charge: {{ trigger.to_state.attributes.battery_charge_percent | default('—', true) }}% · battery voltage: {{ trigger.to_state.attributes.battery_voltage_v | default('—', true) }} V.
 
             # Replace battery started
             - conditions:
@@ -485,7 +733,8 @@ dh_app_pve_notification_local_package:
                 - action: persistent_notification.create
                   data:
                     title: "🔋⚠️ UPS: replace battery"
-                    message: "UPS reported REPLACE BATTERY."
+                    message: >-
+                      UPS reported REPLACE BATTERY · charge: {{ trigger.to_state.attributes.battery_charge_percent | default('—', true) }}% · battery voltage: {{ trigger.to_state.attributes.battery_voltage_v | default('—', true) }} V.
 
             # Replace battery cleared
             - conditions:
@@ -496,7 +745,8 @@ dh_app_pve_notification_local_package:
                 - action: persistent_notification.create
                   data:
                     title: "🔋✅ UPS: replace-battery warning cleared"
-                    message: "REPLACE BATTERY is no longer active."
+                    message: >-
+                      Charge: {{ trigger.to_state.attributes.battery_charge_percent | default('—', true) }}% · battery voltage: {{ trigger.to_state.attributes.battery_voltage_v | default('—', true) }} V.
 
             # Bypass started
             - conditions:
@@ -507,7 +757,8 @@ dh_app_pve_notification_local_package:
                 - action: persistent_notification.create
                   data:
                     title: "🔋⚠️ UPS: bypass enabled"
-                    message: "UPS load is in bypass mode."
+                    message: >-
+                      Load: {{ trigger.to_state.attributes.load_percent | default('—', true) }}% · input: {{ trigger.to_state.attributes.input_voltage_v | default('—', true) }} V · output: {{ trigger.to_state.attributes.output_voltage_v | default('—', true) }} V.
 
             # Bypass ended
             - conditions:
@@ -518,7 +769,8 @@ dh_app_pve_notification_local_package:
                 - action: persistent_notification.create
                   data:
                     title: "🔋✅ UPS: bypass ended"
-                    message: "UPS left bypass mode."
+                    message: >-
+                      Load: {{ trigger.to_state.attributes.load_percent | default('—', true) }}% · input: {{ trigger.to_state.attributes.input_voltage_v | default('—', true) }} V · output: {{ trigger.to_state.attributes.output_voltage_v | default('—', true) }} V.
 
             # Calibration started
             - conditions:
@@ -529,7 +781,8 @@ dh_app_pve_notification_local_package:
                 - action: persistent_notification.create
                   data:
                     title: "🔋🧪 UPS: calibration started"
-                    message: "UPS calibration is running."
+                    message: >-
+                      Charge: {{ trigger.to_state.attributes.battery_charge_percent | default('—', true) }}% · load: {{ trigger.to_state.attributes.load_percent | default('—', true) }}%.
 
             # Calibration ended
             - conditions:
@@ -540,7 +793,8 @@ dh_app_pve_notification_local_package:
                 - action: persistent_notification.create
                   data:
                     title: "🔋✅ UPS: calibration ended"
-                    message: "UPS left calibration mode."
+                    message: >-
+                      Charge: {{ trigger.to_state.attributes.battery_charge_percent | default('—', true) }}% · load: {{ trigger.to_state.attributes.load_percent | default('—', true) }}%.
 
             # Output off
             - conditions:
@@ -551,7 +805,8 @@ dh_app_pve_notification_local_package:
                 - action: persistent_notification.create
                   data:
                     title: "🔋⏹️ UPS: output off"
-                    message: "UPS reported OUTPUT OFF."
+                    message: >-
+                      Input: {{ trigger.to_state.attributes.input_voltage_v | default('—', true) }} V · output: {{ trigger.to_state.attributes.output_voltage_v | default('—', true) }} V · load: {{ trigger.to_state.attributes.load_percent | default('—', true) }}%.
 
             # Output restored
             - conditions:
@@ -562,7 +817,8 @@ dh_app_pve_notification_local_package:
                 - action: persistent_notification.create
                   data:
                     title: "🔋✅ UPS: output restored"
-                    message: "OUTPUT OFF is no longer active."
+                    message: >-
+                      Input: {{ trigger.to_state.attributes.input_voltage_v | default('—', true) }} V · output: {{ trigger.to_state.attributes.output_voltage_v | default('—', true) }} V · load: {{ trigger.to_state.attributes.load_percent | default('—', true) }}%.
 
             # Overload started
             - conditions:
@@ -573,7 +829,8 @@ dh_app_pve_notification_local_package:
                 - action: persistent_notification.create
                   data:
                     title: "🔋❌ UPS: overload"
-                    message: "UPS reported OVERLOAD."
+                    message: >-
+                      Load: {{ trigger.to_state.attributes.load_percent | default('—', true) }}% · nominal UPS power: {{ trigger.to_state.attributes.nominal_real_power_w | default('—', true) }} W · output: {{ trigger.to_state.attributes.output_voltage_v | default('—', true) }} V.
 
             # Overload cleared
             - conditions:
@@ -584,7 +841,8 @@ dh_app_pve_notification_local_package:
                 - action: persistent_notification.create
                   data:
                     title: "🔋✅ UPS: overload cleared"
-                    message: "OVERLOAD is no longer active."
+                    message: >-
+                      Load: {{ trigger.to_state.attributes.load_percent | default('—', true) }}% · output: {{ trigger.to_state.attributes.output_voltage_v | default('—', true) }} V.
 
             # AVR Trim started
             - conditions:
@@ -594,8 +852,9 @@ dh_app_pve_notification_local_package:
               sequence:
                 - action: persistent_notification.create
                   data:
-                    title: "🔋⚠️ UPS: AVR Trim enabled"
-                    message: "UPS is reducing high input voltage without switching to battery."
+                    title: "⚡⚠️ UPS: AVR Trim enabled"
+                    message: >-
+                      High input voltage: {{ trigger.to_state.attributes.input_voltage_v | default('—', true) }} V · output: {{ trigger.to_state.attributes.output_voltage_v | default('—', true) }} V · high transfer threshold: {{ trigger.to_state.attributes.input_transfer_high_v | default('—', true) }} V.
 
             # AVR Trim ended
             - conditions:
@@ -605,8 +864,9 @@ dh_app_pve_notification_local_package:
               sequence:
                 - action: persistent_notification.create
                   data:
-                    title: "🔋✅ UPS: AVR Trim ended"
-                    message: "AVR Trim mode ended."
+                    title: "⚡✅ UPS: AVR Trim ended"
+                    message: >-
+                      Input voltage normalized: {{ trigger.to_state.attributes.input_voltage_v | default('—', true) }} V · output: {{ trigger.to_state.attributes.output_voltage_v | default('—', true) }} V.
 
             # AVR Boost started
             - conditions:
@@ -616,8 +876,9 @@ dh_app_pve_notification_local_package:
               sequence:
                 - action: persistent_notification.create
                   data:
-                    title: "🔋⚠️ UPS: AVR Boost enabled"
-                    message: "UPS is boosting low input voltage without switching to battery."
+                    title: "⚡⚠️ UPS: AVR Boost enabled"
+                    message: >-
+                      Low input voltage: {{ trigger.to_state.attributes.input_voltage_v | default('—', true) }} V · output: {{ trigger.to_state.attributes.output_voltage_v | default('—', true) }} V · low transfer threshold: {{ trigger.to_state.attributes.input_transfer_low_v | default('—', true) }} V.
 
             # AVR Boost ended
             - conditions:
@@ -627,8 +888,9 @@ dh_app_pve_notification_local_package:
               sequence:
                 - action: persistent_notification.create
                   data:
-                    title: "🔋✅ UPS: AVR Boost ended"
-                    message: "AVR Boost mode ended."
+                    title: "⚡✅ UPS: AVR Boost ended"
+                    message: >-
+                      Input voltage normalized: {{ trigger.to_state.attributes.input_voltage_v | default('—', true) }} V · output: {{ trigger.to_state.attributes.output_voltage_v | default('—', true) }} V.
 
             # NUT FSD started
             - conditions:
@@ -639,7 +901,8 @@ dh_app_pve_notification_local_package:
                 - action: persistent_notification.create
                   data:
                     title: "🔋🛑 UPS: Forced Shutdown started"
-                    message: "NUT activated FSD, the forced-shutdown procedure."
+                    message: >-
+                      NUT activated FSD · charge: {{ trigger.to_state.attributes.battery_charge_percent | default('—', true) }}% · runtime: {{ trigger.to_state.attributes.battery_runtime_seconds | default('—', true) }} s · load: {{ trigger.to_state.attributes.load_percent | default('—', true) }}%.
 
             # NUT FSD cleared
             - conditions:
@@ -650,7 +913,8 @@ dh_app_pve_notification_local_package:
                 - action: persistent_notification.create
                   data:
                     title: "🔋✅ UPS: Forced Shutdown cleared"
-                    message: "NUT FSD is no longer active."
+                    message: >-
+                      Charge: {{ trigger.to_state.attributes.battery_charge_percent | default('—', true) }}% · input: {{ trigger.to_state.attributes.input_voltage_v | default('—', true) }} V.
 
             # Alarm started
             - conditions:
@@ -661,7 +925,8 @@ dh_app_pve_notification_local_package:
                 - action: persistent_notification.create
                   data:
                     title: "🔋🚨 UPS: alarm active"
-                    message: "UPS reported ALARM."
+                    message: >-
+                      Charge: {{ trigger.to_state.attributes.battery_charge_percent | default('—', true) }}% · load: {{ trigger.to_state.attributes.load_percent | default('—', true) }}% · input: {{ trigger.to_state.attributes.input_voltage_v | default('—', true) }} V · output: {{ trigger.to_state.attributes.output_voltage_v | default('—', true) }} V.
 
             # Alarm cleared
             - conditions:
@@ -672,9 +937,10 @@ dh_app_pve_notification_local_package:
                 - action: persistent_notification.create
                   data:
                     title: "🔋✅ UPS: alarm cleared"
-                    message: "ALARM is no longer active."
+                    message: >-
+                      Charge: {{ trigger.to_state.attributes.battery_charge_percent | default('—', true) }}% · load: {{ trigger.to_state.attributes.load_percent | default('—', true) }}%.
 
-            # Battery crossed a discharge milestone
+            # Battery discharge milestone
             - conditions:
                 - condition: trigger
                   id:
@@ -682,8 +948,9 @@ dh_app_pve_notification_local_package:
               sequence:
                 - action: persistent_notification.create
                   data:
-                    title: "🔋⚠️ UPS: battery {{ trigger.to_state.attributes.current_charge_percent }}%"
-                    message: "Crossed levels: {{ trigger.to_state.attributes.crossed_thresholds | join(', ') }}%."
+                    title: "🔋⚠️ UPS: charge {{ trigger.to_state.attributes.current_charge_percent }}%"
+                    message: >-
+                      {% set r = trigger.to_state.attributes.battery_runtime_seconds | default(none) %}{% if r is number %}{% set rs = r | int %}{% set rh = rs // 3600 %}{% set rm = (rs % 3600) // 60 %}{% endif %}Runtime: {% if r is number %}{{ '%d:%02d' | format(rh, rm) }}{% else %}—{% endif %} · load: {{ trigger.to_state.attributes.load_percent | default('—', true) }}% · crossed: {{ trigger.to_state.attributes.crossed_thresholds | join(', ') }}%.
 
             # Battery fully charged
             - conditions:
@@ -694,9 +961,10 @@ dh_app_pve_notification_local_package:
                 - action: persistent_notification.create
                   data:
                     title: "🔋✅ UPS: battery charged"
-                    message: "Battery charge cycle completed."
+                    message: >-
+                      Charge: {{ trigger.to_state.attributes.current_charge_percent | default(trigger.to_state.attributes.battery_charge_percent, true) }}% · load: {{ trigger.to_state.attributes.load_percent | default('—', true) }}% · input: {{ trigger.to_state.attributes.input_voltage_v | default('—', true) }} V.
 
-            # PVE Agent committed emergency shutdown
+            # Emergency shutdown committed
             - conditions:
                 - condition: trigger
                   id:
@@ -705,9 +973,10 @@ dh_app_pve_notification_local_package:
                 - action: persistent_notification.create
                   data:
                     title: "🔋🛑 PVE: emergency shutdown started"
-                    message: "Reason: {{ trigger.to_state.attributes.reason }}. Charge: {{ trigger.to_state.attributes.battery_charge_percent }}%. Runtime: {{ trigger.to_state.attributes.battery_runtime_seconds }} s."
+                    message: >-
+                      {% set r = trigger.to_state.attributes.battery_runtime_seconds | default(none) %}{% if r is number %}{% set rs = r | int %}{% set rh = rs // 3600 %}{% set rm = (rs % 3600) // 60 %}{% endif %}Reason: {{ trigger.to_state.attributes.reason }} · charge: {{ trigger.to_state.attributes.battery_charge_percent | default('—', true) }}%{% if r is number %} · runtime: {{ '%d:%02d' | format(rh, rm) }}{% endif %} · load: {{ trigger.to_state.attributes.load_percent | default('—', true) }}% · shutdown budget: {{ trigger.to_state.attributes.shutdown_budget_seconds | default('—', true) }} s · reserve: {{ trigger.to_state.attributes.runtime_reserve_seconds | default('—', true) }} s.
 
-            # UPS Trigger parameters changed
+            # UPS Trigger configuration changed
             - conditions:
                 - condition: trigger
                   id:
@@ -716,4 +985,5 @@ dh_app_pve_notification_local_package:
                 - action: persistent_notification.create
                   data:
                     title: "🔋⚙️ UPS Trigger configuration changed"
-                    message: "Charge: {{ trigger.to_state.attributes.old_values.shutdown_battery_charge_threshold_percent }}% → {{ trigger.to_state.attributes.new_values.shutdown_battery_charge_threshold_percent }}%. Reserve: {{ trigger.to_state.attributes.old_values.runtime_reserve_seconds }} s → {{ trigger.to_state.attributes.new_values.runtime_reserve_seconds }} s."
+                    message: >-
+                      Charge: {{ trigger.to_state.attributes.old_values.shutdown_battery_charge_threshold_percent }}% → {{ trigger.to_state.attributes.new_values.shutdown_battery_charge_threshold_percent }}% · reserve: {{ trigger.to_state.attributes.old_values.runtime_reserve_seconds }} s → {{ trigger.to_state.attributes.new_values.runtime_reserve_seconds }} s.
