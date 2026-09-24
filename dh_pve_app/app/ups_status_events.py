@@ -55,11 +55,6 @@ def semantic_status_events(
         elif status in previous and status not in current:
             add(cleared_event)
 
-    if current_status == () and previous_status != ():
-        add("ups_status_unknown")
-    elif previous_status == () and current_status != ():
-        add("ups_status_restored")
-
     return tuple(events)
 
 
