@@ -1,0 +1,387 @@
+# =============================================================================
+# DigitalHouses Internet App notification contract — Russian presentation
+# =============================================================================
+# Reusable HAOS locale layer only. It validates schema-v2 machine events and
+# emits Notification Envelope v1 through dh_internet_app_notification.
+# Delivery (mobile, Telegram, write2log, etc.) is installation-owned.
+# Install exactly one locale package.
+# =============================================================================
+
+dh_internet_app_notification_package:
+
+  automation:
+    - id: dh_internet_app_notifications
+      alias: DH Internet · Уведомления
+      mode: queued
+      max: 20
+      triggers:
+        - trigger: event.received
+          target:
+            entity_id: event.dh_internet_app_event
+          options:
+            event_type:
+              - connection_lost
+              - connection_restored
+              - recovery_action
+              - recovery_stopped
+              - recovery_exhausted
+              - recovery_error
+              - speedtest_failed
+              - performance_problem_started
+              - performance_problem_recovered
+              - performance_problem_updated
+      actions:
+        - choose:
+            - conditions:
+                - condition: template
+                  value_template: >-
+                    {% set a = trigger.to_state.attributes %}
+                    {{ 'schema_version' in a and a.schema_version == 2
+                       and 'event_type' in a and a.event_type == 'connection_lost'
+                       and 'timestamp' in a and a.timestamp is string
+                       and 'router_up' in a and a.router_up is boolean
+                       and 'attempts' in a and a.attempts is number and a.attempts >= 1 }}
+              sequence:
+                - event: dh_internet_app_notification
+                  event_data:
+                    notification_schema_version: 1
+                    source: dh_internet_app
+                    kind: connection_lost
+                    severity: warning
+                    title: "🌐⚠️ Интернет недоступен"
+                    message: >-
+                      Интернет недоступен.
+                      Роутер отвечает: {{ 'да' if trigger.to_state.attributes.router_up else 'нет' }}.
+                    source_entity: event.dh_internet_app_event
+                    category: connectivity
+                    observed_at: "{{ trigger.to_state.attributes.timestamp }}"
+                    machine_schema_version: 2
+                    router_up: "{{ trigger.to_state.attributes.router_up }}"
+                    attempts: "{{ trigger.to_state.attributes.attempts }}"
+
+            - conditions:
+                - condition: template
+                  value_template: >-
+                    {% set a = trigger.to_state.attributes %}
+                    {{ 'schema_version' in a and a.schema_version == 2
+                       and 'event_type' in a and a.event_type == 'connection_restored'
+                       and 'timestamp' in a and a.timestamp is string
+                       and 'duration_seconds' in a
+                       and a.duration_seconds is number
+                       and a.duration_seconds >= 0 }}
+              sequence:
+                - event: dh_internet_app_notification
+                  event_data:
+                    notification_schema_version: 1
+                    source: dh_internet_app
+                    kind: connection_restored
+                    severity: info
+                    title: "🌐✅ Интернет восстановлен"
+                    message: >-
+                      {% set s = trigger.to_state.attributes.duration_seconds | int %}
+                      {% set h = s // 3600 %}
+                      {% set m = (s % 3600) // 60 %}
+                      {% set sec = s % 60 %}
+                      Связь восстановлена через
+                      {{ ('%d:%02d:%02d' | format(h,m,sec)) if h else ('%02d:%02d' | format(m,sec)) }}.
+                    source_entity: event.dh_internet_app_event
+                    category: connectivity
+                    observed_at: "{{ trigger.to_state.attributes.timestamp }}"
+                    machine_schema_version: 2
+                    duration_seconds: "{{ trigger.to_state.attributes.duration_seconds }}"
+
+            - conditions:
+                - condition: template
+                  value_template: >-
+                    {% set a = trigger.to_state.attributes %}
+                    {{ 'schema_version' in a and a.schema_version == 2
+                       and 'event_type' in a and a.event_type == 'recovery_action'
+                       and 'timestamp' in a and a.timestamp is string
+                       and 'cycle' in a and a.cycle is number and a.cycle >= 1
+                       and 'target' in a and a.target in ['ont', 'router']
+                       and 'action' in a and a.action in ['button', 'switch']
+                       and 'entity_id' in a and a.entity_id is string and a.entity_id | length > 0 }}
+              sequence:
+                - event: dh_internet_app_notification
+                  event_data:
+                    notification_schema_version: 1
+                    source: dh_internet_app
+                    kind: recovery_action
+                    severity: info
+                    title: >-
+                      🔄 Восстановление Internet: {{ trigger.to_state.attributes.target | upper }}
+                    message: >-
+                      Цикл {{ trigger.to_state.attributes.cycle }}:
+                      {{ trigger.to_state.attributes.target }} ·
+                      {{ trigger.to_state.attributes.action }}.
+                    source_entity: event.dh_internet_app_event
+                    category: recovery
+                    observed_at: "{{ trigger.to_state.attributes.timestamp }}"
+                    machine_schema_version: 2
+                    cycle: "{{ trigger.to_state.attributes.cycle }}"
+                    target: "{{ trigger.to_state.attributes.target }}"
+                    action: "{{ trigger.to_state.attributes.action }}"
+                    entity_id: "{{ trigger.to_state.attributes.entity_id }}"
+
+            - conditions:
+                - condition: template
+                  value_template: >-
+                    {% set a = trigger.to_state.attributes %}
+                    {{ 'schema_version' in a and a.schema_version == 2
+                       and 'event_type' in a and a.event_type == 'recovery_stopped'
+                       and 'timestamp' in a and a.timestamp is string
+                       and 'reason' in a and a.reason is string and a.reason | length > 0 }}
+              sequence:
+                - event: dh_internet_app_notification
+                  event_data:
+                    notification_schema_version: 1
+                    source: dh_internet_app
+                    kind: recovery_stopped
+                    severity: info
+                    title: "⏹️ Восстановление Internet остановлено"
+                    message: "Дальнейшие попытки восстановления в текущем инциденте остановлены."
+                    source_entity: event.dh_internet_app_event
+                    category: recovery
+                    observed_at: "{{ trigger.to_state.attributes.timestamp }}"
+                    machine_schema_version: 2
+                    reason: "{{ trigger.to_state.attributes.reason }}"
+
+            - conditions:
+                - condition: template
+                  value_template: >-
+                    {% set a = trigger.to_state.attributes %}
+                    {{ 'schema_version' in a and a.schema_version == 2
+                       and 'event_type' in a and a.event_type == 'recovery_exhausted'
+                       and 'timestamp' in a and a.timestamp is string
+                       and 'cycles' in a and a.cycles is number and a.cycles >= 1
+                       and 'cooldown_seconds' in a
+                       and a.cooldown_seconds is number
+                       and a.cooldown_seconds >= 0 }}
+              sequence:
+                - event: dh_internet_app_notification
+                  event_data:
+                    notification_schema_version: 1
+                    source: dh_internet_app
+                    kind: recovery_exhausted
+                    severity: warning
+                    title: "🌐⚠️ Попытки восстановления исчерпаны"
+                    message: >-
+                      Выполнено циклов: {{ trigger.to_state.attributes.cycles }}.
+                      Пауза: {{ trigger.to_state.attributes.cooldown_seconds }} с.
+                    source_entity: event.dh_internet_app_event
+                    category: recovery
+                    observed_at: "{{ trigger.to_state.attributes.timestamp }}"
+                    machine_schema_version: 2
+                    cycles: "{{ trigger.to_state.attributes.cycles }}"
+                    cooldown_seconds: "{{ trigger.to_state.attributes.cooldown_seconds }}"
+
+            - conditions:
+                - condition: template
+                  value_template: >-
+                    {% set a = trigger.to_state.attributes %}
+                    {{ 'schema_version' in a and a.schema_version == 2
+                       and 'event_type' in a and a.event_type == 'recovery_error'
+                       and 'timestamp' in a and a.timestamp is string
+                       and 'error' in a and a.error is string and a.error | length > 0 }}
+              sequence:
+                - event: dh_internet_app_notification
+                  event_data:
+                    notification_schema_version: 1
+                    source: dh_internet_app
+                    kind: recovery_error
+                    severity: error
+                    title: "🌐❌ Ошибка восстановления"
+                    message: "Автоматическое восстановление Internet завершилось ошибкой."
+                    source_entity: event.dh_internet_app_event
+                    category: recovery
+                    observed_at: "{{ trigger.to_state.attributes.timestamp }}"
+                    machine_schema_version: 2
+                    diagnostic_error: "{{ trigger.to_state.attributes.error }}"
+
+            - conditions:
+                - condition: template
+                  value_template: >-
+                    {% set a = trigger.to_state.attributes %}
+                    {{ 'schema_version' in a and a.schema_version == 2
+                       and 'event_type' in a and a.event_type == 'speedtest_failed'
+                       and 'timestamp' in a and a.timestamp is string
+                       and 'reason' in a and a.reason is string and a.reason | length > 0 }}
+              sequence:
+                - event: dh_internet_app_notification
+                  event_data:
+                    notification_schema_version: 1
+                    source: dh_internet_app
+                    kind: speedtest_failed
+                    severity: warning
+                    title: "📶⚠️ Ошибка Speedtest"
+                    message: "Тест Ookla Speedtest не был успешно завершён."
+                    source_entity: event.dh_internet_app_event
+                    category: speedtest
+                    observed_at: "{{ trigger.to_state.attributes.timestamp }}"
+                    machine_schema_version: 2
+                    diagnostic_reason: "{{ trigger.to_state.attributes.reason }}"
+
+            - conditions:
+                - condition: template
+                  value_template: >-
+                    {% set a = trigger.to_state.attributes %}
+                    {% set ns = namespace(valid=true) %}
+                    {% if 'reasons' in a and a.reasons is sequence and a.reasons is not string and a.reasons is not mapping %}
+                      {% for reason in a.reasons %}
+                        {% if reason not in ['low_download', 'low_upload', 'high_ping'] %}
+                          {% set ns.valid = false %}
+                        {% endif %}
+                      {% endfor %}
+                    {% else %}
+                      {% set ns.valid = false %}
+                    {% endif %}
+                    {{ 'schema_version' in a and a.schema_version == 2
+                       and 'event_type' in a and a.event_type == 'performance_problem_started'
+                       and 'timestamp' in a and a.timestamp is string
+                       and ns.valid and a.reasons | count > 0
+                       and 'download_mbps' in a and a.download_mbps is number
+                       and 'upload_mbps' in a and a.upload_mbps is number
+                       and 'ping_ms' in a and a.ping_ms is number
+                       and 'minimum_download_mbps' in a and a.minimum_download_mbps is number
+                       and 'minimum_upload_mbps' in a and a.minimum_upload_mbps is number
+                       and 'maximum_ping_ms' in a and a.maximum_ping_ms is number }}
+              sequence:
+                - event: dh_internet_app_notification
+                  event_data:
+                    notification_schema_version: 1
+                    source: dh_internet_app
+                    kind: performance_problem_started
+                    severity: warning
+                    title: "📉⚠️ Проблема качества Internet"
+                    message: >-
+                      {% set labels = {'low_download':'низкая скорость Download','low_upload':'низкая скорость Upload','high_ping':'высокий Ping'} %}
+                      Проблемы:
+                      {% for reason in trigger.to_state.attributes.reasons %}{{ labels[reason] }}{{ ', ' if not loop.last else '.' }}{% endfor %}
+                      Download {{ trigger.to_state.attributes.download_mbps }} Мбит/с ·
+                      Upload {{ trigger.to_state.attributes.upload_mbps }} Мбит/с ·
+                      Ping {{ trigger.to_state.attributes.ping_ms }} мс.
+                    source_entity: event.dh_internet_app_event
+                    category: performance
+                    observed_at: "{{ trigger.to_state.attributes.timestamp }}"
+                    machine_schema_version: 2
+                    reasons: "{{ trigger.to_state.attributes.reasons }}"
+                    download_mbps: "{{ trigger.to_state.attributes.download_mbps }}"
+                    upload_mbps: "{{ trigger.to_state.attributes.upload_mbps }}"
+                    ping_ms: "{{ trigger.to_state.attributes.ping_ms }}"
+                    minimum_download_mbps: "{{ trigger.to_state.attributes.minimum_download_mbps }}"
+                    minimum_upload_mbps: "{{ trigger.to_state.attributes.minimum_upload_mbps }}"
+                    maximum_ping_ms: "{{ trigger.to_state.attributes.maximum_ping_ms }}"
+
+            - conditions:
+                - condition: template
+                  value_template: >-
+                    {% set a = trigger.to_state.attributes %}
+                    {% set ns = namespace(valid=true) %}
+                    {% if 'previous_reasons' in a and a.previous_reasons is sequence and a.previous_reasons is not string and a.previous_reasons is not mapping %}
+                      {% for reason in a.previous_reasons %}
+                        {% if reason not in ['low_download', 'low_upload', 'high_ping'] %}
+                          {% set ns.valid = false %}
+                        {% endif %}
+                      {% endfor %}
+                    {% else %}
+                      {% set ns.valid = false %}
+                    {% endif %}
+                    {{ 'schema_version' in a and a.schema_version == 2
+                       and 'event_type' in a and a.event_type == 'performance_problem_recovered'
+                       and 'timestamp' in a and a.timestamp is string
+                       and ns.valid and a.previous_reasons | count > 0
+                       and 'download_mbps' in a and a.download_mbps is number
+                       and 'upload_mbps' in a and a.upload_mbps is number
+                       and 'ping_ms' in a and a.ping_ms is number }}
+              sequence:
+                - event: dh_internet_app_notification
+                  event_data:
+                    notification_schema_version: 1
+                    source: dh_internet_app
+                    kind: performance_problem_recovered
+                    severity: info
+                    title: "📈✅ Качество Internet восстановлено"
+                    message: >-
+                      Download {{ trigger.to_state.attributes.download_mbps }} Мбит/с ·
+                      Upload {{ trigger.to_state.attributes.upload_mbps }} Мбит/с ·
+                      Ping {{ trigger.to_state.attributes.ping_ms }} мс.
+                      Текущие значения находятся в заданных пределах.
+                    source_entity: event.dh_internet_app_event
+                    category: performance
+                    observed_at: "{{ trigger.to_state.attributes.timestamp }}"
+                    machine_schema_version: 2
+                    previous_reasons: "{{ trigger.to_state.attributes.previous_reasons }}"
+                    download_mbps: "{{ trigger.to_state.attributes.download_mbps }}"
+                    upload_mbps: "{{ trigger.to_state.attributes.upload_mbps }}"
+                    ping_ms: "{{ trigger.to_state.attributes.ping_ms }}"
+
+            - conditions:
+                - condition: template
+                  value_template: >-
+                    {% set a = trigger.to_state.attributes %}
+                    {% set ns = namespace(valid=true) %}
+                    {% for key in ['previous_reasons', 'reasons'] %}
+                      {% if key in a and a[key] is sequence and a[key] is not string and a[key] is not mapping %}
+                        {% for reason in a[key] %}
+                          {% if reason not in ['low_download', 'low_upload', 'high_ping'] %}
+                            {% set ns.valid = false %}
+                          {% endif %}
+                        {% endfor %}
+                      {% else %}
+                        {% set ns.valid = false %}
+                      {% endif %}
+                    {% endfor %}
+                    {{ 'schema_version' in a and a.schema_version == 2
+                       and 'event_type' in a and a.event_type == 'performance_problem_updated'
+                       and 'timestamp' in a and a.timestamp is string
+                       and ns.valid and a.reasons | count > 0
+                       and 'download_mbps' in a and a.download_mbps is number
+                       and 'upload_mbps' in a and a.upload_mbps is number
+                       and 'ping_ms' in a and a.ping_ms is number }}
+              sequence:
+                - event: dh_internet_app_notification
+                  event_data:
+                    notification_schema_version: 1
+                    source: dh_internet_app
+                    kind: performance_problem_updated
+                    severity: warning
+                    title: "📉⚠️ Параметры проблемы Internet изменились"
+                    message: >-
+                      {% set labels = {'low_download':'low download','low_upload':'low upload','high_ping':'high ping'} %}
+                      Problems:
+                      {% for reason in trigger.to_state.attributes.reasons %}{{ labels[reason] }}{{ ', ' if not loop.last else '.' }}{% endfor %}
+                      Download {{ trigger.to_state.attributes.download_mbps }} Mbit/s ·
+                      Upload {{ trigger.to_state.attributes.upload_mbps }} Mbit/s ·
+                      Ping {{ trigger.to_state.attributes.ping_ms }} ms.
+                    source_entity: event.dh_internet_app_event
+                    category: performance
+                    observed_at: "{{ trigger.to_state.attributes.timestamp }}"
+                    machine_schema_version: 2
+                    previous_reasons: "{{ trigger.to_state.attributes.previous_reasons }}"
+                    reasons: "{{ trigger.to_state.attributes.reasons }}"
+                    download_mbps: "{{ trigger.to_state.attributes.download_mbps }}"
+                    upload_mbps: "{{ trigger.to_state.attributes.upload_mbps }}"
+                    ping_ms: "{{ trigger.to_state.attributes.ping_ms }}"
+          default:
+            - event: dh_internet_app_notification
+              event_data:
+                notification_schema_version: 1
+                source: dh_internet_app
+                kind: contract_error
+                severity: error
+                title: "🧩❌ Internet App: ошибка контракта события"
+                message: "Machine event Internet App не содержит обязательные данные или содержит некорректные данные."
+                source_entity: event.dh_internet_app_event
+                category: diagnostic
+                contract: dh_internet_app_machine_event_v2
+                failure_class: >-
+                  {% set a = trigger.to_state.attributes %}
+                  {% if 'schema_version' not in a or 'event_type' not in a or 'timestamp' not in a %}
+                    missing_required_field
+                  {% elif a.schema_version != 2 %}
+                    invalid_schema_version
+                  {% elif a.event_type is not string or a.timestamp is not string %}
+                    invalid_type
+                  {% else %}
+                    invalid_event_payload
+                  {% endif %}
