@@ -41,13 +41,23 @@
         <strong id="active30">—</strong>
         <small>installations</small>
       </article>
+      <article class="card">
+        <span>Heartbeats</span>
+        <strong id="heartbeats">—</strong>
+        <small>accepted total</small>
+      </article>
+      <article class="card">
+        <span>Last heartbeat</span>
+        <strong id="last-heartbeat" class="time-value">—</strong>
+        <small id="last-heartbeat-exact">No data</small>
+      </article>
     </section>
 
     <section class="panel chart-panel">
       <div class="panel-head">
         <div>
           <h2>Activity</h2>
-          <p>Unique installations by UTC day</p>
+          <p>Active installations and heartbeat volume by UTC day</p>
         </div>
         <select id="history-days" aria-label="History period">
           <option value="30" selected>30 days</option>
@@ -56,6 +66,17 @@
           <option value="365">365 days</option>
         </select>
       </div>
+
+      <div class="chart-meta">
+        <div><strong id="period-heartbeats">—</strong><span>Heartbeats</span></div>
+        <div><strong id="period-active-days">—</strong><span>Active days</span></div>
+        <div><strong id="period-peak">—</strong><span>Peak active</span></div>
+        <div class="legend">
+          <span><i class="legend-active"></i>Active</span>
+          <span><i class="legend-heartbeats"></i>Heartbeats</span>
+        </div>
+      </div>
+
       <div id="chart" class="chart" aria-label="Activity history chart"></div>
     </section>
 

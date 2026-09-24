@@ -8,7 +8,7 @@ def _rows(result) -> list[dict[str, object]]:
     return [dict(row) for row in result.mappings().all()]
 
 
-def summary(db: Session) -> dict[str, int]:
+def summary(db: Session) -> dict[str, object]:
     row = db.execute(
         text(
             """
@@ -29,11 +29,23 @@ def summary(db: Session) -> dict[str, int]:
                     FROM heartbeats
                     WHERE received_at >= now() - interval '30 days'
                 ) AS active_30d,
-                (SELECT count(*) FROM heartbeats) AS heartbeats
+                (SELECT count(*) FROM heartbeats) AS heartbeats,
+                (SELECT max(received_at) FROM heartbeats) AS last_heartbeat
             """
         )
     ).mappings().one()
-    return {key: int(value) for key, value in row.items()}
+
+    last_heartbeat = row["last_heartbeat"]
+    return {
+        "observed_installations": int(row["observed_installations"]),
+        "active_24h": int(row["active_24h"]),
+        "active_7d": int(row["active_7d"]),
+        "active_30d": int(row["active_30d"]),
+        "heartbeats": int(row["heartbeats"]),
+        "last_heartbeat": (
+            last_heartbeat.isoformat() if last_heartbeat is not None else None
+        ),
+    }
 
 
 def products(db: Session) -> list[dict[str, object]]:

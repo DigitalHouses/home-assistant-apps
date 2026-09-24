@@ -62,3 +62,17 @@ The installer:
 - verifies both loopback API and LAN nginx health.
 
 No JavaScript libraries, fonts, images, or CDN resources are required.
+
+
+## Dashboard metrics
+
+The dashboard summary shows:
+
+- known installations;
+- active installations over 24 hours, 7 days and 30 days;
+- total accepted heartbeat count;
+- the latest heartbeat time, rendered locally in the browser.
+
+The activity chart compares unique active installations with accepted heartbeat
+volume for each UTC calendar day. The selected period also shows total
+heartbeats, number of active days and peak active installations.
