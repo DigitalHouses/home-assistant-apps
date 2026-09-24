@@ -347,12 +347,12 @@ dh_internet_app_notification_package:
                     severity: warning
                     title: "📉⚠️ Параметры проблемы Internet изменились"
                     message: >-
-                      {% set labels = {'low_download':'low download','low_upload':'low upload','high_ping':'high ping'} %}
-                      Problems:
+                      {% set labels = {'low_download':'низкая скорость Download','low_upload':'низкая скорость Upload','high_ping':'высокий Ping'} %}
+                      Проблемы:
                       {% for reason in trigger.to_state.attributes.reasons %}{{ labels[reason] }}{{ ', ' if not loop.last else '.' }}{% endfor %}
-                      Download {{ trigger.to_state.attributes.download_mbps }} Mbit/s ·
-                      Upload {{ trigger.to_state.attributes.upload_mbps }} Mbit/s ·
-                      Ping {{ trigger.to_state.attributes.ping_ms }} ms.
+                      Download {{ trigger.to_state.attributes.download_mbps }} Мбит/с ·
+                      Upload {{ trigger.to_state.attributes.upload_mbps }} Мбит/с ·
+                      Ping {{ trigger.to_state.attributes.ping_ms }} мс.
                     source_entity: event.dh_internet_app_event
                     category: performance
                     observed_at: "{{ trigger.to_state.attributes.timestamp }}"
@@ -370,7 +370,7 @@ dh_internet_app_notification_package:
                 kind: contract_error
                 severity: error
                 title: "🧩❌ Internet App: ошибка контракта события"
-                message: "Machine event Internet App не содержит обязательные данные или содержит некорректные данные."
+                message: "Событие Internet App не содержит обязательные данные или содержит некорректные данные."
                 source_entity: event.dh_internet_app_event
                 category: diagnostic
                 contract: dh_internet_app_machine_event_v2
