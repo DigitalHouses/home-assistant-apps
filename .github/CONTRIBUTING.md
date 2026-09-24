@@ -35,9 +35,9 @@ Owner-authored same-repository PRs targeting `main` are integrated automatically
 
 Runtime contract handling must follow [DigitalHouses Contract Data Policy](../docs/standards/CONTRACT_DATA_POLICY.md): required data fails explicitly, optional data remains absent/null according to schema, and contract boundaries must not invent fallback domain values.
 
-Notification-capable products must follow [DigitalHouses Events and Notifications Standard](../docs/standards/EVENTS_AND_NOTIFICATIONS_STANDARD.md): Apps/Agents emit machine facts; local Home Assistant packages use `event.received`, clear `trigger.id` values, `choose`, and a direct installation-owned action. Do not add an intermediate notification protocol when a direct action is enough.
+Notification-capable products must follow [DigitalHouses Events & Notifications Standard](../docs/standards/EVENTS_AND_NOTIFICATIONS_STANDARD.md): Apps/Agents emit machine events only. Local Home Assistant automations use explicit `trigger.id` values, route with `choose`, read `trigger.to_state.attributes` directly, and call the final delivery action directly. Do not add Notification Envelopes, secondary notification events, delivery adapters or duplicate machine-schema validation in Home Assistant.
 
-Machine-event behavior is the product developer's responsibility and must be proven by product tests. The local notification automation is intentionally simple and does not reimplement producer schema validation.
+Product tests prove the machine-event contract. Repository validation checks repository structure/shared metadata and must not become a second implementation-level notification linter. Installation-specific delivery such as `script.write2log`, Telegram or a concrete `notify.*` target remains local and is not a dependency of the public product.
 
 ## Development
 
