@@ -244,7 +244,7 @@ The UPS trigger controls are MQTT Discovery configuration entities:
 
 Changing a number changes only the draft. It does **not** change the active shutdown policy.
 
-The reusable presentation package `examples/packages/dh_app_pve_ui_package.yaml` and `examples/dh_app_pve_ups_dashboard.yaml` implement a VIEW -> EDIT -> CONFIRM -> APPLY workflow. `sensor.dh_app_pve_ups_trigger_policy` is the read-only committed-policy presentation entity; draft `number` entities are never shown as if they were active values. Opening the editor snapshots committed values, Cancel restores the draft, and a successful `config_changed` Event closes the editor back to VIEW.
+The reusable presentation package `examples/packages/dh_app_pve_ui_package.yaml` and `examples/dh_app_pve_ups_dashboard.yaml` implement a VIEW -> EDIT -> CONFIRM -> APPLY workflow. `sensor.dh_app_pve_ups_trigger_policy` is the read-only committed-policy presentation entity; draft `number` entities are never shown as if they were active values. Opening the editor snapshots committed values, Cancel restores the draft, and only a complete validated schema-v2 `config_changed` Event closes the editor back to VIEW. UI state is validated as numeric before conversion; missing/invalid state or a draft acknowledgement timeout stops the script explicitly instead of coercing the value to zero or implying success.
 
 A real Apply is a durable transaction:
 
