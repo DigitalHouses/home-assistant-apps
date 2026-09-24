@@ -104,7 +104,9 @@ current_charger_status: idle
 detection_source: charger_transition
 ```
 
-The product must not emit presentation fields such as:
+The product must not emit **user-facing or localized presentation semantics** as part of the machine-event contract.
+
+Presentation-oriented fields commonly include:
 
 ```text
 title
@@ -119,7 +121,9 @@ problem_text
 human-readable translated reason
 ```
 
-Forbidden example:
+The prohibition is semantic, not a ban on a literal key name. If an upstream machine protocol genuinely defines a field named `message` or `details` as machine data, the product may preserve it when that field is part of the documented machine contract. It must not turn that field into localized user-facing prose inside the producer.
+
+Forbidden presentation example:
 
 ```yaml
 event_type: battery_fully_charged
@@ -300,40 +304,108 @@ RU notification package
 dh_app_pve_notification
 ```
 
-A valid localized notification event may contain:
+Every normal localized notification event must use the common DigitalHouses Notification Envelope defined in §10.
+
+Example:
 
 ```yaml
+notification_schema_version: 1
 source: dh_app_pve
-source_entity: event.dh_app_pve_ups_diagnostic
-schema_version: 2
 kind: battery_fully_charged
-category: ups
 severity: info
 title: "🔋✅ UPS: батарея заряжена"
 message: "Заряд: 99% → 100% · режим зарядки: charging → idle."
+source_entity: event.dh_app_pve_ups_diagnostic
+category: ups
+observed_at: "2026-09-24T20:25:56+05:00"
 ```
 
-At this boundary `title` and `message` are presentation data and are expected.
+At this boundary `title` and `message` are presentation data and are required.
 
-The source machine `schema_version` may be propagated for provenance, but it must not be treated as an implicit version of the localized notification contract.
+The source machine `schema_version` may be propagated only as explicitly named provenance data when useful, but it must not replace or masquerade as `notification_schema_version`.
+
+Locale packages must not blindly copy the complete machine payload into the notification event through fields such as `raw`, `attributes`, `payload`, `context` or equivalent catch-all passthrough objects. Additional machine context may be exposed only through explicitly selected, documented notification fields. This prevents accidental coupling of the delivery contract to the producer schema and prevents unintended data from crossing the presentation boundary.
 
 ---
 
-## 10. Notification contract versioning
+## 10. DigitalHouses Notification Envelope v1
 
-The localized notification event is a public contract independent from the machine-event schema.
+The localized Home Assistant notification event is a public cross-product contract independent from the source machine-event schema.
 
-A compatibility-breaking change to its required fields or semantics must be versioned explicitly.
+All notification-capable DigitalHouses products use the same mandatory envelope.
 
-New products should expose a dedicated notification-contract version, for example:
+### Required fields
 
-```text
-notification_schema_version
+```yaml
+notification_schema_version: 1
+source: <stable product notification source>
+kind: <stable notification kind>
+severity: <info|warning|error|critical>
+title: <non-empty localized string>
+message: <non-empty localized string>
 ```
 
-Existing products may add an explicit notification-contract version at their next compatibility-affecting notification revision rather than introducing a gratuitous runtime change solely to satisfy this recommendation.
+The six fields above are mandatory for every normal notification and for every `contract_error` notification.
 
-Locale variants of one product must always expose the same notification-contract version and semantics.
+Contract rules:
+
+- `notification_schema_version` must be the integer `1` for Envelope v1;
+- `source` must be a non-empty stable machine identifier for the producing DigitalHouses product, for example `dh_app_pve` or `dh_internet_app`;
+- `kind` must be a non-empty stable machine-readable notification kind;
+- `severity` must be exactly one of `info`, `warning`, `error`, `critical`;
+- `title` must be a non-empty localized human-readable string;
+- `message` must be a non-empty localized human-readable string.
+
+A delivery adapter may therefore consume notifications from different DigitalHouses products without product-specific field mapping.
+
+Conceptually:
+
+```text
+PVE ──────┐
+Internet ─┼→ Notification Envelope v1 → installation-owned delivery
+Plex ─────┘
+```
+
+### Optional common fields
+
+The following common fields are optional when their facts exist and are useful:
+
+```text
+source_entity
+category
+observed_at
+```
+
+Products may define additional explicit notification fields for structured context, provided that:
+
+- they do not replace any required Envelope v1 field;
+- they are documented;
+- all locale variants expose the same field semantics;
+- they are selected explicitly rather than copied wholesale from the machine payload;
+- absence follows the Contract Data Policy and is never repaired with a fabricated value.
+
+### Version independence
+
+`notification_schema_version` versions the localized notification envelope only.
+
+It is independent from:
+
+- machine-event `schema_version`;
+- product release version;
+- telemetry schema version;
+- MQTT Discovery metadata.
+
+A compatibility-breaking change to required envelope fields or their semantics requires a new notification envelope version.
+
+All locale variants of one product must expose the same notification envelope version and semantics.
+
+### Migration
+
+New notification-capable products must implement Notification Envelope v1 from their first release.
+
+Existing products that already emit localized notification events must converge on Envelope v1 in their next notification-contract change. Until migrated, their legacy output is compatibility debt and must not be used as precedent for new products.
+
+A product currently changing its notification architecture is considered in-scope for this migration and must implement Envelope v1 as part of that work.
 
 ---
 
@@ -616,9 +688,7 @@ Once released, these identifiers are compatibility interfaces and must not be re
 
 ## 20. Severity
 
-Machine and notification contracts may expose a canonical severity vocabulary.
-
-Recommended common values:
+Notification Envelope v1 uses the canonical severity vocabulary:
 
 ```text
 info
@@ -626,6 +696,8 @@ warning
 error
 critical
 ```
+
+Machine-event contracts should use the same vocabulary when severity is part of their machine semantics.
 
 A locale may change presentation:
 
@@ -644,15 +716,16 @@ Severity is machine semantics only when the producer can determine it from the p
 
 ## 21. Repository requirements
 
-For every product that supports user notifications, the repository should contain:
+For every product that supports user notifications, the repository must contain:
 
 ```text
 machine-event producer
 machine-event schema/tests
 default locale package
-additional locale packages where maintained
 negative contract tests
 ```
+
+Additional locale packages are optional and may be supplied where maintained.
 
 The repository must not require the maintainer's private notification-delivery implementation.
 
@@ -678,9 +751,14 @@ Every product using this architecture must test at least:
 10. notification packages contain no dependency on private delivery mechanisms such as `write2log`;
 11. startup reconciliation does not convert unknown state into a healthy state;
 12. shipped Home Assistant YAML packages parse successfully;
-13. stable public event/entity identifiers are protected by compatibility tests where applicable.
+13. stable public event/entity identifiers are protected by compatibility tests where applicable;
+14. every normal localized notification and every `contract_error` notification contains all six required Notification Envelope v1 fields;
+15. `notification_schema_version` is the integer `1` in every locale variant;
+16. `severity` is restricted to the common vocabulary;
+17. `title` and `message` are non-empty;
+18. locale packages do not blindly forward the complete source machine payload through `raw` or an equivalent catch-all field.
 
-Where a dedicated notification-contract version exists, all locale variants must also test the same version value.
+All locale variants must test the same notification envelope version and required-field semantics.
 
 ---
 
@@ -704,7 +782,7 @@ Where a dedicated notification-contract version exists, all locale variants must
 └───────────────────┬──────────────────────┘
                     │
                     │ <product>_notification
-                    │ title + message + severity
+                    │ Notification Envelope v1
                     ▼
 ┌──────────────────────────────────────────┐
 │ Installation-owned delivery              │
