@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.5.18
+
+- Replace the user-facing umbrella `ups_status_changed` notification path with explicit semantic UPS machine events and matching Home Assistant `trigger.id` values.
+- Add direct events for NUT availability, unknown/restored power state, line-power loss/restore, low/high battery, replace-battery, bypass, calibration, output-off, overload, AVR Trim/Boost, NUT Forced Shutdown and UPS alarm enter/clear transitions.
+- Keep battery discharge milestones, battery charge completion, software shutdown commit and UPS Trigger configuration changes as dedicated events.
+- Make generic `problem_started/problem_updated/problem_recovered` notification triggers PVE-only; UPS notifications no longer require users to interpret status arrays.
+- Rewrite EN/RU local notification packages so every user scenario has one obvious editable `title`/`message` block. The Russian site package still calls `script.write2log` directly.
+- Keep UPS/NUT collection, FSD ownership and shutdown thresholds unchanged.
+
 ## 0.5.17
 
 - Simplify Home Assistant notifications to the direct flow: machine event → `trigger.id` → `choose` → direct action.
