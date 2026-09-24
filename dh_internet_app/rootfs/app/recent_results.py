@@ -29,6 +29,10 @@ def load_recent_results(path: Path) -> dict[str, Any]:
     updated_at = raw.get("updated_at")
     if not isinstance(updated_at, str):
         updated_at = None
+        if rows:
+            latest_tested_at = rows[0].get("tested_at")
+            if isinstance(latest_tested_at, str):
+                updated_at = latest_tested_at
     return {
         "results": rows[:RECENT_RESULTS_LIMIT],
         "updated_at": updated_at,
