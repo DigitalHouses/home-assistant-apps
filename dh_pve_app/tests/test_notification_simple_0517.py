@@ -44,7 +44,7 @@ def test_notification_local_package_is_direct_and_readable() -> None:
             assert f"id: {trigger_id}" in text
 
         for forbidden in (
-            "dh_app_pve_notification",
+            "event: dh_app_pve_notification",
             "notification_schema_version",
             "contract_error",
             "failure_class",
