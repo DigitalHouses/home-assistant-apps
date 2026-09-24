@@ -195,6 +195,28 @@ dh_app_pve_ui_package:
           options:
             event_type:
               - config_changed
+      conditions:
+        - condition: template
+          value_template: >-
+            {% set attrs = trigger.to_state.attributes %}
+            {{ 'event_type' in attrs
+               and attrs.event_type == 'config_changed'
+               and 'schema_version' in attrs
+               and attrs.schema_version == 2
+               and 'observed_at' in attrs
+               and attrs.observed_at is string
+               and 'old_values' in attrs
+               and attrs.old_values is mapping
+               and 'new_values' in attrs
+               and attrs.new_values is mapping
+               and 'shutdown_battery_charge_threshold_percent' in attrs.new_values
+               and attrs.new_values.shutdown_battery_charge_threshold_percent is number
+               and 'runtime_reserve_seconds' in attrs.new_values
+               and attrs.new_values.runtime_reserve_seconds is number
+               and 'previous_revision' in attrs
+               and attrs.previous_revision is number
+               and 'current_revision' in attrs
+               and attrs.current_revision is number }}
       actions:
         - action: input_select.select_option
           target:
