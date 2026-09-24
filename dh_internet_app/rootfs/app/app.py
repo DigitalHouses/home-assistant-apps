@@ -48,7 +48,14 @@ from speedtest import (
     save_last_result,
     save_servers_state,
 )
-from state import OutageTracker, atomic_write_json, iso, now_local
+from state import (
+    OutageTracker,
+    atomic_write_json,
+    iso,
+    load_recovery_stopped,
+    now_local,
+    save_recovery_stopped,
+)
 from traffic import (
     entity_rate_mbps,
     entity_total_bytes,
@@ -66,6 +73,7 @@ TRAFFIC_FILE = Path("/data/runtime/traffic.json")
 TRAFFIC_POLL_SECONDS = 60
 RECENT_RESULTS_FILE = Path("/data/runtime/recent_results.json")
 SERVERS_FILE = Path("/data/runtime/servers.json")
+RECOVERY_STATE_FILE = Path("/data/runtime/recovery.json")
 
 
 class InternetApp:
@@ -94,6 +102,12 @@ class InternetApp:
 
         self.outages = OutageTracker.load(OUTAGES_FILE)
         self.incident_active = self.outages.active_from is not None
+        recovery_stopped = load_recovery_stopped(RECOVERY_STATE_FILE)
+        if self.incident_active and recovery_stopped:
+            self.stop_recovery.set()
+            self.recovery_state = "stopped"
+        elif recovery_stopped:
+            save_recovery_stopped(RECOVERY_STATE_FILE, False)
         self.speedtest = load_last_result(SPEEDTEST_FILE)
         self.thresholds = load_thresholds(THRESHOLDS_FILE)
         self.recent_results = load_recent_results(RECENT_RESULTS_FILE)
@@ -204,6 +218,7 @@ class InternetApp:
             with self.lock:
                 if self.incident_active:
                     self.recovery_state = "stopped"
+                    save_recovery_stopped(RECOVERY_STATE_FILE, True)
             self._publish_state()
             self._publish_problems()
             self._event("recovery_stopped", reason="user")
@@ -805,6 +820,7 @@ class InternetApp:
             if self.incident_active:
                 record = self.outages.recover()
                 self.incident_active = False
+                save_recovery_stopped(RECOVERY_STATE_FILE, False)
                 self.stop_recovery.set()
                 self._event(
                     "connection_restored",
@@ -823,6 +839,7 @@ class InternetApp:
         if not self.incident_active:
             self.incident_active = True
             self.stop_recovery.clear()
+            save_recovery_stopped(RECOVERY_STATE_FILE, False)
             self.outages.start()
             self._event(
                 "connection_lost",

@@ -24,7 +24,7 @@ When recovery is enabled, both ONT and Router target entities must be configured
 - `retry_interval_minutes`: delay before the next cycle when Internet is still down.
 - `cooldown_minutes`: pause after `max_cycles`; if the same outage continues, a new series may start afterwards.
 
-The MQTT Stop button suppresses further attempts for the current incident. A new outage clears Stop state.
+The MQTT Stop button suppresses further attempts for the current incident, including across an App restart. A new outage clears Stop state.
 
 ## Speedtest
 

@@ -11,13 +11,27 @@ from unittest.mock import patch
 APP_DIR = Path(__file__).resolve().parents[1] / "rootfs" / "app"
 sys.path.insert(0, str(APP_DIR))
 
-from state import OutageTracker, duration_text
+from state import (
+    OutageTracker,
+    duration_text,
+    load_recovery_stopped,
+    save_recovery_stopped,
+)
 
 
 class OutageTests(unittest.TestCase):
     def test_duration_text(self) -> None:
         self.assertEqual(duration_text(65), "01:05")
         self.assertEqual(duration_text(3661), "1:01:01")
+
+    def test_recovery_stop_state_round_trip(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "recovery.json"
+            self.assertFalse(load_recovery_stopped(path))
+            save_recovery_stopped(path, True)
+            self.assertTrue(load_recovery_stopped(path))
+            save_recovery_stopped(path, False)
+            self.assertFalse(load_recovery_stopped(path))
 
     def test_current_outage_is_visible_and_then_closed(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

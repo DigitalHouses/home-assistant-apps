@@ -51,6 +51,18 @@ def atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
             pass
 
 
+def load_recovery_stopped(path: Path) -> bool:
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return False
+    return bool(raw.get("stopped")) if isinstance(raw, dict) else False
+
+
+def save_recovery_stopped(path: Path, stopped: bool) -> None:
+    atomic_write_json(path, {"stopped": bool(stopped)})
+
+
 @dataclass
 class OutageTracker:
     path: Path
