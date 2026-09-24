@@ -56,8 +56,9 @@ def test_ha_package_keeps_recorder_narrow_and_threshold_logic_in_app():
     assert "sensor.dh_app_pve_storage_*_percent_used" in text
     assert "sensor.dh_app_pve_*" not in text
     assert "binary_sensor.dh_app_pve_*" not in text
-    assert "input_number:" not in text
-    assert "automation:" not in text
+    assert "dh_app_pve_ups_trigger_snapshot_charge:" in text
+    assert "dh_app_pve_ups_trigger_snapshot_reserve:" in text
+    assert "dh_app_pve_ups_trigger_close_after_success" in text
 
 
 def test_duplicate_ups_runtime_seconds_entity_is_removed_from_discovery():
