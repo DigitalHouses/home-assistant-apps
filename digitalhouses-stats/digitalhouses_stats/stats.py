@@ -96,7 +96,7 @@ def versions(
                     version,
                     received_at
                 FROM heartbeats
-                WHERE (:product IS NULL OR product = :product)
+                WHERE (CAST(:product AS text) IS NULL OR product = CAST(:product AS text))
                 ORDER BY
                     product,
                     installation_id,
@@ -142,7 +142,7 @@ def countries(
                     country,
                     received_at
                 FROM heartbeats
-                WHERE (:product IS NULL OR product = :product)
+                WHERE (CAST(:product AS text) IS NULL OR product = CAST(:product AS text))
                 ORDER BY
                     product,
                     installation_id,
@@ -201,7 +201,7 @@ def history(
                   AND received_at < (
                     CURRENT_DATE + 1
                 )::timestamptz
-                  AND (:product IS NULL OR product = :product)
+                  AND (CAST(:product AS text) IS NULL OR product = CAST(:product AS text))
                 GROUP BY (received_at AT TIME ZONE 'UTC')::date
             )
             SELECT
