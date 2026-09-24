@@ -29,7 +29,7 @@ class DiscoveryTests(unittest.TestCase):
         self.assertEqual(payload['components']['db_yesterday_records']['name'], 'DB inserted yesterday')
         self.assertEqual(payload['components']['recorder_writing']['name'], 'DB recorder writing')
         self.assertEqual(payload['components']['db_last_age']['name'], 'DB last age')
-        self.assertEqual(len(payload['components']), 19)
+        self.assertEqual(len(payload['components']), 17)
         self.assertEqual(
             payload['components']['db_last_refresh']['default_entity_id'],
             'sensor.dh_db_last_refresh',
@@ -42,20 +42,6 @@ class DiscoveryTests(unittest.TestCase):
         self.assertNotEqual(LAST_REFRESH_TOPIC, STATE_TOPIC)
         self.assertTrue(STATE_RETAIN)
 
-    def test_common_runtime_diagnostics(self):
-        payload = build_discovery_payload('0.1.8')
-        components = payload['components']
-
-        version = components['app_version']
-        self.assertEqual(version['default_entity_id'], 'sensor.dh_db_app_version')
-        self.assertEqual(version['entity_category'], 'diagnostic')
-        self.assertEqual(version['value_template'], '{{ value_json.app_version }}')
-
-        started = components['started_at']
-        self.assertEqual(started['default_entity_id'], 'sensor.dh_db_started_at')
-        self.assertEqual(started['entity_category'], 'diagnostic')
-        self.assertEqual(started['device_class'], 'timestamp')
-        self.assertEqual(started['value_template'], '{{ value_json.started_at }}')
 
 
 class StorageDiscoveryTests(unittest.TestCase):
