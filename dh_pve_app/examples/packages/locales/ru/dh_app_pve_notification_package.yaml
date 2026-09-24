@@ -44,10 +44,15 @@ dh_app_pve_notification_package:
                        and attrs.schema_version == 1
                        and attrs.event_type in ['problem_started', 'problem_updated', 'problem_recovered']
                        and 'category' in attrs
+                       and attrs.category is string
                        and 'severity' in attrs
+                       and attrs.severity is string
                        and 'object_id' in attrs
+                       and attrs.object_id is string
                        and 'object_name' in attrs
-                       and 'metric' in attrs }}
+                       and attrs.object_name is string
+                       and 'metric' in attrs
+                       and attrs.metric is string }}
               sequence:
                 - event: dh_app_pve_notification
                   event_data:
@@ -106,20 +111,30 @@ dh_app_pve_notification_package:
                        and attrs.schema_version == 2
                        and attrs.event_type in ['problem_started', 'problem_updated', 'problem_recovered']
                        and 'observed_at' in attrs
+                       and attrs.observed_at is string
                        and 'problem_id' in attrs
+                       and attrs.problem_id is string
                        and 'category' in attrs
+                       and attrs.category is string
                        and 'severity' in attrs
+                       and attrs.severity is string
                        and 'object_id' in attrs
+                       and attrs.object_id is string
                        and 'object_name' in attrs
+                       and attrs.object_name is string
                        and 'metric' in attrs
+                       and attrs.metric is string
                        and 'previous' in attrs
+                       and (attrs.previous is none or attrs.previous is mapping)
                        and 'current' in attrs
                        and attrs.current is mapping
                        and 'active' in attrs.current
                        and 'value' in attrs.current
                        and 'average' in attrs.current
                        and 'threshold' in attrs.current
-                       and 'active_problem_count' in attrs }}
+                       and 'active_problem_count' in attrs
+                       and attrs.active_problem_count is number
+                       and attrs.active_problem_count >= 0 }}
               sequence:
                 - event: dh_app_pve_notification
                   event_data:
@@ -176,10 +191,19 @@ dh_app_pve_notification_package:
                        and attrs.schema_version == 2
                        and attrs.event_type == 'ups_status_changed'
                        and 'observed_at' in attrs
+                       and attrs.observed_at is string
                        and 'previous_status' in attrs
+                       and attrs.previous_status is sequence
+                       and attrs.previous_status is not string
                        and 'current_status' in attrs
+                       and attrs.current_status is sequence
+                       and attrs.current_status is not string
                        and 'previous_raw_status' in attrs
-                       and 'current_raw_status' in attrs }}
+                       and attrs.previous_raw_status is sequence
+                       and attrs.previous_raw_status is not string
+                       and 'current_raw_status' in attrs
+                       and attrs.current_raw_status is sequence
+                       and attrs.current_raw_status is not string }}
               sequence:
                 - event: dh_app_pve_notification
                   event_data:
@@ -241,9 +265,14 @@ dh_app_pve_notification_package:
                        and attrs.schema_version == 2
                        and attrs.event_type == 'battery_discharge_level_crossed'
                        and 'observed_at' in attrs
+                       and attrs.observed_at is string
                        and 'previous_charge_percent' in attrs
+                       and attrs.previous_charge_percent is number
                        and 'current_charge_percent' in attrs
-                       and 'crossed_thresholds' in attrs }}
+                       and attrs.current_charge_percent is number
+                       and 'crossed_thresholds' in attrs
+                       and attrs.crossed_thresholds is sequence
+                       and attrs.crossed_thresholds is not string }}
               sequence:
                 - event: dh_app_pve_notification
                   event_data:
@@ -271,11 +300,17 @@ dh_app_pve_notification_package:
                        and attrs.schema_version == 2
                        and attrs.event_type == 'battery_fully_charged'
                        and 'observed_at' in attrs
+                       and attrs.observed_at is string
                        and 'previous_charge_percent' in attrs
+                       and (attrs.previous_charge_percent is number or attrs.previous_charge_percent is none)
                        and 'current_charge_percent' in attrs
+                       and (attrs.current_charge_percent is number or attrs.current_charge_percent is none)
                        and 'previous_charger_status' in attrs
+                       and attrs.previous_charger_status is string
                        and 'current_charger_status' in attrs
-                       and 'detection_source' in attrs }}
+                       and attrs.current_charger_status is string
+                       and 'detection_source' in attrs
+                       and attrs.detection_source is string }}
               sequence:
                 - event: dh_app_pve_notification
                   event_data:
@@ -307,12 +342,19 @@ dh_app_pve_notification_package:
                        and attrs.schema_version == 2
                        and attrs.event_type == 'shutdown_committed'
                        and 'observed_at' in attrs
+                       and attrs.observed_at is string
                        and 'reason' in attrs
+                       and attrs.reason is string
                        and 'battery_charge_percent' in attrs
+                       and (attrs.battery_charge_percent is number or attrs.battery_charge_percent is none)
                        and 'battery_runtime_seconds' in attrs
+                       and (attrs.battery_runtime_seconds is number or attrs.battery_runtime_seconds is none)
                        and 'shutdown_budget_seconds' in attrs
+                       and (attrs.shutdown_budget_seconds is number or attrs.shutdown_budget_seconds is none)
                        and 'runtime_reserve_seconds' in attrs
-                       and 'runtime_guard_threshold_seconds' in attrs }}
+                       and (attrs.runtime_reserve_seconds is number or attrs.runtime_reserve_seconds is none)
+                       and 'runtime_guard_threshold_seconds' in attrs
+                       and (attrs.runtime_guard_threshold_seconds is number or attrs.runtime_guard_threshold_seconds is none) }}
               sequence:
                 - event: dh_app_pve_notification
                   event_data:
@@ -378,14 +420,19 @@ dh_app_pve_notification_package:
                        and 'schema_version' in attrs
                        and attrs.schema_version == 2
                        and 'observed_at' in attrs
+                       and attrs.observed_at is string
                        and 'old_values' in attrs
                        and attrs.old_values is mapping
                        and 'new_values' in attrs
                        and attrs.new_values is mapping
                        and 'shutdown_battery_charge_threshold_percent' in attrs.new_values
+                       and attrs.new_values.shutdown_battery_charge_threshold_percent is number
                        and 'runtime_reserve_seconds' in attrs.new_values
+                       and attrs.new_values.runtime_reserve_seconds is number
                        and 'previous_revision' in attrs
-                       and 'current_revision' in attrs }}
+                       and attrs.previous_revision is number
+                       and 'current_revision' in attrs
+                       and attrs.current_revision is number }}
               sequence:
                 - event: dh_app_pve_notification
                   event_data:
