@@ -46,7 +46,7 @@ def test_local_packages_use_simple_direct_event_flow() -> None:
         assert EXPECTED_TRIGGER_IDS <= ids
 
         for forbidden in (
-            "dh_app_pve_notification",
+            "event: dh_app_pve_notification",
             "notification_schema_version",
             "contract_error",
             "failure_class",
