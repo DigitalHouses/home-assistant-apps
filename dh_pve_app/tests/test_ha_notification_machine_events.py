@@ -77,9 +77,9 @@ def test_v2_live_problem_branch_uses_machine_fields_not_app_prose():
         text = path.read_text(encoding="utf-8")
         live = text.split("- id: dh_app_pve_ups_config_changed_notification", 1)[0]
 
-        assert "attrs.schema_version == 1" in live
-        assert "trigger.to_state.attributes.get('summary')" in live
-        assert "trigger.to_state.attributes.get('details')" in live
+        assert "attrs.schema_version == 1" not in live
+        assert "trigger.to_state.attributes.get('summary')" not in live
+        assert "trigger.to_state.attributes.get('details')" not in live
         assert "attrs.schema_version == 2" in live
         assert "attrs.current is mapping" in live
         assert "current['value']" in live
