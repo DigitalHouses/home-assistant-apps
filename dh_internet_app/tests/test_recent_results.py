@@ -86,6 +86,19 @@ class RecentResultsTests(unittest.TestCase):
         self.assertIsNotNone(previous_updated_at)
         self.assertIsNotNone(store["updated_at"])
 
+    def test_legacy_history_backfills_updated_at_from_latest_result(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "recent.json"
+            path.write_text(
+                '{"results":[{"tested_at":"2026-09-24T19:21:55+05:00"}]}',
+                encoding="utf-8",
+            )
+            loaded = load_recent_results(path)
+            self.assertEqual(
+                loaded["updated_at"],
+                "2026-09-24T19:21:55+05:00",
+            )
+
     def test_round_trip_preserves_updated_at(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "recent.json"
