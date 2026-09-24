@@ -462,7 +462,7 @@ As of the current repository implementation:
 | DigitalHouses Plex Agent | `digitalhouses_plex_agent` | pending product implementation |
 | DigitalHouses Recorder App | `digitalhouses_recorder_app` | pending product implementation |
 | DigitalHouses Speedtest App | `digitalhouses_speedtest_app` | pending / identifier subject to Internet App decision |
-| DigitalHouses Backblaze App | `digitalhouses_backblaze_app` | client implemented; production server allowlist update required before enablement |
+| DigitalHouses Backblaze App | `digitalhouses_backblaze_app` | client exists; server allowlist + release-gating review required before production enablement |
 
 This table is operational status, not a replacement for the normative protocol or Release Policy.
 
