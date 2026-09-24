@@ -10,7 +10,7 @@ Native Linux agent for **Proxmox VE 8.x** that publishes host, CPU, memory, stor
 
 The public product name is **DigitalHouses PVE Agent**. Existing runtime identifiers remain compatible: the implementation directory is `dh_pve_app`, the MQTT base namespace is `DigitalHouses/Global/dh_pve_app/<instance>`, and the Home Assistant devices are `DH PVE` and optional `DH PVE UPS`.
 
-Current source release: `VERSION` is `0.5.17`.
+Current source release: `VERSION` is `0.5.18`.
 
 ## Home Assistant dashboard
 
@@ -106,7 +106,7 @@ Native MQTT Event entities are used for diagnostic transitions:
 - `event.dh_app_pve_diagnostic`;
 - `event.dh_app_pve_ups_diagnostic`.
 
-Generic PVE problem event types are `problem_started`, `problem_recovered` and `problem_updated`. UPS Event Discovery additionally accepts `config_changed`, `ups_status_changed`, `battery_discharge_level_crossed`, `battery_fully_charged` and `shutdown_committed`.
+Generic PVE problem event types are `problem_started`, `problem_recovered` and `problem_updated`. UPS Event Discovery uses explicit user-semantic events: NUT unavailable/restored, power-state unknown/restored, line-power lost/restored, enter/clear events for low/high battery, replace-battery, bypass, calibration, output-off, overload, AVR Trim/Boost, Forced Shutdown and alarm, plus `battery_discharge_level_crossed`, `battery_fully_charged`, `shutdown_committed` and `config_changed`.
 
 New public App events use `schema_version: 2` and contain machine semantics only: IDs/enums, previous/current state, numeric values, thresholds, timestamps and reason codes. App event payloads do not generate notification `title`, `message`, `summary`, `details`, localized labels, emoji or `status_ru`. Runtime Event messages are non-retained, published with MQTT QoS 1 after the synchronized retained current-state bundle, and Home Assistant subscribes to the Event topics at QoS 1 through MQTT Discovery.
 
@@ -151,7 +151,7 @@ The PVE HA examples are:
 - `examples/packages/dh_app_pve_notification_local_package.yaml` — English local notification example;
 - `examples/packages/locales/ru/dh_app_pve_notification_local_package.yaml` — Russian site-local notification package.
 
-Install the base package and one local notification package. The local package receives `event.received` triggers from `event.dh_app_pve_diagnostic` and `event.dh_app_pve_ups_diagnostic`, assigns a clear `trigger.id`, routes it through `choose`, and calls the delivery service directly.
+Install the base package and one local notification package. The local package gives every user-visible situation its own `event.received` trigger and matching `trigger.id`, routes it through `choose`, and calls the delivery service directly. For example, `line_power_lost` is the exact place to edit the text shown when the UPS switches to battery, and `line_power_restored` is the exact place to edit the restore message.
 
 The English example uses `persistent_notification.create`. The Russian site package calls `script.write2log` directly. A user may replace the direct action with any local `notify.*`, script or other Home Assistant service.
 
