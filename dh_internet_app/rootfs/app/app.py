@@ -614,11 +614,17 @@ class InternetApp:
         self._refresh_performance(emit_events=True)
 
     def _set_speedtest_status(
-        self, status: str, *, error: str | None = None
+        self,
+        status: str,
+        *,
+        error: str | None = None,
+        last_result: str | None = None,
     ) -> None:
         with self.lock:
             self.speedtest["status"] = status
             self.speedtest["error"] = error
+            if last_result is not None:
+                self.speedtest["last_result"] = last_result
         self._publish_state()
 
     def _refresh_servers(self) -> None:
@@ -667,7 +673,9 @@ class InternetApp:
                 self.snapshot = latest
             if not latest.internet_up:
                 self._set_speedtest_status(
-                    "no_connectivity", error="Internet unavailable"
+                    "idle",
+                    error="Internet unavailable",
+                    last_result="no_connectivity",
                 )
                 self.log.warning("Speedtest skipped: Internet unavailable")
                 return
@@ -697,7 +705,11 @@ class InternetApp:
                     )
             if result is None:
                 message = " | ".join(errors)[-1800:]
-                self._set_speedtest_status("error", error=message)
+                self._set_speedtest_status(
+                    "idle",
+                    error=message,
+                    last_result="error",
+                )
                 self._event("speedtest_failed", reason=message)
                 return
 
