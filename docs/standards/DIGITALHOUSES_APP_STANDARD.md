@@ -1567,7 +1567,7 @@ This explicit type declaration is mandatory and stable.
 
 This application standard is complemented by repository-wide normative contracts:
 
-- [DigitalHouses Events and Multilingual Notifications Standard](EVENTS_AND_NOTIFICATIONS_STANDARD.md);
+- [DigitalHouses Events & Notifications Standard](EVENTS_AND_NOTIFICATIONS_STANDARD.md);
 - [DigitalHouses Release Policy](RELEASE_POLICY.md);
 - [DigitalHouses Immutable Delivery, Compact Backup and Telemetry Standard](IMMUTABLE_DELIVERY_AND_TELEMETRY_STANDARD.md);
 - [DigitalHouses Product Telemetry Policy](PRODUCT_TELEMETRY_POLICY.md);
