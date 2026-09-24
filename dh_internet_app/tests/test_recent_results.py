@@ -59,7 +59,7 @@ class RecentResultsTests(unittest.TestCase):
         self.assertTrue(record["performance_problem"])
 
     def test_newest_first_deduplicated_and_limited(self) -> None:
-        store = {"results": []}
+        store = {"results": [], "updated_at": None}
         for index in range(RECENT_RESULTS_LIMIT + 3):
             record = {
                 "tested_at": f"2026-09-23T10:{index:02d}:00+00:00",
@@ -70,6 +70,7 @@ class RecentResultsTests(unittest.TestCase):
         self.assertEqual(store["results"][0]["result_url"], "https://example/22")
         self.assertIsNotNone(store["updated_at"])
 
+        previous_updated_at = store["updated_at"]
         store = append_recent_result(
             store,
             {
@@ -78,9 +79,14 @@ class RecentResultsTests(unittest.TestCase):
             },
         )
         self.assertEqual(len(store["results"]), RECENT_RESULTS_LIMIT)
-        self.assertEqual(store["results"][0]["tested_at"], "2026-09-23T11:00:00+00:00")
+        self.assertEqual(
+            store["results"][0]["tested_at"],
+            "2026-09-23T11:00:00+00:00",
+        )
+        self.assertIsNotNone(previous_updated_at)
+        self.assertIsNotNone(store["updated_at"])
 
-    def test_round_trip(self) -> None:
+    def test_round_trip_preserves_updated_at(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "recent.json"
             store = {
