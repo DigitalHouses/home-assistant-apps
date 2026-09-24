@@ -143,7 +143,7 @@ def test_startup_reconciliation_validates_retained_aggregate_contract() -> None:
             "active is sequence",
             "active is not string",
             "active | count == problem_count | int",
-            "item is mapping",
+            "item is not mapping",
             "'problem_id' in item",
             "'category' in item",
             "'severity' in item",
