@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.5.22
+
 - Persist the shutdown plan that belonged to each PVE boot/shutdown cycle, including App-calculated planned/actual durations, running guest set and shutdown sequence, so historical UI never reconstructs old plans from current configuration.
 - Add canonical `shutdown_status = correct | incorrect | unknown` while retaining the raw `shutdown_clean` evidence field for compatibility.
 - Keep the active guest shutdown budget based only on currently running non-template VM/LXC, and additionally calculate the diagnostic all-configured-guest budget including stopped guests.
