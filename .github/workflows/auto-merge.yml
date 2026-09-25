@@ -10,6 +10,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  packages: write
 
 jobs:
   integrate:
@@ -94,6 +95,14 @@ jobs:
         with:
           python-version: "3.13"
 
+      - name: Set up QEMU
+        if: steps.merge.outputs.merged == 'true'
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        if: steps.merge.outputs.merged == 'true'
+        uses: docker/setup-buildx-action@v3
+
       - name: Detect and validate releases
         if: steps.merge.outputs.merged == 'true'
         env:
@@ -108,6 +117,106 @@ jobs:
             --json-output release-candidates.json
 
           cat release-candidates.json
+
+      - name: Build and publish immutable Home Assistant App images
+        if: steps.merge.outputs.merged == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MERGE_SHA: ${{ steps.merge.outputs.merge_sha }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          : > app-release-artifacts.tsv
+
+          count="$(jq 'length' release-candidates.json)"
+          if [ "$count" -eq 0 ]; then
+            exit 0
+          fi
+
+          echo "$GH_TOKEN" | docker login ghcr.io             --username "$GITHUB_ACTOR"             --password-stdin
+
+          for index in $(seq 0 $((count - 1))); do
+            product="$(jq -r ".[$index].product" release-candidates.json)"
+            version="$(jq -r ".[$index].version" release-candidates.json)"
+            product_type="$(
+              jq -r --arg product "$product"                 '.products[] | select(.id == $product) | .type'                 digitalhouses-stats/digitalhouses_stats/product_registry.json
+            )"
+
+            if [ "$product_type" != "app" ]; then
+              continue
+            fi
+
+            config="$product/config.yaml"
+            test -f "$config"
+
+            mapfile -t architectures < <(
+              awk '
+                /^arch:[[:space:]]*$/ { in_arch=1; next }
+                in_arch && /^[^[:space:]]/ { exit }
+                in_arch && /^[[:space:]]*-[[:space:]]+/ {
+                  value=$0
+                  sub(/^[[:space:]]*-[[:space:]]+/, "", value)
+                  sub(/[[:space:]]+#.*$/, "", value)
+                  gsub(/[[:space:]]+$/, "", value)
+                  print value
+                }
+              ' "$config"
+            )
+
+            if [ "${#architectures[@]}" -eq 0 ]; then
+              echo "No architectures found for $product" >&2
+              exit 1
+            fi
+
+            image="ghcr.io/digitalhouses/$product"
+            release_ref="$image:$version"
+
+            if docker buildx imagetools inspect "$release_ref" >/dev/null 2>&1; then
+              echo "Refusing to overwrite existing immutable image: $release_ref" >&2
+              exit 1
+            fi
+
+            refs=()
+            for arch in "${architectures[@]}"; do
+              case "$arch" in
+                amd64)
+                  platform="linux/amd64"
+                  ;;
+                aarch64)
+                  platform="linux/arm64"
+                  ;;
+                *)
+                  echo "Unsupported Home Assistant App architecture: $arch" >&2
+                  exit 1
+                  ;;
+              esac
+
+              arch_ref="$image:$version-$arch"
+              if docker buildx imagetools inspect "$arch_ref" >/dev/null 2>&1; then
+                echo "Refusing to overwrite existing immutable image: $arch_ref" >&2
+                exit 1
+              fi
+
+              docker buildx build                 --platform "$platform"                 --build-arg "BUILD_VERSION=$version"                 --build-arg "BUILD_ARCH=$arch"                 --label "org.opencontainers.image.revision=$MERGE_SHA"                 --label "org.opencontainers.image.version=$version"                 --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY"                 --tag "$arch_ref"                 --push                 "$product"
+
+              refs+=("$arch_ref")
+            done
+
+            docker buildx imagetools create               --tag "$release_ref"               "${refs[@]}"
+
+            digest="$(
+              docker buildx imagetools inspect "$release_ref" |
+                awk '/^Digest:/ {print $2; exit}'
+            )"
+
+            if [[ ! "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+              echo "Unable to resolve immutable image digest for $release_ref" >&2
+              exit 1
+            fi
+
+            printf '%s\t%s\t%s\t%s\n'               "$product" "$version" "$release_ref" "$digest"               >> app-release-artifacts.tsv
+          done
 
       - name: Publish product releases
         if: steps.merge.outputs.merged == 'true'
@@ -138,6 +247,118 @@ jobs:
               --version "$version" \
               --notes-file "$notes_file" \
               --github-output "$output_file"
+
+            artifact="$(
+              awk -F '\t' -v product="$product"                 '$1 == product {print $3 "\t" $4; exit}'                 app-release-artifacts.tsv
+            )"
+            if [ -n "$artifact" ]; then
+              image_ref="${artifact%%            title="$(sed -n 's/^title=//p' "$output_file")"
+            prerelease="$(sed -n 's/^prerelease=//p' "$output_file")"
+
+            test -n "$tag"
+            test -n "$title"
+
+            args=(
+              release create "$tag"
+              --repo "$GITHUB_REPOSITORY"
+              --target "$MERGE_SHA"
+              --title "$title"
+              --notes-file "$notes_file"
+            )
+
+            if [ "$prerelease" = "true" ]; then
+              args+=(--prerelease)
+            fi
+
+            gh "${args[@]}"
+          done
+
+      - name: Verify published releases
+        if: steps.merge.outputs.merged == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MERGE_SHA: ${{ steps.merge.outputs.merge_sha }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          count="$(jq 'length' release-candidates.json)"
+          if [ "$count" -eq 0 ]; then
+            exit 0
+          fi
+
+          for index in $(seq 0 $((count - 1))); do
+            product="$(jq -r ".[$index].product" release-candidates.json)"
+            version="$(jq -r ".[$index].version" release-candidates.json)"
+            tag="${product}-v${version}"
+
+            git fetch origin "refs/tags/${tag}:refs/tags/${tag}" --force
+            actual="$(git rev-list -n 1 "$tag")"
+            test "$actual" = "$MERGE_SHA"
+
+            gh release view "$tag" \
+              --repo "$GITHUB_REPOSITORY" \
+              --json tagName,isDraft,isPrerelease
+          done
+\t'*}"
+              image_digest="${artifact#*            title="$(sed -n 's/^title=//p' "$output_file")"
+            prerelease="$(sed -n 's/^prerelease=//p' "$output_file")"
+
+            test -n "$tag"
+            test -n "$title"
+
+            args=(
+              release create "$tag"
+              --repo "$GITHUB_REPOSITORY"
+              --target "$MERGE_SHA"
+              --title "$title"
+              --notes-file "$notes_file"
+            )
+
+            if [ "$prerelease" = "true" ]; then
+              args+=(--prerelease)
+            fi
+
+            gh "${args[@]}"
+          done
+
+      - name: Verify published releases
+        if: steps.merge.outputs.merged == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MERGE_SHA: ${{ steps.merge.outputs.merge_sha }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          count="$(jq 'length' release-candidates.json)"
+          if [ "$count" -eq 0 ]; then
+            exit 0
+          fi
+
+          for index in $(seq 0 $((count - 1))); do
+            product="$(jq -r ".[$index].product" release-candidates.json)"
+            version="$(jq -r ".[$index].version" release-candidates.json)"
+            tag="${product}-v${version}"
+
+            git fetch origin "refs/tags/${tag}:refs/tags/${tag}" --force
+            actual="$(git rev-list -n 1 "$tag")"
+            test "$actual" = "$MERGE_SHA"
+
+            gh release view "$tag" \
+              --repo "$GITHUB_REPOSITORY" \
+              --json tagName,isDraft,isPrerelease
+          done
+\t'}"
+              {
+                echo
+                echo "## Artifact provenance"
+                echo
+                echo "- Image: \`$image_ref\`"
+                echo "- Image digest: \`$image_digest\`"
+                echo "- Commit: \`$MERGE_SHA\`"
+              } >> "$notes_file"
+            fi
 
             tag="$(sed -n 's/^tag=//p' "$output_file")"
             title="$(sed -n 's/^title=//p' "$output_file")"
