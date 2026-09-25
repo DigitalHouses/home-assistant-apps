@@ -1,14 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP_NAME="digitalhouses_plex_monitoring"
-SOURCE_PRODUCT_DIR="digitalhouses_plex_agent"
+PRODUCT_ID="digitalhouses_plex_agent"
+APP_NAME="${PRODUCT_ID}"
+LEGACY_APP_NAME="digitalhouses_plex_monitoring"
+SOURCE_PRODUCT_DIR="${PRODUCT_ID}"
+
 SERVICE_NAME="${APP_NAME}.service"
-GPU_SERVICE_NAME="digitalhouses_plex_gpu_helper.service"
+GPU_SERVICE_NAME="${APP_NAME}_gpu_helper.service"
+LEGACY_SERVICE_NAME="${LEGACY_APP_NAME}.service"
+LEGACY_GPU_SERVICE_NAME="digitalhouses_plex_gpu_helper.service"
+
 SERVICE_USER="${APP_NAME}"
 SERVICE_GROUP="${APP_NAME}"
 REPO_URL="https://github.com/DigitalHouses/home-assistant-apps.git"
-RELEASE_IDENTIFIER="digitalhouses_plex_agent"
+RELEASE_IDENTIFIER="${PRODUCT_ID}"
 SOURCE_REF="${DIGITALHOUSES_SOURCE_REF:-}"
 ALLOW_NON_RELEASE_REF="${DIGITALHOUSES_ALLOW_NON_RELEASE_REF:-0}"
 EXPECTED_VERSION=""
@@ -42,6 +48,20 @@ PLEX_LOCAL_ADMIN_TOKEN="/var/lib/plexmediaserver/Library/Application Support/Ple
 PLEX_API_TOKEN_FILE="${CONFIG_DIR}/plex_local_admin_token"
 TOKEN_DROPIN_DIR="/etc/systemd/system/${SERVICE_NAME}.d"
 TOKEN_DROPIN_FILE="${TOKEN_DROPIN_DIR}/plex-local-token.conf"
+
+LEGACY_APP_DIR="/opt/digitalhouses/${LEGACY_APP_NAME}"
+LEGACY_CONFIG_DIR="/etc/${LEGACY_APP_NAME}"
+LEGACY_CONFIG_FILE="${LEGACY_CONFIG_DIR}/${LEGACY_APP_NAME}.conf"
+LEGACY_STATE_DIR="/var/lib/${LEGACY_APP_NAME}"
+LEGACY_TOKEN_FILE="${LEGACY_CONFIG_DIR}/plex_local_admin_token"
+LEGACY_UNIT_FILE="/etc/systemd/system/${LEGACY_SERVICE_NAME}"
+LEGACY_GPU_UNIT_FILE="/etc/systemd/system/${LEGACY_GPU_SERVICE_NAME}"
+LEGACY_TOKEN_DROPIN_DIR="/etc/systemd/system/${LEGACY_SERVICE_NAME}.d"
+LEGACY_TOKEN_DROPIN_FILE="${LEGACY_TOKEN_DROPIN_DIR}/plex-local-token.conf"
+
+MIGRATION_MARKER="${STATE_DIR}/.runtime_migrated_from_${LEGACY_APP_NAME}"
+MIGRATION_IN_PROGRESS="${STATE_DIR}/.runtime_migration_in_progress"
+BACKUP_DIR="/var/backups/${APP_NAME}"
 
 if [[ "${EUID}" -ne 0 ]]; then
     echo "This installer must run as root."
@@ -143,7 +163,129 @@ install -d -o root -g root -m 0755 "${APP_DIR}"
 install -d -o root -g "${SERVICE_GROUP}" -m 0750 "${CONFIG_DIR}"
 install -d -o "${SERVICE_USER}" -g "${SERVICE_GROUP}" -m 0750 "${STATE_DIR}"
 
-# Replace installed source while preserving the virtual environment.
+legacy_runtime_present=0
+for legacy_path in \
+    "${LEGACY_CONFIG_FILE}" \
+    "${LEGACY_STATE_DIR}" \
+    "${LEGACY_UNIT_FILE}" \
+    "${LEGACY_GPU_UNIT_FILE}"; do
+    if [[ -e "${legacy_path}" ]]; then
+        legacy_runtime_present=1
+        break
+    fi
+done
+
+migration_performed=0
+rollback_needed=0
+legacy_main_was_enabled=0
+legacy_main_was_active=0
+legacy_gpu_was_enabled=0
+legacy_gpu_was_active=0
+
+restore_legacy_runtime() {
+    local reason="${1:-installer error}"
+    echo
+    echo "Rolling back Plex Agent runtime migration: ${reason}"
+
+    set +e
+    systemctl disable --now "${SERVICE_NAME}" >/dev/null 2>&1
+    systemctl disable --now "${GPU_SERVICE_NAME}" >/dev/null 2>&1
+
+    rm -f "${CONFIG_FILE}" "${PLEX_API_TOKEN_FILE}"
+    rm -f "${MIGRATION_MARKER}" "${MIGRATION_IN_PROGRESS}"
+    if [[ -d "${STATE_DIR}" ]]; then
+        find "${STATE_DIR}" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
+    fi
+
+    if [[ "${legacy_gpu_was_enabled}" -eq 1 ]]; then
+        systemctl enable "${LEGACY_GPU_SERVICE_NAME}" >/dev/null 2>&1
+    fi
+    if [[ "${legacy_gpu_was_active}" -eq 1 ]]; then
+        systemctl start "${LEGACY_GPU_SERVICE_NAME}" >/dev/null 2>&1
+    fi
+    if [[ "${legacy_main_was_enabled}" -eq 1 ]]; then
+        systemctl enable "${LEGACY_SERVICE_NAME}" >/dev/null 2>&1
+    fi
+    if [[ "${legacy_main_was_active}" -eq 1 ]]; then
+        systemctl start "${LEGACY_SERVICE_NAME}" >/dev/null 2>&1
+    fi
+    set -e
+}
+
+on_error() {
+    local rc=$?
+    if [[ "${rollback_needed}" -eq 1 ]]; then
+        restore_legacy_runtime "installer failed before canonical runtime acceptance"
+        rollback_needed=0
+    fi
+    exit "${rc}"
+}
+trap on_error ERR
+
+if [[ "${legacy_runtime_present}" -eq 1 && ! -f "${MIGRATION_MARKER}" ]]; then
+    if [[ ! -f "${MIGRATION_IN_PROGRESS}" ]]; then
+        canonical_state_entry="$(
+            find "${STATE_DIR}" -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null || true
+        )"
+        if [[ -f "${CONFIG_FILE}" || -n "${canonical_state_entry}" ]]; then
+            echo "Refusing automatic runtime migration: canonical Plex Agent config/state already exists."
+            echo "Resolve ${CONFIG_DIR} and ${STATE_DIR} manually before retrying."
+            exit 1
+        fi
+    fi
+
+    echo
+    echo "Migrating legacy Plex runtime identity to ${APP_NAME}."
+
+    systemctl is-enabled --quiet "${LEGACY_SERVICE_NAME}" 2>/dev/null && legacy_main_was_enabled=1 || true
+    systemctl is-active --quiet "${LEGACY_SERVICE_NAME}" 2>/dev/null && legacy_main_was_active=1 || true
+    systemctl is-enabled --quiet "${LEGACY_GPU_SERVICE_NAME}" 2>/dev/null && legacy_gpu_was_enabled=1 || true
+    systemctl is-active --quiet "${LEGACY_GPU_SERVICE_NAME}" 2>/dev/null && legacy_gpu_was_active=1 || true
+
+    rollback_needed=1
+    systemctl disable --now "${LEGACY_SERVICE_NAME}" >/dev/null 2>&1 || true
+    systemctl disable --now "${LEGACY_GPU_SERVICE_NAME}" >/dev/null 2>&1 || true
+
+    touch "${MIGRATION_IN_PROGRESS}"
+
+    install -d -o root -g root -m 0700 "${BACKUP_DIR}"
+    backup_stamp="$(date '+%Y%m%d_%H%M%S')"
+    backup_file="${BACKUP_DIR}/legacy-runtime-${backup_stamp}.tar.gz"
+    backup_paths=()
+    for legacy_path in \
+        "${LEGACY_CONFIG_DIR}" \
+        "${LEGACY_STATE_DIR}" \
+        "${LEGACY_UNIT_FILE}" \
+        "${LEGACY_GPU_UNIT_FILE}"; do
+        if [[ -e "${legacy_path}" ]]; then
+            backup_paths+=("${legacy_path#/}")
+        fi
+    done
+    if [[ "${#backup_paths[@]}" -gt 0 ]]; then
+        tar -C / -czf "${backup_file}" "${backup_paths[@]}"
+        chmod 0600 "${backup_file}"
+        echo "Legacy runtime backup: ${backup_file}"
+    fi
+
+    if [[ -f "${LEGACY_CONFIG_FILE}" ]]; then
+        cp -a "${LEGACY_CONFIG_FILE}" "${CONFIG_FILE}"
+        sed -i -E \
+            's#^([[:space:]]*token_file[[:space:]]*=[[:space:]]*)/etc/digitalhouses_plex_monitoring/plex_local_admin_token[[:space:]]*$#\1/etc/digitalhouses_plex_agent/plex_local_admin_token#' \
+            "${CONFIG_FILE}"
+    fi
+
+    if [[ -f "${LEGACY_TOKEN_FILE}" ]]; then
+        cp -a "${LEGACY_TOKEN_FILE}" "${PLEX_API_TOKEN_FILE}"
+    fi
+
+    if [[ -d "${LEGACY_STATE_DIR}" ]]; then
+        cp -a "${LEGACY_STATE_DIR}/." "${STATE_DIR}/"
+    fi
+
+    migration_performed=1
+fi
+
+# Replace installed source while preserving the canonical virtual environment.
 find "${APP_DIR}" \
     -mindepth 1 -maxdepth 1 \
     ! -name ".venv" \
@@ -154,6 +296,10 @@ chown -R root:root "${APP_DIR}"
 if [[ ! -f "${CONFIG_FILE}" ]]; then
     if [[ ! -r /dev/tty ]]; then
         echo "First installation requires an interactive terminal for MQTT settings."
+        if [[ "${rollback_needed}" -eq 1 ]]; then
+            restore_legacy_runtime "migrated configuration is unavailable"
+            rollback_needed=0
+        fi
         exit 1
     fi
 
@@ -220,8 +366,18 @@ chmod 0640 "${CONFIG_FILE}"
 if [[ -f "${PLEX_LOCAL_ADMIN_TOKEN}" ]]; then
     install -o root -g "${SERVICE_GROUP}" -m 0640 \
         "${PLEX_LOCAL_ADMIN_TOKEN}" "${PLEX_API_TOKEN_FILE}"
-elif [[ ! -f "${PLEX_API_TOKEN_FILE}" ]]; then
+elif [[ -f "${PLEX_API_TOKEN_FILE}" ]]; then
+    chown root:"${SERVICE_GROUP}" "${PLEX_API_TOKEN_FILE}"
+    chmod 0640 "${PLEX_API_TOKEN_FILE}"
+else
     echo "Warning: Plex .LocalAdminToken was not found; Plex API monitoring will remain unavailable."
+fi
+
+chown -R "${SERVICE_USER}:${SERVICE_GROUP}" "${STATE_DIR}"
+chmod 0750 "${STATE_DIR}"
+if [[ -f "${MIGRATION_MARKER}" ]]; then
+    chown root:root "${MIGRATION_MARKER}"
+    chmod 0644 "${MIGRATION_MARKER}"
 fi
 
 if [[ ! -x "${APP_DIR}/.venv/bin/python" ]]; then
@@ -255,16 +411,17 @@ install -o root -g root -m 0644 \
     "${APP_DIR}/systemd/${GPU_SERVICE_NAME}" \
     "${GPU_UNIT_FILE}"
 
-# 0.2.0 used a systemd LoadCredential drop-in. Remove it during upgrade.
-rm -f "${TOKEN_DROPIN_FILE}"
-rmdir "${TOKEN_DROPIN_DIR}" 2>/dev/null || true
+# 0.2.0 used a systemd LoadCredential drop-in. Remove both historical and
+# canonical locations during upgrade.
+rm -f "${TOKEN_DROPIN_FILE}" "${LEGACY_TOKEN_DROPIN_FILE}"
+rmdir "${TOKEN_DROPIN_DIR}" "${LEGACY_TOKEN_DROPIN_DIR}" 2>/dev/null || true
 
 systemctl daemon-reload
 
 if [[ "${intel_gpu_present}" -eq 1 ]] && command -v intel_gpu_top >/dev/null 2>&1; then
     systemctl enable "${GPU_SERVICE_NAME}" >/dev/null
     if ! systemctl restart "${GPU_SERVICE_NAME}"; then
-        echo "Warning: DigitalHouses Plex GPU Helper failed to start; GPU telemetry will remain unavailable."
+        echo "Warning: DigitalHouses Plex Agent GPU Helper failed to start; GPU telemetry will remain unavailable."
         systemctl status "${GPU_SERVICE_NAME}" --no-pager || true
         journalctl -u "${GPU_SERVICE_NAME}" -n 50 --no-pager || true
     fi
@@ -274,22 +431,51 @@ else
 fi
 
 systemctl enable "${SERVICE_NAME}" >/dev/null
-systemctl restart "${SERVICE_NAME}"
-
-if ! systemctl is-active --quiet "${SERVICE_NAME}"; then
-    echo "DigitalHouses Plex Monitoring failed to start."
+if ! systemctl restart "${SERVICE_NAME}"; then
+    echo "DigitalHouses Plex Agent failed to start."
     systemctl status "${SERVICE_NAME}" --no-pager || true
     journalctl -u "${SERVICE_NAME}" -n 50 --no-pager || true
+    if [[ "${rollback_needed}" -eq 1 ]]; then
+        restore_legacy_runtime "canonical main service failed to start"
+        rollback_needed=0
+    fi
     exit 1
 fi
 
+if ! systemctl is-active --quiet "${SERVICE_NAME}"; then
+    echo "DigitalHouses Plex Agent is not active after restart."
+    systemctl status "${SERVICE_NAME}" --no-pager || true
+    journalctl -u "${SERVICE_NAME}" -n 50 --no-pager || true
+    if [[ "${rollback_needed}" -eq 1 ]]; then
+        restore_legacy_runtime "canonical main service is not active"
+        rollback_needed=0
+    fi
+    exit 1
+fi
+
+if [[ "${migration_performed}" -eq 1 ]]; then
+    {
+        printf 'migrated_at=%s\n' "$(date --iso-8601=seconds)"
+        printf 'source_runtime=%s\n' "${LEGACY_APP_NAME}"
+        printf 'target_runtime=%s\n' "${APP_NAME}"
+        printf 'source_release=%s\n' "${SOURCE_REF}"
+    } >"${MIGRATION_MARKER}"
+    chown root:root "${MIGRATION_MARKER}"
+    chmod 0644 "${MIGRATION_MARKER}"
+    rm -f "${MIGRATION_IN_PROGRESS}"
+    rollback_needed=0
+fi
+
 echo
-echo "DigitalHouses Plex Monitoring installed successfully."
+echo "DigitalHouses Plex Agent installed successfully."
 echo "Version: ${VERSION}"
 echo "Source: ${SOURCE_REF}"
 echo "Commit: ${SOURCE_SHA}"
 echo "Config: ${CONFIG_FILE}"
 echo "Status: systemctl status ${APP_NAME}"
+if [[ "${migration_performed}" -eq 1 ]]; then
+    echo "Legacy runtime retained for rollback: ${LEGACY_CONFIG_DIR}, ${LEGACY_STATE_DIR}"
+fi
 if [[ "${intel_gpu_present}" -eq 1 ]] && command -v intel_gpu_top >/dev/null 2>&1; then
     echo "GPU helper: systemctl status ${GPU_SERVICE_NAME}"
 fi

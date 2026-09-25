@@ -1,14 +1,14 @@
 [Unit]
-Description=DigitalHouses Plex GPU Helper
+Description=DigitalHouses Plex Agent GPU Helper
 After=local-fs.target
-Before=digitalhouses_plex_monitoring.service
+Before=digitalhouses_plex_agent.service
 
 [Service]
 Type=simple
-User=digitalhouses_plex_monitoring
-Group=digitalhouses_plex_monitoring
-WorkingDirectory=/opt/digitalhouses/digitalhouses_plex_monitoring
-ExecStart=/opt/digitalhouses/digitalhouses_plex_monitoring/.venv/bin/python -m app.gpu_helper --state-file /var/lib/digitalhouses_plex_monitoring/gpu_state.json --interval 10
+User=digitalhouses_plex_agent
+Group=digitalhouses_plex_agent
+WorkingDirectory=/opt/digitalhouses/digitalhouses_plex_agent
+ExecStart=/opt/digitalhouses/digitalhouses_plex_agent/.venv/bin/python -m app.gpu_helper --state-file /var/lib/digitalhouses_plex_agent/gpu_state.json --interval 10
 Restart=on-failure
 RestartSec=5
 Environment=PYTHONUNBUFFERED=1
@@ -24,7 +24,7 @@ ProtectKernelModules=true
 ProtectControlGroups=true
 RestrictSUIDSGID=true
 LockPersonality=true
-ReadWritePaths=/var/lib/digitalhouses_plex_monitoring
+ReadWritePaths=/var/lib/digitalhouses_plex_agent
 
 [Install]
 WantedBy=multi-user.target

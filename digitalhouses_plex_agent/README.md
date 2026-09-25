@@ -8,7 +8,7 @@ Native Linux agent for Plex Media Server workload, playback, transcoding and lib
 
 [Install / update](#install--update) · [Changelog](CHANGELOG.md) · [Engineering docs](../docs/digitalhouses_plex_agent/) · [Issues](https://github.com/DigitalHouses/home-assistant-apps/issues)
 
-The public product name, canonical repository directory and GitHub release identifier are **DigitalHouses Plex Agent** / `digitalhouses_plex_agent`. Existing installed `digitalhouses_plex_monitoring` service, user/group, filesystem paths and MQTT identities remain unchanged for compatibility.
+The public product name, repository directory, release identifier and installed Linux runtime identity are **DigitalHouses Plex Agent** / `digitalhouses_plex_agent`. Version `0.6.0` migrates the previous `digitalhouses_plex_monitoring` service/filesystem identity to the canonical runtime while deliberately preserving the released MQTT/device/entity contract.
 
 ## Purpose
 
@@ -31,13 +31,13 @@ Lovelace example: [plex-dashboard.yaml](examples/lovelace/plex-dashboard.yaml)
 Production install/update is pinned to the canonical release tag. Current release:
 
 ```text
-digitalhouses_plex_agent-v0.5.0
+digitalhouses_plex_agent-v0.6.0
 ```
 
 From a root shell:
 
 ```bash
-RELEASE_TAG="digitalhouses_plex_agent-v0.5.0"
+RELEASE_TAG="digitalhouses_plex_agent-v0.6.0"
 curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/${RELEASE_TAG}/digitalhouses_plex_agent/install.sh" \
   | DIGITALHOUSES_SOURCE_REF="${RELEASE_TAG}" bash
 ```
@@ -45,7 +45,7 @@ curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/
 From a sudo-capable user:
 
 ```bash
-RELEASE_TAG="digitalhouses_plex_agent-v0.5.0"
+RELEASE_TAG="digitalhouses_plex_agent-v0.6.0"
 curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/${RELEASE_TAG}/digitalhouses_plex_agent/install.sh" \
   | sudo env DIGITALHOUSES_SOURCE_REF="${RELEASE_TAG}" bash
 ```
@@ -55,12 +55,39 @@ Run the same release-tag command to reinstall that exact release. To update, cha
 The installer records the deployed product version, source tag/ref, and exact resolved commit SHA in:
 
 ```text
-/opt/digitalhouses/digitalhouses_plex_monitoring/BUILD_INFO
+/opt/digitalhouses/digitalhouses_plex_agent/BUILD_INFO
 ```
 
 Normal production installation rejects `main`, development branches, temporary refs, and arbitrary SHAs as the source ref. A non-release ref is available only through the explicit `DIGITALHOUSES_ALLOW_NON_RELEASE_REF=1` development/testing override.
 
 Release provenance and publication follow the repository [Release Policy](../docs/standards/RELEASE_POLICY.md).
+
+## Runtime migration from 0.5.x
+
+Version `0.6.0` performs a controlled installed-runtime migration from the previous `digitalhouses_plex_monitoring` identity to `digitalhouses_plex_agent`.
+
+On the first update from a legacy installation, the installer:
+
+- stops and disables the legacy main/GPU-helper services;
+- creates a root-only tar backup under `/var/backups/digitalhouses_plex_agent/`;
+- copies the existing configuration, protected Plex token and persistent state into the canonical directories;
+- rewrites only the old default Plex token path in the copied configuration;
+- starts the canonical services and records an idempotent migration marker;
+- automatically restores the previous legacy service state if the canonical main service fails to start.
+
+The legacy `/etc/digitalhouses_plex_monitoring/` and `/var/lib/digitalhouses_plex_monitoring/` trees are retained after a successful first migration as an immediate rollback snapshot. They are not synchronized with later canonical runtime state.
+
+This release does **not** rename the Home Assistant compatibility surface. The following remain unchanged:
+
+```text
+MQTT base:  DigitalHouses/Global/plex_monitoring
+device ID:  digitalhouses_plex_monitoring_plex
+entities:   sensor.dh_plex_*
+            binary_sensor.dh_plex_*
+            button.dh_plex_*
+```
+
+Those identities require a separate Home Assistant migration and are not part of the Linux runtime cutover.
 
 ## Local Plex API authentication
 
@@ -73,10 +100,10 @@ On a standard Linux Plex installation the installer detects:
 The installer copies the token to a protected service-readable file:
 
 ```text
-/etc/digitalhouses_plex_monitoring/plex_local_admin_token
+/etc/digitalhouses_plex_agent/plex_local_admin_token
 ```
 
-The copy is owned by `root:digitalhouses_plex_monitoring` with mode `0640` and is refreshed on install/update when Plex provides `.LocalAdminToken`. The original Plex token permissions are not changed. The token is not stored in MQTT state, logs, or the repository.
+The copy is owned by `root:digitalhouses_plex_agent` with mode `0640` and is refreshed on install/update when Plex provides `.LocalAdminToken`. The original Plex token permissions are not changed. The token is not stored in MQTT state, logs, or the repository.
 
 The API collector connects by default only to:
 
@@ -89,7 +116,7 @@ Existing 0.1.x configuration files continue to work: the `[plex_api]` section ha
 ## Configuration
 
 ```text
-/etc/digitalhouses_plex_monitoring/digitalhouses_plex_monitoring.conf
+/etc/digitalhouses_plex_agent/digitalhouses_plex_agent.conf
 ```
 
 Default telemetry and Plex API settings:
@@ -110,7 +137,7 @@ high_load_publish_interval_seconds = 60
 [plex_api]
 enabled = true
 base_url = http://127.0.0.1:32400
-token_file = /etc/digitalhouses_plex_monitoring/plex_local_admin_token
+token_file = /etc/digitalhouses_plex_agent/plex_local_admin_token
 timeout_seconds = 3
 library_refresh_seconds = 3600
 ```
@@ -221,9 +248,9 @@ GPU temperature is published only when Linux exposes a real hwmon sensor attache
 
 `sensor.dh_plex_last_boot` is the Linux host/VM boot timestamp and therefore survives Plex Agent restarts. `sensor.dh_plex_agent_started_at` is the current agent process start timestamp; `sensor.dh_plex_agent_uptime` remains a separate low-level duration diagnostic for compatibility.
 
-`sensor.dh_plex_playback_started_at` is the earliest first-observed start timestamp among the currently active Plex playback sessions. Internal session identities remain private to the agent and are persisted only under `/var/lib/digitalhouses_plex_monitoring/` so an agent restart does not reset an ongoing session timestamp. When no playback is active, no playback-start timestamp is reported.
+`sensor.dh_plex_playback_started_at` is the earliest first-observed start timestamp among the currently active Plex playback sessions. Internal session identities remain private to the agent and are persisted only under `/var/lib/digitalhouses_plex_agent/` so an agent restart does not reset an ongoing session timestamp. When no playback is active, no playback-start timestamp is reported.
 
-On Linux hosts where i915 PMU access requires elevated privilege, only the dedicated `digitalhouses_plex_gpu_helper.service` receives `CAP_SYS_ADMIN`. The main `digitalhouses_plex_monitoring.service` remains unprivileged. The helper has no MQTT or Plex API responsibility; it writes a timestamped local state file that the main agent reads and rejects when stale.
+On Linux hosts where i915 PMU access requires elevated privilege, only the dedicated `digitalhouses_plex_agent_gpu_helper.service` receives `CAP_SYS_ADMIN`. The main `digitalhouses_plex_agent.service` remains unprivileged. The helper has no MQTT or Plex API responsibility; it writes a timestamped local state file that the main agent reads and rejects when stale.
 
 ## Publication policy
 
@@ -281,17 +308,17 @@ Unknown Plex Media Scanner work remains visible as generic `scanner` activity an
 ## Operations
 
 ```bash
-systemctl status digitalhouses_plex_monitoring
-journalctl -u digitalhouses_plex_monitoring -f
+systemctl status digitalhouses_plex_agent
+journalctl -u digitalhouses_plex_agent -f
 ```
 
 ## Filesystem
 
 ```text
-/opt/digitalhouses/digitalhouses_plex_monitoring/
-/etc/digitalhouses_plex_monitoring/digitalhouses_plex_monitoring.conf
-/etc/digitalhouses_plex_monitoring/plex_local_admin_token
-/var/lib/digitalhouses_plex_monitoring/
+/opt/digitalhouses/digitalhouses_plex_agent/
+/etc/digitalhouses_plex_agent/digitalhouses_plex_agent.conf
+/etc/digitalhouses_plex_agent/plex_local_admin_token
+/var/lib/digitalhouses_plex_agent/
 journald
 ```
 

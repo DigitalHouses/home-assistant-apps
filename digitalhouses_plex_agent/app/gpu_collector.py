@@ -12,7 +12,7 @@ from typing import Callable, Mapping
 
 _PCI_RE = re.compile(r"^[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}[.][0-7]$")
 DEFAULT_GPU_STATE_FILE = Path(
-    "/var/lib/digitalhouses_plex_monitoring/gpu_state.json"
+    "/var/lib/digitalhouses_plex_agent/gpu_state.json"
 )
 DEFAULT_GPU_STATE_MAX_AGE_SECONDS = 30.0
 

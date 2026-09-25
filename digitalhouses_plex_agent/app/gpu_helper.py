@@ -14,7 +14,7 @@ from .gpu_collector import (
 )
 
 
-LOGGER = logging.getLogger("digitalhouses_plex_gpu_helper")
+LOGGER = logging.getLogger("digitalhouses_plex_agent_gpu_helper")
 
 
 def run(

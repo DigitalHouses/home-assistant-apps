@@ -1,0 +1,23 @@
+[Unit]
+Description=DigitalHouses Plex Agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=digitalhouses_plex_agent
+Group=digitalhouses_plex_agent
+WorkingDirectory=/opt/digitalhouses/digitalhouses_plex_agent
+ExecStart=/opt/digitalhouses/digitalhouses_plex_agent/.venv/bin/python -m app.app --config /etc/digitalhouses_plex_agent/digitalhouses_plex_agent.conf
+Restart=on-failure
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/digitalhouses_plex_agent
+
+[Install]
+WantedBy=multi-user.target

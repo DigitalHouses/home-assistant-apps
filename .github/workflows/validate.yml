@@ -175,9 +175,9 @@ jobs:
       - name: Prepare systemd verification path
         run: |
           sudo install -d \
-            /opt/digitalhouses/digitalhouses_plex_monitoring/.venv/bin
+            /opt/digitalhouses/digitalhouses_plex_agent/.venv/bin
           sudo ln -sf "$(command -v python)" \
-            /opt/digitalhouses/digitalhouses_plex_monitoring/.venv/bin/python
+            /opt/digitalhouses/digitalhouses_plex_agent/.venv/bin/python
 
       - name: Validate systemd unit
         run: |
