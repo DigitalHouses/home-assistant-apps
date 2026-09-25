@@ -91,6 +91,7 @@ class TelemetryClient:
         self.now_epoch = now_epoch
         self.log = logging.getLogger(__name__)
         self._lock = threading.Lock()
+        self._enabled_heartbeat_pending = False
         self._state = self._load_or_create_state()
 
     def _load_or_create_state(self) -> dict[str, Any]:
@@ -129,6 +130,14 @@ class TelemetryClient:
 
         if state.get("schema_version") != 1:
             state["schema_version"] = 1
+            changed = True
+
+        previous_enabled = state.get("telemetry_enabled")
+        self._enabled_heartbeat_pending = (
+            self.enabled and previous_enabled is False
+        )
+        if previous_enabled is not self.enabled:
+            state["telemetry_enabled"] = self.enabled
             changed = True
 
         if changed:
@@ -207,7 +216,9 @@ class TelemetryClient:
 
         with self._lock:
             now = float(self.now_epoch())
-            if not self._due(now):
+            enabled_heartbeat = self._enabled_heartbeat_pending
+            self._enabled_heartbeat_pending = False
+            if not enabled_heartbeat and not self._due(now):
                 return False
 
             self._state["last_attempt_epoch"] = now
@@ -237,6 +248,11 @@ class TelemetryClient:
             self._state["last_success_epoch"] = now
             self._state["last_reported_version"] = self.version
             self._save_state()
+            self.log.info(
+                "Telemetry heartbeat sent: product=%s version=%s",
+                PRODUCT,
+                self.version,
+            )
             return True
 
     def delete(self) -> bool:
