@@ -1,6 +1,6 @@
 # Internet App controlled HA App slug migration
 
-Status: canonical rollback-safe bugfix release / operator acceptance pending.
+Status: completed and retired from current runtime.
 
 Canonical product:
 
@@ -16,6 +16,8 @@ canonical target slug: digitalhouses_internet_app
 ```
 
 The repository directory and product/release/telemetry identities are already canonical. MQTT and Home Assistant identities remain `dh_internet_app`; this migration changes only the Supervisor App identity.
+
+The migration was completed and accepted on the canonical installation. Version `0.1.16` removed the temporary migration runtime, writable `/share` mapping and migration environment mode from the current App. This document is retained as the historical migration record; releases `0.1.12`–`0.1.15` contain the implementation used during the transition.
 
 ## Why this is a controlled reinstall
 
@@ -73,7 +75,7 @@ Version `0.1.13` introduced the first canonical slug release. Version `0.1.14` f
 slug: digitalhouses_internet_app
 ```
 
-It keeps the `/share` migration mapping for the import release and runs in `DH_SLUG_MIGRATION_MODE=import`.
+During the migration window, canonical releases kept the `/share` migration mapping and ran in `DH_SLUG_MIGRATION_MODE=import`. These temporary controls were removed in `0.1.16` after acceptance.
 
 Before normal runtime starts it:
 
@@ -90,7 +92,7 @@ If the options were already persisted by the failed `0.1.13` attempt, `0.1.14` d
 
 A successfully completed migration is never applied twice. Once the completed marker is valid, the canonical App ignores later bridge bundle changes entirely; this is required because a rollback start/stop of legacy `0.1.12` regenerates that shared bundle with a new timestamp/hash.
 
-A fresh canonical installation with no migration bundle starts normally.
+A fresh canonical installation starts normally. From `0.1.16` onward there is no migration-bundle handling in the production runtime.
 
 ## Telemetry identity
 
@@ -103,7 +105,7 @@ A fresh canonical installation with no migration bundle starts normally.
 
 The new product version is still reported normally after migration because the telemetry client detects the release-version change.
 
-## Operator sequence
+## Historical operator sequence
 
 1. Update the legacy-slug App to the bridge release.
 2. Confirm the bridge log reports a ready migration bundle.
@@ -120,7 +122,7 @@ The new product version is still reported normally after migration because the t
 
 The two Apps must never run at the same time because they intentionally share the same MQTT client/device/entity identities.
 
-## Rollback
+## Historical rollback
 
 Before acceptance, rollback is deliberately simple:
 
@@ -131,7 +133,7 @@ No MQTT/entity migration is required because both releases use the same `dh_inte
 
 The pre-migration Home Assistant backup is disaster-recovery protection, not the primary immediate rollback mechanism.
 
-## Acceptance
+## Recorded acceptance criteria
 
 Migration is complete only after verifying:
 
@@ -144,3 +146,14 @@ Migration is complete only after verifying:
 - existing `dh_internet_app_*` entities remain the same identities;
 - new canonical-slug backup restores successfully;
 - rollback to the stopped bridge App is proven before legacy uninstall.
+
+## Cleanup release
+
+Version `0.1.16` finalized the migration cleanup:
+
+- removed the writable `/share` mapping;
+- removed `DH_SLUG_MIGRATION_MODE`;
+- removed `slug_migration.py` and migration-only tests;
+- removed bridge export hooks from shutdown;
+- kept canonical slug `digitalhouses_internet_app` as the only supported current App identity;
+- kept MQTT/device/entity identities unchanged under `dh_internet_app`.

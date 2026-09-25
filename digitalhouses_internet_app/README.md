@@ -33,7 +33,7 @@ All recovery timing belongs to App configuration: maximum cycles, retry interval
 
 ## Current product state
 
-Version `0.1.15` completes the controlled Supervisor slug migration to the canonical App identity with restart-aware option restoration and rollback-safe completed-state handling. The product provides:
+Version `0.1.16` is the post-migration cleanup release. The canonical Supervisor identity is now permanent and the temporary migration runtime has been removed. The product provides:
 
 - Internet and router reachability;
 - current-month outage state persisted under `/data`;
@@ -51,15 +51,15 @@ Quality thresholds and App-owned performance problem evaluation are implemented.
 
 See [DOCS.md](DOCS.md) for configuration semantics and [HAOS_TEST_PLAN.md](HAOS_TEST_PLAN.md) for the first real installation test sequence.
 
-## Controlled App slug migration
+## Completed App slug migration
 
-Version `0.1.15` uses the canonical Home Assistant App slug `digitalhouses_internet_app`.
+The Home Assistant App slug migration from legacy `digitalhouses_internet` to canonical `digitalhouses_internet_app` is complete.
 
-Existing installations that previously used legacy slug `digitalhouses_internet` migrate through the `0.1.12` bridge bundle at `/share/digitalhouses_internet_app/slug-migration-v1/bundle.tar.gz`. On canonical-slug import, the App verifies that bundle and restores the previous options through the App's own Supervisor API. If Supervisor requires a container restart before those options appear in `/data/options.json`, the App stops cleanly and completes telemetry/runtime-state restoration on the next start. The completed import is protected by an idempotency marker.
+Releases `0.1.12` through `0.1.15` contained the temporary bridge/import machinery used for the controlled reinstall. Version `0.1.16` removes that machinery from the normal runtime: there is no writable `/share` migration mapping, no migration environment mode, and no migration module in the image.
 
-The stopped legacy App may be used once for rollback verification. Because that legacy bridge refreshes the shared migration bundle whenever it starts/stops, the completed canonical import marker is authoritative and later bundle changes are ignored. MQTT/device/entity identities remain `dh_internet_app` throughout and are not renamed.
+MQTT/device/entity identities remain unchanged under `dh_internet_app`.
 
-See [the controlled slug migration procedure](../docs/digitalhouses_internet_app/slug-migration.md).
+The completed procedure and release history are retained in [the slug migration record](../docs/digitalhouses_internet_app/slug-migration.md).
 
 ## Product telemetry
 
