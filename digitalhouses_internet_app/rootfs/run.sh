@@ -15,5 +15,21 @@ if [[ -z "${MQTT_HOST}" || -z "${MQTT_PORT}" ]]; then
     exit 1
 fi
 
+MIGRATION_MODE="${DH_SLUG_MIGRATION_MODE:-}"
+if [[ "${MIGRATION_MODE}" == "export" ]]; then
+    if MIGRATION_MESSAGE="$(python3 /app/slug_migration.py export 2>&1)"; then
+        bashio::log.info "${MIGRATION_MESSAGE}"
+    else
+        bashio::log.warning "Slug migration bridge export failed: ${MIGRATION_MESSAGE}"
+    fi
+elif [[ "${MIGRATION_MODE}" == "import" ]]; then
+    if MIGRATION_MESSAGE="$(python3 /app/slug_migration.py import 2>&1)"; then
+        bashio::log.info "${MIGRATION_MESSAGE}"
+    else
+        bashio::log.fatal "Slug migration import failed: ${MIGRATION_MESSAGE}"
+        exit 1
+    fi
+fi
+
 mkdir -p /data/runtime
 exec python3 /app/app.py
