@@ -2,7 +2,7 @@
 
 Date: 2026-09-26  
 Status: implemented design amendment  
-Target: `dh_pve_app`
+Target: `digitalhouses_pve_agent` (installed runtime remains `dh_pve_app`)
 
 ## Principle
 
@@ -79,6 +79,26 @@ updates them after a running/paused -> stopped transition. This allows a single
 duration without rebooting PVE.
 
 A standalone guest shutdown does not create a PVE shutdown-history entry.
+
+When a standalone Proxmox task does not include its timeout in the journal, the
+Agent attaches the guest's current PVE shutdown timeout to that completed fact once.
+That timeout becomes part of the persisted shutdown fact and is not rewritten by a
+later configuration change.
+
+The Agent also publishes the derived timeout ratio and assessment:
+
+```text
+timeout_ratio = duration_seconds / timeout_seconds
+
+assessment:
+  ok       -> clean and ratio < 0.80
+  warning  -> clean and 0.80 <= ratio < 1.00
+  critical -> timeout/forced, or ratio >= 1.00
+  unknown  -> insufficient evidence
+```
+
+The thresholds and assessment are App-owned policy. Home Assistant must not
+recalculate the ratio or choose severity from raw duration/timeout values.
 
 ## Publication contract
 
