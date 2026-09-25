@@ -36,12 +36,12 @@ from .process_collector import (
 
 APP_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG = Path(
-    "/etc/digitalhouses_plex_monitoring/"
-    "digitalhouses_plex_monitoring.conf"
+    "/etc/digitalhouses_plex_agent/"
+    "digitalhouses_plex_agent.conf"
 )
 UPTIME_HEARTBEAT_SECONDS = 60.0
 PLAYBACK_STATE_PATH = Path(
-    "/var/lib/digitalhouses_plex_monitoring/playback_session_starts.json"
+    "/var/lib/digitalhouses_plex_agent/playback_session_starts.json"
 )
 
 
@@ -91,7 +91,7 @@ def _configure_logging(level: str) -> None:
 
 
 def run(config: AppConfig) -> int:
-    log = logging.getLogger("digitalhouses_plex_monitoring")
+    log = logging.getLogger("digitalhouses_plex_agent")
     build = load_build_info(APP_ROOT)
     verify_proc_visibility()
 
