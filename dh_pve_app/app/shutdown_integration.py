@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import re
 from collections.abc import Callable, Mapping
 
@@ -33,6 +34,7 @@ from .ups_trigger import SoftwareShutdownController, SoftwareShutdownTriggerResu
 
 
 SHUTDOWN_BUDGET_REFRESH_SECONDS = 60.0
+_LOG = logging.getLogger(__name__)
 _PUBLIC_SHUTDOWN_REASON = {
     "charge_guard": "charge_threshold",
     "runtime_guard": "runtime_threshold",
@@ -55,6 +57,9 @@ def _shutdown_budget_payload(budget: ShutdownBudgetResult | None) -> dict[str, o
             "unavailable_reason": "not_collected",
             "configuration_fingerprint": None,
             "history_evidence_status": "none",
+            "all_configured_guest_budget_seconds": None,
+            "running_guests": [],
+            "shutdown_sequence": [],
         }
     return {
         "available": budget.available,
@@ -70,6 +75,9 @@ def _shutdown_budget_payload(budget: ShutdownBudgetResult | None) -> dict[str, o
         "unavailable_reason": budget.unavailable_reason,
         "configuration_fingerprint": budget.configuration_fingerprint,
         "history_evidence_status": budget.history_evidence_status,
+        "all_configured_guest_budget_seconds": budget.all_configured_guest_budget_seconds,
+        "running_guests": list(budget.running_guests),
+        "shutdown_sequence": [list(group) for group in budget.shutdown_sequence],
     }
 
 
@@ -145,6 +153,124 @@ class ShutdownAwareProductionCollectors(GuestAwareProductionCollectors):
     def __init__(self, *args, shutdown_history_tracker: ShutdownHistoryTracker, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.shutdown_history_tracker = shutdown_history_tracker
+        self._guest_status_cache: dict[tuple[str, str], str] = {}
+        self._pending_guest_shutdowns: dict[tuple[str, str], str | None] = {}
+
+    @staticmethod
+    def _latest_guest_record(
+        payload: Mapping[str, object],
+        kind: str,
+        guest_id: str,
+    ) -> Mapping[str, object] | None:
+        latest = payload.get("guest_last_shutdowns")
+        if not isinstance(latest, Mapping):
+            return None
+        records = latest.get(kind)
+        if not isinstance(records, Mapping):
+            return None
+        raw = records.get(guest_id)
+        return raw if isinstance(raw, Mapping) else None
+
+    def guests(self) -> CollectorSample:
+        sample = super().guests()
+        if not isinstance(sample.data, Mapping):
+            return sample
+
+        data = dict(sample.data)
+        current_statuses: dict[tuple[str, str], str] = {}
+        for plural, kind in (("vms", "vm"), ("lxcs", "lxc")):
+            records = data.get(plural)
+            if not isinstance(records, Mapping):
+                continue
+            for guest_id, raw in records.items():
+                if not isinstance(raw, Mapping):
+                    continue
+                current_statuses[(kind, str(guest_id))] = str(
+                    raw.get("status") or "unknown"
+                ).casefold()
+
+        history_before = self.shutdown_history_tracker.payload()
+        refresh_needed = not self._guest_status_cache
+        for key, status in current_statuses.items():
+            previous_status = self._guest_status_cache.get(key)
+            if previous_status in {"running", "paused"} and status == "stopped":
+                previous_record = self._latest_guest_record(
+                    history_before,
+                    key[0],
+                    key[1],
+                )
+                previous_finished = (
+                    previous_record.get("finished_at")
+                    if isinstance(previous_record, Mapping)
+                    and isinstance(previous_record.get("finished_at"), str)
+                    else None
+                )
+                self._pending_guest_shutdowns.setdefault(key, previous_finished)
+                refresh_needed = True
+
+        if self._pending_guest_shutdowns:
+            refresh_needed = True
+
+        if refresh_needed:
+            try:
+                self.shutdown_history_tracker.refresh_current_guest_shutdowns()
+            except Exception:
+                _LOG.exception("Не удалось обновить историю shutdown VM/LXC")
+
+        history_after = self.shutdown_history_tracker.payload()
+
+        for key, baseline_finished in list(self._pending_guest_shutdowns.items()):
+            record = self._latest_guest_record(history_after, key[0], key[1])
+            if not isinstance(record, Mapping):
+                continue
+            finished = record.get("finished_at")
+            duration = record.get("duration_seconds")
+            if (
+                isinstance(finished, str)
+                and isinstance(duration, int)
+                and not isinstance(duration, bool)
+                and finished != baseline_finished
+            ):
+                self._pending_guest_shutdowns.pop(key, None)
+
+        for plural, kind in (("vms", "vm"), ("lxcs", "lxc")):
+            records = data.get(plural)
+            if not isinstance(records, Mapping):
+                continue
+            enriched: dict[str, object] = {}
+            for guest_id, raw in records.items():
+                if not isinstance(raw, Mapping):
+                    continue
+                item = dict(raw)
+                latest = self._latest_guest_record(
+                    history_after,
+                    kind,
+                    str(guest_id),
+                )
+                if isinstance(latest, Mapping):
+                    item.update(
+                        {
+                            "last_shutdown_started_at": latest.get("started_at"),
+                            "last_shutdown_finished_at": latest.get("finished_at"),
+                            "last_shutdown_duration_seconds": latest.get(
+                                "duration_seconds"
+                            ),
+                            "last_shutdown_timeout_seconds": latest.get(
+                                "timeout_seconds"
+                            ),
+                            "last_shutdown_timeout_ratio": latest.get(
+                                "timeout_ratio"
+                            ),
+                            "last_shutdown_result": latest.get("result", "unknown"),
+                            "last_shutdown_forced": latest.get("forced", False),
+                            "last_shutdown_source": latest.get("source", "unknown"),
+                        }
+                    )
+                enriched[str(guest_id)] = item
+            data[plural] = enriched
+
+        self._guest_status_cache = current_statuses
+        return CollectorSample(data=data, metrics=dict(sample.metrics))
 
     def host(self) -> CollectorSample:
         sample = super().host()
@@ -277,9 +403,36 @@ class ShutdownAwareUpsRuntime(AdaptiveUpsRuntime):
         fingerprint = budget.configuration_fingerprint
         if isinstance(fingerprint, str) and fingerprint:
             try:
-                self.shutdown_history_tracker.record_shutdown_budget_fingerprint(fingerprint)
+                recorder = getattr(
+                    self.shutdown_history_tracker,
+                    "record_shutdown_plan",
+                    None,
+                )
+                if callable(recorder):
+                    recorder(
+                        configuration_fingerprint=fingerprint,
+                        planned_shutdown_seconds=budget.shutdown_budget_seconds,
+                        planned_guest_shutdown_seconds=(
+                            budget.effective_guest_budget_seconds
+                        ),
+                        planned_all_guest_shutdown_seconds=(
+                            budget.all_configured_guest_budget_seconds
+                        ),
+                        running_guests=list(budget.running_guests),
+                        shutdown_sequence=[
+                            list(group) for group in budget.shutdown_sequence
+                        ],
+                    )
+                else:
+                    legacy_recorder = getattr(
+                        self.shutdown_history_tracker,
+                        "record_shutdown_budget_fingerprint",
+                        None,
+                    )
+                    if callable(legacy_recorder):
+                        legacy_recorder(fingerprint)
             except Exception:
-                self.log.exception("Не удалось сохранить fingerprint shutdown budget")
+                self.log.exception("Не удалось сохранить snapshot shutdown plan")
         return budget
 
     def _enqueue_shutdown_committed_event(
