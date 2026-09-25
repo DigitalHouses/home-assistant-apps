@@ -8,17 +8,23 @@ This policy applies to products in the `DigitalHouses/home-assistant-apps` repos
 
 This repository is a monorepo. Each DigitalHouses product has an independent version, release lifecycle, and delivery model.
 
-## 1. Product release identifiers
+## 1. Product identity and release identifiers
+
+Product naming is governed by [DigitalHouses Product Naming Standard](PRODUCT_NAMING_STANDARD.md).
 
 The machine-readable source of product identity and release metadata is:
 
 `digitalhouses-stats/digitalhouses_stats/product_registry.json`
 
-`scripts/release_contract.py` derives its release-managed product set from that registry. Products may exist in the registry before they become release-managed; such entries use `release: null`.
+Every App/Agent uses one canonical product identifier:
 
-Public release identifiers use the public product name, not an internal runtime identifier.
+```text
+digitalhouses_<function>_<app|agent>
+```
 
-| Product | Release identifier |
+The registry `id` is also the release identifier and, for telemetry-enabled products, the telemetry `product` identifier.
+
+| Product | Canonical identifier |
 | --- | --- |
 | DigitalHouses PVE Agent | `digitalhouses_pve_agent` |
 | DigitalHouses Plex Agent | `digitalhouses_plex_agent` |
@@ -27,23 +33,13 @@ Public release identifiers use the public product name, not an internal runtime 
 | DigitalHouses Backblaze App | `digitalhouses_backblaze_app` |
 | DigitalHouses Internet App | `digitalhouses_internet_app` |
 
-Release identifiers describe GitHub release provenance.
+`scripts/release_contract.py` derives its release-managed product set from that registry. Products may exist in the registry before they become release-managed; such entries use `release: null`.
 
-For products participating in shared telemetry, the release identifier is also the default canonical telemetry `product` identifier. A different telemetry identifier requires an explicit repository-level compatibility decision and coordinated updates to the telemetry protocol/server allowlist.
+Repository-level contracts must not create separate release, telemetry, image or documentation identities for the same product.
 
-They do not require runtime identities to change. In particular, adopting or changing a release identifier must not by itself rename:
+Compatibility-sensitive legacy runtime identities may remain temporarily while a product is migrated. Such compatibility exceptions do not change the canonical product identifier and must not be copied into new products.
 
-- Linux service names;
-- Home Assistant App slugs;
-- repository directories;
-- filesystem paths;
-- MQTT topics, device identifiers, or unique IDs;
-- Home Assistant entity IDs;
-- other installed or compatibility-sensitive identities.
-
-A runtime identity may change only through a separate product-specific compatibility decision.
-
-Before enabling telemetry for a renamed or replacement product, resolve the canonical release/telemetry identifier in that product's implementation work and update the shared contracts together. Do not rename only the App slug, telemetry payload, release identifier, or server allowlist in isolation.
+A runtime identity change that affects installed systems — including App slug, Linux service/path, MQTT identifiers or Home Assistant entity IDs — requires an explicit product migration with tests and release notes. Historical tags remain immutable.
 
 Product-specific telemetry implementation must follow [DigitalHouses Telemetry Implementation Guide](TELEMETRY_IMPLEMENTATION_GUIDE.md).
 
