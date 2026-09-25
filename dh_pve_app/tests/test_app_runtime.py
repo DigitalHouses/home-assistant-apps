@@ -165,6 +165,48 @@ def test_manual_refresh_runs_all_collectors_and_updates_timestamp_only_when_all_
     assert bridge.states[-1]["last_refresh"] == runtime.last_refresh
 
 
+def test_manual_refresh_can_limit_collectors_for_fast_ui_refresh():
+    calls = {
+        "topology": 0,
+        "guests": 0,
+        "cpu": 0,
+        "smart": 0,
+        "gpu": 0,
+        "disk_temperature": 0,
+    }
+
+    def collector(name):
+        def run():
+            calls[name] += 1
+            return sample(10.0)
+        return run
+
+    bridge = FakeBridge()
+    settings = RuntimeSettings()
+    runtime = DhPveRuntime(
+        collectors={name: collector(name) for name in calls},
+        bridge=bridge,
+        settings=settings,
+        publish_policy=PublishPolicy(settings),
+        state_store=FakeStore(),
+        scheduler=Scheduler(),
+        now_iso=lambda: "2026-09-25T14:35:00+05:00",
+        now_monotonic=lambda: 100.0,
+        manual_refresh_collectors=("topology", "guests", "cpu"),
+    )
+
+    assert runtime.manual_refresh() is True
+    assert calls == {
+        "topology": 1,
+        "guests": 1,
+        "cpu": 1,
+        "smart": 0,
+        "gpu": 0,
+        "disk_temperature": 0,
+    }
+    assert runtime.last_refresh == "2026-09-25T14:35:00+05:00"
+
+
 def test_manual_refresh_with_partial_failure_keeps_previous_last_refresh():
     def broken():
         raise RuntimeError("no sensor")
