@@ -56,7 +56,7 @@ class ReleaseDeploymentContractTests(unittest.TestCase):
             'cp -a "${LEGACY_CONFIG_FILE}" "${CONFIG_FILE}"',
             'cp -a "${LEGACY_STATE_DIR}/." "${STATE_DIR}/"',
             'systemctl disable --now "${LEGACY_SERVICE_NAME}"',
-            'Canonical runtime failed; restoring the previous legacy service state.',
+            'restore_legacy_runtime()',
         ):
             self.assertIn(expected, installer)
 
