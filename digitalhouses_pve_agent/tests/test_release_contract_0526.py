@@ -64,7 +64,8 @@ def test_0526_shutdown_runtime_contract_is_documented():
     assert "critical -> timeout/forced, or ratio >= 1.00" in design
     assert "self-contained per-guest snapshot" in design
     assert "later rename or deletion does not change historical presentation" in design
-    assert "derive missing `timeout_ratio` and `assessment`" in design
+    assert "may derive missing `timeout_ratio`" in design
+    assert "`assessment`. It must not use the guest's current timeout" in design
     assert "Home Assistant is a presentation client" in design
 
 
