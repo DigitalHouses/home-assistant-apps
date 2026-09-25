@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.15
+
+- Make the completed canonical slug migration marker authoritative over any later bridge bundle refresh.
+- Fix rollback verification: starting/stopping the legacy `0.1.12` bridge App rewrites the shared bundle with a new timestamp/hash, which must not make the already-migrated canonical App fail or re-import old state.
+- Validate the completed marker's schema/product/source/target identity before ignoring the shared bridge bundle.
+- Preserve newer canonical runtime state across legacy rollback tests and subsequent canonical restarts.
+
 ## 0.1.14
 
 - Fix canonical slug import for Supervisor's real options lifecycle: persisted App options become visible inside `/data/options.json` only after the canonical container is started again.
