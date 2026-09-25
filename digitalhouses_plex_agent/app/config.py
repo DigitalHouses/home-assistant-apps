@@ -8,7 +8,7 @@ from pathlib import Path
 INSTANCE_ID_RE = re.compile(r"^[a-z0-9][a-z0-9_]*$")
 LOG_LEVELS = {"debug", "info", "warning", "error"}
 DEFAULT_LOCAL_ADMIN_TOKEN_FILE = Path(
-    "/etc/digitalhouses_plex_monitoring/plex_local_admin_token"
+    "/etc/digitalhouses_plex_agent/plex_local_admin_token"
 )
 
 
