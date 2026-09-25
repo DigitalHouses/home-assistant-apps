@@ -176,10 +176,51 @@ for legacy_path in \
 done
 
 migration_performed=0
+rollback_needed=0
 legacy_main_was_enabled=0
 legacy_main_was_active=0
 legacy_gpu_was_enabled=0
 legacy_gpu_was_active=0
+
+restore_legacy_runtime() {
+    local reason="${1:-installer error}"
+    echo
+    echo "Rolling back Plex Agent runtime migration: ${reason}"
+
+    set +e
+    systemctl disable --now "${SERVICE_NAME}" >/dev/null 2>&1
+    systemctl disable --now "${GPU_SERVICE_NAME}" >/dev/null 2>&1
+
+    rm -f "${CONFIG_FILE}" "${PLEX_API_TOKEN_FILE}"
+    rm -f "${MIGRATION_MARKER}" "${MIGRATION_IN_PROGRESS}"
+    if [[ -d "${STATE_DIR}" ]]; then
+        find "${STATE_DIR}" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
+    fi
+
+    if [[ "${legacy_gpu_was_enabled}" -eq 1 ]]; then
+        systemctl enable "${LEGACY_GPU_SERVICE_NAME}" >/dev/null 2>&1
+    fi
+    if [[ "${legacy_gpu_was_active}" -eq 1 ]]; then
+        systemctl start "${LEGACY_GPU_SERVICE_NAME}" >/dev/null 2>&1
+    fi
+    if [[ "${legacy_main_was_enabled}" -eq 1 ]]; then
+        systemctl enable "${LEGACY_SERVICE_NAME}" >/dev/null 2>&1
+    fi
+    if [[ "${legacy_main_was_active}" -eq 1 ]]; then
+        systemctl start "${LEGACY_SERVICE_NAME}" >/dev/null 2>&1
+    fi
+    set -e
+}
+
+on_error() {
+    local rc=$?
+    if [[ "${rollback_needed}" -eq 1 ]]; then
+        restore_legacy_runtime "installer failed before canonical runtime acceptance"
+        rollback_needed=0
+    fi
+    exit "${rc}"
+}
+trap on_error ERR
 
 if [[ "${legacy_runtime_present}" -eq 1 && ! -f "${MIGRATION_MARKER}" ]]; then
     if [[ ! -f "${MIGRATION_IN_PROGRESS}" ]]; then
@@ -201,6 +242,7 @@ if [[ "${legacy_runtime_present}" -eq 1 && ! -f "${MIGRATION_MARKER}" ]]; then
     systemctl is-enabled --quiet "${LEGACY_GPU_SERVICE_NAME}" 2>/dev/null && legacy_gpu_was_enabled=1 || true
     systemctl is-active --quiet "${LEGACY_GPU_SERVICE_NAME}" 2>/dev/null && legacy_gpu_was_active=1 || true
 
+    rollback_needed=1
     systemctl disable --now "${LEGACY_SERVICE_NAME}" >/dev/null 2>&1 || true
     systemctl disable --now "${LEGACY_GPU_SERVICE_NAME}" >/dev/null 2>&1 || true
 
@@ -240,13 +282,6 @@ if [[ "${legacy_runtime_present}" -eq 1 && ! -f "${MIGRATION_MARKER}" ]]; then
         cp -a "${LEGACY_STATE_DIR}/." "${STATE_DIR}/"
     fi
 
-    {
-        printf 'migrated_at=%s\n' "$(date --iso-8601=seconds)"
-        printf 'source_runtime=%s\n' "${LEGACY_APP_NAME}"
-        printf 'target_runtime=%s\n' "${APP_NAME}"
-        printf 'source_release=%s\n' "${SOURCE_REF}"
-    } >"${MIGRATION_MARKER}"
-    rm -f "${MIGRATION_IN_PROGRESS}"
     migration_performed=1
 fi
 
@@ -261,6 +296,10 @@ chown -R root:root "${APP_DIR}"
 if [[ ! -f "${CONFIG_FILE}" ]]; then
     if [[ ! -r /dev/tty ]]; then
         echo "First installation requires an interactive terminal for MQTT settings."
+        if [[ "${rollback_needed}" -eq 1 ]]; then
+            restore_legacy_runtime "migrated configuration is unavailable"
+            rollback_needed=0
+        fi
         exit 1
     fi
 
@@ -392,32 +431,39 @@ else
 fi
 
 systemctl enable "${SERVICE_NAME}" >/dev/null
-systemctl restart "${SERVICE_NAME}"
-
-if ! systemctl is-active --quiet "${SERVICE_NAME}"; then
+if ! systemctl restart "${SERVICE_NAME}"; then
     echo "DigitalHouses Plex Agent failed to start."
     systemctl status "${SERVICE_NAME}" --no-pager || true
     journalctl -u "${SERVICE_NAME}" -n 50 --no-pager || true
-
-    if [[ "${migration_performed}" -eq 1 ]]; then
-        echo "Canonical runtime failed; restoring the previous legacy service state."
-        systemctl disable --now "${SERVICE_NAME}" >/dev/null 2>&1 || true
-        systemctl disable --now "${GPU_SERVICE_NAME}" >/dev/null 2>&1 || true
-
-        if [[ "${legacy_gpu_was_enabled}" -eq 1 ]]; then
-            systemctl enable "${LEGACY_GPU_SERVICE_NAME}" >/dev/null 2>&1 || true
-        fi
-        if [[ "${legacy_gpu_was_active}" -eq 1 ]]; then
-            systemctl start "${LEGACY_GPU_SERVICE_NAME}" >/dev/null 2>&1 || true
-        fi
-        if [[ "${legacy_main_was_enabled}" -eq 1 ]]; then
-            systemctl enable "${LEGACY_SERVICE_NAME}" >/dev/null 2>&1 || true
-        fi
-        if [[ "${legacy_main_was_active}" -eq 1 ]]; then
-            systemctl start "${LEGACY_SERVICE_NAME}" >/dev/null 2>&1 || true
-        fi
+    if [[ "${rollback_needed}" -eq 1 ]]; then
+        restore_legacy_runtime "canonical main service failed to start"
+        rollback_needed=0
     fi
     exit 1
+fi
+
+if ! systemctl is-active --quiet "${SERVICE_NAME}"; then
+    echo "DigitalHouses Plex Agent is not active after restart."
+    systemctl status "${SERVICE_NAME}" --no-pager || true
+    journalctl -u "${SERVICE_NAME}" -n 50 --no-pager || true
+    if [[ "${rollback_needed}" -eq 1 ]]; then
+        restore_legacy_runtime "canonical main service is not active"
+        rollback_needed=0
+    fi
+    exit 1
+fi
+
+if [[ "${migration_performed}" -eq 1 ]]; then
+    {
+        printf 'migrated_at=%s\n' "$(date --iso-8601=seconds)"
+        printf 'source_runtime=%s\n' "${LEGACY_APP_NAME}"
+        printf 'target_runtime=%s\n' "${APP_NAME}"
+        printf 'source_release=%s\n' "${SOURCE_REF}"
+    } >"${MIGRATION_MARKER}"
+    chown root:root "${MIGRATION_MARKER}"
+    chmod 0644 "${MIGRATION_MARKER}"
+    rm -f "${MIGRATION_IN_PROGRESS}"
+    rollback_needed=0
 fi
 
 echo
