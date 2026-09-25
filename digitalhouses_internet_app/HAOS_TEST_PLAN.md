@@ -138,14 +138,19 @@ Do not uninstall the bridge App. It remains the immediate rollback target until 
 
 ## 9. Canonical slug import
 
-With the legacy `0.1.12` bridge App stopped, reload the App store and install/start `digitalhouses_internet_app` version `0.1.13`.
+With the legacy `0.1.12` bridge App stopped, reload the App store and install/update `digitalhouses_internet_app` to version `0.1.14`.
 
-Verify:
+On the first canonical start, one of two valid paths is expected:
+
+- if the migrated options are already active (including recovery from the failed 0.1.13 attempt), import completes immediately;
+- otherwise the log reports that migration options were applied and one restart is required; the App must stop cleanly, not enter `state: error`. Start it once more.
+
+Then verify:
 
 - startup log reports `Slug migration bundle imported successfully: digitalhouses_internet -> digitalhouses_internet_app`;
 - the canonical App starts normally after import;
 - current App options match the bridge source rather than the package defaults;
-- `telemetry.json` keeps the same installation ID and reports version `0.1.13` after its version-change heartbeat;
+- `telemetry.json` keeps the same installation ID and reports version `0.1.14` after its version-change heartbeat;
 - outage, recent-results, recovery, server, speedtest, threshold and traffic state are present;
 - existing MQTT Discovery entities remain the same `dh_internet_app_*` identities with no duplicates.
 

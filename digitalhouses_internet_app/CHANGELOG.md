@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.14
+
+- Fix canonical slug import for Supervisor's real options lifecycle: persisted App options become visible inside `/data/options.json` only after the canonical container is started again.
+- When migrated options are not yet active, apply them through `/addons/self/options`, write a pending migration marker and stop cleanly instead of entering `state: error`.
+- On the next start, verify the expected options are mounted before restoring telemetry identity and all explicit App-owned runtime state.
+- Recover the real `0.1.13` field case where Supervisor already accepted the migrated options before the old importer failed waiting for an impossible hot-update.
+- Keep completed imports idempotent so the bridge snapshot cannot overwrite newer canonical state.
+
 ## 0.1.13
 
 - Complete the controlled Home Assistant App slug migration to the canonical `digitalhouses_internet_app` identity.

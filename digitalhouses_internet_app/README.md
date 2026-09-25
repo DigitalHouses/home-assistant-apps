@@ -33,7 +33,7 @@ All recovery timing belongs to App configuration: maximum cycles, retry interval
 
 ## Current product state
 
-Version `0.1.13` completes the controlled Supervisor slug migration to the canonical App identity. The product provides:
+Version `0.1.14` completes the controlled Supervisor slug migration to the canonical App identity with restart-aware option restoration. The product provides:
 
 - Internet and router reachability;
 - current-month outage state persisted under `/data`;
@@ -53,9 +53,9 @@ See [DOCS.md](DOCS.md) for configuration semantics and [HAOS_TEST_PLAN.md](HAOS_
 
 ## Controlled App slug migration
 
-Version `0.1.13` uses the canonical Home Assistant App slug `digitalhouses_internet_app`.
+Version `0.1.14` uses the canonical Home Assistant App slug `digitalhouses_internet_app`.
 
-Existing installations that previously used legacy slug `digitalhouses_internet` migrate through the `0.1.12` bridge bundle at `/share/digitalhouses_internet_app/slug-migration-v1/bundle.tar.gz`. On first canonical-slug start, the App verifies that bundle, restores the previous options through the App's own Supervisor API, restores telemetry identity and App-owned runtime state, then writes an idempotency marker before normal runtime starts.
+Existing installations that previously used legacy slug `digitalhouses_internet` migrate through the `0.1.12` bridge bundle at `/share/digitalhouses_internet_app/slug-migration-v1/bundle.tar.gz`. On canonical-slug import, the App verifies that bundle and restores the previous options through the App's own Supervisor API. If Supervisor requires a container restart before those options appear in `/data/options.json`, the App stops cleanly and completes telemetry/runtime-state restoration on the next start. The completed import is protected by an idempotency marker.
 
 The stopped legacy App must remain installed until migration acceptance and rollback verification are complete. MQTT/device/entity identities remain `dh_internet_app` throughout and are not renamed.
 
