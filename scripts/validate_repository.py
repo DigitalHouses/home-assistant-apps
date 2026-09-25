@@ -16,7 +16,7 @@ from validators.common import (
 )
 from validators.products.backblaze_app import validate_backblaze
 from validators.products.internet_app import validate_internet
-from validators.products.plex_agent import validate_plex_monitoring
+from validators.products.plex_agent import validate_plex_agent
 from validators.products.pve_agent import validate_dh_pve_app
 from validators.products.recorder_app import validate_db_monitoring
 from validators.products.speedtest_app import validate_speedtest
@@ -38,7 +38,7 @@ PRODUCT_TYPE_TO_APPLICATION_TYPE = {
 PRODUCT_VALIDATORS = {
     "digitalhouses_backblaze_app": validate_backblaze,
     "digitalhouses_internet_app": validate_internet,
-    "digitalhouses_plex_agent": validate_plex_monitoring,
+    "digitalhouses_plex_agent": validate_plex_agent,
     "digitalhouses_pve_agent": validate_dh_pve_app,
     "digitalhouses_recorder_app": validate_db_monitoring,
     "digitalhouses_speedtest_app": validate_speedtest,
