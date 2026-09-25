@@ -1,6 +1,6 @@
-# DigitalHouses Internet App — first HAOS test plan
+# DigitalHouses Internet App — HAOS validation plan
 
-This plan is for the first real installation of the experimental `0.1.0` build from `develop/digitalhouses-internet`.
+This plan covers the current released product and the controlled Home Assistant App slug migration.
 
 ## 1. Safe first start
 
@@ -17,7 +17,7 @@ Expected result after start:
 
 - one MQTT device named **DigitalHouses Internet App**;
 - all created entity IDs use the `dh_internet_app_` prefix;
-- Version is `0.1.0`;
+- Version matches the installed released App version;
 - Started at is a valid timestamp;
 - Internet, Google, Cloudflare and Router connectivity update normally;
 - no recovery action can execute.
@@ -120,7 +120,23 @@ Then explicitly enable `telemetry_enabled: true` and restart the released App. V
 
 Press `button.dh_internet_app_delete_telemetry` and verify the server-side installation record is removed. Disable telemetry again if the installation should stop reporting.
 
-## 7. Recovery — only after read-only tests pass
+## 8. Slug migration bridge
+
+On legacy slug `digitalhouses_internet`, update to bridge release `0.1.12`.
+
+Verify:
+
+- startup log reports `Slug migration bridge bundle ready`;
+- `/share/digitalhouses_internet_app/slug-migration-v1/bundle.tar.gz` exists;
+- the bundle manifest identifies product `digitalhouses_internet_app`, source slug `digitalhouses_internet`, target slug `digitalhouses_internet_app`, and source version `0.1.12`;
+- options, `telemetry.json`, and all existing explicit runtime files are represented by SHA-256 entries;
+- telemetry `installation_id` in the source state is recorded for later equality verification.
+
+Create a Home Assistant backup while the bridge App is still installed. Then stop the bridge App cleanly and verify the shutdown log reports `Slug migration bridge bundle refreshed`.
+
+Do not uninstall the bridge App. It remains the immediate rollback target until the canonical-slug installation has passed migration acceptance.
+
+## 9. Recovery — only after read-only tests pass
 
 Use known-good Home Assistant `button.*` or `switch.*` recovery entities.
 
@@ -149,7 +165,7 @@ Verify:
 - active cooldown is not bypassed;
 - a restart between cycles waits through a retry guard before another power action.
 
-## 9. Pass criteria
+## 10. Pass criteria
 
 The first HAOS test passes when:
 

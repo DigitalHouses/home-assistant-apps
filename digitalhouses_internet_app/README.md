@@ -31,9 +31,9 @@ All recovery timing belongs to App configuration: maximum cycles, retry interval
 
 `Stop recovery` stops further attempts for the current outage. Stop state, completed recovery cycles and an active cooldown survive an App restart, so restarting the App does not bypass recovery limits. If a switch has already been turned off, the App always attempts to turn it back on before the stop propagates. The HAOS App shutdown timeout is extended to 45 seconds so normal Stop/Restart operations can complete that restore path.
 
-## Current development milestone
+## Current product state
 
-Version `0.1.0` establishes the new product identity and the recovery/availability foundation:
+Version `0.1.12` is the bridge release for the controlled Supervisor slug migration. The product already provides:
 
 - Internet and router reachability;
 - current-month outage state persisted under `/data`;
@@ -50,6 +50,16 @@ Version `0.1.0` establishes the new product identity and the recovery/availabili
 Quality thresholds and App-owned performance problem evaluation are implemented. Router integration uses at most five optional HA bindings: cumulative Download/Upload totals, WAN state and current Download/Upload rates. Together with two recovery entities the App stays within seven external HA bindings. Monthly traffic retains the current month plus 11 previous months. The reusable package, notification presentation and reference dashboard are included in this development milestone.
 
 See [DOCS.md](DOCS.md) for configuration semantics and [HAOS_TEST_PLAN.md](HAOS_TEST_PLAN.md) for the first real installation test sequence.
+
+## Controlled App slug migration
+
+The repository and product identity are already canonical, but the installed Home Assistant App still uses the legacy slug `digitalhouses_internet`. Version `0.1.12` intentionally keeps that slug and prepares a migration bundle for the later canonical slug `digitalhouses_internet_app`.
+
+The bridge automatically exports the current options, telemetry identity and App-owned persistent state to `/share/digitalhouses_internet_app/slug-migration-v1/bundle.tar.gz`. The bundle is refreshed again during graceful App shutdown. Do not uninstall the legacy App before the canonical-slug release has imported and verified this state.
+
+MQTT/device/entity identities remain `dh_internet_app` and are not renamed by the slug migration.
+
+See [the controlled slug migration design](../docs/digitalhouses_internet_app/slug-migration.md).
 
 ## Product telemetry
 

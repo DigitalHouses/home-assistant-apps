@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.12
+
+- Add the controlled bridge phase for the Home Assistant App slug migration from `digitalhouses_internet` to `digitalhouses_internet_app`.
+- Export the current App options, telemetry identity/schedule and explicit `/data/runtime` state to one atomic SHA-256-validated migration bundle under `/share/digitalhouses_internet_app/slug-migration-v1/`.
+- Refresh the bridge bundle at App start and graceful shutdown; export failure is isolated from normal Internet monitoring/recovery.
+- Add the canonical-side importer now, but do not activate it until the subsequent canonical-slug release. The importer applies options through the App's own Supervisor API before restoring state and is idempotent.
+- Keep MQTT, device, unique ID and Home Assistant entity identities unchanged under `dh_internet_app`.
+
 ## 0.1.11
 
 - Send one immediate best-effort telemetry heartbeat when the persisted App setting changes from `telemetry_enabled: false` to `true`, even if the previous successful heartbeat is still inside its normal 24-hour interval.
