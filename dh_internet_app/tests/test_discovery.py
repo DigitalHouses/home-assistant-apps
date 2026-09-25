@@ -174,6 +174,18 @@ class DiscoveryTests(unittest.TestCase):
         self.assertIn("'problems': value_json.problems", problems["json_attributes_template"])
         self.assertNotIn("updated_at", problems["json_attributes_template"])
 
+    def test_telemetry_delete_button_uses_fixed_command(self) -> None:
+        component = build_discovery_payload("0.1.10")["components"][
+            "delete_telemetry"
+        ]
+        self.assertEqual(
+            component["default_entity_id"],
+            "button.dh_internet_app_delete_telemetry",
+        )
+        self.assertEqual(component["command_topic"], TOPICS["command"])
+        self.assertEqual(component["payload_press"], "DELETE_TELEMETRY")
+        self.assertEqual(component["entity_category"], "config")
+
     def test_compact_server_discovery(self) -> None:
         components = build_discovery_payload("0.1.0")["components"]
         self.assertEqual(
