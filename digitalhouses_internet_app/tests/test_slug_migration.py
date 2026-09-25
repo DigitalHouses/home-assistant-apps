@@ -185,7 +185,7 @@ class SlugMigrationTests(unittest.TestCase):
                 source["telemetry.json"]["installation_id"],
             )
 
-    def test_completed_import_is_idempotent_and_preserves_newer_state(self) -> None:
+    def test_completed_import_ignores_refreshed_legacy_bundle(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             old_data = root / "old"
@@ -208,12 +208,27 @@ class SlugMigrationTests(unittest.TestCase):
             newer = {"newer": True}
             self._write_json(new_data, "runtime/outages.json", newer)
 
+            # A rollback start of the legacy bridge App refreshes the shared
+            # bundle and therefore changes its hash. Completed canonical state
+            # must remain authoritative and must not be re-imported.
+            self._write_json(
+                old_data,
+                "runtime/outages.json",
+                {"legacy_refresh": True},
+            )
+            export_bridge_bundle(
+                app_version="0.1.12",
+                data_dir=old_data,
+                bundle_file=bundle,
+                settings_reader=lambda: {},
+            )
+
             self.assertEqual(
                 import_canonical_bundle(
                     data_dir=new_data,
                     bundle_file=bundle,
                     settings_applier=lambda _settings: self.fail(
-                        "completed migration must not reapply"
+                        "completed migration must ignore refreshed bridge bundle"
                     ),
                 ),
                 IMPORT_NONE,
