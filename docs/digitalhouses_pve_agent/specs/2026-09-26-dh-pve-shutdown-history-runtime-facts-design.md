@@ -46,6 +46,19 @@ Historical planned values are snapshots. They are never reconstructed later from
 the current configuration, so changing VM/LXC timeouts must not turn an old history
 row into "plan changed".
 
+Each new host-shutdown history record also stores a self-contained per-guest snapshot:
+`kind`, `guest_id`, `name`, `duration_seconds`, `timeout_seconds`,
+`timeout_ratio`, `assessment`, `result` and `forced`. Guest names are
+snapshotted during the boot and copied into the completed shutdown record, so a
+later rename or deletion does not change historical presentation.
+
+Legacy history records are normalized only from facts already stored in that
+record. If a legacy guest has historical `duration_seconds`, `timeout_seconds`,
+`result` and `forced`, the Agent may derive missing `timeout_ratio` and
+`assessment`. It must not use the guest's current timeout or current name to
+rewrite old history. Legacy names that were never stored remain unavailable to the
+history record itself.
+
 ## Current shutdown plan
 
 The operational shutdown budget uses only guests that are actually running in the
