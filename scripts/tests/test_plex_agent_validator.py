@@ -5,7 +5,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from validators.products.plex_agent import validate_plex_monitoring
+from validators.products.plex_agent import validate_plex_agent
 from validators.common import parse_application_metadata, validate_common
 from validators.types.linux_agent import validate_linux_agent
 
@@ -16,7 +16,7 @@ class PlexAgentValidatorTests(unittest.TestCase):
         metadata = parse_application_metadata(app / "digitalhouses.app")
         validate_common(ROOT, app, metadata)
         context = validate_linux_agent(ROOT, app)
-        validate_plex_monitoring(ROOT, app, context)
+        validate_plex_agent(ROOT, app, context)
         expected_version = (app / "VERSION").read_text(encoding="utf-8").strip()
         self.assertEqual(context["version"], expected_version)
 
