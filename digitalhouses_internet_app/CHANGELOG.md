@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.13
+
+- Complete the controlled Home Assistant App slug migration to the canonical `digitalhouses_internet_app` identity.
+- On first canonical-slug start, import the verified bridge bundle from `/share/digitalhouses_internet_app/slug-migration-v1/bundle.tar.gz` before the normal runtime starts.
+- Restore the previous App options through the App's own Supervisor API, then restore telemetry identity and all explicit App-owned runtime state atomically.
+- Keep MQTT/device/unique-id/Home Assistant identities unchanged under `dh_internet_app`; the legacy `digitalhouses_internet` installation remains a stopped rollback target until migration acceptance.
+- Preserve the migration bundle and import marker so repeated starts cannot reapply the bridge snapshot over newer canonical state.
+
 ## 0.1.12
 
 - Add the controlled bridge phase for the Home Assistant App slug migration from `digitalhouses_internet` to `digitalhouses_internet_app`.

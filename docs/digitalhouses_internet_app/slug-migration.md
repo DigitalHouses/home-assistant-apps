@@ -1,6 +1,6 @@
 # Internet App controlled HA App slug migration
 
-Status: implementation design / bridge phase.
+Status: canonical import release / operator acceptance pending.
 
 Canonical product:
 
@@ -67,13 +67,13 @@ The manifest records:
 
 ## Phase 2 — canonical slug release
 
-The first release with:
+Version `0.1.13` is the first release with:
 
 ```yaml
 slug: digitalhouses_internet_app
 ```
 
-keeps the `/share` migration mapping for the import release.
+It keeps the `/share` migration mapping for the import release and runs in `DH_SLUG_MIGRATION_MODE=import`.
 
 Before normal runtime starts it:
 
@@ -107,11 +107,13 @@ The new product version is still reported normally after migration because the t
 3. Create a Home Assistant backup while the legacy App is still installed.
 4. Stop the legacy App. Do not uninstall it.
 5. Confirm the shutdown log reports a refreshed migration bundle.
-6. Reload the App store and install the canonical-slug App.
-7. Start it and verify migration import before normal runtime.
+6. Reload the App store and install the canonical-slug App `digitalhouses_internet_app` at version `0.1.13`.
+7. Start it and verify the log reports successful bundle import before normal runtime.
 8. Verify options, telemetry identity, Internet state, thresholds, outage/traffic history and HA/MQTT entities.
-9. Create a backup of the canonical-slug App and verify restore.
-10. Only after acceptance uninstall the stopped legacy App.
+9. Restart the canonical App once and verify the bundle is not re-imported.
+10. Create a backup of the canonical-slug App and verify restore.
+11. Prove rollback once by stopping the canonical App and starting the still-installed legacy bridge App, then stop legacy again and return to canonical.
+12. Only after acceptance uninstall the stopped legacy App.
 
 The two Apps must never run at the same time because they intentionally share the same MQTT client/device/entity identities.
 

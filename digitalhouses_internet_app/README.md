@@ -7,7 +7,7 @@ This is a new product. It does not migrate or reuse the stable MQTT identities o
 ## Canonical identities
 
 - repository directory: `digitalhouses_internet_app`
-- HA App slug: `digitalhouses_internet` (legacy installed identity; controlled reinstall migration pending)
+- HA App slug: `digitalhouses_internet_app`
 - public product name: **DigitalHouses Internet App**
 - release identifier: `digitalhouses_internet_app`
 - MQTT base: `DigitalHouses/Global/dh_internet_app`
@@ -33,7 +33,7 @@ All recovery timing belongs to App configuration: maximum cycles, retry interval
 
 ## Current product state
 
-Version `0.1.12` is the bridge release for the controlled Supervisor slug migration. The product already provides:
+Version `0.1.13` completes the controlled Supervisor slug migration to the canonical App identity. The product provides:
 
 - Internet and router reachability;
 - current-month outage state persisted under `/data`;
@@ -53,13 +53,13 @@ See [DOCS.md](DOCS.md) for configuration semantics and [HAOS_TEST_PLAN.md](HAOS_
 
 ## Controlled App slug migration
 
-The repository and product identity are already canonical, but the installed Home Assistant App still uses the legacy slug `digitalhouses_internet`. Version `0.1.12` intentionally keeps that slug and prepares a migration bundle for the later canonical slug `digitalhouses_internet_app`.
+Version `0.1.13` uses the canonical Home Assistant App slug `digitalhouses_internet_app`.
 
-The bridge automatically exports the current options, telemetry identity and App-owned persistent state to `/share/digitalhouses_internet_app/slug-migration-v1/bundle.tar.gz`. The bundle is refreshed again during graceful App shutdown. Do not uninstall the legacy App before the canonical-slug release has imported and verified this state.
+Existing installations that previously used legacy slug `digitalhouses_internet` migrate through the `0.1.12` bridge bundle at `/share/digitalhouses_internet_app/slug-migration-v1/bundle.tar.gz`. On first canonical-slug start, the App verifies that bundle, restores the previous options through the App's own Supervisor API, restores telemetry identity and App-owned runtime state, then writes an idempotency marker before normal runtime starts.
 
-MQTT/device/entity identities remain `dh_internet_app` and are not renamed by the slug migration.
+The stopped legacy App must remain installed until migration acceptance and rollback verification are complete. MQTT/device/entity identities remain `dh_internet_app` throughout and are not renamed.
 
-See [the controlled slug migration design](../docs/digitalhouses_internet_app/slug-migration.md).
+See [the controlled slug migration procedure](../docs/digitalhouses_internet_app/slug-migration.md).
 
 ## Product telemetry
 

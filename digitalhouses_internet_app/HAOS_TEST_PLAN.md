@@ -136,7 +136,31 @@ Create a Home Assistant backup while the bridge App is still installed. Then sto
 
 Do not uninstall the bridge App. It remains the immediate rollback target until the canonical-slug installation has passed migration acceptance.
 
-## 9. Recovery — only after read-only tests pass
+## 9. Canonical slug import
+
+With the legacy `0.1.12` bridge App stopped, reload the App store and install/start `digitalhouses_internet_app` version `0.1.13`.
+
+Verify:
+
+- startup log reports `Slug migration bundle imported successfully: digitalhouses_internet -> digitalhouses_internet_app`;
+- the canonical App starts normally after import;
+- current App options match the bridge source rather than the package defaults;
+- `telemetry.json` keeps the same installation ID and reports version `0.1.13` after its version-change heartbeat;
+- outage, recent-results, recovery, server, speedtest, threshold and traffic state are present;
+- existing MQTT Discovery entities remain the same `dh_internet_app_*` identities with no duplicates.
+
+Restart the canonical App once.
+
+Verify:
+
+- startup log reports no second state import for the same bundle;
+- state created after the first canonical start is not overwritten by the old bridge snapshot.
+
+Before deleting the legacy App, prove rollback once: stop canonical, start legacy `0.1.12`, confirm its prior state is intact, stop legacy again, then start canonical. Never run both simultaneously.
+
+Create a new Home Assistant backup after the canonical App is accepted and verify that backup/restore preserves the canonical slug and installation state.
+
+## 10. Recovery — only after read-only tests pass
 
 Use known-good Home Assistant `button.*` or `switch.*` recovery entities.
 
@@ -165,7 +189,7 @@ Verify:
 - active cooldown is not bypassed;
 - a restart between cycles waits through a retry guard before another power action.
 
-## 10. Pass criteria
+## 11. Pass criteria
 
 The first HAOS test passes when:
 
@@ -177,4 +201,4 @@ The first HAOS test passes when:
 - switch recovery cannot be left off by a normal Stop/Restart path;
 - the reference dashboard and notification package load without legacy Speedtest entities.
 
-Production release remains a separate milestone: immutable GHCR delivery, telemetry integration and release hardening are not required to begin this HAOS functional test.
+Immutable GHCR delivery remains a separate production-delivery milestone; telemetry is already integrated and is part of this validation plan.
