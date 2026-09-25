@@ -34,6 +34,51 @@ def validate_internet(root: Path, app: Path, context: dict[str, Any]) -> None:
     if schema.get("telemetry_enabled") != "bool":
         fail(f"{app.name}: telemetry_enabled schema must be bool")
 
+    slug = config.get("slug")
+    migration_mode = (config.get("environment") or {}).get(
+        "DH_SLUG_MIGRATION_MODE"
+    )
+    if slug == "digitalhouses_internet":
+        if migration_mode != "export":
+            fail(
+                f"{app.name}: legacy slug is allowed only in migration bridge "
+                "export mode"
+            )
+        mappings = config.get("map") or []
+        share_rw = any(
+            isinstance(item, dict)
+            and item.get("type") == "share"
+            and item.get("read_only") is False
+            for item in mappings
+        )
+        if not share_rw:
+            fail(
+                f"{app.name}: migration bridge requires writable share mapping"
+            )
+    elif slug == "digitalhouses_internet_app":
+        if migration_mode != "import":
+            fail(
+                f"{app.name}: first canonical slug release must use migration "
+                "import mode"
+            )
+    else:
+        fail(
+            f"{app.name}: unsupported App slug {slug!r}; expected legacy bridge "
+            "or canonical target slug"
+        )
+
+    migration_path = app / "rootfs" / "app" / "slug_migration.py"
+    require_files(root, [migration_path])
+    migration_source = migration_path.read_text(encoding="utf-8")
+    for value in (
+        'PRODUCT_ID = "digitalhouses_internet_app"',
+        'SOURCE_SLUG = "digitalhouses_internet"',
+        'TARGET_SLUG = "digitalhouses_internet_app"',
+        'BUNDLE_FILE = BUNDLE_DIR / "bundle.tar.gz"',
+    ):
+        if value not in migration_source:
+            fail(f"{app.name}: slug migration contract is missing {value!r}")
+
     traffic = options.get("traffic")
     if not isinstance(traffic, dict):
         fail(f"{app.name}: traffic options must be a mapping")
