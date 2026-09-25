@@ -192,7 +192,7 @@ Conceptually:
 
 ```yaml
 version: "0.1.9"
-image: "ghcr.io/digitalhouses/digitalhouses-recorder-app"
+image: "ghcr.io/digitalhouses/digitalhouses_recorder_app"
 ```
 
 The delivery implementation must follow the current Home Assistant Supervisor App image contract and must keep the package version and container image version aligned.
