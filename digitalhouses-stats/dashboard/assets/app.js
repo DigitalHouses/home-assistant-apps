@@ -5,7 +5,8 @@ const productNames = {
   digitalhouses_plex_agent: "Plex Agent",
   digitalhouses_recorder_app: "Recorder App",
   digitalhouses_speedtest_app: "Speedtest App",
-  digitalhouses_internet_app: "Internet App"
+  digitalhouses_internet_app: "Internet App",
+  digitalhouses_climate_app: "Climate App"
 };
 
 function productName(value) {

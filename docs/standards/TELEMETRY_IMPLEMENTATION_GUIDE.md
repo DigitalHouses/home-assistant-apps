@@ -48,6 +48,7 @@ digitalhouses_plex_agent
 digitalhouses_recorder_app
 digitalhouses_speedtest_app
 digitalhouses_internet_app
+digitalhouses_climate_app
 ```
 
 A product must not start sending telemetry until its canonical product identifier is present in the shared server allowlist and this document/protocol have been updated together.
@@ -456,6 +457,7 @@ As of the current repository implementation:
 | DigitalHouses Speedtest App | `digitalhouses_speedtest_app` | pending product implementation |
 | DigitalHouses Backblaze App | `digitalhouses_backblaze_app` | client exists; server allowlist + release-gating review required before production enablement |
 | DigitalHouses Internet App | `digitalhouses_internet_app` | implemented in product and admitted to protocol/server allowlist |
+| DigitalHouses Climate App | `digitalhouses_climate_app` | client implemented; admitted to protocol/server allowlist; real-install verification pending |
 
 This table is operational status, not a replacement for the normative protocol or Release Policy.
 

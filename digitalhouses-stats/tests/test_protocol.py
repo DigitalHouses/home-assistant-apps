@@ -48,6 +48,17 @@ def test_heartbeat_payload_accepts_internet_app() -> None:
     assert payload.product == "digitalhouses_internet_app"
 
 
+def test_heartbeat_payload_accepts_climate_app() -> None:
+    payload = HeartbeatPayload(
+        schema=1,
+        telemetry_policy_version=1,
+        installation_id=uuid.uuid4(),
+        product="digitalhouses_climate_app",
+        version="0.1.0",
+    )
+    assert payload.product == "digitalhouses_climate_app"
+
+
 def test_heartbeat_payload_rejects_unknown_product() -> None:
     with pytest.raises(ValidationError):
         HeartbeatPayload(

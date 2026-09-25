@@ -15,6 +15,7 @@ ALLOWED_PRODUCTS = frozenset(
         "digitalhouses_recorder_app",
         "digitalhouses_speedtest_app",
         "digitalhouses_internet_app",
+        "digitalhouses_climate_app",
     }
 )
 
