@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.5.26
+
+- Make new PVE shutdown-history records self-contained by snapshotting VM/LXC names during the boot and copying each name into the completed guest shutdown fact.
+- Normalize legacy guest history from its own stored facts only: derive missing `timeout_ratio` and `assessment` from historical duration/timeout/result/forced values without consulting current guest configuration.
+- Persist the legacy normalization during startup and keep completed history immutable when a guest is renamed later.
+
 ## 0.5.25
 
 - Complete standalone VM/LXC shutdown facts with the guest's PVE shutdown timeout when the native task journal does not contain it, persisting that timeout with the measured fact instead of recalculating it later from changed configuration.
