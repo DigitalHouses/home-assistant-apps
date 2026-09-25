@@ -55,7 +55,7 @@ EXPECTED_ENTITY_IDS = {
 
 
 def _load_package(app: Path):
-    package_name = "_digitalhouses_plex_monitoring_validation"
+    package_name = "_digitalhouses_plex_agent_validation"
     app_dir = app / "app"
     init_path = app_dir / "__init__.py"
 
@@ -65,7 +65,7 @@ def _load_package(app: Path):
         submodule_search_locations=[str(app_dir)],
     )
     if package_spec is None or package_spec.loader is None:
-        fail("Unable to load Plex Monitoring app package")
+        fail("Unable to load Plex Agent app package")
 
     package = importlib.util.module_from_spec(package_spec)
     sys.modules[package_name] = package
@@ -78,7 +78,7 @@ def _load_package(app: Path):
             path,
         )
         if spec is None or spec.loader is None:
-            fail(f"Unable to import Plex Monitoring {name}.py")
+            fail(f"Unable to import Plex Agent {name}.py")
         module = importlib.util.module_from_spec(spec)
         sys.modules[spec.name] = module
         spec.loader.exec_module(module)
@@ -96,7 +96,7 @@ def _load_package(app: Path):
                 sys.modules.pop(name, None)
 
 
-def validate_plex_monitoring(
+def validate_plex_agent(
     root: Path,
     app: Path,
     context: dict[str, Any],
@@ -117,14 +117,14 @@ def validate_plex_monitoring(
             app / "app/presentation_policy.py",
             app / "app/presentation_plex.py",
             app / "app/presentation_runtime.py",
-            app / "examples/digitalhouses_plex_monitoring.conf.example",
-            app / "systemd/digitalhouses_plex_monitoring.service",
-            app / "systemd/digitalhouses_plex_gpu_helper.service",
+            app / "examples/digitalhouses_plex_agent.conf.example",
+            app / "systemd/digitalhouses_plex_agent.service",
+            app / "systemd/digitalhouses_plex_agent_gpu_helper.service",
         ],
     )
 
     if context.get("type") != "linux_agent":
-        fail("Plex Monitoring must remain a linux_agent")
+        fail("Plex Agent must remain a linux_agent")
 
     config_module, models_module, plex_api_module, discovery_module = _load_package(app)
 
@@ -182,28 +182,28 @@ def validate_plex_monitoring(
     }
     for field, expected in expected_topics.items():
         if getattr(topics, field) != expected:
-            fail(f"Plex Monitoring topic contract changed for {field}")
+            fail(f"Plex Agent topic contract changed for {field}")
 
     payload = discovery_module.build_discovery_payload(config, build)
     device = payload.get("device") or {}
     if device.get("identifiers") != [EXPECTED_DEVICE_ID]:
-        fail("Plex Monitoring Discovery device identifier changed")
+        fail("Plex Agent Discovery device identifier changed")
 
     components = payload.get("components") or {}
     if set(components) != set(EXPECTED_ENTITY_IDS):
         missing = sorted(set(EXPECTED_ENTITY_IDS) - set(components))
         extra = sorted(set(components) - set(EXPECTED_ENTITY_IDS))
         fail(
-            "Plex Monitoring discovery component set changed: "
+            "Plex Agent discovery component set changed: "
             f"missing={missing}, extra={extra}"
         )
 
     for key, expected_entity_id in EXPECTED_ENTITY_IDS.items():
         component = components.get(key)
         if not isinstance(component, dict):
-            fail(f"Plex Monitoring missing discovery component {key}")
+            fail(f"Plex Agent missing discovery component {key}")
         if component.get("default_entity_id") != expected_entity_id:
-            fail(f"Plex Monitoring default_entity_id changed for {key}")
+            fail(f"Plex Agent default_entity_id changed for {key}")
 
     grouped = {
         "activity": "activity",
@@ -223,7 +223,7 @@ def validate_plex_monitoring(
     for key, group in grouped.items():
         expected_topic = discovery_module.state_group_topic(topics, group)
         if components[key].get("state_topic") != expected_topic:
-            fail(f"Plex Monitoring grouped state routing changed for {key}")
+            fail(f"Plex Agent grouped state routing changed for {key}")
 
     sample_library = plex_api_module.LibraryInfo(
         section_id="3",
@@ -242,12 +242,12 @@ def validate_plex_monitoring(
     )
     library_component = (library_payload.get("components") or {}).get("library_3")
     if not isinstance(library_component, dict):
-        fail("Plex Monitoring dynamic library discovery is missing")
+        fail("Plex Agent dynamic library discovery is missing")
     if library_component.get("default_entity_id") != "sensor.dh_plex_library_3":
-        fail("Plex Monitoring dynamic library entity ID must use section ID")
+        fail("Plex Agent dynamic library entity ID must use section ID")
 
     example = (
-        app / "examples/digitalhouses_plex_monitoring.conf.example"
+        app / "examples/digitalhouses_plex_agent.conf.example"
     ).read_text(encoding="utf-8")
     for expected in (
         "instance_id = plex",
@@ -259,43 +259,43 @@ def validate_plex_monitoring(
         "[plex_api]",
         "enabled = true",
         "base_url = http://127.0.0.1:32400",
-        "token_file = /etc/digitalhouses_plex_monitoring/plex_local_admin_token",
+        "token_file = /etc/digitalhouses_plex_agent/plex_local_admin_token",
         "library_refresh_seconds = 3600",
         "topic_prefix = DigitalHouses/Global/plex_monitoring",
     ):
         if expected not in example:
-            fail(f"Plex Monitoring example config lost contract: {expected}")
+            fail(f"Plex Agent example config lost contract: {expected}")
 
     service = (
-        app / "systemd/digitalhouses_plex_monitoring.service"
+        app / "systemd/digitalhouses_plex_agent.service"
     ).read_text(encoding="utf-8")
     gpu_helper_service = (
-        app / "systemd/digitalhouses_plex_gpu_helper.service"
+        app / "systemd/digitalhouses_plex_agent_gpu_helper.service"
     ).read_text(encoding="utf-8")
     for expected in (
-        "User=digitalhouses_plex_monitoring",
-        "Group=digitalhouses_plex_monitoring",
+        "User=digitalhouses_plex_agent",
+        "Group=digitalhouses_plex_agent",
         (
-            "ExecStart=/opt/digitalhouses/digitalhouses_plex_monitoring/"
+            "ExecStart=/opt/digitalhouses/digitalhouses_plex_agent/"
             ".venv/bin/python -m app.app --config "
             "/etc/digitalhouses_plex_monitoring/"
             "digitalhouses_plex_monitoring.conf"
         ),
-        "ReadWritePaths=/var/lib/digitalhouses_plex_monitoring",
+        "ReadWritePaths=/var/lib/digitalhouses_plex_agent",
     ):
         if expected not in service:
-            fail(f"Plex Monitoring systemd contract changed: {expected}")
+            fail(f"Plex Agent systemd contract changed: {expected}")
 
     if "CAP_SYS_ADMIN" in service:
-        fail("Plex Monitoring main service must not receive CAP_SYS_ADMIN")
+        fail("Plex Agent main service must not receive CAP_SYS_ADMIN")
 
     for expected in (
-        "User=digitalhouses_plex_monitoring",
-        "Group=digitalhouses_plex_monitoring",
+        "User=digitalhouses_plex_agent",
+        "Group=digitalhouses_plex_agent",
         "CapabilityBoundingSet=CAP_SYS_ADMIN",
         "AmbientCapabilities=CAP_SYS_ADMIN",
         "NoNewPrivileges=true",
-        "ReadWritePaths=/var/lib/digitalhouses_plex_monitoring",
+        "ReadWritePaths=/var/lib/digitalhouses_plex_agent",
     ):
         if expected not in gpu_helper_service:
             fail(f"Plex GPU helper service contract changed: {expected}")
@@ -307,9 +307,13 @@ def validate_plex_monitoring(
         'SOURCE_REF="${DIGITALHOUSES_SOURCE_REF:-}"',
         'ALLOW_NON_RELEASE_REF="${DIGITALHOUSES_ALLOW_NON_RELEASE_REF:-0}"',
         'EXPECTED_VERSION="${BASH_REMATCH[1]}"',
+        'APP_NAME="${PRODUCT_ID}"',
+        'LEGACY_APP_NAME="digitalhouses_plex_monitoring"',
         'APP_DIR="/opt/digitalhouses/${APP_NAME}"',
         'CONFIG_DIR="/etc/${APP_NAME}"',
         'STATE_DIR="/var/lib/${APP_NAME}"',
+        'MIGRATION_MARKER="${STATE_DIR}/.runtime_migrated_from_${LEGACY_APP_NAME}"',
+        'BACKUP_DIR="/var/backups/${APP_NAME}"',
         'if [[ ! -f "${CONFIG_FILE}" ]]; then',
         'SOURCE_SHA="$(git -C "${tmp_dir}/repo" rev-parse HEAD)"',
         'SOURCE_VERSION="$(tr -d \'[:space:]\' <"${SOURCE_APP}/VERSION")"',
@@ -320,13 +324,13 @@ def validate_plex_monitoring(
         'rm -f "${TOKEN_DROPIN_FILE}"',
     ):
         if expected not in installer:
-            fail(f"Plex Monitoring installer contract changed: {expected}")
+            fail(f"Plex Agent installer contract changed: {expected}")
 
     if 'SOURCE_REF="${DIGITALHOUSES_SOURCE_REF:-main}"' in installer:
-        fail("Plex Monitoring production installer must not default to main")
+        fail("Plex Agent production installer must not default to main")
 
     if "LoadCredential=" in installer:
-        fail("Plex Monitoring installer must not install a systemd credential drop-in")
+        fail("Plex Agent installer must not install a systemd credential drop-in")
 
     readme = (app / "README.md").read_text(encoding="utf-8")
     release_tag = f"digitalhouses_plex_agent-v{context['version']}"
@@ -337,13 +341,13 @@ def validate_plex_monitoring(
             "${RELEASE_TAG}/digitalhouses_plex_agent/install.sh"
         ),
         'DIGITALHOUSES_SOURCE_REF="${RELEASE_TAG}"',
-        "digitalhouses_plex_monitoring/BUILD_INFO",
+        "digitalhouses_plex_agent/BUILD_INFO",
     ):
         if expected not in readme:
-            fail(f"Plex Monitoring release deployment docs changed: {expected}")
+            fail(f"Plex Agent release deployment docs changed: {expected}")
 
     if (
         "raw.githubusercontent.com/DigitalHouses/home-assistant-apps/main/"
         "digitalhouses_plex_agent/install.sh"
     ) in readme:
-        fail("Plex Monitoring README must not present main as production install source")
+        fail("Plex Agent README must not present main as production install source")
