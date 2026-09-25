@@ -73,6 +73,19 @@ class TelemetryTests(unittest.TestCase):
             self.assertFalse(client.tick())
             self.assertEqual(transport.calls, [])
 
+    def test_local_build_never_sends_production_telemetry(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            transport = FakeTransport()
+            client = TelemetryClient(
+                enabled=True,
+                version="0.1.10-local",
+                state_file=Path(temp) / "telemetry.json",
+                transport=transport,
+                now_epoch=lambda: 1000.0,
+            )
+            self.assertFalse(client.tick())
+            self.assertEqual(transport.calls, [])
+
     def test_enabled_heartbeat_and_restart_do_not_storm(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             now = {"value": 1000.0}
