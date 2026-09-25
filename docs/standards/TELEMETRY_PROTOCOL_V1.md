@@ -48,28 +48,15 @@ Statistics/reporting endpoints are not part of the public telemetry protocol.
 
 ## 3. Product identifiers
 
-Current production protocol-v1 allowlist:
+The canonical production protocol-v1 allowlist is derived from:
 
-```text
-digitalhouses_pve_agent
-digitalhouses_plex_agent
-digitalhouses_recorder_app
-digitalhouses_speedtest_app
-digitalhouses_internet_app
-digitalhouses_climate_app
-```
+`digitalhouses-stats/digitalhouses_stats/product_registry.json`
 
-The server rejects unknown product identifiers.
+Every registry entry with `telemetry_allowed: true` is accepted by the server, including a known product whose telemetry client is not implemented or enabled yet. The server rejects identifiers that are absent from that allowlist.
 
-Adding a product requires one coordinated repository change covering:
+Adding a DigitalHouses product requires adding its canonical identity to the registry in the same repository change. Repository validation prevents a new product directory from being added without a registry entry.
 
-- this allowlist;
-- stats-server allowlist;
-- Release Policy when applicable;
-- product payload;
-- product tests/documentation.
-
-Target products may be listed in repository policy before they are admitted to the production server allowlist.
+Registry admission does not activate telemetry. Product-side implementation must still satisfy opt-in consent, release-build gating, exact protocol payload, persistence, timing, failure isolation, and deletion requirements.
 
 Product identifiers are release/product identities. They do not require runtime service names, App slugs, MQTT identifiers, or repository directories to be renamed.
 

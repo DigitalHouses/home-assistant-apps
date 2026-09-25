@@ -7,6 +7,8 @@ The wire contract is defined by:
 - `docs/standards/TELEMETRY_PROTOCOL_V1.md`
 - `docs/standards/PRODUCT_TELEMETRY_POLICY.md`
 
+The canonical product catalog is `digitalhouses_stats/product_registry.json`. The telemetry allowlist, dashboard product names, zero-count product rows, and repository release tooling derive from this registry. A registry entry may exist before the product telemetry client is implemented or enabled.
+
 ## MVP scope
 
 - `POST /v1/heartbeat`

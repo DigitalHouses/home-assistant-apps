@@ -41,6 +41,28 @@ def test_empty_dashboard_summary() -> None:
     }
 
 
+def test_empty_dashboard_products_lists_full_catalog() -> None:
+    reset_database()
+
+    response = dashboard_client.get("/v1/stats/products")
+    assert response.status_code == 200
+
+    rows = response.json()
+    assert [row["product"] for row in rows] == [
+        "digitalhouses_pve_agent",
+        "digitalhouses_plex_agent",
+        "digitalhouses_recorder_app",
+        "digitalhouses_speedtest_app",
+        "digitalhouses_backblaze_app",
+        "digitalhouses_internet_app",
+        "digitalhouses_climate_app",
+    ]
+    assert all(row["observed_installations"] == 0 for row in rows)
+    assert all(row["active_24h"] == 0 for row in rows)
+    assert all(row["active_7d"] == 0 for row in rows)
+    assert all(row["active_30d"] == 0 for row in rows)
+
+
 def test_heartbeat_history_and_authenticated_delete() -> None:
     reset_database()
 
@@ -256,6 +278,9 @@ def test_local_stats_use_latest_installation_state() -> None:
     assert by_product["digitalhouses_pve_agent"]["active_7d"] == 1
     assert by_product["digitalhouses_plex_agent"]["observed_installations"] == 1
     assert by_product["digitalhouses_plex_agent"]["active_7d"] == 0
+    assert by_product["digitalhouses_backblaze_app"]["observed_installations"] == 0
+    assert by_product["digitalhouses_climate_app"]["observed_installations"] == 0
+    assert by_product["digitalhouses_internet_app"]["name"] == "Internet App"
 
     versions = dashboard_client.get("/v1/stats/versions")
     assert versions.status_code == 200
@@ -282,6 +307,7 @@ def test_local_stats_use_latest_installation_state() -> None:
         {
             "product": "digitalhouses_pve_agent",
             "version": "0.5.10",
+            "name": "PVE Agent",
             "observed_installations": 1,
             "active_7d": 1,
             "active_30d": 1,

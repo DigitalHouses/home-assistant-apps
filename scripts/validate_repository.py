@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from validators.products.backblaze_app import validate_backblaze
@@ -51,13 +52,34 @@ def validate_repository(root: Path = ROOT) -> list[dict[str, str]]:
             root / "docs/standards/REPOSITORY_GOVERNANCE.md",
             root / "scripts/release_contract.py",
             root / "scripts/release_candidates.py",
+            root / "digitalhouses-stats/digitalhouses_stats/product_registry.json",
             root / ".github/workflows/validate.yml",
             root / ".github/workflows/auto-merge.yml",
         ],
     )
 
+    registry_path = (
+        root / "digitalhouses-stats/digitalhouses_stats/product_registry.json"
+    )
+    registry = json.loads(registry_path.read_text(encoding="utf-8"))
+    registered_directories = {
+        entry.get("repository_directory")
+        for entry in registry["products"]
+        if entry.get("repository_directory")
+    }
+
+    applications = discover_applications(root)
+    unregistered = sorted(
+        app.name for app in applications if app.name not in registered_directories
+    )
+    if unregistered:
+        raise ValidationError(
+            "applications missing from product registry: "
+            + ", ".join(unregistered)
+        )
+
     results: list[dict[str, str]] = []
-    for app in discover_applications(root):
+    for app in applications:
         metadata = parse_application_metadata(app / "digitalhouses.app")
         validate_common(root, app, metadata)
 
