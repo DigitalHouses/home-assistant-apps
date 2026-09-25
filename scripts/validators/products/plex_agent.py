@@ -302,8 +302,9 @@ def validate_plex_agent(
 
     installer = (app / "install.sh").read_text(encoding="utf-8")
     for expected in (
-        'APP_NAME="digitalhouses_plex_monitoring"',
-        'RELEASE_IDENTIFIER="digitalhouses_plex_agent"',
+        'PRODUCT_ID="digitalhouses_plex_agent"',
+        'RELEASE_IDENTIFIER="${PRODUCT_ID}"',
+        'SOURCE_PRODUCT_DIR="${PRODUCT_ID}"',
         'SOURCE_REF="${DIGITALHOUSES_SOURCE_REF:-}"',
         'ALLOW_NON_RELEASE_REF="${DIGITALHOUSES_ALLOW_NON_RELEASE_REF:-0}"',
         'EXPECTED_VERSION="${BASH_REMATCH[1]}"',
