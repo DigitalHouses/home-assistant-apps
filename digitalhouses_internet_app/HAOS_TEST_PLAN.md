@@ -138,7 +138,7 @@ Do not uninstall the bridge App. It remains the immediate rollback target until 
 
 ## 9. Canonical slug import
 
-With the legacy `0.1.12` bridge App stopped, reload the App store and install/update `digitalhouses_internet_app` to version `0.1.14`.
+With the legacy `0.1.12` bridge App stopped, reload the App store and install/update `digitalhouses_internet_app` to version `0.1.15`.
 
 On the first canonical start, one of two valid paths is expected:
 
@@ -150,7 +150,7 @@ Then verify:
 - startup log reports `Slug migration bundle imported successfully: digitalhouses_internet -> digitalhouses_internet_app`;
 - the canonical App starts normally after import;
 - current App options match the bridge source rather than the package defaults;
-- `telemetry.json` keeps the same installation ID and reports version `0.1.14` after its version-change heartbeat;
+- `telemetry.json` keeps the same installation ID and reports version `0.1.15` after its version-change heartbeat;
 - outage, recent-results, recovery, server, speedtest, threshold and traffic state are present;
 - existing MQTT Discovery entities remain the same `dh_internet_app_*` identities with no duplicates.
 
@@ -161,7 +161,7 @@ Verify:
 - startup log reports no second state import for the same bundle;
 - state created after the first canonical start is not overwritten by the old bridge snapshot.
 
-Before deleting the legacy App, prove rollback once: stop canonical, start legacy `0.1.12`, confirm its prior state is intact, stop legacy again, then start canonical. Never run both simultaneously.
+Before deleting the legacy App, prove rollback once: stop canonical, start legacy `0.1.12`, confirm its prior state is intact, stop legacy again, then start canonical. Never run both simultaneously. The legacy start/stop refreshes the bridge bundle, so canonical must still start with `No pending slug migration bundle to import` and must preserve newer canonical state.
 
 Create a new Home Assistant backup after the canonical App is accepted and verify that backup/restore preserves the canonical slug and installation state.
 
