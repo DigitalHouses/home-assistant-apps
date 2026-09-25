@@ -201,4 +201,4 @@ The first HAOS test passes when:
 - switch recovery cannot be left off by a normal Stop/Restart path;
 - the reference dashboard and notification package load without legacy Speedtest entities.
 
-Production release remains a separate milestone: immutable GHCR delivery, telemetry integration and release hardening are not required to begin this HAOS functional test.
+Immutable GHCR delivery remains a separate production-delivery milestone; telemetry is already integrated and is part of this validation plan.
