@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.16
+
+- Remove the temporary HA App slug-migration runtime after successful migration and rollback acceptance.
+- Remove the writable `/share` mapping and `DH_SLUG_MIGRATION_MODE` from the canonical App configuration.
+- Remove `slug_migration.py`, its migration-only tests and shutdown/export hooks from the production image.
+- Keep only the canonical Supervisor slug `digitalhouses_internet_app`; repository validation now rejects migration runtime/config regression.
+- Canonicalize the internal Python logger name to `digitalhouses_internet_app` without changing MQTT, device, unique-id or Home Assistant entity identities.
+
 ## 0.1.15
 
 - Make the completed canonical slug migration marker authoritative over any later bridge bundle refresh.
