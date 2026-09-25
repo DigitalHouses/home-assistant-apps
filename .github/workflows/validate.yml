@@ -140,6 +140,12 @@ jobs:
       - name: Check shell syntax
         run: bash -n digitalhouses_backblaze_app/rootfs/run.sh
 
+      - name: Build Backblaze App image
+        run: |
+          APP_VERSION="$(awk '$1 == "version:" {print $2; exit}' digitalhouses_backblaze_app/config.yaml)"
+          test -n "$APP_VERSION"
+          docker build             --build-arg BUILD_VERSION="$APP_VERSION"             --build-arg BUILD_ARCH=amd64             --tag digitalhouses-backblaze-ci:"$APP_VERSION"             digitalhouses_backblaze_app
+
   plex-agent:
     name: Plex Agent
     runs-on: ubuntu-latest
