@@ -93,11 +93,7 @@
         "policy_baseline": "0.0.0"
       },
       "repository_directory": "digitalhouses_internet_app",
-      "haos_slug": "digitalhouses_internet",
-      "slug_migration": {
-        "status": "pending_controlled_reinstall",
-        "target": "digitalhouses_internet_app"
-      }
+      "haos_slug": "digitalhouses_internet_app"
     },
     {
       "id": "digitalhouses_climate_app",
