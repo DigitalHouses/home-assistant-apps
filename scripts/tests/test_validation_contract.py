@@ -9,6 +9,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from validators.common import ValidationError, parse_application_metadata
 from validators.types.haos_app import validate_haos_addon
 from validators.types.linux_agent import validate_linux_agent
+from validate_repository import validate_product_registry_naming
 
 
 class MetadataTests(unittest.TestCase):
@@ -43,6 +44,47 @@ class MetadataTests(unittest.TestCase):
                 "unsupported application type",
             ):
                 parse_application_metadata(path)
+
+
+class ProductNamingTests(unittest.TestCase):
+    def _registry(self, **overrides):
+        product = {
+            "id": "digitalhouses_internet_app",
+            "type": "app",
+            "entity_prefix": "dh_internet_app",
+        }
+        product.update(overrides)
+        return {"products": [product]}
+
+    def test_canonical_product_naming_is_accepted(self):
+        validate_product_registry_naming(self._registry())
+
+    def test_noncanonical_product_id_is_rejected(self):
+        with self.assertRaisesRegex(
+            ValidationError,
+            "invalid canonical product id",
+        ):
+            validate_product_registry_naming(
+                self._registry(id="dh_internet_app")
+            )
+
+    def test_product_type_must_match_identifier_suffix(self):
+        with self.assertRaisesRegex(
+            ValidationError,
+            "registry type must be app",
+        ):
+            validate_product_registry_naming(
+                self._registry(type="agent")
+            )
+
+    def test_entity_prefix_is_deterministic(self):
+        with self.assertRaisesRegex(
+            ValidationError,
+            "entity_prefix must be dh_internet_app",
+        ):
+            validate_product_registry_naming(
+                self._registry(entity_prefix="dh_app_internet")
+            )
 
 
 class TypeContractTests(unittest.TestCase):
