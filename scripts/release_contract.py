@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import subprocess
 from dataclasses import dataclass
@@ -43,51 +44,36 @@ class ReleaseMetadata:
     prerelease: bool
 
 
-PRODUCTS = {
-    "digitalhouses_pve_agent": ProductSpec(
-        identifier="digitalhouses_pve_agent",
-        title="DigitalHouses PVE Agent",
-        directory="dh_pve_app",
-        version_source="version_file",
-        policy_baseline="0.5.6",
-    ),
-    "digitalhouses_plex_agent": ProductSpec(
-        identifier="digitalhouses_plex_agent",
-        title="DigitalHouses Plex Agent",
-        directory="digitalhouses_plex_monitoring",
-        version_source="version_file",
-        policy_baseline="0.2.2",
-    ),
-    "digitalhouses_recorder_app": ProductSpec(
-        identifier="digitalhouses_recorder_app",
-        title="DigitalHouses Recorder App",
-        directory="digitalhouses_db_monitoring",
-        version_source="haos_config",
-        policy_baseline="0.1.8",
-    ),
-    "digitalhouses_speedtest_app": ProductSpec(
-        identifier="digitalhouses_speedtest_app",
-        title="DigitalHouses Speedtest App",
-        directory="digitalhouses_speedtest",
-        version_source="haos_config",
-        policy_baseline="1.2.1",
-    ),
-    "digitalhouses_internet_app": ProductSpec(
-        identifier="digitalhouses_internet_app",
-        title="DigitalHouses Internet App",
-        directory="dh_internet_app",
-        version_source="haos_config",
-        policy_baseline="0.0.0",
-    ),
-    "digitalhouses_backblaze_app": ProductSpec(
-        identifier="digitalhouses_backblaze_app",
-        title="DigitalHouses Backblaze App",
-        directory="digitalhouses_backblaze",
-        version_source="haos_config",
-        policy_baseline="0.0.0",
-    ),
-}
+PRODUCT_REGISTRY = (
+    ROOT
+    / "digitalhouses-stats"
+    / "digitalhouses_stats"
+    / "product_registry.json"
+)
 
+
+def _load_release_products() -> dict[str, ProductSpec]:
+    raw = json.loads(PRODUCT_REGISTRY.read_text(encoding="utf-8"))
+    products: dict[str, ProductSpec] = {}
+
+    for entry in raw["products"]:
+        release = entry.get("release")
+        if release is None:
+            continue
+
+        identifier = entry["id"]
+        products[identifier] = ProductSpec(
+            identifier=identifier,
+            title=release["title"],
+            directory=entry["repository_directory"],
+            version_source=release["version_source"],
+            policy_baseline=release["policy_baseline"],
+        )
+
+    return products
+
+
+PRODUCTS = _load_release_products()
 
 def _parse_semver(version: str) -> tuple[tuple[int, int, int], tuple[str, ...] | None]:
     match = _SEMVER_RE.fullmatch(version)

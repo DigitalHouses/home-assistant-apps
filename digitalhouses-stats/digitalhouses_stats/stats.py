@@ -3,6 +3,8 @@ from __future__ import annotations
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from .products import PRODUCTS, product_name
+
 
 def _rows(result) -> list[dict[str, object]]:
     return [dict(row) for row in result.mappings().all()]
@@ -77,19 +79,26 @@ def products(db: Session) -> list[dict[str, object]]:
               ON l.product = i.product
              AND l.installation_id = i.installation_id
             GROUP BY i.product
-            ORDER BY i.product
             """
         )
     )
-    rows = _rows(result)
-    for row in rows:
-        for key in (
-            "observed_installations",
-            "active_24h",
-            "active_7d",
-            "active_30d",
-        ):
-            row[key] = int(row[key])
+    observed = {row["product"]: row for row in _rows(result)}
+
+    rows: list[dict[str, object]] = []
+    for product in PRODUCTS:
+        row = observed.get(product.identifier)
+        rows.append(
+            {
+                "product": product.identifier,
+                "name": product.display_name,
+                "observed_installations": (
+                    int(row["observed_installations"]) if row is not None else 0
+                ),
+                "active_24h": int(row["active_24h"]) if row is not None else 0,
+                "active_7d": int(row["active_7d"]) if row is not None else 0,
+                "active_30d": int(row["active_30d"]) if row is not None else 0,
+            }
+        )
     return rows
 
 
@@ -134,6 +143,7 @@ def versions(
     )
     rows = _rows(result)
     for row in rows:
+        row["name"] = product_name(str(row["product"]))
         for key in ("observed_installations", "active_7d", "active_30d"):
             row[key] = int(row[key])
     return rows

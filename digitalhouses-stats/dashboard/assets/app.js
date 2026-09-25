@@ -1,18 +1,5 @@
 const $ = (id) => document.getElementById(id);
 
-const productNames = {
-  digitalhouses_pve_agent: "PVE Agent",
-  digitalhouses_plex_agent: "Plex Agent",
-  digitalhouses_recorder_app: "Recorder App",
-  digitalhouses_speedtest_app: "Speedtest App",
-  digitalhouses_internet_app: "Internet App",
-  digitalhouses_climate_app: "Climate App"
-};
-
-function productName(value) {
-  return productNames[value] || value;
-}
-
 async function getJson(path) {
   const response = await fetch(path, { cache: "no-store" });
   if (!response.ok) throw new Error(path + " returned HTTP " + response.status);
@@ -153,11 +140,11 @@ async function load() {
     $("last-heartbeat-exact").textContent = lastHeartbeat.exact;
 
     tableRows("products", products, (r) =>
-      '<tr><td class="product">' + productName(r.product) + '</td><td>' + r.observed_installations +
+      '<tr><td class="product">' + (r.name || r.product) + '</td><td>' + r.observed_installations +
       '</td><td>' + r.active_24h + '</td><td>' + r.active_7d + '</td><td>' + r.active_30d + '</td></tr>', 5);
 
     tableRows("versions", versions, (r) =>
-      '<tr><td class="product">' + productName(r.product) + '</td><td>' + r.version +
+      '<tr><td class="product">' + (r.name || r.product) + '</td><td>' + r.version +
       '</td><td>' + r.observed_installations + '</td><td>' + r.active_7d + '</td></tr>', 4);
 
     tableRows("countries", countries, (r) =>

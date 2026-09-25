@@ -6,6 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from digitalhouses_stats.country import country_from_cloudflare
+from digitalhouses_stats.products import ALLOWED_PRODUCTS, PRODUCTS
 from digitalhouses_stats.protocol import HeartbeatPayload
 from digitalhouses_stats.security import token_hash, token_matches
 
@@ -57,6 +58,34 @@ def test_heartbeat_payload_accepts_climate_app() -> None:
         version="0.1.0",
     )
     assert payload.product == "digitalhouses_climate_app"
+
+
+def test_product_registry_is_complete_and_drives_allowlist() -> None:
+    assert [product.identifier for product in PRODUCTS] == [
+        "digitalhouses_pve_agent",
+        "digitalhouses_plex_agent",
+        "digitalhouses_recorder_app",
+        "digitalhouses_speedtest_app",
+        "digitalhouses_backblaze_app",
+        "digitalhouses_internet_app",
+        "digitalhouses_climate_app",
+    ]
+    assert ALLOWED_PRODUCTS == {
+        product.identifier
+        for product in PRODUCTS
+        if product.telemetry_allowed
+    }
+
+
+def test_heartbeat_payload_accepts_backblaze_app() -> None:
+    payload = HeartbeatPayload(
+        schema=1,
+        telemetry_policy_version=1,
+        installation_id=uuid.uuid4(),
+        product="digitalhouses_backblaze_app",
+        version="0.1.7",
+    )
+    assert payload.product == "digitalhouses_backblaze_app"
 
 
 def test_heartbeat_payload_rejects_unknown_product() -> None:

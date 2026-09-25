@@ -10,6 +10,12 @@ This repository is a monorepo. Each DigitalHouses product has an independent ver
 
 ## 1. Product release identifiers
 
+The machine-readable source of product identity and release metadata is:
+
+`digitalhouses-stats/digitalhouses_stats/product_registry.json`
+
+`scripts/release_contract.py` derives its release-managed product set from that registry. Products may exist in the registry before they become release-managed; such entries use `release: null`.
+
 Public release identifiers use the public product name, not an internal runtime identifier.
 
 | Product | Release identifier |

@@ -5,19 +5,11 @@ import uuid
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from .products import ALLOWED_PRODUCTS
+
 
 SUPPORTED_SCHEMA = 1
 SUPPORTED_POLICY_VERSION = 1
-ALLOWED_PRODUCTS = frozenset(
-    {
-        "digitalhouses_pve_agent",
-        "digitalhouses_plex_agent",
-        "digitalhouses_recorder_app",
-        "digitalhouses_speedtest_app",
-        "digitalhouses_internet_app",
-        "digitalhouses_climate_app",
-    }
-)
 
 SEMVER_RE = re.compile(
     r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)"

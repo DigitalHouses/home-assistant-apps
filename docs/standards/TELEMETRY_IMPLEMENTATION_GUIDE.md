@@ -40,20 +40,13 @@ Current server behavior:
 
 ## 2. Current protocol v1 product allowlist
 
-The production server currently accepts:
+The production server allowlist is derived from the canonical product registry:
 
-```text
-digitalhouses_pve_agent
-digitalhouses_plex_agent
-digitalhouses_recorder_app
-digitalhouses_speedtest_app
-digitalhouses_internet_app
-digitalhouses_climate_app
-```
+`digitalhouses-stats/digitalhouses_stats/product_registry.json`
 
-A product must not start sending telemetry until its canonical product identifier is present in the shared server allowlist and this document/protocol have been updated together.
+All registry entries with `telemetry_allowed: true` are accepted before their clients necessarily start reporting. This intentionally lets development products exist in the Stats catalog with zero observed installations and prevents product/server rollout ordering from causing an avoidable `422 unsupported product`.
 
-Target products may exist in repository policy before they are enabled in the production allowlist.
+Registry admission does not enable telemetry in a product. A client must still be implemented, opt-in, default OFF, and release-gated before it contributes production observations.
 
 ### Internet App naming
 
@@ -455,7 +448,7 @@ As of the current repository implementation:
 | DigitalHouses Plex Agent | `digitalhouses_plex_agent` | pending product implementation |
 | DigitalHouses Recorder App | `digitalhouses_recorder_app` | pending product implementation |
 | DigitalHouses Speedtest App | `digitalhouses_speedtest_app` | pending product implementation |
-| DigitalHouses Backblaze App | `digitalhouses_backblaze_app` | client exists; server allowlist + release-gating review required before production enablement |
+| DigitalHouses Backblaze App | `digitalhouses_backblaze_app` | client exists; admitted to registry/server allowlist; release-gating review required before production enablement |
 | DigitalHouses Internet App | `digitalhouses_internet_app` | implemented in product and admitted to protocol/server allowlist |
 | DigitalHouses Climate App | `digitalhouses_climate_app` | client implemented; admitted to protocol/server allowlist; real-install verification pending |
 

@@ -4,19 +4,13 @@ Status: normative architecture policy. Public activation remains subject to fina
 
 This policy applies to products in `DigitalHouses/home-assistant-apps`.
 
-Current mandatory scope:
+The canonical DigitalHouses product catalog is the machine-readable registry:
 
-- `digitalhouses_pve_agent`
-- `digitalhouses_plex_agent`
-- `digitalhouses_recorder_app`
-- `digitalhouses_speedtest_app`
-- `digitalhouses_backblaze_app`
-- `digitalhouses_internet_app`
-- `digitalhouses_climate_app`
+`digitalhouses-stats/digitalhouses_stats/product_registry.json`
 
-Future DigitalHouses products in this repository must follow the same telemetry contract unless an explicit repository-level exemption is documented.
+Every product whose registry entry has `telemetry_allowed: true` is part of the protocol-v1 server allowlist, including products still in development. Registry admission only makes the server ready to accept that canonical identifier; it does not enable telemetry in the product.
 
-Mandatory scope describes the repository target. It does not mean every listed product is already enabled in the production telemetry server. Production enablement additionally requires the shared protocol/server allowlist and the product implementation to be updated together. Current operational status is maintained in [DigitalHouses Telemetry Implementation Guide](TELEMETRY_IMPLEMENTATION_GUIDE.md).
+Future DigitalHouses products in this repository must be added to the registry and follow the same telemetry contract unless an explicit repository-level exemption is documented. Product telemetry remains opt-in and disabled by default. Current client rollout status is maintained in [DigitalHouses Telemetry Implementation Guide](TELEMETRY_IMPLEMENTATION_GUIDE.md).
 
 ## 1. Purpose
 

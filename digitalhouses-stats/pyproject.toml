@@ -26,5 +26,8 @@ dev = [
 where = ["."]
 include = ["digitalhouses_stats*"]
 
+[tool.setuptools.package-data]
+digitalhouses_stats = ["product_registry.json"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
