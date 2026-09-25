@@ -27,6 +27,29 @@ class PvePresentationRouter(_BasePvePresentationRouter):
                     "shutdown_timeout_seconds": guest_raw.get("shutdown_timeout_seconds"),
                     "shutdown_order": guest_raw.get("shutdown_order"),
                     "onboot": guest_raw.get("onboot", False),
+                    "last_shutdown_started_at": guest_raw.get("last_shutdown_started_at"),
+                    "last_shutdown_finished_at": guest_raw.get("last_shutdown_finished_at"),
+                    "last_shutdown_duration_seconds": guest_raw.get(
+                        "last_shutdown_duration_seconds"
+                    ),
+                    "last_shutdown_timeout_seconds": guest_raw.get(
+                        "last_shutdown_timeout_seconds"
+                    ),
+                    "last_shutdown_timeout_ratio": guest_raw.get(
+                        "last_shutdown_timeout_ratio"
+                    ),
+                    "last_shutdown_result": guest_raw.get(
+                        "last_shutdown_result",
+                        "unknown",
+                    ),
+                    "last_shutdown_forced": guest_raw.get(
+                        "last_shutdown_forced",
+                        False,
+                    ),
+                    "last_shutdown_source": guest_raw.get(
+                        "last_shutdown_source",
+                        "unknown",
+                    ),
                 }
             result[plural] = compact
         return result
