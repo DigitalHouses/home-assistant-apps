@@ -91,6 +91,9 @@ def test_reader_uses_pve_cache_files_and_remote_nut_clients_without_qm_or_pct(tm
 
     assert result.available is True
     assert result.configured_guest_budget_seconds == 160
+    assert result.all_configured_guest_budget_seconds == 200
+    assert result.running_guests == ("vm:110", "vm:700")
+    assert result.shutdown_sequence == (("110",), ("700",))
     assert result.hostsync_budget_seconds == 120
     assert result.finaldelay_seconds == 5
     assert result.host_tail_budget_seconds == 90
