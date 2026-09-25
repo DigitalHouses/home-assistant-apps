@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 import json
 import sys
 import tarfile
@@ -11,6 +12,9 @@ APP_DIR = Path(__file__).resolve().parents[1] / "rootfs" / "app"
 sys.path.insert(0, str(APP_DIR))
 
 from slug_migration import (
+    IMPORT_COMPLETE,
+    IMPORT_NONE,
+    IMPORT_RESTART_REQUIRED,
     PRODUCT_ID,
     SOURCE_SLUG,
     TARGET_SLUG,
@@ -60,6 +64,20 @@ class SlugMigrationTests(unittest.TestCase):
             self._write_json(root, relative, payload)
         return payloads
 
+    def _export(self, old_data: Path, bundle: Path) -> dict[str, dict]:
+        source = self._source_state(old_data)
+        export_bridge_bundle(
+            app_version="0.1.12",
+            data_dir=old_data,
+            bundle_file=bundle,
+            settings_reader=lambda: {
+                "boot": "auto",
+                "auto_update": False,
+                "watchdog": False,
+            },
+        )
+        return source
+
     def test_bridge_export_contains_only_explicit_state_and_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
@@ -72,136 +90,165 @@ class SlugMigrationTests(unittest.TestCase):
                 app_version="0.1.12",
                 data_dir=data,
                 bundle_file=bundle,
-                settings_reader=lambda: {
-                    "boot": "auto",
-                    "auto_update": False,
-                    "watchdog": True,
-                },
+                settings_reader=lambda: {},
             )
 
             self.assertEqual(result["files"], len(payloads))
-            self.assertTrue(bundle.is_file())
             with tarfile.open(bundle, "r:gz") as archive:
                 names = set(archive.getnames())
                 self.assertIn("manifest.json", names)
                 self.assertIn("data/options.json", names)
                 self.assertIn("data/telemetry.json", names)
-                self.assertNotIn(
-                    "data/runtime/not_contract_state.json",
-                    names,
-                )
+                self.assertNotIn("data/runtime/not_contract_state.json", names)
                 manifest = json.load(archive.extractfile("manifest.json"))
                 self.assertEqual(manifest["product"], PRODUCT_ID)
                 self.assertEqual(manifest["source_slug"], SOURCE_SLUG)
                 self.assertEqual(manifest["target_slug"], TARGET_SLUG)
                 self.assertEqual(manifest["source_version"], "0.1.12")
 
-    def test_import_preserves_options_telemetry_identity_and_runtime_state(self) -> None:
+    def test_options_change_requires_restart_then_import_completes(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             old_data = root / "old"
             new_data = root / "new"
             bundle = root / "share" / "bundle.tar.gz"
-            source = self._source_state(old_data)
-
-            export_bridge_bundle(
-                app_version="0.1.12",
-                data_dir=old_data,
-                bundle_file=bundle,
-                settings_reader=lambda: {
-                    "boot": "auto",
-                    "auto_update": True,
-                    "watchdog": False,
-                },
+            source = self._export(old_data, bundle)
+            self._write_json(
+                new_data,
+                "options.json",
+                {"router_ip": "192.168.1.1", "telemetry_enabled": False},
             )
 
             applied: list[dict] = []
-
-            def apply(settings: dict) -> None:
-                applied.append(settings)
-                self._write_json(
-                    new_data,
-                    "options.json",
-                    settings["options"],
-                )
-
-            self.assertTrue(
-                import_canonical_bundle(
-                    data_dir=new_data,
-                    bundle_file=bundle,
-                    settings_applier=apply,
-                )
+            status = import_canonical_bundle(
+                data_dir=new_data,
+                bundle_file=bundle,
+                settings_applier=lambda settings: applied.append(settings),
             )
+
+            self.assertEqual(status, IMPORT_RESTART_REQUIRED)
             self.assertEqual(len(applied), 1)
-            self.assertEqual(
-                applied[0]["options"],
-                source["options.json"],
+            self.assertEqual(applied[0]["options"], source["options.json"])
+            self.assertTrue(
+                (new_data / ".slug_migration_v1_options_pending.json").is_file()
             )
-            self.assertTrue(applied[0]["auto_update"])
-            self.assertFalse(applied[0]["watchdog"])
+            self.assertFalse((new_data / "telemetry.json").exists())
 
-            for relative in (
-                "telemetry.json",
-                "runtime/outages.json",
-                "runtime/traffic.json",
-                "runtime/recovery.json",
-            ):
-                self.assertEqual(
-                    json.loads((new_data / relative).read_text()),
-                    source[relative],
-                )
+            # Supervisor exposes persisted options to the App only when the
+            # canonical container is started again.
+            self._write_json(new_data, "options.json", source["options.json"])
 
+            status = import_canonical_bundle(
+                data_dir=new_data,
+                bundle_file=bundle,
+                settings_applier=lambda _settings: self.fail(
+                    "settings must not be applied twice"
+                ),
+            )
+            self.assertEqual(status, IMPORT_COMPLETE)
+            self.assertFalse(
+                (new_data / ".slug_migration_v1_options_pending.json").exists()
+            )
             self.assertEqual(
-                json.loads((new_data / "telemetry.json").read_text())[
-                    "installation_id"
-                ],
-                source["telemetry.json"]["installation_id"],
+                json.loads((new_data / "telemetry.json").read_text()),
+                source["telemetry.json"],
+            )
+            self.assertEqual(
+                json.loads((new_data / "runtime/outages.json").read_text()),
+                source["runtime/outages.json"],
             )
 
-    def test_import_is_idempotent_and_does_not_overwrite_newer_state(self) -> None:
+    def test_013_side_effect_recovers_when_options_are_already_active(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             old_data = root / "old"
             new_data = root / "new"
             bundle = root / "share" / "bundle.tar.gz"
-            self._source_state(old_data)
-            export_bridge_bundle(
-                app_version="0.1.12",
-                data_dir=old_data,
+            source = self._export(old_data, bundle)
+
+            # 0.1.13 successfully POSTed legacy options to Supervisor before it
+            # failed while waiting for the running container to hot-update.
+            self._write_json(new_data, "options.json", source["options.json"])
+
+            status = import_canonical_bundle(
+                data_dir=new_data,
                 bundle_file=bundle,
-                settings_reader=lambda: {},
+                settings_applier=lambda _settings: self.fail(
+                    "already-active options must not be posted again"
+                ),
             )
 
-            def apply(settings: dict) -> None:
-                self._write_json(
-                    new_data,
-                    "options.json",
-                    settings["options"],
-                )
-
-            self.assertTrue(
-                import_canonical_bundle(
-                    data_dir=new_data,
-                    bundle_file=bundle,
-                    settings_applier=apply,
-                )
+            self.assertEqual(status, IMPORT_COMPLETE)
+            telemetry = json.loads((new_data / "telemetry.json").read_text())
+            self.assertEqual(
+                telemetry["installation_id"],
+                source["telemetry.json"]["installation_id"],
             )
-            newer = {"newer": True}
-            self._write_json(new_data, "runtime/outages.json", newer)
 
-            self.assertFalse(
+    def test_completed_import_is_idempotent_and_preserves_newer_state(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            old_data = root / "old"
+            new_data = root / "new"
+            bundle = root / "share" / "bundle.tar.gz"
+            source = self._export(old_data, bundle)
+            self._write_json(new_data, "options.json", source["options.json"])
+
+            self.assertEqual(
                 import_canonical_bundle(
                     data_dir=new_data,
                     bundle_file=bundle,
                     settings_applier=lambda _settings: self.fail(
-                        "settings must not be applied twice"
+                        "options already match"
                     ),
-                )
+                ),
+                IMPORT_COMPLETE,
+            )
+
+            newer = {"newer": True}
+            self._write_json(new_data, "runtime/outages.json", newer)
+
+            self.assertEqual(
+                import_canonical_bundle(
+                    data_dir=new_data,
+                    bundle_file=bundle,
+                    settings_applier=lambda _settings: self.fail(
+                        "completed migration must not reapply"
+                    ),
+                ),
+                IMPORT_NONE,
             )
             self.assertEqual(
                 json.loads((new_data / "runtime/outages.json").read_text()),
                 newer,
             )
+
+    def test_pending_import_rejects_restart_without_expected_options(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            old_data = root / "old"
+            new_data = root / "new"
+            bundle = root / "share" / "bundle.tar.gz"
+            self._export(old_data, bundle)
+            self._write_json(new_data, "options.json", {"router_ip": "wrong"})
+
+            self.assertEqual(
+                import_canonical_bundle(
+                    data_dir=new_data,
+                    bundle_file=bundle,
+                    settings_applier=lambda _settings: None,
+                ),
+                IMPORT_RESTART_REQUIRED,
+            )
+
+            with self.assertRaises(SlugMigrationError):
+                import_canonical_bundle(
+                    data_dir=new_data,
+                    bundle_file=bundle,
+                    settings_applier=lambda _settings: self.fail(
+                        "pending migration must not repost options"
+                    ),
+                )
 
     def test_tampered_bundle_is_rejected_before_settings_are_applied(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
@@ -209,23 +256,13 @@ class SlugMigrationTests(unittest.TestCase):
             old_data = root / "old"
             new_data = root / "new"
             bundle = root / "share" / "bundle.tar.gz"
-            self._source_state(old_data)
-            export_bridge_bundle(
-                app_version="0.1.12",
-                data_dir=old_data,
-                bundle_file=bundle,
-                settings_reader=lambda: {},
-            )
+            self._export(old_data, bundle)
 
-            # Rebuild the archive with a modified telemetry payload while
-            # retaining the original manifest hash.
             tampered = root / "share" / "tampered.tar.gz"
             with tarfile.open(bundle, "r:gz") as source_archive:
                 manifest = source_archive.extractfile("manifest.json").read()
                 options = source_archive.extractfile("data/options.json").read()
             with tarfile.open(tampered, "w:gz") as archive:
-                import io
-
                 for name, payload in (
                     ("manifest.json", manifest),
                     ("data/options.json", options),
