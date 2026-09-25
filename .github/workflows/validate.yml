@@ -46,14 +46,14 @@ jobs:
       - name: Compile Python
         run: |
           python -m compileall -q \
-            digitalhouses_speedtest/rootfs/app \
-            digitalhouses_speedtest/tests
+            digitalhouses_speedtest_app/rootfs/app \
+            digitalhouses_speedtest_app/tests
 
       - name: Run unit tests
-        run: python -m unittest discover -s digitalhouses_speedtest/tests -v
+        run: python -m unittest discover -s digitalhouses_speedtest_app/tests -v
 
       - name: Check shell syntax
-        run: bash -n digitalhouses_speedtest/rootfs/run.sh
+        run: bash -n digitalhouses_speedtest_app/rootfs/run.sh
 
   internet-app:
     name: Internet App
@@ -71,24 +71,24 @@ jobs:
       - name: Compile Python
         run: |
           python -m compileall -q \
-            dh_internet_app/rootfs/app \
-            dh_internet_app/tests
+            digitalhouses_internet_app/rootfs/app \
+            digitalhouses_internet_app/tests
 
       - name: Run unit tests
-        run: python -m unittest discover -s dh_internet_app/tests -v
+        run: python -m unittest discover -s digitalhouses_internet_app/tests -v
 
       - name: Check shell syntax
-        run: bash -n dh_internet_app/rootfs/run.sh
+        run: bash -n digitalhouses_internet_app/rootfs/run.sh
 
       - name: Build Internet App image
         run: |
-          APP_VERSION="$(awk '$1 == "version:" {print $2; exit}' dh_internet_app/config.yaml)"
+          APP_VERSION="$(awk '$1 == "version:" {print $2; exit}' digitalhouses_internet_app/config.yaml)"
           test -n "$APP_VERSION"
           docker build \
             --build-arg BUILD_VERSION="$APP_VERSION" \
             --build-arg BUILD_ARCH=amd64 \
             --tag digitalhouses-internet-ci:"$APP_VERSION" \
-            dh_internet_app
+            digitalhouses_internet_app
 
   recorder-app:
     name: Recorder App
@@ -106,14 +106,14 @@ jobs:
       - name: Compile Python
         run: |
           python -m compileall -q \
-            digitalhouses_db_monitoring/rootfs/app \
-            digitalhouses_db_monitoring/tests
+            digitalhouses_recorder_app/rootfs/app \
+            digitalhouses_recorder_app/tests
 
       - name: Run unit tests
-        run: python -m unittest discover -s digitalhouses_db_monitoring/tests -v
+        run: python -m unittest discover -s digitalhouses_recorder_app/tests -v
 
       - name: Check shell syntax
-        run: bash -n digitalhouses_db_monitoring/rootfs/run.sh
+        run: bash -n digitalhouses_recorder_app/rootfs/run.sh
 
   backblaze-app:
     name: Backblaze App
@@ -131,14 +131,14 @@ jobs:
       - name: Compile Python
         run: |
           python -m compileall -q \
-            digitalhouses_backblaze/rootfs/app \
-            digitalhouses_backblaze/tests
+            digitalhouses_backblaze_app/rootfs/app \
+            digitalhouses_backblaze_app/tests
 
       - name: Run unit tests
-        run: python -m unittest discover -s digitalhouses_backblaze/tests -v
+        run: python -m unittest discover -s digitalhouses_backblaze_app/tests -v
 
       - name: Check shell syntax
-        run: bash -n digitalhouses_backblaze/rootfs/run.sh
+        run: bash -n digitalhouses_backblaze_app/rootfs/run.sh
 
   plex-agent:
     name: Plex Agent
@@ -156,21 +156,21 @@ jobs:
       - name: Install test and runtime dependencies
         run: |
           python -m pip install --disable-pip-version-check pytest \
-            -r digitalhouses_plex_monitoring/requirements.txt
+            -r digitalhouses_plex_agent/requirements.txt
 
       - name: Compile Python
         run: |
           python -m compileall -q \
-            digitalhouses_plex_monitoring/app \
-            digitalhouses_plex_monitoring/tests
+            digitalhouses_plex_agent/app \
+            digitalhouses_plex_agent/tests
 
       - name: Run unit tests
         env:
-          PYTHONPATH: digitalhouses_plex_monitoring
-        run: python -m pytest digitalhouses_plex_monitoring/tests -q
+          PYTHONPATH: digitalhouses_plex_agent
+        run: python -m pytest digitalhouses_plex_agent/tests -q
 
       - name: Check installer syntax
-        run: bash -n digitalhouses_plex_monitoring/install.sh
+        run: bash -n digitalhouses_plex_agent/install.sh
 
       - name: Prepare systemd verification path
         run: |
@@ -182,7 +182,7 @@ jobs:
       - name: Validate systemd unit
         run: |
           systemd-analyze verify \
-            digitalhouses_plex_monitoring/systemd/*.service
+            digitalhouses_plex_agent/systemd/*.service
 
   pve-agent:
     name: PVE Agent
@@ -200,25 +200,25 @@ jobs:
       - name: Install test and runtime dependencies
         run: |
           python -m pip install --disable-pip-version-check pytest \
-            -r dh_pve_app/requirements.txt
+            -r digitalhouses_pve_agent/requirements.txt
 
       - name: Compile Python
         run: |
           python -m compileall -q \
-            dh_pve_app/app \
-            dh_pve_app/tests
+            digitalhouses_pve_agent/app \
+            digitalhouses_pve_agent/tests
 
       - name: Run unit tests
         env:
-          PYTHONPATH: dh_pve_app
-        run: python -m pytest dh_pve_app/tests -q
+          PYTHONPATH: digitalhouses_pve_agent
+        run: python -m pytest digitalhouses_pve_agent/tests -q
 
       - name: Check installer syntax
         run: |
-          bash -n dh_pve_app/install.sh
-          bash -n dh_pve_app/uninstall.sh
-          bash -n dh_pve_app/hardware/beelink/install.sh
-          bash -n dh_pve_app/hardware/beelink/uninstall.sh
+          bash -n digitalhouses_pve_agent/install.sh
+          bash -n digitalhouses_pve_agent/uninstall.sh
+          bash -n digitalhouses_pve_agent/hardware/beelink/install.sh
+          bash -n digitalhouses_pve_agent/hardware/beelink/uninstall.sh
 
       - name: Prepare systemd verification path
         run: |
@@ -227,7 +227,7 @@ jobs:
             /opt/digitalhouses/dh_pve_app/.venv/bin/python
 
       - name: Validate systemd unit
-        run: systemd-analyze verify dh_pve_app/systemd/*.service
+        run: systemd-analyze verify digitalhouses_pve_agent/systemd/*.service
 
 
   stats-server:

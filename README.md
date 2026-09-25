@@ -9,12 +9,12 @@ Open-source applications and Linux agents by **DigitalHouses**, built to extend 
 
 | Product | Type | Purpose |
 | --- | --- | --- |
-| [DigitalHouses PVE Agent](dh_pve_app/README.md) | Linux agent | Proxmox VE monitoring, hardware diagnostics, VM/LXC state, SMART, fan RPM, and optional NUT/UPS monitoring |
-| [DigitalHouses Plex Agent](digitalhouses_plex_monitoring/README.md) | Linux agent | Plex workload, playback, transcoding, and library monitoring |
-| [DigitalHouses Recorder App](digitalhouses_db_monitoring/README.md) | Home Assistant App | Home Assistant Recorder database size, depth, write activity, and database diagnostics |
-| [DigitalHouses Backblaze](digitalhouses_backblaze/README.md) | Home Assistant App | Backblaze B2 account totals and per-bucket storage usage through MQTT Discovery |
-| [DigitalHouses Internet App](dh_internet_app/README.md) | Home Assistant App | Internet availability, outage history, and automatic ONT/router recovery |
-| [DigitalHouses Speedtest App](digitalhouses_speedtest/README.md) | Home Assistant App | Internet availability, Ookla speed tests, and connection-quality monitoring |
+| [DigitalHouses PVE Agent](digitalhouses_pve_agent/README.md) | Linux agent | Proxmox VE monitoring, hardware diagnostics, VM/LXC state, SMART, fan RPM, and optional NUT/UPS monitoring |
+| [DigitalHouses Plex Agent](digitalhouses_plex_agent/README.md) | Linux agent | Plex workload, playback, transcoding, and library monitoring |
+| [DigitalHouses Recorder App](digitalhouses_recorder_app/README.md) | Home Assistant App | Home Assistant Recorder database size, depth, write activity, and database diagnostics |
+| [DigitalHouses Backblaze App](digitalhouses_backblaze_app/README.md) | Home Assistant App | Backblaze B2 account totals and per-bucket storage usage through MQTT Discovery |
+| [DigitalHouses Internet App](digitalhouses_internet_app/README.md) | Home Assistant App | Internet availability, outage history, and automatic ONT/router recovery |
+| [DigitalHouses Speedtest App](digitalhouses_speedtest_app/README.md) | Home Assistant App | Internet availability, Ookla speed tests, and connection-quality monitoring |
 
 DigitalHouses uses two delivery models:
 
@@ -35,8 +35,8 @@ Then open **Settings → Apps → App store → Repositories**, add the URL abov
 
 Linux agents are installed directly on the target host:
 
-- [DigitalHouses PVE Agent](dh_pve_app/README.md)
-- [DigitalHouses Plex Agent](digitalhouses_plex_monitoring/README.md)
+- [DigitalHouses PVE Agent](digitalhouses_pve_agent/README.md)
+- [DigitalHouses Plex Agent](digitalhouses_plex_agent/README.md)
 
 Installation, configuration, supported platforms, and product-specific operational procedures are documented in each product README.
 
@@ -46,6 +46,7 @@ Engineering documentation is separated into shared standards and product-specifi
 
 - [Documentation index](docs/README.md)
 - [DigitalHouses Application Standard](docs/standards/DIGITALHOUSES_APP_STANDARD.md)
+- [DigitalHouses Product Naming Standard](docs/standards/PRODUCT_NAMING_STANDARD.md)
 - [DigitalHouses Contract Data Policy](docs/standards/CONTRACT_DATA_POLICY.md)
 - [DigitalHouses Events & Notifications Standard](docs/standards/EVENTS_AND_NOTIFICATIONS_STANDARD.md)
 - [DigitalHouses Release Policy](docs/standards/RELEASE_POLICY.md)
