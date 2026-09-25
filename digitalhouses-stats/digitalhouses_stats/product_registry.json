@@ -12,7 +12,7 @@
         "version_source": "version_file",
         "policy_baseline": "0.5.6"
       },
-      "repository_directory": "dh_pve_app"
+      "repository_directory": "digitalhouses_pve_agent"
     },
     {
       "id": "digitalhouses_plex_agent",
@@ -25,7 +25,7 @@
         "version_source": "version_file",
         "policy_baseline": "0.2.2"
       },
-      "repository_directory": "digitalhouses_plex_monitoring"
+      "repository_directory": "digitalhouses_plex_agent"
     },
     {
       "id": "digitalhouses_recorder_app",
@@ -38,7 +38,12 @@
         "version_source": "haos_config",
         "policy_baseline": "0.1.8"
       },
-      "repository_directory": "digitalhouses_db_monitoring"
+      "repository_directory": "digitalhouses_recorder_app",
+      "haos_slug": "digitalhouses_db_monitoring",
+      "slug_migration": {
+        "status": "pending_controlled_reinstall",
+        "target": "digitalhouses_recorder_app"
+      }
     },
     {
       "id": "digitalhouses_speedtest_app",
@@ -51,7 +56,12 @@
         "version_source": "haos_config",
         "policy_baseline": "1.2.1"
       },
-      "repository_directory": "digitalhouses_speedtest"
+      "repository_directory": "digitalhouses_speedtest_app",
+      "haos_slug": "digitalhouses_speedtest",
+      "slug_migration": {
+        "status": "pending_controlled_reinstall",
+        "target": "digitalhouses_speedtest_app"
+      }
     },
     {
       "id": "digitalhouses_backblaze_app",
@@ -64,7 +74,12 @@
         "version_source": "haos_config",
         "policy_baseline": "0.0.0"
       },
-      "repository_directory": "digitalhouses_backblaze"
+      "repository_directory": "digitalhouses_backblaze_app",
+      "haos_slug": "digitalhouses_backblaze",
+      "slug_migration": {
+        "status": "pending_controlled_reinstall",
+        "target": "digitalhouses_backblaze_app"
+      }
     },
     {
       "id": "digitalhouses_internet_app",
@@ -77,7 +92,12 @@
         "version_source": "haos_config",
         "policy_baseline": "0.0.0"
       },
-      "repository_directory": "dh_internet_app"
+      "repository_directory": "digitalhouses_internet_app",
+      "haos_slug": "digitalhouses_internet",
+      "slug_migration": {
+        "status": "pending_controlled_reinstall",
+        "target": "digitalhouses_internet_app"
+      }
     },
     {
       "id": "digitalhouses_climate_app",
@@ -86,7 +106,8 @@
       "display_name": "Climate App",
       "telemetry_allowed": true,
       "release": null,
-      "repository_directory": null
+      "repository_directory": null,
+      "haos_slug": "digitalhouses_climate_app"
     }
   ]
 }
