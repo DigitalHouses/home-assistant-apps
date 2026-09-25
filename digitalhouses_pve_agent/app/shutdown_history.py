@@ -102,9 +102,32 @@ def _empty_guest(kind: str, guest_id: str, timeout: int | None = None) -> dict[s
         "finished_at": None,
         "duration_seconds": None,
         "timeout_ratio": None,
+        "assessment": "unknown",
         "result": "unknown",
         "forced": False,
     }
+
+
+def _guest_shutdown_assessment(
+    *,
+    result: object,
+    forced: object,
+    timeout_ratio: object,
+) -> str:
+    normalized_result = str(result or "unknown").casefold()
+    if bool(forced) or normalized_result in {"timeout", "forced"}:
+        return "critical"
+    if normalized_result != "clean":
+        return "unknown"
+    if not isinstance(timeout_ratio, (int, float)) or isinstance(timeout_ratio, bool):
+        return "unknown"
+    if timeout_ratio >= 1.0:
+        return "critical"
+    if timeout_ratio >= 0.8:
+        return "warning"
+    if timeout_ratio >= 0:
+        return "ok"
+    return "unknown"
 
 
 def _begin_guest_shutdown(
@@ -134,6 +157,7 @@ def _begin_guest_shutdown(
                 "finished_at": None,
                 "duration_seconds": None,
                 "timeout_ratio": None,
+                "assessment": "unknown",
                 "result": "unknown",
                 "forced": False,
             }
@@ -302,6 +326,11 @@ def parse_guest_shutdown_journal(text: str) -> dict[str, Any]:
         timeout = item.get("timeout_seconds")
         if duration is not None and isinstance(timeout, int) and timeout > 0:
             item["timeout_ratio"] = round(duration / timeout, 3)
+        item["assessment"] = _guest_shutdown_assessment(
+            result=item.get("result"),
+            forced=item.get("forced"),
+            timeout_ratio=item.get("timeout_ratio"),
+        )
         if finished is not None and (latest_finished is None or finished > latest_finished):
             latest_finished = finished
         guests[kind][guest_id] = item
@@ -893,6 +922,74 @@ class ShutdownHistoryTracker:
             source="guest_shutdown",
         )
         if changed:
+            self.state_store.save(state)
+        return changed
+
+    def enrich_guest_last_shutdowns(
+        self,
+        guest_timeouts: Mapping[tuple[str, str], int],
+    ) -> bool:
+        state = self._load()
+        latest = state.get("guest_last_shutdowns")
+        if not isinstance(latest, Mapping):
+            return False
+
+        changed = False
+        for key, timeout_seconds in guest_timeouts.items():
+            if (
+                not isinstance(key, tuple)
+                or len(key) != 2
+                or key[0] not in {"vm", "lxc"}
+                or not str(key[1])
+                or not isinstance(timeout_seconds, int)
+                or isinstance(timeout_seconds, bool)
+                or timeout_seconds < 0
+            ):
+                continue
+
+            kind, guest_id_raw = key
+            guest_id = str(guest_id_raw)
+            records = latest.get(kind)
+            if not isinstance(records, dict):
+                continue
+            raw = records.get(guest_id)
+            if not isinstance(raw, Mapping):
+                continue
+
+            item = dict(raw)
+            stored_timeout = item.get("timeout_seconds")
+            if stored_timeout is None:
+                item["timeout_seconds"] = timeout_seconds
+                stored_timeout = timeout_seconds
+
+            duration = item.get("duration_seconds")
+            ratio: float | None = None
+            if (
+                isinstance(duration, int)
+                and not isinstance(duration, bool)
+                and isinstance(stored_timeout, int)
+                and not isinstance(stored_timeout, bool)
+                and stored_timeout > 0
+            ):
+                ratio = round(duration / stored_timeout, 3)
+
+            assessment = _guest_shutdown_assessment(
+                result=item.get("result"),
+                forced=item.get("forced"),
+                timeout_ratio=ratio,
+            )
+
+            if item.get("timeout_ratio") != ratio:
+                item["timeout_ratio"] = ratio
+            if item.get("assessment") != assessment:
+                item["assessment"] = assessment
+
+            if item != dict(raw):
+                records[guest_id] = item
+                changed = True
+
+        if changed:
+            state["guest_last_shutdowns"] = latest
             self.state_store.save(state)
         return changed
 
