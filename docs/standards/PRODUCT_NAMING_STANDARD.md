@@ -51,8 +51,8 @@ Git tag prefix
 telemetry product
 container/image product name
 repository documentation
-repository directory after migration
-Home Assistant App slug after migration
+repository directory
+Home Assistant App slug after its compatibility migration
 ```
 
 A product-specific implementation must not invent a second product name for one of these surfaces.
@@ -158,17 +158,35 @@ A short UI label may omit `DigitalHouses` when screen space requires it, but thi
 
 ## 6. Repository directory and App slug
 
-For every new product, the repository directory must equal the canonical product identifier:
+Every implemented product repository directory must equal the canonical product identifier:
 
 ```text
 digitalhouses_<function>_<type>/
 ```
 
-For every new Home Assistant App, the App slug must also equal the canonical product identifier unless the platform imposes a documented constraint.
+The product registry field `repository_directory` is authoritative and, for an implemented product, must equal `id`.
 
-Existing released products with a different directory, App slug, Linux service name, filesystem path, MQTT device ID, unique ID, or Home Assistant entity ID require an explicit product migration. A shared naming-policy change alone must not silently break installed systems.
+For Home Assistant Apps the registry also declares the current installed identity as `haos_slug`.
 
-After a product is migrated, its product-specific validator must prevent regression to the old name.
+For a new App:
+
+```text
+haos_slug == id
+config.yaml slug == id
+```
+
+A released App whose existing Supervisor identity uses a legacy slug may retain that slug only as an explicit compatibility exception. The registry must then record both the current `haos_slug` and a controlled migration target to the canonical ID. A repository-directory rename alone is not evidence that Supervisor can transparently remap an installed App, its options, `/data`, or backup/restore identity.
+
+After the product-specific controlled migration is completed:
+
+```text
+haos_slug == id
+config.yaml slug == id
+```
+
+and the pending migration marker must be removed. Repository validation must prevent regression.
+
+Linux service names, filesystem paths, MQTT identities and released Home Assistant entity IDs are independent compatibility-sensitive runtime surfaces. A structural repository rename must not silently rename them.
 
 ## 7. MQTT and internal constants
 
@@ -183,7 +201,7 @@ ENTITY_PREFIX = "dh_internet_app"
 
 Do not derive product identity from a repository directory that is still carrying a legacy name.
 
-## 8. Releases and telemetry
+## 8. Releases, telemetry and container images
 
 Release and telemetry identity must use the canonical product identifier exactly.
 
@@ -195,6 +213,20 @@ tag:     digitalhouses_internet_app-v1.2.3
 ```
 
 Telemetry allowlists, payloads, release tooling, registry entries and documentation must use the same product identifier.
+
+For Home Assistant Apps, the GHCR repository name is derived directly from the canonical ID without an alternate dashed product alias:
+
+```text
+ghcr.io/digitalhouses/<canonical_product_id>
+```
+
+Example:
+
+```text
+ghcr.io/digitalhouses/digitalhouses_recorder_app:0.1.9
+```
+
+Underscores are retained. Tooling must generate the image repository mechanically from the registry ID; a second machine-readable product name must not be stored merely for registry formatting.
 
 Historical release tags are immutable and are never renamed.
 
@@ -216,19 +248,29 @@ The Speedtest App and Internet App remain distinct product identities. A replace
 
 Legacy naming is migration debt, not a second supported convention.
 
-A product migration must update all affected active surfaces together, including as applicable:
+Repository-structure migration and installed-runtime migration are deliberately separate when runtime compatibility is at risk.
 
-- repository directory;
+The repository-structure migration updates together:
+
+- canonical repository directories;
+- product registry identity/directory mappings;
+- repository discovery and validator dispatch;
+- CI source paths;
+- release tooling source paths;
+- active documentation links.
+
+It does not by itself rename installed compatibility interfaces.
+
+A later product-specific runtime migration may update, as applicable:
+
 - Home Assistant App slug;
 - Linux service and filesystem paths;
 - MQTT topics/device identifiers/unique IDs;
 - Home Assistant entity IDs;
-- package and dashboard examples;
-- product validators and tests;
-- README/DOCS/CHANGELOG;
-- telemetry/release metadata.
+- package and dashboard examples that depend on those IDs;
+- persistent state layout.
 
-Compatibility-sensitive renames require product-specific release notes and tests.
+Compatibility-sensitive renames require product-specific release notes, migration/rollback procedures and tests.
 
 Do not rewrite historical tags, historical changelog entries, or old engineering records merely for cosmetic consistency.
 
@@ -238,9 +280,14 @@ Repository CI must validate at least:
 
 1. every product registry `id` matches `digitalhouses_<function>_<app|agent>`;
 2. registry `type` matches the identifier suffix;
-3. registry `entity_prefix` equals `dh_<function>_<app|agent>`;
-4. release-managed product identifiers remain identical to the registry `id`.
-
-Product validators are responsible for enforcing completed runtime/entity migrations for their own product.
+3. registry `entity_prefix` equals the deterministic `digitalhouses_ -> dh_` shortening;
+4. every implemented `repository_directory == id`;
+5. every registry implementation directory exists and every implementation marker belongs to the registry;
+6. validator dispatch is keyed by canonical registry `id`;
+7. every registered implementation has common, type-specific and product-specific validation;
+8. release identifiers and telemetry product identity are the registry `id`;
+9. every Home Assistant App `config.yaml slug` equals registry `haos_slug`;
+10. a legacy App slug is accepted only with an explicit controlled migration marker to the canonical ID;
+11. a completed App slug migration cannot regress to a legacy slug.
 
 If code, documentation and this standard disagree, the mismatch is a repository defect.

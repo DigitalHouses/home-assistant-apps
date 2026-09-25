@@ -1,6 +1,6 @@
-# DigitalHouses Backblaze
+# DigitalHouses Backblaze App
 
-DigitalHouses Backblaze is a Home Assistant App for monitoring Backblaze B2 storage usage.
+DigitalHouses Backblaze App is a Home Assistant App for monitoring Backblaze B2 storage usage.
 
 The App authorizes against the Backblaze B2 Native API v4, discovers all buckets visible to the configured application key, scans file versions, and publishes one Home Assistant MQTT device with account totals and per-bucket entities.
 
@@ -113,17 +113,19 @@ See `docs/standards/PRODUCT_TELEMETRY_POLICY.md` and `docs/standards/TELEMETRY_P
 
 ## Release identity
 
-Repository directory and Home Assistant App slug:
+Canonical repository directory and release/telemetry identifier:
+
+```text
+digitalhouses_backblaze_app
+```
+
+Compatibility-sensitive Home Assistant App slug retained for the current installed identity:
 
 ```text
 digitalhouses_backblaze
 ```
 
-Canonical public release identifier:
-
-```text
-digitalhouses_backblaze_app
-```
+Changing that slug requires a separate controlled reinstall migration; it is not part of the repository-structure rename.
 
 The App remains experimental and must not be treated as a production release until the repository's immutable GHCR delivery contract is implemented for it.
 

@@ -70,7 +70,7 @@ def test_legacy_policy_write_topics_are_ignored_but_v2_apply_is_explicit():
 
 
 def test_runtime_service_cannot_write_etc_nut():
-    unit = Path("dh_pve_app/systemd/dh_pve_app.service").read_text(encoding="utf-8")
+    unit = Path("digitalhouses_pve_agent/systemd/dh_pve_app.service").read_text(encoding="utf-8")
 
     assert "ProtectSystem=full" in unit
     assert "ReadWritePaths=/etc/nut" not in unit
@@ -117,7 +117,7 @@ offdelay = 60
 
 
 def test_main_has_no_legacy_timer_commissioning_writer_surface():
-    text = Path("dh_pve_app/app/main.py").read_text(encoding="utf-8")
+    text = Path("digitalhouses_pve_agent/app/main.py").read_text(encoding="utf-8")
 
     assert "ups_commission" not in text
     assert '"--ups-policy-commission"' not in text

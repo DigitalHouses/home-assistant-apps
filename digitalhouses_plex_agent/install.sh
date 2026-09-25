@@ -2,6 +2,7 @@
 set -euo pipefail
 
 APP_NAME="digitalhouses_plex_monitoring"
+SOURCE_PRODUCT_DIR="digitalhouses_plex_agent"
 SERVICE_NAME="${APP_NAME}.service"
 GPU_SERVICE_NAME="digitalhouses_plex_gpu_helper.service"
 SERVICE_USER="${APP_NAME}"
@@ -105,10 +106,10 @@ else
 fi
 
 SOURCE_SHA="$(git -C "${tmp_dir}/repo" rev-parse HEAD)"
-SOURCE_APP="${tmp_dir}/repo/${APP_NAME}"
+SOURCE_APP="${tmp_dir}/repo/${SOURCE_PRODUCT_DIR}"
 
 if [[ ! -f "${SOURCE_APP}/VERSION" ]]; then
-    echo "Application ${APP_NAME} not found at source ref ${SOURCE_REF}."
+    echo "Application ${SOURCE_PRODUCT_DIR} not found at source ref ${SOURCE_REF}."
     exit 1
 fi
 

@@ -5,34 +5,25 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from validators.common import (
-    ValidationError,
-    discover_applications,
-    is_application_directory_name,
-    load_yaml,
-)
+from validators.common import ValidationError, discover_applications, load_yaml
 from validators.products.pve_agent import validate_dh_pve_app
 
 
 class PveAgentRepositoryContractTests(unittest.TestCase):
-    def test_compact_dh_pve_name_is_explicitly_supported(self):
-        self.assertTrue(is_application_directory_name("dh_pve_app"))
-        self.assertTrue(is_application_directory_name("digitalhouses_example"))
-        self.assertFalse(is_application_directory_name("dh_random_app"))
-
-    def test_dh_pve_is_discovered_as_application(self):
+    def test_pve_is_discovered_by_application_marker(self):
         names = {path.name for path in discover_applications(ROOT)}
-        self.assertIn("dh_pve_app", names)
+        self.assertIn("digitalhouses_pve_agent", names)
+        self.assertNotIn("dh_pve_app", names)
 
-    def test_dh_pve_specific_validator_passes_current_contract(self):
+    def test_pve_specific_validator_passes_current_contract(self):
         validate_dh_pve_app(
             ROOT,
-            ROOT / "dh_pve_app",
+            ROOT / "digitalhouses_pve_agent",
             {"type": "linux_agent", "version": "0.5.23"},
         )
 
-    def test_dh_pve_shipped_ha_packages_are_valid_yaml(self):
-        app = ROOT / "dh_pve_app"
+    def test_pve_shipped_ha_packages_are_valid_yaml(self):
+        app = ROOT / "digitalhouses_pve_agent"
         for relative in (
             "examples/packages/dh_app_pve_package.yaml",
             "examples/packages/dh_app_pve_notification_local_package.yaml",
@@ -46,11 +37,11 @@ class PveAgentRepositoryContractTests(unittest.TestCase):
             "PVE HA helpers must be consolidated into dh_app_pve_package.yaml",
         )
 
-    def test_dh_pve_validator_rejects_wrong_release_version(self):
+    def test_pve_validator_rejects_wrong_release_version(self):
         with self.assertRaisesRegex(ValidationError, "release version"):
             validate_dh_pve_app(
                 ROOT,
-                ROOT / "dh_pve_app",
+                ROOT / "digitalhouses_pve_agent",
                 {"type": "linux_agent", "version": "0.4.0"},
             )
 

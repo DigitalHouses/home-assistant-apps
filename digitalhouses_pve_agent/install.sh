@@ -2,6 +2,7 @@
 set -euo pipefail
 
 APP_NAME="dh_pve_app"
+SOURCE_PRODUCT_DIR="digitalhouses_pve_agent"
 SERVICE_NAME="${APP_NAME}.service"
 REPO_URL="https://github.com/DigitalHouses/home-assistant-apps.git"
 SOURCE_REF="${DIGITALHOUSES_SOURCE_REF:-main}"
@@ -16,7 +17,7 @@ ROOT_GUIDE="/root/dh_app_pve.txt"
 
 if [[ "${EUID}" -ne 0 ]]; then
     echo "Установщик должен быть запущен от root."
-    echo "Пример: curl -fsSL https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/main/${APP_NAME}/install.sh | sudo bash"
+    echo "Пример: curl -fsSL https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/main/${SOURCE_PRODUCT_DIR}/install.sh | sudo bash"
     exit 1
 fi
 
@@ -87,10 +88,10 @@ else
     SOURCE_SHA="$(git -C "${tmp_dir}/repo" rev-parse HEAD)"
 fi
 
-SOURCE_APP="${tmp_dir}/repo/${APP_NAME}"
+SOURCE_APP="${tmp_dir}/repo/${SOURCE_PRODUCT_DIR}"
 
 if [[ ! -f "${SOURCE_APP}/VERSION" ]]; then
-    echo "Ошибка: ${APP_NAME} не найден в source ref ${SOURCE_REF}."
+    echo "Ошибка: ${SOURCE_PRODUCT_DIR} не найден в source ref ${SOURCE_REF}."
     exit 1
 fi
 

@@ -8,7 +8,7 @@ Native Linux agent for **Proxmox VE 8.x** that publishes host, CPU, memory, stor
 
 [Installation / update](#installation--update) · [Changelog](CHANGELOG.md) · [Engineering docs](../docs/digitalhouses_pve_agent/) · [Issues](https://github.com/DigitalHouses/home-assistant-apps/issues)
 
-The public product name is **DigitalHouses PVE Agent**. Existing runtime identifiers remain compatible: the implementation directory is `dh_pve_app`, the MQTT base namespace is `DigitalHouses/Global/dh_pve_app/<instance>`, and the Home Assistant devices are `DH PVE` and optional `DH PVE UPS`.
+The public product name and canonical repository identity are **DigitalHouses PVE Agent** / `digitalhouses_pve_agent`. Existing installed runtime identifiers remain compatible: service and filesystem identity `dh_pve_app`, MQTT base namespace `DigitalHouses/Global/dh_pve_app/<instance>`, and Home Assistant devices `DH PVE` plus optional `DH PVE UPS`.
 
 Current source release: `VERSION` is `0.5.23`.
 
@@ -311,7 +311,7 @@ For a reviewed ref/commit:
 
 ```bash
 REF=<reviewed-ref-or-sha>
-DIGITALHOUSES_SOURCE_REF="$REF" bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$REF/dh_pve_app/install.sh")
+DIGITALHOUSES_SOURCE_REF="$REF" bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$REF/digitalhouses_pve_agent/install.sh")
 ```
 
 When `DIGITALHOUSES_SOURCE_REF` is an exact 40-character commit SHA, the installer fetches the immutable source archive through GitHub codeload instead of requiring a `github.com` Git clone.
@@ -328,7 +328,7 @@ reference to:
 ```
 
 The canonical guide is stored in the repository as
-`dh_pve_app/dh_app_pve.txt`. The installed copy is regenerated on every
+`digitalhouses_pve_agent/dh_app_pve.txt`. The installed copy is regenerated on every
 successful update and is prefixed with the actual installed `version`,
 `source` and `commit`.
 

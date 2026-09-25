@@ -11,7 +11,7 @@ def test_policy_helper_lives_in_read_only_app_code():
 
 
 def test_runtime_systemd_keeps_nut_configuration_read_only():
-    unit = Path("dh_pve_app/systemd/dh_pve_app.service").read_text(encoding="utf-8")
+    unit = Path("digitalhouses_pve_agent/systemd/dh_pve_app.service").read_text(encoding="utf-8")
 
     assert "ProtectSystem=full" in unit
     assert "ReadWritePaths=/etc/nut" not in unit

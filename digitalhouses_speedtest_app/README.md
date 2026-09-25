@@ -8,13 +8,15 @@ Home Assistant App for Internet availability, official Ookla Speedtest measureme
 
 [English quick start](#english--quick-start) · [Русский быстрый старт](#русский--быстрый-старт) · [Technical documentation](DOCS.md) · [Changelog](CHANGELOG.md) · [Issues](https://github.com/DigitalHouses/home-assistant-apps/issues)
 
+Repository identity: `digitalhouses_speedtest_app`. The installed Home Assistant App slug remains `digitalhouses_speedtest` until a controlled product-specific reinstall migration is released; existing MQTT/discovery/entity identities are intentionally unchanged.
+
 ![DigitalHouses Internet dashboard](images/internet-dashboard.png)
 
 The repository example is designed so a new user can install it and reproduce the dashboard above without DigitalHouses-private packages.
 
 ## English — Quick start
 
-1. Add `https://github.com/DigitalHouses/home-assistant-apps` to the Home Assistant App store and install **DigitalHouses Speedtest**.
+1. Add `https://github.com/DigitalHouses/home-assistant-apps` to the Home Assistant App store and install **DigitalHouses Speedtest App**.
 2. Install **Mushroom** and **mini-graph-card** through HACS.
 3. Copy both files to your Home Assistant packages directory:
 
@@ -81,7 +83,7 @@ Event data includes an `event`, `title` and `message`. Typical event values are 
 
 ## Русский — Быстрый старт
 
-1. Добавьте `https://github.com/DigitalHouses/home-assistant-apps` в магазин Apps Home Assistant и установите **DigitalHouses Speedtest**.
+1. Добавьте `https://github.com/DigitalHouses/home-assistant-apps` в магазин Apps Home Assistant и установите **DigitalHouses Speedtest App**.
 2. Через HACS установите **Mushroom** и **mini-graph-card**.
 3. Скопируйте два файла:
 

@@ -12,7 +12,7 @@ from validators.types.linux_agent import validate_linux_agent
 
 class PlexAgentValidatorTests(unittest.TestCase):
     def test_current_plex_agent_contract(self):
-        app = ROOT / "digitalhouses_plex_monitoring"
+        app = ROOT / "digitalhouses_plex_agent"
         metadata = parse_application_metadata(app / "digitalhouses.app")
         validate_common(ROOT, app, metadata)
         context = validate_linux_agent(ROOT, app)

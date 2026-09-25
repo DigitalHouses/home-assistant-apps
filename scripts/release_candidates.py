@@ -12,9 +12,12 @@ from pathlib import Path
 
 from release_contract import (
     PRODUCTS,
+    PRODUCT_REGISTRY_RELATIVE,
+    ProductSpec,
     ReleaseContractError,
     _source_version,
     compare_semver,
+    load_release_products,
     release_metadata,
     validate_git_release_history,
 )
@@ -35,18 +38,20 @@ class ReleaseCandidate:
         return {"product": self.product, "version": self.version}
 
 
-def version_source_path(product: str) -> str:
-    spec = PRODUCTS[product]
+def _version_source_path(spec: ProductSpec) -> str:
     filename = "VERSION" if spec.version_source == "version_file" else "config.yaml"
     return f"{spec.directory}/{filename}"
 
 
-def _version_from_text(product: str, text: str) -> str:
-    spec = PRODUCTS[product]
+def version_source_path(product: str) -> str:
+    return _version_source_path(PRODUCTS[product])
+
+
+def _version_from_text(spec: ProductSpec, text: str) -> str:
     if spec.version_source == "version_file":
         version = text.strip()
         if not version:
-            raise ReleaseContractError(f"{product}: empty VERSION")
+            raise ReleaseContractError(f"{spec.identifier}: empty VERSION")
         return version
 
     if spec.version_source == "haos_config":
@@ -57,12 +62,12 @@ def _version_from_text(product: str, text: str) -> str:
                 matches.append(match.group("version"))
         if len(matches) != 1:
             raise ReleaseContractError(
-                f"{product}: expected exactly one top-level config version"
+                f"{spec.identifier}: expected exactly one top-level config version"
             )
         return matches[0]
 
     raise ReleaseContractError(
-        f"{product}: unsupported version source {spec.version_source}"
+        f"{spec.identifier}: unsupported version source {spec.version_source}"
     )
 
 
@@ -83,6 +88,22 @@ def _git_show(root: Path, revision: str, path: str) -> str | None:
     )
 
 
+def _release_products_at_revision(
+    root: Path,
+    revision: str,
+) -> dict[str, ProductSpec] | None:
+    registry_text = _git_show(root, revision, PRODUCT_REGISTRY_RELATIVE)
+    if registry_text is None:
+        return None
+    try:
+        raw = json.loads(registry_text)
+    except json.JSONDecodeError as exc:
+        raise ReleaseContractError(
+            f"{revision}:{PRODUCT_REGISTRY_RELATIVE}: invalid JSON: {exc}"
+        ) from exc
+    return load_release_products(raw, require_canonical_directory=False)
+
+
 def changed_release_candidates(
     root: Path,
     *,
@@ -91,21 +112,31 @@ def changed_release_candidates(
 ) -> list[ReleaseCandidate]:
     candidates: list[ReleaseCandidate] = []
 
-    for product in sorted(PRODUCTS):
-        path = version_source_path(product)
-        before_text = _git_show(root, base, path)
-        after_text = _git_show(root, head, path)
+    head_products = _release_products_at_revision(root, head) or PRODUCTS
+    base_products = _release_products_at_revision(root, base) or head_products
+
+    for product, after_spec in sorted(head_products.items()):
+        before_spec = base_products.get(product)
+        after_path = _version_source_path(after_spec)
+        before_path = (
+            _version_source_path(before_spec)
+            if before_spec is not None
+            else after_path
+        )
+
+        before_text = _git_show(root, base, before_path)
+        after_text = _git_show(root, head, after_path)
 
         if after_text is None:
             if before_text is not None:
                 raise ReleaseContractError(
-                    f"{product}: version source was removed: {path}"
+                    f"{product}: version source was removed: {after_path}"
                 )
             continue
 
-        after_version = _version_from_text(product, after_text)
+        after_version = _version_from_text(after_spec, after_text)
         before_version = (
-            _version_from_text(product, before_text)
+            _version_from_text(before_spec or after_spec, before_text)
             if before_text is not None
             else None
         )
@@ -131,12 +162,7 @@ def _git_tags(root: Path, product: str) -> list[str]:
 
 
 def pending_existing_release_candidates(root: Path) -> list[ReleaseCandidate]:
-    """Return unreleased current versions only for already-adopted products.
-
-    A product is considered already adopted when it has at least one canonical
-    release tag. This prevents enabling automation from unexpectedly publishing
-    first releases for products that have never entered the release flow.
-    """
+    """Return unreleased current versions only for already-adopted products."""
 
     candidates: list[ReleaseCandidate] = []
 

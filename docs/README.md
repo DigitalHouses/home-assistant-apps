@@ -5,6 +5,7 @@ This directory separates ecosystem-wide standards from product-specific engineer
 ## Shared standards
 
 - [DigitalHouses Application Standard](standards/DIGITALHOUSES_APP_STANDARD.md) — common contract for DigitalHouses Home Assistant Apps and Linux agents.
+- [DigitalHouses Product Naming Standard](standards/PRODUCT_NAMING_STANDARD.md) — canonical product IDs, repository directories, App slugs, entity prefixes, release identity, and compatibility migration rules.
 - [DigitalHouses Contract Data Policy](standards/CONTRACT_DATA_POLICY.md) — required/optional runtime data semantics, explicit contract failures, and repository-wide prohibition of silent fallback across contract boundaries.
 - [DigitalHouses Events & Notifications Standard](standards/EVENTS_AND_NOTIFICATIONS_STANDARD.md) — machine events from the public product; direct local Home Assistant routing via `trigger.id` → `choose` → final delivery action.
 - [DigitalHouses Release Policy](standards/RELEASE_POLICY.md) — product versions, release tags, GitHub Releases, immutable artifacts, and release provenance.

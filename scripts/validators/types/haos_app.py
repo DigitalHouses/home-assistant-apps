@@ -15,6 +15,7 @@ _BUILD_VERSION_RE = re.compile(
     r'^\s*ARG\s+BUILD_VERSION\s*=\s*["\']?([^"\'\s]+)["\']?\s*$',
     re.MULTILINE,
 )
+_HAOS_SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
 
 
 def dockerfile_default_version(path: Path) -> str:
@@ -55,8 +56,8 @@ def validate_haos_addon(root: Path, app: Path) -> dict[str, Any]:
         fail(f"{app.name}/config.yaml must be a YAML mapping")
 
     slug = config.get("slug")
-    if slug != app.name:
-        fail(f"{app.name}: config slug must equal directory name, got {slug!r}")
+    if not isinstance(slug, str) or _HAOS_SLUG_RE.fullmatch(slug) is None:
+        fail(f"{app.name}: config slug must be a non-empty URI-safe slug")
 
     version = str(config.get("version") or "").strip()
     if not version:

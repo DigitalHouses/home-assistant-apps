@@ -8,7 +8,7 @@ Native Linux agent for Plex Media Server workload, playback, transcoding and lib
 
 [Install / update](#install--update) · [Changelog](CHANGELOG.md) · [Engineering docs](../docs/digitalhouses_plex_agent/) · [Issues](https://github.com/DigitalHouses/home-assistant-apps/issues)
 
-The public product name is **DigitalHouses Plex Agent**. Its GitHub release identifier is `digitalhouses_plex_agent`. Existing runtime paths, service names and MQTT identities remain unchanged for compatibility.
+The public product name, canonical repository directory and GitHub release identifier are **DigitalHouses Plex Agent** / `digitalhouses_plex_agent`. Existing installed `digitalhouses_plex_monitoring` service, user/group, filesystem paths and MQTT identities remain unchanged for compatibility.
 
 ## Purpose
 
@@ -38,7 +38,7 @@ From a root shell:
 
 ```bash
 RELEASE_TAG="digitalhouses_plex_agent-v0.5.0"
-curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/${RELEASE_TAG}/digitalhouses_plex_monitoring/install.sh" \
+curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/${RELEASE_TAG}/digitalhouses_plex_agent/install.sh" \
   | DIGITALHOUSES_SOURCE_REF="${RELEASE_TAG}" bash
 ```
 
@@ -46,7 +46,7 @@ From a sudo-capable user:
 
 ```bash
 RELEASE_TAG="digitalhouses_plex_agent-v0.5.0"
-curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/${RELEASE_TAG}/digitalhouses_plex_monitoring/install.sh" \
+curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/${RELEASE_TAG}/digitalhouses_plex_agent/install.sh" \
   | sudo env DIGITALHOUSES_SOURCE_REF="${RELEASE_TAG}" bash
 ```
 

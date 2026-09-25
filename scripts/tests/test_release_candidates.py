@@ -51,18 +51,18 @@ class ReleaseCandidatesTests(unittest.TestCase):
             root = Path(temp)
             self._init_repo(root)
 
-            self._write(root, "dh_pve_app/VERSION", "0.6.0\n")
+            self._write(root, "digitalhouses_pve_agent/VERSION", "0.6.0\n")
             self._write(
                 root,
-                "digitalhouses_db_monitoring/config.yaml",
+                "digitalhouses_recorder_app/config.yaml",
                 "name: Recorder\nversion: 0.2.0\noptions:\n  x: 1\n",
             )
             base = self._commit_all(root, "base")
 
-            self._write(root, "dh_pve_app/VERSION", "0.6.1\n")
+            self._write(root, "digitalhouses_pve_agent/VERSION", "0.6.1\n")
             self._write(
                 root,
-                "digitalhouses_db_monitoring/config.yaml",
+                "digitalhouses_recorder_app/config.yaml",
                 "name: Recorder\nversion: 0.2.0\noptions:\n  x: 2\n",
             )
             head = self._commit_all(root, "change")
@@ -83,10 +83,10 @@ class ReleaseCandidatesTests(unittest.TestCase):
             root = Path(temp)
             self._init_repo(root)
 
-            self._write(root, "dh_pve_app/VERSION", "0.6.1\n")
+            self._write(root, "digitalhouses_pve_agent/VERSION", "0.6.1\n")
             self._write(
                 root,
-                "dh_internet_app/config.yaml",
+                "digitalhouses_internet_app/config.yaml",
                 "name: Internet\nversion: 0.1.3\n",
             )
             self._commit_all(root, "products")
@@ -99,6 +99,53 @@ class ReleaseCandidatesTests(unittest.TestCase):
                 [("digitalhouses_pve_agent", "0.6.1")],
             )
 
+
+    def test_repository_directory_move_is_not_release_intent(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            self._init_repo(root)
+
+            registry_path = (
+                "digitalhouses-stats/digitalhouses_stats/product_registry.json"
+            )
+            base_registry = {
+                "schema": 1,
+                "products": [
+                    {
+                        "id": "digitalhouses_pve_agent",
+                        "type": "agent",
+                        "entity_prefix": "dh_pve_agent",
+                        "display_name": "PVE Agent",
+                        "telemetry_allowed": True,
+                        "release": {
+                            "title": "DigitalHouses PVE Agent",
+                            "version_source": "version_file",
+                            "policy_baseline": "0.5.6",
+                        },
+                        "repository_directory": "dh_pve_app",
+                    }
+                ],
+            }
+            self._write(root, "dh_pve_app/VERSION", "0.6.0\n")
+            self._write(root, registry_path, __import__("json").dumps(base_registry))
+            base = self._commit_all(root, "base")
+
+            (root / "digitalhouses_pve_agent").mkdir(parents=True)
+            (root / "dh_pve_app/VERSION").replace(
+                root / "digitalhouses_pve_agent/VERSION"
+            )
+            (root / "dh_pve_app").rmdir()
+
+            head_registry = dict(base_registry)
+            head_registry["products"] = [dict(base_registry["products"][0])]
+            head_registry["products"][0]["repository_directory"] = (
+                "digitalhouses_pve_agent"
+            )
+            self._write(root, registry_path, __import__("json").dumps(head_registry))
+            head = self._commit_all(root, "move")
+
+            candidates = changed_release_candidates(root, base=base, head=head)
+            self.assertEqual(candidates, [])
 
 if __name__ == "__main__":
     unittest.main()

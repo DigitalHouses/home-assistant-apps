@@ -38,6 +38,15 @@ class ReleaseDeploymentContractTests(unittest.TestCase):
             installer,
         )
 
+    def test_installer_separates_repo_source_from_legacy_runtime_identity(self):
+        installer = INSTALLER.read_text(encoding="utf-8")
+        self.assertIn('APP_NAME="digitalhouses_plex_monitoring"', installer)
+        self.assertIn('SOURCE_PRODUCT_DIR="digitalhouses_plex_agent"', installer)
+        self.assertIn(
+            'SOURCE_APP="${tmp_dir}/repo/${SOURCE_PRODUCT_DIR}"',
+            installer,
+        )
+
     def test_readme_production_install_uses_current_release_tag(self):
         version = VERSION.read_text(encoding="utf-8").strip()
         expected_tag = f"digitalhouses_plex_agent-v{version}"
@@ -46,7 +55,7 @@ class ReleaseDeploymentContractTests(unittest.TestCase):
         self.assertIn(f'RELEASE_TAG="{expected_tag}"', readme)
         self.assertIn(
             "raw.githubusercontent.com/DigitalHouses/home-assistant-apps/"
-            "${RELEASE_TAG}/digitalhouses_plex_monitoring/install.sh",
+            "${RELEASE_TAG}/digitalhouses_plex_agent/install.sh",
             readme,
         )
         self.assertIn(

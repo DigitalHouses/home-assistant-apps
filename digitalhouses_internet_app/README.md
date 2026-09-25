@@ -6,8 +6,8 @@ This is a new product. It does not migrate or reuse the stable MQTT identities o
 
 ## Canonical identities
 
-- repository directory: `dh_internet_app`
-- HA App slug: `digitalhouses_internet`
+- repository directory: `digitalhouses_internet_app`
+- HA App slug: `digitalhouses_internet` (legacy installed identity; controlled reinstall migration pending)
 - public product name: **DigitalHouses Internet App**
 - release identifier: `digitalhouses_internet_app`
 - MQTT base: `DigitalHouses/Global/dh_internet_app`

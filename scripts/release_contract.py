@@ -9,6 +9,7 @@ import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -28,6 +29,7 @@ class ReleaseContractError(RuntimeError):
 @dataclass(frozen=True)
 class ProductSpec:
     identifier: str
+    product_type: str
     title: str
     directory: str
     version_source: str
@@ -50,22 +52,37 @@ PRODUCT_REGISTRY = (
     / "digitalhouses_stats"
     / "product_registry.json"
 )
+PRODUCT_REGISTRY_RELATIVE = str(PRODUCT_REGISTRY.relative_to(ROOT))
 
 
-def _load_release_products() -> dict[str, ProductSpec]:
-    raw = json.loads(PRODUCT_REGISTRY.read_text(encoding="utf-8"))
+def load_release_products(
+    raw: dict[str, Any],
+    *,
+    require_canonical_directory: bool = True,
+) -> dict[str, ProductSpec]:
     products: dict[str, ProductSpec] = {}
 
-    for entry in raw["products"]:
+    for entry in raw.get("products", []):
         release = entry.get("release")
         if release is None:
             continue
 
         identifier = entry["id"]
+        directory = entry.get("repository_directory")
+        if not isinstance(directory, str) or not directory:
+            raise ReleaseContractError(
+                f"{identifier}: release-managed product has no repository_directory"
+            )
+        if require_canonical_directory and directory != identifier:
+            raise ReleaseContractError(
+                f"{identifier}: repository_directory must equal canonical product id"
+            )
+
         products[identifier] = ProductSpec(
             identifier=identifier,
+            product_type=entry["type"],
             title=release["title"],
-            directory=entry["repository_directory"],
+            directory=directory,
             version_source=release["version_source"],
             policy_baseline=release["policy_baseline"],
         )
@@ -73,7 +90,26 @@ def _load_release_products() -> dict[str, ProductSpec]:
     return products
 
 
+def _load_release_products() -> dict[str, ProductSpec]:
+    raw = json.loads(PRODUCT_REGISTRY.read_text(encoding="utf-8"))
+    return load_release_products(raw)
+
+
 PRODUCTS = _load_release_products()
+
+
+def ghcr_image_repository(product: str) -> str:
+    """Return the deterministic GHCR repository for a Home Assistant App."""
+    spec = PRODUCTS.get(product)
+    if spec is None:
+        raise ReleaseContractError(f"unknown release product: {product}")
+    if spec.product_type != "app":
+        raise ReleaseContractError(
+            f"{product}: GHCR App image is not defined for product type "
+            f"{spec.product_type!r}"
+        )
+    return f"ghcr.io/digitalhouses/{spec.identifier}"
+
 
 def _parse_semver(version: str) -> tuple[tuple[int, int, int], tuple[str, ...] | None]:
     match = _SEMVER_RE.fullmatch(version)

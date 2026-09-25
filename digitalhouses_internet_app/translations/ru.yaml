@@ -103,7 +103,7 @@ configuration:
             description: Только для switch — сколько держать питание выключенным.
   telemetry_enabled:
     name: Телеметрия использования
-    description: Отправлять минимальную псевдонимную телеметрию DigitalHouses (продукт, версия и случайный ID установки). По умолчанию выключено. Политика: https://github.com/DigitalHouses/home-assistant-apps/blob/main/docs/standards/PRODUCT_TELEMETRY_POLICY.md
+    description: "Отправлять минимальную псевдонимную телеметрию DigitalHouses (продукт, версия и случайный ID установки). По умолчанию выключено. Политика: https://github.com/DigitalHouses/home-assistant-apps/blob/main/docs/standards/PRODUCT_TELEMETRY_POLICY.md"
   log_level:
     name: Уровень логирования
     description: Подробность логов приложения.

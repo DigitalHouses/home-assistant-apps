@@ -2,7 +2,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
-APP = ROOT / "dh_pve_app"
+APP = ROOT / "digitalhouses_pve_agent"
 VALIDATOR = ROOT / "scripts" / "validators" / "products" / "pve_agent.py"
 DESIGN = (
     ROOT
