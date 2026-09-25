@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
-APP = ROOT / "dh_pve_app"
+APP = ROOT / "digitalhouses_pve_agent"
 PACKAGES = APP / "examples" / "packages"
 EN = PACKAGES / "dh_app_pve_notification_local_package.yaml"
 RU = PACKAGES / "locales" / "ru" / "dh_app_pve_notification_local_package.yaml"
