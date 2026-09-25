@@ -145,3 +145,16 @@ def test_shutdown_discovery_is_null_safe_when_current_guest_has_no_previous_hist
             assert ".guests | default({}, true)" in template
             assert f".{kind} | default({{}}, true)" in template
             assert f'.get("{guest_id}", {{}})' in template
+
+
+def test_guest_status_discovery_exposes_autostart_without_extra_entity():
+    components = build_shutdown_aware_pve_discovery_payload(
+        _config(),
+        _identity(),
+        version="0.2.0",
+        inventory=_inventory(),
+    )["components"]
+
+    attrs = components["vm_110_status"]["json_attributes_template"]
+
+    assert "onboot" in attrs
