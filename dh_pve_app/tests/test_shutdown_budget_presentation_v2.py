@@ -198,6 +198,9 @@ def test_discovery_exposes_separate_guest_and_total_budget_sensors():
     assert guest["default_entity_id"] == "sensor.dh_app_pve_ups_guest_shutdown_budget"
     assert guest["state_topic"] == diagnostics_topic
     assert "value_json.shutdown_budget.effective_guest_budget_seconds" in guest["value_template"]
+    assert "all_configured_guest_budget_seconds" in guest["json_attributes_template"]
+    assert "running_guests" in guest["json_attributes_template"]
+    assert "shutdown_sequence" in guest["json_attributes_template"]
     assert total["default_entity_id"] == "sensor.dh_app_pve_ups_shutdown_budget"
     assert total["state_topic"] == diagnostics_topic
     assert "value_json.shutdown_budget.shutdown_budget_seconds" in total["value_template"]
