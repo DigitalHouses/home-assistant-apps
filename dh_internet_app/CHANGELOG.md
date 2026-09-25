@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.11
+
+- Send one immediate best-effort telemetry heartbeat when the persisted App setting changes from `telemetry_enabled: false` to `true`, even if the previous successful heartbeat is still inside its normal 24-hour interval.
+- Consume that enable transition after the first attempt so ordinary restarts cannot create a heartbeat storm; a failed opt-in heartbeat keeps the existing one-hour backoff across restarts.
+- Log successful telemetry heartbeats at INFO level without installation identity or token data.
+- Add regression coverage for re-enable, restart suppression and failure-backoff persistence.
+
 ## 0.1.10
 
 - Add explicit opt-in DigitalHouses Telemetry Protocol v1 support with `telemetry_enabled: false` by default.
