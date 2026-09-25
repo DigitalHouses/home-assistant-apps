@@ -51,6 +51,20 @@ Quality thresholds and App-owned performance problem evaluation are implemented.
 
 See [DOCS.md](DOCS.md) for configuration semantics and [HAOS_TEST_PLAN.md](HAOS_TEST_PLAN.md) for the first real installation test sequence.
 
+## Product telemetry
+
+Usage telemetry is explicit opt-in and disabled by default:
+
+```yaml
+telemetry_enabled: false
+```
+
+When enabled, the App sends one minimal protocol-v1 heartbeat approximately every 24 hours (with deterministic ±30 minute jitter) to `https://telemetry.digitalhouses.vip`. The payload contains only protocol version, telemetry policy version, random installation UUID, canonical product identifier `digitalhouses_internet_app`, and App version. Country is derived server-side. Hostname, Home Assistant UUID, LAN/WAN addresses, router data, Speedtest results, outages, entity IDs and configuration are not sent.
+
+Telemetry identity and scheduling state are stored in `/data/telemetry.json`, so they survive App restart/update and normal HA backup/restore. Telemetry failures never affect Internet monitoring or recovery. `button.dh_internet_app_delete_telemetry` requests authenticated deletion of this installation's retained server-side telemetry data.
+
+See [DigitalHouses Product Telemetry Policy](../docs/standards/PRODUCT_TELEMETRY_POLICY.md).
+
 ## Home Assistant presentation
 
 The Home Assistant layer is deliberately split by responsibility:
