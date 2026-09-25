@@ -33,7 +33,7 @@ All recovery timing belongs to App configuration: maximum cycles, retry interval
 
 ## Current product state
 
-Version `0.1.16` is the post-migration cleanup release. The canonical Supervisor identity is now permanent and the temporary migration runtime has been removed. The product provides:
+Version `0.1.17` is the first stable-stage release. The canonical Supervisor identity is permanent, the temporary migration runtime has been removed, and the App is no longer marked experimental in Home Assistant. The product provides:
 
 - Internet and router reachability;
 - current-month outage state persisted under `/data`;
