@@ -32,6 +32,13 @@ def test_installer_preserves_phase1_legacy_agent_and_config():
         assert token not in text
 
 
+
+def test_installer_separates_canonical_source_directory_from_legacy_runtime_name():
+    text = (ROOT / "install.sh").read_text(encoding="utf-8")
+    assert 'APP_NAME="dh_pve_app"' in text
+    assert 'SOURCE_PRODUCT_DIR="digitalhouses_pve_agent"' in text
+    assert 'SOURCE_APP="${tmp_dir}/repo/${SOURCE_PRODUCT_DIR}"'.replace("\\", "") in text
+
 def test_installer_does_not_echo_mqtt_password_after_entry():
     text = (ROOT / "install.sh").read_text()
     assert 'read -r -s mqtt_password' in text

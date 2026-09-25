@@ -6,7 +6,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from release_contract import ReleaseContractError, release_metadata
+from release_contract import ReleaseContractError, ghcr_image_repository, release_metadata
 
 
 class ReleaseContractTests(unittest.TestCase):
@@ -18,10 +18,10 @@ class ReleaseContractTests(unittest.TestCase):
     def test_linux_agent_future_release_metadata(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
-            self._write(root, "dh_pve_app/VERSION", "0.6.0\n")
+            self._write(root, "digitalhouses_pve_agent/VERSION", "0.6.0\n")
             self._write(
                 root,
-                "dh_pve_app/CHANGELOG.md",
+                "digitalhouses_pve_agent/CHANGELOG.md",
                 "# Changelog\n\n## Unreleased\n\n## 0.6.0\n\n- New release.\n\n## 0.5.6\n\n- Old.\n",
             )
 
@@ -41,7 +41,7 @@ class ReleaseContractTests(unittest.TestCase):
             root = Path(temp)
             self._write(
                 root,
-                "digitalhouses_db_monitoring/config.yaml",
+                "digitalhouses_recorder_app/config.yaml",
                 "name: DigitalHouses DB Monitoring\n"
                 "version: 0.2.0\n"
                 "options:\n"
@@ -49,7 +49,7 @@ class ReleaseContractTests(unittest.TestCase):
             )
             self._write(
                 root,
-                "digitalhouses_db_monitoring/CHANGELOG.md",
+                "digitalhouses_recorder_app/CHANGELOG.md",
                 "# Changelog\n\n## 0.2.0\n\n- Recorder release.\n",
             )
 
@@ -67,12 +67,12 @@ class ReleaseContractTests(unittest.TestCase):
             root = Path(temp)
             self._write(
                 root,
-                "digitalhouses_backblaze/config.yaml",
+                "digitalhouses_backblaze_app/config.yaml",
                 "name: DigitalHouses Backblaze\nversion: 0.1.0\n",
             )
             self._write(
                 root,
-                "digitalhouses_backblaze/CHANGELOG.md",
+                "digitalhouses_backblaze_app/CHANGELOG.md",
                 "# Changelog\n\n## 0.1.0\n\n- Initial release.\n",
             )
 
@@ -96,12 +96,12 @@ class ReleaseContractTests(unittest.TestCase):
             root = Path(temp)
             self._write(
                 root,
-                "dh_internet_app/config.yaml",
+                "digitalhouses_internet_app/config.yaml",
                 "name: DigitalHouses Internet App\nversion: 0.1.0\n",
             )
             self._write(
                 root,
-                "dh_internet_app/CHANGELOG.md",
+                "digitalhouses_internet_app/CHANGELOG.md",
                 "# Changelog\n\n## 0.1.0\n\n- Initial development release.\n",
             )
 
@@ -123,10 +123,10 @@ class ReleaseContractTests(unittest.TestCase):
     def test_rejects_version_at_or_before_policy_baseline(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
-            self._write(root, "digitalhouses_plex_monitoring/VERSION", "0.2.2\n")
+            self._write(root, "digitalhouses_plex_agent/VERSION", "0.2.2\n")
             self._write(
                 root,
-                "digitalhouses_plex_monitoring/CHANGELOG.md",
+                "digitalhouses_plex_agent/CHANGELOG.md",
                 "# Changelog\n\n## 0.2.2\n\n- Existing release.\n",
             )
 
@@ -140,10 +140,10 @@ class ReleaseContractTests(unittest.TestCase):
     def test_rejects_source_version_mismatch(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
-            self._write(root, "digitalhouses_plex_monitoring/VERSION", "0.3.0\n")
+            self._write(root, "digitalhouses_plex_agent/VERSION", "0.3.0\n")
             self._write(
                 root,
-                "digitalhouses_plex_monitoring/CHANGELOG.md",
+                "digitalhouses_plex_agent/CHANGELOG.md",
                 "# Changelog\n\n## 0.3.0\n\n- Plex release.\n",
             )
 
@@ -157,10 +157,10 @@ class ReleaseContractTests(unittest.TestCase):
     def test_rejects_nonempty_unreleased_section(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
-            self._write(root, "dh_pve_app/VERSION", "0.6.0\n")
+            self._write(root, "digitalhouses_pve_agent/VERSION", "0.6.0\n")
             self._write(
                 root,
-                "dh_pve_app/CHANGELOG.md",
+                "digitalhouses_pve_agent/CHANGELOG.md",
                 "# Changelog\n\n## Unreleased\n\n- Not moved yet.\n\n## 0.6.0\n\n- Release.\n",
             )
 
@@ -174,10 +174,10 @@ class ReleaseContractTests(unittest.TestCase):
     def test_prerelease_version_sets_prerelease_flag(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
-            self._write(root, "dh_pve_app/VERSION", "0.6.0-rc.1\n")
+            self._write(root, "digitalhouses_pve_agent/VERSION", "0.6.0-rc.1\n")
             self._write(
                 root,
-                "dh_pve_app/CHANGELOG.md",
+                "digitalhouses_pve_agent/CHANGELOG.md",
                 "# Changelog\n\n## 0.6.0-rc.1\n\n- Candidate.\n",
             )
 
@@ -189,6 +189,16 @@ class ReleaseContractTests(unittest.TestCase):
 
             self.assertTrue(metadata.prerelease)
 
+
+    def test_ghcr_image_repository_is_canonical_product_id(self):
+        self.assertEqual(
+            ghcr_image_repository("digitalhouses_recorder_app"),
+            "ghcr.io/digitalhouses/digitalhouses_recorder_app",
+        )
+
+    def test_ghcr_image_repository_rejects_linux_agent(self):
+        with self.assertRaisesRegex(ReleaseContractError, "GHCR App image"):
+            ghcr_image_repository("digitalhouses_pve_agent")
 
 if __name__ == "__main__":
     unittest.main()

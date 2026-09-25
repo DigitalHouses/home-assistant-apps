@@ -52,6 +52,9 @@ class ProductNamingTests(unittest.TestCase):
             "id": "digitalhouses_internet_app",
             "type": "app",
             "entity_prefix": "dh_internet_app",
+            "display_name": "Internet App",
+            "repository_directory": "digitalhouses_internet_app",
+            "haos_slug": "digitalhouses_internet_app",
         }
         product.update(overrides)
         return {"products": [product]}
@@ -86,6 +89,35 @@ class ProductNamingTests(unittest.TestCase):
                 self._registry(entity_prefix="dh_app_internet")
             )
 
+
+    def test_repository_directory_must_equal_canonical_id(self):
+        with self.assertRaisesRegex(
+            ValidationError,
+            "repository_directory must equal canonical id",
+        ):
+            validate_product_registry_naming(
+                self._registry(repository_directory="dh_internet_app")
+            )
+
+    def test_legacy_app_slug_requires_controlled_migration_marker(self):
+        with self.assertRaisesRegex(
+            ValidationError,
+            "legacy haos_slug requires explicit",
+        ):
+            validate_product_registry_naming(
+                self._registry(haos_slug="digitalhouses_internet")
+            )
+
+    def test_legacy_app_slug_with_controlled_migration_marker_is_accepted(self):
+        validate_product_registry_naming(
+            self._registry(
+                haos_slug="digitalhouses_internet",
+                slug_migration={
+                    "status": "pending_controlled_reinstall",
+                    "target": "digitalhouses_internet_app",
+                },
+            )
+        )
 
 class TypeContractTests(unittest.TestCase):
     def _write(self, path: Path, text: str = "") -> None:
