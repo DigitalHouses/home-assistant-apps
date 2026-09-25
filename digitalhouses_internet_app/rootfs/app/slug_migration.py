@@ -434,20 +434,28 @@ def import_canonical_bundle(
     Therefore options migration is intentionally two-stage when the current
     container still has package defaults.
     """
+    marker_file = marker_file or (data_dir / IMPORT_MARKER.name)
+    pending_file = pending_file or (data_dir / OPTIONS_PENDING_MARKER.name)
+
+    # A completed migration is authoritative. The legacy rollback App may
+    # regenerate the shared bridge bundle with a new exported_at/hash on every
+    # start/stop. That must never cause the canonical App to re-import or fail.
+    if marker_file.is_file():
+        marker = _read_marker(marker_file, label="existing migration")
+        if marker.get("schema") != BUNDLE_SCHEMA_VERSION:
+            raise SlugMigrationError("completed migration marker schema mismatch")
+        if marker.get("product") != PRODUCT_ID:
+            raise SlugMigrationError("completed migration marker product mismatch")
+        if marker.get("source_slug") != SOURCE_SLUG:
+            raise SlugMigrationError("completed migration marker source slug mismatch")
+        if marker.get("target_slug") != TARGET_SLUG:
+            raise SlugMigrationError("completed migration marker target slug mismatch")
+        return IMPORT_NONE
+
     if not bundle_file.is_file():
         return IMPORT_NONE
 
-    marker_file = marker_file or (data_dir / IMPORT_MARKER.name)
-    pending_file = pending_file or (data_dir / OPTIONS_PENDING_MARKER.name)
     manifest, files, bundle_sha256 = _load_bundle(bundle_file)
-
-    if marker_file.is_file():
-        marker = _read_marker(marker_file, label="existing migration")
-        if marker.get("bundle_sha256") == bundle_sha256:
-            return IMPORT_NONE
-        raise SlugMigrationError(
-            "a different slug migration bundle was already imported"
-        )
 
     options = json.loads(files["options.json"].decode("utf-8"))
     current_options = _read_current_options(data_dir)
