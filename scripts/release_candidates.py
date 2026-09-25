@@ -101,7 +101,7 @@ def _release_products_at_revision(
         raise ReleaseContractError(
             f"{revision}:{PRODUCT_REGISTRY_RELATIVE}: invalid JSON: {exc}"
         ) from exc
-    return load_release_products(raw)
+    return load_release_products(raw, require_canonical_directory=False)
 
 
 def changed_release_candidates(

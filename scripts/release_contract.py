@@ -55,7 +55,7 @@ PRODUCT_REGISTRY = (
 PRODUCT_REGISTRY_RELATIVE = str(PRODUCT_REGISTRY.relative_to(ROOT))
 
 
-def load_release_products(raw: dict[str, Any]) -> dict[str, ProductSpec]:
+def load_release_products(\n    raw: dict[str, Any],\n    *,\n    require_canonical_directory: bool = True,\n) -> dict[str, ProductSpec]:
     products: dict[str, ProductSpec] = {}
 
     for entry in raw.get("products", []):
@@ -69,7 +69,7 @@ def load_release_products(raw: dict[str, Any]) -> dict[str, ProductSpec]:
             raise ReleaseContractError(
                 f"{identifier}: release-managed product has no repository_directory"
             )
-        if directory != identifier:
+        if require_canonical_directory and directory != identifier:
             raise ReleaseContractError(
                 f"{identifier}: repository_directory must equal canonical product id"
             )
