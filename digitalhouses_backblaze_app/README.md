@@ -6,7 +6,7 @@ The App authorizes against the Backblaze B2 Native API v4, discovers all buckets
 
 ## Status
 
-Version 0.1.7 is the current experimental implementation.
+Version 0.1.8 is the current stable production release.
 
 ## Backblaze key
 
@@ -127,7 +127,7 @@ digitalhouses_backblaze
 
 Changing that slug requires a separate controlled reinstall migration; it is not part of the repository-structure rename.
 
-The App remains experimental and must not be treated as a production release until the repository's immutable GHCR delivery contract is implemented for it.
+The App is delivered from the immutable GHCR repository `ghcr.io/digitalhouses/digitalhouses_backblaze_app`. Versioned release images are built from the exact released source revision and recorded with their digest in the GitHub Release.
 
 ## Compatibility
 
