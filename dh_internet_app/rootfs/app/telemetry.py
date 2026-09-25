@@ -23,9 +23,9 @@ FAILURE_BACKOFF_SECONDS = 60 * 60
 RUNNER_CHECK_SECONDS = 60.0
 HTTP_TIMEOUT_SECONDS = 5.0
 SEMVER_RE = re.compile(
-    r"^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)"
-    r"(?:-[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?"
-    r"(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$"
+    r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)"
+    r"(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?"
+    r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$"
 )
 
 
