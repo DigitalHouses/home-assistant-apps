@@ -599,6 +599,28 @@ class ShutdownHistoryTracker:
         history = state.get("history")
         if not isinstance(history, list):
             state["history"] = []
+        else:
+            normalized_history: list[dict[str, Any]] = []
+            for raw in history:
+                if not isinstance(raw, Mapping):
+                    continue
+                item = dict(raw)
+                clean = item.get("shutdown_clean")
+                item["shutdown_status"] = _shutdown_status(
+                    clean if isinstance(clean, bool) else None
+                )
+                normalized_history.append(item)
+            state["history"] = normalized_history
+
+        previous = state.get("previous_shutdown")
+        if isinstance(previous, Mapping):
+            normalized_previous = dict(previous)
+            clean = normalized_previous.get("shutdown_clean")
+            normalized_previous["shutdown_status"] = _shutdown_status(
+                clean if isinstance(clean, bool) else None
+            )
+            state["previous_shutdown"] = normalized_previous
+
         latest = state.get("guest_last_shutdowns")
         if not isinstance(latest, Mapping):
             state["guest_last_shutdowns"] = {"vm": {}, "lxc": {}}
