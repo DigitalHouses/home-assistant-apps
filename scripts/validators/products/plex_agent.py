@@ -278,8 +278,8 @@ def validate_plex_agent(
         (
             "ExecStart=/opt/digitalhouses/digitalhouses_plex_agent/"
             ".venv/bin/python -m app.app --config "
-            "/etc/digitalhouses_plex_monitoring/"
-            "digitalhouses_plex_monitoring.conf"
+            "/etc/digitalhouses_plex_agent/"
+            "digitalhouses_plex_agent.conf"
         ),
         "ReadWritePaths=/var/lib/digitalhouses_plex_agent",
     ):
