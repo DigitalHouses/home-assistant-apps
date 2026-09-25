@@ -70,6 +70,24 @@ def test_runtime_scheduler_uses_frozen_collection_cadence(tmp_path, monkeypatch)
     assert "disk_poll_interval_seconds" not in runtime.setting_tasks
 
 
+def test_main_wires_fast_manual_refresh_without_heavy_collectors(tmp_path, monkeypatch):
+    monkeypatch.setattr(main_module, "resolve_identity", lambda general: _identity())
+    _bridge, runtime = main_module.build_runtime(_config(), state_dir=tmp_path)
+
+    assert runtime.manual_refresh_collectors == (
+        "topology",
+        "guests",
+        "host",
+        "cpu",
+        "memory",
+        "storage",
+        "fans",
+    )
+    assert "smart" not in runtime.manual_refresh_collectors
+    assert "gpu" not in runtime.manual_refresh_collectors
+    assert "disk_temperature" not in runtime.manual_refresh_collectors
+
+
 def test_main_wires_shared_topology_shutdown_history_and_static_inventory():
     text = (ROOT / "app" / "main.py").read_text()
     assert "ShutdownAwareProductionCollectors" in text
