@@ -178,6 +178,7 @@ class ShutdownAwareProductionCollectors(GuestAwareProductionCollectors):
 
         data = dict(sample.data)
         current_statuses: dict[tuple[str, str], str] = {}
+        guest_timeouts: dict[tuple[str, str], int] = {}
         for plural, kind in (("vms", "vm"), ("lxcs", "lxc")):
             records = data.get(plural)
             if not isinstance(records, Mapping):
@@ -185,9 +186,17 @@ class ShutdownAwareProductionCollectors(GuestAwareProductionCollectors):
             for guest_id, raw in records.items():
                 if not isinstance(raw, Mapping):
                     continue
-                current_statuses[(kind, str(guest_id))] = str(
+                key = (kind, str(guest_id))
+                current_statuses[key] = str(
                     raw.get("status") or "unknown"
                 ).casefold()
+                timeout = raw.get("shutdown_timeout_seconds")
+                if (
+                    isinstance(timeout, int)
+                    and not isinstance(timeout, bool)
+                    and timeout >= 0
+                ):
+                    guest_timeouts[key] = timeout
 
         history_before = self.shutdown_history_tracker.payload()
         refresh_needed = not self._guest_status_cache
@@ -216,6 +225,11 @@ class ShutdownAwareProductionCollectors(GuestAwareProductionCollectors):
                 self.shutdown_history_tracker.refresh_current_guest_shutdowns()
             except Exception:
                 _LOG.exception("Не удалось обновить историю shutdown VM/LXC")
+
+        try:
+            self.shutdown_history_tracker.enrich_guest_last_shutdowns(guest_timeouts)
+        except Exception:
+            _LOG.exception("Не удалось дополнить факты shutdown VM/LXC конфигурацией")
 
         history_after = self.shutdown_history_tracker.payload()
 
@@ -260,6 +274,10 @@ class ShutdownAwareProductionCollectors(GuestAwareProductionCollectors):
                             ),
                             "last_shutdown_timeout_ratio": latest.get(
                                 "timeout_ratio"
+                            ),
+                            "last_shutdown_assessment": latest.get(
+                                "assessment",
+                                "unknown",
                             ),
                             "last_shutdown_result": latest.get("result", "unknown"),
                             "last_shutdown_forced": latest.get("forced", False),
