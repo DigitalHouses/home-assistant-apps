@@ -32,6 +32,12 @@ DATA_DIR = Path("/data")
 BUNDLE_DIR = Path("/share/digitalhouses_internet_app/slug-migration-v1")
 BUNDLE_FILE = BUNDLE_DIR / "bundle.tar.gz"
 IMPORT_MARKER = DATA_DIR / ".slug_migration_v1_imported.json"
+OPTIONS_PENDING_MARKER = DATA_DIR / ".slug_migration_v1_options_pending.json"
+
+IMPORT_NONE = "none"
+IMPORT_RESTART_REQUIRED = "restart_required"
+IMPORT_COMPLETE = "imported"
+RESTART_REQUIRED_EXIT = 10
 
 STATE_FILES = (
     "options.json",
@@ -379,24 +385,37 @@ def _write_atomic(path: Path, payload: bytes) -> None:
             pass
 
 
-def _wait_for_options(
-    data_dir: Path,
-    expected: dict[str, Any],
-    *,
-    attempts: int = 20,
-    delay_seconds: float = 0.1,
-) -> None:
+def _read_current_options(data_dir: Path) -> dict[str, Any] | None:
     path = data_dir / "options.json"
-    for _ in range(attempts):
-        try:
-            current = json.loads(path.read_text(encoding="utf-8"))
-        except (FileNotFoundError, UnicodeDecodeError, json.JSONDecodeError, OSError):
-            current = None
-        if current == expected:
-            return
-        time.sleep(delay_seconds)
-    raise SlugMigrationError(
-        "Supervisor accepted migration settings but options.json did not converge"
+    try:
+        current = json.loads(path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, UnicodeDecodeError, json.JSONDecodeError, OSError):
+        return None
+    return current if isinstance(current, dict) else None
+
+
+def _read_marker(path: Path, *, label: str) -> dict[str, Any]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError, OSError) as exc:
+        raise SlugMigrationError(f"{label} marker is invalid") from exc
+    if not isinstance(payload, dict):
+        raise SlugMigrationError(f"{label} marker must be an object")
+    return payload
+
+
+def _write_json_marker(path: Path, payload: dict[str, Any]) -> None:
+    _write_atomic(
+        path,
+        (
+            json.dumps(
+                payload,
+                ensure_ascii=False,
+                sort_keys=True,
+                indent=2,
+            )
+            + "\n"
+        ).encode("utf-8"),
     )
 
 
@@ -405,66 +424,91 @@ def import_canonical_bundle(
     data_dir: Path = DATA_DIR,
     bundle_file: Path = BUNDLE_FILE,
     marker_file: Path | None = None,
+    pending_file: Path | None = None,
     settings_applier: Callable[[dict[str, Any]], None] = apply_self_supervisor_settings,
-) -> bool:
-    """Import a bridge bundle exactly once before the canonical runtime starts."""
+) -> str:
+    """Import a bridge bundle exactly once before the canonical runtime starts.
+
+    Supervisor accepts App options immediately through its API, but the running
+    container receives the updated /data/options.json only on the next start.
+    Therefore options migration is intentionally two-stage when the current
+    container still has package defaults.
+    """
     if not bundle_file.is_file():
-        return False
+        return IMPORT_NONE
 
     marker_file = marker_file or (data_dir / IMPORT_MARKER.name)
+    pending_file = pending_file or (data_dir / OPTIONS_PENDING_MARKER.name)
     manifest, files, bundle_sha256 = _load_bundle(bundle_file)
 
     if marker_file.is_file():
-        try:
-            marker = json.loads(marker_file.read_text(encoding="utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError, OSError) as exc:
-            raise SlugMigrationError("existing migration marker is invalid") from exc
-        if not isinstance(marker, dict):
-            raise SlugMigrationError("existing migration marker must be an object")
+        marker = _read_marker(marker_file, label="existing migration")
         if marker.get("bundle_sha256") == bundle_sha256:
-            return False
+            return IMPORT_NONE
         raise SlugMigrationError(
             "a different slug migration bundle was already imported"
         )
 
     options = json.loads(files["options.json"].decode("utf-8"))
-    settings = dict(manifest.get("supervisor_settings") or {})
-    settings["options"] = options
+    current_options = _read_current_options(data_dir)
 
-    # Apply Supervisor-owned options before touching product state. If this
-    # fails, the canonical runtime must not start with default configuration.
-    settings_applier(settings)
-    _wait_for_options(data_dir, options)
+    if pending_file.is_file():
+        pending = _read_marker(pending_file, label="options migration")
+        if pending.get("bundle_sha256") != bundle_sha256:
+            raise SlugMigrationError(
+                "pending options migration belongs to a different bundle"
+            )
+        if current_options != options:
+            raise SlugMigrationError(
+                "Supervisor migration options are not active after restart"
+            )
+    elif current_options != options:
+        settings = dict(manifest.get("supervisor_settings") or {})
+        settings["options"] = options
 
+        # Supervisor persists these settings immediately, but the current
+        # container keeps the old /data/options.json until it is started again.
+        settings_applier(settings)
+        _write_json_marker(
+            pending_file,
+            {
+                "schema": BUNDLE_SCHEMA_VERSION,
+                "product": PRODUCT_ID,
+                "source_slug": SOURCE_SLUG,
+                "target_slug": TARGET_SLUG,
+                "source_version": manifest.get("source_version"),
+                "requested_at": _utc_now(),
+                "bundle_sha256": bundle_sha256,
+                "options_sha256": _sha256_bytes(files["options.json"]),
+            },
+        )
+        return IMPORT_RESTART_REQUIRED
+
+    # Options visible to the runtime now match the bridge source. Restore every
+    # App-owned state file except options.json, which remains Supervisor-owned.
     for relative, payload in files.items():
         if relative == "options.json":
             continue
         _write_atomic(data_dir / relative, payload)
 
-    marker = {
-        "schema": BUNDLE_SCHEMA_VERSION,
-        "product": PRODUCT_ID,
-        "source_slug": SOURCE_SLUG,
-        "target_slug": TARGET_SLUG,
-        "source_version": manifest.get("source_version"),
-        "exported_at": manifest.get("exported_at"),
-        "imported_at": _utc_now(),
-        "bundle_sha256": bundle_sha256,
-    }
-    _write_atomic(
+    _write_json_marker(
         marker_file,
-        (
-            json.dumps(
-                marker,
-                ensure_ascii=False,
-                sort_keys=True,
-                indent=2,
-            )
-            + "\n"
-        ).encode("utf-8"),
+        {
+            "schema": BUNDLE_SCHEMA_VERSION,
+            "product": PRODUCT_ID,
+            "source_slug": SOURCE_SLUG,
+            "target_slug": TARGET_SLUG,
+            "source_version": manifest.get("source_version"),
+            "exported_at": manifest.get("exported_at"),
+            "imported_at": _utc_now(),
+            "bundle_sha256": bundle_sha256,
+        },
     )
-    return True
-
+    try:
+        pending_file.unlink()
+    except FileNotFoundError:
+        pass
+    return IMPORT_COMPLETE
 
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
@@ -484,14 +528,20 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 0
 
-        imported = import_canonical_bundle()
-        if imported:
+        status = import_canonical_bundle()
+        if status == IMPORT_COMPLETE:
             print(
                 "Slug migration bundle imported successfully: "
                 f"{SOURCE_SLUG} -> {TARGET_SLUG}"
             )
-        else:
-            print("No pending slug migration bundle to import")
+            return 0
+        if status == IMPORT_RESTART_REQUIRED:
+            print(
+                "Slug migration options applied successfully; "
+                "restart canonical App once to complete state import"
+            )
+            return RESTART_REQUIRED_EXIT
+        print("No pending slug migration bundle to import")
         return 0
     except Exception as exc:
         print(f"Slug migration failed: {exc}", file=sys.stderr)
