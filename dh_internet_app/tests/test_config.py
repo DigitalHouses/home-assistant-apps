@@ -50,6 +50,7 @@ def base_options() -> dict:
                 "power_off_seconds": 10,
             },
         },
+        "telemetry_enabled": False,
         "log_level": "info",
     }
 
@@ -67,6 +68,12 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.speedtest.timeout_seconds, 240)
         self.assertFalse(config.traffic.enabled)
         self.assertFalse(config.traffic.has_bindings)
+        self.assertFalse(config.telemetry_enabled)
+
+    def test_telemetry_is_explicit_opt_in(self) -> None:
+        raw = base_options()
+        raw["telemetry_enabled"] = True
+        self.assertTrue(parse_options(raw).telemetry_enabled)
 
     def test_speedtest_server_ids_are_positive_and_deduplicated(self) -> None:
         raw = base_options()
