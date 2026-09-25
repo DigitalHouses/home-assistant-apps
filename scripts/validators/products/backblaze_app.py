@@ -166,6 +166,12 @@ def validate_backblaze(
         if expected not in discovery_source:
             fail(f"Backblaze discovery migration contract missing: {expected}")
 
+    config = context["config"]
+    if config.get("stage") != "stable":
+        fail("Backblaze production App stage must be stable")
+    if config.get("image") != "ghcr.io/digitalhouses/digitalhouses_backblaze_app":
+        fail("Backblaze production App must use the canonical immutable GHCR image")
+
     options = context["config"].get("options") or {}
     if options.get("telemetry_enabled") is not False:
         fail("Backblaze telemetry must be disabled by default")

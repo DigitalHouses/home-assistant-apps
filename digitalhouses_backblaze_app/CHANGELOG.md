@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.8
+
+- Promote DigitalHouses Backblaze App from experimental to stable.
+- Deliver the Home Assistant App from the immutable GHCR repository `ghcr.io/digitalhouses/digitalhouses_backblaze_app`.
+- Preserve the existing Home Assistant App slug, MQTT device identity, entity IDs, configuration, and persistent `/data` state.
+
 ## 0.1.7
 
 - Replace the custom mini-graph-card daily storage chart with Home Assistant's native statistics-graph.

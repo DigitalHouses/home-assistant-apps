@@ -448,7 +448,7 @@ As of the current repository implementation:
 | DigitalHouses Plex Agent | `digitalhouses_plex_agent` | pending product implementation |
 | DigitalHouses Recorder App | `digitalhouses_recorder_app` | pending product implementation |
 | DigitalHouses Speedtest App | `digitalhouses_speedtest_app` | pending product implementation |
-| DigitalHouses Backblaze App | `digitalhouses_backblaze_app` | client exists; admitted to registry/server allowlist; release-gating review required before production enablement |
+| DigitalHouses Backblaze App | `digitalhouses_backblaze_app` | client implemented; admitted to registry/server allowlist; immutable production release delivery enabled; real-install verification pending |
 | DigitalHouses Internet App | `digitalhouses_internet_app` | implemented in product and admitted to protocol/server allowlist |
 | DigitalHouses Climate App | `digitalhouses_climate_app` | client implemented; admitted to protocol/server allowlist; real-install verification pending |
 
