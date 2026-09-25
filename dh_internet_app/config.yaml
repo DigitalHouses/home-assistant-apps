@@ -1,5 +1,5 @@
 name: DigitalHouses Internet App
-version: 0.1.9
+version: 0.1.10
 slug: digitalhouses_internet
 description: Internet availability, Ookla Speedtest, traffic accounting and automatic ONT/router recovery through MQTT Discovery.
 url: https://github.com/DigitalHouses/home-assistant-apps/tree/main/dh_internet_app
@@ -50,6 +50,7 @@ options:
       action: switch
       entity_id: ""
       power_off_seconds: 10
+  telemetry_enabled: false
   log_level: info
 schema:
   router_ip: str
@@ -85,4 +86,5 @@ schema:
       action: list(button|switch)
       entity_id: str
       power_off_seconds: int(1,120)
+  telemetry_enabled: bool
   log_level: list(debug|info|warning|error)

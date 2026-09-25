@@ -1,6 +1,6 @@
 FROM ghcr.io/home-assistant/base:latest
 
-ARG BUILD_VERSION="0.1.9"
+ARG BUILD_VERSION="0.1.10"
 ARG BUILD_ARCH
 ARG OOKLA_VERSION="1.2.0"
 
@@ -61,6 +61,7 @@ RUN chmod a+x /run.sh \
         /app/recovery.py \
         /app/speedtest.py \
         /app/state.py \
+        /app/telemetry.py \
         /app/traffic.py
 
 CMD ["/run.sh"]

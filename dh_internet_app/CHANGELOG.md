@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.10
+
+- Add explicit opt-in DigitalHouses Telemetry Protocol v1 support with `telemetry_enabled: false` by default.
+- Persist a random per-installation UUID/token and heartbeat schedule in `/data/telemetry.json`; send only protocol version, policy version, `digitalhouses_internet_app`, App version and installation UUID.
+- Send normal heartbeats every 24 hours ±30 minutes with one-hour failure backoff in an isolated worker so telemetry cannot affect Internet monitoring or recovery.
+- Add authenticated telemetry deletion through `button.dh_internet_app_delete_telemetry`.
+- Admit `digitalhouses_internet_app` to the shared telemetry protocol/stats-server allowlist and distinguish it from the legacy `digitalhouses_speedtest_app` product in the Stats dashboard.
+- Block the built-in `*-local` development version from sending production telemetry.
+
 ## 0.1.9
 
 - Reduce Home Assistant Recorder churn from `sensor.dh_internet_app_problems` by removing the per-publish `updated_at` attribute; the entity now changes only when the problem count/list changes.

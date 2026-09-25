@@ -61,6 +61,7 @@ from state import (
     now_local,
     save_discovery_components,
 )
+from telemetry import TelemetryClient, TelemetryRunner
 from traffic import (
     entity_rate_mbps,
     entity_total_bytes,
@@ -150,6 +151,11 @@ class InternetApp:
             "upload_rate_mbps": None,
         }
         self.ha_api = HomeAssistantApi()
+        self.telemetry = TelemetryClient(
+            enabled=self.config.telemetry_enabled,
+            version=APP_VERSION,
+        )
+        self.telemetry_runner = TelemetryRunner(self.telemetry)
 
         self.mqtt = create_mqtt_client(mqtt, client_id=DEVICE_ID)
         username = os.getenv("MQTT_USER", "")
@@ -279,6 +285,20 @@ class InternetApp:
                 name="speedtest-servers",
                 daemon=True,
             ).start()
+        elif payload == "DELETE_TELEMETRY":
+            threading.Thread(
+                target=self._delete_telemetry,
+                name="dh-internet-telemetry-delete",
+                daemon=True,
+            ).start()
+
+    def _delete_telemetry(self) -> None:
+        if self.telemetry.delete():
+            self.log.info("Retained DigitalHouses telemetry record deleted")
+        else:
+            self.log.warning(
+                "Unable to delete retained DigitalHouses telemetry record"
+            )
 
     def _state_payload(self) -> dict[str, Any]:
         with self.lock:
@@ -976,6 +996,7 @@ class InternetApp:
         port = int(os.getenv("MQTT_PORT", "1883"))
         self.mqtt.connect(host, port, keepalive=60)
         self.mqtt.loop_start()
+        self.telemetry_runner.start()
         periodic_speedtest = threading.Thread(
             target=self._periodic_speedtest_loop,
             name="speedtest-periodic",
@@ -999,6 +1020,7 @@ class InternetApp:
                 self.stop_app.wait(self.config.connectivity.interval_seconds)
         finally:
             self.stop_recovery.set()
+            self.telemetry_runner.stop()
             if self.recovery_thread is not None:
                 # A stopped switch recovery may need to finish both HA API
                 # service calls before the process exits.

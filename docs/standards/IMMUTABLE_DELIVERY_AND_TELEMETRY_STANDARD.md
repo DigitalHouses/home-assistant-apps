@@ -19,7 +19,6 @@ digitalhouses_recorder_app
 digitalhouses_speedtest_app
 digitalhouses_backblaze_app
 digitalhouses_internet_app
-digitalhouses_internet_app
 ```
 
 The Home Assistant image/backup requirements apply only to Home Assistant Apps. The release identity and telemetry requirements apply to all participating products.

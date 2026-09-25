@@ -80,6 +80,26 @@ Traffic history keeps the current month plus up to 11 previous observed months u
 
 Temperature, connected-client count, uptime and last-boot bindings are intentionally outside the new App contract.
 
+## Product telemetry
+
+`telemetry_enabled` is an explicit opt-in and defaults to `false`. When disabled, the App makes no telemetry heartbeat requests.
+
+When enabled, the App sends protocol-v1 heartbeats to `https://telemetry.digitalhouses.vip` with exactly:
+
+- protocol schema version;
+- telemetry policy version;
+- persistent random installation UUID;
+- product `digitalhouses_internet_app`;
+- App version.
+
+The per-installation token is used only as the Bearer credential. Country is derived server-side; Internet measurements, outage history, router telemetry, entity IDs, Home Assistant identity and configuration are not sent.
+
+Identity and heartbeat scheduling state are persisted in `/data/telemetry.json`. A successful heartbeat is normally followed by the next one after 24 hours ±30 minutes. Failed attempts back off for at least one hour and never affect the main monitoring/recovery path.
+
+`button.dh_internet_app_delete_telemetry` performs authenticated deletion of the retained installation telemetry record. Disabling telemetry stops future heartbeats but does not delete already retained server data.
+
+Shared policy: [DigitalHouses Product Telemetry Policy](../docs/standards/PRODUCT_TELEMETRY_POLICY.md).
+
 ## Events and notifications
 
 The App publishes machine-readable MQTT Event entities using schema version 2. Event payloads contain semantics such as event type, target, cycle, reason, values and timestamps.

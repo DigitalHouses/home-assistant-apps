@@ -10,6 +10,7 @@ Before starting the App:
 - keep `recovery.enabled: false`;
 - leave all five `traffic.*` mappings empty;
 - set `speedtest.periodic_enabled: false` for the first start;
+- keep `telemetry_enabled: false` for the initial functional test;
 - confirm an MQTT service is installed and available to Supervisor.
 
 Expected result after start:
@@ -111,6 +112,14 @@ Remove an optional mapping and restart the App.
 
 Verify the previously discovered optional MQTT component is removed.
 
+## 7. Product telemetry
+
+With `telemetry_enabled: false`, restart the App and verify no heartbeat request is logged or observed.
+
+Then explicitly enable `telemetry_enabled: true` and restart the released App. Verify one heartbeat is accepted by DigitalHouses Stats with product `digitalhouses_internet_app` and the current App version. Restart the App again within one hour and verify it does not create a restart heartbeat storm.
+
+Press `button.dh_internet_app_delete_telemetry` and verify the server-side installation record is removed. Disable telemetry again if the installation should stop reporting.
+
 ## 7. Recovery — only after read-only tests pass
 
 Use known-good Home Assistant `button.*` or `switch.*` recovery entities.
@@ -140,7 +149,7 @@ Verify:
 - active cooldown is not bypassed;
 - a restart between cycles waits through a retry guard before another power action.
 
-## 8. Pass criteria
+## 9. Pass criteria
 
 The first HAOS test passes when:
 
