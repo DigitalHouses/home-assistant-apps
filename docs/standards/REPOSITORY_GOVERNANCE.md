@@ -139,6 +139,7 @@ This keeps the public repository navigable without sacrificing unreconciled hist
 The following shared documents are normative repository contracts and apply to product development in their stated scope:
 
 - [DigitalHouses Application Standard](DIGITALHOUSES_APP_STANDARD.md)
+- [DigitalHouses Product Naming Standard](PRODUCT_NAMING_STANDARD.md)
 - [DigitalHouses Contract Data Policy](CONTRACT_DATA_POLICY.md)
 - [DigitalHouses Events & Notifications Standard](EVENTS_AND_NOTIFICATIONS_STANDARD.md)
 - [DigitalHouses Release Policy](RELEASE_POLICY.md)
