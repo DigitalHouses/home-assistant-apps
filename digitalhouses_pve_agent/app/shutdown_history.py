@@ -14,6 +14,8 @@ from .ups_nut import UpsSnapshot
 HISTORY_LIMIT = 50
 PUBLISHED_HISTORY_LIMIT = 10
 HISTORY_PARSER_VERSION = 5
+GUEST_SHUTDOWN_WARNING_RATIO = 0.8
+GUEST_SHUTDOWN_CRITICAL_RATIO = 1.0
 
 _TIMESTAMP_RE = re.compile(r"^(?P<ts>\S+)")
 _START_RE = re.compile(
@@ -121,9 +123,9 @@ def _guest_shutdown_assessment(
         return "unknown"
     if not isinstance(timeout_ratio, (int, float)) or isinstance(timeout_ratio, bool):
         return "unknown"
-    if timeout_ratio >= 1.0:
+    if timeout_ratio >= GUEST_SHUTDOWN_CRITICAL_RATIO:
         return "critical"
-    if timeout_ratio >= 0.8:
+    if timeout_ratio >= GUEST_SHUTDOWN_WARNING_RATIO:
         return "warning"
     if timeout_ratio >= 0:
         return "ok"
@@ -404,7 +406,11 @@ def evaluate_shutdown_readiness(
                 ratio = raw.get("timeout_ratio")
                 if forced or result in {"timeout", "forced"}:
                     issues.append(f"{kind}:{guest_id}:{result}")
-                elif isinstance(ratio, (int, float)) and not isinstance(ratio, bool) and ratio >= 0.8:
+                elif (
+                    isinstance(ratio, (int, float))
+                    and not isinstance(ratio, bool)
+                    and ratio >= GUEST_SHUTDOWN_WARNING_RATIO
+                ):
                     issues.append(f"{kind}:{guest_id}:near_timeout")
 
     return {
