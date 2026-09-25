@@ -35,26 +35,24 @@ DigitalHouses Application Standard
 └── linux_agent
 ```
 
-Current applications:
+Current canonical product identities:
 
 ```text
-digitalhouses_speedtest       -> haos_addon
-dh_internet_app               -> haos_addon
-digitalhouses_db_monitoring   -> haos_addon
-digitalhouses_backblaze       -> haos_addon
+digitalhouses_pve_agent       -> linux_agent
+digitalhouses_plex_agent      -> linux_agent
+digitalhouses_recorder_app    -> haos_addon
+digitalhouses_speedtest_app   -> haos_addon
+digitalhouses_backblaze_app   -> haos_addon
+digitalhouses_internet_app    -> haos_addon
 ```
 
-Planned first `linux_agent`:
-
-```text
-digitalhouses_plex_monitoring -> linux_agent
-```
+Canonical product identity is independent of any legacy repository directory that has not yet completed its naming migration.
 
 ---
 
 ## 2. Core principle
 
-Every `digitalhouses_*` project must explicitly declare its application type.
+Every DigitalHouses product implementation must explicitly declare its application type.
 
 Type detection must **never** be inferred from the presence of files such as `Dockerfile`, `config.yaml`, `install.sh`, or a systemd unit.
 
