@@ -8,6 +8,8 @@ Home Assistant App for monitoring the health, size, retained history, write acti
 
 [Quick start](#quick-start) · [Technical documentation](DOCS.md) · [Changelog](CHANGELOG.md) · [Issues](https://github.com/DigitalHouses/home-assistant-apps/issues)
 
+Repository identity: `digitalhouses_recorder_app`. The installed Home Assistant App slug remains `digitalhouses_db_monitoring` until a controlled product-specific reinstall migration is released; MQTT/device/entity compatibility is intentionally unchanged.
+
 ![DigitalHouses Recorder dashboard](images/dh_db_monitor.png)
 
 ## Quick start
@@ -19,7 +21,7 @@ Home Assistant App for monitoring the health, size, retained history, write acti
 https://github.com/DigitalHouses/home-assistant-apps
 ```
 
-3. Install the Recorder monitoring App, currently listed in Home Assistant package metadata as **DigitalHouses DB Monitoring**.
+3. Install **DigitalHouses Recorder App**.
 4. Select `PostgreSQL` or `MariaDB`, configure the database connection, and optionally enable storage monitoring.
 5. Start the App. MQTT credentials are obtained automatically from the Home Assistant Supervisor MQTT service.
 
