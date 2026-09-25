@@ -480,10 +480,10 @@ At minimum, product regression tests should verify:
 
 ## 13. HAOS add-on structure
 
-A `haos_addon` must use:
+A `haos_addon` repository implementation uses the canonical product directory:
 
 ```text
-digitalhouses_<app_name>/
+digitalhouses_<function>_app/
 ├── digitalhouses.app
 ├── config.yaml
 ├── Dockerfile
@@ -512,26 +512,23 @@ digitalhouses_<app_name>/
 type = haos_addon
 ```
 
----
-
 ## 14. HAOS naming contract
 
-`config.yaml -> slug` must exactly match the application directory name.
+The repository directory is canonical and equals registry `id`.
 
-Example:
+The current Supervisor installation identity is declared separately as registry `haos_slug`, and `config.yaml -> slug` must equal that registry value.
 
-```text
-directory: digitalhouses_speedtest
-slug:      digitalhouses_speedtest
-```
-
-Unless explicitly documented otherwise, MQTT namespace should follow:
+For new Apps:
 
 ```text
-DigitalHouses/Global/<app_name>
+repository_directory == id
+haos_slug            == id
+config.yaml slug     == id
 ```
 
----
+For an already released App with a legacy slug, repository structure may be canonical while the installed identity remains legacy. Such a state is allowed only with an explicit controlled-reinstall migration marker in the registry. Do not infer that renaming the repository directory migrates Supervisor options, `/data`, backup/restore identity, or an existing installation.
+
+Unless explicitly documented otherwise, MQTT namespace follows the product compatibility contract. Existing released MQTT identities are not renamed merely because the repository directory changed.
 
 ## 15. HAOS version contract
 
@@ -691,14 +688,14 @@ Python compile check:
 
 ```bash
 python -m compileall -q \
-  digitalhouses_<app>/rootfs/app \
-  digitalhouses_<app>/tests
+  digitalhouses_<function>_app/rootfs/app \
+  digitalhouses_<function>_app/tests
 ```
 
 Canonical tests:
 
 ```bash
-python -m unittest discover -s digitalhouses_<app>/tests -v
+python -m unittest discover -s digitalhouses_<function>_app/tests -v
 ```
 
 Future:
@@ -717,20 +714,21 @@ A `linux_agent` is a native Linux application installed directly into a VM, LXC,
 
 It is not a HAOS add-on and must not require HAOS Supervisor, HAOS add-on metadata, or Home Assistant add-on container structure.
 
-The first DigitalHouses application of this type is:
+Current implemented Linux agents use canonical repository identities such as:
 
 ```text
-digitalhouses_plex_monitoring
+digitalhouses_pve_agent
+digitalhouses_plex_agent
 ```
 
----
+Installed service/filesystem identity is a separate compatibility surface for products released before canonical repository naming.
 
 ## 23. Linux agent structure
 
-Base structure:
+Base repository structure:
 
 ```text
-digitalhouses_<app_name>/
+digitalhouses_<function>_agent/
 ├── digitalhouses.app
 ├── README.md
 ├── CHANGELOG.md
@@ -739,11 +737,11 @@ digitalhouses_<app_name>/
 ├── app/
 │   └── ...
 ├── systemd/
-│   └── <app-name>.service
+│   └── <runtime-service>.service
 ├── tests/
 │   └── test_*.py
 └── examples/                  # optional / conditional
-    └── <app-name>.conf.example
+    └── <runtime-name>.conf.example
 ```
 
 `digitalhouses.app` must contain:
@@ -754,34 +752,26 @@ type = linux_agent
 
 `DOCS.md`, `images/`, or other support directories may be added when useful but are not mandatory for every Linux agent.
 
----
-
 ## 24. Linux agent canonical name
 
-For the Linux-agent contract:
+The canonical repository/product identity is always the registry ID:
 
 ```text
-<app-name>
+digitalhouses_<function>_agent
 ```
 
-means the application directory name.
+For a new Linux Agent, service/configuration/filesystem names should derive from that canonical identity.
 
-Example:
+For an existing released Agent, service name, user/group, `/opt`, `/etc`, `/var/lib`, MQTT device/topic and Home Assistant entity identities may remain legacy compatibility interfaces until a dedicated product migration is approved.
+
+The source installer must therefore distinguish:
 
 ```text
-digitalhouses_plex_monitoring
+repository source directory
+installed runtime identity
 ```
 
-Therefore the default service and configuration naming is:
-
-```text
-systemd/digitalhouses_plex_monitoring.service
-/etc/digitalhouses_plex_monitoring/digitalhouses_plex_monitoring.conf
-```
-
-A deliberate exception must be documented and protected by the application's compatibility contract.
-
----
+A repository-directory rename must not silently rename an installed service or persistent path.
 
 ## 25. Linux agent version contract
 
@@ -847,37 +837,32 @@ This identity is diagnostic metadata, not a replacement for semantic release ver
 ---
 ## 26. Linux agent filesystem contract
 
-All `linux_agent` installations use the same canonical filesystem layout:
+New `linux_agent` installations use the canonical default layout:
 
 ```text
-/opt/digitalhouses/<app-name>/       application/source
-/etc/<app-name>/<app-name>.conf      configuration
-/var/lib/<app-name>/                 persistent/runtime state
-journald                             logs
+/opt/digitalhouses/<canonical-product-id>/       application/source
+/etc/<canonical-product-id>/<canonical-product-id>.conf
+/var/lib/<canonical-product-id>/
+journald
 ```
 
-Example for Plex Monitoring:
+Existing released products may retain established runtime paths as documented compatibility exceptions. For example, DigitalHouses Plex Agent currently retains:
 
 ```text
 /opt/digitalhouses/digitalhouses_plex_monitoring/
 /etc/digitalhouses_plex_monitoring/digitalhouses_plex_monitoring.conf
 /var/lib/digitalhouses_plex_monitoring/
-journald
 ```
+
+and DigitalHouses PVE Agent retains its established `dh_pve_app` runtime paths.
 
 Rules:
 
-- application code and installed source live under `/opt/digitalhouses/<app-name>/`;
-- operator-managed configuration lives under `/etc/<app-name>/`;
-- persistent mutable application state lives under `/var/lib/<app-name>/`;
+- repository source directory is not used as proof that an installed runtime path has migrated;
+- operator-managed configuration and persistent state must survive application upgrades;
 - services log to `journald` unless an application has a documented compatibility exception;
-- installers must create required directories with appropriate permissions;
 - application code must not treat the Git checkout itself as persistent runtime state;
-- local configuration and runtime state must survive application upgrades.
-
-A deliberate filesystem-layout exception must be documented and protected by the application's compatibility contract.
-
----
+- changing a released runtime path requires a product-specific migration and rollback contract.
 
 ## 27. Linux agent configuration contract
 
@@ -1311,7 +1296,7 @@ The CI must prevent the templates from drifting away from the contracts they are
 
 # Part VI — Application-specific compatibility contracts
 
-## 40. `digitalhouses_speedtest`
+## 40. `digitalhouses_speedtest_app`
 
 Type:
 
@@ -1334,7 +1319,7 @@ Public/global examples must remain independent of local notification mechanisms 
 
 ---
 
-## 41. `digitalhouses_db_monitoring`
+## 41. `digitalhouses_recorder_app`
 
 Type:
 
@@ -1355,9 +1340,9 @@ All tests must pass together in one suite; test modules may not pollute one anot
 
 ---
 
-## 42. `digitalhouses_plex_monitoring`
+## 42. `digitalhouses_plex_agent`
 
-**Status:** Active — first `linux_agent` reference implementation.
+**Status:** Active Linux Agent; repository identity is canonical while established runtime identity remains compatibility-stable.
 
 Type:
 
@@ -1449,80 +1434,47 @@ Additionally:
 
 ---
 
-# Part VIII — Migration plan
+# Part VIII — Repository naming migration state
 
-## 46. Phase 1 — Introduce application types
+## 46. Canonical repository discovery
 
-Add:
+The product registry is the repository-level source of truth. Implementations are discovered from registered `repository_directory` values, not from naming-prefix heuristics or legacy exception lists.
 
-```text
-digitalhouses_speedtest/digitalhouses.app
-digitalhouses_db_monitoring/digitalhouses.app
-```
-
-with:
-
-```ini
-type = haos_addon
-```
-
-Introduce type-aware validation.
-
-Do not infer type from existing files.
-
----
-
-## 47. Phase 2 — Make current CI truthful
-
-- common repository validation;
-- HAOS type validation;
-- Speedtest full CI;
-- DB Monitoring full CI;
-- fix DB Monitoring test isolation;
-- synchronize HAOS version contracts.
-
----
-
-## 48. Phase 3 — Extract app-specific validators
-
-Move Speedtest-specific compatibility checks out of generic repository validation.
-
-Create DB Monitoring regression checks.
-
----
-
-## 49. Phase 4 — Introduce templates
-
-Create and validate:
+For implemented products:
 
 ```text
-templates/haos_addon/
-templates/linux_agent/
+repository_directory == id
 ```
 
----
+Product-specific validator dispatch is keyed by canonical registry `id`.
 
-## 50. Phase 5 — Introduce first Linux agent
+## 47. Compatibility boundary
 
-Create:
+Repository structure may be migrated without mass-renaming released runtime interfaces.
 
-```text
-digitalhouses_plex_monitoring
-```
+The following remain product-specific migration work when legacy names already exist:
 
-from the `linux_agent` template.
+- Home Assistant App slug;
+- Linux systemd service/user/group names;
+- installed `/opt`, `/etc`, `/var/lib` paths;
+- MQTT topics/device IDs/unique IDs;
+- released Home Assistant entity IDs;
+- persistent state layouts;
+- dashboards/automations that depend on those interfaces.
 
-Its first implementation becomes the reference validation case for the Linux-agent contract.
+## 48. Home Assistant App slug migration
 
----
+A legacy slug must be represented explicitly in the registry as current `haos_slug` with a controlled migration target.
 
-## 51. Phase 6 — Build validation
+The product-specific migration must validate existing installation behavior, options, `/data`, backup/restore, rollback and reinstallation. After completion, `haos_slug == id` and the pending migration marker is removed.
 
-Add Docker build smoke-test matrix for HAOS add-ons.
+## 49. CI closure
 
-Add Linux-agent installer/systemd validation appropriate for CI.
+Repository CI must ensure no registered implementation silently falls out of common, type-specific or product-specific validation, and active CI/tooling/docs use canonical repository paths.
 
----
+## 50. Historical material
+
+Historical Git tags, changelog entries and engineering records are not cosmetically rewritten. Legacy strings in those immutable/historical records do not establish a current naming convention.
 
 # Part IX — Final design rule
 

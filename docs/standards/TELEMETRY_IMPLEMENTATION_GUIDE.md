@@ -50,7 +50,7 @@ Registry admission does not enable telemetry in a product. A client must still b
 
 ### Internet App naming
 
-The canonical release and telemetry identifier for `dh_internet_app` is:
+The canonical repository, release and telemetry identifier for DigitalHouses Internet App is:
 
 ```text
 digitalhouses_internet_app

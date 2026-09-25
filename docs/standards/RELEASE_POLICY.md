@@ -230,6 +230,20 @@ The following identities must describe the same release:
 
 Production Home Assistant Apps must be installable through the DigitalHouses App repository and must use published registry images instead of relying on locally built production images.
 
+The image repository is generated directly from the canonical registry ID:
+
+```text
+ghcr.io/digitalhouses/<canonical_product_id>
+```
+
+For example:
+
+```text
+ghcr.io/digitalhouses/digitalhouses_recorder_app:0.1.9
+```
+
+No dashed image alias or second product identifier is maintained. The registry ID remains the only semantic machine identity.
+
 Production deployment must not use `latest` or another floating image tag.
 
 Once a versioned image has been published, that version must not be overwritten with different image content or reused for another commit. New code requires a new product version.

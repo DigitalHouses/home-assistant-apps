@@ -141,11 +141,19 @@ digitalhouses_recorder_app-v0.1.9
 digitalhouses_speedtest_app-v1.2.2
 ```
 
+Image repository naming is mechanical:
+
+```text
+ghcr.io/digitalhouses/<canonical_product_id>
+```
+
+The canonical ID is used unchanged, including underscores. No alternate dashed image/product identity is stored.
+
 Example image identities:
 
 ```text
-ghcr.io/digitalhouses/digitalhouses-recorder-app:0.1.9
-ghcr.io/digitalhouses/digitalhouses-speedtest-app:1.2.2
+ghcr.io/digitalhouses/digitalhouses_recorder_app:0.1.9
+ghcr.io/digitalhouses/digitalhouses_speedtest_app:1.2.2
 ```
 
 The image digest is the exact artifact identity:
