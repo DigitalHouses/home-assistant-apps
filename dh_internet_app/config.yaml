@@ -50,6 +50,7 @@ options:
       action: switch
       entity_id: ""
       power_off_seconds: 10
+  telemetry_enabled: false
   log_level: info
 schema:
   router_ip: str
@@ -85,4 +86,5 @@ schema:
       action: list(button|switch)
       entity_id: str
       power_off_seconds: int(1,120)
+  telemetry_enabled: bool
   log_level: list(debug|info|warning|error)
