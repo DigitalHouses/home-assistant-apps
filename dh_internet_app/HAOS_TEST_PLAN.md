@@ -116,7 +116,7 @@ Verify the previously discovered optional MQTT component is removed.
 
 With `telemetry_enabled: false`, restart the App and verify no heartbeat request is logged or observed.
 
-Then explicitly enable `telemetry_enabled: true` and restart the released App. Verify one heartbeat is accepted by DigitalHouses Stats with product `digitalhouses_internet_app` and the current App version. Restart the App again within one hour and verify it does not create a restart heartbeat storm.
+Then explicitly enable `telemetry_enabled: true` and restart the released App. Verify one heartbeat is accepted immediately by DigitalHouses Stats with product `digitalhouses_internet_app` and the current App version. Restart the App again within one hour and verify it does not create a restart heartbeat storm. After a successful heartbeat, disable telemetry and restart once, then enable it again before the normal 24-hour interval is due: verify exactly one new immediate heartbeat is accepted. If that immediate attempt is forced to fail, restart the App and verify the one-hour failure backoff is preserved.
 
 Press `button.dh_internet_app_delete_telemetry` and verify the server-side installation record is removed. Disable telemetry again if the installation should stop reporting.
 
