@@ -868,13 +868,13 @@ Rules:
 
 Linux agents use native `.conf` configuration rather than YAML unless a specific application has an approved exception.
 
-Canonical production path:
+Default path for a new Linux Agent:
 
 ```text
-/etc/<app-name>/<app-name>.conf
+/etc/<canonical-product-id>/<canonical-product-id>.conf
 ```
 
-Example:
+Existing released Agents may retain a documented compatibility path. DigitalHouses Plex Agent currently retains:
 
 ```text
 /etc/digitalhouses_plex_monitoring/digitalhouses_plex_monitoring.conf
@@ -1364,7 +1364,7 @@ configuration from *.conf
 publishing/monitoring integration
 ```
 
-Canonical configuration path:
+Compatibility-stable installed configuration path:
 
 ```text
 /etc/digitalhouses_plex_monitoring/digitalhouses_plex_monitoring.conf
