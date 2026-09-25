@@ -1,6 +1,6 @@
 # Internet App controlled HA App slug migration
 
-Status: canonical import release / operator acceptance pending.
+Status: canonical import bugfix release / operator acceptance pending.
 
 Canonical product:
 
@@ -67,7 +67,7 @@ The manifest records:
 
 ## Phase 2 — canonical slug release
 
-Version `0.1.13` is the first release with:
+Version `0.1.13` introduced the first canonical slug release. Version `0.1.14` fixes the import sequencing for Supervisor's options lifecycle. The canonical App uses:
 
 ```yaml
 slug: digitalhouses_internet_app
@@ -79,11 +79,14 @@ Before normal runtime starts it:
 
 1. detects the bridge bundle;
 2. validates product, source slug, target slug, member allowlist and every SHA-256;
-3. applies the old options to the new App through `/addons/self/options`;
-4. verifies that the Supervisor-owned `/data/options.json` converged;
-5. atomically restores all other App-owned state;
-6. writes an import marker under the new `/data`;
-7. starts the normal Internet App runtime.
+3. compares the mounted `/data/options.json` with the bridge options;
+4. if they differ, applies the old options through `/addons/self/options`, writes an options-pending marker and stops cleanly;
+5. on the next start, verifies that Supervisor mounted the expected options;
+6. atomically restores all other App-owned state;
+7. writes the completed import marker under the new `/data`;
+8. starts the normal Internet App runtime.
+
+If the options were already persisted by the failed `0.1.13` attempt, `0.1.14` detects that state and proceeds directly to final import without applying them again.
 
 A successfully imported bundle is never applied twice.
 
@@ -107,8 +110,8 @@ The new product version is still reported normally after migration because the t
 3. Create a Home Assistant backup while the legacy App is still installed.
 4. Stop the legacy App. Do not uninstall it.
 5. Confirm the shutdown log reports a refreshed migration bundle.
-6. Reload the App store and install the canonical-slug App `digitalhouses_internet_app` at version `0.1.13`.
-7. Start it and verify the log reports successful bundle import before normal runtime.
+6. Reload the App store and install/update the canonical-slug App `digitalhouses_internet_app` to version `0.1.14`.
+7. Start it. If the log says migrated options were applied and a restart is required, start the App once more. Then verify the log reports successful bundle import before normal runtime.
 8. Verify options, telemetry identity, Internet state, thresholds, outage/traffic history and HA/MQTT entities.
 9. Restart the canonical App once and verify the bundle is not re-imported.
 10. Create a backup of the canonical-slug App and verify restore.
