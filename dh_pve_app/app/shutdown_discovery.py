@@ -63,6 +63,14 @@ def build_shutdown_aware_pve_discovery_payload(
         extra_attrs={
             "shutdown_reason": previous + ".shutdown_reason | default(none)",
             "shutdown_clean": previous + ".shutdown_clean | default(none)",
+            "shutdown_status": previous + ".shutdown_status | default('unknown')",
+            "planned_shutdown_seconds": previous + ".planned_shutdown_seconds | default(none)",
+            "actual_shutdown_seconds": previous + ".actual_shutdown_seconds | default(none)",
+            "planned_guest_shutdown_seconds": previous + ".planned_guest_shutdown_seconds | default(none)",
+            "actual_guest_shutdown_seconds": previous + ".actual_guest_shutdown_seconds | default(none)",
+            "planned_all_guest_shutdown_seconds": previous + ".planned_all_guest_shutdown_seconds | default(none)",
+            "running_guests": previous + ".running_guests | default([])",
+            "shutdown_sequence": previous + ".shutdown_sequence | default([])",
             "boot_id": previous + ".boot_id | default(none)",
             "boot_at": previous + ".boot_at | default(none)",
             "shutdown_at": previous + ".shutdown_at | default(none)",
@@ -124,11 +132,6 @@ def build_shutdown_aware_pve_discovery_payload(
             guest_id = str(guest_id_raw)
             name = str(raw.get("name") or f"{label} {guest_id}")
             current = _path("host", "guest_config", plural, guest_id)
-            previous_kind = (
-                f"((({previous} | default({{}}, true)).guests | default({{}}, true))."
-                f"{kind} | default({{}}, true))"
-            )
-            previous_guest = f"({previous_kind}.get({json.dumps(guest_id)}, {{}}))"
             key, item = _sensor(
                 uid=uid,
                 state_topic=topics.state,
@@ -136,7 +139,7 @@ def build_shutdown_aware_pve_discovery_payload(
                 key=f"{kind}_{_slug(guest_id)}_shutdown",
                 name=f"{label} {guest_id} {name} shutdown",
                 entity_id=f"sensor.dh_pve_{kind}_{_slug(guest_id)}_shutdown",
-                expression=previous_guest + ".duration_seconds | default(none)",
+                expression=current + ".last_shutdown_duration_seconds | default(none)",
                 subsystem="host",
                 section="guests",
                 subject=kind,
@@ -154,13 +157,14 @@ def build_shutdown_aware_pve_discovery_payload(
                     "shutdown_timeout_seconds": current + ".shutdown_timeout_seconds | default(none)",
                     "shutdown_order": current + ".shutdown_order | default(none)",
                     "onboot": current + ".onboot | default(false)",
-                    "last_shutdown_started_at": previous_guest + ".started_at | default(none)",
-                    "last_shutdown_finished_at": previous_guest + ".finished_at | default(none)",
-                    "last_shutdown_duration_seconds": previous_guest + ".duration_seconds | default(none)",
-                    "last_shutdown_timeout_seconds": previous_guest + ".timeout_seconds | default(none)",
-                    "last_shutdown_timeout_ratio": previous_guest + ".timeout_ratio | default(none)",
-                    "last_shutdown_result": previous_guest + ".result | default('unknown')",
-                    "last_shutdown_forced": previous_guest + ".forced | default(false)",
+                    "last_shutdown_started_at": current + ".last_shutdown_started_at | default(none)",
+                    "last_shutdown_finished_at": current + ".last_shutdown_finished_at | default(none)",
+                    "last_shutdown_duration_seconds": current + ".last_shutdown_duration_seconds | default(none)",
+                    "last_shutdown_timeout_seconds": current + ".last_shutdown_timeout_seconds | default(none)",
+                    "last_shutdown_timeout_ratio": current + ".last_shutdown_timeout_ratio | default(none)",
+                    "last_shutdown_result": current + ".last_shutdown_result | default('unknown')",
+                    "last_shutdown_forced": current + ".last_shutdown_forced | default(false)",
+                    "last_shutdown_source": current + ".last_shutdown_source | default('unknown')",
                 },
             )
             components[key] = item
@@ -239,6 +243,9 @@ def build_shutdown_aware_ups_discovery_payload(
         "json_attributes_template": (
             "{{ {'configured_guest_budget_seconds': value_json.shutdown_budget.configured_guest_budget_seconds | default(none), "
             "'observed_guest_budget_seconds': value_json.shutdown_budget.observed_guest_budget_seconds | default(none), "
+            "'all_configured_guest_budget_seconds': value_json.shutdown_budget.all_configured_guest_budget_seconds | default(none), "
+            "'running_guests': value_json.shutdown_budget.running_guests | default([]), "
+            "'shutdown_sequence': value_json.shutdown_budget.shutdown_sequence | default([]), "
             "'history_evidence_status': value_json.shutdown_budget.history_evidence_status | default('none')} | tojson }}"
         ),
     }
