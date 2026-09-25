@@ -334,7 +334,7 @@ def validate_plex_monitoring(
         f'RELEASE_TAG="{release_tag}"',
         (
             "raw.githubusercontent.com/DigitalHouses/home-assistant-apps/"
-            "${RELEASE_TAG}/digitalhouses_plex_monitoring/install.sh"
+            "${RELEASE_TAG}/digitalhouses_plex_agent/install.sh"
         ),
         'DIGITALHOUSES_SOURCE_REF="${RELEASE_TAG}"',
         "digitalhouses_plex_monitoring/BUILD_INFO",
@@ -344,6 +344,6 @@ def validate_plex_monitoring(
 
     if (
         "raw.githubusercontent.com/DigitalHouses/home-assistant-apps/main/"
-        "digitalhouses_plex_monitoring/install.sh"
+        "digitalhouses_plex_agent/install.sh"
     ) in readme:
         fail("Plex Monitoring README must not present main as production install source")
