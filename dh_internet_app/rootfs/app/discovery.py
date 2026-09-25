@@ -471,6 +471,17 @@ def build_discovery_payload(
             "icon": "mdi:refresh",
             "availability": availability,
         },
+        "delete_telemetry": {
+            "platform": "button",
+            "name": "Delete telemetry data",
+            "unique_id": f"{ENTITY_PREFIX}_delete_telemetry",
+            "default_entity_id": f"button.{ENTITY_PREFIX}_delete_telemetry",
+            "command_topic": TOPICS["command"],
+            "payload_press": "DELETE_TELEMETRY",
+            "entity_category": "config",
+            "icon": "mdi:delete-outline",
+            "availability": availability,
+        },
         "recent_results": {
             "platform": "sensor",
             "name": "Recent results",
