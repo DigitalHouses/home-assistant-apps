@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.5.23
+
+- Parse native Proxmox `starting task UPID:...:qmshutdown|vzshutdown:<id>:` journal records so standalone `qm shutdown` / `pct shutdown` operations produce a real per-guest shutdown duration.
+- Preserve the first task-start timestamp when Proxmox later emits the host-shutdown `Stopping VM/CT ... (timeout = ...)` line, while still attaching the configured timeout to that same shutdown transaction.
+- Advance shutdown-history parser metadata to v5; standalone guest shutdown facts remain separate from PVE host shutdown history.
+
 ## 0.5.22
 
 - Persist the shutdown plan that belonged to each PVE boot/shutdown cycle, including App-calculated planned/actual durations, running guest set and shutdown sequence, so historical UI never reconstructs old plans from current configuration.

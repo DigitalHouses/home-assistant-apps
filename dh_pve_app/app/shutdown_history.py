@@ -13,12 +13,16 @@ from .ups_nut import UpsSnapshot
 
 HISTORY_LIMIT = 50
 PUBLISHED_HISTORY_LIMIT = 10
-HISTORY_PARSER_VERSION = 4
+HISTORY_PARSER_VERSION = 5
 
 _TIMESTAMP_RE = re.compile(r"^(?P<ts>\S+)")
 _START_RE = re.compile(
     r"\bStopping\s+(?P<kind>VM|CT)\s+(?P<id>\d+)\s+"
     r"\(timeout\s*=\s*(?P<timeout>\d+)\s+seconds\)",
+    re.IGNORECASE,
+)
+_TASK_START_RE = re.compile(
+    r"\bstarting task UPID:.*?:(?P<type>qmshutdown|vzshutdown):(?P<id>\d+):",
     re.IGNORECASE,
 )
 # A guest-agent liveness probe such as `guest-ping ... got timeout` is not
@@ -103,6 +107,46 @@ def _empty_guest(kind: str, guest_id: str, timeout: int | None = None) -> dict[s
     }
 
 
+def _begin_guest_shutdown(
+    records: dict[tuple[str, str], dict[str, Any]],
+    active_guests: set[tuple[str, str]],
+    *,
+    kind: str,
+    guest_id: str,
+    timestamp: datetime | None,
+    timeout: int | None,
+    first_started: datetime | None,
+) -> datetime | None:
+    key = (kind, guest_id)
+    was_active = key in active_guests
+    item = records.setdefault(key, _empty_guest(kind, guest_id, timeout))
+
+    if timeout is not None:
+        item["timeout_seconds"] = timeout
+
+    if not was_active:
+        if timeout is None:
+            # A new standalone qm/pct task has no timeout in the task line.
+            # Do not leak timeout metadata from an older shutdown of this guest.
+            item["timeout_seconds"] = None
+        item.update(
+            {
+                "finished_at": None,
+                "duration_seconds": None,
+                "timeout_ratio": None,
+                "result": "unknown",
+                "forced": False,
+            }
+        )
+        if timestamp is not None:
+            item["started_at"] = timestamp.isoformat()
+            if first_started is None or timestamp < first_started:
+                first_started = timestamp
+
+    active_guests.add(key)
+    return first_started
+
+
 def parse_guest_shutdown_journal(text: str) -> dict[str, Any]:
     records: dict[tuple[str, str], dict[str, Any]] = {}
     active_guests: set[tuple[str, str]] = set()
@@ -145,35 +189,35 @@ def parse_guest_shutdown_journal(text: str) -> dict[str, Any]:
             if timestamp is not None:
                 clean_shutdown_at = timestamp
 
+        task_start = _TASK_START_RE.search(line)
+        if task_start is not None:
+            kind = (
+                "vm"
+                if task_start.group("type").casefold() == "qmshutdown"
+                else "lxc"
+            )
+            first_started = _begin_guest_shutdown(
+                records,
+                active_guests,
+                kind=kind,
+                guest_id=task_start.group("id"),
+                timestamp=timestamp,
+                timeout=None,
+                first_started=first_started,
+            )
+            continue
+
         start = _START_RE.search(line)
         if start is not None:
-            kind = _guest_kind(start.group("kind"))
-            guest_id = start.group("id")
-            timeout = int(start.group("timeout"))
-            key = (kind, guest_id)
-            item = records.setdefault(key, _empty_guest(kind, guest_id, timeout))
-            item["timeout_seconds"] = timeout
-            active_guests.add(key)
-            if timestamp is not None:
-                previous_start = None
-                if isinstance(item.get("started_at"), str):
-                    try:
-                        previous_start = datetime.fromisoformat(item["started_at"])
-                    except ValueError:
-                        previous_start = None
-                if previous_start is None or timestamp > previous_start:
-                    item.update(
-                        {
-                            "started_at": timestamp.isoformat(),
-                            "finished_at": None,
-                            "duration_seconds": None,
-                            "timeout_ratio": None,
-                            "result": "unknown",
-                            "forced": False,
-                        }
-                    )
-                if first_started is None or timestamp < first_started:
-                    first_started = timestamp
+            first_started = _begin_guest_shutdown(
+                records,
+                active_guests,
+                kind=_guest_kind(start.group("kind")),
+                guest_id=start.group("id"),
+                timestamp=timestamp,
+                timeout=int(start.group("timeout")),
+                first_started=first_started,
+            )
             continue
 
         shutdown_timeout = _SHUTDOWN_TIMEOUT_RE.search(line)

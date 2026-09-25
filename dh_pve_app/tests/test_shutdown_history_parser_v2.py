@@ -81,7 +81,7 @@ def test_same_boot_startup_reconciles_legacy_previous_shutdown_parser_result(tmp
     assert previous["history_parser_version"] >= 2
     assert payload["history"][-1]["history_parser_version"] >= 2
 
-def test_v4_reconciliation_replaces_stale_v3_shutdown_scope_evidence(tmp_path):
+def test_v5_reconciliation_preserves_v4_shutdown_scope_fix(tmp_path):
     store = StateStore(tmp_path / "shutdown_history.json")
     stale_previous = {
         "history_parser_version": 3,
@@ -155,7 +155,7 @@ def test_v4_reconciliation_replaces_stale_v3_shutdown_scope_evidence(tmp_path):
 
     previous = tracker.startup()["previous_shutdown"]
 
-    assert previous["history_parser_version"] == 4
+    assert previous["history_parser_version"] == 5
     assert previous["shutdown_class"] == "ups_power"
     assert previous["shutdown_reason"] == "on_battery_fsd"
     assert previous["shutdown_clean"] is False
@@ -171,3 +171,21 @@ def test_v4_reconciliation_replaces_stale_v3_shutdown_scope_evidence(tmp_path):
     assert vm110["duration_seconds"] is None
     assert vm110["result"] == "unknown"
 
+
+
+def test_manual_pct_shutdown_task_upid_records_duration_from_real_pve_journal():
+    journal = """\
+2026-09-26T01:10:32.607284+0500 pve pct[247662]: <root@pam> starting task UPID:pve:0003C76F:00F0CD27:6AB6D538:vzshutdown:333:root@pam:
+2026-09-26T01:10:32.610709+0500 pve pct[247663]: shutdown CT 333: UPID:pve:0003C76F:00F0CD27:6AB6D538:vzshutdown:333:root@pam:
+2026-09-26T01:10:44.543655+0500 pve pct[247662]: <root@pam> end task UPID:pve:0003C76F:00F0CD27:6AB6D538:vzshutdown:333:root@pam: OK
+"""
+
+    parsed = parse_guest_shutdown_journal(journal)
+    item = parsed["guests"]["lxc"]["333"]
+
+    assert item["started_at"] == "2026-09-26T01:10:32.607284+05:00"
+    assert item["finished_at"] == "2026-09-26T01:10:44.543655+05:00"
+    assert item["duration_seconds"] == 12
+    assert item["timeout_seconds"] is None
+    assert item["result"] == "clean"
+    assert item["forced"] is False
