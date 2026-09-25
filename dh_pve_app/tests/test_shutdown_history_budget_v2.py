@@ -100,3 +100,52 @@ def test_manual_guest_shutdown_in_current_boot_updates_latest_guest_fact(tmp_pat
     assert latest["duration_seconds"] == 7
     assert latest["result"] == "clean"
     assert latest["source"] == "guest_shutdown"
+
+
+def test_legacy_history_records_get_canonical_shutdown_status_in_payload(tmp_path):
+    store = StateStore(tmp_path / "shutdown.json")
+    store.save(
+        {
+            "current_boot": {
+                "boot_id": "boot-current",
+                "boot_at": "2026-09-26T02:00:00+05:00",
+            },
+            "previous_shutdown": {
+                "boot_id": "boot-prev",
+                "shutdown_class": "normal",
+                "shutdown_clean": True,
+            },
+            "history": [
+                {
+                    "boot_id": "boot-good",
+                    "shutdown_class": "normal",
+                    "shutdown_clean": True,
+                },
+                {
+                    "boot_id": "boot-bad",
+                    "shutdown_class": "unclean",
+                    "shutdown_clean": False,
+                },
+                {
+                    "boot_id": "boot-unknown",
+                    "shutdown_class": "unknown",
+                    "shutdown_clean": None,
+                },
+            ],
+        }
+    )
+    tracker = ShutdownHistoryTracker(
+        state_store=store,
+        boot_id_reader=lambda: "boot-current",
+        boot_time_reader=lambda: "2026-09-26T02:00:00+05:00",
+        previous_boot_journal_reader=lambda: "",
+    )
+
+    payload = tracker.payload()
+
+    assert payload["previous_shutdown"]["shutdown_status"] == "correct"
+    assert [item["shutdown_status"] for item in payload["history"]] == [
+        "correct",
+        "incorrect",
+        "unknown",
+    ]
