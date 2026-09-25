@@ -146,6 +146,80 @@ def _running_tasks(
     return tasks
 
 
+def _configured_tasks(
+    *,
+    qemu_dir: Path,
+    lxc_dir: Path,
+) -> list[tuple[str, GuestShutdownTask]] | None:
+    tasks: list[tuple[str, GuestShutdownTask]] = []
+    for kind, directory in (("vm", qemu_dir), ("lxc", lxc_dir)):
+        try:
+            paths = sorted(
+                directory.glob("*.conf"),
+                key=lambda path: int(path.stem) if path.stem.isdigit() else path.stem,
+            )
+        except OSError:
+            return None
+        for path in paths:
+            if not path.stem.isdigit():
+                continue
+            try:
+                config = _read_simple_config(path)
+            except OSError:
+                return None
+            if config.get("template", "0").strip().casefold() in {"1", "true", "yes", "on"}:
+                continue
+            order, timeout = _startup_values(config)
+            tasks.append(
+                (
+                    kind,
+                    GuestShutdownTask(
+                        vmid=int(path.stem),
+                        order=order,
+                        timeout_seconds=timeout,
+                    ),
+                )
+            )
+    return tasks
+
+
+def _order_key(order: int | None) -> tuple[int, int]:
+    if order is None:
+        return (1, 0)
+    return (0, order)
+
+
+def _ordered_task_groups(
+    tasks: Sequence[tuple[str, GuestShutdownTask]],
+) -> tuple[tuple[tuple[str, GuestShutdownTask], ...], ...]:
+    grouped: dict[int | None, list[tuple[str, GuestShutdownTask]]] = {}
+    for item in tasks:
+        grouped.setdefault(item[1].order, []).append(item)
+    return tuple(
+        tuple(sorted(grouped[order], key=lambda item: item[1].vmid))
+        for order in sorted(grouped, key=_order_key, reverse=True)
+    )
+
+
+def _shutdown_sequence(
+    tasks: Sequence[tuple[str, GuestShutdownTask]],
+) -> tuple[tuple[str, ...], ...]:
+    return tuple(
+        tuple(str(task.vmid) for _kind, task in group)
+        for group in _ordered_task_groups(tasks)
+    )
+
+
+def _running_guest_ids(
+    tasks: Sequence[tuple[str, GuestShutdownTask]],
+) -> tuple[str, ...]:
+    return tuple(
+        f"{kind}:{task.vmid}"
+        for group in _ordered_task_groups(tasks)
+        for kind, task in group
+    )
+
+
 def _upsmon_timing(path: Path) -> tuple[int | None, int | None]:
     hostsync: int | None = None
     finaldelay: int | None = None
@@ -288,6 +362,18 @@ def read_shutdown_budget(
         [task for _kind, task in tasks],
         max_workers=workers,
     )
+    all_tasks = _configured_tasks(
+        qemu_dir=qemu_dir,
+        lxc_dir=lxc_dir,
+    )
+    all_configured_guest_budget = (
+        calculate_guest_shutdown_budget(
+            [task for _kind, task in all_tasks],
+            max_workers=workers,
+        )
+        if all_tasks is not None
+        else None
+    )
     hostsync_seconds, finaldelay_seconds = _upsmon_timing(upsmon_path)
     hostsync_applicable = _hostsync_applicable(config, runner=runner)
     if hostsync_applicable is None:
@@ -320,4 +406,7 @@ def read_shutdown_budget(
         result,
         configuration_fingerprint=fingerprint,
         history_evidence_status=evidence_status,
+        all_configured_guest_budget_seconds=all_configured_guest_budget,
+        running_guests=_running_guest_ids(tasks),
+        shutdown_sequence=_shutdown_sequence(tasks),
     )
