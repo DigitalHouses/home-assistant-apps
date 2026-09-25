@@ -179,6 +179,7 @@ class ShutdownAwareProductionCollectors(GuestAwareProductionCollectors):
         data = dict(sample.data)
         current_statuses: dict[tuple[str, str], str] = {}
         guest_timeouts: dict[tuple[str, str], int] = {}
+        guest_names: dict[tuple[str, str], str] = {}
         for plural, kind in (("vms", "vm"), ("lxcs", "lxc")):
             records = data.get(plural)
             if not isinstance(records, Mapping):
@@ -190,6 +191,9 @@ class ShutdownAwareProductionCollectors(GuestAwareProductionCollectors):
                 current_statuses[key] = str(
                     raw.get("status") or "unknown"
                 ).casefold()
+                name = raw.get("name")
+                if isinstance(name, str) and name.strip():
+                    guest_names[key] = name.strip()
                 timeout = raw.get("shutdown_timeout_seconds")
                 if (
                     isinstance(timeout, int)
@@ -197,6 +201,11 @@ class ShutdownAwareProductionCollectors(GuestAwareProductionCollectors):
                     and timeout >= 0
                 ):
                     guest_timeouts[key] = timeout
+
+        try:
+            self.shutdown_history_tracker.record_guest_inventory(guest_names)
+        except Exception:
+            _LOG.exception("Не удалось сохранить snapshot имён VM/LXC")
 
         history_before = self.shutdown_history_tracker.payload()
         refresh_needed = not self._guest_status_cache
