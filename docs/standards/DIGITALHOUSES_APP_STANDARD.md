@@ -35,26 +35,24 @@ DigitalHouses Application Standard
 └── linux_agent
 ```
 
-Current applications:
+Current canonical product identities:
 
 ```text
-digitalhouses_speedtest       -> haos_addon
-dh_internet_app               -> haos_addon
-digitalhouses_db_monitoring   -> haos_addon
-digitalhouses_backblaze       -> haos_addon
+digitalhouses_pve_agent       -> linux_agent
+digitalhouses_plex_agent      -> linux_agent
+digitalhouses_recorder_app    -> haos_addon
+digitalhouses_speedtest_app   -> haos_addon
+digitalhouses_backblaze_app   -> haos_addon
+digitalhouses_internet_app    -> haos_addon
 ```
 
-Planned first `linux_agent`:
-
-```text
-digitalhouses_plex_monitoring -> linux_agent
-```
+Canonical product identity is independent of any legacy repository directory that has not yet completed its naming migration.
 
 ---
 
 ## 2. Core principle
 
-Every `digitalhouses_*` project must explicitly declare its application type.
+Every DigitalHouses product implementation must explicitly declare its application type.
 
 Type detection must **never** be inferred from the presence of files such as `Dockerfile`, `config.yaml`, `install.sh`, or a systemd unit.
 
@@ -180,25 +178,25 @@ The validator must not silently guess an application type.
 
 ## 5. Common naming contract
 
-Every application directory uses:
+Product naming is governed by [DigitalHouses Product Naming Standard](PRODUCT_NAMING_STANDARD.md).
+
+Every product has one canonical identifier:
 
 ```text
-digitalhouses_<app_name>
+digitalhouses_<function>_<app|agent>
 ```
 
-Examples:
+The canonical identifier is stored in the product registry and is the shared product identity for release, telemetry and repository-level contracts.
+
+Home Assistant entities use only the compact deterministic prefix:
 
 ```text
-digitalhouses_speedtest
-digitalhouses_db_monitoring
-digitalhouses_plex_monitoring
+dh_<function>_<app|agent>
 ```
 
-The directory name is the canonical repository identifier of the application.
+For new products, the repository directory equals the canonical product identifier. Existing compatibility-sensitive legacy directories/runtime identifiers may remain only until an explicit product migration; they are not valid naming patterns for new products.
 
-Stable public identifiers such as MQTT topics, device identifiers, entity IDs, service names, or configuration paths become compatibility interfaces once released and must be protected by application-specific regression checks where appropriate.
-
----
+Do not use repository directory names as an alternative product identity. Product code must use the canonical registry identity even while a legacy directory still exists.
 
 ## 6. Common mandatory files
 

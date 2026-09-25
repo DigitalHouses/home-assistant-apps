@@ -3,6 +3,8 @@
   "products": [
     {
       "id": "digitalhouses_pve_agent",
+      "type": "agent",
+      "entity_prefix": "dh_pve_agent",
       "display_name": "PVE Agent",
       "telemetry_allowed": true,
       "release": {
@@ -14,6 +16,8 @@
     },
     {
       "id": "digitalhouses_plex_agent",
+      "type": "agent",
+      "entity_prefix": "dh_plex_agent",
       "display_name": "Plex Agent",
       "telemetry_allowed": true,
       "release": {
@@ -25,6 +29,8 @@
     },
     {
       "id": "digitalhouses_recorder_app",
+      "type": "app",
+      "entity_prefix": "dh_recorder_app",
       "display_name": "Recorder App",
       "telemetry_allowed": true,
       "release": {
@@ -36,6 +42,8 @@
     },
     {
       "id": "digitalhouses_speedtest_app",
+      "type": "app",
+      "entity_prefix": "dh_speedtest_app",
       "display_name": "Speedtest App",
       "telemetry_allowed": true,
       "release": {
@@ -47,6 +55,8 @@
     },
     {
       "id": "digitalhouses_backblaze_app",
+      "type": "app",
+      "entity_prefix": "dh_backblaze_app",
       "display_name": "Backblaze App",
       "telemetry_allowed": true,
       "release": {
@@ -58,6 +68,8 @@
     },
     {
       "id": "digitalhouses_internet_app",
+      "type": "app",
+      "entity_prefix": "dh_internet_app",
       "display_name": "Internet App",
       "telemetry_allowed": true,
       "release": {
@@ -69,6 +81,8 @@
     },
     {
       "id": "digitalhouses_climate_app",
+      "type": "app",
+      "entity_prefix": "dh_climate_app",
       "display_name": "Climate App",
       "telemetry_allowed": true,
       "release": null,

@@ -31,6 +31,8 @@ The implementation is under `scripts/validators/`.
 
 Repository workflow follows [DigitalHouses Repository Governance](../docs/standards/REPOSITORY_GOVERNANCE.md). Product releases follow [DigitalHouses Release Policy](../docs/standards/RELEASE_POLICY.md).
 
+Product and entity naming follows [DigitalHouses Product Naming Standard](../docs/standards/PRODUCT_NAMING_STANDARD.md). New product identities must use `digitalhouses_<function>_<app|agent>` and Home Assistant entity prefixes must use `dh_<function>_<app|agent>`.
+
 Owner-authored same-repository PRs targeting `main` are integrated automatically after the complete repository validation succeeds. A product version change is validated as release intent and produces the canonical tag/GitHub Release after merge; manual `Run workflow`, manual merge, and manual release are not part of the normal development path.
 
 Runtime contract handling must follow [DigitalHouses Contract Data Policy](../docs/standards/CONTRACT_DATA_POLICY.md): required data fails explicitly, optional data remains absent/null according to schema, and contract boundaries must not invent fallback domain values.
