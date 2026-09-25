@@ -66,8 +66,12 @@ def build_guest_aware_discovery_payload(
                 extra_attrs={
                     "guest_id": json.dumps(guest_id),
                     "guest_kind": json.dumps(kind),
+                    "onboot": obj + ".onboot | default(false)",
                     "passthrough_count": obj + ".passthrough_count | default(0)",
                     "qemu_agent": obj + ".qemu_agent | default('not_applicable')",
+                    "last_shutdown_duration_seconds": obj + ".last_shutdown_duration_seconds | default(none)",
+                    "last_shutdown_result": obj + ".last_shutdown_result | default('unknown')",
+                    "last_shutdown_source": obj + ".last_shutdown_source | default('unknown')",
                 },
             )
             components[key] = item

@@ -29,6 +29,9 @@ class ShutdownBudgetResult:
     unavailable_reason: str | None
     configuration_fingerprint: str | None = None
     history_evidence_status: str = "none"
+    all_configured_guest_budget_seconds: int | None = None
+    running_guests: tuple[str, ...] = ()
+    shutdown_sequence: tuple[tuple[str, ...], ...] = ()
 
     def runtime_guard_threshold_seconds(self, runtime_reserve_seconds: int) -> int | None:
         if self.shutdown_budget_seconds is None:

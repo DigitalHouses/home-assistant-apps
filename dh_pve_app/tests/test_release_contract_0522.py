@@ -4,16 +4,23 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 APP = ROOT / "dh_pve_app"
 VALIDATOR = ROOT / "scripts" / "validators" / "products" / "pve_agent.py"
+DESIGN = (
+    ROOT
+    / "docs"
+    / "digitalhouses_pve_agent"
+    / "specs"
+    / "2026-09-26-dh-pve-shutdown-history-runtime-facts-design.md"
+)
 
 
-def test_0521_version_and_repository_validator_contract():
-    assert (APP / "VERSION").read_text(encoding="utf-8").strip() == "0.5.21"
+def test_0522_version_and_repository_validator_contract():
+    assert (APP / "VERSION").read_text(encoding="utf-8").strip() == "0.5.22"
 
     text = VALIDATOR.read_text(encoding="utf-8")
-    assert 'EXPECTED_VERSION = "0.5.21"' in text
+    assert 'EXPECTED_VERSION = "0.5.22"' in text
 
 
-def test_0521_home_assistant_package_layout():
+def test_0522_home_assistant_package_layout():
     packages = APP / "examples" / "packages"
     base = packages / "dh_app_pve_package.yaml"
     en = packages / "dh_app_pve_notification_local_package.yaml"
@@ -24,7 +31,9 @@ def test_0521_home_assistant_package_layout():
     assert ru.is_file()
 
     assert not (packages / "dh_app_pve_notification_package.yaml").exists()
-    assert not (packages / "locales" / "ru" / "dh_app_pve_notification_package.yaml").exists()
+    assert not (
+        packages / "locales" / "ru" / "dh_app_pve_notification_package.yaml"
+    ).exists()
     assert not (packages / "dh_app_pve_ui_package.yaml").exists()
 
     for notification in (en, ru):
@@ -37,32 +46,22 @@ def test_0521_home_assistant_package_layout():
         assert "contract_error" not in text
 
 
-def test_0521_readme_and_changelog_document_simple_notifications():
+def test_0522_shutdown_runtime_contract_is_documented():
     readme = (APP / "README.md").read_text(encoding="utf-8")
     changelog = (APP / "CHANGELOG.md").read_text(encoding="utf-8")
+    design = DESIGN.read_text(encoding="utf-8")
 
-    assert "`VERSION` is `0.5.21`." in readme
-    assert "dh_app_pve_notification_local_package.yaml" in readme
-    assert "line_power_lost" in readme
-    assert "line_power_restored" in readme
-    assert "boost_started" in readme
-    assert "cpu_throttling_started" in readme
-    assert "storage_usage_high" in readme
-    assert "pve_problem_debounce_seconds" in readme
-    assert "event-time assessment snapshot" in readme
-    assert "trigger.id" in readme
-    assert "direct action" in readme
-
-    assert "## 0.5.21" in changelog
-    assert "## 0.5.21" in changelog
-    assert "problem_updated" in changelog
-    assert "semantic start/recovery" in changelog
-    assert "trigger.id" in changelog
-    assert "Notification Envelope" in changelog  # historical 0.5.16 entry remains
-    assert "/root/dh_app_pve.txt" in changelog
+    assert "`VERSION` is `0.5.22`." in readme
+    assert "## 0.5.22" in changelog
+    assert "shutdown_status = correct | incorrect | unknown" in design
+    assert "planned_shutdown_seconds" in design
+    assert "planned_all_guest_shutdown_seconds" in design
+    assert "shutdown_sequence" in design
+    assert "standalone guest shutdown" in design.lower()
+    assert "Home Assistant is a presentation client" in design
 
 
-def test_0521_operational_guide_contract():
+def test_0522_operational_guide_contract():
     guide = (APP / "dh_app_pve.txt").read_text(encoding="utf-8")
     for required in (
         "Установка",

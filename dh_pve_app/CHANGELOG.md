@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.5.22
+
+- Persist the shutdown plan that belonged to each PVE boot/shutdown cycle, including App-calculated planned/actual durations, running guest set and shutdown sequence, so historical UI never reconstructs old plans from current configuration.
+- Add canonical `shutdown_status = correct | incorrect | unknown` while retaining the raw `shutdown_clean` evidence field for compatibility.
+- Keep the active guest shutdown budget based only on currently running non-template VM/LXC, and additionally calculate the diagnostic all-configured-guest budget including stopped guests.
+- Expose VM/LXC `onboot` on the normal guest status entity and publish the App-calculated running shutdown sequence.
+- Track the latest completed shutdown of each VM/LXC within the current PVE boot, so a standalone guest shutdown updates its factual duration without requiring a PVE reboot; standalone guest stops do not become PVE shutdown-history entries.
+
 ## 0.5.21
 
 - Make the Home Assistant `Refresh now` action a lightweight UI refresh: rebuild topology and refresh guest, host, CPU, memory, storage and fan state without waiting for full SMART/health, GPU/transcoding or disk-temperature collectors.
