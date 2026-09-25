@@ -132,6 +132,65 @@ def _guest_shutdown_assessment(
     return "unknown"
 
 
+def _normalized_guest_fact(
+    raw: Mapping[str, Any],
+    *,
+    kind: str,
+    guest_id: str,
+    name: str | None = None,
+) -> dict[str, Any]:
+    item = dict(raw)
+    item["kind"] = kind
+    item["guest_id"] = guest_id
+
+    stored_name = item.get("name")
+    if not isinstance(stored_name, str) or not stored_name.strip():
+        if isinstance(name, str) and name.strip():
+            item["name"] = name.strip()
+
+    duration = item.get("duration_seconds")
+    timeout = item.get("timeout_seconds")
+    ratio = item.get("timeout_ratio")
+    if (
+        (not isinstance(ratio, (int, float)) or isinstance(ratio, bool))
+        and isinstance(duration, int)
+        and not isinstance(duration, bool)
+        and isinstance(timeout, int)
+        and not isinstance(timeout, bool)
+        and timeout > 0
+    ):
+        ratio = round(duration / timeout, 3)
+        item["timeout_ratio"] = ratio
+
+    item["assessment"] = _guest_shutdown_assessment(
+        result=item.get("result"),
+        forced=item.get("forced"),
+        timeout_ratio=ratio,
+    )
+    return item
+
+
+def _normalize_history_guests(guests: object) -> dict[str, dict[str, dict[str, Any]]]:
+    normalized: dict[str, dict[str, dict[str, Any]]] = {"vm": {}, "lxc": {}}
+    if not isinstance(guests, Mapping):
+        return normalized
+
+    for kind in ("vm", "lxc"):
+        records = guests.get(kind)
+        if not isinstance(records, Mapping):
+            continue
+        for guest_id_raw, raw in records.items():
+            if not isinstance(raw, Mapping):
+                continue
+            guest_id = str(guest_id_raw)
+            normalized[kind][guest_id] = _normalized_guest_fact(
+                raw,
+                kind=kind,
+                guest_id=guest_id,
+            )
+    return normalized
+
+
 def _begin_guest_shutdown(
     records: dict[tuple[str, str], dict[str, Any]],
     active_guests: set[tuple[str, str]],
@@ -474,17 +533,32 @@ def _duration_between(start: object, end: object) -> int | None:
 
 def _parsed_guest_history(
     parsed: object,
+    guest_names: object = None,
 ) -> dict[str, dict[str, dict[str, Any]]]:
     guests: dict[str, dict[str, dict[str, Any]]] = {"vm": {}, "lxc": {}}
     if not isinstance(parsed, Mapping):
         return guests
+
+    names = guest_names if isinstance(guest_names, Mapping) else {}
     for kind in ("vm", "lxc"):
         records = parsed.get(kind)
         if not isinstance(records, Mapping):
             continue
-        for guest_id, raw in records.items():
-            if isinstance(raw, Mapping):
-                guests[kind][str(guest_id)] = dict(raw)
+        kind_names = names.get(kind)
+        if not isinstance(kind_names, Mapping):
+            kind_names = {}
+        for guest_id_raw, raw in records.items():
+            if not isinstance(raw, Mapping):
+                continue
+            guest_id = str(guest_id_raw)
+            name_raw = kind_names.get(guest_id)
+            name = name_raw if isinstance(name_raw, str) else None
+            guests[kind][guest_id] = _normalized_guest_fact(
+                raw,
+                kind=kind,
+                guest_id=guest_id,
+                name=name,
+            )
     return guests
 
 
@@ -651,7 +725,10 @@ def _previous_from_parsed(
         "fsd_to_shutdown_seconds": fsd_to_shutdown_seconds,
         "all_guests_stopped_to_shutdown_seconds": all_guests_stopped_to_shutdown_seconds,
         "outage_to_shutdown_seconds": _duration_between(outage_started_at, shutdown_at),
-        "guests": _parsed_guest_history(parsed.get("guests")),
+        "guests": _parsed_guest_history(
+            parsed.get("guests"),
+            source.get("guest_names"),
+        ),
     }
 
 
@@ -688,6 +765,7 @@ class ShutdownHistoryTracker:
                 item["shutdown_status"] = _shutdown_status(
                     clean if isinstance(clean, bool) else None
                 )
+                item["guests"] = _normalize_history_guests(item.get("guests"))
                 normalized_history.append(item)
             state["history"] = normalized_history
 
@@ -698,6 +776,9 @@ class ShutdownHistoryTracker:
             normalized_previous["shutdown_status"] = _shutdown_status(
                 clean if isinstance(clean, bool) else None
             )
+            normalized_previous["guests"] = _normalize_history_guests(
+                normalized_previous.get("guests")
+            )
             state["previous_shutdown"] = normalized_previous
 
         latest = state.get("guest_last_shutdowns")
@@ -705,8 +786,28 @@ class ShutdownHistoryTracker:
             state["guest_last_shutdowns"] = {"vm": {}, "lxc": {}}
         else:
             state["guest_last_shutdowns"] = {
-                "vm": dict(latest.get("vm")) if isinstance(latest.get("vm"), Mapping) else {},
-                "lxc": dict(latest.get("lxc")) if isinstance(latest.get("lxc"), Mapping) else {},
+                "vm": {
+                    str(guest_id): _normalized_guest_fact(
+                        raw,
+                        kind="vm",
+                        guest_id=str(guest_id),
+                    )
+                    for guest_id, raw in latest.get("vm", {}).items()
+                    if isinstance(raw, Mapping)
+                }
+                if isinstance(latest.get("vm"), Mapping)
+                else {},
+                "lxc": {
+                    str(guest_id): _normalized_guest_fact(
+                        raw,
+                        kind="lxc",
+                        guest_id=str(guest_id),
+                    )
+                    for guest_id, raw in latest.get("lxc", {}).items()
+                    if isinstance(raw, Mapping)
+                }
+                if isinstance(latest.get("lxc"), Mapping)
+                else {},
             }
         return state
 
@@ -755,7 +856,9 @@ class ShutdownHistoryTracker:
         return True
 
     def startup(self) -> dict[str, Any]:
+        raw_state = self.state_store.load()
         state = self._load()
+        normalized_changed = state != raw_state
         boot_id = self.boot_id_reader().strip()
         boot_at = self.boot_time_reader()
         current = state.get("current_boot")
@@ -767,10 +870,11 @@ class ShutdownHistoryTracker:
             return self.payload()
 
         if str(current.get("boot_id") or "") == boot_id:
-            if self._reconcile_previous_parser(
+            reconciled = self._reconcile_previous_parser(
                 state,
                 current_boot_at=current.get("boot_at") or boot_at,
-            ):
+            )
+            if normalized_changed or reconciled:
                 self.state_store.save(state)
             return self.payload()
 
@@ -841,6 +945,40 @@ class ShutdownHistoryTracker:
         if changed:
             state["current_boot"] = updated
             self.state_store.save(state)
+
+    def record_guest_inventory(
+        self,
+        guest_names: Mapping[tuple[str, str], str],
+    ) -> None:
+        normalized: dict[str, dict[str, str]] = {"vm": {}, "lxc": {}}
+        for key, name_raw in guest_names.items():
+            if (
+                not isinstance(key, tuple)
+                or len(key) != 2
+                or key[0] not in {"vm", "lxc"}
+                or not str(key[1])
+                or not isinstance(name_raw, str)
+                or not name_raw.strip()
+            ):
+                continue
+            kind, guest_id_raw = key
+            normalized[kind][str(guest_id_raw)] = name_raw.strip()
+
+        state = self._load()
+        current = state.get("current_boot")
+        if not isinstance(current, Mapping):
+            self.startup()
+            state = self._load()
+            current = state.get("current_boot")
+        if not isinstance(current, Mapping):
+            return
+
+        updated = dict(current)
+        if updated.get("guest_names") == normalized:
+            return
+        updated["guest_names"] = normalized
+        state["current_boot"] = updated
+        self.state_store.save(state)
 
     def record_shutdown_budget_fingerprint(self, fingerprint: str) -> None:
         if not isinstance(fingerprint, str) or not fingerprint.strip():
