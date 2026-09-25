@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.17
+
+- Promote DigitalHouses Internet App from Home Assistant `experimental` stage to `stable`.
+- Keep the canonical App slug `digitalhouses_internet_app` and all existing MQTT, device, unique-id and Home Assistant entity identities unchanged.
+- Add repository validation so the Internet App cannot silently regress back to an experimental stage.
+
 ## 0.1.16
 
 - Remove the temporary HA App slug-migration runtime after successful migration and rollback acceptance.

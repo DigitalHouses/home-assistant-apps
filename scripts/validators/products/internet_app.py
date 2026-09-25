@@ -40,6 +40,9 @@ def validate_internet(root: Path, app: Path, context: dict[str, Any]) -> None:
             "'digitalhouses_internet_app'"
         )
 
+    if config.get("stage") != "stable":
+        fail(f"{app.name}: released Internet App stage must remain stable")
+
     if "DH_SLUG_MIGRATION_MODE" in (config.get("environment") or {}):
         fail(f"{app.name}: completed slug migration mode must be removed")
 
