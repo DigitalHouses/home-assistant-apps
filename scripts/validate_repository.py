@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 from validators.products.backblaze_app import validate_backblaze
@@ -38,6 +39,46 @@ PRODUCT_VALIDATORS = {
     "dh_pve_app": validate_dh_pve_app,
 }
 
+_PRODUCT_ID_RE = re.compile(
+    r"^digitalhouses_(?P<function>[a-z0-9]+(?:_[a-z0-9]+)*)_(?P<type>app|agent)$"
+)
+
+
+def validate_product_registry_naming(registry: dict) -> None:
+    products = registry.get("products")
+    if not isinstance(products, list):
+        raise ValidationError("product registry must contain a products list")
+
+    for entry in products:
+        identifier = entry.get("id")
+        if not isinstance(identifier, str):
+            raise ValidationError("product registry entry has no string id")
+
+        match = _PRODUCT_ID_RE.fullmatch(identifier)
+        if match is None:
+            raise ValidationError(
+                f"invalid canonical product id: {identifier}; expected "
+                "digitalhouses_<function>_<app|agent>"
+            )
+
+        expected_type = match.group("type")
+        product_type = entry.get("type")
+        if product_type != expected_type:
+            raise ValidationError(
+                f"{identifier}: registry type must be {expected_type}, "
+                f"got {product_type!r}"
+            )
+
+        expected_prefix = (
+            f"dh_{match.group('function')}_{expected_type}"
+        )
+        entity_prefix = entry.get("entity_prefix")
+        if entity_prefix != expected_prefix:
+            raise ValidationError(
+                f"{identifier}: entity_prefix must be {expected_prefix}, "
+                f"got {entity_prefix!r}"
+            )
+
 
 def validate_repository(root: Path = ROOT) -> list[dict[str, str]]:
     require_files(
@@ -47,6 +88,7 @@ def validate_repository(root: Path = ROOT) -> list[dict[str, str]]:
             root / "README.md",
             root / "LICENSE",
             root / "docs/standards/DIGITALHOUSES_APP_STANDARD.md",
+            root / "docs/standards/PRODUCT_NAMING_STANDARD.md",
             root / "docs/standards/EVENTS_AND_NOTIFICATIONS_STANDARD.md",
             root / "docs/standards/RELEASE_POLICY.md",
             root / "docs/standards/REPOSITORY_GOVERNANCE.md",
@@ -62,6 +104,8 @@ def validate_repository(root: Path = ROOT) -> list[dict[str, str]]:
         root / "digitalhouses-stats/digitalhouses_stats/product_registry.json"
     )
     registry = json.loads(registry_path.read_text(encoding="utf-8"))
+    validate_product_registry_naming(registry)
+
     registered_directories = {
         entry.get("repository_directory")
         for entry in registry["products"]
