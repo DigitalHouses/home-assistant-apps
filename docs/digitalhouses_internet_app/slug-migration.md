@@ -1,6 +1,6 @@
 # Internet App controlled HA App slug migration
 
-Status: canonical import bugfix release / operator acceptance pending.
+Status: canonical rollback-safe bugfix release / operator acceptance pending.
 
 Canonical product:
 
@@ -67,7 +67,7 @@ The manifest records:
 
 ## Phase 2 — canonical slug release
 
-Version `0.1.13` introduced the first canonical slug release. Version `0.1.14` fixes the import sequencing for Supervisor's options lifecycle. The canonical App uses:
+Version `0.1.13` introduced the first canonical slug release. Version `0.1.14` fixed the import sequencing for Supervisor's options lifecycle. Version `0.1.15` makes completed migration state authoritative after rollback refreshes the shared bridge bundle. The canonical App uses:
 
 ```yaml
 slug: digitalhouses_internet_app
@@ -88,7 +88,7 @@ Before normal runtime starts it:
 
 If the options were already persisted by the failed `0.1.13` attempt, `0.1.14` detects that state and proceeds directly to final import without applying them again.
 
-A successfully imported bundle is never applied twice.
+A successfully completed migration is never applied twice. Once the completed marker is valid, the canonical App ignores later bridge bundle changes entirely; this is required because a rollback start/stop of legacy `0.1.12` regenerates that shared bundle with a new timestamp/hash.
 
 A fresh canonical installation with no migration bundle starts normally.
 
@@ -110,12 +110,12 @@ The new product version is still reported normally after migration because the t
 3. Create a Home Assistant backup while the legacy App is still installed.
 4. Stop the legacy App. Do not uninstall it.
 5. Confirm the shutdown log reports a refreshed migration bundle.
-6. Reload the App store and install/update the canonical-slug App `digitalhouses_internet_app` to version `0.1.14`.
+6. Reload the App store and install/update the canonical-slug App `digitalhouses_internet_app` to version `0.1.15`.
 7. Start it. If the log says migrated options were applied and a restart is required, start the App once more. Then verify the log reports successful bundle import before normal runtime.
 8. Verify options, telemetry identity, Internet state, thresholds, outage/traffic history and HA/MQTT entities.
 9. Restart the canonical App once and verify the bundle is not re-imported.
 10. Create a backup of the canonical-slug App and verify restore.
-11. Prove rollback once by stopping the canonical App and starting the still-installed legacy bridge App, then stop legacy again and return to canonical.
+11. Prove rollback once by stopping the canonical App and starting the still-installed legacy bridge App, then stop legacy again and return to canonical. The legacy bridge will refresh the shared bundle; canonical must ignore it because migration is already complete.
 12. Only after acceptance uninstall the stopped legacy App.
 
 The two Apps must never run at the same time because they intentionally share the same MQTT client/device/entity identities.
