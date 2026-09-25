@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.5.25
+
+- Complete standalone VM/LXC shutdown facts with the guest's PVE shutdown timeout when the native task journal does not contain it, persisting that timeout with the measured fact instead of recalculating it later from changed configuration.
+- Calculate and publish App-owned `timeout_ratio` plus `assessment = ok | warning | critical | unknown`; warning begins at 80% of the timeout and critical covers timeout/forced results or 100%+ usage.
+- Route the ready assessment through guest presentation and MQTT Discovery so Home Assistant only formats the result and does not implement shutdown-health policy.
+
 ## 0.5.24
 
 - Publish the first PVE Agent release from the canonical repository directory `digitalhouses_pve_agent/` after the repo-level product naming migration.

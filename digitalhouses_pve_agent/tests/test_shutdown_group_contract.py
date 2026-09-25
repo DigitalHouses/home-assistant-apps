@@ -148,6 +148,9 @@ def test_shutdown_discovery_reads_latest_guest_fact_from_shutdown_group():
 
         attrs = component["json_attributes_template"]
         assert "last_shutdown_duration_seconds" in attrs
+        assert "last_shutdown_timeout_seconds" in attrs
+        assert "last_shutdown_timeout_ratio" in attrs
+        assert "last_shutdown_assessment" in attrs
         assert "last_shutdown_source" in attrs
 
 
@@ -162,3 +165,4 @@ def test_guest_status_discovery_exposes_autostart_without_extra_entity():
     attrs = components["vm_110_status"]["json_attributes_template"]
 
     assert "onboot" in attrs
+    assert "last_shutdown_assessment" in attrs

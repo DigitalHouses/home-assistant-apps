@@ -162,6 +162,7 @@ def build_shutdown_aware_pve_discovery_payload(
                     "last_shutdown_duration_seconds": current + ".last_shutdown_duration_seconds | default(none)",
                     "last_shutdown_timeout_seconds": current + ".last_shutdown_timeout_seconds | default(none)",
                     "last_shutdown_timeout_ratio": current + ".last_shutdown_timeout_ratio | default(none)",
+                    "last_shutdown_assessment": current + ".last_shutdown_assessment | default('unknown')",
                     "last_shutdown_result": current + ".last_shutdown_result | default('unknown')",
                     "last_shutdown_forced": current + ".last_shutdown_forced | default(false)",
                     "last_shutdown_source": current + ".last_shutdown_source | default('unknown')",

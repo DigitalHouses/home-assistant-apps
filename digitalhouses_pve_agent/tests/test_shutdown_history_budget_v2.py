@@ -149,3 +149,71 @@ def test_legacy_history_records_get_canonical_shutdown_status_in_payload(tmp_pat
         "incorrect",
         "unknown",
     ]
+
+
+def test_standalone_guest_shutdown_fact_is_enriched_once_from_guest_config(tmp_path):
+    journal = {
+        "text": (
+            "2026-09-26T01:10:32.607284+0500 pve pct[247662]: "
+            "<root@pam> starting task UPID:pve:1:2:3:4:vzshutdown:333:root@pam:\n"
+            "2026-09-26T01:10:44.543655+0500 pve pct[247662]: "
+            "<root@pam> end task UPID:pve:1:2:3:4:vzshutdown:333:root@pam: OK\n"
+        )
+    }
+    tracker = ShutdownHistoryTracker(
+        state_store=StateStore(tmp_path / "shutdown.json"),
+        boot_id_reader=lambda: "boot-a",
+        boot_time_reader=lambda: "2026-09-26T00:00:00+05:00",
+        previous_boot_journal_reader=lambda: "",
+        current_boot_journal_reader=lambda: journal["text"],
+    )
+    tracker.startup()
+    assert tracker.refresh_current_guest_shutdowns() is True
+
+    before = tracker.payload()["guest_last_shutdowns"]["lxc"]["333"]
+    assert before["duration_seconds"] == 12
+    assert before["timeout_seconds"] is None
+    assert before["timeout_ratio"] is None
+    assert before["assessment"] == "unknown"
+
+    assert tracker.enrich_guest_last_shutdowns(
+        {("lxc", "333"): 30}
+    ) is True
+
+    latest = tracker.payload()["guest_last_shutdowns"]["lxc"]["333"]
+    assert latest["duration_seconds"] == 12
+    assert latest["timeout_seconds"] == 30
+    assert latest["timeout_ratio"] == 0.4
+    assert latest["assessment"] == "ok"
+
+    # Historical fact keeps the timeout that was attached to the shutdown.
+    assert tracker.enrich_guest_last_shutdowns(
+        {("lxc", "333"): 50}
+    ) is False
+    latest = tracker.payload()["guest_last_shutdowns"]["lxc"]["333"]
+    assert latest["timeout_seconds"] == 30
+    assert latest["timeout_ratio"] == 0.4
+
+
+def test_guest_shutdown_assessment_is_app_owned_for_host_shutdown_journal(tmp_path):
+    journal = {
+        "text": (
+            "2026-09-26T01:00:00+05:00 Stopping CT 149 (timeout = 20 seconds)\n"
+            "2026-09-26T01:00:17+05:00 "
+            "end task UPID:pve:1:2:3:4:vzshutdown:149:root@pam: OK\n"
+        )
+    }
+    tracker = ShutdownHistoryTracker(
+        state_store=StateStore(tmp_path / "shutdown.json"),
+        boot_id_reader=lambda: "boot-a",
+        boot_time_reader=lambda: "2026-09-26T00:00:00+05:00",
+        previous_boot_journal_reader=lambda: "",
+        current_boot_journal_reader=lambda: journal["text"],
+    )
+    tracker.startup()
+    assert tracker.refresh_current_guest_shutdowns() is True
+
+    latest = tracker.payload()["guest_last_shutdowns"]["lxc"]["149"]
+    assert latest["duration_seconds"] == 17
+    assert latest["timeout_ratio"] == 0.85
+    assert latest["assessment"] == "warning"

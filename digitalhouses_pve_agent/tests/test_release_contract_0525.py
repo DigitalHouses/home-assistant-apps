@@ -13,14 +13,14 @@ DESIGN = (
 )
 
 
-def test_0524_version_and_repository_validator_contract():
-    assert (APP / "VERSION").read_text(encoding="utf-8").strip() == "0.5.24"
+def test_0525_version_and_repository_validator_contract():
+    assert (APP / "VERSION").read_text(encoding="utf-8").strip() == "0.5.25"
 
     text = VALIDATOR.read_text(encoding="utf-8")
-    assert 'EXPECTED_VERSION = "0.5.24"' in text
+    assert 'EXPECTED_VERSION = "0.5.25"' in text
 
 
-def test_0524_home_assistant_package_layout():
+def test_0525_home_assistant_package_layout():
     packages = APP / "examples" / "packages"
     base = packages / "dh_app_pve_package.yaml"
     en = packages / "dh_app_pve_notification_local_package.yaml"
@@ -46,22 +46,26 @@ def test_0524_home_assistant_package_layout():
         assert "contract_error" not in text
 
 
-def test_0524_shutdown_runtime_contract_is_documented():
+def test_0525_shutdown_runtime_contract_is_documented():
     readme = (APP / "README.md").read_text(encoding="utf-8")
     changelog = (APP / "CHANGELOG.md").read_text(encoding="utf-8")
     design = DESIGN.read_text(encoding="utf-8")
 
-    assert "`VERSION` is `0.5.24`." in readme
-    assert "## 0.5.24" in changelog
+    assert "`VERSION` is `0.5.25`." in readme
+    assert "## 0.5.25" in changelog
     assert "shutdown_status = correct | incorrect | unknown" in design
     assert "planned_shutdown_seconds" in design
     assert "planned_all_guest_shutdown_seconds" in design
     assert "shutdown_sequence" in design
     assert "standalone guest shutdown" in design.lower()
+    assert "timeout_ratio = duration_seconds / timeout_seconds" in design
+    assert "assessment:" in design
+    assert "ok       -> clean and ratio < 0.80" in design
+    assert "critical -> timeout/forced, or ratio >= 1.00" in design
     assert "Home Assistant is a presentation client" in design
 
 
-def test_0524_operational_guide_contract():
+def test_0525_operational_guide_contract():
     guide = (APP / "dh_app_pve.txt").read_text(encoding="utf-8")
     for required in (
         "Установка",
@@ -75,7 +79,7 @@ def test_0524_operational_guide_contract():
         assert required in guide
 
 
-def test_0524_installer_uses_canonical_source_and_legacy_runtime_identity():
+def test_0525_installer_uses_canonical_source_and_legacy_runtime_identity():
     installer = (APP / "install.sh").read_text(encoding="utf-8")
 
     assert 'SOURCE_PRODUCT_DIR="digitalhouses_pve_agent"' in installer
