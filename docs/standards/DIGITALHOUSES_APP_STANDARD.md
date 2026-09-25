@@ -846,15 +846,7 @@ New `linux_agent` installations use the canonical default layout:
 journald
 ```
 
-Existing released products may retain established runtime paths as documented compatibility exceptions. For example, DigitalHouses Plex Agent currently retains:
-
-```text
-/opt/digitalhouses/digitalhouses_plex_monitoring/
-/etc/digitalhouses_plex_monitoring/digitalhouses_plex_monitoring.conf
-/var/lib/digitalhouses_plex_monitoring/
-```
-
-and DigitalHouses PVE Agent retains its established `dh_pve_app` runtime paths.
+Existing released products may retain established runtime paths as documented compatibility exceptions while a controlled migration is pending. DigitalHouses Plex Agent migrated its Linux service/filesystem identity to canonical `digitalhouses_plex_agent` paths in version `0.6.0`. DigitalHouses PVE Agent still retains its established `dh_pve_app` runtime paths as an explicit compatibility exception.
 
 Rules:
 
@@ -874,10 +866,10 @@ Default path for a new Linux Agent:
 /etc/<canonical-product-id>/<canonical-product-id>.conf
 ```
 
-Existing released Agents may retain a documented compatibility path. DigitalHouses Plex Agent currently retains:
+Existing released Agents may retain a documented compatibility path while a controlled migration is pending. DigitalHouses Plex Agent uses the canonical configuration path after its version `0.6.0` runtime migration:
 
 ```text
-/etc/digitalhouses_plex_monitoring/digitalhouses_plex_monitoring.conf
+/etc/digitalhouses_plex_agent/digitalhouses_plex_agent.conf
 ```
 
 Rules:
@@ -1364,10 +1356,10 @@ configuration from *.conf
 publishing/monitoring integration
 ```
 
-Compatibility-stable installed configuration path:
+Canonical installed configuration path:
 
 ```text
-/etc/digitalhouses_plex_monitoring/digitalhouses_plex_monitoring.conf
+/etc/digitalhouses_plex_agent/digitalhouses_plex_agent.conf
 ```
 
 Installation and updates use the same idempotent:
