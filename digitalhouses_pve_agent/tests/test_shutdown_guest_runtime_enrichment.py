@@ -32,6 +32,7 @@ class FakeTopology:
 class FakeShutdownHistoryTracker:
     def __init__(self):
         self.enriched_with = None
+        self.inventory_with = None
         self._payload = {
             "guest_last_shutdowns": {
                 "vm": {},
@@ -59,6 +60,9 @@ class FakeShutdownHistoryTracker:
     def refresh_current_guest_shutdowns(self):
         return False
 
+    def record_guest_inventory(self, guest_names):
+        self.inventory_with = dict(guest_names)
+
     def enrich_guest_last_shutdowns(self, guest_timeouts):
         self.enriched_with = dict(guest_timeouts)
         item = self._payload["guest_last_shutdowns"]["lxc"]["333"]
@@ -79,6 +83,7 @@ def test_guest_collector_enriches_latest_shutdown_fact_before_presentation(tmp_p
 
     sample = collector.guests()
 
+    assert tracker.inventory_with == {("lxc", "333"): "NetAlertX"}
     assert tracker.enriched_with == {("lxc", "333"): 30}
     guest = sample.data["lxcs"]["333"]
     assert guest["last_shutdown_duration_seconds"] == 12
