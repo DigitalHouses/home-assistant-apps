@@ -8,7 +8,7 @@ Native Linux agent for Plex Media Server workload, playback, transcoding and lib
 
 [Install / update](#install--update) · [Changelog](CHANGELOG.md) · [Engineering docs](../docs/digitalhouses_plex_agent/) · [Issues](https://github.com/DigitalHouses/home-assistant-apps/issues)
 
-The public product name, repository directory, release identifier and installed Linux runtime identity are **DigitalHouses Plex Agent** / `digitalhouses_plex_agent`. Version `0.6.0` migrates the previous `digitalhouses_plex_agent` service/filesystem identity to the canonical runtime while deliberately preserving the released MQTT/device/entity contract.
+The public product name, repository directory, release identifier and installed Linux runtime identity are **DigitalHouses Plex Agent** / `digitalhouses_plex_agent`. Version `0.6.0` migrates the previous `digitalhouses_plex_monitoring` service/filesystem identity to the canonical runtime while deliberately preserving the released MQTT/device/entity contract.
 
 ## Purpose
 
