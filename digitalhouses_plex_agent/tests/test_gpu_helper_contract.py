@@ -6,10 +6,10 @@ from app.gpu_collector import GpuStateReader
 
 
 ROOT = Path(__file__).resolve().parents[1]
-MAIN_UNIT = (ROOT / "systemd/digitalhouses_plex_monitoring.service").read_text(
+MAIN_UNIT = (ROOT / "systemd/digitalhouses_plex_agent.service").read_text(
     encoding="utf-8"
 )
-HELPER_UNIT = (ROOT / "systemd/digitalhouses_plex_gpu_helper.service").read_text(
+HELPER_UNIT = (ROOT / "systemd/digitalhouses_plex_agent_gpu_helper.service").read_text(
     encoding="utf-8"
 )
 APP = (ROOT / "app/app.py").read_text(encoding="utf-8")
@@ -24,12 +24,12 @@ def test_main_service_does_not_receive_gpu_privilege():
 
 
 def test_gpu_helper_isolated_capability_contract():
-    assert "User=digitalhouses_plex_monitoring" in HELPER_UNIT
-    assert "Group=digitalhouses_plex_monitoring" in HELPER_UNIT
+    assert "User=digitalhouses_plex_agent" in HELPER_UNIT
+    assert "Group=digitalhouses_plex_agent" in HELPER_UNIT
     assert "CapabilityBoundingSet=CAP_SYS_ADMIN" in HELPER_UNIT
     assert "AmbientCapabilities=CAP_SYS_ADMIN" in HELPER_UNIT
     assert "NoNewPrivileges=true" in HELPER_UNIT
-    assert "ReadWritePaths=/var/lib/digitalhouses_plex_monitoring" in HELPER_UNIT
+    assert "ReadWritePaths=/var/lib/digitalhouses_plex_agent" in HELPER_UNIT
 
 
 def test_main_agent_reads_helper_state_instead_of_running_privileged_collector():
@@ -106,7 +106,7 @@ def test_gpu_state_reader_rejects_stale_snapshot():
 
 
 def test_installer_manages_gpu_helper_separately():
-    assert 'GPU_SERVICE_NAME="digitalhouses_plex_gpu_helper.service"' in INSTALLER
+    assert 'GPU_SERVICE_NAME="${APP_NAME}_gpu_helper.service"' in INSTALLER
     assert '"${APP_DIR}/systemd/${GPU_SERVICE_NAME}"' in INSTALLER
     assert 'systemctl enable "${GPU_SERVICE_NAME}"' in INSTALLER
     assert 'systemctl restart "${GPU_SERVICE_NAME}"' in INSTALLER
