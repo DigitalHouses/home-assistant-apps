@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.5.24
+
+- Publish the first PVE Agent release from the canonical repository directory `digitalhouses_pve_agent/` after the repo-level product naming migration.
+- Keep installed runtime compatibility unchanged: `dh_pve_app.service`, `/opt/digitalhouses/dh_pve_app`, `/etc/dh_pve_app`, `/var/lib/dh_pve_app`, MQTT `DigitalHouses/Global/dh_pve_app` and existing Home Assistant identities remain intact.
+- Carry forward shutdown-history parser v5 and standalone `qm shutdown` / `pct shutdown` duration tracking from 0.5.23 under the canonical source layout.
+
 ## 0.5.23
 
 - Parse native Proxmox `starting task UPID:...:qmshutdown|vzshutdown:<id>:` journal records so standalone `qm shutdown` / `pct shutdown` operations produce a real per-guest shutdown duration.
