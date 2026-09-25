@@ -56,6 +56,7 @@ class DhPveRuntime:
         now_iso: Callable[[], str],
         now_monotonic: Callable[[], float] = time.monotonic,
         setting_tasks: Mapping[str, tuple[str, ...]] | None = None,
+        manual_refresh_collectors: tuple[str, ...] | None = None,
         presentation_router: PvePresentationRouter | None = None,
         static_collectors: tuple[str, ...] = (),
         slow_tasks: tuple[str, ...] = (),
@@ -76,6 +77,11 @@ class DhPveRuntime:
         self.now_iso = now_iso
         self.now_monotonic = now_monotonic
         self.setting_tasks = dict(setting_tasks or {})
+        self.manual_refresh_collectors = (
+            tuple(self.collectors)
+            if manual_refresh_collectors is None
+            else tuple(manual_refresh_collectors)
+        )
         self.presentation_router = presentation_router or PvePresentationRouter()
         self.static_collectors = tuple(static_collectors)
         self.slow_tasks = frozenset(slow_tasks)
@@ -377,7 +383,7 @@ class DhPveRuntime:
         if manual_refresh and all(
             self._subsystems.get(name) is not None
             and self._subsystems[name].available
-            for name in self.collectors
+            for name in selected
         ):
             candidate_refresh = collected_at
 
@@ -432,7 +438,11 @@ class DhPveRuntime:
         )
 
     def manual_refresh(self) -> bool:
-        published = self.run_collection(force=True, manual_refresh=True)
+        published = self.run_collection(
+            names=self.manual_refresh_collectors,
+            force=True,
+            manual_refresh=True,
+        )
         if self._static_collectors_available():
             self._prime_version_fingerprint()
         return published
