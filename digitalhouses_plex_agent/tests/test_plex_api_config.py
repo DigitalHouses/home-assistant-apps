@@ -22,7 +22,7 @@ class PlexApiConfigTests(unittest.TestCase):
         self.assertEqual(config.plex_api.base_url, "http://127.0.0.1:32400")
         self.assertEqual(
             str(config.plex_api.token_file),
-            "/etc/digitalhouses_plex_monitoring/plex_local_admin_token",
+            "/etc/digitalhouses_plex_agent/plex_local_admin_token",
         )
         self.assertEqual(config.plex_api.timeout_seconds, 3.0)
         self.assertEqual(config.plex_api.library_refresh_seconds, 3600.0)
