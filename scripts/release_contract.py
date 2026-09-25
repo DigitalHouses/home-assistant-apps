@@ -55,7 +55,11 @@ PRODUCT_REGISTRY = (
 PRODUCT_REGISTRY_RELATIVE = str(PRODUCT_REGISTRY.relative_to(ROOT))
 
 
-def load_release_products(\n    raw: dict[str, Any],\n    *,\n    require_canonical_directory: bool = True,\n) -> dict[str, ProductSpec]:
+def load_release_products(
+    raw: dict[str, Any],
+    *,
+    require_canonical_directory: bool = True,
+) -> dict[str, ProductSpec]:
     products: dict[str, ProductSpec] = {}
 
     for entry in raw.get("products", []):
