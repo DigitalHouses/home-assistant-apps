@@ -94,7 +94,7 @@ When enabled, the App sends protocol-v1 heartbeats to `https://telemetry.digital
 
 The per-installation token is used only as the Bearer credential. Country is derived server-side; Internet measurements, outage history, router telemetry, entity IDs, Home Assistant identity and configuration are not sent.
 
-Identity and heartbeat scheduling state are persisted in `/data/telemetry.json`. A successful heartbeat is normally followed by the next one after 24 hours ±30 minutes. Failed attempts back off for at least one hour and never affect the main monitoring/recovery path.
+Identity and heartbeat scheduling state are persisted in `/data/telemetry.json`. The persisted state also records whether telemetry was disabled or enabled. A `false -> true` configuration transition schedules exactly one immediate best-effort heartbeat on the next App start, even when the previous successful heartbeat is still inside its normal 24-hour interval. After that first attempt the transition is consumed: an ordinary restart does not create another immediate heartbeat. A successful heartbeat is normally followed by the next one after 24 hours ±30 minutes. If the immediate or scheduled attempt fails, the failure timestamp is persisted and a restart does not bypass the one-hour backoff. Telemetry failures never affect the main monitoring/recovery path.
 
 `button.dh_internet_app_delete_telemetry` performs authenticated deletion of the retained installation telemetry record. Disabling telemetry stops future heartbeats but does not delete already retained server data.
 
