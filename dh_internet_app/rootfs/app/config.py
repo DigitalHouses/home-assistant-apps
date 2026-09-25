@@ -86,6 +86,7 @@ class AppConfig:
     speedtest: SpeedtestConfig
     traffic: TrafficConfig
     recovery: RecoveryConfig
+    telemetry_enabled: bool
     log_level: str
 
 
@@ -253,6 +254,7 @@ def parse_options(raw: Any) -> AppConfig:
             ont=ont,
             router=router,
         ),
+        telemetry_enabled=bool(raw.get("telemetry_enabled", False)),
         log_level=level,
     )
 
