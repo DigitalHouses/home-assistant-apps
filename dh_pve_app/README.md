@@ -10,7 +10,7 @@ Native Linux agent for **Proxmox VE 8.x** that publishes host, CPU, memory, stor
 
 The public product name is **DigitalHouses PVE Agent**. Existing runtime identifiers remain compatible: the implementation directory is `dh_pve_app`, the MQTT base namespace is `DigitalHouses/Global/dh_pve_app/<instance>`, and the Home Assistant devices are `DH PVE` and optional `DH PVE UPS`.
 
-Current source release: `VERSION` is `0.5.20`.
+Current source release: `VERSION` is `0.5.21`.
 
 ## Home Assistant dashboard
 
@@ -39,7 +39,7 @@ Collection cadence is App-owned and does not accelerate because a resource becom
 - `UPS` — 10 s: NUT runtime data;
 - `SLOW` — 60 s: storage usage, disk temperature, GPU/transcoding, VM/LXC runtime, host runtime diagnostics and `/etc/pve/.version` check;
 - `HEALTH` — 1 h: full SMART/wear and genuinely heavy health diagnostics;
-- `STATIC` — startup, Manual Refresh and detected PVE configuration-version changes.
+- `STATIC` — startup and detected PVE configuration-version changes. Manual Refresh rebuilds topology and refreshes UI-facing host/guest/CPU/memory/storage/fan data immediately, while full SMART/health, GPU/transcoding and disk-temperature collectors remain on their scheduled cadences.
 
 The legacy `[ups] poll_interval_seconds` configuration key is accepted only for upgrade compatibility and is ignored; UPS collection remains fixed at 10 seconds.
 
