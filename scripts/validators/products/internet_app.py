@@ -29,6 +29,10 @@ def validate_internet(root: Path, app: Path, context: dict[str, Any]) -> None:
         fail(f"{app.name}: speedtest must be an App option")
     if "traffic" not in options:
         fail(f"{app.name}: traffic must be an App option")
+    if options.get("telemetry_enabled") is not False:
+        fail(f"{app.name}: telemetry_enabled must exist and default to false")
+    if schema.get("telemetry_enabled") != "bool":
+        fail(f"{app.name}: telemetry_enabled schema must be bool")
 
     traffic = options.get("traffic")
     if not isinstance(traffic, dict):
@@ -80,6 +84,21 @@ def validate_internet(root: Path, app: Path, context: dict[str, Any]) -> None:
     )
     if '"script"' in recovery_source or "'script'" in recovery_source:
         fail(f"{app.name}: script recovery action is forbidden")
+
+    telemetry_path = app / "rootfs" / "app" / "telemetry.py"
+    require_files(root, [telemetry_path])
+    telemetry_source = telemetry_path.read_text(encoding="utf-8")
+    for value in (
+        'PRODUCT = "digitalhouses_internet_app"',
+        'STATE_FILE = Path("/data/telemetry.json")',
+        'BASE_URL = "https://telemetry.digitalhouses.vip"',
+        '"telemetry_policy_version": TELEMETRY_POLICY_VERSION',
+        '"installation_id": self.installation_id',
+        '"product": PRODUCT',
+        '"version": self.version',
+    ):
+        if value not in telemetry_source:
+            fail(f"{app.name}: telemetry contract is missing {value!r}")
 
     validate_presentation_examples(root, app, discovery)
     validate_config_translations(root, app, schema)
