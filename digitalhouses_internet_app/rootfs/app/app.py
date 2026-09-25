@@ -61,7 +61,6 @@ from state import (
     now_local,
     save_discovery_components,
 )
-from slug_migration import export_bridge_bundle
 from telemetry import TelemetryClient, TelemetryRunner
 from traffic import (
     entity_rate_mbps,
@@ -92,7 +91,7 @@ class InternetApp:
             format="%(asctime)s %(levelname)s %(message)s",
             datefmt="%Y-%m-%d %H:%M:%S",
         )
-        self.log = logging.getLogger("digitalhouses_internet")
+        self.log = logging.getLogger("digitalhouses_internet_app")
         self.started_at = iso(now_local())
 
         self.stop_app = threading.Event()
@@ -1028,23 +1027,6 @@ class InternetApp:
                 self.recovery_thread.join(
                     timeout=(self.ha_api.timeout_seconds * 2) + 5
                 )
-            if os.getenv("DH_SLUG_MIGRATION_MODE") == "export":
-                try:
-                    migration = export_bridge_bundle(
-                        app_version=APP_VERSION
-                    )
-                    self.log.info(
-                        "Slug migration bridge bundle refreshed: "
-                        "files=%s sha256=%s",
-                        migration["files"],
-                        migration["sha256"],
-                    )
-                except Exception as exc:
-                    # Migration preparation must never break the legacy App.
-                    self.log.warning(
-                        "Unable to refresh slug migration bridge bundle: %s",
-                        exc,
-                    )
             if self.mqtt.is_connected():
                 self.mqtt.publish(
                     TOPICS["availability"], "offline", qos=1, retain=True
