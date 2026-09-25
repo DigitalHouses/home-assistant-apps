@@ -1,6 +1,6 @@
 # DigitalHouses Internet App — HAOS validation plan
 
-This plan covers the current released product and the controlled Home Assistant App slug migration.
+This plan covers the current canonical DigitalHouses Internet App runtime.
 
 ## 1. Safe first start
 
@@ -120,52 +120,7 @@ Then explicitly enable `telemetry_enabled: true` and restart the released App. V
 
 Press `button.dh_internet_app_delete_telemetry` and verify the server-side installation record is removed. Disable telemetry again if the installation should stop reporting.
 
-## 8. Slug migration bridge
-
-On legacy slug `digitalhouses_internet`, update to bridge release `0.1.12`.
-
-Verify:
-
-- startup log reports `Slug migration bridge bundle ready`;
-- `/share/digitalhouses_internet_app/slug-migration-v1/bundle.tar.gz` exists;
-- the bundle manifest identifies product `digitalhouses_internet_app`, source slug `digitalhouses_internet`, target slug `digitalhouses_internet_app`, and source version `0.1.12`;
-- options, `telemetry.json`, and all existing explicit runtime files are represented by SHA-256 entries;
-- telemetry `installation_id` in the source state is recorded for later equality verification.
-
-Create a Home Assistant backup while the bridge App is still installed. Then stop the bridge App cleanly and verify the shutdown log reports `Slug migration bridge bundle refreshed`.
-
-Do not uninstall the bridge App. It remains the immediate rollback target until the canonical-slug installation has passed migration acceptance.
-
-## 9. Canonical slug import
-
-With the legacy `0.1.12` bridge App stopped, reload the App store and install/update `digitalhouses_internet_app` to version `0.1.15`.
-
-On the first canonical start, one of two valid paths is expected:
-
-- if the migrated options are already active (including recovery from the failed 0.1.13 attempt), import completes immediately;
-- otherwise the log reports that migration options were applied and one restart is required; the App must stop cleanly, not enter `state: error`. Start it once more.
-
-Then verify:
-
-- startup log reports `Slug migration bundle imported successfully: digitalhouses_internet -> digitalhouses_internet_app`;
-- the canonical App starts normally after import;
-- current App options match the bridge source rather than the package defaults;
-- `telemetry.json` keeps the same installation ID and reports version `0.1.15` after its version-change heartbeat;
-- outage, recent-results, recovery, server, speedtest, threshold and traffic state are present;
-- existing MQTT Discovery entities remain the same `dh_internet_app_*` identities with no duplicates.
-
-Restart the canonical App once.
-
-Verify:
-
-- startup log reports no second state import for the same bundle;
-- state created after the first canonical start is not overwritten by the old bridge snapshot.
-
-Before deleting the legacy App, prove rollback once: stop canonical, start legacy `0.1.12`, confirm its prior state is intact, stop legacy again, then start canonical. Never run both simultaneously. The legacy start/stop refreshes the bridge bundle, so canonical must still start with `No pending slug migration bundle to import` and must preserve newer canonical state.
-
-Create a new Home Assistant backup after the canonical App is accepted and verify that backup/restore preserves the canonical slug and installation state.
-
-## 10. Recovery — only after read-only tests pass
+## 8. Recovery — only after read-only tests pass
 
 Use known-good Home Assistant `button.*` or `switch.*` recovery entities.
 
@@ -194,9 +149,9 @@ Verify:
 - active cooldown is not bypassed;
 - a restart between cycles waits through a retry guard before another power action.
 
-## 11. Pass criteria
+## 9. Pass criteria
 
-The first HAOS test passes when:
+The HAOS validation passes when:
 
 - App installation/start is clean;
 - MQTT Discovery creates only canonical entities;
@@ -206,4 +161,4 @@ The first HAOS test passes when:
 - switch recovery cannot be left off by a normal Stop/Restart path;
 - the reference dashboard and notification package load without legacy Speedtest entities.
 
-Immutable GHCR delivery remains a separate production-delivery milestone; telemetry is already integrated and is part of this validation plan.
+Historical Supervisor slug-migration validation is retained separately in `../docs/digitalhouses_internet_app/slug-migration.md`; it is no longer part of the current runtime test path.
