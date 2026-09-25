@@ -176,10 +176,8 @@ def test_standalone_guest_shutdown_fact_is_enriched_once_from_guest_config(tmp_p
     assert before["timeout_ratio"] is None
     assert before["assessment"] == "unknown"
 
-    assert tracker.enrich_guest_last_shutdown(
-        kind="lxc",
-        guest_id="333",
-        timeout_seconds=30,
+    assert tracker.enrich_guest_last_shutdowns(
+        {("lxc", "333"): 30}
     ) is True
 
     latest = tracker.payload()["guest_last_shutdowns"]["lxc"]["333"]
@@ -189,10 +187,8 @@ def test_standalone_guest_shutdown_fact_is_enriched_once_from_guest_config(tmp_p
     assert latest["assessment"] == "ok"
 
     # Historical fact keeps the timeout that was attached to the shutdown.
-    assert tracker.enrich_guest_last_shutdown(
-        kind="lxc",
-        guest_id="333",
-        timeout_seconds=50,
+    assert tracker.enrich_guest_last_shutdowns(
+        {("lxc", "333"): 50}
     ) is False
     latest = tracker.payload()["guest_last_shutdowns"]["lxc"]["333"]
     assert latest["timeout_seconds"] == 30
