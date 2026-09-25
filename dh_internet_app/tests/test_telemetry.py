@@ -73,6 +73,103 @@ class TelemetryTests(unittest.TestCase):
             self.assertFalse(client.tick())
             self.assertEqual(transport.calls, [])
 
+    def test_reenable_sends_immediate_heartbeat_once(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            now = {"value": 1000.0}
+            state = Path(temp) / "telemetry.json"
+
+            initial = TelemetryClient(
+                enabled=True,
+                version="0.1.11",
+                state_file=state,
+                transport=FakeTransport(),
+                now_epoch=lambda: now["value"],
+            )
+            self.assertTrue(initial.tick())
+
+            now["value"] += 60.0
+            disabled_transport = FakeTransport()
+            disabled = TelemetryClient(
+                enabled=False,
+                version="0.1.11",
+                state_file=state,
+                transport=disabled_transport,
+                now_epoch=lambda: now["value"],
+            )
+            self.assertFalse(disabled.tick())
+            self.assertEqual(disabled_transport.calls, [])
+
+            now["value"] += 60.0
+            reenabled_transport = FakeTransport()
+            reenabled = TelemetryClient(
+                enabled=True,
+                version="0.1.11",
+                state_file=state,
+                transport=reenabled_transport,
+                now_epoch=lambda: now["value"],
+            )
+            self.assertTrue(reenabled.tick())
+            self.assertEqual(len(reenabled_transport.calls), 1)
+
+            now["value"] += 60.0
+            restarted_transport = FakeTransport()
+            restarted = TelemetryClient(
+                enabled=True,
+                version="0.1.11",
+                state_file=state,
+                transport=restarted_transport,
+                now_epoch=lambda: now["value"],
+            )
+            self.assertFalse(restarted.tick())
+            self.assertEqual(restarted_transport.calls, [])
+
+    def test_failed_reenable_keeps_backoff_after_restart(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            now = {"value": 1000.0}
+            state = Path(temp) / "telemetry.json"
+
+            initial = TelemetryClient(
+                enabled=True,
+                version="0.1.11",
+                state_file=state,
+                transport=FakeTransport(),
+                now_epoch=lambda: now["value"],
+            )
+            self.assertTrue(initial.tick())
+
+            now["value"] += 60.0
+            TelemetryClient(
+                enabled=False,
+                version="0.1.11",
+                state_file=state,
+                transport=FakeTransport(),
+                now_epoch=lambda: now["value"],
+            )
+
+            now["value"] += 60.0
+            failing_transport = FakeTransport(error=OSError("offline"))
+            reenabled = TelemetryClient(
+                enabled=True,
+                version="0.1.11",
+                state_file=state,
+                transport=failing_transport,
+                now_epoch=lambda: now["value"],
+            )
+            self.assertFalse(reenabled.tick())
+            self.assertEqual(len(failing_transport.calls), 1)
+
+            now["value"] += 60.0
+            restarted_transport = FakeTransport()
+            restarted = TelemetryClient(
+                enabled=True,
+                version="0.1.11",
+                state_file=state,
+                transport=restarted_transport,
+                now_epoch=lambda: now["value"],
+            )
+            self.assertFalse(restarted.tick())
+            self.assertEqual(restarted_transport.calls, [])
+
     def test_local_build_never_sends_production_telemetry(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             transport = FakeTransport()
