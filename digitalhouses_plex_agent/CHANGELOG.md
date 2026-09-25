@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.6.0
+
+- Migrate the installed Linux runtime identity from `digitalhouses_plex_monitoring` to canonical `digitalhouses_plex_agent`: service/user/group, `/opt`, `/etc`, `/var/lib`, config file and GPU helper service.
+- Add a controlled copy-first migration for existing installations with a root-only tar backup, idempotent migration marker and preservation of config, Plex token, playback-session state and GPU helper state.
+- Rewrite only the historical default Plex token path in the copied config; user MQTT settings and other explicit configuration remain unchanged.
+- Automatically restore the previous legacy service state if the canonical main service fails its first start.
+- Retain the legacy config/state trees after a successful first migration as an immediate rollback snapshot.
+- Keep MQTT base `DigitalHouses/Global/plex_monitoring`, Discovery device ID `digitalhouses_plex_monitoring_plex` and all existing `dh_plex_*` Home Assistant entities unchanged; HA identity migration remains a separate release.
+
 ## 0.5.0
 
 - Normalize Plex, Scanner, and Transcoder CPU sensors to 0-100% of the complete logical CPU capacity available to the machine instead of Linux per-core `top` semantics.
