@@ -156,7 +156,11 @@ def _configured_tasks(
         try:
             paths = sorted(
                 directory.glob("*.conf"),
-                key=lambda path: int(path.stem) if path.stem.isdigit() else path.stem,
+                key=lambda path: (
+                    (0, int(path.stem))
+                    if path.stem.isdigit()
+                    else (1, path.stem)
+                ),
             )
         except OSError:
             return None
