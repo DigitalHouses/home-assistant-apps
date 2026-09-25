@@ -102,7 +102,6 @@ jobs:
       - name: Set up Docker Buildx
         if: steps.merge.outputs.merged == 'true'
         uses: docker/setup-buildx-action@v3
-
       - name: Detect and validate releases
         if: steps.merge.outputs.merged == 'true'
         env:
@@ -134,14 +133,12 @@ jobs:
             exit 0
           fi
 
-          echo "$GH_TOKEN" | docker login ghcr.io             --username "$GITHUB_ACTOR"             --password-stdin
+          echo "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
 
           for index in $(seq 0 $((count - 1))); do
-            product="$(jq -r ".[$index].product" release-candidates.json)"
-            version="$(jq -r ".[$index].version" release-candidates.json)"
-            product_type="$(
-              jq -r --arg product "$product"                 '.products[] | select(.id == $product) | .type'                 digitalhouses-stats/digitalhouses_stats/product_registry.json
-            )"
+            product="$(jq -r ".[${index}].product" release-candidates.json)"
+            version="$(jq -r ".[${index}].version" release-candidates.json)"
+            product_type="$(jq -r --arg product "$product" '.products[] | select(.id == $product) | .type' digitalhouses-stats/digitalhouses_stats/product_registry.json)"
 
             if [ "$product_type" != "app" ]; then
               continue
@@ -198,26 +195,33 @@ jobs:
                 exit 1
               fi
 
-              docker buildx build                 --platform "$platform"                 --build-arg "BUILD_VERSION=$version"                 --build-arg "BUILD_ARCH=$arch"                 --label "org.opencontainers.image.revision=$MERGE_SHA"                 --label "org.opencontainers.image.version=$version"                 --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY"                 --tag "$arch_ref"                 --push                 "$product"
+              docker buildx build \
+                --platform "$platform" \
+                --build-arg "BUILD_VERSION=$version" \
+                --build-arg "BUILD_ARCH=$arch" \
+                --label "org.opencontainers.image.revision=$MERGE_SHA" \
+                --label "org.opencontainers.image.version=$version" \
+                --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
+                --tag "$arch_ref" \
+                --push \
+                "$product"
 
               refs+=("$arch_ref")
             done
 
-            docker buildx imagetools create               --tag "$release_ref"               "${refs[@]}"
+            docker buildx imagetools create \
+              --tag "$release_ref" \
+              "${refs[@]}"
 
-            digest="$(
-              docker buildx imagetools inspect "$release_ref" |
-                awk '/^Digest:/ {print $2; exit}'
-            )"
+            digest="$(docker buildx imagetools inspect "$release_ref" | awk '/^Digest:/ {print $2; exit}')"
 
             if [[ ! "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
               echo "Unable to resolve immutable image digest for $release_ref" >&2
               exit 1
             fi
 
-            printf '%s\t%s\t%s\t%s\n'               "$product" "$version" "$release_ref" "$digest"               >> app-release-artifacts.tsv
+            printf '%s\t%s\t%s\t%s\n' "$product" "$version" "$release_ref" "$digest" >> app-release-artifacts.tsv
           done
-
       - name: Publish product releases
         if: steps.merge.outputs.merged == 'true'
         env:
@@ -247,109 +251,10 @@ jobs:
               --version "$version" \
               --notes-file "$notes_file" \
               --github-output "$output_file"
-
-            artifact="$(
-              awk -F '\t' -v product="$product"                 '$1 == product {print $3 "\t" $4; exit}'                 app-release-artifacts.tsv
-            )"
-            if [ -n "$artifact" ]; then
-              image_ref="${artifact%%            title="$(sed -n 's/^title=//p' "$output_file")"
-            prerelease="$(sed -n 's/^prerelease=//p' "$output_file")"
-
-            test -n "$tag"
-            test -n "$title"
-
-            args=(
-              release create "$tag"
-              --repo "$GITHUB_REPOSITORY"
-              --target "$MERGE_SHA"
-              --title "$title"
-              --notes-file "$notes_file"
-            )
-
-            if [ "$prerelease" = "true" ]; then
-              args+=(--prerelease)
-            fi
-
-            gh "${args[@]}"
-          done
-
-      - name: Verify published releases
-        if: steps.merge.outputs.merged == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          MERGE_SHA: ${{ steps.merge.outputs.merge_sha }}
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-
-          count="$(jq 'length' release-candidates.json)"
-          if [ "$count" -eq 0 ]; then
-            exit 0
-          fi
-
-          for index in $(seq 0 $((count - 1))); do
-            product="$(jq -r ".[$index].product" release-candidates.json)"
-            version="$(jq -r ".[$index].version" release-candidates.json)"
-            tag="${product}-v${version}"
-
-            git fetch origin "refs/tags/${tag}:refs/tags/${tag}" --force
-            actual="$(git rev-list -n 1 "$tag")"
-            test "$actual" = "$MERGE_SHA"
-
-            gh release view "$tag" \
-              --repo "$GITHUB_REPOSITORY" \
-              --json tagName,isDraft,isPrerelease
-          done
-\t'*}"
-              image_digest="${artifact#*            title="$(sed -n 's/^title=//p' "$output_file")"
-            prerelease="$(sed -n 's/^prerelease=//p' "$output_file")"
-
-            test -n "$tag"
-            test -n "$title"
-
-            args=(
-              release create "$tag"
-              --repo "$GITHUB_REPOSITORY"
-              --target "$MERGE_SHA"
-              --title "$title"
-              --notes-file "$notes_file"
-            )
-
-            if [ "$prerelease" = "true" ]; then
-              args+=(--prerelease)
-            fi
-
-            gh "${args[@]}"
-          done
-
-      - name: Verify published releases
-        if: steps.merge.outputs.merged == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          MERGE_SHA: ${{ steps.merge.outputs.merge_sha }}
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-
-          count="$(jq 'length' release-candidates.json)"
-          if [ "$count" -eq 0 ]; then
-            exit 0
-          fi
-
-          for index in $(seq 0 $((count - 1))); do
-            product="$(jq -r ".[$index].product" release-candidates.json)"
-            version="$(jq -r ".[$index].version" release-candidates.json)"
-            tag="${product}-v${version}"
-
-            git fetch origin "refs/tags/${tag}:refs/tags/${tag}" --force
-            actual="$(git rev-list -n 1 "$tag")"
-            test "$actual" = "$MERGE_SHA"
-
-            gh release view "$tag" \
-              --repo "$GITHUB_REPOSITORY" \
-              --json tagName,isDraft,isPrerelease
-          done
-\t'}"
+            image_ref="$(awk -F '\t' -v product="$product" '$1 == product {print $3; exit}' app-release-artifacts.tsv)"
+            image_digest="$(awk -F '\t' -v product="$product" '$1 == product {print $4; exit}' app-release-artifacts.tsv)"
+            if [ -n "$image_ref" ]; then
+              test -n "$image_digest"
               {
                 echo
                 echo "## Artifact provenance"
