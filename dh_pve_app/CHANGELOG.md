@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.5.21
+
 - Make the Home Assistant `Refresh now` action a lightweight UI refresh: rebuild topology and refresh guest, host, CPU, memory, storage and fan state without waiting for full SMART/health, GPU/transcoding or disk-temperature collectors.
 - Keep heavy collectors on their existing scheduled cadences; manual refresh timestamp now reflects successful completion of the selected UI-refresh set.
 
