@@ -1,0 +1,30 @@
+[Unit]
+Description=DigitalHouses Plex Agent GPU Helper
+After=local-fs.target
+Before=digitalhouses_plex_agent.service
+
+[Service]
+Type=simple
+User=digitalhouses_plex_agent
+Group=digitalhouses_plex_agent
+WorkingDirectory=/opt/digitalhouses/digitalhouses_plex_agent
+ExecStart=/opt/digitalhouses/digitalhouses_plex_agent/.venv/bin/python -m app.gpu_helper --state-file /var/lib/digitalhouses_plex_agent/gpu_state.json --interval 10
+Restart=on-failure
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+CapabilityBoundingSet=CAP_SYS_ADMIN
+AmbientCapabilities=CAP_SYS_ADMIN
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+ReadWritePaths=/var/lib/digitalhouses_plex_agent
+
+[Install]
+WantedBy=multi-user.target
