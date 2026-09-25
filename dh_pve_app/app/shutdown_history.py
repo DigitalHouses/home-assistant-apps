@@ -367,6 +367,19 @@ def _default_previous_boot_journal_reader() -> str:
     return completed.stdout or ""
 
 
+def _default_current_boot_journal_reader() -> str:
+    completed = subprocess.run(
+        ["journalctl", "-b", "0", "-o", "short-iso-precise", "--no-pager"],
+        capture_output=True,
+        text=True,
+        timeout=20.0,
+        check=False,
+    )
+    if completed.returncode != 0:
+        return ""
+    return completed.stdout or ""
+
+
 def _duration_between(start: object, end: object) -> int | None:
     if not isinstance(start, str) or not isinstance(end, str):
         return None
@@ -394,6 +407,87 @@ def _parsed_guest_history(
             if isinstance(raw, Mapping):
                 guests[kind][str(guest_id)] = dict(raw)
     return guests
+
+
+def _shutdown_status(clean: bool | None) -> str:
+    if clean is True:
+        return "correct"
+    if clean is False:
+        return "incorrect"
+    return "unknown"
+
+
+def _guest_record_time(raw: Mapping[str, Any]) -> datetime | None:
+    value = raw.get("finished_at")
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo is not None else None
+
+
+def _merge_guest_last_shutdowns(
+    state: dict[str, Any],
+    guests: object,
+    *,
+    source: str,
+) -> bool:
+    if not isinstance(guests, Mapping):
+        return False
+
+    existing_raw = state.get("guest_last_shutdowns")
+    existing: dict[str, dict[str, dict[str, Any]]] = {"vm": {}, "lxc": {}}
+    if isinstance(existing_raw, Mapping):
+        for kind in ("vm", "lxc"):
+            records = existing_raw.get(kind)
+            if isinstance(records, Mapping):
+                existing[kind] = {
+                    str(guest_id): dict(raw)
+                    for guest_id, raw in records.items()
+                    if isinstance(raw, Mapping)
+                }
+
+    changed = False
+    for kind in ("vm", "lxc"):
+        records = guests.get(kind)
+        if not isinstance(records, Mapping):
+            continue
+        for guest_id, raw in records.items():
+            if not isinstance(raw, Mapping):
+                continue
+            duration = raw.get("duration_seconds")
+            finished_at = raw.get("finished_at")
+            if not isinstance(duration, int) or isinstance(duration, bool):
+                continue
+            if not isinstance(finished_at, str):
+                continue
+
+            candidate = dict(raw)
+            candidate["source"] = source
+            key = str(guest_id)
+            previous = existing[kind].get(key)
+            previous_time = _guest_record_time(previous) if isinstance(previous, Mapping) else None
+            candidate_time = _guest_record_time(candidate)
+            if candidate_time is None:
+                continue
+            if (
+                previous_time is None
+                or candidate_time > previous_time
+                or (
+                    candidate_time == previous_time
+                    and source == "pve_shutdown"
+                    and previous is not None
+                    and previous.get("source") != "pve_shutdown"
+                )
+            ):
+                existing[kind][key] = candidate
+                changed = True
+
+    if changed or not isinstance(existing_raw, Mapping):
+        state["guest_last_shutdowns"] = existing
+    return changed
 
 
 def _previous_from_parsed(
@@ -426,6 +520,22 @@ def _previous_from_parsed(
     outage_started_at = source.get("outage_started_at")
     fsd_at = source.get("fsd_at")
     parsed_total = parsed.get("guest_shutdown_total_seconds")
+    guest_total_seconds = parsed_total if isinstance(parsed_total, int) else None
+    fsd_to_shutdown_seconds = _duration_between(fsd_at, shutdown_at)
+    all_guests_stopped_to_shutdown_seconds = _duration_between(
+        all_guests_stopped_at,
+        shutdown_at,
+    )
+    actual_shutdown_seconds: int | None = None
+    if fsd_to_shutdown_seconds is not None:
+        actual_shutdown_seconds = fsd_to_shutdown_seconds
+    elif (
+        guest_total_seconds is not None
+        and all_guests_stopped_to_shutdown_seconds is not None
+    ):
+        actual_shutdown_seconds = (
+            guest_total_seconds + all_guests_stopped_to_shutdown_seconds
+        )
 
     return {
         "history_parser_version": HISTORY_PARSER_VERSION,
@@ -436,7 +546,16 @@ def _previous_from_parsed(
         "shutdown_class": shutdown_class,
         "shutdown_reason": shutdown_reason,
         "shutdown_clean": shutdown_clean,
+        "shutdown_status": _shutdown_status(shutdown_clean),
         "shutdown_budget_fingerprint": source.get("shutdown_budget_fingerprint"),
+        "planned_shutdown_seconds": source.get("planned_shutdown_seconds"),
+        "planned_guest_shutdown_seconds": source.get("planned_guest_shutdown_seconds"),
+        "planned_all_guest_shutdown_seconds": source.get(
+            "planned_all_guest_shutdown_seconds"
+        ),
+        "running_guests": source.get("running_guests", []),
+        "shutdown_sequence": source.get("shutdown_sequence", []),
+        "actual_shutdown_seconds": actual_shutdown_seconds,
         "uptime_seconds": _duration_between(source.get("boot_at"), shutdown_at),
         "downtime_seconds": _duration_between(shutdown_at, next_boot_at),
         "outage_started_at": outage_started_at,
@@ -446,13 +565,12 @@ def _previous_from_parsed(
         "battery_runtime_at_fsd": source.get("battery_runtime_at_fsd"),
         "ups_load_at_fsd": source.get("ups_load_at_fsd"),
         "all_guests_stopped_at": all_guests_stopped_at,
-        "guest_shutdown_total_seconds": (
-            parsed_total if isinstance(parsed_total, int) else None
-        ),
+        "guest_shutdown_total_seconds": guest_total_seconds,
+        "actual_guest_shutdown_seconds": guest_total_seconds,
         "outage_to_fsd_seconds": _duration_between(outage_started_at, fsd_at),
         "fsd_to_all_guests_stopped_seconds": _duration_between(fsd_at, all_guests_stopped_at),
-        "fsd_to_shutdown_seconds": _duration_between(fsd_at, shutdown_at),
-        "all_guests_stopped_to_shutdown_seconds": _duration_between(all_guests_stopped_at, shutdown_at),
+        "fsd_to_shutdown_seconds": fsd_to_shutdown_seconds,
+        "all_guests_stopped_to_shutdown_seconds": all_guests_stopped_to_shutdown_seconds,
         "outage_to_shutdown_seconds": _duration_between(outage_started_at, shutdown_at),
         "guests": _parsed_guest_history(parsed.get("guests")),
     }
@@ -466,12 +584,14 @@ class ShutdownHistoryTracker:
         boot_id_reader: Callable[[], str] = _default_boot_id_reader,
         boot_time_reader: Callable[[], str] = _default_boot_time_reader,
         previous_boot_journal_reader: Callable[[], str] = _default_previous_boot_journal_reader,
+        current_boot_journal_reader: Callable[[], str] = _default_current_boot_journal_reader,
         now_iso: Callable[[], str] | None = None,
     ) -> None:
         self.state_store = state_store
         self.boot_id_reader = boot_id_reader
         self.boot_time_reader = boot_time_reader
         self.previous_boot_journal_reader = previous_boot_journal_reader
+        self.current_boot_journal_reader = current_boot_journal_reader
         self.now_iso = now_iso or (lambda: datetime.now().astimezone().isoformat())
 
     def _load(self) -> dict[str, Any]:
@@ -479,6 +599,14 @@ class ShutdownHistoryTracker:
         history = state.get("history")
         if not isinstance(history, list):
             state["history"] = []
+        latest = state.get("guest_last_shutdowns")
+        if not isinstance(latest, Mapping):
+            state["guest_last_shutdowns"] = {"vm": {}, "lxc": {}}
+        else:
+            state["guest_last_shutdowns"] = {
+                "vm": dict(latest.get("vm")) if isinstance(latest.get("vm"), Mapping) else {},
+                "lxc": dict(latest.get("lxc")) if isinstance(latest.get("lxc"), Mapping) else {},
+            }
         return state
 
     def _reconcile_previous_parser(self, state: dict[str, Any], *, current_boot_at: object) -> bool:
@@ -502,6 +630,11 @@ class ShutdownHistoryTracker:
             next_boot_at=current_boot_at,
         )
         state["previous_shutdown"] = reconciled
+        _merge_guest_last_shutdowns(
+            state,
+            reconciled.get("guests"),
+            source="pve_shutdown",
+        )
 
         previous_boot_id = reconciled.get("boot_id")
         history: list[dict[str, Any]] = []
@@ -552,6 +685,11 @@ class ShutdownHistoryTracker:
         history.append(previous)
         state["history"] = history[-HISTORY_LIMIT:]
         state["previous_shutdown"] = previous
+        _merge_guest_last_shutdowns(
+            state,
+            previous.get("guests"),
+            source="pve_shutdown",
+        )
         state["current_boot"] = {"boot_id": boot_id, "boot_at": boot_at}
         self.state_store.save(state)
         return self.payload()
@@ -622,6 +760,76 @@ class ShutdownHistoryTracker:
         state["current_boot"] = updated
         self.state_store.save(state)
 
+    def record_shutdown_plan(
+        self,
+        *,
+        configuration_fingerprint: str,
+        planned_shutdown_seconds: int | None,
+        planned_guest_shutdown_seconds: int | None,
+        planned_all_guest_shutdown_seconds: int | None,
+        running_guests: list[str] | tuple[str, ...],
+        shutdown_sequence: list[list[str]] | tuple[tuple[str, ...], ...],
+    ) -> None:
+        if not isinstance(configuration_fingerprint, str) or not configuration_fingerprint.strip():
+            raise ValueError("shutdown plan fingerprint must be a non-empty string")
+
+        def seconds(value: object) -> int | None:
+            if value is None:
+                return None
+            if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+                raise ValueError("shutdown plan seconds must be non-negative integers")
+            return value
+
+        normalized_guests = [str(value) for value in running_guests]
+        normalized_sequence = [
+            [str(value) for value in group]
+            for group in shutdown_sequence
+        ]
+
+        state = self._load()
+        current = state.get("current_boot")
+        if not isinstance(current, Mapping):
+            self.startup()
+            state = self._load()
+            current = state.get("current_boot")
+        if not isinstance(current, Mapping):
+            return
+
+        updated = dict(current)
+        updated.update(
+            {
+                "shutdown_budget_fingerprint": configuration_fingerprint.strip(),
+                "planned_shutdown_seconds": seconds(planned_shutdown_seconds),
+                "planned_guest_shutdown_seconds": seconds(
+                    planned_guest_shutdown_seconds
+                ),
+                "planned_all_guest_shutdown_seconds": seconds(
+                    planned_all_guest_shutdown_seconds
+                ),
+                "running_guests": normalized_guests,
+                "shutdown_sequence": normalized_sequence,
+            }
+        )
+        if updated == dict(current):
+            return
+        state["current_boot"] = updated
+        self.state_store.save(state)
+
+    def refresh_current_guest_shutdowns(self) -> bool:
+        journal = self.current_boot_journal_reader()
+        if not journal.strip():
+            return False
+        parsed = parse_guest_shutdown_journal(journal)
+        state = self._load()
+        changed = _merge_guest_last_shutdowns(
+            state,
+            parsed.get("guests"),
+            source="guest_shutdown",
+        )
+        if changed:
+            self.state_store.save(state)
+        return changed
+
     def record_software_shutdown_commit(self, reason: str, snapshot: UpsSnapshot) -> None:
         if reason not in {"charge_guard", "runtime_guard"}:
             raise ValueError("unsupported software shutdown reason")
@@ -654,9 +862,18 @@ class ShutdownHistoryTracker:
         history = [dict(item) for item in state.get("history", []) if isinstance(item, Mapping)]
         current = state.get("current_boot")
         previous = state.get("previous_shutdown")
+        latest = state.get("guest_last_shutdowns")
         return {
             "current_boot": dict(current) if isinstance(current, Mapping) else None,
             "previous_shutdown": dict(previous) if isinstance(previous, Mapping) else None,
+            "guest_last_shutdowns": (
+                {
+                    "vm": dict(latest.get("vm", {})),
+                    "lxc": dict(latest.get("lxc", {})),
+                }
+                if isinstance(latest, Mapping)
+                else {"vm": {}, "lxc": {}}
+            ),
             "history": history[-PUBLISHED_HISTORY_LIMIT:],
             "history_count": len(history),
         }
