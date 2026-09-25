@@ -180,25 +180,25 @@ The validator must not silently guess an application type.
 
 ## 5. Common naming contract
 
-Every application directory uses:
+Product naming is governed by [DigitalHouses Product Naming Standard](PRODUCT_NAMING_STANDARD.md).
+
+Every product has one canonical identifier:
 
 ```text
-digitalhouses_<app_name>
+digitalhouses_<function>_<app|agent>
 ```
 
-Examples:
+The canonical identifier is stored in the product registry and is the shared product identity for release, telemetry and repository-level contracts.
+
+Home Assistant entities use only the compact deterministic prefix:
 
 ```text
-digitalhouses_speedtest
-digitalhouses_db_monitoring
-digitalhouses_plex_monitoring
+dh_<function>_<app|agent>
 ```
 
-The directory name is the canonical repository identifier of the application.
+For new products, the repository directory equals the canonical product identifier. Existing compatibility-sensitive legacy directories/runtime identifiers may remain only until an explicit product migration; they are not valid naming patterns for new products.
 
-Stable public identifiers such as MQTT topics, device identifiers, entity IDs, service names, or configuration paths become compatibility interfaces once released and must be protected by application-specific regression checks where appropriate.
-
----
+Do not use repository directory names as an alternative product identity. Product code must use the canonical registry identity even while a legacy directory still exists.
 
 ## 6. Common mandatory files
 
