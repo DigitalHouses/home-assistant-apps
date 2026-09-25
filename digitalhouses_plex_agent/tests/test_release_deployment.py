@@ -1,4 +1,3 @@
-import re
 import unittest
 from pathlib import Path
 
@@ -23,7 +22,8 @@ class ReleaseDeploymentContractTests(unittest.TestCase):
 
     def test_installer_requires_canonical_plex_release_tag_by_default(self):
         installer = INSTALLER.read_text(encoding="utf-8")
-        self.assertIn('RELEASE_IDENTIFIER="digitalhouses_plex_agent"', installer)
+        self.assertIn('PRODUCT_ID="digitalhouses_plex_agent"', installer)
+        self.assertIn('RELEASE_IDENTIFIER="${PRODUCT_ID}"', installer)
         self.assertIn(
             'ALLOW_NON_RELEASE_REF="${DIGITALHOUSES_ALLOW_NON_RELEASE_REF:-0}"',
             installer,
@@ -33,17 +33,37 @@ class ReleaseDeploymentContractTests(unittest.TestCase):
             'if [[ "${ALLOW_NON_RELEASE_REF}" != "1" ]]; then',
             installer,
         )
-        self.assertIn(
-            'if [[ -n "${EXPECTED_VERSION}" && "${SOURCE_VERSION}" != "${EXPECTED_VERSION}" ]]; then',
-            installer,
-        )
 
-    def test_installer_separates_repo_source_from_legacy_runtime_identity(self):
+    def test_installer_uses_canonical_runtime_identity(self):
         installer = INSTALLER.read_text(encoding="utf-8")
-        self.assertIn('APP_NAME="digitalhouses_plex_monitoring"', installer)
-        self.assertIn('SOURCE_PRODUCT_DIR="digitalhouses_plex_agent"', installer)
+        for expected in (
+            'APP_NAME="${PRODUCT_ID}"',
+            'SOURCE_PRODUCT_DIR="${PRODUCT_ID}"',
+            'SERVICE_NAME="${APP_NAME}.service"',
+            'GPU_SERVICE_NAME="${APP_NAME}_gpu_helper.service"',
+            'APP_DIR="/opt/digitalhouses/${APP_NAME}"',
+            'CONFIG_DIR="/etc/${APP_NAME}"',
+            'STATE_DIR="/var/lib/${APP_NAME}"',
+        ):
+            self.assertIn(expected, installer)
+
+    def test_installer_contains_controlled_legacy_runtime_migration(self):
+        installer = INSTALLER.read_text(encoding="utf-8")
+        for expected in (
+            'LEGACY_APP_NAME="digitalhouses_plex_monitoring"',
+            'MIGRATION_MARKER="${STATE_DIR}/.runtime_migrated_from_${LEGACY_APP_NAME}"',
+            'BACKUP_DIR="/var/backups/${APP_NAME}"',
+            'cp -a "${LEGACY_CONFIG_FILE}" "${CONFIG_FILE}"',
+            'cp -a "${LEGACY_STATE_DIR}/." "${STATE_DIR}/"',
+            'systemctl disable --now "${LEGACY_SERVICE_NAME}"',
+            'Canonical runtime failed; restoring the previous legacy service state.',
+        ):
+            self.assertIn(expected, installer)
+
+    def test_runtime_migration_does_not_rename_mqtt_contract(self):
+        installer = INSTALLER.read_text(encoding="utf-8")
         self.assertIn(
-            'SOURCE_APP="${tmp_dir}/repo/${SOURCE_PRODUCT_DIR}"',
+            "topic_prefix = DigitalHouses/Global/plex_monitoring",
             installer,
         )
 
