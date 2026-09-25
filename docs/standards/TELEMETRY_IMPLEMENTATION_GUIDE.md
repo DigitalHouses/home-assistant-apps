@@ -47,6 +47,7 @@ digitalhouses_pve_agent
 digitalhouses_plex_agent
 digitalhouses_recorder_app
 digitalhouses_speedtest_app
+digitalhouses_internet_app
 ```
 
 A product must not start sending telemetry until its canonical product identifier is present in the shared server allowlist and this document/protocol have been updated together.
@@ -55,22 +56,13 @@ Target products may exist in repository policy before they are enabled in the pr
 
 ### Internet App naming
 
-The current repository/release contract still contains the legacy identifier:
+The canonical release and telemetry identifier for `dh_internet_app` is:
 
 ```text
-digitalhouses_speedtest_app
+digitalhouses_internet_app
 ```
 
-If a new `dh_internet_app` replaces that product, its canonical release and telemetry identifier must be decided in the Internet App implementation work before telemetry is enabled.
-
-Do not silently reuse or rename the identifier in only one layer. The following must remain consistent:
-
-- Release Policy;
-- telemetry protocol allowlist;
-- stats server allowlist;
-- product telemetry payload;
-- release tooling;
-- product documentation.
+The legacy `digitalhouses_speedtest_app` identifier remains a separate product identity and is not reused for the new Internet App. Release Policy, telemetry protocol/server allowlists, product payload and documentation use `digitalhouses_internet_app` consistently.
 
 ## 3. Required client payload
 
@@ -461,8 +453,9 @@ As of the current repository implementation:
 | DigitalHouses PVE Agent | `digitalhouses_pve_agent` | implemented and verified |
 | DigitalHouses Plex Agent | `digitalhouses_plex_agent` | pending product implementation |
 | DigitalHouses Recorder App | `digitalhouses_recorder_app` | pending product implementation |
-| DigitalHouses Speedtest App | `digitalhouses_speedtest_app` | pending / identifier subject to Internet App decision |
+| DigitalHouses Speedtest App | `digitalhouses_speedtest_app` | pending product implementation |
 | DigitalHouses Backblaze App | `digitalhouses_backblaze_app` | client exists; server allowlist + release-gating review required before production enablement |
+| DigitalHouses Internet App | `digitalhouses_internet_app` | implemented in product and admitted to protocol/server allowlist |
 
 This table is operational status, not a replacement for the normative protocol or Release Policy.
 
