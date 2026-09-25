@@ -94,16 +94,17 @@ def test_shutdown_group_contains_current_guest_shutdown_configuration():
     shutdown = next(item for item in publications if item.group == "shutdown")
     data = shutdown.payload["subsystems"]["host"]["data"]
 
-    assert data["guest_config"]["vms"]["110"] == {
-        "shutdown_timeout_seconds": 200,
-        "shutdown_order": 30,
-        "onboot": True,
-    }
-    assert data["guest_config"]["lxcs"]["149"] == {
-        "shutdown_timeout_seconds": 60,
-        "shutdown_order": 20,
-        "onboot": True,
-    }
+    vm = data["guest_config"]["vms"]["110"]
+    assert vm["shutdown_timeout_seconds"] == 200
+    assert vm["shutdown_order"] == 30
+    assert vm["onboot"] is True
+    assert "last_shutdown_duration_seconds" in vm
+
+    lxc = data["guest_config"]["lxcs"]["149"]
+    assert lxc["shutdown_timeout_seconds"] == 60
+    assert lxc["shutdown_order"] == 20
+    assert lxc["onboot"] is True
+    assert "last_shutdown_duration_seconds" in lxc
 
 
 def test_shutdown_discovery_reads_current_guest_config_from_shutdown_group():
