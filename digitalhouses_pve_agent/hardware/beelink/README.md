@@ -67,6 +67,14 @@ TAG=digitalhouses_pve_agent-v0.5.32
 bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$TAG/digitalhouses_pve_agent/hardware/beelink/install.sh")
 ```
 
+The operation is idempotent. Re-running it repairs missing packages/source or
+autoload state, verifies the running kernel and every newer installed PVE kernel
+with matching headers, and does not create a second DKMS version.
+
+If a different `it87` module is already loaded, the installer does not unload
+it underneath a running host. It finishes the persistent setup and reports
+`REBOOT_REQUIRED=yes`. One normal reboot then activates the pinned DKMS build.
+
 ### Read-only check
 
 ```bash
@@ -91,65 +99,6 @@ TAG=digitalhouses_pve_agent-v0.5.32
 bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$TAG/digitalhouses_pve_agent/hardware/beelink/uninstall.sh")
 ```
 
-### Development / recovery only
-
-For an explicitly reviewed branch or full commit SHA:
-
-```bash
-REF=<branch-or-full-sha>
-bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$REF/digitalhouses_pve_agent/hardware/beelink/install.sh")
-```
-
-A reviewed local checkout is likewise a development/recovery path:
-
-```bash
-sudo bash digitalhouses_pve_agent/hardware/beelink/install.sh
-```
-
-The operation is idempotent. Re-running it repairs missing packages/source or
-autoload state, verifies the running kernel and every newer installed PVE kernel
-with matching headers, and does not create a second DKMS version.
-
-If a different `it87` module is already loaded, the installer does not unload
-it underneath a running host. It finishes the persistent setup and reports
-`REBOOT_REQUIRED=yes`. One normal reboot then activates the pinned DKMS build.
-
-### Read-only check
-
-```bash
-PROFILE_REF=<reviewed-ref-or-sha>
-bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$PROFILE_REF/digitalhouses_pve_agent/hardware/beelink/install.sh") --check
-```
-
-From a reviewed local checkout:
-
-```bash
-sudo bash digitalhouses_pve_agent/hardware/beelink/install.sh --check
-```
-
-A healthy host ends with:
-
-```text
-CHECK=PASS
-```
-
-The check validates DMI, current-kernel DKMS installation, module resolution,
-autoload, loaded driver version, IT8613E hwmon and the App collector when the App
-is present.
-
-### Uninstall / rollback
-
-```bash
-PROFILE_REF=<reviewed-ref-or-sha>
-bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$PROFILE_REF/digitalhouses_pve_agent/hardware/beelink/uninstall.sh")
-```
-
-From a reviewed local checkout:
-
-```bash
-sudo bash digitalhouses_pve_agent/hardware/beelink/uninstall.sh
-```
-
 The uninstaller removes only the DigitalHouses autoload file, the pinned DKMS
 version and its `/usr/src` source directory. It does not touch the stock
 Proxmox module.
@@ -157,4 +106,25 @@ Proxmox module.
 If the custom module is currently loaded, it is deliberately left in memory
 until reboot; a reboot returns the host to the normal stock module state.
 
-Older installed PVE kernels are intentionally ignored: they are not future boot targets and driver incompatibility there must not block preparing the current or next kernel.
+Older installed PVE kernels are intentionally ignored: they are not future boot
+targets and driver incompatibility there must not block preparing the current or
+next kernel.
+
+### Development / recovery only
+
+Branch, `main`, arbitrary SHA and local-checkout execution are not production
+installation paths. For an explicitly reviewed branch or full commit SHA:
+
+```bash
+REF=<branch-or-full-sha>
+bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$REF/digitalhouses_pve_agent/hardware/beelink/install.sh")
+```
+
+The same ref may be used with `--check` or with
+`hardware/beelink/uninstall.sh` for a reviewed development/recovery operation.
+
+From a reviewed local checkout:
+
+```bash
+sudo bash digitalhouses_pve_agent/hardware/beelink/install.sh
+```
