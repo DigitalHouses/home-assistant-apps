@@ -185,13 +185,13 @@ Example:
 
 ```yaml
 automation:
-  - id: dh_local_pve_notifications
-    alias: DH PVE · Notifications
+  - id: dh_pve_agent_notifications
+    alias: DH PVE Agent · Notifications
 
     triggers:
       - trigger: event.received
         target:
-          entity_id: event.dh_app_pve_ups_diagnostic
+          entity_id: event.dh_pve_agent_ups_diagnostic
         options:
           event_type:
             - battery_fully_charged
@@ -204,7 +204,7 @@ automation:
                 id:
                   - battery_full
             sequence:
-              - action: script.write2log
+              - action: persistent_notification.create
                 data:
                   title: "🔋✅ UPS: батарея заряжена"
                   message: >-
