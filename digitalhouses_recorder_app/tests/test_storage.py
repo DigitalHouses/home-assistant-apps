@@ -199,3 +199,70 @@ class PostgresClusterSelectionTests(unittest.TestCase):
             '17 main 5433 online postgres /var/lib/postgresql/17/main /var/log/postgresql/postgresql-17-main.log\n'
         )
         self.assertEqual(select_postgres_cluster_path(output, 5432), '')
+
+
+class ParamikoShutdownTests(unittest.TestCase):
+    def test_ssh_command_closes_all_paramiko_streams(self):
+        import sys
+        from unittest.mock import patch
+        import storage
+
+        events = []
+
+        class FakeStream:
+            def __init__(self, name, data=b''):
+                self.name = name
+                self.data = data
+                self.channel = self
+
+            def recv_exit_status(self):
+                return 0
+
+            def read(self):
+                return self.data
+
+            def close(self):
+                events.append(f'{self.name}.close')
+
+        class FakeSSHClient:
+            def load_host_keys(self, _path):
+                pass
+
+            def set_missing_host_key_policy(self, _policy):
+                pass
+
+            def connect(self, **_kwargs):
+                pass
+
+            def save_host_keys(self, _path):
+                pass
+
+            def exec_command(self, _command, timeout=10):
+                self.stdin = FakeStream('stdin')
+                self.stdout = FakeStream('stdout', b'ok\n')
+                self.stderr = FakeStream('stderr', b'')
+                return self.stdin, self.stdout, self.stderr
+
+            def close(self):
+                events.append('client.close')
+
+        fake_client = FakeSSHClient()
+
+        class FakeParamiko:
+            class AutoAddPolicy:
+                pass
+
+            @staticmethod
+            def SSHClient():
+                return fake_client
+
+        config = FakeStorageConfig('ssh')
+
+        with patch.dict(sys.modules, {'paramiko': FakeParamiko}):
+            output = storage._run_ssh_command(config, 'df -P -B1 /')
+
+        self.assertEqual(output, 'ok\n')
+        self.assertEqual(
+            events,
+            ['stdin.close', 'stdout.close', 'stderr.close', 'client.close'],
+        )
