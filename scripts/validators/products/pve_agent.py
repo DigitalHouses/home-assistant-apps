@@ -802,17 +802,28 @@ def validate_digitalhouses_pve_agent(
 
     installer = (app / "install.sh").read_text(encoding="utf-8")
     for expected in (
-        'APP_NAME="digitalhouses_pve_agent"',
-        'APP_DIR="/opt/digitalhouses/${APP_NAME}"',
-        'CONFIG_DIR="/etc/${APP_NAME}"',
-        'STATE_DIR="/var/lib/${APP_NAME}"',
-        'TELEMETRY_STATE_DIR="/var/lib/digitalhouses/digitalhouses_pve_agent"',
+        'PRODUCT_ID="digitalhouses_pve_agent"',
+        'APP_NAME="${PRODUCT_ID}"',
+        'SOURCE_PRODUCT_DIR="${PRODUCT_ID}"',
+        'SERVICE_NAME="${PRODUCT_ID}.service"',
+        'APP_DIR="/opt/digitalhouses/${PRODUCT_ID}"',
+        'CONFIG_DIR="/etc/${PRODUCT_ID}"',
+        'CONFIG_FILE="${CONFIG_DIR}/${PRODUCT_ID}.conf"',
+        'STATE_DIR="/var/lib/${PRODUCT_ID}"',
+        'TELEMETRY_STATE_DIR="/var/lib/digitalhouses/${PRODUCT_ID}"',
+        'ROOT_GUIDE="/root/digitalhouses_pve_agent.txt"',
+        'LEGACY_APP_NAME="dh_pve_app"',
+        'LEGACY_SERVICE_NAME="${LEGACY_APP_NAME}.service"',
+        'LEGACY_TOPIC_PREFIX="DigitalHouses/Global/dh_pve_app"',
+        'CANONICAL_TOPIC_PREFIX="DigitalHouses/Global/digitalhouses_pve_agent"',
+        'INSTALL_MODE="${DIGITALHOUSES_INSTALL_MODE:-production}"',
+        'SOURCE_REF="${DIGITALHOUSES_SOURCE_REF:-}"',
+        'EXPECTED_SOURCE_REF="${PRODUCT_ID}-v${SOURCE_VERSION}"',
         'if [[ ! -f "${CONFIG_FILE}" ]]; then',
         "nano /etc/digitalhouses_pve_agent/digitalhouses_pve_agent.conf",
         "--check-config",
         'chmod 0755 "${APP_DIR}/uninstall.sh"',
-        'ROOT_GUIDE="/root/dh_pve_agent.txt"',
-        'cat "${APP_DIR}/dh_pve_agent.txt"',
+        'cat "${APP_DIR}/digitalhouses_pve_agent.txt"',
         '"[events]"',
         '"pve_problem_debounce_seconds = 30"',
     ):
@@ -824,7 +835,7 @@ def validate_digitalhouses_pve_agent(
         "/etc/cron.d/digitalhouses-proxmox-mqtt",
     ):
         if forbidden in installer:
-            fail(f"DH PVE Phase 1 installer must not touch legacy agent: {forbidden}")
+            fail(f"DH PVE installer must not touch obsolete pre-product migration artifacts: {forbidden}")
 
     cleanup_source = (app / "app/uninstall_cleanup.py").read_text(encoding="utf-8")
     for expected in (
@@ -844,6 +855,7 @@ def validate_digitalhouses_pve_agent(
 
     uninstaller = (app / "uninstall.sh").read_text(encoding="utf-8")
     for expected in (
+        'APP_NAME="digitalhouses_pve_agent"',
         'CONFIG_DIR="/etc/${APP_NAME}"',
         'STATE_DIR="/var/lib/${APP_NAME}"',
         '"--purge"',
@@ -852,14 +864,14 @@ def validate_digitalhouses_pve_agent(
         'systemctl start "${SERVICE_NAME}"',
         'rm -rf -- "${APP_DIR}"',
         'rm -rf -- "${CONFIG_DIR}" "${STATE_DIR}" "${TELEMETRY_STATE_DIR}"',
-        'ROOT_GUIDE="/root/dh_pve_agent.txt"',
+        'ROOT_GUIDE="/root/digitalhouses_pve_agent.txt"',
         'rm -f -- "${ROOT_GUIDE}"',
     ):
         if expected not in uninstaller:
             fail(f"DH PVE uninstaller contract changed: {expected}")
 
     _require_text(
-        app / "dh_pve_agent.txt",
+        app / "digitalhouses_pve_agent.txt",
         (
             "Установка",
             "Обновление",
