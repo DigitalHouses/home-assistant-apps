@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -31,7 +32,20 @@ def _import_module(
     if spec is None or spec.loader is None:
         fail(f"Unable to import {path.name}")
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    parent = str(path.parent)
+    sys.path.insert(0, parent)
+    sys.modules[module_name] = module
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        sys.modules.pop(module_name, None)
+        if sys.path and sys.path[0] == parent:
+            sys.path.pop(0)
+        else:
+            try:
+                sys.path.remove(parent)
+            except ValueError:
+                pass
     return module
 
 
