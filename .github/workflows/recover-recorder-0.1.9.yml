@@ -1,9 +1,11 @@
 name: Recover Recorder App 0.1.9 release
 
 on:
-  push:
-    branches:
-      - main
+  workflow_run:
+    workflows:
+      - Integrate validated owner PR
+    types:
+      - completed
 
 permissions:
   contents: write
