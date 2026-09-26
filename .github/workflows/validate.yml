@@ -115,6 +115,16 @@ jobs:
       - name: Check shell syntax
         run: bash -n digitalhouses_recorder_app/rootfs/run.sh
 
+      - name: Build Recorder App image
+        run: |
+          APP_VERSION="$(awk '$1 == "version:" {print $2; exit}' digitalhouses_recorder_app/config.yaml)"
+          test -n "$APP_VERSION"
+          docker build \
+            --build-arg BUILD_VERSION="$APP_VERSION" \
+            --build-arg BUILD_ARCH=amd64 \
+            --tag digitalhouses-recorder-ci:"$APP_VERSION" \
+            digitalhouses_recorder_app
+
   backblaze-app:
     name: Backblaze App
     runs-on: ubuntu-latest
