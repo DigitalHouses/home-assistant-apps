@@ -10,7 +10,7 @@ from unittest.mock import Mock, patch
 APP_DIR = Path(__file__).resolve().parents[1] / 'rootfs' / 'app'
 sys.path.insert(0, str(APP_DIR))
 
-from discovery import REFRESH_COMMAND_TOPIC
+from discovery import DISK_USAGE_THRESHOLD_COMMAND_TOPIC, REFRESH_COMMAND_TOPIC
 
 
 def load_app_module():
@@ -120,11 +120,14 @@ class ManualRefreshTests(unittest.TestCase):
         app.publish_json = Mock()
         app.publish_text = Mock()
         app.publish_rankings = Mock()
+        app.publish_disk_usage_threshold = Mock()
         client = Mock()
 
         app._on_connect(client, None, None, 0)
 
         client.subscribe.assert_any_call(REFRESH_COMMAND_TOPIC, qos=1)
+        client.subscribe.assert_any_call(DISK_USAGE_THRESHOLD_COMMAND_TOPIC, qos=1)
+        app.publish_disk_usage_threshold.assert_called_once_with()
 
     def test_run_processes_pending_manual_refresh(self):
         app = self.make_app()
