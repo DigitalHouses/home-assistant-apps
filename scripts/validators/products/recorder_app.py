@@ -4,7 +4,7 @@ import importlib.util
 from pathlib import Path
 from typing import Any
 
-from validators.common import fail
+from validators.common import fail, require_files
 
 EXPECTED_BASE_TOPIC = "DigitalHouses/Global/db_monitoring"
 EXPECTED_DEVICE_ID = "digitalhouses_db_monitoring"
