@@ -12,7 +12,7 @@ def test_required_root_files_exist():
         "CHANGELOG.md",
         "requirements.txt",
         "app/__init__.py",
-        "examples/dh_pve_app.conf.example",
+        "examples/digitalhouses_pve_agent.conf.example",
     ]
     missing = [name for name in required if not (ROOT / name).is_file()]
     assert not missing, f"missing required files: {missing}"
@@ -22,9 +22,9 @@ def test_public_identity_contract():
     assert (ROOT / "digitalhouses.app").read_text().strip() == "type = linux_agent"
     version = (ROOT / "VERSION").read_text().strip()
     assert re.fullmatch(r"\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?", version)
-    assert version == "0.5.28"
+    assert version == "0.5.29"
 
     readme = (ROOT / "README.md").read_text()
-    assert "DigitalHouses/Global/dh_pve_app" in readme
-    assert "DH PVE" in readme
-    assert "DH PVE UPS" in readme
+    assert "DigitalHouses/Global/digitalhouses_pve_agent" in readme
+    assert "DigitalHouses PVE Agent" in readme
+    assert "dh_pve_agent_*" in readme

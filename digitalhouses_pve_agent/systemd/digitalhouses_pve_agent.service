@@ -1,5 +1,5 @@
 [Unit]
-Description=DigitalHouses DH PVE MQTT Monitoring
+Description=DigitalHouses PVE Agent
 After=network-online.target
 Wants=network-online.target
 
@@ -9,9 +9,9 @@ Type=simple
 # passthrough inspection and other read-only host diagnostics require privileges.
 User=root
 Group=root
-WorkingDirectory=/opt/digitalhouses/dh_pve_app
-ExecStartPre=/opt/digitalhouses/dh_pve_app/.venv/bin/python -m app.ups_policy_state_migration --state-dir /var/lib/dh_pve_app
-ExecStart=/opt/digitalhouses/dh_pve_app/.venv/bin/python -m app.main --config /etc/dh_pve_app/dh_pve_app.conf --state-dir /var/lib/dh_pve_app
+WorkingDirectory=/opt/digitalhouses/digitalhouses_pve_agent
+ExecStartPre=/opt/digitalhouses/digitalhouses_pve_agent/.venv/bin/python -m app.ups_policy_state_migration --state-dir /var/lib/digitalhouses_pve_agent
+ExecStart=/opt/digitalhouses/digitalhouses_pve_agent/.venv/bin/python -m app.main --config /etc/digitalhouses_pve_agent/digitalhouses_pve_agent.conf --state-dir /var/lib/digitalhouses_pve_agent
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=on-failure
 RestartSec=5
@@ -21,7 +21,7 @@ PrivateTmp=true
 ProtectHome=true
 ProtectSystem=full
 # Runtime never modifies /etc/nut. ProtectSystem keeps system configuration
-# read-only; application state under /var/lib/dh_pve_app remains writable.
+# read-only; application state under /var/lib/digitalhouses_pve_agent remains writable.
 
 [Install]
 WantedBy=multi-user.target

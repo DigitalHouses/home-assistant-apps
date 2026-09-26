@@ -12,7 +12,7 @@ def test_disk_temperature_uses_status_topic_for_object_availability():
             port=1883,
             username="",
             password="",
-            topic_prefix="DigitalHouses/Global/dh_pve_app",
+            topic_prefix="DigitalHouses/Global/digitalhouses_pve_agent",
             discovery_prefix="homeassistant",
             keepalive_seconds=60,
         ),

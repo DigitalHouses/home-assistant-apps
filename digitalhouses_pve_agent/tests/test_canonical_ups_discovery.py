@@ -14,7 +14,7 @@ def _mqtt():
         port=1883,
         username="",
         password="",
-        topic_prefix="DigitalHouses/Global/dh_pve_app",
+        topic_prefix="DigitalHouses/Global/digitalhouses_pve_agent",
         discovery_prefix="homeassistant",
         keepalive_seconds=60,
     )
@@ -53,16 +53,17 @@ def test_canonical_ups_device_identity_and_migration_discovery_topics():
     topics = build_ups_topics(_mqtt(), _identity())
     payload = _payload()
 
-    assert topics.base == "DigitalHouses/Global/dh_pve_app/node_a/ups"
-    assert topics.device_id == "dh_app_pve_ups_node_a"
-    assert topics.discovery == "homeassistant/device/dh_app_pve_ups_node_a/config"
+    assert topics.base == "DigitalHouses/Global/digitalhouses_pve_agent/node_a/ups"
+    assert topics.device_id == "dh_pve_agent_ups_node_a"
+    assert topics.discovery == "homeassistant/device/dh_pve_agent_ups_node_a/config"
     assert topics.legacy_discoveries == (
+        "homeassistant/device/dh_app_pve_ups_node_a/config",
         "homeassistant/device/dh_pve_ups_node_a/config",
         "homeassistant/device/dh_ups_node_a/config",
     )
-    assert payload["device"]["identifiers"] == ["dh_app_pve_ups_node_a"]
+    assert payload["device"]["identifiers"] == ["dh_pve_agent_ups_node_a"]
     assert all(
-        component["unique_id"].startswith("dh_app_pve_ups_node_a_")
+        component["unique_id"].startswith("dh_pve_agent_ups_node_a_")
         for component in payload["components"].values()
         if "unique_id" in component
     )
@@ -71,25 +72,26 @@ def test_canonical_ups_device_identity_and_migration_discovery_topics():
 def test_canonical_ups_public_entity_ids_are_consistent():
     c = _payload()["components"]
 
-    assert c["status"]["default_entity_id"] == "sensor.dh_app_pve_ups_status"
+    assert c["status"]["default_entity_id"] == "sensor.dh_pve_agent_ups_status"
     assert c["battery_charger_status"]["default_entity_id"] == (
-        "sensor.dh_app_pve_ups_battery_charger_status"
+        "sensor.dh_pve_agent_ups_battery_charger_status"
     )
-    assert c["battery_charge"]["default_entity_id"] == "sensor.dh_app_pve_ups_battery_charge"
-    assert c["refresh"]["default_entity_id"] == "button.dh_app_pve_ups_refresh"
+    assert c["battery_charge"]["default_entity_id"] == "sensor.dh_pve_agent_ups_battery_charge"
+    assert c["refresh"]["default_entity_id"] == "button.dh_pve_agent_ups_refresh"
     assert c["guest_shutdown_budget"]["default_entity_id"] == (
-        "sensor.dh_app_pve_ups_guest_shutdown_budget"
+        "sensor.dh_pve_agent_ups_guest_shutdown_budget"
     )
     assert c["shutdown_readiness"]["default_entity_id"] == (
-        "sensor.dh_app_pve_ups_shutdown_readiness"
+        "sensor.dh_pve_agent_ups_shutdown_readiness"
     )
-    assert c["ups_app_profile"]["default_entity_id"] == "sensor.dh_app_pve_ups_app_profile"
+    assert c["ups_app_profile"]["default_entity_id"] == "sensor.dh_pve_agent_ups_app_profile"
     assert c["ups_last_publication"]["default_entity_id"] == (
-        "sensor.dh_app_pve_ups_last_publication"
+        "sensor.dh_pve_agent_ups_last_publication"
     )
 
     assert not any(
-        ".dh_pve_ups_" in component.get("default_entity_id", "")
+        ".dh_app_pve_ups_" in component.get("default_entity_id", "")
+        or ".dh_pve_ups_" in component.get("default_entity_id", "").replace(".dh_pve_agent_ups_", ".canonical_")
         or ".dh_ups_" in component.get("default_entity_id", "")
         for component in c.values()
     )
@@ -138,7 +140,7 @@ def test_ups_problem_binaries_use_app_owned_retained_topics():
         component = c[f"{problem_id}_problem"]
         assert component["platform"] == "binary_sensor"
         assert component["default_entity_id"] == (
-            f"binary_sensor.dh_app_pve_ups_{problem_id}_problem"
+            f"binary_sensor.dh_pve_agent_ups_{problem_id}_problem"
         )
         assert component["state_topic"] == (
             f"{topics.base}/problems/{problem_id}/state"
@@ -162,14 +164,14 @@ def test_ups_problem_aggregate_and_native_event_are_canonical():
 
     aggregate = c["problems"]
     assert aggregate["platform"] == "sensor"
-    assert aggregate["default_entity_id"] == "sensor.dh_app_pve_ups_problems"
+    assert aggregate["default_entity_id"] == "sensor.dh_pve_agent_ups_problems"
     assert aggregate["state_topic"] == f"{topics.base}/problems/aggregate"
     assert aggregate["json_attributes_topic"] == f"{topics.base}/problems/presentation"
     assert aggregate["entity_category"] == "diagnostic"
 
     event = c["diagnostic_event"]
     assert event["platform"] == "event"
-    assert event["default_entity_id"] == "event.dh_app_pve_ups_diagnostic"
+    assert event["default_entity_id"] == "event.dh_pve_agent_ups_diagnostic"
     assert event["state_topic"] == topics.diagnostic_event
     assert event["event_types"] == [
         "nut_unavailable",
@@ -219,10 +221,10 @@ def test_ups_discovery_contains_no_removed_presentation_fields():
 
 def test_standard_ups_dashboard_localizes_machine_charger_status():
     dashboard = (
-        Path(__file__).parents[1] / "examples" / "dh_app_pve_ups_dashboard.yaml"
+        Path(__file__).parents[1] / "examples" / "dh_pve_agent_ups_dashboard.yaml"
     ).read_text(encoding="utf-8")
 
-    assert "sensor.dh_app_pve_ups_battery_charger_status" in dashboard
+    assert "sensor.dh_pve_agent_ups_battery_charger_status" in dashboard
     for machine_value, label in (
         ("charging", "Заряжается"),
         ("floating", "Поддержание заряда"),
@@ -234,8 +236,8 @@ def test_standard_ups_dashboard_localizes_machine_charger_status():
     ):
         assert f"'{machine_value}': '{label}'" in dashboard
 
-    assert "binary_sensor.dh_app_pve_ups_charging" not in dashboard
-    assert "binary_sensor.dh_app_pve_ups_discharging" not in dashboard
+    assert "binary_sensor.dh_pve_agent_ups_charging" not in dashboard
+    assert "binary_sensor.dh_pve_agent_ups_discharging" not in dashboard
 
 
 def test_line_power_monthly_discovery_is_canonical_and_grouped():
@@ -244,18 +246,18 @@ def test_line_power_monthly_discovery_is_canonical_and_grouped():
     state_topic = ups_state_group_topic(topics, "line_power_statistics")
 
     expected_ids = {
-        "line_power": "binary_sensor.dh_app_pve_ups_line_power",
-        "line_power_online_month": "sensor.dh_app_pve_ups_line_power_online_month",
-        "line_power_offline_month": "sensor.dh_app_pve_ups_line_power_offline_month",
-        "line_power_outages_month": "sensor.dh_app_pve_ups_line_power_outages_month",
-        "line_power_availability_month": "sensor.dh_app_pve_ups_line_power_availability_month",
+        "line_power": "binary_sensor.dh_pve_agent_ups_line_power",
+        "line_power_online_month": "sensor.dh_pve_agent_ups_line_power_online_month",
+        "line_power_offline_month": "sensor.dh_pve_agent_ups_line_power_offline_month",
+        "line_power_outages_month": "sensor.dh_pve_agent_ups_line_power_outages_month",
+        "line_power_availability_month": "sensor.dh_pve_agent_ups_line_power_availability_month",
         "line_power_current_outage_started": (
-            "sensor.dh_app_pve_ups_line_power_current_outage_started"
+            "sensor.dh_pve_agent_ups_line_power_current_outage_started"
         ),
-        "line_power_last_failure": "sensor.dh_app_pve_ups_line_power_last_failure",
-        "line_power_last_restore": "sensor.dh_app_pve_ups_line_power_last_restore",
+        "line_power_last_failure": "sensor.dh_pve_agent_ups_line_power_last_failure",
+        "line_power_last_restore": "sensor.dh_pve_agent_ups_line_power_last_restore",
         "line_power_last_outage_duration": (
-            "sensor.dh_app_pve_ups_line_power_last_outage_duration"
+            "sensor.dh_pve_agent_ups_line_power_last_outage_duration"
         ),
     }
 

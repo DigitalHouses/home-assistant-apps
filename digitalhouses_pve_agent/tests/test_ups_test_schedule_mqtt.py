@@ -15,7 +15,7 @@ def _mqtt():
         port=1883,
         username="",
         password="",
-        topic_prefix="DigitalHouses/Global/dh_pve_app",
+        topic_prefix="DigitalHouses/Global/digitalhouses_pve_agent",
         discovery_prefix="homeassistant",
         keepalive_seconds=60,
     )
@@ -98,7 +98,7 @@ def test_discovery_exposes_interval_numbers_and_native_mqtt_time_entities():
 
     quick_days = components["test_quick_interval_days"]
     assert quick_days["platform"] == "number"
-    assert quick_days["default_entity_id"] == "number.dh_pve_ups_quick_test_interval_days"
+    assert quick_days["default_entity_id"] == "number.dh_pve_agent_ups_quick_test_interval_days"
     assert quick_days["command_topic"] == topics.test_quick_interval_days_set
     assert quick_days["min"] == 0
     assert quick_days["max"] == 3650
@@ -107,18 +107,18 @@ def test_discovery_exposes_interval_numbers_and_native_mqtt_time_entities():
 
     quick_time = components["test_quick_time"]
     assert quick_time["platform"] == "time"
-    assert quick_time["default_entity_id"] == "time.dh_pve_ups_quick_test_time"
+    assert quick_time["default_entity_id"] == "time.dh_pve_agent_ups_quick_test_time"
     assert quick_time["command_topic"] == topics.test_quick_time_set
     assert "test_schedule.quick.preferred_time" in quick_time["value_template"]
 
     deep_days = components["test_deep_interval_days"]
     assert deep_days["platform"] == "number"
-    assert deep_days["default_entity_id"] == "number.dh_pve_ups_deep_test_interval_days"
+    assert deep_days["default_entity_id"] == "number.dh_pve_agent_ups_deep_test_interval_days"
     assert deep_days["command_topic"] == topics.test_deep_interval_days_set
 
     deep_time = components["test_deep_time"]
     assert deep_time["platform"] == "time"
-    assert deep_time["default_entity_id"] == "time.dh_pve_ups_deep_test_time"
+    assert deep_time["default_entity_id"] == "time.dh_pve_agent_ups_deep_test_time"
     assert deep_time["command_topic"] == topics.test_deep_time_set
 
 

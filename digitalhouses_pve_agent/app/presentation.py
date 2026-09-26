@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-"""Recorder-facing publication primitives for dh_pve_app."""
+"""Recorder-facing publication primitives for digitalhouses_pve_agent."""
 
 from collections import defaultdict
 from dataclasses import dataclass

@@ -3,8 +3,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGES = (
-    ROOT / "examples/packages/dh_app_pve_notification_local_package.yaml",
-    ROOT / "examples/packages/locales/ru/dh_app_pve_notification_local_package.yaml",
+    ROOT / "examples/packages/dh_pve_agent_notification_local_package.yaml",
+    ROOT / "examples/packages/locales/ru/dh_pve_agent_notification_local_package.yaml",
 )
 
 EVENT_TYPES = (
@@ -110,7 +110,7 @@ def test_local_notification_packages_use_direct_actions():
     ru = PACKAGES[1].read_text(encoding="utf-8")
 
     assert "action: persistent_notification.create" in en
-    assert "action: script.write2log" in ru
+    assert "action: persistent_notification.create" in ru
 
-    assert "event: dh_app_pve_notification" not in en
-    assert "event: dh_app_pve_notification" not in ru
+    assert "event: dh_pve_agent_notification" not in en
+    assert "event: dh_pve_agent_notification" not in ru

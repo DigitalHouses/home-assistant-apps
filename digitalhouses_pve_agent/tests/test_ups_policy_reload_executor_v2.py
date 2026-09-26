@@ -32,7 +32,7 @@ def test_fixed_reload_executor_uses_only_dh_pve_service_reload_without_shell():
 
     assert len(runner.calls) == 1
     argv, kwargs = runner.calls[0]
-    assert argv == ["systemctl", "reload", "dh_pve_app.service"]
+    assert argv == ["systemctl", "reload", "digitalhouses_pve_agent.service"]
     assert kwargs["shell"] is False
     assert kwargs["timeout"] == 4.0
     assert kwargs["check"] is False

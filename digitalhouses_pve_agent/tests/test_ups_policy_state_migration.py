@@ -31,7 +31,7 @@ def test_retired_dh_timer_normalizes_legacy_v1_policy_to_commissioning(tmp_path)
     store.save(_legacy_state())
     upssched = tmp_path / "upssched.conf"
     upssched.write_text(
-        "CMDSCRIPT /opt/digitalhouses/dh_pve_app/bin/dh-pve-ups-policy-cmd\n",
+        "CMDSCRIPT /opt/digitalhouses/digitalhouses_pve_agent/bin/digitalhouses-pve-agent-ups-policy-cmd\n",
         encoding="utf-8",
     )
 
@@ -118,10 +118,10 @@ def test_missing_upssched_file_counts_as_retired_only_for_legacy_state(tmp_path)
 
 
 def test_systemd_runs_policy_state_migration_before_main_process():
-    unit = (ROOT / "systemd" / "dh_pve_app.service").read_text(encoding="utf-8")
+    unit = (ROOT / "systemd" / "digitalhouses_pve_agent.service").read_text(encoding="utf-8")
 
     assert (
-        "ExecStartPre=/opt/digitalhouses/dh_pve_app/.venv/bin/python "
-        "-m app.ups_policy_state_migration --state-dir /var/lib/dh_pve_app"
+        "ExecStartPre=/opt/digitalhouses/digitalhouses_pve_agent/.venv/bin/python "
+        "-m app.ups_policy_state_migration --state-dir /var/lib/digitalhouses_pve_agent"
     ) in unit
     assert unit.index("ExecStartPre=") < unit.index("ExecStart=")

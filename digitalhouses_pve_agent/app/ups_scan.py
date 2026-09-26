@@ -30,7 +30,7 @@ class UpsScanOutcome:
 
 
 class UpsScanner:
-    """Manual UPS provisioning state for one dh_pve_app instance."""
+    """Manual UPS provisioning state for one digitalhouses_pve_agent instance."""
 
     def __init__(
         self,

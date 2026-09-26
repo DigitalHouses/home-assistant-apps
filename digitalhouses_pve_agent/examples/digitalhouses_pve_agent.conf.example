@@ -5,12 +5,12 @@ instance_id = auto
 display_name = PVE
 
 [mqtt]
-host = 192.168.11.33
+host = 192.0.2.10
 port = 1883
 username = digitalhouses
 password = change_me
 discovery_prefix = homeassistant
-topic_prefix = DigitalHouses/Global/dh_pve_app
+topic_prefix = DigitalHouses/Global/digitalhouses_pve_agent
 
 [ups]
 # Runtime NUT endpoint used for read-only UPS scan/telemetry and supported
@@ -18,7 +18,7 @@ topic_prefix = DigitalHouses/Global/dh_pve_app
 # be changed through MQTT/Home Assistant; use explicit root commissioning.
 host = 127.0.0.1
 port = 3493
-poll_interval_seconds = 5
+poll_interval_seconds = 10
 command_timeout_seconds = 3
 
 [polling]

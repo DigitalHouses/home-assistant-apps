@@ -13,7 +13,7 @@ def _config():
             port=1883,
             username="",
             password="",
-            topic_prefix="DigitalHouses/Global/dh_pve_app",
+            topic_prefix="DigitalHouses/Global/digitalhouses_pve_agent",
             discovery_prefix="homeassistant",
             keepalive_seconds=60,
         ),
@@ -34,7 +34,7 @@ def test_uninstall_cleanup_cli_uses_config_identity_and_skips_runtime(monkeypatc
     identity = _identity()
     calls = []
 
-    monkeypatch.setattr(sys, "argv", ["dh_pve_app", "--uninstall-mqtt-cleanup"])
+    monkeypatch.setattr(sys, "argv", ["digitalhouses_pve_agent", "--uninstall-mqtt-cleanup"])
     monkeypatch.setattr(main_module, "load_config", lambda path: config)
     monkeypatch.setattr(main_module, "resolve_identity", lambda general: identity)
     monkeypatch.setattr(
@@ -62,7 +62,7 @@ def test_uninstall_cleanup_cli_returns_nonzero_on_mqtt_failure(monkeypatch):
     config = _config()
     identity = _identity()
 
-    monkeypatch.setattr(sys, "argv", ["dh_pve_app", "--uninstall-mqtt-cleanup"])
+    monkeypatch.setattr(sys, "argv", ["digitalhouses_pve_agent", "--uninstall-mqtt-cleanup"])
     monkeypatch.setattr(main_module, "load_config", lambda path: config)
     monkeypatch.setattr(main_module, "resolve_identity", lambda general: identity)
     monkeypatch.setattr(

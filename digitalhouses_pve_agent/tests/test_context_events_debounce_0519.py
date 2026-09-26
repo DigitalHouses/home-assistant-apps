@@ -23,14 +23,14 @@ def _state(problem_id: str, *, active: bool, metric: str, value, average=None, t
 
 
 def test_event_config_defaults_to_30_second_pve_debounce(tmp_path):
-    path = tmp_path / "dh_pve_app.conf"
+    path = tmp_path / "digitalhouses_pve_agent.conf"
     path.write_text("[mqtt]\nhost = broker\n", encoding="utf-8")
     config = load_config(path)
     assert config.events.pve_problem_debounce_seconds == 30.0
 
 
 def test_event_config_accepts_explicit_zero_and_custom_delay(tmp_path):
-    path = tmp_path / "dh_pve_app.conf"
+    path = tmp_path / "digitalhouses_pve_agent.conf"
     path.write_text(
         "[mqtt]\nhost = broker\n[events]\npve_problem_debounce_seconds = 15\n",
         encoding="utf-8",

@@ -44,7 +44,7 @@ def _semantic_attrs(
     extra_fields: tuple[str, ...] = (),
 ) -> str:
     fields = [
-        "'proxmox_integration':'dh_pve_app'",
+        "'proxmox_integration':'digitalhouses_pve_agent'",
         f"'proxmox_section':{json.dumps(section)}",
         f"'proxmox_subject':{json.dumps(subject)}",
         f"'proxmox_metric':{json.dumps(metric)}",
@@ -72,7 +72,7 @@ def build_discovery_payload(
             "platform": "sensor",
             "name": "Last refresh",
             "unique_id": uid("last_refresh"),
-            "default_entity_id": "sensor.dh_app_pve_last_refresh",
+            "default_entity_id": "sensor.dh_pve_agent_last_refresh",
             "state_topic": topics.state,
             "value_template": "{{ value_json.last_refresh }}",
             "availability": [_availability(topics.availability)],
@@ -94,7 +94,7 @@ def build_discovery_payload(
             "platform": "button",
             "name": "Refresh",
             "unique_id": uid("refresh"),
-            "default_entity_id": "button.dh_app_pve_refresh",
+            "default_entity_id": "button.dh_pve_agent_refresh",
             "command_topic": topics.refresh,
             "payload_press": "PRESS",
             "availability": [_availability(topics.availability)],
@@ -115,7 +115,7 @@ def build_discovery_payload(
             "platform": "button",
             "name": "Сканировать UPS",
             "unique_id": uid("ups_scan"),
-            "default_entity_id": "button.dh_app_pve_scan_ups",
+            "default_entity_id": "button.dh_pve_agent_scan_ups",
             "command_topic": topics.ups_scan,
             "payload_press": "PRESS",
             "availability": [_availability(topics.availability)],
@@ -127,7 +127,7 @@ def build_discovery_payload(
             "platform": "sensor",
             "name": "UPS scan result",
             "unique_id": uid("ups_scan_result"),
-            "default_entity_id": "sensor.dh_app_pve_ups_scan_result",
+            "default_entity_id": "sensor.dh_pve_agent_ups_scan_result",
             "state_topic": topics.ups_scan_state,
             "value_template": "{{ value_json.result | default('Не выполнялось') }}",
             "availability": [_availability(topics.availability)],
@@ -144,7 +144,7 @@ def build_discovery_payload(
             "platform": "sensor",
             "name": "UPS last scan",
             "unique_id": uid("ups_last_scan"),
-            "default_entity_id": "sensor.dh_app_pve_ups_last_scan",
+            "default_entity_id": "sensor.dh_pve_agent_ups_last_scan",
             "state_topic": topics.ups_scan_state,
             "value_template": "{{ value_json.last_scan | default(none) }}",
             "availability": [_availability(topics.availability)],
@@ -157,7 +157,7 @@ def build_discovery_payload(
             "platform": "sensor",
             "name": "Fans",
             "unique_id": uid("fans_status"),
-            "default_entity_id": "sensor.dh_app_pve_fans",
+            "default_entity_id": "sensor.dh_pve_agent_fans",
             "state_topic": topics.state,
             "value_template": (
                 "{{ value_json.subsystems.fans.data.status | default('unknown') }}"
@@ -227,11 +227,11 @@ def build_discovery_payload(
             "sw_version": version,
         },
         "origin": {
-            "name": "DigitalHouses DH PVE App",
+            "name": "DigitalHouses PVE Agent",
             "sw_version": version,
             "support_url": (
                 "https://github.com/DigitalHouses/home-assistant-apps/"
-                "tree/main/dh_pve_app"
+                "tree/main/digitalhouses_pve_agent"
             ),
         },
         "components": components,

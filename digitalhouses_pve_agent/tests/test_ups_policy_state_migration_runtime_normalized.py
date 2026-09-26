@@ -20,7 +20,7 @@ def test_runtime_normalized_legacy_status_migrates_after_timer_retired(tmp_path)
     )
     upssched = tmp_path / "upssched.conf"
     upssched.write_text(
-        "CMDSCRIPT /opt/digitalhouses/dh_pve_app/bin/dh-pve-ups-policy-cmd\n"
+        "CMDSCRIPT /opt/digitalhouses/digitalhouses_pve_agent/bin/digitalhouses-pve-agent-ups-policy-cmd\n"
         "PIPEFN /run/nut/upssched.pipe\n"
         "LOCKFN /run/nut/upssched.lock\n",
         encoding="utf-8",

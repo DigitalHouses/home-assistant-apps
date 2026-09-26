@@ -6,8 +6,8 @@ from pathlib import Path
 
 APP_ROOT = Path(__file__).resolve().parents[1]
 PACKAGES = APP_ROOT / "examples" / "packages"
-EN_PACKAGE = PACKAGES / "dh_app_pve_notification_local_package.yaml"
-RU_PACKAGE = PACKAGES / "locales" / "ru" / "dh_app_pve_notification_local_package.yaml"
+EN_PACKAGE = PACKAGES / "dh_pve_agent_notification_local_package.yaml"
+RU_PACKAGE = PACKAGES / "locales" / "ru" / "dh_pve_agent_notification_local_package.yaml"
 README = APP_ROOT / "README.md"
 
 EXPECTED_TRIGGER_IDS = {
@@ -84,7 +84,7 @@ def test_local_packages_use_simple_direct_event_flow() -> None:
         assert EXPECTED_TRIGGER_IDS <= ids
 
         for forbidden in (
-            "event: dh_app_pve_notification",
+            "event: dh_pve_agent_notification",
             "notification_schema_version",
             "contract_error",
             "failure_class",
@@ -95,7 +95,7 @@ def test_local_packages_use_simple_direct_event_flow() -> None:
             assert forbidden not in text
 
     assert "action: persistent_notification.create" in en
-    assert "action: script.write2log" in ru
+    assert "action: persistent_notification.create" in ru
 
 
 def test_local_packages_keep_language_in_local_yaml() -> None:
@@ -113,6 +113,6 @@ def test_local_packages_keep_language_in_local_yaml() -> None:
 def test_readme_describes_local_notification_package() -> None:
     readme = _read(README)
 
-    assert "dh_app_pve_notification_local_package.yaml" in readme
+    assert "dh_pve_agent_notification_local_package.yaml" in readme
     assert "trigger.id" in readme
     assert "direct action" in readme

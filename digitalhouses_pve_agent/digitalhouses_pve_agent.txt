@@ -1,26 +1,26 @@
-DH PVE APP — ОПЕРАТИВНАЯ ПАМЯТКА
+DIGITALHOUSES PVE AGENT — ОПЕРАТИВНАЯ ПАМЯТКА
 ===================================
 
 Этот файл устанавливается как:
-  /root/dh_app_pve.txt
+  /root/digitalhouses_pve_agent.txt
 
 Каноническая версия хранится в репозитории:
-  dh_pve_app/dh_app_pve.txt
+  digitalhouses_pve_agent/dh_pve_agent.txt
 
 Installer добавляет выше этой памятки фактические version/source/commit
-установленной сборки. При каждом обновлении /root/dh_app_pve.txt обновляется.
+установленной сборки. При каждом обновлении /root/digitalhouses_pve_agent.txt обновляется.
 
 Установка
 ---------
 
 Обычная установка из main:
 
-  bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/main/dh_pve_app/install.sh")
+  bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/main/digitalhouses_pve_agent/install.sh")
 
 Установка проверенного ref/commit:
 
   REF=<reviewed-ref-or-sha>
-  DIGITALHOUSES_SOURCE_REF="$REF" bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$REF/dh_pve_app/install.sh")
+  DIGITALHOUSES_SOURCE_REF="$REF" bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$REF/digitalhouses_pve_agent/install.sh")
 
 При первой установке installer запросит MQTT-параметры.
 
@@ -32,47 +32,47 @@ Installer добавляет выше этой памятки фактическ
 Для проверенного commit:
 
   REF=<reviewed-sha>
-  DIGITALHOUSES_SOURCE_REF="$REF" bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$REF/dh_pve_app/install.sh")
+  DIGITALHOUSES_SOURCE_REF="$REF" bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$REF/digitalhouses_pve_agent/install.sh")
 
 После обновления проверить:
 
-  cat /opt/digitalhouses/dh_pve_app/BUILD_INFO
-  systemctl status dh_pve_app --no-pager
-  journalctl -u dh_pve_app -n 100 --no-pager
+  cat /opt/digitalhouses/digitalhouses_pve_agent/BUILD_INFO
+  systemctl status digitalhouses_pve_agent --no-pager
+  journalctl -u digitalhouses_pve_agent -n 100 --no-pager
 
 Основные команды
 ----------------
 
 Статус:
 
-  systemctl status dh_pve_app --no-pager
+  systemctl status digitalhouses_pve_agent --no-pager
 
 Перезапуск:
 
-  systemctl restart dh_pve_app
+  systemctl restart digitalhouses_pve_agent
 
 Последние логи:
 
-  journalctl -u dh_pve_app -n 100 --no-pager
+  journalctl -u digitalhouses_pve_agent -n 100 --no-pager
 
 Логи online:
 
-  journalctl -u dh_pve_app -f
+  journalctl -u digitalhouses_pve_agent -f
 
 Установленная версия / source / commit:
 
-  cat /opt/digitalhouses/dh_pve_app/BUILD_INFO
+  cat /opt/digitalhouses/digitalhouses_pve_agent/BUILD_INFO
 
 Конфигурация:
 
-  nano /etc/dh_pve_app/dh_pve_app.conf
+  nano /etc/digitalhouses_pve_agent/digitalhouses_pve_agent.conf
 
 Проверка конфигурации без запуска второго runtime:
 
-  PYTHONPATH=/opt/digitalhouses/dh_pve_app \
-  /opt/digitalhouses/dh_pve_app/.venv/bin/python -m app.main \
-    --config /etc/dh_pve_app/dh_pve_app.conf \
-    --state-dir /var/lib/dh_pve_app \
+  PYTHONPATH=/opt/digitalhouses/digitalhouses_pve_agent \
+  /opt/digitalhouses/digitalhouses_pve_agent/.venv/bin/python -m app.main \
+    --config /etc/digitalhouses_pve_agent/digitalhouses_pve_agent.conf \
+    --state-dir /var/lib/digitalhouses_pve_agent \
     --check-config
 
 Read-only UPS preflight
@@ -80,10 +80,10 @@ Read-only UPS preflight
 
 Без FSD и без изменения NUT/UPS:
 
-  PYTHONPATH=/opt/digitalhouses/dh_pve_app \
-  /opt/digitalhouses/dh_pve_app/.venv/bin/python -m app.main \
-    --config /etc/dh_pve_app/dh_pve_app.conf \
-    --state-dir /var/lib/dh_pve_app \
+  PYTHONPATH=/opt/digitalhouses/digitalhouses_pve_agent \
+  /opt/digitalhouses/digitalhouses_pve_agent/.venv/bin/python -m app.main \
+    --config /etc/digitalhouses_pve_agent/digitalhouses_pve_agent.conf \
+    --state-dir /var/lib/digitalhouses_pve_agent \
     --ups-policy-preflight
 
 Вентиляторы / Fan RPM
@@ -94,9 +94,9 @@ Read-only UPS preflight
 
 Актуальные команды установки/repair, read-only проверки и rollback находятся
 в GitHub:
-  dh_pve_app/hardware/beelink/README.md
+  digitalhouses_pve_agent/hardware/beelink/README.md
 
-dh_app_pve получает обороты вентиляторов напрямую из Linux hwmon:
+dh_pve_agent_agent получает обороты вентиляторов напрямую из Linux hwmon:
 
   /sys/class/hwmon/hwmon*/fan*_input
 
@@ -137,7 +137,7 @@ migration/removal операции.
 max RPM и публикует основной пользовательский Fan Speed в процентах.
 RPM остаётся diagnostic. Calibration хранится в:
 
-  /var/lib/dh_pve_app/fan_calibration.json
+  /var/lib/digitalhouses_pve_agent/fan_calibration.json
 
 Первый write-capable профиль: Beelink/AZW IT8613, it87.2608, fan2 <-> pwm2.
 Для неизвестного hardware App никогда не пишет pwm*.
@@ -151,7 +151,7 @@ max RPM только вверх. Одиночный пик max не изменя
 
 Важно:
 
-- fan*_input отсутствует -> у dh_app_pve нет RPM-источника;
+- fan*_input отсутствует -> у dh_pve_agent_agent нет RPM-источника;
 - fan*_input > 0 -> канал подтверждает реально наблюдаемое вращение;
 - fan*_input = 0 не означает автоматически "канал лишний": настоящий
   вентилятор может поддерживать fan-stop;
@@ -182,7 +182,7 @@ max RPM только вверх. Одиночный пик max не изменя
 Если RPM появился только после установки внешнего hwmon-драйвера, после
 обновления kernel обязательно повторно проверить, что модуль собран/загружен
 и fan*_input снова существует. Внешний драйвер — платформенная мера
-совместимости, а не часть dh_app_pve.
+совместимости, а не часть dh_pve_agent.
 
 Telemetry
 ---------
@@ -198,10 +198,10 @@ Unreleased main/branch/SHA build telemetry не отправляет.
 
 Удалить сохранённую на telemetry-сервере запись этой установки:
 
-  PYTHONPATH=/opt/digitalhouses/dh_pve_app \
-  /opt/digitalhouses/dh_pve_app/.venv/bin/python -m app.main \
-    --config /etc/dh_pve_app/dh_pve_app.conf \
-    --state-dir /var/lib/dh_pve_app \
+  PYTHONPATH=/opt/digitalhouses/digitalhouses_pve_agent \
+  /opt/digitalhouses/digitalhouses_pve_agent/.venv/bin/python -m app.main \
+    --config /etc/digitalhouses_pve_agent/digitalhouses_pve_agent.conf \
+    --state-dir /var/lib/digitalhouses_pve_agent \
     --telemetry-delete
 
 Локальная identity/token остаются persistent, чтобы переустановка/upgrade не
@@ -211,33 +211,33 @@ Unreleased main/branch/SHA build telemetry не отправляет.
 -------------
 
 App:
-  /opt/digitalhouses/dh_pve_app/
+  /opt/digitalhouses/digitalhouses_pve_agent/
 
 Config:
-  /etc/dh_pve_app/dh_pve_app.conf
+  /etc/digitalhouses_pve_agent/digitalhouses_pve_agent.conf
 
 State:
-  /var/lib/dh_pve_app/
+  /var/lib/digitalhouses_pve_agent/
 
 Telemetry identity/state:
   /var/lib/digitalhouses/digitalhouses_pve_agent/telemetry.json
 
 Systemd:
-  /etc/systemd/system/dh_pve_app.service
+  /etc/systemd/system/digitalhouses_pve_agent.service
 
 Памятка:
-  /root/dh_app_pve.txt
+  /root/digitalhouses_pve_agent.txt
 
 Удаление
 --------
 
 Обычное удаление сохраняет config/state:
 
-  /opt/digitalhouses/dh_pve_app/uninstall.sh
+  /opt/digitalhouses/digitalhouses_pve_agent/uninstall.sh
 
 Полное удаление config/state:
 
-  /opt/digitalhouses/dh_pve_app/uninstall.sh --purge
+  /opt/digitalhouses/digitalhouses_pve_agent/uninstall.sh --purge
 
 Uninstall сначала выполняет MQTT cleanup. При ошибке cleanup локальная
 установка сохраняется.

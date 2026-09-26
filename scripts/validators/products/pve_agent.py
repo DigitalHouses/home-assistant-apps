@@ -1,15 +1,16 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 from typing import Any
 
 from validators.common import fail, require_files
 
-EXPECTED_VERSION = "0.5.28"
-EXPECTED_TOPIC_PREFIX = "DigitalHouses/Global/dh_pve_app"
+EXPECTED_VERSION = "0.5.29"
+EXPECTED_TOPIC_PREFIX = "DigitalHouses/Global/digitalhouses_pve_agent"
 EXPECTED_DEVICE_NAME = "DH PVE"
-EXPECTED_REFRESH_ENTITY = "button.dh_app_pve_refresh"
-EXPECTED_LAST_REFRESH_ENTITY = "sensor.dh_app_pve_last_refresh"
+EXPECTED_REFRESH_ENTITY = "button.dh_pve_agent_refresh"
+EXPECTED_LAST_REFRESH_ENTITY = "sensor.dh_pve_agent_last_refresh"
 
 
 def _require_text(path: Path, expected: tuple[str, ...], label: str) -> None:
@@ -19,7 +20,7 @@ def _require_text(path: Path, expected: tuple[str, ...], label: str) -> None:
             fail(f"DH PVE {label} contract changed: {value}")
 
 
-def validate_dh_pve_app(
+def validate_digitalhouses_pve_agent(
     root: Path,
     app: Path,
     context: dict[str, Any],
@@ -62,25 +63,25 @@ def validate_dh_pve_app(
             app / "app/mqtt_bridge.py",
             app / "app/uninstall_cleanup.py",
             app / "app/main.py",
-            app / "examples/dh_pve_app.conf.example",
-            app / "examples/dh_app_pve_dashboard.yaml",
-            app / "examples/dh_app_pve_ups_dashboard.yaml",
-            app / "examples/dh_app_pve_shutdown_readiness_card.yaml",
-            app / "examples/packages/dh_app_pve_package.yaml",
-            app / "examples/packages/dh_app_pve_notification_local_package.yaml",
-            app / "examples/packages/locales/ru/dh_app_pve_notification_local_package.yaml",
-            app / "systemd/dh_pve_app.service",
+            app / "examples/digitalhouses_pve_agent.conf.example",
+            app / "examples/dh_pve_agent_dashboard.yaml",
+            app / "examples/dh_pve_agent_ups_dashboard.yaml",
+            app / "examples/dh_pve_agent_shutdown_readiness_card.yaml",
+            app / "examples/packages/dh_pve_agent_package.yaml",
+            app / "examples/packages/dh_pve_agent_notification_local_package.yaml",
+            app / "examples/packages/locales/ru/dh_pve_agent_notification_local_package.yaml",
+            app / "systemd/digitalhouses_pve_agent.service",
             app / "uninstall.sh",
-            app / "dh_app_pve.txt",
+            app / "digitalhouses_pve_agent.txt",
         ],
     )
 
     if context.get("type") != "linux_agent":
         fail("DH PVE must remain a linux_agent")
 
-    legacy_ui_package = app / "examples/packages/dh_app_pve_ui_package.yaml"
+    legacy_ui_package = app / "examples/packages/dh_pve_agent_ui_package.yaml"
     if legacy_ui_package.exists():
-        fail("DH PVE HA helpers must be consolidated into dh_app_pve_package.yaml")
+        fail("DH PVE HA helpers must be consolidated into dh_pve_agent_package.yaml")
 
     version = (app / "VERSION").read_text(encoding="utf-8").strip()
     if context.get("version") != EXPECTED_VERSION or version != EXPECTED_VERSION:
@@ -99,11 +100,14 @@ def validate_dh_pve_app(
     _require_text(
         app / "app/topics.py",
         (
-            'device_id = f"dh_app_pve_{identity.instance_id}"',
+            'device_id = f"dh_pve_agent_{identity.instance_id}"',
             'diagnostic_event=f"{base}/event/diagnostic"',
-            'device_id = f"dh_app_pve_ups_{identity.instance_id}"',
-            'previous_device_id = f"dh_pve_ups_{identity.instance_id}"',
-            'legacy_device_id = f"dh_ups_{identity.instance_id}"',
+            'device_id = f"dh_pve_agent_ups_{identity.instance_id}"',
+            'legacy_device_id = f"dh_app_pve_{identity.instance_id}"',
+            'older_legacy_device_id = f"dh_pve_{identity.instance_id}"',
+            'legacy_device_id = f"dh_app_pve_ups_{identity.instance_id}"',
+            'older_legacy_device_id = f"dh_pve_ups_{identity.instance_id}"',
+            'oldest_legacy_device_id = f"dh_ups_{identity.instance_id}"',
             "legacy_discoveries=(",
         ),
         "canonical topics",
@@ -121,16 +125,16 @@ def validate_dh_pve_app(
     _require_text(
         app / "app/discovery_metrics.py",
         (
-            'entity_id="sensor.dh_pve_system"',
-            'entity_id="sensor.dh_pve_cpu_usage"',
-            'entity_id="sensor.dh_pve_cpu_temperature"',
-            'entity_id="binary_sensor.dh_pve_cpu_throttling"',
-            'entity_id="sensor.dh_pve_memory_usage"',
-            'f"sensor.dh_pve_storage_{slug}_usage"',
-            'f"sensor.dh_pve_disk_{slug}_health"',
-            'f"sensor.dh_pve_gpu_{slug}_owner"',
-            'f"sensor.dh_pve_fan_{slug}_rpm"',
-            "'proxmox_integration':'dh_pve_app'",
+            'entity_id="sensor.dh_pve_agent_system"',
+            'entity_id="sensor.dh_pve_agent_cpu_usage"',
+            'entity_id="sensor.dh_pve_agent_cpu_temperature"',
+            'entity_id="binary_sensor.dh_pve_agent_cpu_throttling"',
+            'entity_id="sensor.dh_pve_agent_memory_usage"',
+            'f"sensor.dh_pve_agent_storage_{slug}_usage"',
+            'f"sensor.dh_pve_agent_disk_{slug}_health"',
+            'f"sensor.dh_pve_agent_gpu_{slug}_owner"',
+            'f"sensor.dh_pve_agent_fan_{slug}_rpm"',
+            "'proxmox_integration':'digitalhouses_pve_agent'",
             '"used_gib":',
             '"total_gib":',
         ),
@@ -139,14 +143,15 @@ def validate_dh_pve_app(
     _require_text(
         app / "app/discovery_groups.py",
         (
-            'object_id.startswith("dh_pve_")',
-            '"dh_app_pve_" + object_id.removeprefix("dh_pve_")',
-            '"default_entity_id": "sensor.dh_app_pve_problems"',
-            '"default_entity_id": "event.dh_app_pve_diagnostic"',
-            'entity_id="binary_sensor.dh_app_pve_cpu_temperature_problem"',
-            'entity_id=f"binary_sensor.dh_app_pve_storage_{slug}_percent_used_problem"',
-            'entity_id=f"binary_sensor.dh_app_pve_disk_{slug}_smart_problem"',
-            'entity_id=f"binary_sensor.dh_app_pve_gpu_{slug}_temperature_problem"',
+            'object_id.startswith("dh_pve_agent_")',
+            'object_id.startswith("dh_app_pve_")',
+            '"dh_pve_agent_" + object_id.removeprefix("dh_app_pve_")',
+            '"default_entity_id": "sensor.dh_pve_agent_problems"',
+            '"default_entity_id": "event.dh_pve_agent_diagnostic"',
+            'entity_id="binary_sensor.dh_pve_agent_cpu_temperature_problem"',
+            'entity_id=f"binary_sensor.dh_pve_agent_storage_{slug}_percent_used_problem"',
+            'entity_id=f"binary_sensor.dh_pve_agent_disk_{slug}_smart_problem"',
+            'entity_id=f"binary_sensor.dh_pve_agent_gpu_{slug}_temperature_problem"',
             '"cpu_temperature_high"',
             '"cpu_temperature_normal"',
             '"cpu_throttling_started"',
@@ -161,11 +166,11 @@ def validate_dh_pve_app(
             '"fan_control_restored"',
             '"disk_smart_failed"',
             '"disk_smart_restored"',
-            '"default_entity_id": "sensor.dh_app_pve_app_version"',
-            "{{ value_json.app_version | default('unknown') }}",
-            '"default_entity_id": "sensor.dh_app_pve_agent_started"',
-            "{{ value_json.agent_started_at | default(none) }}",
-            '"default_entity_id": "binary_sensor.dh_app_pve_ups_configured"',
+            '"default_entity_id": "sensor.dh_pve_agent_app_version"',
+            "{{ value_json.app_version }}",
+            '"default_entity_id": "sensor.dh_pve_agent_agent_started"',
+            "{{ value_json.agent_started_at }}",
+            '"default_entity_id": "binary_sensor.dh_pve_agent_ups_configured"',
             "value_json.ups_configured",
         ),
         "canonical ready-state Discovery",
@@ -179,11 +184,14 @@ def validate_dh_pve_app(
     _require_text(
         app / "app/discovery_ups_groups.py",
         (
-            'return value.replace(".dh_pve_ups_", ".dh_app_pve_ups_", 1)',
-            'return value.replace(".dh_ups_", ".dh_app_pve_ups_", 1)',
-            '"default_entity_id": f"binary_sensor.dh_app_pve_ups_{problem_id}_problem"',
-            '"default_entity_id": "sensor.dh_app_pve_ups_problems"',
-            '"default_entity_id": "event.dh_app_pve_ups_diagnostic"',
+            'if ".dh_pve_agent_ups_" in value:',
+            'return value',
+            'return value.replace(".dh_app_pve_ups_", ".dh_pve_agent_ups_", 1)',
+            'return value.replace(".dh_pve_ups_", ".dh_pve_agent_ups_", 1)',
+            'return value.replace(".dh_ups_", ".dh_pve_agent_ups_", 1)',
+            '"default_entity_id": f"binary_sensor.dh_pve_agent_ups_{problem_id}_problem"',
+            '"default_entity_id": "sensor.dh_pve_agent_ups_problems"',
+            '"default_entity_id": "event.dh_pve_agent_ups_diagnostic"',
             '"nut_unavailable": "NUT unavailable"',
             '"power_state_unknown": "Power state unknown"',
             '"nut_unavailable"',
@@ -228,9 +236,9 @@ def validate_dh_pve_app(
     _require_text(
         app / "app/discovery_guest.py",
         (
-            'entity_id=f"sensor.dh_pve_{kind}_{_slug(guest_id)}_status"',
-            'entity_id="sensor.dh_pve_vms" if kind == "vm" else "sensor.dh_pve_lxcs"',
-            'entity_id=f"sensor.dh_pve_passthrough_{slug}"',
+            'entity_id=f"sensor.dh_pve_agent_{kind}_{_slug(guest_id)}_status"',
+            'entity_id="sensor.dh_pve_agent_vms" if kind == "vm" else "sensor.dh_pve_agent_lxcs"',
+            'entity_id=f"sensor.dh_pve_agent_passthrough_{slug}"',
             'section="guests"',
             'subject="passthrough"',
         ),
@@ -239,11 +247,11 @@ def validate_dh_pve_app(
     _require_text(
         app / "app/shutdown_discovery.py",
         (
-            'entity_id="sensor.dh_pve_previous_shutdown"',
-            'entity_id="sensor.dh_pve_shutdown_history"',
-            'entity_id=f"sensor.dh_pve_{kind}_{_slug(guest_id)}_shutdown"',
-            '"default_entity_id": "sensor.dh_pve_ups_guest_shutdown_budget"',
-            '"default_entity_id": "sensor.dh_pve_ups_shutdown_readiness"',
+            'entity_id="sensor.dh_pve_agent_previous_shutdown"',
+            'entity_id="sensor.dh_pve_agent_shutdown_history"',
+            'entity_id=f"sensor.dh_pve_agent_{kind}_{_slug(guest_id)}_shutdown"',
+            '"default_entity_id": "sensor.dh_pve_agent_ups_guest_shutdown_budget"',
+            '"default_entity_id": "sensor.dh_pve_agent_ups_shutdown_readiness"',
             "route_pve_discovery_groups(",
             "route_ups_discovery_groups(",
         ),
@@ -301,8 +309,8 @@ def validate_dh_pve_app(
     )
 
     notification_packages = (
-        app / "examples/packages/dh_app_pve_notification_local_package.yaml",
-        app / "examples/packages/locales/ru/dh_app_pve_notification_local_package.yaml",
+        app / "examples/packages/dh_pve_agent_notification_local_package.yaml",
+        app / "examples/packages/locales/ru/dh_pve_agent_notification_local_package.yaml",
     )
     for notification_package in notification_packages:
         notification_source = notification_package.read_text(encoding="utf-8")
@@ -373,7 +381,7 @@ def validate_dh_pve_app(
                 )
 
         for forbidden in (
-            "event: dh_app_pve_notification",
+            "event: dh_pve_agent_notification",
             "id: ups_status_changed",
             "id: problem_started",
             "id: problem_recovered",
@@ -395,14 +403,16 @@ def validate_dh_pve_app(
     ru_notification = notification_packages[1].read_text(encoding="utf-8")
     if "action: persistent_notification.create" not in en_notification:
         fail("DH PVE English local notification example must use a direct action")
-    if "action: script.write2log" not in ru_notification:
-        fail("DH PVE Russian site notification package must call write2log directly")
+    if "action: persistent_notification.create" not in ru_notification:
+        fail("DH PVE Russian public notification example must use a standard direct action")
+    if "script.write2log" in ru_notification:
+        fail("DH PVE public notification examples must not depend on private script.write2log")
 
     ui_package = (
-        app / "examples/packages/dh_app_pve_package.yaml"
+        app / "examples/packages/dh_pve_agent_package.yaml"
     ).read_text(encoding="utf-8")
     close_after_success = ui_package.split(
-        "- id: dh_app_pve_ups_trigger_close_after_success",
+        "- id: dh_pve_agent_ups_trigger_close_after_success",
         1,
     )[1]
     for required in (
@@ -447,57 +457,57 @@ def validate_dh_pve_app(
             fail(f"DH PVE UPS Trigger UI numeric contract changed: {required}")
 
     for forbidden in (
-        "states('number.dh_app_pve_ups_shutdown_battery_charge_threshold') | float",
-        "states('number.dh_app_pve_ups_shutdown_runtime_reserve') | float",
-        "states('input_number.dh_app_pve_ups_trigger_snapshot_charge') | float",
-        "states('input_number.dh_app_pve_ups_trigger_snapshot_reserve') | float",
+        "states('number.dh_pve_agent_ups_shutdown_battery_charge_threshold') | float",
+        "states('number.dh_pve_agent_ups_shutdown_runtime_reserve') | float",
+        "states('input_number.dh_pve_agent_ups_trigger_snapshot_charge') | float",
+        "states('input_number.dh_pve_agent_ups_trigger_snapshot_reserve') | float",
     ):
         if forbidden in ui_package:
             fail(f"DH PVE UPS Trigger UI silently coerces required state: {forbidden}")
 
     _require_text(
-        app / "examples/packages/dh_app_pve_package.yaml",
+        app / "examples/packages/dh_pve_agent_package.yaml",
         (
-            "sensor.dh_app_pve_cpu_usage",
-            "sensor.dh_app_pve_storage_*_percent_used",
-            "sensor.dh_app_pve_fan_*_speed",
-            "sensor.dh_app_pve_ups_status",
+            "sensor.dh_pve_agent_cpu_usage",
+            "sensor.dh_pve_agent_storage_*_percent_used",
+            "sensor.dh_pve_agent_fan_*_speed",
+            "sensor.dh_pve_agent_ups_status",
             "logbook:",
         ),
         "HA package",
     )
     _require_text(
-        app / "examples/dh_app_pve_dashboard.yaml",
+        app / "examples/dh_pve_agent_dashboard.yaml",
         (
-            "sensor.dh_app_pve_problems",
-            "button.dh_app_pve_refresh",
-            "number.dh_app_pve_cpu_temperature_threshold",
-            "number.dh_app_pve_storage_percent_used_threshold",
+            "sensor.dh_pve_agent_problems",
+            "button.dh_pve_agent_refresh",
+            "number.dh_pve_agent_cpu_temperature_threshold",
+            "number.dh_pve_agent_storage_percent_used_threshold",
         ),
         "PVE dashboard",
     )
     _require_text(
-        app / "examples/dh_app_pve_ups_dashboard.yaml",
+        app / "examples/dh_pve_agent_ups_dashboard.yaml",
         (
-            "sensor.dh_app_pve_ups_status",
-            "sensor.dh_app_pve_ups_problems",
-            "sensor.dh_app_pve_ups_battery_charger_status",
+            "sensor.dh_pve_agent_ups_status",
+            "sensor.dh_pve_agent_ups_problems",
+            "sensor.dh_pve_agent_ups_battery_charger_status",
             "'charging': 'Заряжается'",
             "'floating': 'Поддержание заряда'",
-            "binary_sensor.dh_app_pve_ups_on_battery_problem",
-            "button.dh_app_pve_ups_refresh",
-            "binary_sensor.dh_app_pve_ups_configured",
+            "binary_sensor.dh_pve_agent_ups_on_battery_problem",
+            "button.dh_pve_agent_ups_refresh",
+            "binary_sensor.dh_pve_agent_ups_configured",
             "ИБП не настроен",
         ),
         "UPS dashboard",
     )
     _require_text(
-        app / "examples/dh_app_pve_shutdown_readiness_card.yaml",
+        app / "examples/dh_pve_agent_shutdown_readiness_card.yaml",
         (
-            "sensor.dh_app_pve_previous_shutdown",
-            "sensor.dh_app_pve_shutdown_history",
-            "sensor.dh_app_pve_ups_shutdown_readiness",
-            "sensor.dh_app_pve_ups_guest_shutdown_budget",
+            "sensor.dh_pve_agent_previous_shutdown",
+            "sensor.dh_pve_agent_shutdown_history",
+            "sensor.dh_pve_agent_ups_shutdown_readiness",
+            "sensor.dh_pve_agent_ups_guest_shutdown_budget",
             "shutdown_reason",
             "shutdown_clean",
         ),
@@ -516,31 +526,33 @@ def validate_dh_pve_app(
         if forbidden in ups_discovery_source:
             fail(f"DH PVE UPS Discovery depends on removed presentation field: {forbidden}")
 
-    package = (app / "examples/packages/dh_app_pve_package.yaml").read_text(
+    package = (app / "examples/packages/dh_pve_agent_package.yaml").read_text(
         encoding="utf-8"
     )
     for forbidden in (
-        "sensor.dh_app_pve_*",
-        "binary_sensor.dh_app_pve_*",
-        "sensor.dh_pve_",
-        "binary_sensor.dh_pve_",
+        "sensor.dh_pve_agent_*",
+        "binary_sensor.dh_pve_agent_*",
+        "sensor.dh_app_pve_",
+        "binary_sensor.dh_app_pve_",
     ):
         if forbidden in package:
             fail(f"DH PVE HA package must remain explicit/lightweight: {forbidden}")
+    if re.search(r"\\b(?:sensor|binary_sensor)\\.dh_pve_(?!agent_)", package):
+        fail("DH PVE HA package contains pre-canonical dh_pve_* entity IDs")
 
-    pve_dashboard = (app / "examples/dh_app_pve_dashboard.yaml").read_text(
+    pve_dashboard = (app / "examples/dh_pve_agent_dashboard.yaml").read_text(
         encoding="utf-8"
     )
     haos_source = "\n".join(
         path.read_text(encoding="utf-8")
         for path in (
-            app / "examples/dh_app_pve_dashboard.yaml",
-            app / "examples/dh_app_pve_ups_dashboard.yaml",
-            app / "examples/dh_app_pve_shutdown_readiness_card.yaml",
+            app / "examples/dh_pve_agent_dashboard.yaml",
+            app / "examples/dh_pve_agent_ups_dashboard.yaml",
+            app / "examples/dh_pve_agent_shutdown_readiness_card.yaml",
         )
     )
     for forbidden in (
-        ".dh_pve_",
+        ".dh_app_pve_",
         ".dh_ups_",
         "input_number.dh_proxmox_",
         "states.sensor",
@@ -548,6 +560,8 @@ def validate_dh_pve_app(
     ):
         if forbidden in haos_source:
             fail(f"DH PVE canonical HAOS examples contain legacy/business logic: {forbidden}")
+    if re.search(r"\\.dh_pve_(?!agent_)", haos_source):
+        fail("DH PVE canonical HAOS examples contain pre-canonical dh_pve_* entity IDs")
 
     # auto-entities is presentation-only and is allowed only for the PVE
     # inventory collections whose membership is dynamic. It must not return to
@@ -555,8 +569,8 @@ def validate_dh_pve_app(
     strict_haos_source = "\n".join(
         path.read_text(encoding="utf-8")
         for path in (
-            app / "examples/dh_app_pve_ups_dashboard.yaml",
-            app / "examples/dh_app_pve_shutdown_readiness_card.yaml",
+            app / "examples/dh_pve_agent_ups_dashboard.yaml",
+            app / "examples/dh_pve_agent_shutdown_readiness_card.yaml",
         )
     )
     if "custom:auto-entities" in strict_haos_source:
@@ -579,6 +593,9 @@ def validate_dh_pve_app(
         "dh_pve_dashboard.yaml",
         "dh_pve_ups_dashboard.yaml",
         "dh_pve_shutdown_readiness_card.yaml",
+        "dh_app_pve_dashboard.yaml",
+        "dh_app_pve_ups_dashboard.yaml",
+        "dh_app_pve_shutdown_readiness_card.yaml",
     ):
         if (app / "examples" / legacy_name).exists():
             fail(f"DH PVE legacy HAOS example must be removed: {legacy_name}")
@@ -757,23 +774,23 @@ def validate_dh_pve_app(
         "retired poll control and dynamic component cleanup",
     )
 
-    service = app / "systemd/dh_pve_app.service"
+    service = app / "systemd/digitalhouses_pve_agent.service"
     _require_text(
         service,
         (
             "User=root",
-            "WorkingDirectory=/opt/digitalhouses/dh_pve_app",
+            "WorkingDirectory=/opt/digitalhouses/digitalhouses_pve_agent",
             (
-                "ExecStart=/opt/digitalhouses/dh_pve_app/.venv/bin/python "
-                "-m app.main --config /etc/dh_pve_app/dh_pve_app.conf "
-                "--state-dir /var/lib/dh_pve_app"
+                "ExecStart=/opt/digitalhouses/digitalhouses_pve_agent/.venv/bin/python "
+                "-m app.main --config /etc/digitalhouses_pve_agent/digitalhouses_pve_agent.conf "
+                "--state-dir /var/lib/digitalhouses_pve_agent"
             ),
             "Restart=on-failure",
         ),
         "systemd",
     )
 
-    config_example = (app / "examples/dh_pve_app.conf.example").read_text(encoding="utf-8")
+    config_example = (app / "examples/digitalhouses_pve_agent.conf.example").read_text(encoding="utf-8")
     if "[telemetry]" not in config_example or "enabled = false" not in config_example:
         fail("DH PVE telemetry must remain explicit opt-in and default OFF")
     for expected in (
@@ -785,17 +802,28 @@ def validate_dh_pve_app(
 
     installer = (app / "install.sh").read_text(encoding="utf-8")
     for expected in (
-        'APP_NAME="dh_pve_app"',
-        'APP_DIR="/opt/digitalhouses/${APP_NAME}"',
-        'CONFIG_DIR="/etc/${APP_NAME}"',
-        'STATE_DIR="/var/lib/${APP_NAME}"',
-        'TELEMETRY_STATE_DIR="/var/lib/digitalhouses/digitalhouses_pve_agent"',
+        'PRODUCT_ID="digitalhouses_pve_agent"',
+        'APP_NAME="${PRODUCT_ID}"',
+        'SOURCE_PRODUCT_DIR="${PRODUCT_ID}"',
+        'SERVICE_NAME="${PRODUCT_ID}.service"',
+        'APP_DIR="/opt/digitalhouses/${PRODUCT_ID}"',
+        'CONFIG_DIR="/etc/${PRODUCT_ID}"',
+        'CONFIG_FILE="${CONFIG_DIR}/${PRODUCT_ID}.conf"',
+        'STATE_DIR="/var/lib/${PRODUCT_ID}"',
+        'TELEMETRY_STATE_DIR="/var/lib/digitalhouses/${PRODUCT_ID}"',
+        'ROOT_GUIDE="/root/digitalhouses_pve_agent.txt"',
+        'LEGACY_APP_NAME="dh_pve_app"',
+        'LEGACY_SERVICE_NAME="${LEGACY_APP_NAME}.service"',
+        'LEGACY_TOPIC_PREFIX="DigitalHouses/Global/dh_pve_app"',
+        'CANONICAL_TOPIC_PREFIX="DigitalHouses/Global/digitalhouses_pve_agent"',
+        'INSTALL_MODE="${DIGITALHOUSES_INSTALL_MODE:-production}"',
+        'SOURCE_REF="${DIGITALHOUSES_SOURCE_REF:-}"',
+        'EXPECTED_SOURCE_REF="${PRODUCT_ID}-v${SOURCE_VERSION}"',
         'if [[ ! -f "${CONFIG_FILE}" ]]; then',
-        "nano /etc/dh_pve_app/dh_pve_app.conf",
+        "nano /etc/digitalhouses_pve_agent/digitalhouses_pve_agent.conf",
         "--check-config",
         'chmod 0755 "${APP_DIR}/uninstall.sh"',
-        'ROOT_GUIDE="/root/dh_app_pve.txt"',
-        'cat "${APP_DIR}/dh_app_pve.txt"',
+        'cat "${APP_DIR}/digitalhouses_pve_agent.txt"',
         '"[events]"',
         '"pve_problem_debounce_seconds = 30"',
     ):
@@ -807,7 +835,7 @@ def validate_dh_pve_app(
         "/etc/cron.d/digitalhouses-proxmox-mqtt",
     ):
         if forbidden in installer:
-            fail(f"DH PVE Phase 1 installer must not touch legacy agent: {forbidden}")
+            fail(f"DH PVE installer must not touch obsolete pre-product migration artifacts: {forbidden}")
 
     cleanup_source = (app / "app/uninstall_cleanup.py").read_text(encoding="utf-8")
     for expected in (
@@ -827,6 +855,7 @@ def validate_dh_pve_app(
 
     uninstaller = (app / "uninstall.sh").read_text(encoding="utf-8")
     for expected in (
+        'APP_NAME="digitalhouses_pve_agent"',
         'CONFIG_DIR="/etc/${APP_NAME}"',
         'STATE_DIR="/var/lib/${APP_NAME}"',
         '"--purge"',
@@ -835,21 +864,21 @@ def validate_dh_pve_app(
         'systemctl start "${SERVICE_NAME}"',
         'rm -rf -- "${APP_DIR}"',
         'rm -rf -- "${CONFIG_DIR}" "${STATE_DIR}" "${TELEMETRY_STATE_DIR}"',
-        'ROOT_GUIDE="/root/dh_app_pve.txt"',
+        'ROOT_GUIDE="/root/digitalhouses_pve_agent.txt"',
         'rm -f -- "${ROOT_GUIDE}"',
     ):
         if expected not in uninstaller:
             fail(f"DH PVE uninstaller contract changed: {expected}")
 
     _require_text(
-        app / "dh_app_pve.txt",
+        app / "digitalhouses_pve_agent.txt",
         (
             "Установка",
             "Обновление",
-            "systemctl status dh_pve_app",
-            "/etc/dh_pve_app/dh_pve_app.conf",
+            "systemctl status digitalhouses_pve_agent",
+            "/etc/digitalhouses_pve_agent/digitalhouses_pve_agent.conf",
             "--ups-policy-preflight",
-            "/opt/digitalhouses/dh_pve_app/uninstall.sh",
+            "/opt/digitalhouses/digitalhouses_pve_agent/uninstall.sh",
             "--purge",
         ),
         "operational guide",
@@ -872,8 +901,8 @@ def validate_dh_pve_app(
             fail(f"DH PVE uninstaller crosses ownership/safety boundary: {forbidden}")
 
     for diagnostic_metadata_entity in (
-        "sensor.dh_app_pve_app_version",
-        "sensor.dh_app_pve_agent_started",
+        "sensor.dh_pve_agent_app_version",
+        "sensor.dh_pve_agent_agent_started",
     ):
         if diagnostic_metadata_entity in package:
             fail(

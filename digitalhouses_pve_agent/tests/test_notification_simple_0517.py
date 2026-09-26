@@ -6,10 +6,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 APP = ROOT / "digitalhouses_pve_agent"
 PACKAGES = APP / "examples" / "packages"
-EN = PACKAGES / "dh_app_pve_notification_local_package.yaml"
-RU = PACKAGES / "locales" / "ru" / "dh_app_pve_notification_local_package.yaml"
-OLD_EN = PACKAGES / "dh_app_pve_notification_package.yaml"
-OLD_RU = PACKAGES / "locales" / "ru" / "dh_app_pve_notification_package.yaml"
+EN = PACKAGES / "dh_pve_agent_notification_local_package.yaml"
+RU = PACKAGES / "locales" / "ru" / "dh_pve_agent_notification_local_package.yaml"
+OLD_EN = PACKAGES / "dh_pve_agent_notification_package.yaml"
+OLD_RU = PACKAGES / "locales" / "ru" / "dh_pve_agent_notification_package.yaml"
 STANDARD = ROOT / "docs" / "standards" / "EVENTS_AND_NOTIFICATIONS_STANDARD.md"
 
 TRIGGER_IDS = (
@@ -82,7 +82,7 @@ def test_notification_local_package_is_direct_and_readable() -> None:
             assert f"id: {trigger_id}" in text
 
         for forbidden in (
-            "event: dh_app_pve_notification",
+            "event: dh_pve_agent_notification",
             "notification_schema_version",
             "contract_error",
             "failure_class",
@@ -99,7 +99,7 @@ def test_notification_local_package_calls_delivery_directly() -> None:
     ru = _read(RU)
 
     assert "action: persistent_notification.create" in en
-    assert "action: script.write2log" in ru
+    assert "action: persistent_notification.create" in ru
 
 
 def test_notification_standard_uses_simple_direct_flow() -> None:

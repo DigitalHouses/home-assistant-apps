@@ -7,7 +7,7 @@ from pathlib import Path
 
 INSTANCE_ID_RE = re.compile(r"^[a-z0-9][a-z0-9_]*$")
 LOG_LEVELS = {"debug", "info", "warning", "error"}
-DEFAULT_TOPIC_PREFIX = "DigitalHouses/Global/dh_pve_app"
+DEFAULT_TOPIC_PREFIX = "DigitalHouses/Global/digitalhouses_pve_agent"
 DEFAULT_DISCOVERY_PREFIX = "homeassistant"
 FIXED_UPS_POLL_INTERVAL_SECONDS = 10.0
 

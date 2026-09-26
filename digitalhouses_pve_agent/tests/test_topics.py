@@ -32,7 +32,7 @@ def test_build_topics_is_exact():
         port=1883,
         username="",
         password="",
-        topic_prefix="DigitalHouses/Global/dh_pve_app",
+        topic_prefix="DigitalHouses/Global/digitalhouses_pve_agent",
         discovery_prefix="homeassistant",
         keepalive_seconds=60,
     )
@@ -43,13 +43,13 @@ def test_build_topics_is_exact():
         node_name="PVE",
     )
     topics = build_topics(mqtt, identity)
-    assert topics.base == "DigitalHouses/Global/dh_pve_app/shahristan"
+    assert topics.base == "DigitalHouses/Global/digitalhouses_pve_agent/shahristan"
     assert topics.state == topics.base + "/state"
     assert topics.availability == topics.base + "/availability"
     assert topics.refresh == topics.base + "/refresh"
     assert topics.manifest == topics.base + "/manifest"
     assert topics.settings_prefix == topics.base + "/settings"
-    assert topics.device_id == "dh_app_pve_shahristan"
-    assert topics.discovery == "homeassistant/device/dh_app_pve_shahristan/config"
+    assert topics.device_id == "dh_pve_agent_shahristan"
+    assert topics.discovery == "homeassistant/device/dh_pve_agent_shahristan/config"
     assert topics.ha_status == "homeassistant/status"
     assert topics.fan_calibrate == topics.base + "/fans/calibrate"

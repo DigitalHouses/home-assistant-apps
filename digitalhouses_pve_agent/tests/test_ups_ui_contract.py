@@ -1,7 +1,8 @@
 from pathlib import Path
+import re
 
 ROOT = Path(__file__).resolve().parents[1]
-DASHBOARD = ROOT / "examples" / "dh_app_pve_ups_dashboard.yaml"
+DASHBOARD = ROOT / "examples" / "dh_pve_agent_ups_dashboard.yaml"
 
 
 def _text() -> str:
@@ -13,14 +14,14 @@ def test_ups_dashboard_uses_canonical_status_and_telemetry():
     text = _text()
 
     for entity_id in (
-        "sensor.dh_app_pve_ups_problems",
-        "sensor.dh_app_pve_ups_status",
-        "sensor.dh_app_pve_ups_battery_charge",
-        "sensor.dh_app_pve_ups_battery_runtime_minutes",
-        "sensor.dh_app_pve_ups_load",
-        "sensor.dh_app_pve_ups_input_voltage",
-        "sensor.dh_app_pve_ups_output_voltage",
-        "button.dh_app_pve_ups_refresh",
+        "sensor.dh_pve_agent_ups_problems",
+        "sensor.dh_pve_agent_ups_status",
+        "sensor.dh_pve_agent_ups_battery_charge",
+        "sensor.dh_pve_agent_ups_battery_runtime_minutes",
+        "sensor.dh_pve_agent_ups_load",
+        "sensor.dh_pve_agent_ups_input_voltage",
+        "sensor.dh_pve_agent_ups_output_voltage",
+        "button.dh_pve_agent_ups_refresh",
     ):
         assert entity_id in text
 
@@ -29,13 +30,13 @@ def test_ups_dashboard_uses_app_owned_problem_state():
     text = _text()
 
     for entity_id in (
-        "binary_sensor.dh_app_pve_ups_nut_unavailable_problem",
-        "binary_sensor.dh_app_pve_ups_on_battery_problem",
-        "binary_sensor.dh_app_pve_ups_low_battery_problem",
-        "binary_sensor.dh_app_pve_ups_overload_problem",
-        "binary_sensor.dh_app_pve_ups_replace_battery_problem",
-        "binary_sensor.dh_app_pve_ups_bypass_problem",
-        "binary_sensor.dh_app_pve_ups_power_state_unknown_problem",
+        "binary_sensor.dh_pve_agent_ups_nut_unavailable_problem",
+        "binary_sensor.dh_pve_agent_ups_on_battery_problem",
+        "binary_sensor.dh_pve_agent_ups_low_battery_problem",
+        "binary_sensor.dh_pve_agent_ups_overload_problem",
+        "binary_sensor.dh_pve_agent_ups_replace_battery_problem",
+        "binary_sensor.dh_pve_agent_ups_bypass_problem",
+        "binary_sensor.dh_pve_agent_ups_power_state_unknown_problem",
     ):
         assert entity_id in text
 
@@ -49,23 +50,23 @@ def test_ups_dashboard_uses_app_owned_problem_state():
 def test_ups_dashboard_keeps_nut_observation_and_uses_trigger_v2_policy_view():
     text = _text()
 
-    assert "sensor.dh_app_pve_ups_shutdown_policy" in text
-    assert "sensor.dh_app_pve_ups_policy_power_restore_delay" in text
-    assert "sensor.dh_app_pve_ups_policy_on_battery_delay" not in text
+    assert "sensor.dh_pve_agent_ups_shutdown_policy" in text
+    assert "sensor.dh_pve_agent_ups_policy_power_restore_delay" in text
+    assert "sensor.dh_pve_agent_ups_policy_on_battery_delay" not in text
     assert "Config UPS trigger" in text
-    assert "button.dh_app_pve_ups_apply_policy" not in text
+    assert "button.dh_pve_agent_ups_apply_policy" not in text
 
 
 def test_ups_dashboard_has_permanent_app_owned_line_power_monthly_statistics():
     text = _text()
 
     for entity_id in (
-        "binary_sensor.dh_app_pve_ups_line_power",
-        "sensor.dh_app_pve_ups_line_power_online_month",
-        "sensor.dh_app_pve_ups_line_power_offline_month",
-        "sensor.dh_app_pve_ups_line_power_outages_month",
-        "sensor.dh_app_pve_ups_line_power_availability_month",
-        "sensor.dh_app_pve_ups_line_power_current_outage_started",
+        "binary_sensor.dh_pve_agent_ups_line_power",
+        "sensor.dh_pve_agent_ups_line_power_online_month",
+        "sensor.dh_pve_agent_ups_line_power_offline_month",
+        "sensor.dh_pve_agent_ups_line_power_outages_month",
+        "sensor.dh_pve_agent_ups_line_power_availability_month",
+        "sensor.dh_pve_agent_ups_line_power_current_outage_started",
     ):
         assert entity_id in text
 
@@ -96,16 +97,17 @@ def test_ups_dashboard_has_permanent_app_owned_line_power_monthly_statistics():
 def test_ups_dashboard_handles_unconfigured_ups_as_normal_optional_state():
     text = _text()
 
-    assert "binary_sensor.dh_app_pve_ups_configured" in text
+    assert "binary_sensor.dh_pve_agent_ups_configured" in text
     assert "ИБП не настроен" in text
     assert "Мониторинг UPS на этом сервере не настроен" in text
     assert "state: \"off\"" in text
     assert "state: \"on\"" in text
-    assert text.count("binary_sensor.dh_app_pve_ups_configured") >= 2
+    assert text.count("binary_sensor.dh_pve_agent_ups_configured") >= 2
 
 
 def test_ups_dashboard_contains_no_legacy_public_entity_ids():
     text = _text()
 
-    assert ".dh_pve_ups_" not in text
+    assert ".dh_app_pve_ups_" not in text
+    assert re.search(r"\.dh_pve_ups_", text) is None
     assert ".dh_ups_" not in text

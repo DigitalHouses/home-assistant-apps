@@ -76,8 +76,9 @@ def ups_state_group_topic(topics: UpsTopics, group: str) -> str:
 
 def build_topics(mqtt: MqttConfig, identity: HostIdentity) -> Topics:
     base = f"{mqtt.topic_prefix.rstrip('/')}/{identity.instance_id}"
-    device_id = f"dh_app_pve_{identity.instance_id}"
-    previous_device_id = f"dh_pve_{identity.instance_id}"
+    device_id = f"dh_pve_agent_{identity.instance_id}"
+    legacy_device_id = f"dh_app_pve_{identity.instance_id}"
+    older_legacy_device_id = f"dh_pve_{identity.instance_id}"
     discovery_prefix = mqtt.discovery_prefix.strip("/")
     return Topics(
         base=base,
@@ -94,7 +95,8 @@ def build_topics(mqtt: MqttConfig, identity: HostIdentity) -> Topics:
         ups_scan_state=f"{base}/ups/scan/state",
         fan_calibrate=f"{base}/fans/calibrate",
         legacy_discoveries=(
-            f"{discovery_prefix}/device/{previous_device_id}/config",
+            f"{discovery_prefix}/device/{legacy_device_id}/config",
+            f"{discovery_prefix}/device/{older_legacy_device_id}/config",
         ),
     )
 
@@ -102,9 +104,10 @@ def build_topics(mqtt: MqttConfig, identity: HostIdentity) -> Topics:
 def build_ups_topics(mqtt: MqttConfig, identity: HostIdentity) -> UpsTopics:
     pve = build_topics(mqtt, identity)
     base = f"{pve.base}/ups"
-    device_id = f"dh_app_pve_ups_{identity.instance_id}"
-    previous_device_id = f"dh_pve_ups_{identity.instance_id}"
-    legacy_device_id = f"dh_ups_{identity.instance_id}"
+    device_id = f"dh_pve_agent_ups_{identity.instance_id}"
+    legacy_device_id = f"dh_app_pve_ups_{identity.instance_id}"
+    older_legacy_device_id = f"dh_pve_ups_{identity.instance_id}"
+    oldest_legacy_device_id = f"dh_ups_{identity.instance_id}"
     discovery_prefix = mqtt.discovery_prefix.strip("/")
     policy_base = f"{base}/policy"
     test_schedule_base = f"{base}/test/schedule"
@@ -127,8 +130,9 @@ def build_ups_topics(mqtt: MqttConfig, identity: HostIdentity) -> UpsTopics:
         diagnostic_event=f"{base}/event/diagnostic",
         discovery=f"{discovery_prefix}/device/{device_id}/config",
         legacy_discoveries=(
-            f"{discovery_prefix}/device/{previous_device_id}/config",
             f"{discovery_prefix}/device/{legacy_device_id}/config",
+            f"{discovery_prefix}/device/{older_legacy_device_id}/config",
+            f"{discovery_prefix}/device/{oldest_legacy_device_id}/config",
         ),
         device_id=device_id,
     )

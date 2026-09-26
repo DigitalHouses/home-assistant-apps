@@ -17,7 +17,7 @@ def _mqtt() -> MqttConfig:
         port=1883,
         username="",
         password="",
-        topic_prefix="DigitalHouses/Global/dh_pve_app",
+        topic_prefix="DigitalHouses/Global/digitalhouses_pve_agent",
         discovery_prefix="homeassistant",
         keepalive_seconds=60,
     )
@@ -48,11 +48,11 @@ def test_pve_device_exposes_manual_ups_scan_controls():
     payload = build_discovery_payload(_app_config(), _identity(), version="0.2.0-alpha")
     components = payload["components"]
 
-    assert components["ups_scan"]["default_entity_id"] == "button.dh_app_pve_scan_ups"
+    assert components["ups_scan"]["default_entity_id"] == "button.dh_pve_agent_scan_ups"
     assert components["ups_scan"]["command_topic"] == topics.ups_scan
-    assert components["ups_scan_result"]["default_entity_id"] == "sensor.dh_app_pve_ups_scan_result"
+    assert components["ups_scan_result"]["default_entity_id"] == "sensor.dh_pve_agent_ups_scan_result"
     assert components["ups_scan_result"]["state_topic"] == topics.ups_scan_state
-    assert components["ups_last_scan"]["default_entity_id"] == "sensor.dh_app_pve_ups_last_scan"
+    assert components["ups_last_scan"]["default_entity_id"] == "sensor.dh_pve_agent_ups_last_scan"
     assert components["ups_last_scan"]["state_topic"] == topics.ups_scan_state
 
 
@@ -94,9 +94,10 @@ def test_read_only_nut_scan_lists_configured_ups_names():
 
 def test_ups_device_and_entities_use_pve_scoped_public_namespace():
     topics = build_ups_topics(_mqtt(), _identity())
-    assert topics.device_id == "dh_app_pve_ups_node_a"
-    assert topics.discovery == "homeassistant/device/dh_app_pve_ups_node_a/config"
+    assert topics.device_id == "dh_pve_agent_ups_node_a"
+    assert topics.discovery == "homeassistant/device/dh_pve_agent_ups_node_a/config"
     assert topics.legacy_discoveries == (
+        "homeassistant/device/dh_app_pve_ups_node_a/config",
         "homeassistant/device/dh_pve_ups_node_a/config",
         "homeassistant/device/dh_ups_node_a/config",
     )
@@ -114,9 +115,9 @@ def test_ups_device_and_entities_use_pve_scoped_public_namespace():
     )
 
     assert payload["device"]["name"] == "DH PVE UPS"
-    assert payload["device"]["identifiers"] == ["dh_app_pve_ups_node_a"]
+    assert payload["device"]["identifiers"] == ["dh_pve_agent_ups_node_a"]
     # This is the raw builder. Final production Discovery canonicalizes public
     # entity IDs in route_ups_discovery_groups().
-    assert payload["components"]["status"]["default_entity_id"] == "sensor.dh_pve_ups_status"
-    assert payload["components"]["battery_charge"]["default_entity_id"] == "sensor.dh_pve_ups_battery_charge"
-    assert payload["components"]["refresh"]["default_entity_id"] == "button.dh_pve_ups_refresh"
+    assert payload["components"]["status"]["default_entity_id"] == "sensor.dh_pve_agent_ups_status"
+    assert payload["components"]["battery_charge"]["default_entity_id"] == "sensor.dh_pve_agent_ups_battery_charge"
+    assert payload["components"]["refresh"]["default_entity_id"] == "button.dh_pve_agent_ups_refresh"

@@ -16,7 +16,7 @@ def _config():
             port=1883,
             username="",
             password="",
-            topic_prefix="DigitalHouses/Global/dh_pve_app",
+            topic_prefix="DigitalHouses/Global/digitalhouses_pve_agent",
             discovery_prefix="homeassistant",
             keepalive_seconds=60,
         ),
@@ -92,7 +92,7 @@ def test_cli_prints_preflight_json_and_exits_without_starting_runtime(
         sys,
         "argv",
         [
-            "dh_pve_app",
+            "digitalhouses_pve_agent",
             "--config",
             str(tmp_path / "config"),
             "--state-dir",
@@ -124,7 +124,7 @@ def test_cli_returns_nonzero_for_blocked_preflight(tmp_path, monkeypatch, capsys
         sys,
         "argv",
         [
-            "dh_pve_app",
+            "digitalhouses_pve_agent",
             "--state-dir",
             str(tmp_path),
             "--ups-policy-preflight",

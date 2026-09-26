@@ -9,7 +9,7 @@ class ServiceReloadError(RuntimeError):
 
 
 class FixedServiceReloadExecutor:
-    """Reload only dh_pve_app.service through a fixed, non-shell command."""
+    """Reload only digitalhouses_pve_agent.service through a fixed, non-shell command."""
 
     def __init__(
         self,
@@ -22,7 +22,7 @@ class FixedServiceReloadExecutor:
 
     def __call__(self) -> None:
         completed = self.runner(
-            ["systemctl", "reload", "dh_pve_app.service"],
+            ["systemctl", "reload", "digitalhouses_pve_agent.service"],
             shell=False,
             capture_output=True,
             text=True,

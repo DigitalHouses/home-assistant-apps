@@ -116,7 +116,7 @@ def _adaptive_diagnostic_components(topics) -> dict[str, dict[str, object]]:
             "platform": "sensor",
             "name": "App profile",
             "unique_id": uid("app_profile"),
-            "default_entity_id": "sensor.dh_pve_ups_app_profile",
+            "default_entity_id": "sensor.dh_pve_agent_ups_app_profile",
             "state_topic": diagnostics,
             "value_template": "{{ value_json.app_profile.state | default('normal') }}",
             "availability": availability,
@@ -132,7 +132,7 @@ def _adaptive_diagnostic_components(topics) -> dict[str, dict[str, object]]:
             "platform": "sensor",
             "name": "Last publication",
             "unique_id": uid("last_publication"),
-            "default_entity_id": "sensor.dh_pve_ups_last_publication",
+            "default_entity_id": "sensor.dh_pve_agent_ups_last_publication",
             "state_topic": diagnostics,
             "value_template": "{{ value_json.last_publication.timestamp | default(none) }}",
             "availability": availability,
@@ -173,7 +173,7 @@ def _line_power_components(topics) -> dict[str, dict[str, object]]:
             "platform": "binary_sensor",
             "name": "Line power",
             "unique_id": uid("line_power"),
-            "default_entity_id": "binary_sensor.dh_app_pve_ups_line_power",
+            "default_entity_id": "binary_sensor.dh_pve_agent_ups_line_power",
             "state_topic": state_topic,
             "value_template": (
                 "{{ 'ON' if value_json.state | default('unknown') == 'online' else 'OFF' }}"
@@ -189,7 +189,7 @@ def _line_power_components(topics) -> dict[str, dict[str, object]]:
             "platform": "sensor",
             "name": "Line power online this month",
             "unique_id": uid("line_power_online_month"),
-            "default_entity_id": "sensor.dh_app_pve_ups_line_power_online_month",
+            "default_entity_id": "sensor.dh_pve_agent_ups_line_power_online_month",
             "state_topic": state_topic,
             "value_template": "{{ value_json.online_seconds | default(none) }}",
             "unit_of_measurement": "s",
@@ -202,7 +202,7 @@ def _line_power_components(topics) -> dict[str, dict[str, object]]:
             "platform": "sensor",
             "name": "Line power offline this month",
             "unique_id": uid("line_power_offline_month"),
-            "default_entity_id": "sensor.dh_app_pve_ups_line_power_offline_month",
+            "default_entity_id": "sensor.dh_pve_agent_ups_line_power_offline_month",
             "state_topic": state_topic,
             "value_template": "{{ value_json.offline_seconds | default(none) }}",
             "unit_of_measurement": "s",
@@ -215,7 +215,7 @@ def _line_power_components(topics) -> dict[str, dict[str, object]]:
             "platform": "sensor",
             "name": "Line power outages this month",
             "unique_id": uid("line_power_outages_month"),
-            "default_entity_id": "sensor.dh_app_pve_ups_line_power_outages_month",
+            "default_entity_id": "sensor.dh_pve_agent_ups_line_power_outages_month",
             "state_topic": state_topic,
             "value_template": "{{ value_json.outages_month | default(none) }}",
             "availability": availability,
@@ -226,7 +226,7 @@ def _line_power_components(topics) -> dict[str, dict[str, object]]:
             "platform": "sensor",
             "name": "Line power availability this month",
             "unique_id": uid("line_power_availability_month"),
-            "default_entity_id": "sensor.dh_app_pve_ups_line_power_availability_month",
+            "default_entity_id": "sensor.dh_pve_agent_ups_line_power_availability_month",
             "state_topic": state_topic,
             "value_template": "{{ value_json.availability_percent | default(none) }}",
             "unit_of_measurement": "%",
@@ -246,7 +246,7 @@ def _line_power_components(topics) -> dict[str, dict[str, object]]:
             "name": "Current line power outage started",
             "unique_id": uid("line_power_current_outage_started"),
             "default_entity_id": (
-                "sensor.dh_app_pve_ups_line_power_current_outage_started"
+                "sensor.dh_pve_agent_ups_line_power_current_outage_started"
             ),
             "state_topic": state_topic,
             "value_template": "{{ value_json.current_outage_started | default(none) }}",
@@ -260,7 +260,7 @@ def _line_power_components(topics) -> dict[str, dict[str, object]]:
             "platform": "sensor",
             "name": "Last line power failure",
             "unique_id": uid("line_power_last_failure"),
-            "default_entity_id": "sensor.dh_app_pve_ups_line_power_last_failure",
+            "default_entity_id": "sensor.dh_pve_agent_ups_line_power_last_failure",
             "state_topic": state_topic,
             "value_template": "{{ value_json.last_failure | default(none) }}",
             "device_class": "timestamp",
@@ -273,7 +273,7 @@ def _line_power_components(topics) -> dict[str, dict[str, object]]:
             "platform": "sensor",
             "name": "Last line power restore",
             "unique_id": uid("line_power_last_restore"),
-            "default_entity_id": "sensor.dh_app_pve_ups_line_power_last_restore",
+            "default_entity_id": "sensor.dh_pve_agent_ups_line_power_last_restore",
             "state_topic": state_topic,
             "value_template": "{{ value_json.last_restore | default(none) }}",
             "device_class": "timestamp",
@@ -287,7 +287,7 @@ def _line_power_components(topics) -> dict[str, dict[str, object]]:
             "name": "Last line power outage duration",
             "unique_id": uid("line_power_last_outage_duration"),
             "default_entity_id": (
-                "sensor.dh_app_pve_ups_line_power_last_outage_duration"
+                "sensor.dh_pve_agent_ups_line_power_last_outage_duration"
             ),
             "state_topic": state_topic,
             "value_template": (
@@ -307,10 +307,14 @@ def _line_power_components(topics) -> dict[str, dict[str, object]]:
 def _canonicalize_entity_id(value: object) -> object:
     if not isinstance(value, str):
         return value
+    if ".dh_pve_agent_ups_" in value:
+        return value
+    if ".dh_app_pve_ups_" in value:
+        return value.replace(".dh_app_pve_ups_", ".dh_pve_agent_ups_", 1)
     if ".dh_pve_ups_" in value:
-        return value.replace(".dh_pve_ups_", ".dh_app_pve_ups_", 1)
+        return value.replace(".dh_pve_ups_", ".dh_pve_agent_ups_", 1)
     if ".dh_ups_" in value:
-        return value.replace(".dh_ups_", ".dh_app_pve_ups_", 1)
+        return value.replace(".dh_ups_", ".dh_pve_agent_ups_", 1)
     return value
 
 
@@ -324,7 +328,7 @@ def _problem_components(topics) -> dict[str, dict[str, object]]:
             "platform": "binary_sensor",
             "name": name,
             "unique_id": uid(f"{problem_id}_problem"),
-            "default_entity_id": f"binary_sensor.dh_app_pve_ups_{problem_id}_problem",
+            "default_entity_id": f"binary_sensor.dh_pve_agent_ups_{problem_id}_problem",
             "state_topic": f"{topics.base}/problems/{problem_id}/state",
             "payload_on": "ON",
             "payload_off": "OFF",
@@ -338,7 +342,7 @@ def _problem_components(topics) -> dict[str, dict[str, object]]:
         "platform": "sensor",
         "name": "Problems",
         "unique_id": uid("problems"),
-        "default_entity_id": "sensor.dh_app_pve_ups_problems",
+        "default_entity_id": "sensor.dh_pve_agent_ups_problems",
         "state_topic": f"{topics.base}/problems/aggregate",
         "availability": availability,
         "availability_mode": "all",
@@ -350,7 +354,7 @@ def _problem_components(topics) -> dict[str, dict[str, object]]:
         "platform": "event",
         "name": "Diagnostic",
         "unique_id": uid("diagnostic_event"),
-        "default_entity_id": "event.dh_app_pve_ups_diagnostic",
+        "default_entity_id": "event.dh_pve_agent_ups_diagnostic",
         "state_topic": topics.diagnostic_event,
         "event_types": [
             "nut_unavailable",

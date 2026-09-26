@@ -13,7 +13,7 @@ DKMS_CONF_SHA="bb6e28058ee35c438618fe167695db9f853469c2"
 
 AUTOLOAD_FILE="/etc/modules-load.d/digitalhouses-beelink-it87.conf"
 DKMS_SOURCE="/usr/src/it87-${IT87_VERSION}"
-APP_ROOT="/opt/digitalhouses/dh_pve_app"
+APP_ROOT="/opt/digitalhouses/digitalhouses_pve_agent"
 
 SUPPORTED_DMI_MARKERS=("AZW" "Beelink")
 TARGET_KERNELS=()
@@ -227,7 +227,7 @@ verify_app_collector() {
     local python="${APP_ROOT}/.venv/bin/python"
 
     if [[ ! -x "$python" || ! -f "${APP_ROOT}/app/collectors/cooling.py" ]]; then
-        log "dh_pve_app_collector=SKIP (App is not installed)"
+        log "digitalhouses_pve_agent_collector=SKIP (App is not installed)"
         return 0
     fi
 

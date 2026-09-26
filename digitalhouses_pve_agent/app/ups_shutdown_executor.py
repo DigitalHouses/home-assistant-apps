@@ -5,7 +5,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 
-DEFAULT_POLICY_HELPER = Path("/opt/digitalhouses/dh_pve_app/bin/dh-pve-ups-policy-cmd")
+DEFAULT_POLICY_HELPER = Path("/opt/digitalhouses/digitalhouses_pve_agent/bin/digitalhouses-pve-agent-ups-policy-cmd")
 _ALLOWED_REASONS = frozenset({"charge_guard", "runtime_guard"})
 
 

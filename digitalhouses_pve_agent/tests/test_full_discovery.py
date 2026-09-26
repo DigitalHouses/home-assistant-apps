@@ -9,7 +9,7 @@ def _config():
         general=GeneralConfig(instance_id="", node_name="PVE", log_level="info"),
         mqtt=MqttConfig(
             host="mqtt", port=1883, username="", password="",
-            topic_prefix="DigitalHouses/Global/dh_pve_app",
+            topic_prefix="DigitalHouses/Global/digitalhouses_pve_agent",
             discovery_prefix="homeassistant", keepalive_seconds=60,
         ),
     )
@@ -118,18 +118,18 @@ def _inventory():
 
 def test_static_monitoring_entities_are_present():
     c = build_full_discovery_payload(_config(), _identity(), version="0.1.0")["components"]
-    assert c["system"]["default_entity_id"] == "sensor.dh_pve_system"
-    assert c["last_boot"]["default_entity_id"] == "sensor.dh_pve_last_boot"
-    assert c["cpu_usage"]["default_entity_id"] == "sensor.dh_pve_cpu_usage"
-    assert c["cpu_throttling"]["default_entity_id"] == "binary_sensor.dh_pve_cpu_throttling"
-    assert c["memory_usage"]["default_entity_id"] == "sensor.dh_pve_memory_usage"
-    assert c["collector_smart"]["default_entity_id"] == "binary_sensor.dh_pve_smart_collector"
+    assert c["system"]["default_entity_id"] == "sensor.dh_pve_agent_system"
+    assert c["last_boot"]["default_entity_id"] == "sensor.dh_pve_agent_last_boot"
+    assert c["cpu_usage"]["default_entity_id"] == "sensor.dh_pve_agent_cpu_usage"
+    assert c["cpu_throttling"]["default_entity_id"] == "binary_sensor.dh_pve_agent_cpu_throttling"
+    assert c["memory_usage"]["default_entity_id"] == "sensor.dh_pve_agent_memory_usage"
+    assert c["collector_smart"]["default_entity_id"] == "binary_sensor.dh_pve_agent_smart_collector"
 
 
 def test_dynamic_storage_uses_used_total_semantics_and_attrs():
     c = build_full_discovery_payload(_config(), _identity(), version="0.1.0", inventory=_inventory())["components"]
     s = c["storage_local_lvm_usage"]
-    assert s["default_entity_id"] == "sensor.dh_pve_storage_local_lvm_usage"
+    assert s["default_entity_id"] == "sensor.dh_pve_agent_storage_local_lvm_usage"
     assert "usage_percent" in s["value_template"]
     assert "used_gib" in s["json_attributes_template"]
     assert "total_gib" in s["json_attributes_template"]
@@ -150,7 +150,7 @@ def test_nvme_entities_are_compact_and_history_friendly():
 
 def test_dynamic_gpu_and_fan_entities_are_stable():
     c = build_full_discovery_payload(_config(), _identity(), version="0.1.0", inventory=_inventory())["components"]
-    assert c["gpu_pci_0000_00_02_0_owner"]["default_entity_id"] == "sensor.dh_pve_gpu_pci_0000_00_02_0_owner"
+    assert c["gpu_pci_0000_00_02_0_owner"]["default_entity_id"] == "sensor.dh_pve_agent_gpu_pci_0000_00_02_0_owner"
     assert c["gpu_pci_0000_00_02_0_transcoding"]["unit_of_measurement"] == "%"
     assert c["fan_nct6798_isa_0290_fan1_rpm"]["unit_of_measurement"] == "rpm"
 
@@ -168,14 +168,14 @@ def test_guest_discovery_exposes_read_only_vm_lxc_and_summaries():
         _config(), _identity(), version="0.1.0", inventory=_inventory()
     )["components"]
     vm = c["vm_700_status"]
-    assert vm["default_entity_id"] == "sensor.dh_pve_vm_700_status"
+    assert vm["default_entity_id"] == "sensor.dh_pve_agent_vm_700_status"
     assert "subsystems.guests.data.vms" in vm["value_template"]
     assert "['700']" in vm["value_template"] or '["700"]' in vm["value_template"]
     assert '"guest_id"' in vm["json_attributes_template"]
     assert '"qemu_agent"' in vm["json_attributes_template"]
-    assert c["lxc_500_status"]["default_entity_id"] == "sensor.dh_pve_lxc_500_status"
-    assert c["vms_summary"]["default_entity_id"] == "sensor.dh_pve_vms"
-    assert c["lxcs_summary"]["default_entity_id"] == "sensor.dh_pve_lxcs"
+    assert c["lxc_500_status"]["default_entity_id"] == "sensor.dh_pve_agent_lxc_500_status"
+    assert c["vms_summary"]["default_entity_id"] == "sensor.dh_pve_agent_vms"
+    assert c["lxcs_summary"]["default_entity_id"] == "sensor.dh_pve_agent_lxcs"
     guest_components = [item for key, item in c.items() if key.startswith(("vm_", "lxc_", "vms_", "lxcs_"))]
     assert all("command_topic" not in item for item in guest_components)
 
@@ -185,7 +185,7 @@ def test_passthrough_discovery_exposes_owner_and_pci_metadata_read_only():
         _config(), _identity(), version="0.1.0", inventory=_inventory()
     )["components"]
     item = c["passthrough_pci_0000_00_17_0"]
-    assert item["default_entity_id"] == "sensor.dh_pve_passthrough_pci_0000_00_17_0"
+    assert item["default_entity_id"] == "sensor.dh_pve_agent_passthrough_pci_0000_00_17_0"
     assert "VM 700" in item["value_template"]
     attrs = item["json_attributes_template"]
     for key in ("pci_address", "pci_class", "class_name", "model", "config_key", "owner_id", "owner_name"):
