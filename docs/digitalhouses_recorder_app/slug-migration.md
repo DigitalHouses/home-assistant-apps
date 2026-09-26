@@ -1,6 +1,6 @@
 # Recorder App controlled HA App slug migration
 
-Status: Phase 2 canonical migration active.
+Status: completed; canonical slug accepted and legacy installation removed.
 
 Canonical product:
 
@@ -101,9 +101,26 @@ On the first canonical start:
 
 The completed marker is authoritative and makes later starts idempotent.
 
+## Phase 3 — cleanup release 0.1.13
+
+After field acceptance of canonical versions `0.1.11` and `0.1.12`, including
+restart idempotency, entity identity checks and an explicit rollback test, the
+legacy `digitalhouses_db_monitoring` installation was removed.
+
+Version `0.1.13` removes the temporary migration machinery:
+
+- writable `/share` mapping;
+- `DH_SLUG_MIGRATION_MODE`;
+- migration startup/shutdown hooks;
+- `slug_migration.py` and its dedicated tests.
+
+Existing migration files are deliberately not deleted from user storage.
+They are inert historical artifacts and the runtime no longer reads or writes
+them.
+
 ## Compatibility boundary
 
-Versions `0.1.10` and `0.1.11` do not change:
+Versions `0.1.10` through `0.1.13` do not change:
 
 - MQTT base topic `DigitalHouses/Global/db_monitoring`;
 - MQTT device ID `digitalhouses_db_monitoring`;
