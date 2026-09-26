@@ -9,8 +9,8 @@ from app.ups_problem_events import semantic_ups_problem_event
 
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGES = (
-    ROOT / "examples/packages/dh_app_pve_notification_local_package.yaml",
-    ROOT / "examples/packages/locales/ru/dh_app_pve_notification_local_package.yaml",
+    ROOT / "examples/packages/dh_pve_agent_notification_local_package.yaml",
+    ROOT / "examples/packages/locales/ru/dh_pve_agent_notification_local_package.yaml",
 )
 
 UPS_USER_EVENT_TYPES = (
