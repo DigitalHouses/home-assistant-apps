@@ -287,7 +287,7 @@ dh_pve_agent_package:
 
   automation:
     - id: dh_pve_agent_ups_trigger_close_after_success
-      alias: DH PVE · Close UPS Trigger editor after successful Apply
+      alias: DH PVE Agent · Close UPS Trigger editor after successful Apply
       mode: restart
       triggers:
         - trigger: event.received
