@@ -13,6 +13,10 @@ STORAGE_AVAILABILITY_TOPIC = f"{BASE_TOPIC}/storage_availability"
 DISCOVERY_TOPIC = f"homeassistant/device/{DEVICE_ID}/config"
 HA_STATUS_TOPIC = "homeassistant/status"
 REFRESH_COMMAND_TOPIC = f"{BASE_TOPIC}/refresh"
+EVENT_TOPIC = f"{BASE_TOPIC}/event/diagnostic"
+DISK_USAGE_THRESHOLD_STATE_TOPIC = f"{BASE_TOPIC}/settings/disk_usage_threshold_percent/state"
+DISK_USAGE_THRESHOLD_COMMAND_TOPIC = f"{BASE_TOPIC}/settings/disk_usage_threshold_percent/set"
+EVENT_SCHEMA_VERSION = 2
 STATE_RETAIN = True
 
 def _availability(topic: str) -> dict[str, str]:
@@ -81,6 +85,58 @@ def _button_component(
     if icon:
         payload["icon"] = icon
     return payload
+
+
+def _number_component(
+    name: str,
+    unique_suffix: str,
+    entity_id: str,
+    state_topic: str,
+    command_topic: str,
+    *,
+    minimum: float,
+    maximum: float,
+    step: float,
+    unit: str | None = None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "platform": "number",
+        "name": name,
+        "unique_id": f"{DEVICE_ID}_{unique_suffix}",
+        "default_entity_id": entity_id,
+        "state_topic": state_topic,
+        "command_topic": command_topic,
+        "min": minimum,
+        "max": maximum,
+        "step": step,
+        "mode": "box",
+        "entity_category": "config",
+        "availability": [_availability(APP_AVAILABILITY_TOPIC)],
+        "availability_mode": "all",
+    }
+    if unit:
+        payload["unit_of_measurement"] = unit
+    return payload
+
+
+def _event_component(
+    name: str,
+    unique_suffix: str,
+    entity_id: str,
+    state_topic: str,
+    event_types: list[str],
+) -> dict[str, Any]:
+    return {
+        "platform": "event",
+        "name": name,
+        "unique_id": f"{DEVICE_ID}_{unique_suffix}",
+        "default_entity_id": entity_id,
+        "state_topic": state_topic,
+        "event_types": event_types,
+        "availability": [_availability(APP_AVAILABILITY_TOPIC)],
+        "availability_mode": "all",
+    }
+
 
 def build_discovery_payload(app_version: str, include_storage: bool = False) -> dict[str, Any]:
     components = {
@@ -175,6 +231,31 @@ def build_discovery_payload(app_version: str, include_storage: bool = False) -> 
             "DB refresh", "db_refresh", "button.dh_db_refresh", REFRESH_COMMAND_TOPIC,
             diagnostic=True, icon="mdi:refresh",
         ),
+        "db_disk_usage_threshold": _number_component(
+            "DB disk usage threshold",
+            "db_disk_usage_threshold",
+            "number.dh_db_disk_usage_threshold",
+            DISK_USAGE_THRESHOLD_STATE_TOPIC,
+            DISK_USAGE_THRESHOLD_COMMAND_TOPIC,
+            minimum=1,
+            maximum=98,
+            step=1,
+            unit="%",
+        ),
+        "diagnostic_event": _event_component(
+            "Diagnostic event",
+            "diagnostic_event",
+            "event.dh_db_diagnostic",
+            EVENT_TOPIC,
+            [
+                "db_connection_lost",
+                "db_connection_restored",
+                "recorder_writing_stopped",
+                "recorder_writing_restored",
+                "storage_usage_high",
+                "storage_usage_normal",
+            ],
+        ),
     }
     if include_storage:
         components["db_disk_free"] = _component(
@@ -210,9 +291,9 @@ def build_discovery_payload(app_version: str, include_storage: bool = False) -> 
             "sw_version": app_version,
         },
         "origin": {
-            "name": "DigitalHouses DB Monitoring",
+            "name": "DigitalHouses Recorder App",
             "sw_version": app_version,
-            "support_url": "https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_db_monitoring",
+            "support_url": "https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_recorder_app",
         },
         "components": components,
     }
