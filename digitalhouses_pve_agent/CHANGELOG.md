@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.29
+
+- Complete the controlled PVE Agent runtime naming migration to canonical product identity `digitalhouses_pve_agent`.
+- Rename the Linux service and runtime paths to `digitalhouses_pve_agent.service`, `/opt/digitalhouses/digitalhouses_pve_agent`, `/etc/digitalhouses_pve_agent` and `/var/lib/digitalhouses_pve_agent`.
+- Move the default MQTT base to `DigitalHouses/Global/digitalhouses_pve_agent` and Home Assistant identities to the canonical `dh_pve_agent_*` prefix.
+- Keep migration compatibility for former `dh_pve_app`, `dh_app_pve_*`, `dh_pve_*` and `dh_ups_*` Discovery identities through retained tombstones.
+- Require canonical `digitalhouses_pve_agent-v<version>` tags for production install/update; branch or SHA deployment requires explicit development/recovery mode.
+- Make the required Version diagnostic fail loudly instead of synthesizing `unknown`, and remove required-field fallback for Version and Agent Started.
+- Remove site-specific public example data and private `script.write2log` dependency from the Russian notification example.
+
 ## Unreleased
 
 ## 0.5.28
