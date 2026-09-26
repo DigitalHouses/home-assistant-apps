@@ -40,7 +40,7 @@ from metrics import (
     short_db_version,
     yesterday_bounds_epoch,
 )
-APP_VERSION = os.getenv('APP_VERSION', '0.1.9-local')
+APP_VERSION = os.getenv('APP_VERSION', '0.1.10-local')
 MEDIUM_INTERVAL_SECONDS = 300
 SLOW_INTERVAL_SECONDS = 3600
 STORAGE_INTERVAL_SECONDS = 300
