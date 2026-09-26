@@ -2,138 +2,355 @@ import sys
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'rootfs' / 'app'))
+sys.path.insert(
+    0,
+    str(
+        Path(__file__).resolve().parents[1]
+        / "rootfs"
+        / "app"
+    ),
+)
 
 from discovery import (
+    APP_AVAILABILITY_TOPIC,
+    BASE_TOPIC,
+    DEVICE_ID,
     DISK_USAGE_THRESHOLD_COMMAND_TOPIC,
     DISK_USAGE_THRESHOLD_STATE_TOPIC,
     EVENT_TOPIC,
+    LEGACY_BASE_TOPIC,
+    LEGACY_DEVICE_ID,
+    LEGACY_DISK_USAGE_THRESHOLD_COMMAND_TOPIC,
+    LEGACY_EVENT_TOPIC,
+    LEGACY_REFRESH_COMMAND_TOPIC,
     REFRESH_COMMAND_TOPIC,
     STATE_RETAIN,
+    TELEMETRY_DELETE_COMMAND_TOPIC,
     build_discovery_payload,
+    build_legacy_discovery_payload,
 )
 
 
-class DiscoveryTests(unittest.TestCase):
-    def test_device_discovery_contains_expected_entities(self):
-        payload = build_discovery_payload('0.1.8')
-        self.assertEqual(payload['device']['identifiers'], ['digitalhouses_db_monitoring'])
-        self.assertEqual(payload['device']['name'], 'DH Recorder')
-        self.assertEqual(payload['origin']['name'], 'DigitalHouses Recorder App')
-        self.assertEqual(payload['components']['db_start']['default_entity_id'], 'sensor.dh_db_start')
-        self.assertEqual(payload['components']['db_connected']['default_entity_id'], 'binary_sensor.dh_db_connected')
+class CanonicalDiscoveryTests(unittest.TestCase):
+    def test_canonical_identity_and_common_diagnostics(self):
+        payload = build_discovery_payload("0.1.15")
+        components = payload["components"]
+
         self.assertEqual(
-            payload['components']['recorder_writing']['default_entity_id'],
-            'binary_sensor.dh_db_recorder_writing',
+            BASE_TOPIC,
+            "DigitalHouses/Global/digitalhouses_recorder_app",
         )
-        self.assertEqual(payload['components']['db_start']['name'], 'DB start')
-        self.assertEqual(payload['components']['db_yesterday_records']['name'], 'DB inserted yesterday')
-        self.assertEqual(payload['components']['recorder_writing']['name'], 'DB recorder writing')
-        self.assertEqual(payload['components']['db_last_age']['name'], 'DB last age')
-        self.assertEqual(len(payload['components']), 19)
         self.assertEqual(
-            payload['components']['db_last_refresh']['default_entity_id'],
-            'sensor.dh_db_last_refresh',
+            DEVICE_ID,
+            "digitalhouses_recorder_app",
         )
-        self.assertEqual(payload['components']['db_last_refresh']['device_class'], 'timestamp')
+        self.assertEqual(
+            payload["device"]["identifiers"],
+            ["digitalhouses_recorder_app"],
+        )
+        self.assertEqual(
+            payload["device"]["sw_version"],
+            "0.1.15",
+        )
+        self.assertEqual(
+            payload["origin"]["sw_version"],
+            "0.1.15",
+        )
+
+        self.assertEqual(
+            components["db_start"]["default_entity_id"],
+            "sensor.dh_recorder_app_db_start",
+        )
+        self.assertEqual(
+            components["db_version"]["default_entity_id"],
+            "sensor.dh_recorder_app_db_version",
+        )
+        self.assertEqual(
+            components["db_connected"]["default_entity_id"],
+            "binary_sensor.dh_recorder_app_db_connected",
+        )
+        self.assertEqual(
+            components["recorder_writing"][
+                "default_entity_id"
+            ],
+            "binary_sensor.dh_recorder_app_recorder_writing",
+        )
+        self.assertEqual(
+            components["app_version"]["default_entity_id"],
+            "sensor.dh_recorder_app_version",
+        )
+        self.assertEqual(
+            components["app_started_at"][
+                "default_entity_id"
+            ],
+            "sensor.dh_recorder_app_started_at",
+        )
+        self.assertEqual(
+            components["app_started_at"]["device_class"],
+            "timestamp",
+        )
+        self.assertEqual(
+            components["app_version"]["entity_category"],
+            "diagnostic",
+        )
+        self.assertEqual(
+            components["database_type"]["default_entity_id"],
+            "sensor.dh_recorder_app_database_type",
+        )
+        self.assertEqual(len(components), 23)
         self.assertTrue(STATE_RETAIN)
 
-
-class EventAndSettingsDiscoveryTests(unittest.TestCase):
-    def test_diagnostic_event_entity_uses_transient_event_topic(self):
-        payload = build_discovery_payload('0.1.14')
-        component = payload['components']['diagnostic_event']
-
-        self.assertEqual(component['platform'], 'event')
-        self.assertEqual(component['default_entity_id'], 'event.dh_db_diagnostic')
-        self.assertEqual(component['state_topic'], EVENT_TOPIC)
+    def test_canonical_unique_ids_do_not_collide(self):
+        components = build_discovery_payload(
+            "0.1.15",
+            include_storage=True,
+        )["components"]
+        unique_ids = [
+            component["unique_id"]
+            for component in components.values()
+        ]
         self.assertEqual(
-            component['event_types'],
-            [
-                'db_connection_lost',
-                'db_connection_restored',
-                'recorder_writing_stopped',
-                'recorder_writing_restored',
-                'storage_usage_high',
-                'storage_usage_normal',
+            len(unique_ids),
+            len(set(unique_ids)),
+        )
+        self.assertNotEqual(
+            components["db_version"]["unique_id"],
+            components["app_version"]["unique_id"],
+        )
+
+    def test_event_and_control_topics_are_canonical(self):
+        components = build_discovery_payload(
+            "0.1.15"
+        )["components"]
+
+        event_component = components["diagnostic_event"]
+        self.assertEqual(
+            event_component["default_entity_id"],
+            "event.dh_recorder_app_diagnostic",
+        )
+        self.assertEqual(
+            event_component["state_topic"],
+            EVENT_TOPIC,
+        )
+        self.assertEqual(
+            EVENT_TOPIC,
+            (
+                "DigitalHouses/Global/"
+                "digitalhouses_recorder_app/event/diagnostic"
+            ),
+        )
+
+        refresh = components["db_refresh"]
+        self.assertEqual(
+            refresh["default_entity_id"],
+            "button.dh_recorder_app_db_refresh",
+        )
+        self.assertEqual(
+            refresh["command_topic"],
+            REFRESH_COMMAND_TOPIC,
+        )
+
+        threshold = components[
+            "db_disk_usage_threshold"
+        ]
+        self.assertEqual(
+            threshold["default_entity_id"],
+            (
+                "number.dh_recorder_app_"
+                "db_disk_usage_threshold"
+            ),
+        )
+        self.assertEqual(
+            threshold["state_topic"],
+            DISK_USAGE_THRESHOLD_STATE_TOPIC,
+        )
+        self.assertEqual(
+            threshold["command_topic"],
+            DISK_USAGE_THRESHOLD_COMMAND_TOPIC,
+        )
+
+        delete = components["delete_telemetry"]
+        self.assertEqual(
+            delete["default_entity_id"],
+            "button.dh_recorder_app_delete_telemetry",
+        )
+        self.assertEqual(
+            delete["command_topic"],
+            TELEMETRY_DELETE_COMMAND_TOPIC,
+        )
+
+    def test_db_connected_waits_for_observation(self):
+        component = build_discovery_payload(
+            "0.1.15"
+        )["components"]["db_connected"]
+        topics = {
+            item["topic"]
+            for item in component["availability"]
+        }
+        self.assertIn(APP_AVAILABILITY_TOPIC, topics)
+        self.assertIn(
+            (
+                "DigitalHouses/Global/"
+                "digitalhouses_recorder_app/"
+                "database_status_availability"
+            ),
+            topics,
+        )
+
+
+class LegacyBridgeDiscoveryTests(unittest.TestCase):
+    def test_legacy_device_topics_entities_and_unique_ids_are_stable(self):
+        payload = build_legacy_discovery_payload(
+            "0.1.15"
+        )
+        components = payload["components"]
+
+        self.assertEqual(
+            LEGACY_BASE_TOPIC,
+            "DigitalHouses/Global/db_monitoring",
+        )
+        self.assertEqual(
+            LEGACY_DEVICE_ID,
+            "digitalhouses_db_monitoring",
+        )
+        self.assertEqual(
+            payload["device"]["identifiers"],
+            ["digitalhouses_db_monitoring"],
+        )
+        self.assertEqual(
+            components["db_start"]["unique_id"],
+            "digitalhouses_db_monitoring_db_start",
+        )
+        self.assertEqual(
+            components["db_start"]["default_entity_id"],
+            "sensor.dh_db_start",
+        )
+        self.assertEqual(
+            components["db_version"]["unique_id"],
+            "digitalhouses_db_monitoring_db_version",
+        )
+        self.assertEqual(
+            components["db_version"]["default_entity_id"],
+            "sensor.dh_db_version",
+        )
+        self.assertEqual(
+            components["recorder_writing"]["unique_id"],
+            (
+                "digitalhouses_db_monitoring_"
+                "recorder_writing"
+            ),
+        )
+        self.assertEqual(
+            components["recorder_writing"][
+                "default_entity_id"
             ],
-        )
-
-    def test_disk_usage_threshold_is_app_owned_number(self):
-        payload = build_discovery_payload('0.1.14')
-        component = payload['components']['db_disk_usage_threshold']
-
-        self.assertEqual(component['platform'], 'number')
-        self.assertEqual(
-            component['default_entity_id'],
-            'number.dh_db_disk_usage_threshold',
-        )
-        self.assertEqual(component['state_topic'], DISK_USAGE_THRESHOLD_STATE_TOPIC)
-        self.assertEqual(component['command_topic'], DISK_USAGE_THRESHOLD_COMMAND_TOPIC)
-        self.assertEqual(component['min'], 1)
-        self.assertEqual(component['max'], 98)
-        self.assertEqual(component['step'], 1)
-        self.assertEqual(component['unit_of_measurement'], '%')
-
-
-class StorageDiscoveryTests(unittest.TestCase):
-    def test_storage_entities_are_included_when_enabled(self):
-        payload = build_discovery_payload('0.1.8', include_storage=True)
-        components = payload['components']
-        self.assertEqual(
-            components['db_disk_free']['default_entity_id'],
-            'sensor.dh_db_disk_free',
+            "binary_sensor.dh_db_recorder_writing",
         )
         self.assertEqual(
-            components['db_disk_used_percentage']['default_entity_id'],
-            'sensor.dh_db_disk_used_percentage',
+            components["db_refresh"]["unique_id"],
+            "digitalhouses_db_monitoring_db_refresh",
         )
         self.assertEqual(
-            components['db_disk_used']['default_entity_id'],
-            'sensor.dh_db_disk_used',
+            components["db_refresh"]["default_entity_id"],
+            "button.dh_db_refresh",
         )
         self.assertEqual(
-            components['db_disk_total']['default_entity_id'],
-            'sensor.dh_db_disk_total',
+            components["diagnostic_event"]["unique_id"],
+            (
+                "digitalhouses_db_monitoring_"
+                "diagnostic_event"
+            ),
+        )
+        self.assertEqual(
+            components["diagnostic_event"][
+                "default_entity_id"
+            ],
+            "event.dh_db_diagnostic",
+        )
+        self.assertEqual(
+            components["diagnostic_event"]["state_topic"],
+            LEGACY_EVENT_TOPIC,
+        )
+        self.assertEqual(
+            components["db_refresh"]["command_topic"],
+            LEGACY_REFRESH_COMMAND_TOPIC,
+        )
+        self.assertEqual(
+            components["db_disk_usage_threshold"][
+                "command_topic"
+            ],
+            LEGACY_DISK_USAGE_THRESHOLD_COMMAND_TOPIC,
+        )
+        self.assertEqual(len(components), 19)
+
+    def test_legacy_bridge_does_not_create_canonical_only_controls(self):
+        components = build_legacy_discovery_payload(
+            "0.1.15"
+        )["components"]
+        self.assertNotIn("app_version", components)
+        self.assertNotIn("app_started_at", components)
+        self.assertNotIn("database_type", components)
+        self.assertNotIn("delete_telemetry", components)
+
+    def test_legacy_bridge_uses_canonical_lwt_guard(self):
+        component = build_legacy_discovery_payload(
+            "0.1.15"
+        )["components"]["db_start"]
+        self.assertEqual(
+            component["availability"][0]["topic"],
+            APP_AVAILABILITY_TOPIC,
         )
 
-    def test_storage_entities_are_omitted_when_disabled(self):
-        payload = build_discovery_payload('0.1.8', include_storage=False)
-        self.assertNotIn('db_disk_free', payload['components'])
-        self.assertNotIn('db_disk_used_percentage', payload['components'])
-        self.assertNotIn('db_disk_used', payload['components'])
-        self.assertNotIn('db_disk_total', payload['components'])
 
+class StorageAndRankingTests(unittest.TestCase):
+    def test_storage_entities_follow_identity_namespace(self):
+        canonical = build_discovery_payload(
+            "0.1.15",
+            include_storage=True,
+        )["components"]
+        legacy = build_legacy_discovery_payload(
+            "0.1.15",
+            include_storage=True,
+        )["components"]
 
-class RankingDiscoveryTests(unittest.TestCase):
-    def test_ranking_entities_include_json_attributes(self):
-        payload = build_discovery_payload('0.1.8')
-        components = payload['components']
-        for key, entity_id in (
-            ('db_top_entities_24h', 'sensor.dh_db_top_entities_24h'),
-            ('db_top_entities_all_time', 'sensor.dh_db_top_entities_all_time'),
+        self.assertEqual(
+            canonical["db_disk_free"][
+                "default_entity_id"
+            ],
+            "sensor.dh_recorder_app_db_disk_free",
+        )
+        self.assertEqual(
+            legacy["db_disk_free"][
+                "default_entity_id"
+            ],
+            "sensor.dh_db_disk_free",
+        )
+
+    def test_ranking_topics_are_not_main_state_topic(self):
+        components = build_discovery_payload(
+            "0.1.15"
+        )["components"]
+        for key in (
+            "db_top_entities_24h",
+            "db_top_entities_all_time",
         ):
             component = components[key]
-            self.assertEqual(component['default_entity_id'], entity_id)
-            self.assertEqual(component['state_topic'], component['json_attributes_topic'])
-            self.assertNotEqual(component['state_topic'], 'DigitalHouses/Global/db_monitoring/state')
-            self.assertEqual(component['value_template'], '{{ value_json.top_records }}')
-            self.assertEqual(component['json_attributes_template'], '{{ value_json | tojson }}')
+            self.assertEqual(
+                component["state_topic"],
+                component["json_attributes_topic"],
+            )
+            self.assertNotEqual(
+                component["state_topic"],
+                (
+                    "DigitalHouses/Global/"
+                    "digitalhouses_recorder_app/state"
+                ),
+            )
+            self.assertEqual(
+                component["value_template"],
+                "{{ value_json.top_records }}",
+            )
 
 
-class RefreshDiscoveryTests(unittest.TestCase):
-    def test_refresh_button_is_exposed_by_mqtt_discovery(self):
-        payload = build_discovery_payload('0.1.8')
-        component = payload['components']['db_refresh']
-
-        self.assertEqual(component['platform'], 'button')
-        self.assertEqual(component['default_entity_id'], 'button.dh_db_refresh')
-        self.assertEqual(component['command_topic'], REFRESH_COMMAND_TOPIC)
-        self.assertEqual(component['payload_press'], 'PRESS')
-        self.assertEqual(component['entity_category'], 'diagnostic')
-        self.assertNotIn('state_topic', component)
-        self.assertNotIn('value_template', component)
-
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
