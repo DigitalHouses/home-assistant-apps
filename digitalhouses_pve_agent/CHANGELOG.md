@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.5.27
+
+- Recalculate shutdown readiness against each guest's current Proxmox shutdown timeout while preserving the timeout captured with the historical shutdown fact.
+- Clear stale `near_timeout` readiness warnings immediately after a guest timeout is increased, without rewriting completed shutdown history.
+- Keep forced/timeout shutdown results authoritative regardless of later timeout changes.
+
 ## 0.5.26
 
 - Make new PVE shutdown-history records self-contained by snapshotting VM/LXC names during the boot and copying each name into the completed guest shutdown fact.
