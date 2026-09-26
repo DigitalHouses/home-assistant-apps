@@ -80,6 +80,7 @@ def test_missing_policy_is_not_ready():
     issues = shutdown_policy_issues(None, nut_available=True)
     assert issues == ["shutdown_policy_unavailable"]
 
+
 def test_readiness_uses_current_timeout_ratio_from_latest_guest_facts():
     previous_shutdown = {
         "shutdown_class": "ups_power",
