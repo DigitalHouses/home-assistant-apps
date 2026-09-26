@@ -7,7 +7,7 @@ from app.ups_policy_preflight import _legacy_timer_check
 
 UPSCHED_MANAGED = """\
 # DigitalHouses managed UPS shutdown schedule
-CMDSCRIPT /opt/digitalhouses/dh_pve_app/bin/dh-pve-ups-policy-cmd
+CMDSCRIPT /opt/digitalhouses/digitalhouses_pve_agent/bin/digitalhouses-pve-agent-ups-policy-cmd
 PIPEFN /run/nut/upssched.pipe
 LOCKFN /run/nut/upssched.lock
 AT ONBATT * START-TIMER dh-pve-ups-shutdown 1800

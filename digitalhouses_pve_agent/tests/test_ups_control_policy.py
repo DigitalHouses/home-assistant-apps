@@ -59,7 +59,7 @@ def _mqtt():
         port=1883,
         username="",
         password="",
-        topic_prefix="DigitalHouses/Global/dh_pve_app",
+        topic_prefix="DigitalHouses/Global/digitalhouses_pve_agent",
         discovery_prefix="homeassistant",
         keepalive_seconds=60,
     )
@@ -119,7 +119,7 @@ def test_battery_test_executor_maps_only_three_safe_actions_and_hides_password()
         host="127.0.0.1",
         port=3493,
         command_timeout_seconds=3.0,
-        command_username="dh_pve_app",
+        command_username="digitalhouses_pve_agent",
         command_password="super-secret",
     )
 
@@ -134,7 +134,7 @@ def test_battery_test_executor_maps_only_three_safe_actions_and_hides_password()
     ):
         executor(config, action, runner=ok_runner)
         assert calls[-1][0][-1] == nut_command
-        assert calls[-1][0][:5] == ["upscmd", "-u", "dh_pve_app", "-p", "super-secret"]
+        assert calls[-1][0][:5] == ["upscmd", "-u", "digitalhouses_pve_agent", "-p", "super-secret"]
         assert calls[-1][1]["timeout"] == 3.0
         assert calls[-1][1]["check"] is True
 
@@ -157,18 +157,18 @@ def test_ups_command_credentials_are_optional_private_config(tmp_path: Path):
     assert "command_username" in UpsConfig.__dataclass_fields__
     assert "command_password" in UpsConfig.__dataclass_fields__
 
-    path = tmp_path / "dh_pve_app.conf"
+    path = tmp_path / "digitalhouses_pve_agent.conf"
     path.write_text(
         """[mqtt]
 host = broker
 [ups]
-command_username = dh_pve_app
+command_username = digitalhouses_pve_agent
 command_password = secret-value
 """,
         encoding="utf-8",
     )
     config = load_config(path)
-    assert config.ups.command_username == "dh_pve_app"
+    assert config.ups.command_username == "digitalhouses_pve_agent"
     assert config.ups.command_password == "secret-value"
 
 
@@ -259,11 +259,11 @@ def test_discovery_exposes_capability_sensor_policy_sensor_and_supported_test_bu
     )
     components = payload["components"]
 
-    assert components["capabilities"]["default_entity_id"] == "sensor.dh_pve_ups_capabilities"
-    assert components["shutdown_policy"]["default_entity_id"] == "sensor.dh_pve_ups_shutdown_policy"
-    assert components["test_quick"]["default_entity_id"] == "button.dh_pve_ups_test_quick"
-    assert components["test_deep"]["default_entity_id"] == "button.dh_pve_ups_test_deep"
-    assert components["test_stop"]["default_entity_id"] == "button.dh_pve_ups_test_stop"
+    assert components["capabilities"]["default_entity_id"] == "sensor.dh_pve_agent_ups_capabilities"
+    assert components["shutdown_policy"]["default_entity_id"] == "sensor.dh_pve_agent_ups_shutdown_policy"
+    assert components["test_quick"]["default_entity_id"] == "button.dh_pve_agent_ups_test_quick"
+    assert components["test_deep"]["default_entity_id"] == "button.dh_pve_agent_ups_test_deep"
+    assert components["test_stop"]["default_entity_id"] == "button.dh_pve_agent_ups_test_stop"
 
     quick_only = parser("test.battery.start.quick - Start a quick battery test\n")
     payload = build_ups_discovery_payload(

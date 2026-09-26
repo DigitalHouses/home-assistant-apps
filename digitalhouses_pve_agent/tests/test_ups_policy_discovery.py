@@ -11,7 +11,7 @@ def _mqtt():
         port=1883,
         username="",
         password="",
-        topic_prefix="DigitalHouses/Global/dh_pve_app",
+        topic_prefix="DigitalHouses/Global/digitalhouses_pve_agent",
         discovery_prefix="homeassistant",
         keepalive_seconds=60,
     )
@@ -45,7 +45,7 @@ def test_trigger_v2_discovery_exposes_active_policy_read_only():
 
     policy = components["trigger_policy"]
     assert policy["platform"] == "sensor"
-    assert policy["default_entity_id"] == "sensor.dh_app_pve_ups_trigger_policy"
+    assert policy["default_entity_id"] == "sensor.dh_pve_agent_ups_trigger_policy"
     assert policy["state_topic"] == config_topic
     assert policy["json_attributes_topic"] == config_topic
     assert "value_json.policy.status" in policy["value_template"]
@@ -79,7 +79,7 @@ def test_trigger_v2_discovery_exposes_draft_numbers_and_explicit_apply_button():
     charge = components["policy_charge_threshold"]
     assert charge["platform"] == "number"
     assert charge["default_entity_id"] == (
-        "number.dh_app_pve_ups_shutdown_battery_charge_threshold"
+        "number.dh_pve_agent_ups_shutdown_battery_charge_threshold"
     )
     assert charge["command_topic"] == topics.policy_charge_threshold_set
     assert charge["state_topic"] == topics.state
@@ -89,7 +89,7 @@ def test_trigger_v2_discovery_exposes_draft_numbers_and_explicit_apply_button():
 
     reserve = components["policy_runtime_reserve"]
     assert reserve["platform"] == "number"
-    assert reserve["default_entity_id"] == "number.dh_app_pve_ups_shutdown_runtime_reserve"
+    assert reserve["default_entity_id"] == "number.dh_pve_agent_ups_shutdown_runtime_reserve"
     assert reserve["command_topic"] == topics.policy_runtime_reserve_set
     assert "policy.draft.runtime_reserve_seconds" in reserve["value_template"]
     assert (reserve["min"], reserve["max"], reserve["step"]) == (60, 900, 60)
@@ -98,7 +98,7 @@ def test_trigger_v2_discovery_exposes_draft_numbers_and_explicit_apply_button():
 
     apply = components["policy_apply"]
     assert apply["platform"] == "button"
-    assert apply["default_entity_id"] == "button.dh_app_pve_ups_apply_trigger_policy"
+    assert apply["default_entity_id"] == "button.dh_pve_agent_ups_apply_trigger_policy"
     assert apply["command_topic"] == topics.policy_apply
     assert apply["payload_press"] == "PRESS"
     assert apply["entity_category"] == "config"

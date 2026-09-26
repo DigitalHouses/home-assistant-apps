@@ -71,7 +71,7 @@ def _seed(tmp_path, *, user_block=None, monitor_user="dh_primary_user", monitor_
         '[ups]\n    driver = "usbhid-ups"\n    offdelay = 60\n    ondelay = 120\n',
         encoding="utf-8",
     )
-    helper = tmp_path / "dh-pve-ups-policy-cmd"
+    helper = tmp_path / "digitalhouses-pve-agent-ups-policy-cmd"
     helper.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
     helper.chmod(0o755)
 
@@ -92,7 +92,7 @@ def _seed(tmp_path, *, user_block=None, monitor_user="dh_primary_user", monitor_
         encoding="utf-8",
     )
 
-    app_config = tmp_path / "dh_pve_app.conf"
+    app_config = tmp_path / "digitalhouses_pve_agent.conf"
     app_config.write_text(
         "[general]\nnode_name = PVE\n\n"
         "[mqtt]\nhost = 192.168.11.33\n\n"

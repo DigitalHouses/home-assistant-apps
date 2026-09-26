@@ -27,7 +27,7 @@ def _mqtt():
         port=1883,
         username="",
         password="",
-        topic_prefix="DigitalHouses/Global/dh_pve_app",
+        topic_prefix="DigitalHouses/Global/digitalhouses_pve_agent",
         discovery_prefix="homeassistant",
         keepalive_seconds=60,
     )
@@ -50,7 +50,7 @@ def _ups_config():
         port=3493,
         poll_interval_seconds=5.0,
         command_timeout_seconds=3.0,
-        command_username="dh_pve_app",
+        command_username="digitalhouses_pve_agent",
         command_password="super-secret",
     )
 
@@ -103,7 +103,7 @@ def test_beeper_executor_allows_only_beeper_on_off_family_and_hides_password():
         assert calls[-1][0][:5] == [
             "upscmd",
             "-u",
-            "dh_pve_app",
+            "digitalhouses_pve_agent",
             "-p",
             "super-secret",
         ]
@@ -157,7 +157,7 @@ def test_discovery_exposes_feedback_backed_beeper_switch_only_when_supported():
     component = payload["components"].get("beeper")
     assert component is not None
     assert component["platform"] == "switch"
-    assert component["default_entity_id"] == "switch.dh_pve_ups_beeper"
+    assert component["default_entity_id"] == "switch.dh_pve_agent_ups_beeper"
     assert component["state_topic"] == ups_topics.state
     assert component["command_topic"] == ups_topics.beeper_set
     assert component["payload_on"] == "ON"

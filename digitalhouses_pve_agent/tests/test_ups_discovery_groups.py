@@ -11,7 +11,7 @@ def _mqtt():
         port=1883,
         username="",
         password="",
-        topic_prefix="DigitalHouses/Global/dh_pve_app",
+        topic_prefix="DigitalHouses/Global/digitalhouses_pve_agent",
         discovery_prefix="homeassistant",
         keepalive_seconds=60,
     )
@@ -143,8 +143,8 @@ def test_ups_discovery_routes_entities_to_independent_state_groups():
     ):
         assert c[key]["state_topic"] == diagnostics
 
-    assert c["ups_app_profile"]["default_entity_id"] == "sensor.dh_app_pve_ups_app_profile"
-    assert c["ups_last_publication"]["default_entity_id"] == "sensor.dh_app_pve_ups_last_publication"
+    assert c["ups_app_profile"]["default_entity_id"] == "sensor.dh_pve_agent_ups_app_profile"
+    assert c["ups_last_publication"]["default_entity_id"] == "sensor.dh_pve_agent_ups_last_publication"
 
 
 def test_ups_nut_availability_always_reads_status_group():

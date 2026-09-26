@@ -10,7 +10,7 @@ def _mqtt():
         port=1883,
         username="",
         password="",
-        topic_prefix="DigitalHouses/Global/dh_pve_app",
+        topic_prefix="DigitalHouses/Global/digitalhouses_pve_agent",
         discovery_prefix="homeassistant",
         keepalive_seconds=60,
     )
@@ -67,23 +67,23 @@ def test_discovery_exposes_actual_ups_protection_values_as_diagnostic_sensors():
 
     expected = {
         "battery_runtime_low": (
-            "sensor.dh_pve_ups_battery_runtime_low",
+            "sensor.dh_pve_agent_ups_battery_runtime_low",
             "low_runtime_seconds",
         ),
         "battery_charge_low": (
-            "sensor.dh_pve_ups_battery_charge_low",
+            "sensor.dh_pve_agent_ups_battery_charge_low",
             "low_charge_percent",
         ),
         "battery_charge_warning": (
-            "sensor.dh_pve_ups_battery_charge_warning",
+            "sensor.dh_pve_agent_ups_battery_charge_warning",
             "warning_charge_percent",
         ),
         "ups_shutdown_delay": (
-            "sensor.dh_pve_ups_shutdown_delay",
+            "sensor.dh_pve_agent_ups_shutdown_delay",
             "ups_shutdown_delay_seconds",
         ),
         "ups_start_delay": (
-            "sensor.dh_pve_ups_start_delay",
+            "sensor.dh_pve_agent_ups_start_delay",
             "ups_start_delay_seconds",
         ),
     }

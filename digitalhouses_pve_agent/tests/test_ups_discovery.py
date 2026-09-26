@@ -16,7 +16,7 @@ def _mqtt():
         port=1883,
         username="",
         password="",
-        topic_prefix="DigitalHouses/Global/dh_pve_app",
+        topic_prefix="DigitalHouses/Global/digitalhouses_pve_agent",
         discovery_prefix="homeassistant",
         keepalive_seconds=60,
     )
@@ -39,13 +39,13 @@ def test_ups_topics_are_separate_from_pve_topics():
     assert ups.state == f"{pve.base}/ups/state"
     assert ups.availability == f"{pve.base}/ups/availability"
     assert ups.refresh == f"{pve.base}/ups/refresh"
-    assert ups.discovery == "homeassistant/device/dh_app_pve_ups_node_a/config"
+    assert ups.discovery == "homeassistant/device/dh_pve_agent_ups_node_a/config"
     assert ups.legacy_discoveries == (
-        "homeassistant/device/dh_pve_ups_node_a/config",
+        "homeassistant/device/dh_pve_agent_ups_node_a/config",
         "homeassistant/device/dh_ups_node_a/config",
     )
     assert ups.legacy_discovery == "homeassistant/device/dh_ups_node_a/config"
-    assert ups.device_id == "dh_app_pve_ups_node_a"
+    assert ups.device_id == "dh_pve_agent_ups_node_a"
     assert pve.state != ups.state
     assert pve.discovery != ups.discovery
 
@@ -88,8 +88,8 @@ def test_frequency_entities_are_capability_driven_and_primary():
     input_frequency = components["input_frequency"]
     output_frequency = components["output_frequency"]
 
-    assert input_frequency["default_entity_id"] == "sensor.dh_pve_ups_input_frequency"
-    assert output_frequency["default_entity_id"] == "sensor.dh_pve_ups_output_frequency"
+    assert input_frequency["default_entity_id"] == "sensor.dh_pve_agent_ups_input_frequency"
+    assert output_frequency["default_entity_id"] == "sensor.dh_pve_agent_ups_output_frequency"
     assert input_frequency["unit_of_measurement"] == "Hz"
     assert output_frequency["unit_of_measurement"] == "Hz"
     assert input_frequency["device_class"] == "frequency"
@@ -104,7 +104,7 @@ def test_problems_sensor_remains_machine_only_when_nut_read_fails():
     )
     problems = payload["components"]["problems"]
 
-    assert problems["default_entity_id"] == "sensor.dh_pve_ups_problems"
+    assert problems["default_entity_id"] == "sensor.dh_pve_agent_ups_problems"
     assert problems["value_template"] == "{{ value_json.problems_count | default(0) }}"
     assert len(problems["availability"]) == 1
     assert "value_json.available" not in str(problems["availability"])
@@ -201,10 +201,10 @@ def test_discovery_exposes_stable_ui_capability_facts():
     )["components"]
 
     expected = {
-        "quick_test_supported": "binary_sensor.dh_app_pve_ups_quick_test_supported",
-        "deep_test_supported": "binary_sensor.dh_app_pve_ups_deep_test_supported",
-        "stop_test_supported": "binary_sensor.dh_app_pve_ups_stop_test_supported",
-        "beeper_control_supported": "binary_sensor.dh_app_pve_ups_beeper_control_supported",
+        "quick_test_supported": "binary_sensor.dh_pve_agent_ups_quick_test_supported",
+        "deep_test_supported": "binary_sensor.dh_pve_agent_ups_deep_test_supported",
+        "stop_test_supported": "binary_sensor.dh_pve_agent_ups_stop_test_supported",
+        "beeper_control_supported": "binary_sensor.dh_pve_agent_ups_beeper_control_supported",
     }
     for key, entity_id in expected.items():
         component = components[key]
@@ -226,7 +226,7 @@ def test_ups_device_metadata_uses_real_hardware_identity():
         _mqtt(), _identity(), version="0.2.0-alpha", snapshot=snapshot
     )
 
-    assert payload["device"]["identifiers"] == ["dh_app_pve_ups_node_a"]
+    assert payload["device"]["identifiers"] == ["dh_pve_agent_ups_node_a"]
     assert payload["device"]["name"] == "DH PVE UPS"
     assert payload["device"]["manufacturer"] == "CPS"
     assert payload["device"]["model"] == "UT2200E"

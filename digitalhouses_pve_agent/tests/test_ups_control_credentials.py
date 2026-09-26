@@ -19,7 +19,7 @@ def _mqtt():
         port=1883,
         username="",
         password="",
-        topic_prefix="DigitalHouses/Global/dh_pve_app",
+        topic_prefix="DigitalHouses/Global/digitalhouses_pve_agent",
         discovery_prefix="homeassistant",
         keepalive_seconds=60,
     )
@@ -58,7 +58,7 @@ def test_battery_test_buttons_require_both_capability_and_command_credentials():
     with_credentials = list_ups_commands(
         UpsConfig(
             name="ups",
-            command_username="dh_pve_app",
+            command_username="digitalhouses_pve_agent",
             command_password="secret",
         ),
         runner=_runner,
