@@ -1,12 +1,26 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 
 from .models import BuildInfo
 
 
+SEMVER_RE = re.compile(
+    r"^(?:0|[1-9]\\d*)\\.(?:0|[1-9]\\d*)\\.(?:0|[1-9]\\d*)"
+    r"(?:-[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?"
+    r"(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$"
+)
+
+
 class BuildInfoError(ValueError):
     pass
+
+
+def validate_version(value: object) -> str:
+    if not isinstance(value, str) or SEMVER_RE.fullmatch(value) is None:
+        raise BuildInfoError(f"invalid semantic VERSION: {value!r}")
+    return value
 
 
 def _parse_flat(path: Path) -> dict[str, str]:
@@ -39,8 +53,7 @@ def load_build_info(app_root: Path) -> BuildInfo:
     if not version_path.is_file():
         raise BuildInfoError(f"missing VERSION: {version_path}")
     version = version_path.read_text(encoding="utf-8").strip()
-    if not version:
-        raise BuildInfoError("VERSION is empty")
+    validate_version(version)
 
     build_path = app_root / "BUILD_INFO"
     if not build_path.is_file():
