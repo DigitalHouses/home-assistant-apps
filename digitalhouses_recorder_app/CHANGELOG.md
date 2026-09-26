@@ -1,4 +1,13 @@
 # Changelog
+## 0.1.14
+- Add App-owned `number.dh_db_disk_usage_threshold` with persistent runtime state under `/data`.
+- Add `event.dh_db_diagnostic` and event schema v2 for database connectivity, Recorder writing and storage-usage transitions.
+- Establish startup baselines without synthetic alert/recovery events.
+- Reevaluate storage state immediately when the disk threshold changes.
+- Publish current authoritative state before transition events and publish events with QoS 1 / `retain=false`.
+- Replace legacy DB Monitoring wording in startup/origin presentation with DigitalHouses Recorder App.
+- Keep MQTT base/device identity and all existing `dh_db_*` sensor/binary-sensor IDs unchanged.
+
 ## 0.1.13
 - Finalize the completed Home Assistant App slug migration after canonical acceptance and removal of the legacy `digitalhouses_db_monitoring` installation.
 - Remove the temporary writable `/share` mapping, `DH_SLUG_MIGRATION_MODE`, migration startup/shutdown hooks and slug-migration runtime module.
