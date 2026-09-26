@@ -26,6 +26,7 @@ from discovery import (
     build_discovery_payload,
 )
 from storage import StorageCollector
+from slug_migration import export_bridge_bundle
 from rankings import (
     TOP_ENTITIES_24H_INTERVAL_SECONDS,
     TOP_ENTITIES_ALL_TIME_INTERVAL_SECONDS,
@@ -39,7 +40,7 @@ from metrics import (
     short_db_version,
     yesterday_bounds_epoch,
 )
-APP_VERSION = os.getenv('APP_VERSION', '0.1.8-local')
+APP_VERSION = os.getenv('APP_VERSION', '0.1.9-local')
 MEDIUM_INTERVAL_SECONDS = 300
 SLOW_INTERVAL_SECONDS = 3600
 STORAGE_INTERVAL_SECONDS = 300
@@ -358,6 +359,20 @@ class DatabaseMonitorApp:
                     next_publish = now_mono + publish_interval_seconds
                 self.stop_event.wait(1.0)
         finally:
+            if os.getenv('DH_SLUG_MIGRATION_MODE') == 'export':
+                try:
+                    migration = export_bridge_bundle(app_version=APP_VERSION)
+                    self.log.info(
+                        'Slug migration bridge bundle refreshed: files=%s sha256=%s',
+                        migration['files'],
+                        migration['sha256'],
+                    )
+                except Exception as exc:
+                    # Migration preparation must never break the legacy App.
+                    self.log.warning(
+                        'Unable to refresh slug migration bridge bundle: %s',
+                        exc,
+                    )
             self.publish_text(APP_AVAILABILITY_TOPIC, 'offline', retain=True)
             self.client.disconnect()
             self.client.loop_stop()
