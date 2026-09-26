@@ -151,6 +151,11 @@ legacy_was_enabled=0
 if systemctl cat "${LEGACY_SERVICE_NAME}" >/dev/null 2>&1 \
     || [[ -d "${LEGACY_APP_DIR}" || -f "${LEGACY_CONFIG_FILE}" || -d "${LEGACY_STATE_DIR}" ]]; then
     legacy_runtime_detected=1
+    if [[ ! -r "${LEGACY_CONFIG_FILE}" ]]; then
+        echo "Ошибка: legacy runtime обнаружен, но конфигурация недоступна: ${LEGACY_CONFIG_FILE}"
+        echo "MQTT namespace нельзя безопасно очистить без исходной конфигурации."
+        exit 1
+    fi
     if [[ -d "${APP_DIR}" || -f "${CONFIG_FILE}" || -d "${STATE_DIR}" || -e "${UNIT_FILE}" ]]; then
         echo "Ошибка: одновременно обнаружены legacy и canonical runtime."
         echo "Legacy: ${LEGACY_APP_NAME}; canonical: ${PRODUCT_ID}."
@@ -339,6 +344,25 @@ VERSION="$(tr -d '[:space:]' <"${APP_DIR}/VERSION")"
 } >"${APP_DIR}/BUILD_INFO"
 chmod 0644 "${APP_DIR}/BUILD_INFO"
 
+if [[ "${legacy_runtime_detected}" -eq 1 ]]; then
+    echo "Очистка retained MQTT legacy namespace перед canonical startup."
+    if ! PYTHONPATH="${APP_DIR}" "${APP_DIR}/.venv/bin/python" -m app.main \
+        --config "${LEGACY_CONFIG_FILE}" \
+        --state-dir "${LEGACY_STATE_DIR}" \
+        --migration-mqtt-cleanup; then
+        echo "Ошибка: retained MQTT legacy namespace не очищен."
+        echo "Canonical runtime не запускается; восстанавливаю legacy service."
+        rm -rf -- "${APP_DIR}" "${CONFIG_DIR}" "${STATE_DIR}"
+        if [[ "${legacy_was_enabled}" -eq 1 ]]; then
+            systemctl enable "${LEGACY_SERVICE_NAME}" >/dev/null 2>&1 || true
+        fi
+        if [[ "${legacy_was_active}" -eq 1 ]]; then
+            systemctl start "${LEGACY_SERVICE_NAME}" || true
+        fi
+        exit 1
+    fi
+fi
+
 install -o root -g root -m 0644 \
     "${APP_DIR}/systemd/${SERVICE_NAME}" \
     "${UNIT_FILE}"
@@ -370,14 +394,6 @@ if ! systemctl is-active --quiet "${SERVICE_NAME}"; then
 fi
 
 if [[ "${legacy_runtime_detected}" -eq 1 ]]; then
-    if [[ -x "${LEGACY_APP_DIR}/.venv/bin/python" && -r "${LEGACY_CONFIG_FILE}" ]]; then
-        PYTHONPATH="${LEGACY_APP_DIR}" "${LEGACY_APP_DIR}/.venv/bin/python" -m app.main \
-            --config "${LEGACY_CONFIG_FILE}" \
-            --state-dir "${LEGACY_STATE_DIR}" \
-            --uninstall-mqtt-cleanup \
-            || echo "WARNING: legacy MQTT cleanup не завершен; canonical runtime продолжит Discovery tombstones."
-    fi
-
     systemctl disable "${LEGACY_SERVICE_NAME}" >/dev/null 2>&1 || true
     rm -f -- "${LEGACY_UNIT_FILE}" "${LEGACY_ROOT_GUIDE}"
     rm -rf -- "${LEGACY_APP_DIR}" "${LEGACY_CONFIG_DIR}" "${LEGACY_STATE_DIR}"

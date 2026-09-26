@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.30
+
+- Fix the controlled legacy-to-canonical runtime migration so retained MQTT data from the former instance namespace is removed instead of being left stale in the broker.
+- Enumerate and tombstone only retained topics under the exact legacy `<topic_prefix>/<instance_id>/#` namespace, plus the known legacy PVE/UPS Discovery identities.
+- Ignore non-retained traffic, foreign instance namespaces and canonical `dh_pve_agent_*` Discovery identities during migration cleanup.
+- Run migration cleanup while the legacy service is stopped and before canonical service startup; abort canonical startup and restore the previous legacy service if cleanup fails.
+- Keep ordinary uninstall behavior unchanged.
+
 ## 0.5.29
 
 - Complete the controlled PVE Agent runtime naming migration to canonical product identity `digitalhouses_pve_agent`.

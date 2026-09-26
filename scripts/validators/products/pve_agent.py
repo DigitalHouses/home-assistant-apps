@@ -6,7 +6,7 @@ from typing import Any
 
 from validators.common import fail, require_files
 
-EXPECTED_VERSION = "0.5.29"
+EXPECTED_VERSION = "0.5.30"
 EXPECTED_TOPIC_PREFIX = "DigitalHouses/Global/digitalhouses_pve_agent"
 EXPECTED_DEVICE_NAME = "DH PVE"
 EXPECTED_REFRESH_ENTITY = "button.dh_pve_agent_refresh"
@@ -702,6 +702,20 @@ def validate_digitalhouses_pve_agent(
         "runtime",
     )
     _require_text(
+        app / "app/migration_cleanup.py",
+        (
+            "def cleanup_legacy_mqtt_namespace(",
+            'topic_filter = f"{base}/#"',
+            'if not bool(getattr(message, "retain", False)):',
+            'topic != base and not topic.startswith(f"{base}/")',
+            "dh_app_pve_",
+            "dh_pve_ups_",
+            "dh_ups_",
+        ),
+        "legacy MQTT migration cleanup",
+    )
+
+    _require_text(
         app / "app/telemetry.py",
         (
             'PRODUCT = "digitalhouses_pve_agent"',
@@ -819,6 +833,7 @@ def validate_digitalhouses_pve_agent(
         'INSTALL_MODE="${DIGITALHOUSES_INSTALL_MODE:-production}"',
         'SOURCE_REF="${DIGITALHOUSES_SOURCE_REF:-}"',
         'EXPECTED_SOURCE_REF="${PRODUCT_ID}-v${SOURCE_VERSION}"',
+        "--migration-mqtt-cleanup",
         'if [[ ! -f "${CONFIG_FILE}" ]]; then',
         "nano /etc/digitalhouses_pve_agent/digitalhouses_pve_agent.conf",
         "--check-config",
