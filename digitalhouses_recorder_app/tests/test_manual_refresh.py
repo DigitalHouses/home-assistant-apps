@@ -87,8 +87,7 @@ class ManualRefreshTests(unittest.TestCase):
     def make_app(self):
         app = DatabaseMonitorApp.__new__(DatabaseMonitorApp)
         app.log = logging.getLogger('test')
-        app.app_version = '0.1.15'
-        app.legacy_bridge_enabled = False
+        app.app_version = '0.1.16'
         app.db_available = False
         app.db_status_observed = False
         app.db_static_available = False
@@ -115,6 +114,8 @@ class ManualRefreshTests(unittest.TestCase):
             delete=Mock(return_value=True)
         )
         app.telemetry_runner = Mock()
+        app.legacy_cleanup_pending = False
+        app.legacy_cleanup_in_progress = threading.Event()
         return app
 
     def test_refresh_command_queues_manual_refresh(self):
@@ -154,6 +155,65 @@ class ManualRefreshTests(unittest.TestCase):
             qos=1,
         )
         app.publish_disk_usage_threshold.assert_called_once_with()
+
+    def test_cleanup_release_does_not_subscribe_legacy_topics(self):
+        app = self.make_app()
+        app.mqtt_connected = threading.Event()
+        app.db_available = True
+        app.storage_available = True
+        app.storage = types.SimpleNamespace(enabled=False)
+        app.publish_json = Mock()
+        app.publish_text = Mock()
+        app._schedule_legacy_cleanup = Mock()
+        client = Mock()
+
+        app._on_connect(client, None, None, 0)
+
+        subscribed = {
+            call.args[0]
+            for call in client.subscribe.call_args_list
+        }
+        self.assertNotIn(
+            "DigitalHouses/Global/db_monitoring/refresh",
+            subscribed,
+        )
+        self.assertNotIn(
+            (
+                "DigitalHouses/Global/db_monitoring/settings/"
+                "disk_usage_threshold_percent/set"
+            ),
+            subscribed,
+        )
+        app._schedule_legacy_cleanup.assert_called_once_with()
+
+    def test_cleanup_clears_retained_legacy_topics_before_marker(self):
+        app = self.make_app()
+        app.legacy_cleanup_pending = True
+        app.legacy_cleanup_in_progress.set()
+        app.mqtt_connected = threading.Event()
+        app.mqtt_connected.set()
+        app.stop_event = threading.Event()
+        app.client = Mock()
+
+        info = Mock()
+        info.rc = 0
+        info.is_published.return_value = True
+        app.client.publish.return_value = info
+
+        with patch.object(
+            APP_MODULE,
+            "mark_cleanup_complete",
+        ) as mark_complete:
+            app._cleanup_legacy_identity()
+
+        self.assertFalse(app.legacy_cleanup_pending)
+        mark_complete.assert_called_once_with("0.1.16")
+        self.assertEqual(app.client.publish.call_count, 10)
+        for call in app.client.publish.call_args_list:
+            self.assertEqual(call.args[1], "")
+            self.assertEqual(call.kwargs["qos"], 1)
+            self.assertTrue(call.kwargs["retain"])
+        info.wait_for_publish.assert_called_with(timeout=5.0)
 
     def test_run_processes_pending_manual_refresh(self):
         app = self.make_app()
