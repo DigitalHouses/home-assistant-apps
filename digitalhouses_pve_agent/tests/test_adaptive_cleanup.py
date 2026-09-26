@@ -19,7 +19,7 @@ def _config():
             port=1883,
             username="",
             password="",
-            topic_prefix="DigitalHouses/Global/dh_pve_app",
+            topic_prefix="DigitalHouses/Global/digitalhouses_pve_agent",
             discovery_prefix="homeassistant",
             keepalive_seconds=60,
         ),
@@ -48,17 +48,17 @@ def test_collection_cadence_is_not_exposed_as_runtime_number_settings():
 
 
 def test_ha_package_keeps_recorder_narrow_and_threshold_logic_in_app():
-    text = (ROOT / "examples" / "packages" / "dh_app_pve_package.yaml").read_text()
+    text = (ROOT / "examples" / "packages" / "dh_pve_agent_package.yaml").read_text()
 
     assert "recorder:" in text
-    assert "sensor.dh_app_pve_cpu_usage" in text
-    assert "sensor.dh_app_pve_ups_status" in text
-    assert "sensor.dh_app_pve_storage_*_percent_used" in text
-    assert "sensor.dh_app_pve_*" not in text
-    assert "binary_sensor.dh_app_pve_*" not in text
-    assert "dh_app_pve_ups_trigger_snapshot_charge:" in text
-    assert "dh_app_pve_ups_trigger_snapshot_reserve:" in text
-    assert "dh_app_pve_ups_trigger_close_after_success" in text
+    assert "sensor.dh_pve_agent_cpu_usage" in text
+    assert "sensor.dh_pve_agent_ups_status" in text
+    assert "sensor.dh_pve_agent_storage_*_percent_used" in text
+    assert "sensor.dh_pve_agent_*" not in text
+    assert "binary_sensor.dh_pve_agent_*" not in text
+    assert "dh_pve_agent_ups_trigger_snapshot_charge:" in text
+    assert "dh_pve_agent_ups_trigger_snapshot_reserve:" in text
+    assert "dh_pve_agent_ups_trigger_close_after_success" in text
 
 
 def test_duplicate_ups_runtime_seconds_entity_is_removed_from_discovery():
@@ -74,6 +74,6 @@ def test_duplicate_ups_runtime_seconds_entity_is_removed_from_discovery():
 
     assert "battery_runtime_minutes" in components
     assert components["battery_runtime_minutes"]["default_entity_id"] == (
-        "sensor.dh_app_pve_ups_battery_runtime_minutes"
+        "sensor.dh_pve_agent_ups_battery_runtime_minutes"
     )
     assert "battery_runtime" not in components

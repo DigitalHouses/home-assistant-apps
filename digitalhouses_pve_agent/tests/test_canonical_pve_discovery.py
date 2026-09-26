@@ -12,7 +12,7 @@ def _config():
             port=1883,
             username="",
             password="",
-            topic_prefix="DigitalHouses/Global/dh_pve_app",
+            topic_prefix="DigitalHouses/Global/digitalhouses_pve_agent",
             discovery_prefix="homeassistant",
             keepalive_seconds=60,
         ),
@@ -85,11 +85,11 @@ def test_canonical_pve_device_identity_and_discovery_topic():
     topics = build_topics(_config().mqtt, _identity())
     payload = _payload()
 
-    assert topics.device_id == "dh_app_pve_node_a"
-    assert topics.discovery == "homeassistant/device/dh_app_pve_node_a/config"
-    assert payload["device"]["identifiers"] == ["dh_app_pve_node_a"]
+    assert topics.device_id == "dh_pve_agent_node_a"
+    assert topics.discovery == "homeassistant/device/dh_pve_agent_node_a/config"
+    assert payload["device"]["identifiers"] == ["dh_pve_agent_node_a"]
     assert all(
-        component["unique_id"].startswith("dh_app_pve_node_a_")
+        component["unique_id"].startswith("dh_pve_agent_node_a_")
         for component in payload["components"].values()
         if "unique_id" in component
     )
@@ -98,33 +98,33 @@ def test_canonical_pve_device_identity_and_discovery_topic():
 def test_canonical_pve_telemetry_ids_and_percent_used_naming():
     c = _payload()["components"]
 
-    assert c["cpu_usage"]["default_entity_id"] == "sensor.dh_app_pve_cpu_usage"
-    assert c["cpu_temperature"]["default_entity_id"] == "sensor.dh_app_pve_cpu_temperature"
-    assert c["cpu_frequency"]["default_entity_id"] == "sensor.dh_app_pve_cpu_frequency"
-    assert c["memory_usage"]["default_entity_id"] == "sensor.dh_app_pve_memory_usage"
-    assert c["swap_usage"]["default_entity_id"] == "sensor.dh_app_pve_swap_usage"
+    assert c["cpu_usage"]["default_entity_id"] == "sensor.dh_pve_agent_cpu_usage"
+    assert c["cpu_temperature"]["default_entity_id"] == "sensor.dh_pve_agent_cpu_temperature"
+    assert c["cpu_frequency"]["default_entity_id"] == "sensor.dh_pve_agent_cpu_frequency"
+    assert c["memory_usage"]["default_entity_id"] == "sensor.dh_pve_agent_memory_usage"
+    assert c["swap_usage"]["default_entity_id"] == "sensor.dh_pve_agent_swap_usage"
 
     storage = c["storage_local_lvm_percent_used"]
-    assert storage["default_entity_id"] == "sensor.dh_app_pve_storage_local_lvm_percent_used"
+    assert storage["default_entity_id"] == "sensor.dh_pve_agent_storage_local_lvm_percent_used"
     assert "usage_percent" in storage["value_template"]
     assert "storage_local_lvm_usage" not in c
 
     assert c["disk_nvme_hot_temperature"]["default_entity_id"] == (
-        "sensor.dh_app_pve_disk_nvme_hot_temperature"
+        "sensor.dh_pve_agent_disk_nvme_hot_temperature"
     )
     assert c["disk_nvme_hot_wear"]["default_entity_id"] == (
-        "sensor.dh_app_pve_disk_nvme_hot_wear"
+        "sensor.dh_pve_agent_disk_nvme_hot_wear"
     )
     assert c["gpu_pci_0000_00_02_0_temperature"]["default_entity_id"] == (
-        "sensor.dh_app_pve_gpu_pci_0000_00_02_0_temperature"
+        "sensor.dh_pve_agent_gpu_pci_0000_00_02_0_temperature"
     )
     assert c["gpu_pci_0000_00_02_0_transcoding"]["default_entity_id"] == (
-        "sensor.dh_app_pve_gpu_pci_0000_00_02_0_transcoding"
+        "sensor.dh_pve_agent_gpu_pci_0000_00_02_0_transcoding"
     )
-    assert c["fan_cpu_fan_rpm"]["default_entity_id"] == "sensor.dh_app_pve_fan_cpu_fan_rpm"
+    assert c["fan_cpu_fan_rpm"]["default_entity_id"] == "sensor.dh_pve_agent_fan_cpu_fan_rpm"
 
     assert not any(
-        ".dh_pve_" in component.get("default_entity_id", "")
+        ".dh_pve_agent_" in component.get("default_entity_id", "")
         for component in c.values()
     )
 
@@ -134,27 +134,27 @@ def test_problem_binaries_use_app_owned_retained_problem_topics():
     c = _payload()["components"]
     expected = {
         "cpu_temperature_problem": (
-            "binary_sensor.dh_app_pve_cpu_temperature_problem",
+            "binary_sensor.dh_pve_agent_cpu_temperature_problem",
             "cpu_temperature",
         ),
         "cpu_throttling_problem": (
-            "binary_sensor.dh_app_pve_cpu_throttling_problem",
+            "binary_sensor.dh_pve_agent_cpu_throttling_problem",
             "cpu_throttling",
         ),
         "storage_local_lvm_percent_used_problem": (
-            "binary_sensor.dh_app_pve_storage_local_lvm_percent_used_problem",
+            "binary_sensor.dh_pve_agent_storage_local_lvm_percent_used_problem",
             "storage_local_lvm_percent_used",
         ),
         "disk_nvme_hot_temperature_problem": (
-            "binary_sensor.dh_app_pve_disk_nvme_hot_temperature_problem",
+            "binary_sensor.dh_pve_agent_disk_nvme_hot_temperature_problem",
             "disk_nvme_hot_temperature",
         ),
         "disk_nvme_hot_smart_problem": (
-            "binary_sensor.dh_app_pve_disk_nvme_hot_smart_problem",
+            "binary_sensor.dh_pve_agent_disk_nvme_hot_smart_problem",
             "disk_nvme_hot_smart",
         ),
         "gpu_pci_0000_00_02_0_temperature_problem": (
-            "binary_sensor.dh_app_pve_gpu_pci_0000_00_02_0_temperature_problem",
+            "binary_sensor.dh_pve_agent_gpu_pci_0000_00_02_0_temperature_problem",
             "gpu_pci_0000_00_02_0_temperature",
         ),
     }
@@ -178,14 +178,14 @@ def test_problem_aggregate_and_native_mqtt_event_are_canonical():
 
     aggregate = c["problems"]
     assert aggregate["platform"] == "sensor"
-    assert aggregate["default_entity_id"] == "sensor.dh_app_pve_problems"
+    assert aggregate["default_entity_id"] == "sensor.dh_pve_agent_problems"
     assert aggregate["state_topic"] == f"{topics.base}/problems/aggregate"
     assert aggregate["json_attributes_topic"] == f"{topics.base}/problems/presentation"
     assert aggregate["entity_category"] == "diagnostic"
 
     event = c["diagnostic_event"]
     assert event["platform"] == "event"
-    assert event["default_entity_id"] == "event.dh_app_pve_diagnostic"
+    assert event["default_entity_id"] == "event.dh_pve_agent_diagnostic"
     assert event["state_topic"] == topics.diagnostic_event
     assert event["event_types"] == [
         "cpu_temperature_high",
@@ -262,8 +262,8 @@ def test_fan_discovery_uses_short_sequential_friendly_names():
     assert components["fan_it8613_it87_2608_fan3_rpm"]["name"] == "Fan 2 RPM"
 
     assert components["fan_it8613_it87_2608_fan2_speed"]["default_entity_id"] == (
-        "sensor.dh_app_pve_fan_it8613_it87_2608_fan2_speed"
+        "sensor.dh_pve_agent_fan_it8613_it87_2608_fan2_speed"
     )
     assert components["fan_it8613_it87_2608_fan3_speed"]["default_entity_id"] == (
-        "sensor.dh_app_pve_fan_it8613_it87_2608_fan3_speed"
+        "sensor.dh_pve_agent_fan_it8613_it87_2608_fan3_speed"
     )

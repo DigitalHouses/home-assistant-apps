@@ -6,7 +6,7 @@ from app.config import ConfigError, load_config
 
 
 def write_config(tmp_path: Path, text: str) -> Path:
-    path = tmp_path / "dh_pve_app.conf"
+    path = tmp_path / "digitalhouses_pve_agent.conf"
     path.write_text(text, encoding="utf-8")
     return path
 
@@ -18,7 +18,7 @@ def test_load_config_uses_expected_defaults(tmp_path: Path):
     assert config.general.node_name == "PVE"
     assert config.general.log_level == "info"
     assert config.mqtt.port == 1883
-    assert config.mqtt.topic_prefix == "DigitalHouses/Global/dh_pve_app"
+    assert config.mqtt.topic_prefix == "DigitalHouses/Global/digitalhouses_pve_agent"
     assert config.mqtt.discovery_prefix == "homeassistant"
     assert config.mqtt.keepalive_seconds == 60
     assert config.telemetry.enabled is False

@@ -12,7 +12,7 @@ def _config():
             port=1883,
             username="",
             password="",
-            topic_prefix="DigitalHouses/Global/dh_pve_app",
+            topic_prefix="DigitalHouses/Global/digitalhouses_pve_agent",
             discovery_prefix="homeassistant",
             keepalive_seconds=60,
         ),
@@ -214,12 +214,12 @@ def test_pve_discovery_exposes_presentation_diagnostics():
     c = _components()
     diagnostics = state_group_topic(topics, "diagnostics")
 
-    assert c["app_profile"]["default_entity_id"] == "sensor.dh_app_pve_app_profile"
+    assert c["app_profile"]["default_entity_id"] == "sensor.dh_pve_agent_app_profile"
     assert c["app_profile"]["state_topic"] == diagnostics
     assert "app_profile.state" in c["app_profile"]["value_template"]
     assert "resources" in c["app_profile"]["json_attributes_template"]
 
-    assert c["last_publication"]["default_entity_id"] == "sensor.dh_app_pve_last_publication"
+    assert c["last_publication"]["default_entity_id"] == "sensor.dh_pve_agent_last_publication"
     assert c["last_publication"]["state_topic"] == diagnostics
     assert c["last_publication"]["device_class"] == "timestamp"
     assert "last_publication.timestamp" in c["last_publication"]["value_template"]
@@ -235,7 +235,7 @@ def test_pve_discovery_exposes_app_version_from_same_release_value():
 
     assert [key for key in c if key == "app_version"] == ["app_version"]
     assert c["app_version"]["platform"] == "sensor"
-    assert c["app_version"]["default_entity_id"] == "sensor.dh_app_pve_app_version"
+    assert c["app_version"]["default_entity_id"] == "sensor.dh_pve_agent_app_version"
     assert c["app_version"]["state_topic"] == diagnostics
     assert c["app_version"]["value_template"] == (
         "{{ value_json.app_version | default('unknown') }}"
@@ -255,7 +255,7 @@ def test_pve_discovery_exposes_agent_started_as_timestamp():
 
     component = c["agent_started"]
     assert component["platform"] == "sensor"
-    assert component["default_entity_id"] == "sensor.dh_app_pve_agent_started"
+    assert component["default_entity_id"] == "sensor.dh_pve_agent_agent_started"
     assert component["state_topic"] == diagnostics
     assert component["value_template"] == (
         "{{ value_json.agent_started_at | default(none) }}"
@@ -272,7 +272,7 @@ def test_pve_discovery_exposes_optional_ups_configuration_fact():
 
     component = c["ups_configured"]
     assert component["platform"] == "binary_sensor"
-    assert component["default_entity_id"] == "binary_sensor.dh_app_pve_ups_configured"
+    assert component["default_entity_id"] == "binary_sensor.dh_pve_agent_ups_configured"
     assert component["state_topic"] == diagnostics
     assert component["value_template"] == (
         "{{ 'ON' if value_json.ups_configured | default(false) else 'OFF' }}"
@@ -319,7 +319,7 @@ def test_calibrated_fan_discovery_exposes_speed_primary_and_rpm_diagnostics():
     fan_topic = state_group_topic(topics, "fan/nct6798_fan1")
 
     speed = c["fan_nct6798_fan1_speed"]
-    assert speed["default_entity_id"] == "sensor.dh_app_pve_fan_nct6798_fan1_speed"
+    assert speed["default_entity_id"] == "sensor.dh_pve_agent_fan_nct6798_fan1_speed"
     assert speed["state_topic"] == fan_topic
     assert speed["unit_of_measurement"] == "%"
     assert speed["state_class"] == "measurement"
@@ -327,7 +327,7 @@ def test_calibrated_fan_discovery_exposes_speed_primary_and_rpm_diagnostics():
     assert "speed_percent" in speed["value_template"]
 
     rpm = c["fan_nct6798_fan1_rpm"]
-    assert rpm["default_entity_id"] == "sensor.dh_app_pve_fan_nct6798_fan1_rpm"
+    assert rpm["default_entity_id"] == "sensor.dh_pve_agent_fan_nct6798_fan1_rpm"
     assert rpm["entity_category"] == "diagnostic"
 
     assert c["fan_nct6798_fan1_max_rpm"]["entity_category"] == "diagnostic"
@@ -336,7 +336,7 @@ def test_calibrated_fan_discovery_exposes_speed_primary_and_rpm_diagnostics():
 
     button = c["calibrate_fans"]
     assert button["platform"] == "button"
-    assert button["default_entity_id"] == "button.dh_app_pve_calibrate_fans"
+    assert button["default_entity_id"] == "button.dh_pve_agent_calibrate_fans"
     assert button["command_topic"] == topics.fan_calibrate
 
 

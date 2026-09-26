@@ -12,7 +12,7 @@ def _config() -> AppConfig:
             port=1883,
             username="u",
             password="p",
-            topic_prefix="DigitalHouses/Global/dh_pve_app",
+            topic_prefix="DigitalHouses/Global/digitalhouses_pve_agent",
             discovery_prefix="homeassistant",
             keepalive_seconds=60,
         ),
@@ -28,21 +28,21 @@ def _identity() -> HostIdentity:
     )
 
 
-def test_discovery_uses_canonical_dh_app_pve_device_and_refresh_contract():
+def test_discovery_uses_canonical_dh_pve_agent_device_and_refresh_contract():
     payload = build_discovery_payload(_config(), _identity(), version="0.1.0")
     components = payload["components"]
 
-    canonical_id = "dh_app_pve_0123456789abcdef0123456789abcdef"
+    canonical_id = "dh_pve_agent_0123456789abcdef0123456789abcdef"
     assert payload["device"]["name"] == "DH PVE"
     assert payload["device"]["identifiers"] == [canonical_id]
     assert components["refresh"]["unique_id"] == f"{canonical_id}_refresh"
-    assert components["refresh"]["default_entity_id"] == "button.dh_app_pve_refresh"
+    assert components["refresh"]["default_entity_id"] == "button.dh_pve_agent_refresh"
     assert components["refresh"]["command_topic"] == (
-        "DigitalHouses/Global/dh_pve_app/"
+        "DigitalHouses/Global/digitalhouses_pve_agent/"
         "0123456789abcdef0123456789abcdef/refresh"
     )
     assert components["refresh"]["payload_press"] == "PRESS"
-    assert components["last_refresh"]["default_entity_id"] == "sensor.dh_app_pve_last_refresh"
+    assert components["last_refresh"]["default_entity_id"] == "sensor.dh_pve_agent_last_refresh"
     assert components["last_refresh"]["device_class"] == "timestamp"
 
 
@@ -65,7 +65,7 @@ def test_discovery_exposes_only_app_owned_alert_threshold_numbers():
         "gpu_temperature_threshold",
     }
 
-    base = "DigitalHouses/Global/dh_pve_app/0123456789abcdef0123456789abcdef/settings"
+    base = "DigitalHouses/Global/digitalhouses_pve_agent/0123456789abcdef0123456789abcdef/settings"
     for key, spec in SETTING_SPECS.items():
         component = setting_components[key]
         assert component["platform"] == "number"

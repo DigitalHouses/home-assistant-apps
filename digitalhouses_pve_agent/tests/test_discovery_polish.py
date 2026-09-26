@@ -16,7 +16,7 @@ def _config() -> AppConfig:
             port=1883,
             username="",
             password="",
-            topic_prefix="DigitalHouses/Global/dh_pve_app",
+            topic_prefix="DigitalHouses/Global/digitalhouses_pve_agent",
             discovery_prefix="homeassistant",
             keepalive_seconds=60,
         ),
@@ -226,7 +226,7 @@ def test_full_discovery_exposes_fan_status_without_template_counting():
     )["components"]
 
     fan_status = components["fans_status"]
-    assert fan_status["default_entity_id"] == "sensor.dh_app_pve_fans"
+    assert fan_status["default_entity_id"] == "sensor.dh_pve_agent_fans"
     assert ".status" in fan_status["value_template"]
     assert "| count" not in fan_status["value_template"]
     attrs = fan_status["json_attributes_template"]
