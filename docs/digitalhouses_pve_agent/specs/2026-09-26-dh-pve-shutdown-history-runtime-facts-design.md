@@ -113,6 +113,20 @@ assessment:
 The thresholds and assessment are App-owned policy. Home Assistant must not
 recalculate the ratio or choose severity from raw duration/timeout values.
 
+Historical fields remain immutable as `last_shutdown_*`. Separately, the Agent
+projects the measured duration onto the guest's current PVE timeout for the next
+shutdown and publishes:
+
+```text
+next_shutdown_timeout_seconds
+next_shutdown_timeout_ratio
+next_shutdown_assessment
+```
+
+`next_shutdown_*` is not a new historical fact. It answers how the last measured
+duration would be assessed if the next shutdown used the current PVE timeout.
+Shutdown readiness consumes `next_shutdown_assessment`.
+
 ## Publication contract
 
 The App publishes already calculated values. HA may format seconds, dates, labels
