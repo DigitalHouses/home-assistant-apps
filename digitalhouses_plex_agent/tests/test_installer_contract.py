@@ -1,10 +1,10 @@
 import subprocess
 import tempfile
-import textwrap
 import unittest
 from pathlib import Path
 
 INSTALLER = (Path(__file__).resolve().parents[1] / "install.sh").read_text()
+
 
 class InstallerContractTests(unittest.TestCase):
     def test_default_instance_is_noninteractive(self):
@@ -18,14 +18,11 @@ class InstallerContractTests(unittest.TestCase):
         self.assertIn('umask "${previous_umask}"', INSTALLER)
         self.assertIn('chmod -R a+rX "${APP_DIR}/.venv"', INSTALLER)
 
-
     def test_default_mqtt_topic_migration_sed_executes(self):
-        start = INSTALLER.index(
-            '        sed -i -E \\\n'
-            '            "s#^([[:space:]]*topic_prefix'
+        self.assertIn(
+            '${LEGACY_TOPIC_PREFIX}([[:space:]]*)\\$#\\\\1${CANONICAL_TOPIC_PREFIX}\\\\2#"',
+            INSTALLER,
         )
-        end = INSTALLER.index("\n    fi", start)
-        sed_block = textwrap.dedent(INSTALLER[start:end])
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             config = Path(tmp_dir) / "plex.conf"
@@ -33,13 +30,16 @@ class InstallerContractTests(unittest.TestCase):
                 "[mqtt]\n"
                 "topic_prefix = DigitalHouses/Global/plex_monitoring\n"
             )
-            script = (
-                "set -euo pipefail\n"
-                'LEGACY_TOPIC_PREFIX="DigitalHouses/Global/plex_monitoring"\n'
-                'CANONICAL_TOPIC_PREFIX="DigitalHouses/Global/digitalhouses_plex_agent"\n'
-                'CONFIG_FILE="$1"\n'
-                f"{sed_block}\n"
-            )
+            script = r"""
+set -euo pipefail
+LEGACY_TOPIC_PREFIX="DigitalHouses/Global/plex_monitoring"
+CANONICAL_TOPIC_PREFIX="DigitalHouses/Global/digitalhouses_plex_agent"
+CONFIG_FILE="$1"
+
+sed -i -E \
+    "s#^([[:space:]]*topic_prefix[[:space:]]*=[[:space:]]*)${LEGACY_TOPIC_PREFIX}([[:space:]]*)\$#\\1${CANONICAL_TOPIC_PREFIX}\\2#" \
+    "${CONFIG_FILE}"
+"""
             result = subprocess.run(
                 ["bash", "-c", script, "installer-test", str(config)],
                 check=False,
@@ -57,6 +57,7 @@ class InstallerContractTests(unittest.TestCase):
                 "[mqtt]\n"
                 "topic_prefix = DigitalHouses/Global/digitalhouses_plex_agent\n",
             )
+
 
 if __name__ == "__main__":
     unittest.main()
