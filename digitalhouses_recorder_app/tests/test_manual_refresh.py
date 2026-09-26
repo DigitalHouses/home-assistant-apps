@@ -10,7 +10,11 @@ from unittest.mock import Mock, patch
 APP_DIR = Path(__file__).resolve().parents[1] / 'rootfs' / 'app'
 sys.path.insert(0, str(APP_DIR))
 
-from discovery import DISK_USAGE_THRESHOLD_COMMAND_TOPIC, REFRESH_COMMAND_TOPIC
+from discovery import (
+    DISK_USAGE_THRESHOLD_COMMAND_TOPIC,
+    REFRESH_COMMAND_TOPIC,
+    TELEMETRY_DELETE_COMMAND_TOPIC,
+)
 
 
 def load_app_module():
@@ -83,6 +87,12 @@ class ManualRefreshTests(unittest.TestCase):
     def make_app(self):
         app = DatabaseMonitorApp.__new__(DatabaseMonitorApp)
         app.log = logging.getLogger('test')
+        app.app_version = '0.1.15'
+        app.legacy_bridge_enabled = False
+        app.db_available = False
+        app.db_status_observed = False
+        app.db_static_available = False
+        app.storage_available = False
         app.refresh_requested = threading.Event()
         app.refresh_in_progress = threading.Event()
         app.storage = types.SimpleNamespace(enabled=True)
@@ -93,7 +103,18 @@ class ManualRefreshTests(unittest.TestCase):
         app.collect_top_entities = Mock(return_value=True)
         app.collect_storage = Mock(return_value=True)
         app.publish_state = Mock()
+        app.publish_discovery = Mock()
+        app.publish_rankings = Mock()
+        app.publish_disk_usage_threshold = Mock()
+        app._publish_db_availability = Mock()
+        app._publish_db_status_availability = Mock()
+        app._publish_db_static_availability = Mock()
+        app._publish_storage_availability = Mock()
         app.update_state = Mock()
+        app.telemetry = types.SimpleNamespace(
+            delete=Mock(return_value=True)
+        )
+        app.telemetry_runner = Mock()
         return app
 
     def test_refresh_command_queues_manual_refresh(self):
@@ -119,14 +140,19 @@ class ManualRefreshTests(unittest.TestCase):
         app.storage = types.SimpleNamespace(enabled=False)
         app.publish_json = Mock()
         app.publish_text = Mock()
-        app.publish_rankings = Mock()
-        app.publish_disk_usage_threshold = Mock()
         client = Mock()
 
         app._on_connect(client, None, None, 0)
 
         client.subscribe.assert_any_call(REFRESH_COMMAND_TOPIC, qos=1)
-        client.subscribe.assert_any_call(DISK_USAGE_THRESHOLD_COMMAND_TOPIC, qos=1)
+        client.subscribe.assert_any_call(
+            DISK_USAGE_THRESHOLD_COMMAND_TOPIC,
+            qos=1,
+        )
+        client.subscribe.assert_any_call(
+            TELEMETRY_DELETE_COMMAND_TOPIC,
+            qos=1,
+        )
         app.publish_disk_usage_threshold.assert_called_once_with()
 
     def test_run_processes_pending_manual_refresh(self):
