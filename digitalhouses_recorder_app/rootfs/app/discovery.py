@@ -92,7 +92,20 @@ class DiscoveryIdentity:
     def telemetry_delete_command_topic(self) -> str:
         return f"{self.base_topic}/telemetry/delete"
 
-    def entity_id(self, domain: str, suffix: str) -> str:
+    def entity_id(self, domain: str, unique_suffix: str) -> str:
+        if self.canonical:
+            suffix = {
+                "app_version": "version",
+                "app_started_at": "started_at",
+                "diagnostic_event": "diagnostic",
+            }.get(unique_suffix, unique_suffix)
+        else:
+            if unique_suffix == "diagnostic_event":
+                suffix = "diagnostic"
+            elif unique_suffix.startswith("db_"):
+                suffix = unique_suffix[3:]
+            else:
+                suffix = unique_suffix
         return f"{domain}.{self.entity_prefix}_{suffix}"
 
 
@@ -358,11 +371,11 @@ def _event_component(
         "platform": "event",
         "name": "Diagnostic event",
         "unique_id": (
-            f"{identity.device_id}_diagnostic"
+            f"{identity.device_id}_diagnostic_event"
         ),
         "default_entity_id": identity.entity_id(
             "event",
-            "diagnostic",
+            "diagnostic_event",
         ),
         "state_topic": identity.event_topic,
         "event_types": event_types,
