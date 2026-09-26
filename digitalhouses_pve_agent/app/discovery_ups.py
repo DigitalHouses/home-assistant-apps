@@ -54,7 +54,7 @@ def build_ups_discovery_payload(
             "platform": "sensor",
             "name": "Status",
             "unique_id": uid("status"),
-            "default_entity_id": "sensor.dh_pve_ups_status",
+            "default_entity_id": "sensor.dh_pve_agent_ups_status",
             "state_topic": topics.state,
             "value_template": "{{ value_json.status | default('unknown') }}",
             "availability": telemetry_availability,
@@ -71,7 +71,7 @@ def build_ups_discovery_payload(
             "platform": "sensor",
             "name": "Battery charger status",
             "unique_id": uid("battery_charger_status"),
-            "default_entity_id": "sensor.dh_app_pve_ups_battery_charger_status",
+            "default_entity_id": "sensor.dh_pve_agent_ups_battery_charger_status",
             "state_topic": topics.state,
             "value_template": (
                 "{{ value_json.battery_charger_status | default('unknown') }}"
@@ -85,7 +85,7 @@ def build_ups_discovery_payload(
             "platform": "sensor",
             "name": "Problems",
             "unique_id": uid("problems"),
-            "default_entity_id": "sensor.dh_pve_ups_problems",
+            "default_entity_id": "sensor.dh_pve_agent_ups_problems",
             "state_topic": topics.state,
             "value_template": "{{ value_json.problems_count | default(0) }}",
             "availability": [app_availability],
@@ -100,7 +100,7 @@ def build_ups_discovery_payload(
             "platform": "binary_sensor",
             "name": "NUT data available",
             "unique_id": uid("available"),
-            "default_entity_id": "binary_sensor.dh_pve_ups_available",
+            "default_entity_id": "binary_sensor.dh_pve_agent_ups_available",
             "state_topic": topics.state,
             "value_template": "{{ 'ON' if value_json.available | default(false) else 'OFF' }}",
             "payload_on": "ON",
@@ -114,7 +114,7 @@ def build_ups_discovery_payload(
             "platform": "sensor",
             "name": "Last refresh",
             "unique_id": uid("last_refresh"),
-            "default_entity_id": "sensor.dh_pve_ups_last_refresh",
+            "default_entity_id": "sensor.dh_pve_agent_ups_last_refresh",
             "state_topic": topics.state,
             "value_template": "{{ value_json.last_refresh | default(none) }}",
             "availability": [app_availability],
@@ -127,7 +127,7 @@ def build_ups_discovery_payload(
             "platform": "button",
             "name": "Refresh",
             "unique_id": uid("refresh"),
-            "default_entity_id": "button.dh_pve_ups_refresh",
+            "default_entity_id": "button.dh_pve_agent_ups_refresh",
             "command_topic": topics.refresh,
             "payload_press": "PRESS",
             "availability": [app_availability],
@@ -139,7 +139,7 @@ def build_ups_discovery_payload(
             "platform": "sensor",
             "name": "Capabilities",
             "unique_id": uid("capabilities"),
-            "default_entity_id": "sensor.dh_pve_ups_capabilities",
+            "default_entity_id": "sensor.dh_pve_agent_ups_capabilities",
             "state_topic": topics.state,
             "value_template": (
                 "{{ (value_json.capabilities.count | default(0) | string) ~ ' commands' "
@@ -163,7 +163,7 @@ def build_ups_discovery_payload(
             "platform": "binary_sensor",
             "name": "Quick battery test supported",
             "unique_id": uid("quick_test_supported"),
-            "default_entity_id": "binary_sensor.dh_app_pve_ups_quick_test_supported",
+            "default_entity_id": "binary_sensor.dh_pve_agent_ups_quick_test_supported",
             "state_topic": topics.state,
             "value_template": (
                 "{{ 'ON' if value_json.capabilities.quick_test_supported | default(false) else 'OFF' }}"
@@ -179,7 +179,7 @@ def build_ups_discovery_payload(
             "platform": "binary_sensor",
             "name": "Deep battery test supported",
             "unique_id": uid("deep_test_supported"),
-            "default_entity_id": "binary_sensor.dh_app_pve_ups_deep_test_supported",
+            "default_entity_id": "binary_sensor.dh_pve_agent_ups_deep_test_supported",
             "state_topic": topics.state,
             "value_template": (
                 "{{ 'ON' if value_json.capabilities.deep_test_supported | default(false) else 'OFF' }}"
@@ -195,7 +195,7 @@ def build_ups_discovery_payload(
             "platform": "binary_sensor",
             "name": "Stop battery test supported",
             "unique_id": uid("stop_test_supported"),
-            "default_entity_id": "binary_sensor.dh_app_pve_ups_stop_test_supported",
+            "default_entity_id": "binary_sensor.dh_pve_agent_ups_stop_test_supported",
             "state_topic": topics.state,
             "value_template": (
                 "{{ 'ON' if value_json.capabilities.stop_test_supported | default(false) else 'OFF' }}"
@@ -211,7 +211,7 @@ def build_ups_discovery_payload(
             "platform": "binary_sensor",
             "name": "Beeper control supported",
             "unique_id": uid("beeper_control_supported"),
-            "default_entity_id": "binary_sensor.dh_app_pve_ups_beeper_control_supported",
+            "default_entity_id": "binary_sensor.dh_pve_agent_ups_beeper_control_supported",
             "state_topic": topics.state,
             "value_template": (
                 "{{ 'ON' if value_json.capabilities.beeper_control_supported | default(false) else 'OFF' }}"
@@ -227,7 +227,7 @@ def build_ups_discovery_payload(
             "platform": "sensor",
             "name": "Shutdown policy",
             "unique_id": uid("shutdown_policy"),
-            "default_entity_id": "sensor.dh_pve_ups_shutdown_policy",
+            "default_entity_id": "sensor.dh_pve_agent_ups_shutdown_policy",
             "state_topic": topics.state,
             "value_template": "{{ value_json.shutdown_policy.state | default('Unknown') }}",
             "availability": [app_availability],
@@ -259,7 +259,7 @@ def build_ups_discovery_payload(
             "platform": "sensor",
             "name": "Shutdown wait after power loss",
             "unique_id": uid("policy_on_battery_delay_observed"),
-            "default_entity_id": "sensor.dh_pve_ups_policy_on_battery_delay",
+            "default_entity_id": "sensor.dh_pve_agent_ups_policy_on_battery_delay",
             "state_topic": topics.state,
             "value_template": "{{ value_json.shutdown_policy.on_battery_delay_minutes | default(none) }}",
             "unit_of_measurement": "min",
@@ -272,7 +272,7 @@ def build_ups_discovery_payload(
             "platform": "sensor",
             "name": "Power restore delay",
             "unique_id": uid("policy_power_restore_delay_observed"),
-            "default_entity_id": "sensor.dh_pve_ups_policy_power_restore_delay",
+            "default_entity_id": "sensor.dh_pve_agent_ups_policy_power_restore_delay",
             "state_topic": topics.state,
             "value_template": "{{ value_json.shutdown_policy.power_restore_delay_seconds | default(none) }}",
             "unit_of_measurement": "s",
@@ -287,7 +287,7 @@ def build_ups_discovery_payload(
             "name": "Shutdown battery charge threshold",
             "unique_id": uid("policy_charge_threshold"),
             "default_entity_id": (
-                "number.dh_app_pve_ups_shutdown_battery_charge_threshold"
+                "number.dh_pve_agent_ups_shutdown_battery_charge_threshold"
             ),
             "state_topic": topics.state,
             "command_topic": topics.policy_charge_threshold_set,
@@ -309,7 +309,7 @@ def build_ups_discovery_payload(
             "platform": "number",
             "name": "Shutdown runtime reserve",
             "unique_id": uid("policy_runtime_reserve"),
-            "default_entity_id": "number.dh_app_pve_ups_shutdown_runtime_reserve",
+            "default_entity_id": "number.dh_pve_agent_ups_shutdown_runtime_reserve",
             "state_topic": topics.state,
             "command_topic": topics.policy_runtime_reserve_set,
             "value_template": (
@@ -330,7 +330,7 @@ def build_ups_discovery_payload(
             "platform": "button",
             "name": "Apply trigger policy",
             "unique_id": uid("policy_apply"),
-            "default_entity_id": "button.dh_app_pve_ups_apply_trigger_policy",
+            "default_entity_id": "button.dh_pve_agent_ups_apply_trigger_policy",
             "command_topic": topics.policy_apply,
             "payload_press": "PRESS",
             "availability": [app_availability],
@@ -456,17 +456,17 @@ def build_ups_discovery_payload(
     if capabilities is not None:
         if capabilities.supports_test("quick"):
             add_button(
-                "test_quick", "Quick battery test", "button.dh_pve_ups_test_quick",
+                "test_quick", "Quick battery test", "button.dh_pve_agent_ups_test_quick",
                 topics.test_quick, "mdi:battery-sync",
             )
         if capabilities.supports_test("deep"):
             add_button(
-                "test_deep", "Deep battery test", "button.dh_pve_ups_test_deep",
+                "test_deep", "Deep battery test", "button.dh_pve_agent_ups_test_deep",
                 topics.test_deep, "mdi:battery-heart-variant",
             )
         if capabilities.supports_test("stop"):
             add_button(
-                "test_stop", "Stop battery test", "button.dh_pve_ups_test_stop",
+                "test_stop", "Stop battery test", "button.dh_pve_agent_ups_test_stop",
                 topics.test_stop, "mdi:stop-circle-outline",
             )
         if (
@@ -478,7 +478,7 @@ def build_ups_discovery_payload(
                 "platform": "switch",
                 "name": "Beeper",
                 "unique_id": uid("beeper"),
-                "default_entity_id": "switch.dh_pve_ups_beeper",
+                "default_entity_id": "switch.dh_pve_agent_ups_beeper",
                 "state_topic": topics.state,
                 "command_topic": topics.beeper_set,
                 "value_template": (
@@ -495,122 +495,122 @@ def build_ups_discovery_payload(
     if snapshot is not None:
         if snapshot.battery_charge_percent is not None:
             add_sensor(
-                "battery_charge", "Battery charge", "sensor.dh_pve_ups_battery_charge",
+                "battery_charge", "Battery charge", "sensor.dh_pve_agent_ups_battery_charge",
                 "battery_charge_percent", unit="%", device_class="battery",
             )
         if snapshot.runtime_seconds is not None:
             add_sensor(
                 "battery_runtime_minutes", "Battery runtime",
-                "sensor.dh_pve_ups_battery_runtime_minutes", "battery_runtime_minutes",
+                "sensor.dh_pve_agent_ups_battery_runtime_minutes", "battery_runtime_minutes",
                 unit="min", device_class="duration",
             )
             add_sensor(
                 "battery_runtime", "Battery runtime (seconds)",
-                "sensor.dh_pve_ups_battery_runtime", "runtime_seconds",
+                "sensor.dh_pve_agent_ups_battery_runtime", "runtime_seconds",
                 unit="s", device_class="duration", entity_category="diagnostic",
             )
         if snapshot.battery_voltage_v is not None:
             add_sensor(
-                "battery_voltage", "Battery voltage", "sensor.dh_pve_ups_battery_voltage",
+                "battery_voltage", "Battery voltage", "sensor.dh_pve_agent_ups_battery_voltage",
                 "battery_voltage_v", unit="V", device_class="voltage",
                 entity_category="diagnostic",
             )
         if snapshot.load_percent is not None:
-            add_sensor("load", "Load", "sensor.dh_pve_ups_load", "load_percent", unit="%")
+            add_sensor("load", "Load", "sensor.dh_pve_agent_ups_load", "load_percent", unit="%")
         if snapshot.nominal_real_power_w is not None:
             add_sensor(
                 "nominal_real_power", "Nominal real power",
-                "sensor.dh_pve_ups_nominal_real_power", "nominal_real_power_w",
+                "sensor.dh_pve_agent_ups_nominal_real_power", "nominal_real_power_w",
                 unit="W", device_class="power", entity_category="diagnostic",
             )
         if snapshot.input_voltage_v is not None:
             add_sensor(
-                "input_voltage", "Input voltage", "sensor.dh_pve_ups_input_voltage",
+                "input_voltage", "Input voltage", "sensor.dh_pve_agent_ups_input_voltage",
                 "input_voltage_v", unit="V", device_class="voltage",
             )
         if snapshot.output_voltage_v is not None:
             add_sensor(
-                "output_voltage", "Output voltage", "sensor.dh_pve_ups_output_voltage",
+                "output_voltage", "Output voltage", "sensor.dh_pve_agent_ups_output_voltage",
                 "output_voltage_v", unit="V", device_class="voltage",
             )
         if snapshot.input_frequency_hz is not None:
             add_sensor(
-                "input_frequency", "Input frequency", "sensor.dh_pve_ups_input_frequency",
+                "input_frequency", "Input frequency", "sensor.dh_pve_agent_ups_input_frequency",
                 "input_frequency_hz", unit="Hz", device_class="frequency",
             )
         if snapshot.output_frequency_hz is not None:
             add_sensor(
-                "output_frequency", "Output frequency", "sensor.dh_pve_ups_output_frequency",
+                "output_frequency", "Output frequency", "sensor.dh_pve_agent_ups_output_frequency",
                 "output_frequency_hz", unit="Hz", device_class="frequency",
             )
         if snapshot.warning_charge_percent is not None:
             add_sensor(
                 "battery_charge_warning", "Battery warning threshold",
-                "sensor.dh_pve_ups_battery_charge_warning", "warning_charge_percent",
+                "sensor.dh_pve_agent_ups_battery_charge_warning", "warning_charge_percent",
                 unit="%", entity_category="diagnostic",
             )
         if snapshot.low_charge_percent is not None:
             add_sensor(
                 "battery_charge_low", "Battery low threshold",
-                "sensor.dh_pve_ups_battery_charge_low", "low_charge_percent",
+                "sensor.dh_pve_agent_ups_battery_charge_low", "low_charge_percent",
                 unit="%", entity_category="diagnostic",
             )
         if snapshot.low_runtime_seconds is not None:
             add_sensor(
                 "battery_runtime_low", "Low runtime threshold",
-                "sensor.dh_pve_ups_battery_runtime_low", "low_runtime_seconds",
+                "sensor.dh_pve_agent_ups_battery_runtime_low", "low_runtime_seconds",
                 unit="s", device_class="duration", entity_category="diagnostic",
             )
         if snapshot.ups_shutdown_delay_seconds is not None:
             add_sensor(
                 "ups_shutdown_delay", "UPS output shutdown delay",
-                "sensor.dh_pve_ups_shutdown_delay", "ups_shutdown_delay_seconds",
+                "sensor.dh_pve_agent_ups_shutdown_delay", "ups_shutdown_delay_seconds",
                 unit="s", device_class="duration", entity_category="diagnostic",
             )
         if snapshot.ups_start_delay_seconds is not None:
             add_sensor(
                 "ups_start_delay", "UPS output restore delay",
-                "sensor.dh_pve_ups_start_delay", "ups_start_delay_seconds",
+                "sensor.dh_pve_agent_ups_start_delay", "ups_start_delay_seconds",
                 unit="s", device_class="duration", entity_category="diagnostic",
             )
         if snapshot.test_result is not None:
             add_sensor(
-                "test_result", "Last test result", "sensor.dh_pve_ups_test_result",
+                "test_result", "Last test result", "sensor.dh_pve_agent_ups_test_result",
                 "test_result", entity_category="diagnostic", icon="mdi:clipboard-check-outline",
             )
         if snapshot.beeper_status is not None:
             add_sensor(
-                "beeper_status", "Beeper status", "sensor.dh_pve_ups_beeper_status",
+                "beeper_status", "Beeper status", "sensor.dh_pve_agent_ups_beeper_status",
                 "beeper_status", entity_category="diagnostic", icon="mdi:volume-high",
             )
 
         if "ups.status" in snapshot.raw:
             add_binary(
-                "on_battery", "On battery", "binary_sensor.dh_pve_ups_on_battery",
+                "on_battery", "On battery", "binary_sensor.dh_pve_agent_ups_on_battery",
                 "on_battery", "mdi:battery-arrow-down",
             )
             add_binary(
-                "low_battery", "Low battery", "binary_sensor.dh_pve_ups_low_battery",
+                "low_battery", "Low battery", "binary_sensor.dh_pve_agent_ups_low_battery",
                 "low_battery", "mdi:battery-alert",
             )
             add_binary(
-                "replace_battery", "Replace battery", "binary_sensor.dh_pve_ups_replace_battery",
+                "replace_battery", "Replace battery", "binary_sensor.dh_pve_agent_ups_replace_battery",
                 "replace_battery", "mdi:battery-sync-outline",
             )
             add_binary(
-                "overload", "Overload", "binary_sensor.dh_pve_ups_overload",
+                "overload", "Overload", "binary_sensor.dh_pve_agent_ups_overload",
                 "overload", "mdi:alert-octagon-outline",
             )
             add_binary(
-                "bypass", "Bypass", "binary_sensor.dh_pve_ups_bypass",
+                "bypass", "Bypass", "binary_sensor.dh_pve_agent_ups_bypass",
                 "bypass", "mdi:transit-connection-variant",
             )
             add_charger_binary(
-                "charging", "Charging", "binary_sensor.dh_pve_ups_charging",
+                "charging", "Charging", "binary_sensor.dh_pve_agent_ups_charging",
                 "charging", "mdi:battery-charging",
             )
             add_charger_binary(
-                "discharging", "Discharging", "binary_sensor.dh_pve_ups_discharging",
+                "discharging", "Discharging", "binary_sensor.dh_pve_agent_ups_discharging",
                 "discharging", "mdi:battery-minus",
             )
 
@@ -627,11 +627,11 @@ def build_ups_discovery_payload(
     return {
         "device": device,
         "origin": {
-            "name": "DigitalHouses DH PVE App",
+            "name": "DigitalHouses PVE Agent",
             "sw_version": version,
             "support_url": (
                 "https://github.com/DigitalHouses/home-assistant-apps/"
-                "tree/main/dh_pve_app"
+                "tree/main/digitalhouses_pve_agent"
             ),
         },
         "components": components,

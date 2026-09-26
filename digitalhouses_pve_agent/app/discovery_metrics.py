@@ -64,7 +64,7 @@ def _attrs(
     extra: Mapping[str, str] | None = None,
 ) -> str:
     fields = [
-        "'proxmox_integration':'dh_pve_app'",
+        "'proxmox_integration':'digitalhouses_pve_agent'",
         f"'proxmox_section':{json.dumps(section)}",
         f"'proxmox_subject':{json.dumps(subject)}",
         f"'proxmox_metric':{json.dumps(metric)}",
@@ -167,7 +167,7 @@ def build_full_discovery_payload(
     static = [
         _sensor(
             uid=uid, state_topic=topics.state, app_topic=topics.availability,
-            key="system", name="System", entity_id="sensor.dh_pve_system",
+            key="system", name="System", entity_id="sensor.dh_pve_agent_system",
             expression=_path("host", "hostname") + " | default('unknown')",
             subsystem="host", section="system", subject="host", metric="identity",
             object_id=identity.instance_id, display_name=identity.node_name, sort_key="001",
@@ -192,7 +192,7 @@ def build_full_discovery_payload(
         ),
         _sensor(
             uid=uid, state_topic=topics.state, app_topic=topics.availability,
-            key="last_boot", name="Last boot", entity_id="sensor.dh_pve_last_boot",
+            key="last_boot", name="Last boot", entity_id="sensor.dh_pve_agent_last_boot",
             expression=_path("host", "boot_time") + " | default(none)",
             subsystem="host", section="system", subject="host", metric="last_boot",
             object_id=identity.instance_id, display_name=identity.node_name, sort_key="002",
@@ -200,7 +200,7 @@ def build_full_discovery_payload(
         ),
         _sensor(
             uid=uid, state_topic=topics.state, app_topic=topics.availability,
-            key="cpu_usage", name="CPU usage", entity_id="sensor.dh_pve_cpu_usage",
+            key="cpu_usage", name="CPU usage", entity_id="sensor.dh_pve_agent_cpu_usage",
             expression=_path("cpu", "usage_percent") + " | default(none)",
             subsystem="cpu", section="cpu", subject="cpu", metric="usage",
             object_id="cpu", display_name="CPU", sort_key="100",
@@ -208,7 +208,7 @@ def build_full_discovery_payload(
         ),
         _sensor(
             uid=uid, state_topic=topics.state, app_topic=topics.availability,
-            key="cpu_temperature", name="CPU temperature", entity_id="sensor.dh_pve_cpu_temperature",
+            key="cpu_temperature", name="CPU temperature", entity_id="sensor.dh_pve_agent_cpu_temperature",
             expression=_path("cpu", "temperature_c") + " | default(none)",
             subsystem="cpu", section="cpu", subject="cpu", metric="temperature",
             object_id="cpu", display_name="CPU", sort_key="110",
@@ -216,7 +216,7 @@ def build_full_discovery_payload(
         ),
         _sensor(
             uid=uid, state_topic=topics.state, app_topic=topics.availability,
-            key="cpu_frequency", name="CPU frequency", entity_id="sensor.dh_pve_cpu_frequency",
+            key="cpu_frequency", name="CPU frequency", entity_id="sensor.dh_pve_agent_cpu_frequency",
             expression=_path("cpu", "frequency", "average_mhz") + " | default(none)",
             subsystem="cpu", section="cpu", subject="cpu", metric="frequency",
             object_id="cpu", display_name="CPU", sort_key="120",
@@ -225,7 +225,7 @@ def build_full_discovery_payload(
         _binary(
             uid=uid, state_topic=topics.state, app_topic=topics.availability,
             key="cpu_throttling", name="CPU throttling",
-            entity_id="binary_sensor.dh_pve_cpu_throttling",
+            entity_id="binary_sensor.dh_pve_agent_cpu_throttling",
             expression="'ON' if " + _path("cpu", "throttling_active") + " | default(false) else 'OFF'",
             subsystem="cpu", section="cpu", subject="cpu", metric="throttling",
             object_id="cpu", display_name="CPU", sort_key="130",
@@ -233,7 +233,7 @@ def build_full_discovery_payload(
         ),
         _sensor(
             uid=uid, state_topic=topics.state, app_topic=topics.availability,
-            key="memory_usage", name="Memory usage", entity_id="sensor.dh_pve_memory_usage",
+            key="memory_usage", name="Memory usage", entity_id="sensor.dh_pve_agent_memory_usage",
             expression=_path("memory", "usage_percent") + " | default(none)",
             subsystem="memory", section="memory", subject="memory", metric="usage",
             object_id="memory", display_name="RAM", sort_key="200",
@@ -245,7 +245,7 @@ def build_full_discovery_payload(
         ),
         _sensor(
             uid=uid, state_topic=topics.state, app_topic=topics.availability,
-            key="swap_usage", name="Swap usage", entity_id="sensor.dh_pve_swap_usage",
+            key="swap_usage", name="Swap usage", entity_id="sensor.dh_pve_agent_swap_usage",
             expression=_path("memory", "swap_usage_percent") + " | default(none)",
             subsystem="memory", section="memory", subject="swap", metric="usage",
             object_id="swap", display_name="Swap", sort_key="210",
@@ -270,7 +270,7 @@ def build_full_discovery_payload(
         key, item = _binary(
             uid=uid, state_topic=topics.state, app_topic=topics.availability,
             key=f"collector_{subsystem}", name=f"{display} collector",
-            entity_id=f"binary_sensor.dh_pve_{subsystem}_collector",
+            entity_id=f"binary_sensor.dh_pve_agent_{subsystem}_collector",
             expression="'ON' if value_json.subsystems." + subsystem + ".available | default(false) else 'OFF'",
             subsystem=None, section="diagnostic", subject="collector", metric="availability",
             object_id=subsystem, display_name=display, sort_key=f"900_{subsystem}",
@@ -289,7 +289,7 @@ def build_full_discovery_payload(
             key, item = _sensor(
                 uid=uid, state_topic=topics.state, app_topic=topics.availability,
                 key=f"storage_{slug}_usage", name=f"Storage {name} usage",
-                entity_id=f"sensor.dh_pve_storage_{slug}_usage",
+                entity_id=f"sensor.dh_pve_agent_storage_{slug}_usage",
                 expression=obj + ".usage_percent | default(none)",
                 subsystem="storage", section="storage", subject="storage", metric="usage",
                 object_id=name, display_name=name, sort_key=f"300_{index:03d}",
@@ -322,7 +322,7 @@ def build_full_discovery_payload(
             key, item = _sensor(
                 uid=uid, state_topic=topics.state, app_topic=topics.availability,
                 key=f"disk_{slug}_health", name=f"Disk health - {display}",
-                entity_id=f"sensor.dh_pve_disk_{slug}_health",
+                entity_id=f"sensor.dh_pve_agent_disk_{slug}_health",
                 expression=obj + ".health_state | default('UNKNOWN')",
                 subsystem="smart", section="disk", subject="disk", metric="health",
                 object_id=disk_id, display_name=display, sort_key=f"400_{index:03d}_00",
@@ -337,7 +337,7 @@ def build_full_discovery_payload(
             key, item = _binary(
                 uid=uid, state_topic=topics.state, app_topic=topics.availability,
                 key=f"disk_{slug}_smart_problem", name=f"SMART problem - {display}",
-                entity_id=f"binary_sensor.dh_pve_disk_{slug}_smart_problem",
+                entity_id=f"binary_sensor.dh_pve_agent_disk_{slug}_smart_problem",
                 expression="'ON' if " + obj + ".smart_passed is sameas false else 'OFF'",
                 subsystem="smart", section="disk", subject="disk", metric="smart_problem",
                 object_id=disk_id, display_name=display, sort_key=f"400_{index:03d}_01",
@@ -365,7 +365,7 @@ def build_full_discovery_payload(
                     uid=uid, state_topic=topics.state, app_topic=topics.availability,
                     key=f"disk_{slug}_{suffix}",
                     name=f"Disk {suffix.replace('_', ' ')} - {display}",
-                    entity_id=f"sensor.dh_pve_disk_{slug}_{suffix}",
+                    entity_id=f"sensor.dh_pve_agent_disk_{slug}_{suffix}",
                     expression=obj + f".{field} | default(none)",
                     subsystem="smart", section="disk", subject="disk", metric=metric,
                     object_id=disk_id, display_name=display, sort_key=f"400_{index:03d}_{offset:02d}",
@@ -382,7 +382,7 @@ def build_full_discovery_payload(
                     uid=uid, state_topic=topics.state, app_topic=topics.availability,
                     key=f"disk_{slug}_daily_max_temperature",
                     name=f"Disk daily max temperature - {display}",
-                    entity_id=f"sensor.dh_pve_disk_{slug}_daily_max_temperature",
+                    entity_id=f"sensor.dh_pve_agent_disk_{slug}_daily_max_temperature",
                     expression=obj + ".daily.max_temperature_c | default(none)",
                     subsystem="smart", section="disk", subject="disk", metric="daily_max_temperature",
                     object_id=disk_id, display_name=display, sort_key=f"400_{index:03d}_20",
@@ -413,7 +413,7 @@ def build_full_discovery_payload(
             key, item = _sensor(
                 uid=uid, state_topic=topics.state, app_topic=topics.availability,
                 key=f"gpu_{slug}_owner", name=f"GPU owner - {display}",
-                entity_id=f"sensor.dh_pve_gpu_{slug}_owner",
+                entity_id=f"sensor.dh_pve_agent_gpu_{slug}_owner",
                 expression=obj + ".owner | default('unknown')",
                 subsystem="gpu", section="graphics", subject="gpu", metric="owner",
                 object_id=gpu_id, display_name=display, sort_key=f"500_{index:03d}_00",
@@ -424,7 +424,7 @@ def build_full_discovery_payload(
                 key, item = _sensor(
                     uid=uid, state_topic=topics.state, app_topic=topics.availability,
                     key=f"gpu_{slug}_temperature", name=f"GPU temperature - {display}",
-                    entity_id=f"sensor.dh_pve_gpu_{slug}_temperature",
+                    entity_id=f"sensor.dh_pve_agent_gpu_{slug}_temperature",
                     expression=obj + ".temperature_c | default(none)",
                     subsystem="gpu", section="graphics", subject="gpu", metric="temperature",
                     object_id=gpu_id, display_name=display, sort_key=f"500_{index:03d}_01",
@@ -436,7 +436,7 @@ def build_full_discovery_payload(
                 key, item = _sensor(
                     uid=uid, state_topic=topics.state, app_topic=topics.availability,
                     key=f"gpu_{slug}_transcoding", name=f"GPU transcoding - {display}",
-                    entity_id=f"sensor.dh_pve_gpu_{slug}_transcoding",
+                    entity_id=f"sensor.dh_pve_agent_gpu_{slug}_transcoding",
                     expression=obj + ".transcoding_load_percent | default(none)",
                     subsystem="gpu", section="graphics", subject="gpu", metric="transcoding",
                     object_id=gpu_id, display_name=display, sort_key=f"500_{index:03d}_02",
@@ -472,7 +472,7 @@ def build_full_discovery_payload(
             key, item = _sensor(
                 uid=uid, state_topic=topics.state, app_topic=topics.availability,
                 key=f"fan_{slug}_speed", name=fan_name,
-                entity_id=f"sensor.dh_pve_fan_{slug}_speed",
+                entity_id=f"sensor.dh_pve_agent_fan_{slug}_speed",
                 expression=obj + ".speed_percent | default(none)",
                 subsystem="fans", section="cooling", subject="fan", metric="speed_percent",
                 object_id=fan_id, display_name=user_display, sort_key=f"600_{index:03d}_00",
@@ -496,7 +496,7 @@ def build_full_discovery_payload(
             key, item = _sensor(
                 uid=uid, state_topic=topics.state, app_topic=topics.availability,
                 key=f"fan_{slug}_rpm", name=f"{fan_name} RPM",
-                entity_id=f"sensor.dh_pve_fan_{slug}_rpm",
+                entity_id=f"sensor.dh_pve_agent_fan_{slug}_rpm",
                 expression=obj + ".rpm | default(none)",
                 subsystem="fans", section="cooling", subject="fan", metric="rpm",
                 object_id=fan_id, display_name=user_display, sort_key=f"600_{index:03d}_01",
@@ -508,7 +508,7 @@ def build_full_discovery_payload(
             key, item = _sensor(
                 uid=uid, state_topic=topics.state, app_topic=topics.availability,
                 key=f"fan_{slug}_max_rpm", name=f"{fan_name} Max RPM",
-                entity_id=f"sensor.dh_pve_fan_{slug}_max_rpm",
+                entity_id=f"sensor.dh_pve_agent_fan_{slug}_max_rpm",
                 expression=obj + ".max_rpm | default(none)",
                 subsystem="fans", section="cooling", subject="fan", metric="max_rpm",
                 object_id=fan_id, display_name=user_display, sort_key=f"600_{index:03d}_02",
@@ -521,7 +521,7 @@ def build_full_discovery_payload(
                 uid=uid, state_topic=topics.state, app_topic=topics.availability,
                 key=f"fan_{slug}_calibration_status",
                 name=f"{fan_name} Calibration status",
-                entity_id=f"sensor.dh_pve_fan_{slug}_calibration_status",
+                entity_id=f"sensor.dh_pve_agent_fan_{slug}_calibration_status",
                 expression=obj + ".calibration_status | default('unsupported')",
                 subsystem="fans", section="cooling", subject="fan",
                 metric="calibration_status", object_id=fan_id,
@@ -538,7 +538,7 @@ def build_full_discovery_payload(
                 uid=uid, state_topic=topics.state, app_topic=topics.availability,
                 key=f"fan_{slug}_calibrated_at",
                 name=f"{fan_name} Calibrated at",
-                entity_id=f"sensor.dh_pve_fan_{slug}_calibrated_at",
+                entity_id=f"sensor.dh_pve_agent_fan_{slug}_calibrated_at",
                 expression=obj + ".calibrated_at | default(none)",
                 subsystem="fans", section="cooling", subject="fan",
                 metric="calibrated_at", object_id=fan_id,
@@ -553,7 +553,7 @@ def build_full_discovery_payload(
                 "platform": "button",
                 "name": "Calibrate fans",
                 "unique_id": uid("calibrate_fans"),
-                "default_entity_id": "button.dh_pve_calibrate_fans",
+                "default_entity_id": "button.dh_pve_agent_calibrate_fans",
                 "command_topic": topics.fan_calibrate,
                 "payload_press": "PRESS",
                 "availability": [
