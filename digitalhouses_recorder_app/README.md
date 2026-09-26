@@ -6,9 +6,9 @@
 
 Home Assistant App for monitoring the health, size, retained history, write activity and storage footprint of the database used by Home Assistant Recorder.
 
-[Quick start](#quick-start) · [Technical documentation](DOCS.md) · [Changelog](CHANGELOG.md) · [Issues](https://github.com/DigitalHouses/home-assistant-apps/issues)
+[Quick start](#quick-start) · [Technical documentation](DOCS.md) · [Slug migration](../docs/digitalhouses_recorder_app/slug-migration.md) · [Changelog](CHANGELOG.md) · [Issues](https://github.com/DigitalHouses/home-assistant-apps/issues)
 
-Repository identity: `digitalhouses_recorder_app`. The installed Home Assistant App slug remains `digitalhouses_db_monitoring` until a controlled product-specific reinstall migration is released; MQTT/device/entity compatibility is intentionally unchanged.
+Repository identity: `digitalhouses_recorder_app`. The installed Home Assistant App slug remains `digitalhouses_db_monitoring` during the controlled product-specific reinstall migration; MQTT/device/entity compatibility is intentionally unchanged.
 
 ![DigitalHouses Recorder dashboard](images/dh_db_monitor.png)
 
