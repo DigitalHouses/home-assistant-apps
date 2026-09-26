@@ -20,6 +20,7 @@ from identity_migration import (
     LEGACY_DEVICE_ID,
     PHASE_BRIDGE,
     PHASE_COMPLETED,
+    cleanup_required,
     ensure_bridge_state,
     mark_cleanup_complete,
 )
@@ -84,6 +85,24 @@ class IdentityMigrationStateTests(unittest.TestCase):
                 path.read_text(encoding="utf-8")
             )
             self.assertEqual(first, second)
+
+    def test_cleanup_required_until_completed(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "identity.json"
+
+            self.assertTrue(cleanup_required(path=path))
+
+            ensure_bridge_state(
+                "0.1.15",
+                path=path,
+            )
+            self.assertTrue(cleanup_required(path=path))
+
+            mark_cleanup_complete(
+                "0.1.16",
+                path=path,
+            )
+            self.assertFalse(cleanup_required(path=path))
 
     def test_completed_cleanup_never_reenables_legacy_on_rollback(self):
         with tempfile.TemporaryDirectory() as temp:
