@@ -15,7 +15,7 @@ def _mqtt():
         port=1883,
         username="",
         password="",
-        topic_prefix="DigitalHouses/Global/dh_pve_app",
+        topic_prefix="DigitalHouses/Global/digitalhouses_pve_agent",
         discovery_prefix="homeassistant",
         keepalive_seconds=60,
     )
@@ -70,14 +70,14 @@ def test_legacy_policy_write_topics_are_ignored_but_v2_apply_is_explicit():
 
 
 def test_runtime_service_cannot_write_etc_nut():
-    unit = Path("digitalhouses_pve_agent/systemd/dh_pve_app.service").read_text(encoding="utf-8")
+    unit = Path("digitalhouses_pve_agent/systemd/digitalhouses_pve_agent.service").read_text(encoding="utf-8")
 
     assert "ProtectSystem=full" in unit
     assert "ReadWritePaths=/etc/nut" not in unit
 
 
 def test_legacy_policy_apply_enabled_config_is_ignored(tmp_path):
-    path = tmp_path / "dh_pve_app.conf"
+    path = tmp_path / "digitalhouses_pve_agent.conf"
     path.write_text(
         """[mqtt]
 host = broker
@@ -97,7 +97,7 @@ def test_legacy_nut_timer_is_observed_read_only_when_present():
         """MONITOR ups@127.0.0.1 1 user password primary
 SHUTDOWNCMD \"/sbin/shutdown -h now\"
 """,
-        """CMDSCRIPT /opt/digitalhouses/dh_pve_app/bin/dh-pve-ups-policy-cmd
+        """CMDSCRIPT /opt/digitalhouses/digitalhouses_pve_agent/bin/digitalhouses-pve-agent-ups-policy-cmd
 AT ONBATT * START-TIMER dh-pve-ups-shutdown 1800
 AT ONLINE * CANCEL-TIMER dh-pve-ups-shutdown
 """,

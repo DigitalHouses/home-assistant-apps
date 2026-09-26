@@ -44,7 +44,7 @@ def _mqtt():
         port=1883,
         username="",
         password="",
-        topic_prefix="DigitalHouses/Global/dh_pve_app",
+        topic_prefix="DigitalHouses/Global/digitalhouses_pve_agent",
         discovery_prefix="homeassistant",
         keepalive_seconds=60,
     )
@@ -95,7 +95,7 @@ def test_production_discovery_exposes_minutes_without_duplicate_seconds_entity()
     )["components"]
 
     minutes = components["battery_runtime_minutes"]
-    assert minutes["default_entity_id"] == "sensor.dh_app_pve_ups_battery_runtime_minutes"
+    assert minutes["default_entity_id"] == "sensor.dh_pve_agent_ups_battery_runtime_minutes"
     assert minutes["value_template"] == "{{ value_json.battery_runtime_minutes }}"
     assert minutes["unit_of_measurement"] == "min"
     assert minutes["device_class"] == "duration"
