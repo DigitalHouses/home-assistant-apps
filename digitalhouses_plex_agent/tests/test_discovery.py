@@ -28,11 +28,11 @@ class DiscoveryTests(unittest.TestCase):
         topics = build_topics(self.config())
         self.assertEqual(
             topics.state,
-            "DigitalHouses/Global/plex_monitoring/state",
+            "DigitalHouses/Global/digitalhouses_plex_agent/state",
         )
         self.assertEqual(
             topics.discovery,
-            "homeassistant/device/digitalhouses_plex_monitoring_plex/config",
+            "homeassistant/device/digitalhouses_plex_agent_plex/config",
         )
 
     def test_default_entity_ids(self):
@@ -42,10 +42,10 @@ class DiscoveryTests(unittest.TestCase):
         )
         components = payload["components"]
         expected = {
-            "activity": "sensor.dh_plex_activity",
-            "cpu": "sensor.dh_plex_cpu",
-            "credits_detection": "binary_sensor.dh_plex_credits_detection",
-            "refresh": "button.dh_plex_refresh",
+            "activity": "sensor.dh_plex_agent_activity",
+            "cpu": "sensor.dh_plex_agent_cpu",
+            "credits_detection": "binary_sensor.dh_plex_agent_credits_detection",
+            "refresh": "button.dh_plex_agent_refresh",
         }
         for key, entity_id in expected.items():
             self.assertEqual(
@@ -64,7 +64,7 @@ class DiscoveryTests(unittest.TestCase):
         self.assertIn("transcoder_count", components)
         self.assertEqual(
             components["transcoder_count"]["default_entity_id"],
-            "sensor.dh_plex_transcoder_count",
+            "sensor.dh_plex_agent_transcoder_count",
         )
 
         current = components["current_item"]
@@ -86,15 +86,15 @@ class DiscoveryTests(unittest.TestCase):
         topics = build_topics(self.config("plex_guest"))
         self.assertEqual(
             topics.state,
-            "DigitalHouses/Global/plex_monitoring/plex_guest/state",
+            "DigitalHouses/Global/digitalhouses_plex_agent/plex_guest/state",
         )
         self.assertEqual(
             components["activity"]["default_entity_id"],
-            "sensor.dh_plex_guest_activity",
+            "sensor.dh_plex_agent_plex_guest_activity",
         )
         self.assertEqual(
             components["refresh"]["default_entity_id"],
-            "button.dh_plex_guest_refresh",
+            "button.dh_plex_agent_plex_guest_refresh",
         )
 
     def test_process_entities_have_dual_availability(self):
