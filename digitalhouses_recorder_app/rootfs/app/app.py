@@ -746,8 +746,23 @@ class DatabaseMonitorApp:
             )
             with self.state_lock:
                 self.ranking_state[period] = snapshot
-            topic = TOP_ENTITIES_24H_TOPIC if period == '24h' else TOP_ENTITIES_ALL_TIME_TOPIC
+            topic = (
+                TOP_ENTITIES_24H_TOPIC
+                if period == "24h"
+                else TOP_ENTITIES_ALL_TIME_TOPIC
+            )
+            legacy_topic = (
+                LEGACY_TOP_ENTITIES_24H_TOPIC
+                if period == "24h"
+                else LEGACY_TOP_ENTITIES_ALL_TIME_TOPIC
+            )
             self.publish_json(topic, snapshot, retain=True)
+            if self.legacy_bridge_enabled:
+                self.publish_json(
+                    legacy_topic,
+                    snapshot,
+                    retain=True,
+                )
             return True
         except Exception as exc:
             self.log.warning('Top entities %s query failed: %s', period, exc)
@@ -791,7 +806,12 @@ class DatabaseMonitorApp:
             self.app_version,
         )
         self.log.info('Database engine: %s', db.engine)
-        self.log.info('Database target: %s@%s:%s/%s', db.username, db.host, db.port, db.database)
+        self.log.info(
+            "Database target: %s:%s/%s",
+            db.host,
+            db.port,
+            db.database,
+        )
         self.log.info('Timezone: %s', self.config.timezone)
         self.log.info('Publish interval: %s minute(s)', self.config.publish_interval_minutes)
         self.log.info('Storage monitoring source: %s', self.config.storage.source)
@@ -812,8 +832,7 @@ class DatabaseMonitorApp:
                     db_ok = self.collect_fast()
                     if db_ok:
                         if not static_loaded:
-                            self.collect_static()
-                            static_loaded = True
+                            static_loaded = self.collect_static()
                         if now_mono >= next_medium:
                             self.collect_medium()
                             next_medium = now_mono + MEDIUM_INTERVAL_SECONDS
