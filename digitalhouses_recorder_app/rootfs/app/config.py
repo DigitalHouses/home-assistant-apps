@@ -35,6 +35,7 @@ class AppConfig:
     storage: StorageConfig
     publish_interval_minutes: int
     recorder_stale_seconds: int
+    telemetry_enabled: bool
     log_level: str
     timezone: str
 
@@ -140,6 +141,10 @@ def load_config(path: Path = OPTIONS_FILE) -> AppConfig:
         path=storage_path,
     )
 
+    telemetry_enabled = options.get("telemetry_enabled", False)
+    if not isinstance(telemetry_enabled, bool):
+        raise ValueError("telemetry_enabled must be boolean")
+
     log_level = str(options.get('log_level', 'info')).lower()
     if log_level not in {'debug', 'info', 'warning', 'error'}:
         log_level = 'info'
@@ -153,6 +158,7 @@ def load_config(path: Path = OPTIONS_FILE) -> AppConfig:
             options.get('publish_interval_minutes'), 1, 60, 1
         ),
         recorder_stale_seconds=_bounded_int(options.get('recorder_stale_seconds'), 30, 86400, 300),
+        telemetry_enabled=telemetry_enabled,
         log_level=log_level,
         timezone=timezone_name,
     )
