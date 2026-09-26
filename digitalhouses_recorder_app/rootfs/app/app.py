@@ -364,22 +364,15 @@ class DatabaseMonitorApp:
 
     def publish_rankings(self) -> None:
         topics = {
-            "24h": (
-                TOP_ENTITIES_24H_TOPIC,
-                LEGACY_TOP_ENTITIES_24H_TOPIC,
-            ),
-            "all_time": (
-                TOP_ENTITIES_ALL_TIME_TOPIC,
-                LEGACY_TOP_ENTITIES_ALL_TIME_TOPIC,
-            ),
+            "24h": TOP_ENTITIES_24H_TOPIC,
+            "all_time": TOP_ENTITIES_ALL_TIME_TOPIC,
         }
         with self.state_lock:
             snapshots = dict(self.ranking_state)
         for period, snapshot in snapshots.items():
-            topic_pair = topics.get(period)
-            if topic_pair is None:
+            canonical_topic = topics.get(period)
+            if canonical_topic is None:
                 continue
-            canonical_topic, legacy_topic = topic_pair
             self.publish_json(
                 canonical_topic,
                 snapshot,
