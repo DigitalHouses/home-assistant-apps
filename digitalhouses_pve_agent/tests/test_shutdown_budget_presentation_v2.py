@@ -65,7 +65,7 @@ def mqtt_config():
         port=1883,
         username="",
         password="",
-        topic_prefix="DigitalHouses/Global/dh_pve_app",
+        topic_prefix="DigitalHouses/Global/digitalhouses_pve_agent",
         discovery_prefix="homeassistant",
         keepalive_seconds=60,
     )
@@ -195,13 +195,13 @@ def test_discovery_exposes_separate_guest_and_total_budget_sensors():
     total = components["shutdown_budget"]
     readiness = components["shutdown_readiness"]
 
-    assert guest["default_entity_id"] == "sensor.dh_app_pve_ups_guest_shutdown_budget"
+    assert guest["default_entity_id"] == "sensor.dh_pve_agent_ups_guest_shutdown_budget"
     assert guest["state_topic"] == diagnostics_topic
     assert "value_json.shutdown_budget.effective_guest_budget_seconds" in guest["value_template"]
     assert "all_configured_guest_budget_seconds" in guest["json_attributes_template"]
     assert "running_guests" in guest["json_attributes_template"]
     assert "shutdown_sequence" in guest["json_attributes_template"]
-    assert total["default_entity_id"] == "sensor.dh_app_pve_ups_shutdown_budget"
+    assert total["default_entity_id"] == "sensor.dh_pve_agent_ups_shutdown_budget"
     assert total["state_topic"] == diagnostics_topic
     assert "value_json.shutdown_budget.shutdown_budget_seconds" in total["value_template"]
     assert "shutdown_budget_seconds" in readiness["json_attributes_template"]

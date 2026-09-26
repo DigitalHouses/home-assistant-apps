@@ -4,12 +4,12 @@ from app.runtime_settings import RuntimeSettingError, RuntimeSettings, SETTING_S
 
 
 EXPECTED = {
-    "storage_percent_used_threshold": (80.0, 0.0, 98.0, 1.0, "%", "number.dh_app_pve_storage_percent_used_threshold"),
-    "cpu_temperature_threshold": (90.0, 0.0, 110.0, 1.0, "°C", "number.dh_app_pve_cpu_temperature_threshold"),
-    "hdd_temperature_threshold": (45.0, 0.0, 70.0, 1.0, "°C", "number.dh_app_pve_hdd_temperature_threshold"),
-    "ssd_temperature_threshold": (75.0, 0.0, 90.0, 1.0, "°C", "number.dh_app_pve_ssd_temperature_threshold"),
-    "nvme_temperature_threshold": (80.0, 0.0, 110.0, 1.0, "°C", "number.dh_app_pve_nvme_temperature_threshold"),
-    "gpu_temperature_threshold": (85.0, 0.0, 110.0, 1.0, "°C", "number.dh_app_pve_gpu_temperature_threshold"),
+    "storage_percent_used_threshold": (80.0, 0.0, 98.0, 1.0, "%", "number.dh_pve_agent_storage_percent_used_threshold"),
+    "cpu_temperature_threshold": (90.0, 0.0, 110.0, 1.0, "°C", "number.dh_pve_agent_cpu_temperature_threshold"),
+    "hdd_temperature_threshold": (45.0, 0.0, 70.0, 1.0, "°C", "number.dh_pve_agent_hdd_temperature_threshold"),
+    "ssd_temperature_threshold": (75.0, 0.0, 90.0, 1.0, "°C", "number.dh_pve_agent_ssd_temperature_threshold"),
+    "nvme_temperature_threshold": (80.0, 0.0, 110.0, 1.0, "°C", "number.dh_pve_agent_nvme_temperature_threshold"),
+    "gpu_temperature_threshold": (85.0, 0.0, 110.0, 1.0, "°C", "number.dh_pve_agent_gpu_temperature_threshold"),
 }
 
 

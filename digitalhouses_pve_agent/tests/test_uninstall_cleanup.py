@@ -64,7 +64,7 @@ def _config():
             port=1884,
             username="cleanup-user",
             password="cleanup-pass",
-            topic_prefix="DigitalHouses/Global/dh_pve_app",
+            topic_prefix="DigitalHouses/Global/digitalhouses_pve_agent",
             discovery_prefix="homeassistant",
             keepalive_seconds=45,
         ),

@@ -63,7 +63,7 @@ def _mqtt():
         port=1883,
         username="",
         password="",
-        topic_prefix="DigitalHouses/Global/dh_pve_app",
+        topic_prefix="DigitalHouses/Global/digitalhouses_pve_agent",
         discovery_prefix="homeassistant",
         keepalive_seconds=60,
     )
@@ -157,18 +157,18 @@ def test_guest_discovery_exposes_previous_shutdown_and_per_guest_duration_attrib
     )["components"]
 
     previous = components["previous_shutdown"]
-    assert previous["default_entity_id"] == "sensor.dh_app_pve_previous_shutdown"
+    assert previous["default_entity_id"] == "sensor.dh_pve_agent_previous_shutdown"
     assert "shutdown_reason" in previous["json_attributes_template"]
     assert "shutdown_clean" in previous["json_attributes_template"]
     assert "guest_shutdown_total_seconds" in previous["json_attributes_template"]
 
     history = components["shutdown_history"]
-    assert history["default_entity_id"] == "sensor.dh_app_pve_shutdown_history"
+    assert history["default_entity_id"] == "sensor.dh_pve_agent_shutdown_history"
     assert "history" in history["json_attributes_template"]
 
     haos = components["vm_110_shutdown"]
     attrs = haos["json_attributes_template"]
-    assert haos["default_entity_id"] == "sensor.dh_app_pve_vm_110_shutdown"
+    assert haos["default_entity_id"] == "sensor.dh_pve_agent_vm_110_shutdown"
     assert "shutdown_timeout_seconds" in attrs
     assert "last_shutdown_duration_seconds" in attrs
     assert "last_shutdown_timeout_ratio" in attrs
@@ -183,17 +183,17 @@ def test_ups_discovery_has_dedicated_budget_and_readiness_entities():
     )["components"]
 
     budget = components["guest_shutdown_budget"]
-    assert budget["default_entity_id"] == "sensor.dh_app_pve_ups_guest_shutdown_budget"
+    assert budget["default_entity_id"] == "sensor.dh_pve_agent_ups_guest_shutdown_budget"
     assert budget["unit_of_measurement"] == "s"
     assert budget["device_class"] == "duration"
     assert "effective_guest_budget_seconds" in budget["value_template"]
 
     total_budget = components["shutdown_budget"]
-    assert total_budget["default_entity_id"] == "sensor.dh_app_pve_ups_shutdown_budget"
+    assert total_budget["default_entity_id"] == "sensor.dh_pve_agent_ups_shutdown_budget"
     assert "shutdown_budget_seconds" in total_budget["value_template"]
 
     readiness = components["shutdown_readiness"]
-    assert readiness["default_entity_id"] == "sensor.dh_app_pve_ups_shutdown_readiness"
+    assert readiness["default_entity_id"] == "sensor.dh_pve_agent_ups_shutdown_readiness"
     assert "value_json.shutdown_readiness.status" in readiness["value_template"]
     assert "issues" in readiness["json_attributes_template"]
     assert "shutdown_budget_seconds" in readiness["json_attributes_template"]
