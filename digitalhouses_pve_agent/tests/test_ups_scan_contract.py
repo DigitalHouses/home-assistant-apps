@@ -97,7 +97,8 @@ def test_ups_device_and_entities_use_pve_scoped_public_namespace():
     assert topics.device_id == "dh_pve_agent_ups_node_a"
     assert topics.discovery == "homeassistant/device/dh_pve_agent_ups_node_a/config"
     assert topics.legacy_discoveries == (
-        "homeassistant/device/dh_pve_agent_ups_node_a/config",
+        "homeassistant/device/dh_app_pve_ups_node_a/config",
+        "homeassistant/device/dh_pve_ups_node_a/config",
         "homeassistant/device/dh_ups_node_a/config",
     )
     assert topics.legacy_discovery == "homeassistant/device/dh_ups_node_a/config"

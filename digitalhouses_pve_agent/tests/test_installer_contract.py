@@ -16,11 +16,14 @@ def test_systemd_unit_uses_canonical_paths_and_root_is_documented():
     assert "Restart=on-failure" in text
 
 
-def test_installer_preserves_phase1_legacy_agent_and_config():
+def test_installer_preserves_config_and_migrates_legacy_runtime():
     text = (ROOT / "install.sh").read_text()
-    assert 'APP_DIR="/opt/digitalhouses/${APP_NAME}"' in text
-    assert 'CONFIG_FILE="${CONFIG_DIR}/${APP_NAME}.conf"' in text
-    assert 'STATE_DIR="/var/lib/${APP_NAME}"' in text
+    assert 'PRODUCT_ID="digitalhouses_pve_agent"' in text
+    assert 'APP_DIR="/opt/digitalhouses/${PRODUCT_ID}"' in text
+    assert 'CONFIG_FILE="${CONFIG_DIR}/${PRODUCT_ID}.conf"' in text
+    assert 'STATE_DIR="/var/lib/${PRODUCT_ID}"' in text
+    assert 'LEGACY_SERVICE_NAME="${LEGACY_APP_NAME}.service"' in text
+    assert 'LEGACY_APP_NAME="dh_pve_app"' in text
     assert 'if [[ ! -f "${CONFIG_FILE}" ]]; then' in text
     assert "nano /etc/digitalhouses_pve_agent/digitalhouses_pve_agent.conf" in text
     assert "/etc/machine-id" in text
@@ -33,10 +36,11 @@ def test_installer_preserves_phase1_legacy_agent_and_config():
 
 
 
-def test_installer_separates_canonical_source_directory_from_legacy_runtime_name():
+def test_installer_uses_canonical_product_identity_and_explicit_legacy_bridge():
     text = (ROOT / "install.sh").read_text(encoding="utf-8")
-    assert 'APP_NAME="digitalhouses_pve_agent"' in text
-    assert 'SOURCE_PRODUCT_DIR="digitalhouses_pve_agent"' in text
+    assert 'PRODUCT_ID="digitalhouses_pve_agent"' in text
+    assert 'APP_NAME="${PRODUCT_ID}"' in text
+    assert 'SOURCE_PRODUCT_DIR="${PRODUCT_ID}"' in text
     assert 'SOURCE_APP="${tmp_dir}/repo/${SOURCE_PRODUCT_DIR}"'.replace("\\", "") in text
 
 def test_installer_does_not_echo_mqtt_password_after_entry():
@@ -73,7 +77,7 @@ def test_static_policy_helper_is_directly_executable_and_installer_restores_mode
 
 
 def test_installer_deploys_root_quick_reference_with_build_metadata():
-    guide = ROOT / "dh_pve_agent.txt"
+    guide = ROOT / "digitalhouses_pve_agent.txt"
     installer_text = (ROOT / "install.sh").read_text(encoding="utf-8")
 
     assert guide.is_file()
@@ -88,8 +92,8 @@ def test_installer_deploys_root_quick_reference_with_build_metadata():
     ):
         assert token in guide_text
 
-    assert 'ROOT_GUIDE="/root/dh_pve_agent.txt"' in installer_text
-    assert 'cat "${APP_DIR}/dh_pve_agent.txt"' in installer_text
+    assert 'ROOT_GUIDE="/root/digitalhouses_pve_agent.txt"' in installer_text
+    assert 'cat "${APP_DIR}/digitalhouses_pve_agent.txt"' in installer_text
     assert "version = %s" in installer_text
     assert "source = %s" in installer_text
     assert "commit = %s" in installer_text

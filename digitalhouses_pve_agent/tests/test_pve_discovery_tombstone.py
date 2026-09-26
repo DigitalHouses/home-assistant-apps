@@ -57,7 +57,8 @@ def test_pve_topics_expose_previous_device_discovery_for_tombstone():
     assert topics.device_id == "dh_pve_agent_node_a"
     assert topics.discovery == "homeassistant/device/dh_pve_agent_node_a/config"
     assert topics.legacy_discoveries == (
-        "homeassistant/device/dh_pve_agent_node_a/config",
+        "homeassistant/device/dh_app_pve_node_a/config",
+        "homeassistant/device/dh_pve_node_a/config",
     )
 
 
@@ -75,5 +76,6 @@ def test_pve_legacy_discovery_cleanup_publishes_retained_empty_payload():
 
     assert bridge.clear_legacy_pve_discovery() is True
     assert client.published == [
-        ("homeassistant/device/dh_pve_agent_node_a/config", "", 1, True),
+        ("homeassistant/device/dh_app_pve_node_a/config", "", 1, True),
+        ("homeassistant/device/dh_pve_node_a/config", "", 1, True),
     ]

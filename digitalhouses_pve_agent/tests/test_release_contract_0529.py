@@ -70,7 +70,7 @@ def test_0529_shutdown_runtime_contract_is_documented():
 
 
 def test_0529_operational_guide_contract():
-    guide = (APP / "dh_pve_agent.txt").read_text(encoding="utf-8")
+    guide = (APP / "digitalhouses_pve_agent.txt").read_text(encoding="utf-8")
     for required in (
         "Установка",
         "Обновление",
@@ -86,7 +86,9 @@ def test_0529_operational_guide_contract():
 def test_0529_installer_uses_canonical_source_and_legacy_runtime_identity():
     installer = (APP / "install.sh").read_text(encoding="utf-8")
 
-    assert 'SOURCE_PRODUCT_DIR="digitalhouses_pve_agent"' in installer
-    assert 'APP_NAME="digitalhouses_pve_agent"' in installer
+    assert 'PRODUCT_ID="digitalhouses_pve_agent"' in installer
+    assert 'SOURCE_PRODUCT_DIR="${PRODUCT_ID}"' in installer
+    assert 'APP_NAME="${PRODUCT_ID}"' in installer
     assert 'SOURCE_APP="${tmp_dir}/repo/${SOURCE_PRODUCT_DIR}"' in installer
-    assert 'APP_DIR="/opt/digitalhouses/${APP_NAME}"' in installer
+    assert 'APP_DIR="/opt/digitalhouses/${PRODUCT_ID}"' in installer
+    assert 'LEGACY_APP_NAME="dh_pve_app"' in installer

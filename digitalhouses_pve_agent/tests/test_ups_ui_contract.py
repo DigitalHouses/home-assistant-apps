@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 
 ROOT = Path(__file__).resolve().parents[1]
 DASHBOARD = ROOT / "examples" / "dh_pve_agent_ups_dashboard.yaml"
@@ -107,5 +108,6 @@ def test_ups_dashboard_handles_unconfigured_ups_as_normal_optional_state():
 def test_ups_dashboard_contains_no_legacy_public_entity_ids():
     text = _text()
 
-    assert ".dh_pve_agent_ups_" not in text
+    assert ".dh_app_pve_ups_" not in text
+    assert re.search(r"\.dh_pve_ups_", text) is None
     assert ".dh_ups_" not in text

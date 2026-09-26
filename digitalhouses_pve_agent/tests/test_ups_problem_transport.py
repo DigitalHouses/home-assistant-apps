@@ -106,4 +106,5 @@ def test_legacy_ups_discovery_cleanup_clears_both_old_device_topics():
     assert client.published == [
         (topics.legacy_discoveries[0], "", 1, True),
         (topics.legacy_discoveries[1], "", 1, True),
+        (topics.legacy_discoveries[2], "", 1, True),
     ]

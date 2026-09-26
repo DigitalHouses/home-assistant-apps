@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 
 ROOT = Path(__file__).resolve().parents[1]
 CARD = ROOT / "examples" / "dh_pve_agent_shutdown_readiness_card.yaml"
@@ -43,5 +44,5 @@ def test_shutdown_readiness_card_uses_backend_budget_and_readiness_without_join_
 def test_shutdown_readiness_card_contains_no_legacy_public_entity_ids():
     text = _text()
 
-    assert ".dh_pve_agent_" not in text
-    assert ".dh_pve_agent_ups_" not in text
+    assert ".dh_app_pve_" not in text
+    assert re.search(r"\.dh_pve_(?!agent_)", text) is None
