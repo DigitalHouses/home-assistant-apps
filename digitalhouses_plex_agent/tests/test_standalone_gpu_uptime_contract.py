@@ -63,13 +63,13 @@ def test_discovery_exposes_standalone_gpu_and_server_boot_entities():
 
     gpu = state_group_topic(topics, "gpu")
     expected = {
-        "gpu_video": ("sensor.dh_plex_gpu_video", "%"),
-        "gpu_render": ("sensor.dh_plex_gpu_render", "%"),
-        "gpu_video_enhance": ("sensor.dh_plex_gpu_video_enhance", "%"),
-        "gpu_frequency": ("sensor.dh_plex_gpu_frequency", "MHz"),
-        "gpu_temperature": ("sensor.dh_plex_gpu_temperature", "°C"),
-        "gpu_rc6": ("sensor.dh_plex_gpu_rc6", "%"),
-        "gpu_status": ("sensor.dh_plex_gpu_status", None),
+        "gpu_video": ("sensor.dh_plex_agent_gpu_video", "%"),
+        "gpu_render": ("sensor.dh_plex_agent_gpu_render", "%"),
+        "gpu_video_enhance": ("sensor.dh_plex_agent_gpu_video_enhance", "%"),
+        "gpu_frequency": ("sensor.dh_plex_agent_gpu_frequency", "MHz"),
+        "gpu_temperature": ("sensor.dh_plex_agent_gpu_temperature", "°C"),
+        "gpu_rc6": ("sensor.dh_plex_agent_gpu_rc6", "%"),
+        "gpu_status": ("sensor.dh_plex_agent_gpu_status", None),
     }
     for key, (entity_id, unit) in expected.items():
         assert components[key]["default_entity_id"] == entity_id
@@ -77,12 +77,12 @@ def test_discovery_exposes_standalone_gpu_and_server_boot_entities():
         if unit is not None:
             assert components[key]["unit_of_measurement"] == unit
 
-    assert components["last_boot"]["default_entity_id"] == "sensor.dh_plex_last_boot"
+    assert components["last_boot"]["default_entity_id"] == "sensor.dh_plex_agent_last_boot"
     assert components["last_boot"]["state_topic"] == state_group_topic(topics, "diagnostics")
     assert components["last_boot"]["device_class"] == "timestamp"
 
     assert components["hardware_transcode_active"]["default_entity_id"] == (
-        "binary_sensor.dh_plex_hardware_transcode_active"
+        "binary_sensor.dh_plex_agent_hardware_transcode_active"
     )
     assert components["hardware_transcode_active"]["state_topic"] == state_group_topic(
         topics, "playback"
@@ -155,13 +155,13 @@ def test_runtime_publishes_gpu_group_and_server_boot_timestamp():
 
 def test_dashboard_is_self_contained_for_gpu_and_server_uptime():
     for entity_id in (
-        "sensor.dh_plex_gpu_video",
-        "sensor.dh_plex_gpu_render",
-        "sensor.dh_plex_gpu_video_enhance",
-        "sensor.dh_plex_gpu_frequency",
-        "sensor.dh_plex_gpu_temperature",
-        "binary_sensor.dh_plex_hardware_transcode_active",
-        "sensor.dh_plex_last_boot",
+        "sensor.dh_plex_agent_gpu_video",
+        "sensor.dh_plex_agent_gpu_render",
+        "sensor.dh_plex_agent_gpu_video_enhance",
+        "sensor.dh_plex_agent_gpu_frequency",
+        "sensor.dh_plex_agent_gpu_temperature",
+        "binary_sensor.dh_plex_agent_hardware_transcode_active",
+        "sensor.dh_plex_agent_last_boot",
     ):
         assert entity_id in DASHBOARD
 
