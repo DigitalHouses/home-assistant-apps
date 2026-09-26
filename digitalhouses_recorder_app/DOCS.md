@@ -32,8 +32,11 @@ Bridge state:
 
 The marker is idempotent. A future cleanup release will tombstone retained
 legacy MQTT state and the legacy Discovery device after live bridge acceptance.
-Once cleanup writes `phase=completed`, rollback to the bridge code will not
-reactivate the legacy mirror.
+Once cleanup writes `phase=completed`, rollback to bridge release 0.1.15 will
+not reactivate the legacy mirror. After cleanup, 0.1.15 is the supported
+rollback floor for HA/MQTT identity: releases 0.1.14 and older predate the
+completed marker and must not be used as rollback targets unless legacy
+identity resurrection is intentionally accepted.
 
 ## Common runtime diagnostics
 
