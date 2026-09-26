@@ -228,6 +228,31 @@ class SlugMigrationTests(unittest.TestCase):
                     ),
                 )
 
+    def test_canonical_import_accepts_bridge_0_1_10_source(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            old_data = root / "old"
+            new_data = root / "new"
+            bundle = root / "bundle.tar.gz"
+            source_options = self._write_options(old_data)
+            export_bridge_bundle(
+                app_version="0.1.10",
+                data_dir=old_data,
+                bundle_file=bundle,
+                settings_reader=lambda: {},
+            )
+            self._write_options(new_data, source_options)
+
+            status = import_canonical_bundle(
+                data_dir=new_data,
+                bundle_file=bundle,
+                settings_applier=lambda _settings: self.fail(
+                    "matching mounted options must not be re-applied"
+                ),
+            )
+
+            self.assertEqual(status, IMPORT_COMPLETE)
+
     def test_future_import_preserves_options_and_ssh_known_hosts(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

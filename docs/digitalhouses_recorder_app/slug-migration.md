@@ -1,6 +1,6 @@
 # Recorder App controlled HA App slug migration
 
-Status: Phase 1 bridge active.
+Status: Phase 2 canonical migration active.
 
 Canonical product:
 
@@ -71,23 +71,39 @@ The bridge refreshes the bundle at startup and again during graceful shutdown.
 Export failure is isolated from normal Recorder monitoring and is logged as a
 warning.
 
-## Phase 2 — canonical slug
+## Phase 2 — canonical slug release 0.1.11
 
-A subsequent release will switch to:
+Version `0.1.11` switches to:
 
 ```yaml
 slug: digitalhouses_recorder_app
 ```
 
-The already-tested importer will validate the bridge bundle, apply legacy App
-options through Supervisor, wait for the next canonical App start when required,
-restore `ssh_known_hosts`, and write an idempotent completion marker.
+and activates:
 
-Phase 2 is not active in version `0.1.10`.
+```text
+DH_SLUG_MIGRATION_MODE=import
+```
+
+The canonical App validates the bridge bundle created by legacy-slug version
+`0.1.10`.
+
+On the first canonical start:
+
+1. validate product/source/target identity and every SHA-256;
+2. compare the canonical App's current options with the bridge options;
+3. if they differ, apply the bridge options through Supervisor, write the
+   pending marker and stop cleanly with restart-required status;
+4. on the next start, require the migrated options to be visible in
+   `/data/options.json`;
+5. restore optional `ssh_known_hosts`;
+6. write the completed import marker.
+
+The completed marker is authoritative and makes later starts idempotent.
 
 ## Compatibility boundary
 
-Version `0.1.9` does not change:
+Versions `0.1.10` and `0.1.11` do not change:
 
 - MQTT base topic `DigitalHouses/Global/db_monitoring`;
 - MQTT device ID `digitalhouses_db_monitoring`;

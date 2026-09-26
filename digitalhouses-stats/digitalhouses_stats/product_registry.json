@@ -39,11 +39,7 @@
         "policy_baseline": "0.1.8"
       },
       "repository_directory": "digitalhouses_recorder_app",
-      "haos_slug": "digitalhouses_db_monitoring",
-      "slug_migration": {
-        "status": "pending_controlled_reinstall",
-        "target": "digitalhouses_recorder_app"
-      }
+      "haos_slug": "digitalhouses_recorder_app"
     },
     {
       "id": "digitalhouses_speedtest_app",
