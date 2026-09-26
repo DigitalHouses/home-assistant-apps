@@ -25,7 +25,7 @@ https://github.com/DigitalHouses/home-assistant-apps
 4. Select `PostgreSQL` or `MariaDB`, configure the database connection, and optionally enable storage monitoring.
 5. Start the App. MQTT credentials are obtained automatically from the Home Assistant Supervisor MQTT service.
 
-The public product name is **DigitalHouses Recorder App**. Existing HAOS slug, MQTT topics, device identity and entity IDs remain unchanged for compatibility.
+The public product name is **DigitalHouses Recorder App** and the HAOS slug is `digitalhouses_recorder_app`. The legacy MQTT topic, device identity and existing `dh_db_*` entity IDs remain unchanged for compatibility.
 
 ## What it monitors
 
