@@ -8,7 +8,7 @@ Home Assistant App for monitoring the health, size, retained history, write acti
 
 [Quick start](#quick-start) · [Technical documentation](DOCS.md) · [Slug migration](../docs/digitalhouses_recorder_app/slug-migration.md) · [Changelog](CHANGELOG.md) · [Issues](https://github.com/DigitalHouses/home-assistant-apps/issues)
 
-Repository identity: `digitalhouses_recorder_app`. The installed Home Assistant App slug remains `digitalhouses_db_monitoring` during the controlled product-specific reinstall migration; MQTT/device/entity compatibility is intentionally unchanged.
+Repository and Home Assistant App identity: `digitalhouses_recorder_app`. MQTT/device/entity compatibility remains intentionally unchanged (`DigitalHouses/Global/db_monitoring`, device ID `digitalhouses_db_monitoring`, existing `dh_db_*` entities).
 
 ![DigitalHouses Recorder dashboard](images/dh_db_monitor.png)
 
@@ -25,7 +25,7 @@ https://github.com/DigitalHouses/home-assistant-apps
 4. Select `PostgreSQL` or `MariaDB`, configure the database connection, and optionally enable storage monitoring.
 5. Start the App. MQTT credentials are obtained automatically from the Home Assistant Supervisor MQTT service.
 
-The public product name is **DigitalHouses Recorder App**. Existing HAOS slug, MQTT topics, device identity and entity IDs remain unchanged for compatibility.
+The public product name is **DigitalHouses Recorder App** and the HAOS slug is `digitalhouses_recorder_app`. The legacy MQTT topic, device identity and existing `dh_db_*` entity IDs remain unchanged for compatibility.
 
 ## What it monitors
 
@@ -40,7 +40,8 @@ It monitors:
 - previous-day Recorder writes;
 - optional database-filesystem free, used, total and used percentage;
 - Top 10 Recorder entities for the last 24 hours and all retained history;
-- on-demand full refresh with the timestamp of the last successful refresh.
+- on-demand full refresh with the timestamp of the last successful refresh;
+- App-owned disk-usage threshold and machine events for notification automation.
 
 ## Supported databases
 
@@ -83,6 +84,8 @@ Core entities:
 | `sensor.dh_db_top_entities_all_time` | Top Recorder entities across retained history |
 | `button.dh_db_refresh` | Run a full on-demand refresh |
 | `sensor.dh_db_last_refresh` | Last successful full manual refresh |
+| `number.dh_db_disk_usage_threshold` | App-owned storage usage threshold |
+| `event.dh_db_diagnostic` | Machine events for DB/Recorder/storage transitions |
 
 When storage monitoring is enabled, the App also exposes:
 
@@ -92,6 +95,32 @@ When storage monitoring is enabled, the App also exposes:
 | `sensor.dh_db_disk_used` | Used filesystem space |
 | `sensor.dh_db_disk_total` | Total filesystem size |
 | `sensor.dh_db_disk_used_percentage` | Used filesystem percentage |
+
+## Machine events and notifications
+
+Recorder App publishes transient MQTT Events through `event.dh_db_diagnostic`.
+The event payload is the authoritative snapshot for notification automation; local
+Home Assistant packages should not reconstruct an event by rereading current
+sensor states.
+
+Event types:
+
+- `db_connection_lost`
+- `db_connection_restored`
+- `recorder_writing_stopped`
+- `recorder_writing_restored`
+- `storage_usage_high`
+- `storage_usage_normal`
+
+The App establishes an initial baseline after startup and emits events only for
+real transitions after that baseline. Event MQTT payloads use QoS 1 and are not
+retained.
+
+The storage threshold is owned by the App and exposed as
+`number.dh_db_disk_usage_threshold`. The default is 80%, the supported range
+is 1–98%, and changes are persisted under `/data`. Changing the threshold
+immediately reevaluates the latest storage measurement and emits a storage
+transition event when the threshold change itself crosses the current usage.
 
 ## Polling strategy
 

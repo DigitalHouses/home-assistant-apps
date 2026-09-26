@@ -1,6 +1,6 @@
 # DigitalHouses Recorder App — Technical documentation
 
-DigitalHouses DB Monitoring publishes Home Assistant Recorder database health and storage metrics through MQTT Discovery.
+DigitalHouses Recorder App publishes Home Assistant Recorder database health, storage metrics, runtime settings and machine events through MQTT Discovery.
 
 ## Database support
 
@@ -61,3 +61,55 @@ Both rankings are generated immediately when the App starts. Their sensor state 
 Ranking payloads use dedicated retained MQTT topics and are published only when a ranking is recalculated (or after MQTT reconnect). This avoids generating a new Home Assistant state write every minute for unchanged ranking attributes.
 
 If a ranking query fails, the previous successful ranking remains published and normal database monitoring continues.
+
+
+## Runtime disk threshold
+
+`number.dh_db_disk_usage_threshold` is owned by Recorder App. Its value is
+persisted in `/data/runtime_settings.json`.
+
+Contract:
+
+- default: 80%;
+- minimum: 1%;
+- maximum: 98%;
+- step: 1%;
+- invalid persisted state is treated as an explicit runtime-settings error,
+  not silently replaced;
+- changing the Number reevaluates the latest storage measurement immediately.
+
+The old Home Assistant-local `input_number.dh_db_disk_usage_threshold` and
+template `binary_sensor.dh_db_disk_capacity_problem` are no longer part of
+the recommended package architecture.
+
+## Machine event contract
+
+Recorder App exposes `event.dh_db_diagnostic` on the transient MQTT topic
+`DigitalHouses/Global/db_monitoring/event/diagnostic`.
+
+Event schema version: `2`.
+
+Supported event types:
+
+- `db_connection_lost`
+- `db_connection_restored`
+- `recorder_writing_stopped`
+- `recorder_writing_restored`
+- `storage_usage_high`
+- `storage_usage_normal`
+
+Events use QoS 1 and `retain=false`. The App establishes baseline state on
+startup without producing synthetic alert/recovery events.
+
+Local Home Assistant notification logic should follow:
+
+```text
+machine event
+→ trigger.id
+→ choose
+→ direct delivery action
+```
+
+Notification text should read event attributes directly from
+`trigger.to_state.attributes`; it should not reread current Recorder sensors
+to reconstruct what happened.

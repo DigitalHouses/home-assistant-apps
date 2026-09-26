@@ -2,7 +2,7 @@
 
 set -Eeuo pipefail
 
-bashio::log.info "Starting DigitalHouses DB Monitoring ${APP_VERSION:-unknown}"
+bashio::log.info "Starting DigitalHouses Recorder App ${APP_VERSION:-unknown}"
 
 # Remove the legacy 0.1.0 polling group after upgrade. Internal medium/slow
 # query cadences are no longer exposed in the user configuration.
