@@ -10,7 +10,7 @@ Native Linux agent for **Proxmox VE 8.x** that publishes host, CPU, memory, stor
 
 The public product name and canonical repository identity are **DigitalHouses PVE Agent** / `digitalhouses_pve_agent`. Existing installed runtime identifiers remain compatible: service and filesystem identity `dh_pve_app`, MQTT base namespace `DigitalHouses/Global/dh_pve_app/<instance>`, and Home Assistant devices `DH PVE` plus optional `DH PVE UPS`.
 
-Current source release: `VERSION` is `0.5.26`.
+Current source release: `VERSION` is `0.5.27`.
 
 ## Home Assistant dashboard
 
