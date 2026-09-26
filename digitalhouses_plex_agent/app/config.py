@@ -10,6 +10,10 @@ LOG_LEVELS = {"debug", "info", "warning", "error"}
 DEFAULT_LOCAL_ADMIN_TOKEN_FILE = Path(
     "/etc/digitalhouses_plex_agent/plex_local_admin_token"
 )
+PRODUCT_ID = "digitalhouses_plex_agent"
+ENTITY_PREFIX = "dh_plex_agent"
+DEFAULT_INSTANCE_ID = "plex"
+DEFAULT_TOPIC_PREFIX = "DigitalHouses/Global/digitalhouses_plex_agent"
 
 
 class ConfigError(ValueError):
@@ -27,6 +31,7 @@ class GeneralConfig:
 
 @dataclass(frozen=True)
 class TelemetryConfig:
+    enabled: bool
     cpu_change_threshold: float
     high_load_threshold: float
     high_load_publish_interval_seconds: float
@@ -61,7 +66,9 @@ class AppConfig:
 
 
 def entity_prefix(instance_id: str) -> str:
-    return f"dh_{instance_id}"
+    if instance_id == DEFAULT_INSTANCE_ID:
+        return ENTITY_PREFIX
+    return f"{ENTITY_PREFIX}_{instance_id}"
 
 
 def _get_float(
@@ -138,6 +145,7 @@ def load_config(path: Path) -> AppConfig:
             f"general.log_level must be one of {sorted(LOG_LEVELS)}, got {log_level!r}"
         )
 
+    telemetry_enabled = _get_bool(parser, "telemetry", "enabled", False)
     cpu_change = _get_float(parser, "telemetry", "cpu_change_threshold", 5.0)
     high_load = _get_float(parser, "telemetry", "high_load_threshold", 80.0)
     high_interval = _get_float(
@@ -189,7 +197,7 @@ def load_config(path: Path) -> AppConfig:
     topic_prefix = parser.get(
         "mqtt",
         "topic_prefix",
-        fallback="DigitalHouses/Global/plex_monitoring",
+        fallback=DEFAULT_TOPIC_PREFIX,
     ).strip().rstrip("/")
     discovery_prefix = parser.get(
         "mqtt", "discovery_prefix", fallback="homeassistant"
@@ -211,6 +219,7 @@ def load_config(path: Path) -> AppConfig:
             log_level=log_level,
         ),
         telemetry=TelemetryConfig(
+            enabled=telemetry_enabled,
             cpu_change_threshold=cpu_change,
             high_load_threshold=high_load,
             high_load_publish_interval_seconds=high_interval,
