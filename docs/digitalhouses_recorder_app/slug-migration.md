@@ -29,9 +29,11 @@ The migration therefore uses a bridge release and an explicit persistent-state
 bundle. The two App identities must never run at the same time because they
 share the same MQTT/device/entity identities.
 
-## Phase 1 — bridge release 0.1.9
+> Note: version `0.1.9` reached the repository and GHCR build stage but its release transaction did not complete. It is not an accepted production release and must not be deployed. The immutable artifact is left untouched; bridge delivery resumes with `0.1.10`.
 
-Version `0.1.9` keeps:
+## Phase 1 — bridge release 0.1.10
+
+Version `0.1.10` keeps:
 
 ```yaml
 slug: digitalhouses_db_monitoring
@@ -81,7 +83,7 @@ The already-tested importer will validate the bridge bundle, apply legacy App
 options through Supervisor, wait for the next canonical App start when required,
 restore `ssh_known_hosts`, and write an idempotent completion marker.
 
-Phase 2 is not active in version `0.1.9`.
+Phase 2 is not active in version `0.1.10`.
 
 ## Compatibility boundary
 

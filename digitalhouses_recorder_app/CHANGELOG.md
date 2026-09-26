@@ -1,4 +1,11 @@
 # Changelog
+## 0.1.10
+- Publish the controlled Home Assistant App slug-migration bridge as the first accepted bridge release after the incomplete 0.1.9 delivery attempt.
+- Keep the legacy Supervisor slug `digitalhouses_db_monitoring` while exporting `/data/options.json` and optional `/data/ssh_known_hosts` to the verified migration bundle under `/share/digitalhouses_recorder_app/slug-migration-v1/`.
+- Refresh the bridge bundle at App startup and graceful shutdown; migration export failures remain isolated from Recorder monitoring.
+- Keep MQTT base topic, device identity, unique IDs and existing `dh_db_*` Home Assistant entities unchanged.
+- Do not treat 0.1.9 as a production release; its partially published GHCR artifact is intentionally not reused.
+
 ## 0.1.9
 - Add the controlled bridge phase for the Home Assistant App slug migration from `digitalhouses_db_monitoring` to `digitalhouses_recorder_app`.
 - Export `/data/options.json` and optional `/data/ssh_known_hosts` to an atomic SHA-256-validated migration bundle under `/share/digitalhouses_recorder_app/slug-migration-v1/`.
