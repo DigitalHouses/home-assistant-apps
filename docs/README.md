@@ -17,6 +17,7 @@ This directory separates ecosystem-wide standards from product-specific engineer
 
 ## Product engineering records
 
+- [DigitalHouses Speedtest App](digitalhouses_speedtest_app/specs/2026-09-23-app-consolidation.md) — Internet monitoring, traffic accounting, recovery and HA migration design.
 - [DigitalHouses PVE Agent](digitalhouses_pve_agent/) — architecture specifications, implementation plans, audits, and technical debt for the PVE agent.
 - [DigitalHouses Plex Agent](digitalhouses_plex_agent/) — architecture specification and implementation plan for the Plex agent.
 
