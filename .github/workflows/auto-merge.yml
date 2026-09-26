@@ -242,12 +242,31 @@ jobs:
               --tag "$release_ref" \
               "${refs[@]}"
 
-            digest="$(docker buildx imagetools inspect "$release_ref" | awk '/^Digest:/ {print $2; exit}')"
+            inspect_attempts=12
+            inspect_delay_seconds=5
+            digest=""
 
-            if [[ ! "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
-              echo "Unable to resolve immutable image digest for $release_ref" >&2
-              exit 1
-            fi
+            for attempt in $(seq 1 "$inspect_attempts"); do
+              inspect_output=""
+              inspect_rc=0
+              inspect_output="$(docker buildx imagetools inspect "$release_ref" 2>&1)" || inspect_rc=$?
+
+              if [ "$inspect_rc" -eq 0 ]; then
+                digest="$(awk '/^Digest:/ {print $2; exit}' <<<"$inspect_output")"
+                if [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+                  break
+                fi
+              fi
+
+              if [ "$attempt" -ge "$inspect_attempts" ]; then
+                printf '%s\n' "$inspect_output" >&2
+                echo "Unable to resolve immutable image digest for $release_ref after $inspect_attempts attempts" >&2
+                exit 1
+              fi
+
+              echo "Immutable image is not readable yet; retrying digest inspection in ${inspect_delay_seconds}s (attempt ${attempt}/${inspect_attempts})."
+              sleep "$inspect_delay_seconds"
+            done
 
             printf '%s\t%s\t%s\t%s\n' "$product" "$version" "$release_ref" "$digest" >> app-release-artifacts.tsv
           done
