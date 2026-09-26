@@ -77,12 +77,12 @@ def migrate_retired_legacy_policy_state(
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Normalize retired legacy UPS policy state before DH PVE App starts."
+        description="Normalize retired legacy UPS policy state before DigitalHouses PVE Agent starts."
     )
     parser.add_argument(
         "--state-dir",
-        default="/var/lib/dh_pve_app",
-        help="DH PVE App state directory",
+        default="/var/lib/digitalhouses_pve_agent",
+        help="DigitalHouses PVE Agent state directory",
     )
     parser.add_argument(
         "--upssched-path",

@@ -245,9 +245,9 @@ def _identity_checks(
             app_password = _directive_value(app_sections[0], "command_password")
             app_ok = app_user == _MANAGED_NUT_USER
             app_detail = (
-                f"DH PVE App использует {_MANAGED_NUT_USER}."
+                f"DigitalHouses PVE Agent использует {_MANAGED_NUT_USER}."
                 if app_ok
-                else f"DH PVE App должен использовать {_MANAGED_NUT_USER}."
+                else f"DigitalHouses PVE Agent должен использовать {_MANAGED_NUT_USER}."
             )
         else:
             app_ok = False
@@ -361,9 +361,9 @@ def read_policy_preflight(
     upsd_users_path: Path = Path("/etc/nut/upsd.users"),
     upsmon_path: Path = Path("/etc/nut/upsmon.conf"),
     upssched_path: Path = Path("/etc/nut/upssched.conf"),
-    app_config_path: Path = Path("/etc/dh_pve_app/dh_pve_app.conf"),
+    app_config_path: Path = Path("/etc/digitalhouses_pve_agent/digitalhouses_pve_agent.conf"),
     helper_path: Path = Path(
-        "/opt/digitalhouses/dh_pve_app/bin/dh-pve-ups-policy-cmd"
+        "/opt/digitalhouses/digitalhouses_pve_agent/bin/digitalhouses-pve-agent-ups-policy-cmd"
     ),
     helper_expected_uid: int = 0,
     helper_expected_gid: int = 0,
