@@ -53,7 +53,7 @@ from discovery import (
     build_discovery_payload,
     build_legacy_discovery_payload,
 )
-from identity_migration import ensure_bridge_state
+from identity_migration import cleanup_required, mark_cleanup_complete
 from storage import StorageCollector
 from telemetry import TelemetryClient, TelemetryRunner
 from runtime_settings import (
@@ -120,9 +120,11 @@ class DatabaseMonitorApp:
         self._db_outage_started_epoch: float | None = None
         self._recorder_writing_observed: bool | None = None
         self._storage_problem_observed: bool | None = None
-        self.legacy_bridge_enabled = ensure_bridge_state(
-            self.app_version
-        )
+        # 0.1.16 is canonical-only at runtime. Legacy mirroring is
+        # never re-enabled by this cleanup release.
+        self.legacy_bridge_enabled = False
+        self.legacy_cleanup_pending = cleanup_required()
+        self.legacy_cleanup_in_progress = threading.Event()
         self.telemetry = TelemetryClient(
             enabled=self.config.telemetry_enabled,
             version=self.app_version,
@@ -197,6 +199,7 @@ class DatabaseMonitorApp:
         self.publish_state()
         self.publish_rankings()
         self.publish_disk_usage_threshold()
+        self._schedule_legacy_cleanup()
         self.log.info(
             "MQTT connected; canonical discovery published%s",
             " with legacy bridge"
@@ -222,6 +225,74 @@ class DatabaseMonitorApp:
                 ),
                 retain=True,
             )
+
+    def _schedule_legacy_cleanup(self) -> None:
+        if (
+            not self.legacy_cleanup_pending
+            or self.legacy_cleanup_in_progress.is_set()
+        ):
+            return
+        self.legacy_cleanup_in_progress.set()
+        threading.Thread(
+            target=self._cleanup_legacy_identity,
+            name="dh-recorder-legacy-cleanup",
+            daemon=True,
+        ).start()
+
+    def _cleanup_legacy_identity(self) -> None:
+        retained_topics = (
+            LEGACY_STATE_TOPIC,
+            LEGACY_TOP_ENTITIES_24H_TOPIC,
+            LEGACY_TOP_ENTITIES_ALL_TIME_TOPIC,
+            LEGACY_APP_AVAILABILITY_TOPIC,
+            LEGACY_DB_AVAILABILITY_TOPIC,
+            LEGACY_DB_STATUS_AVAILABILITY_TOPIC,
+            LEGACY_DB_STATIC_AVAILABILITY_TOPIC,
+            LEGACY_STORAGE_AVAILABILITY_TOPIC,
+            LEGACY_DISK_USAGE_THRESHOLD_STATE_TOPIC,
+            LEGACY_DISCOVERY_TOPIC,
+        )
+
+        try:
+            while (
+                self.legacy_cleanup_pending
+                and self.mqtt_connected.is_set()
+                and not self.stop_event.is_set()
+            ):
+                try:
+                    for topic in retained_topics:
+                        info = self.client.publish(
+                            topic,
+                            "",
+                            qos=1,
+                            retain=True,
+                        )
+                        if info.rc != mqtt.MQTT_ERR_SUCCESS:
+                            raise RuntimeError(
+                                "MQTT cleanup publish failed "
+                                f"for {topic}: rc={info.rc}"
+                            )
+                        info.wait_for_publish(timeout=5.0)
+                        if not info.is_published():
+                            raise RuntimeError(
+                                "MQTT cleanup publish was not "
+                                f"acknowledged for {topic}"
+                            )
+
+                    mark_cleanup_complete(self.app_version)
+                    self.legacy_cleanup_pending = False
+                    self.log.info(
+                        "Legacy HA/MQTT identity cleanup completed"
+                    )
+                except Exception as exc:
+                    self.log.warning(
+                        "Legacy HA/MQTT identity cleanup failed; "
+                        "will retry while connected: %s",
+                        exc,
+                    )
+                    self.stop_event.wait(60.0)
+        finally:
+            self.legacy_cleanup_in_progress.clear()
 
     def _on_disconnect(self, client, userdata, return_code) -> None:
         del client, userdata
