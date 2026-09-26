@@ -20,7 +20,7 @@ class PostgresAdapter(DatabaseAdapter):
             user=self.config.username,
             password=self.config.password,
             connect_timeout=10,
-            application_name='digitalhouses_db_monitoring',
+            application_name='digitalhouses_recorder_app',
         )
         connection.autocommit = True
         with connection.cursor() as cursor:

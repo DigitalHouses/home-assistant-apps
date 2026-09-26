@@ -1,4 +1,18 @@
 # Changelog
+## 0.1.15
+- Start the controlled HA/MQTT identity migration with canonical MQTT base `DigitalHouses/Global/digitalhouses_recorder_app`, device ID `digitalhouses_recorder_app`, canonical `dh_recorder_app_*` entities and canonical unique IDs.
+- Keep the released `DigitalHouses/Global/db_monitoring` / `digitalhouses_db_monitoring` / `dh_db_*` contract alive as a temporary bridge, preserving its released unique IDs and command/event topics so existing dashboards and automations can be migrated without interruption.
+- Persist HA/MQTT migration state in `/data/ha_mqtt_identity_migration.json`; once a later cleanup release marks migration complete, rollback to this bridge release does not resurrect the legacy identity.
+- Add required diagnostic `sensor.dh_recorder_app_version` and `sensor.dh_recorder_app_started_at`; Version, Discovery `device.sw_version` and `origin.sw_version` now share the same strict release value.
+- Remove synthetic Version fallbacks and fail visibly when `APP_VERSION` is missing or invalid.
+- Add Contract Data validation for required runtime diagnostics, static database identity and event-specific machine payload fields; startup no longer publishes an unobserved synthetic Recorder-writing state.
+- Add canonical database-type diagnostic and explicit availability gates for first DB observation and required static DB identity.
+- Add immutable production image metadata `ghcr.io/digitalhouses/digitalhouses_recorder_app`; release automation publishes versioned multi-arch GHCR images and digest/commit provenance.
+- Add opt-in protocol-v1 telemetry for `digitalhouses_recorder_app`, default OFF, with persistent UUIDv4/token state in `/data/telemetry.json`, immediate first-enable/new-release heartbeat, 24h jittered cadence, one-hour failure backoff, five-second HTTP timeout and authenticated deletion.
+- Keep telemetry isolated from Recorder monitoring and restrict the heartbeat payload to protocol fields only; no DB host/name/user, HA identity, hostname, IP, storage path, SSH data or metrics are sent.
+- Canonicalize the PostgreSQL client `application_name` to `digitalhouses_recorder_app`.
+- Add regression coverage for canonical identity, exact legacy bridge compatibility, diagnostics, Contract Data failures, telemetry persistence/protocol, migration rollback state and immutable image metadata.
+
 ## 0.1.14
 - Add App-owned `number.dh_db_disk_usage_threshold` with persistent runtime state under `/data`.
 - Add `event.dh_db_diagnostic` and event schema v2 for database connectivity, Recorder writing and storage-usage transitions.

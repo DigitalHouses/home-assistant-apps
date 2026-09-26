@@ -1,11 +1,12 @@
 name: DigitalHouses Recorder App
-version: 0.1.14
+version: 0.1.15
 slug: digitalhouses_recorder_app
 description: Monitor Home Assistant Recorder database health and key metrics through MQTT Discovery.
 url: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_recorder_app
 arch:
   - amd64
   - aarch64
+image: ghcr.io/digitalhouses/digitalhouses_recorder_app
 startup: application
 boot: auto
 init: false
@@ -41,6 +42,7 @@ options:
   publish_interval_minutes: 1
   recorder_stale_seconds: 300
   timezone: ""
+  telemetry_enabled: false
   log_level: info
 schema:
   database_type: list(postgresql|mariadb)
@@ -67,4 +69,5 @@ schema:
   publish_interval_minutes: int(1,60)
   recorder_stale_seconds: int(30,86400)
   timezone: str
+  telemetry_enabled: bool
   log_level: list(debug|info|warning|error)

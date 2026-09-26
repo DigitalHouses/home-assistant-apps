@@ -1,6 +1,58 @@
 # DigitalHouses Recorder App — Technical documentation
 
-DigitalHouses Recorder App publishes Home Assistant Recorder database health, storage metrics, runtime settings and machine events through MQTT Discovery.
+Recorder App publishes Home Assistant Recorder database health, storage metrics, runtime settings and machine events through MQTT Discovery.
+
+## Runtime identity
+
+Canonical product:
+
+```text
+digitalhouses_recorder_app
+```
+
+Canonical MQTT/Discovery contract:
+
+```text
+MQTT base:     DigitalHouses/Global/digitalhouses_recorder_app
+Discovery:     homeassistant/device/digitalhouses_recorder_app/config
+device ID:     digitalhouses_recorder_app
+entity prefix: dh_recorder_app
+```
+
+Release 0.1.15 temporarily mirrors the released legacy identity
+`DigitalHouses/Global/db_monitoring` / `digitalhouses_db_monitoring` /
+`dh_db_*`. This is a compatibility bridge only; canonical identity is the new
+production contract.
+
+Bridge state:
+
+```text
+/data/ha_mqtt_identity_migration.json
+```
+
+The marker is idempotent. A future cleanup release will tombstone retained
+legacy MQTT state and the legacy Discovery device after live bridge acceptance.
+Once cleanup writes `phase=completed`, rollback to bridge release 0.1.15 will
+not reactivate the legacy mirror. After cleanup, 0.1.15 is the supported
+rollback floor for HA/MQTT identity: releases 0.1.14 and older predate the
+completed marker and must not be used as rollback targets unless legacy
+identity resurrection is intentionally accepted.
+
+## Common runtime diagnostics
+
+Recorder App exposes:
+
+```text
+sensor.dh_recorder_app_version
+sensor.dh_recorder_app_started_at
+```
+
+`Version` must equal the App release version used by both
+`device.sw_version` and `origin.sw_version`. A missing or non-semver
+`APP_VERSION` is a startup error.
+
+`Started at` is generated once when the Python App process starts. It is a
+timezone-aware ISO8601 timestamp with Home Assistant `device_class: timestamp`.
 
 ## Database support
 
@@ -8,65 +60,104 @@ DigitalHouses Recorder App publishes Home Assistant Recorder database health, st
 - MariaDB Supervisor App: automatic MySQL service discovery.
 - External MariaDB: manual database connection.
 
+`sensor.dh_recorder_app_database_type` exposes the configured database engine.
+
+Required static database identity consists of:
+
+- database name;
+- database user;
+- database version.
+
+Those three values share a dedicated availability gate. If one cannot be read,
+the static DB diagnostics stay unavailable instead of receiving a fabricated
+fallback.
+
+Database connectivity has a separate first-observation availability gate.
+Before the first real connection attempt, `binary_sensor.dh_recorder_app_db_connected`
+does not claim an OFF state.
+
+Recorder writing requires a successful current DB observation. A DB read
+failure therefore makes Recorder-writing data unavailable instead of changing
+it to synthetic `false`.
+
 ## Storage monitoring
 
-When storage monitoring is enabled, the App publishes:
+When storage monitoring is enabled:
 
-- `sensor.dh_db_disk_free` — free space on the filesystem that stores the Recorder database, in GB.
-- `sensor.dh_db_disk_used` — used space on the filesystem that stores the Recorder database, in GB.
-- `sensor.dh_db_disk_total` — total size of the filesystem that stores the Recorder database, in GB.
-- `sensor.dh_db_disk_used_percentage` — used disk percentage.
+- `sensor.dh_recorder_app_db_disk_free` — free filesystem space in GB;
+- `sensor.dh_recorder_app_db_disk_used` — used filesystem space in GB;
+- `sensor.dh_recorder_app_db_disk_total` — total filesystem size in GB;
+- `sensor.dh_recorder_app_db_disk_used_percentage` — used percentage.
 
 ### Automatic
 
-For MariaDB running as a Home Assistant OS App, `Automatic` reads the HAOS data disk metrics from the Supervisor Host API. No SSH configuration is required.
+For MariaDB running as a Home Assistant OS App, Automatic reads Home Assistant
+OS data-disk metrics from the Supervisor Host API. No SSH configuration is
+required.
 
-For an external PostgreSQL or MariaDB server, `Automatic` enables SSH storage monitoring when an SSH username and password are configured. If SSH credentials are empty, database monitoring continues normally and storage sensors are not created.
+For an external PostgreSQL or MariaDB server, Automatic enables SSH storage
+monitoring only when SSH credentials are supplied. Without them, database
+monitoring continues and storage entities are omitted.
 
 ### SSH
 
-For external databases, choose `SSH` and configure a Linux user on the database server. The user only needs permission to log in and run `df`; sudo/root access is not required.
+For external databases, choose SSH and configure a normal Linux user that can
+log in and run `df`; sudo/root access is not required.
 
-`SSH host` can be left empty to reuse the database host.
+`SSH host` may be empty to reuse the database host.
 
-`Filesystem path` is optional and acts as a manual override. If it is empty, the App resolves a usable storage path automatically:
+`Filesystem path` is an optional override. If empty, Recorder App:
 
-1. It first asks the database for its data directory (`SHOW data_directory` for PostgreSQL or `SELECT @@datadir` for MariaDB).
-2. If the DB user cannot read that setting, it detects the database path over SSH (`pg_lsclusters` and common PostgreSQL paths, or common MariaDB data paths).
-3. If no database-specific path can be detected, it falls back to `/`.
+1. asks the database for its data directory;
+2. if necessary, detects a database path over SSH;
+3. if no database-specific path is available, uses `/` as the explicit
+   filesystem fallback for the storage collector.
 
-The resolved path is written to the App log. The first SSH host key is stored in `/data/ssh_known_hosts` and is checked on later connections.
+The first SSH host key is stored in `/data/ssh_known_hosts` and verified on
+later connections.
 
 ### Disabled
 
-Choose `Disabled` to omit the four storage entities.
+Disabled omits the four storage entities.
 
-## Publishing
+## Publishing and polling
 
-`Publish interval, min` controls how often Recorder health/state is refreshed and MQTT state is published. More expensive database queries and storage checks are internally rate-limited.
+`publish_interval_minutes` controls Recorder health/state refresh and retained
+MQTT state publication. Expensive operations are rate-limited.
 
 ### PostgreSQL cluster selection
 
-When the SSH storage path is left empty, the App checks installed PostgreSQL clusters and selects the **online** cluster whose port matches the configured Recorder database port. Stopped clusters are ignored. If no matching cluster can be identified, the normal fallback detection is used.
+When SSH storage path is empty, the App selects the online PostgreSQL cluster
+whose port matches the configured Recorder connection. Stopped clusters are
+ignored.
 
 ## Top Recorder entities
 
-The App publishes two diagnostic ranking sensors:
+Canonical ranking sensors:
 
-- `sensor.dh_db_top_entities_24h` — Top 10 entities by number of Recorder state rows during the last 24 hours. Refreshed once per hour.
-- `sensor.dh_db_top_entities_all_time` — Top 10 entities across all retained Recorder history. Refreshed once per day.
+- `sensor.dh_recorder_app_db_top_entities_24h`;
+- `sensor.dh_recorder_app_db_top_entities_all_time`.
 
-Both rankings are generated immediately when the App starts. Their sensor state is the record count of the highest-ranked entity. Attributes include `top_entity`, `top_records`, `generated_at`, `period` and `top_10`. The `top_10` attribute is intended for dashboard rendering, for example with a Markdown card.
+The 24-hour ranking refreshes hourly. All-time ranking refreshes daily. Each
+uses a dedicated retained MQTT topic and is republished after MQTT reconnect.
 
-Ranking payloads use dedicated retained MQTT topics and are published only when a ranking is recalculated (or after MQTT reconnect). This avoids generating a new Home Assistant state write every minute for unchanged ranking attributes.
-
-If a ranking query fails, the previous successful ranking remains published and normal database monitoring continues.
-
+A ranking query failure preserves the previous successful retained ranking.
+The DB availability topic still distinguishes a current DB outage from a fresh
+ranking observation.
 
 ## Runtime disk threshold
 
-`number.dh_db_disk_usage_threshold` is owned by Recorder App. Its value is
-persisted in `/data/runtime_settings.json`.
+Canonical control:
+
+```text
+number.dh_recorder_app_db_disk_usage_threshold
+```
+
+Its value is persisted in:
+
+```text
+/data/runtime_settings.json
+```
 
 Contract:
 
@@ -74,18 +165,20 @@ Contract:
 - minimum: 1%;
 - maximum: 98%;
 - step: 1%;
-- invalid persisted state is treated as an explicit runtime-settings error,
-  not silently replaced;
+- invalid persisted state is an explicit runtime-settings error;
 - changing the Number reevaluates the latest storage measurement immediately.
 
-The old Home Assistant-local `input_number.dh_db_disk_usage_threshold` and
-template `binary_sensor.dh_db_disk_capacity_problem` are no longer part of
-the recommended package architecture.
+During the 0.1.15 bridge the released legacy Number and its MQTT command/state
+topics are mirrored so existing automations continue to operate.
 
 ## Machine event contract
 
-Recorder App exposes `event.dh_db_diagnostic` on the transient MQTT topic
-`DigitalHouses/Global/db_monitoring/event/diagnostic`.
+Canonical event entity/topic:
+
+```text
+event.dh_recorder_app_diagnostic
+DigitalHouses/Global/digitalhouses_recorder_app/event/diagnostic
+```
 
 Event schema version: `2`.
 
@@ -98,18 +191,129 @@ Supported event types:
 - `storage_usage_high`
 - `storage_usage_normal`
 
-Events use QoS 1 and `retain=false`. The App establishes baseline state on
-startup without producing synthetic alert/recovery events.
+Common required event fields:
 
-Local Home Assistant notification logic should follow:
+- `schema_version`;
+- `event_type`;
+- timezone-aware `observed_at`.
+
+Each event type then has its own required fields. Database events require engine
+and database identity; restore requires outage duration. Recorder-writing
+events require stale threshold while last-record fields are nullable when the
+database contains no Recorder rows. Storage events require current usage,
+capacity, threshold and cause.
+
+Invalid required fields prevent event publication. Machine events do not
+contain localized title/message presentation.
+
+Events use QoS 1 and `retain=false`. Authoritative current state is published
+before a transition event.
+
+During the bridge, the same valid machine payload is also published on the
+legacy transient event topic. This preserves existing local notification
+automations while they move to the canonical event entity.
+
+Local notification architecture remains:
 
 ```text
 machine event
 → trigger.id
 → choose
-→ direct delivery action
+→ direct action
 ```
 
-Notification text should read event attributes directly from
-`trigger.to_state.attributes`; it should not reread current Recorder sensors
-to reconstruct what happened.
+## Telemetry
+
+Configuration:
+
+```yaml
+telemetry_enabled: false
+```
+
+State:
+
+```text
+/data/telemetry.json
+```
+
+The state contains a persistent UUIDv4 installation ID, a persistent random
+256-bit-or-greater token, scheduler timestamps and the enabled state. Identity
+survives normal restart/update and is part of the App's persistent `/data`.
+
+Protocol-v1 heartbeat payload is exactly:
+
+```json
+{
+  "schema": 1,
+  "telemetry_policy_version": 1,
+  "installation_id": "<uuid-v4>",
+  "product": "digitalhouses_recorder_app",
+  "version": "<release-semver>"
+}
+```
+
+Client behavior:
+
+- default OFF;
+- first enable and new released version: immediate heartbeat;
+- normal cadence: 24h with deterministic ±30m jitter;
+- failure backoff: approximately one hour;
+- HTTP timeout: 5s;
+- unreleased/local version: no production telemetry;
+- failure is isolated from Recorder monitoring;
+- token is used only for authentication and is never logged.
+
+No database host/name/user, Home Assistant UUID, hostname, IP, storage path,
+SSH information, metrics or country is sent.
+
+`button.dh_recorder_app_delete_telemetry` performs authenticated
+`DELETE /v1/installation`.
+
+## Immutable production delivery
+
+`config.yaml` points Supervisor to:
+
+```text
+ghcr.io/digitalhouses/digitalhouses_recorder_app
+```
+
+For every App release, repository automation builds architecture-specific
+images and then a versioned multi-arch release tag. Existing release image tags
+are not overwritten.
+
+GitHub release provenance records:
+
+- product version;
+- canonical release tag;
+- merge/main commit;
+- GHCR version tag;
+- immutable image digest.
+
+Container images are registry artifacts, not App `/data`; backups therefore
+carry persistent App state rather than a duplicate image copy. Restore of a
+historical App release is expected to resolve its historical versioned image
+from GHCR and must be verified in live acceptance before migration cleanup.
+
+## Bridge acceptance before cleanup
+
+Before publishing the cleanup release, verify on real Home Assistant OS:
+
+1. App starts from the GHCR production image.
+2. Canonical device `digitalhouses_recorder_app` exists.
+3. Canonical `dh_recorder_app_*` entities update correctly.
+4. Legacy `dh_db_*` entities remain active only as bridge mirrors.
+5. Dashboards/packages/automations have been changed to canonical entity IDs.
+6. PostgreSQL and MariaDB supported paths still operate.
+7. Canonical machine events arrive and local direct notification actions work.
+8. Version and Started-at are correct.
+9. With telemetry enabled, heartbeat reaches Stats with the same identity after
+   restart.
+10. Backup/restore preserves telemetry and migration identity.
+
+Only after this acceptance should the cleanup release tombstone retained legacy
+topics and remove the legacy Discovery device.
+
+## Public integration boundary
+
+The public App and documentation do not require customer-specific services,
+private helper scripts, fixed site IPs or private notification adapters.

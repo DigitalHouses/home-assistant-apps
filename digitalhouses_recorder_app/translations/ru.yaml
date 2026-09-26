@@ -71,6 +71,9 @@ configuration:
   timezone:
     name: Часовой пояс
     description: Необязательный IANA timezone для границ предыдущего дня, например Asia/Almaty. Если пусто, используется timezone контейнера или UTC.
+  telemetry_enabled:
+    name: Анонимная телеметрия продукта
+    description: Отправлять в DigitalHouses только идентификатор установки, продукт и версию релиза по protocol v1. По умолчанию выключено.
   log_level:
     name: Уровень логирования
     description: Детальность журнала приложения.
