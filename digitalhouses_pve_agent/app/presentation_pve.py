@@ -42,6 +42,16 @@ class PvePresentationRouter(_BasePvePresentationRouter):
                         "last_shutdown_assessment",
                         "unknown",
                     ),
+                    "next_shutdown_timeout_seconds": guest_raw.get(
+                        "next_shutdown_timeout_seconds"
+                    ),
+                    "next_shutdown_timeout_ratio": guest_raw.get(
+                        "next_shutdown_timeout_ratio"
+                    ),
+                    "next_shutdown_assessment": guest_raw.get(
+                        "next_shutdown_assessment",
+                        "unknown",
+                    ),
                     "last_shutdown_result": guest_raw.get(
                         "last_shutdown_result",
                         "unknown",
