@@ -33,7 +33,7 @@ def validate_db_monitoring(
 
     if config.get("slug") != "digitalhouses_db_monitoring":
         fail(
-            f"{app.name}: Recorder 0.1.9 bridge must retain legacy "
+            f"{app.name}: Recorder bridge must retain legacy "
             "slug digitalhouses_db_monitoring"
         )
 
@@ -41,7 +41,7 @@ def validate_db_monitoring(
         "DH_SLUG_MIGRATION_MODE"
     )
     if migration_mode != "export":
-        fail(f"{app.name}: Recorder 0.1.9 bridge must use migration export mode")
+        fail(f"{app.name}: Recorder bridge must use migration export mode")
 
     mappings = config.get("map") or []
     share_rw = any(
