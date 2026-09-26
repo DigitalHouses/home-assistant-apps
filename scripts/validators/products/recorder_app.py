@@ -318,87 +318,9 @@ def validate_db_monitoring(
             "Recorder diagnostic event types changed"
         )
 
-    legacy_payload = (
-        discovery.build_legacy_discovery_payload(
-            app_version=version,
-            include_storage=True,
-        )
-    )
-    legacy_components = (
-        legacy_payload.get("components") or {}
-    )
-    if legacy_payload.get("device", {}).get(
-        "identifiers"
-    ) != [LEGACY_DEVICE_ID]:
-        fail(
-            "Recorder App bridge must preserve legacy "
-            "device identifier"
-        )
-
-    legacy_contract = {
-        "db_start": (
-            "digitalhouses_db_monitoring_db_start",
-            "sensor.dh_db_start",
-        ),
-        "db_connected": (
-            "digitalhouses_db_monitoring_db_connected",
-            "binary_sensor.dh_db_connected",
-        ),
-        "recorder_writing": (
-            "digitalhouses_db_monitoring_recorder_writing",
-            "binary_sensor.dh_db_recorder_writing",
-        ),
-        "db_refresh": (
-            "digitalhouses_db_monitoring_db_refresh",
-            "button.dh_db_refresh",
-        ),
-        "db_disk_usage_threshold": (
-            "digitalhouses_db_monitoring_"
-            "db_disk_usage_threshold",
-            "number.dh_db_disk_usage_threshold",
-        ),
-        "diagnostic_event": (
-            "digitalhouses_db_monitoring_diagnostic_event",
-            "event.dh_db_diagnostic",
-        ),
-    }
-    for key, (
-        expected_unique_id,
-        expected_entity_id,
-    ) in legacy_contract.items():
-        component = legacy_components.get(key)
-        if not isinstance(component, dict):
-            fail(
-                "Recorder App bridge missing legacy "
-                f"component {key}"
-            )
-        if component.get(
-            "unique_id"
-        ) != expected_unique_id:
-            fail(
-                "Recorder App bridge changed legacy "
-                f"unique_id for {key}"
-            )
-        if component.get(
-            "default_entity_id"
-        ) != expected_entity_id:
-            fail(
-                "Recorder App bridge changed legacy "
-                f"entity ID for {key}"
-            )
-
-    for canonical_only in (
-        "app_version",
-        "app_started_at",
-        "database_type",
-        "delete_telemetry",
-    ):
-        if canonical_only in legacy_components:
-            fail(
-                "Recorder App bridge must not add canonical-"
-                "only component to legacy device: "
-                f"{canonical_only}"
-            )
+    # Legacy identity remains defined only as a cleanup target.
+    # The 0.1.16 production runtime must not publish or subscribe
+    # the compatibility bridge again.
 
     telemetry = _import_telemetry(app)
     if telemetry.PRODUCT != EXPECTED_PRODUCT_ID:
@@ -435,6 +357,31 @@ def validate_db_monitoring(
     app_text = (
         app / "rootfs" / "app" / "app.py"
     ).read_text(encoding="utf-8")
+    for forbidden in (
+        "build_legacy_discovery_payload(",
+        "legacy_bridge_enabled",
+        "LEGACY_EVENT_TOPIC",
+        "LEGACY_REFRESH_COMMAND_TOPIC",
+        "LEGACY_DISK_USAGE_THRESHOLD_COMMAND_TOPIC",
+    ):
+        if forbidden in app_text:
+            fail(
+                "Recorder App cleanup release contains active "
+                f"legacy bridge runtime {forbidden!r}"
+            )
+
+    for required_cleanup in (
+        "cleanup_required()",
+        "mark_cleanup_complete(self.app_version)",
+        "wait_for_publish(timeout=5.0)",
+        "LEGACY_DISCOVERY_TOPIC",
+        "Legacy HA/MQTT identity cleanup completed",
+    ):
+        if required_cleanup not in app_text:
+            fail(
+                "Recorder App cleanup release is missing "
+                f"required acknowledged cleanup step {required_cleanup!r}"
+            )
     for forbidden in (
         "0.1.14-local",
         "APP_VERSION', '",
