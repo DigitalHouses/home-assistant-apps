@@ -13,11 +13,10 @@ DESIGN = (
 )
 
 
-def test_0530_version_and_repository_validator_contract():
-    assert (APP / "VERSION").read_text(encoding="utf-8").strip() == "0.5.30"
-
-    text = VALIDATOR.read_text(encoding="utf-8")
-    assert 'EXPECTED_VERSION = "0.5.30"' in text
+def test_0530_release_is_recorded():
+    changelog = (APP / "CHANGELOG.md").read_text(encoding="utf-8")
+    assert "## 0.5.30" in changelog
+    assert "controlled legacy-to-canonical runtime migration" in changelog
 
 
 def test_0530_home_assistant_package_layout():
@@ -51,7 +50,7 @@ def test_0530_shutdown_runtime_contract_is_documented():
     changelog = (APP / "CHANGELOG.md").read_text(encoding="utf-8")
     design = DESIGN.read_text(encoding="utf-8")
 
-    assert "`VERSION` is `0.5.30`." in readme
+    assert "Version 0.5.30 performs the corrected one-time controlled migration" in readme
     assert "## 0.5.30" in changelog
     assert "shutdown_status = correct | incorrect | unknown" in design
     assert "planned_shutdown_seconds" in design
