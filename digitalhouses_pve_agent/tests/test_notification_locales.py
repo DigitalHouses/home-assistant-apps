@@ -79,6 +79,8 @@ def test_local_packages_use_simple_direct_event_flow() -> None:
         assert "trigger.to_state.attributes" in text
         assert "actions:" in text
         assert "choose:" in text
+        assert "alias: DH PVE Agent · Notifications" in text
+        assert "alias: DH PVE · Notifications" not in text
 
         ids = _trigger_ids(text)
         assert EXPECTED_TRIGGER_IDS <= ids
