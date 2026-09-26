@@ -95,7 +95,7 @@ def test_local_packages_use_simple_direct_event_flow() -> None:
             assert forbidden not in text
 
     assert "action: persistent_notification.create" in en
-    assert "action: script.write2log" in ru
+    assert "action: persistent_notification.create" in ru
 
 
 def test_local_packages_keep_language_in_local_yaml() -> None:

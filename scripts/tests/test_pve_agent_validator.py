@@ -13,7 +13,7 @@ class PveAgentRepositoryContractTests(unittest.TestCase):
     def test_pve_is_discovered_by_application_marker(self):
         names = {path.name for path in discover_applications(ROOT)}
         self.assertIn("digitalhouses_pve_agent", names)
-        self.assertNotIn("digitalhouses_pve_agent", names)
+        self.assertNotIn("dh_pve_app", names)
 
     def test_pve_specific_validator_passes_current_contract(self):
         validate_digitalhouses_pve_agent(

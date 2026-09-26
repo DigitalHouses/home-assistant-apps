@@ -237,9 +237,7 @@ def test_pve_discovery_exposes_app_version_from_same_release_value():
     assert c["app_version"]["platform"] == "sensor"
     assert c["app_version"]["default_entity_id"] == "sensor.dh_pve_agent_app_version"
     assert c["app_version"]["state_topic"] == diagnostics
-    assert c["app_version"]["value_template"] == (
-        "{{ value_json.app_version | default('unknown') }}"
-    )
+    assert c["app_version"]["value_template"] == "{{ value_json.app_version }}"
     assert c["app_version"]["entity_category"] == "diagnostic"
     assert c["app_version"]["icon"] == "mdi:tag-outline"
 
@@ -257,9 +255,7 @@ def test_pve_discovery_exposes_agent_started_as_timestamp():
     assert component["platform"] == "sensor"
     assert component["default_entity_id"] == "sensor.dh_pve_agent_agent_started"
     assert component["state_topic"] == diagnostics
-    assert component["value_template"] == (
-        "{{ value_json.agent_started_at | default(none) }}"
-    )
+    assert component["value_template"] == "{{ value_json.agent_started_at }}"
     assert component["device_class"] == "timestamp"
     assert component["entity_category"] == "diagnostic"
     assert component["icon"] == "mdi:clock-start"

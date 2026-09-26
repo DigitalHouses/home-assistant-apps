@@ -123,10 +123,10 @@ def test_canonical_pve_telemetry_ids_and_percent_used_naming():
     )
     assert c["fan_cpu_fan_rpm"]["default_entity_id"] == "sensor.dh_pve_agent_fan_cpu_fan_rpm"
 
-    assert not any(
-        ".dh_pve_agent_" in component.get("default_entity_id", "")
-        for component in c.values()
-    )
+    for component in c.values():
+        entity_id = component.get("default_entity_id", "")
+        assert ".dh_app_pve_" not in entity_id
+        assert ".dh_pve_" not in entity_id.replace(".dh_pve_agent_", ".canonical_")
 
 
 def test_problem_binaries_use_app_owned_retained_problem_topics():

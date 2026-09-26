@@ -57,7 +57,8 @@ def test_canonical_ups_device_identity_and_migration_discovery_topics():
     assert topics.device_id == "dh_pve_agent_ups_node_a"
     assert topics.discovery == "homeassistant/device/dh_pve_agent_ups_node_a/config"
     assert topics.legacy_discoveries == (
-        "homeassistant/device/dh_pve_agent_ups_node_a/config",
+        "homeassistant/device/dh_app_pve_ups_node_a/config",
+        "homeassistant/device/dh_pve_ups_node_a/config",
         "homeassistant/device/dh_ups_node_a/config",
     )
     assert payload["device"]["identifiers"] == ["dh_pve_agent_ups_node_a"]
@@ -89,7 +90,8 @@ def test_canonical_ups_public_entity_ids_are_consistent():
     )
 
     assert not any(
-        ".dh_pve_agent_ups_" in component.get("default_entity_id", "")
+        ".dh_app_pve_ups_" in component.get("default_entity_id", "")
+        or ".dh_pve_ups_" in component.get("default_entity_id", "").replace(".dh_pve_agent_ups_", ".canonical_")
         or ".dh_ups_" in component.get("default_entity_id", "")
         for component in c.values()
     )

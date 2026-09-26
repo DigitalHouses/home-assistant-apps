@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 
 ROOT = Path(__file__).parents[1]
 DASHBOARD = ROOT / "examples" / "dh_pve_agent_dashboard.yaml"
@@ -153,5 +154,6 @@ def test_dashboard_is_a_light_client_not_a_problem_engine():
 def test_dashboard_contains_no_legacy_public_entity_ids():
     text = _text()
 
-    assert ".dh_pve_agent_" not in text
+    assert ".dh_app_pve_" not in text
+    assert re.search(r"\.dh_pve_(?!agent_)", text) is None
     assert ".digitalhouses_proxmox_" not in text

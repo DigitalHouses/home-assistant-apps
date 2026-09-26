@@ -47,8 +47,6 @@ def test_package_records_only_explicit_canonical_time_series():
     assert "sensor.dh_pve_agent_*" not in recorder
     assert "binary_sensor.dh_pve_agent_*" not in recorder
     assert "event.dh_pve_agent_" not in recorder
-    assert "sensor.dh_pve_agent_" not in recorder
-    assert "binary_sensor.dh_pve_agent_" not in recorder
 
 
 def test_ups_status_and_line_power_are_explicitly_kept_in_logbook():

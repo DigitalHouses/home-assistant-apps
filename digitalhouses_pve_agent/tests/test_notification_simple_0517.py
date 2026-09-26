@@ -99,7 +99,7 @@ def test_notification_local_package_calls_delivery_directly() -> None:
     ru = _read(RU)
 
     assert "action: persistent_notification.create" in en
-    assert "action: script.write2log" in ru
+    assert "action: persistent_notification.create" in ru
 
 
 def test_notification_standard_uses_simple_direct_flow() -> None:

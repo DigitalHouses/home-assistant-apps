@@ -127,11 +127,11 @@ def test_notification_package_uses_simple_event_trigger_flow():
         assert forbidden not in text
 
 
-def test_russian_notification_package_calls_write2log_directly():
+def test_russian_notification_package_uses_public_direct_action():
     assert RU_NOTIFICATION_PACKAGE.exists()
     text = RU_NOTIFICATION_PACKAGE.read_text(encoding="utf-8")
 
-    assert "action: script.write2log" in text
+    assert "action: persistent_notification.create" in text
     assert "высокая температура CPU" in text
     assert "CPU throttling" in text
     assert "заполнение хранилища" in text

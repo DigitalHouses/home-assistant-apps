@@ -110,7 +110,7 @@ def test_local_notification_packages_use_direct_actions():
     ru = PACKAGES[1].read_text(encoding="utf-8")
 
     assert "action: persistent_notification.create" in en
-    assert "action: script.write2log" in ru
+    assert "action: persistent_notification.create" in ru
 
     assert "event: dh_pve_agent_notification" not in en
     assert "event: dh_pve_agent_notification" not in ru
