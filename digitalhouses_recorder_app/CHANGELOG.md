@@ -1,4 +1,11 @@
 # Changelog
+## 0.1.13
+- Finalize the completed Home Assistant App slug migration after canonical acceptance and removal of the legacy `digitalhouses_db_monitoring` installation.
+- Remove the temporary writable `/share` mapping, `DH_SLUG_MIGRATION_MODE`, migration startup/shutdown hooks and slug-migration runtime module.
+- Keep the canonical Supervisor slug `digitalhouses_recorder_app` as the permanent App identity.
+- Keep MQTT base topic `DigitalHouses/Global/db_monitoring`, MQTT device/unique IDs and all existing `dh_db_*` Home Assistant entities unchanged.
+- Leave any already-created migration bundle under `/share` and completed marker under `/data` as inert historical artifacts; runtime no longer reads or writes them.
+
 ## 0.1.12
 - Close Paramiko SSH command stdin/stdout/stderr streams explicitly before closing the SSH client.
 - Prevent the intermittent Paramiko shutdown traceback `AttributeError: 'NoneType' object has no attribute 'time'` after SSH-backed storage collection.
