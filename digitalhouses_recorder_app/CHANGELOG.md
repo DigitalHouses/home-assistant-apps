@@ -1,4 +1,10 @@
 # Changelog
+## 0.1.9
+- Add the controlled bridge phase for the Home Assistant App slug migration from `digitalhouses_db_monitoring` to `digitalhouses_recorder_app`.
+- Export `/data/options.json` and optional `/data/ssh_known_hosts` to an atomic SHA-256-validated migration bundle under `/share/digitalhouses_recorder_app/slug-migration-v1/`.
+- Refresh the bridge bundle at App startup and graceful shutdown without allowing migration-export failures to interrupt Recorder monitoring.
+- Keep MQTT base topic, device identity, unique IDs and existing `dh_db_*` Home Assistant entities unchanged.
+
 ## 0.1.8
 - Added `sensor.dh_db_last_refresh` with the timestamp of the last successful manual full refresh.
 - Added `sensor.dh_db_disk_used` and `sensor.dh_db_disk_total`.
