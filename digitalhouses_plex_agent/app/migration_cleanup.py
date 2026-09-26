@@ -11,6 +11,8 @@ from .config import AppConfig
 
 log = logging.getLogger(__name__)
 
+LEGACY_DEFAULT_TOPIC_PREFIX = "DigitalHouses/Global/plex_monitoring"
+
 
 def legacy_base_topic(config: AppConfig) -> str:
     prefix = config.mqtt.topic_prefix.rstrip("/")
@@ -62,6 +64,9 @@ def cleanup_legacy_mqtt_namespace(
 
     base = legacy_base_topic(config)
     topic_filter = f"{base}/#"
+    clear_state_namespace = (
+        config.mqtt.topic_prefix.rstrip("/") == LEGACY_DEFAULT_TOPIC_PREFIX
+    )
     client = (
         client_factory()
         if client_factory is not None
@@ -91,7 +96,7 @@ def cleanup_legacy_mqtt_namespace(
     def on_connect(client, userdata, flags, reason_code, properties) -> None:
         nonlocal connection_failed, subscription_failed
         connection_failed = bool(getattr(reason_code, "is_failure", False))
-        if not connection_failed:
+        if not connection_failed and clear_state_namespace:
             try:
                 result = client.subscribe(topic_filter, qos=1)
                 rc = (
@@ -135,7 +140,7 @@ def cleanup_legacy_mqtt_namespace(
             log.error("MQTT migration cleanup subscription failed")
             return False
 
-        if scan_seconds > 0:
+        if clear_state_namespace and scan_seconds > 0:
             threading.Event().wait(scan_seconds)
 
         with retained_lock:
