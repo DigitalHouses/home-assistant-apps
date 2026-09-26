@@ -1,11 +1,47 @@
 from __future__ import annotations
 
 import time
+from datetime import datetime
 from collections.abc import Callable, Mapping
 from typing import Protocol
 
+from .build_info import BuildInfoError, validate_version
 from .models import BuildInfo, MonitorSnapshot
 from .presentation_plex import PlexPresentationRouter, Publication
+
+
+class ContractDataError(ValueError):
+    pass
+
+
+def _required_semver(value: object) -> str:
+    try:
+        return validate_version(value)
+    except BuildInfoError as exc:
+        raise ContractDataError("invalid required field: agent_version") from exc
+
+
+def _required_timestamp(name: str, value: object) -> str:
+    if not isinstance(value, str) or not value:
+        raise ContractDataError(f"missing required field: {name}")
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ContractDataError(f"invalid required field: {name}") from exc
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise ContractDataError(
+            f"invalid required field: {name} must be timezone-aware"
+        )
+    return value
+
+
+def _required_api_status(payload: Mapping[str, object]) -> str:
+    if "plex_api_status" not in payload:
+        raise ContractDataError("missing required field: plex_api_status")
+    value = payload["plex_api_status"]
+    if value not in {"starting", "disabled", "ok", "error"}:
+        raise ContractDataError("invalid required field: plex_api_status")
+    return str(value)
 
 
 class GroupBridge(Protocol):
@@ -27,12 +63,16 @@ class PlexPublicationRuntime:
         agent_started_at: str | None = None,
     ) -> None:
         self.bridge = bridge
+        _required_semver(build.version)
         self.build = build
         self.source_interval_seconds = float(source_interval_seconds)
         self.now_monotonic = now_monotonic
         self.started_at = float(now_monotonic())
         self.server_boot_time = server_boot_time
-        self.agent_started_at = agent_started_at
+        self.agent_started_at = _required_timestamp(
+            "agent_started_at",
+            agent_started_at,
+        )
         self.router = PlexPresentationRouter(
             source_interval_seconds=self.source_interval_seconds,
             high_cpu_threshold=high_cpu_threshold,
@@ -121,7 +161,7 @@ class PlexPublicationRuntime:
         now = float(self.now_monotonic())
         old_status = (self._collector_status, self._plex_api_status)
         self._collector_status = snapshot.collector_status
-        self._plex_api_status = str(api_payload.get("plex_api_status") or "unknown")
+        self._plex_api_status = _required_api_status(api_payload)
         self._process_count = int(snapshot.process_count)
         self._last_refresh = snapshot.last_refresh
         self._last_collected_at = snapshot.collected_at
