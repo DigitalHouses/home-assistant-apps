@@ -2,7 +2,7 @@ from app.shutdown_history import ShutdownHistoryTracker
 from app.state_store import StateStore
 
 
-def test_0527_projection_keys_migrate_only_in_latest_guest_state(tmp_path):
+def test_0528_migrates_0527_projection_keys_only_in_latest_guest_state(tmp_path):
     store = StateStore(tmp_path / "shutdown.json")
     legacy_fact = {
         "kind": "vm",
