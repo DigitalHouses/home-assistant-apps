@@ -766,12 +766,14 @@ class ShutdownAwareUpsRuntime(AdaptiveUpsRuntime):
 
         history = self.shutdown_history_tracker.payload()
         previous = history.get("previous_shutdown")
+        latest_guests = history.get("guest_last_shutdowns")
         guest_budget = budget.effective_guest_budget_seconds if budget is not None else None
         total_budget = budget.shutdown_budget_seconds if budget is not None else None
         readiness = evaluate_shutdown_readiness(
             ups_present=True,
             guest_shutdown_budget_seconds=guest_budget,
             previous_shutdown=previous if isinstance(previous, Mapping) else None,
+            guest_shutdowns=latest_guests if isinstance(latest_guests, Mapping) else None,
             additional_issues=shutdown_policy_issues(
                 self.shutdown_policy,
                 nut_available=self.nut_available,

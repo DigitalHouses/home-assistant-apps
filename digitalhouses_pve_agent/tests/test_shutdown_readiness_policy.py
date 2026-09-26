@@ -79,3 +79,55 @@ def test_missing_power_restore_delay_is_still_reported():
 def test_missing_policy_is_not_ready():
     issues = shutdown_policy_issues(None, nut_available=True)
     assert issues == ["shutdown_policy_unavailable"]
+
+
+def test_readiness_uses_current_timeout_ratio_from_latest_guest_facts():
+    previous_shutdown = {
+        "shutdown_class": "ups_power",
+        "shutdown_clean": True,
+        "guests": {
+            "vm": {
+                "501": {
+                    "result": "clean",
+                    "forced": False,
+                    "timeout_ratio": 0.933,
+                }
+            },
+            "lxc": {
+                "10001": {
+                    "result": "clean",
+                    "forced": False,
+                    "timeout_ratio": 1.067,
+                }
+            },
+        },
+    }
+    latest_guests = {
+        "vm": {
+            "501": {
+                "result": "clean",
+                "forced": False,
+                "timeout_ratio": 0.933,
+                "current_timeout_ratio": 0.56,
+            }
+        },
+        "lxc": {
+            "10001": {
+                "result": "clean",
+                "forced": False,
+                "timeout_ratio": 1.067,
+                "current_timeout_ratio": 0.64,
+            }
+        },
+    }
+
+    readiness = evaluate_shutdown_readiness(
+        ups_present=True,
+        guest_shutdown_budget_seconds=455,
+        previous_shutdown=previous_shutdown,
+        guest_shutdowns=latest_guests,
+    )
+
+    assert readiness["status"] == "ok"
+    assert readiness["issues"] == []
+

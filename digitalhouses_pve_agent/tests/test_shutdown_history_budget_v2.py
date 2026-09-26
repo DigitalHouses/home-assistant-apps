@@ -151,7 +151,7 @@ def test_legacy_history_records_get_canonical_shutdown_status_in_payload(tmp_pat
     ]
 
 
-def test_standalone_guest_shutdown_fact_is_enriched_once_from_guest_config(tmp_path):
+def test_standalone_guest_shutdown_fact_preserves_history_and_tracks_current_config(tmp_path):
     journal = {
         "text": (
             "2026-09-26T01:10:32.607284+0500 pve pct[247662]: "
@@ -185,14 +185,22 @@ def test_standalone_guest_shutdown_fact_is_enriched_once_from_guest_config(tmp_p
     assert latest["timeout_seconds"] == 30
     assert latest["timeout_ratio"] == 0.4
     assert latest["assessment"] == "ok"
+    assert latest["current_timeout_seconds"] == 30
+    assert latest["current_timeout_ratio"] == 0.4
+    assert latest["current_assessment"] == "ok"
 
-    # Historical fact keeps the timeout that was attached to the shutdown.
+    # Historical facts keep the timeout from the shutdown event, while the
+    # current-config assessment follows later PVE timeout changes.
     assert tracker.enrich_guest_last_shutdowns(
         {("lxc", "333"): 50}
-    ) is False
+    ) is True
     latest = tracker.payload()["guest_last_shutdowns"]["lxc"]["333"]
     assert latest["timeout_seconds"] == 30
     assert latest["timeout_ratio"] == 0.4
+    assert latest["assessment"] == "ok"
+    assert latest["current_timeout_seconds"] == 50
+    assert latest["current_timeout_ratio"] == 0.24
+    assert latest["current_assessment"] == "ok"
 
 
 def test_guest_shutdown_assessment_is_app_owned_for_host_shutdown_journal(tmp_path):
