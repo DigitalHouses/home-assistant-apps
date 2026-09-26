@@ -69,6 +69,9 @@ class FakeShutdownHistoryTracker:
         item["timeout_seconds"] = 30
         item["timeout_ratio"] = 0.4
         item["assessment"] = "ok"
+        item["next_shutdown_timeout_seconds"] = 30
+        item["next_shutdown_timeout_ratio"] = 0.4
+        item["next_shutdown_assessment"] = "ok"
         return True
 
 
@@ -90,3 +93,6 @@ def test_guest_collector_enriches_latest_shutdown_fact_before_presentation(tmp_p
     assert guest["last_shutdown_timeout_seconds"] == 30
     assert guest["last_shutdown_timeout_ratio"] == 0.4
     assert guest["last_shutdown_assessment"] == "ok"
+    assert guest["next_shutdown_timeout_seconds"] == 30
+    assert guest["next_shutdown_timeout_ratio"] == 0.4
+    assert guest["next_shutdown_assessment"] == "ok"
