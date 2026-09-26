@@ -430,6 +430,7 @@ def evaluate_shutdown_readiness(
     ups_present: bool,
     guest_shutdown_budget_seconds: int | None,
     previous_shutdown: Mapping[str, Any] | None,
+    guest_shutdowns: Mapping[str, Any] | None = None,
     additional_issues: list[str] | tuple[str, ...] = (),
 ) -> dict[str, Any]:
     if not ups_present:
@@ -451,7 +452,13 @@ def evaluate_shutdown_readiness(
         elif shutdown_clean is not True:
             issues.append("previous_host_shutdown_unknown")
 
-    guests = previous_shutdown.get("guests") if isinstance(previous_shutdown, Mapping) else None
+    guests: object = guest_shutdowns
+    if not isinstance(guests, Mapping):
+        guests = (
+            previous_shutdown.get("guests")
+            if isinstance(previous_shutdown, Mapping)
+            else None
+        )
     if isinstance(guests, Mapping):
         for kind in ("vm", "lxc"):
             records = guests.get(kind)
@@ -462,7 +469,9 @@ def evaluate_shutdown_readiness(
                     continue
                 result = str(raw.get("result") or "unknown")
                 forced = bool(raw.get("forced"))
-                ratio = raw.get("timeout_ratio")
+                ratio = raw.get("current_timeout_ratio")
+                if not isinstance(ratio, (int, float)) or isinstance(ratio, bool):
+                    ratio = raw.get("timeout_ratio")
                 if forced or result in {"timeout", "forced"}:
                     issues.append(f"{kind}:{guest_id}:{result}")
                 elif (
@@ -1123,10 +1132,29 @@ class ShutdownHistoryTracker:
                 timeout_ratio=ratio,
             )
 
+            current_ratio: float | None = None
+            if (
+                isinstance(duration, int)
+                and not isinstance(duration, bool)
+                and timeout_seconds > 0
+            ):
+                current_ratio = round(duration / timeout_seconds, 3)
+            current_assessment = _guest_shutdown_assessment(
+                result=item.get("result"),
+                forced=item.get("forced"),
+                timeout_ratio=current_ratio,
+            )
+
             if item.get("timeout_ratio") != ratio:
                 item["timeout_ratio"] = ratio
             if item.get("assessment") != assessment:
                 item["assessment"] = assessment
+            if item.get("current_timeout_seconds") != timeout_seconds:
+                item["current_timeout_seconds"] = timeout_seconds
+            if item.get("current_timeout_ratio") != current_ratio:
+                item["current_timeout_ratio"] = current_ratio
+            if item.get("current_assessment") != current_assessment:
+                item["current_assessment"] = current_assessment
 
             if item != dict(raw):
                 records[guest_id] = item
