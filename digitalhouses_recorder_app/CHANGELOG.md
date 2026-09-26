@@ -1,4 +1,9 @@
 # Changelog
+## 0.1.12
+- Close Paramiko SSH command stdin/stdout/stderr streams explicitly before closing the SSH client.
+- Prevent the intermittent Paramiko shutdown traceback `AttributeError: 'NoneType' object has no attribute 'time'` after SSH-backed storage collection.
+- Keep the canonical Supervisor slug, migration completion state, MQTT/device identity and existing `dh_db_*` entities unchanged.
+
 ## 0.1.11
 - Complete Phase 2 of the controlled Home Assistant App slug migration by switching the Supervisor slug to `digitalhouses_recorder_app`.
 - Import the verified bridge bundle produced by legacy-slug Recorder App 0.1.10 before normal runtime starts.

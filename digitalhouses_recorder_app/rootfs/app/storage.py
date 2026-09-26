@@ -86,13 +86,18 @@ def _run_ssh_command(config: StorageConfig, command: str) -> str:
             allow_agent=False,
         )
         client.save_host_keys(str(KNOWN_HOSTS_FILE))
-        _stdin, stdout, stderr = client.exec_command(command, timeout=10)
-        exit_status = stdout.channel.recv_exit_status()
-        output = stdout.read().decode('utf-8', errors='replace')
-        error = stderr.read().decode('utf-8', errors='replace').strip()
-        if exit_status != 0:
-            raise RuntimeError(error or f'SSH command exited with status {exit_status}')
-        return output
+        stdin, stdout, stderr = client.exec_command(command, timeout=10)
+        try:
+            exit_status = stdout.channel.recv_exit_status()
+            output = stdout.read().decode('utf-8', errors='replace')
+            error = stderr.read().decode('utf-8', errors='replace').strip()
+            if exit_status != 0:
+                raise RuntimeError(error or f'SSH command exited with status {exit_status}')
+            return output
+        finally:
+            stdin.close()
+            stdout.close()
+            stderr.close()
     finally:
         client.close()
 
