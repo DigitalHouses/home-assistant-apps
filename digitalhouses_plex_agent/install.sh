@@ -384,7 +384,7 @@ if [[ ! -f "${HA_MQTT_MIGRATION_MARKER}" && "${config_created}" -eq 0 ]]; then
         "^[[:space:]]*topic_prefix[[:space:]]*=[[:space:]]*${LEGACY_TOPIC_PREFIX}[[:space:]]*$" \
         "${CONFIG_FILE}"; then
         sed -i -E \
-            "s#^([[:space:]]*topic_prefix[[:space:]]*=[[:space:]]*)${LEGACY_TOPIC_PREFIX}([[:space:]]*)$#\\1${CANONICAL_TOPIC_PREFIX}\\2#" \
+            "s#^([[:space:]]*topic_prefix[[:space:]]*=[[:space:]]*)${LEGACY_TOPIC_PREFIX}([[:space:]]*)\$#\\1${CANONICAL_TOPIC_PREFIX}\\2#" \
             "${CONFIG_FILE}"
     fi
     ha_mqtt_identity_migration=1

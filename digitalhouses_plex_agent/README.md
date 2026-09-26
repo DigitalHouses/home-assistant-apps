@@ -8,7 +8,7 @@ Native Linux agent for Plex Media Server workload, playback, transcoding and lib
 
 [Install / update](#install--update) · [Changelog](CHANGELOG.md) · [Engineering docs](../docs/digitalhouses_plex_agent/) · [Issues](https://github.com/DigitalHouses/home-assistant-apps/issues)
 
-The public product name, repository directory, release identifier, installed Linux runtime, MQTT identity, telemetry product and Home Assistant entity namespace are **DigitalHouses Plex Agent** / `digitalhouses_plex_agent`. Version `0.7.0` completes the canonical identity migration that began with the Linux runtime cutover in `0.6.0`.
+The public product name, repository directory, release identifier, installed Linux runtime, MQTT identity, telemetry product and Home Assistant entity namespace are **DigitalHouses Plex Agent** / `digitalhouses_plex_agent`. Version `0.7.0` completed the canonical identity migration that began with the Linux runtime cutover in `0.6.0`; `0.7.1` fixes the first-update installer path for that migration.
 
 ## Purpose
 
@@ -31,13 +31,13 @@ Lovelace example: [plex-dashboard.yaml](examples/lovelace/plex-dashboard.yaml)
 Production install/update is pinned to the canonical release tag. Current release:
 
 ```text
-digitalhouses_plex_agent-v0.7.0
+digitalhouses_plex_agent-v0.7.1
 ```
 
 From a root shell:
 
 ```bash
-RELEASE_TAG="digitalhouses_plex_agent-v0.7.0"
+RELEASE_TAG="digitalhouses_plex_agent-v0.7.1"
 curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/${RELEASE_TAG}/digitalhouses_plex_agent/install.sh" \
   | DIGITALHOUSES_SOURCE_REF="${RELEASE_TAG}" bash
 ```
@@ -45,7 +45,7 @@ curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/
 From a sudo-capable user:
 
 ```bash
-RELEASE_TAG="digitalhouses_plex_agent-v0.7.0"
+RELEASE_TAG="digitalhouses_plex_agent-v0.7.1"
 curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/${RELEASE_TAG}/digitalhouses_plex_agent/install.sh" \
   | sudo env DIGITALHOUSES_SOURCE_REF="${RELEASE_TAG}" bash
 ```
@@ -76,7 +76,7 @@ entities:   sensor.dh_plex_agent_agent_*
             button.dh_plex_agent_agent_*
 ```
 
-On the first `0.7.0` update, the installer preserves the pre-migration configuration as a protected migration source, rewrites only the historical default MQTT base to the canonical base, starts the canonical service, and then removes retained data owned by the historical default namespace plus the old Discovery device identity.
+On the first `0.7.x` canonical-identity update, the installer preserves the pre-migration configuration as a protected migration source, rewrites only the historical default MQTT base to the canonical base, starts the canonical service, and then removes retained data owned by the historical default namespace plus the old Discovery device identity.
 
 If a site deliberately uses a custom MQTT `topic_prefix`, that custom state namespace is not deleted or rewritten. The old Plex Discovery identity is still tombstoned so Home Assistant cannot retain a duplicate legacy device.
 

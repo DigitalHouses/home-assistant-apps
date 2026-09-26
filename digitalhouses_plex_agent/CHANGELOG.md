@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.7.1
+
+- Fix the first canonical HA/MQTT identity migration from the historical default topic prefix: preserve the regular-expression end-of-line anchor literally so Bash cannot expand it as a positional-argument expression and corrupt the sed command.
+- Add an installer regression test that executes the exact topic-prefix rewrite block against a legacy configuration and verifies the canonical `DigitalHouses/Global/digitalhouses_plex_agent` result.
+
 ## 0.7.0
 
 - Complete the deferred Home Assistant/MQTT identity migration to canonical product identity: MQTT base `DigitalHouses/Global/digitalhouses_plex_agent`, Discovery device ID `digitalhouses_plex_agent_plex`, and `dh_plex_agent_*` entity IDs.
