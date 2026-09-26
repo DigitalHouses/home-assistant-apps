@@ -445,7 +445,7 @@ As of the current repository implementation:
 | Product | Identifier | Production telemetry client |
 | --- | --- | --- |
 | DigitalHouses PVE Agent | `digitalhouses_pve_agent` | implemented and verified |
-| DigitalHouses Plex Agent | `digitalhouses_plex_agent` | client implemented; real-install verification pending |
+| DigitalHouses Plex Agent | `digitalhouses_plex_agent` | implemented and verified |
 | DigitalHouses Recorder App | `digitalhouses_recorder_app` | pending product implementation |
 | DigitalHouses Speedtest App | `digitalhouses_speedtest_app` | pending product implementation |
 | DigitalHouses Backblaze App | `digitalhouses_backblaze_app` | client implemented; admitted to registry/server allowlist; immutable production release delivery enabled; real-install verification pending |

@@ -71,9 +71,9 @@ Version `0.7.0` completes the separately deferred Home Assistant/MQTT cutover:
 ```text
 MQTT base:  DigitalHouses/Global/digitalhouses_plex_agent
 device ID:  digitalhouses_plex_agent_plex
-entities:   sensor.dh_plex_agent_agent_*
-            binary_sensor.dh_plex_agent_agent_*
-            button.dh_plex_agent_agent_*
+entities:   sensor.dh_plex_agent_*
+            binary_sensor.dh_plex_agent_*
+            button.dh_plex_agent_*
 ```
 
 On the first `0.7.x` canonical-identity update, the installer preserves the pre-migration configuration as a protected migration source, rewrites only the historical default MQTT base to the canonical base, starts the canonical service, and then removes retained data owned by the historical default namespace plus the old Discovery device identity.
