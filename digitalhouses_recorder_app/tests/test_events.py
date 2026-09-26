@@ -199,12 +199,11 @@ class RecorderEventTests(unittest.TestCase):
             cause='threshold_changed',
         )
 
-    def test_bridge_mirrors_same_validated_machine_event(self):
+    def test_cleanup_release_emits_canonical_machine_event_only(self):
         app = DatabaseMonitorApp.__new__(DatabaseMonitorApp)
         app.config = types.SimpleNamespace(
             timezone='Asia/Almaty',
         )
-        app.legacy_bridge_enabled = True
         app.publish_json = Mock()
 
         with patch.object(
@@ -219,47 +218,13 @@ class RecorderEventTests(unittest.TestCase):
                 error='connection refused',
             )
 
-        self.assertEqual(app.publish_json.call_count, 2)
-        canonical = app.publish_json.call_args_list[0]
-        legacy = app.publish_json.call_args_list[1]
-        self.assertEqual(
-            canonical.args[0],
-            APP_MODULE.EVENT_TOPIC,
-        )
-        self.assertEqual(
-            legacy.args[0],
-            APP_MODULE.LEGACY_EVENT_TOPIC,
-        )
-        self.assertEqual(
-            canonical.args[1],
-            legacy.args[1],
-        )
-        self.assertFalse(canonical.kwargs['retain'])
-        self.assertFalse(legacy.kwargs['retain'])
-
-    def test_completed_migration_does_not_mirror_machine_event(self):
-        app = DatabaseMonitorApp.__new__(DatabaseMonitorApp)
-        app.config = types.SimpleNamespace(
-            timezone='Asia/Almaty',
-        )
-        app.legacy_bridge_enabled = False
-        app.publish_json = Mock()
-
-        with patch.object(
-            APP_MODULE.time,
-            'time',
-            return_value=1000.0,
-        ):
-            app._event(
-                'db_connection_lost',
-                database_engine='postgresql',
-                database_name='homeassistant',
-            )
-
         app.publish_json.assert_called_once()
         self.assertEqual(
             app.publish_json.call_args.args[0],
             APP_MODULE.EVENT_TOPIC,
+        )
+        self.assertFalse(
+            app.publish_json.call_args.kwargs['retain']
         )
 
 
