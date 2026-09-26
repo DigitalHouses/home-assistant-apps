@@ -56,7 +56,7 @@ class SlugMigrationTests(unittest.TestCase):
 
     def _export(self, data: Path, bundle: Path) -> None:
         export_bridge_bundle(
-            app_version="0.1.9",
+            app_version="0.1.10",
             data_dir=data,
             bundle_file=bundle,
             settings_reader=lambda: {
@@ -82,7 +82,7 @@ class SlugMigrationTests(unittest.TestCase):
             )
 
             result = export_bridge_bundle(
-                app_version="0.1.9",
+                app_version="0.1.10",
                 data_dir=data,
                 bundle_file=bundle,
                 settings_reader=lambda: {
@@ -109,7 +109,7 @@ class SlugMigrationTests(unittest.TestCase):
                 self.assertEqual(manifest["product"], PRODUCT_ID)
                 self.assertEqual(manifest["source_slug"], SOURCE_SLUG)
                 self.assertEqual(manifest["target_slug"], TARGET_SLUG)
-                self.assertEqual(manifest["source_version"], "0.1.9")
+                self.assertEqual(manifest["source_version"], "0.1.10")
                 self.assertEqual(manifest["supervisor_settings"]["boot"], "auto")
                 self.assertIn("sha256", manifest["files"]["options.json"])
                 self.assertIn("sha256", manifest["files"]["ssh_known_hosts"])
@@ -126,7 +126,7 @@ class SlugMigrationTests(unittest.TestCase):
                 "required /data/options.json is missing",
             ):
                 export_bridge_bundle(
-                    app_version="0.1.9",
+                    app_version="0.1.10",
                     data_dir=data,
                     bundle_file=root / "bundle.tar.gz",
                     settings_reader=lambda: {},
@@ -140,7 +140,7 @@ class SlugMigrationTests(unittest.TestCase):
             self._write_options(data)
 
             result = export_bridge_bundle(
-                app_version="0.1.9",
+                app_version="0.1.10",
                 data_dir=data,
                 bundle_file=bundle,
                 settings_reader=lambda: {},
@@ -164,7 +164,7 @@ class SlugMigrationTests(unittest.TestCase):
                 raise RuntimeError("supervisor unavailable")
 
             export_bridge_bundle(
-                app_version="0.1.9",
+                app_version="0.1.10",
                 data_dir=data,
                 bundle_file=bundle,
                 settings_reader=broken_settings_reader,
