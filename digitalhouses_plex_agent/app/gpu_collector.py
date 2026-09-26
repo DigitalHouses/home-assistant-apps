@@ -318,12 +318,28 @@ class GpuStateReader:
         if not isinstance(raw, dict):
             return self._unavailable("helper_error", supported=True)
 
-        supported = bool(raw.get("supported", False))
         source = raw.get("source")
         pci_address = raw.get("pci_address")
+
+        supported_raw = raw.get("supported")
+        if not isinstance(supported_raw, bool):
+            return self._unavailable(
+                "helper_error",
+                supported=detect_intel_gpu_pci() is not None,
+                source=source,
+                pci_address=pci_address,
+            )
+        supported = supported_raw
+
+        available_raw = raw.get("available")
+        status_raw = raw.get("status")
         collected_at = raw.get("collected_at_epoch")
-        if not isinstance(collected_at, (int, float)) or isinstance(
-            collected_at, bool
+        if (
+            not isinstance(available_raw, bool)
+            or not isinstance(status_raw, str)
+            or not status_raw.strip()
+            or not isinstance(collected_at, (int, float))
+            or isinstance(collected_at, bool)
         ):
             return self._unavailable(
                 "helper_error",
@@ -343,8 +359,8 @@ class GpuStateReader:
 
         return {
             "supported": supported,
-            "available": bool(raw.get("available", False)),
-            "status": str(raw.get("status") or "unknown"),
+            "available": available_raw,
+            "status": status_raw,
             "source": source,
             "pci_address": pci_address,
             **{field: raw.get(field) for field in _GPU_VALUE_FIELDS},
