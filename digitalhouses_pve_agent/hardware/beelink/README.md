@@ -55,17 +55,52 @@ This hardware profile is independent from the generic App installer. Do not
 assume that an older already-installed `digitalhouses_pve_agent` release contains
 `hardware/beelink/` under `/opt/digitalhouses/digitalhouses_pve_agent`.
 
-For normal standalone use on a Beelink/AZW host, run the profile directly from
-a reviewed repository ref or exact commit.
+Production use follows the same immutable-delivery rule as the App: run the
+hardware profile from a canonical `digitalhouses_pve_agent-v<version>` release
+tag. Branch, `main` and arbitrary-SHA execution are development/recovery paths,
+not normal production installation.
 
 ### Install or repair
 
 ```bash
-PROFILE_REF=<reviewed-ref-or-sha>
-bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$PROFILE_REF/digitalhouses_pve_agent/hardware/beelink/install.sh")
+TAG=digitalhouses_pve_agent-v0.5.32
+bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$TAG/digitalhouses_pve_agent/hardware/beelink/install.sh")
 ```
 
-From a reviewed local checkout, the equivalent command is:
+### Read-only check
+
+```bash
+TAG=digitalhouses_pve_agent-v0.5.32
+bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$TAG/digitalhouses_pve_agent/hardware/beelink/install.sh") --check
+```
+
+A healthy host ends with:
+
+```text
+CHECK=PASS
+```
+
+The check validates DMI, current-kernel DKMS installation, module resolution,
+autoload, loaded driver version, IT8613E hwmon and the App collector when the App
+is present.
+
+### Uninstall / rollback
+
+```bash
+TAG=digitalhouses_pve_agent-v0.5.32
+bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$TAG/digitalhouses_pve_agent/hardware/beelink/uninstall.sh")
+```
+
+### Development / recovery only
+
+For an explicitly reviewed branch or full commit SHA:
+
+```bash
+REF=<branch-or-full-sha>
+bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$REF/digitalhouses_pve_agent/hardware/beelink/install.sh")
+```
+
+A reviewed local checkout is likewise a development/recovery path:
 
 ```bash
 sudo bash digitalhouses_pve_agent/hardware/beelink/install.sh
