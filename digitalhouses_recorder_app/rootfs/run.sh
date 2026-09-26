@@ -22,6 +22,29 @@ if [[ -z "${MQTT_HOST}" || -z "${MQTT_PORT}" ]]; then
     exit 1
 fi
 
+
+MIGRATION_MODE="${DH_SLUG_MIGRATION_MODE:-}"
+if [[ "${MIGRATION_MODE}" == "export" ]]; then
+    if MIGRATION_MESSAGE="$(python3 /app/slug_migration.py export 2>&1)"; then
+        bashio::log.info "${MIGRATION_MESSAGE}"
+    else
+        bashio::log.warning "Slug migration bridge export failed: ${MIGRATION_MESSAGE}"
+    fi
+elif [[ "${MIGRATION_MODE}" == "import" ]]; then
+    MIGRATION_RC=0
+    MIGRATION_MESSAGE="$(python3 /app/slug_migration.py import 2>&1)" || MIGRATION_RC=$?
+    if [[ "${MIGRATION_RC}" -eq 0 ]]; then
+        bashio::log.info "${MIGRATION_MESSAGE}"
+    elif [[ "${MIGRATION_RC}" -eq 10 ]]; then
+        bashio::log.info "${MIGRATION_MESSAGE}"
+        bashio::log.info "Stopping cleanly so Supervisor can remount migrated options on the next start."
+        exit 0
+    else
+        bashio::log.fatal "Slug migration import failed: ${MIGRATION_MESSAGE}"
+        exit 1
+    fi
+fi
+
 if MYSQL_HOST_VALUE="$(bashio::services mysql host 2>/dev/null)" && [[ -n "${MYSQL_HOST_VALUE}" ]]; then
     export MYSQL_SERVICE_HOST="${MYSQL_HOST_VALUE}"
     export MYSQL_SERVICE_PORT="$(bashio::services mysql port)"
