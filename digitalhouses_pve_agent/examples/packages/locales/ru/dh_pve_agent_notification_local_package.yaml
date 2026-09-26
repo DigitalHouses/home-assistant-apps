@@ -11,7 +11,7 @@ dh_pve_agent_notification_local_package:
 
   automation:
     - id: dh_pve_agent_notifications
-      alias: DH PVE · Notifications
+      alias: DH PVE Agent · Notifications
       mode: queued
       max: 60
 

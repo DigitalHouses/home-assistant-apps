@@ -6,7 +6,7 @@ from typing import Any
 
 from validators.common import fail, require_files
 
-EXPECTED_VERSION = "0.5.30"
+EXPECTED_VERSION = "0.5.31"
 EXPECTED_TOPIC_PREFIX = "DigitalHouses/Global/digitalhouses_pve_agent"
 EXPECTED_DEVICE_NAME = "DH PVE"
 EXPECTED_REFRESH_ENTITY = "button.dh_pve_agent_refresh"
@@ -319,6 +319,7 @@ def validate_digitalhouses_pve_agent(
             "condition: trigger",
             "trigger.to_state.attributes",
             "choose:",
+            "alias: DH PVE Agent · Notifications",
             "id: cpu_temperature_high",
             "id: cpu_temperature_normal",
             "id: cpu_throttling_started",
@@ -392,6 +393,7 @@ def validate_digitalhouses_pve_agent(
             "source_schema_version",
             "startup_problem_reconciliation",
             "attrs.schema_version",
+            "alias: DH PVE · Notifications",
         ):
             if forbidden in notification_source:
                 fail(
@@ -411,6 +413,11 @@ def validate_digitalhouses_pve_agent(
     ui_package = (
         app / "examples/packages/dh_pve_agent_package.yaml"
     ).read_text(encoding="utf-8")
+    if "alias: DH PVE Agent · Close UPS Trigger editor after successful Apply" not in ui_package:
+        fail("DH PVE UPS Trigger UI automation alias must use canonical PVE Agent naming")
+    if "alias: DH PVE · Close UPS Trigger editor after successful Apply" in ui_package:
+        fail("DH PVE UPS Trigger UI automation alias must not use legacy DH PVE naming")
+
     close_after_success = ui_package.split(
         "- id: dh_pve_agent_ups_trigger_close_after_success",
         1,

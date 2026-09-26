@@ -449,8 +449,8 @@ The common contract standardizes semantics, not necessarily legacy entity-ID spe
 Examples of valid existing product-specific identities include:
 
 ```text
-sensor.dh_app_pve_app_version
-sensor.dh_app_pve_agent_started
+sensor.dh_pve_agent_app_version
+sensor.dh_pve_agent_agent_started
 
 sensor.dh_plex_agent_version
 sensor.dh_plex_agent_started_at

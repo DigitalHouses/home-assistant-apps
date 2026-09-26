@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.31
+
+- Canonicalize Home Assistant automation aliases in the base and English/Russian local notification examples so Home Assistant derives `dh_pve_agent_*` entity IDs instead of recreating legacy `dh_pve_*` IDs.
+- Add regression tests and product-validator checks that reject the old `DH PVE · ...` automation aliases.
+- Update shared Application and Events/Notifications standards to use canonical PVE Agent entity identities and a public built-in `persistent_notification.create` delivery example.
+- Align the current shutdown-history design amendment with the installed canonical `digitalhouses_pve_agent` runtime identity.
+
 ## 0.5.30
 
 - Fix the controlled legacy-to-canonical runtime migration so retained MQTT data from the former instance namespace is removed instead of being left stale in the broker.
