@@ -60,12 +60,18 @@ class ReleaseDeploymentContractTests(unittest.TestCase):
         ):
             self.assertIn(expected, installer)
 
-    def test_runtime_migration_does_not_rename_mqtt_contract(self):
+    def test_installer_completes_canonical_mqtt_identity_migration(self):
         installer = INSTALLER.read_text(encoding="utf-8")
         self.assertIn(
-            "topic_prefix = DigitalHouses/Global/plex_monitoring",
+            'CANONICAL_TOPIC_PREFIX="DigitalHouses/Global/digitalhouses_plex_agent"',
             installer,
         )
+        self.assertIn(
+            'LEGACY_TOPIC_PREFIX="DigitalHouses/Global/plex_monitoring"',
+            installer,
+        )
+        self.assertIn("--migration-mqtt-cleanup", installer)
+        self.assertIn(".ha_mqtt_identity_migrated_v1", installer)
 
     def test_readme_production_install_uses_current_release_tag(self):
         version = VERSION.read_text(encoding="utf-8").strip()
