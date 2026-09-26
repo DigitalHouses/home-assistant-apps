@@ -4,6 +4,8 @@ set -euo pipefail
 PRODUCT_ID="digitalhouses_plex_agent"
 APP_NAME="${PRODUCT_ID}"
 LEGACY_APP_NAME="digitalhouses_plex_monitoring"
+LEGACY_TOPIC_PREFIX="DigitalHouses/Global/plex_monitoring"
+CANONICAL_TOPIC_PREFIX="DigitalHouses/Global/digitalhouses_plex_agent"
 SOURCE_PRODUCT_DIR="${PRODUCT_ID}"
 
 SERVICE_NAME="${APP_NAME}.service"
@@ -42,6 +44,7 @@ APP_DIR="/opt/digitalhouses/${APP_NAME}"
 CONFIG_DIR="/etc/${APP_NAME}"
 CONFIG_FILE="${CONFIG_DIR}/${APP_NAME}.conf"
 STATE_DIR="/var/lib/${APP_NAME}"
+TELEMETRY_STATE_DIR="/var/lib/digitalhouses/${APP_NAME}"
 UNIT_FILE="/etc/systemd/system/${SERVICE_NAME}"
 GPU_UNIT_FILE="/etc/systemd/system/${GPU_SERVICE_NAME}"
 PLEX_LOCAL_ADMIN_TOKEN="/var/lib/plexmediaserver/Library/Application Support/Plex Media Server/.LocalAdminToken"
@@ -62,6 +65,8 @@ LEGACY_TOKEN_DROPIN_FILE="${LEGACY_TOKEN_DROPIN_DIR}/plex-local-token.conf"
 MIGRATION_MARKER="${STATE_DIR}/.runtime_migrated_from_${LEGACY_APP_NAME}"
 MIGRATION_IN_PROGRESS="${STATE_DIR}/.runtime_migration_in_progress"
 BACKUP_DIR="/var/backups/${APP_NAME}"
+HA_MQTT_MIGRATION_MARKER="${STATE_DIR}/.ha_mqtt_identity_migrated_v1"
+HA_MQTT_MIGRATION_SOURCE_CONFIG="${BACKUP_DIR}/ha-mqtt-migration-source.conf"
 
 if [[ "${EUID}" -ne 0 ]]; then
     echo "This installer must run as root."
@@ -162,6 +167,8 @@ install -d -o root -g root -m 0755 /opt/digitalhouses
 install -d -o root -g root -m 0755 "${APP_DIR}"
 install -d -o root -g "${SERVICE_GROUP}" -m 0750 "${CONFIG_DIR}"
 install -d -o "${SERVICE_USER}" -g "${SERVICE_GROUP}" -m 0750 "${STATE_DIR}"
+install -d -o root -g root -m 0755 /var/lib/digitalhouses
+install -d -o "${SERVICE_USER}" -g "${SERVICE_GROUP}" -m 0700 "${TELEMETRY_STATE_DIR}"
 
 legacy_runtime_present=0
 for legacy_path in \
@@ -293,6 +300,7 @@ find "${APP_DIR}" \
 cp -a "${SOURCE_APP}/." "${APP_DIR}/"
 chown -R root:root "${APP_DIR}"
 
+config_created=0
 if [[ ! -f "${CONFIG_FILE}" ]]; then
     if [[ ! -r /dev/tty ]]; then
         echo "First installation requires an interactive terminal for MQTT settings."
@@ -337,6 +345,9 @@ if [[ ! -f "${CONFIG_FILE}" ]]; then
         printf '%s\n' "log_level = info"
         printf '\n'
         printf '%s\n' "[telemetry]"
+        printf '%s\n' "# Voluntary product telemetry. Default is OFF."
+        printf '%s\n' "# Policy: https://github.com/DigitalHouses/home-assistant-apps/blob/main/docs/standards/PRODUCT_TELEMETRY_POLICY.md"
+        printf '%s\n' "enabled = false"
         printf '%s\n' "cpu_change_threshold = 5"
         printf '%s\n' "high_load_threshold = 80"
         printf '%s\n' "high_load_publish_interval_seconds = 60"
@@ -353,11 +364,25 @@ if [[ ! -f "${CONFIG_FILE}" ]]; then
         printf 'port = %s\n' "${mqtt_port}"
         printf 'username = %s\n' "${mqtt_user}"
         printf 'password = %s\n' "${mqtt_password}"
-        printf '%s\n' "topic_prefix = DigitalHouses/Global/plex_monitoring"
+        printf '%s\n' "topic_prefix = ${CANONICAL_TOPIC_PREFIX}"
         printf '%s\n' "discovery_prefix = homeassistant"
         printf '%s\n' "keepalive_seconds = 60"
     } >"${CONFIG_FILE}"
     umask "${previous_umask}"
+    config_created=1
+fi
+
+ha_mqtt_identity_migration=0
+if [[ ! -f "${HA_MQTT_MIGRATION_MARKER}" && "${config_created}" -eq 0 ]]; then
+    install -d -o root -g root -m 0700 "${BACKUP_DIR}"
+    if [[ ! -f "${HA_MQTT_MIGRATION_SOURCE_CONFIG}" ]]; then
+        install -o root -g root -m 0600             "${CONFIG_FILE}" "${HA_MQTT_MIGRATION_SOURCE_CONFIG}"
+    fi
+
+    if grep -Eq         "^[[:space:]]*topic_prefix[[:space:]]*=[[:space:]]*${LEGACY_TOPIC_PREFIX}[[:space:]]*$"         "${CONFIG_FILE}"; then
+        sed -i -E             "s#^([[:space:]]*topic_prefix[[:space:]]*=[[:space:]]*)${LEGACY_TOPIC_PREFIX}([[:space:]]*)$#\\1${CANONICAL_TOPIC_PREFIX}\\2#"             "${CONFIG_FILE}"
+    fi
+    ha_mqtt_identity_migration=1
 fi
 
 chown root:"${SERVICE_GROUP}" "${CONFIG_FILE}"
@@ -464,6 +489,27 @@ if [[ "${migration_performed}" -eq 1 ]]; then
     chmod 0644 "${MIGRATION_MARKER}"
     rm -f "${MIGRATION_IN_PROGRESS}"
     rollback_needed=0
+fi
+
+if [[ "${ha_mqtt_identity_migration}" -eq 1 ]]; then
+    echo "Cleaning retained legacy Plex MQTT/Discovery identity."
+    if ! PYTHONPATH="${APP_DIR}" "${APP_DIR}/.venv/bin/python" -m app.app         --config "${HA_MQTT_MIGRATION_SOURCE_CONFIG}"         --migration-mqtt-cleanup; then
+        echo "Canonical Plex Agent is active, but legacy MQTT cleanup did not complete."
+        echo "Retry this same release install after MQTT connectivity is restored."
+        exit 1
+    fi
+    rm -f "${HA_MQTT_MIGRATION_SOURCE_CONFIG}"
+fi
+
+if [[ ! -f "${HA_MQTT_MIGRATION_MARKER}" ]]; then
+    {
+        printf 'completed_at=%s\n' "$(date --iso-8601=seconds)"
+        printf 'target_product=%s\n' "${PRODUCT_ID}"
+        printf 'target_topic_prefix=%s\n' "${CANONICAL_TOPIC_PREFIX}"
+        printf 'source_release=%s\n' "${SOURCE_REF}"
+    } >"${HA_MQTT_MIGRATION_MARKER}"
+    chown root:root "${HA_MQTT_MIGRATION_MARKER}"
+    chmod 0644 "${HA_MQTT_MIGRATION_MARKER}"
 fi
 
 echo
