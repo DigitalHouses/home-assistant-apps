@@ -9,6 +9,13 @@ from validators.common import fail, require_files
 EXPECTED_BASE_TOPIC = "DigitalHouses/Global/db_monitoring"
 EXPECTED_DEVICE_ID = "digitalhouses_db_monitoring"
 EXPECTED_REFRESH_TOPIC = f"{EXPECTED_BASE_TOPIC}/refresh"
+EXPECTED_EVENT_TOPIC = f"{EXPECTED_BASE_TOPIC}/event/diagnostic"
+EXPECTED_THRESHOLD_STATE_TOPIC = (
+    f"{EXPECTED_BASE_TOPIC}/settings/disk_usage_threshold_percent/state"
+)
+EXPECTED_THRESHOLD_COMMAND_TOPIC = (
+    f"{EXPECTED_BASE_TOPIC}/settings/disk_usage_threshold_percent/set"
+)
 
 
 def _import_discovery(app: Path):
@@ -59,6 +66,14 @@ def validate_db_monitoring(
         fail("DB Monitoring discovery device identifier changed")
     if discovery.REFRESH_COMMAND_TOPIC != EXPECTED_REFRESH_TOPIC:
         fail("DB Monitoring refresh command topic changed")
+    if discovery.EVENT_TOPIC != EXPECTED_EVENT_TOPIC:
+        fail("Recorder diagnostic event topic changed")
+    if discovery.DISK_USAGE_THRESHOLD_STATE_TOPIC != EXPECTED_THRESHOLD_STATE_TOPIC:
+        fail("Recorder disk threshold state topic changed")
+    if discovery.DISK_USAGE_THRESHOLD_COMMAND_TOPIC != EXPECTED_THRESHOLD_COMMAND_TOPIC:
+        fail("Recorder disk threshold command topic changed")
+    if discovery.EVENT_SCHEMA_VERSION != 2:
+        fail("Recorder diagnostic event schema version must be 2")
 
     payload = discovery.build_discovery_payload(
         app_version="validation",
@@ -77,6 +92,8 @@ def validate_db_monitoring(
         "db_disk_used": "sensor.dh_db_disk_used",
         "db_disk_total": "sensor.dh_db_disk_total",
         "db_disk_used_percentage": "sensor.dh_db_disk_used_percentage",
+        "db_disk_usage_threshold": "number.dh_db_disk_usage_threshold",
+        "diagnostic_event": "event.dh_db_diagnostic",
     }
     for key, expected_entity_id in required_entities.items():
         component = components.get(key)
@@ -87,3 +104,24 @@ def validate_db_monitoring(
                 f"DB Monitoring unexpected default_entity_id for {key}: "
                 f"{component.get('default_entity_id')!r}"
             )
+
+
+    event_component = components["diagnostic_event"]
+    if event_component.get("platform") != "event":
+        fail("Recorder diagnostic entity must use MQTT event platform")
+    expected_event_types = {
+        "db_connection_lost",
+        "db_connection_restored",
+        "recorder_writing_stopped",
+        "recorder_writing_restored",
+        "storage_usage_high",
+        "storage_usage_normal",
+    }
+    if set(event_component.get("event_types") or []) != expected_event_types:
+        fail("Recorder diagnostic event types changed")
+
+    threshold_component = components["db_disk_usage_threshold"]
+    if threshold_component.get("platform") != "number":
+        fail("Recorder disk usage threshold must be an MQTT number")
+    if threshold_component.get("min") != 1 or threshold_component.get("max") != 98:
+        fail("Recorder disk usage threshold range must remain 1..98")
