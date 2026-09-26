@@ -183,7 +183,10 @@ def validate_digitalhouses_pve_agent(
     _require_text(
         app / "app/discovery_ups_groups.py",
         (
-            'return value.replace(".dh_pve_agent_ups_", ".dh_pve_agent_ups_", 1)',
+            'if ".dh_pve_agent_ups_" in value:',
+            'return value',
+            'return value.replace(".dh_app_pve_ups_", ".dh_pve_agent_ups_", 1)',
+            'return value.replace(".dh_pve_ups_", ".dh_pve_agent_ups_", 1)',
             'return value.replace(".dh_ups_", ".dh_pve_agent_ups_", 1)',
             '"default_entity_id": f"binary_sensor.dh_pve_agent_ups_{problem_id}_problem"',
             '"default_entity_id": "sensor.dh_pve_agent_ups_problems"',
