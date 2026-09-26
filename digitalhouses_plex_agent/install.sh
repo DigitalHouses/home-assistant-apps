@@ -376,11 +376,16 @@ ha_mqtt_identity_migration=0
 if [[ ! -f "${HA_MQTT_MIGRATION_MARKER}" && "${config_created}" -eq 0 ]]; then
     install -d -o root -g root -m 0700 "${BACKUP_DIR}"
     if [[ ! -f "${HA_MQTT_MIGRATION_SOURCE_CONFIG}" ]]; then
-        install -o root -g root -m 0600             "${CONFIG_FILE}" "${HA_MQTT_MIGRATION_SOURCE_CONFIG}"
+        install -o root -g root -m 0600 \
+            "${CONFIG_FILE}" "${HA_MQTT_MIGRATION_SOURCE_CONFIG}"
     fi
 
-    if grep -Eq         "^[[:space:]]*topic_prefix[[:space:]]*=[[:space:]]*${LEGACY_TOPIC_PREFIX}[[:space:]]*$"         "${CONFIG_FILE}"; then
-        sed -i -E             "s#^([[:space:]]*topic_prefix[[:space:]]*=[[:space:]]*)${LEGACY_TOPIC_PREFIX}([[:space:]]*)$#\\1${CANONICAL_TOPIC_PREFIX}\\2#"             "${CONFIG_FILE}"
+    if grep -Eq \
+        "^[[:space:]]*topic_prefix[[:space:]]*=[[:space:]]*${LEGACY_TOPIC_PREFIX}[[:space:]]*$" \
+        "${CONFIG_FILE}"; then
+        sed -i -E \
+            "s#^([[:space:]]*topic_prefix[[:space:]]*=[[:space:]]*)${LEGACY_TOPIC_PREFIX}([[:space:]]*)$#\\1${CANONICAL_TOPIC_PREFIX}\\2#" \
+            "${CONFIG_FILE}"
     fi
     ha_mqtt_identity_migration=1
 fi
@@ -493,7 +498,9 @@ fi
 
 if [[ "${ha_mqtt_identity_migration}" -eq 1 ]]; then
     echo "Cleaning retained legacy Plex MQTT/Discovery identity."
-    if ! PYTHONPATH="${APP_DIR}" "${APP_DIR}/.venv/bin/python" -m app.app         --config "${HA_MQTT_MIGRATION_SOURCE_CONFIG}"         --migration-mqtt-cleanup; then
+    if ! PYTHONPATH="${APP_DIR}" "${APP_DIR}/.venv/bin/python" -m app.app \
+        --config "${HA_MQTT_MIGRATION_SOURCE_CONFIG}" \
+        --migration-mqtt-cleanup; then
         echo "Canonical Plex Agent is active, but legacy MQTT cleanup did not complete."
         echo "Retry this same release install after MQTT connectivity is restored."
         exit 1
