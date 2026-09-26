@@ -3,6 +3,7 @@ from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from app.gpu_collector import (
+    GpuStateReader,
     IntelGpuCollector,
     parse_intel_gpu_top_json,
     read_gpu_temperature,
@@ -142,3 +143,44 @@ def test_gpu_state_writer_is_atomic_and_timestamped():
         assert payload["collected_at_epoch"] == 1234.5
         assert payload["video_busy_percent"] == 12.3
         assert not path.with_name(path.name + ".tmp").exists()
+
+
+def test_gpu_reader_rejects_missing_supported_in_helper_state():
+    with TemporaryDirectory() as tmp:
+        path = Path(tmp) / "gpu_state.json"
+        path.write_text(
+            '{"available":true,"status":"ok","collected_at_epoch":100.0}\n',
+            encoding="utf-8",
+        )
+        with patch(
+            "app.gpu_collector.detect_intel_gpu_pci",
+            return_value="0000:00:10.0",
+        ):
+            payload = GpuStateReader(
+                path,
+                now_epoch=lambda: 100.0,
+            ).collect()
+
+    assert payload["status"] == "helper_error"
+    assert payload["supported"] is True
+    assert payload["available"] is False
+
+
+def test_gpu_reader_rejects_missing_available_or_status():
+    cases = (
+        '{"supported":true,"status":"ok","collected_at_epoch":100.0}\n',
+        '{"supported":true,"available":true,"collected_at_epoch":100.0}\n',
+        '{"supported":true,"available":true,"status":"","collected_at_epoch":100.0}\n',
+    )
+    for raw in cases:
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "gpu_state.json"
+            path.write_text(raw, encoding="utf-8")
+            payload = GpuStateReader(
+                path,
+                now_epoch=lambda: 100.0,
+            ).collect()
+
+        assert payload["status"] == "helper_error"
+        assert payload["supported"] is True
+        assert payload["available"] is False
