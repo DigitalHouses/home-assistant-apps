@@ -25,3 +25,11 @@ def test_public_examples_do_not_contain_site_private_dependencies():
         r")(?![0-9])"
     )
     assert private_ipv4.search(combined) is None
+
+def test_readme_uses_canonical_entity_prefix():
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+
+    assert "dh_plex_agent_agent_" not in readme
+    assert "sensor.dh_plex_agent_*" in readme
+    assert "binary_sensor.dh_plex_agent_*" in readme
+    assert "button.dh_plex_agent_*" in readme
