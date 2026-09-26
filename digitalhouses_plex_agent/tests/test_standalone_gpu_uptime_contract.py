@@ -113,6 +113,7 @@ def test_runtime_publishes_gpu_group_and_server_boot_timestamp():
         bridge=bridge,
         build=BuildInfo("0.4.0", "digitalhouses_plex_agent-v0.4.0", "abcdef"),
         source_interval_seconds=10.0,
+        agent_started_at="2026-09-21T00:00:00+00:00",
         now_monotonic=lambda: next(values),
         server_boot_time="2026-09-20T01:05:32+00:00",
     )
