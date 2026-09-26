@@ -402,8 +402,10 @@ def validate_digitalhouses_pve_agent(
     ru_notification = notification_packages[1].read_text(encoding="utf-8")
     if "action: persistent_notification.create" not in en_notification:
         fail("DH PVE English local notification example must use a direct action")
-    if "action: script.write2log" not in ru_notification:
-        fail("DH PVE Russian site notification package must call write2log directly")
+    if "action: persistent_notification.create" not in ru_notification:
+        fail("DH PVE Russian public notification example must use a standard direct action")
+    if "script.write2log" in ru_notification:
+        fail("DH PVE public notification examples must not depend on private script.write2log")
 
     ui_package = (
         app / "examples/packages/dh_pve_agent_package.yaml"
