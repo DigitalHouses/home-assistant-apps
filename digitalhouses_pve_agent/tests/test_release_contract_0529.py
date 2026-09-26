@@ -13,14 +13,14 @@ DESIGN = (
 )
 
 
-def test_0529_version_and_repository_validator_contract():
-    assert (APP / "VERSION").read_text(encoding="utf-8").strip() == "0.5.29"
+def test_0530_version_and_repository_validator_contract():
+    assert (APP / "VERSION").read_text(encoding="utf-8").strip() == "0.5.30"
 
     text = VALIDATOR.read_text(encoding="utf-8")
-    assert 'EXPECTED_VERSION = "0.5.29"' in text
+    assert 'EXPECTED_VERSION = "0.5.30"' in text
 
 
-def test_0529_home_assistant_package_layout():
+def test_0530_home_assistant_package_layout():
     packages = APP / "examples" / "packages"
     base = packages / "dh_pve_agent_package.yaml"
     en = packages / "dh_pve_agent_notification_local_package.yaml"
@@ -46,13 +46,13 @@ def test_0529_home_assistant_package_layout():
         assert "contract_error" not in text
 
 
-def test_0529_shutdown_runtime_contract_is_documented():
+def test_0530_shutdown_runtime_contract_is_documented():
     readme = (APP / "README.md").read_text(encoding="utf-8")
     changelog = (APP / "CHANGELOG.md").read_text(encoding="utf-8")
     design = DESIGN.read_text(encoding="utf-8")
 
-    assert "`VERSION` is `0.5.29`." in readme
-    assert "## 0.5.29" in changelog
+    assert "`VERSION` is `0.5.30`." in readme
+    assert "## 0.5.30" in changelog
     assert "shutdown_status = correct | incorrect | unknown" in design
     assert "planned_shutdown_seconds" in design
     assert "planned_all_guest_shutdown_seconds" in design
@@ -69,7 +69,7 @@ def test_0529_shutdown_runtime_contract_is_documented():
     assert "Home Assistant is a presentation client" in design
 
 
-def test_0529_operational_guide_contract():
+def test_0530_operational_guide_contract():
     guide = (APP / "digitalhouses_pve_agent.txt").read_text(encoding="utf-8")
     for required in (
         "Установка",
@@ -83,7 +83,7 @@ def test_0529_operational_guide_contract():
         assert required in guide
 
 
-def test_0529_installer_uses_canonical_source_and_legacy_runtime_identity():
+def test_0530_installer_uses_canonical_source_and_legacy_runtime_identity():
     installer = (APP / "install.sh").read_text(encoding="utf-8")
 
     assert 'PRODUCT_ID="digitalhouses_pve_agent"' in installer

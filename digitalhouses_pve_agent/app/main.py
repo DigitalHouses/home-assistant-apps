@@ -17,6 +17,7 @@ from .fan_calibration import FanCalibrationManager, FanCalibrationRegistry
 from .fan_hardware_beelink import BeelinkIt8613FanAdapter
 from .fan_runtime import FanAwareRuntime as ProblemAwareRuntime
 from .identity import resolve_identity
+from .migration_cleanup import cleanup_legacy_mqtt_namespace
 from .machine_event_outbox import MachineEventOutbox
 from .mqtt_bridge import MqttBridge
 from .production import _run
@@ -460,6 +461,11 @@ def main() -> int:
         help=argparse.SUPPRESS,
     )
     parser.add_argument(
+        "--migration-mqtt-cleanup",
+        action="store_true",
+        help=argparse.SUPPRESS,
+    )
+    parser.add_argument(
         "--telemetry-delete",
         action="store_true",
         help="Delete this installation's retained product telemetry record.",
@@ -467,6 +473,10 @@ def main() -> int:
     args = parser.parse_args()
 
     config = load_config(args.config)
+    if args.migration_mqtt_cleanup:
+        identity = resolve_identity(config.general)
+        _configure_logging(config.general.log_level)
+        return 0 if cleanup_legacy_mqtt_namespace(config, identity) else 3
     if args.uninstall_mqtt_cleanup:
         identity = resolve_identity(config.general)
         _configure_logging(config.general.log_level)
