@@ -114,7 +114,7 @@ class ReleaseCandidatesTests(unittest.TestCase):
                     {
                         "id": "digitalhouses_pve_agent",
                         "type": "agent",
-                        "entity_prefix": "dh_pve_agent",
+                        "entity_prefix": "dh_pve_agent_agent",
                         "display_name": "PVE Agent",
                         "telemetry_allowed": True,
                         "release": {
@@ -122,19 +122,19 @@ class ReleaseCandidatesTests(unittest.TestCase):
                             "version_source": "version_file",
                             "policy_baseline": "0.5.6",
                         },
-                        "repository_directory": "dh_pve_app",
+                        "repository_directory": "digitalhouses_pve_agent",
                     }
                 ],
             }
-            self._write(root, "dh_pve_app/VERSION", "0.6.0\n")
+            self._write(root, "digitalhouses_pve_agent/VERSION", "0.6.0\n")
             self._write(root, registry_path, __import__("json").dumps(base_registry))
             base = self._commit_all(root, "base")
 
             (root / "digitalhouses_pve_agent").mkdir(parents=True)
-            (root / "dh_pve_app/VERSION").replace(
+            (root / "digitalhouses_pve_agent/VERSION").replace(
                 root / "digitalhouses_pve_agent/VERSION"
             )
-            (root / "dh_pve_app").rmdir()
+            (root / "digitalhouses_pve_agent").rmdir()
 
             head_registry = dict(base_registry)
             head_registry["products"] = [dict(base_registry["products"][0])]
