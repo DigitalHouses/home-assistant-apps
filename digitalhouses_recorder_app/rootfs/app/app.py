@@ -6,6 +6,7 @@ import os
 import signal
 import threading
 import time
+from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -17,6 +18,10 @@ from discovery import (
     DB_AVAILABILITY_TOPIC,
     STORAGE_AVAILABILITY_TOPIC,
     DISCOVERY_TOPIC,
+    DISK_USAGE_THRESHOLD_COMMAND_TOPIC,
+    DISK_USAGE_THRESHOLD_STATE_TOPIC,
+    EVENT_SCHEMA_VERSION,
+    EVENT_TOPIC,
     HA_STATUS_TOPIC,
     REFRESH_COMMAND_TOPIC,
     STATE_RETAIN,
@@ -26,6 +31,11 @@ from discovery import (
     build_discovery_payload,
 )
 from storage import StorageCollector
+from runtime_settings import (
+    RuntimeSettingError,
+    load_disk_usage_threshold,
+    save_disk_usage_threshold,
+)
 from rankings import (
     TOP_ENTITIES_24H_INTERVAL_SECONDS,
     TOP_ENTITIES_ALL_TIME_INTERVAL_SECONDS,
@@ -39,7 +49,7 @@ from metrics import (
     short_db_version,
     yesterday_bounds_epoch,
 )
-APP_VERSION = os.getenv('APP_VERSION', '0.1.13-local')
+APP_VERSION = os.getenv('APP_VERSION', '0.1.14-local')
 MEDIUM_INTERVAL_SECONDS = 300
 SLOW_INTERVAL_SECONDS = 3600
 STORAGE_INTERVAL_SECONDS = 300
@@ -57,7 +67,7 @@ class DatabaseMonitorApp:
             format='%(asctime)s %(levelname)s %(message)s',
             datefmt='%Y-%m-%d %H:%M:%S',
         )
-        self.log = logging.getLogger('digitalhouses_db_monitoring')
+        self.log = logging.getLogger('digitalhouses_recorder_app')
         self.adapter = create_adapter(self.config.database)
         self.storage = StorageCollector(self.config.storage, self.adapter)
         self.state: dict[str, Any] = {
@@ -73,6 +83,11 @@ class DatabaseMonitorApp:
         self.storage_available = False
         self._logged_storage_path = ''
         self.ranking_state: dict[str, dict[str, Any]] = {}
+        self.disk_usage_threshold_percent = load_disk_usage_threshold()
+        self._db_connected_observed: bool | None = None
+        self._db_outage_started_epoch: float | None = None
+        self._recorder_writing_observed: bool | None = None
+        self._storage_problem_observed: bool | None = None
         self.client = self._build_mqtt_client()
 
     def _build_mqtt_client(self) -> mqtt.Client:
@@ -95,7 +110,7 @@ class DatabaseMonitorApp:
         self.mqtt_connected.set()
         client.subscribe(HA_STATUS_TOPIC, qos=1)
         client.subscribe(REFRESH_COMMAND_TOPIC, qos=1)
-        client.subscribe(REFRESH_COMMAND_TOPIC, qos=1)
+        client.subscribe(DISK_USAGE_THRESHOLD_COMMAND_TOPIC, qos=1)
         self.publish_json(
             DISCOVERY_TOPIC,
             build_discovery_payload(APP_VERSION, include_storage=self.storage.enabled),
@@ -110,6 +125,7 @@ class DatabaseMonitorApp:
         )
         self.publish_state()
         self.publish_rankings()
+        self.publish_disk_usage_threshold()
         self.log.info('MQTT connected; discovery published')
 
     def _on_disconnect(self, client, userdata, return_code) -> None:
@@ -120,6 +136,11 @@ class DatabaseMonitorApp:
 
     def _on_message(self, client, userdata, message) -> None:
         del client, userdata
+        if message.topic == DISK_USAGE_THRESHOLD_COMMAND_TOPIC:
+            self._set_disk_usage_threshold(
+                message.payload.decode('utf-8', errors='replace').strip()
+            )
+            return
         if message.topic == REFRESH_COMMAND_TOPIC:
             if self.refresh_requested.is_set() or self.refresh_in_progress.is_set():
                 self.log.debug('Manual full refresh already pending or running; duplicate request ignored')
@@ -138,6 +159,7 @@ class DatabaseMonitorApp:
             )
             self.publish_state()
             self.publish_rankings()
+            self.publish_disk_usage_threshold()
 
     def publish_text(self, topic: str, payload: str, retain: bool) -> None:
         if not self.mqtt_connected.is_set():
@@ -170,6 +192,150 @@ class DatabaseMonitorApp:
             if topic:
                 self.publish_json(topic, snapshot, retain=True)
 
+    def publish_disk_usage_threshold(self) -> None:
+        self.publish_text(
+            DISK_USAGE_THRESHOLD_STATE_TOPIC,
+            f'{self.disk_usage_threshold_percent:g}',
+            retain=True,
+        )
+
+    def _observed_at(self, epoch: float | None = None) -> str:
+        when = time.time() if epoch is None else epoch
+        return datetime.fromtimestamp(
+            when,
+            ZoneInfo(self.config.timezone),
+        ).isoformat(timespec='seconds')
+
+    def _event(self, event_type: str, **data: Any) -> None:
+        self.publish_json(
+            EVENT_TOPIC,
+            {
+                'schema_version': EVENT_SCHEMA_VERSION,
+                'event_type': event_type,
+                'observed_at': self._observed_at(),
+                **data,
+            },
+            retain=False,
+        )
+
+    def _set_disk_usage_threshold(self, raw_value: str) -> None:
+        try:
+            updated = save_disk_usage_threshold(raw_value)
+        except RuntimeSettingError as exc:
+            self.log.warning('Rejected disk usage threshold: %s', exc)
+            self.publish_disk_usage_threshold()
+            return
+
+        previous = self.disk_usage_threshold_percent
+        self.disk_usage_threshold_percent = updated
+        self.publish_disk_usage_threshold()
+        if updated == previous:
+            return
+
+        self.log.info(
+            'Disk usage threshold changed: %.1f%% -> %.1f%%',
+            previous,
+            updated,
+        )
+        with self.state_lock:
+            metrics = {
+                key: self.state.get(key)
+                for key in (
+                    'db_disk_free',
+                    'db_disk_used',
+                    'db_disk_total',
+                    'db_disk_used_percentage',
+                )
+            }
+        if all(value is not None for value in metrics.values()):
+            self._observe_storage_problem(metrics, cause='threshold_changed')
+
+    def _observe_db_connection(
+        self,
+        connected: bool,
+        *,
+        error: str | None = None,
+    ) -> None:
+        now = time.time()
+        previous = self._db_connected_observed
+        self._db_connected_observed = connected
+
+        if previous is None:
+            if not connected:
+                self._db_outage_started_epoch = now
+            return
+        if previous == connected:
+            return
+
+        if not connected:
+            self._db_outage_started_epoch = now
+            event_type = 'db_connection_lost'
+            payload: dict[str, Any] = {
+                'database_engine': self.config.database.engine,
+                'database_name': self.config.database.database,
+            }
+            if error:
+                payload['error'] = error
+        else:
+            event_type = 'db_connection_restored'
+            payload = {
+                'database_engine': self.config.database.engine,
+                'database_name': self.config.database.database,
+            }
+            if self._db_outage_started_epoch is not None:
+                payload['outage_seconds'] = max(
+                    0,
+                    int(now - self._db_outage_started_epoch),
+                )
+            self._db_outage_started_epoch = None
+
+        self.publish_state()
+        self._event(event_type, **payload)
+
+    def _observe_recorder_writing(
+        self,
+        writing: bool,
+        *,
+        last_record_at: str | None,
+        last_age_seconds: int | None,
+    ) -> None:
+        previous = self._recorder_writing_observed
+        self._recorder_writing_observed = writing
+        if previous is None or previous == writing:
+            return
+
+        self.publish_state()
+        self._event(
+            'recorder_writing_restored' if writing else 'recorder_writing_stopped',
+            last_record_at=last_record_at,
+            last_age_seconds=last_age_seconds,
+            stale_threshold_seconds=self.config.recorder_stale_seconds,
+        )
+
+    def _observe_storage_problem(
+        self,
+        metrics: dict[str, Any],
+        *,
+        cause: str,
+    ) -> None:
+        used_percent = float(metrics['db_disk_used_percentage'])
+        active = used_percent >= self.disk_usage_threshold_percent
+        previous = self._storage_problem_observed
+        self._storage_problem_observed = active
+        if previous is None or previous == active:
+            return
+
+        self.publish_state()
+        self._event(
+            'storage_usage_high' if active else 'storage_usage_normal',
+            used_percent=used_percent,
+            used_gb=float(metrics['db_disk_used']),
+            free_gb=float(metrics['db_disk_free']),
+            total_gb=float(metrics['db_disk_total']),
+            threshold_percent=self.disk_usage_threshold_percent,
+            cause=cause,
+        )
+
     def update_state(self, values: dict[str, Any]) -> None:
         with self.state_lock:
             self.state.update(values)
@@ -190,13 +356,15 @@ class DatabaseMonitorApp:
         if not self.storage.enabled:
             return True
         try:
-            self.update_state(self.storage.collect())
+            metrics = self.storage.collect()
+            self.update_state(metrics)
             if self.config.storage.source == 'ssh':
                 resolved_path = self.storage.resolved_path
                 if resolved_path and resolved_path != self._logged_storage_path:
                     self.log.info('Storage filesystem path: %s', resolved_path)
                     self._logged_storage_path = resolved_path
             self.set_storage_available(True)
+            self._observe_storage_problem(metrics, cause='measurement')
             return True
         except Exception as exc:
             self.log.warning('Storage query failed: %s', exc)
@@ -210,18 +378,26 @@ class DatabaseMonitorApp:
             last_ts = raw.get('db_last_ts')
             age = last_age_seconds(last_ts, now)
             writing = age is not None and age <= self.config.recorder_stale_seconds
+            last_record_at = iso_from_epoch(last_ts)
             self.update_state({
                 'db_connected': True,
-                'db_last': iso_from_epoch(last_ts),
+                'db_last': last_record_at,
                 'db_last_age': age,
                 'recorder_writing': writing,
             })
             self.set_db_available(True)
+            self._observe_db_connection(True)
+            self._observe_recorder_writing(
+                writing,
+                last_record_at=last_record_at,
+                last_age_seconds=age,
+            )
             return True
         except Exception as exc:  # DB driver exceptions differ by backend
             self.log.error('Fast database query failed: %s', exc)
             self.update_state({'db_connected': False, 'recorder_writing': False})
             self.set_db_available(False)
+            self._observe_db_connection(False, error=str(exc))
             return False
 
     def collect_medium(self) -> bool:
@@ -315,7 +491,7 @@ class DatabaseMonitorApp:
     def run(self) -> None:
         db = self.config.database
         publish_interval_seconds = self.config.publish_interval_minutes * 60
-        self.log.info('Starting DigitalHouses DB Monitoring %s', APP_VERSION)
+        self.log.info('Starting DigitalHouses Recorder App %s', APP_VERSION)
         self.log.info('Database engine: %s', db.engine)
         self.log.info('Database target: %s@%s:%s/%s', db.username, db.host, db.port, db.database)
         self.log.info('Timezone: %s', self.config.timezone)
