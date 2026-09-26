@@ -19,24 +19,24 @@ device ID:     digitalhouses_recorder_app
 entity prefix: dh_recorder_app
 ```
 
-Release 0.1.15 temporarily mirrors the released legacy identity
+Release 0.1.15 was the temporary compatibility bridge from
 `DigitalHouses/Global/db_monitoring` / `digitalhouses_db_monitoring` /
-`dh_db_*`. This is a compatibility bridge only; canonical identity is the new
-production contract.
+`dh_db_*` to the canonical contract.
 
-Bridge state:
+Release 0.1.16 is canonical-only at runtime. On its first MQTT connection it
+deletes the retained legacy state topics and tombstones the retained legacy
+Discovery payload. Cleanup publishes use QoS 1 and must receive broker ACKs
+before the migration marker is advanced to `phase=completed`.
+
+Migration state:
 
 ```text
 /data/ha_mqtt_identity_migration.json
 ```
 
-The marker is idempotent. A future cleanup release will tombstone retained
-legacy MQTT state and the legacy Discovery device after live bridge acceptance.
-Once cleanup writes `phase=completed`, rollback to bridge release 0.1.15 will
-not reactivate the legacy mirror. After cleanup, 0.1.15 is the supported
-rollback floor for HA/MQTT identity: releases 0.1.14 and older predate the
-completed marker and must not be used as rollback targets unless legacy
-identity resurrection is intentionally accepted.
+The completed marker is idempotent. Rolling back from 0.1.16 to bridge release
+0.1.15 does not reactivate the legacy mirror. Releases 0.1.14 and older predate
+the completed-marker behavior and are not safe rollback targets after cleanup.
 
 ## Common runtime diagnostics
 
@@ -168,8 +168,7 @@ Contract:
 - invalid persisted state is an explicit runtime-settings error;
 - changing the Number reevaluates the latest storage measurement immediately.
 
-During the 0.1.15 bridge the released legacy Number and its MQTT command/state
-topics are mirrored so existing automations continue to operate.
+During the historical 0.1.15 bridge the released legacy Number and its MQTT command/state topics were mirrored. Release 0.1.16 no longer subscribes to or publishes those legacy topics.
 
 ## Machine event contract
 
