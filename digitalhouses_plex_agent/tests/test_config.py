@@ -25,15 +25,31 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.general.instance_id, "plex")
         self.assertEqual(config.general.poll_interval_seconds, 10.0)
         self.assertEqual(config.general.cpu_window_seconds, 60.0)
+        self.assertFalse(config.telemetry.enabled)
         self.assertEqual(config.telemetry.cpu_change_threshold, 5.0)
         self.assertEqual(config.telemetry.high_load_threshold, 80.0)
         self.assertEqual(
             config.telemetry.high_load_publish_interval_seconds, 60.0
         )
+        self.assertEqual(
+            config.mqtt.topic_prefix,
+            "DigitalHouses/Global/digitalhouses_plex_agent",
+        )
 
     def test_entity_prefix(self):
-        self.assertEqual(entity_prefix("plex"), "dh_plex")
-        self.assertEqual(entity_prefix("plex_guest"), "dh_plex_guest")
+        self.assertEqual(entity_prefix("plex"), "dh_plex_agent")
+        self.assertEqual(
+            entity_prefix("plex_guest"),
+            "dh_plex_agent_plex_guest",
+        )
+
+    def test_telemetry_can_be_enabled_explicitly(self):
+        config = load_config(
+            self._write(
+                self._base("[telemetry]\nenabled = true\n")
+            )
+        )
+        self.assertTrue(config.telemetry.enabled)
 
     def test_invalid_instance_ids(self):
         for value in ("Plex-VM", "_plex", "plex.vm"):
