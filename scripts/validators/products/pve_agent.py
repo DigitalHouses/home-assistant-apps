@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 from typing import Any
 
 from validators.common import fail, require_files
@@ -531,11 +532,13 @@ def validate_digitalhouses_pve_agent(
     for forbidden in (
         "sensor.dh_pve_agent_*",
         "binary_sensor.dh_pve_agent_*",
-        "sensor.dh_pve_agent_",
-        "binary_sensor.dh_pve_agent_",
+        "sensor.dh_app_pve_",
+        "binary_sensor.dh_app_pve_",
     ):
         if forbidden in package:
             fail(f"DH PVE HA package must remain explicit/lightweight: {forbidden}")
+    if re.search(r"\\b(?:sensor|binary_sensor)\\.dh_pve_(?!agent_)", package):
+        fail("DH PVE HA package contains pre-canonical dh_pve_* entity IDs")
 
     pve_dashboard = (app / "examples/dh_pve_agent_dashboard.yaml").read_text(
         encoding="utf-8"
@@ -549,7 +552,7 @@ def validate_digitalhouses_pve_agent(
         )
     )
     for forbidden in (
-        ".dh_pve_agent_",
+        ".dh_app_pve_",
         ".dh_ups_",
         "input_number.dh_proxmox_",
         "states.sensor",
@@ -557,6 +560,8 @@ def validate_digitalhouses_pve_agent(
     ):
         if forbidden in haos_source:
             fail(f"DH PVE canonical HAOS examples contain legacy/business logic: {forbidden}")
+    if re.search(r"\\.dh_pve_(?!agent_)", haos_source):
+        fail("DH PVE canonical HAOS examples contain pre-canonical dh_pve_* entity IDs")
 
     # auto-entities is presentation-only and is allowed only for the PVE
     # inventory collections whose membership is dynamic. It must not return to
@@ -585,9 +590,12 @@ def validate_digitalhouses_pve_agent(
             fail(f"DH PVE inventory auto-entities contract changed: {required}")
 
     for legacy_name in (
-        "dh_pve_agent_dashboard.yaml",
-        "dh_pve_agent_ups_dashboard.yaml",
-        "dh_pve_agent_shutdown_readiness_card.yaml",
+        "dh_pve_dashboard.yaml",
+        "dh_pve_ups_dashboard.yaml",
+        "dh_pve_shutdown_readiness_card.yaml",
+        "dh_app_pve_dashboard.yaml",
+        "dh_app_pve_ups_dashboard.yaml",
+        "dh_app_pve_shutdown_readiness_card.yaml",
     ):
         if (app / "examples" / legacy_name).exists():
             fail(f"DH PVE legacy HAOS example must be removed: {legacy_name}")
