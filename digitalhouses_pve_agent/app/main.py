@@ -53,8 +53,8 @@ from .ups_shutdown_policy import read_shutdown_policy
 from .uninstall_cleanup import cleanup_mqtt
 
 APP_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_CONFIG = Path("/etc/dh_pve_app/dh_pve_app.conf")
-DEFAULT_STATE_DIR = Path("/var/lib/dh_pve_app")
+DEFAULT_CONFIG = Path("/etc/digitalhouses_pve_agent/digitalhouses_pve_agent.conf")
+DEFAULT_STATE_DIR = Path("/var/lib/digitalhouses_pve_agent")
 
 FAST_SECONDS = 10.0
 SLOW_SECONDS = 60.0
@@ -64,9 +64,12 @@ PROCESS_STARTED_AT = datetime.now(timezone.utc).isoformat()
 
 def _version() -> str:
     try:
-        return (APP_ROOT / "VERSION").read_text(encoding="utf-8").strip()
-    except OSError:
-        return "unknown"
+        version = (APP_ROOT / "VERSION").read_text(encoding="utf-8").strip()
+    except OSError as exc:
+        raise RuntimeError("required VERSION file is unavailable") from exc
+    if not version:
+        raise RuntimeError("required VERSION file is empty")
+    return version
 
 
 def _now_iso() -> str:
@@ -307,7 +310,7 @@ def _telemetry_client(config: AppConfig, state_dir: Path) -> TelemetryClient:
 
 
 def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
-    log = logging.getLogger("dh_pve_app")
+    log = logging.getLogger("digitalhouses_pve_agent")
     shutdown_history_tracker = _shutdown_tracker(state_dir)
     try:
         shutdown_history_tracker.startup()
@@ -356,7 +359,7 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
     signal.signal(signal.SIGINT, stop)
     signal.signal(signal.SIGHUP, reload_policy)
 
-    log.info("Запуск DH PVE App %s", _version())
+    log.info("Запуск DigitalHouses PVE Agent %s", _version())
     telemetry_runner.start()
     if ups_runtime is not None:
         log.info("Найден сохраненный UPS %s", ups_runtime.config.name)
@@ -432,13 +435,13 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
         runtime.wait_fan_calibration()
         telemetry_runner.stop()
         bridge.stop()
-        log.info("DH PVE App остановлен")
+        log.info("DigitalHouses PVE Agent остановлен")
 
     return 0
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(prog="dh_pve_app")
+    parser = argparse.ArgumentParser(prog="digitalhouses_pve_agent")
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     parser.add_argument("--state-dir", type=Path, default=DEFAULT_STATE_DIR)
     parser.add_argument(

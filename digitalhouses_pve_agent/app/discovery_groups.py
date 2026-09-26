@@ -166,9 +166,9 @@ def _diagnostic_components(topics) -> dict[str, dict[str, object]]:
             "platform": "sensor",
             "name": "App version",
             "unique_id": uid("app_version"),
-            "default_entity_id": "sensor.dh_app_pve_app_version",
+            "default_entity_id": "sensor.dh_pve_agent_app_version",
             "state_topic": diagnostics,
-            "value_template": "{{ value_json.app_version | default('unknown') }}",
+            "value_template": "{{ value_json.app_version }}",
             "availability": availability,
             "availability_mode": "all",
             "entity_category": "diagnostic",
@@ -178,9 +178,9 @@ def _diagnostic_components(topics) -> dict[str, dict[str, object]]:
             "platform": "sensor",
             "name": "Agent started",
             "unique_id": uid("agent_started"),
-            "default_entity_id": "sensor.dh_app_pve_agent_started",
+            "default_entity_id": "sensor.dh_pve_agent_agent_started",
             "state_topic": diagnostics,
-            "value_template": "{{ value_json.agent_started_at | default(none) }}",
+            "value_template": "{{ value_json.agent_started_at }}",
             "availability": availability,
             "availability_mode": "all",
             "entity_category": "diagnostic",
@@ -191,7 +191,7 @@ def _diagnostic_components(topics) -> dict[str, dict[str, object]]:
             "platform": "binary_sensor",
             "name": "UPS configured",
             "unique_id": uid("ups_configured"),
-            "default_entity_id": "binary_sensor.dh_app_pve_ups_configured",
+            "default_entity_id": "binary_sensor.dh_pve_agent_ups_configured",
             "state_topic": diagnostics,
             "value_template": (
                 "{{ 'ON' if value_json.ups_configured | default(false) else 'OFF' }}"
@@ -207,7 +207,7 @@ def _diagnostic_components(topics) -> dict[str, dict[str, object]]:
             "platform": "sensor",
             "name": "App profile",
             "unique_id": uid("app_profile"),
-            "default_entity_id": "sensor.dh_app_pve_app_profile",
+            "default_entity_id": "sensor.dh_pve_agent_app_profile",
             "state_topic": diagnostics,
             "value_template": "{{ value_json.app_profile.state | default('normal') }}",
             "availability": availability,
@@ -224,7 +224,7 @@ def _diagnostic_components(topics) -> dict[str, dict[str, object]]:
             "platform": "sensor",
             "name": "Last publication",
             "unique_id": uid("last_publication"),
-            "default_entity_id": "sensor.dh_app_pve_last_publication",
+            "default_entity_id": "sensor.dh_pve_agent_last_publication",
             "state_topic": diagnostics,
             "value_template": "{{ value_json.last_publication.timestamp | default(none) }}",
             "availability": availability,
@@ -247,8 +247,12 @@ def _canonical_entity_id(entity_id: object) -> object:
     if not isinstance(entity_id, str) or "." not in entity_id:
         return entity_id
     domain, object_id = entity_id.split(".", 1)
-    if object_id.startswith("dh_pve_"):
-        object_id = "dh_app_pve_" + object_id.removeprefix("dh_pve_")
+    if object_id.startswith("dh_pve_agent_"):
+        return entity_id
+    if object_id.startswith("dh_app_pve_"):
+        object_id = "dh_pve_agent_" + object_id.removeprefix("dh_app_pve_")
+    elif object_id.startswith("dh_pve_"):
+        object_id = "dh_pve_agent_" + object_id.removeprefix("dh_pve_")
     return f"{domain}.{object_id}"
 
 
@@ -276,7 +280,7 @@ def _rename_storage_percent_used(
             continue
         component["name"] = f"Storage {storage_id} percent used"
         component["unique_id"] = f"{topics.device_id}_{new_key}"
-        component["default_entity_id"] = f"sensor.dh_app_pve_storage_{slug}_percent_used"
+        component["default_entity_id"] = f"sensor.dh_pve_agent_storage_{slug}_percent_used"
         components[new_key] = component
 
 
@@ -319,14 +323,14 @@ def _problem_components(
             key="cpu_temperature_problem",
             problem_id="cpu_temperature",
             name="CPU temperature problem",
-            entity_id="binary_sensor.dh_app_pve_cpu_temperature_problem",
+            entity_id="binary_sensor.dh_pve_agent_cpu_temperature_problem",
         ),
         "cpu_throttling_problem": _problem_binary(
             topics,
             key="cpu_throttling_problem",
             problem_id="cpu_throttling",
             name="CPU throttling problem",
-            entity_id="binary_sensor.dh_app_pve_cpu_throttling_problem",
+            entity_id="binary_sensor.dh_pve_agent_cpu_throttling_problem",
         ),
     }
 
@@ -338,7 +342,7 @@ def _problem_components(
             key=key,
             problem_id=f"storage_{slug}_percent_used",
             name=f"Storage {storage_id} percent used problem",
-            entity_id=f"binary_sensor.dh_app_pve_storage_{slug}_percent_used_problem",
+            entity_id=f"binary_sensor.dh_pve_agent_storage_{slug}_percent_used_problem",
         )
 
     for disk_id, raw in _mapping(inventory.get("smart")).items():
@@ -349,7 +353,7 @@ def _problem_components(
             key=smart_key,
             problem_id=f"disk_{slug}_smart",
             name=f"SMART {disk_id} problem",
-            entity_id=f"binary_sensor.dh_app_pve_disk_{slug}_smart_problem",
+            entity_id=f"binary_sensor.dh_pve_agent_disk_{slug}_smart_problem",
         )
         item = _mapping(raw)
         disk_type = str(item.get("disk_type") or "").strip().upper()
@@ -360,7 +364,7 @@ def _problem_components(
                 key=temperature_key,
                 problem_id=f"disk_{slug}_temperature",
                 name=f"Disk {disk_id} temperature problem",
-                entity_id=f"binary_sensor.dh_app_pve_disk_{slug}_temperature_problem",
+                entity_id=f"binary_sensor.dh_pve_agent_disk_{slug}_temperature_problem",
             )
 
     for gpu_id in _mapping(inventory.get("gpu")):
@@ -371,7 +375,7 @@ def _problem_components(
             key=key,
             problem_id=f"gpu_{slug}_temperature",
             name=f"GPU {gpu_id} temperature problem",
-            entity_id=f"binary_sensor.dh_app_pve_gpu_{slug}_temperature_problem",
+            entity_id=f"binary_sensor.dh_pve_agent_gpu_{slug}_temperature_problem",
         )
 
     for fan_id, raw in _mapping(inventory.get("fans")).items():
@@ -384,7 +388,7 @@ def _problem_components(
             key=key,
             problem_id=f"fan_{slug}_control_restore",
             name=f"Fan {fan_id} control restore problem",
-            entity_id=f"binary_sensor.dh_app_pve_fan_{slug}_control_restore_problem",
+            entity_id=f"binary_sensor.dh_pve_agent_fan_{slug}_control_restore_problem",
         )
 
     return result
@@ -403,7 +407,7 @@ def _problem_summary_components(topics) -> dict[str, dict[str, object]]:
             "platform": "sensor",
             "name": "Problems",
             "unique_id": f"{topics.device_id}_problems",
-            "default_entity_id": "sensor.dh_app_pve_problems",
+            "default_entity_id": "sensor.dh_pve_agent_problems",
             "state_topic": f"{topics.base}/problems/aggregate",
             "availability": availability,
             "availability_mode": "all",
@@ -416,7 +420,7 @@ def _problem_summary_components(topics) -> dict[str, dict[str, object]]:
             "platform": "event",
             "name": "Diagnostic",
             "unique_id": f"{topics.device_id}_diagnostic",
-            "default_entity_id": "event.dh_app_pve_diagnostic",
+            "default_entity_id": "event.dh_pve_agent_diagnostic",
             "state_topic": topics.diagnostic_event,
             "event_types": [
                 "cpu_temperature_high",
