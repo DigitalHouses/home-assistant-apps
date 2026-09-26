@@ -1,5 +1,5 @@
 name: DigitalHouses Recorder App
-version: 0.1.8
+version: 0.1.9
 slug: digitalhouses_db_monitoring
 description: Monitor Home Assistant Recorder database health and key metrics through MQTT Discovery.
 url: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_recorder_app
@@ -16,6 +16,11 @@ hassio_role: default
 services:
   - mqtt:need
   - mysql:want
+map:
+  - type: share
+    read_only: false
+environment:
+  DH_SLUG_MIGRATION_MODE: "export"
 options:
   database_type: postgresql
   postgresql:
