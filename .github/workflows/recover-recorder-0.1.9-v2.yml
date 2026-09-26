@@ -1,9 +1,11 @@
 name: Recover Recorder App 0.1.9 release v2
 
 on:
-  push:
-    branches:
-      - main
+  workflow_run:
+    workflows:
+      - Validate repository
+    types:
+      - completed
 
 permissions:
   contents: write
@@ -12,6 +14,7 @@ permissions:
 jobs:
   recover:
     name: Recover Recorder App 0.1.9
+    if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
 
     steps:
