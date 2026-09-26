@@ -29,7 +29,44 @@ def validate_db_monitoring(
     app: Path,
     context: dict[str, Any],
 ) -> None:
-    del root, context
+    config = context["config"]
+
+    if config.get("slug") != "digitalhouses_db_monitoring":
+        fail(
+            f"{app.name}: Recorder 0.1.9 bridge must retain legacy "
+            "slug digitalhouses_db_monitoring"
+        )
+
+    migration_mode = (config.get("environment") or {}).get(
+        "DH_SLUG_MIGRATION_MODE"
+    )
+    if migration_mode != "export":
+        fail(f"{app.name}: Recorder 0.1.9 bridge must use migration export mode")
+
+    mappings = config.get("map") or []
+    share_rw = any(
+        isinstance(item, dict)
+        and item.get("type") == "share"
+        and item.get("read_only") is False
+        for item in mappings
+    )
+    if not share_rw:
+        fail(f"{app.name}: Recorder migration bridge requires writable share mapping")
+
+    migration_path = app / "rootfs" / "app" / "slug_migration.py"
+    require_files(root, [migration_path])
+    migration_source = migration_path.read_text(encoding="utf-8")
+    for value in (
+        'PRODUCT_ID = "digitalhouses_recorder_app"',
+        'SOURCE_SLUG = "digitalhouses_db_monitoring"',
+        'TARGET_SLUG = "digitalhouses_recorder_app"',
+        'BUNDLE_DIR = Path("/share/digitalhouses_recorder_app/slug-migration-v1")',
+        '"options.json"',
+        '"ssh_known_hosts"',
+    ):
+        if value not in migration_source:
+            fail(f"{app.name}: slug migration contract is missing {value!r}")
+
     discovery = _import_discovery(app)
 
     if discovery.BASE_TOPIC != EXPECTED_BASE_TOPIC:
