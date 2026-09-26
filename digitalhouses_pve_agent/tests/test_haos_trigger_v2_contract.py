@@ -71,6 +71,8 @@ def test_ui_package_snapshots_real_active_policy_reverts_cancel_and_closes_on_su
         assert token in text
     assert "script.write2log" not in text
     assert "notify.mobile_app" not in text
+    assert "alias: DH PVE Agent · Close UPS Trigger editor after successful Apply" in text
+    assert "alias: DH PVE · Close UPS Trigger editor after successful Apply" not in text
 
 
 def test_ui_open_and_cancel_wait_for_app_owned_draft_ack_before_state_transition():
