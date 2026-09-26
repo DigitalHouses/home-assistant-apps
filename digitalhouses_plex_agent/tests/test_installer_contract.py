@@ -1,3 +1,6 @@
+import subprocess
+import tempfile
+import textwrap
 import unittest
 from pathlib import Path
 
@@ -14,6 +17,46 @@ class InstallerContractTests(unittest.TestCase):
         self.assertIn('previous_umask="$(umask)"', INSTALLER)
         self.assertIn('umask "${previous_umask}"', INSTALLER)
         self.assertIn('chmod -R a+rX "${APP_DIR}/.venv"', INSTALLER)
+
+
+    def test_default_mqtt_topic_migration_sed_executes(self):
+        start = INSTALLER.index(
+            '        sed -i -E \\\n'
+            '            "s#^([[:space:]]*topic_prefix'
+        )
+        end = INSTALLER.index("\n    fi", start)
+        sed_block = textwrap.dedent(INSTALLER[start:end])
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            config = Path(tmp_dir) / "plex.conf"
+            config.write_text(
+                "[mqtt]\n"
+                "topic_prefix = DigitalHouses/Global/plex_monitoring\n"
+            )
+            script = (
+                "set -euo pipefail\n"
+                'LEGACY_TOPIC_PREFIX="DigitalHouses/Global/plex_monitoring"\n'
+                'CANONICAL_TOPIC_PREFIX="DigitalHouses/Global/digitalhouses_plex_agent"\n'
+                'CONFIG_FILE="$1"\n'
+                f"{sed_block}\n"
+            )
+            result = subprocess.run(
+                ["bash", "-c", script, "installer-test", str(config)],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+
+            self.assertEqual(
+                result.returncode,
+                0,
+                msg=f"stdout={result.stdout}\nstderr={result.stderr}",
+            )
+            self.assertEqual(
+                config.read_text(),
+                "[mqtt]\n"
+                "topic_prefix = DigitalHouses/Global/digitalhouses_plex_agent\n",
+            )
 
 if __name__ == "__main__":
     unittest.main()
