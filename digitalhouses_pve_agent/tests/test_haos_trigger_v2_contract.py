@@ -1,17 +1,17 @@
 from pathlib import Path
 
 ROOT = Path(__file__).parents[1]
-DASHBOARD = ROOT / "examples" / "dh_app_pve_ups_dashboard.yaml"
-UI_PACKAGE = ROOT / "examples" / "packages" / "dh_app_pve_package.yaml"
-LEGACY_UI_PACKAGE = ROOT / "examples" / "packages" / "dh_app_pve_ui_package.yaml"
-NOTIFICATION_PACKAGE = ROOT / "examples" / "packages" / "dh_app_pve_notification_local_package.yaml"
+DASHBOARD = ROOT / "examples" / "dh_pve_agent_ups_dashboard.yaml"
+UI_PACKAGE = ROOT / "examples" / "packages" / "dh_pve_agent_package.yaml"
+LEGACY_UI_PACKAGE = ROOT / "examples" / "packages" / "dh_pve_agent_ui_package.yaml"
+NOTIFICATION_PACKAGE = ROOT / "examples" / "packages" / "dh_pve_agent_notification_local_package.yaml"
 RU_NOTIFICATION_PACKAGE = (
     ROOT
     / "examples"
     / "packages"
     / "locales"
     / "ru"
-    / "dh_app_pve_notification_local_package.yaml"
+    / "dh_pve_agent_notification_local_package.yaml"
 )
 
 
@@ -19,25 +19,25 @@ def test_trigger_dashboard_has_view_edit_confirm_apply_flow():
     text = DASHBOARD.read_text(encoding="utf-8")
     for token in (
         "Config UPS trigger",
-        "input_select.dh_app_pve_ups_trigger_ui_state",
+        "input_select.dh_pve_agent_ups_trigger_ui_state",
         "state: view",
         "state: edit",
         "state: confirm",
-        "script.dh_app_pve_ups_trigger_open",
-        "script.dh_app_pve_ups_trigger_cancel",
-        "script.dh_app_pve_ups_trigger_review",
-        "script.dh_app_pve_ups_trigger_apply",
-        "sensor.dh_app_pve_ups_trigger_policy",
+        "script.dh_pve_agent_ups_trigger_open",
+        "script.dh_pve_agent_ups_trigger_cancel",
+        "script.dh_pve_agent_ups_trigger_review",
+        "script.dh_pve_agent_ups_trigger_apply",
+        "sensor.dh_pve_agent_ups_trigger_policy",
         "active_charge_threshold_percent",
         "active_runtime_reserve_seconds",
-        "number.dh_app_pve_ups_shutdown_battery_charge_threshold",
-        "number.dh_app_pve_ups_shutdown_runtime_reserve",
-        "sensor.dh_app_pve_ups_guest_shutdown_budget",
-        "sensor.dh_app_pve_ups_shutdown_budget",
-        "sensor.dh_app_pve_ups_shutdown_readiness",
+        "number.dh_pve_agent_ups_shutdown_battery_charge_threshold",
+        "number.dh_pve_agent_ups_shutdown_runtime_reserve",
+        "sensor.dh_pve_agent_ups_guest_shutdown_budget",
+        "sensor.dh_pve_agent_ups_shutdown_budget",
+        "sensor.dh_pve_agent_ups_shutdown_readiness",
     ):
         assert token in text
-    assert "sensor.dh_app_pve_ups_policy_on_battery_delay" not in text
+    assert "sensor.dh_pve_agent_ups_policy_on_battery_delay" not in text
     assert "custom:auto-entities" not in text
 
 
@@ -50,17 +50,17 @@ def test_ui_package_snapshots_real_active_policy_reverts_cancel_and_closes_on_su
     assert UI_PACKAGE.exists()
     text = UI_PACKAGE.read_text(encoding="utf-8")
     for token in (
-        "dh_app_pve_ups_trigger_ui_state:",
+        "dh_pve_agent_ups_trigger_ui_state:",
         "- view",
         "- edit",
         "- confirm",
-        "dh_app_pve_ups_trigger_snapshot_charge:",
-        "dh_app_pve_ups_trigger_snapshot_reserve:",
-        "dh_app_pve_ups_trigger_open:",
-        "dh_app_pve_ups_trigger_cancel:",
-        "dh_app_pve_ups_trigger_review:",
-        "dh_app_pve_ups_trigger_apply:",
-        "sensor.dh_app_pve_ups_trigger_policy",
+        "dh_pve_agent_ups_trigger_snapshot_charge:",
+        "dh_pve_agent_ups_trigger_snapshot_reserve:",
+        "dh_pve_agent_ups_trigger_open:",
+        "dh_pve_agent_ups_trigger_cancel:",
+        "dh_pve_agent_ups_trigger_review:",
+        "dh_pve_agent_ups_trigger_apply:",
+        "sensor.dh_pve_agent_ups_trigger_policy",
         "active_charge_threshold_percent",
         "active_runtime_reserve_seconds",
         "number.set_value",
@@ -75,11 +75,11 @@ def test_ui_package_snapshots_real_active_policy_reverts_cancel_and_closes_on_su
 
 def test_ui_open_and_cancel_wait_for_app_owned_draft_ack_before_state_transition():
     text = UI_PACKAGE.read_text(encoding="utf-8")
-    open_section = text.split("    dh_app_pve_ups_trigger_open:", 1)[1].split(
-        "    dh_app_pve_ups_trigger_cancel:", 1
+    open_section = text.split("    dh_pve_agent_ups_trigger_open:", 1)[1].split(
+        "    dh_pve_agent_ups_trigger_cancel:", 1
     )[0]
-    cancel_section = text.split("    dh_app_pve_ups_trigger_cancel:", 1)[1].split(
-        "    dh_app_pve_ups_trigger_review:", 1
+    cancel_section = text.split("    dh_pve_agent_ups_trigger_cancel:", 1)[1].split(
+        "    dh_pve_agent_ups_trigger_review:", 1
     )[0]
 
     for section, final_option in ((open_section, "edit"), (cancel_section, "view")):
@@ -100,8 +100,8 @@ def test_notification_package_uses_simple_event_trigger_flow():
     text = NOTIFICATION_PACKAGE.read_text(encoding="utf-8")
 
     for token in (
-        "event.dh_app_pve_diagnostic",
-        "event.dh_app_pve_ups_diagnostic",
+        "event.dh_pve_agent_diagnostic",
+        "event.dh_pve_agent_ups_diagnostic",
         "trigger: event.received",
         "condition: trigger",
         "trigger.to_state.attributes",
@@ -117,7 +117,7 @@ def test_notification_package_uses_simple_event_trigger_flow():
         assert token in text
 
     for forbidden in (
-        "event: dh_app_pve_notification",
+        "event: dh_pve_agent_notification",
         "notification_schema_version",
         "contract_error",
         "startup_problem_reconciliation",
@@ -152,7 +152,7 @@ def test_config_changed_notification_is_direct_and_localized():
 def test_ui_closes_trigger_editor_only_for_valid_v2_config_changed_contract():
     text = UI_PACKAGE.read_text(encoding="utf-8")
     section = text.split(
-        "- id: dh_app_pve_ups_trigger_close_after_success",
+        "- id: dh_pve_agent_ups_trigger_close_after_success",
         1,
     )[1]
 
@@ -184,13 +184,13 @@ def test_ui_closes_trigger_editor_only_for_valid_v2_config_changed_contract():
 
 def test_ui_numeric_contract_is_validated_before_float_conversion():
     text = UI_PACKAGE.read_text(encoding="utf-8")
-    open_section = text.split("    dh_app_pve_ups_trigger_open:", 1)[1].split(
-        "    dh_app_pve_ups_trigger_cancel:", 1
+    open_section = text.split("    dh_pve_agent_ups_trigger_open:", 1)[1].split(
+        "    dh_pve_agent_ups_trigger_cancel:", 1
     )[0]
-    cancel_section = text.split("    dh_app_pve_ups_trigger_cancel:", 1)[1].split(
-        "    dh_app_pve_ups_trigger_review:", 1
+    cancel_section = text.split("    dh_pve_agent_ups_trigger_cancel:", 1)[1].split(
+        "    dh_pve_agent_ups_trigger_review:", 1
     )[0]
-    apply_section = text.split("    dh_app_pve_ups_trigger_apply:", 1)[1].split(
+    apply_section = text.split("    dh_pve_agent_ups_trigger_apply:", 1)[1].split(
         "  automation:", 1
     )[0]
 
@@ -225,10 +225,10 @@ def test_ui_numeric_contract_is_validated_before_float_conversion():
         assert token in apply_section
 
     for unsafe in (
-        "states('number.dh_app_pve_ups_shutdown_battery_charge_threshold') | float",
-        "states('number.dh_app_pve_ups_shutdown_runtime_reserve') | float",
-        "states('input_number.dh_app_pve_ups_trigger_snapshot_charge') | float",
-        "states('input_number.dh_app_pve_ups_trigger_snapshot_reserve') | float",
+        "states('number.dh_pve_agent_ups_shutdown_battery_charge_threshold') | float",
+        "states('number.dh_pve_agent_ups_shutdown_runtime_reserve') | float",
+        "states('input_number.dh_pve_agent_ups_trigger_snapshot_charge') | float",
+        "states('input_number.dh_pve_agent_ups_trigger_snapshot_reserve') | float",
     ):
         assert unsafe not in text
 

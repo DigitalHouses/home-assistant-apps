@@ -76,7 +76,7 @@ def _bridge():
         port=1883,
         username="user",
         password="secret",
-        topic_prefix="DigitalHouses/Global/dh_pve_app",
+        topic_prefix="DigitalHouses/Global/digitalhouses_pve_agent",
         discovery_prefix="homeassistant",
         keepalive_seconds=60,
     )

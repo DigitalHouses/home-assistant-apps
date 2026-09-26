@@ -16,7 +16,7 @@ def _config():
             port=1883,
             username="",
             password="",
-            topic_prefix="DigitalHouses/Global/dh_pve_app",
+            topic_prefix="DigitalHouses/Global/digitalhouses_pve_agent",
             discovery_prefix="homeassistant",
             keepalive_seconds=60,
         ),
@@ -101,7 +101,7 @@ def test_main_wires_shared_topology_shutdown_history_and_static_inventory():
 
 def test_main_wires_fixed_policy_reload_barrier():
     main_text = (ROOT / "app" / "main.py").read_text()
-    unit_text = (ROOT / "systemd" / "dh_pve_app.service").read_text()
+    unit_text = (ROOT / "systemd" / "digitalhouses_pve_agent.service").read_text()
 
     assert "FixedServiceReloadExecutor" in main_text
     assert "policy_reload_executor=FixedServiceReloadExecutor()" in main_text
