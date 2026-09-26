@@ -58,15 +58,15 @@ def test_discovery_exposes_agent_diagnostics_without_commit_sensor():
     assert components["agent_started_at"]["device_class"] == "timestamp"
 
     assert components["playback_started_at"]["default_entity_id"] == (
-        "sensor.dh_plex_playback_started_at"
+        "sensor.dh_plex_agent_playback_started_at"
     )
     assert components["playback_started_at"]["device_class"] == "timestamp"
 
     assert components["publication_profile"]["default_entity_id"] == (
-        "sensor.dh_plex_publication_profile"
+        "sensor.dh_plex_agent_publication_profile"
     )
     assert components["last_publication"]["default_entity_id"] == (
-        "sensor.dh_plex_last_publication"
+        "sensor.dh_plex_agent_last_publication"
     )
 
 
