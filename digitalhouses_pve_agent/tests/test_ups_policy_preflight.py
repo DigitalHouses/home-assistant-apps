@@ -73,7 +73,7 @@ def _seed(tmp_path):
         '[ups]\n    driver = "usbhid-ups"\n    offdelay = 60\n    ondelay = 120\n',
         encoding="utf-8",
     )
-    helper = tmp_path / "dh-pve-ups-policy-cmd"
+    helper = tmp_path / "digitalhouses-pve-agent-ups-policy-cmd"
     helper.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
     helper.chmod(0o755)
     (tmp_path / "upsd.users").write_text(
@@ -88,7 +88,7 @@ def _seed(tmp_path):
         'SHUTDOWNCMD "/sbin/shutdown -h now"\n',
         encoding="utf-8",
     )
-    (tmp_path / "dh_pve_app.conf").write_text(
+    (tmp_path / "digitalhouses_pve_agent.conf").write_text(
         "[general]\nnode_name = PVE\n\n"
         "[mqtt]\nhost = mqtt\n\n"
         "[ups]\n"
@@ -109,7 +109,7 @@ def _preflight_kwargs(helper):
         "helper_expected_gid": os.getgid(),
         "upsd_users_path": root / "upsd.users",
         "upsmon_path": root / "upsmon.conf",
-        "app_config_path": root / "dh_pve_app.conf",
+        "app_config_path": root / "digitalhouses_pve_agent.conf",
     }
 
 
