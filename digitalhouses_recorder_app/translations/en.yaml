@@ -71,6 +71,9 @@ configuration:
   timezone:
     name: Timezone
     description: Optional IANA timezone for previous-day boundaries, for example Asia/Almaty. Leave empty to use the container timezone or UTC fallback.
+  telemetry_enabled:
+    name: Anonymous product telemetry
+    description: Send only protocol-v1 installation identity, product and release version to DigitalHouses. Disabled by default.
   log_level:
     name: Log level
     description: Application logging verbosity.
