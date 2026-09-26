@@ -60,11 +60,40 @@ jobs:
             exit 0
           fi
 
-          gh pr merge "$PR_NUMBER" \
-            --repo "$GITHUB_REPOSITORY" \
-            --merge \
-            --delete-branch \
-            --match-head-commit "$VALIDATED_HEAD_SHA"
+          merge_attempts=12
+          merge_delay_seconds=5
+
+          for attempt in $(seq 1 "$merge_attempts"); do
+            if merge_output="$(gh pr merge "$PR_NUMBER" \
+              --repo "$GITHUB_REPOSITORY" \
+              --merge \
+              --delete-branch \
+              --match-head-commit "$VALIDATED_HEAD_SHA" 2>&1)"; then
+              printf '%s\n' "$merge_output"
+              break
+            fi
+
+            merge_rc=$?
+            printf '%s\n' "$merge_output" >&2
+
+            if ! grep -Fq "base branch policy prohibits the merge" <<<"$merge_output"; then
+              exit "$merge_rc"
+            fi
+
+            if [ "$attempt" -ge "$merge_attempts" ]; then
+              echo "Base branch policy still blocks the exact validated PR after $merge_attempts attempts." >&2
+              exit "$merge_rc"
+            fi
+
+            retry_pr_json="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
+            test "$(jq -r '.state' <<<"$retry_pr_json")" = "open"
+            test "$(jq -r '.draft' <<<"$retry_pr_json")" = "false"
+            test "$(jq -r '.base.sha' <<<"$retry_pr_json")" = "$VALIDATED_BASE_SHA"
+            test "$(jq -r '.head.sha' <<<"$retry_pr_json")" = "$VALIDATED_HEAD_SHA"
+
+            echo "Base branch policy has not observed all completed checks yet; retrying merge in ${merge_delay_seconds}s (attempt ${attempt}/${merge_attempts})."
+            sleep "$merge_delay_seconds"
+          done
 
           merged_json="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
           merged="$(jq -r '.merged' <<<"$merged_json")"
