@@ -171,7 +171,7 @@ def _normalized_guest_fact(
     legacy_projection = {
         "current_timeout_seconds": "next_shutdown_timeout_seconds",
         "current_timeout_ratio": "next_shutdown_timeout_ratio",
-        "next_shutdown_assessment": "next_shutdown_assessment",
+        "current_assessment": "next_shutdown_assessment",
     }
     for legacy_key, next_key in legacy_projection.items():
         if next_key not in item and legacy_key in item:
@@ -1162,9 +1162,9 @@ class ShutdownHistoryTracker:
                 item["timeout_ratio"] = ratio
             if item.get("assessment") != assessment:
                 item["assessment"] = assessment
-            if item.get("current_timeout_seconds") != timeout_seconds:
+            if item.get("next_shutdown_timeout_seconds") != timeout_seconds:
                 item["next_shutdown_timeout_seconds"] = timeout_seconds
-            if item.get("current_timeout_ratio") != next_shutdown_ratio:
+            if item.get("next_shutdown_timeout_ratio") != next_shutdown_ratio:
                 item["next_shutdown_timeout_ratio"] = next_shutdown_ratio
             if item.get("next_shutdown_assessment") != next_shutdown_assessment:
                 item["next_shutdown_assessment"] = next_shutdown_assessment
