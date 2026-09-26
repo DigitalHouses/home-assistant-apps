@@ -81,6 +81,7 @@ def make_runtime(mono_values):
             "0123456789abcdef",
         ),
         source_interval_seconds=10.0,
+        agent_started_at="2026-09-21T00:00:00+00:00",
         now_monotonic=lambda: next(values),
     )
     return runtime, bridge

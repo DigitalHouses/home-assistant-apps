@@ -90,7 +90,7 @@ def test_discovery_keeps_only_current_cpu_entities_and_adds_timestamps():
     )
     assert components["agent_started_at"]["device_class"] == "timestamp"
     assert components["playback_started_at"]["default_entity_id"] == (
-        "sensor.dh_plex_playback_started_at"
+        "sensor.dh_plex_agent_playback_started_at"
     )
     assert components["playback_started_at"]["device_class"] == "timestamp"
 

@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.7.0
+
+- Complete the deferred Home Assistant/MQTT identity migration to canonical product identity: MQTT base `DigitalHouses/Global/digitalhouses_plex_agent`, Discovery device ID `digitalhouses_plex_agent_plex`, and `dh_plex_agent_*` entity IDs.
+- Add controlled retained-MQTT/Discovery cleanup for the historical `DigitalHouses/Global/plex_monitoring` / `digitalhouses_plex_monitoring_plex` contract; custom MQTT namespaces are preserved and only their legacy Discovery identity is tombstoned.
+- Add opt-in protocol-v1 product telemetry for `digitalhouses_plex_agent`, default OFF, with persistent UUID/token identity, released-build gating, 24-hour jittered cadence, one-hour failure backoff, isolated background delivery, and authenticated deletion.
+- Store telemetry identity outside the source tree under `/var/lib/digitalhouses/digitalhouses_plex_agent/telemetry.json`; preserve identity across restart and update.
+- Enforce required Contract Data semantics for Version, Started-at, and Plex API status; remove synthetic Discovery fallbacks for required diagnostics and add negative regression tests.
+- Keep production installation release-tag-only and retain exact source tag + resolved commit SHA in `BUILD_INFO`.
+- Canonicalize the public dashboard/config examples and product validator, while retaining legacy names only in migration code and historical release documentation.
+
 ## 0.6.0
 
 - Migrate the installed Linux runtime identity from `digitalhouses_plex_monitoring` to canonical `digitalhouses_plex_agent`: service/user/group, `/opt`, `/etc`, `/var/lib`, config file and GPU helper service.

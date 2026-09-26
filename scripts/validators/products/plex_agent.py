@@ -7,50 +7,50 @@ from typing import Any
 
 from validators.common import fail, require_files
 
-EXPECTED_TOPIC_PREFIX = "DigitalHouses/Global/plex_monitoring"
+EXPECTED_TOPIC_PREFIX = "DigitalHouses/Global/digitalhouses_plex_agent"
 EXPECTED_INSTANCE_ID = "plex"
-EXPECTED_DEVICE_ID = "digitalhouses_plex_monitoring_plex"
+EXPECTED_DEVICE_ID = "digitalhouses_plex_agent_plex"
 
 EXPECTED_ENTITY_IDS = {
-    "activity": "sensor.dh_plex_activity",
-    "current_item": "sensor.dh_plex_current_item",
-    "server_running": "binary_sensor.dh_plex_server_running",
-    "scanner_running": "binary_sensor.dh_plex_scanner_running",
-    "credits_detection": "binary_sensor.dh_plex_credits_detection",
-    "intro_detection": "binary_sensor.dh_plex_intro_detection",
-    "thumbnail_generation": "binary_sensor.dh_plex_thumbnail_generation",
-    "transcoder_running": "binary_sensor.dh_plex_transcoder_running",
-    "transcoder_count": "sensor.dh_plex_transcoder_count",
-    "cpu": "sensor.dh_plex_cpu",
-    "scanner_cpu": "sensor.dh_plex_scanner_cpu",
-    "transcoder_cpu": "sensor.dh_plex_transcoder_cpu",
-    "scanner_actions": "sensor.dh_plex_scanner_actions",
-    "process_count": "sensor.dh_plex_process_count",
-    "collector_status": "sensor.dh_plex_collector_status",
-    "last_refresh": "sensor.dh_plex_last_refresh",
-    "playback_count": "sensor.dh_plex_playback_count",
-    "playback_started_at": "sensor.dh_plex_playback_started_at",
-    "playback_sessions": "sensor.dh_plex_playback_sessions",
-    "playback_active": "binary_sensor.dh_plex_playback_active",
-    "video_playback_active": "binary_sensor.dh_plex_video_playback_active",
-    "audio_playback_active": "binary_sensor.dh_plex_audio_playback_active",
-    "hardware_transcode_active": "binary_sensor.dh_plex_hardware_transcode_active",
-    "libraries": "sensor.dh_plex_libraries",
-    "gpu_video": "sensor.dh_plex_gpu_video",
-    "gpu_render": "sensor.dh_plex_gpu_render",
-    "gpu_video_enhance": "sensor.dh_plex_gpu_video_enhance",
-    "gpu_frequency": "sensor.dh_plex_gpu_frequency",
-    "gpu_temperature": "sensor.dh_plex_gpu_temperature",
-    "gpu_rc6": "sensor.dh_plex_gpu_rc6",
-    "gpu_status": "sensor.dh_plex_gpu_status",
-    "api_status": "sensor.dh_plex_api_status",
+    "activity": "sensor.dh_plex_agent_activity",
+    "current_item": "sensor.dh_plex_agent_current_item",
+    "server_running": "binary_sensor.dh_plex_agent_server_running",
+    "scanner_running": "binary_sensor.dh_plex_agent_scanner_running",
+    "credits_detection": "binary_sensor.dh_plex_agent_credits_detection",
+    "intro_detection": "binary_sensor.dh_plex_agent_intro_detection",
+    "thumbnail_generation": "binary_sensor.dh_plex_agent_thumbnail_generation",
+    "transcoder_running": "binary_sensor.dh_plex_agent_transcoder_running",
+    "transcoder_count": "sensor.dh_plex_agent_transcoder_count",
+    "cpu": "sensor.dh_plex_agent_cpu",
+    "scanner_cpu": "sensor.dh_plex_agent_scanner_cpu",
+    "transcoder_cpu": "sensor.dh_plex_agent_transcoder_cpu",
+    "scanner_actions": "sensor.dh_plex_agent_scanner_actions",
+    "process_count": "sensor.dh_plex_agent_process_count",
+    "collector_status": "sensor.dh_plex_agent_collector_status",
+    "last_refresh": "sensor.dh_plex_agent_last_refresh",
+    "playback_count": "sensor.dh_plex_agent_playback_count",
+    "playback_started_at": "sensor.dh_plex_agent_playback_started_at",
+    "playback_sessions": "sensor.dh_plex_agent_playback_sessions",
+    "playback_active": "binary_sensor.dh_plex_agent_playback_active",
+    "video_playback_active": "binary_sensor.dh_plex_agent_video_playback_active",
+    "audio_playback_active": "binary_sensor.dh_plex_agent_audio_playback_active",
+    "hardware_transcode_active": "binary_sensor.dh_plex_agent_hardware_transcode_active",
+    "libraries": "sensor.dh_plex_agent_libraries",
+    "gpu_video": "sensor.dh_plex_agent_gpu_video",
+    "gpu_render": "sensor.dh_plex_agent_gpu_render",
+    "gpu_video_enhance": "sensor.dh_plex_agent_gpu_video_enhance",
+    "gpu_frequency": "sensor.dh_plex_agent_gpu_frequency",
+    "gpu_temperature": "sensor.dh_plex_agent_gpu_temperature",
+    "gpu_rc6": "sensor.dh_plex_agent_gpu_rc6",
+    "gpu_status": "sensor.dh_plex_agent_gpu_status",
+    "api_status": "sensor.dh_plex_agent_api_status",
     "agent_version": "sensor.dh_plex_agent_version",
     "agent_uptime": "sensor.dh_plex_agent_uptime",
     "agent_started_at": "sensor.dh_plex_agent_started_at",
-    "last_boot": "sensor.dh_plex_last_boot",
-    "publication_profile": "sensor.dh_plex_publication_profile",
-    "last_publication": "sensor.dh_plex_last_publication",
-    "refresh": "button.dh_plex_refresh",
+    "last_boot": "sensor.dh_plex_agent_last_boot",
+    "publication_profile": "sensor.dh_plex_agent_publication_profile",
+    "last_publication": "sensor.dh_plex_agent_last_publication",
+    "refresh": "button.dh_plex_agent_refresh",
 }
 
 
@@ -112,6 +112,9 @@ def validate_plex_agent(
             app / "app/plex_api.py",
             app / "app/api_runtime.py",
             app / "app/build_info.py",
+            app / "app/state_store.py",
+            app / "app/telemetry.py",
+            app / "app/migration_cleanup.py",
             app / "app/presentation.py",
             app / "app/runtime_windows.py",
             app / "app/presentation_policy.py",
@@ -137,6 +140,7 @@ def validate_plex_agent(
             log_level="info",
         ),
         telemetry=config_module.TelemetryConfig(
+            enabled=False,
             cpu_change_threshold=5.0,
             high_load_threshold=80.0,
             high_load_publish_interval_seconds=60.0,
@@ -243,7 +247,7 @@ def validate_plex_agent(
     library_component = (library_payload.get("components") or {}).get("library_3")
     if not isinstance(library_component, dict):
         fail("Plex Agent dynamic library discovery is missing")
-    if library_component.get("default_entity_id") != "sensor.dh_plex_library_3":
+    if library_component.get("default_entity_id") != "sensor.dh_plex_agent_library_3":
         fail("Plex Agent dynamic library entity ID must use section ID")
 
     example = (
@@ -253,6 +257,7 @@ def validate_plex_agent(
         "instance_id = plex",
         "poll_interval_seconds = 10",
         "cpu_window_seconds = 60",
+        "enabled = false",
         "cpu_change_threshold = 5",
         "high_load_threshold = 80",
         "high_load_publish_interval_seconds = 60",
@@ -261,7 +266,7 @@ def validate_plex_agent(
         "base_url = http://127.0.0.1:32400",
         "token_file = /etc/digitalhouses_plex_agent/plex_local_admin_token",
         "library_refresh_seconds = 3600",
-        "topic_prefix = DigitalHouses/Global/plex_monitoring",
+        "topic_prefix = DigitalHouses/Global/digitalhouses_plex_agent",
     ):
         if expected not in example:
             fail(f"Plex Agent example config lost contract: {expected}")
@@ -315,6 +320,9 @@ def validate_plex_agent(
         'STATE_DIR="/var/lib/${APP_NAME}"',
         'MIGRATION_MARKER="${STATE_DIR}/.runtime_migrated_from_${LEGACY_APP_NAME}"',
         'BACKUP_DIR="/var/backups/${APP_NAME}"',
+        'TELEMETRY_STATE_DIR="/var/lib/digitalhouses/${APP_NAME}"',
+        'HA_MQTT_MIGRATION_MARKER="${STATE_DIR}/.ha_mqtt_identity_migrated_v1"',
+        'CANONICAL_TOPIC_PREFIX="DigitalHouses/Global/digitalhouses_plex_agent"',
         'if [[ ! -f "${CONFIG_FILE}" ]]; then',
         'SOURCE_SHA="$(git -C "${tmp_dir}/repo" rev-parse HEAD)"',
         'SOURCE_VERSION="$(tr -d \'[:space:]\' <"${SOURCE_APP}/VERSION")"',

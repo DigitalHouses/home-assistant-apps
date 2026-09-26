@@ -18,6 +18,7 @@ from .config import AppConfig, load_config
 from .discovery import build_discovery_payload, build_topics
 from .gpu_collector import GpuStateReader
 from .metrics import RollingCpuMetrics, group_current_cpu
+from .migration_cleanup import cleanup_legacy_mqtt_namespace
 from .models import (
     ActivityState,
     CpuGroupMetrics,
@@ -33,6 +34,12 @@ from .process_collector import (
     collect_raw_processes,
     verify_proc_visibility,
 )
+from .state_store import StateStore
+from .telemetry import (
+    DEFAULT_TELEMETRY_STATE_FILE,
+    TelemetryClient,
+    TelemetryRunner,
+)
 
 APP_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG = Path(
@@ -47,6 +54,29 @@ PLAYBACK_STATE_PATH = Path(
 
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _telemetry_client(config: AppConfig, build) -> TelemetryClient:
+    return TelemetryClient(
+        enabled=config.telemetry.enabled,
+        version=build.version,
+        state_store=StateStore(DEFAULT_TELEMETRY_STATE_FILE),
+        build_info_path=APP_ROOT / "BUILD_INFO",
+    )
+
+
+def _telemetry_runner(
+    config: AppConfig,
+    build,
+) -> TelemetryRunner | None:
+    try:
+        return TelemetryRunner(_telemetry_client(config, build))
+    except Exception as exc:
+        logging.getLogger("digitalhouses_plex_agent").warning(
+            "Telemetry initialization failed; Plex Agent continues: %s",
+            exc,
+        )
+        return None
 
 
 def _empty_cpu() -> CpuMetrics:
@@ -94,6 +124,7 @@ def run(config: AppConfig) -> int:
     log = logging.getLogger("digitalhouses_plex_agent")
     build = load_build_info(APP_ROOT)
     verify_proc_visibility()
+    telemetry_runner = _telemetry_runner(config, build)
 
     topics = build_topics(config)
     api_runtime = PlexApiRuntime(
@@ -141,6 +172,8 @@ def run(config: AppConfig) -> int:
         "enabled" if config.plex_api.enabled else "disabled",
     )
 
+    if telemetry_runner is not None:
+        telemetry_runner.start()
     mqtt.start()
     last_snapshot: MonitorSnapshot | None = None
     collector_failed = False
@@ -345,6 +378,8 @@ def run(config: AppConfig) -> int:
                     )
 
     finally:
+        if telemetry_runner is not None:
+            telemetry_runner.stop()
         mqtt.stop()
         log.info("DigitalHouses Plex Agent stopped")
 
@@ -358,9 +393,31 @@ def main() -> int:
         type=Path,
         default=DEFAULT_CONFIG,
     )
+    parser.add_argument(
+        "--migration-mqtt-cleanup",
+        action="store_true",
+        help=argparse.SUPPRESS,
+    )
+    parser.add_argument(
+        "--telemetry-delete",
+        action="store_true",
+        help="Delete this installation's retained product telemetry record.",
+    )
     args = parser.parse_args()
     config = load_config(args.config)
     _configure_logging(config.general.log_level)
+    if args.migration_mqtt_cleanup:
+        return 0 if cleanup_legacy_mqtt_namespace(config) else 3
+    if args.telemetry_delete:
+        try:
+            build = load_build_info(APP_ROOT)
+            return 0 if _telemetry_client(config, build).delete() else 3
+        except Exception as exc:
+            logging.getLogger("digitalhouses_plex_agent").warning(
+                "Telemetry deletion could not be initialized: %s",
+                exc,
+            )
+            return 3
     return run(config)
 
 

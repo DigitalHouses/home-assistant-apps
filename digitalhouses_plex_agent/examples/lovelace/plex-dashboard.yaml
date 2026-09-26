@@ -11,17 +11,17 @@ sections:
         heading_style: title
         icon: mdi:plex
       - type: custom:mushroom-template-card
-        entity: binary_sensor.dh_plex_server_running
+        entity: binary_sensor.dh_plex_agent_server_running
         primary: Plex Media Server
         secondary: |-
-          {% if is_state('binary_sensor.dh_plex_server_running', 'on') %}
+          {% if is_state('binary_sensor.dh_plex_agent_server_running', 'on') %}
             Работает
           {% else %}
             Остановлен
           {% endif %}
         icon: mdi:plex
         icon_color: |-
-          {% if is_state('binary_sensor.dh_plex_server_running', 'on') %}
+          {% if is_state('binary_sensor.dh_plex_agent_server_running', 'on') %}
             green
           {% else %}
             red
@@ -29,7 +29,7 @@ sections:
         tap_action:
           action: more-info
       - type: custom:mushroom-template-card
-        entity: sensor.dh_plex_last_boot
+        entity: sensor.dh_plex_agent_last_boot
         primary: Время работы Plex сервера
         secondary: >-
           {% set boot = states(entity) %}
@@ -56,13 +56,13 @@ sections:
         tap_action:
           action: more-info
       - type: custom:mushroom-template-card
-        entity: sensor.dh_plex_playback_count
+        entity: sensor.dh_plex_agent_playback_count
         primary: Воспроизведение
         secondary: >-
-          {{ states('sensor.dh_plex_playback_count') }} active session(s)
+          {{ states('sensor.dh_plex_agent_playback_count') }} active session(s)
         icon: mdi:play-network
         icon_color: |-
-          {% if states('sensor.dh_plex_playback_count') | int(0) > 0 %}
+          {% if states('sensor.dh_plex_agent_playback_count') | int(0) > 0 %}
             green
           {% else %}
             grey
@@ -70,10 +70,10 @@ sections:
         tap_action:
           action: more-info
       - type: custom:mushroom-template-card
-        entity: sensor.dh_plex_activity
+        entity: sensor.dh_plex_agent_activity
         primary: Активность
         secondary: |-
-          {% set s = states('sensor.dh_plex_activity') %}
+          {% set s = states('sensor.dh_plex_agent_activity') %}
           {% set names = {
             'idle': 'Ожидание',
             'scanner': 'Сканирование',
@@ -86,7 +86,7 @@ sections:
           } %}
           {{ names.get(s, s) }}
         icon: |-
-          {% set s = states('sensor.dh_plex_activity') %}
+          {% set s = states('sensor.dh_plex_agent_activity') %}
           {% if s == 'idle' %}
             mdi:sleep
           {% elif s == 'scanner' %}
@@ -105,7 +105,7 @@ sections:
             mdi:plex
           {% endif %}
         icon_color: >-
-          {% set s = states('sensor.dh_plex_activity') %}
+          {% set s = states('sensor.dh_plex_agent_activity') %}
           {% if s == 'idle' %}
             green
           {% elif s in ['scanner', 'credits_detection', 'intro_detection', 'thumbnail_generation'] %}
@@ -120,10 +120,10 @@ sections:
         tap_action:
           action: more-info
       - type: custom:mushroom-template-card
-        entity: sensor.dh_plex_current_item
+        entity: sensor.dh_plex_agent_current_item
         primary: Текущий объект
         secondary: >-
-          {% set item = states('sensor.dh_plex_current_item') %}
+          {% set item = states('sensor.dh_plex_agent_current_item') %}
           {% if item in ['none', 'unknown', 'unavailable', ''] %}
             Нет активного объекта
           {% else %}
@@ -131,7 +131,7 @@ sections:
           {% endif %}
         icon: mdi:movie-open
         icon_color: >-
-          {% if states('sensor.dh_plex_current_item') not in ['none', 'unknown', 'unavailable', ''] %}
+          {% if states('sensor.dh_plex_agent_current_item') not in ['none', 'unknown', 'unavailable', ''] %}
             blue
           {% else %}
             grey
@@ -140,10 +140,10 @@ sections:
         tap_action:
           action: more-info
       - type: custom:mushroom-template-card
-        entity: button.dh_plex_refresh
+        entity: button.dh_plex_agent_refresh
         primary: Обновить
         secondary: >-
-          {% set v = states('sensor.dh_plex_last_refresh') %}
+          {% set v = states('sensor.dh_plex_agent_last_refresh') %}
           {% if v in ['unknown', 'unavailable', 'none', ''] %}
             Ещё не выполнялось
           {% else %}
@@ -155,22 +155,22 @@ sections:
           action: perform-action
           perform_action: button.press
           target:
-            entity_id: button.dh_plex_refresh
+            entity_id: button.dh_plex_agent_refresh
         grid_options:
           columns: 12
           rows: 1
       - type: markdown
         title: Plex — активная работа
         content: >
-          {% set items = state_attr('sensor.dh_plex_current_item', 'items') or [] %}
+          {% set items = state_attr('sensor.dh_plex_agent_current_item', 'items') or [] %}
 
-          {% set transcoder = states('sensor.dh_plex_transcoder_count') | int(0) %}
+          {% set transcoder = states('sensor.dh_plex_agent_transcoder_count') | int(0) %}
 
-          {% set scanner = state_attr('sensor.dh_plex_current_item', 'scanner_count') | int(0) %}
+          {% set scanner = state_attr('sensor.dh_plex_agent_current_item', 'scanner_count') | int(0) %}
 
-          {% set playback = states('sensor.dh_plex_playback_count') | int(0) %}
+          {% set playback = states('sensor.dh_plex_agent_playback_count') | int(0) %}
 
-          {% set activity = states('sensor.dh_plex_activity') %}
+          {% set activity = states('sensor.dh_plex_agent_activity') %}
 
 
           <table>
@@ -214,7 +214,7 @@ sections:
         title: Plex Activity History
         hours_to_show: 6
         entities:
-          - sensor.dh_plex_activity
+          - sensor.dh_plex_agent_activity
   - type: grid
     cards:
       - type: heading
@@ -225,7 +225,7 @@ sections:
         name: Plex CPU
         icon: mdi:cpu-64-bit
         entities:
-          - entity: sensor.dh_plex_cpu
+          - entity: sensor.dh_plex_agent_cpu
             name: CPU
         hours_to_show: 6
         points_per_hour: 6
@@ -241,7 +241,7 @@ sections:
         name: Scanner CPU
         icon: mdi:magnify-scan
         entities:
-          - entity: sensor.dh_plex_scanner_cpu
+          - entity: sensor.dh_plex_agent_scanner_cpu
             name: CPU
         hours_to_show: 6
         points_per_hour: 6
@@ -257,7 +257,7 @@ sections:
         name: Transcoder CPU
         icon: mdi:movie-cog
         entities:
-          - entity: sensor.dh_plex_transcoder_cpu
+          - entity: sensor.dh_plex_agent_transcoder_cpu
             name: CPU
         hours_to_show: 6
         points_per_hour: 6
@@ -277,17 +277,17 @@ sections:
         state_color: true
         show_header_toggle: false
         entities:
-          - entity: binary_sensor.dh_plex_hardware_transcode_active
+          - entity: binary_sensor.dh_plex_agent_hardware_transcode_active
             name: Hardware transcode
-          - entity: sensor.dh_plex_gpu_video
+          - entity: sensor.dh_plex_agent_gpu_video
             name: GPU Video
-          - entity: sensor.dh_plex_gpu_render
+          - entity: sensor.dh_plex_agent_gpu_render
             name: GPU Render
-          - entity: sensor.dh_plex_gpu_video_enhance
+          - entity: sensor.dh_plex_agent_gpu_video_enhance
             name: GPU Video Enhance
-          - entity: sensor.dh_plex_gpu_frequency
+          - entity: sensor.dh_plex_agent_gpu_frequency
             name: GPU Frequency
-          - entity: sensor.dh_plex_gpu_temperature
+          - entity: sensor.dh_plex_agent_gpu_temperature
             name: GPU Temperature
   - type: grid
     cards:
@@ -299,18 +299,18 @@ sections:
         state_color: true
         show_header_toggle: false
         entities:
-          - entity: binary_sensor.dh_plex_playback_active
+          - entity: binary_sensor.dh_plex_agent_playback_active
             name: Any Playback
-          - entity: binary_sensor.dh_plex_video_playback_active
+          - entity: binary_sensor.dh_plex_agent_video_playback_active
             name: Video
-          - entity: binary_sensor.dh_plex_audio_playback_active
+          - entity: binary_sensor.dh_plex_agent_audio_playback_active
             name: Audio
-          - entity: sensor.dh_plex_playback_started_at
+          - entity: sensor.dh_plex_agent_playback_started_at
             name: Запущено
       - type: markdown
         title: Активные сессии
         content: >
-          {% set sessions = state_attr('sensor.dh_plex_playback_sessions', 'sessions') or [] %}
+          {% set sessions = state_attr('sensor.dh_plex_agent_playback_sessions', 'sessions') or [] %}
 
 
           | Type | Media | User | Client | Mode |
@@ -346,23 +346,23 @@ sections:
         state_color: true
         show_header_toggle: false
         entities:
-          - entity: binary_sensor.dh_plex_scanner_running
+          - entity: binary_sensor.dh_plex_agent_scanner_running
             name: Media Scanner
-          - entity: binary_sensor.dh_plex_credits_detection
+          - entity: binary_sensor.dh_plex_agent_credits_detection
             name: Credits Detection
-          - entity: binary_sensor.dh_plex_intro_detection
+          - entity: binary_sensor.dh_plex_agent_intro_detection
             name: Intro Detection
-          - entity: binary_sensor.dh_plex_thumbnail_generation
+          - entity: binary_sensor.dh_plex_agent_thumbnail_generation
             name: Thumbnail Generation
-          - entity: binary_sensor.dh_plex_transcoder_running
+          - entity: binary_sensor.dh_plex_agent_transcoder_running
             name: Transcoder
       - type: entities
         title: Process Details
         show_header_toggle: false
         entities:
-          - entity: sensor.dh_plex_scanner_actions
+          - entity: sensor.dh_plex_agent_scanner_actions
             name: Scanner Actions
-          - entity: sensor.dh_plex_process_count
+          - entity: sensor.dh_plex_agent_process_count
             name: Plex Processes
   - type: grid
     cards:
@@ -378,7 +378,7 @@ sections:
           show_header_toggle: false
         filter:
           include:
-            - entity_id: sensor.dh_plex_library_*
+            - entity_id: sensor.dh_plex_agent_library_*
               options:
                 secondary_info: last-changed
         sort:
@@ -392,43 +392,43 @@ sections:
         show_header_toggle: false
         state_color: true
         entities:
-          - entity: sensor.dh_plex_collector_status
+          - entity: sensor.dh_plex_agent_collector_status
             name: Process Collector
-          - entity: sensor.dh_plex_api_status
+          - entity: sensor.dh_plex_agent_api_status
             name: Plex API
-          - entity: sensor.dh_plex_libraries
+          - entity: sensor.dh_plex_agent_libraries
             name: Libraries
           - entity: sensor.dh_plex_agent_version
             name: Версия агента
           - entity: sensor.dh_plex_agent_started_at
             name: Агент запущен
-          - entity: sensor.dh_plex_publication_profile
+          - entity: sensor.dh_plex_agent_publication_profile
             name: Профиль публикации
-          - entity: sensor.dh_plex_last_publication
+          - entity: sensor.dh_plex_agent_last_publication
             name: Последняя публикация
-          - entity: sensor.dh_plex_last_refresh
+          - entity: sensor.dh_plex_agent_last_refresh
             name: Последний Refresh
 badges:
   - type: entity
-    entity: binary_sensor.dh_plex_server_running
+    entity: binary_sensor.dh_plex_agent_server_running
     name: Plex
     show_name: true
     show_state: true
     show_icon: true
   - type: entity
-    entity: sensor.dh_plex_playback_count
+    entity: sensor.dh_plex_agent_playback_count
     name: Playback
     show_name: true
     show_state: true
     show_icon: true
   - type: entity
-    entity: binary_sensor.dh_plex_video_playback_active
+    entity: binary_sensor.dh_plex_agent_video_playback_active
     name: Video
     show_name: true
     show_state: true
     show_icon: true
   - type: entity
-    entity: sensor.dh_plex_cpu
+    entity: sensor.dh_plex_agent_cpu
     name: CPU
     show_name: true
     show_state: true

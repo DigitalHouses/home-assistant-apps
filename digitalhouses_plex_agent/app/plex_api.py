@@ -220,8 +220,11 @@ def parse_sessions_xml(xml_text: str | bytes) -> tuple[PlaybackSession, ...]:
             or playback_id
             or item.get("sessionKey")
             or item.get("ratingKey")
-            or "unknown"
         )
+        if not session_id:
+            raise PlexApiError(
+                "Plex playback session is missing a stable session identity"
+            )
 
         result.append(
             PlaybackSession(

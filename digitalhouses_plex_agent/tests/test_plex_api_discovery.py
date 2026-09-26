@@ -23,7 +23,7 @@ class PlexApiDiscoveryTests(unittest.TestCase):
         topics = build_topics(self.config())
         self.assertEqual(
             topics.plex_api_availability,
-            "DigitalHouses/Global/plex_monitoring/plex_api_availability",
+            "DigitalHouses/Global/digitalhouses_plex_agent/plex_api_availability",
         )
 
     def test_playback_entities_use_api_availability(self):
@@ -31,13 +31,13 @@ class PlexApiDiscoveryTests(unittest.TestCase):
         payload = build_discovery_payload(config, BuildInfo("0.2.0", "main", "abcdef"))
         components = payload["components"]
         expected = {
-            "playback_count": "sensor.dh_plex_playback_count",
-            "playback_sessions": "sensor.dh_plex_playback_sessions",
-            "playback_active": "binary_sensor.dh_plex_playback_active",
-            "video_playback_active": "binary_sensor.dh_plex_video_playback_active",
-            "audio_playback_active": "binary_sensor.dh_plex_audio_playback_active",
-            "api_status": "sensor.dh_plex_api_status",
-            "libraries": "sensor.dh_plex_libraries",
+            "playback_count": "sensor.dh_plex_agent_playback_count",
+            "playback_sessions": "sensor.dh_plex_agent_playback_sessions",
+            "playback_active": "binary_sensor.dh_plex_agent_playback_active",
+            "video_playback_active": "binary_sensor.dh_plex_agent_video_playback_active",
+            "audio_playback_active": "binary_sensor.dh_plex_agent_audio_playback_active",
+            "api_status": "sensor.dh_plex_agent_api_status",
+            "libraries": "sensor.dh_plex_agent_libraries",
         }
         for component, entity_id in expected.items():
             self.assertEqual(components[component]["default_entity_id"], entity_id)
@@ -58,11 +58,11 @@ class PlexApiDiscoveryTests(unittest.TestCase):
         components = payload["components"]
         self.assertEqual(
             components["library_1"]["default_entity_id"],
-            "sensor.dh_plex_library_1",
+            "sensor.dh_plex_agent_library_1",
         )
         self.assertEqual(
             components["library_3"]["default_entity_id"],
-            "sensor.dh_plex_library_3",
+            "sensor.dh_plex_agent_library_3",
         )
         self.assertIn("libraries_by_id", components["library_1"]["value_template"])
         self.assertIn("item_count", components["library_1"]["value_template"])

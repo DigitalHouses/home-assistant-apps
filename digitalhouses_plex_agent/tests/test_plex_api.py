@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app.plex_api import (
     LibraryInfo,
     PlexApiCollector,
+    PlexApiError,
     PlaybackSession,
     build_plex_api_payload,
     parse_sessions_xml,
@@ -88,6 +89,18 @@ class PlexApiTests(unittest.TestCase):
         self.assertEqual(sessions[1].audio_channels, 2)
         self.assertEqual(sessions[1].bit_depth, 16)
         self.assertEqual(sessions[1].sample_rate_hz, 44100)
+
+    def test_missing_session_identity_is_contract_error(self):
+        xml = """<MediaContainer size="1">
+          <Video title="Example" type="movie">
+            <Player state="playing" />
+          </Video>
+        </MediaContainer>"""
+        with self.assertRaisesRegex(
+            PlexApiError,
+            "missing a stable session identity",
+        ):
+            parse_sessions_xml(xml)
 
     def test_transcode_exposes_decisions_and_hardware(self):
         session = parse_sessions_xml(TRANSCODE_XML)[0]

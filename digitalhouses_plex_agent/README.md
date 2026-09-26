@@ -8,7 +8,7 @@ Native Linux agent for Plex Media Server workload, playback, transcoding and lib
 
 [Install / update](#install--update) · [Changelog](CHANGELOG.md) · [Engineering docs](../docs/digitalhouses_plex_agent/) · [Issues](https://github.com/DigitalHouses/home-assistant-apps/issues)
 
-The public product name, repository directory, release identifier and installed Linux runtime identity are **DigitalHouses Plex Agent** / `digitalhouses_plex_agent`. Version `0.6.0` migrates the previous `digitalhouses_plex_monitoring` service/filesystem identity to the canonical runtime while deliberately preserving the released MQTT/device/entity contract.
+The public product name, repository directory, release identifier, installed Linux runtime, MQTT identity, telemetry product and Home Assistant entity namespace are **DigitalHouses Plex Agent** / `digitalhouses_plex_agent`. Version `0.7.0` completes the canonical identity migration that began with the Linux runtime cutover in `0.6.0`.
 
 ## Purpose
 
@@ -31,13 +31,13 @@ Lovelace example: [plex-dashboard.yaml](examples/lovelace/plex-dashboard.yaml)
 Production install/update is pinned to the canonical release tag. Current release:
 
 ```text
-digitalhouses_plex_agent-v0.6.0
+digitalhouses_plex_agent-v0.7.0
 ```
 
 From a root shell:
 
 ```bash
-RELEASE_TAG="digitalhouses_plex_agent-v0.6.0"
+RELEASE_TAG="digitalhouses_plex_agent-v0.7.0"
 curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/${RELEASE_TAG}/digitalhouses_plex_agent/install.sh" \
   | DIGITALHOUSES_SOURCE_REF="${RELEASE_TAG}" bash
 ```
@@ -45,7 +45,7 @@ curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/
 From a sudo-capable user:
 
 ```bash
-RELEASE_TAG="digitalhouses_plex_agent-v0.6.0"
+RELEASE_TAG="digitalhouses_plex_agent-v0.7.0"
 curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/${RELEASE_TAG}/digitalhouses_plex_agent/install.sh" \
   | sudo env DIGITALHOUSES_SOURCE_REF="${RELEASE_TAG}" bash
 ```
@@ -62,32 +62,25 @@ Normal production installation rejects `main`, development branches, temporary r
 
 Release provenance and publication follow the repository [Release Policy](../docs/standards/RELEASE_POLICY.md).
 
-## Runtime migration from 0.5.x
+## Canonical identity migration
 
-Version `0.6.0` performs a controlled installed-runtime migration from the previous `digitalhouses_plex_monitoring` identity to `digitalhouses_plex_agent`.
+Version `0.6.0` migrated the installed Linux service/filesystem identity from `digitalhouses_plex_monitoring` to `digitalhouses_plex_agent`.
 
-On the first update from a legacy installation, the installer:
-
-- stops and disables the legacy main/GPU-helper services;
-- creates a root-only tar backup under `/var/backups/digitalhouses_plex_agent/`;
-- copies the existing configuration, protected Plex token and persistent state into the canonical directories;
-- rewrites only the old default Plex token path in the copied configuration;
-- starts the canonical services and records an idempotent migration marker;
-- automatically restores the previous legacy service state if the canonical main service fails to start.
-
-The legacy `/etc/digitalhouses_plex_monitoring/` and `/var/lib/digitalhouses_plex_monitoring/` trees are retained after a successful first migration as an immediate rollback snapshot. They are not synchronized with later canonical runtime state.
-
-This release does **not** rename the Home Assistant compatibility surface. The following remain unchanged:
+Version `0.7.0` completes the separately deferred Home Assistant/MQTT cutover:
 
 ```text
-MQTT base:  DigitalHouses/Global/plex_monitoring
-device ID:  digitalhouses_plex_monitoring_plex
-entities:   sensor.dh_plex_*
-            binary_sensor.dh_plex_*
-            button.dh_plex_*
+MQTT base:  DigitalHouses/Global/digitalhouses_plex_agent
+device ID:  digitalhouses_plex_agent_plex
+entities:   sensor.dh_plex_agent_agent_*
+            binary_sensor.dh_plex_agent_agent_*
+            button.dh_plex_agent_agent_*
 ```
 
-Those identities require a separate Home Assistant migration and are not part of the Linux runtime cutover.
+On the first `0.7.0` update, the installer preserves the pre-migration configuration as a protected migration source, rewrites only the historical default MQTT base to the canonical base, starts the canonical service, and then removes retained data owned by the historical default namespace plus the old Discovery device identity.
+
+If a site deliberately uses a custom MQTT `topic_prefix`, that custom state namespace is not deleted or rewritten. The old Plex Discovery identity is still tombstoned so Home Assistant cannot retain a duplicate legacy device.
+
+The cleanup is idempotent and recorded in canonical persistent state. Historical service/config/state names remain only for migration detection, rollback artifacts, and release history.
 
 ## Local Plex API authentication
 
@@ -119,7 +112,7 @@ Existing 0.1.x configuration files continue to work: the `[plex_api]` section ha
 /etc/digitalhouses_plex_agent/digitalhouses_plex_agent.conf
 ```
 
-Default telemetry and Plex API settings:
+Default telemetry/publication and Plex API settings:
 
 ```ini
 [general]
@@ -130,6 +123,7 @@ cpu_window_seconds = 60
 log_level = info
 
 [telemetry]
+enabled = false
 cpu_change_threshold = 5
 high_load_threshold = 80
 high_load_publish_interval_seconds = 60
@@ -141,6 +135,35 @@ token_file = /etc/digitalhouses_plex_agent/plex_local_admin_token
 timeout_seconds = 3
 library_refresh_seconds = 3600
 ```
+
+### Usage telemetry
+
+Product telemetry is voluntary and disabled by default:
+
+```ini
+[telemetry]
+enabled = false
+```
+
+When enabled on an exact canonical release build, Plex Agent sends only the protocol-v1 fields: schema version, telemetry policy version, a random installation UUID, product `digitalhouses_plex_agent`, and released product version. It does not send hostname, Plex token, library/media information, hardware inventory, MQTT settings, LAN address, or other site/customer data.
+
+The persistent telemetry identity is stored separately from source code at:
+
+```text
+/var/lib/digitalhouses/digitalhouses_plex_agent/telemetry.json
+```
+
+It survives service restart and product update. Normal cadence is approximately once per 24 hours with jitter; failures back off and never affect Plex/MQTT monitoring.
+
+To delete this installation's retained server-side telemetry record:
+
+```bash
+/opt/digitalhouses/digitalhouses_plex_agent/.venv/bin/python -m app.app \
+  --config /etc/digitalhouses_plex_agent/digitalhouses_plex_agent.conf \
+  --telemetry-delete
+```
+
+See the shared [Product Telemetry Policy](../docs/standards/PRODUCT_TELEMETRY_POLICY.md) and [Telemetry Protocol v1](../docs/standards/TELEMETRY_PROTOCOL_V1.md).
 
 CPU sensors use a machine-wide **0-100%** scale. The agent sums Plex process CPU time and divides it by the number of logical CPUs available to the Plex host/VM. On a 4-vCPU VM, one fully occupied logical CPU therefore appears as 25%. The configured `high_load_threshold = 80` means 80% of the whole machine CPU capacity.
 
@@ -155,11 +178,11 @@ content_type: video | audio
 This is intentionally separate from Plex media types such as `movie`, `episode`, and `track`. Home Assistant automations can use the dedicated binary sensors without parsing session attributes:
 
 ```text
-binary_sensor.dh_plex_video_playback_active
-binary_sensor.dh_plex_audio_playback_active
+binary_sensor.dh_plex_agent_video_playback_active
+binary_sensor.dh_plex_agent_audio_playback_active
 ```
 
-`sensor.dh_plex_playback_sessions` exposes session attributes such as title, year, artist/album for music, series/season/episode for TV, user, player, platform, state, LAN/remote location, bandwidth, playback mode, codec decisions, and hardware-transcode details when Plex supplies them.
+`sensor.dh_plex_agent_playback_sessions` exposes session attributes such as title, year, artist/album for music, series/season/episode for TV, user, player, platform, state, LAN/remote location, bandwidth, playback mode, codec decisions, and hardware-transcode details when Plex supplies them.
 
 Playback mode is normalized as `Direct Play`, `Direct Stream`, `Transcode`, or `Unknown`.
 
@@ -170,10 +193,10 @@ The API collector reads `/library/sections` and publishes both an aggregate libr
 Example:
 
 ```text
-sensor.dh_plex_libraries
-sensor.dh_plex_library_1
-sensor.dh_plex_library_2
-sensor.dh_plex_library_3
+sensor.dh_plex_agent_libraries
+sensor.dh_plex_agent_library_1
+sensor.dh_plex_agent_library_2
+sensor.dh_plex_agent_library_3
 ```
 
 The state of a per-library sensor is the count of playable leaf content:
@@ -189,54 +212,54 @@ Library attributes also contain `content_type: video|audio`, Plex library type, 
 With default `instance_id = plex`:
 
 ```text
-sensor.dh_plex_activity
-sensor.dh_plex_current_item
+sensor.dh_plex_agent_activity
+sensor.dh_plex_agent_current_item
 
-binary_sensor.dh_plex_server_running
-binary_sensor.dh_plex_scanner_running
-binary_sensor.dh_plex_credits_detection
-binary_sensor.dh_plex_intro_detection
-binary_sensor.dh_plex_thumbnail_generation
-binary_sensor.dh_plex_transcoder_running
+binary_sensor.dh_plex_agent_server_running
+binary_sensor.dh_plex_agent_scanner_running
+binary_sensor.dh_plex_agent_credits_detection
+binary_sensor.dh_plex_agent_intro_detection
+binary_sensor.dh_plex_agent_thumbnail_generation
+binary_sensor.dh_plex_agent_transcoder_running
 
-sensor.dh_plex_playback_count
-sensor.dh_plex_playback_sessions
-binary_sensor.dh_plex_playback_active
-binary_sensor.dh_plex_video_playback_active
-binary_sensor.dh_plex_audio_playback_active
-sensor.dh_plex_playback_started_at
-sensor.dh_plex_libraries
-sensor.dh_plex_library_<section_id>
+sensor.dh_plex_agent_playback_count
+sensor.dh_plex_agent_playback_sessions
+binary_sensor.dh_plex_agent_playback_active
+binary_sensor.dh_plex_agent_video_playback_active
+binary_sensor.dh_plex_agent_audio_playback_active
+sensor.dh_plex_agent_playback_started_at
+sensor.dh_plex_agent_libraries
+sensor.dh_plex_agent_library_<section_id>
 
-sensor.dh_plex_cpu
-sensor.dh_plex_scanner_cpu
-sensor.dh_plex_transcoder_cpu
+sensor.dh_plex_agent_cpu
+sensor.dh_plex_agent_scanner_cpu
+sensor.dh_plex_agent_transcoder_cpu
 
-sensor.dh_plex_gpu_video
-sensor.dh_plex_gpu_render
-sensor.dh_plex_gpu_video_enhance
-sensor.dh_plex_gpu_frequency
-sensor.dh_plex_gpu_temperature
-sensor.dh_plex_gpu_rc6
-sensor.dh_plex_gpu_status
-binary_sensor.dh_plex_hardware_transcode_active
+sensor.dh_plex_agent_gpu_video
+sensor.dh_plex_agent_gpu_render
+sensor.dh_plex_agent_gpu_video_enhance
+sensor.dh_plex_agent_gpu_frequency
+sensor.dh_plex_agent_gpu_temperature
+sensor.dh_plex_agent_gpu_rc6
+sensor.dh_plex_agent_gpu_status
+binary_sensor.dh_plex_agent_hardware_transcode_active
 
-sensor.dh_plex_transcoder_count
-sensor.dh_plex_scanner_actions
-sensor.dh_plex_process_count
-sensor.dh_plex_collector_status
-sensor.dh_plex_api_status
+sensor.dh_plex_agent_transcoder_count
+sensor.dh_plex_agent_scanner_actions
+sensor.dh_plex_agent_process_count
+sensor.dh_plex_agent_collector_status
+sensor.dh_plex_agent_api_status
 sensor.dh_plex_agent_version
 sensor.dh_plex_agent_uptime
 sensor.dh_plex_agent_started_at
-sensor.dh_plex_last_boot
-sensor.dh_plex_publication_profile
-sensor.dh_plex_last_publication
-sensor.dh_plex_last_refresh
-button.dh_plex_refresh
+sensor.dh_plex_agent_last_boot
+sensor.dh_plex_agent_publication_profile
+sensor.dh_plex_agent_last_publication
+sensor.dh_plex_agent_last_refresh
+button.dh_plex_agent_refresh
 ```
 
-`sensor.dh_plex_current_item` remains a Linux **workload** sensor. It describes media files currently being processed by Plex processes; it is not a list of user playback sessions.
+`sensor.dh_plex_agent_current_item` remains a Linux **workload** sensor. It describes media files currently being processed by Plex processes; it is not a list of user playback sessions.
 
 ## Standalone Intel GPU telemetry
 
@@ -244,11 +267,11 @@ Plex Agent collects Intel GPU engine telemetry locally on the same Linux host/VM
 
 GPU temperature is published only when Linux exposes a real hwmon sensor attached to the GPU. CPU/SoC temperature is never relabeled as GPU temperature. On systems such as the current Alder Lake-N Plex VM, GPU load can be available while GPU temperature remains unavailable.
 
-`binary_sensor.dh_plex_hardware_transcode_active` comes from Plex playback-session semantics; the GPU sensors independently show measured hardware activity.
+`binary_sensor.dh_plex_agent_hardware_transcode_active` comes from Plex playback-session semantics; the GPU sensors independently show measured hardware activity.
 
-`sensor.dh_plex_last_boot` is the Linux host/VM boot timestamp and therefore survives Plex Agent restarts. `sensor.dh_plex_agent_started_at` is the current agent process start timestamp; `sensor.dh_plex_agent_uptime` remains a separate low-level duration diagnostic for compatibility.
+`sensor.dh_plex_agent_last_boot` is the Linux host/VM boot timestamp and therefore survives Plex Agent restarts. `sensor.dh_plex_agent_started_at` is the current agent process start timestamp; `sensor.dh_plex_agent_uptime` remains a separate low-level duration diagnostic for compatibility.
 
-`sensor.dh_plex_playback_started_at` is the earliest first-observed start timestamp among the currently active Plex playback sessions. Internal session identities remain private to the agent and are persisted only under `/var/lib/digitalhouses_plex_agent/` so an agent restart does not reset an ongoing session timestamp. When no playback is active, no playback-start timestamp is reported.
+`sensor.dh_plex_agent_playback_started_at` is the earliest first-observed start timestamp among the currently active Plex playback sessions. Internal session identities remain private to the agent and are persisted only under `/var/lib/digitalhouses_plex_agent/` so an agent restart does not reset an ongoing session timestamp. When no playback is active, no playback-start timestamp is reported.
 
 On Linux hosts where i915 PMU access requires elevated privilege, only the dedicated `digitalhouses_plex_agent_gpu_helper.service` receives `CAP_SYS_ADMIN`. The main `digitalhouses_plex_agent.service` remains unprivileged. The helper has no MQTT or Plex API responsibility; it writes a timestamped local state file that the main agent reads and rejects when stale.
 
@@ -301,7 +324,7 @@ Known scanner signatures include:
 - Intro: `--server-action intro` or `intros`;
 - thumbnails/indexing: `--server-action index`, `--index`, `-b`, `--chapter-thumbs-only`.
 
-Unknown Plex Media Scanner work remains visible as generic `scanner` activity and its `--server-action` values remain visible in `sensor.dh_plex_scanner_actions`.
+Unknown Plex Media Scanner work remains visible as generic `scanner` activity and its `--server-action` values remain visible in `sensor.dh_plex_agent_scanner_actions`.
 
 `Plex Transcoder` means a transcoder process exists. It does **not** by itself prove that a user playback session is being transcoded. Playback mode comes from the Plex session API.
 
@@ -319,6 +342,7 @@ journalctl -u digitalhouses_plex_agent -f
 /etc/digitalhouses_plex_agent/digitalhouses_plex_agent.conf
 /etc/digitalhouses_plex_agent/plex_local_admin_token
 /var/lib/digitalhouses_plex_agent/
+/var/lib/digitalhouses/digitalhouses_plex_agent/telemetry.json
 journald
 ```
 

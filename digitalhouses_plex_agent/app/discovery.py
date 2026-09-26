@@ -37,7 +37,7 @@ def state_group_topic(topics: Topics, group: str) -> str:
 
 def build_topics(config: AppConfig) -> Topics:
     instance = config.general.instance_id
-    device_id = f"digitalhouses_plex_monitoring_{instance}"
+    device_id = f"digitalhouses_plex_agent_{instance}"
     topic_prefix = config.mqtt.topic_prefix.rstrip(chr(47))
     base = topic_prefix if instance == "plex" else f"{topic_prefix}/{instance}"
     return Topics(
@@ -467,14 +467,14 @@ def build_discovery_payload(
         key=uid("gpu_status"),
         entity_id=f"sensor.{prefix}_gpu_status",
         state_topic=gpu_topic,
-        value_template="{{ value_json.status | default('unknown') }}",
+        value_template="{{ value_json.status }}",
         app_availability=topics.app_availability,
         diagnostic=True,
         icon="mdi:gpu",
         json_attributes_topic=gpu_topic,
         json_attributes_template=(
-            "{{ {'supported': value_json.supported | default(false), "
-            "'available': value_json.available | default(false), "
+            "{{ {'supported': value_json.supported, "
+            "'available': value_json.available, "
             "'source': value_json.source | default(none), "
             "'pci_address': value_json.pci_address | default(none)} | tojson }}"
         ),
@@ -497,9 +497,9 @@ def build_discovery_payload(
         platform="sensor",
         name="Agent version",
         key=uid("agent_version"),
-        entity_id=f"sensor.{prefix}_agent_version",
+        entity_id=f"sensor.{prefix}_version",
         state_topic=topics.state,
-        value_template="{{ value_json.agent_version | default('unknown') }}",
+        value_template="{{ value_json.agent_version }}",
         app_availability=topics.app_availability,
         diagnostic=True,
         icon="mdi:tag-outline",
@@ -509,9 +509,9 @@ def build_discovery_payload(
         platform="sensor",
         name="Agent uptime",
         key=uid("agent_uptime"),
-        entity_id=f"sensor.{prefix}_agent_uptime",
+        entity_id=f"sensor.{prefix}_uptime",
         state_topic=topics.state,
-        value_template="{{ value_json.agent_uptime_seconds | default(0) }}",
+        value_template="{{ value_json.agent_uptime_seconds }}",
         app_availability=topics.app_availability,
         diagnostic=True,
         device_class="duration",
@@ -523,9 +523,9 @@ def build_discovery_payload(
         platform="sensor",
         name="Agent started at",
         key=uid("agent_started_at"),
-        entity_id=f"sensor.{prefix}_agent_started_at",
+        entity_id=f"sensor.{prefix}_started_at",
         state_topic=state_group_topic(topics, "diagnostics"),
-        value_template="{{ value_json.agent_started_at | default(none) }}",
+        value_template="{{ value_json.agent_started_at }}",
         app_availability=topics.app_availability,
         diagnostic=True,
         device_class="timestamp",
@@ -538,14 +538,14 @@ def build_discovery_payload(
         key=uid("publication_profile"),
         entity_id=f"sensor.{prefix}_publication_profile",
         state_topic=topics.state,
-        value_template="{{ value_json.publication_profile.state | default('normal') }}",
+        value_template="{{ value_json.publication_profile.state }}",
         app_availability=topics.app_availability,
         diagnostic=True,
         icon="mdi:speedometer-medium",
         json_attributes_topic=topics.state,
         json_attributes_template=(
-            "{{ {'resources': value_json.publication_profile.resources | default({}), "
-            "'reason': value_json.publication_profile.reason | default(none)} | tojson }}"
+            "{{ {'resources': value_json.publication_profile.resources, "
+            "'reason': value_json.publication_profile.reason} | tojson }}"
         ),
     )
 
@@ -555,17 +555,17 @@ def build_discovery_payload(
         key=uid("last_publication"),
         entity_id=f"sensor.{prefix}_last_publication",
         state_topic=topics.state,
-        value_template="{{ value_json.last_publication.timestamp | default(none) }}",
+        value_template="{{ value_json.last_publication.timestamp }}",
         app_availability=topics.app_availability,
         diagnostic=True,
         device_class="timestamp",
         icon="mdi:publish",
         json_attributes_topic=topics.state,
         json_attributes_template=(
-            "{{ {'group': value_json.last_publication.group | default(none), "
-            "'reason': value_json.last_publication.reason | default(none), "
-            "'profile': value_json.last_publication.profile | default(none), "
-            "'group_count': value_json.last_publication.group_count | default(0)} | tojson }}"
+            "{{ {'group': value_json.last_publication.group, "
+            "'reason': value_json.last_publication.reason, "
+            "'profile': value_json.last_publication.profile, "
+            "'group_count': value_json.last_publication.group_count} | tojson }}"
         ),
     )
 
@@ -593,11 +593,11 @@ def build_discovery_payload(
             "sw_version": build.version,
         },
         "origin": {
-            "name": "DigitalHouses Plex Monitoring",
+            "name": "DigitalHouses Plex Agent",
             "sw_version": build.version,
             "support_url": (
                 "https://github.com/DigitalHouses/home-assistant-apps/"
-                "tree/main/digitalhouses_plex_monitoring"
+                "tree/main/digitalhouses_plex_agent"
             ),
         },
         "components": components,

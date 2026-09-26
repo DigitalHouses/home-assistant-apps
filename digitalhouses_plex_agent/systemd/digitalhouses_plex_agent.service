@@ -17,7 +17,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/var/lib/digitalhouses_plex_agent
+ReadWritePaths=/var/lib/digitalhouses_plex_agent /var/lib/digitalhouses/digitalhouses_plex_agent
 
 [Install]
 WantedBy=multi-user.target
