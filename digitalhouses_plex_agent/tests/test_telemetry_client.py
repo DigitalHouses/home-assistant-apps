@@ -218,3 +218,68 @@ def test_linux_agent_telemetry_identity_uses_canonical_persistent_path():
     assert str(DEFAULT_TELEMETRY_STATE_FILE) == (
         "/var/lib/digitalhouses/digitalhouses_plex_agent/telemetry.json"
     )
+
+
+def test_daily_cadence_respects_persisted_jittered_schedule(tmp_path: Path):
+    now = {"value": 1000.0}
+    store = StateStore(tmp_path / "telemetry.json")
+    transport = FakeTransport()
+    client = TelemetryClient(
+        enabled=True,
+        version="0.7.0",
+        state_store=store,
+        build_info_path=_released_build(tmp_path, "0.7.0"),
+        transport=transport,
+        now_epoch=lambda: now["value"],
+    )
+
+    assert client.tick() is True
+    interval = client._normal_interval()
+    assert 23.5 * 60 * 60 <= interval <= 24.5 * 60 * 60
+
+    now["value"] = 1000.0 + interval - 1.0
+    assert client.tick() is False
+    assert len(transport.calls) == 1
+
+    now["value"] = 1000.0 + interval
+    assert client.tick() is True
+    assert len(transport.calls) == 2
+
+
+def test_corrupted_state_is_repaired_without_reusing_invalid_identity(tmp_path: Path):
+    path = tmp_path / "telemetry.json"
+    path.write_text(
+        '{"schema_version":1,"installation_id":"bad","installation_token":"bad"}\n',
+        encoding="utf-8",
+    )
+    client = TelemetryClient(
+        enabled=False,
+        version="0.7.0",
+        state_store=StateStore(path),
+        build_info_path=tmp_path / "BUILD_INFO",
+    )
+
+    assert client.installation_id != "bad"
+    assert client.installation_token != "bad"
+    assert len(bytes.fromhex(client.installation_token)) >= 32
+
+
+def test_token_is_not_logged_when_transport_exception_mentions_secret(
+    tmp_path: Path,
+    caplog,
+):
+    transport = FakeTransport()
+    client = TelemetryClient(
+        enabled=True,
+        version="0.7.0",
+        state_store=StateStore(tmp_path / "telemetry.json"),
+        build_info_path=_released_build(tmp_path, "0.7.0"),
+        transport=transport,
+        now_epoch=lambda: 1000.0,
+    )
+    transport.error = RuntimeError(
+        f"synthetic failure secret={client.installation_token}"
+    )
+
+    assert client.tick() is False
+    assert client.installation_token not in caplog.text
