@@ -6,6 +6,9 @@ cpu_window_seconds = 60
 log_level = info
 
 [telemetry]
+# Voluntary product telemetry. Default is OFF.
+# Policy: https://github.com/DigitalHouses/home-assistant-apps/blob/main/docs/standards/PRODUCT_TELEMETRY_POLICY.md
+enabled = false
 cpu_change_threshold = 5
 high_load_threshold = 80
 high_load_publish_interval_seconds = 60
@@ -22,6 +25,6 @@ host =
 port = 1883
 username =
 password =
-topic_prefix = DigitalHouses/Global/plex_monitoring
+topic_prefix = DigitalHouses/Global/digitalhouses_plex_agent
 discovery_prefix = homeassistant
 keepalive_seconds = 60
