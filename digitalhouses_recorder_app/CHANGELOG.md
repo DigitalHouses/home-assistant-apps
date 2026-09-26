@@ -1,4 +1,12 @@
 # Changelog
+## 0.1.11
+- Complete Phase 2 of the controlled Home Assistant App slug migration by switching the Supervisor slug to `digitalhouses_recorder_app`.
+- Import the verified bridge bundle produced by legacy-slug Recorder App 0.1.10 before normal runtime starts.
+- Apply migrated App options through Supervisor; when the new options are not yet mounted into `/data/options.json`, stop cleanly once and complete the import on the next canonical App start.
+- Restore optional `ssh_known_hosts` only after the migrated options are active, then write the idempotent migration-complete marker.
+- Keep MQTT base topic `DigitalHouses/Global/db_monitoring`, MQTT device/unique IDs and all existing `dh_db_*` Home Assistant entities unchanged.
+- Keep the legacy `digitalhouses_db_monitoring` installation only as a stopped rollback target during migration acceptance.
+
 ## 0.1.10
 - Publish the controlled Home Assistant App slug-migration bridge as the first accepted bridge release after the incomplete 0.1.9 delivery attempt.
 - Keep the legacy Supervisor slug `digitalhouses_db_monitoring` while exporting `/data/options.json` and optional `/data/ssh_known_hosts` to the verified migration bundle under `/share/digitalhouses_recorder_app/slug-migration-v1/`.
