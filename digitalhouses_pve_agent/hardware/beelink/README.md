@@ -3,7 +3,7 @@
 This profile prepares a supported Beelink/AZW mini PC running Proxmox VE so the
 Linux hwmon stack exposes the IT8613E fan tachometer reliably after every boot.
 
-It is intentionally separate from the generic `dh_pve_app/install.sh`. A custom
+It is intentionally separate from the generic `digitalhouses_pve_agent/install.sh`. A custom
 kernel driver must never be installed automatically on unrelated Proxmox hosts.
 
 ## What it installs
@@ -22,7 +22,7 @@ The installer uses the normal Debian/Proxmox kernel-module path:
 7. creates `/etc/modules-load.d/digitalhouses-beelink-it87.conf`;
 8. loads the module with normal `modprobe it87`;
 9. verifies the IT8613E hwmon device and `fan2_input`;
-10. when `dh_pve_app` is installed, verifies that its raw collector sees
+10. when `digitalhouses_pve_agent` is installed, verifies that its raw collector sees
     `it8613_it87_2608_fan2`.
 
 The upstream `dkms.conf` has `AUTOINSTALL="yes"`, so future Proxmox kernel
@@ -39,7 +39,7 @@ The host-profile installer does not use `force_id`, `fix_pwm_polarity`,
 `ignore_resource_conflict`, direct `insmod`, direct `rmmod`, or PWM
 control. It only prepares the pinned driver and hwmon telemetry.
 
-A newer `dh_pve_app` release may separately use the explicitly supported
+A newer `digitalhouses_pve_agent` release may separately use the explicitly supported
 Beelink IT8613 `fan2/pwm2` adapter for guarded fan calibration. That runtime
 path is hardware-profile-aware, persists the original control state before the
 first write, drives the fan only to maximum, restores/verifies the original
@@ -52,8 +52,8 @@ hwmon device and readable `fan2_input`.
 ## Standalone use
 
 This hardware profile is independent from the generic App installer. Do not
-assume that an older already-installed `dh_pve_app` release contains
-`hardware/beelink/` under `/opt/digitalhouses/dh_pve_app`.
+assume that an older already-installed `digitalhouses_pve_agent` release contains
+`hardware/beelink/` under `/opt/digitalhouses/digitalhouses_pve_agent`.
 
 For normal standalone use on a Beelink/AZW host, run the profile directly from
 a reviewed repository ref or exact commit.
@@ -62,13 +62,13 @@ a reviewed repository ref or exact commit.
 
 ```bash
 PROFILE_REF=<reviewed-ref-or-sha>
-bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$PROFILE_REF/dh_pve_app/hardware/beelink/install.sh")
+bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$PROFILE_REF/digitalhouses_pve_agent/hardware/beelink/install.sh")
 ```
 
 From a reviewed local checkout, the equivalent command is:
 
 ```bash
-sudo bash dh_pve_app/hardware/beelink/install.sh
+sudo bash digitalhouses_pve_agent/hardware/beelink/install.sh
 ```
 
 The operation is idempotent. Re-running it repairs missing packages/source or
@@ -83,13 +83,13 @@ it underneath a running host. It finishes the persistent setup and reports
 
 ```bash
 PROFILE_REF=<reviewed-ref-or-sha>
-bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$PROFILE_REF/dh_pve_app/hardware/beelink/install.sh") --check
+bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$PROFILE_REF/digitalhouses_pve_agent/hardware/beelink/install.sh") --check
 ```
 
 From a reviewed local checkout:
 
 ```bash
-sudo bash dh_pve_app/hardware/beelink/install.sh --check
+sudo bash digitalhouses_pve_agent/hardware/beelink/install.sh --check
 ```
 
 A healthy host ends with:
@@ -106,13 +106,13 @@ is present.
 
 ```bash
 PROFILE_REF=<reviewed-ref-or-sha>
-bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$PROFILE_REF/dh_pve_app/hardware/beelink/uninstall.sh")
+bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$PROFILE_REF/digitalhouses_pve_agent/hardware/beelink/uninstall.sh")
 ```
 
 From a reviewed local checkout:
 
 ```bash
-sudo bash dh_pve_app/hardware/beelink/uninstall.sh
+sudo bash digitalhouses_pve_agent/hardware/beelink/uninstall.sh
 ```
 
 The uninstaller removes only the DigitalHouses autoload file, the pinned DKMS

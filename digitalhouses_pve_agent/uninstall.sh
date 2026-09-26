@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP_NAME="dh_pve_app"
+APP_NAME="digitalhouses_pve_agent"
 SERVICE_NAME="${APP_NAME}.service"
 APP_DIR="/opt/digitalhouses/${APP_NAME}"
 CONFIG_DIR="/etc/${APP_NAME}"
@@ -9,7 +9,7 @@ CONFIG_FILE="${CONFIG_DIR}/${APP_NAME}.conf"
 STATE_DIR="/var/lib/${APP_NAME}"
 TELEMETRY_STATE_DIR="/var/lib/digitalhouses/digitalhouses_pve_agent"
 UNIT_FILE="/etc/systemd/system/${SERVICE_NAME}"
-ROOT_GUIDE="/root/dh_app_pve.txt"
+ROOT_GUIDE="/root/digitalhouses_pve_agent.txt"
 
 purge=0
 if [[ "$#" -gt 1 ]]; then
@@ -36,7 +36,7 @@ if ! command -v pveversion >/dev/null 2>&1 || [[ ! -d /etc/pve ]]; then
 fi
 
 if [[ ! -x "${APP_DIR}/.venv/bin/python" ]]; then
-    echo "Ошибка: установленный Python runtime dh_pve_app не найден."
+    echo "Ошибка: установленный Python runtime digitalhouses_pve_agent не найден."
     echo "Локальная установка не изменена."
     exit 1
 fi
@@ -110,4 +110,4 @@ fi
 systemctl daemon-reload
 systemctl reset-failed "${SERVICE_NAME}" >/dev/null 2>&1 || true
 
-echo "DH PVE App удален."
+echo "DigitalHouses PVE Agent удален."

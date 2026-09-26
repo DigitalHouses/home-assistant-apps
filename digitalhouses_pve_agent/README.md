@@ -8,13 +8,13 @@ Native Linux agent for **Proxmox VE 8.x** that publishes host, CPU, memory, stor
 
 [Installation / update](#installation--update) · [Changelog](CHANGELOG.md) · [Engineering docs](../docs/digitalhouses_pve_agent/) · [Issues](https://github.com/DigitalHouses/home-assistant-apps/issues)
 
-The public product name and canonical repository identity are **DigitalHouses PVE Agent** / `digitalhouses_pve_agent`. Existing installed runtime identifiers remain compatible: service and filesystem identity `dh_pve_app`, MQTT base namespace `DigitalHouses/Global/dh_pve_app/<instance>`, and Home Assistant devices `DH PVE` plus optional `DH PVE UPS`.
+The canonical product and runtime identity is **DigitalHouses PVE Agent** / `digitalhouses_pve_agent`: systemd service `digitalhouses_pve_agent.service`, filesystem roots under `/opt/digitalhouses/digitalhouses_pve_agent`, `/etc/digitalhouses_pve_agent` and `/var/lib/digitalhouses_pve_agent`, MQTT base `DigitalHouses/Global/digitalhouses_pve_agent/<instance>`, and Home Assistant entity prefix `dh_pve_agent_*`. Version 0.5.29 performs the one-time controlled migration from the former `dh_pve_app` / `dh_app_pve_*` runtime.
 
-Current source release: `VERSION` is `0.5.28`.
+Current source release: `VERSION` is `0.5.29`.
 
 ## Home Assistant dashboard
 
-![DigitalHouses PVE Agent — Home Assistant dashboard](images/dh_pve_app_dashboard_ru.png)
+![DigitalHouses PVE Agent — Home Assistant dashboard](images/digitalhouses_pve_agent_dashboard_ru.png)
 
 Example of the DigitalHouses PVE Agent dashboard in Home Assistant.
 
@@ -55,7 +55,7 @@ Stable fan identity uses the hwmon chip, resolved underlying device and fan chan
 
 Unconfirmed fan candidates are omitted from normal MQTT Discovery. They are never tombstoned merely because they are still in debounce or currently report `0 RPM`: neither condition proves that a physical fan is absent. Explicit Device Discovery tombstones remain reserved for authoritative migrations/removals that are independent of live fan-presence inference.
 
-`pwm*` and `/sys/class/thermal/cooling_device*` are not used as proof of a physical fan or as RPM sources. The installed `/root/dh_app_pve.txt` guide contains generic read-only fan troubleshooting. Beelink/AZW driver installation, verification and rollback are documented separately in `hardware/beelink/README.md`.
+`pwm*` and `/sys/class/thermal/cooling_device*` are not used as proof of a physical fan or as RPM sources. The installed `/root/digitalhouses_pve_agent.txt` guide contains generic read-only fan troubleshooting. Beelink/AZW driver installation, verification and rollback are documented separately in `hardware/beelink/README.md`.
 
 For an explicitly supported write-capable hardware profile, the App can calibrate each confirmed physical fan against its measured maximum RPM. Calibration state is persisted separately from fan-presence state. The user-facing sensor is `Fan speed % = current RPM / calibrated max RPM × 100`, rounded to the nearest integer and clamped to 0..100%; the raw RPM sensor remains diagnostic.
 
@@ -69,9 +69,9 @@ A calibrated maximum may increase automatically if ordinary operation produces t
 
 For Beelink/AZW mini PCs that require the newer upstream `it87` driver to expose IT8613E fan RPM, use the repository-owned host profile in `hardware/beelink/`.
 
-The profile is intentionally separate from the generic App installer. It installs the pinned driver through the native Proxmox/Debian path — APT headers and DKMS, `depmod`, `modules-load.d` and `modprobe` — without replacing the stock Proxmox kernel module. It is idempotent, has a read-only `--check` mode, verifies `fan2_input` and the real `dh_pve_app` collector, and includes a symmetric uninstall path.
+The profile is intentionally separate from the generic App installer. It installs the pinned driver through the native Proxmox/Debian path — APT headers and DKMS, `depmod`, `modules-load.d` and `modprobe` — without replacing the stock Proxmox kernel module. It is idempotent, has a read-only `--check` mode, verifies `fan2_input` and the real `digitalhouses_pve_agent` collector, and includes a symmetric uninstall path.
 
-See `hardware/beelink/README.md` for the standalone install/repair command, read-only `--check`, reboot handling and rollback. The profile is run explicitly from a reviewed repository ref/commit and must not be assumed to exist inside an older already-installed App release.
+See `hardware/beelink/README.md` for the standalone install/repair command, read-only `--check`, reboot handling and rollback. For production, the profile is taken from the same canonical release tag as the installed Agent. Development/recovery use of another ref must be explicit.
 
 ## MQTT presentation
 
@@ -86,8 +86,8 @@ The normal publication windows are:
 
 Canonical Home Assistant entity prefixes are:
 
-- PVE: `dh_app_pve_*`;
-- UPS: `dh_app_pve_ups_*`.
+- PVE: `dh_pve_agent_*`;
+- UPS: `dh_pve_agent_ups_*`.
 
 Legacy MQTT Discovery identities are removed through retained tombstones during migration so old and canonical entities do not coexist indefinitely.
 
@@ -97,14 +97,14 @@ Problem calculation is App-owned. Home Assistant does not scan `states.sensor`, 
 
 Current problems are exposed as `binary_sensor` entities with `device_class: problem`. Aggregate problem state and compact presentation are separate retained sensors.
 
-The installed App release is exposed as diagnostic entity `sensor.dh_app_pve_app_version`. Its state comes from the same `VERSION` value used by MQTT Device Discovery `device.sw_version` and `origin.sw_version`. The standard PVE dashboard shows it in the host summary as `App <version>` and hides that segment if the entity is unavailable or unknown.
+The installed App release is exposed as diagnostic entity `sensor.dh_pve_agent_app_version`. Its state comes from the same `VERSION` value used by MQTT Device Discovery `device.sw_version` and `origin.sw_version`. The standard PVE dashboard shows it in the host summary as `App <version>` and hides that segment if the entity is unavailable or unknown.
 
-The current agent process start is exposed as `sensor.dh_app_pve_agent_started` with Home Assistant `device_class: timestamp`. Its value is fixed for the lifetime of the running agent process and changes only after an agent restart, allowing Home Assistant to present the age natively instead of publishing a continuously changing uptime duration.
+The current agent process start is exposed as `sensor.dh_pve_agent_agent_started` with Home Assistant `device_class: timestamp`. Its value is fixed for the lifetime of the running agent process and changes only after an agent restart, allowing Home Assistant to present the age natively instead of publishing a continuously changing uptime duration.
 
 Native MQTT Event entities are used for diagnostic transitions:
 
-- `event.dh_app_pve_diagnostic`;
-- `event.dh_app_pve_ups_diagnostic`.
+- `event.dh_pve_agent_diagnostic`;
+- `event.dh_pve_agent_ups_diagnostic`.
 
 PVE problem events are semantic: CPU temperature high/normal, CPU throttling started/cleared, storage usage high/normal, disk/GPU temperature high/normal, fan-control restore failed/restored and disk SMART failed/restored. Changes while a problem remains active are reflected immediately in retained problem/telemetry state; no generic transient `problem_updated` Event is published. UPS Event Discovery uses explicit user-semantic events: NUT unavailable/restored, power-state unknown/restored, line-power lost/restored, enter/clear events for low/high battery, replace-battery, bypass, calibration, output-off, overload, AVR Trim/Boost, Forced Shutdown and alarm, plus `battery_discharge_level_crossed`, `battery_fully_charged`, `shutdown_committed` and `config_changed`.
 
@@ -123,19 +123,19 @@ The default is 30 seconds; valid values are 0..3600 seconds and 0 disables debou
 
 ## Optional UPS UI contract
 
-UPS monitoring is optional. The always-present PVE device exposes `binary_sensor.dh_app_pve_ups_configured` from the persistent UPS selection state:
+UPS monitoring is optional. The always-present PVE device exposes `binary_sensor.dh_pve_agent_ups_configured` from the persistent UPS selection state:
 
 - `off` — no UPS has been provisioned for this PVE host; the UPS dashboard should show one neutral “UPS not configured” card and hide the UPS-specific view;
-- `on` + `binary_sensor.dh_app_pve_ups_available = off` — a UPS is provisioned but NUT cannot currently read it; this is a real availability problem and must remain visible;
+- `on` + `binary_sensor.dh_pve_agent_ups_available = off` — a UPS is provisioned but NUT cannot currently read it; this is a real availability problem and must remain visible;
 - `on` + UPS available — show the full UPS dashboard.
 
-UPS controls that depend on hardware capabilities have stable diagnostic facts: `binary_sensor.dh_app_pve_ups_quick_test_supported`, `binary_sensor.dh_app_pve_ups_deep_test_supported`, `binary_sensor.dh_app_pve_ups_stop_test_supported`, and `binary_sensor.dh_app_pve_ups_beeper_control_supported`. UI cards may use these facts for visibility instead of referencing an entity that the UPS does not support.
+UPS controls that depend on hardware capabilities have stable diagnostic facts: `binary_sensor.dh_pve_agent_ups_quick_test_supported`, `binary_sensor.dh_pve_agent_ups_deep_test_supported`, `binary_sensor.dh_pve_agent_ups_stop_test_supported`, and `binary_sensor.dh_pve_agent_ups_beeper_control_supported`. UI cards may use these facts for visibility instead of referencing an entity that the UPS does not support.
 
 ## UPS status, charger and battery semantics
 
 Canonical UPS status is derived from NUT tokens into stable machine states such as `online`, `on_battery`, `boost`, `trim`, `bypass`, `overload`, `low_battery` and `replace_battery`. Raw NUT status tokens remain available diagnostically.
 
-Canonical charger state is exposed as `sensor.dh_app_pve_ups_battery_charger_status` with machine values `charging`, `discharging`, `floating`, `resting`, `idle` or `unknown`. `battery.charger.status` has priority. `CHRG`/`DISCHRG` are charger fallback evidence only when a direct charger status is not available; a present but unknown direct value is not overridden by token fallback.
+Canonical charger state is exposed as `sensor.dh_pve_agent_ups_battery_charger_status` with machine values `charging`, `discharging`, `floating`, `resting`, `idle` or `unknown`. `battery.charger.status` has priority. `CHRG`/`DISCHRG` are charger fallback evidence only when a direct charger status is not available; a present but unknown direct value is not overridden by token fallback.
 
 Battery discharge notification milestones are fixed machine events at 90, 80, 70, 60, 50, 40, 30, 20 and 10 percent. They are independent from the configurable shutdown charge threshold. A large downward jump may report multiple crossed milestones in one Event, and persisted discharge-session state prevents duplicate milestones after restart.
 
@@ -156,19 +156,19 @@ machine event
 
 The PVE HA examples are:
 
-- `examples/packages/dh_app_pve_package.yaml` — non-language helpers, Recorder and Logbook;
-- `examples/packages/dh_app_pve_notification_local_package.yaml` — English local notification example;
-- `examples/packages/locales/ru/dh_app_pve_notification_local_package.yaml` — Russian site-local notification package.
+- `examples/packages/dh_pve_agent_package.yaml` — non-language helpers, Recorder and Logbook;
+- `examples/packages/dh_pve_agent_notification_local_package.yaml` — English local notification example;
+- `examples/packages/locales/ru/dh_pve_agent_notification_local_package.yaml` — Russian site-local notification package.
 
 Install the base package and one local notification package. The local package gives every user-visible situation its own `event.received` trigger and matching `trigger.id`, routes it through `choose`, and calls the delivery service directly. For example, `line_power_lost` is the exact place to edit the text shown when the UPS switches to battery, `line_power_restored` is the restore event, `boost_started` is the exact place for AVR Boost, and `cpu_throttling_started` or `storage_usage_high` are the exact places for those PVE alerts. The bundled text demonstrates the event-time context fields, such as UPS charge/runtime/load/input voltage or PVE temperature/frequency/threshold/free space.
 
-The English example uses `persistent_notification.create`. The Russian site package calls `script.write2log` directly. A user may replace the direct action with any local `notify.*`, script or other Home Assistant service.
+Both public notification examples use `persistent_notification.create`. A user may replace that direct action with any local `notify.*`, script or other Home Assistant service.
 
 Event data is read directly from `trigger.to_state.attributes`. The notification automation does not create another Home Assistant notification event and does not repeat the producer's machine-event schema validation.
 
 Live events are transient. If Home Assistant is offline when an event occurs, that old event is not replayed as a new notification. Current state remains available through the product sensors and binary sensors.
 
-When upgrading from 0.5.16 or earlier, remove the old `dh_app_pve_notification_package.yaml` and any temporary delivery/adapter package before installing `dh_app_pve_notification_local_package.yaml`. The standalone `dh_app_pve_ui_package.yaml` remains obsolete because its helpers are already consolidated into `dh_app_pve_package.yaml`.
+When upgrading from 0.5.16 or earlier, remove the old `dh_pve_agent_notification_package.yaml` and any temporary delivery/adapter package before installing `dh_pve_agent_notification_local_package.yaml`. The standalone `dh_pve_agent_ui_package.yaml` remains obsolete because its helpers are already consolidated into `dh_pve_agent_package.yaml`.
 
 ## Product telemetry
 
@@ -186,10 +186,10 @@ Telemetry identity and scheduling state are persisted in `/var/lib/digitalhouses
 The shared privacy/consent contract is documented in [DigitalHouses Product Telemetry Policy](../docs/standards/PRODUCT_TELEMETRY_POLICY.md). The current installation can request authenticated deletion with:
 
 ```bash
-PYTHONPATH=/opt/digitalhouses/dh_pve_app \
-/opt/digitalhouses/dh_pve_app/.venv/bin/python -m app.main \
-  --config /etc/dh_pve_app/dh_pve_app.conf \
-  --state-dir /var/lib/dh_pve_app \
+PYTHONPATH=/opt/digitalhouses/digitalhouses_pve_agent \
+/opt/digitalhouses/digitalhouses_pve_agent/.venv/bin/python -m app.main \
+  --config /etc/digitalhouses_pve_agent/digitalhouses_pve_agent.conf \
+  --state-dir /var/lib/digitalhouses_pve_agent \
   --telemetry-delete
 ```
 
@@ -197,7 +197,7 @@ PYTHONPATH=/opt/digitalhouses/dh_pve_app \
 
 Recorder configuration is an explicit whitelist. Continuous history is kept only for useful metrics such as CPU, RAM/Swap, fan speed %, storage usage, disk temperature/wear, GPU telemetry and selected UPS telemetry/status.
 
-Rich presentation, debug diagnostics, the static `sensor.dh_app_pve_app_version` and `sensor.dh_app_pve_agent_started` metadata entities, and MQTT Event entities are intentionally not Recorder history.
+Rich presentation, debug diagnostics, the static `sensor.dh_pve_agent_app_version` and `sensor.dh_pve_agent_agent_started` metadata entities, and MQTT Event entities are intentionally not Recorder history.
 
 ## UPS / NUT ownership
 
@@ -209,7 +209,7 @@ UPS -> USB -> Proxmox -> NUT
 
 Proxmox/NUT remains the shutdown authority. Home Assistant never decides to shut down Proxmox and does not expose generic shell, arbitrary `upscmd`, `load.*`, UPS output-off or arbitrary FSD controls.
 
-The long-running `dh_pve_app.service` treats `/etc/nut` as read-only. Existing administrator NUT/upssched configuration may be observed for diagnostics, but the former App-managed ONBATT/upssched timer writer and root commissioning CLI are not part of the current product path.
+The long-running `digitalhouses_pve_agent.service` treats `/etc/nut` as read-only. Existing administrator NUT/upssched configuration may be observed for diagnostics, but the former App-managed ONBATT/upssched timer writer and root commissioning CLI are not part of the current product path.
 
 Native UPS/NUT Low Battery behavior remains authoritative. The App does not install `ignorelb` and does not rewrite/synthesize hardware Low Battery thresholds.
 
@@ -242,19 +242,19 @@ Storage backed by a VM/NAS through NFS/CIFS/SMB can extend the final host shutdo
 
 The UPS trigger controls are MQTT Discovery configuration entities:
 
-- `number.dh_app_pve_ups_shutdown_battery_charge_threshold`;
-- `number.dh_app_pve_ups_shutdown_runtime_reserve`;
-- `button.dh_app_pve_ups_apply_trigger_policy`.
+- `number.dh_pve_agent_ups_shutdown_battery_charge_threshold`;
+- `number.dh_pve_agent_ups_shutdown_runtime_reserve`;
+- `button.dh_pve_agent_ups_apply_trigger_policy`.
 
 Changing a number changes only the draft. It does **not** change the active shutdown policy.
 
-The consolidated base package `examples/packages/dh_app_pve_package.yaml` and `examples/dh_app_pve_ups_dashboard.yaml` implement a VIEW -> EDIT -> CONFIRM -> APPLY workflow. `sensor.dh_app_pve_ups_trigger_policy` is the read-only committed-policy presentation entity; draft `number` entities are never shown as if they were active values. Opening the editor snapshots committed values, Cancel restores the draft, and only a complete validated schema-v2 `config_changed` Event closes the editor back to VIEW. UI state is validated as numeric before conversion; missing/invalid state or a draft acknowledgement timeout stops the script explicitly instead of coercing the value to zero or implying success.
+The consolidated base package `examples/packages/dh_pve_agent_package.yaml` and `examples/dh_pve_agent_ups_dashboard.yaml` implement a VIEW -> EDIT -> CONFIRM -> APPLY workflow. `sensor.dh_pve_agent_ups_trigger_policy` is the read-only committed-policy presentation entity; draft `number` entities are never shown as if they were active values. Opening the editor snapshots committed values, Cancel restores the draft, and only a complete validated schema-v2 `config_changed` Event closes the editor back to VIEW. UI state is validated as numeric before conversion; missing/invalid state or a draft acknowledgement timeout stops the script explicitly instead of coercing the value to zero or implying success.
 
 A real Apply is a durable transaction:
 
 1. validate draft;
 2. persist a pending target while keeping the previous active policy;
-3. request the fixed `dh_pve_app.service` reload;
+3. request the fixed `digitalhouses_pve_agent.service` reload;
 4. handle `SIGHUP` in the main loop;
 5. promote and reread/verify the target policy;
 6. publish synchronized current state;
@@ -269,7 +269,7 @@ The service reload command is fixed internally. MQTT cannot provide a service na
 When Trigger A or Trigger B commits, the App can only call the installed immutable helper:
 
 ```text
-/opt/digitalhouses/dh_pve_app/bin/dh-pve-ups-policy-cmd dh-pve-ups-shutdown
+/opt/digitalhouses/digitalhouses_pve_agent/bin/digitalhouses-pve-agent-ups-policy-cmd dh-pve-ups-shutdown
 ```
 
 The helper has one fixed action: NUT FSD through `/sbin/upsmon -c fsd`. There is no generic helper argument surface.
@@ -294,8 +294,8 @@ A non-destructive UPS/NUT/PVE safety report is available without MQTT:
 
 ```bash
 python -m app.main \
-  --config /etc/dh_pve_app/dh_pve_app.conf \
-  --state-dir /var/lib/dh_pve_app \
+  --config /etc/digitalhouses_pve_agent/digitalhouses_pve_agent.conf \
+  --state-dir /var/lib/digitalhouses_pve_agent \
   --ups-policy-preflight
 ```
 
@@ -303,20 +303,28 @@ Preflight checks the selected UPS, NUT services/PRIMARY path, native Low Battery
 
 ## Installation / update
 
-The installer deploys the App code, fixed helper and systemd unit. It preserves existing configuration/state where appropriate and does not silently execute destructive UPS commissioning. On first install it validates the MQTT port, collects host/port/username/password interactively, shows a password-safe summary and writes the configuration only after explicit `y/yes` confirmation.
-
-If upgrading from a release older than 0.5.0, complete the 0.5.0 Event-contract migration first: update the HA notification package, reload/restart Home Assistant and verify there are no package/template errors before deploying the reviewed App SHA.
-
-For a reviewed ref/commit:
+Production install/update is release-tag only. Version 0.5.29 is also the controlled runtime-identity migration release: an existing `dh_pve_app.service` installation is stopped, its config/state are copied to canonical paths, the old default MQTT base is rewritten to the canonical base, the new service is validated and started, and only then are the legacy service/paths removed. If the canonical service does not become active, the installer restores the previous legacy service.
 
 ```bash
-REF=<reviewed-ref-or-sha>
-DIGITALHOUSES_SOURCE_REF="$REF" bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$REF/digitalhouses_pve_agent/install.sh")
+TAG=digitalhouses_pve_agent-v0.5.29
+DIGITALHOUSES_SOURCE_REF="$TAG" \
+  bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$TAG/digitalhouses_pve_agent/install.sh")
 ```
 
-When `DIGITALHOUSES_SOURCE_REF` is an exact 40-character commit SHA, the installer fetches the immutable source archive through GitHub codeload instead of requiring a `github.com` Git clone.
+The installer verifies that the tag is canonical and that `digitalhouses_pve_agent-v<version>` exactly matches the source `VERSION`. `BUILD_INFO` stores both the canonical release tag and the resolved full commit SHA.
 
-After deployment verify the exact installed version/ref, service state, MQTT availability, canonical charger-status entity, expanded UPS Event metadata and read-only preflight before any UPS shutdown commissioning.
+Branch or arbitrary-SHA deployment is not a production path. It is available only through an explicit development/recovery override:
+
+```bash
+REF=<branch-or-full-sha>
+DIGITALHOUSES_INSTALL_MODE=development \
+DIGITALHOUSES_SOURCE_REF="$REF" \
+  bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$REF/digitalhouses_pve_agent/install.sh")
+```
+
+On first install, the installer validates the MQTT port, collects host/port/username/password interactively, shows a password-safe summary and writes the configuration only after explicit `y/yes` confirmation.
+
+After deployment verify the installed version/tag/SHA, `digitalhouses_pve_agent.service`, MQTT availability, canonical Home Assistant entities and UPS preflight before any UPS shutdown commissioning.
 
 ## Installed operational guide
 
@@ -324,11 +332,11 @@ After a successful install/update, the installer writes a short operational
 reference to:
 
 ```text
-/root/dh_app_pve.txt
+/root/digitalhouses_pve_agent.txt
 ```
 
 The canonical guide is stored in the repository as
-`digitalhouses_pve_agent/dh_app_pve.txt`. The installed copy is regenerated on every
+`digitalhouses_pve_agent/dh_pve_agent.txt`. The installed copy is regenerated on every
 successful update and is prefixed with the actual installed `version`,
 `source` and `commit`.
 
@@ -342,25 +350,25 @@ cleanup so a stale reference is not left behind.
 The installer deploys an executable supported uninstaller at:
 
 ```bash
-/opt/digitalhouses/dh_pve_app/uninstall.sh
+/opt/digitalhouses/digitalhouses_pve_agent/uninstall.sh
 ```
 
 A normal uninstall records the service state and stops the service gracefully, then runs MQTT cleanup while the installed Python environment and source are still present. Only after cleanup succeeds does it disable/remove the unit and App runtime. The cleanup publishes canonical PVE and UPS availability as retained `offline`, then removes canonical and legacy PVE/UPS MQTT Discovery through retained tombstones. It preserves:
 
-- `/etc/dh_pve_app/`;
-- `/var/lib/dh_pve_app/`.
+- `/etc/digitalhouses_pve_agent/`;
+- `/var/lib/digitalhouses_pve_agent/`.
 
 This keeps configuration, identity and persistent state available for a later reinstall.
 
 Full removal is explicit:
 
 ```bash
-/opt/digitalhouses/dh_pve_app/uninstall.sh --purge
+/opt/digitalhouses/digitalhouses_pve_agent/uninstall.sh --purge
 ```
 
-`uninstall.sh --purge` performs the same MQTT cleanup first, then additionally deletes `/etc/dh_pve_app/` and `/var/lib/dh_pve_app/`.
+`uninstall.sh --purge` performs the same MQTT cleanup first, then additionally deletes `/etc/digitalhouses_pve_agent/` and `/var/lib/digitalhouses_pve_agent/`.
 
-If MQTT cleanup fails, uninstall aborts with a non-zero status and does not remove the unit, App files, configuration or state. If `dh_pve_app.service` was active before uninstall, it is started again.
+If MQTT cleanup fails, uninstall aborts with a non-zero status and does not remove the unit, App files, configuration or state. If `digitalhouses_pve_agent.service` was active before uninstall, it is started again.
 
 Uninstall does not modify NUT configuration/services, does not issue FSD or UPS output/load commands, does not remove shared OS dependencies, and does not modify Home Assistant or the MQTT broker.
 
