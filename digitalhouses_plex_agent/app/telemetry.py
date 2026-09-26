@@ -247,10 +247,9 @@ class TelemetryClient:
                 token=self.installation_token,
                 timeout_seconds=HTTP_TIMEOUT_SECONDS,
             )
-        except Exception as exc:
+        except Exception:
             self.log.warning(
-                "Telemetry heartbeat failed; will retry later: %s",
-                exc,
+                "Telemetry heartbeat failed; will retry later"
             )
             return False
 
@@ -285,8 +284,8 @@ class TelemetryClient:
                 token=self.installation_token,
                 timeout_seconds=HTTP_TIMEOUT_SECONDS,
             )
-        except Exception as exc:
-            self.log.warning("Telemetry deletion failed: %s", exc)
+        except Exception:
+            self.log.warning("Telemetry deletion failed")
             return False
 
         if not (200 <= int(status) < 300 or int(status) == 404):
@@ -330,10 +329,9 @@ class TelemetryRunner:
         while not self._stop.is_set():
             try:
                 self.client.tick()
-            except Exception as exc:
+            except Exception:
                 self.client.log.warning(
-                    "Telemetry worker failed; Plex Agent continues: %s",
-                    exc,
+                    "Telemetry worker failed; Plex Agent continues"
                 )
             self._stop.wait(self.check_seconds)
 
