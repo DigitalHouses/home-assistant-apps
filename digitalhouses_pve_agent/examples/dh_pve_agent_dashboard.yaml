@@ -17,10 +17,10 @@ sections:
       # Keep the aggregate problem card first. The App owns the problem list;
       # Lovelace only renders the retained sensor presentation.
       - type: custom:mushroom-template-card
-        entity: sensor.dh_app_pve_problems
+        entity: sensor.dh_pve_agent_problems
         primary: >-
-          {% set active = state_attr('sensor.dh_app_pve_problems', 'active') or [] %}
-          {% if states('sensor.dh_app_pve_problems') in ['unknown', 'unavailable'] %}
+          {% set active = state_attr('sensor.dh_pve_agent_problems', 'active') or [] %}
+          {% if states('sensor.dh_pve_agent_problems') in ['unknown', 'unavailable'] %}
             Состояние проблем недоступно
           {% elif active | count == 0 %}
             Все нормально
@@ -28,7 +28,7 @@ sections:
             Обнаружены проблемы · {{ active | count }}
           {% endif %}
         secondary: |-
-          {% set active = state_attr('sensor.dh_app_pve_problems', 'active') or [] %}
+          {% set active = state_attr('sensor.dh_pve_agent_problems', 'active') or [] %}
           {% if active | count == 0 %}
             Активных проблем нет
           {% else %}
@@ -37,12 +37,12 @@ sections:
             {% endfor %}
           {% endif %}
         icon: >-
-          {% set active = state_attr('sensor.dh_app_pve_problems', 'active') or [] %}
+          {% set active = state_attr('sensor.dh_pve_agent_problems', 'active') or [] %}
           {{ 'mdi:alert-circle' if active | count > 0 else 'mdi:check-circle' }}
         icon_color: >-
-          {% if states('sensor.dh_app_pve_problems') in ['unknown', 'unavailable'] %}
+          {% if states('sensor.dh_pve_agent_problems') in ['unknown', 'unavailable'] %}
             grey
-          {% elif (state_attr('sensor.dh_app_pve_problems', 'active') or []) | count > 0 %}
+          {% elif (state_attr('sensor.dh_pve_agent_problems', 'active') or []) | count > 0 %}
             red
           {% else %}
             green
@@ -52,15 +52,15 @@ sections:
           action: more-info
 
       - type: custom:mushroom-template-card
-        entity: sensor.dh_app_pve_system
+        entity: sensor.dh_pve_agent_system
         primary: >-
-          {{ states('sensor.dh_app_pve_system') }}
+          {{ states('sensor.dh_pve_agent_system') }}
         secondary: >-
-          {% set manufacturer = state_attr('sensor.dh_app_pve_system', 'manufacturer') %}
-          {% set model = state_attr('sensor.dh_app_pve_system', 'model') %}
-          {% set pve = state_attr('sensor.dh_app_pve_system', 'proxmox_version') %}
-          {% set app = states('sensor.dh_app_pve_app_version') %}
-          {% set ip = state_attr('sensor.dh_app_pve_system', 'primary_ip') %}
+          {% set manufacturer = state_attr('sensor.dh_pve_agent_system', 'manufacturer') %}
+          {% set model = state_attr('sensor.dh_pve_agent_system', 'model') %}
+          {% set pve = state_attr('sensor.dh_pve_agent_system', 'proxmox_version') %}
+          {% set app = states('sensor.dh_pve_agent_app_version') %}
+          {% set ip = state_attr('sensor.dh_pve_agent_system', 'primary_ip') %}
           {% set app_segment = '' if app in ['unknown', 'unavailable', 'none', ''] else ' · App ' ~ app %}
           {{ [manufacturer, model] | reject('in', [none, '', 'unknown']) | join(' ') }}{% if pve %} · PVE {{ pve }}{% endif %}{{ app_segment }}{% if ip %} · {{ ip }}{% endif %}
         icon: mdi:server
@@ -70,18 +70,18 @@ sections:
           action: more-info
 
       - type: tile
-        entity: sensor.dh_app_pve_last_boot
+        entity: sensor.dh_pve_agent_last_boot
         name: Последний запуск
 
       - type: tile
-        entity: sensor.dh_app_pve_agent_started
+        entity: sensor.dh_pve_agent_agent_started
         name: Агент запущен
 
       - type: custom:mushroom-template-card
-        entity: button.dh_app_pve_refresh
+        entity: button.dh_pve_agent_refresh
         primary: Обновить
         secondary: >-
-          {% set v = states('sensor.dh_app_pve_last_refresh') %}
+          {% set v = states('sensor.dh_pve_agent_last_refresh') %}
           {% if v in ['unknown', 'unavailable', 'none', ''] %}
             Последнее обновление: —
           {% else %}
@@ -93,14 +93,14 @@ sections:
           action: perform-action
           perform_action: button.press
           target:
-            entity_id: button.dh_app_pve_refresh
+            entity_id: button.dh_pve_agent_refresh
 
       - type: tile
-        entity: sensor.dh_app_pve_last_refresh
+        entity: sensor.dh_pve_agent_last_refresh
         name: Последнее обновление
 
       - type: tile
-        entity: sensor.dh_app_pve_last_publication
+        entity: sensor.dh_pve_agent_last_publication
         name: Последняя публикация
 
   # ---------------------------------------------------------------------------
@@ -118,18 +118,18 @@ sections:
         square: false
         cards:
           - type: tile
-            entity: sensor.dh_app_pve_cpu_usage
+            entity: sensor.dh_pve_agent_cpu_usage
             name: CPU
           - type: custom:mushroom-template-card
-            entity: sensor.dh_app_pve_cpu_temperature
+            entity: sensor.dh_pve_agent_cpu_temperature
             primary: Температура CPU
             secondary: >-
-              {{ states('sensor.dh_app_pve_cpu_temperature') }} °C
+              {{ states('sensor.dh_pve_agent_cpu_temperature') }} °C
             icon: mdi:thermometer
             icon_color: >-
-              {% if is_state('binary_sensor.dh_app_pve_cpu_temperature_problem', 'on') %}
+              {% if is_state('binary_sensor.dh_pve_agent_cpu_temperature_problem', 'on') %}
                 red
-              {% elif is_state('binary_sensor.dh_app_pve_cpu_temperature_problem', 'off') %}
+              {% elif is_state('binary_sensor.dh_pve_agent_cpu_temperature_problem', 'off') %}
                 blue
               {% else %}
                 grey
@@ -137,28 +137,28 @@ sections:
             tap_action:
               action: more-info
           - type: tile
-            entity: sensor.dh_app_pve_cpu_frequency
+            entity: sensor.dh_pve_agent_cpu_frequency
             name: Частота CPU
           - type: tile
-            entity: sensor.dh_app_pve_memory_usage
+            entity: sensor.dh_pve_agent_memory_usage
             name: RAM
           - type: tile
-            entity: sensor.dh_app_pve_swap_usage
+            entity: sensor.dh_pve_agent_swap_usage
             name: Swap
 
       - type: history-graph
         title: CPU / RAM / Swap · 24 часа
         hours_to_show: 24
         entities:
-          - sensor.dh_app_pve_cpu_usage
-          - sensor.dh_app_pve_memory_usage
-          - sensor.dh_app_pve_swap_usage
+          - sensor.dh_pve_agent_cpu_usage
+          - sensor.dh_pve_agent_memory_usage
+          - sensor.dh_pve_agent_swap_usage
 
       - type: history-graph
         title: Температура CPU · 24 часа
         hours_to_show: 24
         entities:
-          - sensor.dh_app_pve_cpu_temperature
+          - sensor.dh_pve_agent_cpu_temperature
 
   # ---------------------------------------------------------------------------
   # Column 3 · Dynamic storage and disk inventory
@@ -176,9 +176,9 @@ sections:
         card_param: cards
         filter:
           include:
-            - entity_id: sensor.dh_app_pve_storage_*_percent_used
+            - entity_id: sensor.dh_pve_agent_storage_*_percent_used
               attributes:
-                proxmox_integration: dh_pve_app
+                proxmox_integration: digitalhouses_pve_agent
                 proxmox_section: storage
                 proxmox_subject: storage
               options:
@@ -217,9 +217,9 @@ sections:
         card_param: cards
         filter:
           include:
-            - entity_id: sensor.dh_app_pve_disk_*_temperature
+            - entity_id: sensor.dh_pve_agent_disk_*_temperature
               attributes:
-                proxmox_integration: dh_pve_app
+                proxmox_integration: digitalhouses_pve_agent
                 proxmox_section: disk
                 proxmox_subject: disk
                 proxmox_metric: temperature
@@ -261,10 +261,10 @@ sections:
         icon: mdi:server-multiple
 
       - type: custom:mushroom-template-card
-        entity: sensor.dh_app_pve_vms
+        entity: sensor.dh_pve_agent_vms
         primary: Виртуальные машины
         secondary: >-
-          Запущено: {{ state_attr('sensor.dh_app_pve_vms', 'running') | int(0) }} · всего: {{ state_attr('sensor.dh_app_pve_vms', 'total') | int(0) }} · остановлено: {{ state_attr('sensor.dh_app_pve_vms', 'stopped') | int(0) }}
+          Запущено: {{ state_attr('sensor.dh_pve_agent_vms', 'running') | int(0) }} · всего: {{ state_attr('sensor.dh_pve_agent_vms', 'total') | int(0) }} · остановлено: {{ state_attr('sensor.dh_pve_agent_vms', 'stopped') | int(0) }}
         icon: mdi:server-multiple
         icon_color: blue
         tap_action:
@@ -276,9 +276,9 @@ sections:
         card_param: cards
         filter:
           include:
-            - entity_id: sensor.dh_app_pve_vm_*_status
+            - entity_id: sensor.dh_pve_agent_vm_*_status
               attributes:
-                proxmox_integration: dh_pve_app
+                proxmox_integration: digitalhouses_pve_agent
                 proxmox_section: guests
                 proxmox_subject: vm
                 proxmox_metric: status
@@ -315,10 +315,10 @@ sections:
         icon: mdi:package-variant
 
       - type: custom:mushroom-template-card
-        entity: sensor.dh_app_pve_lxcs
+        entity: sensor.dh_pve_agent_lxcs
         primary: LXC контейнеры
         secondary: >-
-          Запущено: {{ state_attr('sensor.dh_app_pve_lxcs', 'running') | int(0) }} · всего: {{ state_attr('sensor.dh_app_pve_lxcs', 'total') | int(0) }} · остановлено: {{ state_attr('sensor.dh_app_pve_lxcs', 'stopped') | int(0) }}
+          Запущено: {{ state_attr('sensor.dh_pve_agent_lxcs', 'running') | int(0) }} · всего: {{ state_attr('sensor.dh_pve_agent_lxcs', 'total') | int(0) }} · остановлено: {{ state_attr('sensor.dh_pve_agent_lxcs', 'stopped') | int(0) }}
         icon: mdi:package-variant
         icon_color: blue
         tap_action:
@@ -330,9 +330,9 @@ sections:
         card_param: cards
         filter:
           include:
-            - entity_id: sensor.dh_app_pve_lxc_*_status
+            - entity_id: sensor.dh_pve_agent_lxc_*_status
               attributes:
-                proxmox_integration: dh_pve_app
+                proxmox_integration: digitalhouses_pve_agent
                 proxmox_section: guests
                 proxmox_subject: lxc
                 proxmox_metric: status
@@ -374,21 +374,21 @@ sections:
       - type: entities
         show_header_toggle: false
         entities:
-          - entity: number.dh_app_pve_storage_percent_used_threshold
+          - entity: number.dh_pve_agent_storage_percent_used_threshold
             name: Хранилище · занято
-          - entity: number.dh_app_pve_cpu_temperature_threshold
+          - entity: number.dh_pve_agent_cpu_temperature_threshold
             name: CPU · температура
-          - entity: number.dh_app_pve_hdd_temperature_threshold
+          - entity: number.dh_pve_agent_hdd_temperature_threshold
             name: HDD · температура
-          - entity: number.dh_app_pve_ssd_temperature_threshold
+          - entity: number.dh_pve_agent_ssd_temperature_threshold
             name: SSD · температура
-          - entity: number.dh_app_pve_nvme_temperature_threshold
+          - entity: number.dh_pve_agent_nvme_temperature_threshold
             name: NVMe · температура
-          - entity: number.dh_app_pve_gpu_temperature_threshold
+          - entity: number.dh_pve_agent_gpu_temperature_threshold
             name: GPU · температура
 
       - type: markdown
         content: >-
-          Пороги принадлежат **DH PVE App**. Dashboard не сравнивает значения
+          Пороги принадлежат **DigitalHouses PVE Agent**. Dashboard не сравнивает значения
           самостоятельно: красная подсветка использует готовые App-owned
           `binary_sensor.*_problem`.

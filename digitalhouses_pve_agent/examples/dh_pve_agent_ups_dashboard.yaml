@@ -7,11 +7,11 @@ sections:
   - type: grid
     visibility:
       - condition: state
-        entity: binary_sensor.dh_app_pve_ups_configured
+        entity: binary_sensor.dh_pve_agent_ups_configured
         state: "off"
     cards:
       - type: custom:mushroom-template-card
-        entity: binary_sensor.dh_app_pve_ups_configured
+        entity: binary_sensor.dh_pve_agent_ups_configured
         primary: ИБП не настроен
         secondary: Мониторинг UPS на этом сервере не настроен. Основной мониторинг Proxmox продолжает работать.
         icon: mdi:power-plug-off-outline
@@ -22,26 +22,26 @@ sections:
   - type: grid
     visibility:
       - condition: state
-        entity: binary_sensor.dh_app_pve_ups_configured
+        entity: binary_sensor.dh_pve_agent_ups_configured
         state: "on"
     cards:
       - type: heading
         heading: Состояние UPS
         icon: mdi:power-plug-battery
       - type: tile
-        entity: sensor.dh_app_pve_ups_status
+        entity: sensor.dh_pve_agent_ups_status
         name: Статус
       - type: tile
-        entity: sensor.dh_app_pve_ups_problems
+        entity: sensor.dh_pve_agent_ups_problems
         name: Проблемы
       - type: tile
-        entity: button.dh_app_pve_ups_refresh
+        entity: button.dh_pve_agent_ups_refresh
         name: Обновить
 
   - type: grid
     visibility:
       - condition: state
-        entity: binary_sensor.dh_app_pve_ups_configured
+        entity: binary_sensor.dh_pve_agent_ups_configured
         state: "on"
     cards:
       - type: heading
@@ -49,38 +49,38 @@ sections:
         icon: mdi:battery-medium
       - type: entities
         entities:
-          - entity: sensor.dh_app_pve_ups_battery_charge
+          - entity: sensor.dh_pve_agent_ups_battery_charge
             name: Заряд батареи
-          - entity: sensor.dh_app_pve_ups_battery_runtime_minutes
+          - entity: sensor.dh_pve_agent_ups_battery_runtime_minutes
             name: Прогноз работы от батареи
-          - entity: sensor.dh_app_pve_ups_load
+          - entity: sensor.dh_pve_agent_ups_load
             name: Нагрузка
-          - entity: sensor.dh_app_pve_ups_input_voltage
+          - entity: sensor.dh_pve_agent_ups_input_voltage
             name: Входное напряжение
           - type: conditional
             conditions:
               - condition: state
-                entity: sensor.dh_app_pve_ups_output_voltage
+                entity: sensor.dh_pve_agent_ups_output_voltage
                 state_not:
                   - unknown
                   - unavailable
             row:
-              entity: sensor.dh_app_pve_ups_output_voltage
+              entity: sensor.dh_pve_agent_ups_output_voltage
               name: Выходное напряжение
           - type: conditional
             conditions:
               - condition: state
-                entity: sensor.dh_app_pve_ups_battery_voltage
+                entity: sensor.dh_pve_agent_ups_battery_voltage
                 state_not:
                   - unknown
                   - unavailable
             row:
-              entity: sensor.dh_app_pve_ups_battery_voltage
+              entity: sensor.dh_pve_agent_ups_battery_voltage
               name: Напряжение батареи
       - type: custom:mushroom-template-card
-        entity: sensor.dh_app_pve_ups_battery_charger_status
+        entity: sensor.dh_pve_agent_ups_battery_charger_status
         primary: >-
-          {% set s = states('sensor.dh_app_pve_ups_battery_charger_status') %}
+          {% set s = states('sensor.dh_pve_agent_ups_battery_charger_status') %}
           {% set labels = {
             'charging': 'Заряжается',
             'floating': 'Поддержание заряда',
@@ -93,7 +93,7 @@ sections:
           {{ labels.get(s, s) }}
         secondary: Состояние зарядного устройства
         icon: >-
-          {% set s = states('sensor.dh_app_pve_ups_battery_charger_status') %}
+          {% set s = states('sensor.dh_pve_agent_ups_battery_charger_status') %}
           {% set icons = {
             'charging': 'mdi:battery-charging',
             'floating': 'mdi:battery-sync',
@@ -105,7 +105,7 @@ sections:
           } %}
           {{ icons.get(s, 'mdi:battery-unknown') }}
         icon_color: >-
-          {% set s = states('sensor.dh_app_pve_ups_battery_charger_status') %}
+          {% set s = states('sensor.dh_pve_agent_ups_battery_charger_status') %}
           {% set colors = {
             'charging': 'green',
             'floating': 'green',
@@ -121,13 +121,13 @@ sections:
         title: Заряд / нагрузка · 24 часа
         hours_to_show: 24
         entities:
-          - sensor.dh_app_pve_ups_battery_charge
-          - sensor.dh_app_pve_ups_load
+          - sensor.dh_pve_agent_ups_battery_charge
+          - sensor.dh_pve_agent_ups_load
 
   - type: grid
     visibility:
       - condition: state
-        entity: binary_sensor.dh_app_pve_ups_configured
+        entity: binary_sensor.dh_pve_agent_ups_configured
         state: "on"
     cards:
       - type: heading
@@ -135,65 +135,65 @@ sections:
         icon: mdi:alert-circle-outline
       - type: entities
         entities:
-          - entity: binary_sensor.dh_app_pve_ups_nut_unavailable_problem
+          - entity: binary_sensor.dh_pve_agent_ups_nut_unavailable_problem
             name: NUT недоступен
-          - entity: binary_sensor.dh_app_pve_ups_on_battery_problem
+          - entity: binary_sensor.dh_pve_agent_ups_on_battery_problem
             name: Работа от батареи
-          - entity: binary_sensor.dh_app_pve_ups_low_battery_problem
+          - entity: binary_sensor.dh_pve_agent_ups_low_battery_problem
             name: Низкий заряд
-          - entity: binary_sensor.dh_app_pve_ups_overload_problem
+          - entity: binary_sensor.dh_pve_agent_ups_overload_problem
             name: Перегрузка
-          - entity: binary_sensor.dh_app_pve_ups_replace_battery_problem
+          - entity: binary_sensor.dh_pve_agent_ups_replace_battery_problem
             name: Замена батареи
-          - entity: binary_sensor.dh_app_pve_ups_bypass_problem
+          - entity: binary_sensor.dh_pve_agent_ups_bypass_problem
             name: Bypass
-          - entity: binary_sensor.dh_app_pve_ups_power_state_unknown_problem
+          - entity: binary_sensor.dh_pve_agent_ups_power_state_unknown_problem
             name: Неизвестное состояние питания
 
   - type: grid
     visibility:
       - condition: state
-        entity: binary_sensor.dh_app_pve_ups_configured
+        entity: binary_sensor.dh_pve_agent_ups_configured
         state: "on"
     cards:
       - type: heading
         heading: Городская сеть
         icon: mdi:transmission-tower
       - type: custom:mushroom-template-card
-        entity: binary_sensor.dh_app_pve_ups_line_power
+        entity: binary_sensor.dh_pve_agent_ups_line_power
         primary: >-
-          {% if is_state('binary_sensor.dh_app_pve_ups_line_power', 'on') %}
+          {% if is_state('binary_sensor.dh_pve_agent_ups_line_power', 'on') %}
             Городская сеть работает
-          {% elif is_state('binary_sensor.dh_app_pve_ups_line_power', 'off') %}
+          {% elif is_state('binary_sensor.dh_pve_agent_ups_line_power', 'off') %}
             Городская сеть отсутствует
           {% else %}
             Состояние городской сети неизвестно
           {% endif %}
         secondary: >-
-          {% if is_state('binary_sensor.dh_app_pve_ups_line_power', 'off') %}
-            {% set started = states('sensor.dh_app_pve_ups_line_power_current_outage_started') %}
+          {% if is_state('binary_sensor.dh_pve_agent_ups_line_power', 'off') %}
+            {% set started = states('sensor.dh_pve_agent_ups_line_power_current_outage_started') %}
             {% if started not in ['unknown', 'unavailable', 'none', ''] %}
               Без света с {{ as_timestamp(started) | timestamp_custom('%H:%M:%S', true) }}
             {% else %}
               UPS работает от батареи
             {% endif %}
-          {% elif states('binary_sensor.dh_app_pve_ups_line_power') in ['unknown', 'unavailable'] %}
+          {% elif states('binary_sensor.dh_pve_agent_ups_line_power') in ['unknown', 'unavailable'] %}
             NUT не дал достоверного состояния сети
           {% else %}
             Питание от городской сети
           {% endif %}
         icon: >-
-          {% if is_state('binary_sensor.dh_app_pve_ups_line_power', 'on') %}
+          {% if is_state('binary_sensor.dh_pve_agent_ups_line_power', 'on') %}
             mdi:transmission-tower
-          {% elif is_state('binary_sensor.dh_app_pve_ups_line_power', 'off') %}
+          {% elif is_state('binary_sensor.dh_pve_agent_ups_line_power', 'off') %}
             mdi:transmission-tower-off
           {% else %}
             mdi:help-circle-outline
           {% endif %}
         icon_color: >-
-          {% if is_state('binary_sensor.dh_app_pve_ups_line_power', 'on') %}
+          {% if is_state('binary_sensor.dh_pve_agent_ups_line_power', 'on') %}
             green
-          {% elif is_state('binary_sensor.dh_app_pve_ups_line_power', 'off') %}
+          {% elif is_state('binary_sensor.dh_pve_agent_ups_line_power', 'off') %}
             red
           {% else %}
             grey
@@ -202,7 +202,7 @@ sections:
 
       - type: markdown
         content: >-
-          {% set meta = 'sensor.dh_app_pve_ups_line_power_availability_month' %}
+          {% set meta = 'sensor.dh_pve_agent_ups_line_power_availability_month' %}
           {% set month_label_ru = state_attr(meta, 'month_label_ru') %}
           {% set partial_month = state_attr(meta, 'partial_month') %}
           {% set tracking_since = state_attr(meta, 'tracking_since') %}
@@ -220,9 +220,9 @@ sections:
         square: false
         cards:
           - type: custom:mushroom-template-card
-            entity: sensor.dh_app_pve_ups_line_power_online_month
+            entity: sensor.dh_pve_agent_ups_line_power_online_month
             primary: >-
-              {% set raw = states('sensor.dh_app_pve_ups_line_power_online_month') %}
+              {% set raw = states('sensor.dh_pve_agent_ups_line_power_online_month') %}
               {% if raw in ['unknown', 'unavailable', 'none', ''] %}
                 —
               {% else %}
@@ -239,9 +239,9 @@ sections:
             fill_container: true
 
           - type: custom:mushroom-template-card
-            entity: sensor.dh_app_pve_ups_line_power_offline_month
+            entity: sensor.dh_pve_agent_ups_line_power_offline_month
             primary: >-
-              {% set raw = states('sensor.dh_app_pve_ups_line_power_offline_month') %}
+              {% set raw = states('sensor.dh_pve_agent_ups_line_power_offline_month') %}
               {% if raw in ['unknown', 'unavailable', 'none', ''] %}
                 —
               {% else %}
@@ -258,9 +258,9 @@ sections:
             fill_container: true
 
           - type: custom:mushroom-template-card
-            entity: sensor.dh_app_pve_ups_line_power_outages_month
+            entity: sensor.dh_pve_agent_ups_line_power_outages_month
             primary: >-
-              {% set raw = states('sensor.dh_app_pve_ups_line_power_outages_month') %}
+              {% set raw = states('sensor.dh_pve_agent_ups_line_power_outages_month') %}
               {{ raw if raw not in ['unknown', 'unavailable', 'none', ''] else '—' }}
             secondary: Отключений
             icon: mdi:transmission-tower-off
@@ -268,9 +268,9 @@ sections:
             fill_container: true
 
           - type: custom:mushroom-template-card
-            entity: sensor.dh_app_pve_ups_line_power_availability_month
+            entity: sensor.dh_pve_agent_ups_line_power_availability_month
             primary: >-
-              {% set raw = states('sensor.dh_app_pve_ups_line_power_availability_month') %}
+              {% set raw = states('sensor.dh_pve_agent_ups_line_power_availability_month') %}
               {% if raw in ['unknown', 'unavailable', 'none', ''] %}
                 —
               {% else %}
@@ -284,35 +284,35 @@ sections:
   - type: grid
     visibility:
       - condition: state
-        entity: binary_sensor.dh_app_pve_ups_configured
+        entity: binary_sensor.dh_pve_agent_ups_configured
         state: "on"
     cards:
       - type: heading
         heading: UPS Shutdown Trigger
         icon: mdi:power-settings
       - type: tile
-        entity: sensor.dh_app_pve_ups_shutdown_policy
+        entity: sensor.dh_pve_agent_ups_shutdown_policy
         name: NUT policy
       - type: tile
-        entity: sensor.dh_app_pve_ups_policy_power_restore_delay
+        entity: sensor.dh_pve_agent_ups_policy_power_restore_delay
         name: Задержка восстановления питания
 
       - type: conditional
         conditions:
           - condition: state
-            entity: input_select.dh_app_pve_ups_trigger_ui_state
+            entity: input_select.dh_pve_agent_ups_trigger_ui_state
             state: view
         card:
           type: vertical-stack
           cards:
             - type: markdown
               content: >-
-                {% set policy = 'sensor.dh_app_pve_ups_trigger_policy' %}
+                {% set policy = 'sensor.dh_pve_agent_ups_trigger_policy' %}
                 {% set charge = state_attr(policy, 'active_charge_threshold_percent') %}
                 {% set reserve = state_attr(policy, 'active_runtime_reserve_seconds') %}
                 {% set revision = state_attr(policy, 'policy_revision') %}
-                {% set guest_raw = states('sensor.dh_app_pve_ups_guest_shutdown_budget') %}
-                {% set budget_raw = states('sensor.dh_app_pve_ups_shutdown_budget') %}
+                {% set guest_raw = states('sensor.dh_pve_agent_ups_guest_shutdown_budget') %}
+                {% set budget_raw = states('sensor.dh_pve_agent_ups_shutdown_budget') %}
                 {% set guest = guest_raw | int(0) %}
                 {% set budget = budget_raw | int(0) %}
                 {% set reserve_s = reserve | int(0) %}
@@ -323,25 +323,25 @@ sections:
                 **Guest shutdown budget:** {{ guest if guest_raw not in ['unknown', 'unavailable', 'none', ''] else '—' }} s  
                 **Full shutdown budget:** {{ budget if budget_raw not in ['unknown', 'unavailable', 'none', ''] else '—' }} s  
                 **Effective runtime trigger:** {% if reserve is not none and budget_raw not in ['unknown', 'unavailable', 'none', ''] %}{{ trigger_s }} s / {{ '%02d:%02d' | format(trigger_s // 60, trigger_s % 60) }}{% else %}—{% endif %}  
-                **Readiness:** {{ states('sensor.dh_app_pve_ups_shutdown_readiness') | upper }}
+                **Readiness:** {{ states('sensor.dh_pve_agent_ups_shutdown_readiness') | upper }}
             - type: button
               name: Config UPS trigger
               icon: mdi:tune-variant
               tap_action:
                 action: perform-action
-                perform_action: script.dh_app_pve_ups_trigger_open
+                perform_action: script.dh_pve_agent_ups_trigger_open
 
       - type: conditional
         conditions:
           - condition: state
-            entity: input_select.dh_app_pve_ups_trigger_ui_state
+            entity: input_select.dh_pve_agent_ups_trigger_ui_state
             state: edit
         card:
           type: vertical-stack
           cards:
             - type: markdown
               content: >-
-                {% set policy = 'sensor.dh_app_pve_ups_trigger_policy' %}
+                {% set policy = 'sensor.dh_pve_agent_ups_trigger_policy' %}
                 {% set active_charge = state_attr(policy, 'active_charge_threshold_percent') %}
                 {% set active_reserve = state_attr(policy, 'active_runtime_reserve_seconds') %}
                 ## Configure UPS trigger
@@ -351,15 +351,15 @@ sections:
             - type: entities
               title: Draft
               entities:
-                - entity: number.dh_app_pve_ups_shutdown_battery_charge_threshold
+                - entity: number.dh_pve_agent_ups_shutdown_battery_charge_threshold
                   name: Battery threshold
-                - entity: number.dh_app_pve_ups_shutdown_runtime_reserve
+                - entity: number.dh_pve_agent_ups_shutdown_runtime_reserve
                   name: Runtime reserve
             - type: markdown
               content: >-
-                {% set budget_raw = states('sensor.dh_app_pve_ups_shutdown_budget') %}
+                {% set budget_raw = states('sensor.dh_pve_agent_ups_shutdown_budget') %}
                 {% set budget = budget_raw | int(0) %}
-                {% set reserve = states('number.dh_app_pve_ups_shutdown_runtime_reserve') | int(0) %}
+                {% set reserve = states('number.dh_pve_agent_ups_shutdown_runtime_reserve') | int(0) %}
                 {% set trigger_s = budget + reserve %}
                 **DRAFT calculation**  
                 Full shutdown budget: {{ budget if budget_raw not in ['unknown', 'unavailable', 'none', ''] else '—' }} s  
@@ -373,30 +373,30 @@ sections:
                   icon: mdi:check-circle-outline
                   tap_action:
                     action: perform-action
-                    perform_action: script.dh_app_pve_ups_trigger_review
+                    perform_action: script.dh_pve_agent_ups_trigger_review
                 - type: button
                   name: Cancel
                   icon: mdi:close-circle-outline
                   tap_action:
                     action: perform-action
-                    perform_action: script.dh_app_pve_ups_trigger_cancel
+                    perform_action: script.dh_pve_agent_ups_trigger_cancel
 
       - type: conditional
         conditions:
           - condition: state
-            entity: input_select.dh_app_pve_ups_trigger_ui_state
+            entity: input_select.dh_pve_agent_ups_trigger_ui_state
             state: confirm
         card:
           type: vertical-stack
           cards:
             - type: markdown
               content: >-
-                {% set policy = 'sensor.dh_app_pve_ups_trigger_policy' %}
+                {% set policy = 'sensor.dh_pve_agent_ups_trigger_policy' %}
                 {% set old_charge = state_attr(policy, 'active_charge_threshold_percent') %}
                 {% set old_reserve = state_attr(policy, 'active_runtime_reserve_seconds') %}
-                {% set new_charge = states('number.dh_app_pve_ups_shutdown_battery_charge_threshold') | int(0) %}
-                {% set new_reserve = states('number.dh_app_pve_ups_shutdown_runtime_reserve') | int(0) %}
-                {% set budget_raw = states('sensor.dh_app_pve_ups_shutdown_budget') %}
+                {% set new_charge = states('number.dh_pve_agent_ups_shutdown_battery_charge_threshold') | int(0) %}
+                {% set new_reserve = states('number.dh_pve_agent_ups_shutdown_runtime_reserve') | int(0) %}
+                {% set budget_raw = states('sensor.dh_pve_agent_ups_shutdown_budget') %}
                 {% set budget = budget_raw | int(0) %}
                 {% set trigger_s = budget + new_reserve %}
                 ## Подтвердить UPS Trigger Policy
@@ -414,10 +414,10 @@ sections:
                   icon: mdi:check-decagram-outline
                   tap_action:
                     action: perform-action
-                    perform_action: script.dh_app_pve_ups_trigger_apply
+                    perform_action: script.dh_pve_agent_ups_trigger_apply
                 - type: button
                   name: Назад
                   icon: mdi:arrow-left
                   tap_action:
                     action: perform-action
-                    perform_action: script.dh_app_pve_ups_trigger_back_to_edit
+                    perform_action: script.dh_pve_agent_ups_trigger_back_to_edit

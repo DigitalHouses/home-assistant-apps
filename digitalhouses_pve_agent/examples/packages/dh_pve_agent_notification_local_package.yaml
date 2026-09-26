@@ -1,16 +1,16 @@
 # =============================================================================
 # DigitalHouses PVE local notifications — English example
 # =============================================================================
-# Machine events come from dh_pve_app.
+# Machine events come from digitalhouses_pve_agent.
 # Find the trigger.id you need and edit only title/message below it.
 # Event payload already contains the measurements captured for that event.
 # Flow: machine event -> trigger.id -> choose -> direct action.
 # =============================================================================
 
-dh_app_pve_notification_local_package:
+dh_pve_agent_notification_local_package:
 
   automation:
-    - id: dh_app_pve_notifications
+    - id: dh_pve_agent_notifications
       alias: DH PVE · Notifications
       mode: queued
       max: 60
@@ -20,7 +20,7 @@ dh_app_pve_notification_local_package:
         # High CPU temperature
         - trigger: event.received
           target:
-            entity_id: event.dh_app_pve_diagnostic
+            entity_id: event.dh_pve_agent_diagnostic
           options:
             event_type:
               - cpu_temperature_high
@@ -29,7 +29,7 @@ dh_app_pve_notification_local_package:
         # CPU temperature normal
         - trigger: event.received
           target:
-            entity_id: event.dh_app_pve_diagnostic
+            entity_id: event.dh_pve_agent_diagnostic
           options:
             event_type:
               - cpu_temperature_normal
@@ -38,7 +38,7 @@ dh_app_pve_notification_local_package:
         # CPU throttling started
         - trigger: event.received
           target:
-            entity_id: event.dh_app_pve_diagnostic
+            entity_id: event.dh_pve_agent_diagnostic
           options:
             event_type:
               - cpu_throttling_started
@@ -47,7 +47,7 @@ dh_app_pve_notification_local_package:
         # CPU throttling cleared
         - trigger: event.received
           target:
-            entity_id: event.dh_app_pve_diagnostic
+            entity_id: event.dh_pve_agent_diagnostic
           options:
             event_type:
               - cpu_throttling_cleared
@@ -56,7 +56,7 @@ dh_app_pve_notification_local_package:
         # Storage usage high
         - trigger: event.received
           target:
-            entity_id: event.dh_app_pve_diagnostic
+            entity_id: event.dh_pve_agent_diagnostic
           options:
             event_type:
               - storage_usage_high
@@ -65,7 +65,7 @@ dh_app_pve_notification_local_package:
         # Storage usage normal
         - trigger: event.received
           target:
-            entity_id: event.dh_app_pve_diagnostic
+            entity_id: event.dh_pve_agent_diagnostic
           options:
             event_type:
               - storage_usage_normal
@@ -74,7 +74,7 @@ dh_app_pve_notification_local_package:
         # High disk temperature
         - trigger: event.received
           target:
-            entity_id: event.dh_app_pve_diagnostic
+            entity_id: event.dh_pve_agent_diagnostic
           options:
             event_type:
               - disk_temperature_high
@@ -83,7 +83,7 @@ dh_app_pve_notification_local_package:
         # Disk temperature normal
         - trigger: event.received
           target:
-            entity_id: event.dh_app_pve_diagnostic
+            entity_id: event.dh_pve_agent_diagnostic
           options:
             event_type:
               - disk_temperature_normal
@@ -92,7 +92,7 @@ dh_app_pve_notification_local_package:
         # High GPU temperature
         - trigger: event.received
           target:
-            entity_id: event.dh_app_pve_diagnostic
+            entity_id: event.dh_pve_agent_diagnostic
           options:
             event_type:
               - gpu_temperature_high
@@ -101,7 +101,7 @@ dh_app_pve_notification_local_package:
         # GPU temperature normal
         - trigger: event.received
           target:
-            entity_id: event.dh_app_pve_diagnostic
+            entity_id: event.dh_pve_agent_diagnostic
           options:
             event_type:
               - gpu_temperature_normal
@@ -110,7 +110,7 @@ dh_app_pve_notification_local_package:
         # Fan control restore failed
         - trigger: event.received
           target:
-            entity_id: event.dh_app_pve_diagnostic
+            entity_id: event.dh_pve_agent_diagnostic
           options:
             event_type:
               - fan_control_restore_failed
@@ -119,7 +119,7 @@ dh_app_pve_notification_local_package:
         # Fan control restored
         - trigger: event.received
           target:
-            entity_id: event.dh_app_pve_diagnostic
+            entity_id: event.dh_pve_agent_diagnostic
           options:
             event_type:
               - fan_control_restored
@@ -128,7 +128,7 @@ dh_app_pve_notification_local_package:
         # Disk SMART failed
         - trigger: event.received
           target:
-            entity_id: event.dh_app_pve_diagnostic
+            entity_id: event.dh_pve_agent_diagnostic
           options:
             event_type:
               - disk_smart_failed
@@ -137,7 +137,7 @@ dh_app_pve_notification_local_package:
         # Disk SMART restored
         - trigger: event.received
           target:
-            entity_id: event.dh_app_pve_diagnostic
+            entity_id: event.dh_pve_agent_diagnostic
           options:
             event_type:
               - disk_smart_restored
@@ -147,7 +147,7 @@ dh_app_pve_notification_local_package:
         # NUT unavailable
         - trigger: event.received
           target:
-            entity_id: event.dh_app_pve_ups_diagnostic
+            entity_id: event.dh_pve_agent_ups_diagnostic
           options:
             event_type:
               - nut_unavailable
@@ -156,7 +156,7 @@ dh_app_pve_notification_local_package:
         # NUT restored
         - trigger: event.received
           target:
-            entity_id: event.dh_app_pve_ups_diagnostic
+            entity_id: event.dh_pve_agent_ups_diagnostic
           options:
             event_type:
               - nut_restored
@@ -165,7 +165,7 @@ dh_app_pve_notification_local_package:
         # Power state unknown
         - trigger: event.received
           target:
-            entity_id: event.dh_app_pve_ups_diagnostic
+            entity_id: event.dh_pve_agent_ups_diagnostic
           options:
             event_type:
               - power_state_unknown
@@ -174,7 +174,7 @@ dh_app_pve_notification_local_package:
         # Power state restored
         - trigger: event.received
           target:
-            entity_id: event.dh_app_pve_ups_diagnostic
+            entity_id: event.dh_pve_agent_ups_diagnostic
           options:
             event_type:
               - power_state_restored
@@ -183,7 +183,7 @@ dh_app_pve_notification_local_package:
         # Line power lost
         - trigger: event.received
           target:
-            entity_id: event.dh_app_pve_ups_diagnostic
+            entity_id: event.dh_pve_agent_ups_diagnostic
           options:
             event_type:
               - line_power_lost
@@ -192,7 +192,7 @@ dh_app_pve_notification_local_package:
         # Line power restored
         - trigger: event.received
           target:
-            entity_id: event.dh_app_pve_ups_diagnostic
+            entity_id: event.dh_pve_agent_ups_diagnostic
           options:
             event_type:
               - line_power_restored
@@ -201,7 +201,7 @@ dh_app_pve_notification_local_package:
         # Low battery started
         - trigger: event.received
           target:
-            entity_id: event.dh_app_pve_ups_diagnostic
+            entity_id: event.dh_pve_agent_ups_diagnostic
           options:
             event_type:
               - low_battery_started
@@ -210,7 +210,7 @@ dh_app_pve_notification_local_package:
         # Low battery cleared
         - trigger: event.received
           target:
-            entity_id: event.dh_app_pve_ups_diagnostic
+            entity_id: event.dh_pve_agent_ups_diagnostic
           options:
             event_type:
               - low_battery_cleared
@@ -219,7 +219,7 @@ dh_app_pve_notification_local_package:
         # High battery started
         - trigger: event.received
           target:
-            entity_id: event.dh_app_pve_ups_diagnostic
+            entity_id: event.dh_pve_agent_ups_diagnostic
           options:
             event_type:
               - high_battery_started
@@ -228,7 +228,7 @@ dh_app_pve_notification_local_package:
         # High battery cleared
         - trigger: event.received
           target:
-            entity_id: event.dh_app_pve_ups_diagnostic
+            entity_id: event.dh_pve_agent_ups_diagnostic
           options:
             event_type:
               - high_battery_cleared
@@ -237,7 +237,7 @@ dh_app_pve_notification_local_package:
         # Replace battery started
         - trigger: event.received
           target:
-            entity_id: event.dh_app_pve_ups_diagnostic
+            entity_id: event.dh_pve_agent_ups_diagnostic
           options:
             event_type:
               - replace_battery_started
@@ -246,7 +246,7 @@ dh_app_pve_notification_local_package:
         # Replace battery cleared
         - trigger: event.received
           target:
-            entity_id: event.dh_app_pve_ups_diagnostic
+            entity_id: event.dh_pve_agent_ups_diagnostic
           options:
             event_type:
               - replace_battery_cleared
@@ -255,7 +255,7 @@ dh_app_pve_notification_local_package:
         # Bypass started
         - trigger: event.received
           target:
-            entity_id: event.dh_app_pve_ups_diagnostic
+            entity_id: event.dh_pve_agent_ups_diagnostic
           options:
             event_type:
               - bypass_started
@@ -264,7 +264,7 @@ dh_app_pve_notification_local_package:
         # Bypass ended
         - trigger: event.received
           target:
-            entity_id: event.dh_app_pve_ups_diagnostic
+            entity_id: event.dh_pve_agent_ups_diagnostic
           options:
             event_type:
               - bypass_ended
@@ -273,7 +273,7 @@ dh_app_pve_notification_local_package:
         # Calibration started
         - trigger: event.received
           target:
-            entity_id: event.dh_app_pve_ups_diagnostic
+            entity_id: event.dh_pve_agent_ups_diagnostic
           options:
             event_type:
               - calibration_started
@@ -282,7 +282,7 @@ dh_app_pve_notification_local_package:
         # Calibration ended
         - trigger: event.received
           target:
-            entity_id: event.dh_app_pve_ups_diagnostic
+            entity_id: event.dh_pve_agent_ups_diagnostic
           options:
             event_type:
               - calibration_ended
@@ -291,7 +291,7 @@ dh_app_pve_notification_local_package:
         # Output off
         - trigger: event.received
           target:
-            entity_id: event.dh_app_pve_ups_diagnostic
+            entity_id: event.dh_pve_agent_ups_diagnostic
           options:
             event_type:
               - output_off
@@ -300,7 +300,7 @@ dh_app_pve_notification_local_package:
         # Output restored
         - trigger: event.received
           target:
-            entity_id: event.dh_app_pve_ups_diagnostic
+            entity_id: event.dh_pve_agent_ups_diagnostic
           options:
             event_type:
               - output_restored
@@ -309,7 +309,7 @@ dh_app_pve_notification_local_package:
         # Overload started
         - trigger: event.received
           target:
-            entity_id: event.dh_app_pve_ups_diagnostic
+            entity_id: event.dh_pve_agent_ups_diagnostic
           options:
             event_type:
               - overload_started
@@ -318,7 +318,7 @@ dh_app_pve_notification_local_package:
         # Overload cleared
         - trigger: event.received
           target:
-            entity_id: event.dh_app_pve_ups_diagnostic
+            entity_id: event.dh_pve_agent_ups_diagnostic
           options:
             event_type:
               - overload_cleared
@@ -327,7 +327,7 @@ dh_app_pve_notification_local_package:
         # AVR Trim started
         - trigger: event.received
           target:
-            entity_id: event.dh_app_pve_ups_diagnostic
+            entity_id: event.dh_pve_agent_ups_diagnostic
           options:
             event_type:
               - trim_started
@@ -336,7 +336,7 @@ dh_app_pve_notification_local_package:
         # AVR Trim ended
         - trigger: event.received
           target:
-            entity_id: event.dh_app_pve_ups_diagnostic
+            entity_id: event.dh_pve_agent_ups_diagnostic
           options:
             event_type:
               - trim_ended
@@ -345,7 +345,7 @@ dh_app_pve_notification_local_package:
         # AVR Boost started
         - trigger: event.received
           target:
-            entity_id: event.dh_app_pve_ups_diagnostic
+            entity_id: event.dh_pve_agent_ups_diagnostic
           options:
             event_type:
               - boost_started
@@ -354,7 +354,7 @@ dh_app_pve_notification_local_package:
         # AVR Boost ended
         - trigger: event.received
           target:
-            entity_id: event.dh_app_pve_ups_diagnostic
+            entity_id: event.dh_pve_agent_ups_diagnostic
           options:
             event_type:
               - boost_ended
@@ -363,7 +363,7 @@ dh_app_pve_notification_local_package:
         # NUT FSD started
         - trigger: event.received
           target:
-            entity_id: event.dh_app_pve_ups_diagnostic
+            entity_id: event.dh_pve_agent_ups_diagnostic
           options:
             event_type:
               - forced_shutdown_started
@@ -372,7 +372,7 @@ dh_app_pve_notification_local_package:
         # NUT FSD cleared
         - trigger: event.received
           target:
-            entity_id: event.dh_app_pve_ups_diagnostic
+            entity_id: event.dh_pve_agent_ups_diagnostic
           options:
             event_type:
               - forced_shutdown_cleared
@@ -381,7 +381,7 @@ dh_app_pve_notification_local_package:
         # Alarm started
         - trigger: event.received
           target:
-            entity_id: event.dh_app_pve_ups_diagnostic
+            entity_id: event.dh_pve_agent_ups_diagnostic
           options:
             event_type:
               - alarm_started
@@ -390,7 +390,7 @@ dh_app_pve_notification_local_package:
         # Alarm cleared
         - trigger: event.received
           target:
-            entity_id: event.dh_app_pve_ups_diagnostic
+            entity_id: event.dh_pve_agent_ups_diagnostic
           options:
             event_type:
               - alarm_cleared
@@ -399,7 +399,7 @@ dh_app_pve_notification_local_package:
         # Battery discharge milestone
         - trigger: event.received
           target:
-            entity_id: event.dh_app_pve_ups_diagnostic
+            entity_id: event.dh_pve_agent_ups_diagnostic
           options:
             event_type:
               - battery_discharge_level_crossed
@@ -408,7 +408,7 @@ dh_app_pve_notification_local_package:
         # Battery fully charged
         - trigger: event.received
           target:
-            entity_id: event.dh_app_pve_ups_diagnostic
+            entity_id: event.dh_pve_agent_ups_diagnostic
           options:
             event_type:
               - battery_fully_charged
@@ -417,7 +417,7 @@ dh_app_pve_notification_local_package:
         # Emergency shutdown committed
         - trigger: event.received
           target:
-            entity_id: event.dh_app_pve_ups_diagnostic
+            entity_id: event.dh_pve_agent_ups_diagnostic
           options:
             event_type:
               - shutdown_committed
@@ -426,7 +426,7 @@ dh_app_pve_notification_local_package:
         # UPS Trigger configuration changed
         - trigger: event.received
           target:
-            entity_id: event.dh_app_pve_ups_diagnostic
+            entity_id: event.dh_pve_agent_ups_diagnostic
           options:
             event_type:
               - config_changed

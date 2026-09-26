@@ -4,18 +4,18 @@ cards:
     title: Готовность выключения Proxmox
     show_header_toggle: false
     entities:
-      - entity: sensor.dh_app_pve_ups_shutdown_readiness
+      - entity: sensor.dh_pve_agent_ups_shutdown_readiness
         name: Готовность shutdown
-      - entity: sensor.dh_app_pve_ups_guest_shutdown_budget
+      - entity: sensor.dh_pve_agent_ups_guest_shutdown_budget
         name: Shutdown budget VM/LXC
-      - entity: sensor.dh_app_pve_previous_shutdown
+      - entity: sensor.dh_pve_agent_previous_shutdown
         name: Предыдущая остановка
-      - entity: sensor.dh_app_pve_shutdown_history
+      - entity: sensor.dh_pve_agent_shutdown_history
         name: История остановок
 
   - type: markdown
     content: >-
-      {% set entity = 'sensor.dh_app_pve_previous_shutdown' %}
+      {% set entity = 'sensor.dh_pve_agent_previous_shutdown' %}
       **Последняя остановка PVE**
 
       Причина (`shutdown_reason`):
@@ -30,7 +30,7 @@ cards:
 
   - type: markdown
     content: >-
-      `shutdown_budget` и `shutdown_readiness` рассчитывает DH PVE App из текущей
+      `shutdown_budget` и `shutdown_readiness` рассчитывает DigitalHouses PVE Agent из текущей
       конфигурации Proxmox и сохранённой истории shutdown. После изменения
       параметров PVE используйте **Обновить**, чтобы приложение перечитало
       конфигурацию и пересчитало budget.

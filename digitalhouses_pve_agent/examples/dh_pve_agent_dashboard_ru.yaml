@@ -1,5 +1,5 @@
 title: Proxmox
-path: dh_app_pve
+path: dh_pve_agent_agent
 icon: mdi:server
 type: sections
 max_columns: 4
@@ -11,7 +11,7 @@ sections:
         heading_style: title
         icon: mdi:server
       - type: custom:mushroom-template-card
-        entity: sensor.dh_app_pve_system
+        entity: sensor.dh_pve_agent_system
         primary: PVE
         secondary: |-
           {% if states(entity) in ['unknown', 'unavailable', 'none', ''] %}
@@ -32,14 +32,14 @@ sections:
             {% set slots_total = state_attr(entity, 'memory_slots_total') %}
             {% set memory_speed = state_attr(entity, 'memory_speed_mt_s') %}
             {% set memory_total =
-              state_attr('sensor.dh_app_pve_memory_usage', 'total_gib')
+              state_attr('sensor.dh_pve_agent_memory_usage', 'total_gib')
             %}
 
             {% set kernel = state_attr(entity, 'kernel_version') or '' %}
             {% set pve_raw = state_attr(entity, 'proxmox_version') or '' %}
             {% set ip = state_attr(entity, 'primary_ip') or '' %}
             {% set app_version =
-              states('sensor.dh_app_pve_app_version')
+              states('sensor.dh_pve_agent_app_version')
             %}
 
             {% set lines = namespace(items=[]) %}
@@ -157,7 +157,7 @@ sections:
 
             {% for fan in states.sensor | sort(attribute='entity_id') %}
               {% if
-                state_attr(fan.entity_id, 'proxmox_integration') == 'dh_pve_app'
+                state_attr(fan.entity_id, 'proxmox_integration') == 'digitalhouses_pve_agent'
                 and state_attr(fan.entity_id, 'proxmox_section') == 'cooling'
                 and state_attr(fan.entity_id, 'proxmox_metric') == 'rpm'
                 and fan.state | is_number
@@ -210,9 +210,9 @@ sections:
           {% endif %}
         icon: mdi:server
         icon_color: |-
-          {% if is_state('binary_sensor.dh_app_pve_host_collector', 'on') %}
+          {% if is_state('binary_sensor.dh_pve_agent_host_collector', 'on') %}
             green
-          {% elif is_state('binary_sensor.dh_app_pve_host_collector', 'off') %}
+          {% elif is_state('binary_sensor.dh_pve_agent_host_collector', 'off') %}
             red
           {% else %}
             grey
@@ -227,7 +227,7 @@ sections:
         heading_style: title
         icon: phu:proxmox
       - type: custom:mushroom-template-card
-        entity: sensor.dh_app_pve_problems
+        entity: sensor.dh_pve_agent_problems
         primary: |-
           {% set active = state_attr(entity, 'active') or [] %}
           {% if states(entity) in ['unknown', 'unavailable', 'none', ''] %}
@@ -285,11 +285,11 @@ sections:
         square: false
         cards:
           - type: custom:mini-graph-card
-            entity: sensor.dh_app_pve_cpu_usage
+            entity: sensor.dh_pve_agent_cpu_usage
             name: CPU
             icon: mdi:cpu-64-bit
             entities:
-              - sensor.dh_app_pve_cpu_usage
+              - sensor.dh_pve_agent_cpu_usage
             hours_to_show: 12
             points_per_hour: 4
             line_width: 2
@@ -307,11 +307,11 @@ sections:
               labels: false
               extrema: true
           - type: custom:mini-graph-card
-            entity: sensor.dh_app_pve_memory_usage
+            entity: sensor.dh_pve_agent_memory_usage
             name: Память
             icon: mdi:memory
             entities:
-              - sensor.dh_app_pve_memory_usage
+              - sensor.dh_pve_agent_memory_usage
             hours_to_show: 12
             points_per_hour: 4
             line_width: 2
@@ -335,10 +335,10 @@ sections:
         icon: mdi:server
         heading: Приложение
       - type: custom:mushroom-template-card
-        entity: button.dh_app_pve_refresh
+        entity: button.dh_pve_agent_refresh
         primary: Обновить сейчас
         secondary: >-
-          {% set last = states('sensor.dh_app_pve_last_refresh') %} {% if last
+          {% set last = states('sensor.dh_pve_agent_last_refresh') %} {% if last
           not in ['unknown', 'unavailable', 'none', ''] %}
             Последнее: {{ as_timestamp(last)
               | timestamp_custom('%d.%m.%Y %H:%M:%S', true) }}
@@ -351,7 +351,7 @@ sections:
           action: perform-action
           perform_action: button.press
           target:
-            entity_id: button.dh_app_pve_refresh
+            entity_id: button.dh_pve_agent_refresh
           confirmation:
             text: Обновить данные DH PVE Agent?
         grid_options:
@@ -359,7 +359,7 @@ sections:
       - type: vertical-stack
         cards:
           - type: custom:mushroom-template-card
-            entity: sensor.dh_app_pve_last_refresh
+            entity: sensor.dh_pve_agent_last_refresh
             primary: Последнее ручное обновление
             secondary: >-
               {% set ts = states(entity) %} {% if ts not in ['unknown',
@@ -380,7 +380,7 @@ sections:
             tap_action:
               action: more-info
           - type: custom:mushroom-entity-card
-            entity: sensor.dh_app_pve_agent_started
+            entity: sensor.dh_pve_agent_agent_started
             name: Агент запущен
             icon: mdi:clock-start
             tap_action:
@@ -388,7 +388,7 @@ sections:
         grid_options:
           columns: 12
       - type: custom:mushroom-template-card
-        entity: sensor.dh_app_pve_last_boot
+        entity: sensor.dh_pve_agent_last_boot
         primary: Время работы PVE сервера
         secondary: >-
           {% set boot = states(entity) %} {% if boot not in ['unknown',
@@ -429,7 +429,7 @@ sections:
         heading_style: subtitle
         icon: mdi:harddisk-check
       - type: custom:mushroom-template-card
-        entity: sensor.dh_app_pve_problems
+        entity: sensor.dh_pve_agent_problems
         primary: >-
           {% set problems_available =
             states(entity) not in ['unknown', 'unavailable', 'none', '']
@@ -437,7 +437,7 @@ sections:
             active
             | selectattr('category', 'equalto', 'disk')
             | list
-          %} {% set smart = states('binary_sensor.dh_app_pve_smart_collector')
+          %} {% set smart = states('binary_sensor.dh_pve_agent_smart_collector')
           %}
 
           {% if not problems_available or smart in ['unknown', 'unavailable',
@@ -457,7 +457,7 @@ sections:
             active
             | selectattr('category', 'equalto', 'disk')
             | list
-          %} {% set smart = states('binary_sensor.dh_app_pve_smart_collector')
+          %} {% set smart = states('binary_sensor.dh_pve_agent_smart_collector')
           %} {% set ns = namespace(items=[]) %}
 
           {% if not problems_available %}
@@ -499,7 +499,7 @@ sections:
             active
             | selectattr('category', 'equalto', 'disk')
             | list
-          %} {% set smart = states('binary_sensor.dh_app_pve_smart_collector')
+          %} {% set smart = states('binary_sensor.dh_pve_agent_smart_collector')
           %}
 
           {% if not problems_available or smart in ['unknown', 'unavailable',
@@ -517,7 +517,7 @@ sections:
             active
             | selectattr('category', 'equalto', 'disk')
             | list
-          %} {% set smart = states('binary_sensor.dh_app_pve_smart_collector')
+          %} {% set smart = states('binary_sensor.dh_pve_agent_smart_collector')
           %}
 
           {% if not problems_available or smart in ['unknown', 'unavailable',
@@ -549,7 +549,7 @@ sections:
           template: |-
             {% set ns = namespace(items=[]) %}
             {% for disk in states.sensor | sort(attribute='entity_id') %}
-              {% if state_attr(disk.entity_id, 'proxmox_integration') == 'dh_pve_app'
+              {% if state_attr(disk.entity_id, 'proxmox_integration') == 'digitalhouses_pve_agent'
                     and state_attr(disk.entity_id, 'proxmox_section') == 'disk'
                     and state_attr(disk.entity_id, 'proxmox_subject') == 'disk'
                     and state_attr(disk.entity_id, 'proxmox_metric') == 'health'
@@ -672,7 +672,7 @@ sections:
             {% set ns = namespace(items=[]) %}
 
             {% for storage in states.sensor | sort(attribute='entity_id') %}
-              {% if state_attr(storage.entity_id, 'proxmox_integration') == 'dh_pve_app'
+              {% if state_attr(storage.entity_id, 'proxmox_integration') == 'digitalhouses_pve_agent'
                     and state_attr(storage.entity_id, 'proxmox_section') == 'storage'
                     and state_attr(storage.entity_id, 'proxmox_subject') == 'storage'
                     and state_attr(storage.entity_id, 'proxmox_metric') == 'usage'
@@ -767,31 +767,31 @@ sections:
         square: false
         cards:
           - type: custom:mushroom-number-card
-            entity: number.dh_app_pve_storage_percent_used_threshold
+            entity: number.dh_pve_agent_storage_percent_used_threshold
             name: Заполнение хранилища
             icon: mdi:database-alert
             display_mode: buttons
             fill_container: true
           - type: custom:mushroom-number-card
-            entity: number.dh_app_pve_cpu_temperature_threshold
+            entity: number.dh_pve_agent_cpu_temperature_threshold
             name: Температура CPU
             icon: mdi:cpu-64-bit
             display_mode: buttons
             fill_container: true
           - type: custom:mushroom-number-card
-            entity: number.dh_app_pve_hdd_temperature_threshold
+            entity: number.dh_pve_agent_hdd_temperature_threshold
             name: Температура HDD
             icon: mdi:harddisk
             display_mode: buttons
             fill_container: true
           - type: custom:mushroom-number-card
-            entity: number.dh_app_pve_ssd_temperature_threshold
+            entity: number.dh_pve_agent_ssd_temperature_threshold
             name: Температура SSD
             icon: mdi:chip
             display_mode: buttons
             fill_container: true
           - type: custom:mushroom-number-card
-            entity: number.dh_app_pve_nvme_temperature_threshold
+            entity: number.dh_pve_agent_nvme_temperature_threshold
             name: Температура NVMe
             icon: mdi:expansion-card-variant
             display_mode: buttons
@@ -810,7 +810,7 @@ sections:
           template: >-
             {% set ns = namespace(has_gpu_temp=false) %} {% for e in
             states.sensor %}
-              {% if state_attr(e.entity_id, 'proxmox_integration') == 'dh_pve_app'
+              {% if state_attr(e.entity_id, 'proxmox_integration') == 'digitalhouses_pve_agent'
                     and state_attr(e.entity_id, 'proxmox_section') == 'graphics'
                     and state_attr(e.entity_id, 'proxmox_subject') == 'gpu'
                     and state_attr(e.entity_id, 'proxmox_metric') == 'temperature'
@@ -820,7 +820,7 @@ sections:
             {% endfor %} {% if ns.has_gpu_temp %}
               {{ [{
                 'type': 'custom:mushroom-number-card',
-                'entity': 'number.dh_app_pve_gpu_temperature_threshold',
+                'entity': 'number.dh_pve_agent_gpu_temperature_threshold',
                 'name': 'Температура GPU',
                 'icon': 'mdi:expansion-card',
                 'display_mode': 'buttons',
@@ -846,7 +846,7 @@ sections:
         square: false
         cards:
           - type: custom:mushroom-entity-card
-            entity: sensor.dh_app_pve_cpu_usage
+            entity: sensor.dh_pve_agent_cpu_usage
             name: CPU
             icon: mdi:cpu-64-bit
             layout: horizontal
@@ -855,7 +855,7 @@ sections:
             tap_action:
               action: more-info
           - type: custom:mushroom-entity-card
-            entity: sensor.dh_app_pve_memory_usage
+            entity: sensor.dh_pve_agent_memory_usage
             name: RAM
             icon: mdi:memory
             layout: horizontal
@@ -864,7 +864,7 @@ sections:
             tap_action:
               action: more-info
           - type: custom:mushroom-entity-card
-            entity: sensor.dh_app_pve_swap_usage
+            entity: sensor.dh_pve_agent_swap_usage
             name: Swap
             icon: mdi:swap-horizontal
             layout: horizontal
@@ -879,10 +879,10 @@ sections:
         heading_style: subtitle
         icon: mdi:cpu-64-bit
       - type: custom:entity-progress-card-template
-        entity: sensor.dh_app_pve_cpu_temperature
+        entity: sensor.dh_pve_agent_cpu_temperature
         name: >-
           {% set model =
-            state_attr('sensor.dh_app_pve_system', 'cpu_model')
+            state_attr('sensor.dh_pve_agent_system', 'cpu_model')
             or 'CPU'
           %} {% set model =
             model
@@ -900,7 +900,7 @@ sections:
           {% endif %}
         secondary: |-
           {% set threshold =
-            states('number.dh_app_pve_cpu_temperature_threshold')
+            states('number.dh_pve_agent_cpu_temperature_threshold')
           %} {% if states(entity) in ['unknown', 'unavailable', 'none', ''] %}
             Температура недоступна
           {% elif threshold not in ['unknown', 'unavailable', 'none', ''] %}
@@ -912,37 +912,37 @@ sections:
           {% set temp =
             states(entity) | float(0)
           %} {% set threshold =
-            states('number.dh_app_pve_cpu_temperature_threshold') | float(0)
+            states('number.dh_pve_agent_cpu_temperature_threshold') | float(0)
           %} {% if threshold > 0 %}
             {{ [0, [(temp / threshold * 100), 100] | min] | max | round(1) }}
           {% else %}
             0
           {% endif %}
         icon: >-
-          {% if is_state('binary_sensor.dh_app_pve_cpu_temperature_problem',
+          {% if is_state('binary_sensor.dh_pve_agent_cpu_temperature_problem',
           'on') %}
             mdi:thermometer-alert
-          {% elif is_state('binary_sensor.dh_app_pve_cpu_temperature_problem',
+          {% elif is_state('binary_sensor.dh_pve_agent_cpu_temperature_problem',
           'off') %}
             mdi:thermometer-check
           {% else %}
             mdi:thermometer
           {% endif %}
         color: >-
-          {% if is_state('binary_sensor.dh_app_pve_cpu_temperature_problem',
+          {% if is_state('binary_sensor.dh_pve_agent_cpu_temperature_problem',
           'on') %}
             red
-          {% elif is_state('binary_sensor.dh_app_pve_cpu_temperature_problem',
+          {% elif is_state('binary_sensor.dh_pve_agent_cpu_temperature_problem',
           'off') %}
             blue
           {% else %}
             grey
           {% endif %}
         bar_color: >-
-          {% if is_state('binary_sensor.dh_app_pve_cpu_temperature_problem',
+          {% if is_state('binary_sensor.dh_pve_agent_cpu_temperature_problem',
           'on') %}
             red
-          {% elif is_state('binary_sensor.dh_app_pve_cpu_temperature_problem',
+          {% elif is_state('binary_sensor.dh_pve_agent_cpu_temperature_problem',
           'off') %}
             blue
           {% else %}
@@ -959,30 +959,30 @@ sections:
         grid_options:
           columns: 12
       - type: custom:mushroom-template-card
-        entity: sensor.dh_app_pve_cpu_frequency
+        entity: sensor.dh_pve_agent_cpu_frequency
         primary: Частота CPU
         secondary: |-
           {% if states(entity) not in ['unknown', 'unavailable', 'none', ''] %}
             {{ states(entity) }}
             {{ state_attr(entity, 'unit_of_measurement') or 'MHz' }}
-            {% if is_state('binary_sensor.dh_app_pve_cpu_throttling_problem', 'on') %}
+            {% if is_state('binary_sensor.dh_pve_agent_cpu_throttling_problem', 'on') %}
               · THROTTLING
             {% endif %}
           {% else %}
             Частота недоступна
           {% endif %}
         icon: >-
-          {% if is_state('binary_sensor.dh_app_pve_cpu_throttling_problem',
+          {% if is_state('binary_sensor.dh_pve_agent_cpu_throttling_problem',
           'on') %}
             mdi:speedometer-slow
           {% else %}
             mdi:sine-wave
           {% endif %}
         icon_color: >-
-          {% if is_state('binary_sensor.dh_app_pve_cpu_throttling_problem',
+          {% if is_state('binary_sensor.dh_pve_agent_cpu_throttling_problem',
           'on') %}
             red
-          {% elif is_state('binary_sensor.dh_app_pve_cpu_throttling_problem',
+          {% elif is_state('binary_sensor.dh_pve_agent_cpu_throttling_problem',
           'off') %}
             blue
           {% else %}
@@ -993,10 +993,10 @@ sections:
         grid_options:
           columns: 12
       - type: custom:mushroom-template-card
-        entity: binary_sensor.dh_app_pve_cpu_throttling_problem
+        entity: binary_sensor.dh_pve_agent_cpu_throttling_problem
         primary: |-
           {% set model =
-            state_attr('sensor.dh_app_pve_system', 'cpu_model')
+            state_attr('sensor.dh_pve_agent_system', 'cpu_model')
             or 'CPU'
           %}
           {% set model =
@@ -1051,7 +1051,7 @@ sections:
             {% set ns = namespace(items=[], count=0) %}
             {% for fan in states.sensor | sort(attribute='entity_id') %}
               {% if
-                state_attr(fan.entity_id, 'proxmox_integration') == 'dh_pve_app'
+                state_attr(fan.entity_id, 'proxmox_integration') == 'digitalhouses_pve_agent'
                 and state_attr(fan.entity_id, 'proxmox_section') == 'cooling'
                 and state_attr(fan.entity_id, 'proxmox_metric') == 'rpm'
               %}
@@ -1137,10 +1137,10 @@ sections:
         card_param: cards
         filter:
           include:
-            - entity_id: button.dh_app_pve_calibrate_fans
+            - entity_id: button.dh_pve_agent_calibrate_fans
               options:
                 type: custom:mushroom-template-card
-                entity: button.dh_app_pve_calibrate_fans
+                entity: button.dh_pve_agent_calibrate_fans
                 primary: Калибровать вентиляторы
                 secondary: Кратковременно включает максимальную скорость
                 icon: mdi:fan-chevron-up
@@ -1149,7 +1149,7 @@ sections:
                   action: perform-action
                   perform_action: button.press
                   target:
-                    entity_id: button.dh_app_pve_calibrate_fans
+                    entity_id: button.dh_pve_agent_calibrate_fans
                   confirmation:
                     text: >-
                       Вентилятор на несколько секунд будет переведён на
@@ -1175,7 +1175,7 @@ sections:
             {% set ns = namespace(items=[]) %}
             {% for e in states.sensor | sort(attribute='entity_id') %}
               {% if
-                state_attr(e.entity_id, 'proxmox_integration') == 'dh_pve_app'
+                state_attr(e.entity_id, 'proxmox_integration') == 'digitalhouses_pve_agent'
                 and state_attr(e.entity_id, 'proxmox_section') == 'graphics'
               %}
 
@@ -1207,7 +1207,7 @@ sections:
                   {% endif %}
 
                   {% set threshold =
-                    states('number.dh_app_pve_gpu_temperature_threshold')
+                    states('number.dh_pve_agent_gpu_temperature_threshold')
                   %}
 
                   {% if e.state | is_number %}
@@ -1302,7 +1302,7 @@ sections:
         content: >-
           {%- set ns = namespace(vms=[], lxcs=[], lines=[]) -%} {%- for e in
           states.sensor -%}
-            {%- if state_attr(e.entity_id, 'proxmox_integration') == 'dh_pve_app'
+            {%- if state_attr(e.entity_id, 'proxmox_integration') == 'digitalhouses_pve_agent'
                   and state_attr(e.entity_id, 'proxmox_section') == 'guests'
                   and state_attr(e.entity_id, 'proxmox_subject') in ['vm', 'lxc']
                   and state_attr(e.entity_id, 'proxmox_metric') == 'status' -%}
@@ -1320,11 +1320,11 @@ sections:
             {%- endif -%}
           {%- endfor -%}
 
-          {%- set vm_running = state_attr('sensor.dh_app_pve_vms', 'running') |
-          int(0) -%} {%- set vm_total = state_attr('sensor.dh_app_pve_vms',
+          {%- set vm_running = state_attr('sensor.dh_pve_agent_vms', 'running') |
+          int(0) -%} {%- set vm_total = state_attr('sensor.dh_pve_agent_vms',
           'total') | int(0) -%} {%- set lxc_running =
-          state_attr('sensor.dh_app_pve_lxcs', 'running') | int(0) -%} {%- set
-          lxc_total = state_attr('sensor.dh_app_pve_lxcs', 'total') | int(0) -%}
+          state_attr('sensor.dh_pve_agent_lxcs', 'running') | int(0) -%} {%- set
+          lxc_total = state_attr('sensor.dh_pve_agent_lxcs', 'total') | int(0) -%}
 
           {%- set ns.lines = ns.lines + [
             'VM ' ~ vm_running ~ '/' ~ vm_total ~ ' · LXC ' ~ lxc_running ~ '/' ~ lxc_total,
@@ -1344,7 +1344,7 @@ sections:
 
             {%- set pt = namespace(items=[]) -%}
             {%- for p in states.sensor -%}
-              {%- if state_attr(p.entity_id, 'proxmox_integration') == 'dh_pve_app'
+              {%- if state_attr(p.entity_id, 'proxmox_integration') == 'digitalhouses_pve_agent'
                     and state_attr(p.entity_id, 'proxmox_section') == 'guests'
                     and state_attr(p.entity_id, 'proxmox_subject') == 'passthrough'
                     and state_attr(p.entity_id, 'proxmox_metric') == 'owner'
@@ -1405,7 +1405,7 @@ sections:
           template: >-
             {% set ns = namespace(entities=[]) %} {% for e in states.sensor |
             sort(attribute='entity_id') %}
-              {% if state_attr(e.entity_id, 'proxmox_integration') == 'dh_pve_app'
+              {% if state_attr(e.entity_id, 'proxmox_integration') == 'digitalhouses_pve_agent'
                     and state_attr(e.entity_id, 'proxmox_metric') == 'temperature'
                     and e.state not in ['unknown', 'unavailable'] %}
                 {% set label = state_attr(e.entity_id, 'proxmox_display_name')
@@ -1453,11 +1453,11 @@ sections:
         name: CPU / RAM / Swap
         icon: mdi:chart-areaspline
         entities:
-          - entity: sensor.dh_app_pve_cpu_usage
+          - entity: sensor.dh_pve_agent_cpu_usage
             name: CPU
-          - entity: sensor.dh_app_pve_memory_usage
+          - entity: sensor.dh_pve_agent_memory_usage
             name: RAM
-          - entity: sensor.dh_app_pve_swap_usage
+          - entity: sensor.dh_pve_agent_swap_usage
             name: Swap
         hours_to_show: 24
         points_per_hour: 2
@@ -1483,11 +1483,11 @@ sections:
         heading_style: subtitle
         icon: mdi:sine-wave
       - type: custom:mini-graph-card
-        entity: sensor.dh_app_pve_cpu_frequency
+        entity: sensor.dh_pve_agent_cpu_frequency
         name: Частота CPU
         icon: mdi:sine-wave
         entities:
-          - sensor.dh_app_pve_cpu_frequency
+          - sensor.dh_pve_agent_cpu_frequency
         hours_to_show: 24
         points_per_hour: 2
         line_width: 2
@@ -1520,9 +1520,9 @@ sections:
           template: >-
             {% set ns = namespace(entities=[]) %} {% for e in states.sensor |
             sort(attribute='entity_id') %}
-              {% if state_attr(e.entity_id, 'proxmox_integration') == 'dh_pve_app'
+              {% if state_attr(e.entity_id, 'proxmox_integration') == 'digitalhouses_pve_agent'
                     and state_attr(e.entity_id, 'proxmox_section') == 'storage'
-                    and e.entity_id is match('sensor\.dh_app_pve_storage_.*_percent_used')
+                    and e.entity_id is match('sensor\.dh_pve_agent_storage_.*_percent_used')
                     and e.state not in ['unknown', 'unavailable'] %}
                 {% set label = state_attr(e.entity_id, 'proxmox_display_name') or e.name %}
                 {% set ns.entities = ns.entities + [{'entity': e.entity_id, 'name': label}] %}
