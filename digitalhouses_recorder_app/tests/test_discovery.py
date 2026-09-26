@@ -4,7 +4,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'rootfs' / 'app'))
 
-from discovery import REFRESH_COMMAND_TOPIC, STATE_RETAIN, build_discovery_payload
+from discovery import (
+    DISK_USAGE_THRESHOLD_COMMAND_TOPIC,
+    DISK_USAGE_THRESHOLD_STATE_TOPIC,
+    EVENT_TOPIC,
+    REFRESH_COMMAND_TOPIC,
+    STATE_RETAIN,
+    build_discovery_payload,
+)
 
 
 class DiscoveryTests(unittest.TestCase):
@@ -23,13 +30,50 @@ class DiscoveryTests(unittest.TestCase):
         self.assertEqual(payload['components']['db_yesterday_records']['name'], 'DB inserted yesterday')
         self.assertEqual(payload['components']['recorder_writing']['name'], 'DB recorder writing')
         self.assertEqual(payload['components']['db_last_age']['name'], 'DB last age')
-        self.assertEqual(len(payload['components']), 17)
+        self.assertEqual(len(payload['components']), 19)
         self.assertEqual(
             payload['components']['db_last_refresh']['default_entity_id'],
             'sensor.dh_db_last_refresh',
         )
         self.assertEqual(payload['components']['db_last_refresh']['device_class'], 'timestamp')
         self.assertTrue(STATE_RETAIN)
+
+
+class EventAndSettingsDiscoveryTests(unittest.TestCase):
+    def test_diagnostic_event_entity_uses_transient_event_topic(self):
+        payload = build_discovery_payload('0.1.14')
+        component = payload['components']['diagnostic_event']
+
+        self.assertEqual(component['platform'], 'event')
+        self.assertEqual(component['default_entity_id'], 'event.dh_db_diagnostic')
+        self.assertEqual(component['state_topic'], EVENT_TOPIC)
+        self.assertEqual(
+            component['event_types'],
+            [
+                'db_connection_lost',
+                'db_connection_restored',
+                'recorder_writing_stopped',
+                'recorder_writing_restored',
+                'storage_usage_high',
+                'storage_usage_normal',
+            ],
+        )
+
+    def test_disk_usage_threshold_is_app_owned_number(self):
+        payload = build_discovery_payload('0.1.14')
+        component = payload['components']['db_disk_usage_threshold']
+
+        self.assertEqual(component['platform'], 'number')
+        self.assertEqual(
+            component['default_entity_id'],
+            'number.dh_db_disk_usage_threshold',
+        )
+        self.assertEqual(component['state_topic'], DISK_USAGE_THRESHOLD_STATE_TOPIC)
+        self.assertEqual(component['command_topic'], DISK_USAGE_THRESHOLD_COMMAND_TOPIC)
+        self.assertEqual(component['min'], 1)
+        self.assertEqual(component['max'], 98)
+        self.assertEqual(component['step'], 1)
+        self.assertEqual(component['unit_of_measurement'], '%')
 
 
 class StorageDiscoveryTests(unittest.TestCase):
