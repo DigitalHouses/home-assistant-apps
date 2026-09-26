@@ -18,6 +18,7 @@ from .config import AppConfig, load_config
 from .discovery import build_discovery_payload, build_topics
 from .gpu_collector import GpuStateReader
 from .metrics import RollingCpuMetrics, group_current_cpu
+from .migration_cleanup import cleanup_legacy_mqtt_namespace
 from .models import (
     ActivityState,
     CpuGroupMetrics,
@@ -393,6 +394,11 @@ def main() -> int:
         default=DEFAULT_CONFIG,
     )
     parser.add_argument(
+        "--migration-mqtt-cleanup",
+        action="store_true",
+        help=argparse.SUPPRESS,
+    )
+    parser.add_argument(
         "--telemetry-delete",
         action="store_true",
         help="Delete this installation's retained product telemetry record.",
@@ -400,6 +406,8 @@ def main() -> int:
     args = parser.parse_args()
     config = load_config(args.config)
     _configure_logging(config.general.log_level)
+    if args.migration_mqtt_cleanup:
+        return 0 if cleanup_legacy_mqtt_namespace(config) else 3
     if args.telemetry_delete:
         try:
             build = load_build_info(APP_ROOT)
