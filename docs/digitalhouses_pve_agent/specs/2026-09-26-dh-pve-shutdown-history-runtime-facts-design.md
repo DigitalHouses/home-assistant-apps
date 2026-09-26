@@ -2,11 +2,11 @@
 
 Date: 2026-09-26  
 Status: implemented design amendment  
-Target: `digitalhouses_pve_agent` (installed runtime remains `dh_pve_app`)
+Target: `digitalhouses_pve_agent`
 
 ## Principle
 
-Home Assistant is a presentation client. `dh_pve_app` owns shutdown acquisition,
+Home Assistant is a presentation client. `digitalhouses_pve_agent` owns shutdown acquisition,
 history, calculations and derived status. Lovelace must not reconstruct historical
 budgets from the current configuration or calculate shutdown durations from several
 raw attributes.
