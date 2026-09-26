@@ -19,7 +19,7 @@ class DiscoveryTests(unittest.TestCase):
         payload = build_discovery_payload('0.1.8')
         self.assertEqual(payload['device']['identifiers'], ['digitalhouses_db_monitoring'])
         self.assertEqual(payload['device']['name'], 'DH Recorder')
-        self.assertEqual(payload['origin']['name'], 'DigitalHouses DB Monitoring')
+        self.assertEqual(payload['origin']['name'], 'DigitalHouses Recorder App')
         self.assertEqual(payload['components']['db_start']['default_entity_id'], 'sensor.dh_db_start')
         self.assertEqual(payload['components']['db_connected']['default_entity_id'], 'binary_sensor.dh_db_connected')
         self.assertEqual(
