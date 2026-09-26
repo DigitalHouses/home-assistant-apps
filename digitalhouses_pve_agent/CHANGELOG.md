@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.5.28
+
+- Expose the current Proxmox guest timeout projection as `next_shutdown_timeout_seconds`, `next_shutdown_timeout_ratio` and `next_shutdown_assessment` on VM/LXC shutdown diagnostics.
+- Keep `last_shutdown_*` immutable historical facts while `next_shutdown_*` describes how that measured duration would be assessed for the next shutdown under the current PVE timeout configuration.
+- Make shutdown readiness consume `next_shutdown_assessment` and migrate the temporary 0.5.27 persisted `current_timeout_*` / `current_assessment` keys into the new `next_shutdown_*` shape without preserving the temporary names as a public contract.
+
 ## 0.5.27
 
 - Recalculate shutdown readiness against each guest's current Proxmox shutdown timeout while preserving the timeout captured with the historical shutdown fact.

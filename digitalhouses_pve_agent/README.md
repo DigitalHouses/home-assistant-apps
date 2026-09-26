@@ -10,7 +10,7 @@ Native Linux agent for **Proxmox VE 8.x** that publishes host, CPU, memory, stor
 
 The public product name and canonical repository identity are **DigitalHouses PVE Agent** / `digitalhouses_pve_agent`. Existing installed runtime identifiers remain compatible: service and filesystem identity `dh_pve_app`, MQTT base namespace `DigitalHouses/Global/dh_pve_app/<instance>`, and Home Assistant devices `DH PVE` plus optional `DH PVE UPS`.
 
-Current source release: `VERSION` is `0.5.27`.
+Current source release: `VERSION` is `0.5.28`.
 
 ## Home Assistant dashboard
 
@@ -234,7 +234,7 @@ The current default runtime reserve is 180 seconds.
 
 `shutdown_budget` is calculated by the App from current PVE shutdown configuration plus comparable clean shutdown history. The active guest budget uses only VM/LXC that are currently running. The App also calculates an all-configured-guest diagnostic budget, including stopped non-template guests, without inflating the active UPS budget. The regular Trigger B path uses cheap PVE files/cache; it does not run `qm list`/`pct list` every UPS poll. Budget/configuration fingerprints prevent unrelated historical shutdown samples from being treated as comparable.
 
-PVE shutdown history stores the plan that belonged to each boot/shutdown cycle instead of reconstructing it later from current settings. Records expose App-calculated planned/actual shutdown times, the running guest set, shutdown sequence and `shutdown_status` (`correct`, `incorrect` or `unknown`). Per-guest last-shutdown facts are tracked independently, so a standalone `qm shutdown`/`pct shutdown` can update that guest's factual duration without creating a PVE shutdown-history record. VM/LXC status entities also expose `onboot` for compact autostart presentation.
+PVE shutdown history stores the plan that belonged to each boot/shutdown cycle instead of reconstructing it later from current settings. Records expose App-calculated planned/actual shutdown times, the running guest set, shutdown sequence and `shutdown_status` (`correct`, `incorrect` or `unknown`). Per-guest `last_shutdown_*` facts are tracked independently, so a standalone `qm shutdown`/`pct shutdown` can update that guest's factual duration without creating a PVE shutdown-history record. The separate `next_shutdown_*` fields project that measured duration onto the guest's current PVE timeout and are used by shutdown readiness; historical facts are not rewritten when configuration changes. VM/LXC status entities also expose `onboot` for compact autostart presentation.
 
 Storage backed by a VM/NAS through NFS/CIFS/SMB can extend the final host shutdown if the provider disappears before unmount. That dependency is treated as an explicit shutdown-budget risk and is not hidden by guest-duration history.
 

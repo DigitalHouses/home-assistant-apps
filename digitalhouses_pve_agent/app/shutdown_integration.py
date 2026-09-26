@@ -288,6 +288,16 @@ class ShutdownAwareProductionCollectors(GuestAwareProductionCollectors):
                                 "assessment",
                                 "unknown",
                             ),
+                            "next_shutdown_timeout_seconds": latest.get(
+                                "next_shutdown_timeout_seconds"
+                            ),
+                            "next_shutdown_timeout_ratio": latest.get(
+                                "next_shutdown_timeout_ratio"
+                            ),
+                            "next_shutdown_assessment": latest.get(
+                                "next_shutdown_assessment",
+                                "unknown",
+                            ),
                             "last_shutdown_result": latest.get("result", "unknown"),
                             "last_shutdown_forced": latest.get("forced", False),
                             "last_shutdown_source": latest.get("source", "unknown"),

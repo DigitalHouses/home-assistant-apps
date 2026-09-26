@@ -167,6 +167,48 @@ def _normalized_guest_fact(
         forced=item.get("forced"),
         timeout_ratio=ratio,
     )
+
+    for projection_key in (
+        "current_timeout_seconds",
+        "current_timeout_ratio",
+        "current_assessment",
+        "next_shutdown_timeout_seconds",
+        "next_shutdown_timeout_ratio",
+        "next_shutdown_assessment",
+    ):
+        item.pop(projection_key, None)
+
+    return item
+
+
+def _normalized_latest_guest_fact(
+    raw: Mapping[str, Any],
+    *,
+    kind: str,
+    guest_id: str,
+) -> dict[str, Any]:
+    projection = {
+        "next_shutdown_timeout_seconds": raw.get(
+            "next_shutdown_timeout_seconds",
+            raw.get("current_timeout_seconds"),
+        ),
+        "next_shutdown_timeout_ratio": raw.get(
+            "next_shutdown_timeout_ratio",
+            raw.get("current_timeout_ratio"),
+        ),
+        "next_shutdown_assessment": raw.get(
+            "next_shutdown_assessment",
+            raw.get("current_assessment"),
+        ),
+    }
+    item = _normalized_guest_fact(
+        raw,
+        kind=kind,
+        guest_id=guest_id,
+    )
+    for key, value in projection.items():
+        if value is not None:
+            item[key] = value
     return item
 
 
@@ -469,17 +511,19 @@ def evaluate_shutdown_readiness(
                     continue
                 result = str(raw.get("result") or "unknown")
                 forced = bool(raw.get("forced"))
-                ratio = raw.get("current_timeout_ratio")
-                if not isinstance(ratio, (int, float)) or isinstance(ratio, bool):
-                    ratio = raw.get("timeout_ratio")
+                next_assessment = raw.get("next_shutdown_assessment")
                 if forced or result in {"timeout", "forced"}:
                     issues.append(f"{kind}:{guest_id}:{result}")
-                elif (
-                    isinstance(ratio, (int, float))
-                    and not isinstance(ratio, bool)
-                    and ratio >= GUEST_SHUTDOWN_WARNING_RATIO
-                ):
+                elif next_assessment in {"warning", "critical"}:
                     issues.append(f"{kind}:{guest_id}:near_timeout")
+                elif next_assessment not in {"ok", "unknown"}:
+                    ratio = raw.get("timeout_ratio")
+                    if (
+                        isinstance(ratio, (int, float))
+                        and not isinstance(ratio, bool)
+                        and ratio >= GUEST_SHUTDOWN_WARNING_RATIO
+                    ):
+                        issues.append(f"{kind}:{guest_id}:near_timeout")
 
     return {
         "status": "warning" if issues else "ok",
@@ -796,7 +840,7 @@ class ShutdownHistoryTracker:
         else:
             state["guest_last_shutdowns"] = {
                 "vm": {
-                    str(guest_id): _normalized_guest_fact(
+                    str(guest_id): _normalized_latest_guest_fact(
                         raw,
                         kind="vm",
                         guest_id=str(guest_id),
@@ -807,7 +851,7 @@ class ShutdownHistoryTracker:
                 if isinstance(latest.get("vm"), Mapping)
                 else {},
                 "lxc": {
-                    str(guest_id): _normalized_guest_fact(
+                    str(guest_id): _normalized_latest_guest_fact(
                         raw,
                         kind="lxc",
                         guest_id=str(guest_id),
@@ -1132,29 +1176,33 @@ class ShutdownHistoryTracker:
                 timeout_ratio=ratio,
             )
 
-            current_ratio: float | None = None
+            next_shutdown_ratio: float | None = None
             if (
                 isinstance(duration, int)
                 and not isinstance(duration, bool)
                 and timeout_seconds > 0
             ):
-                current_ratio = round(duration / timeout_seconds, 3)
-            current_assessment = _guest_shutdown_assessment(
+                next_shutdown_ratio = round(duration / timeout_seconds, 3)
+            next_shutdown_assessment = _guest_shutdown_assessment(
                 result=item.get("result"),
                 forced=item.get("forced"),
-                timeout_ratio=current_ratio,
+                timeout_ratio=next_shutdown_ratio,
             )
 
             if item.get("timeout_ratio") != ratio:
                 item["timeout_ratio"] = ratio
             if item.get("assessment") != assessment:
                 item["assessment"] = assessment
-            if item.get("current_timeout_seconds") != timeout_seconds:
-                item["current_timeout_seconds"] = timeout_seconds
-            if item.get("current_timeout_ratio") != current_ratio:
-                item["current_timeout_ratio"] = current_ratio
-            if item.get("current_assessment") != current_assessment:
-                item["current_assessment"] = current_assessment
+            if item.get("next_shutdown_timeout_seconds") != timeout_seconds:
+                item["next_shutdown_timeout_seconds"] = timeout_seconds
+            if item.get("next_shutdown_timeout_ratio") != next_shutdown_ratio:
+                item["next_shutdown_timeout_ratio"] = next_shutdown_ratio
+            if item.get("next_shutdown_assessment") != next_shutdown_assessment:
+                item["next_shutdown_assessment"] = next_shutdown_assessment
+
+            item.pop("current_timeout_seconds", None)
+            item.pop("current_timeout_ratio", None)
+            item.pop("current_assessment", None)
 
             if item != dict(raw):
                 records[guest_id] = item

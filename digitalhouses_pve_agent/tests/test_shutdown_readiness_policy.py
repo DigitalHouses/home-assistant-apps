@@ -81,7 +81,7 @@ def test_missing_policy_is_not_ready():
     assert issues == ["shutdown_policy_unavailable"]
 
 
-def test_readiness_uses_current_timeout_ratio_from_latest_guest_facts():
+def test_readiness_uses_next_shutdown_assessment_from_latest_guest_facts():
     previous_shutdown = {
         "shutdown_class": "ups_power",
         "shutdown_clean": True,
@@ -108,7 +108,8 @@ def test_readiness_uses_current_timeout_ratio_from_latest_guest_facts():
                 "result": "clean",
                 "forced": False,
                 "timeout_ratio": 0.933,
-                "current_timeout_ratio": 0.56,
+                "next_shutdown_timeout_ratio": 0.56,
+                "next_shutdown_assessment": "ok",
             }
         },
         "lxc": {
@@ -116,7 +117,8 @@ def test_readiness_uses_current_timeout_ratio_from_latest_guest_facts():
                 "result": "clean",
                 "forced": False,
                 "timeout_ratio": 1.067,
-                "current_timeout_ratio": 0.64,
+                "next_shutdown_timeout_ratio": 0.64,
+                "next_shutdown_assessment": "ok",
             }
         },
     }

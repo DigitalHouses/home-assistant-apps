@@ -185,9 +185,12 @@ def test_standalone_guest_shutdown_fact_preserves_history_and_tracks_current_con
     assert latest["timeout_seconds"] == 30
     assert latest["timeout_ratio"] == 0.4
     assert latest["assessment"] == "ok"
-    assert latest["current_timeout_seconds"] == 30
-    assert latest["current_timeout_ratio"] == 0.4
-    assert latest["current_assessment"] == "ok"
+    assert latest["next_shutdown_timeout_seconds"] == 30
+    assert latest["next_shutdown_timeout_ratio"] == 0.4
+    assert latest["next_shutdown_assessment"] == "ok"
+    assert "current_timeout_seconds" not in latest
+    assert "current_timeout_ratio" not in latest
+    assert "current_assessment" not in latest
 
     # Historical facts keep the timeout from the shutdown event, while the
     # current-config assessment follows later PVE timeout changes.
@@ -198,9 +201,12 @@ def test_standalone_guest_shutdown_fact_preserves_history_and_tracks_current_con
     assert latest["timeout_seconds"] == 30
     assert latest["timeout_ratio"] == 0.4
     assert latest["assessment"] == "ok"
-    assert latest["current_timeout_seconds"] == 50
-    assert latest["current_timeout_ratio"] == 0.24
-    assert latest["current_assessment"] == "ok"
+    assert latest["next_shutdown_timeout_seconds"] == 50
+    assert latest["next_shutdown_timeout_ratio"] == 0.24
+    assert latest["next_shutdown_assessment"] == "ok"
+    assert "current_timeout_seconds" not in latest
+    assert "current_timeout_ratio" not in latest
+    assert "current_assessment" not in latest
 
 
 def test_guest_shutdown_assessment_is_app_owned_for_host_shutdown_journal(tmp_path):

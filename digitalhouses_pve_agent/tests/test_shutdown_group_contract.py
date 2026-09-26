@@ -151,6 +151,12 @@ def test_shutdown_discovery_reads_latest_guest_fact_from_shutdown_group():
         assert "last_shutdown_timeout_seconds" in attrs
         assert "last_shutdown_timeout_ratio" in attrs
         assert "last_shutdown_assessment" in attrs
+        assert "next_shutdown_timeout_seconds" in attrs
+        assert "next_shutdown_timeout_ratio" in attrs
+        assert "next_shutdown_assessment" in attrs
+        assert "current_timeout_seconds" not in attrs
+        assert "current_timeout_ratio" not in attrs
+        assert "current_assessment" not in attrs
         assert "last_shutdown_source" in attrs
 
 
