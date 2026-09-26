@@ -228,9 +228,9 @@ jobs:
 
       - name: Prepare systemd verification path
         run: |
-          sudo install -d /opt/digitalhouses/dh_pve_app/.venv/bin
+          sudo install -d /opt/digitalhouses/digitalhouses_pve_agent/.venv/bin
           sudo ln -sf "$(command -v python)" \
-            /opt/digitalhouses/dh_pve_app/.venv/bin/python
+            /opt/digitalhouses/digitalhouses_pve_agent/.venv/bin/python
 
       - name: Validate systemd unit
         run: systemd-analyze verify digitalhouses_pve_agent/systemd/*.service
