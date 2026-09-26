@@ -168,16 +168,47 @@ def _normalized_guest_fact(
         timeout_ratio=ratio,
     )
 
-    legacy_projection = {
-        "current_timeout_seconds": "next_shutdown_timeout_seconds",
-        "current_timeout_ratio": "next_shutdown_timeout_ratio",
-        "current_assessment": "next_shutdown_assessment",
-    }
-    for legacy_key, next_key in legacy_projection.items():
-        if next_key not in item and legacy_key in item:
-            item[next_key] = item.get(legacy_key)
-        item.pop(legacy_key, None)
+    for projection_key in (
+        "current_timeout_seconds",
+        "current_timeout_ratio",
+        "current_assessment",
+        "next_shutdown_timeout_seconds",
+        "next_shutdown_timeout_ratio",
+        "next_shutdown_assessment",
+    ):
+        item.pop(projection_key, None)
 
+    return item
+
+
+def _normalized_latest_guest_fact(
+    raw: Mapping[str, Any],
+    *,
+    kind: str,
+    guest_id: str,
+) -> dict[str, Any]:
+    projection = {
+        "next_shutdown_timeout_seconds": raw.get(
+            "next_shutdown_timeout_seconds",
+            raw.get("current_timeout_seconds"),
+        ),
+        "next_shutdown_timeout_ratio": raw.get(
+            "next_shutdown_timeout_ratio",
+            raw.get("current_timeout_ratio"),
+        ),
+        "next_shutdown_assessment": raw.get(
+            "next_shutdown_assessment",
+            raw.get("current_assessment"),
+        ),
+    }
+    item = _normalized_guest_fact(
+        raw,
+        kind=kind,
+        guest_id=guest_id,
+    )
+    for key, value in projection.items():
+        if value is not None:
+            item[key] = value
     return item
 
 
@@ -809,7 +840,7 @@ class ShutdownHistoryTracker:
         else:
             state["guest_last_shutdowns"] = {
                 "vm": {
-                    str(guest_id): _normalized_guest_fact(
+                    str(guest_id): _normalized_latest_guest_fact(
                         raw,
                         kind="vm",
                         guest_id=str(guest_id),
@@ -820,7 +851,7 @@ class ShutdownHistoryTracker:
                 if isinstance(latest.get("vm"), Mapping)
                 else {},
                 "lxc": {
-                    str(guest_id): _normalized_guest_fact(
+                    str(guest_id): _normalized_latest_guest_fact(
                         raw,
                         kind="lxc",
                         guest_id=str(guest_id),
