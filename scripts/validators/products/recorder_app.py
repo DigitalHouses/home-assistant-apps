@@ -33,42 +33,23 @@ def validate_db_monitoring(
 
     if config.get("slug") != "digitalhouses_recorder_app":
         fail(
-            f"{app.name}: Recorder canonical migration release must use "
-            "slug digitalhouses_recorder_app"
+            f"{app.name}: config slug must remain canonical "
+            "'digitalhouses_recorder_app'"
         )
 
-    migration_mode = (config.get("environment") or {}).get(
-        "DH_SLUG_MIGRATION_MODE"
-    )
-    if migration_mode != "import":
-        fail(
-            f"{app.name}: Recorder canonical migration release must use "
-            "migration import mode"
-        )
+    if "DH_SLUG_MIGRATION_MODE" in (config.get("environment") or {}):
+        fail(f"{app.name}: completed slug migration mode must be removed")
 
     mappings = config.get("map") or []
-    share_rw = any(
-        isinstance(item, dict)
-        and item.get("type") == "share"
-        and item.get("read_only") is False
+    if any(
+        isinstance(item, dict) and item.get("type") == "share"
         for item in mappings
-    )
-    if not share_rw:
-        fail(f"{app.name}: Recorder canonical migration requires writable share mapping")
+    ):
+        fail(f"{app.name}: temporary migration share mapping must be removed")
 
     migration_path = app / "rootfs" / "app" / "slug_migration.py"
-    require_files(root, [migration_path])
-    migration_source = migration_path.read_text(encoding="utf-8")
-    for value in (
-        'PRODUCT_ID = "digitalhouses_recorder_app"',
-        'SOURCE_SLUG = "digitalhouses_db_monitoring"',
-        'TARGET_SLUG = "digitalhouses_recorder_app"',
-        'BUNDLE_DIR = Path("/share/digitalhouses_recorder_app/slug-migration-v1")',
-        '"options.json"',
-        '"ssh_known_hosts"',
-    ):
-        if value not in migration_source:
-            fail(f"{app.name}: slug migration contract is missing {value!r}")
+    if migration_path.exists():
+        fail(f"{app.name}: completed slug migration runtime must be removed")
 
     discovery = _import_discovery(app)
 
