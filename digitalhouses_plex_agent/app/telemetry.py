@@ -7,6 +7,7 @@ import re
 import secrets
 import threading
 import time
+import urllib.error
 import urllib.request
 import uuid
 from pathlib import Path
@@ -77,8 +78,14 @@ class UrllibTelemetryTransport:
                 "User-Agent": "DigitalHouses-Telemetry/1",
             },
         )
-        with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
-            return int(response.status)
+        try:
+            with urllib.request.urlopen(
+                request,
+                timeout=timeout_seconds,
+            ) as response:
+                return int(response.status)
+        except urllib.error.HTTPError as exc:
+            return int(exc.code)
 
 
 def _valid_uuid4(value: object) -> bool:
@@ -155,14 +162,21 @@ class TelemetryClient:
         installation_id = state.get("installation_id")
         installation_token = state.get("installation_token")
         changed = False
+        identity_changed = False
         if not _valid_uuid4(installation_id):
             installation_id = str(uuid.uuid4())
             state["installation_id"] = installation_id
             changed = True
+            identity_changed = True
         if not _valid_token(installation_token):
             installation_token = secrets.token_hex(32)
             state["installation_token"] = installation_token
             changed = True
+            identity_changed = True
+        if identity_changed:
+            state.pop("last_attempt_epoch", None)
+            state.pop("last_success_epoch", None)
+            state.pop("last_reported_version", None)
         if state.get("schema_version") != 1:
             state["schema_version"] = 1
             changed = True
