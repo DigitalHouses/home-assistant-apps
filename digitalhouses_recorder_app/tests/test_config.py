@@ -34,6 +34,50 @@ class ConfigTests(unittest.TestCase):
             path.unlink(missing_ok=True)
 
         self.assertEqual(config.publish_interval_minutes, 7)
+        self.assertFalse(config.telemetry_enabled)
+
+    def test_telemetry_is_opt_in_and_boolean(self):
+        base = {
+            'database_type': 'postgresql',
+            'postgresql': {
+                'host': 'db.example.local',
+                'port': 5432,
+                'database': 'homeassistant',
+                'username': 'recorder_monitor',
+                'password': 'secret',
+            },
+        }
+
+        enabled_options = dict(base)
+        enabled_options['telemetry_enabled'] = True
+        with tempfile.NamedTemporaryFile(
+            'w',
+            encoding='utf-8',
+            delete=False,
+        ) as handle:
+            json.dump(enabled_options, handle)
+            enabled_path = Path(handle.name)
+        try:
+            self.assertTrue(
+                load_config(enabled_path).telemetry_enabled
+            )
+        finally:
+            enabled_path.unlink(missing_ok=True)
+
+        invalid_options = dict(base)
+        invalid_options['telemetry_enabled'] = 'false'
+        with tempfile.NamedTemporaryFile(
+            'w',
+            encoding='utf-8',
+            delete=False,
+        ) as handle:
+            json.dump(invalid_options, handle)
+            invalid_path = Path(handle.name)
+        try:
+            with self.assertRaises(ValueError):
+                load_config(invalid_path)
+        finally:
+            invalid_path.unlink(missing_ok=True)
 
 
 if __name__ == '__main__':
