@@ -31,17 +31,20 @@ def validate_db_monitoring(
 ) -> None:
     config = context["config"]
 
-    if config.get("slug") != "digitalhouses_db_monitoring":
+    if config.get("slug") != "digitalhouses_recorder_app":
         fail(
-            f"{app.name}: Recorder bridge must retain legacy "
-            "slug digitalhouses_db_monitoring"
+            f"{app.name}: Recorder canonical migration release must use "
+            "slug digitalhouses_recorder_app"
         )
 
     migration_mode = (config.get("environment") or {}).get(
         "DH_SLUG_MIGRATION_MODE"
     )
-    if migration_mode != "export":
-        fail(f"{app.name}: Recorder bridge must use migration export mode")
+    if migration_mode != "import":
+        fail(
+            f"{app.name}: Recorder canonical migration release must use "
+            "migration import mode"
+        )
 
     mappings = config.get("map") or []
     share_rw = any(
@@ -51,7 +54,7 @@ def validate_db_monitoring(
         for item in mappings
     )
     if not share_rw:
-        fail(f"{app.name}: Recorder migration bridge requires writable share mapping")
+        fail(f"{app.name}: Recorder canonical migration requires writable share mapping")
 
     migration_path = app / "rootfs" / "app" / "slug_migration.py"
     require_files(root, [migration_path])
