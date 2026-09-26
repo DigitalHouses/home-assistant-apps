@@ -6,7 +6,7 @@ from typing import Any
 
 from validators.common import fail, require_files
 
-EXPECTED_VERSION = "0.5.31"
+EXPECTED_VERSION = "0.5.32"
 EXPECTED_TOPIC_PREFIX = "DigitalHouses/Global/digitalhouses_pve_agent"
 EXPECTED_DEVICE_NAME = "DH PVE"
 EXPECTED_REFRESH_ENTITY = "button.dh_pve_agent_refresh"
@@ -892,11 +892,16 @@ def validate_digitalhouses_pve_agent(
         if expected not in uninstaller:
             fail(f"DH PVE uninstaller contract changed: {expected}")
 
+    guide_path = app / "digitalhouses_pve_agent.txt"
     _require_text(
-        app / "digitalhouses_pve_agent.txt",
+        guide_path,
         (
             "Установка",
             "Обновление",
+            f"TAG=digitalhouses_pve_agent-v{EXPECTED_VERSION}",
+            'DIGITALHOUSES_SOURCE_REF="$TAG"',
+            "digitalhouses_pve_agent/digitalhouses_pve_agent.txt",
+            "DIGITALHOUSES_INSTALL_MODE=development",
             "systemctl status digitalhouses_pve_agent",
             "/etc/digitalhouses_pve_agent/digitalhouses_pve_agent.conf",
             "--ups-policy-preflight",
@@ -905,6 +910,45 @@ def validate_digitalhouses_pve_agent(
         ),
         "operational guide",
     )
+    guide = guide_path.read_text(encoding="utf-8")
+    for forbidden in (
+        "Обычная установка из main",
+        "<reviewed-ref-or-sha>",
+        "<reviewed-sha>",
+        "digitalhouses_pve_agent/dh_pve_agent.txt",
+    ):
+        if forbidden in guide:
+            fail(f"DH PVE operational guide violates release-tag-only production contract: {forbidden}")
+
+    hardware_guide = (app / "hardware/beelink/README.md").read_text(encoding="utf-8")
+    for required in (
+        f"TAG=digitalhouses_pve_agent-v{EXPECTED_VERSION}",
+        "development/recovery",
+        "REF=<branch-or-full-sha>",
+    ):
+        if required not in hardware_guide:
+            fail(f"DH PVE Beelink guide release contract changed: {required}")
+    for forbidden in (
+        "<reviewed-ref-or-sha>",
+        "normal standalone use on a Beelink/AZW host",
+    ):
+        if forbidden in hardware_guide:
+            fail(f"DH PVE Beelink guide violates release-tag-only production contract: {forbidden}")
+
+    readme = (app / "README.md").read_text(encoding="utf-8")
+    for required in (
+        f"Current source release: `VERSION` is `{EXPECTED_VERSION}`.",
+        f"TAG=digitalhouses_pve_agent-v{EXPECTED_VERSION}",
+        "digitalhouses_pve_agent/digitalhouses_pve_agent.txt",
+    ):
+        if required not in readme:
+            fail(f"DH PVE README release documentation changed: {required}")
+    for forbidden in (
+        "TAG=digitalhouses_pve_agent-v0.5.30",
+        "digitalhouses_pve_agent/dh_pve_agent.txt",
+    ):
+        if forbidden in readme:
+            fail(f"DH PVE README contains stale production documentation: {forbidden}")
 
     uninstaller_lower = uninstaller.lower()
     for forbidden in (

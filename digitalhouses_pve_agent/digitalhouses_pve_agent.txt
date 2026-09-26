@@ -5,7 +5,7 @@ DIGITALHOUSES PVE AGENT — ОПЕРАТИВНАЯ ПАМЯТКА
   /root/digitalhouses_pve_agent.txt
 
 Каноническая версия хранится в репозитории:
-  digitalhouses_pve_agent/dh_pve_agent.txt
+  digitalhouses_pve_agent/digitalhouses_pve_agent.txt
 
 Installer добавляет выше этой памятки фактические version/source/commit
 установленной сборки. При каждом обновлении /root/digitalhouses_pve_agent.txt обновляется.
@@ -13,26 +13,28 @@ Installer добавляет выше этой памятки фактическ
 Установка
 ---------
 
-Обычная установка из main:
+Production установка выполняется только из canonical release tag:
 
-  bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/main/digitalhouses_pve_agent/install.sh")
-
-Установка проверенного ref/commit:
-
-  REF=<reviewed-ref-or-sha>
-  DIGITALHOUSES_SOURCE_REF="$REF" bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$REF/digitalhouses_pve_agent/install.sh")
+  TAG=digitalhouses_pve_agent-v0.5.32
+  DIGITALHOUSES_SOURCE_REF="$TAG" bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$TAG/digitalhouses_pve_agent/install.sh")
 
 При первой установке installer запросит MQTT-параметры.
+
+Branch/main/arbitrary SHA не являются production-путём. Они допустимы только
+явно для development/recovery:
+
+  REF=<branch-or-full-sha>
+  DIGITALHOUSES_INSTALL_MODE=development \
+  DIGITALHOUSES_SOURCE_REF="$REF" bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$REF/digitalhouses_pve_agent/install.sh")
 
 Обновление
 ----------
 
-Обновление выполняется тем же install.sh. Существующие config/state сохраняются.
+Production обновление выполняется тем же install.sh из canonical release tag.
+Существующие config/state сохраняются.
 
-Для проверенного commit:
-
-  REF=<reviewed-sha>
-  DIGITALHOUSES_SOURCE_REF="$REF" bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$REF/digitalhouses_pve_agent/install.sh")
+  TAG=digitalhouses_pve_agent-v0.5.32
+  DIGITALHOUSES_SOURCE_REF="$TAG" bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$TAG/digitalhouses_pve_agent/install.sh")
 
 После обновления проверить:
 

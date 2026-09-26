@@ -8,16 +8,10 @@ APP_STANDARD = ROOT / "docs" / "standards" / "DIGITALHOUSES_APP_STANDARD.md"
 EVENTS_STANDARD = ROOT / "docs" / "standards" / "EVENTS_AND_NOTIFICATIONS_STANDARD.md"
 
 
-def test_0531_version_contract():
-    assert (APP / "VERSION").read_text(encoding="utf-8").strip() == "0.5.31"
-
-    validator = VALIDATOR.read_text(encoding="utf-8")
-    assert 'EXPECTED_VERSION = "0.5.31"' in validator
-
-    readme = (APP / "README.md").read_text(encoding="utf-8")
+def test_0531_release_is_recorded():
     changelog = (APP / "CHANGELOG.md").read_text(encoding="utf-8")
-    assert "Current source release: `VERSION` is `0.5.31`." in readme
     assert "## 0.5.31" in changelog
+    assert "Canonicalize Home Assistant automation aliases" in changelog
 
 
 def test_0531_home_assistant_automation_aliases_are_canonical():
