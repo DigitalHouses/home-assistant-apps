@@ -630,7 +630,7 @@ class ShutdownAwareUpsRuntime(AdaptiveUpsRuntime):
         if self.policy_reload_executor is None:
             self.policy_draft = self.policy_active or self.policy_draft
             self.policy_status = "Apply failed"
-            self.policy_apply_result = "Reload dh_pve_app.service не настроен."
+            self.policy_apply_result = "Reload digitalhouses_pve_agent.service не настроен."
             self._pending_policy_config_event = None
             self._persist()
             return
@@ -650,7 +650,7 @@ class ShutdownAwareUpsRuntime(AdaptiveUpsRuntime):
         try:
             self._save_policy_apply_transaction(transaction)
             self.policy_status = "Applying"
-            self.policy_apply_result = "Ожидается reload dh_pve_app.service."
+            self.policy_apply_result = "Ожидается reload digitalhouses_pve_agent.service."
             self.policy_validation = validation
             self._persist()
             self.policy_reload_executor()
@@ -661,7 +661,7 @@ class ShutdownAwareUpsRuntime(AdaptiveUpsRuntime):
             self.log.error("UPS policy reload request failed: %s", type(exc).__name__)
             self._rollback_from_transaction(
                 transaction,
-                message="Не удалось выполнить reload dh_pve_app.service.",
+                message="Не удалось выполнить reload digitalhouses_pve_agent.service.",
             )
 
     def complete_policy_reload(self) -> bool:
