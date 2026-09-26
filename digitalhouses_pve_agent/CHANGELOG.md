@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.32
+
+- Make the installed operational guide production-release-tag only and move branch/main/SHA deployment under an explicit development/recovery path.
+- Apply the same release-tag-only production contract to the Beelink/AZW hardware-profile documentation.
+- Fix the canonical operational-guide repository path and update the normal production install example to the current release.
+- Add validator and release-contract regression checks so stale `main`/reviewed-SHA production instructions and old guide paths cannot return.
+
 ## 0.5.31
 
 - Canonicalize Home Assistant automation aliases in the base and English/Russian local notification examples so Home Assistant derives `dh_pve_agent_*` entity IDs instead of recreating legacy `dh_pve_*` IDs.
