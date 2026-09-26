@@ -283,3 +283,41 @@ def test_token_is_not_logged_when_transport_exception_mentions_secret(
 
     assert client.tick() is False
     assert client.installation_token not in caplog.text
+
+
+def test_delete_treats_404_as_complete(tmp_path: Path):
+    transport = FakeTransport(status=404)
+    client = TelemetryClient(
+        enabled=False,
+        version="0.7.0",
+        state_store=StateStore(tmp_path / "telemetry.json"),
+        build_info_path=tmp_path / "BUILD_INFO",
+        transport=transport,
+    )
+
+    assert client.delete() is True
+
+
+def test_identity_repair_clears_stale_schedule(tmp_path: Path):
+    path = tmp_path / "telemetry.json"
+    path.write_text(
+        '{"schema_version":1,'
+        '"installation_id":"bad",'
+        '"installation_token":"bad",'
+        '"last_attempt_epoch":999999,'
+        '"last_success_epoch":999999,'
+        '"last_reported_version":"0.7.0"}\n',
+        encoding="utf-8",
+    )
+    transport = FakeTransport()
+    client = TelemetryClient(
+        enabled=True,
+        version="0.7.0",
+        state_store=StateStore(path),
+        build_info_path=_released_build(tmp_path, "0.7.0"),
+        transport=transport,
+        now_epoch=lambda: 1000.0,
+    )
+
+    assert client.tick() is True
+    assert len(transport.calls) == 1
