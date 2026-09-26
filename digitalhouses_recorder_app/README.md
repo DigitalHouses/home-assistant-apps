@@ -14,7 +14,7 @@ Canonical product and Home Assistant App identity:
 digitalhouses_recorder_app
 ```
 
-Canonical MQTT/HA identity introduced by the controlled 0.1.15 bridge:
+Canonical MQTT/HA identity completed by the 0.1.16 cleanup release:
 
 ```text
 MQTT base:    DigitalHouses/Global/digitalhouses_recorder_app
@@ -106,25 +106,39 @@ When storage monitoring is enabled:
 
 ## HA/MQTT identity migration
 
-Release 0.1.15 is a controlled compatibility bridge, not a blind rename.
+Release 0.1.15 provided the controlled compatibility bridge from the released
+legacy contract to the canonical Recorder App identity. Live acceptance
+confirmed the canonical device/entities, local package migration, telemetry,
+and App-data backup/restore before cleanup.
 
-Canonical identity is published as the primary contract. The already released legacy contract is temporarily mirrored so existing installations can move dashboards and automations without interruption:
+Release 0.1.16 completes that migration. Runtime publication and command/event
+handling are canonical-only:
 
 ```text
-legacy MQTT base: DigitalHouses/Global/db_monitoring
-legacy device ID: digitalhouses_db_monitoring
-legacy entities:  dh_db_*
+MQTT base:    DigitalHouses/Global/digitalhouses_recorder_app
+device ID:    digitalhouses_recorder_app
+entity prefix dh_recorder_app
 ```
 
-The bridge preserves the released legacy MQTT unique IDs, command topics and event topic. Migration state is persisted in:
+On the first 0.1.16 MQTT connection, the App removes retained state under the
+former `DigitalHouses/Global/db_monitoring` namespace and publishes an empty
+retained Discovery payload for `digitalhouses_db_monitoring`. Each retained
+delete uses QoS 1 and must be acknowledged by the broker before cleanup is
+marked complete.
+
+Migration state is persisted in:
 
 ```text
 /data/ha_mqtt_identity_migration.json
 ```
 
-A later cleanup release is activated only after live acceptance and local references have moved to canonical entities. That release removes retained legacy state, publishes a Discovery tombstone for the legacy device and marks the migration completed. The completed marker prevents rollback to the bridge release from resurrecting legacy discovery.
+After the marker reaches `phase=completed`, rolling back to bridge release
+0.1.15 does not resurrect the legacy identity. Releases 0.1.14 and older
+predate this completed-marker behavior and are not safe rollback targets after
+cleanup.
 
-Historical slug migration is separate and already complete. The Supervisor slug remains:
+Historical Supervisor slug migration is separate and remains complete. The
+Supervisor slug is:
 
 ```text
 digitalhouses_recorder_app
@@ -268,7 +282,7 @@ Product-persistent state lives under `/data`, including telemetry identity, runt
 
 Production image delivery is external through versioned GHCR releases. Release automation records the immutable image digest and source merge commit, so a historical App release can resolve its historical registry image rather than embedding a duplicate image in App backup data.
 
-Backup/restore persistence still requires live acceptance for each migration release before cleanup is declared complete.
+HA/MQTT cleanup was enabled only after live partial App backup/restore acceptance confirmed persistent telemetry identity under `/data`.
 
 ## Security
 

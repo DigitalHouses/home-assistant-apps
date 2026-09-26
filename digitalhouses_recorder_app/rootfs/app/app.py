@@ -35,10 +35,7 @@ from discovery import (
     LEGACY_DB_STATIC_AVAILABILITY_TOPIC,
     LEGACY_DB_STATUS_AVAILABILITY_TOPIC,
     LEGACY_DISCOVERY_TOPIC,
-    LEGACY_DISK_USAGE_THRESHOLD_COMMAND_TOPIC,
     LEGACY_DISK_USAGE_THRESHOLD_STATE_TOPIC,
-    LEGACY_EVENT_TOPIC,
-    LEGACY_REFRESH_COMMAND_TOPIC,
     LEGACY_STATE_TOPIC,
     LEGACY_STORAGE_AVAILABILITY_TOPIC,
     LEGACY_TOP_ENTITIES_24H_TOPIC,
@@ -51,9 +48,8 @@ from discovery import (
     TOP_ENTITIES_24H_TOPIC,
     TOP_ENTITIES_ALL_TIME_TOPIC,
     build_discovery_payload,
-    build_legacy_discovery_payload,
 )
-from identity_migration import ensure_bridge_state
+from identity_migration import cleanup_required, mark_cleanup_complete
 from storage import StorageCollector
 from telemetry import TelemetryClient, TelemetryRunner
 from runtime_settings import (
@@ -120,9 +116,8 @@ class DatabaseMonitorApp:
         self._db_outage_started_epoch: float | None = None
         self._recorder_writing_observed: bool | None = None
         self._storage_problem_observed: bool | None = None
-        self.legacy_bridge_enabled = ensure_bridge_state(
-            self.app_version
-        )
+        self.legacy_cleanup_pending = cleanup_required()
+        self.legacy_cleanup_in_progress = threading.Event()
         self.telemetry = TelemetryClient(
             enabled=self.config.telemetry_enabled,
             version=self.app_version,
@@ -168,28 +163,12 @@ class DatabaseMonitorApp:
             TELEMETRY_DELETE_COMMAND_TOPIC,
             qos=1,
         )
-        if self.legacy_bridge_enabled:
-            client.subscribe(
-                LEGACY_REFRESH_COMMAND_TOPIC,
-                qos=1,
-            )
-            client.subscribe(
-                LEGACY_DISK_USAGE_THRESHOLD_COMMAND_TOPIC,
-                qos=1,
-            )
-
         self.publish_discovery()
         self.publish_text(
             APP_AVAILABILITY_TOPIC,
             "online",
             retain=True,
         )
-        if self.legacy_bridge_enabled:
-            self.publish_text(
-                LEGACY_APP_AVAILABILITY_TOPIC,
-                "online",
-                retain=True,
-            )
         self._publish_db_availability()
         self._publish_db_status_availability()
         self._publish_db_static_availability()
@@ -197,11 +176,9 @@ class DatabaseMonitorApp:
         self.publish_state()
         self.publish_rankings()
         self.publish_disk_usage_threshold()
+        self._schedule_legacy_cleanup()
         self.log.info(
-            "MQTT connected; canonical discovery published%s",
-            " with legacy bridge"
-            if self.legacy_bridge_enabled
-            else "",
+            "MQTT connected; canonical discovery published"
         )
 
     def publish_discovery(self) -> None:
@@ -213,15 +190,73 @@ class DatabaseMonitorApp:
             ),
             retain=True,
         )
-        if self.legacy_bridge_enabled:
-            self.publish_json(
-                LEGACY_DISCOVERY_TOPIC,
-                build_legacy_discovery_payload(
-                    self.app_version,
-                    include_storage=self.storage.enabled,
-                ),
-                retain=True,
-            )
+    def _schedule_legacy_cleanup(self) -> None:
+        if (
+            not self.legacy_cleanup_pending
+            or self.legacy_cleanup_in_progress.is_set()
+        ):
+            return
+        self.legacy_cleanup_in_progress.set()
+        threading.Thread(
+            target=self._cleanup_legacy_identity,
+            name="dh-recorder-legacy-cleanup",
+            daemon=True,
+        ).start()
+
+    def _cleanup_legacy_identity(self) -> None:
+        retained_topics = (
+            LEGACY_STATE_TOPIC,
+            LEGACY_TOP_ENTITIES_24H_TOPIC,
+            LEGACY_TOP_ENTITIES_ALL_TIME_TOPIC,
+            LEGACY_APP_AVAILABILITY_TOPIC,
+            LEGACY_DB_AVAILABILITY_TOPIC,
+            LEGACY_DB_STATUS_AVAILABILITY_TOPIC,
+            LEGACY_DB_STATIC_AVAILABILITY_TOPIC,
+            LEGACY_STORAGE_AVAILABILITY_TOPIC,
+            LEGACY_DISK_USAGE_THRESHOLD_STATE_TOPIC,
+            LEGACY_DISCOVERY_TOPIC,
+        )
+
+        try:
+            while (
+                self.legacy_cleanup_pending
+                and self.mqtt_connected.is_set()
+                and not self.stop_event.is_set()
+            ):
+                try:
+                    for topic in retained_topics:
+                        info = self.client.publish(
+                            topic,
+                            "",
+                            qos=1,
+                            retain=True,
+                        )
+                        if info.rc != mqtt.MQTT_ERR_SUCCESS:
+                            raise RuntimeError(
+                                "MQTT cleanup publish failed "
+                                f"for {topic}: rc={info.rc}"
+                            )
+                        info.wait_for_publish(timeout=5.0)
+                        if not info.is_published():
+                            raise RuntimeError(
+                                "MQTT cleanup publish was not "
+                                f"acknowledged for {topic}"
+                            )
+
+                    mark_cleanup_complete(self.app_version)
+                    self.legacy_cleanup_pending = False
+                    self.log.info(
+                        "Legacy HA/MQTT identity cleanup completed"
+                    )
+                except Exception as exc:
+                    self.log.warning(
+                        "Legacy HA/MQTT identity cleanup failed; "
+                        "will retry while connected: %s",
+                        exc,
+                    )
+                    self.stop_event.wait(60.0)
+        finally:
+            self.legacy_cleanup_in_progress.clear()
 
     def _on_disconnect(self, client, userdata, return_code) -> None:
         del client, userdata
@@ -241,13 +276,6 @@ class DatabaseMonitorApp:
             DISK_USAGE_THRESHOLD_COMMAND_TOPIC
         }
         refresh_topics = {REFRESH_COMMAND_TOPIC}
-        if self.legacy_bridge_enabled:
-            threshold_topics.add(
-                LEGACY_DISK_USAGE_THRESHOLD_COMMAND_TOPIC
-            )
-            refresh_topics.add(
-                LEGACY_REFRESH_COMMAND_TOPIC
-            )
 
         if message.topic in threshold_topics:
             self._set_disk_usage_threshold(
@@ -333,42 +361,23 @@ class DatabaseMonitorApp:
             payload,
             retain=STATE_RETAIN,
         )
-        if self.legacy_bridge_enabled:
-            self.publish_json(
-                LEGACY_STATE_TOPIC,
-                payload,
-                retain=STATE_RETAIN,
-            )
 
     def publish_rankings(self) -> None:
         topics = {
-            "24h": (
-                TOP_ENTITIES_24H_TOPIC,
-                LEGACY_TOP_ENTITIES_24H_TOPIC,
-            ),
-            "all_time": (
-                TOP_ENTITIES_ALL_TIME_TOPIC,
-                LEGACY_TOP_ENTITIES_ALL_TIME_TOPIC,
-            ),
+            "24h": TOP_ENTITIES_24H_TOPIC,
+            "all_time": TOP_ENTITIES_ALL_TIME_TOPIC,
         }
         with self.state_lock:
             snapshots = dict(self.ranking_state)
         for period, snapshot in snapshots.items():
-            topic_pair = topics.get(period)
-            if topic_pair is None:
+            canonical_topic = topics.get(period)
+            if canonical_topic is None:
                 continue
-            canonical_topic, legacy_topic = topic_pair
             self.publish_json(
                 canonical_topic,
                 snapshot,
                 retain=True,
             )
-            if self.legacy_bridge_enabled:
-                self.publish_json(
-                    legacy_topic,
-                    snapshot,
-                    retain=True,
-                )
 
     def publish_disk_usage_threshold(self) -> None:
         payload = f"{self.disk_usage_threshold_percent:g}"
@@ -377,12 +386,6 @@ class DatabaseMonitorApp:
             payload,
             retain=True,
         )
-        if self.legacy_bridge_enabled:
-            self.publish_text(
-                LEGACY_DISK_USAGE_THRESHOLD_STATE_TOPIC,
-                payload,
-                retain=True,
-            )
 
     def _observed_at(self, epoch: float | None = None) -> str:
         when = time.time() if epoch is None else epoch
@@ -408,12 +411,6 @@ class DatabaseMonitorApp:
             payload,
             retain=False,
         )
-        if self.legacy_bridge_enabled:
-            self.publish_json(
-                LEGACY_EVENT_TOPIC,
-                payload,
-                retain=False,
-            )
 
     def _set_disk_usage_threshold(self, raw_value: str) -> None:
         try:
@@ -547,12 +544,6 @@ class DatabaseMonitorApp:
             value,
             retain=True,
         )
-        if self.legacy_bridge_enabled:
-            self.publish_text(
-                LEGACY_DB_AVAILABILITY_TOPIC,
-                value,
-                retain=True,
-            )
 
     def set_db_available(self, available: bool) -> None:
         self.db_available = available
@@ -569,12 +560,6 @@ class DatabaseMonitorApp:
             value,
             retain=True,
         )
-        if self.legacy_bridge_enabled:
-            self.publish_text(
-                LEGACY_DB_STATUS_AVAILABILITY_TOPIC,
-                value,
-                retain=True,
-            )
 
     def set_db_status_observed(
         self,
@@ -594,12 +579,6 @@ class DatabaseMonitorApp:
             value,
             retain=True,
         )
-        if self.legacy_bridge_enabled:
-            self.publish_text(
-                LEGACY_DB_STATIC_AVAILABILITY_TOPIC,
-                value,
-                retain=True,
-            )
 
     def set_db_static_available(
         self,
@@ -619,12 +598,6 @@ class DatabaseMonitorApp:
             value,
             retain=True,
         )
-        if self.legacy_bridge_enabled:
-            self.publish_text(
-                LEGACY_STORAGE_AVAILABILITY_TOPIC,
-                value,
-                retain=True,
-            )
 
     def set_storage_available(
         self,
@@ -751,18 +724,7 @@ class DatabaseMonitorApp:
                 if period == "24h"
                 else TOP_ENTITIES_ALL_TIME_TOPIC
             )
-            legacy_topic = (
-                LEGACY_TOP_ENTITIES_24H_TOPIC
-                if period == "24h"
-                else LEGACY_TOP_ENTITIES_ALL_TIME_TOPIC
-            )
             self.publish_json(topic, snapshot, retain=True)
-            if self.legacy_bridge_enabled:
-                self.publish_json(
-                    legacy_topic,
-                    snapshot,
-                    retain=True,
-                )
             return True
         except Exception as exc:
             self.log.warning('Top entities %s query failed: %s', period, exc)
@@ -858,12 +820,6 @@ class DatabaseMonitorApp:
                 "offline",
                 retain=True,
             )
-            if self.legacy_bridge_enabled:
-                self.publish_text(
-                    LEGACY_APP_AVAILABILITY_TOPIC,
-                    "offline",
-                    retain=True,
-                )
             self.client.disconnect()
             self.client.loop_stop()
 

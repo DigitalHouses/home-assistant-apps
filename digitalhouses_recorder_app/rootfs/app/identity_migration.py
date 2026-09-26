@@ -111,6 +111,20 @@ def ensure_bridge_state(
     return True
 
 
+
+def cleanup_required(
+    path: Path = STATE_FILE,
+) -> bool:
+    """Return whether retained legacy HA/MQTT identity cleanup is pending."""
+
+    state = _read_state(path)
+    return not (
+        state.get("schema_version") == SCHEMA_VERSION
+        and state.get("phase") == PHASE_COMPLETED
+        and state.get("cleanup_pending") is False
+    )
+
+
 def mark_cleanup_complete(
     release_version: str,
     path: Path = STATE_FILE,

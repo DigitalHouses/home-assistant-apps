@@ -1,4 +1,13 @@
 # Changelog
+## 0.1.16
+- Complete the controlled HA/MQTT identity migration and make runtime publication/subscriptions canonical-only.
+- Stop publishing the legacy `DigitalHouses/Global/db_monitoring` state/event/control mirror and stop subscribing to legacy command topics.
+- On first MQTT connection, delete retained legacy state/availability/ranking/threshold topics and publish an empty retained Discovery payload for `digitalhouses_db_monitoring`.
+- Require QoS 1 broker acknowledgement for every retained cleanup publish before writing `phase=completed` to `/data/ha_mqtt_identity_migration.json`.
+- Keep cleanup idempotent and retry while MQTT remains connected; a failed cleanup does not advance the migration marker.
+- Preserve rollback safety: bridge release 0.1.15 reads the completed marker and does not resurrect legacy identity after cleanup.
+- Record completed live acceptance for canonical HA/MQTT identity, protocol-v1 telemetry, authenticated deletion, and partial App backup/restore of persistent telemetry identity.
+
 ## 0.1.15
 - Start the controlled HA/MQTT identity migration with canonical MQTT base `DigitalHouses/Global/digitalhouses_recorder_app`, device ID `digitalhouses_recorder_app`, canonical `dh_recorder_app_*` entities and canonical unique IDs.
 - Keep the released `DigitalHouses/Global/db_monitoring` / `digitalhouses_db_monitoring` / `dh_db_*` contract alive as a temporary bridge, preserving its released unique IDs and command/event topics so existing dashboards and automations can be migrated without interruption.
