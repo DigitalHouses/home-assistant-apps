@@ -8,7 +8,7 @@ from pathlib import Path
 APP_DIR = Path(__file__).resolve().parents[1] / "rootfs" / "app"
 sys.path.insert(0, str(APP_DIR))
 
-from telemetry import PRODUCT, TelemetryClient
+from state import ContractDataError\nfrom telemetry import PRODUCT, TelemetryClient
 
 
 class FakeTransport:
@@ -41,6 +41,40 @@ class TelemetryTests(unittest.TestCase):
             self.assertEqual(first.installation_id, second.installation_id)
             self.assertEqual(first.installation_token, second.installation_token)
             self.assertGreaterEqual(len(bytes.fromhex(first.installation_token)), 32)
+
+    def test_corrupted_existing_identity_is_not_regenerated(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            state = Path(temp) / "telemetry.json"
+            state.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "installation_id": "broken",
+                        "installation_token": "00" * 32,
+                        "telemetry_enabled": False,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            original = state.read_text(encoding="utf-8")
+            with self.assertRaises(ContractDataError):
+                TelemetryClient(
+                    enabled=False,
+                    version="0.1.19",
+                    state_file=state,
+                )
+            self.assertEqual(state.read_text(encoding="utf-8"), original)
+
+    def test_corrupted_existing_json_fails_loudly(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            state = Path(temp) / "telemetry.json"
+            state.write_text("{broken", encoding="utf-8")
+            with self.assertRaises(ContractDataError):
+                TelemetryClient(
+                    enabled=False,
+                    version="0.1.19",
+                    state_file=state,
+                )
 
     def test_payload_is_exact_protocol_v1(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
