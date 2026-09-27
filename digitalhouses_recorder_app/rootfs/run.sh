@@ -9,6 +9,12 @@ fi
 
 bashio::log.info "Starting DigitalHouses Recorder App ${APP_VERSION}"
 
+export TZ="$(bashio::supervisor.timezone)"
+if [[ -z "${TZ}" ]]; then
+    bashio::log.fatal "Supervisor timezone is unavailable."
+    exit 1
+fi
+
 # Remove the legacy 0.1.0 polling group after upgrade. Internal medium/slow
 # query cadences are no longer exposed in the user configuration.
 OPTIONS_JSON="$(bashio::addon.options)"
