@@ -7,6 +7,10 @@ from typing import Mapping
 
 PCI_BDF_RE = re.compile(r"(?P<pci>(?:[0-9a-fA-F]{4}:)?[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\.[0-7])")
 HOSTPCI_LINE_RE = re.compile(r"^(?P<key>hostpci\d+):\s*(?P<value>.+)$", re.MULTILINE)
+USB_LINE_RE = re.compile(r"^(?P<key>usb\d+):\s*(?P<value>.+)$", re.MULTILINE)
+USB_HOST_RE = re.compile(r"(?:^|,)host=(?P<host>[^,\s]+)")
+USB_ID_RE = re.compile(r"^(?P<vendor>[0-9a-fA-F]{4}):(?P<product>[0-9a-fA-F]{4})$")
+USB_PORT_RE = re.compile(r"^\d+-\d+(?:\.\d+)*$")
 LSPCI_RE = re.compile(
     r"^(?P<pci>[0-9a-fA-F]{4}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\.[0-7])\s+"
     r"(?P<label>.+?)\s+\[(?P<class>[0-9a-fA-F]{4})\]:\s+"
@@ -32,6 +36,31 @@ class PassthroughDevice:
     model: str
     vendor_id: str | None = None
     device_id: str | None = None
+
+
+@dataclass(frozen=True)
+class UsbDevice:
+    sysfs_name: str
+    usb_id: str
+    vendor_id: str
+    product_id: str
+    manufacturer: str | None
+    product: str | None
+    serial: str | None
+    busnum: int | None
+    devnum: int | None
+    physical_port: str
+    database_vendor: str | None = None
+    database_model: str | None = None
+    display_name: str | None = None
+
+
+@dataclass(frozen=True)
+class UsbPassthroughConfig:
+    config_key: str
+    host: str
+    usb_id: str | None
+    physical_port: str | None
 
 
 @dataclass(frozen=True)
@@ -178,6 +207,84 @@ def parse_hostpci(
             )
         )
     return tuple(result)
+
+
+def parse_usb_passthrough(config: str) -> tuple[UsbPassthroughConfig, ...]:
+    result: list[UsbPassthroughConfig] = []
+    for match in USB_LINE_RE.finditer(config):
+        value = match.group("value")
+        host_match = USB_HOST_RE.search(value)
+        if not host_match:
+            continue
+        host = host_match.group("host").strip().lower()
+        if host == "spice":
+            continue
+        usb_id: str | None = None
+        physical_port: str | None = None
+        id_match = USB_ID_RE.fullmatch(host)
+        if id_match:
+            usb_id = f"{id_match.group('vendor').lower()}:{id_match.group('product').lower()}"
+        elif USB_PORT_RE.fullmatch(host):
+            physical_port = host
+        else:
+            continue
+        result.append(
+            UsbPassthroughConfig(
+                config_key=match.group("key"),
+                host=host,
+                usb_id=usb_id,
+                physical_port=physical_port,
+            )
+        )
+    return tuple(result)
+
+
+def parse_udev_properties(text: str) -> dict[str, str]:
+    result: dict[str, str] = {}
+    for raw in text.splitlines():
+        if "=" not in raw:
+            continue
+        key, value = raw.split("=", 1)
+        key = key.strip()
+        if key:
+            result[key] = value.strip()
+    return result
+
+
+def usb_display_name(
+    *,
+    manufacturer: str | None,
+    product: str | None,
+    database_vendor: str | None,
+    database_model: str | None,
+    usb_id: str,
+) -> str:
+    generic_products = {
+        "",
+        "usb",
+        "usb device",
+        "usb serial",
+        "unknown",
+        usb_id.lower(),
+        usb_id.split(":", 1)[1].lower(),
+    }
+    product_text = (product or "").strip()
+    database_model_text = (database_model or "").strip()
+    if product_text.casefold() in generic_products and database_model_text:
+        model = database_model_text
+    else:
+        model = product_text or database_model_text
+
+    vendor = (database_vendor or manufacturer or "").strip()
+    if vendor and model:
+        if model.casefold().startswith(vendor.casefold()):
+            return model
+        return f"{vendor} {model}"
+    if model:
+        return model
+    if vendor:
+        return vendor
+    return usb_id
 
 
 def _unwrap_qga_json(text: str) -> object:
