@@ -1300,86 +1300,220 @@ sections:
         icon: mdi:server-network
       - type: markdown
         content: >-
-          {%- set ns = namespace(vms=[], lxcs=[], lines=[]) -%} {%- for e in
-          states.sensor -%}
+          {%- set ns = namespace(vms=[], lxcs=[], host_usb=[], lines=[]) -%}
+
+          {%- for e in states.sensor -%}
             {%- if state_attr(e.entity_id, 'proxmox_integration') == 'digitalhouses_pve_agent'
                   and state_attr(e.entity_id, 'proxmox_section') == 'guests'
                   and state_attr(e.entity_id, 'proxmox_subject') in ['vm', 'lxc']
                   and state_attr(e.entity_id, 'proxmox_metric') == 'status' -%}
+
               {%- set item = {
-                'id': state_attr(e.entity_id, 'guest_id') or state_attr(e.entity_id, 'proxmox_object_id'),
+                'id': state_attr(e.entity_id, 'guest_id')
+                  or state_attr(e.entity_id, 'proxmox_object_id'),
                 'name': state_attr(e.entity_id, 'proxmox_display_name') or e.name,
                 'state': e.state | lower,
                 'sort': state_attr(e.entity_id, 'proxmox_sort_key') or e.entity_id
               } -%}
+
               {%- if state_attr(e.entity_id, 'proxmox_subject') == 'vm' -%}
                 {%- set ns.vms = ns.vms + [item] -%}
               {%- else -%}
                 {%- set ns.lxcs = ns.lxcs + [item] -%}
               {%- endif -%}
+
+            {%- elif state_attr(e.entity_id, 'proxmox_integration') == 'digitalhouses_pve_agent'
+                  and state_attr(e.entity_id, 'proxmox_section') == 'guests'
+                  and state_attr(e.entity_id, 'proxmox_subject') == 'host_usb'
+                  and state_attr(e.entity_id, 'proxmox_metric') == 'owner' -%}
+
+              {%- set ns.host_usb = ns.host_usb + [{
+                'id': state_attr(e.entity_id, 'usb_id')
+                  or state_attr(e.entity_id, 'physical_port')
+                  or state_attr(e.entity_id, 'proxmox_object_id'),
+                'name': state_attr(e.entity_id, 'proxmox_display_name')
+                  or state_attr(e.entity_id, 'model')
+                  or e.name,
+                'sort': state_attr(e.entity_id, 'proxmox_sort_key') or e.entity_id
+              }] -%}
+
             {%- endif -%}
           {%- endfor -%}
 
-          {%- set vm_running = state_attr('sensor.dh_pve_agent_vms', 'running') |
-          int(0) -%} {%- set vm_total = state_attr('sensor.dh_pve_agent_vms',
-          'total') | int(0) -%} {%- set lxc_running =
-          state_attr('sensor.dh_pve_agent_lxcs', 'running') | int(0) -%} {%- set
-          lxc_total = state_attr('sensor.dh_pve_agent_lxcs', 'total') | int(0) -%}
+          {%- set vm_running =
+            state_attr('sensor.dh_pve_agent_vms', 'running') | int(0)
+          -%}
+
+          {%- set vm_total =
+            state_attr('sensor.dh_pve_agent_vms', 'total') | int(0)
+          -%}
+
+          {%- set lxc_running =
+            state_attr('sensor.dh_pve_agent_lxcs', 'running') | int(0)
+          -%}
+
+          {%- set lxc_total =
+            state_attr('sensor.dh_pve_agent_lxcs', 'total') | int(0)
+          -%}
+
+          {%- set ns.lines = ns.lines + ['PVE'] -%}
+
+          {%- for usb in ns.host_usb | sort(attribute='sort') -%}
+            {%- set ns.lines = ns.lines + [
+              '├─ USB ' ~ usb.id,
+              '│  └─ ' ~ usb.name
+            ] -%}
+          {%- endfor -%}
 
           {%- set ns.lines = ns.lines + [
-            'VM ' ~ vm_running ~ '/' ~ vm_total ~ ' · LXC ' ~ lxc_running ~ '/' ~ lxc_total,
-            '├─ VM'
+            '├─ VM ' ~ vm_running ~ '/' ~ vm_total
           ] -%}
 
           {%- for vm in ns.vms | sort(attribute='sort') -%}
             {%- set vm_last = loop.last -%}
-            {%- set marker = '🟢' if vm.state == 'running'
-                else '🟠' if vm.state == 'paused'
-                else '⚪' if vm.state == 'stopped'
-                else '🔴' -%}
-            {%- set branch = '└─' if vm_last else '├─' -%}
+
+            {%- set marker =
+              '🟢' if vm.state == 'running'
+              else '🟠' if vm.state == 'paused'
+              else '⚪' if vm.state == 'stopped'
+              else '🔴'
+            -%}
+
+            {%- set vm_branch = '└─' if vm_last else '├─' -%}
+
             {%- set ns.lines = ns.lines + [
-              '│  ' ~ branch ~ ' ' ~ marker ~ ' ' ~ vm.id ~ ' · ' ~ vm.name
+              '│  ' ~ vm_branch ~ ' ' ~ marker ~ ' '
+                ~ vm.id ~ ' · ' ~ vm.name
             ] -%}
 
             {%- set pt = namespace(items=[]) -%}
+
             {%- for p in states.sensor -%}
               {%- if state_attr(p.entity_id, 'proxmox_integration') == 'digitalhouses_pve_agent'
                     and state_attr(p.entity_id, 'proxmox_section') == 'guests'
                     and state_attr(p.entity_id, 'proxmox_subject') == 'passthrough'
                     and state_attr(p.entity_id, 'proxmox_metric') == 'owner'
-                    and (state_attr(p.entity_id, 'owner_id') | string) == (vm.id | string) -%}
+                    and (state_attr(p.entity_id, 'owner_id') | string)
+                        == (vm.id | string) -%}
+
+                {%- set connection = state_attr(p.entity_id, 'connection') or '' -%}
+
+                {%- if connection == 'passthrough_usb' -%}
+                  {%- set kind = 'USB' -%}
+                  {%- set technical =
+                    state_attr(p.entity_id, 'usb_id')
+                    or state_attr(p.entity_id, 'usb_host')
+                    or state_attr(p.entity_id, 'physical_port')
+                    or state_attr(p.entity_id, 'proxmox_object_id')
+                  -%}
+                {%- else -%}
+                  {%- set kind = 'PCI' -%}
+                  {%- set technical =
+                    state_attr(p.entity_id, 'pci_address')
+                    or state_attr(p.entity_id, 'proxmox_object_id')
+                  -%}
+                {%- endif -%}
+
                 {%- set pt.items = pt.items + [{
-                  'address': state_attr(p.entity_id, 'pci_address') or state_attr(p.entity_id, 'proxmox_object_id'),
-                  'model': state_attr(p.entity_id, 'model')
+                  'kind': kind,
+                  'id': technical,
+                  'name': state_attr(p.entity_id, 'model')
                     or state_attr(p.entity_id, 'class_name')
                     or state_attr(p.entity_id, 'proxmox_display_name')
                     or p.name,
                   'sort': state_attr(p.entity_id, 'proxmox_sort_key') or p.entity_id
                 }] -%}
+
               {%- endif -%}
             {%- endfor -%}
 
             {%- for p in pt.items | sort(attribute='sort') -%}
-              {%- set child = '└─' if loop.last else '├─' -%}
-              {%- set indent = '│     ' if vm_last else '│  │  ' -%}
-              {%- set ns.lines = ns.lines + [
-                indent ~ child ~ ' PCI ' ~ p.address ~ ' · ' ~ p.model
-              ] -%}
-            {%- endfor -%}
-          {%- endfor -%}
+              {%- set p_last = loop.last -%}
+              {%- set child = '└─' if p_last else '├─' -%}
+              {%- set base = '│     ' if vm_last else '│  │  ' -%}
+              {%- set name_indent = base ~ ('   ' if p_last else '│  ') -%}
 
-          {%- set ns.lines = ns.lines + ['└─ LXC'] -%} {%- for lxc in ns.lxcs |
-          sort(attribute='sort') -%}
-            {%- set marker = '🟢' if lxc.state == 'running'
-                else '🟠' if lxc.state == 'paused'
-                else '⚪' if lxc.state == 'stopped'
-                else '🔴' -%}
-            {%- set branch = '└─' if loop.last else '├─' -%}
+              {%- set ns.lines = ns.lines + [
+                base ~ child ~ ' ' ~ p.kind ~ ' ' ~ p.id,
+                name_indent ~ '└─ ' ~ p.name
+              ] -%}
+            {%- endfor %}
+          {%- endfor %}
+
+          {%- set ns.lines = ns.lines + [
+            '└─ LXC ' ~ lxc_running ~ '/' ~ lxc_total
+          ] -%}
+
+          {%- for lxc in ns.lxcs | sort(attribute='sort') -%}
+            {%- set lxc_last = loop.last -%}
+
+            {%- set marker =
+              '🟢' if lxc.state == 'running'
+              else '🟠' if lxc.state == 'paused'
+              else '⚪' if lxc.state == 'stopped'
+              else '🔴'
+            -%}
+
+            {%- set lxc_branch = '└─' if lxc_last else '├─' -%}
+
             {%- set ns.lines = ns.lines + [
-              '   ' ~ branch ~ ' ' ~ marker ~ ' ' ~ lxc.id ~ ' · ' ~ lxc.name
+              '   ' ~ lxc_branch ~ ' ' ~ marker ~ ' '
+                ~ lxc.id ~ ' · ' ~ lxc.name
             ] -%}
-          {%- endfor -%}
+
+            {%- set pt = namespace(items=[]) -%}
+
+            {%- for p in states.sensor -%}
+              {%- if state_attr(p.entity_id, 'proxmox_integration') == 'digitalhouses_pve_agent'
+                    and state_attr(p.entity_id, 'proxmox_section') == 'guests'
+                    and state_attr(p.entity_id, 'proxmox_subject') == 'passthrough'
+                    and state_attr(p.entity_id, 'proxmox_metric') == 'owner'
+                    and (state_attr(p.entity_id, 'owner_id') | string)
+                        == (lxc.id | string) -%}
+
+                {%- set connection = state_attr(p.entity_id, 'connection') or '' -%}
+
+                {%- if connection == 'passthrough_usb' -%}
+                  {%- set kind = 'USB' -%}
+                  {%- set technical =
+                    state_attr(p.entity_id, 'usb_id')
+                    or state_attr(p.entity_id, 'usb_host')
+                    or state_attr(p.entity_id, 'physical_port')
+                    or state_attr(p.entity_id, 'proxmox_object_id')
+                  -%}
+                {%- else -%}
+                  {%- set kind = 'PCI' -%}
+                  {%- set technical =
+                    state_attr(p.entity_id, 'pci_address')
+                    or state_attr(p.entity_id, 'proxmox_object_id')
+                  -%}
+                {%- endif -%}
+
+                {%- set pt.items = pt.items + [{
+                  'kind': kind,
+                  'id': technical,
+                  'name': state_attr(p.entity_id, 'model')
+                    or state_attr(p.entity_id, 'class_name')
+                    or state_attr(p.entity_id, 'proxmox_display_name')
+                    or p.name,
+                  'sort': state_attr(p.entity_id, 'proxmox_sort_key') or p.entity_id
+                }] -%}
+
+              {%- endif -%}
+            {%- endfor -%}
+
+            {%- for p in pt.items | sort(attribute='sort') -%}
+              {%- set p_last = loop.last -%}
+              {%- set child = '└─' if p_last else '├─' -%}
+              {%- set base = '      ' if lxc_last else '   │  ' -%}
+              {%- set name_indent = base ~ ('   ' if p_last else '│  ') -%}
+
+              {%- set ns.lines = ns.lines + [
+                base ~ child ~ ' ' ~ p.kind ~ ' ' ~ p.id,
+                name_indent ~ '└─ ' ~ p.name
+              ] -%}
+            {%- endfor %}
+          {%- endfor %}
 
           {{ '```text\n' ~ (ns.lines | join('\n')) ~ '\n```' }}
         grid_options:

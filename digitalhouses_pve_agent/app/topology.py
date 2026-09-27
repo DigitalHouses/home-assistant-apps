@@ -13,10 +13,15 @@ from .collectors.gpu import GpuOwner, GuestInfo, parse_lxc_gpu_owners, read_dri_
 from .collectors.guests import (
     GuestRecord,
     PassthroughDevice,
+    UsbDevice,
+    UsbPassthroughConfig,
     is_physical_guest_disk,
     parse_hostpci,
     parse_lspci_catalog,
     parse_qga_lsblk,
+    parse_udev_properties,
+    parse_usb_passthrough,
+    usb_display_name,
 )
 from .pve_cache import read_pve_rrd, read_pve_vmlist
 
@@ -30,6 +35,15 @@ class PciAssignment:
     owner_id: str
     owner_name: str
     device: PassthroughDevice
+
+
+@dataclass(frozen=True)
+class UsbAssignment:
+    owner_kind: str
+    owner_id: str
+    owner_name: str
+    config: UsbPassthroughConfig
+    device: UsbDevice | None
 
 
 @dataclass(frozen=True)
@@ -51,6 +65,8 @@ class TopologySnapshot:
     vms: Mapping[str, GuestRecord]
     lxcs: Mapping[str, GuestRecord]
     pci: Mapping[str, PciAssignment]
+    usb: Mapping[str, UsbAssignment]
+    host_usb: Mapping[str, UsbDevice]
     gpu_owners: Mapping[str, GpuOwner]
     qga: Mapping[str, str]
     storage_sources: tuple[GuestStorageSource, ...]
@@ -103,6 +119,7 @@ class TopologyManager:
         now_epoch: Callable[[], float] = time.time,
         config_reader: ConfigReader | None = None,
         pve_root: Path = Path("/etc/pve"),
+        usb_sys_root: Path = Path("/sys/bus/usb/devices"),
         node_name: str | None = None,
     ) -> None:
         self.runner = runner
@@ -111,11 +128,13 @@ class TopologyManager:
         self.now_epoch = now_epoch
         self.config_reader = config_reader
         self.pve_root = pve_root
+        self.usb_sys_root = usb_sys_root
         self.node_name = node_name or platform.node()
         self._snapshot: TopologySnapshot | None = None
         self._vm_configs: dict[str, str] = {}
         self._lxc_configs: dict[str, str] = {}
         self._pci_catalog: dict[str, dict[str, str]] = {}
+        self._usb_inventory: dict[str, UsbDevice] = {}
         self._gpu_catalog_text = ""
         self._qga_last_probe: dict[str, float] = {}
         self._storage_sources: dict[tuple[str, str], GuestStorageSource] = {}
@@ -229,6 +248,84 @@ class TopologyManager:
             if key[0] == guest.guest_id and key not in seen:
                 self._storage_sources.pop(key, None)
 
+    @staticmethod
+    def _read_optional(path: Path) -> str | None:
+        try:
+            value = path.read_text(encoding="utf-8").strip()
+        except (OSError, UnicodeError):
+            return None
+        return value or None
+
+    def _scan_usb_inventory(self) -> dict[str, UsbDevice]:
+        result: dict[str, UsbDevice] = {}
+        try:
+            entries = sorted(self.usb_sys_root.iterdir(), key=lambda item: item.name)
+        except OSError:
+            return result
+
+        for entry in entries:
+            vendor = self._read_optional(entry / "idVendor")
+            product_id = self._read_optional(entry / "idProduct")
+            if not vendor or not product_id:
+                continue
+            vendor = vendor.lower()
+            product_id = product_id.lower()
+
+            # Linux root hubs are infrastructure, not user-facing attached USB devices.
+            if entry.name.startswith("usb") or (vendor == "1d6b" and product_id in {"0002", "0003"}):
+                continue
+
+            properties: dict[str, str] = {}
+            try:
+                raw = self._run(
+                    ["udevadm", "info", "--query=property", "--path", str(entry)],
+                    timeout=5,
+                    check=False,
+                )
+                properties = parse_udev_properties(raw)
+            except Exception:
+                properties = {}
+
+            usb_id = f"{vendor}:{product_id}"
+            manufacturer = self._read_optional(entry / "manufacturer")
+            product = self._read_optional(entry / "product")
+            serial = self._read_optional(entry / "serial")
+            database_vendor = properties.get("ID_VENDOR_FROM_DATABASE") or None
+            database_model = properties.get("ID_MODEL_FROM_DATABASE") or None
+
+            def _read_int(name: str) -> int | None:
+                raw_value = self._read_optional(entry / name)
+                if raw_value is None:
+                    return None
+                try:
+                    return int(raw_value)
+                except ValueError:
+                    return None
+
+            device = UsbDevice(
+                sysfs_name=entry.name,
+                usb_id=usb_id,
+                vendor_id=vendor,
+                product_id=product_id,
+                manufacturer=manufacturer,
+                product=product,
+                serial=serial,
+                busnum=_read_int("busnum"),
+                devnum=_read_int("devnum"),
+                physical_port=entry.name,
+                database_vendor=database_vendor,
+                database_model=database_model,
+                display_name=usb_display_name(
+                    manufacturer=manufacturer,
+                    product=product,
+                    database_vendor=database_vendor,
+                    database_model=database_model,
+                    usb_id=usb_id,
+                ),
+            )
+            result[entry.name] = device
+        return result
+
     def _build_pci_assignments(
         self,
         vms: Mapping[str, GuestRecord],
@@ -244,6 +341,60 @@ class TopologyManager:
                     device=device,
                 )
         return result
+
+    def _build_usb_assignments(
+        self,
+        vms: Mapping[str, GuestRecord],
+    ) -> dict[str, UsbAssignment]:
+        result: dict[str, UsbAssignment] = {}
+        devices = tuple(self._usb_inventory.values())
+
+        for guest_id, config in self._vm_configs.items():
+            guest = vms.get(
+                guest_id,
+                GuestRecord("vm", guest_id, f"VM {guest_id}", "unknown"),
+            )
+            for item in parse_usb_passthrough(config):
+                matches: list[UsbDevice] = []
+                if item.usb_id:
+                    matches = [device for device in devices if device.usb_id == item.usb_id]
+                elif item.physical_port:
+                    matches = [
+                        device
+                        for device in devices
+                        if device.physical_port == item.physical_port
+                    ]
+                device = sorted(matches, key=lambda value: value.sysfs_name)[0] if matches else None
+                key = f"usb_vm_{guest_id}_{item.config_key}"
+                result[key] = UsbAssignment(
+                    owner_kind="vm",
+                    owner_id=guest_id,
+                    owner_name=guest.name,
+                    config=item,
+                    device=device,
+                )
+        return result
+
+    def _host_usb_devices(
+        self,
+        assignments: Mapping[str, UsbAssignment],
+    ) -> dict[str, UsbDevice]:
+        assigned_ids = {
+            item.config.usb_id
+            for item in assignments.values()
+            if item.config.usb_id
+        }
+        assigned_ports = {
+            item.config.physical_port
+            for item in assignments.values()
+            if item.config.physical_port
+        }
+        return {
+            key: device
+            for key, device in self._usb_inventory.items()
+            if device.usb_id not in assigned_ids
+            and device.physical_port not in assigned_ports
+        }
 
     def _build_gpu_owners(
         self,
@@ -280,6 +431,8 @@ class TopologyManager:
         vms: Mapping[str, GuestRecord],
         lxcs: Mapping[str, GuestRecord],
         pci: Mapping[str, PciAssignment],
+        usb: Mapping[str, UsbAssignment],
+        host_usb: Mapping[str, UsbDevice],
     ) -> str:
         payload = {
             "vms": {key: self._vm_configs.get(key, "") for key in sorted(vms)},
@@ -293,6 +446,24 @@ class TopologyManager:
                 }
                 for key, value in sorted(pci.items())
             },
+            "usb": {
+                key: {
+                    "owner": value.owner_id,
+                    "kind": value.owner_kind,
+                    "key": value.config.config_key,
+                    "host": value.config.host,
+                    "connected": value.device is not None,
+                }
+                for key, value in sorted(usb.items())
+            },
+            "host_usb": {
+                key: {
+                    "usb_id": value.usb_id,
+                    "serial": value.serial,
+                    "port": value.physical_port,
+                }
+                for key, value in sorted(host_usb.items())
+            },
         }
         raw = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
         return hashlib.sha256(raw).hexdigest()[:16]
@@ -304,6 +475,8 @@ class TopologyManager:
         qga: Mapping[str, str],
     ) -> TopologySnapshot:
         pci = self._build_pci_assignments(vms)
+        usb = self._build_usb_assignments(vms)
+        host_usb = self._host_usb_devices(usb)
         gpu_owners = self._build_gpu_owners(vms, lxcs, pci)
         sources = tuple(
             replace(
@@ -317,10 +490,12 @@ class TopologyManager:
             vms=dict(vms),
             lxcs=dict(lxcs),
             pci=pci,
+            usb=usb,
+            host_usb=host_usb,
             gpu_owners=gpu_owners,
             qga=dict(qga),
             storage_sources=sources,
-            revision=self._revision(vms, lxcs, pci),
+            revision=self._revision(vms, lxcs, pci, usb, host_usb),
         )
 
     def full_scan(self) -> TopologySnapshot:
@@ -331,6 +506,7 @@ class TopologyManager:
             pci_text = self._run(["lspci", "-Dnn"], timeout=10)
         self._gpu_catalog_text = pci_text
         self._pci_catalog = parse_lspci_catalog(pci_text)
+        self._usb_inventory = self._scan_usb_inventory()
 
         self._vm_configs = {guest_id: self._read_config("vm", guest_id) for guest_id in vms}
         self._lxc_configs = {guest_id: self._read_config("lxc", guest_id) for guest_id in lxcs}
@@ -442,7 +618,10 @@ class TopologyManager:
         vms: dict[str, object] = {}
         for guest_id, guest in self._snapshot.vms.items():
             config = self._vm_configs.get(guest_id, "")
-            passthrough_count = sum(1 for item in self._snapshot.pci.values() if item.owner_id == guest_id)
+            passthrough_count = (
+                sum(1 for item in self._snapshot.pci.values() if item.owner_id == guest_id)
+                + sum(1 for item in self._snapshot.usb.values() if item.owner_id == guest_id)
+            )
             vms[guest_id] = {
                 "kind": "vm",
                 "guest_id": guest_id,

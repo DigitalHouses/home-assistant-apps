@@ -120,13 +120,19 @@ def build_guest_aware_discovery_payload(
         owner_id = str(raw.get("owner_id") or "unknown")
         owner_name = str(raw.get("owner_name") or "Unknown")
         owner_label = f"{owner_kind.upper()} {owner_id}" if owner_kind in {"vm", "lxc"} else owner_name
+        technical_id = str(
+            raw.get("pci_address")
+            or raw.get("usb_id")
+            or raw.get("usb_host")
+            or assignment_id
+        )
         obj = _path("topology", "assignments", assignment_id)
         key, item = _sensor(
             uid=uid,
             state_topic=topics.state,
             app_topic=topics.availability,
             key=f"passthrough_{slug}",
-            name=f"Passthrough {raw.get('pci_address') or assignment_id}",
+            name=f"Passthrough {technical_id}",
             entity_id=f"sensor.dh_pve_agent_passthrough_{slug}",
             expression=json.dumps(owner_label),
             subsystem="topology",
@@ -134,7 +140,7 @@ def build_guest_aware_discovery_payload(
             subject="passthrough",
             metric="owner",
             object_id=assignment_id,
-            display_name=str(raw.get("model") or raw.get("class_name") or assignment_id),
+            display_name=str(raw.get("model") or raw.get("class_name") or technical_id),
             sort_key=f"720_{index:03d}",
             entity_category="diagnostic",
             icon="mdi:connection",
@@ -148,6 +154,55 @@ def build_guest_aware_discovery_payload(
                 "pci_class": obj + ".pci_class | default(none)",
                 "class_name": obj + ".class_name | default(none)",
                 "model": obj + ".model | default(none)",
+                "usb_host": obj + ".usb_host | default(none)",
+                "usb_id": obj + ".usb_id | default(none)",
+                "physical_port": obj + ".physical_port | default(none)",
+                "manufacturer": obj + ".manufacturer | default(none)",
+                "product": obj + ".product | default(none)",
+                "serial": obj + ".serial | default(none)",
+                "database_vendor": obj + ".database_vendor | default(none)",
+                "database_model": obj + ".database_model | default(none)",
+                "connected": obj + ".connected | default(true)",
+            },
+        )
+        components[key] = item
+
+    host_usb = _mapping(topology.get("host_usb"))
+    for index, (usb_id_raw, raw) in enumerate(sorted(host_usb.items()), start=1):
+        if not isinstance(raw, Mapping):
+            continue
+        usb_object_id = str(usb_id_raw)
+        slug = _slug(usb_object_id)
+        technical_id = str(raw.get("usb_id") or raw.get("physical_port") or usb_object_id)
+        obj = _path("topology", "host_usb", usb_object_id)
+        key, item = _sensor(
+            uid=uid,
+            state_topic=topics.state,
+            app_topic=topics.availability,
+            key=f"host_usb_{slug}",
+            name=f"Host USB {technical_id}",
+            entity_id=f"sensor.dh_pve_agent_host_usb_{slug}",
+            expression=json.dumps("PVE"),
+            subsystem="topology",
+            section="guests",
+            subject="host_usb",
+            metric="owner",
+            object_id=usb_object_id,
+            display_name=str(raw.get("model") or technical_id),
+            sort_key=f"710_{index:03d}",
+            entity_category="diagnostic",
+            icon="mdi:usb",
+            extra_attrs={
+                "connection": obj + ".connection | default('host_usb')",
+                "usb_id": obj + ".usb_id | default(none)",
+                "physical_port": obj + ".physical_port | default(none)",
+                "manufacturer": obj + ".manufacturer | default(none)",
+                "product": obj + ".product | default(none)",
+                "serial": obj + ".serial | default(none)",
+                "database_vendor": obj + ".database_vendor | default(none)",
+                "database_model": obj + ".database_model | default(none)",
+                "busnum": obj + ".busnum | default(none)",
+                "devnum": obj + ".devnum | default(none)",
             },
         )
         components[key] = item

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.36
+
+- Add host USB inventory from Linux sysfs and enrich user-facing USB names with device descriptors plus the udev hardware database while excluding Linux root hubs.
+- Add read-only VM `usbN` passthrough topology for `host=<VID:PID>` and physical-port targets without changing the existing PCI passthrough path.
+- Preserve duplicate configured USB ownership exactly as written in Proxmox configuration, so the same `VID:PID` can be shown under multiple VMs instead of being silently collapsed.
+- Expose unassigned attached USB devices as host-owned topology diagnostics and include USB plus PCI in VM `passthrough_count`.
+- Extend MQTT Discovery and the Russian VM/LXC dashboard tree so host USB appears under PVE and every PCI/USB device is rendered as two branches: technical identifier first, human-readable device name second.
+
+
 ## 0.5.35
 
 - Restore the product ownership boundary: canonical retained MQTT cleanup belongs to `uninstall.sh`, not to install/update.

@@ -120,6 +120,8 @@ def _component_groups(inventory: Mapping[str, object]) -> dict[str, str]:
     topology = _mapping(inventory.get("topology"))
     for assignment_id in _mapping(topology.get("assignments")):
         groups[f"passthrough_{_entity_slug(assignment_id)}"] = "topology"
+    for usb_id in _mapping(topology.get("host_usb")):
+        groups[f"host_usb_{_entity_slug(usb_id)}"] = "topology"
 
     return groups
 
