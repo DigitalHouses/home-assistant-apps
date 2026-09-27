@@ -41,6 +41,27 @@ class DiscoveryTests(unittest.TestCase):
                     entity_id,
                 )
 
+    def test_connectivity_is_unavailable_until_observed(self) -> None:
+        components = build_discovery_payload("0.1.19")["components"]
+        for key in (
+            "google_connectivity",
+            "cloudflare_connectivity",
+            "internet_status",
+            "router_status",
+        ):
+            with self.subTest(component=key):
+                availability = components[key]["availability"]
+                self.assertEqual(len(availability), 2)
+                self.assertEqual(availability[1]["topic"], TOPICS["state"])
+                self.assertIn(
+                    "value_json.connectivity_observed",
+                    availability[1]["value_template"],
+                )
+                self.assertEqual(
+                    components[key]["availability_mode"],
+                    "all",
+                )
+
     def test_optional_component_registry_matches_conditional_entities(self) -> None:
         payload = build_discovery_payload(
             "0.1.0",
