@@ -68,9 +68,9 @@ configuration:
   recorder_stale_seconds:
     name: Recorder stale threshold
     description: Maximum age in seconds of the newest state before DB recorder writing is reported as off.
-  timezone:
-    name: Timezone
-    description: Optional IANA timezone for previous-day boundaries, for example Asia/Almaty. Leave empty to use the container timezone or UTC fallback.
+  top_entities_limit:
+    name: Top entities count
+    description: Number of Recorder entities returned by each ranking. Default 10.
   telemetry_enabled:
     name: Anonymous product telemetry
     description: Send only protocol-v1 installation identity, product and release version to DigitalHouses. Disabled by default.
