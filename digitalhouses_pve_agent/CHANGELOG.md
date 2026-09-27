@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.34
+
+- Add a canonical clean-reinstall preflight for the supported uninstall/reinstall migration path: when saved canonical config exists but the runtime directory is absent, the installer runs the full current-instance MQTT uninstall cleanup before starting the service.
+- This closes the 0.5.32 -> clean reinstall gap where the old uninstaller removed Discovery but left retained state/problems/settings/UPS topics under the canonical instance namespace.
+- If pre-start MQTT cleanup fails, the service is not started, the newly staged runtime is removed, and saved config/state remain intact for a safe retry.
+
+
 ## 0.5.33
 
 - Make Home Assistant entity identity deterministic for the supported one-PVE-Agent-per-HA contract: every final PVE/UPS Discovery component now uses `unique_id = <entity object_id>_id`, while MQTT instance/device ownership continues to use the stable machine/instance ID.
