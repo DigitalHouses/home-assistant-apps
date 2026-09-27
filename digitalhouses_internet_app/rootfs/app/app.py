@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import signal
 import threading
 from datetime import timedelta
@@ -14,7 +15,8 @@ from typing import Any
 import paho.mqtt.client as mqtt
 
 from config import AppConfig, ConfigError, load_config
-from connectivity import ConnectivitySnapshot, sample
+from connectivity import ConnectivityProbeError, ConnectivitySnapshot, sample
+from contracts import validate_machine_event
 from discovery import (
     DISCOVERY_TOPIC,
     DEVICE_ID,
@@ -53,6 +55,7 @@ from speedtest import (
     save_servers_state,
 )
 from state import (
+    ContractDataError,
     OutageTracker,
     RecoveryRuntimeState,
     atomic_write_json,
@@ -71,7 +74,15 @@ from traffic import (
     update_traffic,
 )
 
-APP_VERSION = os.getenv("APP_VERSION", "0.1.1-local")
+APP_VERSION_RE = re.compile(
+    r"^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)"
+    r"(?:-[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?"
+    r"(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$"
+)
+APP_VERSION = os.environ.get("APP_VERSION")
+if not APP_VERSION or APP_VERSION_RE.fullmatch(APP_VERSION) is None:
+    raise RuntimeError("APP_VERSION must be a valid semantic version")
+
 OUTAGES_FILE = Path("/data/runtime/outages.json")
 SPEEDTEST_FILE = Path("/data/runtime/speedtest.json")
 THRESHOLDS_FILE = Path("/data/runtime/thresholds.json")
@@ -101,6 +112,7 @@ class InternetApp:
         self.speedtest_lock = threading.Lock()
 
         self.snapshot = ConnectivitySnapshot(False, False)
+        self.connectivity_observed = False
         self.failure_count = 0
         self.incident_active = False
         self.recovery_state = "idle"
@@ -303,6 +315,7 @@ class InternetApp:
     def _state_payload(self) -> dict[str, Any]:
         with self.lock:
             return {
+                "connectivity_observed": self.connectivity_observed,
                 "internet_up": self.snapshot.internet_up,
                 "google_up": self.snapshot.google_up,
                 "cloudflare_up": self.snapshot.cloudflare_up,
@@ -387,10 +400,11 @@ class InternetApp:
     def _problems_payload(self) -> dict[str, Any]:
         with self.lock:
             problems: list[str] = []
-            if not self.snapshot.internet_up:
-                problems.append("internet_unavailable")
-            if not self.snapshot.router_up:
-                problems.append("router_unavailable")
+            if self.connectivity_observed:
+                if not self.snapshot.internet_up:
+                    problems.append("internet_unavailable")
+                if not self.snapshot.router_up:
+                    problems.append("router_unavailable")
             if self.recovery_state == "error":
                 problems.append("recovery_error")
             if self.performance.get("available"):
@@ -530,6 +544,7 @@ class InternetApp:
             "timestamp": iso(now_local()),
             **data,
         }
+        validate_machine_event(payload)
         self.mqtt.publish(
             TOPICS["event"],
             json.dumps(payload),
@@ -652,10 +667,16 @@ class InternetApp:
             self.log.info("Speedtest operation is already running")
             return
         try:
-            latest = sample(
-                self.config.router_ip,
-                self.config.connectivity.timeout_seconds,
-            )
+            try:
+                latest = sample(
+                    self.config.router_ip,
+                    self.config.connectivity.timeout_seconds,
+                )
+            except ConnectivityProbeError as exc:
+                self.servers["error"] = f"Connectivity probe failed: {exc}"
+                self._publish_servers()
+                self.log.error("Server refresh connectivity probe failed: %s", exc)
+                return
             if not latest.internet_up:
                 self.servers["error"] = "Internet unavailable"
                 self._publish_servers()
@@ -685,12 +706,24 @@ class InternetApp:
             self.log.info("Speedtest is already running")
             return
         try:
-            latest = sample(
-                self.config.router_ip,
-                self.config.connectivity.timeout_seconds,
-            )
+            try:
+                latest = sample(
+                    self.config.router_ip,
+                    self.config.connectivity.timeout_seconds,
+                )
+            except ConnectivityProbeError as exc:
+                message = f"Connectivity probe failed: {exc}"
+                self._set_speedtest_status(
+                    "idle",
+                    error=message,
+                    last_result="error",
+                )
+                self._event("speedtest_failed", reason=message)
+                self.log.error("Speedtest connectivity probe failed: %s", exc)
+                return
             with self.lock:
                 self.snapshot = latest
+                self.connectivity_observed = True
             if not latest.internet_up:
                 self._set_speedtest_status(
                     "idle",
@@ -843,6 +876,7 @@ class InternetApp:
                     )
                     with self.lock:
                         self.snapshot = latest
+                        self.connectivity_observed = True
                     if latest.internet_up:
                         return
 
@@ -886,6 +920,7 @@ class InternetApp:
                     )
                     with self.lock:
                         self.snapshot = latest
+                        self.connectivity_observed = True
                     self._publish_state()
                     if latest.internet_up:
                         return
@@ -948,23 +983,29 @@ class InternetApp:
     def _observe(self, snapshot: ConnectivitySnapshot) -> None:
         with self.lock:
             self.snapshot = snapshot
+            self.connectivity_observed = True
 
         if snapshot.internet_up:
             self.failure_count = 0
             if self.incident_active:
                 record = self.outages.recover()
+                if record is None:
+                    raise ContractDataError(
+                        "active incident has no active persisted outage"
+                    )
                 self.incident_active = False
                 self.recovery_runtime.reset()
                 self.recovery_runtime.save(RECOVERY_STATE_FILE)
                 self.stop_recovery.set()
-                self._event(
-                    "connection_restored",
-                    duration_seconds=(
-                        record["duration_seconds"] if record is not None else 0
-                    ),
-                )
+
+                # Authoritative retained state must be synchronized before
+                # the transient recovery event is emitted.
                 self._set_recovery_state("idle", cycle=0, countdown=0)
                 self._publish_outages()
+                self._event(
+                    "connection_restored",
+                    duration_seconds=record["duration_seconds"],
+                )
             else:
                 self.outages.clear_pending()
             return
@@ -977,17 +1018,24 @@ class InternetApp:
         if self.failure_count < self.config.connectivity.attempts:
             return
 
+        if not self.outages.confirm_pending():
+            raise ContractDataError(
+                "failed to confirm persisted pending outage"
+            )
         self.incident_active = True
         self.stop_recovery.clear()
         self.recovery_runtime.reset()
         self.recovery_runtime.save(RECOVERY_STATE_FILE)
-        self.outages.confirm_pending()
+
+        # Synchronize retained state before the transient incident event.
+        self._publish_state()
+        self._publish_outages()
+        self._publish_problems()
         self._event(
             "connection_lost",
             router_up=snapshot.router_up,
             attempts=self.failure_count,
         )
-        self._publish_outages()
 
         self._ensure_recovery()
 
@@ -1011,12 +1059,23 @@ class InternetApp:
         traffic_thread.start()
         try:
             while not self.stop_app.is_set():
-                snapshot = sample(
-                    self.config.router_ip,
-                    self.config.connectivity.timeout_seconds,
-                )
-                self._observe(snapshot)
-                self._publish_all()
+                try:
+                    snapshot = sample(
+                        self.config.router_ip,
+                        self.config.connectivity.timeout_seconds,
+                    )
+                except ConnectivityProbeError as exc:
+                    with self.lock:
+                        self.connectivity_observed = False
+                    self.log.error(
+                        "Connectivity probe failed; state is unknown: %s",
+                        exc,
+                    )
+                    self._publish_state()
+                    self._publish_problems()
+                else:
+                    self._observe(snapshot)
+                    self._publish_all()
                 self.stop_app.wait(self.config.connectivity.interval_seconds)
         finally:
             self.stop_recovery.set()
@@ -1044,6 +1103,8 @@ def main() -> None:
         app = InternetApp()
     except ConfigError as exc:
         raise SystemExit(f"Configuration error: {exc}") from exc
+    except ContractDataError as exc:
+        raise SystemExit(f"Contract data error: {exc}") from exc
 
     signal.signal(signal.SIGTERM, app.stop)
     signal.signal(signal.SIGINT, app.stop)
