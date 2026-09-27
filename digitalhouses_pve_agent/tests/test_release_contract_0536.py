@@ -58,6 +58,11 @@ def test_0536_usb_topology_contract_is_read_only_and_additive():
     assert 'subject="host_usb"' in discovery
     assert "USB " in dashboard
     assert "set kind = 'PCI'" in dashboard
+    assert "item.get('problem_id'" in dashboard
+    assert "item.get('average')" in dashboard
+    assert "item.get('threshold')" in dashboard
+    assert "item.get('summary'" not in dashboard
+    assert "item.get('details'" not in dashboard
 
 
 def test_0536_installer_still_does_not_clean_canonical_mqtt():
