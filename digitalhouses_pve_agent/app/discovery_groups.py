@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping
 
+from .discovery_identity import canonicalize_component_unique_ids
 from .topics import state_group_topic
 
 _ENTITY_SEGMENT = re.compile(r"[^a-z0-9]+")
@@ -166,7 +167,7 @@ def _diagnostic_components(topics) -> dict[str, dict[str, object]]:
             "platform": "sensor",
             "name": "App version",
             "unique_id": uid("app_version"),
-            "default_entity_id": "sensor.dh_pve_agent_app_version",
+            "default_entity_id": "sensor.dh_pve_agent_version",
             "state_topic": diagnostics,
             "value_template": "{{ value_json.app_version }}",
             "availability": availability,
@@ -178,7 +179,7 @@ def _diagnostic_components(topics) -> dict[str, dict[str, object]]:
             "platform": "sensor",
             "name": "Agent started",
             "unique_id": uid("agent_started"),
-            "default_entity_id": "sensor.dh_pve_agent_agent_started",
+            "default_entity_id": "sensor.dh_pve_agent_started",
             "state_topic": diagnostics,
             "value_template": "{{ value_json.agent_started_at }}",
             "availability": availability,
@@ -207,7 +208,7 @@ def _diagnostic_components(topics) -> dict[str, dict[str, object]]:
             "platform": "sensor",
             "name": "App profile",
             "unique_id": uid("app_profile"),
-            "default_entity_id": "sensor.dh_pve_agent_app_profile",
+            "default_entity_id": "sensor.dh_pve_agent_profile",
             "state_topic": diagnostics,
             "value_template": "{{ value_json.app_profile.state | default('normal') }}",
             "availability": availability,
@@ -496,4 +497,5 @@ def route_pve_discovery_groups(
     components.update(_diagnostic_components(topics))
     components.update(_problem_components(topics, inventory))
     components.update(_problem_summary_components(topics))
+    canonicalize_component_unique_ids(components)
     return payload
