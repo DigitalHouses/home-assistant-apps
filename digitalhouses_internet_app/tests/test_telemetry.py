@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sys
 import tempfile
 import unittest
@@ -8,7 +9,8 @@ from pathlib import Path
 APP_DIR = Path(__file__).resolve().parents[1] / "rootfs" / "app"
 sys.path.insert(0, str(APP_DIR))
 
-from state import ContractDataError\nfrom telemetry import PRODUCT, TelemetryClient
+from state import ContractDataError
+from telemetry import PRODUCT, TelemetryClient
 
 
 class FakeTransport:
