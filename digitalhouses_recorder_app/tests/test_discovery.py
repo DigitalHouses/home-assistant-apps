@@ -97,7 +97,7 @@ class CanonicalDiscoveryTests(unittest.TestCase):
             components["database_type"]["default_entity_id"],
             "sensor.dh_recorder_app_database_type",
         )
-        self.assertEqual(len(components), 23)
+        self.assertEqual(len(components), 25)
         self.assertTrue(STATE_RETAIN)
 
     def test_canonical_unique_ids_do_not_collide(self):
@@ -324,6 +324,49 @@ class StorageAndRankingTests(unittest.TestCase):
                 "default_entity_id"
             ],
             "sensor.dh_db_disk_free",
+        )
+
+    def test_record_ui_sensors_are_scalar_k_values(self):
+        components = build_discovery_payload(
+            "0.1.17",
+            include_storage=True,
+        )["components"]
+        expected = {
+            "db_records_per_hour": "K rec/h",
+            "db_records": "K records",
+            "db_yesterday_records": "K records",
+            "db_current_hour_records": "K records",
+            "db_today_records": "K records",
+        }
+        for key, unit in expected.items():
+            component = components[key]
+            self.assertEqual(
+                component["unit_of_measurement"],
+                unit,
+            )
+            self.assertNotIn(
+                "json_attributes_topic",
+                component,
+            )
+            self.assertNotIn(
+                "json_attributes_template",
+                component,
+            )
+
+        self.assertEqual(
+            components["db_current_hour_records"][
+                "default_entity_id"
+            ],
+            (
+                "sensor.dh_recorder_app_"
+                "db_current_hour_records"
+            ),
+        )
+        self.assertEqual(
+            components["db_today_records"][
+                "default_entity_id"
+            ],
+            "sensor.dh_recorder_app_db_today_records",
         )
 
     def test_ranking_topics_are_not_main_state_topic(self):
