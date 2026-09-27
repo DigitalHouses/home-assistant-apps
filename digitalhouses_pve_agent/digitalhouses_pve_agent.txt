@@ -246,10 +246,6 @@ instance `DigitalHouses/Global/digitalhouses_pve_agent/<instance_id>/#` и
 canonical/known legacy MQTT Discovery. Config/state на диске без --purge
 сохраняются. При ошибке MQTT cleanup локальная установка сохраняется.
 
-Если clean reinstall выполняется после старой версии, которая уже удалена и
-оставила canonical config/state, installer распознаёт состояние "config есть,
-runtime нет" и до запуска нового service повторно выполняет полный MQTT cleanup.
-
 Важно
 -----
 
