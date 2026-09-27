@@ -29,6 +29,7 @@ class Bridge:
         self.setting_states = []
         self.discovery_payload = None
         self.publication_order = []
+        self.cleared_retained_topics = []
 
     def set_discovery_payload(self, payload):
         self.discovery_payload = payload
@@ -53,7 +54,6 @@ class GroupBridge(Bridge):
         super().__init__()
         self.group_states = []
         self.legacy_state_cleanup = 0
-        self.cleared_retained_topics = []
 
     def publish_state_group(self, group, payload):
         self.group_states.append((group, payload))
