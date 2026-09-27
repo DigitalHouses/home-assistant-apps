@@ -241,8 +241,10 @@ Systemd:
 
   /opt/digitalhouses/digitalhouses_pve_agent/uninstall.sh --purge
 
-Uninstall сначала выполняет MQTT cleanup. При ошибке cleanup локальная
-установка сохраняется.
+Uninstall сначала полностью удаляет retained MQTT namespace текущего
+instance `DigitalHouses/Global/digitalhouses_pve_agent/<instance_id>/#` и
+canonical/known legacy MQTT Discovery. Config/state на диске без --purge
+сохраняются. При ошибке MQTT cleanup локальная установка сохраняется.
 
 Важно
 -----
