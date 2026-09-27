@@ -874,11 +874,16 @@ def validate_digitalhouses_pve_agent(
     for forbidden in (
         "digitalhouses-proxmox-mqtt.sh",
         "/etc/cron.d/digitalhouses-proxmox-mqtt",
+    ):
+        if forbidden in installer:
+            fail(f"DH PVE installer must not touch obsolete pre-product migration artifacts: {forbidden}")
+
+    for forbidden in (
         "canonical_clean_reinstall",
         "--uninstall-mqtt-cleanup",
     ):
         if forbidden in installer:
-            fail(f"DH PVE installer must not touch obsolete pre-product migration artifacts: {forbidden}")
+            fail(f"DH PVE canonical MQTT cleanup must remain uninstall-only: {forbidden}")
 
     cleanup_source = (app / "app/uninstall_cleanup.py").read_text(encoding="utf-8")
     for expected in (
