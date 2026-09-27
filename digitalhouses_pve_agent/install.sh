@@ -145,11 +145,6 @@ if [[ "${INSTALL_MODE}" == "production" ]]; then
     fi
 fi
 
-canonical_clean_reinstall=0
-if [[ ! -d "${APP_DIR}" && -f "${CONFIG_FILE}" ]]; then
-    canonical_clean_reinstall=1
-fi
-
 legacy_runtime_detected=0
 legacy_was_active=0
 legacy_was_enabled=0
@@ -340,20 +335,6 @@ if ! PYTHONPATH="${APP_DIR}" "${APP_DIR}/.venv/bin/python" -m app.main \
 fi
 
 "${APP_DIR}/.venv/bin/python" -m compileall -q "${APP_DIR}/app"
-
-if [[ "${canonical_clean_reinstall}" -eq 1 && "${legacy_runtime_detected}" -eq 0 ]]; then
-    echo "Сохранённый canonical config найден без runtime."
-    echo "Очищаю retained MQTT namespace текущего instance перед clean reinstall."
-    if ! PYTHONPATH="${APP_DIR}" "${APP_DIR}/.venv/bin/python" -m app.main \
-        --config "${CONFIG_FILE}" \
-        --state-dir "${STATE_DIR}" \
-        --uninstall-mqtt-cleanup; then
-        echo "Ошибка: retained MQTT canonical namespace не очищен."
-        echo "Service не запускается; config/state сохранены."
-        rm -rf -- "${APP_DIR}"
-        exit 1
-    fi
-fi
 
 VERSION="$(tr -d '[:space:]' <"${APP_DIR}/VERSION")"
 {

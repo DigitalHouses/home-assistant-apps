@@ -6,7 +6,7 @@ from typing import Any
 
 from validators.common import fail, require_files
 
-EXPECTED_VERSION = "0.5.34"
+EXPECTED_VERSION = "0.5.35"
 EXPECTED_TOPIC_PREFIX = "DigitalHouses/Global/digitalhouses_pve_agent"
 EXPECTED_DEVICE_NAME = "DH PVE"
 EXPECTED_REFRESH_ENTITY = "button.dh_pve_agent_refresh"
@@ -860,11 +860,6 @@ def validate_digitalhouses_pve_agent(
         'SOURCE_REF="${DIGITALHOUSES_SOURCE_REF:-}"',
         'EXPECTED_SOURCE_REF="${PRODUCT_ID}-v${SOURCE_VERSION}"',
         "--migration-mqtt-cleanup",
-        'canonical_clean_reinstall=0',
-        'if [[ ! -d "${APP_DIR}" && -f "${CONFIG_FILE}" ]]; then',
-        'if [[ "${canonical_clean_reinstall}" -eq 1 && "${legacy_runtime_detected}" -eq 0 ]]; then',
-        "--uninstall-mqtt-cleanup",
-        'rm -rf -- "${APP_DIR}"',
         'if [[ ! -f "${CONFIG_FILE}" ]]; then',
         "nano /etc/digitalhouses_pve_agent/digitalhouses_pve_agent.conf",
         "--check-config",
@@ -882,6 +877,13 @@ def validate_digitalhouses_pve_agent(
     ):
         if forbidden in installer:
             fail(f"DH PVE installer must not touch obsolete pre-product migration artifacts: {forbidden}")
+
+    for forbidden in (
+        "canonical_clean_reinstall",
+        "--uninstall-mqtt-cleanup",
+    ):
+        if forbidden in installer:
+            fail(f"DH PVE canonical MQTT cleanup must remain uninstall-only: {forbidden}")
 
     cleanup_source = (app / "app/uninstall_cleanup.py").read_text(encoding="utf-8")
     for expected in (
