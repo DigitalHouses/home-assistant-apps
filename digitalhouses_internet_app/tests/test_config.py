@@ -128,6 +128,42 @@ class ConfigTests(unittest.TestCase):
         with self.assertRaises(ConfigError):
             parse_options(raw)
 
+    def test_invalid_explicit_integer_is_rejected_not_clamped(self) -> None:
+        raw = base_options()
+        raw["connectivity_check"]["interval_seconds"] = 1
+        with self.assertRaises(ConfigError):
+            parse_options(raw)
+
+        raw = base_options()
+        raw["connectivity_check"]["attempts"] = "3"
+        with self.assertRaises(ConfigError):
+            parse_options(raw)
+
+    def test_invalid_explicit_boolean_is_rejected(self) -> None:
+        raw = base_options()
+        raw["telemetry_enabled"] = "false"
+        with self.assertRaises(ConfigError):
+            parse_options(raw)
+
+        raw = base_options()
+        raw["speedtest"]["periodic_enabled"] = 1
+        with self.assertRaises(ConfigError):
+            parse_options(raw)
+
+    def test_invalid_log_level_is_rejected(self) -> None:
+        raw = base_options()
+        raw["log_level"] = "verbose"
+        with self.assertRaises(ConfigError):
+            parse_options(raw)
+
+    def test_schema_defaults_remain_available_when_keys_are_absent(self) -> None:
+        raw = base_options()
+        del raw["connectivity_check"]["attempts"]
+        del raw["telemetry_enabled"]
+        config = parse_options(raw)
+        self.assertEqual(config.connectivity.attempts, 3)
+        self.assertFalse(config.telemetry_enabled)
+
     def test_only_smart_and_both_modes_are_supported(self) -> None:
         raw = base_options()
         raw["recovery"]["mode"] = "sequential"
