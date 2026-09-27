@@ -11,6 +11,59 @@ from pathlib import Path
 from typing import Any
 
 
+class ContractDataError(RuntimeError):
+    """Raised when existing persisted runtime state violates its contract."""
+
+
+def load_json_object(path: Path, *, label: str) -> dict[str, Any] | None:
+    """Load one persisted JSON object.
+
+    A genuinely missing file means fresh state. Existing unreadable, malformed,
+    or non-object content is a contract failure and must not be replaced with
+    healthy defaults.
+    """
+    try:
+        text = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        raise ContractDataError(f"unable to read {label} state {path}: {exc}") from exc
+
+    try:
+        raw = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise ContractDataError(f"invalid JSON in {label} state {path}: {exc}") from exc
+    if not isinstance(raw, dict):
+        raise ContractDataError(f"{label} state {path} must be a JSON object")
+    return raw
+
+
+def _parse_datetime(
+    value: Any,
+    *,
+    field: str,
+    timezone,
+    allow_none: bool = True,
+) -> datetime | None:
+    if value is None and allow_none:
+        return None
+    if not isinstance(value, str) or not value:
+        raise ContractDataError(f"{field} must be an ISO-8601 string or null")
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError as exc:
+        raise ContractDataError(f"{field} must be valid ISO-8601") from exc
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone)
+    return parsed
+
+
+def _nonnegative_int(value: Any, *, field: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise ContractDataError(f"{field} must be a non-negative integer")
+    return value
+
+
 def now_local() -> datetime:
     return datetime.now().astimezone()
 
@@ -52,20 +105,19 @@ def atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
 
 
 def load_discovery_components(path: Path) -> set[str]:
-    try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-    except (FileNotFoundError, json.JSONDecodeError, OSError):
+    raw = load_json_object(path, label="discovery")
+    if raw is None:
         return set()
-    if not isinstance(raw, dict):
-        return set()
+    if raw.get("schema_version") != 1:
+        raise ContractDataError("discovery.schema_version must be 1")
     components = raw.get("optional_components")
     if not isinstance(components, list):
-        return set()
-    return {
-        str(item)
-        for item in components
-        if isinstance(item, str) and item
-    }
+        raise ContractDataError("discovery.optional_components must be a list")
+    if any(not isinstance(item, str) or not item for item in components):
+        raise ContractDataError(
+            "discovery.optional_components must contain non-empty strings"
+        )
+    return set(components)
 
 
 def save_discovery_components(path: Path, components: set[str]) -> None:
@@ -86,32 +138,25 @@ class RecoveryRuntimeState:
 
     @classmethod
     def load(cls, path: Path) -> "RecoveryRuntimeState":
-        try:
-            raw = json.loads(path.read_text(encoding="utf-8"))
-        except (FileNotFoundError, json.JSONDecodeError, OSError):
+        raw = load_json_object(path, label="recovery")
+        if raw is None:
             return cls()
-        if not isinstance(raw, dict):
-            return cls()
+        if raw.get("schema_version") != 1:
+            raise ContractDataError("recovery.schema_version must be 1")
 
-        cooldown_until = None
-        raw_deadline = raw.get("cooldown_until")
-        if isinstance(raw_deadline, str) and raw_deadline:
-            try:
-                cooldown_until = datetime.fromisoformat(raw_deadline)
-                if cooldown_until.tzinfo is None:
-                    cooldown_until = cooldown_until.replace(
-                        tzinfo=now_local().tzinfo
-                    )
-            except ValueError:
-                cooldown_until = None
+        stopped = raw.get("stopped")
+        if not isinstance(stopped, bool):
+            raise ContractDataError("recovery.stopped must be boolean")
 
-        try:
-            cycle = max(0, int(raw.get("cycle") or 0))
-        except (TypeError, ValueError):
-            cycle = 0
+        cycle = _nonnegative_int(raw.get("cycle"), field="recovery.cycle")
+        cooldown_until = _parse_datetime(
+            raw.get("cooldown_until"),
+            field="recovery.cooldown_until",
+            timezone=now_local().tzinfo,
+        )
 
         return cls(
-            stopped=bool(raw.get("stopped")),
+            stopped=stopped,
             cycle=cycle,
             cooldown_until=cooldown_until,
         )
@@ -157,44 +202,72 @@ class OutageTracker:
     def load(cls, path: Path) -> "OutageTracker":
         now = now_local()
         current_month = month_key(now)
-        try:
-            raw = json.loads(path.read_text(encoding="utf-8"))
-        except (FileNotFoundError, json.JSONDecodeError, OSError):
-            raw = {}
+        raw = load_json_object(path, label="outages")
+        if raw is None:
+            return cls(path, current_month, [], None)
 
-        if not isinstance(raw, dict):
-            raw = {}
+        month = raw.get("month")
+        if not isinstance(month, str) or not month:
+            raise ContractDataError("outages.month must be a non-empty string")
 
-        active_from = None
-        active_raw = raw.get("active_from")
-        if isinstance(active_raw, str) and active_raw:
-            try:
-                active_from = datetime.fromisoformat(active_raw)
-                if active_from.tzinfo is None:
-                    active_from = active_from.replace(tzinfo=now.tzinfo)
-            except ValueError:
-                active_from = None
+        outages = raw.get("outages")
+        if not isinstance(outages, list):
+            raise ContractDataError("outages.outages must be a list")
+        for index, record in enumerate(outages):
+            if not isinstance(record, dict):
+                raise ContractDataError(
+                    f"outages.outages[{index}] must be an object"
+                )
+            for field in ("from", "to", "duration"):
+                if not isinstance(record.get(field), str) or not record[field]:
+                    raise ContractDataError(
+                        f"outages.outages[{index}].{field} must be a non-empty string"
+                    )
+            _parse_datetime(
+                record["from"],
+                field=f"outages.outages[{index}].from",
+                timezone=now.tzinfo,
+                allow_none=False,
+            )
+            _parse_datetime(
+                record["to"],
+                field=f"outages.outages[{index}].to",
+                timezone=now.tzinfo,
+                allow_none=False,
+            )
+            _nonnegative_int(
+                record.get("duration_seconds"),
+                field=f"outages.outages[{index}].duration_seconds",
+            )
 
-        pending_from = None
-        pending_raw = raw.get("pending_from")
-        if isinstance(pending_raw, str) and pending_raw:
-            try:
-                pending_from = datetime.fromisoformat(pending_raw)
-                if pending_from.tzinfo is None:
-                    pending_from = pending_from.replace(tzinfo=now.tzinfo)
-            except ValueError:
-                pending_from = None
-        try:
-            pending_attempts = max(0, int(raw.get("pending_attempts") or 0))
-        except (TypeError, ValueError):
-            pending_attempts = 0
-        if pending_from is None:
-            pending_attempts = 0
-        if active_from is not None:
-            pending_from = None
-            pending_attempts = 0
+        active_from = _parse_datetime(
+            raw.get("active_from"),
+            field="outages.active_from",
+            timezone=now.tzinfo,
+        )
+        pending_from = _parse_datetime(
+            raw.get("pending_from"),
+            field="outages.pending_from",
+            timezone=now.tzinfo,
+        )
+        pending_attempts_raw = raw.get("pending_attempts", 0)
+        pending_attempts = _nonnegative_int(
+            pending_attempts_raw,
+            field="outages.pending_attempts",
+        )
 
-        if raw.get("month") != current_month:
+        if pending_from is None and pending_attempts != 0:
+            raise ContractDataError(
+                "outages.pending_attempts must be 0 when pending_from is null"
+            )
+        if active_from is not None and (
+            pending_from is not None or pending_attempts != 0
+        ):
+            raise ContractDataError(
+                "outages cannot be active and pending at the same time"
+            )
+
+        if month != current_month:
             month_start = now.replace(
                 day=1,
                 hour=0,
@@ -217,9 +290,6 @@ class OutageTracker:
             tracker.save()
             return tracker
 
-        outages = raw.get("outages")
-        if not isinstance(outages, list):
-            outages = []
         return cls(
             path,
             current_month,
@@ -313,7 +383,7 @@ class OutageTracker:
         when = when or now_local()
         self._roll_month(when)
         rows = list(self.outages)
-        total = sum(int(item.get("duration_seconds", 0)) for item in rows)
+        total = sum(item["duration_seconds"] for item in rows)
         if self.active_from is not None:
             seconds = max(0, int((when - self.active_from).total_seconds()))
             rows.append(
