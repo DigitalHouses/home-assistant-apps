@@ -48,6 +48,38 @@ class GuestAwareProductionCollectors(ResilientProductionCollectors):
                 "model": device.model,
             }
 
+        for assignment_id, assignment in sorted(snapshot.usb.items()):
+            device = assignment.device
+            assignments[assignment_id] = {
+                "connection": "passthrough_usb",
+                "owner_kind": assignment.owner_kind,
+                "owner_id": assignment.owner_id,
+                "owner_name": assignment.owner_name,
+                "config_key": assignment.config.config_key,
+                "usb_host": assignment.config.host,
+                "usb_id": (
+                    device.usb_id
+                    if device is not None
+                    else assignment.config.usb_id
+                ),
+                "physical_port": (
+                    device.physical_port
+                    if device is not None
+                    else assignment.config.physical_port
+                ),
+                "manufacturer": device.manufacturer if device is not None else None,
+                "product": device.product if device is not None else None,
+                "serial": device.serial if device is not None else None,
+                "database_vendor": device.database_vendor if device is not None else None,
+                "database_model": device.database_model if device is not None else None,
+                "model": (
+                    device.display_name
+                    if device is not None
+                    else assignment.config.host
+                ),
+                "connected": device is not None,
+            }
+
         # Preserve the legacy shared /dev/dri -> LXC mapping as topology too.
         # It is not hostpci and therefore does not exist in snapshot.pci.
         for pci, owner in sorted(snapshot.gpu_owners.items()):
@@ -65,7 +97,28 @@ class GuestAwareProductionCollectors(ResilientProductionCollectors):
                 "model": pci,
             }
 
-        data = {"revision": snapshot.revision, "assignments": assignments}
+        host_usb = {
+            f"usb_{device.sysfs_name.replace('-', '_').replace('.', '_')}": {
+                "connection": "host_usb",
+                "usb_id": device.usb_id,
+                "physical_port": device.physical_port,
+                "manufacturer": device.manufacturer,
+                "product": device.product,
+                "serial": device.serial,
+                "database_vendor": device.database_vendor,
+                "database_model": device.database_model,
+                "model": device.display_name,
+                "busnum": device.busnum,
+                "devnum": device.devnum,
+            }
+            for device in snapshot.host_usb.values()
+        }
+
+        data = {
+            "revision": snapshot.revision,
+            "assignments": assignments,
+            "host_usb": host_usb,
+        }
         return CollectorSample(
             data=data,
             metrics={"revision": _metric(snapshot.revision, "discrete")},
