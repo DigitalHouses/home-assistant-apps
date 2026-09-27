@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from state import atomic_write_json, iso, now_local
+from state import ContractDataError, atomic_write_json, iso, load_json_object, now_local
 
 RECENT_RESULTS_LIMIT = 20
 
@@ -16,28 +16,41 @@ def default_recent_results() -> dict[str, Any]:
 
 
 def load_recent_results(path: Path) -> dict[str, Any]:
-    try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-    except (FileNotFoundError, json.JSONDecodeError, OSError):
+    raw = load_json_object(path, label="recent results")
+    if raw is None:
         return default_recent_results()
-    if not isinstance(raw, dict):
-        return default_recent_results()
+
     rows = raw.get("results")
     if not isinstance(rows, list):
-        rows = []
-    rows = [row for row in rows if isinstance(row, dict)]
+        raise ContractDataError("recent_results.results must be a list")
+    validated: list[dict[str, Any]] = []
+    for index, row in enumerate(rows):
+        if not isinstance(row, dict):
+            raise ContractDataError(
+                f"recent_results.results[{index}] must be an object"
+            )
+        tested_at = row.get("tested_at")
+        if not isinstance(tested_at, str) or not tested_at:
+            raise ContractDataError(
+                f"recent_results.results[{index}].tested_at must be a non-empty string"
+            )
+        validated.append(dict(row))
+
     updated_at = raw.get("updated_at")
-    if not isinstance(updated_at, str):
-        updated_at = None
-        if rows:
-            latest_tested_at = rows[0].get("tested_at")
-            if isinstance(latest_tested_at, str):
-                updated_at = latest_tested_at
+    if updated_at is not None and (
+        not isinstance(updated_at, str) or not updated_at
+    ):
+        raise ContractDataError(
+            "recent_results.updated_at must be a non-empty string or null"
+        )
+    if updated_at is None and validated:
+        # Explicit migration for history written before updated_at was persisted.
+        updated_at = validated[0]["tested_at"]
+
     return {
-        "results": rows[:RECENT_RESULTS_LIMIT],
+        "results": validated[:RECENT_RESULTS_LIMIT],
         "updated_at": updated_at,
     }
-
 
 def save_recent_results(path: Path, store: dict[str, Any]) -> None:
     atomic_write_json(path, store)
@@ -72,7 +85,7 @@ def append_recent_result(
     store: dict[str, Any],
     record: dict[str, Any],
 ) -> dict[str, Any]:
-    rows = list(store.get("results") or [])
+    rows = list(store["results"])
     result_url = record.get("result_url")
     tested_at = record.get("tested_at")
     rows = [
@@ -91,10 +104,10 @@ def append_recent_result(
 
 
 def recent_results_payload(store: dict[str, Any]) -> dict[str, Any]:
-    rows = list(store.get("results") or [])[:RECENT_RESULTS_LIMIT]
+    rows = list(store["results"])[:RECENT_RESULTS_LIMIT]
     return {
         "count": len(rows),
         "limit": RECENT_RESULTS_LIMIT,
-        "updated_at": store.get("updated_at"),
+        "updated_at": store["updated_at"],
         "results": rows,
     }
