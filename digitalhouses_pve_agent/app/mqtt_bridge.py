@@ -426,9 +426,14 @@ class MqttBridge(MqttEvents):
         )
 
     def clear_retained_topics(self, topics: tuple[str, ...]) -> bool:
+        """Delete only retained topics owned by this PVE Agent instance."""
+        base = self.topics.base.rstrip("/")
         ok = True
         for topic in sorted(set(topics)):
             if not topic:
+                continue
+            if topic != base and not topic.startswith(f"{base}/"):
+                self.log.warning("Refusing retained cleanup outside owned namespace: %s", topic)
                 continue
             published = self._publish(topic, "", retain=True)
             ok = published and ok
