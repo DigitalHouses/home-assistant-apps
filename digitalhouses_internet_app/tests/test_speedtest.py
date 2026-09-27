@@ -9,7 +9,8 @@ from pathlib import Path
 APP_DIR = Path(__file__).resolve().parents[1] / "rootfs" / "app"
 sys.path.insert(0, str(APP_DIR))
 
-from speedtest import load_last_result, parse_result, parse_server_list\nfrom state import ContractDataError
+from speedtest import load_last_result, parse_result, parse_server_list
+from state import ContractDataError
 
 
 class SpeedtestTests(unittest.TestCase):
