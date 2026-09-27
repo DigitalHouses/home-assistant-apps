@@ -97,6 +97,7 @@ def build_topics(mqtt: MqttConfig, identity: HostIdentity) -> Topics:
         legacy_discoveries=(
             f"{discovery_prefix}/device/{legacy_device_id}/config",
             f"{discovery_prefix}/device/{older_legacy_device_id}/config",
+            f"{discovery_prefix}/device/digitalhouses_proxmox_{identity.instance_id}/config",
         ),
     )
 

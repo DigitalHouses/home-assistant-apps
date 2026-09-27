@@ -200,6 +200,32 @@ def test_state_group_publication_is_retained_qos1_json():
     assert json.loads(item[1]) == {"usage": 42.5}
 
 
+def test_retained_topic_cleanup_is_empty_retained_qos1_and_deduplicated():
+    bridge, client, topics, _, _, _ = _bridge()
+    bridge.connected.set()
+
+    first = f"{topics.base}/state/storage/ghost"
+    second = f"{topics.base}/problems/storage_ghost_percent_used/state"
+
+    assert bridge.clear_retained_topics((second, first, second)) is True
+    assert client.published == [
+        (second if second < first else first, "", 1, True),
+        (first if second < first else second, "", 1, True),
+    ]
+
+
+def test_retained_topic_cleanup_refuses_topics_outside_instance_namespace():
+    bridge, client, topics, _, _, _ = _bridge()
+    bridge.connected.set()
+
+    owned = f"{topics.base}/state/cpu"
+    foreign = "DigitalHouses/Global/digitalhouses_pve_agent/other/state/cpu"
+
+    assert bridge.clear_retained_topics((foreign, owned)) is True
+    assert (owned, "", 1, True) in client.published
+    assert not any(item[0] == foreign for item in client.published)
+
+
 def test_ups_state_group_publication_is_retained_qos1_json():
     bridge, client, _, _, config, identity = _bridge()
     bridge.connected.set()

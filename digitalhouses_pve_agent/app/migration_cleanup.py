@@ -21,6 +21,7 @@ def _legacy_discovery_topics(
     return (
         f"{prefix}/device/dh_app_pve_{instance}/config",
         f"{prefix}/device/dh_pve_{instance}/config",
+        f"{prefix}/device/digitalhouses_proxmox_{instance}/config",
         f"{prefix}/device/dh_app_pve_ups_{instance}/config",
         f"{prefix}/device/dh_pve_ups_{instance}/config",
         f"{prefix}/device/dh_ups_{instance}/config",

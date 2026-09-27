@@ -88,11 +88,12 @@ def test_canonical_pve_device_identity_and_discovery_topic():
     assert topics.device_id == "dh_pve_agent_node_a"
     assert topics.discovery == "homeassistant/device/dh_pve_agent_node_a/config"
     assert payload["device"]["identifiers"] == ["dh_pve_agent_node_a"]
-    assert all(
-        component["unique_id"].startswith("dh_pve_agent_node_a_")
-        for component in payload["components"].values()
-        if "unique_id" in component
-    )
+    for component in payload["components"].values():
+        if "unique_id" not in component:
+            continue
+        entity_id = component["default_entity_id"]
+        object_id = entity_id.split(".", 1)[1]
+        assert component["unique_id"] == f"{object_id}_id"
 
 
 def test_canonical_pve_telemetry_ids_and_percent_used_naming():
@@ -103,6 +104,12 @@ def test_canonical_pve_telemetry_ids_and_percent_used_naming():
     assert c["cpu_frequency"]["default_entity_id"] == "sensor.dh_pve_agent_cpu_frequency"
     assert c["memory_usage"]["default_entity_id"] == "sensor.dh_pve_agent_memory_usage"
     assert c["swap_usage"]["default_entity_id"] == "sensor.dh_pve_agent_swap_usage"
+    assert c["app_version"]["default_entity_id"] == "sensor.dh_pve_agent_version"
+    assert c["app_profile"]["default_entity_id"] == "sensor.dh_pve_agent_profile"
+    assert c["agent_started"]["default_entity_id"] == "sensor.dh_pve_agent_started"
+    assert c["app_version"]["unique_id"] == "dh_pve_agent_version_id"
+    assert c["app_profile"]["unique_id"] == "dh_pve_agent_profile_id"
+    assert c["agent_started"]["unique_id"] == "dh_pve_agent_started_id"
 
     storage = c["storage_local_lvm_percent_used"]
     assert storage["default_entity_id"] == "sensor.dh_pve_agent_storage_local_lvm_percent_used"

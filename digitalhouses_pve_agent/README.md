@@ -10,7 +10,7 @@ Native Linux agent for **Proxmox VE 8.x** that publishes host, CPU, memory, stor
 
 The canonical product and runtime identity is **DigitalHouses PVE Agent** / `digitalhouses_pve_agent`: systemd service `digitalhouses_pve_agent.service`, filesystem roots under `/opt/digitalhouses/digitalhouses_pve_agent`, `/etc/digitalhouses_pve_agent` and `/var/lib/digitalhouses_pve_agent`, MQTT base `DigitalHouses/Global/digitalhouses_pve_agent/<instance>`, and Home Assistant entity prefix `dh_pve_agent_*`. Version 0.5.30 performs the corrected one-time controlled migration from the former `dh_pve_app` / `dh_app_pve_*` runtime, including deterministic cleanup of retained data owned by the legacy MQTT instance namespace.
 
-Current source release: `VERSION` is `0.5.32`.
+Current source release: `VERSION` is `0.5.33`.
 
 ## Home Assistant dashboard
 
@@ -89,6 +89,8 @@ Canonical Home Assistant entity prefixes are:
 - PVE: `dh_pve_agent_*`;
 - UPS: `dh_pve_agent_ups_*`.
 
+The supported Home Assistant topology is one PVE Agent per Home Assistant instance. Every MQTT Discovery component therefore uses a deterministic Home Assistant identity: `unique_id = <entity object_id>_id`. The stable PVE machine/instance ID remains in the MQTT namespace and MQTT device identity for broker-level isolation and cleanup, but is not part of the Home Assistant entity `unique_id`. Multiple PVE Agents may share one MQTT broker when they are consumed by separate Home Assistant instances.
+
 Legacy MQTT Discovery identities are removed through retained tombstones during migration so old and canonical entities do not coexist indefinitely.
 
 ## Problems and diagnostics
@@ -97,9 +99,9 @@ Problem calculation is App-owned. Home Assistant does not scan `states.sensor`, 
 
 Current problems are exposed as `binary_sensor` entities with `device_class: problem`. Aggregate problem state and compact presentation are separate retained sensors.
 
-The installed App release is exposed as diagnostic entity `sensor.dh_pve_agent_app_version`. Its state comes from the same `VERSION` value used by MQTT Device Discovery `device.sw_version` and `origin.sw_version`. The standard PVE dashboard shows it in the host summary as `App <version>` and hides that segment if the entity is unavailable or unknown.
+The installed App release is exposed as diagnostic entity `sensor.dh_pve_agent_version`. Its state comes from the same `VERSION` value used by MQTT Device Discovery `device.sw_version` and `origin.sw_version`. The standard PVE dashboard shows it in the host summary as `App <version>` and hides that segment if the entity is unavailable or unknown.
 
-The current agent process start is exposed as `sensor.dh_pve_agent_agent_started` with Home Assistant `device_class: timestamp`. Its value is fixed for the lifetime of the running agent process and changes only after an agent restart, allowing Home Assistant to present the age natively instead of publishing a continuously changing uptime duration.
+The current agent process start is exposed as `sensor.dh_pve_agent_started` with Home Assistant `device_class: timestamp`. Its value is fixed for the lifetime of the running agent process and changes only after an agent restart, allowing Home Assistant to present the age natively instead of publishing a continuously changing uptime duration.
 
 Native MQTT Event entities are used for diagnostic transitions:
 
@@ -197,7 +199,7 @@ PYTHONPATH=/opt/digitalhouses/digitalhouses_pve_agent \
 
 Recorder configuration is an explicit whitelist. Continuous history is kept only for useful metrics such as CPU, RAM/Swap, fan speed %, storage usage, disk temperature/wear, GPU telemetry and selected UPS telemetry/status.
 
-Rich presentation, debug diagnostics, the static `sensor.dh_pve_agent_app_version` and `sensor.dh_pve_agent_agent_started` metadata entities, and MQTT Event entities are intentionally not Recorder history.
+Rich presentation, debug diagnostics, the static `sensor.dh_pve_agent_version` and `sensor.dh_pve_agent_started` metadata entities, and MQTT Event entities are intentionally not Recorder history.
 
 ## UPS / NUT ownership
 
@@ -306,7 +308,7 @@ Preflight checks the selected UPS, NUT services/PRIMARY path, native Low Battery
 Production install/update is release-tag only. Version 0.5.30 is the corrected controlled runtime-identity migration release: an existing `dh_pve_app.service` installation is stopped, its config/state are copied to canonical paths, retained messages owned by the exact legacy `<topic_prefix>/<instance>/#` namespace plus known legacy Discovery topics are tombstoned, the old default MQTT base is rewritten to the canonical base, the new service is validated and started, and only then are the legacy service/paths removed. Non-retained traffic, foreign instances and the canonical MQTT namespace are not targeted. If MQTT cleanup fails, canonical startup is aborted and the previous legacy service is restored; if canonical startup itself fails, the installer also restores the previous legacy service.
 
 ```bash
-TAG=digitalhouses_pve_agent-v0.5.32
+TAG=digitalhouses_pve_agent-v0.5.33
 DIGITALHOUSES_SOURCE_REF="$TAG" \
   bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$TAG/digitalhouses_pve_agent/install.sh")
 ```

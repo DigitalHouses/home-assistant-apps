@@ -39,7 +39,7 @@ sections:
             {% set pve_raw = state_attr(entity, 'proxmox_version') or '' %}
             {% set ip = state_attr(entity, 'primary_ip') or '' %}
             {% set app_version =
-              states('sensor.dh_pve_agent_app_version')
+              states('sensor.dh_pve_agent_version')
             %}
 
             {% set lines = namespace(items=[]) %}
@@ -380,7 +380,7 @@ sections:
             tap_action:
               action: more-info
           - type: custom:mushroom-entity-card
-            entity: sensor.dh_pve_agent_agent_started
+            entity: sensor.dh_pve_agent_started
             name: Агент запущен
             icon: mdi:clock-start
             tap_action:
