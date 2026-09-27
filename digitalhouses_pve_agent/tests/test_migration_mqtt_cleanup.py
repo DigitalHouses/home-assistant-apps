@@ -150,6 +150,7 @@ def test_migration_cleanup_removes_only_retained_topics_owned_by_legacy_instance
     expected_discovery_topics = {
         "homeassistant/device/dh_app_pve_node_a/config",
         "homeassistant/device/dh_pve_node_a/config",
+        "homeassistant/device/digitalhouses_proxmox_node_a/config",
         "homeassistant/device/dh_app_pve_ups_node_a/config",
         "homeassistant/device/dh_pve_ups_node_a/config",
         "homeassistant/device/dh_ups_node_a/config",
