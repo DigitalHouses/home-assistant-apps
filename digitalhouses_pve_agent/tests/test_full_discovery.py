@@ -111,6 +111,38 @@ def _inventory():
                     "class_name": "VGA compatible controller",
                     "model": "Intel Alder Lake-N UHD Graphics",
                 },
+                "usb_vm_110_usb0": {
+                    "connection": "passthrough_usb",
+                    "owner_kind": "vm",
+                    "owner_id": "110",
+                    "owner_name": "haos",
+                    "config_key": "usb0",
+                    "usb_host": "1a86:7523",
+                    "usb_id": "1a86:7523",
+                    "physical_port": "1-3",
+                    "manufacturer": None,
+                    "product": "USB Serial",
+                    "serial": None,
+                    "database_vendor": "QinHeng Electronics",
+                    "database_model": "CH340 serial converter",
+                    "model": "QinHeng Electronics CH340 serial converter",
+                    "connected": True,
+                },
+            },
+            "host_usb": {
+                "usb_1_10": {
+                    "connection": "host_usb",
+                    "usb_id": "8087:0026",
+                    "physical_port": "1-10",
+                    "manufacturer": None,
+                    "product": None,
+                    "serial": None,
+                    "database_vendor": "Intel Corp.",
+                    "database_model": "AX201 Bluetooth",
+                    "model": "Intel Corp. AX201 Bluetooth",
+                    "busnum": 1,
+                    "devnum": 4,
+                }
             },
         },
     }
@@ -191,3 +223,28 @@ def test_passthrough_discovery_exposes_owner_and_pci_metadata_read_only():
     for key in ("pci_address", "pci_class", "class_name", "model", "config_key", "owner_id", "owner_name"):
         assert key in attrs
     assert "command_topic" not in item
+
+
+
+def test_guest_discovery_exposes_usb_passthrough_and_host_usb():
+    c = build_guest_aware_discovery_payload(
+        _config(), _identity(), version="0.5.35", inventory=_inventory()
+    )["components"]
+
+    passthrough = c["passthrough_usb_vm_110_usb0"]
+    assert passthrough["default_entity_id"] == (
+        "sensor.dh_pve_agent_passthrough_usb_vm_110_usb0"
+    )
+    assert '"connection"' in passthrough["json_attributes_template"]
+    assert '"usb_id"' in passthrough["json_attributes_template"]
+    assert '"physical_port"' in passthrough["json_attributes_template"]
+    assert '"connected"' in passthrough["json_attributes_template"]
+    assert "QinHeng Electronics CH340 serial converter" in passthrough[
+        "json_attributes_template"
+    ]
+
+    host_usb = c["host_usb_usb_1_10"]
+    assert host_usb["default_entity_id"] == "sensor.dh_pve_agent_host_usb_usb_1_10"
+    assert host_usb["value_template"] == '{{ "PVE" }}'
+    assert '"usb_id"' in host_usb["json_attributes_template"]
+    assert '"physical_port"' in host_usb["json_attributes_template"]
