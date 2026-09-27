@@ -68,9 +68,9 @@ configuration:
   recorder_stale_seconds:
     name: Порог остановки Recorder
     description: Максимальный возраст последней записи в секундах, после которого DB recorder writing переключается в off.
-  timezone:
-    name: Часовой пояс
-    description: Необязательный IANA timezone для границ предыдущего дня, например Asia/Almaty. Если пусто, используется timezone контейнера или UTC.
+  top_entities_limit:
+    name: Количество Top entities
+    description: Количество сущностей Recorder в каждом рейтинге. По умолчанию 10.
   telemetry_enabled:
     name: Анонимная телеметрия продукта
     description: Отправлять в DigitalHouses только идентификатор установки, продукт и версию релиза по protocol v1. По умолчанию выключено.
