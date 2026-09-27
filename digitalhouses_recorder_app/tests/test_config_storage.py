@@ -31,6 +31,7 @@ class StorageConfigTests(unittest.TestCase):
             'MYSQL_SERVICE_PORT': '3306',
             'MYSQL_SERVICE_USER': 'service',
             'MYSQL_SERVICE_PASSWORD': 'secret',
+            'TZ': 'Asia/Almaty',
         }
         try:
             with patch.dict(os.environ, env, clear=False):
@@ -49,7 +50,12 @@ class StorageConfigTests(unittest.TestCase):
             'storage': {'source': 'automatic'},
         })
         try:
-            cfg = load_config(path)
+            with patch.dict(
+                os.environ,
+                {'TZ': 'Asia/Almaty'},
+                clear=False,
+            ):
+                cfg = load_config(path)
             self.assertEqual(cfg.storage.source, 'disabled')
         finally:
             path.unlink(missing_ok=True)
@@ -67,7 +73,12 @@ class StorageConfigTests(unittest.TestCase):
             },
         })
         try:
-            cfg = load_config(path)
+            with patch.dict(
+                os.environ,
+                {'TZ': 'Asia/Almaty'},
+                clear=False,
+            ):
+                cfg = load_config(path)
             self.assertEqual(cfg.storage.source, 'ssh')
             self.assertEqual(cfg.storage.host, '192.168.11.31')
             self.assertEqual(cfg.storage.username, 'hauser')
