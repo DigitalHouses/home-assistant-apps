@@ -22,6 +22,10 @@ if bashio::jq.exists "${OPTIONS_JSON}" '.poll'; then
     bashio::log.info "Removing legacy 'poll' configuration option."
     bashio::addon.option 'poll'
 fi
+if bashio::jq.exists "${OPTIONS_JSON}" '.timezone'; then
+    bashio::log.info "Removing legacy 'timezone' configuration option."
+    bashio::addon.option 'timezone'
+fi
 
 export MQTT_HOST="$(bashio::services mqtt host)"
 export MQTT_PORT="$(bashio::services mqtt port)"
