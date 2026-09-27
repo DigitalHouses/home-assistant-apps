@@ -307,6 +307,8 @@ Preflight checks the selected UPS, NUT services/PRIMARY path, native Low Battery
 
 Production install/update is release-tag only. Version 0.5.30 is the corrected controlled runtime-identity migration release: an existing `dh_pve_app.service` installation is stopped, its config/state are copied to canonical paths, retained messages owned by the exact legacy `<topic_prefix>/<instance>/#` namespace plus known legacy Discovery topics are tombstoned, the old default MQTT base is rewritten to the canonical base, the new service is validated and started, and only then are the legacy service/paths removed. Non-retained traffic, foreign instances and the canonical MQTT namespace are not targeted. If MQTT cleanup fails, canonical startup is aborted and the previous legacy service is restored; if canonical startup itself fails, the installer also restores the previous legacy service.
 
+For the canonical runtime, install/update/reinstall never clears the current canonical MQTT namespace. Canonical retained MQTT cleanup is owned exclusively by the supported uninstaller.
+
 ```bash
 TAG=digitalhouses_pve_agent-v0.5.35
 DIGITALHOUSES_SOURCE_REF="$TAG" \
@@ -355,7 +357,7 @@ The installer deploys an executable supported uninstaller at:
 /opt/digitalhouses/digitalhouses_pve_agent/uninstall.sh
 ```
 
-A normal uninstall records the service state and stops the service gracefully, then runs MQTT cleanup while the installed Python environment and source are still present. Only after cleanup succeeds does it disable/remove the unit and App runtime. The cleanup publishes canonical PVE and UPS availability as retained `offline`, then removes canonical and legacy PVE/UPS MQTT Discovery through retained tombstones. It preserves:
+A normal uninstall records the service state and stops the service gracefully, then runs MQTT cleanup while the installed Python environment and source are still present. Only after cleanup succeeds does it disable/remove the unit and App runtime. The cleanup removes every retained topic owned by the exact canonical `DigitalHouses/Global/digitalhouses_pve_agent/<instance_id>/#` namespace and tombstones canonical plus known legacy PVE/UPS MQTT Discovery identities. It preserves:
 
 - `/etc/digitalhouses_pve_agent/`;
 - `/var/lib/digitalhouses_pve_agent/`.
