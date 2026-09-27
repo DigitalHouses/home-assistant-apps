@@ -36,6 +36,9 @@ def load_app_module():
     rankings.build_top_entities_snapshot = lambda *args, **kwargs: {}
 
     metrics = types.ModuleType('metrics')
+    metrics.current_period_starts_epoch = (
+        lambda *args, **kwargs: (0, 0)
+    )
     metrics.db_depth_days = lambda *args, **kwargs: None
     metrics.iso_from_epoch = lambda value: (
         '2026-09-26T07:00:00Z' if value is not None else None

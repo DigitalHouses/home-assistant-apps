@@ -10,7 +10,12 @@ class DatabaseAdapter(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def medium_metrics(self, hour_cutoff: float) -> dict[str, Any]:
+    def medium_metrics(
+        self,
+        hour_cutoff: float,
+        current_hour_start: float,
+        today_start: float,
+    ) -> dict[str, Any]:
         raise NotImplementedError
 
     @abstractmethod
@@ -22,7 +27,11 @@ class DatabaseAdapter(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def top_entities(self, since_ts: float | None) -> list[tuple[str, int]]:
+    def top_entities(
+        self,
+        since_ts: float | None,
+        limit: int,
+    ) -> list[tuple[str, int]]:
         raise NotImplementedError
 
     @abstractmethod

@@ -1,4 +1,12 @@
 # Changelog
+## 0.1.17
+- Add scalar-only `sensor.dh_recorder_app_db_current_hour_records` and `sensor.dh_recorder_app_db_today_records`, refreshed with the five-minute medium metrics group.
+- Normalize Recorder row-count presentation to thousands: `K records` for counts and `K rec/h` for the rolling-hour rate, including yesterday and ranking values.
+- Keep graph-oriented numeric sensors free of dynamic JSON attributes so Recorder history stores only their changing scalar state.
+- Add `top_entities_limit` App configuration with default 10 and supported range 1..100; apply the limit in both PostgreSQL/MariaDB ranking SQL and the published ranking snapshot.
+- Rename the ranking list attribute from fixed `top_10` to `top_entities` and publish the active `limit`.
+- Remove the user `timezone` option; source local timezone from Home Assistant Supervisor through `bashio::supervisor.timezone` with no silent UTC fallback.
+
 ## 0.1.16
 - Complete the controlled HA/MQTT identity migration and make runtime publication/subscriptions canonical-only.
 - Stop publishing the legacy `DigitalHouses/Global/db_monitoring` state/event/control mirror and stop subscribing to legacy command topics.

@@ -49,11 +49,10 @@ Recorder App publishes one canonical MQTT Discovery device with:
 
 - database connectivity and Recorder write activity;
 - earliest/latest retained state and history depth;
-- hourly and total Recorder state-row volume;
+- rolling-hour, current-hour, current-day, previous-day and total Recorder state-row volume in thousands;
 - database size, type, database name/user and server version;
-- previous-day Recorder writes;
 - optional filesystem free, used, total and used percentage;
-- Top 10 Recorder entities for the last 24 hours and all retained history;
+- configurable Top-N Recorder entities for the last 24 hours and all retained history;
 - on-demand full refresh and last successful refresh timestamp;
 - App-owned disk-usage threshold;
 - machine events for DB/Recorder/storage transitions;
@@ -79,11 +78,13 @@ Core diagnostics and controls include:
 | `sensor.dh_recorder_app_db_start` | Earliest retained Recorder state |
 | `sensor.dh_recorder_app_db_last` | Latest Recorder state |
 | `sensor.dh_recorder_app_db_depth` | Retained history depth |
-| `sensor.dh_recorder_app_db_records_per_hour` | Recorder state rows written during the last hour |
-| `sensor.dh_recorder_app_db_records` | Total Recorder state rows, in thousands |
+| `sensor.dh_recorder_app_db_records_per_hour` | Recorder writes during the rolling last 60 minutes, K rec/h |
+| `sensor.dh_recorder_app_db_current_hour_records` | Recorder writes since the start of the current local hour, K records |
+| `sensor.dh_recorder_app_db_today_records` | Recorder writes since local midnight, K records |
+| `sensor.dh_recorder_app_db_records` | Total Recorder state rows, K records |
 | `sensor.dh_recorder_app_db_size` | Database size |
 | `sensor.dh_recorder_app_db_version` | Database server/version |
-| `sensor.dh_recorder_app_db_yesterday_records` | Previous local-day Recorder writes |
+| `sensor.dh_recorder_app_db_yesterday_records` | Previous local-day Recorder writes, K records |
 | `sensor.dh_recorder_app_db_name` | Database name reported by the server |
 | `sensor.dh_recorder_app_db_user` | Database user reported by the server |
 | `binary_sensor.dh_recorder_app_db_connected` | Database connectivity after the first real observation |
@@ -221,7 +222,7 @@ Recorder health uses `publish_interval_minutes`, default one minute. Expensive w
 | Metric group | Interval |
 | --- | ---: |
 | Recorder health/latest state | Configured publish interval |
-| Database size/hourly activity | 5 minutes |
+| Database size/current record counters | 5 minutes |
 | Storage metrics | 5 minutes |
 | History depth/total records | 1 hour |
 | Top entities — 24h | 1 hour |
@@ -242,6 +243,7 @@ postgresql:
   database: homeassistant
   username: recorder_monitor
   password: "CHANGE_ME"
+top_entities_limit: 10
 telemetry_enabled: false
 ```
 
@@ -251,6 +253,7 @@ Supervisor MariaDB:
 database_type: mariadb
 mariadb:
   connection: supervisor
+top_entities_limit: 10
 telemetry_enabled: false
 ```
 

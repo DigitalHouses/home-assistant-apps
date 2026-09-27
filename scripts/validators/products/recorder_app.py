@@ -136,6 +136,28 @@ def validate_db_monitoring(
             f"{app.name}: telemetry_enabled schema must be bool"
         )
 
+    if "timezone" in options or "timezone" in schema:
+        fail(
+            f"{app.name}: timezone must come from Supervisor, "
+            "not App options"
+        )
+    if options.get("top_entities_limit") != 10:
+        fail(
+            f"{app.name}: top_entities_limit must default to 10"
+        )
+    if schema.get("top_entities_limit") != "int(1,100)":
+        fail(
+            f"{app.name}: top_entities_limit schema must be int(1,100)"
+        )
+
+    run_script = (
+        app / "rootfs" / "run.sh"
+    ).read_text(encoding="utf-8")
+    if "bashio::supervisor.timezone" not in run_script:
+        fail(
+            f"{app.name}: runtime timezone must come from Supervisor"
+        )
+
     if "DH_SLUG_MIGRATION_MODE" in (
         config.get("environment") or {}
     ):
@@ -232,6 +254,12 @@ def validate_db_monitoring(
         "db_start": (
             "sensor.dh_recorder_app_db_start"
         ),
+        "db_current_hour_records": (
+            "sensor.dh_recorder_app_db_current_hour_records"
+        ),
+        "db_today_records": (
+            "sensor.dh_recorder_app_db_today_records"
+        ),
         "db_connected": (
             "binary_sensor.dh_recorder_app_db_connected"
         ),
@@ -268,6 +296,46 @@ def validate_db_monitoring(
                 "Recorder App unexpected default_entity_id "
                 f"for {key}: "
                 f"{component.get('default_entity_id')!r}"
+            )
+
+    record_units = {
+        "db_records_per_hour": "K rec/h",
+        "db_records": "K records",
+        "db_yesterday_records": "K records",
+        "db_current_hour_records": "K records",
+        "db_today_records": "K records",
+        "db_top_entities_24h": "K records",
+        "db_top_entities_all_time": "K records",
+    }
+    for key, expected_unit in record_units.items():
+        component = components.get(key) or {}
+        if component.get("unit_of_measurement") != expected_unit:
+            fail(
+                f"Recorder App {key} must use {expected_unit}"
+            )
+
+    graph_sensor_keys = {
+        "db_depth",
+        "db_records_per_hour",
+        "db_records",
+        "db_size",
+        "db_yesterday_records",
+        "db_last_age",
+        "db_current_hour_records",
+        "db_today_records",
+        "db_disk_free",
+        "db_disk_used",
+        "db_disk_total",
+        "db_disk_used_percentage",
+    }
+    for key in graph_sensor_keys:
+        component = components.get(key) or {}
+        if (
+            "json_attributes_topic" in component
+            or "json_attributes_template" in component
+        ):
+            fail(
+                f"Recorder App graph sensor {key} must remain scalar-only"
             )
 
     if components["app_version"].get(

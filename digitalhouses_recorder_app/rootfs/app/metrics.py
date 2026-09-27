@@ -32,6 +32,25 @@ def db_depth_days(start_ts: float | int | None, now_ts: float, timezone_name: st
     return max(0, (now_date - start_date).days)
 
 
+def current_period_starts_epoch(
+    now_ts: float,
+    timezone_name: str,
+) -> tuple[float, float]:
+    tz = ZoneInfo(timezone_name)
+    now_local = datetime.fromtimestamp(float(now_ts), tz)
+    hour_start = now_local.replace(
+        minute=0,
+        second=0,
+        microsecond=0,
+    )
+    today_start = datetime.combine(
+        now_local.date(),
+        datetime.min.time(),
+        tzinfo=tz,
+    )
+    return hour_start.timestamp(), today_start.timestamp()
+
+
 def yesterday_bounds_epoch(now_ts: float, timezone_name: str) -> tuple[float, float]:
     tz = ZoneInfo(timezone_name)
     now_local = datetime.fromtimestamp(float(now_ts), tz)

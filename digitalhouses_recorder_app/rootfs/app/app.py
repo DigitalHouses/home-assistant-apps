@@ -63,6 +63,7 @@ from rankings import (
     build_top_entities_snapshot,
 )
 from metrics import (
+    current_period_starts_epoch,
     db_depth_days,
     iso_from_epoch,
     last_age_seconds,
@@ -661,12 +662,32 @@ class DatabaseMonitorApp:
 
     def collect_medium(self) -> bool:
         now = time.time()
+        current_hour_start, today_start = current_period_starts_epoch(
+            now,
+            self.config.timezone,
+        )
         try:
-            raw = self.adapter.medium_metrics(now - 3600)
+            raw = self.adapter.medium_metrics(
+                now - 3600,
+                current_hour_start,
+                today_start,
+            )
             size = raw.get('db_size_bytes')
             self.update_state({
-                'db_records_per_hour': records_k(raw.get('records_last_hour')),
-                'db_size': round(float(size) / 1024 / 1024, 1) if size is not None else None,
+                'db_records_per_hour': records_k(
+                    raw.get('records_last_hour')
+                ),
+                'db_current_hour_records': records_k(
+                    raw.get('records_current_hour')
+                ),
+                'db_today_records': records_k(
+                    raw.get('records_today')
+                ),
+                'db_size': (
+                    round(float(size) / 1024 / 1024, 1)
+                    if size is not None
+                    else None
+                ),
             })
             return True
         except Exception as exc:
@@ -683,7 +704,9 @@ class DatabaseMonitorApp:
                 'db_start': iso_from_epoch(start_ts),
                 'db_depth': db_depth_days(start_ts, now, self.config.timezone),
                 'db_records': records_k(raw.get('records_total')),
-                'db_yesterday_records': raw.get('records_yesterday'),
+                'db_yesterday_records': records_k(
+                    raw.get('records_yesterday')
+                ),
             })
             return True
         except Exception as exc:
@@ -713,9 +736,16 @@ class DatabaseMonitorApp:
         generated_ts = time.time()
         since_ts = generated_ts - 86400 if period == '24h' else None
         try:
-            rows = self.adapter.top_entities(since_ts)
+            rows = self.adapter.top_entities(
+                since_ts,
+                self.config.top_entities_limit,
+            )
             snapshot = build_top_entities_snapshot(
-                rows, period, generated_ts, self.config.timezone
+                rows,
+                period,
+                generated_ts,
+                self.config.timezone,
+                self.config.top_entities_limit,
             )
             with self.state_lock:
                 self.ranking_state[period] = snapshot
@@ -775,6 +805,10 @@ class DatabaseMonitorApp:
             db.database,
         )
         self.log.info('Timezone: %s', self.config.timezone)
+        self.log.info(
+            'Top entities limit: %s',
+            self.config.top_entities_limit,
+        )
         self.log.info('Publish interval: %s minute(s)', self.config.publish_interval_minutes)
         self.log.info('Storage monitoring source: %s', self.config.storage.source)
         host = os.environ['MQTT_HOST']

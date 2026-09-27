@@ -42,6 +42,9 @@ def load_app_module():
     rankings.build_top_entities_snapshot = lambda *args, **kwargs: {}
 
     metrics = types.ModuleType('metrics')
+    metrics.current_period_starts_epoch = (
+        lambda *args, **kwargs: (0, 0)
+    )
     metrics.db_depth_days = lambda *args, **kwargs: None
     metrics.iso_from_epoch = lambda *args, **kwargs: None
     metrics.last_age_seconds = lambda *args, **kwargs: None
@@ -227,6 +230,7 @@ class ManualRefreshTests(unittest.TestCase):
             ),
             publish_interval_minutes=1,
             timezone='Asia/Almaty',
+            top_entities_limit=10,
             storage=types.SimpleNamespace(source='disabled'),
         )
         app.client = Mock()

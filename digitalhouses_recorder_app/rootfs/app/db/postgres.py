@@ -50,11 +50,24 @@ class PostgresAdapter(DatabaseAdapter):
         del hour_cutoff
         return {'db_last_ts': self._one('SELECT MAX(last_updated_ts) FROM states')}
 
-    def medium_metrics(self, hour_cutoff: float) -> dict[str, Any]:
+    def medium_metrics(
+        self,
+        hour_cutoff: float,
+        current_hour_start: float,
+        today_start: float,
+    ) -> dict[str, Any]:
         return {
             'records_last_hour': self._one(
                 'SELECT COUNT(*) FROM states WHERE last_updated_ts >= %s',
                 (hour_cutoff,),
+            ),
+            'records_current_hour': self._one(
+                'SELECT COUNT(*) FROM states WHERE last_updated_ts >= %s',
+                (current_hour_start,),
+            ),
+            'records_today': self._one(
+                'SELECT COUNT(*) FROM states WHERE last_updated_ts >= %s',
+                (today_start,),
             ),
             'db_size_bytes': self._one('SELECT pg_database_size(current_database())'),
         }
@@ -76,12 +89,16 @@ class PostgresAdapter(DatabaseAdapter):
             'db_version': self._one("SELECT substring(version() from 1 for 80)"),
         }
 
-    def top_entities(self, since_ts: float | None) -> list[tuple[str, int]]:
+    def top_entities(
+        self,
+        since_ts: float | None,
+        limit: int,
+    ) -> list[tuple[str, int]]:
         where = ''
-        params: tuple[Any, ...] = ()
+        params: tuple[Any, ...] = (limit,)
         if since_ts is not None:
             where = ' WHERE s.last_updated_ts >= %s'
-            params = (since_ts,)
+            params = (since_ts, limit)
         rows = self._rows(
             'SELECT sm.entity_id, COUNT(*) AS records '
             'FROM states AS s '
@@ -89,7 +106,7 @@ class PostgresAdapter(DatabaseAdapter):
             + where +
             ' GROUP BY sm.entity_id '
             'ORDER BY records DESC, sm.entity_id ASC '
-            'LIMIT 10',
+            'LIMIT %s',
             params,
         )
         return [(str(entity_id), int(records)) for entity_id, records in rows]
