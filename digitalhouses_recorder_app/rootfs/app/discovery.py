@@ -448,7 +448,7 @@ def _build_components(
             "{{ value_json.db_records_per_hour }}",
             diagnostic=True,
             state_class="measurement",
-            unit_of_measurement="k rec/h",
+            unit_of_measurement="K rec/h",
             icon="mdi:database-arrow-down",
         ),
         "db_records": _component(
@@ -459,7 +459,7 @@ def _build_components(
             "{{ value_json.db_records }}",
             diagnostic=True,
             state_class="measurement",
-            unit_of_measurement="k records",
+            unit_of_measurement="K records",
             icon="mdi:database-marker",
         ),
         "db_size": _component(
@@ -494,7 +494,8 @@ def _build_components(
             "{{ value_json.db_yesterday_records }}",
             diagnostic=True,
             state_class="measurement",
-            unit_of_measurement="records",
+            unit_of_measurement="K records",
+            suggested_display_precision=1,
             icon="mdi:calendar-arrow-left",
         ),
         "db_name": _component(
@@ -566,7 +567,8 @@ def _build_components(
             diagnostic=True,
             state_topic=identity.top_entities_24h_topic,
             state_class="measurement",
-            unit_of_measurement="records",
+            unit_of_measurement="K records",
+            suggested_display_precision=1,
             icon="mdi:format-list-numbered",
             json_attributes_topic=(
                 identity.top_entities_24h_topic
@@ -586,7 +588,8 @@ def _build_components(
                 identity.top_entities_all_time_topic
             ),
             state_class="measurement",
-            unit_of_measurement="records",
+            unit_of_measurement="K records",
+            suggested_display_precision=1,
             icon="mdi:format-list-numbered",
             json_attributes_topic=(
                 identity.top_entities_all_time_topic
@@ -630,6 +633,30 @@ def _build_components(
     if include_canonical_runtime:
         components.update(
             {
+                "db_current_hour_records": _component(
+                    identity,
+                    "sensor",
+                    "DB inserted current hour",
+                    "db_current_hour_records",
+                    "{{ value_json.db_current_hour_records }}",
+                    diagnostic=True,
+                    state_class="measurement",
+                    unit_of_measurement="K records",
+                    suggested_display_precision=1,
+                    icon="mdi:clock-outline",
+                ),
+                "db_today_records": _component(
+                    identity,
+                    "sensor",
+                    "DB inserted today",
+                    "db_today_records",
+                    "{{ value_json.db_today_records }}",
+                    diagnostic=True,
+                    state_class="measurement",
+                    unit_of_measurement="K records",
+                    suggested_display_precision=1,
+                    icon="mdi:calendar-today",
+                ),
                 "database_type": _component(
                     identity,
                     "sensor",
