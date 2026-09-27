@@ -6,7 +6,7 @@ from typing import Any
 
 from validators.common import fail, require_files
 
-EXPECTED_VERSION = "0.5.32"
+EXPECTED_VERSION = "0.5.33"
 EXPECTED_TOPIC_PREFIX = "DigitalHouses/Global/digitalhouses_pve_agent"
 EXPECTED_DEVICE_NAME = "DH PVE"
 EXPECTED_REFRESH_ENTITY = "button.dh_pve_agent_refresh"
@@ -33,6 +33,7 @@ def validate_digitalhouses_pve_agent(
             app / "app/config.py",
             app / "app/topics.py",
             app / "app/discovery.py",
+            app / "app/discovery_identity.py",
             app / "app/discovery_metrics.py",
             app / "app/discovery_guest.py",
             app / "app/discovery_groups.py",
@@ -105,6 +106,7 @@ def validate_digitalhouses_pve_agent(
             'device_id = f"dh_pve_agent_ups_{identity.instance_id}"',
             'legacy_device_id = f"dh_app_pve_{identity.instance_id}"',
             'older_legacy_device_id = f"dh_pve_{identity.instance_id}"',
+            'digitalhouses_proxmox_{identity.instance_id}',
             'legacy_device_id = f"dh_app_pve_ups_{identity.instance_id}"',
             'older_legacy_device_id = f"dh_pve_ups_{identity.instance_id}"',
             'oldest_legacy_device_id = f"dh_ups_{identity.instance_id}"',
@@ -166,10 +168,12 @@ def validate_digitalhouses_pve_agent(
             '"fan_control_restored"',
             '"disk_smart_failed"',
             '"disk_smart_restored"',
-            '"default_entity_id": "sensor.dh_pve_agent_app_version"',
+            '"default_entity_id": "sensor.dh_pve_agent_version"',
             "{{ value_json.app_version }}",
-            '"default_entity_id": "sensor.dh_pve_agent_agent_started"',
+            '"default_entity_id": "sensor.dh_pve_agent_profile"',
+            '"default_entity_id": "sensor.dh_pve_agent_started"',
             "{{ value_json.agent_started_at }}",
+            "canonicalize_component_unique_ids(components)",
             '"default_entity_id": "binary_sensor.dh_pve_agent_ups_configured"',
             "value_json.ups_configured",
         ),
@@ -303,6 +307,7 @@ def validate_digitalhouses_pve_agent(
             "def publish_ups_problem_aggregate(self, count: int) -> bool:",
             "def publish_ups_problem_presentation(self, payload: dict[str, object]) -> bool:",
             "def publish_ups_diagnostic_event(self, payload: dict[str, object]) -> bool:",
+            "def clear_retained_topics(self, topics: tuple[str, ...]) -> bool:",
             "for topic in self.ups_topics.legacy_discoveries:",
         ),
         "UPS MQTT transport",
@@ -716,6 +721,7 @@ def validate_digitalhouses_pve_agent(
             'if not bool(getattr(message, "retain", False)):',
             'topic != base and not topic.startswith(f"{base}/")',
             "dh_app_pve_",
+            "digitalhouses_proxmox_",
             "dh_pve_ups_",
             "dh_ups_",
         ),
@@ -790,6 +796,9 @@ def validate_digitalhouses_pve_agent(
             '"setting_disk_poll_interval_seconds": "number"',
             "def _split_component_tombstones(",
             "def _component_cleanup_payload(",
+            "_DISCOVERY_MANIFEST_KEY",
+            "def _removed_component_cleanup(",
+            "clear_retained_topics",
             "pending_tombstones",
         ),
         "retired poll control and dynamic component cleanup",
@@ -863,8 +872,12 @@ def validate_digitalhouses_pve_agent(
     for expected in (
         "build_topics(config.mqtt, identity)",
         "build_ups_topics(config.mqtt, identity)",
-        '(topics.availability, "offline")',
-        '(ups_topics.availability, "offline")',
+        'topic_filter = f"{topics.base}/#"',
+        'client.subscribe(topic_filter, qos=1)',
+        'if not bool(getattr(message, "retain", False)):',
+        "machine_topics = sorted(retained_topics)",
+        '(topics.availability, "")',
+        '(ups_topics.availability, "")',
         '(topics.discovery, "")',
         '(ups_topics.discovery, "")',
         "topics.legacy_discoveries",
@@ -967,8 +980,8 @@ def validate_digitalhouses_pve_agent(
             fail(f"DH PVE uninstaller crosses ownership/safety boundary: {forbidden}")
 
     for diagnostic_metadata_entity in (
-        "sensor.dh_pve_agent_app_version",
-        "sensor.dh_pve_agent_agent_started",
+        "sensor.dh_pve_agent_version",
+        "sensor.dh_pve_agent_started",
     ):
         if diagnostic_metadata_entity in package:
             fail(
@@ -976,9 +989,13 @@ def validate_digitalhouses_pve_agent(
                 f"{diagnostic_metadata_entity}"
             )
 
-    app_source = "\n".join(
-        path.read_text(encoding="utf-8")
-        for path in sorted((app / "app").glob("*.py"))
-    )
-    if "digitalhouses_proxmox_" in app_source:
-        fail("DH PVE source must not reuse legacy Home Assistant entity IDs")
+    for source_path in sorted((app / "app").glob("*.py")):
+        source = source_path.read_text(encoding="utf-8")
+        if (
+            "digitalhouses_proxmox_" in source
+            and source_path.name not in {"topics.py", "migration_cleanup.py"}
+        ):
+            fail(
+                "DH PVE source must not reuse legacy Home Assistant entity IDs "
+                f"outside explicit MQTT cleanup ownership: {source_path.name}"
+            )
