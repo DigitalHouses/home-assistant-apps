@@ -357,10 +357,20 @@ def validate_presentation_examples(
                     f"found legacy marker {forbidden_marker!r}"
                 )
 
-    if "persistent_notification.create" not in notification_text:
-        fail(f"{app.name}: English notification example must deliver directly")
-    if "script.write2log" not in notification_ru_text:
-        fail(f"{app.name}: Russian local notification package must deliver directly")
+    for locale, text in (
+        ("English", notification_text),
+        ("Russian", notification_ru_text),
+    ):
+        if "persistent_notification.create" not in text:
+            fail(
+                f"{app.name}: {locale} notification example must use "
+                "the public direct delivery action"
+            )
+        if "script.write2log" in text:
+            fail(
+                f"{app.name}: {locale} public notification example must not "
+                "depend on installation-local script.write2log"
+            )
 
     if "dh_internet_app_" not in dashboard_text:
         fail(f"{app.name}: dashboard must use canonical entities")
