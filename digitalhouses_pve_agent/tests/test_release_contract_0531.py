@@ -32,8 +32,8 @@ def test_0531_home_assistant_automation_aliases_are_canonical():
 
 def test_0531_shared_standards_use_canonical_pve_examples():
     app_standard = APP_STANDARD.read_text(encoding="utf-8")
-    assert "sensor.dh_pve_agent_app_version" in app_standard
-    assert "sensor.dh_pve_agent_agent_started" in app_standard
+    assert "sensor.dh_pve_agent_version" in app_standard
+    assert "sensor.dh_pve_agent_started" in app_standard
     assert "sensor.dh_app_pve_app_version" not in app_standard
     assert "sensor.dh_app_pve_agent_started" not in app_standard
 
