@@ -8,7 +8,13 @@ from unittest.mock import patch
 APP_DIR = Path(__file__).resolve().parents[1] / "rootfs" / "app"
 sys.path.insert(0, str(APP_DIR))
 
-from connectivity import (\n    CLOUDFLARE_PROBE,\n    GOOGLE_PROBE,\n    ConnectivityProbeError,\n    ping_host,\n    sample,\n)
+from connectivity import (
+    CLOUDFLARE_PROBE,
+    GOOGLE_PROBE,
+    ConnectivityProbeError,
+    ping_host,
+    sample,
+)
 
 
 class ConnectivityTests(unittest.TestCase):
