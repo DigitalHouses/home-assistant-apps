@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.35
+
+- Restore the product ownership boundary: canonical retained MQTT cleanup belongs to `uninstall.sh`, not to install/update.
+- Remove the 0.5.34 clean-reinstall preflight that tombstoned the current canonical MQTT instance before service startup.
+- Install, update and canonical reinstall now preserve the existing canonical MQTT namespace; uninstall remains responsible for deleting the owned instance subtree and known Discovery identities.
+
+
 ## 0.5.34
 
 - Add a canonical clean-reinstall preflight for the supported uninstall/reinstall migration path: when saved canonical config exists but the runtime directory is absent, the installer runs the full current-instance MQTT uninstall cleanup before starting the service.
