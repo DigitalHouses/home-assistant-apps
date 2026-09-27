@@ -62,11 +62,12 @@ def test_canonical_ups_device_identity_and_migration_discovery_topics():
         "homeassistant/device/dh_ups_node_a/config",
     )
     assert payload["device"]["identifiers"] == ["dh_pve_agent_ups_node_a"]
-    assert all(
-        component["unique_id"].startswith("dh_pve_agent_ups_node_a_")
-        for component in payload["components"].values()
-        if "unique_id" in component
-    )
+    for component in payload["components"].values():
+        if "unique_id" not in component:
+            continue
+        entity_id = component["default_entity_id"]
+        object_id = entity_id.split(".", 1)[1]
+        assert component["unique_id"] == f"{object_id}_id"
 
 
 def test_canonical_ups_public_entity_ids_are_consistent():
