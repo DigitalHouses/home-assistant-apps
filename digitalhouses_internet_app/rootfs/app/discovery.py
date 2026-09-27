@@ -68,6 +68,17 @@ def build_discovery_payload(
         "payload_available": "online",
         "payload_not_available": "offline",
     }
+    connectivity_availability = [
+        availability,
+        {
+            "topic": TOPICS["state"],
+            "payload_available": "online",
+            "payload_not_available": "offline",
+            "value_template": (
+                "{{ 'online' if value_json.connectivity_observed else 'offline' }}"
+            ),
+        },
+    ]
     result_availability = [
         availability,
         {
@@ -118,7 +129,8 @@ def build_discovery_payload(
             "value_template": "{{ 'ON' if value_json.google_up else 'OFF' }}",
             "payload_on": "ON",
             "payload_off": "OFF",
-            "availability": availability,
+            "availability": connectivity_availability,
+            "availability_mode": "all",
         },
         "cloudflare_connectivity": {
             "platform": "binary_sensor",
@@ -130,7 +142,8 @@ def build_discovery_payload(
             "value_template": "{{ 'ON' if value_json.cloudflare_up else 'OFF' }}",
             "payload_on": "ON",
             "payload_off": "OFF",
-            "availability": availability,
+            "availability": connectivity_availability,
+            "availability_mode": "all",
         },
         "internet_status": {
             "platform": "binary_sensor",
@@ -142,7 +155,8 @@ def build_discovery_payload(
             "value_template": "{{ 'ON' if value_json.internet_up else 'OFF' }}",
             "payload_on": "ON",
             "payload_off": "OFF",
-            "availability": availability,
+            "availability": connectivity_availability,
+            "availability_mode": "all",
         },
         "router_status": {
             "platform": "binary_sensor",
@@ -154,7 +168,8 @@ def build_discovery_payload(
             "value_template": "{{ 'ON' if value_json.router_up else 'OFF' }}",
             "payload_on": "ON",
             "payload_off": "OFF",
-            "availability": availability,
+            "availability": connectivity_availability,
+            "availability_mode": "all",
         },
         "recovery_state": {
             "platform": "sensor",
