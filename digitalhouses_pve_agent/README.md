@@ -89,6 +89,8 @@ Canonical Home Assistant entity prefixes are:
 - PVE: `dh_pve_agent_*`;
 - UPS: `dh_pve_agent_ups_*`.
 
+The supported Home Assistant topology is one PVE Agent per Home Assistant instance. Every MQTT Discovery component therefore uses a deterministic Home Assistant identity: `unique_id = <entity object_id>_id`. The stable PVE machine/instance ID remains in the MQTT namespace and MQTT device identity for broker-level isolation and cleanup, but is not part of the Home Assistant entity `unique_id`. Multiple PVE Agents may share one MQTT broker when they are consumed by separate Home Assistant instances.
+
 Legacy MQTT Discovery identities are removed through retained tombstones during migration so old and canonical entities do not coexist indefinitely.
 
 ## Problems and diagnostics
@@ -97,9 +99,9 @@ Problem calculation is App-owned. Home Assistant does not scan `states.sensor`, 
 
 Current problems are exposed as `binary_sensor` entities with `device_class: problem`. Aggregate problem state and compact presentation are separate retained sensors.
 
-The installed App release is exposed as diagnostic entity `sensor.dh_pve_agent_app_version`. Its state comes from the same `VERSION` value used by MQTT Device Discovery `device.sw_version` and `origin.sw_version`. The standard PVE dashboard shows it in the host summary as `App <version>` and hides that segment if the entity is unavailable or unknown.
+The installed App release is exposed as diagnostic entity `sensor.dh_pve_agent_version`. Its state comes from the same `VERSION` value used by MQTT Device Discovery `device.sw_version` and `origin.sw_version`. The standard PVE dashboard shows it in the host summary as `App <version>` and hides that segment if the entity is unavailable or unknown.
 
-The current agent process start is exposed as `sensor.dh_pve_agent_agent_started` with Home Assistant `device_class: timestamp`. Its value is fixed for the lifetime of the running agent process and changes only after an agent restart, allowing Home Assistant to present the age natively instead of publishing a continuously changing uptime duration.
+The current agent process start is exposed as `sensor.dh_pve_agent_started` with Home Assistant `device_class: timestamp`. Its value is fixed for the lifetime of the running agent process and changes only after an agent restart, allowing Home Assistant to present the age natively instead of publishing a continuously changing uptime duration.
 
 Native MQTT Event entities are used for diagnostic transitions:
 
@@ -197,7 +199,7 @@ PYTHONPATH=/opt/digitalhouses/digitalhouses_pve_agent \
 
 Recorder configuration is an explicit whitelist. Continuous history is kept only for useful metrics such as CPU, RAM/Swap, fan speed %, storage usage, disk temperature/wear, GPU telemetry and selected UPS telemetry/status.
 
-Rich presentation, debug diagnostics, the static `sensor.dh_pve_agent_app_version` and `sensor.dh_pve_agent_agent_started` metadata entities, and MQTT Event entities are intentionally not Recorder history.
+Rich presentation, debug diagnostics, the static `sensor.dh_pve_agent_version` and `sensor.dh_pve_agent_started` metadata entities, and MQTT Event entities are intentionally not Recorder history.
 
 ## UPS / NUT ownership
 
