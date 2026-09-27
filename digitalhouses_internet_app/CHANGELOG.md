@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.18
+
+- Migrate production Home Assistant delivery to the canonical versioned GHCR image repository `ghcr.io/digitalhouses/digitalhouses_internet_app`.
+- Keep the canonical Supervisor slug, MQTT namespace/device identity, Home Assistant entity identities, App options and persistent `/data` state unchanged.
+- Add repository validation for the immutable image metadata and document current-production backup/restore acceptance without requiring a downgrade to an older App release.
+
 ## 0.1.17
 
 - Promote DigitalHouses Internet App from Home Assistant `experimental` stage to `stable`.

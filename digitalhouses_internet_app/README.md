@@ -10,6 +10,7 @@ This is a new product. It does not migrate or reuse the stable MQTT identities o
 - HA App slug: `digitalhouses_internet_app`
 - public product name: **DigitalHouses Internet App**
 - release identifier: `digitalhouses_internet_app`
+- production image: `ghcr.io/digitalhouses/digitalhouses_internet_app:<version>`
 - MQTT base: `DigitalHouses/Global/dh_internet_app`
 - Home Assistant entity / unique-id prefix: `dh_internet_app_`
 
@@ -33,7 +34,7 @@ All recovery timing belongs to App configuration: maximum cycles, retry interval
 
 ## Current product state
 
-Version `0.1.17` is the first stable-stage release. The canonical Supervisor identity is permanent, the temporary migration runtime has been removed, and the App is no longer marked experimental in Home Assistant. The product provides:
+Version `0.1.18` keeps the stable canonical runtime and moves production Home Assistant delivery to the versioned DigitalHouses GHCR image. The canonical Supervisor identity is permanent, the temporary migration runtime has been removed, and the App remains stable in Home Assistant. The product provides:
 
 - Internet and router reachability;
 - current-month outage state persisted under `/data`;
@@ -50,6 +51,12 @@ Version `0.1.17` is the first stable-stage release. The canonical Supervisor ide
 Quality thresholds and App-owned performance problem evaluation are implemented. Router integration uses at most five optional HA bindings: cumulative Download/Upload totals, WAN state and current Download/Upload rates. Together with two recovery entities the App stays within seven external HA bindings. Monthly traffic retains the current month plus 11 previous months. The reusable package, notification presentation and reference dashboard are included in this development milestone.
 
 See [DOCS.md](DOCS.md) for configuration semantics and [HAOS_TEST_PLAN.md](HAOS_TEST_PLAN.md) for the first real installation test sequence.
+
+## Immutable production delivery
+
+Production releases are delivered through the DigitalHouses App repository using the canonical image repository `ghcr.io/digitalhouses/digitalhouses_internet_app`. The App package version, canonical release tag, exact release commit, GHCR version tag and recorded image digest must all describe the same release. Floating tags such as `latest` are not part of the production contract.
+
+Home Assistant backups are expected to contain installation-specific configuration and persistent `/data` state, including telemetry identity and App-owned runtime state, without duplicating a locally built application image. Restore acceptance targets the current supported production release; restoring an older release over a newer one is not a general immutable-delivery requirement.
 
 ## Completed App slug migration
 
