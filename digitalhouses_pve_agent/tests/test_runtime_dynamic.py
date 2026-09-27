@@ -48,6 +48,10 @@ class Bridge:
         self.setting_states.append((key, value))
         return True
 
+    def clear_retained_topics(self, topics):
+        self.cleared_retained_topics.append(tuple(topics))
+        return True
+
 
 class GroupBridge(Bridge):
     def __init__(self):
@@ -62,10 +66,6 @@ class GroupBridge(Bridge):
 
     def clear_legacy_state(self):
         self.legacy_state_cleanup += 1
-        return True
-
-    def clear_retained_topics(self, topics):
-        self.cleared_retained_topics.append(tuple(topics))
         return True
 
 
