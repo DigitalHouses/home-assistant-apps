@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from state import atomic_write_json, iso, now_local
+from state import ContractDataError, atomic_write_json, iso, load_json_object, now_local
 
 DEFAULT_THRESHOLDS: dict[str, int | float] = {
     "minimum_download_mbps": 10,
@@ -35,24 +35,31 @@ def _compact(value: float) -> int | float:
 
 
 def normalize_thresholds(raw: Any) -> dict[str, int | float]:
-    source = raw if isinstance(raw, dict) else {}
+    if not isinstance(raw, dict):
+        raise ValueError("thresholds must be an object")
     result: dict[str, int | float] = {}
     for key, (minimum, maximum) in SPECS.items():
-        value = _number(source.get(key))
+        if key not in raw:
+            raise ValueError(f"missing threshold: {key}")
+        value = _number(raw[key])
         if value is None or not minimum <= value <= maximum:
-            value = float(DEFAULT_THRESHOLDS[key])
+            raise ValueError(
+                f"{key} must be between {minimum:g} and {maximum:g}"
+            )
         result[key] = _compact(value)
     return result
 
 
 def load_thresholds(path: Path) -> dict[str, int | float]:
+    raw = load_json_object(path, label="thresholds")
+    if raw is None:
+        thresholds = dict(DEFAULT_THRESHOLDS)
+        atomic_write_json(path, thresholds)
+        return thresholds
     try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-    except (FileNotFoundError, json.JSONDecodeError, OSError):
-        raw = {}
-    thresholds = normalize_thresholds(raw)
-    atomic_write_json(path, thresholds)
-    return thresholds
+        return normalize_thresholds(raw)
+    except ValueError as exc:
+        raise ContractDataError(f"invalid thresholds state: {exc}") from exc
 
 
 def set_threshold(

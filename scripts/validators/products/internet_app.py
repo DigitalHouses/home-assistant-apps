@@ -111,6 +111,75 @@ def validate_internet(root: Path, app: Path, context: dict[str, Any]) -> None:
         if value not in discovery:
             fail(f"{app.name}: discovery contract is missing {value!r}")
 
+    run_source = (app / "rootfs" / "run.sh").read_text(encoding="utf-8")
+    app_source = (app / "rootfs" / "app" / "app.py").read_text(
+        encoding="utf-8"
+    )
+    connectivity_source = (
+        app / "rootfs" / "app" / "connectivity.py"
+    ).read_text(encoding="utf-8")
+    state_source = (app / "rootfs" / "app" / "state.py").read_text(
+        encoding="utf-8"
+    )
+    contracts_path = app / "rootfs" / "app" / "contracts.py"
+    contracts_test_path = app / "tests" / "test_contracts.py"
+    require_files(root, [contracts_path, contracts_test_path])
+    contracts_source = contracts_path.read_text(encoding="utf-8")
+
+    for forbidden in (
+        '${APP_VERSION:-unknown}',
+        'os.getenv("APP_VERSION",',
+    ):
+        if forbidden in run_source or forbidden in app_source:
+            fail(
+                f"{app.name}: release version must not use silent fallback "
+                f"{forbidden!r}"
+            )
+
+    for required_marker in (
+        ': "${APP_VERSION:?APP_VERSION is required}"',
+        'APP_VERSION = os.environ.get("APP_VERSION")',
+        '"connectivity_observed": self.connectivity_observed',
+        "except ConnectivityProbeError as exc:",
+        "validate_machine_event(payload)",
+        "Contract data error:",
+    ):
+        if required_marker not in run_source and required_marker not in app_source:
+            fail(
+                f"{app.name}: runtime contract hardening is missing "
+                f"{required_marker!r}"
+            )
+
+    if "class ConnectivityProbeError" not in connectivity_source:
+        fail(
+            f"{app.name}: probe execution failures must remain distinct "
+            "from observed connectivity-down results"
+        )
+    for required_marker in (
+        "class ContractDataError",
+        "def load_json_object(",
+    ):
+        if required_marker not in state_source:
+            fail(
+                f"{app.name}: persisted-state contract is missing "
+                f"{required_marker!r}"
+            )
+    for required_marker in (
+        "EVENT_SCHEMA_VERSION = 2",
+        "def validate_machine_event(",
+        "_EVENT_FIELDS",
+    ):
+        if required_marker not in contracts_source:
+            fail(
+                f"{app.name}: machine-event contract is missing "
+                f"{required_marker!r}"
+            )
+    if "value_json.connectivity_observed" not in discovery:
+        fail(
+            f"{app.name}: connectivity entities must stay unavailable "
+            "until a real probe observation exists"
+        )
+
     recovery_source = (app / "rootfs" / "app" / "recovery.py").read_text(
         encoding="utf-8"
     )

@@ -9,6 +9,7 @@ from pathlib import Path
 APP_DIR = Path(__file__).resolve().parents[1] / "rootfs" / "app"
 sys.path.insert(0, str(APP_DIR))
 
+from state import ContractDataError
 from traffic import (
     HISTORY_MONTHS,
     default_traffic_state,
@@ -41,6 +42,14 @@ class TrafficTests(unittest.TestCase):
             ),
             1_000_000_000,
         )
+
+    def test_total_requires_explicit_unit(self) -> None:
+        with self.assertRaises(ValueError):
+            entity_total_bytes({"state": "1", "attributes": {}})
+
+    def test_rate_requires_explicit_unit(self) -> None:
+        with self.assertRaises(ValueError):
+            entity_rate_mbps({"state": "1", "attributes": {}})
 
     def test_rate_conversion(self) -> None:
         self.assertEqual(
@@ -97,6 +106,16 @@ class TrafficTests(unittest.TestCase):
         self.assertEqual(state["total"]["download_bytes"], 800)
         self.assertEqual(state["total"]["upload_bytes"], 500)
         self.assertEqual(state["counter_resets"], 1)
+
+    def test_corrupted_existing_traffic_state_fails_loudly(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "traffic.json"
+            path.write_text(
+                '{"schema_version":1,"source":{},"last":{},"total":{},"months":{}}',
+                encoding="utf-8",
+            )
+            with self.assertRaises(ContractDataError):
+                load_traffic_state(path, "sensor.down", "sensor.up")
 
     def test_source_change_keeps_history_but_rebaselines(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

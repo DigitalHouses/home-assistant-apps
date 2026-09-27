@@ -179,7 +179,21 @@ Verify:
 
 Historical-version restore or installing an older App release over a newer one is not part of this general acceptance test unless a separate product-specific migration procedure explicitly requires it.
 
-## 10. Pass criteria
+## 10. Runtime contract compliance
+
+After updating to the current production release, verify:
+
+- Version equals the released App version and no startup log contains an `unknown`/local fallback version;
+- immediately after a restart the connectivity entities do not invent a down state before the first successful probe observation;
+- after observation, Internet/Google/Cloudflare/Router report the real current result;
+- the App starts with the existing canonical `dh_internet_app_*` identities and creates no duplicate device/entities;
+- persisted thresholds, outage count/history, recovery state, Recent Results and traffic totals remain intact across restart/update;
+- the first start of a new released version may send one telemetry heartbeat with that version, while another ordinary restart does not create a heartbeat storm;
+- App logs contain no `Contract data error`, `Configuration error`, traceback or unexpected probe failure.
+
+Corruption and malformed-event negative cases are covered by automated repository tests; do not damage production `/data` files to reproduce them during routine live acceptance.
+
+## 11. Pass criteria
 
 The HAOS validation passes when:
 
@@ -190,6 +204,7 @@ The HAOS validation passes when:
 - optional mappings appear/disappear cleanly;
 - switch recovery cannot be left off by a normal Stop/Restart path;
 - the reference dashboard and notification package load without legacy Speedtest entities;
-- immutable GHCR delivery and current-production backup/restore acceptance pass.
+- immutable GHCR delivery and current-production backup/restore acceptance pass;
+- runtime contract-compliance acceptance passes without changing canonical identities.
 
 Historical Supervisor slug-migration validation is retained separately in `../docs/digitalhouses_internet_app/slug-migration.md`; it is no longer part of the current runtime test path.

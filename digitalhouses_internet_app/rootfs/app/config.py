@@ -90,31 +90,99 @@ class AppConfig:
     log_level: str
 
 
-def _bounded_int(value: Any, minimum: int, maximum: int, default: int) -> int:
-    try:
-        parsed = int(value)
-    except (TypeError, ValueError):
-        parsed = default
-    return max(minimum, min(maximum, parsed))
+def _mapping_option(raw: dict[str, Any], key: str) -> dict[str, Any]:
+    if key not in raw:
+        return {}
+    value = raw[key]
+    if not isinstance(value, dict):
+        raise ConfigError(f"{key} must be an object")
+    return value
 
 
-def _target(raw: Any, name: str) -> RecoveryTarget:
-    if not isinstance(raw, dict):
-        raw = {}
-    action = str(raw.get("action", "switch")).strip().lower()
-    if action not in {"button", "switch"}:
-        raise ConfigError(f"recovery.{name}.action must be button or switch")
-    entity_id = str(raw.get("entity_id", "")).strip()
-    prefix = f"{action}."
-    if entity_id and not entity_id.startswith(prefix):
+def _int_option(
+    raw: dict[str, Any],
+    key: str,
+    *,
+    minimum: int,
+    maximum: int,
+    default: int,
+    prefix: str,
+) -> int:
+    if key not in raw:
+        return default
+    value = raw[key]
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ConfigError(f"{prefix}.{key} must be an integer")
+    if not minimum <= value <= maximum:
         raise ConfigError(
-            f"recovery.{name}.entity_id must start with {prefix!r} for action {action}"
+            f"{prefix}.{key} must be between {minimum} and {maximum}"
         )
+    return value
+
+
+def _bool_option(
+    raw: dict[str, Any],
+    key: str,
+    *,
+    default: bool,
+    prefix: str,
+) -> bool:
+    if key not in raw:
+        return default
+    value = raw[key]
+    if not isinstance(value, bool):
+        raise ConfigError(f"{prefix}.{key} must be boolean")
+    return value
+
+
+def _string_option(
+    raw: dict[str, Any],
+    key: str,
+    *,
+    default: str,
+    prefix: str,
+) -> str:
+    if key not in raw:
+        return default
+    value = raw[key]
+    if not isinstance(value, str):
+        raise ConfigError(f"{prefix}.{key} must be a string")
+    return value.strip()
+
+
+def _target(raw: dict[str, Any], name: str) -> RecoveryTarget:
+    prefix = f"recovery.{name}"
+    action = _string_option(
+        raw,
+        "action",
+        default="switch",
+        prefix=prefix,
+    ).lower()
+    if action not in {"button", "switch"}:
+        raise ConfigError(f"{prefix}.action must be button or switch")
+
+    entity_id = _string_option(
+        raw,
+        "entity_id",
+        default="",
+        prefix=prefix,
+    )
+    domain = f"{action}."
+    if entity_id and not entity_id.startswith(domain):
+        raise ConfigError(
+            f"{prefix}.entity_id must start with {domain!r} for action {action}"
+        )
+
     return RecoveryTarget(
         action=action,
         entity_id=entity_id,
-        power_off_seconds=_bounded_int(
-            raw.get("power_off_seconds"), 1, 120, 10
+        power_off_seconds=_int_option(
+            raw,
+            "power_off_seconds",
+            minimum=1,
+            maximum=120,
+            default=10,
+            prefix=prefix,
         ),
     )
 
@@ -123,55 +191,64 @@ def parse_options(raw: Any) -> AppConfig:
     if not isinstance(raw, dict):
         raise ConfigError("options must be a JSON object")
 
-    router_ip = str(raw.get("router_ip", "")).strip()
+    router_ip = _string_option(
+        raw,
+        "router_ip",
+        default="192.168.1.1",
+        prefix="options",
+    )
     try:
         ipaddress.ip_address(router_ip)
     except ValueError as exc:
         raise ConfigError("router_ip must be a valid IPv4 or IPv6 address") from exc
 
-    connectivity_raw = raw.get("connectivity_check")
-    if not isinstance(connectivity_raw, dict):
-        connectivity_raw = {}
-
-    speedtest_raw = raw.get("speedtest")
-    if not isinstance(speedtest_raw, dict):
-        speedtest_raw = {}
+    connectivity_raw = _mapping_option(raw, "connectivity_check")
+    speedtest_raw = _mapping_option(raw, "speedtest")
+    traffic_raw = _mapping_option(raw, "traffic")
+    recovery_raw = _mapping_option(raw, "recovery")
 
     server_ids_raw = speedtest_raw.get("server_ids", [])
     if not isinstance(server_ids_raw, list):
         raise ConfigError("speedtest.server_ids must be a list")
     server_ids: list[int] = []
     for raw_server_id in server_ids_raw:
-        try:
-            server_id = int(raw_server_id)
-        except (TypeError, ValueError) as exc:
-            raise ConfigError("speedtest.server_ids must contain integers") from exc
-        if server_id <= 0:
+        if isinstance(raw_server_id, bool) or not isinstance(raw_server_id, int):
+            raise ConfigError("speedtest.server_ids must contain integers")
+        if raw_server_id <= 0:
             raise ConfigError("speedtest.server_ids must contain positive integers")
-        if server_id not in server_ids:
-            server_ids.append(server_id)
+        if raw_server_id not in server_ids:
+            server_ids.append(raw_server_id)
 
-    traffic_raw = raw.get("traffic")
-    if not isinstance(traffic_raw, dict):
-        traffic_raw = {}
-
-    recovery_raw = raw.get("recovery")
-    if not isinstance(recovery_raw, dict):
-        recovery_raw = {}
-
-    traffic_download_total = str(
-        traffic_raw.get("traffic_download_total", "")
-    ).strip()
-    traffic_upload_total = str(
-        traffic_raw.get("traffic_upload_total", "")
-    ).strip()
-    router_wan_status = str(traffic_raw.get("router_wan_status", "")).strip()
-    router_download_rate = str(
-        traffic_raw.get("router_download_rate", "")
-    ).strip()
-    router_upload_rate = str(
-        traffic_raw.get("router_upload_rate", "")
-    ).strip()
+    traffic_download_total = _string_option(
+        traffic_raw,
+        "traffic_download_total",
+        default="",
+        prefix="traffic",
+    )
+    traffic_upload_total = _string_option(
+        traffic_raw,
+        "traffic_upload_total",
+        default="",
+        prefix="traffic",
+    )
+    router_wan_status = _string_option(
+        traffic_raw,
+        "router_wan_status",
+        default="",
+        prefix="traffic",
+    )
+    router_download_rate = _string_option(
+        traffic_raw,
+        "router_download_rate",
+        default="",
+        prefix="traffic",
+    )
+    router_upload_rate = _string_option(
+        traffic_raw,
+        "router_upload_rate",
+        default="",
+        prefix="traffic",
+    )
 
     if bool(traffic_download_total) != bool(traffic_upload_total):
         raise ConfigError(
@@ -192,46 +269,104 @@ def parse_options(raw: Any) -> AppConfig:
             "traffic.router_wan_status must be sensor.* or binary_sensor.*"
         )
 
-    enabled = bool(recovery_raw.get("enabled", False))
-    mode = str(recovery_raw.get("mode", "smart")).strip().lower()
+    enabled = _bool_option(
+        recovery_raw,
+        "enabled",
+        default=False,
+        prefix="recovery",
+    )
+    mode = _string_option(
+        recovery_raw,
+        "mode",
+        default="smart",
+        prefix="recovery",
+    ).lower()
     if mode not in {"smart", "both"}:
         raise ConfigError("recovery.mode must be smart or both")
 
-    ont = _target(recovery_raw.get("ont"), "ont")
-    router = _target(recovery_raw.get("router"), "router")
+    ont_raw = _mapping_option(recovery_raw, "ont")
+    router_raw = _mapping_option(recovery_raw, "router")
+    ont = _target(ont_raw, "ont")
+    router = _target(router_raw, "router")
     if enabled:
         if not ont.entity_id:
-            raise ConfigError("recovery.ont.entity_id is required when recovery is enabled")
+            raise ConfigError(
+                "recovery.ont.entity_id is required when recovery is enabled"
+            )
         if not router.entity_id:
             raise ConfigError(
                 "recovery.router.entity_id is required when recovery is enabled"
             )
 
-    level = str(raw.get("log_level", "info")).strip().lower()
+    level = _string_option(
+        raw,
+        "log_level",
+        default="info",
+        prefix="options",
+    ).lower()
     if level not in {"debug", "info", "warning", "error"}:
-        level = "info"
+        raise ConfigError(
+            "log_level must be debug, info, warning or error"
+        )
 
     return AppConfig(
         router_ip=router_ip,
         connectivity=ConnectivityConfig(
-            interval_seconds=_bounded_int(
-                connectivity_raw.get("interval_seconds"), 5, 3600, 10
+            interval_seconds=_int_option(
+                connectivity_raw,
+                "interval_seconds",
+                minimum=5,
+                maximum=3600,
+                default=10,
+                prefix="connectivity_check",
             ),
-            attempts=_bounded_int(connectivity_raw.get("attempts"), 1, 10, 3),
-            timeout_seconds=_bounded_int(
-                connectivity_raw.get("timeout_seconds"), 1, 30, 2
+            attempts=_int_option(
+                connectivity_raw,
+                "attempts",
+                minimum=1,
+                maximum=10,
+                default=3,
+                prefix="connectivity_check",
+            ),
+            timeout_seconds=_int_option(
+                connectivity_raw,
+                "timeout_seconds",
+                minimum=1,
+                maximum=30,
+                default=2,
+                prefix="connectivity_check",
             ),
         ),
         speedtest=SpeedtestConfig(
-            periodic_enabled=bool(speedtest_raw.get("periodic_enabled", True)),
+            periodic_enabled=_bool_option(
+                speedtest_raw,
+                "periodic_enabled",
+                default=True,
+                prefix="speedtest",
+            ),
             interval_seconds=60
-            * _bounded_int(speedtest_raw.get("interval_minutes"), 5, 720, 30),
-            timeout_seconds=_bounded_int(
-                speedtest_raw.get("timeout_seconds"), 30, 600, 240
+            * _int_option(
+                speedtest_raw,
+                "interval_minutes",
+                minimum=5,
+                maximum=720,
+                default=30,
+                prefix="speedtest",
+            ),
+            timeout_seconds=_int_option(
+                speedtest_raw,
+                "timeout_seconds",
+                minimum=30,
+                maximum=600,
+                default=240,
+                prefix="speedtest",
             ),
             server_ids=tuple(server_ids),
-            automatic_server_fallback=bool(
-                speedtest_raw.get("automatic_server_fallback", True)
+            automatic_server_fallback=_bool_option(
+                speedtest_raw,
+                "automatic_server_fallback",
+                default=True,
+                prefix="speedtest",
             ),
         ),
         traffic=TrafficConfig(
@@ -244,17 +379,50 @@ def parse_options(raw: Any) -> AppConfig:
         recovery=RecoveryConfig(
             enabled=enabled,
             mode=mode,
-            max_cycles=_bounded_int(recovery_raw.get("max_cycles"), 1, 10, 3),
+            max_cycles=_int_option(
+                recovery_raw,
+                "max_cycles",
+                minimum=1,
+                maximum=10,
+                default=3,
+                prefix="recovery",
+            ),
             retry_interval_seconds=60
-            * _bounded_int(recovery_raw.get("retry_interval_minutes"), 1, 60, 5),
+            * _int_option(
+                recovery_raw,
+                "retry_interval_minutes",
+                minimum=1,
+                maximum=60,
+                default=5,
+                prefix="recovery",
+            ),
             boot_wait_seconds=60
-            * _bounded_int(recovery_raw.get("boot_wait_minutes"), 1, 30, 3),
+            * _int_option(
+                recovery_raw,
+                "boot_wait_minutes",
+                minimum=1,
+                maximum=30,
+                default=3,
+                prefix="recovery",
+            ),
             cooldown_seconds=60
-            * _bounded_int(recovery_raw.get("cooldown_minutes"), 1, 1440, 15),
+            * _int_option(
+                recovery_raw,
+                "cooldown_minutes",
+                minimum=1,
+                maximum=1440,
+                default=15,
+                prefix="recovery",
+            ),
             ont=ont,
             router=router,
         ),
-        telemetry_enabled=bool(raw.get("telemetry_enabled", False)),
+        telemetry_enabled=_bool_option(
+            raw,
+            "telemetry_enabled",
+            default=False,
+            prefix="options",
+        ),
         log_level=level,
     )
 
@@ -264,6 +432,8 @@ def load_config(path: Path = OPTIONS_FILE) -> AppConfig:
         raw = json.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError as exc:
         raise ConfigError(f"options file not found: {path}") from exc
+    except OSError as exc:
+        raise ConfigError(f"unable to read options file {path}: {exc}") from exc
     except json.JSONDecodeError as exc:
         raise ConfigError(f"invalid JSON in {path}: {exc}") from exc
     return parse_options(raw)

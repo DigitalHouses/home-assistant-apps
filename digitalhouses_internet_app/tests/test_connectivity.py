@@ -8,7 +8,13 @@ from unittest.mock import patch
 APP_DIR = Path(__file__).resolve().parents[1] / "rootfs" / "app"
 sys.path.insert(0, str(APP_DIR))
 
-from connectivity import CLOUDFLARE_PROBE, GOOGLE_PROBE, sample
+from connectivity import (
+    CLOUDFLARE_PROBE,
+    GOOGLE_PROBE,
+    ConnectivityProbeError,
+    ping_host,
+    sample,
+)
 
 
 class ConnectivityTests(unittest.TestCase):
@@ -27,6 +33,21 @@ class ConnectivityTests(unittest.TestCase):
         self.assertFalse(result.google_up)
         self.assertTrue(result.cloudflare_up)
         self.assertTrue(result.router_up)
+
+    def test_ping_execution_error_is_not_reported_as_down(self) -> None:
+        with patch("connectivity.subprocess.run", side_effect=OSError("missing ping")):
+            with self.assertRaises(ConnectivityProbeError):
+                ping_host("192.0.2.1", 2)
+
+    def test_ping_process_timeout_is_not_reported_as_down(self) -> None:
+        import subprocess
+
+        with patch(
+            "connectivity.subprocess.run",
+            side_effect=subprocess.TimeoutExpired("ping", 4),
+        ):
+            with self.assertRaises(ConnectivityProbeError):
+                ping_host("192.0.2.1", 2)
 
     def test_internet_is_down_only_when_both_probes_fail(self) -> None:
         answers = {

@@ -10,6 +10,7 @@ APP_DIR = Path(__file__).resolve().parents[1] / "rootfs" / "app"
 sys.path.insert(0, str(APP_DIR))
 
 from speedtest import load_last_result, parse_result, parse_server_list
+from state import ContractDataError
 
 
 class SpeedtestTests(unittest.TestCase):
@@ -43,6 +44,30 @@ class SpeedtestTests(unittest.TestCase):
         self.assertEqual(result["status"], "idle")
         self.assertEqual(result["last_result"], "success")
         self.assertIsNotNone(result["tested_at"])
+
+    def test_optional_metadata_is_null_when_absent(self) -> None:
+        result = parse_result(
+            {
+                "type": "result",
+                "download": {"bandwidth": 1_000_000},
+                "upload": {"bandwidth": 1_000_000},
+                "ping": {"latency": 10},
+                "server": {},
+                "interface": {},
+                "result": {},
+            }
+        )
+        self.assertIsNone(result["provider"])
+        self.assertIsNone(result["external_ip"])
+        self.assertIsNone(result["server"])
+        self.assertIsNone(result["result_url"])
+
+    def test_corrupted_existing_speedtest_state_fails_loudly(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "speedtest.json"
+            path.write_text('{"download_mbps":"bad"}', encoding="utf-8")
+            with self.assertRaises(ContractDataError):
+                load_last_result(path)
 
     def test_legacy_last_success_loads_as_idle(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

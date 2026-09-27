@@ -4,7 +4,7 @@
 
 `router_ip` is the LAN address of the router. The App uses it to distinguish a local router failure from an upstream Internet/ONT failure.
 
-`connectivity_check.interval_seconds` controls the normal probe interval. `attempts` is the number of consecutive failed Internet probes required before an outage incident starts. `timeout_seconds` is the timeout for an individual probe.
+`connectivity_check.interval_seconds` controls the normal probe interval. `attempts` is the number of consecutive observed failed Internet probes required before an outage incident starts. `timeout_seconds` is the timeout for an individual probe. Connectivity remains unknown/unavailable until a real probe completes. Failure to execute the probe mechanism is a diagnostic error, not an observed outage, and therefore does not increment outage confirmation or start recovery.
 
 ## Recovery
 
@@ -72,7 +72,7 @@ Together with the two optional recovery target entities, this keeps the external
 
 The two cumulative counters are a pair: configure both or neither. They enable App-owned monthly traffic accounting. WAN state and current Download/Upload rates are independent optional bindings and do not affect recovery decisions.
 
-The App samples configured Router sources every 60 seconds through the Home Assistant Core API. Home Assistant data-size units are normalized to bytes and data-rate units are normalized to Mbit/s while preserving the distinction between bit (`bit/s`, `Mbit/s`) and byte (`B/s`, `MB/s`) units. Common `Mbps/Gbps` aliases are also accepted.
+The App samples configured Router sources every 60 seconds through the Home Assistant Core API. Every mapped numeric traffic/rate source must expose an explicit supported `unit_of_measurement`; a missing unit is unavailable contract data and is never guessed. Home Assistant data-size units are normalized to bytes and data-rate units are normalized to Mbit/s while preserving the distinction between bit (`bit/s`, `Mbit/s`) and byte (`B/s`, `MB/s`) units. Common `Mbps/Gbps` aliases are also accepted.
 
 The first cumulative sample establishes a baseline. Normal growth adds only the delta. A source counter reset does not create negative traffic. If the cumulative source IDs change, history is retained but a fresh baseline is established. At a calendar-month boundary the first observation is also a fresh baseline because cumulative counters cannot reveal the exact cross-boundary split.
 
@@ -94,15 +94,21 @@ When enabled, the App sends protocol-v1 heartbeats to `https://telemetry.digital
 
 The per-installation token is used only as the Bearer credential. Country is derived server-side; Internet measurements, outage history, router telemetry, entity IDs, Home Assistant identity and configuration are not sent.
 
-Identity and heartbeat scheduling state are persisted in `/data/telemetry.json`. The persisted state also records whether telemetry was disabled or enabled. A `false -> true` configuration transition schedules exactly one immediate best-effort heartbeat on the next App start, even when the previous successful heartbeat is still inside its normal 24-hour interval. After that first attempt the transition is consumed: an ordinary restart does not create another immediate heartbeat. A successful heartbeat is normally followed by the next one after 24 hours ±30 minutes. If the immediate or scheduled attempt fails, the failure timestamp is persisted and a restart does not bypass the one-hour backoff. Telemetry failures never affect the main monitoring/recovery path.
+Identity and heartbeat scheduling state are persisted in `/data/telemetry.json`. A missing file creates a fresh installation identity; an existing malformed file fails explicitly and is never replaced with a new UUID/token, preventing one installation from silently becoming a second telemetry installation. The persisted state also records whether telemetry was disabled or enabled. A `false -> true` configuration transition schedules exactly one immediate best-effort heartbeat on the next App start, even when the previous successful heartbeat is still inside its normal 24-hour interval. After that first attempt the transition is consumed: an ordinary restart does not create another immediate heartbeat. A successful heartbeat is normally followed by the next one after 24 hours ±30 minutes. If the immediate or scheduled attempt fails, the failure timestamp is persisted and a restart does not bypass the one-hour backoff. Telemetry failures never affect the main monitoring/recovery path.
 
 `button.dh_internet_app_delete_telemetry` performs authenticated deletion of the retained installation telemetry record. Disabling telemetry stops future heartbeats but does not delete already retained server data.
 
 Shared policy: [DigitalHouses Product Telemetry Policy](../docs/standards/PRODUCT_TELEMETRY_POLICY.md).
 
+## Persisted state and configuration contracts
+
+Missing optional configuration keys use the defaults declared by the App schema. Explicitly supplied invalid values are rejected; integers are not clamped, strings are not coerced into booleans/numbers, and an invalid log level does not fall back to `info`.
+
+App-owned persisted runtime files distinguish first installation from corruption. If a file does not yet exist, documented fresh-state defaults may be created. If an existing recovery, outage, threshold, traffic, Speedtest, recent-results, server-catalog, discovery or telemetry state file is unreadable or violates its contract, the App reports an explicit contract-data failure rather than substituting zero/false/empty state.
+
 ## Events and notifications
 
-The App publishes machine-readable MQTT Event entities using schema version 2. Event payloads contain semantics such as event type, target, cycle, reason, values and timestamps.
+The App publishes machine-readable MQTT Event entities using schema version 2. Every event is validated by the producer against its event-specific required fields and types before MQTT transport. Event payloads contain semantics such as event type, target, cycle, reason, values and timestamps. For `connection_lost` and `connection_restored`, authoritative retained state is published first and the transient event follows.
 
 Human-readable notification text and final delivery belong to the local Home Assistant package. The App publishes machine events only and has no dependency on `script.write2log`, Telegram, mobile notifications or another delivery service.
 

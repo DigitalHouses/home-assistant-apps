@@ -12,6 +12,8 @@ import uuid
 from pathlib import Path
 from typing import Any, Callable, Mapping, Protocol
 
+from state import ContractDataError, load_json_object
+
 PRODUCT = "digitalhouses_internet_app"
 SCHEMA_VERSION = 1
 TELEMETRY_POLICY_VERSION = 1
@@ -95,14 +97,20 @@ class TelemetryClient:
         self._state = self._load_or_create_state()
 
     def _load_or_create_state(self) -> dict[str, Any]:
-        try:
-            state = json.loads(self.state_file.read_text(encoding="utf-8"))
-        except (FileNotFoundError, OSError, json.JSONDecodeError):
-            state = {}
-        if not isinstance(state, dict):
-            state = {}
+        state = load_json_object(self.state_file, label="telemetry")
+        if state is None:
+            state = {
+                "schema_version": 1,
+                "installation_id": str(uuid.uuid4()),
+                "installation_token": secrets.token_hex(32),
+                "telemetry_enabled": self.enabled,
+            }
+            self._save_state(state)
+            return state
 
-        changed = False
+        if state.get("schema_version") != 1:
+            raise ContractDataError("telemetry.schema_version must be 1")
+
         installation_id = state.get("installation_id")
         try:
             parsed = uuid.UUID(str(installation_id))
@@ -113,8 +121,9 @@ class TelemetryClient:
         except (ValueError, TypeError, AttributeError):
             valid_id = False
         if not valid_id:
-            state["installation_id"] = str(uuid.uuid4())
-            changed = True
+            raise ContractDataError(
+                "telemetry.installation_id must be a canonical UUIDv4"
+            )
 
         token = state.get("installation_token")
         try:
@@ -125,22 +134,37 @@ class TelemetryClient:
         except ValueError:
             token_valid = False
         if not token_valid:
-            state["installation_token"] = secrets.token_hex(32)
-            changed = True
-
-        if state.get("schema_version") != 1:
-            state["schema_version"] = 1
-            changed = True
+            raise ContractDataError(
+                "telemetry.installation_token must contain at least 32 bytes"
+            )
 
         previous_enabled = state.get("telemetry_enabled")
+        if not isinstance(previous_enabled, bool):
+            raise ContractDataError(
+                "telemetry.telemetry_enabled must be boolean"
+            )
+
+        for field in ("last_attempt_epoch", "last_success_epoch"):
+            value = state.get(field)
+            if value is not None and (
+                isinstance(value, bool) or not isinstance(value, (int, float))
+            ):
+                raise ContractDataError(
+                    f"telemetry.{field} must be numeric when present"
+                )
+        last_version = state.get("last_reported_version")
+        if last_version is not None and (
+            not isinstance(last_version, str) or not last_version
+        ):
+            raise ContractDataError(
+                "telemetry.last_reported_version must be a non-empty string when present"
+            )
+
         self._enabled_heartbeat_pending = (
             self.enabled and previous_enabled is False
         )
         if previous_enabled is not self.enabled:
             state["telemetry_enabled"] = self.enabled
-            changed = True
-
-        if changed:
             self._save_state(state)
         return dict(state)
 
