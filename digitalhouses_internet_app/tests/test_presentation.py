@@ -180,6 +180,40 @@ class PresentationTests(unittest.TestCase):
             self.assertNotIn("default(", content)
             self.assertNotIn("int(0)", content)
 
+    def test_incident_events_follow_retained_state_publication(self) -> None:
+        source = (APP_DIR / "app.py").read_text(encoding="utf-8")
+        start = source.index("    def _observe(")
+        end = source.index("    def run(", start)
+        observe = source[start:end]
+
+        lost_event = observe.index('self._event(\n            "connection_lost"')
+        self.assertLess(observe.index("self._publish_state()"), lost_event)
+        self.assertLess(observe.index("self._publish_outages()"), lost_event)
+        self.assertLess(observe.index("self._publish_problems()"), lost_event)
+
+        restored_event = observe.index(
+            'self._event(\n                    "connection_restored"'
+        )
+        self.assertLess(
+            observe.index('self._set_recovery_state("idle"', 0, restored_event),
+            restored_event,
+        )
+        self.assertLess(
+            observe.index("self._publish_outages()", 0, restored_event),
+            restored_event,
+        )
+
+    def test_mqtt_bootstrap_replaces_retained_state_before_online(self) -> None:
+        source = (APP_DIR / "app.py").read_text(encoding="utf-8")
+        start = source.index("    def _on_connect(")
+        end = source.index("    def _on_message(", start)
+        on_connect = source[start:end]
+        state_publish = on_connect.index('TOPICS["state"]')
+        online_publish = on_connect.index(
+            'client.publish(TOPICS["availability"], "online"'
+        )
+        self.assertLess(state_publish, online_publish)
+
     def test_machine_event_producer_contains_no_presentation_fields(self) -> None:
         source = (APP_DIR / "app.py").read_text(encoding="utf-8")
         start = source.index("    def _event(")
