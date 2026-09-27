@@ -480,16 +480,30 @@ sections:
           {% else %}
 
             {% for item in disk %}
-              {% set object_name = item.get('object_name', 'Диск') %}
-              {% set summary = item.get('summary', 'Проблема') %}
-              {% set details = item.get('details', '') %}
+              {% set id = item.get('problem_id', '') %}
+              {% set name = item.get('object_name', 'Диск') %}
+              {% set average = item.get('average') %}
+              {% set threshold = item.get('threshold') %}
 
-              {% set ns.items = ns.items + [
-                object_name
-                ~ ': '
-                ~ summary
-                ~ ((' · ' ~ details) if details else '')
-              ] %}
+              {% if id.startswith('disk_') and id.endswith('_smart') %}
+                {% set text = name ~ ': ошибка SMART' %}
+              {% elif id.startswith('disk_') and id.endswith('_temperature') %}
+                {% set text = name ~ ': высокая температура' %}
+                {% if average is number and threshold is number %}
+                  {% set text =
+                    text
+                    ~ ' · '
+                    ~ (average | round(1))
+                    ~ ' °C · порог '
+                    ~ (threshold | round(0))
+                    ~ ' °C'
+                  %}
+                {% endif %}
+              {% else %}
+                {% set text = name ~ ': ' ~ (id or 'проблема') %}
+              {% endif %}
+
+              {% set ns.items = ns.items + [text] %}
             {% endfor %}
 
             {% if smart == 'off' %}
