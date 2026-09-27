@@ -8,6 +8,7 @@ from pathlib import Path
 APP_DIR = Path(__file__).resolve().parents[1] / "rootfs" / "app"
 sys.path.insert(0, str(APP_DIR))
 
+from state import ContractDataError
 from recent_results import (
     RECENT_RESULTS_LIMIT,
     append_recent_result,
@@ -19,6 +20,13 @@ from recent_results import (
 
 
 class RecentResultsTests(unittest.TestCase):
+    def test_corrupted_existing_history_fails_loudly(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "recent.json"
+            path.write_text('{"results":[42],"updated_at":null}', encoding="utf-8")
+            with self.assertRaises(ContractDataError):
+                load_recent_results(path)
+
     def test_payload_does_not_change_updated_at_on_publish(self) -> None:
         store = {
             "results": [{"tested_at": "2026-09-23T10:00:00+00:00"}],
