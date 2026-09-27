@@ -162,9 +162,12 @@ class PresentationTests(unittest.TestCase):
             ):
                 self.assertNotIn(forbidden, content)
 
-        self.assertIn("action: persistent_notification.create", en)
-        self.assertNotIn("script.write2log", en)
-        self.assertIn("action: script.write2log", ru)
+        for content in (en, ru):
+            self.assertIn(
+                "action: persistent_notification.create",
+                content,
+            )
+            self.assertNotIn("script.write2log", content)
 
     def test_notification_text_reads_required_machine_fields_directly(self) -> None:
         for path in notification_paths():

@@ -103,7 +103,7 @@ dh_internet_app_notification_local_package:
                   id:
                     - connection_lost
               sequence:
-                - action: script.write2log
+                - action: persistent_notification.create
                   data:
                     title: "🌐⚠️ Интернет недоступен"
                     message: >-
@@ -116,7 +116,7 @@ dh_internet_app_notification_local_package:
                   id:
                     - connection_restored
               sequence:
-                - action: script.write2log
+                - action: persistent_notification.create
                   data:
                     title: "🌐✅ Интернет восстановлен"
                     message: >-
@@ -132,7 +132,7 @@ dh_internet_app_notification_local_package:
                   id:
                     - recovery_action
               sequence:
-                - action: script.write2log
+                - action: persistent_notification.create
                   data:
                     title: >-
                       🔄 Восстановление Internet: {{ trigger.to_state.attributes.target | upper }}
@@ -146,7 +146,7 @@ dh_internet_app_notification_local_package:
                   id:
                     - recovery_stopped
               sequence:
-                - action: script.write2log
+                - action: persistent_notification.create
                   data:
                     title: "⏹️ Восстановление Internet остановлено"
                     message: >-
@@ -158,7 +158,7 @@ dh_internet_app_notification_local_package:
                   id:
                     - recovery_exhausted
               sequence:
-                - action: script.write2log
+                - action: persistent_notification.create
                   data:
                     title: "🌐⚠️ Попытки восстановления исчерпаны"
                     message: >-
@@ -170,7 +170,7 @@ dh_internet_app_notification_local_package:
                   id:
                     - recovery_error
               sequence:
-                - action: script.write2log
+                - action: persistent_notification.create
                   data:
                     title: "🌐❌ Ошибка восстановления"
                     message: >-
@@ -182,7 +182,7 @@ dh_internet_app_notification_local_package:
                   id:
                     - speedtest_failed
               sequence:
-                - action: script.write2log
+                - action: persistent_notification.create
                   data:
                     title: "📶⚠️ Ошибка Speedtest"
                     message: >-
@@ -194,7 +194,7 @@ dh_internet_app_notification_local_package:
                   id:
                     - performance_problem_started
               sequence:
-                - action: script.write2log
+                - action: persistent_notification.create
                   data:
                     title: "📉⚠️ Проблема качества Internet"
                     message: >-
@@ -213,7 +213,7 @@ dh_internet_app_notification_local_package:
                   id:
                     - performance_problem_recovered
               sequence:
-                - action: script.write2log
+                - action: persistent_notification.create
                   data:
                     title: "📈✅ Качество Internet восстановлено"
                     message: >-
@@ -230,7 +230,7 @@ dh_internet_app_notification_local_package:
                   id:
                     - performance_problem_updated
               sequence:
-                - action: script.write2log
+                - action: persistent_notification.create
                   data:
                     title: "📉⚠️ Параметры проблемы Internet изменились"
                     message: >-
