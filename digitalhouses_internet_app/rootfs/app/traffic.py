@@ -7,7 +7,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from state import atomic_write_json, iso, month_key, now_local
+from state import (
+    ContractDataError,
+    atomic_write_json,
+    iso,
+    load_json_object,
+    month_key,
+    now_local,
+)
 
 HISTORY_MONTHS = 12
 GIB = 1024 ** 3
@@ -65,8 +72,11 @@ def entity_total_bytes(payload: dict[str, Any]) -> int:
 
     attributes = payload.get("attributes")
     if not isinstance(attributes, dict):
-        attributes = {}
-    unit = str(attributes.get("unit_of_measurement") or "B").strip()
+        raise ValueError("traffic source attributes must be an object")
+    unit = attributes.get("unit_of_measurement")
+    if not isinstance(unit, str) or not unit.strip():
+        raise ValueError("traffic source unit_of_measurement is required")
+    unit = unit.strip()
     multiplier = _size_multiplier(unit)
     if multiplier is None:
         raise ValueError(f"unsupported traffic unit: {unit!r}")
@@ -118,8 +128,11 @@ def entity_rate_mbps(payload: dict[str, Any]) -> float:
         raise ValueError("rate source state must not be negative")
     attributes = payload.get("attributes")
     if not isinstance(attributes, dict):
-        attributes = {}
-    unit = str(attributes.get("unit_of_measurement") or "Mbit/s").strip()
+        raise ValueError("rate source attributes must be an object")
+    unit = attributes.get("unit_of_measurement")
+    if not isinstance(unit, str) or not unit.strip():
+        raise ValueError("rate source unit_of_measurement is required")
+    unit = unit.strip()
     multiplier = _rate_multiplier(unit)
     if multiplier is None:
         raise ValueError(f"unsupported router rate unit: {unit!r}")
@@ -161,66 +174,148 @@ def default_traffic_state(
     }
 
 
+def _required_nonnegative_int(value: Any, *, field: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise ContractDataError(f"{field} must be a non-negative integer")
+    return value
+
+
+def _optional_nonnegative_int(value: Any, *, field: str) -> int | None:
+    if value is None:
+        return None
+    return _required_nonnegative_int(value, field=field)
+
+
+def _optional_timestamp(value: Any, *, field: str) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value:
+        raise ContractDataError(f"{field} must be an ISO-8601 string or null")
+    try:
+        datetime.fromisoformat(value)
+    except ValueError as exc:
+        raise ContractDataError(f"{field} must be valid ISO-8601") from exc
+    return value
+
+
 def load_traffic_state(
     path: Path,
     download_entity_id: str,
     upload_entity_id: str,
 ) -> dict[str, Any]:
-    expected = default_traffic_state(download_entity_id, upload_entity_id)
-    try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-    except (FileNotFoundError, json.JSONDecodeError, OSError):
-        return expected
-    if not isinstance(raw, dict):
-        return expected
+    raw = load_json_object(path, label="traffic")
+    if raw is None:
+        return default_traffic_state(download_entity_id, upload_entity_id)
+    if raw.get("schema_version") != 1:
+        raise ContractDataError("traffic.schema_version must be 1")
 
+    source = raw.get("source")
+    last = raw.get("last")
     total = raw.get("total")
     months = raw.get("months")
-    last = raw.get("last")
-    source = raw.get("source")
-    if not isinstance(total, dict):
-        total = {}
-    if not isinstance(months, dict):
-        months = {}
-    if not isinstance(last, dict):
-        last = {}
     if not isinstance(source, dict):
-        source = {}
+        raise ContractDataError("traffic.source must be an object")
+    if not isinstance(last, dict):
+        raise ContractDataError("traffic.last must be an object")
+    if not isinstance(total, dict):
+        raise ContractDataError("traffic.total must be an object")
+    if not isinstance(months, dict):
+        raise ContractDataError("traffic.months must be an object")
+
+    for field in ("download_entity_id", "upload_entity_id"):
+        if not isinstance(source.get(field), str):
+            raise ContractDataError(f"traffic.source.{field} must be a string")
 
     result = default_traffic_state(download_entity_id, upload_entity_id)
     result["total"] = {
-        "download_bytes": max(0, int(total.get("download_bytes") or 0)),
-        "upload_bytes": max(0, int(total.get("upload_bytes") or 0)),
+        "download_bytes": _required_nonnegative_int(
+            total.get("download_bytes"),
+            field="traffic.total.download_bytes",
+        ),
+        "upload_bytes": _required_nonnegative_int(
+            total.get("upload_bytes"),
+            field="traffic.total.upload_bytes",
+        ),
     }
-    result["months"] = {
-        str(key): {
-            "download_bytes": max(0, int(value.get("download_bytes") or 0)),
-            "upload_bytes": max(0, int(value.get("upload_bytes") or 0)),
-            "samples": max(0, int(value.get("samples") or 0)),
-            "counter_resets": max(0, int(value.get("counter_resets") or 0)),
+
+    validated_months: dict[str, dict[str, int]] = {}
+    for key, value in months.items():
+        if not isinstance(key, str) or not key:
+            raise ContractDataError("traffic.months keys must be non-empty strings")
+        if not isinstance(value, dict):
+            raise ContractDataError(f"traffic.months.{key} must be an object")
+        validated_months[key] = {
+            "download_bytes": _required_nonnegative_int(
+                value.get("download_bytes"),
+                field=f"traffic.months.{key}.download_bytes",
+            ),
+            "upload_bytes": _required_nonnegative_int(
+                value.get("upload_bytes"),
+                field=f"traffic.months.{key}.upload_bytes",
+            ),
+            "samples": _required_nonnegative_int(
+                value.get("samples"),
+                field=f"traffic.months.{key}.samples",
+            ),
+            "counter_resets": _required_nonnegative_int(
+                value.get("counter_resets"),
+                field=f"traffic.months.{key}.counter_resets",
+            ),
         }
-        for key, value in months.items()
-        if isinstance(value, dict)
-    }
-    result["counter_resets"] = max(0, int(raw.get("counter_resets") or 0))
-    result["source_changes"] = max(0, int(raw.get("source_changes") or 0))
-    result["updated_at"] = raw.get("updated_at")
+    result["months"] = validated_months
+    result["counter_resets"] = _required_nonnegative_int(
+        raw.get("counter_resets"),
+        field="traffic.counter_resets",
+    )
+    result["source_changes"] = _required_nonnegative_int(
+        raw.get("source_changes"),
+        field="traffic.source_changes",
+    )
+    result["updated_at"] = _optional_timestamp(
+        raw.get("updated_at"),
+        field="traffic.updated_at",
+    )
+
+    last_download = _optional_nonnegative_int(
+        last.get("download_bytes"),
+        field="traffic.last.download_bytes",
+    )
+    last_upload = _optional_nonnegative_int(
+        last.get("upload_bytes"),
+        field="traffic.last.upload_bytes",
+    )
+    observed_at = _optional_timestamp(
+        last.get("observed_at"),
+        field="traffic.last.observed_at",
+    )
+    if (last_download is None) != (last_upload is None):
+        raise ContractDataError(
+            "traffic.last download/upload counters must both be null or both be integers"
+        )
+    if last_download is None and observed_at is not None:
+        raise ContractDataError(
+            "traffic.last.observed_at must be null when counters are null"
+        )
+    if last_download is not None and observed_at is None:
+        raise ContractDataError(
+            "traffic.last.observed_at is required when counters are present"
+        )
 
     same_source = (
-        source.get("download_entity_id") == download_entity_id
-        and source.get("upload_entity_id") == upload_entity_id
+        source["download_entity_id"] == download_entity_id
+        and source["upload_entity_id"] == upload_entity_id
     )
     if same_source:
         result["last"] = {
-            "download_bytes": last.get("download_bytes"),
-            "upload_bytes": last.get("upload_bytes"),
-            "observed_at": last.get("observed_at"),
+            "download_bytes": last_download,
+            "upload_bytes": last_upload,
+            "observed_at": observed_at,
         }
     else:
         result["source_changes"] += 1
+
     _trim_months(result)
     return result
-
 
 def _trim_months(state: dict[str, Any]) -> None:
     months = state["months"]
@@ -231,7 +326,10 @@ def _trim_months(state: dict[str, Any]) -> None:
 def _delta(current: int, previous: Any) -> tuple[int, bool]:
     if previous is None:
         return 0, False
-    previous_int = max(0, int(previous))
+    previous_int = _required_nonnegative_int(
+        previous,
+        field="traffic.last counter",
+    )
     if current >= previous_int:
         return current - previous_int, False
     # Same source counter restarted. The current value is traffic accumulated
@@ -240,12 +338,16 @@ def _delta(current: int, previous: Any) -> tuple[int, bool]:
 
 
 def _observed_month(value: Any) -> str | None:
-    if not value:
+    if value is None:
         return None
+    if not isinstance(value, str) or not value:
+        raise ContractDataError("traffic.last.observed_at must be ISO-8601 or null")
     try:
-        parsed = datetime.fromisoformat(str(value))
-    except ValueError:
-        return None
+        parsed = datetime.fromisoformat(value)
+    except ValueError as exc:
+        raise ContractDataError(
+            "traffic.last.observed_at must be valid ISO-8601"
+        ) from exc
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=now_local().tzinfo)
     return month_key(parsed)
@@ -313,29 +415,29 @@ def traffic_payload(state: dict[str, Any], *, when: datetime | None = None) -> d
     history = []
     for key in sorted(state["months"], reverse=True)[:HISTORY_MONTHS]:
         item = state["months"][key]
-        download = int(item.get("download_bytes") or 0)
-        upload = int(item.get("upload_bytes") or 0)
+        download = item["download_bytes"]
+        upload = item["upload_bytes"]
         history.append(
             {
                 "month": key,
                 "download_gib": _gib(download),
                 "upload_gib": _gib(upload),
                 "total_gib": _gib(download + upload),
-                "samples": int(item.get("samples") or 0),
-                "counter_resets": int(item.get("counter_resets") or 0),
+                "samples": item["samples"],
+                "counter_resets": item["counter_resets"],
             }
         )
 
     return {
         "download_total_gib": _gib(state["total"]["download_bytes"]),
         "upload_total_gib": _gib(state["total"]["upload_bytes"]),
-        "download_month_gib": _gib(month.get("download_bytes", 0)),
-        "upload_month_gib": _gib(month.get("upload_bytes", 0)),
+        "download_month_gib": _gib(month["download_bytes"]),
+        "upload_month_gib": _gib(month["upload_bytes"]),
         "history_count": len(history),
         "history": history,
         "month": current_month,
         "updated_at": state.get("updated_at"),
-        "counter_resets": int(state.get("counter_resets") or 0),
-        "source_changes": int(state.get("source_changes") or 0),
-        "source": dict(state.get("source") or {}),
+        "counter_resets": state["counter_resets"],
+        "source_changes": state["source_changes"],
+        "source": dict(state["source"]),
     }
