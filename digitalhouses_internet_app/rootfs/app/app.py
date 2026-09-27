@@ -238,6 +238,15 @@ class InternetApp:
             DISCOVERY_STATE_FILE,
             current_optional,
         )
+        # Replace any retained connectivity snapshot before making the device
+        # available. On a fresh process this carries connectivity_observed=false,
+        # so Home Assistant cannot briefly reuse the previous process result.
+        client.publish(
+            TOPICS["state"],
+            json.dumps(self._state_payload()),
+            qos=1,
+            retain=True,
+        )
         client.publish(TOPICS["availability"], "online", qos=1, retain=True)
         client.publish(
             TOPICS["traffic_availability"],
@@ -1053,7 +1062,7 @@ class InternetApp:
 
     def run(self) -> None:
         host = os.environ["MQTT_HOST"]
-        port = int(os.getenv("MQTT_PORT", "1883"))
+        port = int(os.environ["MQTT_PORT"])
         self.mqtt.connect(host, port, keepalive=60)
         self.mqtt.loop_start()
         self.telemetry_runner.start()
@@ -1120,7 +1129,10 @@ def main() -> None:
 
     signal.signal(signal.SIGTERM, app.stop)
     signal.signal(signal.SIGINT, app.stop)
-    app.run()
+    try:
+        app.run()
+    except ContractDataError as exc:
+        raise SystemExit(f"Contract data error: {exc}") from exc
 
 
 if __name__ == "__main__":
