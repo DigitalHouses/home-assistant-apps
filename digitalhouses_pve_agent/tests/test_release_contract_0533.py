@@ -54,3 +54,24 @@ def test_0533_readme_uses_current_release_and_canonical_guide_path():
 
     assert "TAG=digitalhouses_pve_agent-v0.5.30" not in readme
     assert "digitalhouses_pve_agent/dh_pve_agent.txt" not in readme
+
+
+
+def test_0533_identity_and_lifecycle_contract_is_documented():
+    readme = (APP / "README.md").read_text(encoding="utf-8")
+    changelog = (APP / "CHANGELOG.md").read_text(encoding="utf-8")
+
+    assert "one PVE Agent per Home Assistant instance" in readme
+    assert "unique_id = <entity object_id>_id" in readme
+    assert "sensor.dh_pve_agent_version" in readme
+    assert "sensor.dh_pve_agent_started" in readme
+    assert "sensor.dh_pve_agent_app_version" not in readme
+    assert "sensor.dh_pve_agent_agent_started" not in readme
+
+    for required in (
+        "complete retained purge",
+        "digitalhouses_proxmox_<instance_id>",
+        "Discovery manifest",
+        "QEMU Guest Agent",
+    ):
+        assert required in changelog
