@@ -75,9 +75,9 @@ from traffic import (
 )
 
 APP_VERSION_RE = re.compile(
-    r"^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)"
-    r"(?:-[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?"
-    r"(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$"
+    r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)"
+    r"(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?"
+    r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$"
 )
 APP_VERSION = os.environ.get("APP_VERSION")
 if not APP_VERSION or APP_VERSION_RE.fullmatch(APP_VERSION) is None:
