@@ -57,7 +57,7 @@ def test_0536_usb_topology_contract_is_read_only_and_additive():
     assert 'key=f"host_usb_{slug}"' in discovery
     assert 'subject="host_usb"' in discovery
     assert "USB " in dashboard
-    assert "PCI " in dashboard
+    assert "set kind = 'PCI'" in dashboard
 
 
 def test_0536_installer_still_does_not_clean_canonical_mqtt():
