@@ -76,7 +76,7 @@ Required outcome:
 - production Apps are installed from the DigitalHouses App repository;
 - application code is delivered through versioned GHCR images;
 - local-image backup duplication is removed;
-- old released images remain recoverable.
+- released image versions remain immutable and are retained according to repository artifact-retention policy.
 
 DigitalHouses Backblaze App and DigitalHouses Internet App were introduced after this rollout sequence was written. Each must satisfy the same immutable Home Assistant App delivery contract before its first production release; an experimental source-only implementation is not a completed production release.
 
@@ -180,7 +180,7 @@ Once a versioned image is published, that version must not be overwritten with d
 
 New code requires a new product version.
 
-Released images should remain available for disaster recovery of historical backups.
+Released image versions must not be overwritten. Artifact retention is an operational/repository policy concern and is not a per-release backup acceptance requirement.
 
 ## 5. Home Assistant App image contract
 
@@ -263,8 +263,8 @@ Principle:
 
 After migrating each Home Assistant App to registry delivery:
 
-1. install the production App from the DigitalHouses App repository;
-2. create a Full Backup;
+1. install the current production App from the DigitalHouses App repository;
+2. create a Home Assistant backup that includes the App;
 3. inspect the App backup;
 4. confirm installation-specific persistent state is present;
 5. confirm a large locally built application image is not embedded in the App backup.
@@ -274,38 +274,27 @@ The acceptance criterion is not a fixed total Home Assistant backup size.
 The criterion is:
 
 ```text
-A DigitalHouses App backup does not contain a ~30–40 MB locally built
-application image when the released image is recoverable from the
-production registry.
+A DigitalHouses App backup contains installation-specific persistent state,
+but does not duplicate the reproducible application image when that image is
+delivered from the production registry.
 ```
 
-## 9. Disaster-recovery acceptance
+## 9. Restore acceptance
 
-The decisive restore test must prove historical-version recovery.
+Restore acceptance validates installation state recovery for the supported current production App lifecycle.
 
-Example:
+A product-level acceptance test should confirm that:
 
-```text
-release Recorder 0.1.9
-    ↓
-install 0.1.9
-    ↓
-create backup
-    ↓
-release 0.1.10
-    ↓
-restore the old backup onto a clean supported Home Assistant system
-    ↓
-Supervisor can recover the required released image
-    ↓
-persistent data is restored
-    ↓
-installation identity is preserved
-```
+1. the App can be restored on a supported Home Assistant system;
+2. the required published registry image can be obtained;
+3. persistent `/data` state is restored;
+4. installation identity and other documented persistent product state are preserved.
 
-The test must prove that a newer current release does not make an older valid backup unrecoverable.
+Restoring an older App release after a newer release has been published is **not** a mandatory immutable-delivery acceptance test.
 
-Old release images must therefore not be routinely deleted merely because a newer version exists.
+Historical-version restore, downgrade and rollback testing are separate operational or migration procedures and should be required only when a specific product migration or recovery plan needs them.
+
+This distinction keeps immutable artifact integrity separate from product-version rollback policy.
 
 ---
 
@@ -567,19 +556,20 @@ history -> retained until authenticated deletion or future repository-level rete
 
 ## 21. Home Assistant App tests
 
-For Recorder and Speedtest:
+For participating Home Assistant Apps:
 
 ```text
 production repository install succeeds
 published versioned image is used
 image tag matches product version
 image digest is recorded
-Full Backup contains persistent installation state
-Full Backup does not embed a large local application image
-restore recovers required released App version
+backup contains persistent installation state
+backup does not embed a large local application image
+restore recovers persistent App state on a supported system
 installation identity survives backup/restore
-historical backup remains restorable after a newer release exists
 ```
+
+Historical-version restore after a newer release exists is not a general release-contract requirement. Add downgrade/rollback tests only where a product-specific migration or recovery procedure explicitly requires them.
 
 ## 22. Release-contract tests
 
