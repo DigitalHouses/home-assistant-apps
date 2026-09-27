@@ -43,6 +43,13 @@ def validate_internet(root: Path, app: Path, context: dict[str, Any]) -> None:
     if config.get("stage") != "stable":
         fail(f"{app.name}: released Internet App stage must remain stable")
 
+    expected_image = "ghcr.io/digitalhouses/digitalhouses_internet_app"
+    if config.get("image") != expected_image:
+        fail(
+            f"{app.name}: production image must remain canonical "
+            f"{expected_image!r}"
+        )
+
     if "DH_SLUG_MIGRATION_MODE" in (config.get("environment") or {}):
         fail(f"{app.name}: completed slug migration mode must be removed")
 
