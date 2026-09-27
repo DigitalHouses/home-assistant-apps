@@ -38,6 +38,7 @@ class AppConfig:
     telemetry_enabled: bool
     log_level: str
     timezone: str
+    top_entities_limit: int
 
 
 def _read_options(path: Path = OPTIONS_FILE) -> dict[str, Any]:
@@ -149,7 +150,7 @@ def load_config(path: Path = OPTIONS_FILE) -> AppConfig:
     if log_level not in {'debug', 'info', 'warning', 'error'}:
         log_level = 'info'
 
-    timezone_name = str(os.getenv('TZ') or options.get('timezone') or 'UTC').strip() or 'UTC'
+    timezone_name = _required(os.getenv('TZ'), 'Supervisor timezone')
 
     return AppConfig(
         database=db,
@@ -161,4 +162,7 @@ def load_config(path: Path = OPTIONS_FILE) -> AppConfig:
         telemetry_enabled=telemetry_enabled,
         log_level=log_level,
         timezone=timezone_name,
+        top_entities_limit=_bounded_int(
+            options.get('top_entities_limit'), 1, 100, 10
+        ),
     )
