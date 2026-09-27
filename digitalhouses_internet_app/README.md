@@ -96,7 +96,7 @@ The Home Assistant layer is deliberately split by responsibility:
 
 - `examples/packages/dh_internet_app_global_package.yaml` — Recorder whitelist only;
 - `examples/packages/dh_internet_app_notification_local_package.yaml` — English direct-delivery example;
-- `examples/packages/locales/ru/dh_internet_app_notification_local_package.yaml` — Russian site-local package using `script.write2log`;
+- `examples/packages/locales/ru/dh_internet_app_notification_local_package.yaml` — Russian public direct-delivery example;
 - `examples/lovelace/dh_internet_app_dashboard.yaml` — reference Sections dashboard.
 
 Install one local notification package. It consumes `event.dh_internet_app_event` directly, gives every user-visible machine event its own `trigger.id`, routes through `choose`, and calls the final delivery action directly. There is no Notification Envelope, secondary `dh_internet_app_notification` event, adapter layer or repeated machine-schema validation in Home Assistant. The producer owns the machine-event contract.
