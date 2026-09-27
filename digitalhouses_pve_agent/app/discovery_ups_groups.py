@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from .discovery_identity import canonicalize_component_unique_ids
 from .topics import ups_state_group_topic
 
 
@@ -445,4 +446,5 @@ def route_ups_discovery_groups(payload: dict[str, object], topics) -> dict[str, 
     # status JSON. Raw UPS status binaries remain available as telemetry.
     raw_components.update(_problem_components(topics))
     raw_components.update(_line_power_components(topics))
+    canonicalize_component_unique_ids(raw_components)
     return payload
