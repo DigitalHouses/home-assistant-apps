@@ -85,7 +85,7 @@ Verify:
 
 Install exactly one local notification package.
 
-Verify that each supported `event.dh_internet_app_event` machine event activates the matching `trigger.id` branch and calls the final delivery action directly. The Russian site package must call `script.write2log` directly; the English example uses `persistent_notification.create`.
+Verify that each supported `event.dh_internet_app_event` machine event activates the matching `trigger.id` branch and calls the final delivery action directly. Both public locale examples use `persistent_notification.create`; an installation may replace only that final action with its own local delivery service.
 
 Verify there is no secondary `dh_internet_app_notification` event, Notification Envelope, adapter layer or duplicated machine-schema validation. Notification text must read required event data directly from `trigger.to_state.attributes`.
 
