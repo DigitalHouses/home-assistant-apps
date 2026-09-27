@@ -12,6 +12,7 @@ APP_DIR = Path(__file__).resolve().parents[1] / "rootfs" / "app"
 sys.path.insert(0, str(APP_DIR))
 
 from state import (
+    ContractDataError,
     OutageTracker,
     RecoveryRuntimeState,
     duration_text,
@@ -41,6 +42,13 @@ class OutageTests(unittest.TestCase):
                 expected,
             )
 
+    def test_corrupted_discovery_state_fails_loudly(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "discovery.json"
+            path.write_text("{broken", encoding="utf-8")
+            with self.assertRaises(ContractDataError):
+                load_discovery_components(path)
+
     def test_recovery_runtime_state_round_trip(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "recovery.json"
@@ -66,6 +74,23 @@ class OutageTests(unittest.TestCase):
                 30,
             )
 
+    def test_corrupted_recovery_state_is_not_reset_to_defaults(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "recovery.json"
+            path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "stopped": False,
+                        "cycle": "bad",
+                        "cooldown_until": None,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with self.assertRaises(ContractDataError):
+                RecoveryRuntimeState.load(path)
+
     def test_recovery_runtime_reset(self) -> None:
         state = RecoveryRuntimeState(
             stopped=True,
@@ -78,6 +103,16 @@ class OutageTests(unittest.TestCase):
         self.assertFalse(state.stopped)
         self.assertEqual(state.cycle, 0)
         self.assertIsNone(state.cooldown_until)
+
+    def test_corrupted_existing_outage_state_fails_loudly(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "outages.json"
+            path.write_text(
+                '{"month":"2026-09","outages":"not-a-list"}',
+                encoding="utf-8",
+            )
+            with self.assertRaises(ContractDataError):
+                OutageTracker.load(path)
 
     def test_pending_outage_round_trip_preserves_first_failure(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
