@@ -125,6 +125,15 @@ def validate_digitalhouses_pve_agent(
         "base Discovery",
     )
     _require_text(
+        app / "app/discovery_identity.py",
+        (
+            'return f"{object_id}_id"',
+            "def canonicalize_component_unique_ids(",
+            'component["unique_id"] = unique_id',
+        ),
+        "Home Assistant unique-id identity",
+    )
+    _require_text(
         app / "app/discovery_metrics.py",
         (
             'entity_id="sensor.dh_pve_agent_system"',
@@ -234,6 +243,7 @@ def validate_digitalhouses_pve_agent(
             '"deep_test_supported"',
             '"stop_test_supported"',
             '"beeper_control_supported"',
+            "canonicalize_component_unique_ids(raw_components)",
         ),
         "canonical UPS ready-state Discovery",
     )
