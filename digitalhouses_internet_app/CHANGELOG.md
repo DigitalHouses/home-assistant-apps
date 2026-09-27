@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.19
+
+- Enforce the released App version as required runtime contract data; remove `unknown` and stale local version fallbacks.
+- Keep connectivity entities unavailable until a real probe succeeds and distinguish probe-execution failures from an observed Internet/router outage, so an unavailable probe mechanism cannot trigger recovery.
+- Validate every schema-v2 machine event at the producer and publish authoritative retained incident state before `connection_lost` / `connection_restored` transient events.
+- Fail loudly when existing recovery, outage, traffic, thresholds, Speedtest, recent-results, server-catalog, discovery or telemetry persistence is malformed instead of silently replacing it with healthy defaults.
+- Preserve telemetry installation identity on state corruption by rejecting invalid persisted UUID/token data rather than generating a new installation.
+- Require explicit units on mapped traffic/rate sources, reject invalid explicit App configuration instead of coercing/clamping it, and represent absent optional Speedtest metadata as `null`.
+- Keep the Supervisor slug, MQTT namespace/device identity, Home Assistant entity IDs, recovery modes and Recorder publication cadence unchanged.
+
 ## 0.1.18
 
 - Migrate production Home Assistant delivery to the canonical versioned GHCR image repository `ghcr.io/digitalhouses/digitalhouses_internet_app`.
