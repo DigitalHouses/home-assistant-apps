@@ -2,7 +2,8 @@
 
 set -Eeuo pipefail
 
-bashio::log.info "Starting DigitalHouses Internet App ${APP_VERSION:-unknown}"
+: "${APP_VERSION:?APP_VERSION is required}"
+bashio::log.info "Starting DigitalHouses Internet App ${APP_VERSION}"
 
 export TZ="$(bashio::supervisor.timezone)"
 export MQTT_HOST="$(bashio::services mqtt host)"
