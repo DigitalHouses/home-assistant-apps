@@ -245,12 +245,27 @@ sections:
             Система работает штатно.
           {% else %}
             {% for item in active %}
-              {% set object_name = item.get('object_name', 'Объект') %}
-              {% set summary = item.get('summary', 'Проблема') %}
-              {% set details = item.get('details', '') %}
-              • {{ object_name }} — {{ summary }}{% if details %} · {{ details }}{% endif %}
-              {% if not loop.last %}
+              {% set id = item.get('problem_id', '') %}
+              {% set name = item.get('object_name', 'Объект') %}
+              {% set average = item.get('average') %}
+              {% set threshold = item.get('threshold') %}
 
+              {% if id == 'cpu_temperature' %}
+                • {{ name }} — высокая температура{% if average is number and threshold is number %}: {{ average | round(1) }} °C · порог {{ threshold | round(0) }} °C{% endif %}
+              {% elif id == 'cpu_throttling' %}
+                • {{ name }} — троттлинг процессора
+              {% elif id.startswith('storage_') and id.endswith('_percent_used') %}
+                • {{ name }} — заполнение хранилища{% if average is number and threshold is number %}: {{ average | round(1) }}% · порог {{ threshold | round(0) }}%{% endif %}
+              {% elif id.startswith('disk_') and id.endswith('_temperature') %}
+                • {{ name }} — высокая температура{% if average is number and threshold is number %}: {{ average | round(1) }} °C · порог {{ threshold | round(0) }} °C{% endif %}
+              {% elif id.startswith('disk_') and id.endswith('_smart') %}
+                • {{ name }} — ошибка SMART
+              {% elif id.startswith('gpu_') and id.endswith('_temperature') %}
+                • {{ name }} — высокая температура GPU{% if average is number and threshold is number %}: {{ average | round(1) }} °C · порог {{ threshold | round(0) }} °C{% endif %}
+              {% elif id.startswith('fan_') and id.endswith('_control_restore') %}
+                • {{ name }} — не восстановлено управление вентилятором
+              {% else %}
+                • {{ name }} — {{ id or 'неизвестная проблема' }}
               {% endif %}
             {% endfor %}
           {% endif %}
