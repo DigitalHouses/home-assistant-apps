@@ -536,8 +536,6 @@ class InternetApp:
         self._publish_problems()
 
     def _event(self, event_type: str, **data: Any) -> None:
-        if not self.mqtt.is_connected():
-            return
         payload = {
             "schema_version": EVENT_SCHEMA_VERSION,
             "event_type": event_type,
@@ -545,6 +543,8 @@ class InternetApp:
             **data,
         }
         validate_machine_event(payload)
+        if not self.mqtt.is_connected():
+            return
         self.mqtt.publish(
             TOPICS["event"],
             json.dumps(payload),
@@ -954,10 +954,22 @@ class InternetApp:
 
         except RecoveryStopped:
             self._set_recovery_state("stopped", countdown=0)
+        except ConnectivityProbeError as exc:
+            with self.lock:
+                self.connectivity_observed = False
+            self.log.exception("Recovery connectivity probe failed")
+            self._set_recovery_state("error", countdown=0)
+            self._event(
+                "recovery_error",
+                error=str(exc) or exc.__class__.__name__,
+            )
         except Exception as exc:
             self.log.exception("Recovery failed")
             self._set_recovery_state("error", countdown=0)
-            self._event("recovery_error", error=str(exc))
+            self._event(
+                "recovery_error",
+                error=str(exc) or exc.__class__.__name__,
+            )
         finally:
             with self.lock:
                 self.recovery_thread = None
