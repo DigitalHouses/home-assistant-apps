@@ -9,6 +9,10 @@ GOOGLE_PROBE = "8.8.8.8"
 CLOUDFLARE_PROBE = "1.1.1.1"
 
 
+class ConnectivityProbeError(RuntimeError):
+    """Raised when the probe mechanism itself cannot produce an observation."""
+
+
 @dataclass(frozen=True)
 class ConnectivitySnapshot:
     internet_up: bool
@@ -34,8 +38,14 @@ def ping_host(host: str, timeout_seconds: int) -> bool:
             stderr=subprocess.DEVNULL,
             timeout=timeout_seconds + 2,
         )
-    except (OSError, subprocess.TimeoutExpired):
-        return False
+    except subprocess.TimeoutExpired as exc:
+        raise ConnectivityProbeError(
+            f"ping probe process timed out for {host}"
+        ) from exc
+    except OSError as exc:
+        raise ConnectivityProbeError(
+            f"unable to execute ping probe for {host}: {exc}"
+        ) from exc
     return result.returncode == 0
 
 
