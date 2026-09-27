@@ -104,8 +104,28 @@ def _inventory():
                     "pci_class": "0300",
                     "class_name": "VGA compatible controller",
                     "model": "Intel UHD",
+                },
+                "usb_vm_110_usb0": {
+                    "connection": "passthrough_usb",
+                    "owner_kind": "vm",
+                    "owner_id": "110",
+                    "owner_name": "haos",
+                    "config_key": "usb0",
+                    "usb_host": "1a86:7523",
+                    "usb_id": "1a86:7523",
+                    "physical_port": "1-3",
+                    "model": "QinHeng Electronics CH340 serial converter",
+                    "connected": True,
+                },
+            },
+            "host_usb": {
+                "usb_1_10": {
+                    "connection": "host_usb",
+                    "usb_id": "8087:0026",
+                    "physical_port": "1-10",
+                    "model": "Intel Corp. AX201 Bluetooth",
                 }
-            }
+            },
         },
     }
 
@@ -151,6 +171,12 @@ def test_pve_discovery_routes_entities_to_smallest_state_group():
     )
     assert c["vms_summary"]["state_topic"] == state_group_topic(topics, "guest/summary")
     assert c["passthrough_pci_0000_00_02_0"]["state_topic"] == state_group_topic(
+        topics, "topology"
+    )
+    assert c["passthrough_usb_vm_110_usb0"]["state_topic"] == state_group_topic(
+        topics, "topology"
+    )
+    assert c["host_usb_usb_1_10"]["state_topic"] == state_group_topic(
         topics, "topology"
     )
     assert c["collector_cpu"]["state_topic"] == state_group_topic(
