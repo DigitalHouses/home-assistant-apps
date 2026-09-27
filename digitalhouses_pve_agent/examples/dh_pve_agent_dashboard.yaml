@@ -59,7 +59,7 @@ sections:
           {% set manufacturer = state_attr('sensor.dh_pve_agent_system', 'manufacturer') %}
           {% set model = state_attr('sensor.dh_pve_agent_system', 'model') %}
           {% set pve = state_attr('sensor.dh_pve_agent_system', 'proxmox_version') %}
-          {% set app = states('sensor.dh_pve_agent_app_version') %}
+          {% set app = states('sensor.dh_pve_agent_version') %}
           {% set ip = state_attr('sensor.dh_pve_agent_system', 'primary_ip') %}
           {% set app_segment = '' if app in ['unknown', 'unavailable', 'none', ''] else ' · App ' ~ app %}
           {{ [manufacturer, model] | reject('in', [none, '', 'unknown']) | join(' ') }}{% if pve %} · PVE {{ pve }}{% endif %}{{ app_segment }}{% if ip %} · {{ ip }}{% endif %}
@@ -74,7 +74,7 @@ sections:
         name: Последний запуск
 
       - type: tile
-        entity: sensor.dh_pve_agent_agent_started
+        entity: sensor.dh_pve_agent_started
         name: Агент запущен
 
       - type: custom:mushroom-template-card
