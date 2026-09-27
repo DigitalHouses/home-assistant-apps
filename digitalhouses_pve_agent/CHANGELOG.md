@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.33
+
+- Make Home Assistant entity identity deterministic for the supported one-PVE-Agent-per-HA contract: every final PVE/UPS Discovery component now uses `unique_id = <entity object_id>_id`, while MQTT instance/device ownership continues to use the stable machine/instance ID.
+- Normalize public PVE diagnostics to `sensor.dh_pve_agent_version`, `sensor.dh_pve_agent_profile` and `sensor.dh_pve_agent_started`.
+- Change uninstall MQTT cleanup from Discovery-only removal to a complete retained purge of the current `DigitalHouses/Global/digitalhouses_pve_agent/<instance_id>/#` namespace while preserving local config/state unless `--purge` is explicitly requested.
+- Add cleanup for the pre-product retained Discovery ID `homeassistant/device/digitalhouses_proxmox_<instance_id>/config` alongside the canonical and later legacy device IDs.
+- Persist a Discovery manifest and reconcile inventory-driven component removal at runtime. Removed storage/disk/GPU/fan/VM/LXC/passthrough components receive MQTT Device Discovery tombstones and no-longer-referenced retained state/problem topics are deleted without touching shared topics.
+- Keep guest/passthrough SMART collection unchanged; disks visible through QEMU Guest Agent remain part of the supported PVE monitoring inventory.
+- Add regression coverage for deterministic unique IDs, full uninstall purge, idempotent cleanup and dynamic retained-state removal across restart.
+
+
 ## 0.5.32
 
 - Make the installed operational guide production-release-tag only and move branch/main/SHA deployment under an explicit development/recovery path.
