@@ -1,13 +1,20 @@
 from __future__ import annotations
 
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
 APP_DIR = Path(__file__).resolve().parents[1] / "rootfs" / "app"
 sys.path.insert(0, str(APP_DIR))
 
-from quality import evaluate_performance, load_thresholds, normalize_thresholds, set_threshold\nfrom state import ContractDataError
+from quality import (
+    evaluate_performance,
+    load_thresholds,
+    normalize_thresholds,
+    set_threshold,
+)
+from state import ContractDataError
 
 
 class QualityTests(unittest.TestCase):
