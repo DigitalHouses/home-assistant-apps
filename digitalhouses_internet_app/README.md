@@ -34,7 +34,7 @@ All recovery timing belongs to App configuration: maximum cycles, retry interval
 
 ## Current product state
 
-Version `0.1.18` keeps the stable canonical runtime and moves production Home Assistant delivery to the versioned DigitalHouses GHCR image. The canonical Supervisor identity is permanent, the temporary migration runtime has been removed, and the App remains stable in Home Assistant. The product provides:
+Version `0.1.19` keeps immutable GHCR delivery and hardens runtime contract handling. The canonical Supervisor identity is permanent, the temporary migration runtime has been removed, and the App remains stable in Home Assistant. The product provides:
 
 - Internet and router reachability;
 - current-month outage state persisted under `/data`;
@@ -67,6 +67,14 @@ Releases `0.1.12` through `0.1.15` contained the temporary bridge/import machine
 MQTT/device/entity identities remain unchanged under `dh_internet_app`.
 
 The completed procedure and release history are retained in [the slug migration record](../docs/digitalhouses_internet_app/slug-migration.md).
+
+## Runtime contract behavior
+
+Connectivity is considered **unknown** until a real ICMP probe completes. During startup, or when the probe mechanism itself cannot execute, the four connectivity entities are unavailable rather than being reported as down. Probe execution failures do not advance outage confirmation and cannot start automatic recovery.
+
+Persisted App-owned state under `/data` is contract data. A genuinely missing state file is treated as first-run state and receives documented defaults where applicable. An existing malformed state file is not silently replaced: startup fails with an explicit contract-data error so recovery limits, outage history, traffic totals or telemetry installation identity cannot be reset unnoticed.
+
+Machine events are producer-validated against their schema-v2 event-specific contract before transport. For connection loss/restoration, retained authoritative state is synchronized before the transient event is emitted. Existing MQTT/device/entity identities remain unchanged.
 
 ## Product telemetry
 
