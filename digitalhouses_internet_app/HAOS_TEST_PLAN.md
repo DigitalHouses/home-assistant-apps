@@ -149,7 +149,37 @@ Verify:
 - active cooldown is not bypassed;
 - a restart between cycles waits through a retry guard before another power action.
 
-## 9. Pass criteria
+## 9. Immutable delivery, backup and restore
+
+Install or update the current production App from the DigitalHouses App repository.
+
+Verify:
+
+- the installed App version matches the current released version;
+- production delivery uses the published `ghcr.io/digitalhouses/digitalhouses_internet_app:<version>` artifact rather than a locally built production image;
+- the GitHub Release records the canonical release tag, exact commit SHA, image name and image digest for the same version;
+- the canonical Supervisor slug remains `digitalhouses_internet_app` and existing `dh_internet_app_*` entities are not duplicated or renamed.
+
+Create a Home Assistant backup that includes the App and inspect the App backup.
+
+Verify:
+
+- installation-specific configuration and required persistent `/data` state are present;
+- telemetry installation identity/state is included as persistent App data when it exists;
+- the backup does not embed a large locally built copy of the reproducible application image.
+
+Restore that current-production backup on a supported Home Assistant system.
+
+Verify:
+
+- the required published registry image can be obtained;
+- App options and persistent `/data` state are restored;
+- telemetry installation identity and documented runtime state survive the restore;
+- the App starts cleanly with the same canonical MQTT/device/entity identities.
+
+Historical-version restore or installing an older App release over a newer one is not part of this general acceptance test unless a separate product-specific migration procedure explicitly requires it.
+
+## 10. Pass criteria
 
 The HAOS validation passes when:
 
@@ -159,6 +189,7 @@ The HAOS validation passes when:
 - App restart preserves outage/recovery/traffic state correctly;
 - optional mappings appear/disappear cleanly;
 - switch recovery cannot be left off by a normal Stop/Restart path;
-- the reference dashboard and notification package load without legacy Speedtest entities.
+- the reference dashboard and notification package load without legacy Speedtest entities;
+- immutable GHCR delivery and current-production backup/restore acceptance pass.
 
 Historical Supervisor slug-migration validation is retained separately in `../docs/digitalhouses_internet_app/slug-migration.md`; it is no longer part of the current runtime test path.
