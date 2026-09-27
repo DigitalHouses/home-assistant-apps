@@ -6,7 +6,13 @@ from zoneinfo import ZoneInfo
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'rootfs' / 'app'))
 
-from metrics import db_depth_days, last_age_seconds, records_k, yesterday_bounds_epoch
+from metrics import (
+    current_period_starts_epoch,
+    db_depth_days,
+    last_age_seconds,
+    records_k,
+    yesterday_bounds_epoch,
+)
 
 class MetricsTests(unittest.TestCase):
     def test_last_age_seconds(self):
@@ -20,6 +26,24 @@ class MetricsTests(unittest.TestCase):
         start = datetime(2026, 9, 1, 23, 30, tzinfo=tz).timestamp()
         now = datetime(2026, 9, 4, 0, 10, tzinfo=tz).timestamp()
         self.assertEqual(db_depth_days(start, now, 'Asia/Almaty'), 3)
+
+    def test_current_hour_and_day_starts_are_local(self):
+        tz = ZoneInfo('Asia/Almaty')
+        now = datetime(
+            2026, 9, 4, 12, 34, 56, tzinfo=tz
+        ).timestamp()
+        hour_start, day_start = current_period_starts_epoch(
+            now,
+            'Asia/Almaty',
+        )
+        self.assertEqual(
+            datetime.fromtimestamp(hour_start, tz),
+            datetime(2026, 9, 4, 12, 0, tzinfo=tz),
+        )
+        self.assertEqual(
+            datetime.fromtimestamp(day_start, tz),
+            datetime(2026, 9, 4, 0, 0, tzinfo=tz),
+        )
 
     def test_yesterday_bounds_are_local_midnight(self):
         tz = ZoneInfo('Asia/Almaty')
