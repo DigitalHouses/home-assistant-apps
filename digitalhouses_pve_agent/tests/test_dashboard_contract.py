@@ -18,7 +18,7 @@ def test_canonical_pve_dashboard_exists_and_uses_app_owned_state():
         "sensor.dh_pve_agent_problems",
         "sensor.dh_pve_agent_system",
         "sensor.dh_pve_agent_last_boot",
-        "sensor.dh_pve_agent_agent_started",
+        "sensor.dh_pve_agent_started",
         "sensor.dh_pve_agent_cpu_usage",
         "sensor.dh_pve_agent_cpu_temperature",
         "sensor.dh_pve_agent_cpu_frequency",
@@ -39,7 +39,7 @@ def test_dashboard_shows_app_version_in_system_card_and_hides_unknown_values():
         "entity: sensor.dh_pve_agent_system", 1
     )[1].split("icon: mdi:server", 1)[0]
 
-    assert "sensor.dh_pve_agent_app_version" in system_card
+    assert "sensor.dh_pve_agent_version" in system_card
     assert "App " in system_card
     assert "unknown" in system_card
     assert "unavailable" in system_card
