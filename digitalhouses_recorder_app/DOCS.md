@@ -80,6 +80,29 @@ Recorder writing requires a successful current DB observation. A DB read
 failure therefore makes Recorder-writing data unavailable instead of changing
 it to synthetic `false`.
 
+
+## Timezone ownership
+
+Recorder App has no user-configurable timezone. At startup, `run.sh` reads the
+Home Assistant Supervisor timezone through `bashio::supervisor.timezone` and
+exports it as `TZ`. Local-hour, local-day and previous-day boundaries all use
+that authoritative timezone. There is no silent UTC fallback.
+
+## Recorder count metrics
+
+Recorder row counts exposed for UI graphs are scalar-only sensors: their
+changing data is carried only in the entity state, never in dynamic JSON
+attributes. Counts are normalized to thousands with one decimal place.
+
+- `db_records_per_hour`: rolling last 60 minutes, `K rec/h`;
+- `db_current_hour_records`: since the start of the current local hour, `K records`;
+- `db_today_records`: since local midnight, `K records`;
+- `db_yesterday_records`: previous local calendar day, `K records`;
+- `db_records`: all retained Recorder rows, `K records`.
+
+The rolling-hour/current-hour/current-day counters refresh every five minutes.
+Total and previous-day counters remain in the hourly slow group.
+
 ## Storage monitoring
 
 When storage monitoring is enabled:
@@ -140,6 +163,15 @@ Canonical ranking sensors:
 
 The 24-hour ranking refreshes hourly. All-time ranking refreshes daily. Each
 uses a dedicated retained MQTT topic and is republished after MQTT reconnect.
+
+`top_entities_limit` controls both rankings. It defaults to `10` and accepts
+values from `1` through `100`. The SQL query itself uses this limit, so a
+larger user-selected value changes both query result size and the published
+ranking payload.
+
+Ranking record counts are also normalized to `K records`. The ranking payload
+uses the neutral `top_entities` list plus `limit`, `top_entity`,
+`top_records`, `generated_at` and `period` fields.
 
 A ranking query failure preserves the previous successful retained ranking.
 The DB availability topic still distinguishes a current DB outage from a fresh
