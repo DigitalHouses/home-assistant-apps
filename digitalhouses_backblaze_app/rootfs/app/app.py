@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import signal
 import threading
 import time
@@ -15,22 +16,32 @@ import paho.mqtt.client as mqtt
 from backblaze import BackblazeClient
 from config import AppConfig, load_config
 from discovery import (
+    API_OBSERVED_TOPIC,
     APP_AVAILABILITY_TOPIC,
+    DATA_AVAILABILITY_TOPIC,
     DISCOVERY_SCHEMA_VERSION,
     DISCOVERY_TOPIC,
     HA_STATUS_TOPIC,
     REFRESH_COMMAND_TOPIC,
-    TELEMETRY_DELETE_COMMAND_TOPIC,
     STATE_RETAIN,
     STATE_TOPIC,
-    bucket_state_topic,
+    TELEMETRY_DELETE_COMMAND_TOPIC,
     build_discovery_payload,
+    discovery_cleanup_payload,
+    dynamic_discovery_manifest,
+    load_discovery_manifest,
     mark_discovery_schema,
     needs_discovery_reset,
+    removed_discovery_components,
+    save_discovery_manifest,
+    bucket_state_topic,
 )
 from telemetry import TelemetryClient, TelemetryRunner
 
-APP_VERSION = os.getenv("APP_VERSION", "0.1.10-local")
+APP_VERSION_RE = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
+APP_VERSION = os.environ.get("APP_VERSION")
+if not APP_VERSION or APP_VERSION_RE.fullmatch(APP_VERSION) is None:
+    raise RuntimeError("APP_VERSION must be a valid semantic version")
 
 
 class BackblazeMonitorApp:
@@ -52,8 +63,20 @@ class BackblazeMonitorApp:
         self.refresh_requested = threading.Event()
         self.refresh_in_progress = threading.Event()
         self.state_lock = threading.RLock()
-        self.discovery_sync_lock = threading.Lock()
+        self.discovery_sync_lock = threading.RLock()
         self.buckets: list[dict[str, Any]] = []
+        self.has_scan_result = False
+        self.last_scan_succeeded = False
+        self.discovery_manifest_invalid = False
+        try:
+            loaded_manifest = load_discovery_manifest()
+        except ValueError as exc:
+            self.log.warning("Discovery manifest is invalid; reset required: %s", exc)
+            loaded_manifest = None
+            self.discovery_manifest_invalid = True
+        self.discovery_manifest_missing = loaded_manifest is None
+        self.discovery_manifest = loaded_manifest or {}
+
         self.state: dict[str, Any] = {
             "api_connected": False,
             "bucket_count": 0,
@@ -94,6 +117,8 @@ class BackblazeMonitorApp:
         client.subscribe(REFRESH_COMMAND_TOPIC, qos=1)
         client.subscribe(TELEMETRY_DELETE_COMMAND_TOPIC, qos=1)
         self.publish_text(APP_AVAILABILITY_TOPIC, "online", retain=True)
+        self.publish_text(DATA_AVAILABILITY_TOPIC, "offline", retain=True)
+        self.publish_text(API_OBSERVED_TOPIC, "offline", retain=True)
         threading.Thread(
             target=self._sync_discovery_after_connect,
             name="dh-backblaze-discovery-sync",
@@ -102,35 +127,58 @@ class BackblazeMonitorApp:
 
     def _sync_discovery_after_connect(self) -> None:
         with self.discovery_sync_lock:
-            reset = needs_discovery_reset()
+            reset = (
+                needs_discovery_reset()
+                or self.discovery_manifest_missing
+                or self.discovery_manifest_invalid
+            )
             if reset:
-                info = self.client.publish(
+                if not self.publish_text(
                     DISCOVERY_TOPIC,
                     "",
-                    qos=1,
                     retain=True,
-                )
-                if info.rc != mqtt.MQTT_ERR_SUCCESS:
+                    confirm=True,
+                ):
                     self.log.warning(
-                        "MQTT discovery migration could not clear old config: rc=%s",
-                        info.rc,
+                        "MQTT discovery migration could not clear old config"
                     )
                     return
-                try:
-                    info.wait_for_publish(timeout=5.0)
-                except (RuntimeError, ValueError) as exc:
-                    self.log.warning(
-                        "MQTT discovery migration clear was not confirmed: %s",
-                        exc,
-                    )
-                    return
+                self.discovery_manifest = {}
                 self.log.info(
                     "MQTT discovery migration: old retained device config cleared"
                 )
 
-            self.publish_discovery()
             self.publish_state()
-            self.publish_buckets()
+
+            if self.has_scan_result and self.last_scan_succeeded:
+                if not self.sync_discovery():
+                    return
+                self.publish_buckets()
+                self.publish_text(API_OBSERVED_TOPIC, "online", retain=True)
+                self.publish_text(DATA_AVAILABILITY_TOPIC, "online", retain=True)
+            elif self.has_scan_result:
+                self.publish_text(API_OBSERVED_TOPIC, "online", retain=True)
+                self.publish_text(DATA_AVAILABILITY_TOPIC, "offline", retain=True)
+            elif reset:
+                payload = build_discovery_payload(APP_VERSION)
+                if not self.publish_json(
+                    DISCOVERY_TOPIC,
+                    payload,
+                    retain=True,
+                    confirm=True,
+                ):
+                    return
+                try:
+                    save_discovery_manifest({})
+                except OSError as exc:
+                    self.log.warning(
+                        "Unable to persist empty discovery manifest: %s",
+                        exc,
+                    )
+                    return
+                self.discovery_manifest = {}
+                self.discovery_manifest_missing = False
+                self.discovery_manifest_invalid = False
 
             if reset:
                 try:
@@ -146,7 +194,7 @@ class BackblazeMonitorApp:
                         DISCOVERY_SCHEMA_VERSION,
                     )
 
-            self.log.info("MQTT connected; discovery published")
+            self.log.info("MQTT connected; retained state synchronized")
 
     def _on_disconnect(self, client, userdata, return_code) -> None:
         del client, userdata
@@ -171,9 +219,23 @@ class BackblazeMonitorApp:
         if message.topic == HA_STATUS_TOPIC:
             payload = message.payload.decode("utf-8", errors="replace").strip().lower()
             if payload == "online":
-                self.publish_discovery()
-                self.publish_state()
-                self.publish_buckets()
+                threading.Thread(
+                    target=self._republish_current_snapshot,
+                    name="dh-backblaze-ha-republish",
+                    daemon=True,
+                ).start()
+
+    def _republish_current_snapshot(self) -> None:
+        with self.discovery_sync_lock:
+            self.publish_state()
+            if self.has_scan_result and self.last_scan_succeeded:
+                if self.sync_discovery():
+                    self.publish_buckets()
+                    self.publish_text(API_OBSERVED_TOPIC, "online", retain=True)
+                    self.publish_text(DATA_AVAILABILITY_TOPIC, "online", retain=True)
+            elif self.has_scan_result:
+                self.publish_text(API_OBSERVED_TOPIC, "online", retain=True)
+                self.publish_text(DATA_AVAILABILITY_TOPIC, "offline", retain=True)
 
     def _delete_telemetry(self) -> None:
         if self.telemetry.delete():
@@ -181,12 +243,31 @@ class BackblazeMonitorApp:
         else:
             self.log.warning("Unable to delete retained DigitalHouses telemetry record")
 
-    def publish_text(self, topic: str, payload: str, *, retain: bool) -> None:
+    def publish_text(
+        self,
+        topic: str,
+        payload: str,
+        *,
+        retain: bool,
+        confirm: bool = False,
+    ) -> bool:
         if not self.mqtt_connected.is_set():
-            return
+            return False
         info = self.client.publish(topic, payload, qos=1, retain=retain)
         if info.rc != mqtt.MQTT_ERR_SUCCESS:
             self.log.warning("MQTT publish failed for %s: rc=%s", topic, info.rc)
+            return False
+        if not confirm:
+            return True
+        try:
+            info.wait_for_publish(timeout=5.0)
+        except (RuntimeError, ValueError) as exc:
+            self.log.warning("MQTT publish was not confirmed for %s: %s", topic, exc)
+            return False
+        if not info.is_published():
+            self.log.warning("MQTT publish timed out for %s", topic)
+            return False
+        return True
 
     def publish_json(
         self,
@@ -194,58 +275,98 @@ class BackblazeMonitorApp:
         payload: dict[str, Any],
         *,
         retain: bool = True,
-    ) -> None:
-        self.publish_text(
+        confirm: bool = False,
+    ) -> bool:
+        return self.publish_text(
             topic,
             json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
             retain=retain,
+            confirm=confirm,
         )
 
-    def publish_discovery(
-        self,
-        *,
-        removed_buckets: list[dict[str, Any]] | None = None,
-    ) -> None:
-        with self.state_lock:
-            buckets = [
-                {
-                    "bucket_id": item["bucket_id"],
-                    "bucket_name": item["bucket_name"],
-                }
-                for item in self.buckets
-            ]
-        self.publish_json(
-            DISCOVERY_TOPIC,
-            build_discovery_payload(
-                APP_VERSION,
-                buckets,
-                removed_buckets=removed_buckets or (),
-            ),
-            retain=True,
-        )
-
-    def publish_state(self) -> None:
+    def publish_state(self) -> bool:
         with self.state_lock:
             payload = dict(self.state)
-        self.publish_json(STATE_TOPIC, payload, retain=STATE_RETAIN)
+        return self.publish_json(STATE_TOPIC, payload, retain=STATE_RETAIN)
 
-    def publish_buckets(self) -> None:
+    def publish_buckets(self) -> bool:
         with self.state_lock:
             buckets = [dict(item) for item in self.buckets]
+        ok = True
         for bucket in buckets:
-            self.publish_json(
+            ok = self.publish_json(
                 bucket_state_topic(str(bucket["bucket_id"])),
                 bucket,
                 retain=True,
-            )
+            ) and ok
+        return ok
 
-    def clear_bucket_states(self, buckets: list[dict[str, Any]]) -> None:
-        for bucket in buckets:
-            self.publish_text(
-                bucket_state_topic(str(bucket["bucket_id"])),
-                "",
+    def sync_discovery(self) -> bool:
+        with self.discovery_sync_lock:
+            if not self.mqtt_connected.is_set():
+                return False
+            with self.state_lock:
+                buckets = [
+                    {
+                        "bucket_id": item["bucket_id"],
+                        "bucket_name": item["bucket_name"],
+                    }
+                    for item in self.buckets
+                ]
+
+            payload = build_discovery_payload(APP_VERSION, buckets)
+            current_manifest = dynamic_discovery_manifest(payload)
+            try:
+                removals, retained_topics = removed_discovery_components(
+                    self.discovery_manifest,
+                    current_manifest,
+                )
+            except ValueError as exc:
+                self.log.warning("Discovery reconciliation failed: %s", exc)
+                return False
+
+            if removals:
+                cleanup = discovery_cleanup_payload(payload, removals)
+                if not self.publish_json(
+                    DISCOVERY_TOPIC,
+                    cleanup,
+                    retain=True,
+                    confirm=True,
+                ):
+                    return False
+                for topic in retained_topics:
+                    if not self.publish_text(
+                        topic,
+                        "",
+                        retain=True,
+                        confirm=True,
+                    ):
+                        return False
+
+            if not self.publish_json(
+                DISCOVERY_TOPIC,
+                payload,
                 retain=True,
-            )
+                confirm=True,
+            ):
+                return False
+
+            try:
+                save_discovery_manifest(current_manifest)
+            except OSError as exc:
+                self.log.warning("Unable to persist discovery manifest: %s", exc)
+                return False
+
+            self.discovery_manifest = current_manifest
+            self.discovery_manifest_missing = False
+            self.discovery_manifest_invalid = False
+
+            if removals:
+                self.log.info(
+                    "Removed stale Backblaze discovery components: %s",
+                    ", ".join(sorted(removals)),
+                )
+            return True
 
     def refresh(self) -> bool:
         if self.refresh_in_progress.is_set():
@@ -257,7 +378,6 @@ class BackblazeMonitorApp:
             now = datetime.now(timezone.utc).isoformat()
             buckets = [asdict(item) for item in usage.buckets]
             with self.state_lock:
-                previous_buckets = [dict(item) for item in self.buckets]
                 self.buckets = buckets
                 self.state.update({
                     "api_connected": True,
@@ -268,30 +388,21 @@ class BackblazeMonitorApp:
                     "versions": usage.versions,
                     "last_update": now,
                 })
+            self.has_scan_result = True
+            self.last_scan_succeeded = True
 
-            active_bucket_ids = {
-                str(item["bucket_id"])
-                for item in buckets
-            }
-            removed_buckets = [
-                item
-                for item in previous_buckets
-                if str(item["bucket_id"]) not in active_bucket_ids
-            ]
-            if removed_buckets:
-                self.publish_discovery(removed_buckets=removed_buckets)
-                self.clear_bucket_states(removed_buckets)
-                self.log.info(
-                    "Removed stale Backblaze bucket entities: %s",
-                    ", ".join(
-                        str(item["bucket_name"])
-                        for item in removed_buckets
-                    ),
-                )
+            if self.mqtt_connected.is_set():
+                if not self.sync_discovery():
+                    self.publish_text(DATA_AVAILABILITY_TOPIC, "offline", retain=True)
+                    self.log.warning(
+                        "Backblaze refresh collected data but MQTT discovery sync failed"
+                    )
+                    return False
+                self.publish_state()
+                self.publish_buckets()
+                self.publish_text(API_OBSERVED_TOPIC, "online", retain=True)
+                self.publish_text(DATA_AVAILABILITY_TOPIC, "online", retain=True)
 
-            self.publish_discovery()
-            self.publish_state()
-            self.publish_buckets()
             self.log.info(
                 "Backblaze refresh complete: buckets=%s stored_bytes=%s versions=%s",
                 len(buckets),
@@ -302,7 +413,12 @@ class BackblazeMonitorApp:
         except Exception as exc:
             with self.state_lock:
                 self.state["api_connected"] = False
-            self.publish_state()
+            self.has_scan_result = True
+            self.last_scan_succeeded = False
+            if self.mqtt_connected.is_set():
+                self.publish_state()
+                self.publish_text(API_OBSERVED_TOPIC, "online", retain=True)
+                self.publish_text(DATA_AVAILABILITY_TOPIC, "offline", retain=True)
             self.log.warning("Backblaze refresh failed: %s", exc)
             return False
         finally:
@@ -330,6 +446,8 @@ class BackblazeMonitorApp:
                 self.stop_event.wait(1.0)
         finally:
             self.telemetry_runner.stop()
+            self.publish_text(DATA_AVAILABILITY_TOPIC, "offline", retain=True)
+            self.publish_text(API_OBSERVED_TOPIC, "offline", retain=True)
             self.publish_text(APP_AVAILABILITY_TOPIC, "offline", retain=True)
             self.client.disconnect()
             self.client.loop_stop()
