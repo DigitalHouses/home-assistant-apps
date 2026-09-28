@@ -14,7 +14,7 @@ REFRESH_COMMAND_TOPIC = f"{BASE_TOPIC}/refresh"
 TELEMETRY_DELETE_COMMAND_TOPIC = f"{BASE_TOPIC}/telemetry/delete"
 HA_STATUS_TOPIC = "homeassistant/status"
 STATE_RETAIN = True
-DISCOVERY_SCHEMA_VERSION = 2
+DISCOVERY_SCHEMA_VERSION = 3
 DISCOVERY_SCHEMA_PATH = Path("/data/discovery_schema_version")
 
 
