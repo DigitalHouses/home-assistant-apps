@@ -273,20 +273,21 @@ class BackblazeClient:
                     "action",
                     context=context,
                 )
-                content_version = action not in {"start", "hide", "folder"}
-                content_length = 0
-                if content_version:
-                    _required_string(item, "fileId", context=context)
-                    content_length = _required_non_negative_int(
-                        item,
-                        "contentLength",
-                        context=context,
+                if action not in {"start", "upload", "hide", "folder"}:
+                    raise BackblazeApiError(
+                        f"{context} has unsupported action {action!r}"
                     )
-                elif "contentLength" in item:
-                    content_length = _required_non_negative_int(
-                        item,
-                        "contentLength",
-                        context=context,
+                content_version = action == "upload"
+                content_length = _required_non_negative_int(
+                    item,
+                    "contentLength",
+                    context=context,
+                )
+                if action != "folder":
+                    _required_string(item, "fileId", context=context)
+                if not content_version and content_length != 0:
+                    raise BackblazeApiError(
+                        f"{context} has non-zero contentLength for action {action!r}"
                     )
 
                 if file_name != active_name:
