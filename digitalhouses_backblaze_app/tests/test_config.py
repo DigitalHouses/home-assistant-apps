@@ -21,6 +21,27 @@ class ConfigTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             parse_config({"application_key_id": "", "application_key": ""})
 
+    def test_configuration_types_are_strict(self):
+        with self.assertRaisesRegex(ValueError, "application_key_id"):
+            parse_config({
+                "application_key_id": 123,
+                "application_key": "secret",
+            })
+
+        with self.assertRaisesRegex(ValueError, "refresh_interval_hours"):
+            parse_config({
+                "application_key_id": "key-id",
+                "application_key": "secret",
+                "refresh_interval_hours": "6",
+            })
+
+        with self.assertRaisesRegex(ValueError, "telemetry_enabled"):
+            parse_config({
+                "application_key_id": "key-id",
+                "application_key": "secret",
+                "telemetry_enabled": "false",
+            })
+
 
 if __name__ == "__main__":
     unittest.main()
