@@ -304,8 +304,8 @@ def validate_db_monitoring(
         "db_yesterday_records": "K records",
         "db_current_hour_records": "K records",
         "db_today_records": "K records",
-        "db_top_entities_24h": "K records",
-        "db_top_entities_all_time": "K records",
+        "db_top_entities_24h": "records",
+        "db_top_entities_all_time": "records",
     }
     for key, expected_unit in record_units.items():
         component = components.get(key) or {}

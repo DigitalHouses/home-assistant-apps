@@ -328,7 +328,7 @@ class StorageAndRankingTests(unittest.TestCase):
 
     def test_record_ui_sensors_are_scalar_k_values(self):
         components = build_discovery_payload(
-            "0.1.17",
+            "0.1.18",
             include_storage=True,
         )["components"]
         expected = {
@@ -392,6 +392,14 @@ class StorageAndRankingTests(unittest.TestCase):
             self.assertEqual(
                 component["value_template"],
                 "{{ value_json.top_records }}",
+            )
+            self.assertEqual(
+                component["unit_of_measurement"],
+                "records",
+            )
+            self.assertEqual(
+                component["suggested_display_precision"],
+                0,
             )
 
 

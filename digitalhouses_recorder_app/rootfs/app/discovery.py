@@ -567,8 +567,8 @@ def _build_components(
             diagnostic=True,
             state_topic=identity.top_entities_24h_topic,
             state_class="measurement",
-            unit_of_measurement="K records",
-            suggested_display_precision=1,
+            unit_of_measurement="records",
+            suggested_display_precision=0,
             icon="mdi:format-list-numbered",
             json_attributes_topic=(
                 identity.top_entities_24h_topic
@@ -588,8 +588,8 @@ def _build_components(
                 identity.top_entities_all_time_topic
             ),
             state_class="measurement",
-            unit_of_measurement="K records",
-            suggested_display_precision=1,
+            unit_of_measurement="records",
+            suggested_display_precision=0,
             icon="mdi:format-list-numbered",
             json_attributes_topic=(
                 identity.top_entities_all_time_topic
