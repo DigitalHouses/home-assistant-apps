@@ -6,11 +6,20 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "rootfs" / "app"))
 
 from discovery import (
+    API_OBSERVED_TOPIC,
+    APP_AVAILABILITY_TOPIC,
     BASE_TOPIC,
+    DATA_AVAILABILITY_TOPIC,
     DISCOVERY_SCHEMA_VERSION,
+    bucket_state_topic,
     build_discovery_payload,
+    discovery_cleanup_payload,
+    dynamic_discovery_manifest,
+    load_discovery_manifest,
     mark_discovery_schema,
     needs_discovery_reset,
+    removed_discovery_components,
+    save_discovery_manifest,
 )
 
 
@@ -121,6 +130,95 @@ class DiscoveryTests(unittest.TestCase):
             {"platform": "sensor"},
         )
         self.assertIn("value_template", components["bucket_active-id_used"])
+
+    def test_data_entities_use_source_availability_gates(self):
+        payload = build_discovery_payload(
+            "0.1.11",
+            [{"bucket_id": "bucket-id", "bucket_name": "HA-Backups"}],
+        )
+        components = payload["components"]
+
+        total_topics = {
+            item["topic"] for item in components["total_used"]["availability"]
+        }
+        self.assertEqual(
+            total_topics,
+            {APP_AVAILABILITY_TOPIC, DATA_AVAILABILITY_TOPIC},
+        )
+
+        api_topics = {
+            item["topic"] for item in components["api_connected"]["availability"]
+        }
+        self.assertEqual(
+            api_topics,
+            {APP_AVAILABILITY_TOPIC, API_OBSERVED_TOPIC},
+        )
+
+        version_topics = {
+            item["topic"] for item in components["app_version"]["availability"]
+        }
+        self.assertEqual(version_topics, {APP_AVAILABILITY_TOPIC})
+
+        bucket_topics = {
+            item["topic"]
+            for item in components["bucket_bucket-id_used"]["availability"]
+        }
+        self.assertEqual(
+            bucket_topics,
+            {APP_AVAILABILITY_TOPIC, DATA_AVAILABILITY_TOPIC},
+        )
+
+    def test_dynamic_manifest_survives_restart_and_removes_missing_bucket(self):
+        old_payload = build_discovery_payload(
+            "0.1.11",
+            [{"bucket_id": "removed-id", "bucket_name": "Removed"}],
+        )
+        new_payload = build_discovery_payload("0.1.11")
+        old_manifest = dynamic_discovery_manifest(old_payload)
+        new_manifest = dynamic_discovery_manifest(new_payload)
+
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "manifest.json"
+            save_discovery_manifest(old_manifest, path)
+            restored = load_discovery_manifest(path)
+
+        self.assertEqual(restored, old_manifest)
+
+        removals, topics = removed_discovery_components(
+            restored or {},
+            new_manifest,
+        )
+        self.assertEqual(
+            set(removals),
+            {
+                "bucket_removed-id_used",
+                "bucket_removed-id_files",
+                "bucket_removed-id_versions",
+            },
+        )
+        self.assertEqual(topics, (bucket_state_topic("removed-id"),))
+
+        cleanup = discovery_cleanup_payload(new_payload, removals)
+        for key in removals:
+            self.assertEqual(cleanup["components"][key], {"platform": "sensor"})
+
+    def test_invalid_manifest_is_not_silently_accepted(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "manifest.json"
+            path.write_text(
+                '{"schema_version":1,"components":{"bucket_x_used":{"platform":"sensor"}}}',
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "invalid topics"):
+                load_discovery_manifest(path)
+
+    def test_support_url_uses_canonical_repository_directory(self):
+        payload = build_discovery_payload("0.1.11")
+        self.assertTrue(
+            payload["origin"]["support_url"].endswith(
+                "/digitalhouses_backblaze_app"
+            )
+        )
 
     def test_discovery_schema_reset_is_one_time(self):
         with tempfile.TemporaryDirectory() as temp:
