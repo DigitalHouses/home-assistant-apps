@@ -6,7 +6,7 @@ The App authorizes against the Backblaze B2 Native API v4, discovers all buckets
 
 ## Status
 
-Version 0.1.9 is the current stable production release.
+Version 0.1.10 is the current stable production release.
 
 ## Backblaze key
 
