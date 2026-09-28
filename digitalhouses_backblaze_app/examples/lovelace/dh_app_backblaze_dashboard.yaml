@@ -70,7 +70,7 @@ sections:
         title: Total used by day
         chart_type: bar
         period: day
-        days_to_show: 10
+        days_to_show: 30
         stat_types:
           - max
         entities:
