@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.10
+
+- Perform a one-time MQTT Device Discovery schema reset on upgrade so bucket entities that were already stale before 0.1.9 are removed immediately.
+- Re-publish the current Backblaze device discovery after the reset, preserving the existing device identity and entity IDs for buckets that still exist.
+
 ## 0.1.9
 
 - Remove Home Assistant MQTT entities for buckets that disappear from Backblaze after a refresh.

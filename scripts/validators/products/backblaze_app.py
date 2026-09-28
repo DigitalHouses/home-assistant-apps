@@ -160,7 +160,7 @@ def validate_backblaze(
         encoding="utf-8"
     )
     for expected in (
-        'DISCOVERY_SCHEMA_VERSION = 2',
+        'DISCOVERY_SCHEMA_VERSION = 3',
         'DISCOVERY_SCHEMA_PATH = Path("/data/discovery_schema_version")',
     ):
         if expected not in discovery_source:

@@ -7,6 +7,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "rootfs" / "app"))
 
 from discovery import (
     BASE_TOPIC,
+    DISCOVERY_SCHEMA_VERSION,
     build_discovery_payload,
     mark_discovery_schema,
     needs_discovery_reset,
@@ -125,6 +126,13 @@ class DiscoveryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             marker = Path(temp) / "discovery_schema_version"
             self.assertTrue(needs_discovery_reset(marker))
+
+            marker.write_text(
+                str(DISCOVERY_SCHEMA_VERSION - 1),
+                encoding="utf-8",
+            )
+            self.assertTrue(needs_discovery_reset(marker))
+
             mark_discovery_schema(marker)
             self.assertFalse(needs_discovery_reset(marker))
 
