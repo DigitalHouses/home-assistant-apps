@@ -56,7 +56,7 @@ def validate_backblaze(
         "type: statistics-graph",
         "chart_type: bar",
         "period: day",
-        "days_to_show: 10",
+        "days_to_show: 30",
         "- max",
     ):
         if expected not in dashboard_text:
@@ -72,6 +72,10 @@ def validate_backblaze(
         fail("Backblaze refresh command topic changed")
     if discovery.TELEMETRY_DELETE_COMMAND_TOPIC != EXPECTED_TELEMETRY_DELETE_TOPIC:
         fail("Backblaze telemetry delete command topic changed")
+    if discovery.DATA_AVAILABILITY_TOPIC != f"{EXPECTED_BASE_TOPIC}/data_availability":
+        fail("Backblaze data availability topic changed")
+    if discovery.API_OBSERVED_TOPIC != f"{EXPECTED_BASE_TOPIC}/api_observed":
+        fail("Backblaze API observation availability topic changed")
 
     payload = discovery.build_discovery_payload(
         app_version="validation",
@@ -155,13 +159,46 @@ def validate_backblaze(
     if started.get("entity_category") != "diagnostic":
         fail("Backblaze started-at diagnostic must be diagnostic")
 
+    total_availability = {
+        item.get("topic")
+        for item in components["total_used"].get("availability", [])
+        if isinstance(item, dict)
+    }
+    if total_availability != {
+        discovery.APP_AVAILABILITY_TOPIC,
+        discovery.DATA_AVAILABILITY_TOPIC,
+    }:
+        fail("Backblaze storage metrics must require App and B2 data availability")
+
+    api_availability = {
+        item.get("topic")
+        for item in components["api_connected"].get("availability", [])
+        if isinstance(item, dict)
+    }
+    if api_availability != {
+        discovery.APP_AVAILABILITY_TOPIC,
+        discovery.API_OBSERVED_TOPIC,
+    }:
+        fail("Backblaze API diagnostic must require a real API observation")
+
+    support_url = payload.get("origin", {}).get("support_url")
+    if not isinstance(support_url, str) or not support_url.endswith(
+        "/digitalhouses_backblaze_app"
+    ):
+        fail("Backblaze Discovery support URL must use canonical repository directory")
 
     discovery_source = (app / "rootfs/app/discovery.py").read_text(
         encoding="utf-8"
     )
     for expected in (
-        'DISCOVERY_SCHEMA_VERSION = 3',
+        'DISCOVERY_SCHEMA_VERSION = 4',
         'DISCOVERY_SCHEMA_PATH = Path("/data/discovery_schema_version")',
+        'DISCOVERY_MANIFEST_PATH = Path("/data/discovery_manifest.json")',
+        "def dynamic_discovery_manifest(",
+        "def removed_discovery_components(",
+        "def discovery_cleanup_payload(",
+        "def load_discovery_manifest(",
+        "def save_discovery_manifest(",
     ):
         if expected not in discovery_source:
             fail(f"Backblaze discovery migration contract missing: {expected}")
@@ -175,6 +212,52 @@ def validate_backblaze(
     options = context["config"].get("options") or {}
     if options.get("telemetry_enabled") is not False:
         fail("Backblaze telemetry must be disabled by default")
+
+    app_source = (app / "rootfs/app/app.py").read_text(encoding="utf-8")
+    for expected in (
+        'APP_VERSION = os.environ.get("APP_VERSION")',
+        'raise RuntimeError("APP_VERSION must be a valid semantic version")',
+        "load_discovery_manifest()",
+        "removed_discovery_components(",
+        "save_discovery_manifest(current_manifest)",
+        "confirm=True",
+        'publish_text(DATA_AVAILABILITY_TOPIC, "offline", retain=True)',
+        'publish_text(DATA_AVAILABILITY_TOPIC, "online", retain=True)',
+        'publish_text(API_OBSERVED_TOPIC, "online", retain=True)',
+    ):
+        if expected not in app_source:
+            fail(f"Backblaze runtime hardening contract missing: {expected}")
+    for forbidden in (
+        '"0.1.10-local"',
+        '"0.1.11-local"',
+        "APP_VERSION:-unknown",
+    ):
+        if forbidden in app_source:
+            fail(f"Backblaze runtime must not synthesize Version: {forbidden}")
+
+    run_script = (app / "rootfs/run.sh").read_text(encoding="utf-8")
+    if 'APP_VERSION:-unknown' in run_script:
+        fail("Backblaze run.sh must not synthesize unknown App version")
+    if 'APP_VERSION is required.' not in run_script:
+        fail("Backblaze run.sh must fail visibly when APP_VERSION is missing")
+
+    b2_source = (app / "rootfs/app/backblaze.py").read_text(encoding="utf-8")
+    for expected in (
+        "def _required_string(",
+        "def _required_non_negative_int(",
+        "has unsupported action",
+        "contentLength",
+        "bucketName",
+    ):
+        if expected not in b2_source:
+            fail(f"Backblaze B2 contract-data validation missing: {expected}")
+    for forbidden in (
+        'item.get("contentLength") or 0',
+        'bucket.get("bucketName") or bucket_id',
+        'str(item.get("fileName") or "")',
+    ):
+        if forbidden in b2_source:
+            fail(f"Backblaze B2 contract data must not use silent fallback: {forbidden}")
 
     telemetry = (app / "rootfs/app/telemetry.py").read_text(encoding="utf-8")
     required_telemetry_contract = (
