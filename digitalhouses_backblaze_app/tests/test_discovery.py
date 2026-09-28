@@ -96,6 +96,31 @@ class DiscoveryTests(unittest.TestCase):
             "sensor.dh_backblaze_ha_backups_files",
         )
 
+    def test_removed_bucket_components_are_explicit_removal_stubs(self):
+        payload = build_discovery_payload(
+            "0.1.0",
+            [{"bucket_id": "active-id", "bucket_name": "Active"}],
+            removed_buckets=[
+                {"bucket_id": "removed-id", "bucket_name": "Removed"},
+                {"bucket_id": "active-id", "bucket_name": "Active"},
+            ],
+        )
+        components = payload["components"]
+
+        self.assertEqual(
+            components["bucket_removed-id_used"],
+            {"platform": "sensor"},
+        )
+        self.assertEqual(
+            components["bucket_removed-id_files"],
+            {"platform": "sensor"},
+        )
+        self.assertEqual(
+            components["bucket_removed-id_versions"],
+            {"platform": "sensor"},
+        )
+        self.assertIn("value_template", components["bucket_active-id_used"])
+
     def test_discovery_schema_reset_is_one_time(self):
         with tempfile.TemporaryDirectory() as temp:
             marker = Path(temp) / "discovery_schema_version"

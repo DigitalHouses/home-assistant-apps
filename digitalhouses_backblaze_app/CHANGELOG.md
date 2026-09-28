@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.9
+
+- Remove Home Assistant MQTT entities for buckets that disappear from Backblaze after a refresh.
+- Publish explicit MQTT Device Discovery removal stubs before the updated device config, as required for dynamic component removal.
+- Clear retained per-bucket MQTT state topics when buckets are removed to prevent stale broker state.
+
 ## 0.1.8
 
 - Promote DigitalHouses Backblaze App from experimental to stable.

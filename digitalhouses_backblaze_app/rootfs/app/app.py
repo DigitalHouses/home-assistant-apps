@@ -30,7 +30,7 @@ from discovery import (
 )
 from telemetry import TelemetryClient, TelemetryRunner
 
-APP_VERSION = os.getenv("APP_VERSION", "0.1.7-local")
+APP_VERSION = os.getenv("APP_VERSION", "0.1.9-local")
 
 
 class BackblazeMonitorApp:
@@ -201,7 +201,11 @@ class BackblazeMonitorApp:
             retain=retain,
         )
 
-    def publish_discovery(self) -> None:
+    def publish_discovery(
+        self,
+        *,
+        removed_buckets: list[dict[str, Any]] | None = None,
+    ) -> None:
         with self.state_lock:
             buckets = [
                 {
@@ -212,7 +216,11 @@ class BackblazeMonitorApp:
             ]
         self.publish_json(
             DISCOVERY_TOPIC,
-            build_discovery_payload(APP_VERSION, buckets),
+            build_discovery_payload(
+                APP_VERSION,
+                buckets,
+                removed_buckets=removed_buckets or (),
+            ),
             retain=True,
         )
 
@@ -231,6 +239,14 @@ class BackblazeMonitorApp:
                 retain=True,
             )
 
+    def clear_bucket_states(self, buckets: list[dict[str, Any]]) -> None:
+        for bucket in buckets:
+            self.publish_text(
+                bucket_state_topic(str(bucket["bucket_id"])),
+                "",
+                retain=True,
+            )
+
     def refresh(self) -> bool:
         if self.refresh_in_progress.is_set():
             return False
@@ -241,6 +257,7 @@ class BackblazeMonitorApp:
             now = datetime.now(timezone.utc).isoformat()
             buckets = [asdict(item) for item in usage.buckets]
             with self.state_lock:
+                previous_buckets = [dict(item) for item in self.buckets]
                 self.buckets = buckets
                 self.state.update({
                     "api_connected": True,
@@ -251,6 +268,27 @@ class BackblazeMonitorApp:
                     "versions": usage.versions,
                     "last_update": now,
                 })
+
+            active_bucket_ids = {
+                str(item["bucket_id"])
+                for item in buckets
+            }
+            removed_buckets = [
+                item
+                for item in previous_buckets
+                if str(item["bucket_id"]) not in active_bucket_ids
+            ]
+            if removed_buckets:
+                self.publish_discovery(removed_buckets=removed_buckets)
+                self.clear_bucket_states(removed_buckets)
+                self.log.info(
+                    "Removed stale Backblaze bucket entities: %s",
+                    ", ".join(
+                        str(item["bucket_name"])
+                        for item in removed_buckets
+                    ),
+                )
+
             self.publish_discovery()
             self.publish_state()
             self.publish_buckets()
