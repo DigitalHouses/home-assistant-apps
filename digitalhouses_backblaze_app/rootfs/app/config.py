@@ -17,21 +17,34 @@ class AppConfig:
     log_level: str
 
 
-def parse_config(raw: dict[str, Any]) -> AppConfig:
-    application_key_id = str(raw.get("application_key_id") or "").strip()
-    application_key = str(raw.get("application_key") or "").strip()
-    if not application_key_id:
-        raise ValueError("application_key_id is required")
-    if not application_key:
-        raise ValueError("application_key is required")
+def _required_non_empty_string(raw: dict[str, Any], key: str) -> str:
+    value = raw.get(key)
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{key} is required and must be a non-empty string")
+    return value.strip()
 
-    refresh_interval_hours = int(raw.get("refresh_interval_hours", 6))
+
+def parse_config(raw: dict[str, Any]) -> AppConfig:
+    application_key_id = _required_non_empty_string(raw, "application_key_id")
+    application_key = _required_non_empty_string(raw, "application_key")
+
+    refresh_interval_hours = raw.get("refresh_interval_hours", 6)
+    if (
+        isinstance(refresh_interval_hours, bool)
+        or not isinstance(refresh_interval_hours, int)
+    ):
+        raise ValueError("refresh_interval_hours must be an integer")
     if not 1 <= refresh_interval_hours <= 168:
         raise ValueError("refresh_interval_hours must be between 1 and 168")
 
-    telemetry_enabled = bool(raw.get("telemetry_enabled", False))
+    telemetry_enabled = raw.get("telemetry_enabled", False)
+    if not isinstance(telemetry_enabled, bool):
+        raise ValueError("telemetry_enabled must be boolean")
 
-    log_level = str(raw.get("log_level") or "info").strip().lower()
+    log_level = raw.get("log_level", "info")
+    if not isinstance(log_level, str):
+        raise ValueError("log_level must be a string")
+    log_level = log_level.strip().lower()
     if log_level not in {"debug", "info", "warning", "error"}:
         raise ValueError("unsupported log_level")
 
