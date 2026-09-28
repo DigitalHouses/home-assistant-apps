@@ -328,7 +328,7 @@ class StorageAndRankingTests(unittest.TestCase):
 
     def test_record_ui_sensors_are_scalar_k_values(self):
         components = build_discovery_payload(
-            "0.1.17",
+            "0.1.18",
             include_storage=True,
         )["components"]
         expected = {
