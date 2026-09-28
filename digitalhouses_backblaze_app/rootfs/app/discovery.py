@@ -102,6 +102,8 @@ def _button(
 def build_discovery_payload(
     app_version: str,
     buckets: Iterable[dict[str, str]] = (),
+    *,
+    removed_buckets: Iterable[dict[str, str]] = (),
 ) -> dict[str, Any]:
     components: dict[str, dict[str, Any]] = {
         "total_used": _component(
@@ -197,9 +199,11 @@ def build_discovery_payload(
         ),
     }
 
+    active_bucket_ids: set[str] = set()
     for bucket in buckets:
         bucket_id = str(bucket["bucket_id"])
         bucket_name = str(bucket["bucket_name"])
+        active_bucket_ids.add(bucket_id)
         slug = bucket_slug(bucket_name)
         topic = bucket_state_topic(bucket_id)
         prefix = f"bucket_{bucket_id}"
@@ -237,6 +241,15 @@ def build_discovery_payload(
             state_class="measurement",
             icon="mdi:file-clock-outline",
         )
+
+    for bucket in removed_buckets:
+        bucket_id = str(bucket["bucket_id"])
+        if bucket_id in active_bucket_ids:
+            continue
+        prefix = f"bucket_{bucket_id}"
+        components[f"{prefix}_used"] = {"platform": "sensor"}
+        components[f"{prefix}_files"] = {"platform": "sensor"}
+        components[f"{prefix}_versions"] = {"platform": "sensor"}
 
     return {
         "device": {
