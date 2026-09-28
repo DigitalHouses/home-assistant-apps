@@ -6,7 +6,7 @@ The App authorizes against the Backblaze B2 Native API v4, discovers all buckets
 
 ## Status
 
-Version 0.1.10 is the current stable production release.
+Version 0.1.11 is the current stable production release.
 
 ## Backblaze key
 
@@ -62,7 +62,7 @@ Reusable Sections dashboard:
 examples/lovelace/dh_app_backblaze_dashboard.yaml
 ```
 
-The dashboard contains account totals, dynamic bucket cards, diagnostics, manual refresh, and a 10-day daily bar chart for Total used.
+The dashboard contains account totals, dynamic bucket cards, diagnostics, manual refresh, and a 30-day daily bar chart for Total used.
 
 The daily chart uses Home Assistant's native statistics graph:
 
@@ -70,7 +70,7 @@ The daily chart uses Home Assistant's native statistics graph:
 type: statistics-graph
 chart_type: bar
 period: day
-days_to_show: 10
+days_to_show: 30
 stat_types:
   - max
 ```
