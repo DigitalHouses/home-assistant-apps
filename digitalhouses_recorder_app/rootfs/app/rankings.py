@@ -4,8 +4,6 @@ from datetime import datetime
 from typing import Any, Iterable
 from zoneinfo import ZoneInfo
 
-from metrics import records_k
-
 TOP_ENTITIES_24H_INTERVAL_SECONDS = 3600
 TOP_ENTITIES_ALL_TIME_INTERVAL_SECONDS = 86400
 
@@ -20,7 +18,7 @@ def build_top_entities_snapshot(
     items = [
         {
             'entity_id': str(entity_id),
-            'records': records_k(records),
+            'records': int(records),
         }
         for entity_id, records in rows
     ][:limit]

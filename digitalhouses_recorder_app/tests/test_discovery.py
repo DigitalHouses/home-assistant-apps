@@ -393,6 +393,14 @@ class StorageAndRankingTests(unittest.TestCase):
                 component["value_template"],
                 "{{ value_json.top_records }}",
             )
+            self.assertEqual(
+                component["unit_of_measurement"],
+                "records",
+            )
+            self.assertEqual(
+                component["suggested_display_precision"],
+                0,
+            )
 
 
 if __name__ == "__main__":

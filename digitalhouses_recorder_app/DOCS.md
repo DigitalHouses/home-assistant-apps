@@ -169,9 +169,10 @@ values from `1` through `100`. The SQL query itself uses this limit, so a
 larger user-selected value changes both query result size and the published
 ranking payload.
 
-Ranking record counts are also normalized to `K records`. The ranking payload
-uses the neutral `top_entities` list plus `limit`, `top_entity`,
-`top_records`, `generated_at` and `period` fields.
+Ranking sensors are presentation data sources for the Top entities tables. Their
+state (`top_records`) and every `top_entities[].records` value use absolute
+Recorder row counts with the `records` unit; they are not scaled to thousands.
+The payload also includes `limit`, `top_entity`, `generated_at` and `period`.
 
 A ranking query failure preserves the previous successful retained ranking.
 The DB availability topic still distinguishes a current DB outage from a fresh

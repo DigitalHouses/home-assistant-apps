@@ -1,4 +1,8 @@
 # Changelog
+## 0.1.18
+- Publish absolute Recorder row counts in both Top entities ranking sensors instead of rounded thousands, so table consumers receive exact values directly from the ranking payload.
+- Keep `top_entities_limit` behavior unchanged while changing ranking Discovery units from `K records` to `records`; other graph-oriented Recorder count sensors remain normalized to thousands.
+
 ## 0.1.17
 - Add scalar-only `sensor.dh_recorder_app_db_current_hour_records` and `sensor.dh_recorder_app_db_today_records`, refreshed with the five-minute medium metrics group.
 - Normalize Recorder row-count presentation to thousands: `K records` for counts and `K rec/h` for the rolling-hour rate, including yesterday and ranking values.
