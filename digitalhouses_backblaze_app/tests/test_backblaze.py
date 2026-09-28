@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "rootfs" / "app"))
 
-from backblaze import BackblazeClient
+from backblaze import BackblazeApiError, BackblazeClient
 
 
 class BackblazeClientTests(unittest.TestCase):
@@ -84,6 +84,90 @@ class BackblazeClientTests(unittest.TestCase):
         with patch.object(client, "_request_json", return_value=response):
             with self.assertRaisesRegex(RuntimeError, "listBuckets"):
                 client.authorize()
+
+    def test_missing_content_length_fails_contract(self):
+        client = BackblazeClient("id", "secret")
+        account = type(
+            "Account",
+            (),
+            {
+                "account_id": "account",
+                "api_url": "https://api.example.test",
+                "authorization_token": "token",
+            },
+        )()
+        bucket = {
+            "bucketId": "a",
+            "bucketName": "alpha",
+            "bucketType": "allPrivate",
+        }
+        response = {
+            "files": [
+                {
+                    "fileName": "broken",
+                    "fileId": "1",
+                    "action": "upload",
+                }
+            ],
+            "nextFileName": None,
+            "nextFileId": None,
+        }
+
+        with patch.object(client, "_post", return_value=response):
+            with self.assertRaisesRegex(BackblazeApiError, "contentLength"):
+                client.scan_bucket(account, bucket)
+
+    def test_unknown_file_action_fails_contract(self):
+        client = BackblazeClient("id", "secret")
+        account = type(
+            "Account",
+            (),
+            {
+                "account_id": "account",
+                "api_url": "https://api.example.test",
+                "authorization_token": "token",
+            },
+        )()
+        bucket = {
+            "bucketId": "a",
+            "bucketName": "alpha",
+            "bucketType": "allPrivate",
+        }
+        response = {
+            "files": [
+                {
+                    "fileName": "future",
+                    "fileId": "1",
+                    "action": "future-action",
+                    "contentLength": 1,
+                }
+            ],
+            "nextFileName": None,
+            "nextFileId": None,
+        }
+
+        with patch.object(client, "_post", return_value=response):
+            with self.assertRaisesRegex(BackblazeApiError, "unsupported action"):
+                client.scan_bucket(account, bucket)
+
+    def test_missing_bucket_name_fails_contract(self):
+        client = BackblazeClient("id", "secret")
+        account = type(
+            "Account",
+            (),
+            {
+                "account_id": "account",
+                "api_url": "https://api.example.test",
+                "authorization_token": "token",
+            },
+        )()
+        bucket = {
+            "bucketId": "a",
+            "bucketType": "allPrivate",
+        }
+
+        with self.assertRaisesRegex(BackblazeApiError, "bucketName"):
+            client.scan_bucket(account, bucket)
 
 
 if __name__ == "__main__":

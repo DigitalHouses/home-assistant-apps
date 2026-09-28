@@ -23,7 +23,7 @@ Each refresh performs:
 2. b2_list_buckets for all buckets visible to the key.
 3. paginated b2_list_file_versions for every bucket.
 4. aggregation of stored bytes, current visible files, and completed content-bearing versions.
-5. retained MQTT state publication and MQTT Discovery update.
+5. retained MQTT state publication and MQTT Discovery update only from a validated successful scan.
 
 A file hidden by a hide marker remains included in stored bytes while its retained historical upload version exists. It is not counted as a current visible file.
 
@@ -36,6 +36,16 @@ Base topic: DigitalHouses/Global/backblaze
 Discovery device ID: digitalhouses_backblaze
 
 Home Assistant status is observed so retained discovery/state can be republished after Home Assistant starts.
+
+Backblaze data availability is independent from App process availability. Until the first successful B2 scan, and after any failed scan, storage/file/version entities are unavailable rather than exposing retained values as current data. API connectivity becomes available only after a real API observation.
+
+Dynamic bucket Discovery is reconciled against a persistent manifest stored in:
+
+```text
+/data/discovery_manifest.json
+```
+
+The manifest advances only after the retained Discovery update is broker-confirmed. Buckets deleted while the App is stopped are therefore removed on the first successful scan after restart.
 
 ## Product telemetry
 

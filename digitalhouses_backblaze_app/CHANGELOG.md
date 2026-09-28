@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.11
+
+- Persist the dynamic MQTT Device Discovery manifest under /data and reconcile removed bucket components across App restarts.
+- Require broker-confirmed Discovery cleanup before advancing the persisted manifest.
+- Keep storage/file/version metrics unavailable until a successful Backblaze scan and after scan failures, preventing stale retained values from appearing current.
+- Require a strict released APP_VERSION with no local/unknown fallback.
+- Fail visibly on malformed required Backblaze bucket/file-version contract data instead of coercing missing values to zero or empty strings.
+- Advance the one-time Discovery schema bridge to v4 and correct the Discovery support URL to the canonical repository directory.
+- Restore the native daily Total used history example to 30 days.
+
+
 ## 0.1.10
 
 - Perform a one-time MQTT Device Discovery schema reset on upgrade so bucket entities that were already stale before 0.1.9 are removed immediately.

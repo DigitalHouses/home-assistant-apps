@@ -2,7 +2,12 @@
 
 set -Eeuo pipefail
 
-bashio::log.info "Starting DigitalHouses Backblaze ${APP_VERSION:-unknown}"
+if [[ -z "${APP_VERSION:-}" ]]; then
+    bashio::log.fatal "APP_VERSION is required."
+    exit 1
+fi
+
+bashio::log.info "Starting DigitalHouses Backblaze ${APP_VERSION}"
 
 export MQTT_HOST="$(bashio::services mqtt host)"
 export MQTT_PORT="$(bashio::services mqtt port)"

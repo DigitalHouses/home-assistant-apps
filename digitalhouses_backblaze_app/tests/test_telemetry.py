@@ -96,6 +96,92 @@ class TelemetryTests(unittest.TestCase):
             self.assertEqual(call["payload"]["installation_id"], installation_id)
             self.assertEqual(call["token"], token)
 
+    def test_upgrade_keeps_identity_and_sends_new_version(self):
+        with tempfile.TemporaryDirectory() as temp:
+            state = Path(temp) / "telemetry_state.json"
+            first_transport = FakeTransport()
+            first = TelemetryClient(
+                enabled=True,
+                version="0.1.10",
+                state_file=state,
+                transport=first_transport,
+                now_epoch=lambda: 1000,
+            )
+            self.assertTrue(first.tick())
+            installation_id = first.installation_id
+            token = first.installation_token
+
+            upgraded_transport = FakeTransport()
+            upgraded = TelemetryClient(
+                enabled=True,
+                version="0.1.11",
+                state_file=state,
+                transport=upgraded_transport,
+                now_epoch=lambda: 1010,
+            )
+            self.assertEqual(upgraded.installation_id, installation_id)
+            self.assertEqual(upgraded.installation_token, token)
+            self.assertTrue(upgraded.tick())
+            self.assertEqual(
+                upgraded_transport.calls[0]["payload"]["version"],
+                "0.1.11",
+            )
+
+    def test_restart_does_not_create_heartbeat_storm(self):
+        with tempfile.TemporaryDirectory() as temp:
+            state = Path(temp) / "telemetry_state.json"
+            first_transport = FakeTransport()
+            first = TelemetryClient(
+                enabled=True,
+                version="0.1.11",
+                state_file=state,
+                transport=first_transport,
+                now_epoch=lambda: 1000,
+            )
+            self.assertTrue(first.tick())
+
+            restarted_transport = FakeTransport()
+            restarted = TelemetryClient(
+                enabled=True,
+                version="0.1.11",
+                state_file=state,
+                transport=restarted_transport,
+                now_epoch=lambda: 1100,
+            )
+            self.assertFalse(restarted.tick())
+            self.assertEqual(restarted_transport.calls, [])
+
+    def test_failed_heartbeat_uses_backoff(self):
+        with tempfile.TemporaryDirectory() as temp:
+            state = Path(temp) / "telemetry_state.json"
+            transport = FakeTransport(status=500)
+            now = [1000.0]
+            client = TelemetryClient(
+                enabled=True,
+                version="0.1.11",
+                state_file=state,
+                transport=transport,
+                now_epoch=lambda: now[0],
+            )
+            self.assertFalse(client.tick())
+            self.assertEqual(len(transport.calls), 1)
+
+            now[0] = 1200.0
+            self.assertFalse(client.tick())
+            self.assertEqual(len(transport.calls), 1)
+
+    def test_malformed_state_is_regenerated_safely(self):
+        with tempfile.TemporaryDirectory() as temp:
+            state = Path(temp) / "telemetry_state.json"
+            state.write_text("{broken", encoding="utf-8")
+            client = TelemetryClient(
+                enabled=False,
+                version="0.1.11",
+                state_file=state,
+            )
+            self.assertTrue(client.installation_id)
+            self.assertGreaterEqual(len(bytes.fromhex(client.installation_token)), 32)
+
 
 if __name__ == "__main__":
     unittest.main()

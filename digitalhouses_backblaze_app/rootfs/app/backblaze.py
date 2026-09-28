@@ -5,7 +5,7 @@ import json
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Mapping
 
 AUTHORIZE_URL = "https://api.backblazeb2.com/b2api/v4/b2_authorize_account"
 API_VERSION_PATH = "/b2api/v4"
@@ -41,6 +41,36 @@ class AccountUsage:
     current_bytes: int
     current_files: int
     versions: int
+
+
+def _required_string(
+    payload: Mapping[str, Any],
+    key: str,
+    *,
+    context: str,
+) -> str:
+    value = payload.get(key)
+    if not isinstance(value, str) or not value:
+        raise BackblazeApiError(f"{context} is missing required string {key}")
+    return value
+
+
+def _required_non_negative_int(
+    payload: Mapping[str, Any],
+    key: str,
+    *,
+    context: str,
+) -> int:
+    value = payload.get(key)
+    if isinstance(value, bool):
+        raise BackblazeApiError(f"{context} has invalid integer {key}")
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError) as exc:
+        raise BackblazeApiError(f"{context} has invalid integer {key}") from exc
+    if parsed < 0:
+        raise BackblazeApiError(f"{context} has negative integer {key}")
+    return parsed
 
 
 class BackblazeClient:
@@ -106,20 +136,46 @@ class BackblazeClient:
             headers={"Authorization": f"Basic {basic}"},
         )
         try:
-            storage = data["apiInfo"]["storageApi"]
+            api_info = data["apiInfo"]
+            if not isinstance(api_info, dict):
+                raise TypeError("apiInfo")
+            storage = api_info["storageApi"]
+            if not isinstance(storage, dict):
+                raise TypeError("storageApi")
             allowed = storage["allowed"]
-            capabilities = set(allowed.get("capabilities") or [])
-            missing = {"listBuckets", "listFiles"} - capabilities
+            if not isinstance(allowed, dict):
+                raise TypeError("allowed")
+            capabilities = allowed["capabilities"]
+            if (
+                not isinstance(capabilities, list)
+                or not all(isinstance(item, str) for item in capabilities)
+            ):
+                raise TypeError("capabilities")
+            missing = {"listBuckets", "listFiles"} - set(capabilities)
             if missing:
                 raise BackblazeApiError(
                     "Application key is missing capabilities: "
                     + ", ".join(sorted(missing))
                 )
             return AuthorizedAccount(
-                account_id=str(data["accountId"]),
-                api_url=str(storage["apiUrl"]).rstrip("/"),
-                authorization_token=str(data["authorizationToken"]),
+                account_id=_required_string(
+                    data,
+                    "accountId",
+                    context="b2_authorize_account",
+                ),
+                api_url=_required_string(
+                    storage,
+                    "apiUrl",
+                    context="b2_authorize_account.storageApi",
+                ).rstrip("/"),
+                authorization_token=_required_string(
+                    data,
+                    "authorizationToken",
+                    context="b2_authorize_account",
+                ),
             )
+        except BackblazeApiError:
+            raise
         except (KeyError, TypeError, ValueError) as exc:
             raise BackblazeApiError(
                 "Backblaze authorization response is incomplete"
@@ -147,29 +203,33 @@ class BackblazeClient:
         buckets = data.get("buckets")
         if not isinstance(buckets, list):
             raise BackblazeApiError("b2_list_buckets returned no buckets array")
-        return [item for item in buckets if isinstance(item, dict)]
-
-    @staticmethod
-    def _content_version(item: dict[str, Any]) -> bool:
-        action = str(item.get("action") or "")
-        if action in {"start", "hide", "folder"}:
-            return False
-        try:
-            int(item.get("contentLength") or 0)
-        except (TypeError, ValueError):
-            return False
-        return bool(item.get("fileId"))
+        for index, item in enumerate(buckets):
+            if not isinstance(item, dict):
+                raise BackblazeApiError(
+                    f"b2_list_buckets bucket[{index}] is not an object"
+                )
+        return list(buckets)
 
     def scan_bucket(
         self,
         account: AuthorizedAccount,
         bucket: dict[str, Any],
     ) -> BucketUsage:
-        bucket_id = str(bucket.get("bucketId") or "")
-        bucket_name = str(bucket.get("bucketName") or bucket_id)
-        bucket_type = str(bucket.get("bucketType") or "")
-        if not bucket_id:
-            raise BackblazeApiError("Bucket without bucketId")
+        bucket_id = _required_string(
+            bucket,
+            "bucketId",
+            context="b2_list_buckets bucket",
+        )
+        bucket_name = _required_string(
+            bucket,
+            "bucketName",
+            context=f"bucket {bucket_id}",
+        )
+        bucket_type = _required_string(
+            bucket,
+            "bucketType",
+            context=f"bucket {bucket_id}",
+        )
 
         stored_bytes = 0
         current_bytes = 0
@@ -198,23 +258,44 @@ class BackblazeClient:
                     f"b2_list_file_versions returned invalid files for {bucket_name}"
                 )
 
-            for item in files:
+            for index, item in enumerate(files):
+                context = f"bucket {bucket_name} file[{index}]"
                 if not isinstance(item, dict):
-                    continue
-                file_name = str(item.get("fileName") or "")
+                    raise BackblazeApiError(f"{context} is not an object")
+
+                file_name = _required_string(
+                    item,
+                    "fileName",
+                    context=context,
+                )
+                action = _required_string(
+                    item,
+                    "action",
+                    context=context,
+                )
+                if action not in {"start", "upload", "hide", "folder"}:
+                    raise BackblazeApiError(
+                        f"{context} has unsupported action {action!r}"
+                    )
+                content_version = action == "upload"
+                content_length = _required_non_negative_int(
+                    item,
+                    "contentLength",
+                    context=context,
+                )
+                if action != "folder":
+                    _required_string(item, "fileId", context=context)
+                if not content_version and content_length != 0:
+                    raise BackblazeApiError(
+                        f"{context} has non-zero contentLength for action {action!r}"
+                    )
+
                 if file_name != active_name:
                     active_name = file_name
                     current_decided = False
 
-                action = str(item.get("action") or "")
-                content_version = self._content_version(item)
-                try:
-                    content_length = int(item.get("contentLength") or 0)
-                except (TypeError, ValueError):
-                    content_length = 0
-
                 if content_version:
-                    stored_bytes += max(content_length, 0)
+                    stored_bytes += content_length
                     versions += 1
                 elif action == "hide":
                     hide_markers += 1
@@ -223,14 +304,26 @@ class BackblazeClient:
                     current_decided = True
                     if content_version:
                         current_files += 1
-                        current_bytes += max(content_length, 0)
+                        current_bytes += content_length
 
-            next_name = data.get("nextFileName")
-            next_id = data.get("nextFileId")
-            if not next_name:
+            next_name_raw = data.get("nextFileName")
+            next_id_raw = data.get("nextFileId")
+            if next_name_raw is None:
+                if next_id_raw is not None:
+                    raise BackblazeApiError(
+                        f"b2_list_file_versions returned nextFileId without nextFileName for {bucket_name}"
+                    )
                 break
-            start_file_name = str(next_name)
-            start_file_id = str(next_id) if next_id else None
+            if not isinstance(next_name_raw, str) or not next_name_raw:
+                raise BackblazeApiError(
+                    f"b2_list_file_versions returned invalid nextFileName for {bucket_name}"
+                )
+            if not isinstance(next_id_raw, str) or not next_id_raw:
+                raise BackblazeApiError(
+                    f"b2_list_file_versions returned invalid nextFileId for {bucket_name}"
+                )
+            start_file_name = next_name_raw
+            start_file_id = next_id_raw
 
         return BucketUsage(
             bucket_id=bucket_id,
