@@ -31,7 +31,7 @@ class HomeAssistantExamplesTests(unittest.TestCase):
         self.assertIn("type: statistics-graph", text)
         self.assertIn("chart_type: bar", text)
         self.assertIn("period: day", text)
-        self.assertIn("days_to_show: 10", text)
+        self.assertIn("days_to_show: 30", text)
         self.assertIn("- max", text)
 
     def test_dashboard_uses_account_totals_and_dynamic_buckets(self):
