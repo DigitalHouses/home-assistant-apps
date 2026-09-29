@@ -350,6 +350,22 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
     initialized = False
     ups_startup_attempted = False
 
+    def refresh_ups_after_pve() -> bool:
+        nonlocal ups_startup_attempted
+        if ups_runtime is None:
+            return True
+        bridge.ups_refresh_requested.clear()
+        if not ups_startup_attempted:
+            bridge.ups_reconnect_requested.clear()
+            bridge.clear_legacy_ups_discovery()
+            startup_ok = ups_runtime.startup()
+            ups_startup_attempted = True
+            if not startup_ok:
+                return False
+        return ups_runtime.manual_refresh()
+
+    runtime.set_manual_refresh_followup(refresh_ups_after_pve)
+
     def stop(signum: int, frame: object) -> None:
         log.info("Получен сигнал остановки %s", signum)
         stop_event.set()
