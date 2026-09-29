@@ -242,7 +242,12 @@ def test_running_vm_recovers_qga_and_passthrough_storage_without_vm_restart(tmp_
 
     runner.calls.clear()
     runner.vm700_qga_available = True
-    now[0] = 61.0
+
+    # Guest polling is already rate-limited by the 60-second scheduler.
+    # Recovery must not inherit a second 60-second QGA throttle from the
+    # startup probe phase. Reproduce startup probe at t=5 and poll at t=60.
+    manager._qga_last_probe["700"] = 5.0
+    now[0] = 60.0
 
     status = manager.poll_guest_status()
 
