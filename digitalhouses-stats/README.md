@@ -1,13 +1,13 @@
 # DigitalHouses Stats
 
-Backend for DigitalHouses opt-in product telemetry and LAN-only statistics.
+Backend for DigitalHouses product telemetry and LAN-only statistics.
 
 The wire contract is defined by:
 
 - `docs/standards/TELEMETRY_PROTOCOL_V1.md`
 - `docs/standards/PRODUCT_TELEMETRY_POLICY.md`
 
-The canonical product catalog is `digitalhouses_stats/product_registry.json`. The telemetry allowlist, dashboard product names, zero-count product rows, and repository release tooling derive from this registry. A registry entry may exist before the product telemetry client is implemented or enabled.
+The canonical product catalog is `digitalhouses_stats/product_registry.json`. The telemetry allowlist, dashboard product names, zero-count product rows, and repository release tooling derive from this registry. A registry entry may exist before the product telemetry client completes rollout. The ingestion service accepts legacy telemetry policy v1 and current mandatory telemetry policy v2 during migration.
 
 ## MVP scope
 
