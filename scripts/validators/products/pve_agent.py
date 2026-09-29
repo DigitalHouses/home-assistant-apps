@@ -11,7 +11,6 @@ EXPECTED_TOPIC_PREFIX = "DigitalHouses/Global/digitalhouses_pve_agent"
 EXPECTED_DEVICE_NAME = "DH PVE"
 EXPECTED_REFRESH_ENTITY = "button.dh_pve_agent_refresh"
 EXPECTED_LAST_REFRESH_ENTITY = "sensor.dh_pve_agent_last_refresh"
-EXPECTED_RESTART_ENTITY = "button.dh_pve_agent_restart_agent"
 
 
 def _require_text(path: Path, expected: tuple[str, ...], label: str) -> None:
@@ -105,7 +104,6 @@ def validate_digitalhouses_pve_agent(
         (
             'device_id = f"dh_pve_agent_{identity.instance_id}"',
             'diagnostic_event=f"{base}/event/diagnostic"',
-            'restart_agent=f"{base}/restart"',
             'device_id = f"dh_pve_agent_ups_{identity.instance_id}"',
             'legacy_device_id = f"dh_app_pve_{identity.instance_id}"',
             'older_legacy_device_id = f"dh_pve_{identity.instance_id}"',
@@ -123,12 +121,16 @@ def validate_digitalhouses_pve_agent(
             f'"name": "{EXPECTED_DEVICE_NAME}"',
             f'"default_entity_id": "{EXPECTED_REFRESH_ENTITY}"',
             f'"default_entity_id": "{EXPECTED_LAST_REFRESH_ENTITY}"',
-            f'"default_entity_id": "{EXPECTED_RESTART_ENTITY}"',
-            '"command_topic": topics.restart_agent',
             '"payload_press": "PRESS"',
         ),
         "base Discovery",
     )
+    for path_name in ("app/topics.py", "app/discovery.py", "app/mqtt_bridge.py", "app/main.py"):
+        source = (app / path_name).read_text(encoding="utf-8")
+        for forbidden in ("restart_agent", "restart_requested", "RESTART_EXIT_CODE"):
+            if forbidden in source:
+                fail(f"DH PVE retired Restart Agent code remains in {path_name}: {forbidden}")
+
     _require_text(
         app / "app/discovery_identity.py",
         (
@@ -694,15 +696,22 @@ def validate_digitalhouses_pve_agent(
     manual_start = main_text.index("manual_refresh_collectors=(")
     manual_end = main_text.index("static_collectors=", manual_start)
     manual_block = main_text[manual_start:manual_end]
-    for required in ('"topology",', '"smart",', '"disk_temperature",'):
-        if required not in manual_block:
-            fail(f"DH PVE manual disk recovery contract changed: {required}")
-    if not (
-        manual_block.index('"topology",')
-        < manual_block.index('"smart",')
-        < manual_block.index('"disk_temperature",')
+    for required in (
+        '"topology",',
+        '"guests",',
+        '"host",',
+        '"cpu",',
+        '"memory",',
+        '"storage",',
+        '"fans",',
+        '"smart",',
+        '"disk_temperature",',
+        '"gpu",',
     ):
-        fail("DH PVE manual disk recovery order must be topology -> smart -> disk_temperature")
+        if required not in manual_block:
+            fail(f"DH PVE full manual refresh contract changed: {required}")
+    if manual_block.index('"topology",') >= manual_block.index('"smart",'):
+        fail("DH PVE full manual refresh must rebuild topology before SMART")
 
     _require_text(
         app / "app/shutdown_integration.py",
@@ -728,9 +737,6 @@ def validate_digitalhouses_pve_agent(
             "FAST_SECONDS = 10.0",
             "SLOW_SECONDS = 60.0",
             "HEALTH_SECONDS = 3600.0",
-            "RESTART_EXIT_CODE = 75",
-            "bridge.restart_requested.is_set()",
-            "return RESTART_EXIT_CODE if restart_requested else 0",
             'for name in ("cpu", "memory", "fans"):',
             'for name in ("guests", "storage", "gpu", "disk_temperature"):',
             'scheduler.add("smart", interval_seconds=HEALTH_SECONDS',
@@ -760,11 +766,11 @@ def validate_digitalhouses_pve_agent(
     _require_text(
         app / "app/mqtt_bridge.py",
         (
-            "self.restart_requested = threading.Event()",
-            "topic == self.topics.restart_agent",
-            "client.subscribe(self.topics.restart_agent, qos=1)",
+            "self.refresh_requested.set()",
+            "if self.ups_topics is not None:",
+            "self.ups_refresh_requested.set()",
         ),
-        "restart MQTT command",
+        "global manual refresh",
     )
     _require_text(
         app / "app/migration_cleanup.py",
