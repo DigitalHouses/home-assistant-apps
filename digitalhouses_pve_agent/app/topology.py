@@ -143,6 +143,7 @@ class TopologyManager:
         self._gpu_catalog_text = ""
         self._qga_last_probe: dict[str, float] = {}
         self._storage_sources: dict[tuple[str, str], GuestStorageSource] = {}
+        self._storage_recovery_pending: set[str] = set()
 
     @property
     def snapshot(self) -> TopologySnapshot | None:
@@ -252,7 +253,11 @@ class TopologyManager:
         for key in list(self._storage_sources):
             if key[0] == guest.guest_id and key not in seen:
                 self._storage_sources.pop(key, None)
-        return True
+
+        # A successful guest-exec with no physical disk is not a completed
+        # recovery for a storage-class passthrough controller. The guest may
+        # have QGA ready before the passthrough disk has finished appearing.
+        return bool(seen)
 
     @staticmethod
     def _read_optional(path: Path) -> str | None:
