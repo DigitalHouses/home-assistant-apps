@@ -81,7 +81,7 @@ def test_0539_qga_recovery_and_restart_agent_contract():
 
     assert 'qga.get(guest_id) == "unavailable"' in topology
     assert "recovered = self._qga_state(guest, config, force=True)" in topology
-    assert "self._probe_guest_storage(guest, devices, recovered)" in topology
+    assert 'self._probe_guest_storage(guest, devices, "available")' in topology
     assert "on_storage_recovered" in topology
     assert "_storage_recovery_pending" in topology
     assert "passthrough storage recovery ожидает повторного rescan" in topology
