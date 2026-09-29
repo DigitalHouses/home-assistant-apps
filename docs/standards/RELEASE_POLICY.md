@@ -43,6 +43,22 @@ A runtime identity change that affects installed systems — including App slug,
 
 Product-specific telemetry implementation must follow [DigitalHouses Telemetry Implementation Guide](TELEMETRY_IMPLEMENTATION_GUIDE.md).
 
+### 1.1 Deprecated and superseded products
+
+A product may be marked `lifecycle: deprecated` in the registry when another canonical product fully supersedes it.
+
+For a deprecated product:
+
+- existing installations and historical release provenance remain valid;
+- Home Assistant Apps use `stage: deprecated`;
+- new installations are directed to the declared `superseded_by` product;
+- feature development and cosmetic identity migrations stop;
+- compatibility or security fixes may still receive a normal newer release when required;
+- historical tags, runtime identities and entity identities are not rewritten;
+- the successor uses its own canonical product identity and does not inherit the deprecated product identifier.
+
+Deprecation is not deletion. Removing a previously released product or making existing installations unusable requires a separate explicit retirement decision.
+
 ## 2. Version source of truth
 
 Each product owns its own Semantic Version.
