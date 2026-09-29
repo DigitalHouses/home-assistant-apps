@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.41
+
+- Clean up the experimental 0.5.37-0.5.39 recovery code and restore the 0.5.36 runtime model: no background QGA/storage recovery state, no SMART scheduler wake, and no MQTT Restart Agent control.
+- Remove the temporary Restart Agent MQTT topic, event, Discovery button, exit-code handling and related contracts; normal systemd `Restart=on-failure` behavior remains unchanged.
+- Restore `_probe_guest_storage()` to the 0.5.36 fire-and-forget scan semantics with no recovery-only boolean return/comment.
+- Make the main Home Assistant Refresh button a full explicit refresh of every PVE collector, including topology, guests, host, CPU, memory, storage, fans, SMART, disk temperature and GPU.
+- When UPS is configured, the same main Refresh request also triggers the UPS manual refresh; the dedicated UPS Refresh button remains available for UPS-only refresh.
+
 ## 0.5.40
 
 - Simplify the exceptional QGA/passthrough recovery path: remove periodic background QGA/storage recovery retries and the one-shot SMART scheduler wake introduced in 0.5.37-0.5.39.
