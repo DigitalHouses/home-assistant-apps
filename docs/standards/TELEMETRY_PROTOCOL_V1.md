@@ -4,7 +4,7 @@ Status: normative protocol contract.
 
 This document defines one telemetry protocol for DigitalHouses products in `DigitalHouses/home-assistant-apps`.
 
-Privacy and consent requirements are defined by [DigitalHouses Product Telemetry Policy](PRODUCT_TELEMETRY_POLICY.md).
+Privacy, participation, transparency and deletion requirements are defined by [DigitalHouses Product Telemetry Policy](PRODUCT_TELEMETRY_POLICY.md).
 
 Implementation guidance and current rollout status are defined by [DigitalHouses Telemetry Implementation Guide](TELEMETRY_IMPLEMENTATION_GUIDE.md).
 
@@ -14,7 +14,7 @@ Protocol v1 is intentionally small.
 
 It provides:
 
-- opt-in installation heartbeat;
+- minimal product installation heartbeat;
 - released product/version observation;
 - server-derived country aggregation;
 - activity history;
@@ -52,11 +52,11 @@ The canonical production protocol-v1 allowlist is derived from:
 
 `digitalhouses-stats/digitalhouses_stats/product_registry.json`
 
-Every registry entry with `telemetry_allowed: true` is accepted by the server, including a known product whose telemetry client is not implemented or enabled yet. The server rejects identifiers that are absent from that allowlist.
+Every registry entry with `telemetry_allowed: true` is accepted by the server, including known products whose client rollout is incomplete or whose lifecycle is deprecated. The server rejects identifiers that are absent from that allowlist.
 
 Adding a DigitalHouses product requires adding its canonical identity to the registry in the same repository change. Repository validation prevents a new product directory from being added without a registry entry.
 
-Registry admission does not activate telemetry. Product-side implementation must still satisfy opt-in consent, release-build gating, exact protocol payload, persistence, timing, failure isolation, and deletion requirements.
+Registry admission does not by itself prove client compliance. Product-side implementation must satisfy the applicable telemetry policy version, release-build gating, exact protocol payload, persistence, timing, failure isolation, transparency, and deletion requirements.
 
 Product identifiers are release/product identities. They do not require runtime service names, App slugs, MQTT identifiers, or repository directories to be renamed.
 
@@ -102,7 +102,7 @@ Payload:
 ```json
 {
   "schema": 1,
-  "telemetry_policy_version": 1,
+  "telemetry_policy_version": 2,
   "installation_id": "550e8400-e29b-41d4-a716-446655440000",
   "product": "digitalhouses_pve_agent",
   "version": "0.5.10"
@@ -215,6 +215,8 @@ Authenticated deletion removes:
 
 `installation_id` alone must never authorize deletion.
 
+For telemetry policy version 2 clients, successful deletion must also rotate the locally persisted installation ID and token. If the product continues running, future required telemetry resumes under the fresh identity according to normal scheduling. The protocol server does not link the deleted identity to the fresh identity.
+
 ## 9. Client timing
 
 Normal target:
@@ -231,8 +233,9 @@ Recommended deterministic or random jitter:
 
 A client may additionally send one best-effort heartbeat:
 
-- immediately after telemetry becomes enabled;
-- after a successful upgrade that changes the released product version.
+- on a fresh installation;
+- after a successful upgrade that changes the released product version;
+- after successful authenticated deletion and local identity rotation.
 
 The client must persist enough scheduling state to prevent restart-triggered heartbeat storms.
 
@@ -400,7 +403,15 @@ Production adoption statistics should be protected from development noise by pro
 
 `schema: 1` identifies this wire contract.
 
-`telemetry_policy_version: 1` identifies the client privacy/telemetry policy contract currently accepted by the server.
+The current supported policy is:
+
+```text
+telemetry_policy_version: 2
+```
+
+Policy version 1 identifies the historical opt-in client contract. During migration the production server accepts both policy versions 1 and 2 so already released clients remain valid. New releases that complete the mandatory-telemetry migration must send policy version 2.
+
+This policy change does not add payload fields and therefore does not change `schema: 1`.
 
 Backward-incompatible wire changes require a new protocol schema.
 
