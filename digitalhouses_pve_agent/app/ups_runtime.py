@@ -11,6 +11,7 @@ from .config import MqttConfig, UpsConfig
 from .discovery_ups import build_ups_discovery_payload
 from .identity import HostIdentity
 from .publish_policy import MetricValue, PublishPolicy
+from .operation_status import operation_payload
 from .runtime_settings import RuntimeSettings
 from .scheduler import Scheduler
 from .state_store import StateStore
@@ -639,6 +640,9 @@ class UpsRuntime:
         self._refresh_policy_validation()
         availability_ok = self.bridge.publish_ups_availability(True)
         collection_ok = self._collect(force=True)
+        refresh_publisher = getattr(self.bridge, "publish_ups_refresh_operation", None)
+        if callable(refresh_publisher):
+            refresh_publisher(operation_payload("idle"))
         self._persist()
         return bool(availability_ok and collection_ok)
 
@@ -747,9 +751,45 @@ class UpsRuntime:
             self.scheduler.mark_run("ups", now=now)
 
     def manual_refresh(self) -> bool:
-        self._refresh_auxiliary()
-        self._refresh_policy_validation()
-        return self._collect(force=True, manual_refresh=True)
+        started_at = self.now_iso()
+        started_monotonic = self.now_monotonic()
+        in_progress = getattr(self.bridge, "ups_refresh_in_progress", None)
+        publisher = getattr(self.bridge, "publish_ups_refresh_operation", None)
+        if in_progress is not None:
+            in_progress.set()
+        if callable(publisher):
+            publisher(operation_payload("updating", started_at=started_at))
+
+        try:
+            self._refresh_auxiliary()
+            self._refresh_policy_validation()
+            ok = self._collect(force=True, manual_refresh=True)
+            if callable(publisher):
+                publisher(
+                    operation_payload(
+                        "idle" if ok else "error",
+                        started_at=started_at,
+                        finished_at=self.now_iso(),
+                        duration_seconds=self.now_monotonic() - started_monotonic,
+                        error=None if ok else "UPS refresh failed",
+                    )
+                )
+            return ok
+        except Exception as exc:
+            if callable(publisher):
+                publisher(
+                    operation_payload(
+                        "error",
+                        started_at=started_at,
+                        finished_at=self.now_iso(),
+                        duration_seconds=self.now_monotonic() - started_monotonic,
+                        error=f"{type(exc).__name__}: {exc}",
+                    )
+                )
+            raise
+        finally:
+            if in_progress is not None:
+                in_progress.clear()
 
     def _test_history_record(
         self,
