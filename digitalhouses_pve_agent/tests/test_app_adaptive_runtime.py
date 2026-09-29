@@ -284,7 +284,7 @@ def test_reconnect_republishes_cached_groups_without_collecting_or_touching_buck
 def test_failed_group_publish_prevents_manual_refresh_timestamp_advance():
     runtime, bridge = make_runtime(
         {"cpu": lambda: cpu_sample(), "memory": lambda: memory_sample()},
-        mono_values=[0.0, 1.0],
+        mono_values=[0.0, 0.5, 1.0],
         iso_values=[
             "2026-09-14T20:00:00+05:00",
             "2026-09-14T20:00:00+05:00",
