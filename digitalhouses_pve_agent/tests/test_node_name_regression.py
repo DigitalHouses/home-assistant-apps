@@ -20,5 +20,7 @@ def test_cluster_resource_node_filter_is_case_insensitive():
 def test_main_does_not_use_configured_display_node_name_for_topology_filtering():
     text = (Path(__file__).parents[1] / "app" / "main.py").read_text(encoding="utf-8")
 
-    assert "TopologyManager(runner=_run)" in text
-    assert "TopologyManager(runner=_run, node_name=identity.node_name)" not in text
+    assert "ShutdownAwareTopologyManager(" in text
+    assert "runner=_run" in text
+    assert "node_name=identity.node_name" not in text
+    assert "node_name=config.general.node_name" not in text
