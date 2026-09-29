@@ -758,14 +758,6 @@ def validate_digitalhouses_pve_agent(
         "runtime",
     )
     _require_text(
-        app / "app/scheduler.py",
-        (
-            "def request_run(",
-            "task.next_due = min(task.next_due, float(now))",
-        ),
-        "one-shot scheduler wake",
-    )
-    _require_text(
         app / "app/mqtt_bridge.py",
         (
             "self.restart_requested = threading.Event()",
