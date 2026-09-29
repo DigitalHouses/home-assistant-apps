@@ -140,10 +140,6 @@ def build_runtime(
     scheduler = Scheduler()
     topology = ShutdownAwareTopologyManager(
         runner=_run,
-        on_storage_recovered=lambda: scheduler.request_run(
-            "smart",
-            now=time.monotonic(),
-        ),
     )
     fan_presence_store = StateStore(state_dir / "fans.json")
     fan_calibration_registry = FanCalibrationRegistry(
@@ -194,6 +190,8 @@ def build_runtime(
             "memory",
             "storage",
             "fans",
+            "smart",
+            "disk_temperature",
         ),
         static_collectors=("topology", "host"),
         slow_tasks=("guests", "storage", "gpu", "disk_temperature"),
