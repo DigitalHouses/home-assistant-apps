@@ -6,7 +6,7 @@ from typing import Any
 
 from validators.common import fail, require_files
 
-EXPECTED_VERSION = "0.5.38"
+EXPECTED_VERSION = "0.5.39"
 EXPECTED_TOPIC_PREFIX = "DigitalHouses/Global/digitalhouses_pve_agent"
 EXPECTED_DEVICE_NAME = "DH PVE"
 EXPECTED_REFRESH_ENTITY = "button.dh_pve_agent_refresh"
@@ -677,8 +677,11 @@ def validate_digitalhouses_pve_agent(
             'current_vms, current_lxcs = self._guest_lists()',
             'qga.get(guest_id) == "unavailable"',
             'recovered = self._qga_state(guest, config, force=True)',
-            'self._probe_guest_storage(guest, devices, recovered)',
+            'self._probe_guest_storage(guest, devices, "available")',
+            'return bool(seen)',
             "on_storage_recovered",
+            "_storage_recovery_pending",
+            "passthrough storage recovery ожидает повторного rescan",
             "QGA восстановлен для VM %s; passthrough storage пересканирован",
         ),
         "cache-first topology",

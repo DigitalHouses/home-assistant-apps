@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.39
+
+- Keep storage recovery pending after QGA returns until a targeted guest `lsblk` actually rediscovers at least one physical disk behind the storage-class passthrough controller.
+- Retry only that targeted `lsblk` on the existing 60-second guest cycle when the first post-QGA guest-exec fails or the passthrough disk has not appeared yet; no new timer and no repeated SMART polling are added.
+- Wake SMART exactly once after storage recovery completes, then clear the pending state.
+- Add live-case regression coverage for `guest-ping` recovery followed by one transient `guest exec` failure and successful storage recovery on the next guest cycle.
+
 ## 0.5.38
 
 - Fix QGA recovery cadence after startup: the existing 60-second guest-status scheduler is now authoritative, so recovery probes bypass the internal QGA cache throttle instead of potentially waiting a second polling cycle.
