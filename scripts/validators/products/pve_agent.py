@@ -758,7 +758,8 @@ def validate_digitalhouses_pve_agent(
         app / "app/app.py",
         (
             'operation_payload("updating"',
-            '"idle" if published and not failed else "error"',
+            '"idle" if success else "error"',
+            "commit_ok = self._commit_manual_refresh(finished_at)",
             "refresh_in_progress",
         ),
         "PVE refresh lifecycle",
