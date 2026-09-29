@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.40
+
+- Simplify the exceptional QGA/passthrough recovery path: remove periodic background QGA/storage recovery retries and the one-shot SMART scheduler wake introduced in 0.5.37-0.5.39.
+- Make Home Assistant Manual Refresh the explicit recovery action. Refresh now runs a full topology scan first, then normal host/guest collectors, full SMART, and disk-temperature collection sequentially.
+- If the Agent started while a VM QEMU Guest Agent was unavailable, restore QGA and press Refresh; the topology scan rediscovers the passthrough disk and the same manual action immediately refreshes SMART/state/Discovery without restarting the Agent.
+- Keep normal runtime lightweight: hourly SMART and 60-second guest/storage cadence remain unchanged, with no extra background retry loop for this rare boot-order edge case.
+
 ## 0.5.39
 
 - Keep storage recovery pending after QGA returns until a targeted guest `lsblk` actually rediscovers at least one physical disk behind the storage-class passthrough controller.
