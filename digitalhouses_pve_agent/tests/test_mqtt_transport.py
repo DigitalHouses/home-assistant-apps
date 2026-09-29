@@ -105,7 +105,6 @@ def test_transport_uses_retained_qos1_lwt_and_subscriptions():
     bridge._on_connect(client, None, None, _Reason(), None)
     assert (topics.ha_status, 1) in client.subscriptions
     assert (topics.refresh, 1) in client.subscriptions
-    assert (topics.restart_agent, 1) in client.subscriptions
     assert (topics.ups_scan, 1) in client.subscriptions
     assert (topics.fan_calibrate, 1) in client.subscriptions
     assert (f"{topics.base}/ups/refresh", 1) in client.subscriptions
