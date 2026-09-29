@@ -172,7 +172,7 @@ def validate_product_registry_naming(registry: dict) -> None:
                     raise ValidationError(
                         f"{identifier}: canonical haos_slug must not carry pending migration"
                     )
-            elif repository_directory is not None:
+            else:
                 if migration != {
                     "status": "pending_controlled_reinstall",
                     "target": identifier,

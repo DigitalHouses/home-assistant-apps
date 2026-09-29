@@ -119,6 +119,33 @@ class ProductNamingTests(unittest.TestCase):
             )
         )
 
+    def test_external_legacy_app_slug_still_requires_migration_marker(self):
+        with self.assertRaisesRegex(
+            ValidationError,
+            "legacy haos_slug requires explicit",
+        ):
+            validate_product_registry_naming(
+                self._registry(
+                    repository_directory=None,
+                    haos_slug="dh_climate_app",
+                )
+            )
+
+    def test_external_legacy_app_slug_with_migration_marker_is_accepted(self):
+        validate_product_registry_naming(
+            self._registry(
+                id="digitalhouses_climate_app",
+                entity_prefix="dh_climate_app",
+                display_name="Climate App",
+                repository_directory=None,
+                haos_slug="dh_climate_app",
+                slug_migration={
+                    "status": "pending_controlled_reinstall",
+                    "target": "digitalhouses_climate_app",
+                },
+            )
+        )
+
 class TypeContractTests(unittest.TestCase):
     def _write(self, path: Path, text: str = "") -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
