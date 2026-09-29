@@ -13,6 +13,7 @@ class Topics:
     state: str
     availability: str
     refresh: str
+    refresh_operation: str
     manifest: str
     settings_prefix: str
     diagnostic_event: str
@@ -21,6 +22,7 @@ class Topics:
     device_id: str
     ups_scan: str
     ups_scan_state: str
+    ups_scan_operation: str
     fan_calibrate: str
     legacy_discoveries: tuple[str, ...] = ()
 
@@ -31,6 +33,7 @@ class UpsTopics:
     state: str
     availability: str
     refresh: str
+    refresh_operation: str
     beeper_set: str
     test_quick: str
     test_deep: str
@@ -85,6 +88,7 @@ def build_topics(mqtt: MqttConfig, identity: HostIdentity) -> Topics:
         state=f"{base}/state",
         availability=f"{base}/availability",
         refresh=f"{base}/refresh",
+        refresh_operation=f"{base}/refresh/operation",
         manifest=f"{base}/manifest",
         settings_prefix=f"{base}/settings",
         diagnostic_event=f"{base}/event/diagnostic",
@@ -93,6 +97,7 @@ def build_topics(mqtt: MqttConfig, identity: HostIdentity) -> Topics:
         device_id=device_id,
         ups_scan=f"{base}/ups/scan",
         ups_scan_state=f"{base}/ups/scan/state",
+        ups_scan_operation=f"{base}/ups/scan/operation",
         fan_calibrate=f"{base}/fans/calibrate",
         legacy_discoveries=(
             f"{discovery_prefix}/device/{legacy_device_id}/config",
@@ -117,6 +122,7 @@ def build_ups_topics(mqtt: MqttConfig, identity: HostIdentity) -> UpsTopics:
         state=f"{base}/state",
         availability=f"{base}/availability",
         refresh=f"{base}/refresh",
+        refresh_operation=f"{base}/refresh/operation",
         beeper_set=f"{base}/beeper/set",
         test_quick=f"{base}/test/quick",
         test_deep=f"{base}/test/deep",
