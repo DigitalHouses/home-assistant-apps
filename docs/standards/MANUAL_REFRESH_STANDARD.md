@@ -4,7 +4,7 @@
 **Date:** 2026-09-29  
 **Scope:** Active DigitalHouses Apps and Agents that expose manually refreshable observational state.
 
-Reference implementation: DigitalHouses PVE Agent 0.5.41 / 0.5.42.
+Reference implementation: DigitalHouses PVE Agent 0.5.44.
 
 ## 1. Principle
 
@@ -236,7 +236,7 @@ HA/MQTT reconnect -> state republish does not perform a new Refresh
 
 | Product | Current state |
 | --- | --- |
-| PVE Agent | Reference implementation. Full Refresh semantics in 0.5.41; operation-state contract in 0.5.42. |
+| PVE Agent | Reference implementation. Full Refresh scope in 0.5.41; operation-state contract in 0.5.42; end-to-end PVE + UPS lifecycle and transactional last_refresh in 0.5.44. |
 | Plex Agent | Has product-level Refresh and last-refresh. Align operation-state and end-to-end success semantics. |
 | Recorder App | Has full manual refresh and success-only last-refresh semantics. Align canonical product-level UI/entity naming and operation-state contract. |
 | Backblaze App | Has manual account Refresh. Align during the active Backblaze standards migration. |
