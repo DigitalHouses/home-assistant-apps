@@ -1523,7 +1523,7 @@ In particular:
 
 - Home Assistant Apps must migrate to immutable versioned registry artifacts and compact recoverable backups;
 - Linux Agents retain their native delivery model unless changed separately;
-- all target products must converge on the same opt-in telemetry semantics and protocol; production enablement follows the rollout/allowlist status in the shared implementation guide;
+- all active supported products must converge on mandatory telemetry policy v2 using the shared minimal protocol, with no product opt-out control and complete failure isolation; rollout status is tracked in the shared implementation guide;
 - product-specific implementations must not silently fork the shared release or telemetry contract.
 
 Repository validation and product acceptance tests should enforce these requirements as implementation proceeds.
