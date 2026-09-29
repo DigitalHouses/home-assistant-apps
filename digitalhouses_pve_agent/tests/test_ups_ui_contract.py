@@ -22,8 +22,28 @@ def test_ups_dashboard_uses_canonical_status_and_telemetry():
         "sensor.dh_pve_agent_ups_input_voltage",
         "sensor.dh_pve_agent_ups_output_voltage",
         "button.dh_pve_agent_ups_refresh",
+        "sensor.dh_pve_agent_ups_refresh_state",
+        "sensor.dh_pve_agent_ups_scan_state",
+        "button.dh_pve_agent_scan_ups",
     ):
         assert entity_id in text
+
+
+def test_ups_dashboard_shows_refresh_and_scan_progress():
+    text = _text()
+
+    for token in (
+        "Обновление UPS…",
+        "Поиск UPS…",
+        "Ошибка обновления UPS",
+        "Ошибка поиска UPS",
+        "background: var(--secondary-background-color)",
+        "sensor.dh_pve_agent_ups_scan_result",
+        "sensor.dh_pve_agent_ups_last_scan",
+    ):
+        assert token in text
+
+    assert text.count("button.dh_pve_agent_scan_ups") >= 2
 
 
 def test_ups_dashboard_uses_app_owned_problem_state():

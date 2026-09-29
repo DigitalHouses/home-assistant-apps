@@ -79,6 +79,7 @@ def test_canonical_ups_public_entity_ids_are_consistent():
     )
     assert c["battery_charge"]["default_entity_id"] == "sensor.dh_pve_agent_ups_battery_charge"
     assert c["refresh"]["default_entity_id"] == "button.dh_pve_agent_ups_refresh"
+    assert c["refresh_state"]["default_entity_id"] == "sensor.dh_pve_agent_ups_refresh_state"
     assert c["guest_shutdown_budget"]["default_entity_id"] == (
         "sensor.dh_pve_agent_ups_guest_shutdown_budget"
     )

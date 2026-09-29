@@ -26,6 +26,8 @@ class FakeBridge:
         self.setting_states = []
         self.publish_ok = True
         self.refresh_requested = threading.Event()
+        self.refresh_in_progress = threading.Event()
+        self.refresh_operations = []
         self.reconnect_requested = threading.Event()
         self.setting_updates = queue.SimpleQueue()
 
@@ -35,6 +37,10 @@ class FakeBridge:
 
     def publish_discovery(self):
         self.discovery_count += 1
+        return True
+
+    def publish_refresh_operation(self, payload):
+        self.refresh_operations.append(payload)
         return True
 
     def publish_setting_value(self, key, value):
@@ -93,6 +99,7 @@ def test_startup_publishes_discovery_settings_and_initial_state():
     runtime, bridge, policy, _, _ = make_runtime({"cpu": lambda: sample(10.0)})
     assert runtime.startup() is True
     assert bridge.discovery_count == 1
+    assert bridge.refresh_operations[-1]["state"] == "idle"
     assert len(bridge.setting_states) == len(runtime.settings.as_dict())
     assert bridge.states[-1]["subsystems"]["cpu"]["available"] is True
     assert policy.last_published() is not None
@@ -163,6 +170,8 @@ def test_manual_refresh_runs_all_collectors_and_updates_timestamp_only_when_all_
     assert calls == {"cpu": 1, "disk": 1}
     assert runtime.last_refresh == "2026-09-10T21:41:00+05:00"
     assert bridge.states[-1]["last_refresh"] == runtime.last_refresh
+    assert [item["state"] for item in bridge.refresh_operations] == ["updating", "idle"]
+    assert bridge.refresh_in_progress.is_set() is False
 
 
 def test_manual_refresh_can_limit_collectors_for_fast_ui_refresh():
@@ -216,6 +225,8 @@ def test_manual_refresh_with_partial_failure_keeps_previous_last_refresh():
     assert runtime.manual_refresh() is True
     assert runtime.last_refresh == "2026-09-09T10:00:00+05:00"
     assert bridge.states[-1]["last_refresh"] == "2026-09-09T10:00:00+05:00"
+    assert [item["state"] for item in bridge.refresh_operations] == ["updating", "error"]
+    assert "fan" in bridge.refresh_operations[-1]["error"]
 
 
 def test_reconnect_republishes_discovery_settings_and_current_state_without_collecting():

@@ -239,10 +239,12 @@ def test_detail_transition_does_not_mutate_scheduler_collection_cadence():
 def test_manual_refresh_publishes_all_current_resource_groups_and_updates_refresh_time():
     runtime, bridge = make_runtime(
         {"cpu": lambda: cpu_sample(), "memory": lambda: memory_sample()},
-        mono_values=[0.0, 10.0],
+        mono_values=[0.0, 10.0, 10.5, 11.0],
         iso_values=[
             "2026-09-14T20:00:00+05:00",
             "2026-09-14T20:00:10+05:00",
+            "2026-09-14T20:00:10+05:00",
+            "2026-09-14T20:00:11+05:00",
         ],
     )
     runtime.run_collection(force=True)
@@ -282,8 +284,12 @@ def test_reconnect_republishes_cached_groups_without_collecting_or_touching_buck
 def test_failed_group_publish_prevents_manual_refresh_timestamp_advance():
     runtime, bridge = make_runtime(
         {"cpu": lambda: cpu_sample(), "memory": lambda: memory_sample()},
-        mono_values=[0.0],
-        iso_values=["2026-09-14T20:00:00+05:00"],
+        mono_values=[0.0, 0.5, 1.0],
+        iso_values=[
+            "2026-09-14T20:00:00+05:00",
+            "2026-09-14T20:00:00+05:00",
+            "2026-09-14T20:00:01+05:00",
+        ],
     )
     bridge.fail_group = "memory"
 

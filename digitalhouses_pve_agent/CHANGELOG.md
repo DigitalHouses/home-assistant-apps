@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.42
+
+- Add retained operation-state telemetry for manual PVE Refresh, UPS Refresh and UPS Scan with canonical `idle`, `updating` and `error` states plus `started_at`, `finished_at`, `duration_seconds` and `error` attributes.
+- Suppress duplicate Refresh/Scan button presses while the same operation is pending or running; no queues of repeated heavy SMART/scan work are created.
+- Expose `sensor.dh_pve_agent_refresh_state`, `sensor.dh_pve_agent_ups_refresh_state` and `sensor.dh_pve_agent_ups_scan_state` through MQTT Device Discovery.
+- Update example dashboards so the action card itself becomes a grey `Обновление…` / `Поиск UPS…` panel while work is running, returns to its normal state on success and shows a red error state on failure.
+- Keep UPS Scan distinct from UPS Refresh: Scan discovers/provisions NUT UPS devices; Refresh re-reads an already selected UPS.
+
 ## 0.5.41
 
 - Clean up the experimental 0.5.37-0.5.39 recovery code and restore the 0.5.36 runtime model: no background QGA/storage recovery state, no SMART scheduler wake, and no MQTT Restart Agent control.
