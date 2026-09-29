@@ -2,6 +2,7 @@
 
 Status: architecture/legal-risk review for public telemetry rollout  
 Review date: 2026-09-29  
+Primary-source check: current official Kazakhstan / EU / California sources reviewed on 2026-09-29.  
 Scope: DigitalHouses product telemetry sent to `https://telemetry.digitalhouses.vip`
 
 This document is an engineering compliance review, not a substitute for advice from qualified counsel in each applicable jurisdiction.
