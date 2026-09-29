@@ -132,6 +132,9 @@ def test_main_orchestration_processes_scan_before_optional_ups_runtime():
     assert "UpsScanner" in text
     assert "ups_scan_requested" in text
     assert "publish_ups_scan_state" in text
+    assert "publish_ups_scan_operation" in text
+    assert "ups_scan_in_progress.set()" in text
+    assert "ups_scan_in_progress.clear()" in text
     assert "scanner.selected_name()" in text
     assert "outcome.selection_changed" in text
     assert "ups_runtime = build_ups_runtime" in text
