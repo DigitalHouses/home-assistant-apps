@@ -99,6 +99,16 @@ def test_main_wires_shared_topology_shutdown_history_and_static_inventory():
     assert "HEALTH_SECONDS = 3600.0" in text
 
 
+def test_main_wires_mqtt_restart_through_systemd_failure_restart():
+    main_text = (ROOT / "app" / "main.py").read_text()
+    unit_text = (ROOT / "systemd" / "digitalhouses_pve_agent.service").read_text()
+
+    assert "RESTART_EXIT_CODE = 75" in main_text
+    assert "bridge.restart_requested.is_set()" in main_text
+    assert "return RESTART_EXIT_CODE if restart_requested else 0" in main_text
+    assert "Restart=on-failure" in unit_text
+
+
 def test_main_wires_fixed_policy_reload_barrier():
     main_text = (ROOT / "app" / "main.py").read_text()
     unit_text = (ROOT / "systemd" / "digitalhouses_pve_agent.service").read_text()
