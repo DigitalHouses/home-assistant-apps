@@ -53,6 +53,10 @@ class Scheduler:
         task = self._tasks[name]
         task.next_due = float(now) + task.interval_seconds
 
+    def request_run(self, name: str, *, now: float) -> None:
+        task = self._tasks[name]
+        task.next_due = min(task.next_due, float(now))
+
     def set_interval(
         self,
         name: str,

@@ -203,6 +203,63 @@ def test_guest_status_transition_to_running_uses_rrd_then_targeted_rescan(tmp_pa
 
 
 
+def test_running_vm_recovers_qga_and_passthrough_storage_without_vm_restart(tmp_path: Path):
+    _write_pve_cache(tmp_path, vm700_status="running")
+
+    class RecoveryRunner(FakeRunner):
+        def __init__(self):
+            super().__init__()
+            self.vm700_qga_available = False
+
+        def __call__(self, argv, *, timeout=20.0, check=True):
+            argv = tuple(argv)
+            if argv == ("qm", "agent", "700", "ping"):
+                self.calls.append(argv)
+                if not self.vm700_qga_available:
+                    raise RuntimeError("guest-ping timeout")
+                return ""
+            return super().__call__(argv, timeout=timeout, check=check)
+
+    now = [0.0]
+    recoveries = []
+    runner = RecoveryRunner()
+    manager = TopologyManager(
+        runner=runner,
+        dri_to_pci={},
+        config_reader=config_reader,
+        pve_root=tmp_path,
+        usb_sys_root=tmp_path / "usb",
+        node_name="pve",
+        now_epoch=lambda: 110.0,
+        now_monotonic=lambda: now[0],
+        on_storage_recovered=lambda: recoveries.append("smart"),
+    )
+
+    snapshot = manager.full_scan()
+    assert snapshot.vms["700"].status == "running"
+    assert snapshot.qga["700"] == "unavailable"
+    assert manager.vm_storage_sources() == ()
+
+    runner.calls.clear()
+    runner.vm700_qga_available = True
+    now[0] = 61.0
+
+    status = manager.poll_guest_status()
+
+    assert status.vms["700"].status == "running"
+    assert manager.qga_state("700") == "available"
+    sources = manager.vm_storage_sources()
+    assert len(sources) == 1
+    assert sources[0].device_path == "/dev/sdb"
+    assert sources[0].serial == "S2PWNX0H603177N"
+    assert recoveries == ["smart"]
+    assert ("qm", "agent", "700", "ping") in runner.calls
+    assert any(
+        call[:4] == ("qm", "guest", "exec", "700")
+        for call in runner.calls
+    )
+
+
 def test_usb_topology_keeps_duplicate_vm_assignments_and_host_devices(tmp_path: Path):
     _write_pve_cache(tmp_path, vm700_status="running")
     _write_usb_inventory(tmp_path)

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.37
+
+- Recover QEMU Guest Agent availability for continuously running VMs: when a storage-passthrough VM was discovered while QGA was unavailable, retry only the cheap guest ping on the existing 60-second guest-status cadence and run one targeted storage rescan when QGA becomes available.
+- Restore passthrough storage sources such as the TrueNAS Samsung 850 EVO without requiring a VM restart or PVE Agent restart after a transient QGA timeout, then schedule one immediate SMART collection so Home Assistant does not wait for the normal hourly HEALTH cadence.
+- Add diagnostic Home Assistant button `button.dh_pve_agent_restart_agent` on the dedicated `<instance>/restart` MQTT command topic.
+- Handle Restart Agent as a graceful runtime shutdown with exit code 75; the existing systemd `Restart=on-failure` policy owns process restart, so the agent never invokes `systemctl restart` on itself.
+- Add regression coverage for QGA recovery while VM status remains `running`, restart MQTT routing/subscription/Discovery, and the systemd restart contract.
+
 ## 0.5.36
 
 - Add host USB inventory from Linux sysfs and enrich user-facing USB names with device descriptors plus the udev hardware database while excluding Linux root hubs.

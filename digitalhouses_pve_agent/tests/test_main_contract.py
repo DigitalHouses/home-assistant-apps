@@ -64,6 +64,8 @@ def test_runtime_scheduler_uses_frozen_collection_cadence(tmp_path, monkeypatch)
     assert runtime.scheduler.interval("gpu") == 60.0
     assert runtime.scheduler.interval("disk_temperature") == 60.0
     assert runtime.scheduler.interval("smart") == 3600.0
+    main_text = (ROOT / "app" / "main.py").read_text()
+    assert "on_storage_recovered=lambda: scheduler.request_run(" in main_text
     assert "host" not in runtime.scheduler.names()
     assert "topology" not in runtime.scheduler.names()
     assert "fast_poll_interval_seconds" not in runtime.setting_tasks
@@ -97,6 +99,16 @@ def test_main_wires_shared_topology_shutdown_history_and_static_inventory():
     assert "FAST_SECONDS = 10.0" in text
     assert "SLOW_SECONDS = 60.0" in text
     assert "HEALTH_SECONDS = 3600.0" in text
+
+
+def test_main_wires_mqtt_restart_through_systemd_failure_restart():
+    main_text = (ROOT / "app" / "main.py").read_text()
+    unit_text = (ROOT / "systemd" / "digitalhouses_pve_agent.service").read_text()
+
+    assert "RESTART_EXIT_CODE = 75" in main_text
+    assert "bridge.restart_requested.is_set()" in main_text
+    assert "return RESTART_EXIT_CODE if restart_requested else 0" in main_text
+    assert "Restart=on-failure" in unit_text
 
 
 def test_main_wires_fixed_policy_reload_barrier():

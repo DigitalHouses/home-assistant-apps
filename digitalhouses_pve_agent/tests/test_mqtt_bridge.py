@@ -47,6 +47,15 @@ def test_refresh_press_sets_event():
     assert events.refresh_requested.is_set()
 
 
+def test_restart_press_sets_dedicated_event():
+    topics = _topics()
+    events = MqttEvents(topics, RuntimeSettings())
+
+    assert events.handle_message(topics.restart_agent, b"PRESS") is True
+    assert events.restart_requested.is_set()
+    assert not events.refresh_requested.is_set()
+
+
 def test_fan_calibration_press_sets_dedicated_event():
     topics = _topics()
     events = MqttEvents(topics, RuntimeSettings())

@@ -6,11 +6,12 @@ from typing import Any
 
 from validators.common import fail, require_files
 
-EXPECTED_VERSION = "0.5.36"
+EXPECTED_VERSION = "0.5.37"
 EXPECTED_TOPIC_PREFIX = "DigitalHouses/Global/digitalhouses_pve_agent"
 EXPECTED_DEVICE_NAME = "DH PVE"
 EXPECTED_REFRESH_ENTITY = "button.dh_pve_agent_refresh"
 EXPECTED_LAST_REFRESH_ENTITY = "sensor.dh_pve_agent_last_refresh"
+EXPECTED_RESTART_ENTITY = "button.dh_pve_agent_restart_agent"
 
 
 def _require_text(path: Path, expected: tuple[str, ...], label: str) -> None:
@@ -31,6 +32,7 @@ def validate_digitalhouses_pve_agent(
             app / "VERSION",
             app / "requirements.txt",
             app / "app/config.py",
+            app / "app/scheduler.py",
             app / "app/topics.py",
             app / "app/discovery.py",
             app / "app/discovery_identity.py",
@@ -103,6 +105,7 @@ def validate_digitalhouses_pve_agent(
         (
             'device_id = f"dh_pve_agent_{identity.instance_id}"',
             'diagnostic_event=f"{base}/event/diagnostic"',
+            'restart_agent=f"{base}/restart"',
             'device_id = f"dh_pve_agent_ups_{identity.instance_id}"',
             'legacy_device_id = f"dh_app_pve_{identity.instance_id}"',
             'older_legacy_device_id = f"dh_pve_{identity.instance_id}"',
@@ -120,6 +123,8 @@ def validate_digitalhouses_pve_agent(
             f'"name": "{EXPECTED_DEVICE_NAME}"',
             f'"default_entity_id": "{EXPECTED_REFRESH_ENTITY}"',
             f'"default_entity_id": "{EXPECTED_LAST_REFRESH_ENTITY}"',
+            f'"default_entity_id": "{EXPECTED_RESTART_ENTITY}"',
+            '"command_topic": topics.restart_agent',
             '"payload_press": "PRESS"',
         ),
         "base Discovery",
@@ -670,6 +675,10 @@ def validate_digitalhouses_pve_agent(
             'read_pve_rrd(',
             'path = self.pve_root / directory / f"{guest_id}.conf"',
             'current_vms, current_lxcs = self._guest_lists()',
+            'qga.get(guest_id) == "unavailable"',
+            'recovered = self._qga_state(guest, config)',
+            'self._probe_guest_storage(guest, devices, recovered)',
+            "on_storage_recovered",
         ),
         "cache-first topology",
     )
@@ -691,12 +700,16 @@ def validate_digitalhouses_pve_agent(
             "ProblemAwareRuntime(",
             "problem_event_debounce_seconds=config.events.pve_problem_debounce_seconds",
             "ShutdownAwareProductionCollectors(",
-            "ShutdownAwareTopologyManager(runner=_run)",
+            "ShutdownAwareTopologyManager(",
+            "on_storage_recovered=lambda: scheduler.request_run(",
             "build_shutdown_aware_pve_discovery_payload(",
             "ShutdownHistoryTracker(",
             "FAST_SECONDS = 10.0",
             "SLOW_SECONDS = 60.0",
             "HEALTH_SECONDS = 3600.0",
+            "RESTART_EXIT_CODE = 75",
+            "bridge.restart_requested.is_set()",
+            "return RESTART_EXIT_CODE if restart_requested else 0",
             'for name in ("cpu", "memory", "fans"):',
             'for name in ("guests", "storage", "gpu", "disk_temperature"):',
             'scheduler.add("smart", interval_seconds=HEALTH_SECONDS',
@@ -722,6 +735,23 @@ def validate_digitalhouses_pve_agent(
             "cleanup_mqtt(config, identity)",
         ),
         "runtime",
+    )
+    _require_text(
+        app / "app/scheduler.py",
+        (
+            "def request_run(",
+            "task.next_due = min(task.next_due, float(now))",
+        ),
+        "one-shot scheduler wake",
+    )
+    _require_text(
+        app / "app/mqtt_bridge.py",
+        (
+            "self.restart_requested = threading.Event()",
+            "topic == self.topics.restart_agent",
+            "client.subscribe(self.topics.restart_agent, qos=1)",
+        ),
+        "restart MQTT command",
     )
     _require_text(
         app / "app/migration_cleanup.py",
