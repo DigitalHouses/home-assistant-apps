@@ -90,6 +90,7 @@ class DhPveRuntime:
         self.app_version = app_version
         self.agent_started_at = agent_started_at
         self.ups_configured = bool(ups_configured)
+        self.manual_refresh_followup: Callable[[], bool] | None = None
         self._pve_version_fingerprint: str | None = None
         self._subsystems: dict[str, SubsystemState] = {}
         self._published_groups: dict[str, dict[str, object]] = {}
@@ -438,6 +439,12 @@ class DhPveRuntime:
             if name in self.collectors
         )
 
+    def set_manual_refresh_followup(
+        self,
+        callback: Callable[[], bool] | None,
+    ) -> None:
+        self.manual_refresh_followup = callback
+
     def manual_refresh(self) -> bool:
         started_at = self.now_iso()
         started_monotonic = self.now_monotonic()
@@ -463,22 +470,31 @@ class DhPveRuntime:
                     or not self._subsystems[name].available
                 )
             ]
+            followup_ok = True
+            if callable(self.manual_refresh_followup):
+                followup_ok = bool(self.manual_refresh_followup())
+
+            success = published and not failed and followup_ok
             finished_at = self.now_iso()
             duration = self.now_monotonic() - started_monotonic
             if callable(publisher):
                 publisher(
                     operation_payload(
-                        "idle" if published and not failed else "error",
+                        "idle" if success else "error",
                         started_at=started_at,
                         finished_at=finished_at,
                         duration_seconds=duration,
                         error=(
                             None
-                            if published and not failed
+                            if success
                             else (
                                 "collector failure: " + ", ".join(failed)
                                 if failed
-                                else "publication failed"
+                                else (
+                                    "publication failed"
+                                    if not published
+                                    else "follow-up refresh failed"
+                                )
                             )
                         ),
                     )
