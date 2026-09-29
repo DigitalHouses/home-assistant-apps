@@ -54,6 +54,11 @@ def validate_product_registry_naming(registry: dict) -> None:
     if not isinstance(products, list):
         raise ValidationError("product registry must contain a products list")
 
+    all_ids = {
+        entry.get("id")
+        for entry in products
+        if isinstance(entry, dict) and isinstance(entry.get("id"), str)
+    }
     seen_ids: set[str] = set()
     seen_directories: set[str] = set()
 
@@ -89,6 +94,28 @@ def validate_product_registry_naming(registry: dict) -> None:
             raise ValidationError(
                 f"{identifier}: entity_prefix must be {expected_prefix}, "
                 f"got {entity_prefix!r}"
+            )
+
+        lifecycle = entry.get("lifecycle", "active")
+        if lifecycle not in {"active", "deprecated"}:
+            raise ValidationError(
+                f"{identifier}: lifecycle must be 'active' or 'deprecated'"
+            )
+
+        superseded_by = entry.get("superseded_by")
+        if lifecycle == "deprecated":
+            if (
+                not isinstance(superseded_by, str)
+                or superseded_by == identifier
+                or superseded_by not in all_ids
+            ):
+                raise ValidationError(
+                    f"{identifier}: deprecated product must declare a valid "
+                    "different superseded_by product id"
+                )
+        elif superseded_by is not None:
+            raise ValidationError(
+                f"{identifier}: active product must not declare superseded_by"
             )
 
         display_name = entry.get("display_name")
@@ -135,7 +162,12 @@ def validate_product_registry_naming(registry: dict) -> None:
                 )
 
             migration = entry.get("slug_migration")
-            if haos_slug == identifier:
+            if lifecycle == "deprecated":
+                if migration is not None:
+                    raise ValidationError(
+                        f"{identifier}: deprecated App must not carry pending slug migration"
+                    )
+            elif haos_slug == identifier:
                 if migration is not None:
                     raise ValidationError(
                         f"{identifier}: canonical haos_slug must not carry pending migration"
@@ -239,6 +271,16 @@ def validate_repository(root: Path = ROOT) -> list[dict[str, str]]:
                 raise ValidationError(
                     f"{identifier}: config name must be {expected_name!r}, "
                     f"got {config.get('name')!r}"
+                )
+
+            lifecycle = entry.get("lifecycle", "active")
+            if lifecycle == "deprecated" and config.get("stage") != "deprecated":
+                raise ValidationError(
+                    f"{identifier}: deprecated App must use config stage 'deprecated'"
+                )
+            if lifecycle == "active" and config.get("stage") == "deprecated":
+                raise ValidationError(
+                    f"{identifier}: active App must not use config stage 'deprecated'"
                 )
 
         product_validator = PRODUCT_VALIDATORS.get(identifier)

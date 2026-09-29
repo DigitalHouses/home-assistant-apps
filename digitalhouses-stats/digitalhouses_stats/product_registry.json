@@ -47,17 +47,15 @@
       "entity_prefix": "dh_speedtest_app",
       "display_name": "Speedtest App",
       "telemetry_allowed": true,
+      "lifecycle": "deprecated",
+      "superseded_by": "digitalhouses_internet_app",
       "release": {
         "title": "DigitalHouses Speedtest App",
         "version_source": "haos_config",
         "policy_baseline": "1.2.1"
       },
       "repository_directory": "digitalhouses_speedtest_app",
-      "haos_slug": "digitalhouses_speedtest",
-      "slug_migration": {
-        "status": "pending_controlled_reinstall",
-        "target": "digitalhouses_speedtest_app"
-      }
+      "haos_slug": "digitalhouses_speedtest"
     },
     {
       "id": "digitalhouses_backblaze_app",

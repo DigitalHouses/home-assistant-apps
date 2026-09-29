@@ -447,7 +447,7 @@ As of the current repository implementation:
 | DigitalHouses PVE Agent | `digitalhouses_pve_agent` | implemented and verified |
 | DigitalHouses Plex Agent | `digitalhouses_plex_agent` | implemented and verified |
 | DigitalHouses Recorder App | `digitalhouses_recorder_app` | implemented and production-verified (heartbeat, deletion, restart persistence, App backup/restore) |
-| DigitalHouses Speedtest App | `digitalhouses_speedtest_app` | pending product implementation |
+| DigitalHouses Speedtest App | `digitalhouses_speedtest_app` | deprecated; superseded by `digitalhouses_internet_app`; production telemetry client intentionally not planned |
 | DigitalHouses Backblaze App | `digitalhouses_backblaze_app` | client implemented; admitted to registry/server allowlist; immutable production release delivery enabled; real-install verification pending |
 | DigitalHouses Internet App | `digitalhouses_internet_app` | implemented in product and admitted to protocol/server allowlist |
 | DigitalHouses Climate App | `digitalhouses_climate_app` | client implemented; admitted to protocol/server allowlist; real-install verification pending |

@@ -186,6 +186,15 @@ config.yaml slug == id
 
 and the pending migration marker must be removed. Repository validation must prevent regression.
 
+A product that is explicitly deprecated because a separate successor product replaces it may freeze its existing compatibility-sensitive runtime identities instead of performing a cosmetic migration. The registry must then declare:
+
+```text
+lifecycle: deprecated
+superseded_by: <canonical successor product id>
+```
+
+A deprecated App uses Home Assistant `stage: deprecated`, must not carry a pending slug-migration marker, and keeps its historical installed slug for existing installations. Deprecation does not transfer or reuse the old product identity: the successor remains a separate canonical product.
+
 Linux service names, filesystem paths, MQTT identities and released Home Assistant entity IDs are independent compatibility-sensitive runtime surfaces. A structural repository rename must not silently rename them.
 
 ## 7. MQTT and internal constants
