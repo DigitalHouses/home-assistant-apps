@@ -210,10 +210,10 @@ class TopologyManager:
         guest: GuestRecord,
         devices: tuple[PassthroughDevice, ...],
         qga_state: str,
-    ) -> bool:
+    ) -> None:
         storage_devices = self._storage_passthrough(devices)
         if not storage_devices or guest.status != "running" or qga_state != "available":
-            return False
+            return
         command = "lsblk -J -b -d -o NAME,PATH,TYPE,SIZE,MODEL,SERIAL,WWN,TRAN,ROTA"
         try:
             raw = self._run(
@@ -222,7 +222,7 @@ class TopologyManager:
             )
             block_devices = parse_qga_lsblk(raw)
         except Exception:
-            return False
+            return
 
         hostpci = ",".join(item.config_key for item in storage_devices)
         seen: set[tuple[str, str]] = set()
@@ -248,10 +248,6 @@ class TopologyManager:
             if key[0] == guest.guest_id and key not in seen:
                 self._storage_sources.pop(key, None)
 
-        # A successful guest-exec with no physical disk is not a completed
-        # recovery for a storage-class passthrough controller. The guest may
-        # have QGA ready before the passthrough disk has finished appearing.
-        return bool(seen)
 
     @staticmethod
     def _read_optional(path: Path) -> str | None:
