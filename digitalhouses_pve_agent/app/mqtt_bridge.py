@@ -64,7 +64,6 @@ class MqttEvents:
         self.settings = settings
         self.ups_topics: UpsTopics | None = None
         self.refresh_requested = threading.Event()
-        self.restart_requested = threading.Event()
         self.reconnect_requested = threading.Event()
         self.ups_scan_requested = threading.Event()
         self.fan_calibration_requested = threading.Event()
@@ -92,11 +91,8 @@ class MqttEvents:
         if topic == self.topics.refresh:
             if text.upper() == "PRESS":
                 self.refresh_requested.set()
-                return True
-            return False
-        if topic == self.topics.restart_agent:
-            if text.upper() == "PRESS":
-                self.restart_requested.set()
+                if self.ups_topics is not None:
+                    self.ups_refresh_requested.set()
                 return True
             return False
         if topic == self.topics.ups_scan:
@@ -239,7 +235,6 @@ class MqttBridge(MqttEvents):
         self.connected.set()
         client.subscribe(self.topics.ha_status, qos=1)
         client.subscribe(self.topics.refresh, qos=1)
-        client.subscribe(self.topics.restart_agent, qos=1)
         client.subscribe(self.topics.ups_scan, qos=1)
         client.subscribe(self.topics.fan_calibrate, qos=1)
         client.subscribe(f"{self.topics.base}/ups/refresh", qos=1)
