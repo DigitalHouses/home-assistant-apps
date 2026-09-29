@@ -6,29 +6,29 @@ APP = ROOT / "digitalhouses_pve_agent"
 VALIDATOR = ROOT / "scripts" / "validators" / "products" / "pve_agent.py"
 
 
-def test_0543_version_contract():
-    assert (APP / "VERSION").read_text(encoding="utf-8").strip() == "0.5.43"
+def test_0544_version_contract():
+    assert (APP / "VERSION").read_text(encoding="utf-8").strip() == "0.5.44"
 
     validator = VALIDATOR.read_text(encoding="utf-8")
-    assert 'EXPECTED_VERSION = "0.5.43"' in validator
+    assert 'EXPECTED_VERSION = "0.5.44"' in validator
 
     readme = (APP / "README.md").read_text(encoding="utf-8")
     changelog = (APP / "CHANGELOG.md").read_text(encoding="utf-8")
-    assert "Current source release: `VERSION` is `0.5.43`." in readme
-    assert "## 0.5.43" in changelog
+    assert "Current source release: `VERSION` is `0.5.44`." in readme
+    assert "## 0.5.44" in changelog
 
 
-def test_0543_operational_docs_use_current_release_tag():
+def test_0544_operational_docs_use_current_release_tag():
     for path in (
         APP / "README.md",
         APP / "digitalhouses_pve_agent.txt",
         APP / "hardware" / "beelink" / "README.md",
     ):
         text = path.read_text(encoding="utf-8")
-        assert "digitalhouses_pve_agent-v0.5.43" in text
+        assert "digitalhouses_pve_agent-v0.5.44" in text
 
 
-def test_0543_keeps_0536_runtime_cleanup_and_full_manual_refresh():
+def test_0544_keeps_0536_runtime_cleanup_and_full_manual_refresh():
     topology = (APP / "app" / "topology.py").read_text(encoding="utf-8")
     main = (APP / "app" / "main.py").read_text(encoding="utf-8")
     scheduler = (APP / "app" / "scheduler.py").read_text(encoding="utf-8")
@@ -72,7 +72,7 @@ def test_0543_keeps_0536_runtime_cleanup_and_full_manual_refresh():
     assert manual.index('"topology",') < manual.index('"smart",')
 
 
-def test_0543_operation_state_contract_is_agent_owned():
+def test_0544_operation_state_contract_is_agent_owned():
     operation = (APP / "app" / "operation_status.py").read_text(encoding="utf-8")
     app_runtime = (APP / "app" / "app.py").read_text(encoding="utf-8")
     ups_runtime = (APP / "app" / "ups_runtime.py").read_text(encoding="utf-8")
@@ -96,7 +96,8 @@ def test_0543_operation_state_contract_is_agent_owned():
     assert 'refresh_publisher(operation_payload("idle"))' in dynamic_runtime
 
     assert 'operation_payload("updating"' in app_runtime
-    assert '"idle" if published and not failed else "error"' in app_runtime
+    assert "commit_ok = self._commit_manual_refresh(finished_at)" in app_runtime
+    assert '"idle" if success else "error"' in app_runtime
     assert 'operation_payload("updating"' in ups_runtime
     assert '"idle" if ok else "error"' in ups_runtime
     assert "ups_scan_in_progress.set()" in main
@@ -107,7 +108,7 @@ def test_0543_operation_state_contract_is_agent_owned():
     assert '"default_entity_id": "sensor.dh_pve_agent_ups_refresh_state"' in ups_discovery
 
 
-def test_0543_ui_uses_operation_state_not_fake_timers():
+def test_0544_ui_uses_operation_state_not_fake_timers():
     pve = (APP / "examples" / "dh_pve_agent_dashboard.yaml").read_text(encoding="utf-8")
     ups = (APP / "examples" / "dh_pve_agent_ups_dashboard.yaml").read_text(encoding="utf-8")
 
@@ -127,7 +128,28 @@ def test_0543_ui_uses_operation_state_not_fake_timers():
         assert forbidden not in ups
 
 
-def test_0543_installer_still_does_not_clean_canonical_mqtt():
+def test_0544_global_refresh_stays_active_through_ups_followup():
+    app_runtime = (APP / "app" / "app.py").read_text(encoding="utf-8")
+    main = (APP / "app" / "main.py").read_text(encoding="utf-8")
+    mqtt = (APP / "app" / "mqtt_bridge.py").read_text(encoding="utf-8")
+
+    assert "self.manual_refresh_followup" in app_runtime
+    assert "followup_ok = bool(self.manual_refresh_followup())" in app_runtime
+    assert "commit_ok = self._commit_manual_refresh(finished_at)" in app_runtime
+    assert "self.last_refresh = completed_at" in app_runtime
+    assert '"follow-up refresh failed"' in app_runtime
+
+    assert "def refresh_ups_after_pve()" in main
+    assert "runtime.set_manual_refresh_followup(refresh_ups_after_pve)" in main
+    assert "return ups_runtime.manual_refresh()" in main
+
+    refresh_branch = mqtt[mqtt.index("if topic == self.topics.refresh:"):]
+    refresh_branch = refresh_branch[:refresh_branch.index("if topic == self.topics.ups_scan:")]
+    assert "self.refresh_requested.set()" in refresh_branch
+    assert "self.ups_refresh_requested.set()" not in refresh_branch
+
+
+def test_0544_installer_still_does_not_clean_canonical_mqtt():
     installer = (APP / "install.sh").read_text(encoding="utf-8")
     uninstaller = (APP / "uninstall.sh").read_text(encoding="utf-8")
 

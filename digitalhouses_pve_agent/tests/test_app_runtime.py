@@ -174,6 +174,37 @@ def test_manual_refresh_runs_all_collectors_and_updates_timestamp_only_when_all_
     assert bridge.refresh_in_progress.is_set() is False
 
 
+def test_global_refresh_stays_updating_through_followup():
+    runtime, bridge, _, _, _ = make_runtime(
+        {"cpu": lambda: sample(10.0)},
+        now_values=["2026-09-30T04:31:16+05:00"] * 20,
+    )
+    observed = []
+
+    def followup():
+        observed.append(bridge.refresh_operations[-1]["state"])
+        return True
+
+    runtime.set_manual_refresh_followup(followup)
+
+    assert runtime.manual_refresh() is True
+    assert observed == ["updating"]
+    assert [item["state"] for item in bridge.refresh_operations] == ["updating", "idle"]
+
+
+def test_failed_followup_marks_global_refresh_error():
+    runtime, bridge, _, _, _ = make_runtime(
+        {"cpu": lambda: sample(10.0)},
+        now_values=["2026-09-30T04:31:16+05:00"] * 20,
+    )
+    runtime.set_manual_refresh_followup(lambda: False)
+
+    assert runtime.manual_refresh() is False
+    assert runtime.last_refresh is None
+    assert [item["state"] for item in bridge.refresh_operations] == ["updating", "error"]
+    assert bridge.refresh_operations[-1]["error"] == "follow-up refresh failed"
+
+
 def test_manual_refresh_can_limit_collectors_for_fast_ui_refresh():
     calls = {
         "topology": 0,
@@ -222,7 +253,7 @@ def test_manual_refresh_with_partial_failure_keeps_previous_last_refresh():
 
     runtime, bridge, _, _, _ = make_runtime({"cpu": lambda: sample(10.0), "fan": broken})
     runtime.last_refresh = "2026-09-09T10:00:00+05:00"
-    assert runtime.manual_refresh() is True
+    assert runtime.manual_refresh() is False
     assert runtime.last_refresh == "2026-09-09T10:00:00+05:00"
     assert bridge.states[-1]["last_refresh"] == "2026-09-09T10:00:00+05:00"
     assert [item["state"] for item in bridge.refresh_operations] == ["updating", "error"]

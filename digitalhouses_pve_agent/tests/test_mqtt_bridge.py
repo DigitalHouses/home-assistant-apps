@@ -98,14 +98,14 @@ def test_unknown_topic_is_ignored():
     assert events.handle_message("some/other/topic", b"x") is False
 
 
-def test_main_refresh_also_refreshes_configured_ups():
+def test_main_refresh_queues_only_global_refresh_event():
     events = MqttEvents(_topics(), RuntimeSettings())
     ups = build_ups_topics(_mqtt(), _identity())
     events.configure_ups(ups)
 
     assert events.handle_message(events.topics.refresh, b"PRESS") is True
     assert events.refresh_requested.is_set()
-    assert events.ups_refresh_requested.is_set()
+    assert not events.ups_refresh_requested.is_set()
 
 
 def test_duplicate_ups_refresh_press_is_ignored_while_running():

@@ -93,6 +93,14 @@ def test_main_wires_full_manual_refresh(tmp_path, monkeypatch):
     assert runtime.manual_refresh_collectors.index("topology") < runtime.manual_refresh_collectors.index("smart")
 
 
+def test_main_wires_ups_as_followup_of_global_refresh():
+    text = (ROOT / "app" / "main.py").read_text()
+
+    assert "def refresh_ups_after_pve()" in text
+    assert "runtime.set_manual_refresh_followup(refresh_ups_after_pve)" in text
+    assert "return ups_runtime.manual_refresh()" in text
+
+
 def test_main_wires_shared_topology_shutdown_history_and_static_inventory():
     text = (ROOT / "app" / "main.py").read_text()
     assert "ShutdownAwareProductionCollectors" in text

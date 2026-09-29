@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.44
+
+- Make the main PVE Refresh operation state cover the complete user action, including the UPS follow-up phase. `sensor.dh_pve_agent_refresh_state` now stays `updating` until both PVE and configured UPS refresh work has finished.
+- Run UPS Refresh as an explicit follow-up inside the global Refresh lifecycle instead of queueing an independent UPS refresh event from the MQTT button handler.
+- Keep `sensor.dh_pve_agent_ups_refresh_state` independent: it changes to `updating` only during the UPS phase, while the global Refresh sensor remains `updating` across both phases.
+- Preserve the dedicated UPS Refresh button and duplicate-press protection.
+
 ## 0.5.43
 
 - Fix initial `sensor.dh_pve_agent_refresh_state` being `unknown` after Agent startup. Production uses `DynamicDiscoveryRuntime.startup()`, which bypassed the base runtime's operation-state initialization added in 0.5.42.

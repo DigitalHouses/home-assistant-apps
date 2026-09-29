@@ -96,12 +96,6 @@ class MqttEvents:
                 if self.refresh_in_progress.is_set() or self.refresh_requested.is_set():
                     return True
                 self.refresh_requested.set()
-                if (
-                    self.ups_topics is not None
-                    and not self.ups_refresh_in_progress.is_set()
-                    and not self.ups_refresh_requested.is_set()
-                ):
-                    self.ups_refresh_requested.set()
                 return True
             return False
         if topic == self.topics.ups_scan:

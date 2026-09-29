@@ -6,7 +6,7 @@ from typing import Any
 
 from validators.common import fail, require_files
 
-EXPECTED_VERSION = "0.5.43"
+EXPECTED_VERSION = "0.5.44"
 EXPECTED_TOPIC_PREFIX = "DigitalHouses/Global/digitalhouses_pve_agent"
 EXPECTED_DEVICE_NAME = "DH PVE"
 EXPECTED_REFRESH_ENTITY = "button.dh_pve_agent_refresh"
@@ -758,7 +758,8 @@ def validate_digitalhouses_pve_agent(
         app / "app/app.py",
         (
             'operation_payload("updating"',
-            '"idle" if published and not failed else "error"',
+            '"idle" if success else "error"',
+            "commit_ok = self._commit_manual_refresh(finished_at)",
             "refresh_in_progress",
         ),
         "PVE refresh lifecycle",
@@ -837,10 +838,32 @@ def validate_digitalhouses_pve_agent(
         app / "app/mqtt_bridge.py",
         (
             "self.refresh_requested.set()",
-            "if self.ups_topics is not None:",
-            "self.ups_refresh_requested.set()",
+            "self.refresh_in_progress.is_set()",
         ),
-        "global manual refresh",
+        "global manual refresh command",
+    )
+    mqtt_source = (app / "app/mqtt_bridge.py").read_text(encoding="utf-8")
+    refresh_branch = mqtt_source[mqtt_source.index("if topic == self.topics.refresh:"):]
+    refresh_branch = refresh_branch[:refresh_branch.index("if topic == self.topics.ups_scan:")]
+    if "self.ups_refresh_requested.set()" in refresh_branch:
+        fail("DH PVE global Refresh must not queue a second UPS refresh event")
+    _require_text(
+        app / "app/main.py",
+        (
+            "def refresh_ups_after_pve()",
+            "runtime.set_manual_refresh_followup(refresh_ups_after_pve)",
+            "return ups_runtime.manual_refresh()",
+        ),
+        "global Refresh UPS follow-up",
+    )
+    _require_text(
+        app / "app/app.py",
+        (
+            "self.manual_refresh_followup",
+            "followup_ok = bool(self.manual_refresh_followup())",
+            '"follow-up refresh failed"',
+        ),
+        "global Refresh lifecycle",
     )
     _require_text(
         app / "app/migration_cleanup.py",

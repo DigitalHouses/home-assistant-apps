@@ -90,6 +90,7 @@ class DhPveRuntime:
         self.app_version = app_version
         self.agent_started_at = agent_started_at
         self.ups_configured = bool(ups_configured)
+        self.manual_refresh_followup: Callable[[], bool] | None = None
         self._pve_version_fingerprint: str | None = None
         self._subsystems: dict[str, SubsystemState] = {}
         self._published_groups: dict[str, dict[str, object]] = {}
@@ -438,6 +439,49 @@ class DhPveRuntime:
             if name in self.collectors
         )
 
+    def set_manual_refresh_followup(
+        self,
+        callback: Callable[[], bool] | None,
+    ) -> None:
+        self.manual_refresh_followup = callback
+
+    def _commit_manual_refresh(self, completed_at: str) -> bool:
+        if self._group_capable():
+            profile = str(
+                self.presentation_router.profile_summary().get("state") or "normal"
+            )
+            payload: dict[str, object] = {
+                "collected_at": completed_at,
+                "app_version": self.app_version,
+                "agent_started_at": self.agent_started_at,
+                "ups_configured": self.ups_configured,
+                "last_refresh": completed_at,
+                "app_profile": self.presentation_router.profile_summary(),
+                "last_publication": {
+                    "timestamp": completed_at,
+                    "group": "diagnostics",
+                    "reason": "manual_refresh",
+                    "profile": profile,
+                    "group_count": len(self.manual_refresh_collectors),
+                },
+            }
+            publisher = getattr(self.bridge, "publish_state_group")
+            if not publisher("diagnostics", payload):
+                return False
+            self._published_groups["diagnostics"] = payload
+            self._pending_groups.pop("diagnostics", None)
+        else:
+            payload = self._state_payload(
+                collected_at=completed_at,
+                last_refresh=completed_at,
+            )
+            if not self.bridge.publish_state(payload):
+                return False
+
+        self.last_refresh = completed_at
+        self._persist_runtime_state()
+        return True
+
     def manual_refresh(self) -> bool:
         started_at = self.now_iso()
         started_monotonic = self.now_monotonic()
@@ -452,7 +496,7 @@ class DhPveRuntime:
             published = self.run_collection(
                 names=self.manual_refresh_collectors,
                 force=True,
-                manual_refresh=True,
+                manual_refresh=False,
             )
             failed = [
                 name
@@ -463,29 +507,42 @@ class DhPveRuntime:
                     or not self._subsystems[name].available
                 )
             ]
+            followup_ok = True
+            if callable(self.manual_refresh_followup):
+                followup_ok = bool(self.manual_refresh_followup())
+
             finished_at = self.now_iso()
+            commit_ok = False
+            if published and not failed and followup_ok:
+                commit_ok = self._commit_manual_refresh(finished_at)
+            success = published and not failed and followup_ok and commit_ok
+
             duration = self.now_monotonic() - started_monotonic
             if callable(publisher):
                 publisher(
                     operation_payload(
-                        "idle" if published and not failed else "error",
+                        "idle" if success else "error",
                         started_at=started_at,
                         finished_at=finished_at,
                         duration_seconds=duration,
                         error=(
                             None
-                            if published and not failed
+                            if success
                             else (
                                 "collector failure: " + ", ".join(failed)
                                 if failed
-                                else "publication failed"
+                                else (
+                                    "publication failed"
+                                    if not published or not commit_ok and followup_ok
+                                    else "follow-up refresh failed"
+                                )
                             )
                         ),
                     )
                 )
             if self._static_collectors_available():
                 self._prime_version_fingerprint()
-            return published
+            return success
         except Exception as exc:
             if callable(publisher):
                 publisher(
