@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import platform
 import re
 import time
@@ -27,6 +28,8 @@ from .pve_cache import read_pve_rrd, read_pve_vmlist
 
 Runner = Callable[..., str]
 ConfigReader = Callable[[str, str], str]
+
+log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -587,11 +590,15 @@ class TopologyManager:
                 and qga.get(guest_id) == "unavailable"
                 and _agent_enabled(config)
             ):
-                recovered = self._qga_state(guest, config)
+                recovered = self._qga_state(guest, config, force=True)
                 qga[guest_id] = recovered
                 if recovered == "available":
                     devices = parse_hostpci(config, self._pci_catalog)
                     if self._probe_guest_storage(guest, devices, recovered):
+                        log.info(
+                            "QGA восстановлен для VM %s; passthrough storage пересканирован",
+                            guest_id,
+                        )
                         if self.on_storage_recovered is not None:
                             self.on_storage_recovered()
 
