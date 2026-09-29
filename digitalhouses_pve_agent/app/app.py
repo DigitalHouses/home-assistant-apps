@@ -10,6 +10,7 @@ from typing import Any, Protocol
 
 from .presentation_pve import PresentationSubsystem, PvePresentationRouter
 from .publish_policy import MetricValue, PublishPolicy
+from .operation_status import operation_payload
 from .runtime_settings import RuntimeSettings
 from .scheduler import Scheduler
 from .state_store import StateStore
@@ -438,14 +439,68 @@ class DhPveRuntime:
         )
 
     def manual_refresh(self) -> bool:
-        published = self.run_collection(
-            names=self.manual_refresh_collectors,
-            force=True,
-            manual_refresh=True,
-        )
-        if self._static_collectors_available():
-            self._prime_version_fingerprint()
-        return published
+        started_at = self.now_iso()
+        started_monotonic = self.now_monotonic()
+        in_progress = getattr(self.bridge, "refresh_in_progress", None)
+        publisher = getattr(self.bridge, "publish_refresh_operation", None)
+        if in_progress is not None:
+            in_progress.set()
+        if callable(publisher):
+            publisher(operation_payload("updating", started_at=started_at))
+
+        try:
+            published = self.run_collection(
+                names=self.manual_refresh_collectors,
+                force=True,
+                manual_refresh=True,
+            )
+            failed = [
+                name
+                for name in self.manual_refresh_collectors
+                if name in self.collectors
+                and (
+                    self._subsystems.get(name) is None
+                    or not self._subsystems[name].available
+                )
+            ]
+            finished_at = self.now_iso()
+            duration = self.now_monotonic() - started_monotonic
+            if callable(publisher):
+                publisher(
+                    operation_payload(
+                        "idle" if published and not failed else "error",
+                        started_at=started_at,
+                        finished_at=finished_at,
+                        duration_seconds=duration,
+                        error=(
+                            None
+                            if published and not failed
+                            else (
+                                "collector failure: " + ", ".join(failed)
+                                if failed
+                                else "publication failed"
+                            )
+                        ),
+                    )
+                )
+            if self._static_collectors_available():
+                self._prime_version_fingerprint()
+            return published
+        except Exception as exc:
+            if callable(publisher):
+                publisher(
+                    operation_payload(
+                        "error",
+                        started_at=started_at,
+                        finished_at=self.now_iso(),
+                        duration_seconds=self.now_monotonic() - started_monotonic,
+                        error=f"{type(exc).__name__}: {exc}",
+                    )
+                )
+            raise
+        finally:
+            if in_progress is not None:
+                in_progress.clear()
 
     def publish_settings(self) -> bool:
         ok = True
@@ -462,6 +517,9 @@ class DhPveRuntime:
         discovery_ok = self.bridge.publish_discovery()
         settings_ok = self.publish_settings()
         state_ok = self.run_collection(force=True)
+        refresh_publisher = getattr(self.bridge, "publish_refresh_operation", None)
+        if callable(refresh_publisher):
+            refresh_publisher(operation_payload("idle"))
         if self._static_collectors_available():
             self._prime_version_fingerprint()
         return cleanup_ok and discovery_ok and settings_ok and state_ok

@@ -135,6 +135,25 @@ def build_ups_discovery_payload(
             "entity_category": "diagnostic",
             "icon": "mdi:refresh",
         },
+        "refresh_state": {
+            "platform": "sensor",
+            "name": "Refresh state",
+            "unique_id": uid("refresh_state"),
+            "default_entity_id": "sensor.dh_pve_agent_ups_refresh_state",
+            "state_topic": topics.refresh_operation,
+            "value_template": "{{ value_json.state | default('idle') }}",
+            "availability": [app_availability],
+            "availability_mode": "all",
+            "entity_category": "diagnostic",
+            "icon": "mdi:progress-clock",
+            "json_attributes_topic": topics.refresh_operation,
+            "json_attributes_template": (
+                "{{ {'started_at': value_json.started_at | default(none), "
+                "'finished_at': value_json.finished_at | default(none), "
+                "'duration_seconds': value_json.duration_seconds | default(none), "
+                "'error': value_json.error | default(none)} | tojson }}"
+            ),
+        },
         "capabilities": {
             "platform": "sensor",
             "name": "Capabilities",

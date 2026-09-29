@@ -47,6 +47,8 @@ def test_build_topics_is_exact():
     assert topics.state == topics.base + "/state"
     assert topics.availability == topics.base + "/availability"
     assert topics.refresh == topics.base + "/refresh"
+    assert topics.refresh_operation == topics.base + "/refresh/operation"
+    assert topics.ups_scan_operation == topics.base + "/ups/scan/operation"
     assert topics.manifest == topics.base + "/manifest"
     assert topics.settings_prefix == topics.base + "/settings"
     assert topics.device_id == "dh_pve_agent_shahristan"

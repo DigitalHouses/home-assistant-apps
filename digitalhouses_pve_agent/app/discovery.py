@@ -111,6 +111,25 @@ def build_discovery_payload(
                 sort_key="011",
             ),
         },
+        "refresh_state": {
+            "platform": "sensor",
+            "name": "Refresh state",
+            "unique_id": uid("refresh_state"),
+            "default_entity_id": "sensor.dh_pve_agent_refresh_state",
+            "state_topic": topics.refresh_operation,
+            "value_template": "{{ value_json.state | default('idle') }}",
+            "availability": [_availability(topics.availability)],
+            "availability_mode": "all",
+            "entity_category": "diagnostic",
+            "icon": "mdi:progress-clock",
+            "json_attributes_topic": topics.refresh_operation,
+            "json_attributes_template": (
+                "{{ {'started_at': value_json.started_at | default(none), "
+                "'finished_at': value_json.finished_at | default(none), "
+                "'duration_seconds': value_json.duration_seconds | default(none), "
+                "'error': value_json.error | default(none)} | tojson }}"
+            ),
+        },
         "ups_scan": {
             "platform": "button",
             "name": "Сканировать UPS",
@@ -122,6 +141,25 @@ def build_discovery_payload(
             "availability_mode": "all",
             "entity_category": "diagnostic",
             "icon": "mdi:power-plug-battery-outline",
+        },
+        "ups_scan_state": {
+            "platform": "sensor",
+            "name": "UPS scan state",
+            "unique_id": uid("ups_scan_state"),
+            "default_entity_id": "sensor.dh_pve_agent_ups_scan_state",
+            "state_topic": topics.ups_scan_operation,
+            "value_template": "{{ value_json.state | default('idle') }}",
+            "availability": [_availability(topics.availability)],
+            "availability_mode": "all",
+            "entity_category": "diagnostic",
+            "icon": "mdi:magnify-scan",
+            "json_attributes_topic": topics.ups_scan_operation,
+            "json_attributes_template": (
+                "{{ {'started_at': value_json.started_at | default(none), "
+                "'finished_at': value_json.finished_at | default(none), "
+                "'duration_seconds': value_json.duration_seconds | default(none), "
+                "'error': value_json.error | default(none)} | tojson }}"
+            ),
         },
         "ups_scan_result": {
             "platform": "sensor",

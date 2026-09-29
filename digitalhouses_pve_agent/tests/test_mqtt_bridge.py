@@ -47,6 +47,22 @@ def test_refresh_press_sets_event():
     assert events.refresh_requested.is_set()
 
 
+def test_duplicate_refresh_presses_are_ignored_while_pending_or_running():
+    topics = _topics()
+    events = MqttEvents(topics, RuntimeSettings())
+
+    assert events.handle_message(topics.refresh, b"PRESS") is True
+    assert events.refresh_requested.is_set()
+
+    assert events.handle_message(topics.refresh, b"PRESS") is True
+    assert events.refresh_requested.is_set()
+
+    events.refresh_requested.clear()
+    events.refresh_in_progress.set()
+    assert events.handle_message(topics.refresh, b"PRESS") is True
+    assert not events.refresh_requested.is_set()
+
+
 def test_fan_calibration_press_sets_dedicated_event():
     topics = _topics()
     events = MqttEvents(topics, RuntimeSettings())
@@ -90,6 +106,16 @@ def test_main_refresh_also_refreshes_configured_ups():
     assert events.handle_message(events.topics.refresh, b"PRESS") is True
     assert events.refresh_requested.is_set()
     assert events.ups_refresh_requested.is_set()
+
+
+def test_duplicate_ups_refresh_press_is_ignored_while_running():
+    events = MqttEvents(_topics(), RuntimeSettings())
+    ups = build_ups_topics(_mqtt(), _identity())
+    events.configure_ups(ups)
+
+    events.ups_refresh_in_progress.set()
+    assert events.handle_message(ups.refresh, b"PRESS") is True
+    assert not events.ups_refresh_requested.is_set()
 
 
 def test_ups_refresh_uses_separate_event():

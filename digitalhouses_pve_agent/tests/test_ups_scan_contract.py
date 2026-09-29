@@ -44,6 +44,7 @@ def test_pve_device_exposes_manual_ups_scan_controls():
     topics = build_topics(_mqtt(), _identity())
     assert getattr(topics, "ups_scan", None) == topics.base + "/ups/scan"
     assert getattr(topics, "ups_scan_state", None) == topics.base + "/ups/scan/state"
+    assert getattr(topics, "ups_scan_operation", None) == topics.base + "/ups/scan/operation"
 
     payload = build_discovery_payload(_app_config(), _identity(), version="0.2.0-alpha")
     components = payload["components"]
@@ -54,6 +55,8 @@ def test_pve_device_exposes_manual_ups_scan_controls():
     assert components["ups_scan_result"]["state_topic"] == topics.ups_scan_state
     assert components["ups_last_scan"]["default_entity_id"] == "sensor.dh_pve_agent_ups_last_scan"
     assert components["ups_last_scan"]["state_topic"] == topics.ups_scan_state
+    assert components["ups_scan_state"]["default_entity_id"] == "sensor.dh_pve_agent_ups_scan_state"
+    assert components["ups_scan_state"]["state_topic"] == topics.ups_scan_operation
 
 
 def test_mqtt_events_accept_manual_ups_scan_press():
@@ -63,6 +66,11 @@ def test_mqtt_events_accept_manual_ups_scan_press():
     assert hasattr(events, "ups_scan_requested")
     assert events.handle_message(topics.ups_scan, b"PRESS") is True
     assert events.ups_scan_requested.is_set()
+
+    events.ups_scan_requested.clear()
+    events.ups_scan_in_progress.set()
+    assert events.handle_message(topics.ups_scan, b"PRESS") is True
+    assert not events.ups_scan_requested.is_set()
 
 
 def test_read_only_nut_scan_lists_configured_ups_names():
@@ -121,3 +129,5 @@ def test_ups_device_and_entities_use_pve_scoped_public_namespace():
     assert payload["components"]["status"]["default_entity_id"] == "sensor.dh_pve_agent_ups_status"
     assert payload["components"]["battery_charge"]["default_entity_id"] == "sensor.dh_pve_agent_ups_battery_charge"
     assert payload["components"]["refresh"]["default_entity_id"] == "button.dh_pve_agent_ups_refresh"
+    assert payload["components"]["refresh_state"]["default_entity_id"] == "sensor.dh_pve_agent_ups_refresh_state"
+    assert payload["components"]["refresh_state"]["state_topic"] == topics.refresh_operation

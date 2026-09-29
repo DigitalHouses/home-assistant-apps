@@ -20,6 +20,7 @@ from .identity import resolve_identity
 from .migration_cleanup import cleanup_legacy_mqtt_namespace
 from .machine_event_outbox import MachineEventOutbox
 from .mqtt_bridge import MqttBridge
+from .operation_status import operation_payload
 from .production import _run
 from .publish_policy import PublishPolicy
 from .pve_cache import read_pve_version
@@ -375,6 +376,7 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
                 bridge.reconnect_requested.clear()
                 initialized = runtime.startup()
                 if initialized:
+                    bridge.publish_ups_scan_operation(operation_payload("idle"))
                     log.info("Первичная публикация MQTT завершена")
                 else:
                     log.warning(
@@ -388,24 +390,57 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
 
                 if bridge.ups_scan_requested.is_set():
                     bridge.ups_scan_requested.clear()
-                    outcome = scanner.scan()
-                    bridge.publish_ups_scan_state(outcome.payload())
-                    log.info("Сканирование UPS: %s", outcome.result)
-
-                    if outcome.selected_name is not None:
-                        if not runtime.set_ups_configured(True):
-                            log.warning("Не удалось опубликовать факт настройки UPS")
-                        if ups_runtime is None or outcome.selection_changed:
-                            ups_runtime = build_ups_runtime(
-                                config,
-                                bridge,
-                                selected_name=outcome.selected_name,
-                                state_dir=state_dir,
-                                shutdown_history_tracker=shutdown_history_tracker,
+                    scan_started_at = _now_iso()
+                    scan_started_monotonic = time.monotonic()
+                    bridge.ups_scan_in_progress.set()
+                    bridge.publish_ups_scan_operation(
+                        operation_payload("updating", started_at=scan_started_at)
+                    )
+                    try:
+                        outcome = scanner.scan()
+                        bridge.publish_ups_scan_state(outcome.payload())
+                        bridge.publish_ups_scan_operation(
+                            operation_payload(
+                                "error" if outcome.error else "idle",
+                                started_at=scan_started_at,
+                                finished_at=_now_iso(),
+                                duration_seconds=(
+                                    time.monotonic() - scan_started_monotonic
+                                ),
+                                error=outcome.error,
                             )
-                            ups_startup_attempted = False
-                        elif outcome.count == 1:
-                            ups_runtime.manual_refresh()
+                        )
+                        log.info("Сканирование UPS: %s", outcome.result)
+
+                        if outcome.selected_name is not None:
+                            if not runtime.set_ups_configured(True):
+                                log.warning("Не удалось опубликовать факт настройки UPS")
+                            if ups_runtime is None or outcome.selection_changed:
+                                ups_runtime = build_ups_runtime(
+                                    config,
+                                    bridge,
+                                    selected_name=outcome.selected_name,
+                                    state_dir=state_dir,
+                                    shutdown_history_tracker=shutdown_history_tracker,
+                                )
+                                ups_startup_attempted = False
+                            elif outcome.count == 1:
+                                ups_runtime.manual_refresh()
+                    except Exception as exc:
+                        bridge.publish_ups_scan_operation(
+                            operation_payload(
+                                "error",
+                                started_at=scan_started_at,
+                                finished_at=_now_iso(),
+                                duration_seconds=(
+                                    time.monotonic() - scan_started_monotonic
+                                ),
+                                error=f"{type(exc).__name__}: {exc}",
+                            )
+                        )
+                        raise
+                    finally:
+                        bridge.ups_scan_in_progress.clear()
 
                 if ups_runtime is not None and not ups_startup_attempted:
                     bridge.ups_reconnect_requested.clear()
