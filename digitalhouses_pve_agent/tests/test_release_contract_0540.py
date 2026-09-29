@@ -85,10 +85,14 @@ def test_0540_manual_disk_recovery_and_restart_agent_contract():
     assert "on_storage_recovered" not in topology
     assert "request_run(" not in scheduler
     assert "on_storage_recovered" not in main
-    assert '"smart",' in main
-    assert '"disk_temperature",' in main
-    assert main.index('"topology",') < main.index('"smart",')
-    assert main.index('"smart",') < main.index('"disk_temperature",')
+    manual_start = main.index("manual_refresh_collectors=(")
+    manual_end = main.index("static_collectors=", manual_start)
+    manual = main[manual_start:manual_end]
+    assert '"topology",' in manual
+    assert '"smart",' in manual
+    assert '"disk_temperature",' in manual
+    assert manual.index('"topology",') < manual.index('"smart",')
+    assert manual.index('"smart",') < manual.index('"disk_temperature",')
 
     assert 'restart_agent=f"{base}/restart"' in topics
     assert "self.restart_requested = threading.Event()" in mqtt
