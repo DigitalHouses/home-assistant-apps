@@ -60,6 +60,7 @@ DEFAULT_STATE_DIR = Path("/var/lib/digitalhouses_pve_agent")
 FAST_SECONDS = 10.0
 SLOW_SECONDS = 60.0
 HEALTH_SECONDS = 3600.0
+RESTART_EXIT_CODE = 75
 PROCESS_STARTED_AT = datetime.now(timezone.utc).isoformat()
 
 
@@ -345,6 +346,7 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
     reload_event = threading.Event()
     initialized = False
     ups_startup_attempted = False
+    restart_requested = False
 
     def stop(signum: int, frame: object) -> None:
         log.info("Получен сигнал остановки %s", signum)
@@ -378,6 +380,12 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
                         "Первичная публикация MQTT выполнена не полностью; "
                         "будет повторена после следующего MQTT reconnect"
                     )
+
+            if bridge.restart_requested.is_set():
+                bridge.restart_requested.clear()
+                restart_requested = True
+                log.warning("Запрошен ручной перезапуск DigitalHouses PVE Agent через MQTT")
+                break
 
             if initialized:
                 runtime.process_events()
@@ -438,7 +446,7 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
         bridge.stop()
         log.info("DigitalHouses PVE Agent остановлен")
 
-    return 0
+    return RESTART_EXIT_CODE if restart_requested else 0
 
 
 def main() -> int:
