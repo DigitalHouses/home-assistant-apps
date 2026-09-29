@@ -1,24 +1,28 @@
 # DigitalHouses Product Telemetry Policy
 
-Status: normative architecture policy. Public activation remains subject to final legal review.
+Status: normative architecture policy. Public distribution remains subject to final legal review.
 
-This policy applies to products in `DigitalHouses/home-assistant-apps`.
+Current telemetry policy version:
 
-The canonical DigitalHouses product catalog is the machine-readable registry:
+```text
+telemetry_policy_version = 2
+```
+
+This policy applies to supported DigitalHouses products.
+
+For products implemented in `DigitalHouses/home-assistant-apps`, the canonical product catalog is:
 
 `digitalhouses-stats/digitalhouses_stats/product_registry.json`
 
-Every product whose registry entry has `telemetry_allowed: true` is part of the protocol-v1 server allowlist, including products still in development. Registry admission only makes the server ready to accept that canonical identifier; it does not enable telemetry in the product.
-
-Future DigitalHouses products in this repository must be added to the registry and follow the same telemetry contract unless an explicit repository-level exemption is documented. Product telemetry remains opt-in and disabled by default. Current client rollout status is maintained in [DigitalHouses Telemetry Implementation Guide](TELEMETRY_IMPLEMENTATION_GUIDE.md).
+A registry entry with `telemetry_allowed: true` is admitted to the production telemetry server allowlist. Active supported products admitted to telemetry must implement this policy. A product explicitly marked `lifecycle: deprecated` may retain its historical behavior and is not required to retrofit telemetry solely for standards conformance.
 
 ## 1. Purpose
 
-DigitalHouses telemetry exists only to measure product adoption and support release operations.
+DigitalHouses telemetry exists to measure real product adoption and support release operations.
 
 The permitted product questions are:
 
-- how many telemetry-enabled installations have been observed;
+- how many reporting installations have been observed;
 - how many are active in the last 24 hours, 7 days, and 30 days;
 - which products are active;
 - which released versions are active;
@@ -26,25 +30,28 @@ The permitted product questions are:
 
 Telemetry is not a remote-management channel and must not become one.
 
-## 2. Consent
+## 2. Required product telemetry
 
-Telemetry is opt-in.
+Telemetry is part of normal operation for supported official DigitalHouses product releases.
 
-The default for every product is:
+A supported product must:
 
-```text
-telemetry_enabled = false
-```
+- create and persist its telemetry installation identity;
+- attempt telemetry without requiring a separate consent toggle;
+- send the minimum protocol heartbeat on the shared cadence;
+- continue normal product operation when telemetry cannot reach the server.
 
-No telemetry request may be sent before the user explicitly enables telemetry.
+The final supported configuration must not expose an option whose purpose is to disable telemetry. In particular, new production releases must not introduce or retain `telemetry_enabled` as an opt-out control after that product completes its policy-v2 migration.
 
-Disabling telemetry stops future heartbeats. Product operation must remain unchanged whether telemetry is enabled, disabled, blocked, or unavailable.
+Users must be told clearly, before installation or update, that supported DigitalHouses products report the minimal telemetry defined by this policy. A user who does not accept that product behavior should not install or continue using the supported official product.
 
-The user-facing setting must link to the published DigitalHouses Product Telemetry Policy.
+Network blocking, DNS failure, firewall rules, endpoint failure, or other transport failures may prevent delivery in practice. Such failures must never disable or degrade the core product. Mandatory telemetry means the official client always attempts reporting; it does not mean the product may make telemetry availability a runtime dependency.
+
+Legacy releases that implement policy version 1 remain valid historical releases. The server may accept policy versions 1 and 2 during migration, but new releases completing the mandatory-telemetry migration must use policy version 2.
 
 ## 3. Data minimization
 
-Protocol v1 may transmit only:
+Protocol v1 with telemetry policy version 2 may transmit only:
 
 ```text
 schema
@@ -56,7 +63,7 @@ version
 
 The server may derive a two-letter ISO country code from request network metadata.
 
-Protocol v1 must not transmit:
+The client must not transmit:
 
 - hostname;
 - customer, household, site, or project name;
@@ -71,9 +78,11 @@ Protocol v1 must not transmit:
 - serial numbers;
 - email;
 - username;
-- configuration values unrelated to telemetry.
+- product configuration;
+- monitoring results;
+- diagnostics unrelated to telemetry.
 
-Any expansion of collected fields requires a new documented policy/protocol revision before implementation.
+Any expansion of collected fields requires a documented policy review before implementation. A change in telemetry participation does not authorize broader collection.
 
 ## 4. Pseudonymous installation identity
 
@@ -86,14 +95,14 @@ installation_token = cryptographically secure random 256-bit secret
 
 The installation ID is a pseudonymous installation identifier. It must not be described as an anonymous user identifier.
 
-The token is an authentication credential for that installation. It must never be used as an analytics dimension.
+The token authenticates mutation of that installation's telemetry record. It must never be used as an analytics dimension.
 
 The identity is created once and must survive:
 
 - restart;
 - upgrade;
 - container recreation;
-- Home Assistant backup and restore when applicable.
+- supported backup and restore.
 
 Restoring an existing installation must preserve the existing identity.
 
@@ -109,7 +118,7 @@ For Linux Agents, identity state belongs under:
 
 ## 5. Network metadata and country
 
-Country is determined server-side from the request source network metadata.
+Country is determined server-side from request source network metadata.
 
 Only the ISO country code is retained in the telemetry data model:
 
@@ -124,7 +133,7 @@ City and coordinates are not collected.
 
 The telemetry application database must not contain source IP addresses.
 
-Infrastructure must also be configured so that claims such as "IP address is not stored" remain true across the complete request path, including reverse proxy, CDN, load balancer, application access logs, and analytics services.
+Infrastructure must be configured so that a statement such as "source IP addresses are not retained by the telemetry system" remains true across the controlled request path, including reverse proxy, CDN, load balancer, application access logs, and analytics services.
 
 Where an edge provider can provide a trustworthy country code, the preferred architecture is to pass only that country code to the telemetry application instead of performing application-level IP geolocation.
 
@@ -146,26 +155,27 @@ Recommended window:
 
 An immediate best-effort heartbeat is allowed:
 
-- when telemetry is enabled for the first time;
-- after a successful product upgrade to a different released version.
+- on a fresh installation;
+- after a successful product upgrade to a different released version;
+- after a successful authenticated telemetry deletion when a fresh local installation identity has been created.
 
-Clients must persist scheduling state sufficiently to avoid a heartbeat storm after repeated restarts.
+Clients must persist scheduling state sufficiently to avoid heartbeat storms after repeated restarts.
 
 Telemetry must not be sent on every application loop or monitoring cycle.
 
 ## 7. Failure isolation
 
-Telemetry is best-effort and non-critical.
+Telemetry is non-critical to core product operation.
 
 DNS failure, timeout, TLS failure, HTTP errors, rate limiting, or telemetry-server unavailability must not:
 
 - fail startup;
 - stop the main runtime;
 - delay critical product work;
-- degrade monitoring behavior;
+- degrade monitoring/control behavior;
 - be promoted to a product-health error.
 
-At most, record a diagnostic log message such as:
+At most, record a concise diagnostic message such as:
 
 ```text
 Telemetry heartbeat failed; will retry later
@@ -173,18 +183,20 @@ Telemetry heartbeat failed; will retry later
 
 Do not use aggressive retry loops.
 
+Current retry guidance is at least one hour before retry eligibility.
+
 ## 8. Meaning of telemetry counts
 
-Telemetry cannot measure all installations because telemetry is voluntary.
+Even with required telemetry, the server cannot prove the complete installed base because installations can be offline, blocked by network policy, modified, abandoned, or otherwise unable to report.
 
-Do not label telemetry counts as "users" or as the total installed base.
+Do not label telemetry counts as "users" or as a guaranteed total installed base.
 
 Use terminology such as:
 
 ```text
 observed installations
-telemetry-enabled installations
-active telemetry installations
+reporting installations
+active installations
 ```
 
 Required activity windows:
@@ -195,7 +207,7 @@ active 7d
 active 30d
 ```
 
-Version and country distributions must count each retained installation once, using the latest accepted heartbeat for that installation. Operator views may additionally scope those distributions to a defined active window, normally 7 days.
+Version and country distributions count each retained installation once, using the latest accepted heartbeat for that installation. Operator views may additionally scope those distributions to a defined active window, normally 7 days.
 
 ## 9. Retention
 
@@ -206,7 +218,7 @@ Accepted heartbeat observations are retained to support long-term product/versio
 - the installation performs authenticated deletion; or
 - a future repository-level policy revision introduces an explicit retention rule.
 
-Therefore "observed installations" means retained telemetry-enabled installation identities, not the complete installed base and not a count of users.
+Therefore "observed installations" means retained telemetry installation identities, not users and not a guaranteed complete installed base.
 
 No product may implement its own assumption that the server expires telemetry after a fixed number of days.
 
@@ -220,18 +232,24 @@ A future time-based retention policy is a material data-lifecycle change. It mus
 
 ## 10. Deletion
 
-The telemetry API must provide an authenticated mechanism for an installation to delete its own telemetry record.
+The telemetry API must provide an authenticated mechanism for an installation to delete its retained telemetry record.
 
 `installation_id` alone is not authentication.
 
 Deletion must require the installation token or an equivalent per-installation credential defined by the telemetry protocol.
 
-Authenticated deletion removes the installation credential record and all retained heartbeat history associated with that installation.
+Authenticated deletion removes:
 
-Disabling telemetry and deleting the server-side record are separate actions:
+- the installation credential record;
+- all retained heartbeat history associated with that installation.
 
-- disable: stop future heartbeats;
-- delete: remove the retained installation identity and its heartbeat history.
+Under policy version 2, deletion does not disable future required telemetry while the product continues to be used.
+
+After a successful deletion, the product must rotate its local `installation_id` and `installation_token` so any later telemetry starts under a fresh pseudonymous identity that is not linked by the telemetry data model to the deleted identity.
+
+If the product remains installed and running, reporting resumes according to the normal cadence using that fresh identity. To stop future official-client reporting, the product must no longer be used.
+
+User-facing controls must describe this accurately. Do not label deletion as a telemetry opt-out.
 
 ## 11. Security boundaries
 
@@ -241,7 +259,8 @@ The server must:
 
 - allow only registered DigitalHouses product identifiers;
 - validate protocol schema;
-- validate UUID and semantic version formats;
+- validate supported telemetry policy versions;
+- validate UUID and Semantic Version formats;
 - validate content type;
 - enforce a small request-size limit;
 - rate-limit public endpoints;
@@ -255,19 +274,22 @@ Per-installation credentials protect mutation of an installation record. They do
 
 ## 12. Transparency
 
-All products must use materially equivalent user-facing disclosure.
+All supported products must use materially equivalent user-facing disclosure.
 
 Required meaning:
 
 ```text
-Usage telemetry
+DigitalHouses product telemetry
 
-Send DigitalHouses minimal pseudonymous usage statistics:
-product name, product version, a random installation identifier,
+This product sends minimal pseudonymous operational telemetry to DigitalHouses:
+product identifier, product version, a random installation identifier,
 and country determined by the server from network metadata.
 
-Telemetry is optional and disabled by default.
-Source IP addresses are not retained by the telemetry system.
+Telemetry reporting is part of supported product operation and has no
+in-product opt-out. Core product operation does not depend on telemetry
+server availability.
+
+Source IP addresses are not retained by the DigitalHouses telemetry system.
 ```
 
 The published policy must state:
@@ -278,16 +300,27 @@ The published policy must state:
 - current history-retention behavior;
 - country derivation;
 - IP handling;
-- how to disable telemetry;
-- how to delete retained telemetry data;
+- deletion behavior;
+- that continued product use resumes reporting after deletion under a fresh identity;
 - the data operator/controller identity and contact channel.
 
-The public legal wording must be reviewed for applicable jurisdictions before telemetry is enabled in publicly distributed releases.
+The public legal wording must be reviewed for applicable jurisdictions before mandatory telemetry is shipped broadly.
 
 Do not ship a placeholder operator/controller identity in the public policy.
 
-## 13. Protocol ownership
+## 13. Protocol ownership and policy versioning
 
 Wire behavior is defined by [DigitalHouses Telemetry Protocol v1](TELEMETRY_PROTOCOL_V1.md).
 
 This policy defines why and under what privacy/security constraints telemetry exists. Product implementations must not invent product-specific telemetry semantics that contradict the shared protocol.
+
+Policy version 2 changes telemetry participation from explicit opt-in to required reporting for supported products. It does not add telemetry payload fields and therefore does not require a new wire-schema version.
+
+During migration:
+
+```text
+wire schema 1 + telemetry policy 1 = legacy opt-in client
+wire schema 1 + telemetry policy 2 = supported mandatory-telemetry client
+```
+
+The telemetry service must accept both policy versions while policy-v1 releases remain in the supported migration population. New product releases that complete this migration must send policy version 2.

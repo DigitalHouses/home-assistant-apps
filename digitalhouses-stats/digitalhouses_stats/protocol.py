@@ -9,7 +9,7 @@ from .products import ALLOWED_PRODUCTS
 
 
 SUPPORTED_SCHEMA = 1
-SUPPORTED_POLICY_VERSION = 1
+SUPPORTED_POLICY_VERSIONS = frozenset({1, 2})
 
 SEMVER_RE = re.compile(
     r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)"
@@ -39,7 +39,7 @@ class HeartbeatPayload(StrictPayload):
     @field_validator("telemetry_policy_version")
     @classmethod
     def validate_policy(cls, value: int) -> int:
-        if value != SUPPORTED_POLICY_VERSION:
+        if value not in SUPPORTED_POLICY_VERSIONS:
             raise ValueError("unsupported telemetry policy version")
         return value
 

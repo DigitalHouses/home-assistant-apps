@@ -76,16 +76,16 @@ def test_heartbeat_history_and_authenticated_delete() -> None:
 
     payload = {
         "schema": 1,
-        "telemetry_policy_version": 1,
+        "telemetry_policy_version": 2,
         "installation_id": installation_id,
         "product": "digitalhouses_pve_agent",
-        "version": "0.5.8",
+        "version": "0.5.40",
     }
 
     first = telemetry_client.post("/v1/heartbeat", json=payload, headers=headers)
     assert first.status_code == 204
 
-    payload["version"] = "0.5.9"
+    payload["version"] = "0.5.41"
     second = telemetry_client.post("/v1/heartbeat", json=payload, headers=headers)
     assert second.status_code == 204
 
@@ -100,7 +100,7 @@ def test_heartbeat_history_and_authenticated_delete() -> None:
             )
         ).mappings().all()
 
-    assert [row["version"] for row in rows] == ["0.5.8", "0.5.9"]
+    assert [row["version"] for row in rows] == ["0.5.40", "0.5.41"]
     assert [row["country"] for row in rows] == ["KZ", "KZ"]
     assert all(row["received_at"] is not None for row in rows)
 

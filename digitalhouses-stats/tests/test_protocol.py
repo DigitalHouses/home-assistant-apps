@@ -38,6 +38,28 @@ def test_heartbeat_payload_accepts_protocol_v1() -> None:
     assert payload.schema == 1
 
 
+def test_heartbeat_payload_accepts_policy_v2() -> None:
+    payload = HeartbeatPayload(
+        schema=1,
+        telemetry_policy_version=2,
+        installation_id=uuid.uuid4(),
+        product="digitalhouses_pve_agent",
+        version="0.5.40",
+    )
+    assert payload.telemetry_policy_version == 2
+
+
+def test_heartbeat_payload_rejects_unsupported_policy() -> None:
+    with pytest.raises(ValidationError):
+        HeartbeatPayload(
+            schema=1,
+            telemetry_policy_version=3,
+            installation_id=uuid.uuid4(),
+            product="digitalhouses_pve_agent",
+            version="0.5.40",
+        )
+
+
 def test_heartbeat_payload_accepts_internet_app() -> None:
     payload = HeartbeatPayload(
         schema=1,
