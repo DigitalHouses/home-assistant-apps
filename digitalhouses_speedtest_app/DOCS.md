@@ -1,7 +1,9 @@
 # DigitalHouses Speedtest App — Technical documentation
 
 > [!WARNING]
-> This product is deprecated and superseded by `digitalhouses_internet_app`.
+> This product is deprecated and superseded by [`digitalhouses_internet_app`](https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_internet_app).
+> Replacement: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_internet_app
+>
 > This document is retained for existing Speedtest App installations. New deployments must use DigitalHouses Internet App. The legacy Supervisor slug and runtime identities are intentionally frozen; no canonical slug migration is planned.
 
 
