@@ -1,6 +1,6 @@
 # DigitalHouses Product Telemetry Policy
 
-Status: normative architecture policy. Public distribution remains subject to final legal review.
+Status: normative architecture policy. Mandatory public rollout is subject to the legal gate in [Telemetry Privacy / Legal Review](TELEMETRY_PRIVACY_LEGAL_REVIEW.md).
 
 Current telemetry policy version:
 
