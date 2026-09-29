@@ -6,11 +6,14 @@ from typing import Any
 
 from validators.common import fail, require_files
 
-EXPECTED_VERSION = "0.5.41"
+EXPECTED_VERSION = "0.5.42"
 EXPECTED_TOPIC_PREFIX = "DigitalHouses/Global/digitalhouses_pve_agent"
 EXPECTED_DEVICE_NAME = "DH PVE"
 EXPECTED_REFRESH_ENTITY = "button.dh_pve_agent_refresh"
 EXPECTED_LAST_REFRESH_ENTITY = "sensor.dh_pve_agent_last_refresh"
+EXPECTED_REFRESH_STATE_ENTITY = "sensor.dh_pve_agent_refresh_state"
+EXPECTED_UPS_REFRESH_STATE_ENTITY = "sensor.dh_pve_agent_ups_refresh_state"
+EXPECTED_UPS_SCAN_STATE_ENTITY = "sensor.dh_pve_agent_ups_scan_state"
 
 
 def _require_text(path: Path, expected: tuple[str, ...], label: str) -> None:
@@ -32,6 +35,7 @@ def validate_digitalhouses_pve_agent(
             app / "requirements.txt",
             app / "app/config.py",
             app / "app/scheduler.py",
+            app / "app/operation_status.py",
             app / "app/topics.py",
             app / "app/discovery.py",
             app / "app/discovery_identity.py",
@@ -104,6 +108,8 @@ def validate_digitalhouses_pve_agent(
         (
             'device_id = f"dh_pve_agent_{identity.instance_id}"',
             'diagnostic_event=f"{base}/event/diagnostic"',
+            'refresh_operation=f"{base}/refresh/operation"',
+            'ups_scan_operation=f"{base}/ups/scan/operation"',
             'device_id = f"dh_pve_agent_ups_{identity.instance_id}"',
             'legacy_device_id = f"dh_app_pve_{identity.instance_id}"',
             'older_legacy_device_id = f"dh_pve_{identity.instance_id}"',
@@ -121,6 +127,10 @@ def validate_digitalhouses_pve_agent(
             f'"name": "{EXPECTED_DEVICE_NAME}"',
             f'"default_entity_id": "{EXPECTED_REFRESH_ENTITY}"',
             f'"default_entity_id": "{EXPECTED_LAST_REFRESH_ENTITY}"',
+            f'"default_entity_id": "{EXPECTED_REFRESH_STATE_ENTITY}"',
+            f'"default_entity_id": "{EXPECTED_UPS_SCAN_STATE_ENTITY}"',
+            "topics.refresh_operation",
+            "topics.ups_scan_operation",
             '"payload_press": "PRESS"',
         ),
         "base Discovery",
@@ -510,6 +520,10 @@ def validate_digitalhouses_pve_agent(
         (
             "sensor.dh_pve_agent_problems",
             "button.dh_pve_agent_refresh",
+            "sensor.dh_pve_agent_refresh_state",
+            "sensor.dh_pve_agent_ups_refresh_state",
+            "Обновление…",
+            "background: var(--secondary-background-color)",
             "number.dh_pve_agent_cpu_temperature_threshold",
             "number.dh_pve_agent_storage_percent_used_threshold",
         ),
@@ -525,6 +539,11 @@ def validate_digitalhouses_pve_agent(
             "'floating': 'Поддержание заряда'",
             "binary_sensor.dh_pve_agent_ups_on_battery_problem",
             "button.dh_pve_agent_ups_refresh",
+            "sensor.dh_pve_agent_ups_refresh_state",
+            "sensor.dh_pve_agent_ups_scan_state",
+            "button.dh_pve_agent_scan_ups",
+            "Обновление UPS…",
+            "Поиск UPS…",
             "binary_sensor.dh_pve_agent_ups_configured",
             "ИБП не настроен",
         ),
@@ -712,6 +731,57 @@ def validate_digitalhouses_pve_agent(
             fail(f"DH PVE full manual refresh contract changed: {required}")
     if manual_block.index('"topology",') >= manual_block.index('"smart",'):
         fail("DH PVE full manual refresh must rebuild topology before SMART")
+
+    _require_text(
+        app / "app/operation_status.py",
+        (
+            'VALID_OPERATION_STATES = frozenset({"idle", "updating", "error"})',
+            "def operation_payload(",
+            '"duration_seconds"',
+            '"error"',
+        ),
+        "operation status payload",
+    )
+    _require_text(
+        app / "app/mqtt_bridge.py",
+        (
+            "self.refresh_in_progress = threading.Event()",
+            "self.ups_refresh_in_progress = threading.Event()",
+            "self.ups_scan_in_progress = threading.Event()",
+            "publish_refresh_operation",
+            "publish_ups_refresh_operation",
+            "publish_ups_scan_operation",
+        ),
+        "operation status transport",
+    )
+    _require_text(
+        app / "app/app.py",
+        (
+            'operation_payload("updating"',
+            '"idle" if published and not failed else "error"',
+            "refresh_in_progress",
+        ),
+        "PVE refresh lifecycle",
+    )
+    _require_text(
+        app / "app/ups_runtime.py",
+        (
+            'operation_payload("updating"',
+            '"idle" if ok else "error"',
+            "ups_refresh_in_progress",
+        ),
+        "UPS refresh lifecycle",
+    )
+    _require_text(
+        app / "app/main.py",
+        (
+            "publish_ups_scan_operation",
+            "ups_scan_in_progress.set()",
+            "ups_scan_in_progress.clear()",
+            '"error" if outcome.error else "idle"',
+        ),
+        "UPS scan lifecycle",
+    )
 
     _require_text(
         app / "app/shutdown_integration.py",
