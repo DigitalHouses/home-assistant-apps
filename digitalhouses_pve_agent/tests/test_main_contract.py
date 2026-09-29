@@ -64,6 +64,8 @@ def test_runtime_scheduler_uses_frozen_collection_cadence(tmp_path, monkeypatch)
     assert runtime.scheduler.interval("gpu") == 60.0
     assert runtime.scheduler.interval("disk_temperature") == 60.0
     assert runtime.scheduler.interval("smart") == 3600.0
+    main_text = (ROOT / "app" / "main.py").read_text()
+    assert "on_storage_recovered=lambda: scheduler.request_run(" in main_text
     assert "host" not in runtime.scheduler.names()
     assert "topology" not in runtime.scheduler.names()
     assert "fast_poll_interval_seconds" not in runtime.setting_tasks
