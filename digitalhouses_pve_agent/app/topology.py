@@ -527,7 +527,14 @@ class TopologyManager:
             config = self._vm_configs.get(guest_id, "")
             qga[guest_id] = self._qga_state(guest, config, force=True)
             devices = parse_hostpci(config, self._pci_catalog)
-            self._probe_guest_storage(guest, devices, qga[guest_id])
+            storage_devices = self._storage_passthrough(devices)
+            if not storage_devices:
+                self._storage_recovery_pending.discard(guest_id)
+                continue
+            if self._probe_guest_storage(guest, devices, qga[guest_id]):
+                self._storage_recovery_pending.discard(guest_id)
+            else:
+                self._storage_recovery_pending.add(guest_id)
 
         self._snapshot = self._compose_snapshot(vms, lxcs, qga)
         return self._snapshot
@@ -550,7 +557,13 @@ class TopologyManager:
             self._vm_configs[guest_id] = config
             qga[guest_id] = self._qga_state(guest, config, force=True)
             devices = parse_hostpci(config, self._pci_catalog)
-            self._probe_guest_storage(guest, devices, qga[guest_id])
+            storage_devices = self._storage_passthrough(devices)
+            if not storage_devices:
+                self._storage_recovery_pending.discard(guest_id)
+            elif self._probe_guest_storage(guest, devices, qga[guest_id]):
+                self._storage_recovery_pending.discard(guest_id)
+            else:
+                self._storage_recovery_pending.add(guest_id)
         else:
             guest = lxcs.get(guest_id)
             if guest is None:
