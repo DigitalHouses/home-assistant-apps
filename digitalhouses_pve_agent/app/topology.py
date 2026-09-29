@@ -599,26 +599,53 @@ class TopologyManager:
         qga = dict(self._snapshot.qga)
         for guest_id, guest in current_vms.items():
             config = self._vm_configs.get(guest_id, "")
+            devices = parse_hostpci(config, self._pci_catalog)
+            storage_devices = self._storage_passthrough(devices)
+
+            if not storage_devices:
+                self._storage_recovery_pending.discard(guest_id)
+
             if guest.status != "running" and guest_id in qga:
                 qga[guest_id] = "unavailable" if _agent_enabled(config) else "disabled"
+                if storage_devices:
+                    self._storage_recovery_pending.add(guest_id)
                 continue
 
-            if (
-                guest.status == "running"
-                and qga.get(guest_id) == "unavailable"
-                and _agent_enabled(config)
-            ):
+            if not _agent_enabled(config):
+                qga[guest_id] = "disabled"
+                self._storage_recovery_pending.discard(guest_id)
+                continue
+
+            if guest.status != "running":
+                continue
+
+            if qga.get(guest_id) == "unavailable":
                 recovered = self._qga_state(guest, config, force=True)
                 qga[guest_id] = recovered
-                if recovered == "available":
-                    devices = parse_hostpci(config, self._pci_catalog)
-                    if self._probe_guest_storage(guest, devices, recovered):
-                        log.info(
-                            "QGA восстановлен для VM %s; passthrough storage пересканирован",
-                            guest_id,
-                        )
-                        if self.on_storage_recovered is not None:
-                            self.on_storage_recovered()
+                if recovered != "available":
+                    if storage_devices:
+                        self._storage_recovery_pending.add(guest_id)
+                    continue
+                if storage_devices:
+                    self._storage_recovery_pending.add(guest_id)
+
+            if (
+                qga.get(guest_id) == "available"
+                and guest_id in self._storage_recovery_pending
+            ):
+                if self._probe_guest_storage(guest, devices, "available"):
+                    self._storage_recovery_pending.discard(guest_id)
+                    log.info(
+                        "QGA восстановлен для VM %s; passthrough storage пересканирован",
+                        guest_id,
+                    )
+                    if self.on_storage_recovered is not None:
+                        self.on_storage_recovered()
+                else:
+                    log.info(
+                        "QGA доступен для VM %s; passthrough storage recovery ожидает повторного rescan",
+                        guest_id,
+                    )
 
         self._snapshot = self._compose_snapshot(current_vms, current_lxcs, qga)
 
