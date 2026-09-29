@@ -73,7 +73,7 @@ def test_runtime_scheduler_uses_frozen_collection_cadence(tmp_path, monkeypatch)
     assert "disk_poll_interval_seconds" not in runtime.setting_tasks
 
 
-def test_main_wires_manual_refresh_with_explicit_disk_rescan(tmp_path, monkeypatch):
+def test_main_wires_full_manual_refresh(tmp_path, monkeypatch):
     monkeypatch.setattr(main_module, "resolve_identity", lambda general: _identity())
     _bridge, runtime = main_module.build_runtime(_config(), state_dir=tmp_path)
 
@@ -87,10 +87,10 @@ def test_main_wires_manual_refresh_with_explicit_disk_rescan(tmp_path, monkeypat
         "fans",
         "smart",
         "disk_temperature",
+        "gpu",
     )
+    assert set(runtime.manual_refresh_collectors) == set(runtime.collectors)
     assert runtime.manual_refresh_collectors.index("topology") < runtime.manual_refresh_collectors.index("smart")
-    assert runtime.manual_refresh_collectors.index("smart") < runtime.manual_refresh_collectors.index("disk_temperature")
-    assert "gpu" not in runtime.manual_refresh_collectors
 
 
 def test_main_wires_shared_topology_shutdown_history_and_static_inventory():
@@ -104,14 +104,11 @@ def test_main_wires_shared_topology_shutdown_history_and_static_inventory():
     assert "HEALTH_SECONDS = 3600.0" in text
 
 
-def test_main_wires_mqtt_restart_through_systemd_failure_restart():
+def test_main_has_no_mqtt_restart_control():
     main_text = (ROOT / "app" / "main.py").read_text()
-    unit_text = (ROOT / "systemd" / "digitalhouses_pve_agent.service").read_text()
 
-    assert "RESTART_EXIT_CODE = 75" in main_text
-    assert "bridge.restart_requested.is_set()" in main_text
-    assert "return RESTART_EXIT_CODE if restart_requested else 0" in main_text
-    assert "Restart=on-failure" in unit_text
+    assert "RESTART_EXIT_CODE" not in main_text
+    assert "restart_requested" not in main_text
 
 
 def test_main_wires_fixed_policy_reload_barrier():

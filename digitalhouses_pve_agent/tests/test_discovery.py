@@ -42,12 +42,7 @@ def test_discovery_uses_canonical_dh_pve_agent_device_and_refresh_contract():
         "0123456789abcdef0123456789abcdef/refresh"
     )
     assert components["refresh"]["payload_press"] == "PRESS"
-    assert components["restart_agent"]["default_entity_id"] == "button.dh_pve_agent_restart_agent"
-    assert components["restart_agent"]["command_topic"] == (
-        "DigitalHouses/Global/digitalhouses_pve_agent/"
-        "0123456789abcdef0123456789abcdef/restart"
-    )
-    assert components["restart_agent"]["payload_press"] == "PRESS"
+    assert "restart_agent" not in components
     assert components["last_refresh"]["default_entity_id"] == "sensor.dh_pve_agent_last_refresh"
     assert components["last_refresh"]["device_class"] == "timestamp"
 

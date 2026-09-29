@@ -10,7 +10,7 @@ Native Linux agent for **Proxmox VE 8.x** that publishes host, CPU, memory, stor
 
 The canonical product and runtime identity is **DigitalHouses PVE Agent** / `digitalhouses_pve_agent`: systemd service `digitalhouses_pve_agent.service`, filesystem roots under `/opt/digitalhouses/digitalhouses_pve_agent`, `/etc/digitalhouses_pve_agent` and `/var/lib/digitalhouses_pve_agent`, MQTT base `DigitalHouses/Global/digitalhouses_pve_agent/<instance>`, and Home Assistant entity prefix `dh_pve_agent_*`. Version 0.5.30 performs the corrected one-time controlled migration from the former `dh_pve_app` / `dh_app_pve_*` runtime, including deterministic cleanup of retained data owned by the legacy MQTT instance namespace.
 
-Current source release: `VERSION` is `0.5.40`.
+Current source release: `VERSION` is `0.5.41`.
 
 ## Home Assistant dashboard
 
@@ -39,7 +39,7 @@ Collection cadence is App-owned and does not accelerate because a resource becom
 - `UPS` — 10 s: NUT runtime data;
 - `SLOW` — 60 s: storage usage, disk temperature, GPU/transcoding, VM/LXC runtime, host runtime diagnostics and `/etc/pve/.version` check;
 - `HEALTH` — 1 h: full SMART/wear and genuinely heavy health diagnostics;
-- `STATIC` — startup and detected PVE configuration-version changes. Manual Refresh is the explicit heavy recovery path: it rebuilds topology, rescans QGA-backed passthrough storage, runs SMART/health and disk-temperature collection, and refreshes normal UI-facing host/guest/CPU/memory/storage/fan data. GPU/transcoding remains on its scheduled cadence.
+- `STATIC` — startup and detected PVE configuration-version changes. Manual Refresh is the explicit full refresh path: it rebuilds topology, rescans QGA-backed passthrough storage, and sequentially refreshes every PVE collector, including guests, host, CPU, memory, storage, fans, SMART/health, disk temperature and GPU/transcoding. If UPS is configured, the same main Refresh request also refreshes UPS state; the dedicated UPS Refresh remains available for UPS-only refresh.
 
 The legacy `[ups] poll_interval_seconds` configuration key is accepted only for upgrade compatibility and is ignored; UPS collection remains fixed at 10 seconds.
 
@@ -310,7 +310,7 @@ Production install/update is release-tag only. Version 0.5.30 is the corrected c
 For the canonical runtime, install/update/reinstall never clears the current canonical MQTT namespace. Canonical retained MQTT cleanup is owned exclusively by the supported uninstaller.
 
 ```bash
-TAG=digitalhouses_pve_agent-v0.5.40
+TAG=digitalhouses_pve_agent-v0.5.41
 DIGITALHOUSES_SOURCE_REF="$TAG" \
   bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$TAG/digitalhouses_pve_agent/install.sh")
 ```
