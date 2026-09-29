@@ -50,14 +50,14 @@ configuration + installation-specific persistent state
 without locally built application images
 
 TELEMETRY
-opt-in product heartbeat
+required product heartbeat
    ↓
 telemetry.digitalhouses.vip
    ↓
 product / version / installation identity / country / activity
 ```
 
-The architecture deliberately separates deployment from telemetry. A product must remain fully functional without telemetry.
+The architecture deliberately separates deployment from telemetry. A product must remain fully functional when telemetry delivery is unavailable or blocked.
 
 ## 2. Implementation order
 
@@ -65,12 +65,7 @@ Implementation is staged.
 
 ### Stage A — immutable Home Assistant App delivery
 
-Implement first for:
-
-```text
-digitalhouses_recorder_app
-digitalhouses_speedtest_app
-```
+The initial immutable-delivery migration started with `digitalhouses_recorder_app`. DigitalHouses Speedtest App was later deprecated and superseded by Internet App, so it is excluded from retrofit work.
 
 Required outcome:
 
@@ -98,14 +93,14 @@ Current production policy intentionally has no automatic time-based retention cl
 
 ### Stage C — product integration
 
-Integrate the same telemetry client semantics into:
+Integrate the same telemetry client semantics into active supported products:
 
 ```text
 digitalhouses_pve_agent
 digitalhouses_plex_agent
 digitalhouses_recorder_app
-digitalhouses_speedtest_app
 digitalhouses_backblaze_app
+digitalhouses_internet_app
 ```
 
 Do not combine the first immutable-delivery migration of a Home Assistant App with its first telemetry implementation in the same product release unless a documented exception is approved.
@@ -309,15 +304,15 @@ All products use one service:
 PVE Agent ─────────┐
 Plex Agent ────────┤
 Recorder App ──────┼── HTTPS ──> telemetry.digitalhouses.vip
-Speedtest App ─────┤
-Backblaze App ──────┘
+Backblaze App ─────┤
+Internet App ──────┘
 ```
 
 All products use one wire contract:
 
 [DigitalHouses Telemetry Protocol v1](TELEMETRY_PROTOCOL_V1.md)
 
-All products use one privacy/consent model:
+All products use one privacy/participation model:
 
 [DigitalHouses Product Telemetry Policy](PRODUCT_TELEMETRY_POLICY.md)
 
@@ -329,17 +324,13 @@ Product-specific telemetry protocols are prohibited unless a future standard exp
 
 ## 11. Telemetry defaults
 
-Every product must expose telemetry as an explicit opt-in.
+Supported official DigitalHouses products use telemetry policy version 2.
 
-Default:
+Telemetry reporting is part of supported product operation and is not exposed as a user opt-in/opt-out configuration option.
 
-```text
-telemetry_enabled = false
-```
+The client always schedules the minimal heartbeat defined by protocol v1. Telemetry-server failure, DNS failure, firewall blocking, timeout or rate limiting must never affect core product operation.
 
-Disabled means no telemetry HTTP requests.
-
-Telemetry-server failure must never affect core product operation.
+Legacy policy-v1 releases remain valid during migration and continue to be accepted by the server.
 
 ## 12. Installation identity
 
@@ -381,7 +372,7 @@ Protocol v1 heartbeat contains only:
 ```json
 {
   "schema": 1,
-  "telemetry_policy_version": 1,
+  "telemetry_policy_version": 2,
   "installation_id": "550e8400-e29b-41d4-a716-446655440000",
   "product": "digitalhouses_recorder_app",
   "version": "0.1.9"
@@ -410,8 +401,9 @@ with jitter, recommended:
 
 An additional best-effort heartbeat is allowed after:
 
-- telemetry is enabled;
-- a successful upgrade to a new product version.
+- a fresh installation;
+- a successful upgrade to a new product version;
+- authenticated deletion followed by local identity rotation.
 
 The scheduling implementation must avoid restart storms.
 
@@ -419,21 +411,21 @@ No heartbeat may be tied to each normal monitoring cycle.
 
 ## 15. Telemetry terminology
 
-Because telemetry is voluntary, the telemetry service cannot know the complete installed base.
+Required reporting still cannot prove the complete installed base because an installation may be offline, blocked by network policy, modified, abandoned, or otherwise unable to reach the telemetry service.
 
 Reports must use terms such as:
 
 ```text
 observed installations
-telemetry-enabled installations
-active telemetry installations
+reporting installations
+active installations
 ```
 
 Do not call these numbers:
 
 ```text
 users
-total installations
+guaranteed total installations
 complete installed base
 ```
 
@@ -458,9 +450,9 @@ History is removed when:
 
 Every implementation must support the shared authenticated deletion protocol.
 
-Authenticated deletion removes the installation credential record and its retained heartbeat history.
+Authenticated deletion removes the installation credential record and its retained heartbeat history. Under telemetry policy version 2, the client then rotates its local installation ID/token. If the product remains in use, later reporting resumes under that fresh identity.
 
-`installation_id` is not an authentication secret.
+`installation_id` is not an authentication secret. Deletion is an erasure operation, not a telemetry opt-out.
 
 ## 17. Privacy wording
 
@@ -470,15 +462,16 @@ The persistent random installation ID is a pseudonymous identifier, and the requ
 
 User-facing and policy wording must accurately describe:
 
-- opt-in behavior;
+- required telemetry participation for supported products;
 - transmitted fields;
 - server-derived country;
 - IP non-retention across the complete controlled request path;
 - retention;
-- deletion;
+- deletion and identity rotation;
+- the fact that continued product use resumes reporting after deletion;
 - operator/controller identity.
 
-Public legal wording requires legal review before general telemetry activation.
+Public legal wording requires legal review before broad mandatory-telemetry distribution.
 
 ---
 
@@ -537,11 +530,11 @@ At minimum:
 
 ```text
 fresh install -> new UUID/token created
+supported release -> telemetry schedules without user opt-in
+no user opt-out control -> telemetry cannot be disabled through product config
 restart -> same identity
 upgrade -> same identity, new version reported
-telemetry disabled -> no telemetry HTTP requests
-telemetry enabled -> heartbeat sent
-server unavailable -> product remains operational
+server unavailable/blocking -> product remains operational
 repeated heartbeat -> a new observation is appended for the same installation
 version update -> later heartbeat reports new version without changing installation identity
 server timestamp -> received_at is generated by server
@@ -550,7 +543,12 @@ IP -> absent from telemetry database
 unknown product -> rejected
 invalid UUID -> rejected
 wrong installation token -> rejected
+policy version 1 -> accepted during migration
+policy version 2 -> accepted
+unsupported policy version -> rejected
 delete with valid token -> installation and heartbeat history removed
+delete success -> client identity/token rotated
+continued use after delete -> later report uses fresh identity
 delete with ID only/wrong token -> rejected
 history -> retained until authenticated deletion or future repository-level retention policy
 ```
@@ -582,7 +580,7 @@ At minimum, automated checks should detect:
 - App version/image-release mismatch;
 - missing release provenance;
 - unsupported product identifiers;
-- telemetry default changed to enabled;
+- policy-v2 product still exposes a telemetry opt-out or sends the wrong telemetry policy version;
 - protocol payload drift without protocol/policy update;
 - missing mandatory telemetry tests in participating products where practical.
 
@@ -602,7 +600,7 @@ DigitalHouses Speedtest App is now deprecated and superseded by DigitalHouses In
 
 The exact release versions must still follow the current product changelogs and release policy.
 
-Telemetry should be introduced in subsequent product releases after the common telemetry server and protocol are ready.
+Telemetry policy v2 is introduced product by product after the shared server accepts both legacy policy v1 and current policy v2.
 
 ## 24. Definition of done
 
@@ -617,10 +615,11 @@ Home Assistant Apps:
 - historical released images remain recoverable
 
 All participating products:
-- implement opt-in telemetry with default OFF
+- implement required telemetry policy v2 with no product opt-out control
 - use the same protocol and semantics
-- preserve installation identity correctly
-- tolerate telemetry failure completely
+- preserve installation identity correctly across restart/upgrade/restore
+- rotate identity after authenticated deletion
+- tolerate telemetry failure or blocking completely
 
 Telemetry service:
 - stores minimum required installation credential data
