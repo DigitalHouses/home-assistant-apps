@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.43
+
+- Fix initial `sensor.dh_pve_agent_refresh_state` being `unknown` after Agent startup. Production uses `DynamicDiscoveryRuntime.startup()`, which bypassed the base runtime's operation-state initialization added in 0.5.42.
+- Publish retained PVE Refresh operation state `idle` from the actual dynamic production startup after initial collection/Discovery, matching the already-correct UPS Refresh and UPS Scan startup behavior.
+- Add regression coverage so the production dynamic startup must initialize the Refresh operation state.
+
 ## 0.5.42
 
 - Add retained operation-state telemetry for manual PVE Refresh, UPS Refresh and UPS Scan with canonical `idle`, `updating` and `error` states plus `started_at`, `finished_at`, `duration_seconds` and `error` attributes.
