@@ -7,7 +7,9 @@
 Home Assistant App for Internet availability, official Ookla Speedtest measurements, quality thresholds, outage statistics and optional ONT/router recovery.
 
 > [!WARNING]
-> **Deprecated.** DigitalHouses Speedtest App is a legacy product superseded by [DigitalHouses Internet App](../digitalhouses_internet_app/README.md).
+> **Deprecated.** DigitalHouses Speedtest App is a legacy product superseded by **[DigitalHouses Internet App](https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_internet_app)**.
+> **Replacement:** https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_internet_app
+>
 > Existing installations may continue to run, but new installations should use Internet App. No canonical slug migration or new feature development is planned for Speedtest App; only critical compatibility/security fixes may be released when required.
 
 [English quick start](#english--quick-start) · [Русский быстрый старт](#русский--быстрый-старт) · [Technical documentation](DOCS.md) · [Changelog](CHANGELOG.md) · [Issues](https://github.com/DigitalHouses/home-assistant-apps/issues)
