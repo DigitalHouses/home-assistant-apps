@@ -13,6 +13,7 @@ class Topics:
     state: str
     availability: str
     refresh: str
+    restart_agent: str
     manifest: str
     settings_prefix: str
     diagnostic_event: str
@@ -85,6 +86,7 @@ def build_topics(mqtt: MqttConfig, identity: HostIdentity) -> Topics:
         state=f"{base}/state",
         availability=f"{base}/availability",
         refresh=f"{base}/refresh",
+        restart_agent=f"{base}/restart",
         manifest=f"{base}/manifest",
         settings_prefix=f"{base}/settings",
         diagnostic_event=f"{base}/event/diagnostic",
