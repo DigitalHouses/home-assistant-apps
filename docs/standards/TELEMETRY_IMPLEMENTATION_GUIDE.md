@@ -323,7 +323,7 @@ Do not add application-level IP geolocation while the trusted edge already provi
 
 ## 12. Statistics semantics
 
-Because telemetry is voluntary, counts are not total users or total installed base.
+Even with required telemetry, counts are not guaranteed total users or the complete installed base because installations can be offline, blocked, modified, or otherwise unable to report.
 
 Use:
 
