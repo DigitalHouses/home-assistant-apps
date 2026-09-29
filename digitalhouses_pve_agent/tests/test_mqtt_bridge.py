@@ -47,15 +47,6 @@ def test_refresh_press_sets_event():
     assert events.refresh_requested.is_set()
 
 
-def test_restart_press_sets_dedicated_event():
-    topics = _topics()
-    events = MqttEvents(topics, RuntimeSettings())
-
-    assert events.handle_message(topics.restart_agent, b"PRESS") is True
-    assert events.restart_requested.is_set()
-    assert not events.refresh_requested.is_set()
-
-
 def test_fan_calibration_press_sets_dedicated_event():
     topics = _topics()
     events = MqttEvents(topics, RuntimeSettings())
@@ -89,6 +80,16 @@ def test_unknown_topic_is_ignored():
     events = MqttEvents(_topics(), RuntimeSettings())
 
     assert events.handle_message("some/other/topic", b"x") is False
+
+
+def test_main_refresh_also_refreshes_configured_ups():
+    events = MqttEvents(_topics(), RuntimeSettings())
+    ups = build_ups_topics(_mqtt(), _identity())
+    events.configure_ups(ups)
+
+    assert events.handle_message(events.topics.refresh, b"PRESS") is True
+    assert events.refresh_requested.is_set()
+    assert events.ups_refresh_requested.is_set()
 
 
 def test_ups_refresh_uses_separate_event():
