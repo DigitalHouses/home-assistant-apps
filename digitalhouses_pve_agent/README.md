@@ -10,7 +10,7 @@ Native Linux agent for **Proxmox VE 8.x** that publishes host, CPU, memory, stor
 
 The canonical product and runtime identity is **DigitalHouses PVE Agent** / `digitalhouses_pve_agent`: systemd service `digitalhouses_pve_agent.service`, filesystem roots under `/opt/digitalhouses/digitalhouses_pve_agent`, `/etc/digitalhouses_pve_agent` and `/var/lib/digitalhouses_pve_agent`, MQTT base `DigitalHouses/Global/digitalhouses_pve_agent/<instance>`, and Home Assistant entity prefix `dh_pve_agent_*`. Version 0.5.30 performs the corrected one-time controlled migration from the former `dh_pve_app` / `dh_app_pve_*` runtime, including deterministic cleanup of retained data owned by the legacy MQTT instance namespace.
 
-Current source release: `VERSION` is `0.5.41`.
+Current source release: `VERSION` is `0.5.42`.
 
 ## Home Assistant dashboard
 
@@ -43,7 +43,7 @@ Collection cadence is App-owned and does not accelerate because a resource becom
 
 The legacy `[ups] poll_interval_seconds` configuration key is accepted only for upgrade compatibility and is ignored; UPS collection remains fixed at 10 seconds.
 
-Manual Refresh executes the requested recovery collection sequentially rather than creating a parallel burst. If the Agent started while a VM QEMU Guest Agent was unavailable, restore the guest first and press Refresh to rebuild passthrough disk inventory and SMART state without restarting the PVE Agent.
+Manual Refresh executes the requested recovery collection sequentially rather than creating a parallel burst. If the Agent started while a VM QEMU Guest Agent was unavailable, restore the guest first and press Refresh to rebuild passthrough disk inventory and SMART state without restarting the PVE Agent. Manual PVE Refresh, UPS Refresh and UPS Scan publish retained operation state (`idle`, `updating`, `error`) with start/finish timestamps, duration and error detail so Home Assistant can show real progress without timers.
 
 ## Fan monitoring and calibration
 
