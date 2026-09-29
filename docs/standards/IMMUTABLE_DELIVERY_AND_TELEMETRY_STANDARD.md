@@ -16,12 +16,13 @@ It is mandatory for the participating product set:
 digitalhouses_pve_agent
 digitalhouses_plex_agent
 digitalhouses_recorder_app
-digitalhouses_speedtest_app
 digitalhouses_backblaze_app
 digitalhouses_internet_app
 ```
 
 The Home Assistant image/backup requirements apply only to Home Assistant Apps. The release identity and telemetry requirements apply to all participating products.
+
+Deprecated products that are explicitly superseded by a separate canonical product are not required to retrofit new delivery or telemetry architecture solely for standards conformance. Their historical release/runtime contract remains frozen except for critical compatibility or security fixes.
 
 ## 1. Architecture goal
 
@@ -595,12 +596,9 @@ Policy without enforcement is considered incomplete implementation.
 
 The first immutable-delivery releases should contain only the delivery/backup migration plus required release tooling changes.
 
-Current policy-adoption baselines make the natural first candidates:
+Current policy-adoption baselines made Recorder App the initial migration candidate.
 
-```text
-Recorder App: newer than 0.1.8
-Speedtest App: newer than 1.2.1
-```
+DigitalHouses Speedtest App is now deprecated and superseded by DigitalHouses Internet App. It is intentionally excluded from further immutable-delivery and telemetry retrofit work; its existing release/runtime identity remains frozen for legacy installations.
 
 The exact release versions must still follow the current product changelogs and release policy.
 
