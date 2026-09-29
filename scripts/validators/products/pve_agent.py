@@ -691,6 +691,19 @@ def validate_digitalhouses_pve_agent(
         if forbidden in text_value:
             fail(f"DH PVE {label} must stay removed: {forbidden}")
 
+    manual_start = main_text.index("manual_refresh_collectors=(")
+    manual_end = main_text.index("static_collectors=", manual_start)
+    manual_block = main_text[manual_start:manual_end]
+    for required in ('"topology",', '"smart",', '"disk_temperature",'):
+        if required not in manual_block:
+            fail(f"DH PVE manual disk recovery contract changed: {required}")
+    if not (
+        manual_block.index('"topology",')
+        < manual_block.index('"smart",')
+        < manual_block.index('"disk_temperature",')
+    ):
+        fail("DH PVE manual disk recovery order must be topology -> smart -> disk_temperature")
+
     _require_text(
         app / "app/shutdown_integration.py",
         (
@@ -723,7 +736,6 @@ def validate_digitalhouses_pve_agent(
             'scheduler.add("smart", interval_seconds=HEALTH_SECONDS',
             'static_collectors=("topology", "host")',
             'slow_tasks=("guests", "storage", "gpu", "disk_temperature")',
-            '            "smart",\n            "disk_temperature",\n        ),'
             "read_pve_version(",
             'fan_presence_store = StateStore(state_dir / "fans.json")',
             'StateStore(state_dir / "fan_calibration.json")',
