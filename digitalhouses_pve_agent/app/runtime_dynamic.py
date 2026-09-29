@@ -4,6 +4,7 @@ import json
 from collections.abc import Callable, Mapping
 
 from .app import DhPveRuntime
+from .operation_status import operation_payload
 
 
 _LEGACY_DISCOVERY_REMOVALS = {
@@ -336,6 +337,9 @@ class DynamicDiscoveryRuntime(DhPveRuntime):
                 cleanup_ok = bool(cleaner())
         settings_ok = self.publish_settings()
         state_ok = self.run_collection(force=True)
+        refresh_publisher = getattr(self.bridge, "publish_refresh_operation", None)
+        if callable(refresh_publisher):
+            refresh_publisher(operation_payload("idle"))
         if self._static_collectors_available():
             self._prime_version_fingerprint()
         return cleanup_ok and settings_ok and state_ok and self._last_discovery_ok

@@ -30,6 +30,7 @@ class Bridge:
         self.discovery_payload = None
         self.publication_order = []
         self.cleared_retained_topics = []
+        self.refresh_operations = []
 
     def set_discovery_payload(self, payload):
         self.discovery_payload = payload
@@ -50,6 +51,10 @@ class Bridge:
 
     def clear_retained_topics(self, topics):
         self.cleared_retained_topics.append(tuple(topics))
+        return True
+
+    def publish_refresh_operation(self, payload):
+        self.refresh_operations.append(payload)
         return True
 
 
@@ -108,6 +113,13 @@ def test_startup_builds_discovery_from_collected_inventory():
     assert runtime.startup() is True
     assert bridge.discovery == [{"storage": ["local"]}]
     assert len(bridge.states) == 1
+    assert bridge.refresh_operations == [{
+        "state": "idle",
+        "started_at": None,
+        "finished_at": None,
+        "duration_seconds": None,
+        "error": None,
+    }]
 
 
 def test_startup_publishes_inventory_discovery_before_first_state():
