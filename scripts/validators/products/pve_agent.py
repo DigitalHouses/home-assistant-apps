@@ -32,6 +32,7 @@ def validate_digitalhouses_pve_agent(
             app / "VERSION",
             app / "requirements.txt",
             app / "app/config.py",
+            app / "app/scheduler.py",
             app / "app/topics.py",
             app / "app/discovery.py",
             app / "app/discovery_identity.py",
@@ -677,6 +678,7 @@ def validate_digitalhouses_pve_agent(
             'qga.get(guest_id) == "unavailable"',
             'recovered = self._qga_state(guest, config)',
             'self._probe_guest_storage(guest, devices, recovered)',
+            "on_storage_recovered",
         ),
         "cache-first topology",
     )
@@ -698,7 +700,8 @@ def validate_digitalhouses_pve_agent(
             "ProblemAwareRuntime(",
             "problem_event_debounce_seconds=config.events.pve_problem_debounce_seconds",
             "ShutdownAwareProductionCollectors(",
-            "ShutdownAwareTopologyManager(runner=_run)",
+            "ShutdownAwareTopologyManager(",
+            "on_storage_recovered=lambda: scheduler.request_run(",
             "build_shutdown_aware_pve_discovery_payload(",
             "ShutdownHistoryTracker(",
             "FAST_SECONDS = 10.0",
@@ -732,6 +735,14 @@ def validate_digitalhouses_pve_agent(
             "cleanup_mqtt(config, identity)",
         ),
         "runtime",
+    )
+    _require_text(
+        app / "app/scheduler.py",
+        (
+            "def request_run(",
+            "task.next_due = min(task.next_due, float(now))",
+        ),
+        "one-shot scheduler wake",
     )
     _require_text(
         app / "app/mqtt_bridge.py",
