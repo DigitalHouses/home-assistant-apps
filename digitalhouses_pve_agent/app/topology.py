@@ -121,6 +121,7 @@ class TopologyManager:
         pve_root: Path = Path("/etc/pve"),
         usb_sys_root: Path = Path("/sys/bus/usb/devices"),
         node_name: str | None = None,
+        on_storage_recovered: Callable[[], None] | None = None,
     ) -> None:
         self.runner = runner
         self._fixed_dri_to_pci = dict(dri_to_pci) if dri_to_pci is not None else None
@@ -130,6 +131,7 @@ class TopologyManager:
         self.pve_root = pve_root
         self.usb_sys_root = usb_sys_root
         self.node_name = node_name or platform.node()
+        self.on_storage_recovered = on_storage_recovered
         self._snapshot: TopologySnapshot | None = None
         self._vm_configs: dict[str, str] = {}
         self._lxc_configs: dict[str, str] = {}
@@ -210,10 +212,10 @@ class TopologyManager:
         guest: GuestRecord,
         devices: tuple[PassthroughDevice, ...],
         qga_state: str,
-    ) -> None:
+    ) -> bool:
         storage_devices = self._storage_passthrough(devices)
         if not storage_devices or guest.status != "running" or qga_state != "available":
-            return
+            return False
         command = "lsblk -J -b -d -o NAME,PATH,TYPE,SIZE,MODEL,SERIAL,WWN,TRAN,ROTA"
         try:
             raw = self._run(
@@ -222,7 +224,7 @@ class TopologyManager:
             )
             block_devices = parse_qga_lsblk(raw)
         except Exception:
-            return
+            return False
 
         hostpci = ",".join(item.config_key for item in storage_devices)
         seen: set[tuple[str, str]] = set()
@@ -247,6 +249,7 @@ class TopologyManager:
         for key in list(self._storage_sources):
             if key[0] == guest.guest_id and key not in seen:
                 self._storage_sources.pop(key, None)
+        return True
 
     @staticmethod
     def _read_optional(path: Path) -> str | None:
@@ -588,7 +591,9 @@ class TopologyManager:
                 qga[guest_id] = recovered
                 if recovered == "available":
                     devices = parse_hostpci(config, self._pci_catalog)
-                    self._probe_guest_storage(guest, devices, recovered)
+                    if self._probe_guest_storage(guest, devices, recovered):
+                        if self.on_storage_recovered is not None:
+                            self.on_storage_recovered()
 
         self._snapshot = self._compose_snapshot(current_vms, current_lxcs, qga)
 
