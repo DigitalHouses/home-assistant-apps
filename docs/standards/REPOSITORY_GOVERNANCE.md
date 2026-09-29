@@ -142,6 +142,7 @@ The following shared documents are normative repository contracts and apply to p
 - [DigitalHouses Product Naming Standard](PRODUCT_NAMING_STANDARD.md)
 - [DigitalHouses Contract Data Policy](CONTRACT_DATA_POLICY.md)
 - [DigitalHouses Events & Notifications Standard](EVENTS_AND_NOTIFICATIONS_STANDARD.md)
+- [DigitalHouses Manual Refresh Standard](MANUAL_REFRESH_STANDARD.md)
 - [DigitalHouses Release Policy](RELEASE_POLICY.md)
 - [DigitalHouses Immutable Delivery, Compact Backup and Telemetry Standard](IMMUTABLE_DELIVERY_AND_TELEMETRY_STANDARD.md)
 - [DigitalHouses Product Telemetry Policy](PRODUCT_TELEMETRY_POLICY.md)
