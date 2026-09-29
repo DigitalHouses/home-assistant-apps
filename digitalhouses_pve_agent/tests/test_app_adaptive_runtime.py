@@ -253,9 +253,15 @@ def test_manual_refresh_publishes_all_current_resource_groups_and_updates_refres
     assert runtime.manual_refresh() is True
 
     groups = [group for group, _ in bridge.group_states]
-    assert groups[:-1] == ["collector/cpu", "cpu", "collector/memory", "memory"]
-    assert groups[-1] == "diagnostics"
-    assert runtime.last_refresh == "2026-09-14T20:00:10+05:00"
+    assert groups == [
+        "collector/cpu",
+        "cpu",
+        "collector/memory",
+        "memory",
+        "diagnostics",
+        "diagnostics",
+    ]
+    assert runtime.last_refresh == "2026-09-14T20:00:11+05:00"
     assert bridge.group_states[-1][1]["last_refresh"] == runtime.last_refresh
     assert bridge.group_states[-1][1]["last_publication"]["reason"] == "manual_refresh"
 
