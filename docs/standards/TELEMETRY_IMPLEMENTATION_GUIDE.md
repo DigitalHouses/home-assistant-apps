@@ -46,7 +46,7 @@ The production server allowlist is derived from the canonical product registry:
 
 All registry entries with `telemetry_allowed: true` are accepted before their clients necessarily start reporting. This intentionally lets development products exist in the Stats catalog with zero observed installations and prevents product/server rollout ordering from causing an avoidable `422 unsupported product`.
 
-Registry admission does not enable telemetry in a product. A client must still be implemented, opt-in, default OFF, and release-gated before it contributes production observations.
+Registry admission does not prove product-side compliance. A supported policy-v2 client must be implemented as required telemetry, release-gated, failure-isolated, and transparent before it contributes production observations. Policy-v1 clients remain accepted during migration.
 
 ### Internet App naming
 
@@ -148,30 +148,19 @@ Scheduling fields may differ internally, but restart storms must be prevented.
 
 ## 5. Consent/configuration contract
 
-Telemetry is opt-in and disabled by default.
+Telemetry policy version 2 is required behavior for supported official product releases.
 
-Linux Agent example:
+The final product configuration must not expose a telemetry enable/disable control. Policy-v2 products do not use `[telemetry] enabled = false` or `telemetry_enabled: false` as an opt-out mechanism.
 
-```ini
-[telemetry]
-enabled = false
-```
+Required semantics:
 
-Home Assistant App example:
+- supported official clients always schedule the minimal telemetry heartbeat;
+- users are informed clearly in public product documentation before installation/update;
+- telemetry failure never affects product health or core behavior;
+- blocking the telemetry endpoint may prevent delivery but must not break the product;
+- authenticated deletion erases retained server data but does not disable future reporting while the product remains in use.
 
-```yaml
-telemetry_enabled: false
-```
-
-The exact product configuration surface may differ, but the semantics must not:
-
-- default OFF;
-- disabled means no telemetry requests;
-- telemetry failure never affects product health;
-- disabling does not automatically delete historical server data;
-- deletion is a separate authenticated action.
-
-The user-facing option must link to the shared telemetry policy.
+Migration from a released policy-v1 product must explicitly remove or retire the old opt-in configuration surface without pretending that a legacy `false` value still disables reporting.
 
 ## 6. Scheduling contract
 
@@ -183,8 +172,9 @@ Normal successful cadence:
 
 Allowed additional immediate best-effort heartbeat:
 
-- first time telemetry is enabled;
-- after successful upgrade to a new released version.
+- on a fresh installation;
+- after successful upgrade to a new released version;
+- after authenticated deletion and local identity rotation.
 
 Recommended failure backoff:
 
@@ -270,6 +260,8 @@ Server-side deletion removes:
 
 - installation credential record;
 - all retained heartbeat history for that installation.
+
+For a policy-v2 client, successful deletion must also rotate the locally persisted UUID/token pair. Continued product use later reports under that fresh identity. Deletion is therefore an erasure operation, not an opt-out control.
 
 ## 10. Server-side storage semantics
 
@@ -380,19 +372,21 @@ Any future retention change must update, together:
 Every product telemetry integration must cover at least:
 
 ```text
-default OFF -> no HTTP requests
-enable -> immediate eligible heartbeat
+supported production release -> telemetry schedules without user opt-in
+no user opt-out control -> telemetry cannot be disabled through product configuration
 fresh install -> UUID/token created
 restart -> same identity
 upgrade -> same identity, new version
 daily cadence -> no restart storm
-failure -> product remains operational
-wrong/malformed state -> safely repaired or regenerated
-payload -> exact protocol v1 fields only
+failure/blocking -> product remains operational
+malformed persistent identity -> visible contract error according to the shared contract-data policy
+payload -> exact protocol v1 fields only with telemetry_policy_version=2
 country -> absent from client payload
 release provenance -> development build does not pollute production telemetry
 successful heartbeat -> scheduling state persisted
 delete -> correct product/ID/token request
+delete success -> server history removed and client UUID/token rotated
+continued use after delete -> later reporting resumes under fresh identity
 token -> never logged
 ```
 
@@ -411,18 +405,18 @@ Before implementation:
 - [ ] confirm server allowlist contains that identifier;
 - [ ] confirm product version source;
 - [ ] define persistent telemetry state location;
-- [ ] define user-facing opt-in setting, default OFF;
-- [ ] link user-facing setting to shared telemetry policy.
+- [ ] remove/retire any policy-v1 telemetry opt-in setting;
+- [ ] publish clear user-facing disclosure linking to the shared telemetry policy.
 
 Implementation:
 
 - [ ] UUIDv4 + 256-bit token creation;
-- [ ] strict protocol v1 payload;
+- [ ] strict protocol v1 payload with `telemetry_policy_version=2`;
 - [ ] 24h ±30m schedule;
 - [ ] failure backoff;
 - [ ] release-build gating;
 - [ ] independent background runner/task;
-- [ ] authenticated delete;
+- [ ] authenticated delete + local identity rotation;
 - [ ] secret-safe logging.
 
 Verification:
@@ -435,8 +429,9 @@ Verification:
 - [ ] country derived by server;
 - [ ] no client country field;
 - [ ] no IP persisted;
-- [ ] disabling stops future heartbeats;
-- [ ] deletion removes installation/history when tested.
+- [ ] no product telemetry opt-out control remains;
+- [ ] deletion removes installation/history and rotates local identity;
+- [ ] continued use after deletion resumes later under a fresh identity.
 
 ## 16. Current rollout status
 
@@ -444,13 +439,13 @@ As of the current repository implementation:
 
 | Product | Identifier | Production telemetry client |
 | --- | --- | --- |
-| DigitalHouses PVE Agent | `digitalhouses_pve_agent` | implemented and verified |
-| DigitalHouses Plex Agent | `digitalhouses_plex_agent` | implemented and verified |
-| DigitalHouses Recorder App | `digitalhouses_recorder_app` | implemented and production-verified (heartbeat, deletion, restart persistence, App backup/restore) |
-| DigitalHouses Speedtest App | `digitalhouses_speedtest_app` | deprecated; superseded by `digitalhouses_internet_app`; production telemetry client intentionally not planned |
-| DigitalHouses Backblaze App | `digitalhouses_backblaze_app` | client implemented; admitted to registry/server allowlist; immutable production release delivery enabled; real-install verification pending |
-| DigitalHouses Internet App | `digitalhouses_internet_app` | implemented in product and admitted to protocol/server allowlist |
-| DigitalHouses Climate App | `digitalhouses_climate_app` | client implemented; admitted to protocol/server allowlist; real-install verification pending |
+| DigitalHouses PVE Agent | `digitalhouses_pve_agent` | policy-v1 client implemented and verified; policy-v2 migration pending |
+| DigitalHouses Plex Agent | `digitalhouses_plex_agent` | policy-v1 client implemented and verified; policy-v2 migration pending |
+| DigitalHouses Recorder App | `digitalhouses_recorder_app` | policy-v1 client production-verified; policy-v2 migration pending |
+| DigitalHouses Speedtest App | `digitalhouses_speedtest_app` | deprecated; superseded by `digitalhouses_internet_app`; policy-v2 retrofit intentionally not planned |
+| DigitalHouses Backblaze App | `digitalhouses_backblaze_app` | policy-v1 client implemented; policy-v2 migration pending |
+| DigitalHouses Internet App | `digitalhouses_internet_app` | policy-v1 client implemented; policy-v2 migration pending |
+| DigitalHouses Climate App | `digitalhouses_climate_app` | separate repository; policy-v2 alignment pending |
 
 This table is operational status, not a replacement for the normative protocol or Release Policy.
 
@@ -470,15 +465,16 @@ docs/standards/RELEASE_POLICY.md
 First audit the current product implementation and report any contract mismatch.
 
 Required constraints:
-- telemetry remains opt-in and default OFF;
-- protocol v1 payload is exact; do not add product-specific fields;
+- supported official releases use mandatory telemetry policy v2; no user opt-out control;
+- protocol v1 payload is exact with telemetry_policy_version=2; do not add product-specific fields;
 - country is never sent by the client;
 - persistent UUIDv4 + 256-bit token survive restart/upgrade/restore;
 - 24h ±30m heartbeat with persisted scheduling and non-aggressive failure backoff;
-- telemetry failure cannot affect core product operation;
+- telemetry failure or blocking cannot affect core product operation;
 - production adoption must not be polluted by development builds;
-- authenticated deletion uses the shared endpoint;
-- tests cover identity, payload, timing, failure isolation and deletion.
+- authenticated deletion uses the shared endpoint, deletes retained history and rotates the local identity;
+- continued product use after deletion resumes reporting under the fresh identity;
+- tests cover identity, payload, timing, failure isolation, transparency and deletion.
 
 Before enabling real telemetry, confirm the canonical product/release identifier is present in the shared stats-server allowlist.
 Do not change shared telemetry semantics inside the product without updating the repository-level contract first.
