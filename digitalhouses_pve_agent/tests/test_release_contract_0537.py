@@ -74,6 +74,7 @@ def test_0537_qga_recovery_and_restart_agent_contract():
     mqtt = (APP / "app" / "mqtt_bridge.py").read_text(encoding="utf-8")
     discovery = (APP / "app" / "discovery.py").read_text(encoding="utf-8")
     main = (APP / "app" / "main.py").read_text(encoding="utf-8")
+    scheduler = (APP / "app" / "scheduler.py").read_text(encoding="utf-8")
     service = (APP / "systemd" / "digitalhouses_pve_agent.service").read_text(
         encoding="utf-8"
     )
@@ -81,6 +82,9 @@ def test_0537_qga_recovery_and_restart_agent_contract():
     assert 'qga.get(guest_id) == "unavailable"' in topology
     assert "recovered = self._qga_state(guest, config)" in topology
     assert "self._probe_guest_storage(guest, devices, recovered)" in topology
+    assert "on_storage_recovered" in topology
+    assert "def request_run(" in scheduler
+    assert "on_storage_recovered=lambda: scheduler.request_run(" in main
 
     assert 'restart_agent=f"{base}/restart"' in topics
     assert "self.restart_requested = threading.Event()" in mqtt
