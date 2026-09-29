@@ -248,7 +248,6 @@ class TopologyManager:
             if key[0] == guest.guest_id and key not in seen:
                 self._storage_sources.pop(key, None)
 
-
     @staticmethod
     def _read_optional(path: Path) -> str | None:
         try:
@@ -575,9 +574,8 @@ class TopologyManager:
 
         qga = dict(self._snapshot.qga)
         for guest_id, guest in current_vms.items():
-            config = self._vm_configs.get(guest_id, "")
             if guest.status != "running" and guest_id in qga:
-                qga[guest_id] = "unavailable" if _agent_enabled(config) else "disabled"
+                qga[guest_id] = "unavailable" if _agent_enabled(self._vm_configs.get(guest_id, "")) else "disabled"
 
         self._snapshot = self._compose_snapshot(current_vms, current_lxcs, qga)
 
