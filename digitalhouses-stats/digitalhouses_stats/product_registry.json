@@ -97,7 +97,11 @@
       "telemetry_allowed": true,
       "release": null,
       "repository_directory": null,
-      "haos_slug": "digitalhouses_climate_app"
+      "haos_slug": "dh_climate_app",
+      "slug_migration": {
+        "status": "pending_controlled_reinstall",
+        "target": "digitalhouses_climate_app"
+      }
     }
   ]
 }
