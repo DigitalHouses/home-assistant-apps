@@ -221,6 +221,7 @@ def test_running_vm_recovers_qga_and_passthrough_storage_without_vm_restart(tmp_
             return super().__call__(argv, timeout=timeout, check=check)
 
     now = [0.0]
+    recoveries = []
     runner = RecoveryRunner()
     manager = TopologyManager(
         runner=runner,
@@ -231,6 +232,7 @@ def test_running_vm_recovers_qga_and_passthrough_storage_without_vm_restart(tmp_
         node_name="pve",
         now_epoch=lambda: 110.0,
         now_monotonic=lambda: now[0],
+        on_storage_recovered=lambda: recoveries.append("smart"),
     )
 
     snapshot = manager.full_scan()
@@ -250,6 +252,7 @@ def test_running_vm_recovers_qga_and_passthrough_storage_without_vm_restart(tmp_
     assert len(sources) == 1
     assert sources[0].device_path == "/dev/sdb"
     assert sources[0].serial == "S2PWNX0H603177N"
+    assert recoveries == ["smart"]
     assert ("qm", "agent", "700", "ping") in runner.calls
     assert any(
         call[:4] == ("qm", "guest", "exec", "700")
