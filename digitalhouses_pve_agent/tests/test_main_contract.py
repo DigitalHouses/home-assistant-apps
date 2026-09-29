@@ -65,14 +65,15 @@ def test_runtime_scheduler_uses_frozen_collection_cadence(tmp_path, monkeypatch)
     assert runtime.scheduler.interval("disk_temperature") == 60.0
     assert runtime.scheduler.interval("smart") == 3600.0
     main_text = (ROOT / "app" / "main.py").read_text()
-    assert "on_storage_recovered=lambda: scheduler.request_run(" in main_text
+    assert "on_storage_recovered" not in main_text
+    assert "request_run(" not in main_text
     assert "host" not in runtime.scheduler.names()
     assert "topology" not in runtime.scheduler.names()
     assert "fast_poll_interval_seconds" not in runtime.setting_tasks
     assert "disk_poll_interval_seconds" not in runtime.setting_tasks
 
 
-def test_main_wires_fast_manual_refresh_without_heavy_collectors(tmp_path, monkeypatch):
+def test_main_wires_manual_refresh_with_explicit_disk_rescan(tmp_path, monkeypatch):
     monkeypatch.setattr(main_module, "resolve_identity", lambda general: _identity())
     _bridge, runtime = main_module.build_runtime(_config(), state_dir=tmp_path)
 
@@ -84,10 +85,12 @@ def test_main_wires_fast_manual_refresh_without_heavy_collectors(tmp_path, monke
         "memory",
         "storage",
         "fans",
+        "smart",
+        "disk_temperature",
     )
-    assert "smart" not in runtime.manual_refresh_collectors
+    assert runtime.manual_refresh_collectors.index("topology") < runtime.manual_refresh_collectors.index("smart")
+    assert runtime.manual_refresh_collectors.index("smart") < runtime.manual_refresh_collectors.index("disk_temperature")
     assert "gpu" not in runtime.manual_refresh_collectors
-    assert "disk_temperature" not in runtime.manual_refresh_collectors
 
 
 def test_main_wires_shared_topology_shutdown_history_and_static_inventory():
