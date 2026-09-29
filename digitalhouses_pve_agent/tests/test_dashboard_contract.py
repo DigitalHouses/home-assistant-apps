@@ -27,10 +27,29 @@ def test_canonical_pve_dashboard_exists_and_uses_app_owned_state():
         "sensor.dh_pve_agent_vms",
         "sensor.dh_pve_agent_lxcs",
         "button.dh_pve_agent_refresh",
+        "sensor.dh_pve_agent_refresh_state",
+        "sensor.dh_pve_agent_ups_refresh_state",
         "sensor.dh_pve_agent_last_refresh",
         "sensor.dh_pve_agent_last_publication",
     ):
         assert entity_id in text
+
+
+def test_dashboard_refresh_card_has_live_operation_feedback():
+    text = _text()
+    refresh = text.split("entity: sensor.dh_pve_agent_refresh_state", 1)[1].split(
+        "entity: sensor.dh_pve_agent_last_refresh", 1
+    )[0]
+
+    for token in (
+        "Обновление…",
+        "Ошибка обновления",
+        "Сбор данных PVE",
+        "sensor.dh_pve_agent_ups_refresh_state",
+        "background: var(--secondary-background-color)",
+        "button.dh_pve_agent_refresh",
+    ):
+        assert token in refresh
 
 
 def test_dashboard_shows_app_version_in_system_card_and_hides_unknown_values():
