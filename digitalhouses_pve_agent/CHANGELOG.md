@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.38
+
+- Fix QGA recovery cadence after startup: the existing 60-second guest-status scheduler is now authoritative, so recovery probes bypass the internal QGA cache throttle instead of potentially waiting a second polling cycle.
+- Add a regression test for the real phase-offset case where the startup QGA probe happened 55 seconds before the next guest-status poll.
+- Log successful QGA passthrough-storage recovery explicitly before scheduling the immediate SMART collection.
+
 ## 0.5.37
 
 - Recover QEMU Guest Agent availability for continuously running VMs: when a storage-passthrough VM was discovered while QGA was unavailable, retry only the cheap guest ping on the existing 60-second guest-status cadence and run one targeted storage rescan when QGA becomes available.
