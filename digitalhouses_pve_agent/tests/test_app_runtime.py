@@ -199,7 +199,8 @@ def test_failed_followup_marks_global_refresh_error():
     )
     runtime.set_manual_refresh_followup(lambda: False)
 
-    assert runtime.manual_refresh() is True
+    assert runtime.manual_refresh() is False
+    assert runtime.last_refresh is None
     assert [item["state"] for item in bridge.refresh_operations] == ["updating", "error"]
     assert bridge.refresh_operations[-1]["error"] == "follow-up refresh failed"
 
@@ -252,7 +253,7 @@ def test_manual_refresh_with_partial_failure_keeps_previous_last_refresh():
 
     runtime, bridge, _, _, _ = make_runtime({"cpu": lambda: sample(10.0), "fan": broken})
     runtime.last_refresh = "2026-09-09T10:00:00+05:00"
-    assert runtime.manual_refresh() is True
+    assert runtime.manual_refresh() is False
     assert runtime.last_refresh == "2026-09-09T10:00:00+05:00"
     assert bridge.states[-1]["last_refresh"] == "2026-09-09T10:00:00+05:00"
     assert [item["state"] for item in bridge.refresh_operations] == ["updating", "error"]
