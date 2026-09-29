@@ -335,25 +335,77 @@ sections:
         icon: mdi:server
         heading: Приложение
       - type: custom:mushroom-template-card
-        entity: button.dh_pve_agent_refresh
-        primary: Обновить сейчас
-        secondary: >-
-          {% set last = states('sensor.dh_pve_agent_last_refresh') %} {% if last
-          not in ['unknown', 'unavailable', 'none', ''] %}
-            Последнее: {{ as_timestamp(last)
-              | timestamp_custom('%d.%m.%Y %H:%M:%S', true) }}
+        entity: sensor.dh_pve_agent_refresh_state
+        primary: >-
+          {% set pve = states('sensor.dh_pve_agent_refresh_state') %}
+          {% set ups = states('sensor.dh_pve_agent_ups_refresh_state') %}
+          {% set ups_enabled = is_state('binary_sensor.dh_pve_agent_ups_configured', 'on') %}
+          {% if pve == 'updating' or (ups_enabled and ups == 'updating') %}
+            Обновление…
+          {% elif pve == 'error' or (ups_enabled and ups == 'error') %}
+            Ошибка обновления
           {% else %}
-            Ручное обновление ещё не выполнялось
+            Обновить всё
           {% endif %}
-        icon: mdi:refresh
-        icon_color: blue
+        secondary: >-
+          {% set pve = states('sensor.dh_pve_agent_refresh_state') %}
+          {% set ups = states('sensor.dh_pve_agent_ups_refresh_state') %}
+          {% set ups_enabled = is_state('binary_sensor.dh_pve_agent_ups_configured', 'on') %}
+          {% if pve == 'updating' or (ups_enabled and ups == 'updating') %}
+            Сбор данных PVE{{ ' и UPS' if ups_enabled else '' }}
+          {% elif pve == 'error' %}
+            {{ state_attr('sensor.dh_pve_agent_refresh_state', 'error') or 'Ошибка ручного обновления PVE' }}
+          {% elif ups_enabled and ups == 'error' %}
+            {{ state_attr('sensor.dh_pve_agent_ups_refresh_state', 'error') or 'Ошибка ручного обновления UPS' }}
+          {% else %}
+            {% set last = states('sensor.dh_pve_agent_last_refresh') %}
+            {% if last not in ['unknown', 'unavailable', 'none', ''] %}
+              Последнее: {{ as_timestamp(last)
+                | timestamp_custom('%d.%m.%Y %H:%M:%S', true) }}
+            {% else %}
+              Ручное обновление ещё не выполнялось
+            {% endif %}
+          {% endif %}
+        icon: >-
+          {% set pve = states('sensor.dh_pve_agent_refresh_state') %}
+          {% set ups = states('sensor.dh_pve_agent_ups_refresh_state') %}
+          {% set ups_enabled = is_state('binary_sensor.dh_pve_agent_ups_configured', 'on') %}
+          {% if pve == 'updating' or (ups_enabled and ups == 'updating') %}
+            mdi:progress-clock
+          {% elif pve == 'error' or (ups_enabled and ups == 'error') %}
+            mdi:alert-circle
+          {% else %}
+            mdi:refresh
+          {% endif %}
+        icon_color: >-
+          {% set pve = states('sensor.dh_pve_agent_refresh_state') %}
+          {% set ups = states('sensor.dh_pve_agent_ups_refresh_state') %}
+          {% set ups_enabled = is_state('binary_sensor.dh_pve_agent_ups_configured', 'on') %}
+          {% if pve == 'updating' or (ups_enabled and ups == 'updating') %}
+            grey
+          {% elif pve == 'error' or (ups_enabled and ups == 'error') %}
+            red
+          {% else %}
+            blue
+          {% endif %}
         tap_action:
           action: perform-action
           perform_action: button.press
           target:
             entity_id: button.dh_pve_agent_refresh
           confirmation:
-            text: Обновить данные DH PVE Agent?
+            text: Обновить все данные DH PVE Agent?
+        card_mod:
+          style: |
+            ha-card {
+              {% set pve = states('sensor.dh_pve_agent_refresh_state') %}
+              {% set ups = states('sensor.dh_pve_agent_ups_refresh_state') %}
+              {% set ups_enabled = is_state('binary_sensor.dh_pve_agent_ups_configured', 'on') %}
+              {% if pve == 'updating' or (ups_enabled and ups == 'updating') %}
+                background: var(--secondary-background-color) !important;
+                opacity: 0.78;
+              {% endif %}
+            }
         grid_options:
           columns: 12
       - type: vertical-stack
