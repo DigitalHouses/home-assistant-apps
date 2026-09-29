@@ -6,7 +6,7 @@ from typing import Any
 
 from validators.common import fail, require_files
 
-EXPECTED_VERSION = "0.5.39"
+EXPECTED_VERSION = "0.5.40"
 EXPECTED_TOPIC_PREFIX = "DigitalHouses/Global/digitalhouses_pve_agent"
 EXPECTED_DEVICE_NAME = "DH PVE"
 EXPECTED_REFRESH_ENTITY = "button.dh_pve_agent_refresh"
@@ -675,17 +675,35 @@ def validate_digitalhouses_pve_agent(
             'read_pve_rrd(',
             'path = self.pve_root / directory / f"{guest_id}.conf"',
             'current_vms, current_lxcs = self._guest_lists()',
-            'qga.get(guest_id) == "unavailable"',
-            'recovered = self._qga_state(guest, config, force=True)',
-            'self._probe_guest_storage(guest, devices, "available")',
-            'return bool(seen)',
-            "on_storage_recovered",
-            "_storage_recovery_pending",
-            "passthrough storage recovery ожидает повторного rescan",
-            "QGA восстановлен для VM %s; passthrough storage пересканирован",
+            'qga[guest_id] = self._qga_state(guest, config, force=True)',
+            'self._probe_guest_storage(guest, devices, qga[guest_id])',
         ),
         "cache-first topology",
     )
+    topology_text = (app / "app/topology.py").read_text(encoding="utf-8")
+    main_text = (app / "app/main.py").read_text(encoding="utf-8")
+    scheduler_text = (app / "app/scheduler.py").read_text(encoding="utf-8")
+    for forbidden, text_value, label in (
+        ("_storage_recovery_pending", topology_text, "automatic storage recovery"),
+        ("on_storage_recovered", topology_text + main_text, "automatic storage recovery callback"),
+        ("request_run(", scheduler_text + main_text, "automatic SMART scheduler wake"),
+    ):
+        if forbidden in text_value:
+            fail(f"DH PVE {label} must stay removed: {forbidden}")
+
+    manual_start = main_text.index("manual_refresh_collectors=(")
+    manual_end = main_text.index("static_collectors=", manual_start)
+    manual_block = main_text[manual_start:manual_end]
+    for required in ('"topology",', '"smart",', '"disk_temperature",'):
+        if required not in manual_block:
+            fail(f"DH PVE manual disk recovery contract changed: {required}")
+    if not (
+        manual_block.index('"topology",')
+        < manual_block.index('"smart",')
+        < manual_block.index('"disk_temperature",')
+    ):
+        fail("DH PVE manual disk recovery order must be topology -> smart -> disk_temperature")
+
     _require_text(
         app / "app/shutdown_integration.py",
         (
@@ -705,7 +723,6 @@ def validate_digitalhouses_pve_agent(
             "problem_event_debounce_seconds=config.events.pve_problem_debounce_seconds",
             "ShutdownAwareProductionCollectors(",
             "ShutdownAwareTopologyManager(",
-            "on_storage_recovered=lambda: scheduler.request_run(",
             "build_shutdown_aware_pve_discovery_payload(",
             "ShutdownHistoryTracker(",
             "FAST_SECONDS = 10.0",
@@ -739,14 +756,6 @@ def validate_digitalhouses_pve_agent(
             "cleanup_mqtt(config, identity)",
         ),
         "runtime",
-    )
-    _require_text(
-        app / "app/scheduler.py",
-        (
-            "def request_run(",
-            "task.next_due = min(task.next_due, float(now))",
-        ),
-        "one-shot scheduler wake",
     )
     _require_text(
         app / "app/mqtt_bridge.py",

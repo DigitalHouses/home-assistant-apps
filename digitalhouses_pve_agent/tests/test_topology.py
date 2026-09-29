@@ -203,7 +203,7 @@ def test_guest_status_transition_to_running_uses_rrd_then_targeted_rescan(tmp_pa
 
 
 
-def test_running_vm_recovers_qga_and_passthrough_storage_without_vm_restart(tmp_path: Path):
+def test_full_scan_recovers_passthrough_storage_after_qga_returns(tmp_path: Path):
     _write_pve_cache(tmp_path, vm700_status="running")
 
     class RecoveryRunner(FakeRunner):
@@ -220,122 +220,29 @@ def test_running_vm_recovers_qga_and_passthrough_storage_without_vm_restart(tmp_
                 return ""
             return super().__call__(argv, timeout=timeout, check=check)
 
-    now = [0.0]
-    recoveries = []
     runner = RecoveryRunner()
-    manager = TopologyManager(
-        runner=runner,
-        dri_to_pci={},
-        config_reader=config_reader,
-        pve_root=tmp_path,
-        usb_sys_root=tmp_path / "usb",
-        node_name="pve",
-        now_epoch=lambda: 110.0,
-        now_monotonic=lambda: now[0],
-        on_storage_recovered=lambda: recoveries.append("smart"),
-    )
+    manager = _manager(tmp_path, runner)
 
     snapshot = manager.full_scan()
-    assert snapshot.vms["700"].status == "running"
+
     assert snapshot.qga["700"] == "unavailable"
     assert manager.vm_storage_sources() == ()
 
     runner.calls.clear()
     runner.vm700_qga_available = True
 
-    # Guest polling is already rate-limited by the 60-second scheduler.
-    # Recovery must not inherit a second 60-second QGA throttle from the
-    # startup probe phase. Reproduce startup probe at t=5 and poll at t=60.
-    manager._qga_last_probe["700"] = 5.0
-    now[0] = 60.0
+    snapshot = manager.full_scan()
 
-    status = manager.poll_guest_status()
-
-    assert status.vms["700"].status == "running"
-    assert manager.qga_state("700") == "available"
+    assert snapshot.qga["700"] == "available"
     sources = manager.vm_storage_sources()
     assert len(sources) == 1
     assert sources[0].device_path == "/dev/sdb"
     assert sources[0].serial == "S2PWNX0H603177N"
-    assert recoveries == ["smart"]
     assert ("qm", "agent", "700", "ping") in runner.calls
     assert any(
         call[:4] == ("qm", "guest", "exec", "700")
         for call in runner.calls
     )
-
-
-def test_qga_recovery_retries_storage_rescan_after_transient_guest_exec_failure(tmp_path: Path):
-    _write_pve_cache(tmp_path, vm700_status="running")
-
-    class RetryRunner(FakeRunner):
-        def __init__(self):
-            super().__init__()
-            self.qga_available = False
-            self.fail_next_storage_exec = True
-
-        def __call__(self, argv, *, timeout=20.0, check=True):
-            argv = tuple(argv)
-            if argv == ("qm", "agent", "700", "ping"):
-                self.calls.append(argv)
-                if not self.qga_available:
-                    raise RuntimeError("guest-ping timeout")
-                return ""
-            if (
-                argv[:4] == ("qm", "guest", "exec", "700")
-                and self.qga_available
-                and self.fail_next_storage_exec
-            ):
-                self.calls.append(argv)
-                self.fail_next_storage_exec = False
-                raise RuntimeError("guest-exec transient failure")
-            return super().__call__(argv, timeout=timeout, check=check)
-
-    now = [0.0]
-    recoveries = []
-    runner = RetryRunner()
-    manager = TopologyManager(
-        runner=runner,
-        dri_to_pci={},
-        config_reader=config_reader,
-        pve_root=tmp_path,
-        usb_sys_root=tmp_path / "usb",
-        node_name="pve",
-        now_epoch=lambda: 110.0,
-        now_monotonic=lambda: now[0],
-        on_storage_recovered=lambda: recoveries.append("smart"),
-    )
-
-    snapshot = manager.full_scan()
-    assert snapshot.qga["700"] == "unavailable"
-    assert manager.vm_storage_sources() == ()
-
-    runner.calls.clear()
-    runner.qga_available = True
-    now[0] = 60.0
-
-    first = manager.poll_guest_status()
-
-    assert first.vms["700"].status == "running"
-    assert manager.qga_state("700") == "available"
-    assert manager.vm_storage_sources() == ()
-    assert recoveries == []
-    assert ("qm", "agent", "700", "ping") in runner.calls
-    assert any(call[:4] == ("qm", "guest", "exec", "700") for call in runner.calls)
-
-    runner.calls.clear()
-    now[0] = 120.0
-
-    second = manager.poll_guest_status()
-
-    assert second.vms["700"].status == "running"
-    assert manager.qga_state("700") == "available"
-    sources = manager.vm_storage_sources()
-    assert len(sources) == 1
-    assert sources[0].serial == "S2PWNX0H603177N"
-    assert recoveries == ["smart"]
-    assert ("qm", "agent", "700", "ping") not in runner.calls
-    assert any(call[:4] == ("qm", "guest", "exec", "700") for call in runner.calls)
 
 
 def test_usb_topology_keeps_duplicate_vm_assignments_and_host_devices(tmp_path: Path):
