@@ -137,7 +137,14 @@ def build_runtime(
         discovery_builder({}),
     )
 
-    topology = ShutdownAwareTopologyManager(runner=_run)
+    scheduler = Scheduler()
+    topology = ShutdownAwareTopologyManager(
+        runner=_run,
+        on_storage_recovered=lambda: scheduler.request_run(
+            "smart",
+            now=time.monotonic(),
+        ),
+    )
     fan_presence_store = StateStore(state_dir / "fans.json")
     fan_calibration_registry = FanCalibrationRegistry(
         StateStore(state_dir / "fan_calibration.json")
@@ -154,7 +161,6 @@ def build_runtime(
     )
     collectors = production.mapping()
 
-    scheduler = Scheduler()
     now = time.monotonic()
     for name in ("cpu", "memory", "fans"):
         scheduler.add(name, interval_seconds=FAST_SECONDS, now=now)
