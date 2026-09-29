@@ -680,6 +680,17 @@ def validate_digitalhouses_pve_agent(
         ),
         "cache-first topology",
     )
+    topology_text = (app / "app/topology.py").read_text(encoding="utf-8")
+    main_text = (app / "app/main.py").read_text(encoding="utf-8")
+    scheduler_text = (app / "app/scheduler.py").read_text(encoding="utf-8")
+    for forbidden, text_value, label in (
+        ("_storage_recovery_pending", topology_text, "automatic storage recovery"),
+        ("on_storage_recovered", topology_text + main_text, "automatic storage recovery callback"),
+        ("request_run(", scheduler_text + main_text, "automatic SMART scheduler wake"),
+    ):
+        if forbidden in text_value:
+            fail(f"DH PVE {label} must stay removed: {forbidden}")
+
     _require_text(
         app / "app/shutdown_integration.py",
         (
