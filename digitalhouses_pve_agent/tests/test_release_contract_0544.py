@@ -96,7 +96,8 @@ def test_0544_operation_state_contract_is_agent_owned():
     assert 'refresh_publisher(operation_payload("idle"))' in dynamic_runtime
 
     assert 'operation_payload("updating"' in app_runtime
-    assert '"idle" if published and not failed else "error"' in app_runtime
+    assert "commit_ok = self._commit_manual_refresh(finished_at)" in app_runtime
+    assert '"idle" if success else "error"' in app_runtime
     assert 'operation_payload("updating"' in ups_runtime
     assert '"idle" if ok else "error"' in ups_runtime
     assert "ups_scan_in_progress.set()" in main
@@ -134,6 +135,8 @@ def test_0544_global_refresh_stays_active_through_ups_followup():
 
     assert "self.manual_refresh_followup" in app_runtime
     assert "followup_ok = bool(self.manual_refresh_followup())" in app_runtime
+    assert "commit_ok = self._commit_manual_refresh(finished_at)" in app_runtime
+    assert "self.last_refresh = completed_at" in app_runtime
     assert '"follow-up refresh failed"' in app_runtime
 
     assert "def refresh_ups_after_pve()" in main
