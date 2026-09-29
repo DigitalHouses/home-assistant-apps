@@ -11,10 +11,12 @@ from app.ups_runtime import UpsRuntime
 class Bridge:
     def __init__(self):
         self.ups_refresh_requested = threading.Event()
+        self.ups_refresh_in_progress = threading.Event()
         self.ups_reconnect_requested = threading.Event()
         self.setting_updates = queue.SimpleQueue()
         self.discovery = []
         self.states = []
+        self.refresh_operations = []
         self.availability = []
 
     def publish_ups_discovery(self, payload):
@@ -23,6 +25,10 @@ class Bridge:
 
     def publish_ups_state(self, payload):
         self.states.append(payload)
+        return True
+
+    def publish_ups_refresh_operation(self, payload):
+        self.refresh_operations.append(payload)
         return True
 
     def publish_ups_availability(self, online):
@@ -95,6 +101,7 @@ def test_startup_publishes_discovery_availability_and_canonical_machine_state(tm
 
     assert runtime.startup() is True
     assert bridge.availability == [True]
+    assert bridge.refresh_operations[-1]["state"] == "idle"
     assert len(bridge.discovery) == 2
     assert len(bridge.states) == 1
     payload = bridge.states[-1]
@@ -232,13 +239,19 @@ def test_manual_refresh_updates_timestamp_only_after_success(tmp_path):
     bridge, runtime, clock = _runtime(tmp_path, reader)
     runtime.startup()
     clock["iso"] = "2026-09-12T01:05:00+00:00"
+    bridge.refresh_operations.clear()
     assert runtime.manual_refresh() is True
     assert bridge.states[-1]["last_refresh"] == "2026-09-12T01:05:00+00:00"
+    assert [item["state"] for item in bridge.refresh_operations] == ["updating", "idle"]
+    assert not bridge.ups_refresh_in_progress.is_set()
 
     should_fail["value"] = True
     clock["iso"] = "2026-09-12T01:06:00+00:00"
+    bridge.refresh_operations.clear()
     assert runtime.manual_refresh() is False
     assert bridge.states[-1]["last_refresh"] == "2026-09-12T01:05:00+00:00"
+    assert [item["state"] for item in bridge.refresh_operations] == ["updating", "error"]
+    assert bridge.refresh_operations[-1]["error"] == "UPS refresh failed"
 
 
 def test_reconnect_forces_discovery_and_last_known_state(tmp_path):
