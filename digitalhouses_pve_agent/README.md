@@ -43,7 +43,7 @@ Collection cadence is App-owned and does not accelerate because a resource becom
 
 The legacy `[ups] poll_interval_seconds` configuration key is accepted only for upgrade compatibility and is ignored; UPS collection remains fixed at 10 seconds.
 
-Manual Refresh executes the requested recovery collection sequentially rather than creating a parallel burst. If the Agent started while a VM QEMU Guest Agent was unavailable, restore the guest first and press Refresh to rebuild passthrough disk inventory and SMART state without restarting the PVE Agent. Manual PVE Refresh, UPS Refresh and UPS Scan publish retained operation state (`idle`, `updating`, `error`) with start/finish timestamps, duration and error detail so Home Assistant can show real progress without timers.
+Manual Refresh executes the requested recovery collection sequentially rather than creating a parallel burst. If the Agent started while a VM QEMU Guest Agent was unavailable, restore the guest first and press Refresh to rebuild passthrough disk inventory and SMART state without restarting the PVE Agent. Manual PVE Refresh, UPS Refresh and UPS Scan publish retained operation state (`idle`, `updating`, `error`) with start/finish timestamps, duration and error detail so Home Assistant can show real progress without timers. For the main Refresh button, `sensor.dh_pve_agent_refresh_state` remains `updating` across the complete PVE + configured-UPS flow; `sensor.dh_pve_agent_last_refresh` advances only after the complete flow succeeds.
 
 ## Fan monitoring and calibration
 
