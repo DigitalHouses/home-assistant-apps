@@ -64,10 +64,13 @@ class MqttEvents:
         self.settings = settings
         self.ups_topics: UpsTopics | None = None
         self.refresh_requested = threading.Event()
+        self.refresh_in_progress = threading.Event()
         self.reconnect_requested = threading.Event()
         self.ups_scan_requested = threading.Event()
+        self.ups_scan_in_progress = threading.Event()
         self.fan_calibration_requested = threading.Event()
         self.ups_refresh_requested = threading.Event()
+        self.ups_refresh_in_progress = threading.Event()
         self.ups_test_quick_requested = threading.Event()
         self.ups_test_deep_requested = threading.Event()
         self.ups_test_stop_requested = threading.Event()
@@ -90,13 +93,21 @@ class MqttEvents:
         text = payload.decode("utf-8", errors="replace").strip()
         if topic == self.topics.refresh:
             if text.upper() == "PRESS":
+                if self.refresh_in_progress.is_set() or self.refresh_requested.is_set():
+                    return True
                 self.refresh_requested.set()
-                if self.ups_topics is not None:
+                if (
+                    self.ups_topics is not None
+                    and not self.ups_refresh_in_progress.is_set()
+                    and not self.ups_refresh_requested.is_set()
+                ):
                     self.ups_refresh_requested.set()
                 return True
             return False
         if topic == self.topics.ups_scan:
             if text.upper() == "PRESS":
+                if self.ups_scan_in_progress.is_set() or self.ups_scan_requested.is_set():
+                    return True
                 self.ups_scan_requested.set()
                 return True
             return False
@@ -107,6 +118,11 @@ class MqttEvents:
             return False
         if self.ups_topics is not None and topic == self.ups_topics.refresh:
             if text.upper() == "PRESS":
+                if (
+                    self.ups_refresh_in_progress.is_set()
+                    or self.ups_refresh_requested.is_set()
+                ):
+                    return True
                 self.ups_refresh_requested.set()
                 return True
             return False
@@ -444,6 +460,29 @@ class MqttBridge(MqttEvents):
     def publish_ups_scan_state(self, payload: dict[str, object]) -> bool:
         return self._publish(
             self.topics.ups_scan_state,
+            json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+            retain=True,
+        )
+
+    def publish_refresh_operation(self, payload: dict[str, object]) -> bool:
+        return self._publish(
+            self.topics.refresh_operation,
+            json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+            retain=True,
+        )
+
+    def publish_ups_scan_operation(self, payload: dict[str, object]) -> bool:
+        return self._publish(
+            self.topics.ups_scan_operation,
+            json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+            retain=True,
+        )
+
+    def publish_ups_refresh_operation(self, payload: dict[str, object]) -> bool:
+        if self.ups_topics is None:
+            return False
+        return self._publish(
+            self.ups_topics.refresh_operation,
             json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
             retain=True,
         )
