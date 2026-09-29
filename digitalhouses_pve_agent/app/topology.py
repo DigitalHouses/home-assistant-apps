@@ -574,8 +574,21 @@ class TopologyManager:
 
         qga = dict(self._snapshot.qga)
         for guest_id, guest in current_vms.items():
+            config = self._vm_configs.get(guest_id, "")
             if guest.status != "running" and guest_id in qga:
-                qga[guest_id] = "unavailable" if _agent_enabled(self._vm_configs.get(guest_id, "")) else "disabled"
+                qga[guest_id] = "unavailable" if _agent_enabled(config) else "disabled"
+                continue
+
+            if (
+                guest.status == "running"
+                and qga.get(guest_id) == "unavailable"
+                and _agent_enabled(config)
+            ):
+                recovered = self._qga_state(guest, config)
+                qga[guest_id] = recovered
+                if recovered == "available":
+                    devices = parse_hostpci(config, self._pci_catalog)
+                    self._probe_guest_storage(guest, devices, recovered)
 
         self._snapshot = self._compose_snapshot(current_vms, current_lxcs, qga)
 
