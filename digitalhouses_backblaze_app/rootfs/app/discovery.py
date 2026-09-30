@@ -9,6 +9,8 @@ DEVICE_ID = "digitalhouses_backblaze"
 DEVICE_NAME = "DH Backblaze"
 BASE_TOPIC = "DigitalHouses/Global/backblaze"
 STATE_TOPIC = f"{BASE_TOPIC}/state"
+STORAGE_TREE_TOPIC = f"{BASE_TOPIC}/storage_tree"
+REFRESH_OPERATION_TOPIC = f"{BASE_TOPIC}/refresh/operation"
 APP_AVAILABILITY_TOPIC = f"{BASE_TOPIC}/availability"
 DATA_AVAILABILITY_TOPIC = f"{BASE_TOPIC}/data_availability"
 API_OBSERVED_TOPIC = f"{BASE_TOPIC}/api_observed"
@@ -183,6 +185,49 @@ def build_discovery_payload(
             data_required=True,
             device_class="timestamp",
             icon="mdi:cloud-sync-outline",
+        ),
+        "storage_tree": _component(
+            "sensor",
+            "Storage tree",
+            "storage_tree",
+            "sensor.dh_backblaze_storage_tree",
+            "{{ value_json.folder_count }}",
+            state_topic=STORAGE_TREE_TOPIC,
+            data_required=True,
+            state_class="measurement",
+            icon="mdi:file-tree-outline",
+            json_attributes_topic=STORAGE_TREE_TOPIC,
+            json_attributes_template=(
+                "{{ {'generated_at': value_json.generated_at | default(none), "
+                "'buckets': value_json.buckets | default([])} | tojson }}"
+            ),
+        ),
+        "last_refresh": _component(
+            "sensor",
+            "Last refresh",
+            "last_refresh",
+            "sensor.dh_backblaze_last_refresh",
+            "{{ value_json.last_refresh }}",
+            diagnostic=True,
+            device_class="timestamp",
+            icon="mdi:clock-check-outline",
+        ),
+        "refresh_state": _component(
+            "sensor",
+            "Refresh state",
+            "refresh_state",
+            "sensor.dh_backblaze_refresh_state",
+            "{{ value_json.state | default('idle') }}",
+            state_topic=REFRESH_OPERATION_TOPIC,
+            diagnostic=True,
+            icon="mdi:progress-clock",
+            json_attributes_topic=REFRESH_OPERATION_TOPIC,
+            json_attributes_template=(
+                "{{ {'started_at': value_json.started_at | default(none), "
+                "'finished_at': value_json.finished_at | default(none), "
+                "'duration_seconds': value_json.duration_seconds | default(none), "
+                "'error': value_json.error | default(none)} | tojson }}"
+            ),
         ),
         "api_connected": _component(
             "binary_sensor",
