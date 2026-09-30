@@ -43,6 +43,7 @@ class SpeedtestTests(unittest.TestCase):
         self.assertEqual(result["server"], "Example Server — Almaty, Kazakhstan")
         self.assertEqual(result["status"], "idle")
         self.assertEqual(result["last_result"], "success")
+        self.assertEqual(result["automatic_failure_streak"], 0)
         self.assertIsNotNone(result["tested_at"])
 
     def test_optional_metadata_is_null_when_absent(self) -> None:
@@ -87,6 +88,27 @@ class SpeedtestTests(unittest.TestCase):
             state = load_last_result(path)
             self.assertEqual(state["status"], "idle")
             self.assertEqual(state["last_result"], "success")
+            self.assertEqual(state["automatic_failure_streak"], 0)
+
+    def test_persisted_automatic_failure_streak_is_loaded(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "speedtest.json"
+            path.write_text(
+                json.dumps({"automatic_failure_streak": 4}),
+                encoding="utf-8",
+            )
+            state = load_last_result(path)
+            self.assertEqual(state["automatic_failure_streak"], 4)
+
+    def test_invalid_automatic_failure_streak_fails_loudly(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "speedtest.json"
+            path.write_text(
+                json.dumps({"automatic_failure_streak": -1}),
+                encoding="utf-8",
+            )
+            with self.assertRaises(ContractDataError):
+                load_last_result(path)
 
     def test_parse_server_list(self) -> None:
         servers = parse_server_list(

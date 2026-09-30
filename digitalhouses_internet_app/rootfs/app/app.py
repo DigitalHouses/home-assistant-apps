@@ -297,6 +297,7 @@ class InternetApp:
         elif payload == "RUN_SPEEDTEST":
             threading.Thread(
                 target=self._run_speedtest,
+                kwargs={"source": "manual"},
                 name="speedtest-manual",
                 daemon=True,
             ).start()
@@ -710,7 +711,22 @@ class InternetApp:
         finally:
             self.speedtest_lock.release()
 
-    def _run_speedtest(self) -> None:
+    def _record_speedtest_failure(self, reason: str, *, source: str) -> None:
+        with self.lock:
+            if source == "automatic":
+                self.speedtest["automatic_failure_streak"] += 1
+                save_last_result(SPEEDTEST_FILE, self.speedtest)
+            streak = self.speedtest["automatic_failure_streak"]
+        self._event(
+            "speedtest_failed",
+            reason=reason,
+            source=source,
+            automatic_failure_streak=streak,
+        )
+
+    def _run_speedtest(self, *, source: str) -> None:
+        if source not in {"manual", "automatic"}:
+            raise ValueError(f"Unsupported Speedtest source: {source}")
         if not self.speedtest_lock.acquire(blocking=False):
             self.log.info("Speedtest is already running")
             return
@@ -727,7 +743,7 @@ class InternetApp:
                     error=message,
                     last_result="error",
                 )
-                self._event("speedtest_failed", reason=message)
+                self._record_speedtest_failure(message, source=source)
                 self.log.error("Speedtest connectivity probe failed: %s", exc)
                 return
             with self.lock:
@@ -772,7 +788,7 @@ class InternetApp:
                     error=message,
                     last_result="error",
                 )
-                self._event("speedtest_failed", reason=message)
+                self._record_speedtest_failure(message, source=source)
                 return
 
             with self.lock:
@@ -816,7 +832,7 @@ class InternetApp:
         interval = self.config.speedtest.interval_seconds
         self.log.info("Periodic Speedtest interval: %s minutes", interval // 60)
         while not self.stop_app.wait(interval):
-            self._run_speedtest()
+            self._run_speedtest(source="automatic")
 
     def _recovery_worker(self) -> None:
         cfg = self.config.recovery

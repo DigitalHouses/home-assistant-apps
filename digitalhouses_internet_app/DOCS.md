@@ -34,6 +34,8 @@ Graphable entities are Download, Upload, Ping, Jitter and Packet loss. Provider,
 
 The Speedtest status is an execution-state sensor: it is normally `idle`, becomes `running` while Ookla is executing, then returns to `idle`. The `last_result` attribute records `success`, `error` or `no_connectivity`. A failed or skipped test does not overwrite the last successful measurements, which remain persisted under `/data/runtime`.
 
+Before every manual or periodic Speedtest, the App performs a fresh connectivity probe. If Internet is unavailable, Ookla is not started and the skip does not advance the automatic failure streak. Automatic execution failures are counted persistently across App restarts; a successful manual or automatic Speedtest resets the streak to zero. Every failure remains available as a machine event/log record, but the reference notification packages alert only on the fifth consecutive automatic failure and do not repeat the alert for failures 6, 7, and later. A failed manual Speedtest is notified immediately.
+
 ### Server selection
 
 `speedtest.server_ids` is an ordered list of preferred Ookla server IDs. Empty means automatic selection. Configured IDs are tried in order; when `automatic_server_fallback` is enabled, one final automatic-selection attempt follows them.

@@ -34,7 +34,7 @@ All recovery timing belongs to App configuration: maximum cycles, retry interval
 
 ## Current product state
 
-Version `0.1.19` keeps immutable GHCR delivery and hardens runtime contract handling. The canonical Supervisor identity is permanent, the temporary migration runtime has been removed, and the App remains stable in Home Assistant. The product provides:
+Version `0.1.20` keeps immutable GHCR delivery and adds persistent suppression of transient automatic Speedtest failures. The canonical Supervisor identity is permanent, the temporary migration runtime has been removed, and the App remains stable in Home Assistant. The product provides:
 
 - Internet and router reachability;
 - current-month outage state persisted under `/data`;

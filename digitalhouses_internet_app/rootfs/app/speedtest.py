@@ -27,6 +27,7 @@ def default_speedtest_state() -> dict[str, Any]:
         "result_url": None,
         "tested_at": None,
         "error": None,
+        "automatic_failure_streak": 0,
     }
 
 
@@ -91,6 +92,17 @@ def load_last_result(path: Path) -> dict[str, Any]:
             "speedtest.tested_at must be a non-empty string or null"
         )
     state["tested_at"] = tested_at
+
+    automatic_failure_streak = raw.get("automatic_failure_streak", 0)
+    if (
+        isinstance(automatic_failure_streak, bool)
+        or not isinstance(automatic_failure_streak, int)
+        or automatic_failure_streak < 0
+    ):
+        raise ContractDataError(
+            "speedtest.automatic_failure_streak must be a non-negative integer"
+        )
+    state["automatic_failure_streak"] = automatic_failure_streak
 
     last_result = raw.get("last_result")
     if last_result is not None and last_result not in {
@@ -189,6 +201,7 @@ def parse_result(payload: Any) -> dict[str, Any]:
         ),
         "tested_at": iso(now_local()),
         "error": None,
+        "automatic_failure_streak": 0,
     }
 
 

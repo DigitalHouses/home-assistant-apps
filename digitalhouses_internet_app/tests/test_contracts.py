@@ -67,6 +67,8 @@ VALID_EVENTS = {
     "speedtest_failed": payload(
         "speedtest_failed",
         reason="Ookla exited with code 1",
+        source="automatic",
+        automatic_failure_streak=5,
     ),
     "performance_problem_started": payload(
         "performance_problem_started",

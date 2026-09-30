@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.20
+
+- Persist the consecutive automatic Speedtest failure streak across App restarts and reset it after any successful manual or automatic Speedtest.
+- Keep the pre-Speedtest connectivity guard authoritative: confirmed Internet unavailability skips Ookla entirely and does not advance the automatic failure streak.
+- Tag Speedtest failure machine events with the execution source and current automatic failure streak.
+- Keep every Speedtest failure available in the machine event/log path while suppressing user notification for automatic failures 1–4 and 6+; the reference notification packages alert exactly on the fifth consecutive automatic failure.
+- Keep failed manual Speedtest notifications immediate.
+
 ## 0.1.19
 
 - Enforce the released App version as required runtime contract data; remove `unknown` and stale local version fallbacks.
