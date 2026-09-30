@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.15
+
+- Pin account Total used and all per-bucket used sensors to decimal GB presentation by removing the `data_size` device class that caused Home Assistant to preserve and auto-convert the previous GiB display unit.
+- Advance the one-time MQTT Device Discovery schema to v6 so existing installations re-read the fixed GB sensor contract.
+- Keep entity IDs, MQTT topics, state class, Recorder scope, decimal values, and storage-tree semantics unchanged.
+
 ## 0.1.14
 
 - Force a one-time MQTT Device Discovery schema reset after the GiB-to-GB storage-unit migration.
