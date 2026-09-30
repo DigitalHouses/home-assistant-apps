@@ -9,6 +9,7 @@ This directory separates ecosystem-wide standards from product-specific engineer
 - [DigitalHouses Contract Data Policy](standards/CONTRACT_DATA_POLICY.md) — required/optional runtime data semantics, explicit contract failures, and repository-wide prohibition of silent fallback across contract boundaries.
 - [DigitalHouses Events & Notifications Standard](standards/EVENTS_AND_NOTIFICATIONS_STANDARD.md) — machine events from the public product; direct local Home Assistant routing via `trigger.id` → `choose` → final delivery action.
 - [DigitalHouses Manual Refresh Standard](standards/MANUAL_REFRESH_STANDARD.md) — unified product-level Refresh semantics, runtime-owned progress/error state, success-only last-refresh timestamp, and duplicate suppression.
+- [DigitalHouses Operation UI Standard](standards/OPERATION_UI_STANDARD.md) — common action-card UX for long-running operations: runtime-owned `idle/updating/error`, live progress/error presentation, and no frontend timers.
 - [DigitalHouses Release Policy](standards/RELEASE_POLICY.md) — product versions, release tags, GitHub Releases, immutable artifacts, and release provenance.
 - [Immutable Delivery, Compact Backup and Telemetry Standard](standards/IMMUTABLE_DELIVERY_AND_TELEMETRY_STANDARD.md) — mandatory target architecture and rollout for all current DigitalHouses products.
 - [DigitalHouses Product Telemetry Policy](standards/PRODUCT_TELEMETRY_POLICY.md) — consent, privacy, retained-history lifecycle, deletion, and telemetry boundaries.
