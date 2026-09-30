@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.14
+
+- Force a one-time MQTT Device Discovery schema reset after the GiB-to-GB storage-unit migration.
+- Recreate Backblaze storage sensors from the GB-native Discovery contract so Home Assistant does not preserve the previous GiB display unit in the entity registry.
+- Keep existing entity IDs, MQTT topics, Recorder scope, decimal GB values, and storage-tree semantics unchanged.
+
 ## 0.1.13
 
 - Display account Total used and all per-bucket used sensors in decimal GB (`bytes / 1,000,000,000`) to match the Backblaze B2 web UI and the storage tree.
