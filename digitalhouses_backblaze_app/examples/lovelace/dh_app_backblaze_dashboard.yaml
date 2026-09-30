@@ -6,6 +6,7 @@
 # - dh_app_backblaze_package.yaml
 # - Mushroom cards
 # - auto-entities
+# - card-mod
 #
 # Recorder history for the daily chart:
 # - sensor.dh_backblaze_storage_used
@@ -82,23 +83,63 @@ sections:
           columns: 12
 
       - type: custom:mushroom-template-card
-        entity: button.dh_backblaze_refresh
-        primary: Refresh
-        secondary: >-
-          {% set ts = states('sensor.dh_backblaze_last_update') %}
-          {% if ts not in ['unknown', 'unavailable', 'none', ''] %}
-            Last update:
-            {{ as_timestamp(ts) | timestamp_custom('%d.%m.%Y %H:%M:%S', true) }}
+        entity: sensor.dh_backblaze_refresh_state
+        primary: >-
+          {% set state = states(entity) %}
+          {% if state == 'updating' %}
+            Обновление…
+          {% elif state == 'error' %}
+            Ошибка обновления
           {% else %}
-            No update data
+            Обновить всё
           {% endif %}
-        icon: mdi:refresh
-        icon_color: blue
+        secondary: >-
+          {% set state = states(entity) %}
+          {% if state == 'updating' %}
+            Полное сканирование Backblaze B2
+          {% elif state == 'error' %}
+            {{ state_attr(entity, 'error') or 'Не удалось обновить Backblaze' }}
+          {% else %}
+            {% set last = states('sensor.dh_backblaze_last_refresh') %}
+            {% if last not in ['unknown', 'unavailable', 'none', ''] %}
+              Последнее ручное:
+              {{ as_timestamp(last)
+                | timestamp_custom('%d.%m.%Y %H:%M:%S', true) }}
+            {% else %}
+              Ручное обновление ещё не выполнялось
+            {% endif %}
+          {% endif %}
+        icon: >-
+          {% if is_state(entity, 'updating') %}
+            mdi:progress-clock
+          {% elif is_state(entity, 'error') %}
+            mdi:alert-circle
+          {% else %}
+            mdi:refresh
+          {% endif %}
+        icon_color: >-
+          {% if is_state(entity, 'updating') %}
+            grey
+          {% elif is_state(entity, 'error') %}
+            red
+          {% else %}
+            blue
+          {% endif %}
         tap_action:
           action: perform-action
           perform_action: button.press
           target:
             entity_id: button.dh_backblaze_refresh
+          confirmation:
+            text: Обновить все данные DH Backblaze App?
+        card_mod:
+          style: |
+            ha-card {
+              {% if is_state('sensor.dh_backblaze_refresh_state', 'updating') %}
+                background: var(--secondary-background-color) !important;
+                opacity: 0.78;
+              {% endif %}
+            }
         grid_options:
           columns: 12
 
@@ -108,6 +149,122 @@ sections:
         heading: Buckets
         heading_style: title
         icon: mdi:bucket-multiple-outline
+
+
+      - type: markdown
+        content: >-
+          {%- set entity = 'sensor.dh_backblaze_storage_tree' -%}
+          {%- set buckets = state_attr(entity, 'buckets') or [] -%}
+          {%- set ns = namespace(lines=['Backblaze B2']) -%}
+
+          {%- for bucket in buckets -%}
+            {%- set bucket_last = loop.last -%}
+            {%- set bucket_branch = '└─' if bucket_last else '├─' -%}
+            {%- set bucket_bytes = bucket.current_bytes | int(0) -%}
+            {%- if bucket_bytes >= 1073741824 -%}
+              {%- set bucket_size =
+                ('%.1f' | format(bucket_bytes / 1073741824)) ~ ' GiB'
+              -%}
+            {%- elif bucket_bytes >= 1048576 -%}
+              {%- set bucket_size =
+                ('%.1f' | format(bucket_bytes / 1048576)) ~ ' MiB'
+              -%}
+            {%- else -%}
+              {%- set bucket_size =
+                ('%.1f' | format(bucket_bytes / 1024)) ~ ' KiB'
+              -%}
+            {%- endif -%}
+
+            {%- set ns.lines = ns.lines + [
+              bucket_branch ~ ' ' ~ bucket.bucket_name ~
+              ' · ' ~ bucket_size ~
+              ' · ' ~ (bucket.current_files | int(0)) ~ ' files'
+            ] -%}
+
+            {%- set folders = bucket.folders or [] -%}
+            {%- set base = '   ' if bucket_last else '│  ' -%}
+
+            {%- for folder in folders -%}
+              {%- set folder_last = loop.last -%}
+              {%- set folder_branch = '└─' if folder_last else '├─' -%}
+              {%- set detail_prefix =
+                base ~ ('   ' if folder_last else '│  ')
+              -%}
+              {%- set folder_bytes = folder.current_bytes | int(0) -%}
+
+              {%- if folder_bytes >= 1073741824 -%}
+                {%- set folder_size =
+                  ('%.1f' | format(folder_bytes / 1073741824)) ~ ' GiB'
+                -%}
+              {%- elif folder_bytes >= 1048576 -%}
+                {%- set folder_size =
+                  ('%.1f' | format(folder_bytes / 1048576)) ~ ' MiB'
+                -%}
+              {%- elif folder_bytes >= 1024 -%}
+                {%- set folder_size =
+                  ('%.1f' | format(folder_bytes / 1024)) ~ ' KiB'
+                -%}
+              {%- else -%}
+                {%- set folder_size = folder_bytes ~ ' B' -%}
+              {%- endif -%}
+
+              {%- set last = folder.last_upload -%}
+              {%- if last -%}
+                {%- set age =
+                  [0, (as_timestamp(now()) - as_timestamp(last)) | int] | max
+                -%}
+                {%- if age < 3600 -%}
+                  {%- set age_text = (age // 60) ~ ' мин назад' -%}
+                {%- elif age < 86400 -%}
+                  {%- set age_text = (age // 3600) ~ ' ч назад' -%}
+                {%- else -%}
+                  {%- set age_text = (age // 86400) ~ ' д назад' -%}
+                {%- endif -%}
+              {%- else -%}
+                {%- set age_text = 'нет времени загрузки' -%}
+              {%- endif -%}
+
+              {%- set folder_name =
+                'root' if folder.name == '(root)' else folder.name
+              -%}
+
+              {%- set ns.lines = ns.lines + [
+                base ~ folder_branch ~ ' ' ~ folder_name,
+                detail_prefix ~ '└─ ' ~ folder_size ~
+                ' · ' ~ (folder.current_files | int(0)) ~
+                ' files · ' ~ age_text
+              ] -%}
+            {%- endfor -%}
+
+            {%- if folders | count == 0 -%}
+              {%- set ns.lines = ns.lines + [
+                base ~ '└─ нет текущих файлов'
+              ] -%}
+            {%- endif -%}
+          {%- endfor -%}
+
+          {% if is_state('sensor.dh_backblaze_refresh_state', 'updating') %}
+          **Обновление…** Показан последний успешный snapshot.
+
+          {% elif is_state('sensor.dh_backblaze_refresh_state', 'error') %}
+          **Ошибка обновления.** Показан последний успешный snapshot.
+
+          {% endif %}
+          {% if buckets | count == 0 %}
+          Нет данных о структуре bucket.
+          {% else %}
+          {{ '~~~text\n' ~ (ns.lines | join('\n')) ~ '\n~~~' }}
+          {% endif %}
+        card_mod:
+          style: |
+            ha-card {
+              {% if is_state('sensor.dh_backblaze_refresh_state', 'updating') %}
+                background: var(--secondary-background-color) !important;
+                opacity: 0.78;
+              {% endif %}
+            }
+        grid_options:
+          columns: 12
 
       - type: custom:auto-entities
         show_empty: true
