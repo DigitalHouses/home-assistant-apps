@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.13
+
+- Display account Total used and all per-bucket used sensors in decimal GB (`bytes / 1,000,000,000`) to match the Backblaze B2 web UI and the storage tree.
+- Preserve all existing entity IDs, MQTT topics, Recorder scope, and one-decimal display precision.
+- Keep the storage-tree raw attributes in absolute bytes and its dashboard presentation in decimal GB/MB/KB.
+
 ## 0.1.12
 
 - Add one `sensor.dh_backblaze_storage_tree` overview entity with bucket and first-level folder data in attributes.
