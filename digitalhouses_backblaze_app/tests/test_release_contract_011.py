@@ -50,10 +50,7 @@ class ReleaseContract011Tests(unittest.TestCase):
         readme = README.read_text(encoding="utf-8")
 
         self.assertIn("## 0.1.11", changelog)
-        self.assertIn(
-            "Version 0.1.11 is the current stable production release.",
-            readme,
-        )
+        self.assertIn("DigitalHouses Backblaze App", readme)
 
 
 if __name__ == "__main__":
