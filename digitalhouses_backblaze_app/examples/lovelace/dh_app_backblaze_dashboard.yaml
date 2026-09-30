@@ -161,17 +161,17 @@ sections:
             {%- set bucket_last = loop.last -%}
             {%- set bucket_branch = '└─' if bucket_last else '├─' -%}
             {%- set bucket_bytes = bucket.current_bytes | int(0) -%}
-            {%- if bucket_bytes >= 1073741824 -%}
+            {%- if bucket_bytes >= 1000000000 -%}
               {%- set bucket_size =
-                ('%.1f' | format(bucket_bytes / 1073741824)) ~ ' GiB'
+                ('%.1f' | format(bucket_bytes / 1000000000)) ~ ' GB'
               -%}
-            {%- elif bucket_bytes >= 1048576 -%}
+            {%- elif bucket_bytes >= 1000000 -%}
               {%- set bucket_size =
-                ('%.1f' | format(bucket_bytes / 1048576)) ~ ' MiB'
+                ('%.1f' | format(bucket_bytes / 1000000)) ~ ' MB'
               -%}
             {%- else -%}
               {%- set bucket_size =
-                ('%.1f' | format(bucket_bytes / 1024)) ~ ' KiB'
+                ('%.1f' | format(bucket_bytes / 1000)) ~ ' KB'
               -%}
             {%- endif -%}
 
@@ -192,17 +192,17 @@ sections:
               -%}
               {%- set folder_bytes = folder.current_bytes | int(0) -%}
 
-              {%- if folder_bytes >= 1073741824 -%}
+              {%- if folder_bytes >= 1000000000 -%}
                 {%- set folder_size =
-                  ('%.1f' | format(folder_bytes / 1073741824)) ~ ' GiB'
+                  ('%.1f' | format(folder_bytes / 1000000000)) ~ ' GB'
                 -%}
-              {%- elif folder_bytes >= 1048576 -%}
+              {%- elif folder_bytes >= 1000000 -%}
                 {%- set folder_size =
-                  ('%.1f' | format(folder_bytes / 1048576)) ~ ' MiB'
+                  ('%.1f' | format(folder_bytes / 1000000)) ~ ' MB'
                 -%}
-              {%- elif folder_bytes >= 1024 -%}
+              {%- elif folder_bytes >= 1000 -%}
                 {%- set folder_size =
-                  ('%.1f' | format(folder_bytes / 1024)) ~ ' KiB'
+                  ('%.1f' | format(folder_bytes / 1000)) ~ ' KB'
                 -%}
               {%- else -%}
                 {%- set folder_size = folder_bytes ~ ' B' -%}
@@ -243,18 +243,12 @@ sections:
             {%- endif -%}
           {%- endfor -%}
 
-          {% if is_state('sensor.dh_backblaze_refresh_state', 'updating') %}
-          **Обновление…** Показан последний успешный snapshot.
+          {%- if buckets | count == 0 -%}
+            {%- set ns.lines = ['Backblaze B2', '└─ Нет данных'] -%}
+          {%- endif -%}
 
-          {% elif is_state('sensor.dh_backblaze_refresh_state', 'error') %}
-          **Ошибка обновления.** Показан последний успешный snapshot.
-
-          {% endif %}
-          {% if buckets | count == 0 %}
-          Нет данных о структуре bucket.
-          {% else %}
-          {{ '~~~text\n' ~ (ns.lines | join('\n')) ~ '\n~~~' }}
-          {% endif %}
+          <pre style="margin:0; padding:0; line-height:1; font-family:'Courier
+          New',monospace; white-space:pre;">{{ ns.lines | join('\n') }}</pre>
         card_mod:
           style: |
             ha-card {
