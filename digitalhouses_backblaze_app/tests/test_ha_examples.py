@@ -46,6 +46,17 @@ class HomeAssistantExamplesTests(unittest.TestCase):
         self.assertIn("Обновление…", text)
         self.assertIn("background: var(--secondary-background-color)", text)
         self.assertIn("button.dh_backblaze_refresh", text)
+        self.assertIn("1000000000", text)
+        self.assertIn("1000000", text)
+        self.assertIn("~ ' GB'", text)
+        self.assertIn("~ ' MB'", text)
+        self.assertIn("~ ' KB'", text)
+        self.assertNotIn("GiB", text)
+        self.assertNotIn("MiB", text)
+        self.assertNotIn("KiB", text)
+        self.assertIn("<pre style=", text)
+        self.assertIn("line-height:1", text)
+        self.assertNotIn("~~~text", text)
 
 
     def test_dashboard_uses_account_totals_and_dynamic_buckets(self):
