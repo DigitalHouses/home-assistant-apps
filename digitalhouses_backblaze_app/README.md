@@ -6,7 +6,7 @@ The App authorizes against the Backblaze B2 Native API v4, discovers all buckets
 
 ## Status
 
-Version 0.1.13 is the current stable production release.
+Version 0.1.14 is the current stable production release.
 
 ## Backblaze key
 
@@ -34,7 +34,7 @@ Account entities include:
 - sensor.dh_backblaze_app_version
 - sensor.dh_backblaze_app_started_at
 
-Every discovered bucket also gets used, files, and versions sensors under the same Home Assistant device. Account and bucket storage sensors use decimal GB (`bytes / 1,000,000,000`) with one decimal place, matching the Backblaze B2 web UI.
+Every discovered bucket also gets used, files, and versions sensors under the same Home Assistant device. Account and bucket storage sensors use decimal GB (`bytes / 1,000,000,000`) with one decimal place, matching the Backblaze B2 web UI. Version 0.1.14 performs a one-time Discovery reset so existing installations also adopt GB instead of retaining the previous GiB display unit.
 
 ## Home Assistant package
 
