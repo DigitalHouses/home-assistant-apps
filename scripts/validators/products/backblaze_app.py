@@ -128,7 +128,7 @@ def validate_backblaze(
     if components["total_used"].get("name") != "Total used":
         fail("Backblaze account storage sensor must be named Total used")
     if components["total_used"].get("value_template") != (
-        "{{ (value_json.stored_bytes / 1073741824) | round(1) }}"
+        "{{ (value_json.stored_bytes / 1000000000) | round(1) }}"
     ):
         fail("Backblaze Total used must consume the pre-aggregated account total")
 
@@ -147,8 +147,8 @@ def validate_backblaze(
             fail(f"Backblaze primary entity must not have entity_category: {key}")
 
     for key in ("total_used", "bucket_bucket-id_used"):
-        if components[key].get("unit_of_measurement") != "GiB":
-            fail(f"Backblaze storage unit changed: {key}")
+        if components[key].get("unit_of_measurement") != "GB":
+            fail(f"Backblaze storage unit must be decimal GB: {key}")
         if components[key].get("suggested_display_precision") != 1:
             fail(f"Backblaze storage precision changed: {key}")
         if components[key].get("json_attributes_topic") is not None:
