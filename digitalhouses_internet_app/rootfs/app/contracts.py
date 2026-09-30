@@ -11,6 +11,7 @@ _REASON_VALUES = {"low_download", "low_upload", "high_ping"}
 _TARGET_VALUES = {"ont", "router"}
 _ACTION_VALUES = {"button", "switch"}
 _MODE_VALUES = {"smart", "both"}
+_SPEEDTEST_SOURCE_VALUES = {"manual", "automatic"}
 
 
 def _is_bool(value: Any) -> bool:
@@ -106,6 +107,8 @@ _EVENT_FIELDS: dict[str, dict[str, Validator]] = {
     },
     "speedtest_failed": {
         "reason": _is_nonempty_string,
+        "source": _is_enum(_SPEEDTEST_SOURCE_VALUES),
+        "automatic_failure_streak": lambda value: _is_int(value, minimum=0),
     },
     "performance_problem_started": {
         "reasons": lambda value: _is_string_list(
