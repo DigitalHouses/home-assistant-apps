@@ -34,6 +34,20 @@ class HomeAssistantExamplesTests(unittest.TestCase):
         self.assertIn("days_to_show: 30", text)
         self.assertIn("- max", text)
 
+    def test_dashboard_renders_storage_tree_and_runtime_refresh_state(self):
+        text = DASHBOARD.read_text(encoding="utf-8")
+
+        self.assertIn("sensor.dh_backblaze_storage_tree", text)
+        self.assertIn("state_attr(entity, 'buckets')", text)
+        self.assertIn("Backblaze B2", text)
+        self.assertIn("folder.last_upload", text)
+        self.assertIn("sensor.dh_backblaze_refresh_state", text)
+        self.assertIn("sensor.dh_backblaze_last_refresh", text)
+        self.assertIn("Обновление…", text)
+        self.assertIn("background: var(--secondary-background-color)", text)
+        self.assertIn("button.dh_backblaze_refresh", text)
+
+
     def test_dashboard_uses_account_totals_and_dynamic_buckets(self):
         text = DASHBOARD.read_text(encoding="utf-8")
 
