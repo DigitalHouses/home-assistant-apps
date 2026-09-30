@@ -11,6 +11,8 @@ from discovery import (
     BASE_TOPIC,
     DATA_AVAILABILITY_TOPIC,
     DISCOVERY_SCHEMA_VERSION,
+    REFRESH_OPERATION_TOPIC,
+    STORAGE_TREE_TOPIC,
     bucket_state_topic,
     build_discovery_payload,
     discovery_cleanup_payload,
@@ -84,6 +86,40 @@ class DiscoveryTests(unittest.TestCase):
         self.assertEqual(
             components["telemetry_delete"]["default_entity_id"],
             "button.dh_backblaze_delete_telemetry",
+        )
+
+        self.assertEqual(
+            components["storage_tree"]["default_entity_id"],
+            "sensor.dh_backblaze_storage_tree",
+        )
+        self.assertEqual(
+            components["storage_tree"]["state_topic"],
+            STORAGE_TREE_TOPIC,
+        )
+        self.assertEqual(
+            components["storage_tree"]["json_attributes_topic"],
+            STORAGE_TREE_TOPIC,
+        )
+        self.assertNotIn("entity_category", components["storage_tree"])
+        self.assertEqual(
+            components["last_refresh"]["default_entity_id"],
+            "sensor.dh_backblaze_last_refresh",
+        )
+        self.assertEqual(
+            components["last_refresh"]["device_class"],
+            "timestamp",
+        )
+        self.assertEqual(
+            components["refresh_state"]["default_entity_id"],
+            "sensor.dh_backblaze_refresh_state",
+        )
+        self.assertEqual(
+            components["refresh_state"]["state_topic"],
+            REFRESH_OPERATION_TOPIC,
+        )
+        self.assertEqual(
+            components["refresh_state"]["json_attributes_topic"],
+            REFRESH_OPERATION_TOPIC,
         )
 
     def test_bucket_entities_are_dynamic_and_named(self):
@@ -167,6 +203,19 @@ class DiscoveryTests(unittest.TestCase):
             bucket_topics,
             {APP_AVAILABILITY_TOPIC, DATA_AVAILABILITY_TOPIC},
         )
+
+        tree_topics = {
+            item["topic"] for item in components["storage_tree"]["availability"]
+        }
+        self.assertEqual(
+            tree_topics,
+            {APP_AVAILABILITY_TOPIC, DATA_AVAILABILITY_TOPIC},
+        )
+
+        refresh_state_topics = {
+            item["topic"] for item in components["refresh_state"]["availability"]
+        }
+        self.assertEqual(refresh_state_topics, {APP_AVAILABILITY_TOPIC})
 
     def test_dynamic_manifest_survives_restart_and_removes_missing_bucket(self):
         old_payload = build_discovery_payload(
