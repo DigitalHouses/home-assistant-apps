@@ -43,7 +43,7 @@ class DiscoveryTests(unittest.TestCase):
         )
         self.assertEqual(
             components["total_used"]["value_template"],
-            "{{ (value_json.stored_bytes / 1073741824) | round(1) }}",
+            "{{ (value_json.stored_bytes / 1000000000) | round(1) }}",
         )
         self.assertNotIn("entity_category", components["total_used"])
         self.assertNotIn("entity_category", components["bucket_count"])
@@ -56,7 +56,7 @@ class DiscoveryTests(unittest.TestCase):
         self.assertNotIn("entity_category", components["total_versions"])
         self.assertEqual(
             components["total_used"]["unit_of_measurement"],
-            "GiB",
+            "GB",
         )
         self.assertEqual(
             components["total_used"]["suggested_display_precision"],
@@ -133,7 +133,7 @@ class DiscoveryTests(unittest.TestCase):
             used["default_entity_id"],
             "sensor.dh_backblaze_ha_backups_used",
         )
-        self.assertEqual(used["unit_of_measurement"], "GiB")
+        self.assertEqual(used["unit_of_measurement"], "GB")
         self.assertEqual(used["suggested_display_precision"], 1)
         self.assertNotIn("json_attributes_topic", used)
         self.assertNotIn("entity_category", used)
