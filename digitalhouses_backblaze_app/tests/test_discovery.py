@@ -58,6 +58,7 @@ class DiscoveryTests(unittest.TestCase):
             components["total_used"]["unit_of_measurement"],
             "GB",
         )
+        self.assertNotIn("device_class", components["total_used"])
         self.assertEqual(
             components["total_used"]["suggested_display_precision"],
             1,
@@ -134,6 +135,7 @@ class DiscoveryTests(unittest.TestCase):
             "sensor.dh_backblaze_ha_backups_used",
         )
         self.assertEqual(used["unit_of_measurement"], "GB")
+        self.assertNotIn("device_class", used)
         self.assertEqual(used["suggested_display_precision"], 1)
         self.assertNotIn("json_attributes_topic", used)
         self.assertNotIn("entity_category", used)
