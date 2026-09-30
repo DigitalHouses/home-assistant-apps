@@ -19,7 +19,7 @@ REFRESH_COMMAND_TOPIC = f"{BASE_TOPIC}/refresh"
 TELEMETRY_DELETE_COMMAND_TOPIC = f"{BASE_TOPIC}/telemetry/delete"
 HA_STATUS_TOPIC = "homeassistant/status"
 STATE_RETAIN = True
-DISCOVERY_SCHEMA_VERSION = 5
+DISCOVERY_SCHEMA_VERSION = 6
 DISCOVERY_SCHEMA_PATH = Path("/data/discovery_schema_version")
 DISCOVERY_MANIFEST_SCHEMA_VERSION = 1
 DISCOVERY_MANIFEST_PATH = Path("/data/discovery_manifest.json")
@@ -139,7 +139,6 @@ def build_discovery_payload(
             "sensor.dh_backblaze_storage_used",
             "{{ (value_json.stored_bytes / 1000000000) | round(1) }}",
             data_required=True,
-            device_class="data_size",
             state_class="measurement",
             unit_of_measurement="GB",
             suggested_display_precision=1,
@@ -291,7 +290,6 @@ def build_discovery_payload(
             "{{ (value_json.stored_bytes / 1000000000) | round(1) }}",
             state_topic=topic,
             data_required=True,
-            device_class="data_size",
             state_class="measurement",
             unit_of_measurement="GB",
             suggested_display_precision=1,
