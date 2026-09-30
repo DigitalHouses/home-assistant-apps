@@ -70,6 +70,7 @@ class BackblazeMonitorApp:
         self.discovery_sync_lock = threading.RLock()
         self.buckets: list[dict[str, Any]] = []
         self.storage_tree: dict[str, Any] | None = None
+        self.refresh_operation = operation_payload("idle")
         self.last_refresh = load_last_refresh()
         self.has_scan_result = False
         self.last_scan_succeeded = False
@@ -126,7 +127,7 @@ class BackblazeMonitorApp:
         self.publish_text(APP_AVAILABILITY_TOPIC, "online", retain=True)
         self.publish_text(DATA_AVAILABILITY_TOPIC, "offline", retain=True)
         self.publish_text(API_OBSERVED_TOPIC, "offline", retain=True)
-        self.publish_refresh_operation(operation_payload("idle"))
+        self.publish_refresh_operation(self.refresh_operation)
         threading.Thread(
             target=self._sync_discovery_after_connect,
             name="dh-backblaze-discovery-sync",
@@ -333,6 +334,7 @@ class BackblazeMonitorApp:
         *,
         confirm: bool = False,
     ) -> bool:
+        self.refresh_operation = dict(payload)
         return self.publish_json(
             REFRESH_OPERATION_TOPIC,
             payload,
