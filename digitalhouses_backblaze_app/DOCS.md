@@ -23,7 +23,8 @@ Each refresh performs:
 2. b2_list_buckets for all buckets visible to the key.
 3. paginated b2_list_file_versions for every bucket.
 4. aggregation of stored bytes, current visible files, and completed content-bearing versions.
-5. retained MQTT state publication and MQTT Discovery update only from a validated successful scan.
+5. in the same pass, aggregation of current files by the first path segment inside each bucket, including absolute current bytes, current file count, and latest B2 `uploadTimestamp`.
+6. retained MQTT state publication and MQTT Discovery update only from a validated successful scan.
 
 A file hidden by a hide marker remains included in stored bytes while its retained historical upload version exists. It is not counted as a current visible file.
 
@@ -46,6 +47,19 @@ Dynamic bucket Discovery is reconciled against a persistent manifest stored in:
 ```
 
 The manifest advances only after the retained Discovery update is broker-confirmed. Buckets deleted while the App is stopped are therefore removed on the first successful scan after restart.
+
+The first-level storage overview is published as one retained Home Assistant entity:
+
+`sensor.dh_backblaze_storage_tree`
+
+Its state is the number of first-level folder groups. Attributes contain a `buckets` list; each bucket contains its current bytes/files and its first-level `folders`. Each folder exposes `name`, `current_bytes`, `current_files`, and ISO-8601 `last_upload`. Files directly in the bucket root are grouped as `(root)`. No recursive folder tree and no individual file names are published to Home Assistant.
+
+Manual Refresh additionally exposes:
+
+- `sensor.dh_backblaze_refresh_state` — retained `idle | updating | error` plus `started_at`, `finished_at`, `duration_seconds`, and `error`;
+- `sensor.dh_backblaze_last_refresh` — completion time of the last successful manual full Refresh.
+
+Periodic scans never advance `last_refresh`. The last manual Refresh is persisted in `/data/runtime_state.json`. A malformed persistent runtime-state file fails visibly instead of being silently replaced.
 
 ## Product telemetry
 

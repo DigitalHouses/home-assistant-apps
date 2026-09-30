@@ -6,7 +6,7 @@ The App authorizes against the Backblaze B2 Native API v4, discovers all buckets
 
 ## Status
 
-Version 0.1.11 is the current stable production release.
+Version 0.1.12 is the current stable production release.
 
 ## Backblaze key
 
@@ -26,6 +26,9 @@ Account entities include:
 - sensor.dh_backblaze_files
 - sensor.dh_backblaze_versions
 - sensor.dh_backblaze_last_update
+- sensor.dh_backblaze_storage_tree
+- sensor.dh_backblaze_last_refresh
+- sensor.dh_backblaze_refresh_state
 - binary_sensor.dh_backblaze_api
 - button.dh_backblaze_refresh
 - sensor.dh_backblaze_app_version
@@ -62,7 +65,9 @@ Reusable Sections dashboard:
 examples/lovelace/dh_app_backblaze_dashboard.yaml
 ```
 
-The dashboard contains account totals, dynamic bucket cards, diagnostics, manual refresh, and a 30-day daily bar chart for Total used.
+The dashboard contains account totals, a first-level bucket/folder storage tree, dynamic bucket cards, diagnostics, manual refresh, and a 30-day daily bar chart for Total used.
+
+The storage tree is rendered from one `sensor.dh_backblaze_storage_tree` entity. Its attributes contain the current first-level folders for every visible bucket with absolute byte counts, current file counts, and the latest B2 upload timestamp. The sensor is intentionally not included in the Recorder package.
 
 The daily chart uses Home Assistant's native statistics graph:
 
@@ -79,7 +84,9 @@ Recorder history from `dh_app_backblaze_package.yaml` is required for the chart.
 
 ## Refresh model
 
-The App refreshes immediately after start and then every 6 hours by default. The interval is configurable from 1 to 168 hours. Manual refresh is available from Home Assistant.
+The App scans immediately after start and then every 6 hours by default. The interval is configurable from 1 to 168 hours.
+
+Manual Refresh is a separate product-level operation. Home Assistant exposes `sensor.dh_backblaze_refresh_state` with retained `idle`, `updating`, or `error` state plus start/finish timestamps, measured duration, and error detail. `sensor.dh_backblaze_last_refresh` advances only after a successful full manual scan and authoritative MQTT publication; periodic scans do not change it.
 
 ## Storage semantics
 

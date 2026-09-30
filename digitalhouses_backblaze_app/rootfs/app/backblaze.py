@@ -5,6 +5,7 @@ import json
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any, Mapping
 
 AUTHORIZE_URL = "https://api.backblazeb2.com/b2api/v4/b2_authorize_account"
@@ -23,6 +24,14 @@ class AuthorizedAccount:
 
 
 @dataclass(frozen=True)
+class FolderUsage:
+    name: str
+    current_bytes: int
+    current_files: int
+    last_upload: str
+
+
+@dataclass(frozen=True)
 class BucketUsage:
     bucket_id: str
     bucket_name: str
@@ -32,6 +41,7 @@ class BucketUsage:
     current_files: int
     versions: int
     hide_markers: int
+    folders: tuple[FolderUsage, ...]
 
 
 @dataclass(frozen=True)
@@ -236,6 +246,7 @@ class BackblazeClient:
         current_files = 0
         versions = 0
         hide_markers = 0
+        folder_totals: dict[str, dict[str, int]] = {}
         active_name: str | None = None
         current_decided = False
         start_file_name: str | None = None
@@ -303,8 +314,30 @@ class BackblazeClient:
                 if not current_decided and action not in {"start", "folder"}:
                     current_decided = True
                     if content_version:
+                        upload_timestamp = _required_non_negative_int(
+                            item,
+                            "uploadTimestamp",
+                            context=context,
+                        )
                         current_files += 1
                         current_bytes += content_length
+
+                        first_segment = file_name.split("/", 1)[0]
+                        folder_name = first_segment or "(root)"
+                        folder = folder_totals.setdefault(
+                            folder_name,
+                            {
+                                "current_bytes": 0,
+                                "current_files": 0,
+                                "last_upload_ms": 0,
+                            },
+                        )
+                        folder["current_bytes"] += content_length
+                        folder["current_files"] += 1
+                        folder["last_upload_ms"] = max(
+                            folder["last_upload_ms"],
+                            upload_timestamp,
+                        )
 
             next_name_raw = data.get("nextFileName")
             next_id_raw = data.get("nextFileId")
@@ -325,6 +358,22 @@ class BackblazeClient:
             start_file_name = next_name_raw
             start_file_id = next_id_raw
 
+        folders = tuple(
+            FolderUsage(
+                name=name,
+                current_bytes=values["current_bytes"],
+                current_files=values["current_files"],
+                last_upload=datetime.fromtimestamp(
+                    values["last_upload_ms"] / 1000,
+                    tz=timezone.utc,
+                ).isoformat(),
+            )
+            for name, values in sorted(
+                folder_totals.items(),
+                key=lambda item: item[0].casefold(),
+            )
+        )
+
         return BucketUsage(
             bucket_id=bucket_id,
             bucket_name=bucket_name,
@@ -334,6 +383,7 @@ class BackblazeClient:
             current_files=current_files,
             versions=versions,
             hide_markers=hide_markers,
+            folders=folders,
         )
 
     def scan_all(self) -> AccountUsage:

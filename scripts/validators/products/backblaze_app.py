@@ -9,6 +9,8 @@ from validators.common import fail
 EXPECTED_BASE_TOPIC = "DigitalHouses/Global/backblaze"
 EXPECTED_DEVICE_ID = "digitalhouses_backblaze"
 EXPECTED_REFRESH_TOPIC = f"{EXPECTED_BASE_TOPIC}/refresh"
+EXPECTED_REFRESH_OPERATION_TOPIC = f"{EXPECTED_BASE_TOPIC}/refresh/operation"
+EXPECTED_STORAGE_TREE_TOPIC = f"{EXPECTED_BASE_TOPIC}/storage_tree"
 EXPECTED_TELEMETRY_DELETE_TOPIC = f"{EXPECTED_BASE_TOPIC}/telemetry/delete"
 
 
@@ -58,6 +60,11 @@ def validate_backblaze(
         "period: day",
         "days_to_show: 30",
         "- max",
+        "sensor.dh_backblaze_storage_tree",
+        "sensor.dh_backblaze_refresh_state",
+        "sensor.dh_backblaze_last_refresh",
+        "Backblaze B2",
+        "Обновление…",
     ):
         if expected not in dashboard_text:
             fail(f"Backblaze dashboard contract missing: {expected}")
@@ -70,6 +77,10 @@ def validate_backblaze(
         fail("Backblaze discovery device identifier changed")
     if discovery.REFRESH_COMMAND_TOPIC != EXPECTED_REFRESH_TOPIC:
         fail("Backblaze refresh command topic changed")
+    if discovery.REFRESH_OPERATION_TOPIC != EXPECTED_REFRESH_OPERATION_TOPIC:
+        fail("Backblaze refresh operation topic changed")
+    if discovery.STORAGE_TREE_TOPIC != EXPECTED_STORAGE_TREE_TOPIC:
+        fail("Backblaze storage tree topic changed")
     if discovery.TELEMETRY_DELETE_COMMAND_TOPIC != EXPECTED_TELEMETRY_DELETE_TOPIC:
         fail("Backblaze telemetry delete command topic changed")
     if discovery.DATA_AVAILABILITY_TOPIC != f"{EXPECTED_BASE_TOPIC}/data_availability":
@@ -89,6 +100,9 @@ def validate_backblaze(
         "total_files": "sensor.dh_backblaze_files",
         "total_versions": "sensor.dh_backblaze_versions",
         "last_update": "sensor.dh_backblaze_last_update",
+        "storage_tree": "sensor.dh_backblaze_storage_tree",
+        "last_refresh": "sensor.dh_backblaze_last_refresh",
+        "refresh_state": "sensor.dh_backblaze_refresh_state",
         "api_connected": "binary_sensor.dh_backblaze_api",
         "app_version": "sensor.dh_backblaze_app_version",
         "app_started_at": "sensor.dh_backblaze_app_started_at",
@@ -123,6 +137,7 @@ def validate_backblaze(
         "bucket_count",
         "total_files",
         "total_versions",
+        "storage_tree",
         "bucket_bucket-id_used",
         "bucket_bucket-id_files",
         "bucket_bucket-id_versions",
@@ -141,6 +156,8 @@ def validate_backblaze(
 
     diagnostic_components = (
         "last_update",
+        "last_refresh",
+        "refresh_state",
         "api_connected",
         "app_version",
         "app_started_at",
@@ -224,6 +241,11 @@ def validate_backblaze(
         'publish_text(DATA_AVAILABILITY_TOPIC, "offline", retain=True)',
         'publish_text(DATA_AVAILABILITY_TOPIC, "online", retain=True)',
         'publish_text(API_OBSERVED_TOPIC, "online", retain=True)',
+        "self.publish_refresh_operation(self.refresh_operation)",
+        "def refresh(self, *, manual: bool = False) -> bool:",
+        "self.refresh(manual=manual_refresh)",
+        "self.publish_storage_tree()",
+        "self._commit_last_refresh(completed_at)",
     ):
         if expected not in app_source:
             fail(f"Backblaze runtime hardening contract missing: {expected}")
@@ -248,6 +270,9 @@ def validate_backblaze(
         "has unsupported action",
         "contentLength",
         "bucketName",
+        "uploadTimestamp",
+        "class FolderUsage:",
+        "folder_totals",
     ):
         if expected not in b2_source:
             fail(f"Backblaze B2 contract-data validation missing: {expected}")
@@ -258,6 +283,32 @@ def validate_backblaze(
     ):
         if forbidden in b2_source:
             fail(f"Backblaze B2 contract data must not use silent fallback: {forbidden}")
+
+    operation = (app / "rootfs/app/operation_status.py").read_text(
+        encoding="utf-8"
+    )
+    for expected in (
+        'VALID_OPERATION_STATES = frozenset({"idle", "updating", "error"})',
+        "def operation_payload(",
+        '"started_at"',
+        '"finished_at"',
+        '"duration_seconds"',
+        '"error"',
+    ):
+        if expected not in operation:
+            fail(f"Backblaze refresh operation contract missing: {expected}")
+
+    runtime_state = (app / "rootfs/app/runtime_state.py").read_text(
+        encoding="utf-8"
+    )
+    for expected in (
+        'RUNTIME_STATE_PATH = Path("/data/runtime_state.json")',
+        "def load_last_refresh(",
+        "def save_last_refresh(",
+        "Runtime state is not valid JSON",
+    ):
+        if expected not in runtime_state:
+            fail(f"Backblaze runtime-state contract missing: {expected}")
 
     telemetry = (app / "rootfs/app/telemetry.py").read_text(encoding="utf-8")
     required_telemetry_contract = (
