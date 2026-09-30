@@ -23,8 +23,10 @@ from discovery import (
     DISCOVERY_TOPIC,
     HA_STATUS_TOPIC,
     REFRESH_COMMAND_TOPIC,
+    REFRESH_OPERATION_TOPIC,
     STATE_RETAIN,
     STATE_TOPIC,
+    STORAGE_TREE_TOPIC,
     TELEMETRY_DELETE_COMMAND_TOPIC,
     build_discovery_payload,
     discovery_cleanup_payload,
@@ -36,6 +38,8 @@ from discovery import (
     save_discovery_manifest,
     bucket_state_topic,
 )
+from operation_status import operation_payload
+from runtime_state import load_last_refresh, save_last_refresh
 from telemetry import TelemetryClient, TelemetryRunner
 
 APP_VERSION_RE = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
@@ -65,6 +69,8 @@ class BackblazeMonitorApp:
         self.state_lock = threading.RLock()
         self.discovery_sync_lock = threading.RLock()
         self.buckets: list[dict[str, Any]] = []
+        self.storage_tree: dict[str, Any] | None = None
+        self.last_refresh = load_last_refresh()
         self.has_scan_result = False
         self.last_scan_succeeded = False
         self.discovery_manifest_invalid = False
@@ -85,6 +91,7 @@ class BackblazeMonitorApp:
             "current_files": 0,
             "versions": 0,
             "last_update": None,
+            "last_refresh": self.last_refresh,
             "app_version": APP_VERSION,
             "app_started_at": self.started_at,
         }
@@ -119,6 +126,7 @@ class BackblazeMonitorApp:
         self.publish_text(APP_AVAILABILITY_TOPIC, "online", retain=True)
         self.publish_text(DATA_AVAILABILITY_TOPIC, "offline", retain=True)
         self.publish_text(API_OBSERVED_TOPIC, "offline", retain=True)
+        self.publish_refresh_operation(operation_payload("idle"))
         threading.Thread(
             target=self._sync_discovery_after_connect,
             name="dh-backblaze-discovery-sync",
@@ -154,6 +162,7 @@ class BackblazeMonitorApp:
                 if not self.sync_discovery():
                     return
                 self.publish_buckets()
+                self.publish_storage_tree()
                 self.publish_text(API_OBSERVED_TOPIC, "online", retain=True)
                 self.publish_text(DATA_AVAILABILITY_TOPIC, "online", retain=True)
             elif self.has_scan_result:
@@ -231,6 +240,7 @@ class BackblazeMonitorApp:
             if self.has_scan_result and self.last_scan_succeeded:
                 if self.sync_discovery():
                     self.publish_buckets()
+                    self.publish_storage_tree()
                     self.publish_text(API_OBSERVED_TOPIC, "online", retain=True)
                     self.publish_text(DATA_AVAILABILITY_TOPIC, "online", retain=True)
             elif self.has_scan_result:
@@ -294,12 +304,109 @@ class BackblazeMonitorApp:
             buckets = [dict(item) for item in self.buckets]
         ok = True
         for bucket in buckets:
+            payload = {
+                key: value
+                for key, value in bucket.items()
+                if key != "folders"
+            }
             ok = self.publish_json(
                 bucket_state_topic(str(bucket["bucket_id"])),
-                bucket,
+                payload,
                 retain=True,
             ) and ok
         return ok
+
+    def publish_storage_tree(self) -> bool:
+        with self.state_lock:
+            payload = (
+                None
+                if self.storage_tree is None
+                else json.loads(json.dumps(self.storage_tree))
+            )
+        if payload is None:
+            return False
+        return self.publish_json(STORAGE_TREE_TOPIC, payload, retain=True)
+
+    def publish_refresh_operation(
+        self,
+        payload: dict[str, object],
+        *,
+        confirm: bool = False,
+    ) -> bool:
+        return self.publish_json(
+            REFRESH_OPERATION_TOPIC,
+            payload,
+            retain=True,
+            confirm=confirm,
+        )
+
+    @staticmethod
+    def build_storage_tree(
+        buckets: list[dict[str, Any]],
+        generated_at: str,
+    ) -> dict[str, Any]:
+        tree_buckets: list[dict[str, Any]] = []
+        folder_count = 0
+        for bucket in sorted(
+            buckets,
+            key=lambda item: str(item["bucket_name"]).casefold(),
+        ):
+            folders = sorted(
+                (
+                    {
+                        "name": str(folder["name"]),
+                        "current_bytes": int(folder["current_bytes"]),
+                        "current_files": int(folder["current_files"]),
+                        "last_upload": str(folder["last_upload"]),
+                    }
+                    for folder in bucket.get("folders", [])
+                ),
+                key=lambda item: item["name"].casefold(),
+            )
+            folder_count += len(folders)
+            tree_buckets.append({
+                "bucket_id": str(bucket["bucket_id"]),
+                "bucket_name": str(bucket["bucket_name"]),
+                "current_bytes": int(bucket["current_bytes"]),
+                "current_files": int(bucket["current_files"]),
+                "folders": folders,
+            })
+        return {
+            "folder_count": folder_count,
+            "generated_at": generated_at,
+            "buckets": tree_buckets,
+        }
+
+    def _commit_last_refresh(self, completed_at: str) -> bool:
+        previous = self.last_refresh
+        try:
+            save_last_refresh(completed_at)
+        except Exception as exc:
+            self.log.warning("Unable to persist last manual refresh: %s", exc)
+            return False
+
+        with self.state_lock:
+            payload = dict(self.state)
+            payload["last_refresh"] = completed_at
+        if not self.publish_json(
+            STATE_TOPIC,
+            payload,
+            retain=STATE_RETAIN,
+            confirm=True,
+        ):
+            try:
+                save_last_refresh(previous)
+            except Exception as exc:
+                self.log.error(
+                    "Unable to roll back persisted last manual refresh: %s",
+                    exc,
+                )
+            return False
+
+        self.last_refresh = completed_at
+        with self.state_lock:
+            self.state["last_refresh"] = completed_at
+        return True
 
     def sync_discovery(self) -> bool:
         with self.discovery_sync_lock:
@@ -368,17 +475,37 @@ class BackblazeMonitorApp:
                 )
             return True
 
-    def refresh(self) -> bool:
+    def refresh(self, *, manual: bool = False) -> bool:
         if self.refresh_in_progress.is_set():
             return False
+
         self.refresh_in_progress.set()
-        self.refresh_requested.clear()
+        if manual:
+            self.refresh_requested.clear()
+
+        started_at = datetime.now(timezone.utc).isoformat()
+        started_monotonic = time.monotonic()
+        if manual and not self.publish_refresh_operation(
+            operation_payload("updating", started_at=started_at),
+            confirm=True,
+        ):
+            self.log.warning(
+                "Manual Backblaze refresh was not started because operation state "
+                "could not be published"
+            )
+            self.refresh_in_progress.clear()
+            return False
+
+        success = False
+        error_detail: str | None = None
         try:
             usage = self.api.scan_all()
-            now = datetime.now(timezone.utc).isoformat()
+            completed_at = datetime.now(timezone.utc).isoformat()
             buckets = [asdict(item) for item in usage.buckets]
+            storage_tree = self.build_storage_tree(buckets, completed_at)
             with self.state_lock:
                 self.buckets = buckets
+                self.storage_tree = storage_tree
                 self.state.update({
                     "api_connected": True,
                     "bucket_count": len(buckets),
@@ -386,31 +513,63 @@ class BackblazeMonitorApp:
                     "current_bytes": usage.current_bytes,
                     "current_files": usage.current_files,
                     "versions": usage.versions,
-                    "last_update": now,
+                    "last_update": completed_at,
                 })
             self.has_scan_result = True
             self.last_scan_succeeded = True
 
+            publication_ok = True
             if self.mqtt_connected.is_set():
-                if not self.sync_discovery():
-                    self.publish_text(DATA_AVAILABILITY_TOPIC, "offline", retain=True)
-                    self.log.warning(
-                        "Backblaze refresh collected data but MQTT discovery sync failed"
+                discovery_ok = self.sync_discovery()
+                if discovery_ok:
+                    publication_ok = all((
+                        self.publish_state(),
+                        self.publish_buckets(),
+                        self.publish_storage_tree(),
+                        self.publish_text(
+                            API_OBSERVED_TOPIC,
+                            "online",
+                            retain=True,
+                        ),
+                        self.publish_text(
+                            DATA_AVAILABILITY_TOPIC,
+                            "online",
+                            retain=True,
+                        ),
+                    ))
+                else:
+                    publication_ok = False
+
+                if not publication_ok:
+                    self.publish_text(
+                        DATA_AVAILABILITY_TOPIC,
+                        "offline",
+                        retain=True,
                     )
-                    return False
-                self.publish_state()
-                self.publish_buckets()
-                self.publish_text(API_OBSERVED_TOPIC, "online", retain=True)
-                self.publish_text(DATA_AVAILABILITY_TOPIC, "online", retain=True)
+                    error_detail = "authoritative MQTT publication failed"
+            elif manual:
+                publication_ok = False
+                error_detail = "MQTT is disconnected"
+
+            success = publication_ok
+            if manual and success:
+                success = self._commit_last_refresh(completed_at)
+                if not success:
+                    error_detail = "last refresh commit failed"
 
             self.log.info(
-                "Backblaze refresh complete: buckets=%s stored_bytes=%s versions=%s",
+                "Backblaze refresh complete: buckets=%s folders=%s "
+                "stored_bytes=%s versions=%s manual=%s success=%s",
                 len(buckets),
+                storage_tree["folder_count"],
                 usage.stored_bytes,
                 usage.versions,
+                manual,
+                success,
             )
-            return True
+            return success
         except Exception as exc:
+            error_detail = f"{type(exc).__name__}: {exc}"
             with self.state_lock:
                 self.state["api_connected"] = False
             self.has_scan_result = True
@@ -422,6 +581,18 @@ class BackblazeMonitorApp:
             self.log.warning("Backblaze refresh failed: %s", exc)
             return False
         finally:
+            if manual:
+                finished_at = datetime.now(timezone.utc).isoformat()
+                duration = time.monotonic() - started_monotonic
+                self.publish_refresh_operation(
+                    operation_payload(
+                        "idle" if success else "error",
+                        started_at=started_at,
+                        finished_at=finished_at,
+                        duration_seconds=duration,
+                        error=None if success else (error_detail or "refresh failed"),
+                    )
+                )
             self.refresh_in_progress.clear()
 
     def run(self) -> None:
@@ -440,8 +611,9 @@ class BackblazeMonitorApp:
         try:
             while not self.stop_event.is_set():
                 now = time.monotonic()
-                if self.refresh_requested.is_set() or now >= next_refresh:
-                    self.refresh()
+                manual_refresh = self.refresh_requested.is_set()
+                if manual_refresh or now >= next_refresh:
+                    self.refresh(manual=manual_refresh)
                     next_refresh = time.monotonic() + interval_seconds
                 self.stop_event.wait(1.0)
         finally:
