@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.12
+
+- Add one `sensor.dh_backblaze_storage_tree` overview entity with bucket and first-level folder data in attributes.
+- Aggregate current bytes, current visible file count, and latest B2 upload timestamp for every first-level folder during the existing full file-version scan without an additional B2 listing pass.
+- Align manual Refresh with the DigitalHouses Manual Refresh Standard: retained `idle/updating/error` operation state, timestamps, duration, error detail, duplicate suppression, and success-only `last_refresh`.
+- Persist the last successful manual Refresh under `/data/runtime_state.json` so restart and supported backup/restore keep its meaning.
+- Keep periodic scans independent from manual Refresh state and `last_refresh`.
+- Add a Markdown storage tree dashboard view and PVE-style live Refresh presentation while keeping the previous successful snapshot visible during an in-progress scan.
+
 ## 0.1.11
 
 - Persist the dynamic MQTT Device Discovery manifest under /data and reconcile removed bucket components across App restarts.
