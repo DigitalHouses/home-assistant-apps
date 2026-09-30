@@ -208,7 +208,7 @@ def validate_backblaze(
         encoding="utf-8"
     )
     for expected in (
-        'DISCOVERY_SCHEMA_VERSION = 4',
+        'DISCOVERY_SCHEMA_VERSION = 5',
         'DISCOVERY_SCHEMA_PATH = Path("/data/discovery_schema_version")',
         'DISCOVERY_MANIFEST_PATH = Path("/data/discovery_manifest.json")',
         "def dynamic_discovery_manifest(",
