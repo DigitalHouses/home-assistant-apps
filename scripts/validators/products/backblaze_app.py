@@ -149,6 +149,8 @@ def validate_backblaze(
     for key in ("total_used", "bucket_bucket-id_used"):
         if components[key].get("unit_of_measurement") != "GB":
             fail(f"Backblaze storage unit must be decimal GB: {key}")
+        if components[key].get("device_class") is not None:
+            fail(f"Backblaze storage sensor must not be unit-converted by HA: {key}")
         if components[key].get("suggested_display_precision") != 1:
             fail(f"Backblaze storage precision changed: {key}")
         if components[key].get("json_attributes_topic") is not None:
@@ -208,7 +210,7 @@ def validate_backblaze(
         encoding="utf-8"
     )
     for expected in (
-        'DISCOVERY_SCHEMA_VERSION = 5',
+        'DISCOVERY_SCHEMA_VERSION = 6',
         'DISCOVERY_SCHEMA_PATH = Path("/data/discovery_schema_version")',
         'DISCOVERY_MANIFEST_PATH = Path("/data/discovery_manifest.json")',
         "def dynamic_discovery_manifest(",
