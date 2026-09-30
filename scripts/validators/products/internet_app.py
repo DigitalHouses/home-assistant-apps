@@ -371,6 +371,16 @@ def validate_presentation_examples(
                 f"{app.name}: {locale} public notification example must not "
                 "depend on installation-local script.write2log"
             )
+        for required_marker in (
+            "trigger.to_state.attributes.source == 'manual'",
+            "trigger.to_state.attributes.source == 'automatic'",
+            "trigger.to_state.attributes.automatic_failure_streak == 5",
+        ):
+            if required_marker not in text:
+                fail(
+                    f"{app.name}: {locale} Speedtest notification threshold "
+                    f"is missing {required_marker!r}"
+                )
 
     if "dh_internet_app_" not in dashboard_text:
         fail(f"{app.name}: dashboard must use canonical entities")
