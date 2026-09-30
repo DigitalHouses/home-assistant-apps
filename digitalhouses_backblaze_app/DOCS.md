@@ -28,6 +28,8 @@ Each refresh performs:
 
 A file hidden by a hide marker remains included in stored bytes while its retained historical upload version exists. It is not counted as a current visible file.
 
+Home Assistant account and per-bucket storage sensors present these byte totals as decimal GB (`bytes / 1,000,000,000`) with one decimal place. Storage-tree attributes remain absolute bytes; the dashboard renders them as decimal GB/MB/KB.
+
 Started large files are ignored for current-file determination. Uploaded parts of unfinished large files are not included in version 0.1.0 storage totals.
 
 ## MQTT
