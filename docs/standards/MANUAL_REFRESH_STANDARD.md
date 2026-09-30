@@ -178,6 +178,8 @@ A stale retained updating state after an unclean product restart must be reconci
 
 ## 9. UI contract
 
+Refresh UI follows [DigitalHouses Operation UI Standard](OPERATION_UI_STANDARD.md).
+
 Dashboards render product-owned operation state.
 
 Recommended behavior:
