@@ -241,7 +241,7 @@ def validate_backblaze(
         'publish_text(DATA_AVAILABILITY_TOPIC, "offline", retain=True)',
         'publish_text(DATA_AVAILABILITY_TOPIC, "online", retain=True)',
         'publish_text(API_OBSERVED_TOPIC, "online", retain=True)',
-        "publish_refresh_operation(operation_payload(\"idle\"))",
+        "self.publish_refresh_operation(self.refresh_operation)",
         "def refresh(self, *, manual: bool = False) -> bool:",
         "self.refresh(manual=manual_refresh)",
         "self.publish_storage_tree()",
