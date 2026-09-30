@@ -181,13 +181,23 @@ dh_internet_app_notification_local_package:
                 - condition: trigger
                   id:
                     - speedtest_failed
+                - condition: template
+                  value_template: >-
+                    {{ trigger.to_state.attributes.source == 'manual'
+                       or (trigger.to_state.attributes.source == 'automatic'
+                           and trigger.to_state.attributes.automatic_failure_streak == 5) }}
               sequence:
                 - action: persistent_notification.create
                   data:
                     title: "📶⚠️ Ошибка Speedtest"
                     message: >-
-                      Тест Ookla Speedtest не был успешно завершён:
-                      {{ trigger.to_state.attributes.reason }}.
+                      {% if trigger.to_state.attributes.source == 'automatic' %}
+                        Автоматический Ookla Speedtest завершился ошибкой 5 раз подряд.
+                        Последняя ошибка: {{ trigger.to_state.attributes.reason }}.
+                      {% else %}
+                        Ручной Ookla Speedtest не был успешно завершён:
+                        {{ trigger.to_state.attributes.reason }}.
+                      {% endif %}
 
             - conditions:
                 - condition: trigger
