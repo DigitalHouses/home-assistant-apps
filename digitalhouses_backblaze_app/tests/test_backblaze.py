@@ -32,26 +32,26 @@ class BackblazeClientTests(unittest.TestCase):
             },
             {
                 "files": [
-                    {"fileName": "bar", "fileId": "1", "action": "upload", "contentLength": 200},
-                    {"fileName": "foo", "fileId": "2", "action": "upload", "contentLength": 100},
-                    {"fileName": "foo", "fileId": "3", "action": "upload", "contentLength": 90},
-                    {"fileName": "hidden", "fileId": "4", "action": "hide", "contentLength": 0},
-                    {"fileName": "hidden", "fileId": "5", "action": "upload", "contentLength": 50},
+                    {"fileName": "ruslan-home/bar", "fileId": "1", "action": "upload", "contentLength": 200, "uploadTimestamp": 2000},
+                    {"fileName": "ruslan-home/foo", "fileId": "2", "action": "upload", "contentLength": 100, "uploadTimestamp": 3000},
+                    {"fileName": "ruslan-home/foo", "fileId": "3", "action": "upload", "contentLength": 90, "uploadTimestamp": 2500},
+                    {"fileName": "archive/hidden", "fileId": "4", "action": "hide", "contentLength": 0},
+                    {"fileName": "archive/hidden", "fileId": "5", "action": "upload", "contentLength": 50, "uploadTimestamp": 4000},
                 ],
                 "nextFileName": "part",
                 "nextFileId": "6",
             },
             {
                 "files": [
-                    {"fileName": "part", "fileId": "6", "action": "start", "contentLength": 0},
-                    {"fileName": "part", "fileId": "7", "action": "upload", "contentLength": 20},
+                    {"fileName": "pve/part", "fileId": "6", "action": "start", "contentLength": 0},
+                    {"fileName": "pve/part", "fileId": "7", "action": "upload", "contentLength": 20, "uploadTimestamp": 5000},
                 ],
                 "nextFileName": None,
                 "nextFileId": None,
             },
             {
                 "files": [
-                    {"fileName": "one", "fileId": "8", "action": "upload", "contentLength": 300},
+                    {"fileName": "ha/one", "fileId": "8", "action": "upload", "contentLength": 300, "uploadTimestamp": 6000},
                 ],
                 "nextFileName": None,
                 "nextFileId": None,
@@ -68,6 +68,17 @@ class BackblazeClientTests(unittest.TestCase):
         self.assertEqual(usage.buckets[0].stored_bytes, 460)
         self.assertEqual(usage.buckets[0].current_files, 3)
         self.assertEqual(usage.buckets[0].hide_markers, 1)
+
+        alpha_folders = usage.buckets[0].folders
+        self.assertEqual([item.name for item in alpha_folders], ["pve", "ruslan-home"])
+        self.assertEqual(alpha_folders[0].current_bytes, 20)
+        self.assertEqual(alpha_folders[0].current_files, 1)
+        self.assertEqual(alpha_folders[0].last_upload, "1970-01-01T00:00:05+00:00")
+        self.assertEqual(alpha_folders[1].current_bytes, 300)
+        self.assertEqual(alpha_folders[1].current_files, 2)
+        self.assertEqual(alpha_folders[1].last_upload, "1970-01-01T00:00:03+00:00")
+        self.assertEqual(usage.buckets[1].folders[0].name, "ha")
+        self.assertEqual(usage.buckets[1].folders[0].last_upload, "1970-01-01T00:00:06+00:00")
 
     def test_authorize_requires_read_only_listing_capabilities(self):
         client = BackblazeClient("id", "secret")
@@ -115,6 +126,39 @@ class BackblazeClientTests(unittest.TestCase):
 
         with patch.object(client, "_post", return_value=response):
             with self.assertRaisesRegex(BackblazeApiError, "contentLength"):
+                client.scan_bucket(account, bucket)
+
+    def test_current_upload_requires_upload_timestamp_for_tree_freshness(self):
+        client = BackblazeClient("id", "secret")
+        account = type(
+            "Account",
+            (),
+            {
+                "account_id": "account",
+                "api_url": "https://api.example.test",
+                "authorization_token": "token",
+            },
+        )()
+        bucket = {
+            "bucketId": "a",
+            "bucketName": "alpha",
+            "bucketType": "allPrivate",
+        }
+        response = {
+            "files": [
+                {
+                    "fileName": "backup/file",
+                    "fileId": "1",
+                    "action": "upload",
+                    "contentLength": 1,
+                }
+            ],
+            "nextFileName": None,
+            "nextFileId": None,
+        }
+
+        with patch.object(client, "_post", return_value=response):
+            with self.assertRaisesRegex(BackblazeApiError, "uploadTimestamp"):
                 client.scan_bucket(account, bucket)
 
     def test_unknown_file_action_fails_contract(self):
