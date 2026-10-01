@@ -9,7 +9,7 @@ This document is an engineering compliance review, not a substitute for advice f
 
 ## 1. Executive conclusion
 
-The current telemetry data model is intentionally minimal, but it is not safe to assume that mandatory telemetry with no consent/objection path is lawful merely because the product is optional to install.
+The current telemetry data model is intentionally minimal. DigitalHouses' preferred product model is now explicit acceptance before activation followed by mandatory telemetry during supported product use. That is materially stronger than collecting without consent, but it is still not safe to assume this conditional-consent model is lawful in every jurisdiction.
 
 The main reasons are:
 
@@ -57,7 +57,7 @@ Article 8 requires consent to be given in a form that allows confirmation that c
 
 Engineering consequence:
 
-> "The software is optional; users who dislike telemetry should not use it" is not, by itself, a documented statutory exception to the consent rule.
+DigitalHouses therefore does not treat "the software is optional" as an exception to consent. The supported policy requires a confirmable affirmative acceptance before telemetry begins.
 
 ### 3.2 Exceptions do not clearly cover ordinary product telemetry
 
@@ -131,7 +131,23 @@ EDPB guidance treats pseudonymised data that can still be related to an identifi
 
 A stable installation UUID associated with repeated network requests should therefore be treated conservatively as pseudonymous personal data for GDPR architecture.
 
-### 4.2 Consent is not the only possible GDPR legal basis
+### 4.2 Conditional consent remains an EU risk
+
+DigitalHouses' preferred model is:
+
+```text
+explicit acceptance
+→ supported product activates
+→ mandatory telemetry
+```
+
+This does not automatically solve EU consent validity. GDPR Article 7(4) and EDPB consent guidance require special scrutiny where access to a service is conditioned on consent to processing that is not objectively necessary for that service. EDPB guidance emphasizes genuine choice and the ability to refuse/withdraw without detriment.
+
+Because DigitalHouses deliberately designs core runtime operation to survive telemetry-server unavailability, telemetry cannot simply be declared technically necessary to the core automation/monitoring function.
+
+Therefore EU/EEA distribution remains under legal gate unless qualified analysis establishes a valid basis and user-rights model.
+
+### 4.3 Consent is not the only possible GDPR legal basis
 
 GDPR Article 6 provides several lawful bases. For this telemetry, the plausible non-consent candidate is legitimate interests.
 
@@ -143,7 +159,7 @@ Using legitimate interests requires a documented three-part analysis:
 
 The fact that telemetry is useful to DigitalHouses is not enough by itself.
 
-### 4.3 Right to object
+### 4.4 Right to object
 
 Where processing relies on legitimate interests, GDPR Article 21 gives the data subject a right to object. The controller must stop unless it demonstrates compelling legitimate grounds that override the individual's interests/rights or the processing is needed for legal claims.
 
@@ -151,7 +167,7 @@ Engineering consequence:
 
 > a permanent "no opt-out under any circumstances" rule is high-risk if legitimate interests is the chosen GDPR basis.
 
-### 4.4 ePrivacy is a separate issue
+### 4.5 ePrivacy is a separate issue
 
 EDPB's final Guidelines 2/2023 interpret Article 5(3) ePrivacy broadly for storage/access to information in terminal equipment.
 
@@ -159,7 +175,7 @@ The DigitalHouses client creates and reads a persistent installation identifier 
 
 A GDPR legitimate-interest assessment alone does not resolve the ePrivacy question.
 
-### 4.5 Transparency
+### 4.6 Transparency
 
 If GDPR applies, the public notice should include at least:
 
@@ -213,24 +229,27 @@ Do not mark mandatory public telemetry legally cleared until all of these are re
 
 ## 7. Architecture recommendation
 
-### Safest public model
+### DigitalHouses target product model
 
-For a globally distributed Home Assistant product, the lowest-risk current architecture is:
+The preferred technical/product model is:
 
 ```text
-explicit telemetry opt-in
-+ minimal protocol payload
+explicit informed acceptance before activation
++ mandatory minimal telemetry after acceptance
++ no ordinary runtime opt-out
 + no source-IP retention
 + clear privacy notice
 + authenticated deletion
-+ withdrawal disables future telemetry
++ separate consent-withdrawal handling where law requires it
 ```
 
-This model is also already implemented by the existing policy-v1 clients.
+Refusal means the supported product does not activate.
 
-### If DigitalHouses keeps mandatory telemetry
+This model must still pass the jurisdiction-specific legal gate. In particular, do not assume that making consent a condition of access makes that consent valid in the EU/EEA.
 
-Do not rely on "do not use the product" as the legal basis.
+### Mandatory telemetry legal gate
+
+Do not rely on "accept or do not use the product" as the legal basis by itself.
 
 Before rollout, obtain jurisdiction-appropriate legal confirmation for:
 
