@@ -183,6 +183,7 @@ def build_full_discovery_payload(
                 "cpu_model": _path("host", "cpu", "model") + " | default(none)",
                 "cpu_cores": _path("host", "cpu", "cores") + " | default(none)",
                 "cpu_threads": _path("host", "cpu", "threads") + " | default(none)",
+                "memory_installed_gib": _path("host", "memory_inventory", "total_gib") + " | default(none)",
                 "memory_type": _path("host", "memory_inventory", "memory_type") + " | default(none)",
                 "memory_form_factor": _path("host", "memory_inventory", "form_factor") + " | default(none)",
                 "memory_slots_populated": _path("host", "memory_inventory", "populated_slots") + " | default(none)",
