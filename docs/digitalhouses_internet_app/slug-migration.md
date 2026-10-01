@@ -101,7 +101,7 @@ slug: digitalhouses_internet_app
 - `installation_id`;
 - installation token;
 - telemetry enable state;
-- last success/attempt scheduling state.
+- состояние расписания последнего success/attempt.
 
 Новая product version после миграции всё равно сообщается штатно, потому что telemetry client обнаруживает изменение release version.
 
@@ -147,7 +147,7 @@ Home Assistant backup до миграции является disaster-recovery p
 - новый backup канонического slug успешно восстанавливается;
 - rollback на остановленный bridge App доказан до удаления legacy App.
 
-## Cleanup release
+## Cleanup-релиз
 
 Версия `0.1.16` завершила cleanup миграции:
 
