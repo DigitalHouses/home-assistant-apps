@@ -3,6 +3,7 @@ import re
 
 ROOT = Path(__file__).parents[1]
 DASHBOARD = ROOT / "examples" / "dh_pve_agent_dashboard.yaml"
+DASHBOARD_RU = ROOT / "examples" / "dh_pve_agent_dashboard_ru.yaml"
 
 
 def _text() -> str:
@@ -33,6 +34,16 @@ def test_canonical_pve_dashboard_exists_and_uses_app_owned_state():
         "sensor.dh_pve_agent_last_publication",
     ):
         assert entity_id in text
+
+
+def test_ru_dashboard_uses_installed_ram_from_system_inventory():
+    text = DASHBOARD_RU.read_text(encoding="utf-8")
+    system_card = text.split(
+        "entity: sensor.dh_pve_agent_system", 1
+    )[1].split("icon: mdi:server", 1)[0]
+
+    assert "state_attr(entity, 'memory_installed_gib')" in system_card
+    assert "state_attr('sensor.dh_pve_agent_memory_usage', 'total_gib')" not in system_card
 
 
 def test_dashboard_refresh_card_has_live_operation_feedback():
