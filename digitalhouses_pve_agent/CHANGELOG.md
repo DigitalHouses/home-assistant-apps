@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.45
+
+- Expose installed physical memory as `memory_installed_gib` on `sensor.dh_pve_agent_system`, sourced from the existing DMI/SMBIOS memory inventory instead of Linux `MemTotal`.
+- Update the Russian hardware summary card to show installed RAM capacity, so a 16 GiB machine is presented as `16 GiB` even when the operating system reports a smaller usable-memory total.
+- Keep `sensor.dh_pve_agent_memory_usage.total_gib` unchanged as the operating-system runtime memory capacity used for memory-usage telemetry.
+
+
 ## 0.5.44
 
 - Make the main PVE Refresh operation state cover the complete user action, including the UPS follow-up phase. `sensor.dh_pve_agent_refresh_state` now stays `updating` until both PVE and configured UPS refresh work has finished.
