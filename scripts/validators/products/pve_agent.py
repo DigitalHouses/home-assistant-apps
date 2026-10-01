@@ -6,7 +6,7 @@ from typing import Any
 
 from validators.common import fail, require_files
 
-EXPECTED_VERSION = "0.5.44"
+EXPECTED_VERSION = "0.5.45"
 EXPECTED_TOPIC_PREFIX = "DigitalHouses/Global/digitalhouses_pve_agent"
 EXPECTED_DEVICE_NAME = "DH PVE"
 EXPECTED_REFRESH_ENTITY = "button.dh_pve_agent_refresh"
@@ -165,6 +165,7 @@ def validate_digitalhouses_pve_agent(
             "'proxmox_integration':'digitalhouses_pve_agent'",
             '"used_gib":',
             '"total_gib":',
+            '"memory_installed_gib":',
         ),
         "metric Discovery intermediate",
     )
