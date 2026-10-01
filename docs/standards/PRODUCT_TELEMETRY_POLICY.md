@@ -36,16 +36,29 @@ Telemetry is part of normal operation for supported official DigitalHouses produ
 
 A supported product must:
 
-- create and persist its telemetry installation identity;
-- attempt telemetry without requiring a separate consent toggle;
-- send the minimum protocol heartbeat on the shared cadence;
-- continue normal product operation when telemetry cannot reach the server.
+- require explicit acceptance of the current DigitalHouses telemetry/privacy terms before entering normal supported runtime;
+- create and persist its telemetry installation identity only after, or as part of, that accepted activation flow;
+- send the minimum protocol heartbeat on the shared cadence after acceptance;
+- continue normal product operation when telemetry transport is temporarily unavailable.
 
-The final supported configuration must not expose an option whose purpose is to disable telemetry. In particular, new production releases must not introduce or retain `telemetry_enabled` as an opt-out control after that product completes its policy-v2 migration.
+Telemetry is mandatory **after acceptance**, but acceptance itself is explicit.
 
-Users must be told clearly, before installation or update, that supported DigitalHouses products report the minimal telemetry defined by this policy. A user who does not accept that product behavior should not install or continue using the supported official product.
+The final supported configuration must not expose a normal runtime option whose purpose is to disable telemetry after acceptance. In particular, new production releases must not use `telemetry_enabled` as an ordinary opt-out control after that product completes its policy-v2 migration.
 
-Network blocking, DNS failure, firewall rules, endpoint failure, or other transport failures may prevent delivery in practice. Such failures must never disable or degrade the core product. Mandatory telemetry means the official client always attempts reporting; it does not mean the product may make telemetry availability a runtime dependency.
+The user-facing model is:
+
+```text
+review telemetry/privacy terms
+→ accept
+→ product activates
+→ mandatory telemetry operates
+```
+
+If the user does not accept, the supported product must not enter its normal operating state and must not transmit telemetry.
+
+Where applicable law requires withdrawal of consent, withdrawal must stop future telemetry. The product may then move to an explicit `consent_required` / unsupported state rather than silently continuing normal supported operation without telemetry. Jurisdictions where conditioning product use on this consent is not legally valid remain blocked by the shared legal gate.
+
+Network blocking, DNS failure, firewall rules, endpoint failure, or other transport failures may prevent delivery in practice. Such failures must never disable or degrade the core product. Mandatory telemetry means an **accepted** official client always schedules reporting. Telemetry server/network availability must never become a runtime dependency.
 
 Legacy releases that implement policy version 1 remain valid historical releases. The server may accept policy versions 1 and 2 during migration, but new releases completing the mandatory-telemetry migration must use policy version 2.
 
@@ -243,13 +256,13 @@ Authenticated deletion removes:
 - the installation credential record;
 - all retained heartbeat history associated with that installation.
 
-Under policy version 2, deletion does not disable future required telemetry while the product continues to be used.
+Under policy version 2, deletion does not itself withdraw the separately recorded telemetry consent. If consent remains active and the product continues in supported runtime, future required telemetry resumes under a fresh identity.
 
 After a successful deletion, the product must rotate its local `installation_id` and `installation_token` so any later telemetry starts under a fresh pseudonymous identity that is not linked by the telemetry data model to the deleted identity.
 
 If the product remains installed and running, reporting resumes according to the normal cadence using that fresh identity. To stop future official-client reporting, the product must no longer be used.
 
-User-facing controls must describe this accurately. Do not label deletion as a telemetry opt-out.
+User-facing controls must describe this accurately. Do not label deletion as consent withdrawal or as a telemetry opt-out. Consent withdrawal, where legally required, is a separate product-state transition.
 
 ## 11. Security boundaries
 
@@ -285,9 +298,10 @@ This product sends minimal pseudonymous operational telemetry to DigitalHouses:
 product identifier, product version, a random installation identifier,
 and country determined by the server from network metadata.
 
-Telemetry reporting is part of supported product operation and has no
-in-product opt-out. Core product operation does not depend on telemetry
-server availability.
+Telemetry reporting is part of supported product operation after explicit
+acceptance of the current telemetry/privacy terms. Declining acceptance means
+the supported product does not activate. Core product operation after activation
+does not depend on telemetry server availability.
 
 Source IP addresses are not retained by the DigitalHouses telemetry system.
 ```
@@ -314,7 +328,7 @@ Wire behavior is defined by [DigitalHouses Telemetry Protocol v1](TELEMETRY_PROT
 
 This policy defines why and under what privacy/security constraints telemetry exists. Product implementations must not invent product-specific telemetry semantics that contradict the shared protocol.
 
-Policy version 2 changes telemetry participation from explicit opt-in to required reporting for supported products. It does not add telemetry payload fields and therefore does not require a new wire-schema version.
+Policy version 2 changes telemetry participation from an optional runtime feature to required reporting after explicit installation/activation consent for supported products. It does not add telemetry payload fields and therefore does not require a new wire-schema version.
 
 During migration:
 
