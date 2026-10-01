@@ -1,163 +1,163 @@
-# Changelog
+# Журнал изменений
 
 ## 0.1.20
 
-- Persist the consecutive automatic Speedtest failure streak across App restarts and reset it after any successful manual or automatic Speedtest.
-- Keep the pre-Speedtest connectivity guard authoritative: confirmed Internet unavailability skips Ookla entirely and does not advance the automatic failure streak.
-- Tag Speedtest failure machine events with the execution source and current automatic failure streak.
-- Keep every Speedtest failure available in the machine event/log path while suppressing user notification for automatic failures 1–4 and 6+; the reference notification packages alert exactly on the fifth consecutive automatic failure.
-- Keep failed manual Speedtest notifications immediate.
+- Сохранять между перезапусками App серию последовательных ошибок автоматического Speedtest и сбрасывать её после любого успешного ручного или автоматического Speedtest.
+- Сохранить обязательную проверку связности перед Speedtest: подтверждённая недоступность Интернета полностью пропускает запуск Ookla и не увеличивает серию автоматических ошибок.
+- Добавить в machine events ошибок Speedtest источник запуска и текущую длину серии автоматических ошибок.
+- Сохранять каждую ошибку Speedtest в machine event/log path, но подавлять пользовательское уведомление для автоматических ошибок 1–4 и 6+; reference notification packages уведомляют ровно на пятой последовательной автоматической ошибке.
+- Сохранять немедленное уведомление об ошибке ручного Speedtest.
 
 ## 0.1.19
 
-- Enforce the released App version as required runtime contract data; remove `unknown` and stale local version fallbacks.
-- Keep connectivity entities unavailable until a real probe succeeds and distinguish probe-execution failures from an observed Internet/router outage, so an unavailable probe mechanism cannot trigger recovery.
-- Validate every schema-v2 machine event at the producer and publish authoritative retained incident state before `connection_lost` / `connection_restored` transient events.
-- Fail loudly when existing recovery, outage, traffic, thresholds, Speedtest, recent-results, server-catalog, discovery or telemetry persistence is malformed instead of silently replacing it with healthy defaults.
-- Preserve telemetry installation identity on state corruption by rejecting invalid persisted UUID/token data rather than generating a new installation.
-- Require explicit units on mapped traffic/rate sources, reject invalid explicit App configuration instead of coercing/clamping it, and represent absent optional Speedtest metadata as `null`.
-- Keep the Supervisor slug, MQTT namespace/device identity, Home Assistant entity IDs, recovery modes and Recorder publication cadence unchanged.
+- Сделать released App version обязательными runtime contract data; убрать fallback `unknown` и устаревшие локальные fallback version.
+- Держать connectivity entities unavailable до успешного реального probe и отделять ошибку выполнения probe от наблюдаемого outage Интернета/роутера, чтобы недоступный механизм проверки не мог запустить recovery.
+- Валидировать каждый schema-v2 machine event на стороне producer и публиковать authoritative retained incident state до transient events `connection_lost` / `connection_restored`.
+- При malformed persistence recovery, outage, traffic, thresholds, Speedtest, recent-results, server-catalog, discovery или telemetry завершаться явной ошибкой вместо тихой подстановки healthy defaults.
+- Сохранять telemetry installation identity при повреждении state: отклонять невалидные persistent UUID/token вместо генерации новой установки.
+- Требовать явные units у mapped traffic/rate sources, отклонять невалидную явно заданную App configuration вместо coercion/clamping и представлять отсутствующие optional Speedtest metadata как `null`.
+- Не менять Supervisor slug, MQTT namespace/device identity, Home Assistant entity IDs, recovery modes и cadence публикации в Recorder.
 
 ## 0.1.18
 
-- Migrate production Home Assistant delivery to the canonical versioned GHCR image repository `ghcr.io/digitalhouses/digitalhouses_internet_app`.
-- Keep the canonical Supervisor slug, MQTT namespace/device identity, Home Assistant entity identities, App options and persistent `/data` state unchanged.
-- Add repository validation for the immutable image metadata and document current-production backup/restore acceptance without requiring a downgrade to an older App release.
+- Перевести production-доставку Home Assistant на канонический versioned GHCR image repository `ghcr.io/digitalhouses/digitalhouses_internet_app`.
+- Не менять канонический Supervisor slug, MQTT namespace/device identity, Home Assistant entity identities, App options и persistent state `/data`.
+- Добавить repository validation immutable image metadata и документировать acceptance backup/restore текущего production без требования downgrade на более старый App release.
 
 ## 0.1.17
 
-- Promote DigitalHouses Internet App from Home Assistant `experimental` stage to `stable`.
-- Keep the canonical App slug `digitalhouses_internet_app` and all existing MQTT, device, unique-id and Home Assistant entity identities unchanged.
-- Add repository validation so the Internet App cannot silently regress back to an experimental stage.
+- Перевести DigitalHouses Internet App со стадии Home Assistant `experimental` в `stable`.
+- Сохранить канонический App slug `digitalhouses_internet_app` и все существующие MQTT, device, unique-id и Home Assistant entity identities.
+- Добавить repository validation, запрещающую Internet App незаметно вернуться на experimental stage.
 
 ## 0.1.16
 
-- Remove the temporary HA App slug-migration runtime after successful migration and rollback acceptance.
-- Remove the writable `/share` mapping and `DH_SLUG_MIGRATION_MODE` from the canonical App configuration.
-- Remove `slug_migration.py`, its migration-only tests and shutdown/export hooks from the production image.
-- Keep only the canonical Supervisor slug `digitalhouses_internet_app`; repository validation now rejects migration runtime/config regression.
-- Canonicalize the internal Python logger name to `digitalhouses_internet_app` without changing MQTT, device, unique-id or Home Assistant entity identities.
+- Удалить временный runtime миграции HA App slug после успешной migration и rollback acceptance.
+- Удалить writable mapping `/share` и `DH_SLUG_MIGRATION_MODE` из канонической App configuration.
+- Удалить `slug_migration.py`, migration-only tests и shutdown/export hooks из production image.
+- Оставить только канонический Supervisor slug `digitalhouses_internet_app`; repository validation теперь запрещает регрессию migration runtime/config.
+- Канонизировать имя внутреннего Python logger как `digitalhouses_internet_app` без изменения MQTT, device, unique-id и Home Assistant entity identities.
 
 ## 0.1.15
 
-- Make the completed canonical slug migration marker authoritative over any later bridge bundle refresh.
-- Fix rollback verification: starting/stopping the legacy `0.1.12` bridge App rewrites the shared bundle with a new timestamp/hash, which must not make the already-migrated canonical App fail or re-import old state.
-- Validate the completed marker's schema/product/source/target identity before ignoring the shared bridge bundle.
-- Preserve newer canonical runtime state across legacy rollback tests and subsequent canonical restarts.
+- Сделать marker завершённой canonical slug migration authoritative относительно любых последующих обновлений bridge bundle.
+- Исправить rollback verification: start/stop legacy bridge App `0.1.12` пересоздаёт shared bundle с новым timestamp/hash, но это не должно ломать уже мигрированный canonical App или повторно импортировать старое state.
+- Проверять schema/product/source/target identity completed marker до игнорирования shared bridge bundle.
+- Сохранять более новое canonical runtime state при legacy rollback tests и последующих canonical restarts.
 
 ## 0.1.14
 
-- Fix canonical slug import for Supervisor's real options lifecycle: persisted App options become visible inside `/data/options.json` only after the canonical container is started again.
-- When migrated options are not yet active, apply them through `/addons/self/options`, write a pending migration marker and stop cleanly instead of entering `state: error`.
-- On the next start, verify the expected options are mounted before restoring telemetry identity and all explicit App-owned runtime state.
-- Recover the real `0.1.13` field case where Supervisor already accepted the migrated options before the old importer failed waiting for an impossible hot-update.
-- Keep completed imports idempotent so the bridge snapshot cannot overwrite newer canonical state.
+- Исправить import canonical slug под реальный lifecycle Supervisor options: persistent App options становятся видимы в `/data/options.json` только после следующего запуска canonical container.
+- Если migrated options ещё не активны, применять их через `/addons/self/options`, записывать pending migration marker и корректно останавливаться вместо перехода в `state: error`.
+- При следующем запуске проверять, что ожидаемые options смонтированы, до восстановления telemetry identity и всего явного App-owned runtime state.
+- Обработать реальный field-case `0.1.13`, когда Supervisor уже принял migrated options до сбоя старого importer в ожидании невозможного hot-update.
+- Сделать completed imports idempotent, чтобы bridge snapshot не мог перезаписать более новое canonical state.
 
 ## 0.1.13
 
-- Complete the controlled Home Assistant App slug migration to the canonical `digitalhouses_internet_app` identity.
-- On first canonical-slug start, import the verified bridge bundle from `/share/digitalhouses_internet_app/slug-migration-v1/bundle.tar.gz` before the normal runtime starts.
-- Restore the previous App options through the App's own Supervisor API, then restore telemetry identity and all explicit App-owned runtime state atomically.
-- Keep MQTT/device/unique-id/Home Assistant identities unchanged under `dh_internet_app`; the legacy `digitalhouses_internet` installation remains a stopped rollback target until migration acceptance.
-- Preserve the migration bundle and import marker so repeated starts cannot reapply the bridge snapshot over newer canonical state.
+- Завершить контролируемую миграцию Home Assistant App slug на канонический `digitalhouses_internet_app`.
+- При первом запуске canonical slug импортировать проверенный bridge bundle из `/share/digitalhouses_internet_app/slug-migration-v1/bundle.tar.gz` до старта обычного runtime.
+- Восстанавливать прежние App options через собственный Supervisor API App, затем атомарно восстанавливать telemetry identity и всё явное App-owned runtime state.
+- Сохранить MQTT/device/unique-id/Home Assistant identities под `dh_internet_app`; legacy установка `digitalhouses_internet` остаётся остановленной rollback target до migration acceptance.
+- Сохранять migration bundle и import marker, чтобы повторные запуски не могли снова наложить bridge snapshot поверх более нового canonical state.
 
 ## 0.1.12
 
-- Add the controlled bridge phase for the Home Assistant App slug migration from `digitalhouses_internet` to `digitalhouses_internet_app`.
-- Export the current App options, telemetry identity/schedule and explicit `/data/runtime` state to one atomic SHA-256-validated migration bundle under `/share/digitalhouses_internet_app/slug-migration-v1/`.
-- Refresh the bridge bundle at App start and graceful shutdown; export failure is isolated from normal Internet monitoring/recovery.
-- Add the canonical-side importer now, but do not activate it until the subsequent canonical-slug release. The importer applies options through the App's own Supervisor API before restoring state and is idempotent.
-- Keep MQTT, device, unique ID and Home Assistant entity identities unchanged under `dh_internet_app`.
+- Добавить контролируемую bridge phase миграции Home Assistant App slug с `digitalhouses_internet` на `digitalhouses_internet_app`.
+- Экспортировать текущие App options, telemetry identity/schedule и явное state `/data/runtime` в один атомарный migration bundle с проверкой SHA-256 под `/share/digitalhouses_internet_app/slug-migration-v1/`.
+- Обновлять bridge bundle при старте App и graceful shutdown; ошибка export изолирована от обычного monitoring/recovery Интернета.
+- Добавить canonical-side importer заранее, но не активировать до следующего релиза с canonical slug. Importer применяет options через собственный Supervisor API App до восстановления state и является idempotent.
+- Сохранить MQTT, device, unique ID и Home Assistant entity identities под `dh_internet_app`.
 
 ## 0.1.11
 
-- Send one immediate best-effort telemetry heartbeat when the persisted App setting changes from `telemetry_enabled: false` to `true`, even if the previous successful heartbeat is still inside its normal 24-hour interval.
-- Consume that enable transition after the first attempt so ordinary restarts cannot create a heartbeat storm; a failed opt-in heartbeat keeps the existing one-hour backoff across restarts.
-- Log successful telemetry heartbeats at INFO level without installation identity or token data.
-- Add regression coverage for re-enable, restart suppression and failure-backoff persistence.
+- Отправлять один немедленный best-effort telemetry heartbeat при изменении persistent App setting `telemetry_enabled: false` → `true`, даже если предыдущий успешный heartbeat ещё находится внутри обычного 24-часового интервала.
+- После первой попытки считать enable transition обработанным, чтобы обычные restarts не создавали heartbeat storm; failed opt-in heartbeat сохраняет существующий часовой backoff между рестартами.
+- Логировать успешные telemetry heartbeats на уровне INFO без installation identity или token data.
+- Добавить regression coverage для re-enable, подавления restart и persistence failure-backoff.
 
 ## 0.1.10
 
-- Add explicit opt-in DigitalHouses Telemetry Protocol v1 support with `telemetry_enabled: false` by default.
-- Persist a random per-installation UUID/token and heartbeat schedule in `/data/telemetry.json`; send only protocol version, policy version, `digitalhouses_internet_app`, App version and installation UUID.
-- Send normal heartbeats every 24 hours ±30 minutes with one-hour failure backoff in an isolated worker so telemetry cannot affect Internet monitoring or recovery.
-- Add authenticated telemetry deletion through `button.dh_internet_app_delete_telemetry`.
-- Admit `digitalhouses_internet_app` to the shared telemetry protocol/stats-server allowlist and distinguish it from the legacy `digitalhouses_speedtest_app` product in the Stats dashboard.
-- Block the built-in `*-local` development version from sending production telemetry.
+- Добавить явную opt-in поддержку DigitalHouses Telemetry Protocol v1 с `telemetry_enabled: false` по умолчанию.
+- Хранить random per-installation UUID/token и heartbeat schedule в `/data/telemetry.json`; отправлять только protocol version, policy version, `digitalhouses_internet_app`, App version и installation UUID.
+- Отправлять обычные heartbeat каждые 24 часа ±30 минут с часовым failure backoff в изолированном worker, чтобы telemetry не могла влиять на monitoring/recovery Интернета.
+- Добавить authenticated telemetry deletion через `button.dh_internet_app_delete_telemetry`.
+- Добавить `digitalhouses_internet_app` в shared telemetry protocol/stats-server allowlist и отличать его от legacy продукта `digitalhouses_speedtest_app` в Stats dashboard.
+- Запретить встроенной development version `*-local` отправлять production telemetry.
 
 ## 0.1.9
 
-- Reduce Home Assistant Recorder churn from `sensor.dh_internet_app_problems` by removing the per-publish `updated_at` attribute; the entity now changes only when the problem count/list changes.
-- Reduce Recorder churn from `sensor.dh_internet_app_availability_month` by exposing only the stable `month` attribute and rounding the HA entity state to two decimals.
-- Keep the full outage payload and exact `elapsed_seconds`, `online_seconds`, `offline_seconds` and outage durations on the App-owned outage MQTT payload; only the Recorder-facing availability entity is made low-noise.
+- Снизить churn Home Assistant Recorder от `sensor.dh_internet_app_problems`: удалить per-publish атрибут `updated_at`; теперь entity меняется только при изменении количества/списка проблем.
+- Снизить churn Recorder от `sensor.dh_internet_app_availability_month`: публиковать только стабильный атрибут `month` и округлять state HA entity до двух знаков.
+- Сохранить полный outage payload и точные `elapsed_seconds`, `online_seconds`, `offline_seconds` и outage durations в App-owned outage MQTT payload; low-noise сделать только Recorder-facing availability entity.
 
 ## 0.1.8
 
-- Simplify Home Assistant notifications to the same direct model used by `dh_pve_app`: machine event → `trigger.id` → `choose` → direct local action.
-- Replace the Notification Envelope / secondary `dh_internet_app_notification` layer with `dh_internet_app_notification_local_package.yaml`.
-- English example calls `persistent_notification.create` directly; the Russian site-local package calls `script.write2log` directly.
-- Remove duplicated machine-event schema validation and `contract_error` presentation logic from Home Assistant. Required machine-event correctness remains producer-owned.
-- Keep the Internet App machine-event schema and MQTT Event entity unchanged.
+- Упростить уведомления Home Assistant до той же прямой модели, что используется в `dh_pve_app`: machine event → `trigger.id` → `choose` → direct local action.
+- Заменить Notification Envelope / secondary layer `dh_internet_app_notification` на `dh_internet_app_notification_local_package.yaml`.
+- Английский пример напрямую вызывает `persistent_notification.create`; русский site-local package напрямую вызывает `script.write2log`.
+- Удалить duplicated machine-event schema validation и presentation logic `contract_error` из Home Assistant. Корректность обязательного machine-event контракта остаётся ответственностью producer.
+- Не менять machine-event schema Internet App и MQTT Event entity.
 
 ## 0.1.7
 
-- Guard Router Download/Upload one-decimal MQTT templates against optional `null` telemetry values so an unavailable mapped source becomes unavailable cleanly instead of rendering an invalid numeric template.
+- Защитить MQTT templates Router Download/Upload с одним знаком после запятой от optional значений `null`, чтобы unavailable mapped source корректно становился unavailable вместо формирования невалидного numeric template.
 
 ## 0.1.6
 
-- Simplified Speedtest runtime status to `idle | running`; the last attempt outcome is now exposed separately as `last_result=success|error|no_connectivity` while successful measurements remain persistent.
-- Rounded Router Download/Upload rate entity states to one decimal place.
-- Expanded the Recorder whitelist with Speedtest status metadata, quality thresholds, recovery state/cycle, aggregate Problems and Router WAN state while keeping rich list/history entities out of Recorder.
-- Explicitly regression-tested that the current-month outage sensor publishes the complete monthly outage list without truncation.
-- Restored a robust one-row-per-result Markdown pattern for the Recent Speedtests reference table.
+- Упростить runtime status Speedtest до `idle | running`; результат последней попытки теперь отдельно публикуется как `last_result=success|error|no_connectivity`, при этом успешные measurements остаются persistent.
+- Округлять states сущностей Router Download/Upload rate до одного знака.
+- Расширить Recorder whitelist метаданными Speedtest status, quality thresholds, recovery state/cycle, aggregate Problems и Router WAN state, оставив rich list/history entities вне Recorder.
+- Добавить явный regression test, подтверждающий, что sensor outages текущего месяца публикует полный список месячных outages без truncation.
+- Восстановить устойчивый Markdown pattern «одна строка на результат» для reference table Recent Speedtests.
 
 ## 0.1.5
 
-- Migrated Internet App notifications to the repository Events and Multilingual Notifications Standard and DigitalHouses Notification Envelope v1.
-- Added strict event-specific schema validation before localization; malformed machine events now emit explicit `contract_error` notifications instead of receiving silent fallback values.
-- Made English and Russian locale packages contract-identical, moved Russian presentation to the canonical `examples/packages/locales/ru/` layout, and removed raw machine-payload forwarding.
-- Kept notification delivery installation-owned: reusable locale packages stop at the transport-neutral `dh_internet_app_notification` Home Assistant event.
+- Мигрировать уведомления Internet App на repository Events and Multilingual Notifications Standard и DigitalHouses Notification Envelope v1.
+- Добавить строгую event-specific schema validation до localization; malformed machine events теперь генерируют явные уведомления `contract_error` вместо silent fallback values.
+- Сделать английский и русский locale packages contract-identical, перенести русскую presentation в канонический путь `examples/packages/locales/ru/` и удалить forwarding raw machine payload.
+- Оставить notification delivery в ответственности установки: reusable locale packages завершаются на transport-neutral Home Assistant event `dh_internet_app_notification`.
 
 ## 0.1.4
 
-- Persist pending Internet outage detection from the first failed connectivity check, including the debounce attempt count, so App restarts do not lose the true outage start time or restart confirmation from zero.
-- Confirmed outages now start at the first failed check; transient failures that recover before confirmation are discarded.
+- Сохранять pending detection Internet outage с первой неудачной connectivity check, включая debounce attempt count, чтобы рестарты App не теряли реальный start time outage и не начинали подтверждение снова с нуля.
+- Подтверждённые outages теперь начинаются с первой неудачной проверки; transient failures, восстановившиеся до подтверждения, отбрасываются.
 
 ## 0.1.3
 
-- Backfilled Recent Results `updated_at` from the newest persisted `tested_at` when upgrading legacy runtime state created before 0.1.2.
+- При обновлении legacy runtime state, созданного до 0.1.2, backfill `updated_at` Recent Results из самого нового persistent `tested_at`.
 
 ## 0.1.2
 
-- Fixed Recent Results `updated_at` so it changes only when the persisted Speedtest history changes, not on every MQTT state publish.
+- Исправить `updated_at` Recent Results: теперь он меняется только при изменении persistent Speedtest history, а не при каждой MQTT state publication.
 
 ## 0.1.1
 
-- Fixed startup on Home Assistant base images that provide paho-mqtt 1.x by adding runtime compatibility with both paho-mqtt 1.x and 2.x callback APIs.
-- Kept the MQTT v2 callback API when available while accepting the legacy four-argument `on_connect` callback on paho-mqtt 1.x.
+- Исправить startup на base images Home Assistant с paho-mqtt 1.x, добавив runtime compatibility одновременно с callback APIs paho-mqtt 1.x и 2.x.
+- Сохранять MQTT v2 callback API, когда он доступен, при этом принимать legacy четырёхаргументный callback `on_connect` в paho-mqtt 1.x.
 
 ## 0.1.0
 
-- Renamed repository directory to `dh_internet_app` while keeping HA App slug `digitalhouses_internet`.
-- Fixed MQTT Event discovery to pass schema-v2 JSON events directly to Home Assistant.
-- Preserved active outage state across App restarts and calendar-month rollover.
-- Expanded EN/RU App configuration descriptions for all user-facing options using the official nested `fields` translation format.
-- Hardened MQTT v2 connection callback handling and documented all dashboard card dependencies.
-- Persisted Stop Recovery, completed recovery cycles and active cooldown across App restarts for the same outage.
-- Hardened switch recovery so a power-restore attempt is made even if the turn-off API response fails.
-- Marked optional Router telemetry unavailable when its mapped HA source is absent/unavailable and filtered it from the reference dashboard.
-- Extended the HAOS shutdown timeout to protect switch power restoration during normal App Stop/Restart.
-- Added explicit MQTT Device Discovery cleanup when optional Router/Traffic mappings are removed.
-- Fixed Router traffic unit normalization so bit/s and byte/s units cannot collapse into the same lowercase key.
+- Переименовать каталог репозитория в `dh_internet_app`, сохранив HA App slug `digitalhouses_internet`.
+- Исправить MQTT Event Discovery, чтобы schema-v2 JSON events передавались напрямую в Home Assistant.
+- Сохранять active outage state между рестартами App и переходом календарного месяца.
+- Расширить EN/RU описания App configuration для всех user-facing options с использованием официального nested `fields` translation format.
+- Усилить MQTT v2 connection callback handling и документировать все зависимости dashboard cards.
+- Сохранять Stop Recovery, завершённые recovery cycles и active cooldown между рестартами App для одного outage.
+- Усилить switch recovery: попытка restore power выполняется даже при ошибке API response на выключение.
+- Помечать optional Router telemetry unavailable, когда её mapped HA source отсутствует/unavailable, и скрывать её в reference dashboard.
+- Увеличить HAOS shutdown timeout для защиты восстановления питания switch при обычном App Stop/Restart.
+- Добавить явный cleanup MQTT Device Discovery при удалении optional Router/Traffic mappings.
+- Исправить normalization единиц Router traffic, чтобы bit/s и byte/s не схлопывались в одинаковый lowercase key.
 
-- Created DigitalHouses Internet App as a new Home Assistant App product with canonical `dh_internet_app_` MQTT/Home Assistant identity.
-- Added Internet/router reachability, current-month outage history and App-owned monthly availability calculation.
-- Added `smart` and `both` recovery modes with guarded `button` / `switch` actions, countdown, Stop control and structured events.
-- Added Version and Started-at runtime diagnostics.
-- Added official Ookla Speedtest with periodic/manual execution, Download, Upload, Ping, Jitter, Packet loss and compact status metadata.
-- Added persistent quality thresholds, low download/upload/high ping evaluation, aggregate Problems diagnostics and schema-v2 performance events.
-- Added Recent Results persistence with the latest 20 successful tests and per-test quality thresholds.
-- Added optional cumulative router traffic accounting with current-month totals and 12-month history.
-- Added optional WAN state and current Router Download/Upload rate bindings while keeping the total external HA binding contract at seven including recovery.
-- Added preferred Ookla server IDs, automatic fallback and on-demand server list refresh.
-- Added reusable Home Assistant Recorder, notification and dashboard presentation examples.
+- Создать DigitalHouses Internet App как новый Home Assistant App product с канонической MQTT/Home Assistant identity `dh_internet_app_`.
+- Добавить reachability Интернета/роутера, history отключений текущего месяца и App-owned расчёт monthly availability.
+- Добавить recovery modes `smart` и `both` с защищёнными actions `button` / `switch`, countdown, Stop control и structured events.
+- Добавить runtime diagnostics Version и Started at.
+- Добавить официальный Ookla Speedtest с periodic/manual execution, Download, Upload, Ping, Jitter, Packet loss и компактными status metadata.
+- Добавить persistent quality thresholds, оценку low download/upload/high ping, aggregate Problems diagnostics и schema-v2 performance events.
+- Добавить persistence Recent Results с последними 20 успешными тестами и per-test quality thresholds.
+- Добавить optional cumulative router traffic accounting с totals текущего месяца и историей за 12 месяцев.
+- Добавить optional bindings WAN state и текущих Router Download/Upload rate, сохраняя общий контракт внешних HA bindings в пределах семи вместе с recovery.
+- Добавить preferred Ookla server IDs, automatic fallback и on-demand refresh списка серверов.
+- Добавить reusable examples Home Assistant Recorder, notifications и dashboard presentation.
