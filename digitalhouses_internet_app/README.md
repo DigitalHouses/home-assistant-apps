@@ -90,7 +90,7 @@ telemetry_enabled: false
 
 Telemetry identity и состояние расписания хранятся в `/data/telemetry.json`, поэтому переживают restart/update App и обычный HA backup/restore. Ошибки телеметрии никогда не влияют на мониторинг Интернета или восстановление. `button.dh_internet_app_delete_telemetry` выполняет authenticated deletion серверной telemetry-записи этой установки.
 
-См. [DigitalHouses Product Telemetry Policy](../docs/standards/PRODUCT_TELEMETRY_POLICY.md).
+См. [политику телеметрии продуктов DigitalHouses](../docs/standards/PRODUCT_TELEMETRY_POLICY.md).
 
 ## Presentation в Home Assistant
 
