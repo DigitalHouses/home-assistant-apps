@@ -148,19 +148,53 @@ Scheduling fields may differ internally, but restart storms must be prevented.
 
 ## 5. Consent/configuration contract
 
-Telemetry policy version 2 is required behavior for supported official product releases.
+Telemetry policy version 2 is mandatory behavior **after explicit acceptance** of the current DigitalHouses telemetry/privacy terms.
 
-The final product configuration must not expose a telemetry enable/disable control. Policy-v2 products do not use `[telemetry] enabled = false` or `telemetry_enabled: false` as an opt-out mechanism.
+This is not an optional telemetry setting.
 
-Required semantics:
+Required activation model:
 
-- supported official clients always schedule the minimal telemetry heartbeat;
-- users are informed clearly in public product documentation before installation/update;
-- telemetry failure never affects product health or core behavior;
-- blocking the telemetry endpoint may prevent delivery but must not break the product;
-- authenticated deletion erases retained server data but does not disable future reporting while the product remains in use.
+```text
+not accepted
+    ↓ explicit user acceptance
+accepted
+    ↓
+normal supported runtime + mandatory telemetry
+```
 
-Migration from a released policy-v1 product must explicitly remove or retire the old opt-in configuration surface without pretending that a legacy `false` value still disables reporting.
+Before acceptance:
+
+- do not send telemetry;
+- do not create the impression that the product is fully activated;
+- present a clear consent-required state/instruction;
+- show or link the current telemetry/privacy policy;
+- record no acceptance implicitly from mere installation, startup, upgrade, or network access.
+
+After acceptance:
+
+- no ordinary `telemetry_enabled` opt-out is exposed;
+- minimal policy-v2 telemetry is scheduled automatically;
+- telemetry transport failure never affects normal product health;
+- acceptance state survives restart/upgrade and supported backup/restore.
+
+The acceptance record should persist at least:
+
+```text
+telemetry_policy_version
+accepted_at
+policy_revision or policy content hash
+```
+
+The exact persistence representation is product-specific, but it must be possible to determine which policy revision was explicitly accepted.
+
+Where applicable law requires withdrawal:
+
+- withdrawal stops future telemetry;
+- withdrawal is distinct from deleting retained telemetry history;
+- the product may transition to an explicit `consent_required` / unsupported state rather than silently becoming a telemetry-free supported product;
+- jurisdiction-specific legality of conditioning continued use on consent remains governed by the legal review.
+
+Do not treat `telemetry_enabled: false` from policy-v1 releases as equivalent to policy-v2 acceptance.
 
 ## 6. Scheduling contract
 
@@ -405,6 +439,8 @@ Before implementation:
 - [ ] confirm server allowlist contains that identifier;
 - [ ] confirm product version source;
 - [ ] define persistent telemetry state location;
+- [ ] implement an explicit policy-v2 acceptance gate;
+- [ ] persist accepted policy version/revision and acceptance time;
 - [ ] remove/retire any policy-v1 telemetry opt-in setting;
 - [ ] publish clear user-facing disclosure linking to the shared telemetry policy.
 
@@ -429,7 +465,9 @@ Verification:
 - [ ] country derived by server;
 - [ ] no client country field;
 - [ ] no IP persisted;
-- [ ] no product telemetry opt-out control remains;
+- [ ] no telemetry is sent before explicit acceptance;
+- [ ] refusal leaves product in consent-required / not-activated state;
+- [ ] accepted product has no ordinary telemetry opt-out control;
 - [ ] deletion removes installation/history and rotates local identity;
 - [ ] continued use after deletion resumes later under a fresh identity.
 
@@ -465,7 +503,7 @@ docs/standards/RELEASE_POLICY.md
 First audit the current product implementation and report any contract mismatch.
 
 Required constraints:
-- supported official releases use mandatory telemetry policy v2; no user opt-out control;
+- supported official releases use explicit acceptance + mandatory telemetry policy v2; no ordinary runtime opt-out after acceptance;
 - protocol v1 payload is exact with telemetry_policy_version=2; do not add product-specific fields;
 - country is never sent by the client;
 - persistent UUIDv4 + 256-bit token survive restart/upgrade/restore;
