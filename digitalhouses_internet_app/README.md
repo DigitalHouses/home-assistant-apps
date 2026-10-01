@@ -1,108 +1,106 @@
 # DigitalHouses Internet App
 
-Home Assistant App для мониторинга доступности Интернета, Ookla Speedtest, истории отключений за текущий месяц и автоматического восстановления ONT/роутера.
+Home Assistant App for Internet availability monitoring, Ookla Speedtest, current-month outage history and automatic ONT/router recovery.
 
-Это отдельный продукт. Он не мигрирует и не переиспользует стабильные MQTT-идентификаторы или историю Recorder продукта `digitalhouses_speedtest`.
+This is a new product. It does not migrate or reuse the stable MQTT identities or Recorder history of `digitalhouses_speedtest`.
 
-> Документация DigitalHouses Internet App в репозитории ведётся на русском языке. Технические идентификаторы, имена сущностей, MQTT-топики, значения протоколов и код сохраняются в исходном виде.
+## Canonical identities
 
-## Канонические идентификаторы
+- repository directory: `digitalhouses_internet_app`
+- HA App slug: `digitalhouses_internet_app`
+- public product name: **DigitalHouses Internet App**
+- release identifier: `digitalhouses_internet_app`
+- production image: `ghcr.io/digitalhouses/digitalhouses_internet_app:<version>`
+- MQTT base: `DigitalHouses/Global/dh_internet_app`
+- Home Assistant entity / unique-id prefix: `dh_internet_app_`
 
-- каталог в репозитории: `digitalhouses_internet_app`
-- slug HA App: `digitalhouses_internet_app`
-- публичное имя продукта: **DigitalHouses Internet App**
-- идентификатор релиза: `digitalhouses_internet_app`
-- production-образ: `ghcr.io/digitalhouses/digitalhouses_internet_app:<version>`
-- базовый MQTT-топик: `DigitalHouses/Global/dh_internet_app`
-- префикс сущностей / unique ID Home Assistant: `dh_internet_app_`
+## Recovery
 
-## Восстановление
+Recovery is intentionally limited to two user-facing modes:
 
-Восстановление намеренно ограничено двумя пользовательскими режимами:
+- `smart` — if the router answers locally but Internet is unavailable, reboot the ONT; if the router itself does not answer, reboot the router.
+- `both` — reboot ONT and then router on every recovery cycle.
 
-- `smart` — если роутер доступен локально, но Интернет недоступен, перезагружается ONT; если сам роутер недоступен, перезагружается роутер.
-- `both` — в каждом цикле восстановления последовательно перезагружаются ONT и затем роутер.
+Recovery actions are intentionally limited to:
 
-Действия восстановления намеренно ограничены двумя типами:
+- `button` — press an existing Home Assistant reboot button;
+- `switch` — power-cycle a Home Assistant switch/relay.
 
-- `button` — нажатие существующей кнопки перезагрузки Home Assistant;
-- `switch` — цикл выключения/включения существующего switch/реле Home Assistant.
+Arbitrary scripts and shell commands are not part of the recovery contract.
 
-Произвольные scripts и shell-команды не входят в контракт восстановления.
+All recovery timing belongs to App configuration: maximum cycles, retry interval, boot wait, cooldown and switch power-off duration. `router_ip` is a top-level network fact used by both monitoring and smart recovery.
 
-Все временные параметры восстановления принадлежат конфигурации App: максимальное количество циклов, интервал повторной попытки, ожидание загрузки, cooldown и длительность отключения питания switch. `router_ip` — сетевой параметр верхнего уровня, который используется и мониторингом, и smart-восстановлением.
+`Stop recovery` stops further attempts for the current outage. Stop state, completed recovery cycles and an active cooldown survive an App restart, so restarting the App does not bypass recovery limits. If a switch has already been turned off, the App always attempts to turn it back on before the stop propagates. The HAOS App shutdown timeout is extended to 45 seconds so normal Stop/Restart operations can complete that restore path.
 
-`Stop recovery` останавливает дальнейшие попытки для текущего отключения. Состояние Stop, количество уже выполненных циклов и активный cooldown сохраняются при перезапуске App, поэтому перезапуск не позволяет обойти ограничения восстановления. Если switch уже был выключен, App всегда пытается вернуть питание до завершения Stop. Таймаут остановки HAOS App увеличен до 45 секунд, чтобы обычные Stop/Restart могли завершить этот защитный путь восстановления питания.
+## Current product state
 
-## Текущее состояние продукта
+Version `0.1.20` keeps immutable GHCR delivery and adds persistent suppression of transient automatic Speedtest failures. The canonical Supervisor identity is permanent, the temporary migration runtime has been removed, and the App remains stable in Home Assistant. The product provides:
 
-Версия `0.1.20` сохраняет immutable-доставку через GHCR и добавляет устойчивое подавление кратковременных ошибок автоматического Speedtest. Каноническая Supervisor-идентичность постоянна, временный runtime миграции удалён, App остаётся в стабильном канале Home Assistant. Продукт предоставляет:
+- Internet and router reachability;
+- current-month outage state persisted under `/data`;
+- `smart | both` recovery state machine;
+- `button | switch` recovery actions via the Home Assistant Core API;
+- recovery countdown and Stop button;
+- structured MQTT Event entity;
+- Version and Started-at diagnostics;
+- Ookla Download, Upload, Ping, Jitter and Packet loss measurements;
+- manual and periodic Speedtest with `idle | running` execution status and last-result metadata;
+- preferred Ookla server IDs with optional automatic fallback and on-demand server catalog;
+- Recent Results as one diagnostic entity with the last 20 successful tests and the thresholds that were active for each test.
 
-- доступность Интернета и роутера;
-- состояние отключений текущего месяца с хранением под `/data`;
-- state machine восстановления `smart | both`;
-- действия восстановления `button | switch` через Home Assistant Core API;
-- countdown восстановления и кнопку Stop;
-- структурированную MQTT Event-сущность;
-- диагностические Version и Started at;
-- измерения Ookla Download, Upload, Ping, Jitter и Packet loss;
-- ручной и периодический Speedtest со статусом выполнения `idle | running` и метаданными последнего результата;
-- предпочтительные Ookla server IDs с опциональным automatic fallback и каталогом серверов по запросу;
-- Recent Results как одну диагностическую сущность с последними 20 успешными тестами и порогами, действовавшими на момент каждого теста.
+Quality thresholds and App-owned performance problem evaluation are implemented. Router integration uses at most five optional HA bindings: cumulative Download/Upload totals, WAN state and current Download/Upload rates. Together with two recovery entities the App stays within seven external HA bindings. Monthly traffic retains the current month plus 11 previous months. The reusable package, notification presentation and reference dashboard are included in this development milestone.
 
-Реализованы пороги качества и App-owned оценка проблем производительности. Интеграция с роутером использует не более пяти опциональных HA bindings: накопительные Download/Upload, WAN state и текущие Download/Upload rates. Вместе с двумя recovery entities App остаётся в пределах семи внешних HA bindings. История трафика хранит текущий месяц и 11 предыдущих. В продукт входят reusable package, presentation уведомлений и reference dashboard.
+See [DOCS.md](DOCS.md) for configuration semantics and [HAOS_TEST_PLAN.md](HAOS_TEST_PLAN.md) for the first real installation test sequence.
 
-Семантика конфигурации описана в [DOCS.md](DOCS.md), а последовательность проверки реальной установки — в [HAOS_TEST_PLAN.md](HAOS_TEST_PLAN.md).
+## Immutable production delivery
 
-## Неизменяемая production-доставка
+Production releases are delivered through the DigitalHouses App repository using the canonical image repository `ghcr.io/digitalhouses/digitalhouses_internet_app`. The App package version, canonical release tag, exact release commit, GHCR version tag and recorded image digest must all describe the same release. Floating tags such as `latest` are not part of the production contract.
 
-Production-релизы доставляются через репозиторий DigitalHouses App с использованием канонического image repository `ghcr.io/digitalhouses/digitalhouses_internet_app`. Версия App package, канонический release tag, точный release commit, GHCR version tag и зафиксированный image digest должны описывать один и тот же релиз. Плавающие теги вроде `latest` не входят в production-контракт.
+Home Assistant backups are expected to contain installation-specific configuration and persistent `/data` state, including telemetry identity and App-owned runtime state, without duplicating a locally built application image. Restore acceptance targets the current supported production release; restoring an older release over a newer one is not a general immutable-delivery requirement.
 
-Backup Home Assistant должен содержать установочную конфигурацию и persistent-состояние `/data`, включая telemetry identity и App-owned runtime state, без дублирования локально собранного application image. Restore acceptance выполняется для текущего поддерживаемого production-релиза; восстановление старого релиза поверх нового не является общим требованием immutable-доставки.
+## Completed App slug migration
 
-## Завершённая миграция slug App
+The Home Assistant App slug migration from legacy `digitalhouses_internet` to canonical `digitalhouses_internet_app` is complete.
 
-Миграция Home Assistant App slug с legacy `digitalhouses_internet` на канонический `digitalhouses_internet_app` завершена.
+Releases `0.1.12` through `0.1.15` contained the temporary bridge/import machinery used for the controlled reinstall. Version `0.1.16` removes that machinery from the normal runtime: there is no writable `/share` migration mapping, no migration environment mode, and no migration module in the image.
 
-Релизы `0.1.12`–`0.1.15` содержали временный bridge/import-механизм для контролируемой переустановки. Версия `0.1.16` удалила этот механизм из обычного runtime: отсутствуют writable mapping `/share`, migration environment mode и migration module в image.
+MQTT/device/entity identities remain unchanged under `dh_internet_app`.
 
-MQTT/device/entity identities под `dh_internet_app` не изменились.
+The completed procedure and release history are retained in [the slug migration record](../docs/digitalhouses_internet_app/slug-migration.md).
 
-Завершённая процедура и история релизов сохранены в [документе миграции slug](../docs/digitalhouses_internet_app/slug-migration.md).
+## Runtime contract behavior
 
-## Поведение runtime-контрактов
+Connectivity is considered **unknown** until a real ICMP probe completes. During startup, or when the probe mechanism itself cannot execute, the four connectivity entities are unavailable rather than being reported as down. Probe execution failures do not advance outage confirmation and cannot start automatic recovery.
 
-Связность считается **неизвестной**, пока не завершится реальная ICMP-проверка. Во время запуска либо при невозможности выполнить сам механизм probe четыре connectivity entities показываются как unavailable, а не как недоступные. Ошибка выполнения probe не увеличивает подтверждение outage и не может запустить автоматическое восстановление.
+Persisted App-owned state under `/data` is contract data. A genuinely missing state file is treated as first-run state and receives documented defaults where applicable. An existing malformed state file is not silently replaced: startup fails with an explicit contract-data error so recovery limits, outage history, traffic totals or telemetry installation identity cannot be reset unnoticed.
 
-Persistent App-owned state под `/data` является контрактными данными. Действительно отсутствующий state file рассматривается как первый запуск и получает документированные значения по умолчанию там, где это предусмотрено. Уже существующий повреждённый файл молча не заменяется: запуск завершается явной ошибкой contract data, чтобы ограничения восстановления, история отключений, traffic totals или telemetry installation identity не могли незаметно сброситься.
+Machine events are producer-validated against their schema-v2 event-specific contract before transport. For connection loss/restoration, retained authoritative state is synchronized before the transient event is emitted. Existing MQTT/device/entity identities remain unchanged.
 
-Machine events проверяются producer-ом по event-specific контракту schema v2 до транспорта. Для потери/восстановления связи authoritative retained state синхронизируется до отправки transient event. Существующие MQTT/device/entity identities не меняются.
+## Product telemetry
 
-## Телеметрия продукта
-
-Телеметрия использования является явным opt-in и по умолчанию отключена:
+Usage telemetry is explicit opt-in and disabled by default:
 
 ```yaml
 telemetry_enabled: false
 ```
 
-При переходе telemetry из disabled в enabled App выполняет одну best-effort heartbeat-попытку сразу при следующем запуске. Свежая установка и изменение released App version также дают право на немедленный heartbeat. После успешного heartbeat обычная отправка происходит примерно раз в 24 часа с детерминированным jitter ±30 минут. Обычные рестарты не обходят сохранённое расписание, а неудачная попытка сохраняет часовой backoff между рестартами. Endpoint: `https://telemetry.digitalhouses.vip`. Payload содержит только protocol version, telemetry policy version, случайный installation UUID, канонический product identifier `digitalhouses_internet_app` и App version. Страна определяется на стороне сервера. Hostname, Home Assistant UUID, LAN/WAN addresses, данные роутера, результаты Speedtest, outages, entity IDs и конфигурация не отправляются.
+When telemetry changes from disabled to enabled, the App sends one best-effort heartbeat immediately on the next App start. A fresh installation and a released App version change are also eligible for an immediate heartbeat. After a successful heartbeat, normal reporting is approximately every 24 hours with deterministic ±30 minute jitter. Ordinary restarts do not bypass the saved schedule, and a failed attempt keeps the one-hour retry backoff across restarts. The endpoint is `https://telemetry.digitalhouses.vip`. The payload contains only protocol version, telemetry policy version, random installation UUID, canonical product identifier `digitalhouses_internet_app`, and App version. Country is derived server-side. Hostname, Home Assistant UUID, LAN/WAN addresses, router data, Speedtest results, outages, entity IDs and configuration are not sent.
 
-Telemetry identity и состояние расписания хранятся в `/data/telemetry.json`, поэтому переживают restart/update App и обычный HA backup/restore. Ошибки телеметрии никогда не влияют на мониторинг Интернета или восстановление. `button.dh_internet_app_delete_telemetry` выполняет authenticated deletion серверной telemetry-записи этой установки.
+Telemetry identity and scheduling state are stored in `/data/telemetry.json`, so they survive App restart/update and normal HA backup/restore. Telemetry failures never affect Internet monitoring or recovery. `button.dh_internet_app_delete_telemetry` requests authenticated deletion of this installation's retained server-side telemetry data.
 
-См. [политику телеметрии продуктов DigitalHouses](../docs/standards/PRODUCT_TELEMETRY_POLICY.md).
+See [DigitalHouses Product Telemetry Policy](../docs/standards/PRODUCT_TELEMETRY_POLICY.md).
 
-## Presentation в Home Assistant
+## Home Assistant presentation
 
-Home Assistant слой намеренно разделён по ответственности:
+The Home Assistant layer is deliberately split by responsibility:
 
-- `examples/packages/dh_internet_app_global_package.yaml` — только Recorder whitelist;
-- `examples/packages/dh_internet_app_notification_local_package.yaml` — английский пример прямой доставки;
-- `examples/packages/locales/ru/dh_internet_app_notification_local_package.yaml` — русский публичный пример прямой доставки;
+- `examples/packages/dh_internet_app_global_package.yaml` — Recorder whitelist only;
+- `examples/packages/dh_internet_app_notification_local_package.yaml` — English direct-delivery example;
+- `examples/packages/locales/ru/dh_internet_app_notification_local_package.yaml` — Russian public direct-delivery example;
 - `examples/lovelace/dh_internet_app_dashboard.yaml` — reference Sections dashboard.
 
-Устанавливается один local notification package. Он напрямую потребляет `event.dh_internet_app_event`, назначает каждому user-visible machine event собственный `trigger.id`, маршрутизирует через `choose` и напрямую вызывает конечный delivery action. Notification Envelope, вторичного события `dh_internet_app_notification`, adapter layer и повторной machine-schema validation в Home Assistant нет. Контракт machine event принадлежит producer-у.
+Install one local notification package. It consumes `event.dh_internet_app_event` directly, gives every user-visible machine event its own `trigger.id`, routes through `choose`, and calls the final delivery action directly. There is no Notification Envelope, secondary `dh_internet_app_notification` event, adapter layer or repeated machine-schema validation in Home Assistant. The producer owns the machine-event contract.
 
-Reference dashboard использует Mushroom, mini-graph-card и auto-entities. Опциональные Router и traffic entities скрываются, если их mappings не настроены либо mapped source в данный момент unavailable.
+The reference dashboard uses Mushroom, mini-graph-card and auto-entities. Optional Router and traffic entities are hidden when their mappings are not configured or their mapped source is currently unavailable.
 
-Recorder-facing диагностика намеренно low-noise: `sensor.dh_internet_app_problems` меняется только при фактическом изменении списка проблем, а `sensor.dh_internet_app_availability_month` публикует state с двумя знаками и стабильный атрибут календарного месяца, тогда как точные outage timings остаются App-owned.
+Recorder-facing diagnostics are intentionally low-noise: `sensor.dh_internet_app_problems` changes only when the actual problem list changes, and `sensor.dh_internet_app_availability_month` exposes a two-decimal state plus the stable calendar month while exact outage timing remains App-owned.
