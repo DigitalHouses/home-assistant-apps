@@ -90,7 +90,7 @@ Temperature, connected-client count, uptime и last-boot bindings намерен
 
 - protocol schema version;
 - telemetry policy version;
-- persistent random installation UUID;
+- постоянный случайный installation UUID;
 - product `digitalhouses_internet_app`;
 - App version.
 
@@ -100,7 +100,7 @@ Identity и состояние heartbeat scheduling сохраняются в `/
 
 `button.dh_internet_app_delete_telemetry` выполняет authenticated deletion сохранённой серверной telemetry record установки. Отключение telemetry прекращает будущие heartbeat, но не удаляет уже сохранённые серверные данные.
 
-Общая политика: [DigitalHouses Product Telemetry Policy](../docs/standards/PRODUCT_TELEMETRY_POLICY.md).
+Общая политика: [политика телеметрии продуктов DigitalHouses](../docs/standards/PRODUCT_TELEMETRY_POLICY.md).
 
 ## Контракты persistent state и конфигурации
 
@@ -116,7 +116,7 @@ Human-readable notification text и конечная доставка прина
 
 ## Presentation-слой Home Assistant
 
-Reusable Home Assistant layer не рассчитывает Internet state, recovery decisions, quality thresholds, outages или traffic. Всё это остаётся App-owned.
+Переиспользуемый слой Home Assistant не рассчитывает Internet state, recovery decisions, quality thresholds, outages или traffic. Всё это остаётся App-owned.
 
 `dh_internet_app_global_package.yaml` содержит только Recorder whitelist для полезных time-series entities. Он записывает connectivity, Speedtest measurements/status, quality thresholds/problem flags, recovery state/cycle и опциональные Router WAN/rates плюс cumulative/current-month traffic. Rich list/history entities, такие как месячные outage rows, Recent Results, server catalogs и traffic-history aggregates, намеренно не пишутся в Recorder, поскольку их attributes сохраняются App и могут быть крупными.
 
