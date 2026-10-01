@@ -31,9 +31,7 @@ sections:
             {% set slots_populated = state_attr(entity, 'memory_slots_populated') %}
             {% set slots_total = state_attr(entity, 'memory_slots_total') %}
             {% set memory_speed = state_attr(entity, 'memory_speed_mt_s') %}
-            {% set memory_total =
-              state_attr('sensor.dh_pve_agent_memory_usage', 'total_gib')
-            %}
+            {% set memory_total = state_attr(entity, 'memory_installed_gib') %}
 
             {% set kernel = state_attr(entity, 'kernel_version') or '' %}
             {% set pve_raw = state_attr(entity, 'proxmox_version') or '' %}
@@ -89,9 +87,13 @@ sections:
             {% set ram = namespace(parts=[]) %}
 
             {% if memory_total is number %}
-              {% set ram.parts = ram.parts + [
-                ('%.1f' | format(memory_total | float)) ~ ' GiB'
-              ] %}
+              {% set memory_value = memory_total | float %}
+              {% if memory_value == (memory_value | int) %}
+                {% set memory_label = memory_value | int %}
+              {% else %}
+                {% set memory_label = '%.1f' | format(memory_value) %}
+              {% endif %}
+              {% set ram.parts = ram.parts + [memory_label ~ ' GiB'] %}
             {% endif %}
 
             {% if memory_type %}
