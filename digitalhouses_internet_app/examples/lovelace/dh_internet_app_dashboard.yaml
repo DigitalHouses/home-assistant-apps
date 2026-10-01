@@ -1,5 +1,5 @@
-# DigitalHouses Internet App — Home Assistant Sections dashboard
-# Requires Mushroom, mini-graph-card and auto-entities.
+# DigitalHouses Internet App — Sections dashboard Home Assistant
+# Требуются Mushroom, mini-graph-card и auto-entities.
 
 title: Internet
 path: internet
