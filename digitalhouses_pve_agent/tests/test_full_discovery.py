@@ -151,6 +151,8 @@ def _inventory():
 def test_static_monitoring_entities_are_present():
     c = build_full_discovery_payload(_config(), _identity(), version="0.1.0")["components"]
     assert c["system"]["default_entity_id"] == "sensor.dh_pve_agent_system"
+    assert "memory_installed_gib" in c["system"]["json_attributes_template"]
+    assert "memory_inventory.total_gib" in c["system"]["json_attributes_template"]
     assert c["last_boot"]["default_entity_id"] == "sensor.dh_pve_agent_last_boot"
     assert c["cpu_usage"]["default_entity_id"] == "sensor.dh_pve_agent_cpu_usage"
     assert c["cpu_throttling"]["default_entity_id"] == "binary_sensor.dh_pve_agent_cpu_throttling"
