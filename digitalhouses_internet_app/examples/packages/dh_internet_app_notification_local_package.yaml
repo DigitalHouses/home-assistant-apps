@@ -1,9 +1,9 @@
 # =============================================================================
-# DigitalHouses Internet App local notifications — English example
+# DigitalHouses Internet App — локальные уведомления, английский пример
 # =============================================================================
-# Machine events come directly from event.dh_internet_app_event.
-# Flow: machine event -> trigger.id -> choose -> direct action.
-# Replace persistent_notification.create with the local delivery service if needed.
+# Machine events приходят напрямую из event.dh_internet_app_event.
+# Поток: machine event -> trigger.id -> choose -> direct action.
+# При необходимости замените persistent_notification.create на локальный delivery service.
 # =============================================================================
 
 dh_internet_app_notification_local_package:

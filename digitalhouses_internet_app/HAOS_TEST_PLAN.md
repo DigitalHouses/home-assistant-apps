@@ -1,210 +1,210 @@
-# DigitalHouses Internet App — HAOS validation plan
+# DigitalHouses Internet App — план проверки HAOS
 
-This plan covers the current canonical DigitalHouses Internet App runtime.
+Этот план покрывает текущий канонический runtime DigitalHouses Internet App.
 
-## 1. Safe first start
+## 1. Безопасный первый запуск
 
-Before starting the App:
+Перед запуском App:
 
-- set `router_ip` to the actual LAN router address;
-- keep `recovery.enabled: false`;
-- leave all five `traffic.*` mappings empty;
-- set `speedtest.periodic_enabled: false` for the first start;
-- keep `telemetry_enabled: false` for the initial functional test;
-- confirm an MQTT service is installed and available to Supervisor.
+- укажите в `router_ip` фактический LAN-адрес роутера;
+- оставьте `recovery.enabled: false`;
+- оставьте пустыми все пять mappings `traffic.*`;
+- для первого запуска установите `speedtest.periodic_enabled: false`;
+- для начальной функциональной проверки оставьте `telemetry_enabled: false`;
+- убедитесь, что MQTT service установлен и доступен Supervisor.
 
-Expected result after start:
+Ожидаемый результат после запуска:
 
-- one MQTT device named **DigitalHouses Internet App**;
-- all created entity IDs use the `dh_internet_app_` prefix;
-- Version matches the installed released App version;
-- Started at is a valid timestamp;
-- Internet, Google, Cloudflare and Router connectivity update normally;
-- no recovery action can execute.
+- одно MQTT device с именем **DigitalHouses Internet App**;
+- все созданные entity IDs используют префикс `dh_internet_app_`;
+- Version совпадает с установленной released App version;
+- Started at содержит корректный timestamp;
+- connectivity Internet, Google, Cloudflare и Router обновляется штатно;
+- ни одно recovery action не может выполниться.
 
-## 2. Manual Speedtest
+## 2. Ручной Speedtest
 
-Press `button.dh_internet_app_run_speedtest`.
+Нажмите `button.dh_internet_app_run_speedtest`.
 
-Verify:
+Проверьте:
 
-- status changes from `idle` to `running`, then returns to `idle`;
-- Download, Upload and Ping contain numeric values;
-- Jitter and Packet loss are populated when supplied by Ookla;
-- `last_result` becomes `success` and provider/server/result metadata appear on Speedtest status;
-- Recent Results gains one record.
+- status меняется с `idle` на `running`, затем возвращается в `idle`;
+- Download, Upload и Ping содержат числовые значения;
+- Jitter и Packet loss заполняются, если Ookla их предоставляет;
+- `last_result` становится `success`, а provider/server/result metadata появляются в Speedtest status;
+- в Recent Results появляется одна запись.
 
-Change one threshold temporarily so the last result violates it, then restore the threshold.
+Временно измените один порог так, чтобы последний результат его нарушал, затем верните исходное значение.
 
-Verify:
+Проверьте:
 
-- the matching problem binary changes;
-- aggregate Performance problem changes;
-- schema-v2 performance events are emitted;
-- restoring the threshold clears the current problem without rewriting the historical Recent Results snapshot.
+- соответствующий problem binary меняется;
+- aggregate Performance problem меняется;
+- отправляются schema-v2 performance events;
+- возврат порога очищает текущую проблему, не переписывая исторический snapshot Recent Results.
 
-## 3. Server catalog
+## 3. Каталог серверов
 
-Press `button.dh_internet_app_refresh_servers`.
+Нажмите `button.dh_internet_app_refresh_servers`.
 
-Verify:
+Проверьте:
 
-- the operation happens only on demand;
-- Available servers receives a refreshed timestamp and server list;
-- no periodic server-catalog polling appears in the App log.
+- операция выполняется только по запросу;
+- Available servers получает новый timestamp и список серверов;
+- в App log отсутствует периодический polling каталога серверов.
 
-## 4. Outage and persistence
+## 4. Отключение и persistence
 
-With Recovery still disabled, create a controlled Internet outage.
+При всё ещё выключенном Recovery создайте контролируемое отключение Интернета.
 
-Verify after the configured failed-check count:
+После настроенного количества неудачных проверок проверьте:
 
-- Internet changes to unavailable;
-- one active current-month outage appears;
-- the outage has `to: null` while active;
-- a `connection_lost` MQTT Event is emitted.
+- Internet становится unavailable;
+- появляется один активный outage текущего месяца;
+- пока outage активен, у него `to: null`;
+- отправляется MQTT Event `connection_lost`.
 
-Restart the App while the outage is still active.
+Перезапустите App, пока outage ещё активен.
 
-Verify:
+Проверьте:
 
-- the same outage remains active;
-- its original/current-month start is preserved;
-- no duplicate outage record is created.
+- тот же outage остаётся активным;
+- его исходное/текущее начало месяца сохраняется;
+- дублирующая outage record не создаётся.
 
-Restore Internet.
+Восстановите Интернет.
 
-Verify:
+Проверьте:
 
-- the outage closes once;
-- duration and monthly availability update;
-- the Outages sensor still contains every outage recorded in the current month; only dashboard presentation may limit the visible rows;
-- `connection_restored` is emitted.
+- outage закрывается ровно один раз;
+- duration и monthly availability обновляются;
+- sensor Outages по-прежнему содержит все outages текущего месяца; ограничиваться может только число строк в dashboard presentation;
+- отправляется `connection_restored`.
 
-## 5. Notification presentation
+## 5. Presentation уведомлений
 
-Install exactly one local notification package.
+Установите ровно один local notification package.
 
-Verify that each supported `event.dh_internet_app_event` machine event activates the matching `trigger.id` branch and calls the final delivery action directly. Both public locale examples use `persistent_notification.create`; an installation may replace only that final action with its own local delivery service.
+Проверьте, что каждое поддерживаемое machine event из `event.dh_internet_app_event` активирует соответствующую ветку `trigger.id` и напрямую вызывает конечный delivery action. Оба публичных locale examples используют `persistent_notification.create`; установка может заменить только этот final action своим local delivery service.
 
-Verify there is no secondary `dh_internet_app_notification` event, Notification Envelope, adapter layer or duplicated machine-schema validation. Notification text must read required event data directly from `trigger.to_state.attributes`.
+Убедитесь, что отсутствуют вторичное событие `dh_internet_app_notification`, Notification Envelope, adapter layer и duplicated machine-schema validation. Текст уведомлений должен читать обязательные event data напрямую из `trigger.to_state.attributes`.
 
-## 6. Optional Router and traffic bindings
+## 6. Опциональные bindings роутера и трафика
 
-Configure only Router WAN/current-rate mappings first.
+Сначала настройте только Router WAN/current-rate mappings.
 
-Verify:
+Проверьте:
 
-- only the configured optional MQTT entities are created;
-- if a mapped source becomes unavailable, the corresponding MQTT entity becomes unavailable and disappears from the reference auto-entities card.
+- создаются только настроенные optional MQTT entities;
+- если mapped source становится unavailable, соответствующая MQTT entity также становится unavailable и исчезает из reference auto-entities card.
 
-Then configure both cumulative counters together.
+Затем настройте оба cumulative counters вместе.
 
-Verify:
+Проверьте:
 
-- first sample is a baseline, not counted usage;
-- later counter growth adds only the delta;
-- current-month totals grow correctly;
-- Traffic history is populated;
-- App restart does not duplicate usage.
+- первый sample является baseline и не считается трафиком;
+- последующий рост счётчика добавляет только delta;
+- totals текущего месяца растут правильно;
+- Traffic history заполняется;
+- restart App не дублирует usage.
 
-Remove an optional mapping and restart the App.
+Удалите один optional mapping и перезапустите App.
 
-Verify the previously discovered optional MQTT component is removed.
+Проверьте, что ранее обнаруженный optional MQTT component удалён.
 
-## 7. Product telemetry
+## 7. Телеметрия продукта
 
-With `telemetry_enabled: false`, restart the App and verify no heartbeat request is logged or observed.
+При `telemetry_enabled: false` перезапустите App и убедитесь, что heartbeat request не записывается в log и не наблюдается.
 
-Then explicitly enable `telemetry_enabled: true` and restart the released App. Verify one heartbeat is accepted immediately by DigitalHouses Stats with product `digitalhouses_internet_app` and the current App version. Restart the App again within one hour and verify it does not create a restart heartbeat storm. After a successful heartbeat, disable telemetry and restart once, then enable it again before the normal 24-hour interval is due: verify exactly one new immediate heartbeat is accepted. If that immediate attempt is forced to fail, restart the App and verify the one-hour failure backoff is preserved.
+Затем явно включите `telemetry_enabled: true` и перезапустите released App. Убедитесь, что DigitalHouses Stats сразу принимает один heartbeat с product `digitalhouses_internet_app` и текущей App version. Снова перезапустите App в течение часа и убедитесь, что restart heartbeat storm не возникает. После успешного heartbeat отключите telemetry и один раз перезапустите App, затем включите её снова до наступления обычного 24-часового интервала: должен быть принят ровно один новый immediate heartbeat. Если эту немедленную попытку принудительно сделать неуспешной, перезапустите App и убедитесь, что часовой failure backoff сохраняется.
 
-Press `button.dh_internet_app_delete_telemetry` and verify the server-side installation record is removed. Disable telemetry again if the installation should stop reporting.
+Нажмите `button.dh_internet_app_delete_telemetry` и убедитесь, что server-side installation record удалена. Если установка больше не должна отправлять данные, снова отключите telemetry.
 
-## 8. Recovery — only after read-only tests pass
+## 8. Recovery — только после прохождения read-only тестов
 
-Use known-good Home Assistant `button.*` or `switch.*` recovery entities.
+Используйте заведомо исправные Home Assistant recovery entities `button.*` или `switch.*`.
 
-First test `smart`:
+Сначала проверьте `smart`:
 
-- Internet down + Router up -> ONT only;
-- Internet down + Router down -> Router only;
-- no automatic escalation to both devices.
+- Internet down + Router up → только ONT;
+- Internet down + Router down → только Router;
+- автоматической эскалации на оба устройства нет.
 
-Then test `both`:
+Затем проверьте `both`:
 
-- every cycle executes ONT, then Router.
+- каждый цикл выполняет ONT, затем Router.
 
-For a switch target:
+Для цели типа switch:
 
-- confirm the configured power-off interval;
-- press Stop Recovery while the switch is off and confirm power is restored;
-- repeat with a normal HAOS App Stop/Restart and confirm the switch is restored before the App exits.
+- подтвердите настроенный интервал power-off;
+- нажмите Stop Recovery, пока switch выключен, и убедитесь, что питание восстановлено;
+- повторите с обычным HAOS App Stop/Restart и убедитесь, что switch возвращён в on до выхода App.
 
-Restart the App during an active recovery incident.
+Перезапустите App во время активного recovery incident.
 
-Verify:
+Проверьте:
 
-- Stop Recovery remains stopped for the same outage;
-- completed cycle budget is not reset;
-- active cooldown is not bypassed;
-- a restart between cycles waits through a retry guard before another power action.
+- Stop Recovery остаётся остановленным для того же outage;
+- бюджет выполненных циклов не сбрасывается;
+- активный cooldown не обходится;
+- restart между циклами выдерживает retry guard до следующего power action.
 
-## 9. Immutable delivery, backup and restore
+## 9. Неизменяемая доставка, backup и restore
 
-Install or update the current production App from the DigitalHouses App repository.
+Установите или обновите текущий production App из DigitalHouses App repository.
 
-Verify:
+Проверьте:
 
-- the installed App version matches the current released version;
-- production delivery uses the published `ghcr.io/digitalhouses/digitalhouses_internet_app:<version>` artifact rather than a locally built production image;
-- the GitHub Release records the canonical release tag, exact commit SHA, image name and image digest for the same version;
-- the canonical Supervisor slug remains `digitalhouses_internet_app` and existing `dh_internet_app_*` entities are not duplicated or renamed.
+- установленная App version совпадает с текущей released version;
+- production delivery использует опубликованный artifact `ghcr.io/digitalhouses/digitalhouses_internet_app:<version>`, а не локально собранный production image;
+- GitHub Release фиксирует для одной версии канонический release tag, точный commit SHA, image name и image digest;
+- канонический Supervisor slug остаётся `digitalhouses_internet_app`, существующие `dh_internet_app_*` entities не дублируются и не переименовываются.
 
-Create a Home Assistant backup that includes the App and inspect the App backup.
+Создайте Home Assistant backup, включающий App, и проверьте App backup.
 
-Verify:
+Проверьте:
 
-- installation-specific configuration and required persistent `/data` state are present;
-- telemetry installation identity/state is included as persistent App data when it exists;
-- the backup does not embed a large locally built copy of the reproducible application image.
+- присутствуют installation-specific configuration и необходимое persistent state `/data`;
+- telemetry installation identity/state включены как persistent App data, если они существуют;
+- backup не содержит крупную локально собранную копию воспроизводимого application image.
 
-Restore that current-production backup on a supported Home Assistant system.
+Восстановите этот current-production backup на поддерживаемой системе Home Assistant.
 
-Verify:
+Проверьте:
 
-- the required published registry image can be obtained;
-- App options and persistent `/data` state are restored;
-- telemetry installation identity and documented runtime state survive the restore;
-- the App starts cleanly with the same canonical MQTT/device/entity identities.
+- требуемый опубликованный registry image может быть получен;
+- App options и persistent state `/data` восстановлены;
+- telemetry installation identity и документированный runtime state переживают restore;
+- App чисто запускается с теми же каноническими MQTT/device/entity identities.
 
-Historical-version restore or installing an older App release over a newer one is not part of this general acceptance test unless a separate product-specific migration procedure explicitly requires it.
+Restore исторической версии или установка более старого App release поверх более нового не входит в этот общий acceptance test, если отдельная product-specific migration procedure явно этого не требует.
 
-## 10. Runtime contract compliance
+## 10. Соответствие runtime-контрактам
 
-After updating to the current production release, verify:
+После обновления до текущего production release проверьте:
 
-- Version equals the released App version and no startup log contains an `unknown`/local fallback version;
-- immediately after a restart the connectivity entities do not invent a down state before the first successful probe observation;
-- after observation, Internet/Google/Cloudflare/Router report the real current result;
-- the App starts with the existing canonical `dh_internet_app_*` identities and creates no duplicate device/entities;
-- persisted thresholds, outage count/history, recovery state, Recent Results and traffic totals remain intact across restart/update;
-- the first start of a new released version may send one telemetry heartbeat with that version, while another ordinary restart does not create a heartbeat storm;
-- App logs contain no `Contract data error`, `Configuration error`, traceback or unexpected probe failure.
+- Version равна released App version, а startup log не содержит fallback version `unknown`/local;
+- сразу после restart connectivity entities не выдумывают down state до первой успешной probe observation;
+- после observation Internet/Google/Cloudflare/Router показывают фактический текущий результат;
+- App запускается с существующими каноническими `dh_internet_app_*` identities и не создаёт duplicate device/entities;
+- persistent thresholds, outage count/history, recovery state, Recent Results и traffic totals сохраняются через restart/update;
+- первый запуск новой released version может отправить один telemetry heartbeat с этой version, тогда как следующий обычный restart не создаёт heartbeat storm;
+- App logs не содержат `Contract data error`, `Configuration error`, traceback или неожиданную probe failure.
 
-Corruption and malformed-event negative cases are covered by automated repository tests; do not damage production `/data` files to reproduce them during routine live acceptance.
+Негативные случаи corruption и malformed-event покрываются автоматическими repository tests; при обычной live acceptance не повреждайте production-файлы `/data` специально для их воспроизведения.
 
-## 11. Pass criteria
+## 11. Критерии прохождения
 
-The HAOS validation passes when:
+Проверка HAOS считается пройденной, когда:
 
-- App installation/start is clean;
-- MQTT Discovery creates only canonical entities;
-- connectivity, Speedtest, thresholds, Events and current-month outage state work;
-- App restart preserves outage/recovery/traffic state correctly;
-- optional mappings appear/disappear cleanly;
-- switch recovery cannot be left off by a normal Stop/Restart path;
-- the reference dashboard and notification package load without legacy Speedtest entities;
-- immutable GHCR delivery and current-production backup/restore acceptance pass;
-- runtime contract-compliance acceptance passes without changing canonical identities.
+- установка/запуск App проходят чисто;
+- MQTT Discovery создаёт только канонические entities;
+- connectivity, Speedtest, thresholds, Events и outage state текущего месяца работают;
+- restart App корректно сохраняет outage/recovery/traffic state;
+- optional mappings корректно появляются и удаляются;
+- switch recovery не может оставить питание выключенным после обычного Stop/Restart;
+- reference dashboard и notification package загружаются без legacy Speedtest entities;
+- immutable GHCR delivery и current-production backup/restore acceptance проходят;
+- runtime contract-compliance acceptance проходит без изменения канонических identities.
 
-Historical Supervisor slug-migration validation is retained separately in `../docs/digitalhouses_internet_app/slug-migration.md`; it is no longer part of the current runtime test path.
+Историческая проверка Supervisor slug migration сохранена отдельно в `../docs/digitalhouses_internet_app/slug-migration.md`; она больше не входит в текущий runtime test path.

@@ -1,68 +1,68 @@
-# DigitalHouses Internet App — configuration
+# DigitalHouses Internet App — конфигурация
 
-## Network
+## Сеть
 
-`router_ip` is the LAN address of the router. The App uses it to distinguish a local router failure from an upstream Internet/ONT failure.
+`router_ip` — LAN-адрес роутера. App использует его, чтобы отличать локальную недоступность роутера от upstream-проблемы Интернета/ONT.
 
-`connectivity_check.interval_seconds` controls the normal probe interval. `attempts` is the number of consecutive observed failed Internet probes required before an outage incident starts. `timeout_seconds` is the timeout for an individual probe. Connectivity remains unknown/unavailable until a real probe completes. Failure to execute the probe mechanism is a diagnostic error, not an observed outage, and therefore does not increment outage confirmation or start recovery.
+`connectivity_check.interval_seconds` задаёт обычный интервал проверки. `attempts` — количество последовательных наблюдаемых неудачных Internet probes, необходимое для начала outage incident. `timeout_seconds` — таймаут одной проверки. Связность остаётся unknown/unavailable до завершения реального probe. Невозможность выполнить сам механизм probe является диагностической ошибкой, а не наблюдаемым outage, поэтому она не увеличивает подтверждение outage и не запускает recovery.
 
-## Recovery
+## Восстановление
 
-Recovery is disabled by default.
+По умолчанию recovery отключён.
 
-`recovery.mode` supports only:
+`recovery.mode` поддерживает только:
 
-- `smart`: Internet down + Router up -> ONT; Router down -> Router.
-- `both`: ONT -> Router on every recovery attempt.
+- `smart`: Internet down + Router up → ONT; Router down → Router.
+- `both`: ONT → Router при каждой попытке recovery.
 
-Each target supports only `button` or `switch`. A button target must reference a `button.*` entity and is executed with `button.press`. A switch target must reference a `switch.*` entity; the App turns it off for `power_off_seconds` and always attempts to restore power before the action completes or a Stop request propagates. The App declares a 45-second Supervisor shutdown timeout so a normal App Stop/Restart leaves enough time for the guarded restore path.
+Каждая цель поддерживает только `button` или `switch`. Цель типа button должна ссылаться на сущность `button.*` и вызывается через `button.press`. Цель типа switch должна ссылаться на `switch.*`; App выключает её на `power_off_seconds` и всегда пытается вернуть питание до завершения action либо передачи Stop request. App объявляет 45-секундный Supervisor shutdown timeout, чтобы обычный App Stop/Restart оставлял достаточно времени для защитного восстановления питания.
 
-When recovery is enabled, both ONT and Router target entities must be configured. All recovery timing belongs to App configuration:
+Когда recovery включён, должны быть настроены обе цели — ONT и Router. Все временные параметры recovery принадлежат App configuration:
 
-- `max_cycles`: recovery attempts before cooldown.
-- `boot_wait_minutes`: stabilization wait after an action cycle.
-- `retry_interval_minutes`: delay before the next cycle when Internet is still down.
-- `cooldown_minutes`: pause after `max_cycles`; if the same outage continues, a new series may start afterwards.
+- `max_cycles`: количество recovery attempts до cooldown.
+- `boot_wait_minutes`: время стабилизации после цикла действий.
+- `retry_interval_minutes`: задержка перед следующим циклом, если Интернет всё ещё недоступен.
+- `cooldown_minutes`: пауза после `max_cycles`; если тот же outage продолжается, после неё может начаться новая серия.
 
-The MQTT Stop button suppresses further attempts for the current incident, including across an App restart. The completed recovery-cycle budget and an active cooldown are also persisted, so restarting the App cannot bypass the configured recovery limits. A restart between normal cycles reapplies a retry guard before another power action. A new outage clears the previous recovery runtime state.
+MQTT-кнопка Stop подавляет дальнейшие попытки для текущего incident, включая перезапуск App. Бюджет уже выполненных recovery cycles и активный cooldown также сохраняются, поэтому рестарт App не позволяет обойти заданные ограничения. Рестарт между обычными циклами повторно применяет retry guard до следующего power action. Новый outage очищает предыдущее recovery runtime state.
 
 ## Speedtest
 
-The App runs the official Ookla CLI. Periodic execution is controlled by App configuration with a 5..720 minute interval and may be disabled. The MQTT Discovery Run speed test button uses the same backend path.
+App запускает официальный Ookla CLI. Периодический запуск управляется App configuration, поддерживает интервал 5..720 минут и может быть отключён. MQTT Discovery-кнопка Run speed test использует тот же backend path.
 
-Graphable entities are Download, Upload, Ping, Jitter and Packet loss. Provider, external IP, selected server, result URL, last successful timestamp, last result and the last error are attributes of the compact Speedtest status entity rather than separate entities.
+Графические сущности: Download, Upload, Ping, Jitter и Packet loss. Provider, external IP, выбранный server, result URL, timestamp последнего успешного теста, last result и last error являются атрибутами компактной Speedtest status entity, а не отдельными сущностями.
 
-The Speedtest status is an execution-state sensor: it is normally `idle`, becomes `running` while Ookla is executing, then returns to `idle`. The `last_result` attribute records `success`, `error` or `no_connectivity`. A failed or skipped test does not overwrite the last successful measurements, which remain persisted under `/data/runtime`.
+Speedtest status — это execution-state sensor: обычно он находится в `idle`, во время выполнения Ookla переходит в `running`, затем возвращается в `idle`. Атрибут `last_result` хранит `success`, `error` или `no_connectivity`. Неудачный или пропущенный тест не перезаписывает последние успешные измерения — они остаются сохранены под `/data/runtime`.
 
-Before every manual or periodic Speedtest, the App performs a fresh connectivity probe. If Internet is unavailable, Ookla is not started and the skip does not advance the automatic failure streak. Automatic execution failures are counted persistently across App restarts; a successful manual or automatic Speedtest resets the streak to zero. Every failure remains available as a machine event/log record, but the reference notification packages alert only on the fifth consecutive automatic failure and do not repeat the alert for failures 6, 7, and later. A failed manual Speedtest is notified immediately.
+Перед каждым ручным или периодическим Speedtest App выполняет свежую connectivity probe. Если Интернет недоступен, Ookla не запускается, а skip не увеличивает streak автоматических ошибок. Ошибки автоматического запуска считаются с сохранением между рестартами App; любой успешный ручной или автоматический Speedtest сбрасывает streak в ноль. Каждая ошибка остаётся доступной как machine event/log record, но reference notification packages уведомляют только на пятой последовательной автоматической ошибке и не повторяют уведомление на 6-й, 7-й и последующих ошибках. Ошибка ручного Speedtest уведомляется немедленно.
 
-### Server selection
+### Выбор сервера
 
-`speedtest.server_ids` is an ordered list of preferred Ookla server IDs. Empty means automatic selection. Configured IDs are tried in order; when `automatic_server_fallback` is enabled, one final automatic-selection attempt follows them.
+`speedtest.server_ids` — упорядоченный список предпочтительных Ookla server IDs. Пустой список означает automatic selection. Настроенные IDs пробуются по порядку; если включён `automatic_server_fallback`, после них выполняется одна финальная попытка automatic selection.
 
-The server catalog is on-demand: `button.dh_internet_app_refresh_servers` updates one diagnostic `sensor.dh_internet_app_available_servers`. There is no background server-catalog polling.
+Каталог серверов работает по запросу: `button.dh_internet_app_refresh_servers` обновляет одну диагностическую сущность `sensor.dh_internet_app_available_servers`. Фонового polling каталога серверов нет.
 
-## Quality thresholds
+## Пороги качества
 
-The three user-editable MQTT Number entities are Minimum download speed, Minimum upload speed and Maximum ping. Their values are persisted under `/data/runtime` and immediately recalculate the last successful Speedtest result.
+Три редактируемые пользователем MQTT Number entities: Minimum download speed, Minimum upload speed и Maximum ping. Их значения хранятся под `/data/runtime` и немедленно пересчитывают последний успешный Speedtest result.
 
-The App owns low-download, low-upload, high-ping and aggregate performance-problem state. Home Assistant is presentation only and does not recalculate thresholds with templates. Schema-v2 Events are emitted on meaningful problem transitions.
+App владеет состояниями low-download, low-upload, high-ping и aggregate performance-problem. Home Assistant отвечает только за presentation и не пересчитывает пороги шаблонами. Schema-v2 Events отправляются при значимых переходах состояния проблемы.
 
-## Recent Results
+## Последние результаты
 
-The App persists the latest 20 successful Speedtest records under `/data/runtime`. Home Assistant receives them through one diagnostic Recent results sensor whose state is the retained test count and whose `results` attribute contains the records.
+App хранит последние 20 успешных Speedtest records под `/data/runtime`. Home Assistant получает их через одну диагностическую Recent results sensor, state которой содержит количество сохранённых тестов, а атрибут `results` — сами записи.
 
-Each record stores measured values plus the thresholds and problem flags active when that test completed. Later threshold changes recalculate current problem state but do not rewrite historical results.
+Каждая запись хранит измеренные значения вместе с порогами и problem flags, действовавшими на момент завершения теста. Последующее изменение порогов пересчитывает текущее problem state, но не переписывает исторические Recent Results snapshots.
 
-## Monthly outages and availability
+## Отключения и доступность за месяц
 
-The App persists every outage in the current local calendar month, including an active outage; the monthly list is not truncated. Each record contains From, To and duration; the current outage has no To value until recovery. Presentation may show only the latest rows without changing the retained monthly history.
+App хранит каждое отключение текущего локального календарного месяца, включая активное; список за месяц не обрезается. Каждая запись содержит From, To и duration; у текущего outage поле To отсутствует до восстановления. Presentation может показывать только последние строки, не изменяя сохранённую месячную историю.
 
-Current-month availability is calculated by the App from elapsed local calendar-month time minus accumulated outage time. An active outage is persisted across App restarts; if it spans a month boundary, the new month is anchored at local month start. Home Assistant exposes the result but does not own the calculation.
+Доступность текущего месяца рассчитывается App как прошедшее время локального календарного месяца минус накопленное время outages. Активный outage сохраняется между рестартами App; если он пересекает границу месяца, новый месяц привязывается к локальному началу месяца. Home Assistant только отображает результат и не владеет расчётом.
 
-## Router telemetry and traffic
+## Телеметрия роутера и трафик
 
-All Router Home Assistant bindings are optional. The public contract contains at most five:
+Все Home Assistant bindings роутера опциональны. Публичный контракт содержит не более пяти:
 
 - `traffic.traffic_download_total`
 - `traffic.traffic_upload_total`
@@ -70,56 +70,56 @@ All Router Home Assistant bindings are optional. The public contract contains at
 - `traffic.router_download_rate`
 - `traffic.router_upload_rate`
 
-Together with the two optional recovery target entities, this keeps the external Home Assistant binding surface at a maximum of seven. No Home Assistant entity binding is mandatory.
+Вместе с двумя опциональными recovery target entities это ограничивает поверхность внешних Home Assistant bindings максимум семью. Ни один Home Assistant entity binding не является обязательным.
 
-The two cumulative counters are a pair: configure both or neither. They enable App-owned monthly traffic accounting. WAN state and current Download/Upload rates are independent optional bindings and do not affect recovery decisions.
+Два накопительных счётчика образуют пару: настраиваются либо оба, либо ни один. Они включают App-owned месячный учёт трафика. WAN state и текущие Download/Upload rates — независимые опциональные bindings и не влияют на recovery decisions.
 
-The App samples configured Router sources every 60 seconds through the Home Assistant Core API. Every mapped numeric traffic/rate source must expose an explicit supported `unit_of_measurement`; a missing unit is unavailable contract data and is never guessed. Home Assistant data-size units are normalized to bytes and data-rate units are normalized to Mbit/s while preserving the distinction between bit (`bit/s`, `Mbit/s`) and byte (`B/s`, `MB/s`) units. Common `Mbps/Gbps` aliases are also accepted.
+App опрашивает настроенные Router sources каждые 60 секунд через Home Assistant Core API. Каждый mapped numeric traffic/rate source обязан публиковать явный поддерживаемый `unit_of_measurement`; отсутствие unit означает unavailable contract data, и единица никогда не угадывается. Единицы data size Home Assistant нормализуются в bytes, а data rate — в Mbit/s с сохранением различия между bit (`bit/s`, `Mbit/s`) и byte (`B/s`, `MB/s`). Также принимаются распространённые aliases `Mbps/Gbps`.
 
-The first cumulative sample establishes a baseline. Normal growth adds only the delta. A source counter reset does not create negative traffic. If the cumulative source IDs change, history is retained but a fresh baseline is established. At a calendar-month boundary the first observation is also a fresh baseline because cumulative counters cannot reveal the exact cross-boundary split.
+Первый cumulative sample устанавливает baseline и не считается потреблением. Нормальный рост добавляет только delta. Reset исходного счётчика не создаёт отрицательный трафик. При изменении cumulative source IDs история сохраняется, но устанавливается новый baseline. На границе календарного месяца первая observation также становится новым baseline, потому что cumulative counters не позволяют точно разделить delta по сторонам границы месяца.
 
-Traffic history keeps the current month plus up to 11 previous observed months under `/data/runtime`. Traffic entities are created only when the cumulative pair is configured. WAN state and current rate entities are created only when their own mapping is configured. If an optional mapped source is currently missing, `unknown` or `unavailable`, the corresponding MQTT entity is marked unavailable until the source returns; the reference dashboard filters such entities out. When a mapping is removed from App configuration, the App explicitly removes the previously discovered optional MQTT component before publishing the reduced device configuration.
+Traffic history хранит текущий месяц и до 11 предыдущих наблюдаемых месяцев под `/data/runtime`. Traffic entities создаются только при настроенной cumulative pair. WAN state и current rate entities создаются только при наличии собственных mappings. Если опциональный mapped source отсутствует, имеет `unknown` или `unavailable`, соответствующая MQTT entity помечается unavailable до возврата источника; reference dashboard скрывает такую entity. При удалении mapping из App configuration App явно удаляет ранее обнаруженный optional MQTT component до публикации уменьшенной конфигурации устройства.
 
-Temperature, connected-client count, uptime and last-boot bindings are intentionally outside the new App contract.
+Temperature, connected-client count, uptime и last-boot bindings намеренно находятся вне нового App contract.
 
-## Product telemetry
+## Телеметрия продукта
 
-`telemetry_enabled` is an explicit opt-in and defaults to `false`. When disabled, the App makes no telemetry heartbeat requests.
+`telemetry_enabled` — явный opt-in, по умолчанию `false`. В disabled состоянии App не выполняет telemetry heartbeat requests.
 
-When enabled, the App sends protocol-v1 heartbeats to `https://telemetry.digitalhouses.vip` with exactly:
+При включении App отправляет protocol-v1 heartbeat на `https://telemetry.digitalhouses.vip` ровно с такими данными:
 
 - protocol schema version;
 - telemetry policy version;
-- persistent random installation UUID;
+- постоянный случайный installation UUID;
 - product `digitalhouses_internet_app`;
 - App version.
 
-The per-installation token is used only as the Bearer credential. Country is derived server-side; Internet measurements, outage history, router telemetry, entity IDs, Home Assistant identity and configuration are not sent.
+Per-installation token используется только как Bearer credential. Страна определяется на стороне сервера; Internet measurements, outage history, router telemetry, entity IDs, Home Assistant identity и configuration не отправляются.
 
-Identity and heartbeat scheduling state are persisted in `/data/telemetry.json`. A missing file creates a fresh installation identity; an existing malformed file fails explicitly and is never replaced with a new UUID/token, preventing one installation from silently becoming a second telemetry installation. The persisted state also records whether telemetry was disabled or enabled. A `false -> true` configuration transition schedules exactly one immediate best-effort heartbeat on the next App start, even when the previous successful heartbeat is still inside its normal 24-hour interval. After that first attempt the transition is consumed: an ordinary restart does not create another immediate heartbeat. A successful heartbeat is normally followed by the next one after 24 hours ±30 minutes. If the immediate or scheduled attempt fails, the failure timestamp is persisted and a restart does not bypass the one-hour backoff. Telemetry failures never affect the main monitoring/recovery path.
+Identity и состояние heartbeat scheduling сохраняются в `/data/telemetry.json`. Отсутствующий файл создаёт новую installation identity; существующий malformed file приводит к явной ошибке и никогда не заменяется новым UUID/token, чтобы одна установка не могла незаметно превратиться во вторую telemetry installation. Persistent state также хранит, была ли telemetry disabled или enabled. Переход configuration `false -> true` планирует ровно один немедленный best-effort heartbeat при следующем запуске App, даже если предыдущий успешный heartbeat ещё находится внутри обычного 24-часового интервала. После первой попытки переход считается обработанным: обычный restart не создаёт ещё один немедленный heartbeat. После успешного heartbeat следующий обычно отправляется через 24 часа ±30 минут. Если немедленная или плановая попытка неудачна, timestamp ошибки сохраняется, а restart не позволяет обойти часовой backoff. Ошибки telemetry никогда не влияют на основной monitoring/recovery path.
 
-`button.dh_internet_app_delete_telemetry` performs authenticated deletion of the retained installation telemetry record. Disabling telemetry stops future heartbeats but does not delete already retained server data.
+`button.dh_internet_app_delete_telemetry` выполняет authenticated deletion сохранённой серверной telemetry record установки. Отключение telemetry прекращает будущие heartbeat, но не удаляет уже сохранённые серверные данные.
 
-Shared policy: [DigitalHouses Product Telemetry Policy](../docs/standards/PRODUCT_TELEMETRY_POLICY.md).
+Общая политика: [политика телеметрии продуктов DigitalHouses](../docs/standards/PRODUCT_TELEMETRY_POLICY.md).
 
-## Persisted state and configuration contracts
+## Контракты persistent state и конфигурации
 
-Missing optional configuration keys use the defaults declared by the App schema. Explicitly supplied invalid values are rejected; integers are not clamped, strings are not coerced into booleans/numbers, and an invalid log level does not fall back to `info`.
+Отсутствующие опциональные configuration keys используют defaults, объявленные App schema. Явно заданные invalid values отклоняются; integers не clamp-ятся, strings не преобразуются в booleans/numbers, а invalid log level не откатывается к `info`.
 
-App-owned persisted runtime files distinguish first installation from corruption. If a file does not yet exist, documented fresh-state defaults may be created. If an existing recovery, outage, threshold, traffic, Speedtest, recent-results, server-catalog, discovery or telemetry state file is unreadable or violates its contract, the App reports an explicit contract-data failure rather than substituting zero/false/empty state.
+App-owned persistent runtime files различают первый запуск и corruption. Если файл ещё не существует, могут быть созданы документированные fresh-state defaults. Если существующий recovery, outage, threshold, traffic, Speedtest, recent-results, server-catalog, discovery или telemetry state file не читается либо нарушает контракт, App сообщает явную contract-data failure вместо подстановки zero/false/empty state.
 
-## Events and notifications
+## Events и уведомления
 
-The App publishes machine-readable MQTT Event entities using schema version 2. Every event is validated by the producer against its event-specific required fields and types before MQTT transport. Event payloads contain semantics such as event type, target, cycle, reason, values and timestamps. For `connection_lost` and `connection_restored`, authoritative retained state is published first and the transient event follows.
+App публикует machine-readable MQTT Event entities по schema version 2. Каждый event проверяется producer-ом по event-specific required fields и types до MQTT transport. Event payloads содержат семантику вроде event type, target, cycle, reason, values и timestamps. Для `connection_lost` и `connection_restored` authoritative retained state публикуется первым, transient event — после него.
 
-Human-readable notification text and final delivery belong to the local Home Assistant package. The App publishes machine events only and has no dependency on `script.write2log`, Telegram, mobile notifications or another delivery service.
+Human-readable notification text и конечная доставка принадлежат local Home Assistant package. App публикует только machine events и не зависит от `script.write2log`, Telegram, mobile notifications или другого delivery service.
 
-## Home Assistant presentation layer
+## Presentation-слой Home Assistant
 
-The reusable Home Assistant layer does not calculate Internet state, recovery decisions, quality thresholds, outages or traffic. Those remain App-owned.
+Переиспользуемый слой Home Assistant не рассчитывает Internet state, recovery decisions, quality thresholds, outages или traffic. Всё это остаётся App-owned.
 
-`dh_internet_app_global_package.yaml` contains only the Recorder whitelist for useful time-series entities. It records connectivity, Speedtest measurements/status, quality thresholds/problem flags, recovery state/cycle and optional Router WAN/rates plus cumulative/current-month traffic. Rich list/history entities such as monthly outage rows, Recent Results, server catalogs and traffic-history aggregates are intentionally not recorded because their attributes are App-persisted and can be large.
+`dh_internet_app_global_package.yaml` содержит только Recorder whitelist для полезных time-series entities. Он записывает connectivity, Speedtest measurements/status, quality thresholds/problem flags, recovery state/cycle и опциональные Router WAN/rates плюс cumulative/current-month traffic. Rich list/history entities, такие как месячные outage rows, Recent Results, server catalogs и traffic-history aggregates, намеренно не пишутся в Recorder, поскольку их attributes сохраняются App и могут быть крупными.
 
-`dh_internet_app_notification_local_package.yaml` and `locales/ru/dh_internet_app_notification_local_package.yaml` consume schema-v2 machine Events from `event.dh_internet_app_event` directly. Each user-visible `event_type` has a readable `trigger.id` and one matching `choose` branch. Both public locale examples call `persistent_notification.create` directly; installations may replace that final action with their own local delivery service.
+`dh_internet_app_notification_local_package.yaml` и `locales/ru/dh_internet_app_notification_local_package.yaml` напрямую потребляют schema-v2 machine Events из `event.dh_internet_app_event`. Каждый user-visible `event_type` имеет читаемый `trigger.id` и одну соответствующую ветку `choose`. Оба публичных locale examples напрямую вызывают `persistent_notification.create`; установка может заменить только этот final action собственным local delivery service.
 
-There is no Notification Envelope, secondary notification event, adapter or duplicated schema-validation layer in Home Assistant. If the producer violates a required event contract, fix the producer and its tests rather than manufacturing fallback notification data.
+Notification Envelope, secondary notification event, adapter и duplicated schema-validation layer в Home Assistant отсутствуют. Если producer нарушает required event contract, исправляется producer и его tests, а не создаются fallback notification data.
