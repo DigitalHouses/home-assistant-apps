@@ -138,7 +138,7 @@ library_refresh_seconds = 3600
 
 ### Usage telemetry
 
-Product telemetry is voluntary and disabled by default:
+Установщик спрашивает `Consent to collect statistics (product name, version, installation ID)? [y/N]`. Только `y` сохраняет `enabled = true` и продолжает установку. При `N`/Enter установщик останавливается без изменения действующей службы. При обновлении сохранённое `true` принимается, а при `false` согласие запрашивается до изменения установки:
 
 ```ini
 [telemetry]

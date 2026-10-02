@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Обязательное согласие на сбор статистики: App останавливается при `telemetry_enabled: false`, а Agent — без `[telemetry] enabled = true`. Установщик Agent запрашивает `y/N` до изменения старой установки. Протокол и обработка недоступности сервера статистики не менялись.
+
+
 ## 0.1.15
 
 - Pin account Total used and all per-bucket used sensors to decimal GB presentation by removing the `data_size` device class that caused Home Assistant to preserve and auto-convert the previous GiB display unit.

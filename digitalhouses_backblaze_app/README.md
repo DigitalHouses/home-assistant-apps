@@ -96,7 +96,7 @@ Version 0.1.0 does not add uploaded parts belonging to unfinished large-file upl
 
 ## DigitalHouses telemetry
 
-Usage telemetry is optional and disabled by default:
+Для нормального запуска необходимо явное согласие на сбор статистики. По умолчанию `telemetry_enabled: false`; App записывает `Statistics collection consent not granted. Stopping application.` и завершает работу. Для существующих установок включите параметр перед обновлением, чтобы не прерывать мониторинг:
 
 ```yaml
 telemetry_enabled: false
@@ -114,7 +114,7 @@ Backblaze credentials, account ID, bucket names, bucket IDs, file names, storage
 
 The installation identity and token are stored in `/data/telemetry_state.json` and survive restart, upgrade and supported Home Assistant backup/restore.
 
-Use `button.dh_backblaze_delete_telemetry` to request authenticated deletion of this installation's retained telemetry record. Disabling telemetry stops future heartbeats; deletion and disabling are separate operations.
+Use `button.dh_backblaze_delete_telemetry` to request authenticated deletion of this installation's retained telemetry record. При снятии согласия App прекращает штатную работу при следующем запуске. Удаление статистики и отзыв согласия — отдельные операции.
 
 See `docs/standards/PRODUCT_TELEMETRY_POLICY.md` and `docs/standards/TELEMETRY_PROTOCOL_V1.md`.
 

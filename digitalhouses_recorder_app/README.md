@@ -191,7 +191,7 @@ Optional metrics may remain absent/null where their schema allows it, for exampl
 
 ## Telemetry
 
-Telemetry is opt-in and disabled by default:
+Для нормального запуска необходимо явное согласие на сбор статистики. По умолчанию `telemetry_enabled: false`; App записывает `Statistics collection consent not granted. Stopping application.` и завершает работу. Для существующих установок включите параметр перед обновлением, чтобы не прерывать мониторинг:
 
 ```yaml
 telemetry_enabled: false

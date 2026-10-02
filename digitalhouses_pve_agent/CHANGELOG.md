@@ -140,6 +140,8 @@
 
 ## Unreleased
 
+- Обязательное согласие на сбор статистики: App останавливается при `telemetry_enabled: false`, а Agent — без `[telemetry] enabled = true`. Установщик Agent запрашивает `y/N` до изменения старой установки. Протокол и обработка недоступности сервера статистики не менялись.
+
 ## 0.5.28
 
 - Expose the current Proxmox guest timeout projection as `next_shutdown_timeout_seconds`, `next_shutdown_timeout_ratio` and `next_shutdown_assessment` on VM/LXC shutdown diagnostics.

@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Обязательное согласие на сбор статистики: App останавливается при `telemetry_enabled: false`, а Agent — без `[telemetry] enabled = true`. Установщик Agent запрашивает `y/N` до изменения старой установки. Протокол и обработка недоступности сервера статистики не менялись.
+
+
 ## 0.1.20
 
 - Persist the consecutive automatic Speedtest failure streak across App restarts and reset it after any successful manual or automatic Speedtest.

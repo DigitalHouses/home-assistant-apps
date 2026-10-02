@@ -84,7 +84,7 @@ Temperature, connected-client count, uptime and last-boot bindings are intention
 
 ## Product telemetry
 
-`telemetry_enabled` is an explicit opt-in and defaults to `false`. When disabled, the App makes no telemetry heartbeat requests.
+`telemetry_enabled` — обязательное согласие для запуска App, исходно `false`. При `false` в журнал записывается `Statistics collection consent not granted. Stopping application.` и App завершает работу. Для существующих установок установите `true` до обновления.
 
 When enabled, the App sends protocol-v1 heartbeats to `https://telemetry.digitalhouses.vip` with exactly:
 

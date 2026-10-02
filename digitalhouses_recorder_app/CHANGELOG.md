@@ -1,4 +1,9 @@
 # Changelog
+
+## Unreleased
+
+- Обязательное согласие на сбор статистики: App останавливается при `telemetry_enabled: false`, а Agent — без `[telemetry] enabled = true`. Установщик Agent запрашивает `y/N` до изменения старой установки. Протокол и обработка недоступности сервера статистики не менялись.
+
 ## 0.1.18
 - Publish absolute Recorder row counts in both Top entities ranking sensors instead of rounded thousands, so table consumers receive exact values directly from the ranking payload.
 - Keep `top_entities_limit` behavior unchanged while changing ranking Discovery units from `K records` to `records`; other graph-oriented Recorder count sensors remain normalized to thousands.
