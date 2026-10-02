@@ -326,13 +326,11 @@ Product-specific telemetry protocols are prohibited unless a future standard exp
 
 Supported official DigitalHouses products use telemetry policy version 2.
 
-Telemetry reporting is part of supported product operation **after explicit acceptance of the current telemetry/privacy terms**, and is not exposed as an ordinary runtime opt-in/opt-out configuration option.
+Telemetry reporting is part of supported product operation after affirmative activation using **the existing single boolean configuration switch**: `telemetry_enabled: false|true` for HA Apps; `[telemetry] enabled = false|true` for Linux Agents. Default `false`. When false, on startup log «Не принято условие передачи статистики DigitalHouses — завершение работы» and terminate the product without sending telemetry. When true, start normal runtime and mandatory heartbeat reporting. No new `accept_v2` config key, Ingress, separate activation UI or consent-state file. If a previously accepted user switches it off, the next start must terminate; there is no supported telemetry-free operational mode.
 
-Подтверждение выполняется **исключительно в конфигурации**: `telemetry_policy_acceptance: not_accepted|accept_v2` в Home Assistant App options; `[telemetry] policy_acceptance = "not_accepted"|"accept_v2"` в конфиге Linux Agent. По умолчанию подтверждения нет. `accept_v2` выбирается вручную после ознакомления с опубликованной редакцией. Ingress, дополнительный UI и MQTT-переключатели не требуются и не используются; это не опция отключения статистики. Принятую редакцию и время локально фиксирует сам продукт. Новая существенно изменённая редакция требует повторного явного принятия. Публичное включение остаётся под legal gate. Without acceptance, the supported product must not activate or send telemetry. Legacy telemetry-enabled settings are not proof of policy-v2 acceptance.
+Display next to this switch: «Для статистики DigitalHouses передаются: название приложения/агента, версия и случайный идентификатор установки. Страна определяется сервером по сетевым данным.» plus a link to the policy. Actual protocol-v1 fields (including UUID, server country derivation and network metadata handling) must remain accurately disclosed. Telemetry network failures must never affect an activated product. Before shipping this startup gate to existing protective PVE/UPS deployments, establish safe explicit migration; public rollout remains subject to legal gate.
 
-After acceptance, the client always schedules the minimal heartbeat defined by protocol v1. Telemetry-server failure, DNS failure, firewall blocking, timeout or rate limiting must never affect core product operation.
-
-Legacy policy-v1 releases remain valid during migration and continue to be accepted by the server.
+Legacy policy-v1 releases continue to be accepted by the server during migration.
 
 ## 12. Installation identity
 
@@ -531,15 +529,15 @@ A Linux Agent release does not require a container image unless its delivery mod
 At minimum:
 
 ```text
-HA options / Agent config -> not_accepted by default; only explicit accept_v2 is acceptance
-no separate Ingress / MQTT / web activation UI for acceptance
-acceptance -> accepted_at and exact policy revision/hash are persisted
-material policy revision -> new config acceptance is required
-fresh install without acceptance -> no new telemetry identity, no heartbeat, consent-required/not-activated state
-explicit acceptance -> accepted terms revision and timestamp persisted; new UUID/token created; telemetry schedules
-legacy policy-v1 telemetry_enabled true/false -> does not imply policy-v2 acceptance
-refusal or legally required withdrawal -> no future telemetry and no silent supported runtime continuation without required consent
-accepted release -> no normal telemetry opt-out control in product config
+App telemetry_enabled / Agent [telemetry] enabled -> defaults false
+one visible boolean switch and adjacent description; no separate Ingress / MQTT / web activation UI
+false -> refusal log and startup exit; true -> runtime starts and telemetry schedules
+policy must be linked next to switch; disclose transmitted UUID and server-derived country
+fresh install with false -> no new identity, heartbeat, or normal runtime
+user enables existing bool -> new UUID/token created and telemetry schedules
+migration from existing installs -> avoid unplanned shutdown of PVE/UPS protection
+switch turned false -> startup logs refusal and exits; no telemetry-free runtime
+switch is consent/activation control, never telemetry-only opt-out
 restart -> same identity
 upgrade -> same identity, new version reported
 server unavailable/blocking -> product remains operational
@@ -588,7 +586,7 @@ At minimum, automated checks should detect:
 - App version/image-release mismatch;
 - missing release provenance;
 - unsupported product identifiers;
-- policy-v2 product still exposes a telemetry opt-out or sends the wrong telemetry policy version;
+- policy-v2 product allows normal runtime with consent switch off or sends wrong telemetry policy version;
 - protocol payload drift without protocol/policy update;
 - missing mandatory telemetry tests in participating products where practical.
 
@@ -623,7 +621,7 @@ Home Assistant Apps:
 - historical released images remain recoverable
 
 All participating products:
-- implement required telemetry policy v2 with no product opt-out control
+- implement required telemetry policy v2 with one existing boolean consent switch; false must stop startup
 - use the same protocol and semantics
 - preserve installation identity correctly across restart/upgrade/restore
 - rotate identity after authenticated deletion
