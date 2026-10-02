@@ -256,13 +256,20 @@ machine event
 
 ## Telemetry
 
-Configuration:
+Подтверждение согласия — существующий переключатель в конфигурации Home Assistant App:
 
 ```yaml
 telemetry_enabled: false
 ```
 
-State:
+Описание переключателя (английский текст): `Consent to collect statistics (product name, version, installation ID).`
+
+- `false` либо отсутствующий ключ: журнал `Statistics collection consent not granted. Stopping application.` и остановка до создания DB/MQTT/Telemetry-клиентов;
+- `true`: штатная работа и отправка телеметрии;
+- прежнее значение настройки сохраняется при обновлении; включения без действия пользователя нет;
+- сбои сервера статистики не влияют на работу Recorder.
+
+Состояние после принятия согласия:
 
 ```text
 /data/telemetry.json
@@ -286,7 +293,7 @@ Protocol-v1 heartbeat payload is exactly:
 
 Client behavior:
 
-- default OFF;
+- default OFF (runtime blocked until consent);
 - first enable and new released version: immediate heartbeat;
 - normal cadence: 24h with deterministic ±30m jitter;
 - failure backoff: approximately one hour;

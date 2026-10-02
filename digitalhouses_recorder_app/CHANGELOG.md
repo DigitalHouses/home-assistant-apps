@@ -1,4 +1,10 @@
 # Changelog
+
+## Unreleased
+- Добавлено обязательное согласие `telemetry_enabled` на сбор данных (название продукта, версия, идентификатор установки) без изменения протокола v1.
+- При `false` Recorder останавливается до подключения к БД/MQTT и отправки статистики; явное `true` позволяет штатный запуск. Сохранённые настройки не меняются при обновлении.
+- Добавлены проверки отказа, разрешённого запуска и контракта конфигурации для CI.
+
 ## 0.1.18
 - Publish absolute Recorder row counts in both Top entities ranking sensors instead of rounded thousands, so table consumers receive exact values directly from the ranking payload.
 - Keep `top_entities_limit` behavior unchanged while changing ranking Discovery units from `K records` to `records`; other graph-oriented Recorder count sensors remain normalized to thousands.

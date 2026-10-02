@@ -93,6 +93,11 @@ class DatabaseMonitorApp:
             datefmt='%Y-%m-%d %H:%M:%S',
         )
         self.log = logging.getLogger('digitalhouses_recorder_app')
+        if not self.config.telemetry_enabled:
+            self.log.error(
+                "Statistics collection consent not granted. Stopping application."
+            )
+            raise SystemExit(1)
         self.adapter = create_adapter(self.config.database)
         self.storage = StorageCollector(self.config.storage, self.adapter)
         self.state: dict[str, Any] = {

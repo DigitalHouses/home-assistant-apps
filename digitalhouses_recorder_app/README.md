@@ -191,13 +191,13 @@ Optional metrics may remain absent/null where their schema allows it, for exampl
 
 ## Telemetry
 
-Telemetry is opt-in and disabled by default:
+Согласие на сбор статистики DigitalHouses обязательно для запуска Recorder App. В настройках Home Assistant App расположен переключатель `telemetry_enabled` с начальным значением `false` и текстом:
 
-```yaml
-telemetry_enabled: false
-```
+> Consent to collect statistics (product name, version, installation ID).
 
-When enabled, protocol v1 sends only:
+При `false` (в том числе после обновления ранее установленной версии) App выводит в журнал `Statistics collection consent not granted. Stopping application.` и останавливается **до подключения к БД, MQTT и инициализации телеметрии**. Для работы необходимо вручную выбрать `true`; обновление не изменяет это значение автоматически. Если согласие отозвано, последующий запуск также завершается.
+
+Формат и периодичность протокола v1 не меняются. Отправляются только:
 
 - schema;
 - telemetry policy version;
@@ -213,7 +213,7 @@ Installation identity and a 256-bit token are stored in:
 /data/telemetry.json
 ```
 
-A first enable or new released version is reported immediately, then approximately every 24 hours with deterministic jitter. Failures are isolated from Recorder monitoring and use one-hour retry backoff. The delete button performs authenticated deletion through the telemetry service.
+После согласия первый heartbeat и отчёт о новой версии выполняются по существующему графику, далее приблизительно каждые 24 часа. Ошибки DNS/HTTPS или недоступность сервера статистики не останавливают мониторинг Recorder; повторная попытка — через час. Существующая кнопка удаления записи телеметрии сохранена.
 
 ## Polling strategy
 
