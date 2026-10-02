@@ -76,7 +76,7 @@ def guard_ups() -> None:
     """Recheck NUT directly; unknown/battery power fails closed."""
     selection = STATE / "ups_selection.json"
     if not selection.exists():
-        raise RuntimeError("UPS selection missing; refuse update")
+        return  # A host that never selected an UPS is unconfigured.
     selected = read_json(selection).get("selected_name")
     if not selected:
         return  # Explicitly no UPS configured.
@@ -111,6 +111,8 @@ def verify_release(tag: str, version: str) -> None:
             release.get("tag_name") != tag):
         raise RuntimeError("Release is not a published stable DigitalHouses PVE release")
     installed = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
+    if not re.fullmatch(r"\d+\.\d+\.\d+", installed):
+        raise RuntimeError("Installed version is not a stable release")
     old = tuple(int(x) for x in installed.split("."))
     new = tuple(int(x) for x in m.groups())
     if len(old) != 3 or new <= old:
