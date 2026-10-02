@@ -7,15 +7,15 @@ VALIDATOR = ROOT / "scripts" / "validators" / "products" / "pve_agent.py"
 
 
 def test_0545_version_contract():
-    assert (APP / "VERSION").read_text(encoding="utf-8").strip() == "0.5.45"
+    assert (APP / "VERSION").read_text(encoding="utf-8").strip() == "0.5.46"
 
     validator = VALIDATOR.read_text(encoding="utf-8")
-    assert 'EXPECTED_VERSION = "0.5.45"' in validator
+    assert 'EXPECTED_VERSION = "0.5.46"' in validator
 
     readme = (APP / "README.md").read_text(encoding="utf-8")
     changelog = (APP / "CHANGELOG.md").read_text(encoding="utf-8")
-    assert "Current source release: `VERSION` is `0.5.45`." in readme
-    assert "## 0.5.45" in changelog
+    assert "Current source release: `VERSION` is `0.5.46`." in readme
+    assert "## 0.5.46" in changelog
 
 
 def test_0545_operational_docs_use_current_release_tag():
@@ -25,7 +25,7 @@ def test_0545_operational_docs_use_current_release_tag():
         APP / "hardware" / "beelink" / "README.md",
     ):
         text = path.read_text(encoding="utf-8")
-        assert "digitalhouses_pve_agent-v0.5.45" in text
+        assert "digitalhouses_pve_agent-v0.5.46" in text
 
 
 def test_0545_keeps_0536_runtime_cleanup_and_full_manual_refresh():
@@ -46,12 +46,12 @@ def test_0545_keeps_0536_runtime_cleanup_and_full_manual_refresh():
         assert forbidden not in topology
 
     assert "request_run(" not in scheduler
-    assert "restart_agent" not in topics
-    assert "restart_agent" not in discovery
-    assert "restart_requested" not in mqtt
-    assert "restart_agent" not in mqtt
-    assert "RESTART_EXIT_CODE" not in main
-    assert "restart_requested" not in main
+    # Откат QGA-recovery остаётся в силе; независимая кнопка Restart восстановлена.
+    assert 'restart_agent=f"{base}/restart"' in topics
+    assert '"default_entity_id": "button.dh_pve_agent_restart_agent"' in discovery
+    assert "self.restart_requested = threading.Event()" in mqtt
+    assert "RESTART_EXIT_CODE = 75" in main
+    assert "def _restart_denial_reason(" in main
 
     manual_start = main.index("manual_refresh_collectors=(")
     manual_end = main.index("static_collectors=", manual_start)
