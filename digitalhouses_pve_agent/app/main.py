@@ -327,7 +327,12 @@ def _restart_denial_reason(
         return "Уже запущено аварийное завершение по UPS"
     if not ups_startup_attempted or not ups_runtime.nut_available:
         return "Состояние настроенного UPS неизвестно"
-    snapshot = ups_runtime.last_snapshot
+    # Повторно проверить питание прямо перед рестартом: очередной
+    # 10-секундный UPS sample может ещё не отражать пропадание сети.
+    try:
+        snapshot = ups_runtime.reader(ups_runtime.config)
+    except Exception as exc:
+        return f"Не удалось проверить текущее состояние UPS: {exc}"
     if snapshot is None:
         return "Нет актуального состояния настроенного UPS"
     if (
