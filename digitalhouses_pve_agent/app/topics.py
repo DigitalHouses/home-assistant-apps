@@ -25,6 +25,9 @@ class Topics:
     ups_scan_state: str
     ups_scan_operation: str
     fan_calibrate: str
+    update_check: str = ""
+    update_install: str = ""
+    update_state: str = ""
     legacy_discoveries: tuple[str, ...] = ()
 
 
@@ -101,6 +104,9 @@ def build_topics(mqtt: MqttConfig, identity: HostIdentity) -> Topics:
         ups_scan_state=f"{base}/ups/scan/state",
         ups_scan_operation=f"{base}/ups/scan/operation",
         fan_calibrate=f"{base}/fans/calibrate",
+        update_check=f"{base}/update/check",
+        update_install=f"{base}/update/install",
+        update_state=f"{base}/update/state",
         legacy_discoveries=(
             f"{discovery_prefix}/device/{legacy_device_id}/config",
             f"{discovery_prefix}/device/{older_legacy_device_id}/config",
