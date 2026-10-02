@@ -194,7 +194,7 @@ Where applicable law requires withdrawal:
 - the product may transition to an explicit `consent_required` / unsupported state rather than silently becoming a telemetry-free supported product;
 - jurisdiction-specific legality of conditioning continued use on consent remains governed by the legal review.
 
-Do not treat `telemetry_enabled: false` from policy-v1 releases as equivalent to policy-v2 acceptance.
+Neither `telemetry_enabled: true` nor `telemetry_enabled: false` in a policy-v1 release constitutes acceptance of policy-v2 terms. An upgrade must not silently infer acceptance from a legacy setting. For safety-critical products (including UPS/shutdown control), plan migration so a consent gate cannot unexpectedly disable active protection during an unattended update; require an explicit, safe activation/migration path before releasing the change.
 
 ## 6. Scheduling contract
 
@@ -406,9 +406,12 @@ Any future retention change must update, together:
 Every product telemetry integration must cover at least:
 
 ```text
-supported production release -> telemetry schedules without user opt-in
-no user opt-out control -> telemetry cannot be disabled through product configuration
-fresh install -> UUID/token created
+fresh install without acceptance -> no telemetry heartbeat, no newly generated telemetry identity, consent-required/not-activated state
+explicit acceptance of current terms -> policy revision and acceptance time persisted; telemetry identity generated and heartbeat scheduled
+legacy policy-v1 telemetry_enabled true/false -> does not count as policy-v2 acceptance
+refusal or legally required withdrawal -> no future telemetry, no silent continuation of supported runtime without required consent
+accepted production release -> no normal telemetry opt-out in product configuration
+accepted activation -> UUID/token created
 restart -> same identity
 upgrade -> same identity, new version
 daily cadence -> no restart storm
