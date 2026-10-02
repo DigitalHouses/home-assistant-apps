@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.50
+
+- Fix update and restart buttons crashing the PVE Agent on hosts with a configured UPS: `software_shutdown_committed` is a Boolean property, not a callable. The previous mocks incorrectly exposed it as a function.
+- Treat UPS preflight exceptions as an explicit update error (fail closed), leaving the main agent alive and blocking the installation; add realistic property and exception regression tests.
+
 ## 0.5.49
 
 - Fix the Proxmox kernel OOM journal scan by passing timezone-independent Unix timestamp arguments to journalctl (instead of ISO-8601 with microseconds/UTC offset, which journalctl cannot parse on the production host).

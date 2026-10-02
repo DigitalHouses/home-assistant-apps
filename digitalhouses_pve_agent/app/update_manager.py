@@ -180,7 +180,13 @@ class UpdateManager:
             elif self._is_worker_busy():
                 log.info("Update already running; duplicate request ignored")
             else:
-                denied = denial_reason() if denial_reason else "UPS preflight not provided"
+                try:
+                    denied = denial_reason() if denial_reason is not None else "UPS preflight not provided"
+                except Exception as exc:
+                    # Fail closed: broken safety checks must not crash the
+                    # main agent loop or permit an unsafe UPS interruption.
+                    denied = f"UPS preflight failed: {exc}"
+                    log.exception("Agent update UPS preflight failed")
                 if denied:
                     self._status, self._status_error = "error", denied
                     log.warning("Agent update denied: %s", denied)
