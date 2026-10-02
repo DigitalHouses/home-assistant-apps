@@ -46,7 +46,15 @@ def test_discovery_uses_canonical_dh_pve_agent_device_and_refresh_contract():
     assert components["refresh_state"]["state_topic"].endswith("/refresh/operation")
     assert components["ups_scan_state"]["default_entity_id"] == "sensor.dh_pve_agent_ups_scan_state"
     assert components["ups_scan_state"]["state_topic"].endswith("/ups/scan/operation")
-    assert "restart_agent" not in components
+    restart = components["restart_agent"]
+    assert restart["platform"] == "button"
+    assert restart["device_class"] == "restart"
+    assert restart["default_entity_id"] == "button.dh_pve_agent_restart_agent"
+    assert restart["unique_id"] == f"{canonical_id}_restart_agent"
+    assert restart["command_topic"].endswith("/restart")
+    assert restart["payload_press"] == "PRESS"
+    assert restart["retain"] is False
+    assert restart["entity_category"] == "diagnostic"
     assert components["last_refresh"]["default_entity_id"] == "sensor.dh_pve_agent_last_refresh"
     assert components["last_refresh"]["device_class"] == "timestamp"
 
