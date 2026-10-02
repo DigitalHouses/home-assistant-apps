@@ -241,6 +241,10 @@ jobs:
           sudo install -d /opt/digitalhouses/digitalhouses_pve_agent/.venv/bin
           sudo ln -sf "$(command -v python)" \
             /opt/digitalhouses/digitalhouses_pve_agent/.venv/bin/python
+          sudo install -d /usr/local/libexec
+          sudo install -m 0755 \
+            digitalhouses_pve_agent/bin/digitalhouses-pve-agent-update-runner \
+            /usr/local/libexec/digitalhouses-pve-agent-update-runner
 
       - name: Validate systemd unit
         run: systemd-analyze verify digitalhouses_pve_agent/systemd/*.service
