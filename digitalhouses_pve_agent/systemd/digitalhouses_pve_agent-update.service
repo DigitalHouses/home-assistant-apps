@@ -1,0 +1,16 @@
+[Unit]
+Description=DigitalHouses PVE Agent independent update worker
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/etc/digitalhouses_pve_agent/digitalhouses_pve_agent.conf
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=/usr/bin/python3 /usr/local/libexec/digitalhouses-pve-agent-update-runner
+TimeoutStartSec=0
+PrivateTmp=true
+NoNewPrivileges=true
+# This service changes the agent installation and systemd units only.
+# It does not change PVE, VM/LXC or NUT configuration.

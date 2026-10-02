@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.47
+
+- Add manual Check updates and Install update MQTT buttons, update-available binary sensor, latest version and update-status diagnostic sensors in the existing PVE Agent device.
+- Check stable published canonical GitHub Releases in a background thread at startup, every 24 hours and on request; unknown connectivity never means no update.
+- Install upgrades through an independent systemd worker, with a verified release tag, strict NUT power preflight, root-only backup, post-start verification and automatic rollback/recovery.
+- Reject retained command messages and concurrent installations; add administrative dashboard controls with an installation confirmation.
+- Preserve configured MQTT identity and state, avoid changing PVE/VM/LXC or NUT services, and add regression tests.
+
 ## 0.5.46
 
 - Возвращена отдельная диагностическая MQTT-кнопка `button.dh_pve_agent_restart_agent` в существующем устройстве DH PVE.

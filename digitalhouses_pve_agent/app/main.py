@@ -40,6 +40,7 @@ from .telemetry import (
     TelemetryRunner,
 )
 from .topics import build_topics, build_ups_topics
+from .update_manager import UpdateManager
 from .ups_battery_events import UpsBatteryEventTracker
 from .ups_policy_preflight import (
     PreflightCheck,
@@ -373,6 +374,7 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
         shutdown_history_tracker=shutdown_history_tracker,
     )
     telemetry_runner = TelemetryRunner(_telemetry_client(config, state_dir))
+    update_manager = UpdateManager(state_dir, _version())
     recovery = runtime.recover_fan_control()
     if recovery:
         log.warning("Fan control recovery: %s", recovery)
@@ -423,9 +425,11 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
         while not stop_event.is_set():
             if bridge.restart_requested.is_set():
                 bridge.restart_requested.clear()
-                denied = _restart_denial_reason(
-                    ups_runtime,
-                    ups_startup_attempted=ups_startup_attempted,
+                denied = (
+                    "Выполняется обновление агента" if update_manager._is_worker_busy()
+                    else _restart_denial_reason(
+                        ups_runtime, ups_startup_attempted=ups_startup_attempted
+                    )
                 )
                 if denied:
                     log.warning("MQTT Restart Agent отклонён: %s", denied)
@@ -438,6 +442,7 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
                 initialized = runtime.startup()
                 if initialized:
                     bridge.publish_ups_scan_operation(operation_payload("idle"))
+                    update_manager.publish(bridge)
                     log.info("Первичная публикация MQTT завершена")
                 else:
                     log.warning(
@@ -446,6 +451,8 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
                     )
 
             if initialized:
+                if bridge.reconnect_requested.is_set():
+                    update_manager.publish(bridge)
                 runtime.process_events()
                 runtime.tick(time.monotonic())
 
@@ -528,6 +535,18 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
                     reload_event.clear()
                     log.debug("SIGHUP обработан до инициализации UPS runtime")
 
+            check_updates = bridge.check_updates_requested.is_set()
+            install_update = bridge.install_update_requested.is_set()
+            bridge.check_updates_requested.clear()
+            bridge.install_update_requested.clear()
+            update_manager.tick(
+                bridge,
+                check=check_updates,
+                install=install_update,
+                denial_reason=lambda: _restart_denial_reason(
+                    ups_runtime, ups_startup_attempted=ups_startup_attempted
+                ),
+            )
             bridge.wake_requested.wait(1.0)
             bridge.wake_requested.clear()
     finally:

@@ -363,6 +363,17 @@ if [[ "${legacy_runtime_detected}" -eq 1 ]]; then
     fi
 fi
 
+install -d -o root -g root -m 0755 /usr/local/libexec
+install -o root -g root -m 0755 \
+    "${APP_DIR}/bin/digitalhouses-pve-agent-update-runner" \
+    /usr/local/libexec/digitalhouses-pve-agent-update-runner
+install -o root -g root -m 0644 \
+    "${APP_DIR}/systemd/digitalhouses_pve_agent-update.service" \
+    /etc/systemd/system/digitalhouses_pve_agent-update.service
+install -o root -g root -m 0644 \
+    "${APP_DIR}/systemd/digitalhouses_pve_agent-update-recover.service" \
+    /etc/systemd/system/digitalhouses_pve_agent-update-recover.service
+
 install -o root -g root -m 0644 \
     "${APP_DIR}/systemd/${SERVICE_NAME}" \
     "${UNIT_FILE}"

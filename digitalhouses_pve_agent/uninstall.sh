@@ -47,6 +47,11 @@ if [[ ! -r "${CONFIG_FILE}" ]]; then
     exit 1
 fi
 
+if systemctl is-active --quiet digitalhouses_pve_agent-update.service; then
+    echo "Ошибка: обновление агента выполняется; удаление запрещено."
+    exit 1
+fi
+
 was_active=0
 was_enabled=0
 if systemctl is-active --quiet "${SERVICE_NAME}"; then
@@ -93,6 +98,9 @@ else
     systemctl disable "${SERVICE_NAME}" >/dev/null 2>&1 || true
 fi
 
+rm -f -- /etc/systemd/system/digitalhouses_pve_agent-update.service
+rm -f -- /etc/systemd/system/digitalhouses_pve_agent-update-recover.service
+rm -f -- /usr/local/libexec/digitalhouses-pve-agent-update-runner
 rm -f -- "${UNIT_FILE}"
 rm -f -- "${ROOT_GUIDE}"
 rm -rf -- "${APP_DIR}"

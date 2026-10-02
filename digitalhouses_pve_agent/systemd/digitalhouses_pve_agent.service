@@ -2,6 +2,8 @@
 Description=DigitalHouses PVE Agent
 After=network-online.target
 Wants=network-online.target
+Requires=digitalhouses_pve_agent-update-recover.service
+After=digitalhouses_pve_agent-update-recover.service
 
 [Service]
 Type=simple
