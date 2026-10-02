@@ -135,3 +135,44 @@ def test_interval_parameter_is_validated_and_defaults_to_ten_minutes():
     settings = RuntimeSettings()
     assert settings.get("memory_check_interval") == 10
     assert settings.apply("memory_check_interval", "60") == 60
+
+
+def test_host_reboot_resets_all_cgroup_and_pressure_baselines(tmp_path):
+    monitor, proc_root, group = _fixture(tmp_path)
+    boot_file = proc_root / "sys/kernel/random/boot_id"
+    boot_file.parent.mkdir(parents=True)
+    boot_file.write_text("boot-A")
+    t = datetime(2026, 10, 3, 0, 0, tzinfo=timezone.utc)
+    monitor.scan(t, _guest())
+    (group / "memory.pressure").write_text(_psi(1200, 1000))
+    (group / "memory.events").write_text("oom 2\noom_kill 1\n")
+    monitor.scan(t + timedelta(minutes=10), _guest())
+    before = len(monitor.events)
+    boot_file.write_text("boot-B")
+    # Even when totals exceed the values from the previous boot, a new boot
+    # must establish a baseline instead of fabricating another incident.
+    (group / "memory.pressure").write_text(_psi(9000, 8000))
+    (group / "memory.events").write_text("oom 8\noom_kill 5\n")
+    monitor.scan(t + timedelta(minutes=20), _guest())
+    assert len(monitor.events) == before
+
+
+def test_kernel_killed_process_without_cgroup_uses_unambiguous_oom_header(tmp_path):
+    t = datetime(2026, 10, 3, 0, 0, tzinfo=timezone.utc)
+    entries = [
+        {
+            "__CURSOR": "oom-header",
+            "__REALTIME_TIMESTAMP": str(int(t.timestamp() * 1_000_000)),
+            "MESSAGE": "oom-kill:constraint=CONSTRAINT_MEMCG,oom_memcg=/lxc.payload.7000",
+        },
+        {
+            "__CURSOR": "oom-kill",
+            "__REALTIME_TIMESTAMP": str(int(t.timestamp() * 1_000_000) + 300_000),
+            "MESSAGE": "Out of memory: Killed process 123 (postgres) total-vm:200000kB",
+        },
+    ]
+    monitor, _, _ = _fixture(tmp_path, journal=entries)
+    monitor.scan(t + timedelta(seconds=1), _guest())
+    assert len(monitor.events) == 1
+    assert monitor.events[0]["guest"] == "7000"
+    assert monitor.events[0]["level"] == "red"
