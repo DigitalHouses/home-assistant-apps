@@ -46,6 +46,35 @@ def _fixture(tmp_path, *, journal=None):
     return monitor, proc_root, group
 
 
+
+def test_kernel_journal_epoch_arguments_work_with_proxmox_journalctl(tmp_path):
+    """Proxmox journalctl rejects datetime.isoformat() with timezone/micros."""
+    proc_root = tmp_path / "proc"
+    group_root = tmp_path / "cgroup"
+    (proc_root / "pressure").mkdir(parents=True)
+    (proc_root / "pressure" / "memory").write_text(_psi(0, 0))
+    captured = []
+
+    def journalctl(args, **kwargs):
+        captured.append(args)
+        since = args[args.index("--since") + 1]
+        until = args[args.index("--until") + 1]
+        # Simulate the real host's date-parser failure for ISO-8601.
+        if not since.startswith("@") or not until.startswith("@"):
+            return subprocess.CompletedProcess(args, 1, "", "Failed to parse timestamp")
+        return subprocess.CompletedProcess(args, 0, "", "")
+
+    monitor = MemoryDiagnostics(
+        StateStore(tmp_path / "memory.json"), proc_root=proc_root,
+        cgroup_root=group_root, journal_run=journalctl,
+    )
+    local = datetime(2026, 10, 3, 1, 51, 50, tzinfo=timezone(timedelta(hours=5)))
+    result = monitor.scan(local, {"lxcs": {}, "vms": {}})
+    assert result["journal_status"] == "ok"
+    assert captured
+    assert captured[0][captured[0].index("--since") + 1] == f"@{int(local.timestamp()) - 605}"
+    assert captured[0][captured[0].index("--until") + 1] == f"@{int(local.timestamp())}"
+
 def test_psi_full_and_lxc_oom_kill_are_detected_without_repeating(tmp_path):
     monitor, proc_root, group = _fixture(tmp_path)
     start = datetime(2026, 10, 3, 0, 0, tzinfo=timezone.utc)

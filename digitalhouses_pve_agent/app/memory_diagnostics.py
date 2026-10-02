@@ -185,8 +185,10 @@ class MemoryDiagnostics:
         since = (self.last_scan or (now - timedelta(minutes=10))) - timedelta(seconds=5)
         args = [
             "journalctl", "--no-pager", "--quiet", "--output=json",
-            "_TRANSPORT=kernel", "--since", since.isoformat(),
-            "--until", now.isoformat(), "--grep", OOM_GREP,
+            # journalctl on Proxmox does not parse ISO-8601 timestamps with
+            # microseconds and a timezone offset. @epoch is timezone-safe.
+            "_TRANSPORT=kernel", "--since", f"@{int(since.timestamp())}",
+            "--until", f"@{int(now.timestamp())}", "--grep", OOM_GREP,
         ]
         try:
             proc = self.journal_run(args, capture_output=True, text=True, timeout=8, check=False)
