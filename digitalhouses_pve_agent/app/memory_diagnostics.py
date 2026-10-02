@@ -27,6 +27,7 @@ _LXC_IDS = (
     re.compile(r"(?:^|/)lxc/(\d+)(?:/|$)"),
     re.compile(r"(?:^|/)pve-container@(\d+)\.service(?:/|$)"),
 )
+_LXC_PAYLOAD_IDS = _LXC_IDS[:2]  # Never sample the host-side pve-container monitor unit.
 _VM_IDS = (
     re.compile(r"(?:^|/)qemu/(\d+)(?:/|$)"),
     re.compile(r"(?:^|/)qemu\.slice/(\d+)\.scope(?:/|$)"),
@@ -106,7 +107,7 @@ def _lxc_cgroups(root: Path, ids: set[str]) -> dict[str, Path]:
         for events_path in paths:
             folder = events_path.parent
             relative = folder.relative_to(root).as_posix()
-            for pattern in _LXC_IDS:
+            for pattern in _LXC_PAYLOAD_IDS:
                 match = pattern.search("/" + relative)
                 if match and match.group(1) in ids:
                     guest_id = match.group(1)
@@ -160,6 +161,7 @@ class MemoryDiagnostics:
         self.last_scan = _as_datetime(state.get("last_scan"))
         self.checked_at = _as_datetime(state.get("checked_at"))
         self.seen_journal = set(str(x) for x in state.get("seen_journal", []) if isinstance(x, str))
+        self.boot_id = state.get("boot_id") if isinstance(state.get("boot_id"), str) else None
         self.journal_status = "unknown"
         self.pressure_status = "unknown"
 
@@ -225,6 +227,16 @@ class MemoryDiagnostics:
             except (KeyError, ValueError, TypeError, OverflowError):
                 at = now
             kind, guest = _guest_for_message(message)
+            if killed and kind == "PVE":
+                # Kernel sometimes omits the cgroup from the kill line. Link
+                # it only to ONE unambiguous, immediately preceding header.
+                candidates = [
+                    key for key, header_at in attempted_events.items()
+                    if key[0] != "PVE"
+                    and 0 <= (at - header_at).total_seconds() <= 3
+                ]
+                if len(candidates) == 1:
+                    kind, guest = candidates[0]
             key = (kind, guest)
             if killed:
                 process = re.search(r"Killed process\s+\d+\s+\(([^)]+)\)", message)
@@ -313,6 +325,16 @@ class MemoryDiagnostics:
 
     def scan(self, now: datetime, inventory: Mapping[str, object] | None) -> dict[str, object]:
         now = now.astimezone(timezone.utc)
+        try:
+            current_boot_id = (self.proc_root / "sys/kernel/random/boot_id").read_text(encoding="ascii").strip()
+        except (OSError, UnicodeError):
+            current_boot_id = ""
+        if current_boot_id:
+            if current_boot_id != self.boot_id:
+                # Host and cgroup totals restart at zero on every boot, and
+                # comparing them across boots can invent pressure/OOM events.
+                self.baselines.clear()
+            self.boot_id = current_boot_id
         names = _guest_names(inventory)
         seen = self._journal(now, names)
         ok = 0
@@ -385,6 +407,7 @@ class MemoryDiagnostics:
         # The retained publisher and local state are deliberately separate.
         self.store.save({
             "events": self.events, "next_id": self.next_id,
+            "boot_id": self.boot_id,
             "baselines": self.baselines,
             "last_scan": self.last_scan.isoformat() if self.last_scan else None,
             "checked_at": self.checked_at.isoformat(),
