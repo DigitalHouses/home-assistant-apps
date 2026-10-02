@@ -17,15 +17,18 @@ def _ups(
     nut_available=True,
     committed=False,
 ):
+    snapshot = SimpleNamespace(
+        line_power=line_power,
+        on_battery=on_battery,
+        low_battery=low_battery,
+        discharging=discharging,
+        status_tokens=status_tokens,
+    )
     return SimpleNamespace(
         nut_available=nut_available,
-        last_snapshot=SimpleNamespace(
-            line_power=line_power,
-            on_battery=on_battery,
-            low_battery=low_battery,
-            discharging=discharging,
-            status_tokens=status_tokens,
-        ),
+        last_snapshot=snapshot,
+        reader=lambda config: snapshot,
+        config=object(),
         software_shutdown_committed=lambda: committed,
     )
 
@@ -66,7 +69,24 @@ def test_restart_denied_for_unsafe_ups_snapshots():
 
 def test_restart_denied_when_ups_snapshot_missing():
     ups = _ups()
-    ups.last_snapshot = None
+    ups.reader = lambda config: None
+    assert _restart_denial_reason(ups, ups_startup_attempted=True)
+
+
+def test_restart_denied_when_fresh_ups_read_fails():
+    ups = _ups()
+
+    def broken_reader(config):
+        raise ConnectionError("NUT unavailable")
+
+    ups.reader = broken_reader
+    reason = _restart_denial_reason(ups, ups_startup_attempted=True)
+    assert reason and "NUT unavailable" in reason
+
+
+def test_restart_checks_fresh_state_not_cached_state():
+    ups = _ups()
+    ups.reader = lambda config: _ups(on_battery=True).last_snapshot
     assert _restart_denial_reason(ups, ups_startup_attempted=True)
 
 
