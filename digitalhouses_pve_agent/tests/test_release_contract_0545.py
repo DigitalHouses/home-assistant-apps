@@ -7,7 +7,7 @@ VALIDATOR = ROOT / "scripts" / "validators" / "products" / "pve_agent.py"
 
 
 def test_0545_version_contract():
-    assert (APP / "VERSION").read_text(encoding="utf-8").strip() == "0.5.46"
+    assert (APP / "VERSION").read_text(encoding="utf-8").strip() == "0.5.47"
 
     validator = VALIDATOR.read_text(encoding="utf-8")
     assert 'EXPECTED_VERSION = "0.5.46"' in validator
