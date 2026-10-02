@@ -29,7 +29,7 @@ def _ups(
         last_snapshot=snapshot,
         reader=lambda config: snapshot,
         config=object(),
-        software_shutdown_committed=lambda: committed,
+        software_shutdown_committed=committed,
     )
 
 
