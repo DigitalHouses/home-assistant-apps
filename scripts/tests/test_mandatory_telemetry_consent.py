@@ -83,6 +83,8 @@ class ConsentTests(unittest.TestCase):
                               and any(isinstance(t, ast.Name) and t.id == first_effect
                                       for t in n.targets))
                 self.assertLess(run.body.index(guard), effect)
+                unit = ROOT / f"digitalhouses_{name}_agent/systemd/digitalhouses_{name}_agent.service"
+                self.assertIn("RestartPreventExitStatus=78", unit.read_text())
                 wrapper = ast.FunctionDef(
                     name="check",
                     args=ast.arguments(posonlyargs=[], args=[], vararg=None,
@@ -101,7 +103,7 @@ class ConsentTests(unittest.TestCase):
                         "log": log,
                     }
                     exec(code, namespace)
-                    self.assertEqual(namespace["check"](), None if enabled else 1)
+                    self.assertEqual(namespace["check"](), None if enabled else 78)
                     self.assertEqual(log.errors, [] if enabled else [MESSAGE])
 
     def test_installers_preserve_old_service_on_refusal_and_write_consent(self):

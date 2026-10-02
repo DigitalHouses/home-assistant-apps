@@ -14,6 +14,8 @@ ExecStartPre=/opt/digitalhouses/digitalhouses_pve_agent/.venv/bin/python -m app.
 ExecStart=/opt/digitalhouses/digitalhouses_pve_agent/.venv/bin/python -m app.main --config /etc/digitalhouses_pve_agent/digitalhouses_pve_agent.conf --state-dir /var/lib/digitalhouses_pve_agent
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=on-failure
+# Missing consent is a permanent configuration state, not a restartable crash.
+RestartPreventExitStatus=78
 RestartSec=5
 TimeoutStopSec=20
 NoNewPrivileges=true

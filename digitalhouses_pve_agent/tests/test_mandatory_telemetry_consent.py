@@ -12,7 +12,7 @@ def test_denied_consent_stops_before_side_effects(monkeypatch, caplog, tmp_path)
     config = SimpleNamespace(telemetry=SimpleNamespace(enabled=False))
     with caplog.at_level(logging.ERROR):
         result = runtime.run(config, state_dir=tmp_path)
-    assert result == 1
+    assert result == 78
     assert "Statistics collection consent not granted. Stopping application." in caplog.text
 
 

@@ -124,7 +124,7 @@ def run(config: AppConfig) -> int:
     log = logging.getLogger("digitalhouses_plex_agent")
     if not config.telemetry.enabled:
         log.error("Statistics collection consent not granted. Stopping application.")
-        return 1
+        return 78
     build = load_build_info(APP_ROOT)
     verify_proc_visibility()
     telemetry_runner = _telemetry_runner(config, build)
