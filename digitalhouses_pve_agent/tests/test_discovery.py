@@ -53,6 +53,7 @@ def test_discovery_uses_canonical_dh_pve_agent_device_and_refresh_contract():
     assert restart["unique_id"] == f"{canonical_id}_restart_agent"
     assert restart["command_topic"].endswith("/restart")
     assert restart["payload_press"] == "PRESS"
+    assert restart["qos"] == 1
     assert restart["retain"] is False
     assert restart["entity_category"] == "diagnostic"
     assert components["last_refresh"]["default_entity_id"] == "sensor.dh_pve_agent_last_refresh"
