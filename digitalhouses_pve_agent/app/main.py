@@ -383,6 +383,7 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
     memory_last_check: float | None = None
     memory_worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix="dh-pve-memory")
     memory_pending = None
+    memory_force_due = False
     recovery = runtime.recover_fan_control()
     if recovery:
         log.warning("Fan control recovery: %s", recovery)
@@ -463,6 +464,7 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
                     update_manager.publish(bridge)
                 memory_reconnected = bridge.reconnect_requested.is_set()
                 memory_manual_refresh = bridge.refresh_requested.is_set()
+                memory_force_due = memory_force_due or memory_manual_refresh
                 runtime.process_events()
                 runtime.tick(time.monotonic())
 
@@ -481,11 +483,12 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
                     memory_pending is None
                     and (
                         memory_last_check is None
-                        or memory_manual_refresh
+                        or memory_force_due
                         or memory_now - memory_last_check >= memory_interval
                     )
                 ):
                     memory_last_check = memory_now
+                    memory_force_due = False
                     memory_pending = memory_worker.submit(
                         memory_monitor.scan,
                         datetime.now(timezone.utc),
