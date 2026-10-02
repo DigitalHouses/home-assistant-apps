@@ -131,7 +131,10 @@ class UpdateManager:
             self.tag, self.latest = result
             self.known = True
             self._status, self._status_error = "idle", None
-        self.cache.save({"tag": self.tag, "version": self.latest, "checked_at": self.checked})
+        try:
+            self.cache.save({"tag": self.tag, "version": self.latest, "checked_at": self.checked})
+        except Exception as exc:
+            log.warning("Update cache save failed: %s", exc)
 
     def _worker_status(self) -> dict[str, object]:
         try:
@@ -142,13 +145,15 @@ class UpdateManager:
     def _payload(self) -> dict[str, object]:
         worker = self._worker_status()
         worker_state = worker.get("state")
-        if worker_state in BUSY_PHASES or worker_state in {"completed", "error"}:
+        if worker_state in BUSY_PHASES:
             status = worker_state
             error = worker.get("error")
         else:
             status, error = self._status, self._status_error
         if self._checking and worker_state not in BUSY_PHASES:
             status, error = "checking", None
+        elif worker_state in {"completed", "error"} and self._status == "idle":
+            status, error = worker_state, worker.get("error")
         available = (
             (stable_version(self.latest) > stable_version(self.version))
             if self.known else None
@@ -193,12 +198,17 @@ class UpdateManager:
             self._published = json.dumps(payload, ensure_ascii=False, sort_keys=True)
 
     def _launch_update(self) -> None:
-        self.request.save({
-            "tag": self.tag, "version": self.latest,
-            "requested_at": datetime.now(timezone.utc).isoformat(),
-        })
-        # Clear the previous result so it cannot hide the queued operation.
-        self.worker.save({"state": "queued", "error": None})
+        try:
+            self.request.save({
+                "tag": self.tag, "version": self.latest,
+                "requested_at": datetime.now(timezone.utc).isoformat(),
+            })
+            # Clear the previous result so it cannot hide the queued operation.
+            self.worker.save({"state": "queued", "error": None})
+        except Exception as exc:
+            self._status, self._status_error = "error", str(exc)
+            log.error("Update request persistence failed: %s", exc)
+            return
         try:
             subprocess.run(
                 ["systemctl", "start", "--no-block", UPDATE_SERVICE],
