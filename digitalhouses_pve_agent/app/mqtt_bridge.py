@@ -394,6 +394,14 @@ class MqttBridge(MqttEvents):
             retain=True,
         )
 
+    def publish_memory_diagnostics(self, payload: dict[str, object]) -> bool:
+        """Publish bounded read-only memory history as retained MQTT state."""
+        return self._publish(
+            f"{self.topics.base}/memory/diagnostics",
+            json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+            retain=True,
+        )
+
     def publish_state(self, payload: dict[str, object]) -> bool:
         return self._publish(
             self.topics.state,
