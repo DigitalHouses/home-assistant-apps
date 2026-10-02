@@ -370,6 +370,9 @@ install -o root -g root -m 0755 \
 install -o root -g root -m 0644 \
     "${APP_DIR}/systemd/digitalhouses_pve_agent-update.service" \
     /etc/systemd/system/digitalhouses_pve_agent-update.service
+install -o root -g root -m 0644 \
+    "${APP_DIR}/systemd/digitalhouses_pve_agent-update-recover.service" \
+    /etc/systemd/system/digitalhouses_pve_agent-update-recover.service
 
 install -o root -g root -m 0644 \
     "${APP_DIR}/systemd/${SERVICE_NAME}" \
