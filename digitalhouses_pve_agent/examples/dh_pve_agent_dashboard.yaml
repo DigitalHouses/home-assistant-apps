@@ -160,6 +160,33 @@ sections:
             text: Перезапустить только PVE Agent? Proxmox и VM не будут перезапущены.
 
       - type: tile
+        entity: binary_sensor.dh_pve_agent_update_available
+        name: Доступно обновление
+
+      - type: tile
+        entity: sensor.dh_pve_agent_latest_version
+        name: Последний релиз
+
+      - type: tile
+        entity: sensor.dh_pve_agent_update_status
+        name: Статус установки
+
+      - type: tile
+        entity: button.dh_pve_agent_check_updates
+        name: Проверить обновления
+
+      - type: tile
+        entity: button.dh_pve_agent_update
+        name: Установить обновление
+        tap_action:
+          action: perform-action
+          perform_action: button.press
+          target:
+            entity_id: button.dh_pve_agent_update
+          confirmation:
+            text: Обновить PVE Agent? Мониторинг и программная логика UPS на время установки прервутся.
+
+      - type: tile
         entity: sensor.dh_pve_agent_last_refresh
         name: Последнее обновление
 
