@@ -337,7 +337,7 @@ sections:
         heading_style: subtitle
         icon: mdi:memory
       - type: markdown
-        content: |-
+        title: PVE · События памяти · 30 дней
         content: |-
           {% set source = 'sensor.dh_pve_agent_memory_history' %}
           {% set events = state_attr(source, 'events') or [] %}
@@ -356,6 +356,12 @@ sections:
           {% endfor %}
           {% if more %}
           Показаны последние {{ events | count }} из {{ count }} событий. Полная история за 30 дней сохранена на PVE.
+          {% endif %}
+          {% elif journal == 'ok' and pressure == 'ok' %}
+          За последние 30 дней событий не зафиксировано.
+          {% else %}
+          Нет подтверждённых данных о событиях.
+          {% endif %}
         grid_options:
           columns: 12
       - type: entities
