@@ -75,6 +75,13 @@ class ConfigTests(unittest.TestCase):
         raw["telemetry_enabled"] = True
         self.assertTrue(parse_options(raw).telemetry_enabled)
 
+    def test_non_boolean_consent_is_rejected(self) -> None:
+        for invalid in ("true", 1, None):
+            raw = base_options()
+            raw["telemetry_enabled"] = invalid
+            with self.assertRaises(ConfigError):
+                parse_options(raw)
+
     def test_speedtest_server_ids_are_positive_and_deduplicated(self) -> None:
         raw = base_options()
         raw["speedtest"]["server_ids"] = [123, 456, 123]
