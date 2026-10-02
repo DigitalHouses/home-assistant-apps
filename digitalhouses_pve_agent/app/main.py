@@ -451,6 +451,8 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
                     )
 
             if initialized:
+                if bridge.reconnect_requested.is_set():
+                    update_manager.publish(bridge)
                 runtime.process_events()
                 runtime.tick(time.monotonic())
 
