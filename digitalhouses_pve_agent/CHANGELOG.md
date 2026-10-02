@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.46
+
+- Возвращена отдельная диагностическая MQTT-кнопка `button.dh_pve_agent_restart_agent` в существующем устройстве DH PVE.
+- По команде агент штатно завершает работу с кодом 75; повторный запуск выполняет `systemd Restart=on-failure`, без вызова `systemctl` из агента.
+- Retained MQTT-команды отклоняются; повторные нажатия не накапливаются.
+- Перезапуск блокируется при аварийном shutdown, неизвестном состоянии настроенного UPS или работе UPS от батареи/при разряде. Причина фиксируется в журнале.
+- Добавлены регрессионные тесты MQTT, Discovery, UPS-защиты и systemd.
+
 ## 0.5.45
 
 - Expose installed physical memory as `memory_installed_gib` on `sensor.dh_pve_agent_system`, sourced from the existing DMI/SMBIOS memory inventory instead of Linux `MemTotal`.

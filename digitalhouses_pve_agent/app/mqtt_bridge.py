@@ -64,6 +64,7 @@ class MqttEvents:
         self.settings = settings
         self.ups_topics: UpsTopics | None = None
         self.refresh_requested = threading.Event()
+        self.restart_requested = threading.Event()
         self.refresh_in_progress = threading.Event()
         self.reconnect_requested = threading.Event()
         self.ups_scan_requested = threading.Event()
@@ -98,6 +99,12 @@ class MqttEvents:
                 self.refresh_requested.set()
                 return True
             return False
+        if topic == self.topics.restart_agent:
+            if text.upper() != "PRESS":
+                return False
+            # Повторные нажатия не создают очередь перезапусков.
+            self.restart_requested.set()
+            return True
         if topic == self.topics.ups_scan:
             if text.upper() == "PRESS":
                 if self.ups_scan_in_progress.is_set() or self.ups_scan_requested.is_set():
@@ -245,6 +252,7 @@ class MqttBridge(MqttEvents):
         self.connected.set()
         client.subscribe(self.topics.ha_status, qos=1)
         client.subscribe(self.topics.refresh, qos=1)
+        client.subscribe(self.topics.restart_agent, qos=1)
         client.subscribe(self.topics.ups_scan, qos=1)
         client.subscribe(self.topics.fan_calibrate, qos=1)
         client.subscribe(f"{self.topics.base}/ups/refresh", qos=1)
@@ -286,6 +294,9 @@ class MqttBridge(MqttEvents):
     def _on_message(self, client, userdata, message) -> None:
         payload = bytes(message.payload)
         text = payload.decode("utf-8", errors="replace").strip()
+        if message.topic == self.topics.restart_agent and getattr(message, "retain", False):
+            self.log.warning("Отклонена retained MQTT-команда перезапуска агента")
+            return
         if message.topic == self.topics.ha_status and text.casefold() == "online":
             self.handle_ha_online()
             self.wake_requested.set()

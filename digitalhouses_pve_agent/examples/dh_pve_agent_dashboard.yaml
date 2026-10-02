@@ -148,6 +148,18 @@ sections:
             }
 
       - type: tile
+        entity: button.dh_pve_agent_restart_agent
+        name: Перезапустить агент
+        icon: mdi:restart
+        tap_action:
+          action: perform-action
+          perform_action: button.press
+          target:
+            entity_id: button.dh_pve_agent_restart_agent
+          confirmation:
+            text: Перезапустить только PVE Agent? Proxmox и VM не будут перезапущены.
+
+      - type: tile
         entity: sensor.dh_pve_agent_last_refresh
         name: Последнее обновление
 

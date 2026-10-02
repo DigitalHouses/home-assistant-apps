@@ -61,6 +61,7 @@ DEFAULT_STATE_DIR = Path("/var/lib/digitalhouses_pve_agent")
 FAST_SECONDS = 10.0
 SLOW_SECONDS = 60.0
 HEALTH_SECONDS = 3600.0
+RESTART_EXIT_CODE = 75
 PROCESS_STARTED_AT = datetime.now(timezone.utc).isoformat()
 
 
@@ -314,6 +315,37 @@ def _telemetry_client(config: AppConfig, state_dir: Path) -> TelemetryClient:
     )
 
 
+def _restart_denial_reason(
+    ups_runtime: ShutdownAwareUpsRuntime | None,
+    *,
+    ups_startup_attempted: bool,
+) -> str | None:
+    """Запретить рестарт, если прерывание мониторинга UPS сейчас опасно."""
+    if ups_runtime is None:
+        return None
+    if ups_runtime.software_shutdown_committed():
+        return "Уже запущено аварийное завершение по UPS"
+    if not ups_startup_attempted or not ups_runtime.nut_available:
+        return "Состояние настроенного UPS неизвестно"
+    # Повторно проверить питание прямо перед рестартом: очередной
+    # 10-секундный UPS sample может ещё не отражать пропадание сети.
+    try:
+        snapshot = ups_runtime.reader(ups_runtime.config)
+    except Exception as exc:
+        return f"Не удалось проверить текущее состояние UPS: {exc}"
+    if snapshot is None:
+        return "Нет актуального состояния настроенного UPS"
+    if (
+        not snapshot.line_power
+        or snapshot.on_battery
+        or snapshot.low_battery
+        or snapshot.discharging
+        or "FSD" in snapshot.status_tokens
+    ):
+        return "UPS работает в аварийном режиме или от батареи"
+    return None
+
+
 def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
     log = logging.getLogger("digitalhouses_pve_agent")
     shutdown_history_tracker = _shutdown_tracker(state_dir)
@@ -349,6 +381,7 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
     reload_event = threading.Event()
     initialized = False
     ups_startup_attempted = False
+    restart_requested = False
 
     def refresh_ups_after_pve() -> bool:
         nonlocal ups_startup_attempted
@@ -388,6 +421,18 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
 
     try:
         while not stop_event.is_set():
+            if bridge.restart_requested.is_set():
+                bridge.restart_requested.clear()
+                denied = _restart_denial_reason(
+                    ups_runtime,
+                    ups_startup_attempted=ups_startup_attempted,
+                )
+                if denied:
+                    log.warning("MQTT Restart Agent отклонён: %s", denied)
+                else:
+                    restart_requested = True
+                    log.warning("Ручной перезапуск агента через MQTT")
+                    break
             if bridge.connected.is_set() and not initialized:
                 bridge.reconnect_requested.clear()
                 initialized = runtime.startup()
@@ -492,7 +537,7 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
         bridge.stop()
         log.info("DigitalHouses PVE Agent остановлен")
 
-    return 0
+    return RESTART_EXIT_CODE if restart_requested else 0
 
 
 def main() -> int:

@@ -14,6 +14,7 @@ class Topics:
     availability: str
     refresh: str
     refresh_operation: str
+    restart_agent: str
     manifest: str
     settings_prefix: str
     diagnostic_event: str
@@ -89,6 +90,7 @@ def build_topics(mqtt: MqttConfig, identity: HostIdentity) -> Topics:
         availability=f"{base}/availability",
         refresh=f"{base}/refresh",
         refresh_operation=f"{base}/refresh/operation",
+        restart_agent=f"{base}/restart",
         manifest=f"{base}/manifest",
         settings_prefix=f"{base}/settings",
         diagnostic_event=f"{base}/event/diagnostic",
