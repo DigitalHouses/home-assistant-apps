@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.48
+
+- Add passive host/LXC OOM and PSI FULL memory-pressure diagnostics with 30-day retained local history, bounded HA event presentation and a configurable 10–60-minute MQTT poll interval.
+- Run low-frequency kernel-journal and cgroup reads separately from the critical UPS polling loop; do not change guests or memory policy.
+- Add the Russian HA memory-event table and regression tests for counter resets, duplicate OOM messages and PSI episode merging.
+
 ## 0.5.47
 
 - Add manual Check updates and Install update MQTT buttons, update-available binary sensor, latest version and update-status diagnostic sensors in the existing PVE Agent device.

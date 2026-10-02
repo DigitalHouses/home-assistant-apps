@@ -450,6 +450,30 @@ def _problem_summary_components(topics) -> dict[str, dict[str, object]]:
     }
 
 
+def _memory_diagnostic_components(topics) -> dict[str, dict[str, object]]:
+    topic = f"{topics.base}/memory/diagnostics"
+    return {
+        "memory_history": {
+            "platform": "sensor",
+            "name": "Memory events (30 days)",
+            "unique_id": f"{topics.device_id}_memory_history",
+            "default_entity_id": "sensor.dh_pve_agent_memory_history",
+            "state_topic": topic,
+            "value_template": "{{ value_json.count | default('unknown') }}",
+            "json_attributes_topic": topic,
+            "json_attributes_template": "{{ value_json | tojson }}",
+            "availability": [{
+                "topic": topics.availability,
+                "payload_available": "online",
+                "payload_not_available": "offline",
+            }],
+            "availability_mode": "all",
+            "entity_category": "diagnostic",
+            "icon": "mdi:memory",
+        },
+    }
+
+
 def route_pve_discovery_groups(
     payload: dict[str, object],
     topics,
@@ -499,5 +523,6 @@ def route_pve_discovery_groups(
     components.update(_diagnostic_components(topics))
     components.update(_problem_components(topics, inventory))
     components.update(_problem_summary_components(topics))
+    components.update(_memory_diagnostic_components(topics))
     canonicalize_component_unique_ids(components)
     return payload

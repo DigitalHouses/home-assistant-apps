@@ -60,7 +60,7 @@ def test_discovery_uses_canonical_dh_pve_agent_device_and_refresh_contract():
     assert components["last_refresh"]["device_class"] == "timestamp"
 
 
-def test_discovery_exposes_only_app_owned_alert_threshold_numbers():
+def test_discovery_exposes_app_owned_alerts_and_memory_interval():
     payload = build_discovery_payload(_config(), _identity(), version="0.1.0")
     components = payload["components"]
 
@@ -77,6 +77,7 @@ def test_discovery_exposes_only_app_owned_alert_threshold_numbers():
         "ssd_temperature_threshold",
         "nvme_temperature_threshold",
         "gpu_temperature_threshold",
+        "memory_check_interval",
     }
 
     base = "DigitalHouses/Global/digitalhouses_pve_agent/0123456789abcdef0123456789abcdef/settings"

@@ -44,6 +44,16 @@ def _spec(
 
 
 SETTING_SPECS: dict[str, SettingSpec] = {
+    "memory_check_interval": _spec(
+        "memory_check_interval",
+        default=10,
+        minimum=10,
+        maximum=60,
+        step=10,
+        entity_id="number.dh_pve_agent_memory_check_interval",
+        name="Memory diagnostics interval",
+        unit="min",
+    ),
     "storage_percent_used_threshold": _spec(
         "storage_percent_used_threshold",
         default=80,

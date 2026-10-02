@@ -39,7 +39,7 @@ def test_collection_cadence_is_not_exposed_as_runtime_number_settings():
     assert "fast_poll_interval_seconds" not in SETTING_SPECS
     assert "disk_poll_interval_seconds" not in SETTING_SPECS
     assert not any("publish_delta" in key for key in SETTING_SPECS)
-    assert all(key.endswith("_threshold") for key in SETTING_SPECS)
+    assert all(key.endswith("_threshold") or key == "memory_check_interval" for key in SETTING_SPECS)
 
     components = build_discovery_payload(_config(), _identity(), version="0.2.0")["components"]
     assert "setting_fast_poll_interval_seconds" not in components

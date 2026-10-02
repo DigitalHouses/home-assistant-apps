@@ -4,6 +4,7 @@ from app.runtime_settings import RuntimeSettingError, RuntimeSettings, SETTING_S
 
 
 EXPECTED = {
+    "memory_check_interval": (10.0, 10.0, 60.0, 10.0, "min", "number.dh_pve_agent_memory_check_interval"),
     "storage_percent_used_threshold": (80.0, 0.0, 98.0, 1.0, "%", "number.dh_pve_agent_storage_percent_used_threshold"),
     "cpu_temperature_threshold": (90.0, 0.0, 110.0, 1.0, "°C", "number.dh_pve_agent_cpu_temperature_threshold"),
     "hdd_temperature_threshold": (45.0, 0.0, 70.0, 1.0, "°C", "number.dh_pve_agent_hdd_temperature_threshold"),
@@ -13,7 +14,7 @@ EXPECTED = {
 }
 
 
-def test_runtime_settings_expose_only_canonical_alert_thresholds():
+def test_runtime_settings_expose_canonical_controls():
     assert set(SETTING_SPECS) == set(EXPECTED)
     settings = RuntimeSettings()
     assert settings.as_dict() == {key: values[0] for key, values in EXPECTED.items()}

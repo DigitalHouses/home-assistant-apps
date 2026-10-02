@@ -1,0 +1,34 @@
+type: vertical-stack
+cards:
+  - type: markdown
+    title: PVE · События памяти · 30 дней
+    content: |-
+      {% set source = 'sensor.dh_pve_agent_memory_history' %}
+      {% set events = state_attr(source, 'events') or [] %}
+      {% set count = states(source) | int(0) %}
+      {% set more = state_attr(source, 'truncated') == true %}
+      {% set journal = state_attr(source, 'journal_status') %}
+      {% set pressure = state_attr(source, 'pressure_status') %}
+      {% if journal != 'ok' or pressure != 'ok' %}
+      ⚪ Диагностика частично недоступна: журнал — {{ journal or 'unknown' }}, PSI/cgroup — {{ pressure or 'unknown' }}.
+      {% endif %}
+      {% if events %}
+      | № | Дата и время | Гость | Событие |
+      |:--:|:--|:--|:--|
+      {% for e in events -%}
+      | {{ loop.index }} | {{ as_timestamp(e.at) | timestamp_custom('%d.%m.%Y %H:%M', true) }} | {{ e.guest }} | {{ '🔴' if e.level == 'red' else '🟠' if e.level == 'orange' else '🟡' }} {{ e.description | replace('|', '/') }} |
+      {% endfor %}
+      {% if more %}
+      Показаны последние {{ events | count }} из {{ count }} событий. Полная история за 30 дней сохранена на PVE.
+      {% endif %}
+      {% elif journal == 'ok' and pressure == 'ok' %}
+      За последние 30 дней событий не зафиксировано.
+      {% else %}
+      Нет подтверждённых данных о событиях.
+      {% endif %}
+  - type: entities
+    title: Параметры диагностики
+    show_header_toggle: false
+    entities:
+      - entity: number.dh_pve_agent_memory_check_interval
+        name: Интервал проверки памяти
