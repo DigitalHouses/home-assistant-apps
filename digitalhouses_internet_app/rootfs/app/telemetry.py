@@ -16,7 +16,7 @@ from state import ContractDataError, load_json_object
 
 PRODUCT = "digitalhouses_internet_app"
 SCHEMA_VERSION = 1
-TELEMETRY_POLICY_VERSION = 1
+TELEMETRY_POLICY_VERSION = 2
 BASE_URL = "https://telemetry.digitalhouses.vip"
 STATE_FILE = Path("/data/telemetry.json")
 NORMAL_INTERVAL_SECONDS = 24 * 60 * 60

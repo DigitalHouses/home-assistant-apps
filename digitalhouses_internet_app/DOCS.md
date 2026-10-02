@@ -84,7 +84,7 @@ Temperature, connected-client count, uptime and last-boot bindings are intention
 
 ## Product telemetry
 
-`telemetry_enabled` is an explicit opt-in and defaults to `false`. When disabled, the App makes no telemetry heartbeat requests.
+`telemetry_enabled` is required activation consent for statistics collection. Its default is `false`, and the configuration text is `Consent to collect statistics (product name, version, installation ID).` If the setting is absent or `false`, startup logs `Statistics collection consent not granted. Stopping application.` and exits before runtime state initialization, MQTT connections, and telemetry requests. For existing installations, the saved setting persists on upgrade: a previously accepted `true` continues to operate; a `false` or missing setting requires the operator to enable the existing switch and restart. Turning it off stops supported runtime on the next App start without modifying stored identity or product configuration.
 
 When enabled, the App sends protocol-v1 heartbeats to `https://telemetry.digitalhouses.vip` with exactly:
 
@@ -96,9 +96,9 @@ When enabled, the App sends protocol-v1 heartbeats to `https://telemetry.digital
 
 The per-installation token is used only as the Bearer credential. Country is derived server-side; Internet measurements, outage history, router telemetry, entity IDs, Home Assistant identity and configuration are not sent.
 
-Identity and heartbeat scheduling state are persisted in `/data/telemetry.json`. A missing file creates a fresh installation identity; an existing malformed file fails explicitly and is never replaced with a new UUID/token, preventing one installation from silently becoming a second telemetry installation. The persisted state also records whether telemetry was disabled or enabled. A `false -> true` configuration transition schedules exactly one immediate best-effort heartbeat on the next App start, even when the previous successful heartbeat is still inside its normal 24-hour interval. After that first attempt the transition is consumed: an ordinary restart does not create another immediate heartbeat. A successful heartbeat is normally followed by the next one after 24 hours ±30 minutes. If the immediate or scheduled attempt fails, the failure timestamp is persisted and a restart does not bypass the one-hour backoff. Telemetry failures never affect the main monitoring/recovery path.
+Protocol v1 is unchanged; the App now reports telemetry policy version **2**. Identity and heartbeat scheduling state are persisted in `/data/telemetry.json` after consent is granted. A missing file on accepted activation creates a fresh installation identity; an existing malformed file fails explicitly and is never replaced with a new UUID/token, preventing one installation from silently becoming a second telemetry installation. The persisted state also records whether telemetry was disabled or enabled. A `false -> true` configuration transition schedules exactly one immediate best-effort heartbeat on the next App start, even when the previous successful heartbeat is still inside its normal 24-hour interval. After that first attempt the transition is consumed: an ordinary restart does not create another immediate heartbeat. A successful heartbeat is normally followed by the next one after 24 hours ±30 minutes. If the immediate or scheduled attempt fails, the failure timestamp is persisted and a restart does not bypass the one-hour backoff. Telemetry failures never affect the main monitoring/recovery path.
 
-`button.dh_internet_app_delete_telemetry` performs authenticated deletion of the retained installation telemetry record. Disabling telemetry stops future heartbeats but does not delete already retained server data.
+`button.dh_internet_app_delete_telemetry` performs authenticated deletion of the retained installation telemetry record. The deletion action does not withdraw consent. Telemetry server failures never prevent monitoring or recovery, and no heartbeat is attempted without consent.
 
 Shared policy: [DigitalHouses Product Telemetry Policy](../docs/standards/PRODUCT_TELEMETRY_POLICY.md).
 
