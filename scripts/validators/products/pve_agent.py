@@ -39,6 +39,7 @@ def validate_digitalhouses_pve_agent(
             app / "app/update_manager.py",
             app / "bin/digitalhouses-pve-agent-update-runner",
             app / "systemd/digitalhouses_pve_agent-update.service",
+            app / "systemd/digitalhouses_pve_agent-update-recover.service",
             app / "app/topics.py",
             app / "app/discovery.py",
             app / "app/discovery_identity.py",
