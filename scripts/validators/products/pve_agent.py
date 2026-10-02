@@ -6,7 +6,7 @@ from typing import Any
 
 from validators.common import fail, require_files
 
-EXPECTED_VERSION = "0.5.45"
+EXPECTED_VERSION = "0.5.46"
 EXPECTED_TOPIC_PREFIX = "DigitalHouses/Global/digitalhouses_pve_agent"
 EXPECTED_DEVICE_NAME = "DH PVE"
 EXPECTED_REFRESH_ENTITY = "button.dh_pve_agent_refresh"
@@ -135,11 +135,38 @@ def validate_digitalhouses_pve_agent(
         ),
         "base Discovery",
     )
-    for path_name in ("app/topics.py", "app/discovery.py", "app/mqtt_bridge.py", "app/main.py"):
-        source = (app / path_name).read_text(encoding="utf-8")
-        for forbidden in ("restart_agent", "restart_requested", "RESTART_EXIT_CODE"):
-            if forbidden in source:
-                fail(f"DH PVE retired Restart Agent code remains in {path_name}: {forbidden}")
+    _require_text(
+        app / "app/topics.py",
+        ('restart_agent=f"{base}/restart"',),
+        "Restart Agent MQTT topic",
+    )
+    _require_text(
+        app / "app/discovery.py",
+        (
+            '"default_entity_id": "button.dh_pve_agent_restart_agent"',
+            '"retain": False',
+            '"device_class": "restart"',
+        ),
+        "Restart Agent Discovery",
+    )
+    _require_text(
+        app / "app/mqtt_bridge.py",
+        (
+            "self.restart_requested = threading.Event()",
+            "client.subscribe(self.topics.restart_agent, qos=1)",
+            'getattr(message, "retain", False)',
+        ),
+        "Restart Agent MQTT safety",
+    )
+    _require_text(
+        app / "app/main.py",
+        (
+            "RESTART_EXIT_CODE = 75",
+            "def _restart_denial_reason(",
+            "return RESTART_EXIT_CODE if restart_requested else 0",
+        ),
+        "Restart Agent systemd lifecycle",
+    )
 
     _require_text(
         app / "app/discovery_identity.py",
