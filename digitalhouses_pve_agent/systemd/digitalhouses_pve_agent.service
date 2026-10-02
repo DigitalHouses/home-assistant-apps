@@ -10,6 +10,7 @@ Type=simple
 User=root
 Group=root
 WorkingDirectory=/opt/digitalhouses/digitalhouses_pve_agent
+ExecStartPre=/usr/bin/python3 /usr/local/libexec/digitalhouses-pve-agent-update-runner --recover
 ExecStartPre=/opt/digitalhouses/digitalhouses_pve_agent/.venv/bin/python -m app.ups_policy_state_migration --state-dir /var/lib/digitalhouses_pve_agent
 ExecStart=/opt/digitalhouses/digitalhouses_pve_agent/.venv/bin/python -m app.main --config /etc/digitalhouses_pve_agent/digitalhouses_pve_agent.conf --state-dir /var/lib/digitalhouses_pve_agent
 ExecReload=/bin/kill -HUP $MAINPID
