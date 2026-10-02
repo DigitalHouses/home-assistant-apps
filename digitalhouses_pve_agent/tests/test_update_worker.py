@@ -25,6 +25,7 @@ def sandbox(tmp_path):
         "BACKUP": tmp_path / "var" / "update-backup",
         "LOCK": tmp_path / "var" / "update.lock",
     }
+    paths["STATE"].mkdir(parents=True, exist_ok=True)
     for name, path in paths.items():
         scope[name] = path
     scope["FILES"] = {
