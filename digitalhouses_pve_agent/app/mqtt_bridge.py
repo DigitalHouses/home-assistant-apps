@@ -65,6 +65,8 @@ class MqttEvents:
         self.ups_topics: UpsTopics | None = None
         self.refresh_requested = threading.Event()
         self.restart_requested = threading.Event()
+        self.check_updates_requested = threading.Event()
+        self.install_update_requested = threading.Event()
         self.refresh_in_progress = threading.Event()
         self.reconnect_requested = threading.Event()
         self.ups_scan_requested = threading.Event()
@@ -104,6 +106,15 @@ class MqttEvents:
                 return False
             # Повторные нажатия не создают очередь перезапусков.
             self.restart_requested.set()
+            return True
+        if topic in (self.topics.update_check, self.topics.update_install):
+            if text.upper() != "PRESS":
+                return False
+            request = (
+                self.check_updates_requested if topic == self.topics.update_check
+                else self.install_update_requested
+            )
+            request.set()
             return True
         if topic == self.topics.ups_scan:
             if text.upper() == "PRESS":
@@ -253,6 +264,8 @@ class MqttBridge(MqttEvents):
         client.subscribe(self.topics.ha_status, qos=1)
         client.subscribe(self.topics.refresh, qos=1)
         client.subscribe(self.topics.restart_agent, qos=1)
+        client.subscribe(self.topics.update_check, qos=1)
+        client.subscribe(self.topics.update_install, qos=1)
         client.subscribe(self.topics.ups_scan, qos=1)
         client.subscribe(self.topics.fan_calibrate, qos=1)
         client.subscribe(f"{self.topics.base}/ups/refresh", qos=1)
@@ -294,7 +307,9 @@ class MqttBridge(MqttEvents):
     def _on_message(self, client, userdata, message) -> None:
         payload = bytes(message.payload)
         text = payload.decode("utf-8", errors="replace").strip()
-        if message.topic == self.topics.restart_agent and getattr(message, "retain", False):
+        if message.topic in {
+            self.topics.restart_agent, self.topics.update_check, self.topics.update_install
+        } and getattr(message, "retain", False):
             self.log.warning("Отклонена retained MQTT-команда перезапуска агента")
             return
         if message.topic == self.topics.ha_status and text.casefold() == "online":
@@ -465,6 +480,13 @@ class MqttBridge(MqttEvents):
     def publish_ups_scan_state(self, payload: dict[str, object]) -> bool:
         return self._publish(
             self.topics.ups_scan_state,
+            json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+            retain=True,
+        )
+
+    def publish_update_state(self, payload: dict[str, object]) -> bool:
+        return self._publish(
+            self.topics.update_state,
             json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
             retain=True,
         )
