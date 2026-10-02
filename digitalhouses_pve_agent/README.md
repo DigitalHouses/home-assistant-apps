@@ -10,7 +10,7 @@ Native Linux agent for **Proxmox VE 8.x** that publishes host, CPU, memory, stor
 
 The canonical product and runtime identity is **DigitalHouses PVE Agent** / `digitalhouses_pve_agent`: systemd service `digitalhouses_pve_agent.service`, filesystem roots under `/opt/digitalhouses/digitalhouses_pve_agent`, `/etc/digitalhouses_pve_agent` and `/var/lib/digitalhouses_pve_agent`, MQTT base `DigitalHouses/Global/digitalhouses_pve_agent/<instance>`, and Home Assistant entity prefix `dh_pve_agent_*`. Version 0.5.30 performs the corrected one-time controlled migration from the former `dh_pve_app` / `dh_app_pve_*` runtime, including deterministic cleanup of retained data owned by the legacy MQTT instance namespace.
 
-Current source release: `VERSION` is `0.5.46`.
+Current source release: `VERSION` is `0.5.47`.
 
 ## Home Assistant dashboard
 
@@ -44,6 +44,24 @@ Collection cadence is App-owned and does not accelerate because a resource becom
 The legacy `[ups] poll_interval_seconds` configuration key is accepted only for upgrade compatibility and is ignored; UPS collection remains fixed at 10 seconds.
 
 Manual Refresh executes the requested recovery collection sequentially rather than creating a parallel burst. If the Agent started while a VM QEMU Guest Agent was unavailable, restore the guest first and press Refresh to rebuild passthrough disk inventory and SMART state without restarting the PVE Agent. Manual PVE Refresh, UPS Refresh and UPS Scan publish retained operation state (`idle`, `updating`, `error`) with start/finish timestamps, duration and error detail so Home Assistant can show real progress without timers. For the main Refresh button, `sensor.dh_pve_agent_refresh_state` remains `updating` across the complete PVE + configured-UPS flow; `sensor.dh_pve_agent_last_refresh` advances only after the complete flow succeeds.
+
+## Update from Home Assistant
+
+The PVE Agent exposes two non-retained MQTT commands in the existing DH PVE device:
+
+- `button.dh_pve_agent_check_updates` checks GitHub Releases on demand.
+- `button.dh_pve_agent_update` installs a verified newer, stable, published PVE Agent release.
+- `binary_sensor.dh_pve_agent_update_available` is ON/OFF/unknown.
+- `sensor.dh_pve_agent_latest_version` shows the latest release version (unknown if GitHub is unreachable).
+- `sensor.dh_pve_agent_update_status` shows checking, queued, downloading, installing, verifying, rolling_back, idle, completed or error; details include the last error and check time.
+
+A release check runs at startup and every 24 hours, in a background thread. No automatic installation occurs, and unrelated monorepo products, prereleases, drafts, tags without published GitHub Releases, branches and arbitrary commits are never offered.
+
+Updates are carried out by a separate `digitalhouses_pve_agent-update.service` unit. Its small independent runner lives in `/usr/local/libexec`, outside the source tree being replaced. Before installation it verifies the Release and live NUT/UPS power, then copies the old agent runtime, configuration and units into `/var/lib/digitalhouses_pve_agent/update-backup`. A failed install/startup restores the previous installation. An interrupted transaction is recovered by the agent's systemd ExecStartPre on subsequent startup. The last backup is retained for recovery. The updater never shuts down or restarts PVE, VMs, containers or NUT. It necessarily restarts **the agent process**, briefly interrupting monitoring and application-owned UPS logic.
+
+A configured UPS must confirm line power and no low-battery, discharge or forced-shutdown state. Unknown UPS state blocks installation. HA confirmation is provided in the administrative dashboard example, not in MQTT itself: protect the installation MQTT topic using broker ACLs and restrict HA dashboard access. Commands with MQTT retain are rejected. A second installation request cannot run concurrently.
+
+This mechanism is intentionally scoped to the Linux agent and does not replace the Home Assistant App update model. See the repository Release Policy for immutable source tags, version identity and exact-source provenance.
 
 ## Restart Agent
 
