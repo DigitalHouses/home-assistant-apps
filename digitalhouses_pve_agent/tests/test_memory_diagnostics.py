@@ -137,6 +137,31 @@ def test_five_percent_exact_boundary_and_actual_hourly_period(tmp_path):
     assert third["events"][0]["amount"] == 359_000_001
 
 
+def test_ten_minute_threshold_requires_thirty_seconds(tmp_path):
+    monitor, proc_root, _group = _fixture(tmp_path)
+    t = datetime(2026, 10, 3, 0, 0, tzinfo=timezone.utc)
+    no_lxcs = {"lxcs": {}, "vms": {}}
+    monitor.scan(t, no_lxcs)
+
+    # Tiny nonzero FULL and exactly 29.99 seconds must remain local-only.
+    (proc_root / "pressure" / "memory").write_text(
+        _psi(29_990_000, 29_990_000)
+    )
+    first = monitor.scan(t + timedelta(minutes=10), no_lxcs)
+    assert first["count"] == 0
+
+    # One subsequent 10-minute interval at precisely 30 seconds is enough.
+    (proc_root / "pressure" / "memory").write_text(
+        _psi(59_990_000, 59_990_000)
+    )
+    second = monitor.scan(t + timedelta(minutes=20), no_lxcs)
+    assert second["count"] == 1
+    assert second["events"][0]["amount"] == 59_990_000
+    assert [s["full_us"] for s in monitor.psi_samples] == [
+        29_990_000, 30_000_000,
+    ]
+
+
 def test_zero_and_microsecond_samples_preserved_without_ha_noise(tmp_path):
     monitor, proc_root, group = _fixture(tmp_path)
     t = datetime(2026, 10, 3, 0, 0, tzinfo=timezone.utc)
@@ -200,8 +225,12 @@ def test_psi_sample_retention_30_days_and_baseline_reset(tmp_path):
     assert len(monitor.psi_samples) == 1
     assert monitor.psi_samples[0]["at"] == (t + timedelta(days=31)).isoformat()
     # A counter reset must not produce a sample with negative differences.
-    (proc_root / "pressure" / "memory").write_text(_psi(0, 0))
+    (proc_root / "pressure" / "memory").write_text(_psi(100_000, 100_000))
     monitor.scan(t + timedelta(days=31, minutes=10), no_lxcs)
+    before = len(monitor.psi_samples)
+    (proc_root / "pressure" / "memory").write_text(_psi(100, 100))
+    monitor.scan(t + timedelta(days=31, minutes=20), no_lxcs)
+    assert len(monitor.psi_samples) == before
     assert monitor.payload()["count"] == 0
 
 
