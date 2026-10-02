@@ -1,7 +1,6 @@
 """Обязательное согласие на сбор статистики Recorder App."""
 from __future__ import annotations
 
-import json
 import logging
 from pathlib import Path
 from types import SimpleNamespace
@@ -27,7 +26,7 @@ def app_options(consent: bool):
 class ConsentTests(TestCase):
     def test_disabled_stops_before_connectors_and_telemetry(self):
         with (
-            patch.dict(APP_MODULE.os.environ, {"APP_VERSION": "0.1.18"}),
+            patch.dict(APP_MODULE.os.environ, {"APP_VERSION": "0.1.19"}),
             patch.object(APP_MODULE, "load_config", return_value=app_options(False)),
             patch.object(APP_MODULE, "create_adapter") as adapter,
             patch.object(APP_MODULE, "TelemetryClient") as telemetry,
@@ -44,7 +43,7 @@ class ConsentTests(TestCase):
 
     def test_enabled_reaches_normal_runtime(self):
         with (
-            patch.dict(APP_MODULE.os.environ, {"APP_VERSION": "0.1.18"}),
+            patch.dict(APP_MODULE.os.environ, {"APP_VERSION": "0.1.19"}),
             patch.object(APP_MODULE, "load_config", return_value=app_options(True)),
             patch.object(APP_MODULE, "create_adapter", side_effect=RuntimeError("entered runtime")) as adapter,
         ):
