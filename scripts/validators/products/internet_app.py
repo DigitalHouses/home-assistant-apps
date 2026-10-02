@@ -33,6 +33,15 @@ def validate_internet(root: Path, app: Path, context: dict[str, Any]) -> None:
         fail(f"{app.name}: telemetry_enabled must exist and default to false")
     if schema.get("telemetry_enabled") != "bool":
         fail(f"{app.name}: telemetry_enabled schema must be bool")
+    for locale in ("en", "ru"):
+        translation = load_yaml(app / "translations" / f"{locale}.yaml", root)
+        consent = (translation.get("configuration") or {}).get("telemetry_enabled") or {}
+        if consent.get("description") != (
+            "Consent to collect statistics (product name, version, installation ID)."
+        ):
+            fail(f"{app.name}: {locale} consent description must match the policy")
+        if consent.get("name") != "Statistics collection consent":
+            fail(f"{app.name}: {locale} consent option must have the standard label")
 
     if config.get("slug") != "digitalhouses_internet_app":
         fail(
@@ -126,6 +135,20 @@ def validate_internet(root: Path, app: Path, context: dict[str, Any]) -> None:
     require_files(root, [contracts_path, contracts_test_path])
     contracts_source = contracts_path.read_text(encoding="utf-8")
 
+    consent_guard = app_source.find("if not self.config.telemetry_enabled:")
+    if consent_guard < 0 or any(
+        consent_guard > app_source.find(marker) or app_source.find(marker) < 0
+        for marker in (
+            "self.started_at =",
+            "OutageTracker.load(",
+            "self.telemetry = TelemetryClient(",
+            "self.mqtt = create_mqtt_client(",
+        )
+    ):
+        fail(f"{app.name}: consent must be checked before runtime initialization")
+    if "Statistics collection consent not granted. Stopping application." not in app_source:
+        fail(f"{app.name}: missing standard consent refusal log")
+
     for forbidden in (
         '${APP_VERSION:-unknown}',
         'os.getenv("APP_VERSION",',
@@ -190,6 +213,7 @@ def validate_internet(root: Path, app: Path, context: dict[str, Any]) -> None:
     require_files(root, [telemetry_path])
     telemetry_source = telemetry_path.read_text(encoding="utf-8")
     for value in (
+        'TELEMETRY_POLICY_VERSION = 2',
         'PRODUCT = "digitalhouses_internet_app"',
         'STATE_FILE = Path("/data/telemetry.json")',
         'BASE_URL = "https://telemetry.digitalhouses.vip"',

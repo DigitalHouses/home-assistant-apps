@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.21
+
+- Require explicit statistics-collection consent via the existing `telemetry_enabled` App option (default `false`) before any runtime state, MQTT client, or telemetry client is initialized.
+- Log `Statistics collection consent not granted. Stopping application.` and stop when consent is absent or disabled; keep the existing persisted option, installation identity, and all other settings unchanged during upgrades.
+- Use the standard English configuration consent label and data-scope description in both available App locales.
+- Continue telemetry protocol v1 with policy version 2 after consent; keep transport failure isolation, retry scheduling, existing MQTT identities, and monitored data unchanged.
+
 ## 0.1.20
 
 - Persist the consecutive automatic Speedtest failure streak across App restarts and reset it after any successful manual or automatic Speedtest.

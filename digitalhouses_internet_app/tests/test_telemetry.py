@@ -89,7 +89,7 @@ class TelemetryTests(unittest.TestCase):
                 client.payload(),
                 {
                     "schema": 1,
-                    "telemetry_policy_version": 1,
+                    "telemetry_policy_version": 2,
                     "installation_id": client.installation_id,
                     "product": "digitalhouses_internet_app",
                     "version": "0.1.10",

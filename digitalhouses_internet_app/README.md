@@ -78,15 +78,17 @@ Machine events are producer-validated against their schema-v2 event-specific con
 
 ## Product telemetry
 
-Usage telemetry is explicit opt-in and disabled by default:
+Statistics collection requires explicit consent in the standard App configuration (`telemetry_enabled`), disabled by default:
 
 ```yaml
 telemetry_enabled: false
 ```
 
+The configuration label and description are `Statistics collection consent` and `Consent to collect statistics (product name, version, installation ID).` When the option is `false` or absent, startup logs `Statistics collection consent not granted. Stopping application.` and stops **before MQTT, state initialization, or telemetry requests**. Existing installations retain their configured consent setting across updates. Set the option to `true` and restart the App to activate normal monitoring and required statistics. Removing consent stops the App at its next start; no new authorization mechanism is introduced.
+
 When telemetry changes from disabled to enabled, the App sends one best-effort heartbeat immediately on the next App start. A fresh installation and a released App version change are also eligible for an immediate heartbeat. After a successful heartbeat, normal reporting is approximately every 24 hours with deterministic ±30 minute jitter. Ordinary restarts do not bypass the saved schedule, and a failed attempt keeps the one-hour retry backoff across restarts. The endpoint is `https://telemetry.digitalhouses.vip`. The payload contains only protocol version, telemetry policy version, random installation UUID, canonical product identifier `digitalhouses_internet_app`, and App version. Country is derived server-side. Hostname, Home Assistant UUID, LAN/WAN addresses, router data, Speedtest results, outages, entity IDs and configuration are not sent.
 
-Telemetry identity and scheduling state are stored in `/data/telemetry.json`, so they survive App restart/update and normal HA backup/restore. Telemetry failures never affect Internet monitoring or recovery. `button.dh_internet_app_delete_telemetry` requests authenticated deletion of this installation's retained server-side telemetry data.
+Protocol v1 continues unchanged; the supported release uses telemetry policy version **2**. Telemetry identity and scheduling state are stored in `/data/telemetry.json` only after accepted activation; existing valid state is preserved across App restart/update and normal HA backup/restore. Telemetry server outages do not prevent monitoring or recovery after consent. `button.dh_internet_app_delete_telemetry` requests authenticated deletion of this installation's retained server-side telemetry data and does not withdraw consent.
 
 See [DigitalHouses Product Telemetry Policy](../docs/standards/PRODUCT_TELEMETRY_POLICY.md).
 

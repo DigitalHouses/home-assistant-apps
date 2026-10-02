@@ -102,8 +102,8 @@ configuration:
             name: Router power-off, s
             description: Switch-only off duration before power is restored.
   telemetry_enabled:
-    name: Usage telemetry
-    description: "Send minimal pseudonymous DigitalHouses product telemetry (product, version and random installation ID). Disabled by default. Policy: https://github.com/DigitalHouses/home-assistant-apps/blob/main/docs/standards/PRODUCT_TELEMETRY_POLICY.md"
+    name: Statistics collection consent
+    description: Consent to collect statistics (product name, version, installation ID).
   log_level:
     name: Log level
     description: Application logging verbosity.
