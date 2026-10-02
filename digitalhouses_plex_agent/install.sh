@@ -74,6 +74,72 @@ if [[ "${EUID}" -ne 0 ]]; then
     exit 1
 fi
 
+
+# Consent preflight must run before package installation, file migration or service changes.
+telemetry_consent_granted() {
+    local file="${1}"
+    [[ -f "${file}" ]] || return 1
+    awk '
+        /^[[:space:]]*\[[^]]+\]/ {
+            section = ($0 ~ /^[[:space:]]*\[telemetry\][[:space:]]*$/)
+        }
+        section && /^[[:space:]]*enabled[[:space:]]*=/ {
+            sub(/^[[:space:]]*enabled[[:space:]]*=[[:space:]]*/, "")
+            sub(/[[:space:]]*[#;].*$/, "")
+            if (tolower($0) ~ /^(true|yes|on|1)[[:space:]]*$/) accepted = 1
+        }
+        END { exit !accepted }
+    ' "${file}"
+}
+
+persist_telemetry_consent() {
+    local file="${1}" tmp
+    tmp="$(mktemp "${file}.consent.XXXXXX")"
+    if ! awk '
+        BEGIN { section = 0; found_section = 0; found_key = 0 }
+        /^[[:space:]]*\[[^]]+\]/ {
+            if (section && !found_key) print "enabled = true"
+            section = ($0 ~ /^[[:space:]]*\[telemetry\][[:space:]]*$/)
+            if (section) { found_section = 1; found_key = 0 }
+        }
+        section && /^[[:space:]]*enabled[[:space:]]*=/ {
+            print "enabled = true"
+            found_key = 1
+            next
+        }
+        { print }
+        END {
+            if (section && !found_key) print "enabled = true"
+            if (!found_section) print "\n[telemetry]\nenabled = true"
+        }
+    ' "${file}" >"${tmp}"; then
+        rm -f -- "${tmp}"
+        return 1
+    fi
+    mv -f -- "${tmp}" "${file}"
+}
+
+CONSENT_NEEDS_SAVE=0
+CONSENT_SOURCE="${CONFIG_FILE}"
+if [[ ! -f "${CONSENT_SOURCE}" && -f "${LEGACY_CONFIG_FILE}" ]]; then
+    CONSENT_SOURCE="${LEGACY_CONFIG_FILE}"
+fi
+if ! telemetry_consent_granted "${CONSENT_SOURCE}"; then
+    if [[ ! -r /dev/tty ]]; then
+        echo "Consent to collect statistics is required. Interactive installation is needed." >&2
+        exit 1
+    fi
+    printf "Consent to collect statistics (product name, version, installation ID)? [y/N] " >/dev/tty
+    consent_answer=""
+    IFS= read -r consent_answer </dev/tty || true
+    if [[ "${consent_answer}" != "y" ]]; then
+        echo "Statistics collection consent not granted. Installation stopped." >&2
+        exit 1
+    fi
+    CONSENT_NEEDS_SAVE=1
+fi
+# END TELEMETRY CONSENT PREFLIGHT
+
 need_apt=0
 command -v git >/dev/null 2>&1 || need_apt=1
 command -v python3 >/dev/null 2>&1 || need_apt=1
@@ -345,9 +411,9 @@ if [[ ! -f "${CONFIG_FILE}" ]]; then
         printf '%s\n' "log_level = info"
         printf '\n'
         printf '%s\n' "[telemetry]"
-        printf '%s\n' "# Voluntary product telemetry. Default is OFF."
+        printf '%s\n' "# Consent to collect statistics (product name, version, installation ID)."
         printf '%s\n' "# Policy: https://github.com/DigitalHouses/home-assistant-apps/blob/main/docs/standards/PRODUCT_TELEMETRY_POLICY.md"
-        printf '%s\n' "enabled = false"
+        printf '%s\n' "enabled = true"
         printf '%s\n' "cpu_change_threshold = 5"
         printf '%s\n' "high_load_threshold = 80"
         printf '%s\n' "high_load_publish_interval_seconds = 60"
@@ -370,6 +436,10 @@ if [[ ! -f "${CONFIG_FILE}" ]]; then
     } >"${CONFIG_FILE}"
     umask "${previous_umask}"
     config_created=1
+fi
+
+if [[ "${CONSENT_NEEDS_SAVE}" -eq 1 && "${config_created}" -eq 0 ]]; then
+    persist_telemetry_consent "${CONFIG_FILE}"
 fi
 
 ha_mqtt_identity_migration=0

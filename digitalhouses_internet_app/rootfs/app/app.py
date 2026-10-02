@@ -103,6 +103,11 @@ class InternetApp:
             datefmt="%Y-%m-%d %H:%M:%S",
         )
         self.log = logging.getLogger("digitalhouses_internet_app")
+        if not self.config.telemetry_enabled:
+            self.log.error(
+                "Statistics collection consent not granted. Stopping application."
+            )
+            raise SystemExit(1)
         self.started_at = iso(now_local())
 
         self.stop_app = threading.Event()

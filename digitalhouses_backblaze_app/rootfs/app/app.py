@@ -57,6 +57,11 @@ class BackblazeMonitorApp:
             datefmt="%Y-%m-%d %H:%M:%S",
         )
         self.log = logging.getLogger("digitalhouses_backblaze")
+        if not self.config.telemetry_enabled:
+            self.log.error(
+                "Statistics collection consent not granted. Stopping application."
+            )
+            raise SystemExit(1)
         self.started_at = datetime.now(timezone.utc).isoformat()
         self.api = BackblazeClient(
             self.config.application_key_id,

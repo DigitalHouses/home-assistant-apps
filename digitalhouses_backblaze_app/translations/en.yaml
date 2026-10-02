@@ -9,8 +9,8 @@ configuration:
     name: Refresh interval, hours
     description: Interval between full scans of all visible Backblaze buckets.
   telemetry_enabled:
-    name: Usage telemetry
-    description: Send minimal pseudonymous DigitalHouses product telemetry. Disabled by default.
+    name: Statistics collection consent
+    description: Consent to collect statistics (product name, version, installation ID).
   log_level:
     name: Log level
     description: Application logging verbosity.
