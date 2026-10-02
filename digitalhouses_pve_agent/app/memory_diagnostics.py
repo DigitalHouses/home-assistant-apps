@@ -152,7 +152,7 @@ class MemoryDiagnostics:
         try:
             state = store.load()
         except Exception as exc:
-            LOG.warning("Memory diagnostics: persisted state unavailable: %s", exc)
+            LOG.warning("Недоступно сохранённое состояние диагностики памяти: %s", exc)
             state = {}
         self.events = [e for e in state.get("events", []) if isinstance(e, dict)] if isinstance(state.get("events"), list) else []
         self.baselines = state.get("baselines", {}) if isinstance(state.get("baselines"), dict) else {}
@@ -193,7 +193,7 @@ class MemoryDiagnostics:
             if len(proc.stdout.encode("utf-8")) > JOURNAL_LIMIT_BYTES:
                 raise RuntimeError("journal window too large; data not complete")
         except (OSError, subprocess.SubprocessError, RuntimeError) as exc:
-            LOG.warning("Memory diagnostics: kernel journal unavailable: %s", exc)
+            LOG.warning("Недоступен журнал ядра для диагностики памяти: %s", exc)
             self.journal_status = "unknown"
             return set()
 
@@ -309,7 +309,7 @@ class MemoryDiagnostics:
                     counters["pressure_event"] = active["id"]
         counters["identity"] = identity
         self.baselines[name] = counters
-        return True
+        return psi is not None and ev is not None
 
     def scan(self, now: datetime, inventory: Mapping[str, object] | None) -> dict[str, object]:
         now = now.astimezone(timezone.utc)
@@ -370,6 +370,9 @@ class MemoryDiagnostics:
         cutoff = now - timedelta(days=RETENTION_DAYS)
         self.events = [event for event in self.events if (date := _as_datetime(event.get("at"))) is not None and date >= cutoff]
         self.events.sort(key=lambda event: (str(event.get("at")), int(event.get("id", 0))), reverse=True)
+        # Bound the in-memory cursor set as well as the on-disk form.
+        if len(self.seen_journal) > 2000:
+            self.seen_journal = set(sorted(self.seen_journal)[-2000:])
         # Don't record journal watermark on failure, so the next pass retries
         # the same interval. Persist seen cursors to deduplicate overlap.
         if self.journal_status == "ok":
