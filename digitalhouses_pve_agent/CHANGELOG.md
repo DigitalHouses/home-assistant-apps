@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.51
+
+- Classify PSI memory FULL incidents only when the interval's stalled time reaches at least 5% of its actual elapsed duration (30 seconds per 10 minutes), proportional to configured or delayed scan intervals.
+- Preserve every valid PSI interval, including zero and subthreshold microsecond deltas, locally for 30 days without publishing raw samples to Home Assistant; continue merging consecutive FULL intervals into one actionable incident.
+- Keep OOM events unconditional, preserve legacy noisy pressure entries locally while excluding them from the HA incident table, and add regression coverage.
+
 ## 0.5.50
 
 - Fix update and restart buttons crashing the PVE Agent on hosts with a configured UPS: `software_shutdown_committed` is a Boolean property, not a callable. The previous mocks incorrectly exposed it as a function.
