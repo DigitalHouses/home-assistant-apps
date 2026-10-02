@@ -326,7 +326,9 @@ Product-specific telemetry protocols are prohibited unless a future standard exp
 
 Supported official DigitalHouses products use telemetry policy version 2.
 
-Telemetry reporting is part of supported product operation **after explicit acceptance of the current telemetry/privacy terms**, and is not exposed as an ordinary runtime opt-in/opt-out configuration option. Without acceptance, the supported product must not activate or send telemetry. Legacy telemetry-enabled settings are not proof of policy-v2 acceptance.
+Telemetry reporting is part of supported product operation **after explicit acceptance of the current telemetry/privacy terms**, and is not exposed as an ordinary runtime opt-in/opt-out configuration option.
+
+Подтверждение выполняется **исключительно в конфигурации**: `telemetry_policy_acceptance: not_accepted|accept_v2` в Home Assistant App options; `[telemetry] policy_acceptance = "not_accepted"|"accept_v2"` в конфиге Linux Agent. По умолчанию подтверждения нет. `accept_v2` выбирается вручную после ознакомления с опубликованной редакцией. Ingress, дополнительный UI и MQTT-переключатели не требуются и не используются; это не опция отключения статистики. Принятую редакцию и время локально фиксирует сам продукт. Новая существенно изменённая редакция требует повторного явного принятия. Публичное включение остаётся под legal gate. Without acceptance, the supported product must not activate or send telemetry. Legacy telemetry-enabled settings are not proof of policy-v2 acceptance.
 
 After acceptance, the client always schedules the minimal heartbeat defined by protocol v1. Telemetry-server failure, DNS failure, firewall blocking, timeout or rate limiting must never affect core product operation.
 
@@ -529,6 +531,10 @@ A Linux Agent release does not require a container image unless its delivery mod
 At minimum:
 
 ```text
+HA options / Agent config -> not_accepted by default; only explicit accept_v2 is acceptance
+no separate Ingress / MQTT / web activation UI for acceptance
+acceptance -> accepted_at and exact policy revision/hash are persisted
+material policy revision -> new config acceptance is required
 fresh install without acceptance -> no new telemetry identity, no heartbeat, consent-required/not-activated state
 explicit acceptance -> accepted terms revision and timestamp persisted; new UUID/token created; telemetry schedules
 legacy policy-v1 telemetry_enabled true/false -> does not imply policy-v2 acceptance
