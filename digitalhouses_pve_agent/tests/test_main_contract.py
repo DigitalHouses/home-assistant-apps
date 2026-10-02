@@ -112,11 +112,12 @@ def test_main_wires_shared_topology_shutdown_history_and_static_inventory():
     assert "HEALTH_SECONDS = 3600.0" in text
 
 
-def test_main_has_no_mqtt_restart_control():
+def test_main_has_guarded_mqtt_restart_control():
     main_text = (ROOT / "app" / "main.py").read_text()
 
-    assert "RESTART_EXIT_CODE" not in main_text
-    assert "restart_requested" not in main_text
+    assert "RESTART_EXIT_CODE = 75" in main_text
+    assert "def _restart_denial_reason(" in main_text
+    assert "if bridge.restart_requested.is_set():" in main_text
 
 
 def test_main_wires_fixed_policy_reload_barrier():
