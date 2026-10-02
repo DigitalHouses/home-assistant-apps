@@ -132,6 +132,29 @@ def test_check_is_nonblocking_and_install_needs_verified_version(tmp_path, monke
     assert not (tmp_path / "update_request.json").exists()
 
 
+def test_preflight_exception_fails_closed_without_crashing_agent(tmp_path, monkeypatch):
+    manager = UpdateManager(tmp_path, "0.5.48")
+    manager.tag, manager.latest, manager.known = (
+        "digitalhouses_pve_agent-v0.5.50", "0.5.50", True
+    )
+    manager._last_check = time.monotonic()
+    bridge = Mock()
+    bridge.publish_update_state.return_value = True
+    started = Mock()
+    monkeypatch.setattr(subprocess, "run", started)
+
+    def broken_guard():
+        raise TypeError("'bool' object is not callable")
+
+    manager.tick(bridge, install=True, denial_reason=broken_guard)
+    payload = bridge.publish_update_state.call_args.args[0]
+    assert payload["status"] == "error"
+    assert "UPS preflight failed" in payload["error"]
+    assert "bool" in payload["error"]
+    assert not (tmp_path / "update_request.json").exists()
+    started.assert_not_called()
+
+
 def test_unsafe_ups_denies_install_without_starting_systemd(tmp_path, monkeypatch):
     manager = UpdateManager(tmp_path, "0.5.46")
     manager.tag, manager.latest, manager.known = (
