@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import importlib.util
 import logging
+import os
 import sys
 import unittest
 from pathlib import Path
@@ -27,9 +28,13 @@ def load_app_without_mqtt_dependency():
         "internet_app_consent_test", APP_DIR / "app.py"
     )
     module = importlib.util.module_from_spec(spec)
-    with patch.dict(
-        sys.modules,
-        {"paho": paho, "paho.mqtt": mqtt, "paho.mqtt.client": client},
+    with (
+        patch.dict(sys.modules, {
+            "paho": paho,
+            "paho.mqtt": mqtt,
+            "paho.mqtt.client": client,
+        }),
+        patch.dict(os.environ, {"APP_VERSION": "0.1.21"}),
     ):
         spec.loader.exec_module(module)
     return module
