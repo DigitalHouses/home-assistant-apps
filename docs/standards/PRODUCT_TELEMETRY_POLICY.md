@@ -43,6 +43,8 @@ A supported product must:
 
 Telemetry is mandatory **after acceptance**, but acceptance itself is explicit.
 
+Форма принятия условий едина: пользователь вручную задаёт `telemetry_policy_acceptance: accept_v2` в конфигурации Home Assistant App (начальное `not_accepted`) либо `policy_acceptance = "accept_v2"` в секции `[telemetry]` конфигурации Linux Agent. До выбора требуется доступная ссылка на точную редакцию политики. Никаких отдельных Ingress/веб-страниц, MQTT-переключателей и дополнительного UI для согласия нет. Поле является записью принятия условий, не выключателем телеметрии; после принятия она всегда запланирована. Дата/время и идентификатор подтверждённой редакции фиксируются автоматически в постоянном локальном состоянии. Существенно новая редакция требует нового явно выбранного значения; сохранённое старое согласие автоматически не расширяется. Юридический gate на публичный rollout сохраняется.
+
 The final supported configuration must not expose a normal runtime option whose purpose is to disable telemetry after acceptance. In particular, new production releases must not use `telemetry_enabled` as an ordinary opt-out control after that product completes its policy-v2 migration.
 
 The user-facing model is:
