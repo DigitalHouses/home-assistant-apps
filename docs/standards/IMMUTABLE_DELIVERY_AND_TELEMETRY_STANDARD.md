@@ -326,9 +326,9 @@ Product-specific telemetry protocols are prohibited unless a future standard exp
 
 Supported official DigitalHouses products use telemetry policy version 2.
 
-Telemetry reporting is part of supported product operation and is not exposed as a user opt-in/opt-out configuration option.
+Telemetry reporting is part of supported product operation **after explicit acceptance of the current telemetry/privacy terms**, and is not exposed as an ordinary runtime opt-in/opt-out configuration option. Without acceptance, the supported product must not activate or send telemetry. Legacy telemetry-enabled settings are not proof of policy-v2 acceptance.
 
-The client always schedules the minimal heartbeat defined by protocol v1. Telemetry-server failure, DNS failure, firewall blocking, timeout or rate limiting must never affect core product operation.
+After acceptance, the client always schedules the minimal heartbeat defined by protocol v1. Telemetry-server failure, DNS failure, firewall blocking, timeout or rate limiting must never affect core product operation.
 
 Legacy policy-v1 releases remain valid during migration and continue to be accepted by the server.
 
@@ -529,9 +529,11 @@ A Linux Agent release does not require a container image unless its delivery mod
 At minimum:
 
 ```text
-fresh install -> new UUID/token created
-supported release -> telemetry schedules without user opt-in
-no user opt-out control -> telemetry cannot be disabled through product config
+fresh install without acceptance -> no new telemetry identity, no heartbeat, consent-required/not-activated state
+explicit acceptance -> accepted terms revision and timestamp persisted; new UUID/token created; telemetry schedules
+legacy policy-v1 telemetry_enabled true/false -> does not imply policy-v2 acceptance
+refusal or legally required withdrawal -> no future telemetry and no silent supported runtime continuation without required consent
+accepted release -> no normal telemetry opt-out control in product config
 restart -> same identity
 upgrade -> same identity, new version reported
 server unavailable/blocking -> product remains operational
