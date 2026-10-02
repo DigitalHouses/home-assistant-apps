@@ -326,7 +326,7 @@ def _restart_denial_reason(
     """Запретить рестарт, если прерывание мониторинга UPS сейчас опасно."""
     if ups_runtime is None:
         return None
-    if ups_runtime.software_shutdown_committed():
+    if ups_runtime.software_shutdown_committed:
         return "Уже запущено аварийное завершение по UPS"
     if not ups_startup_attempted or not ups_runtime.nut_available:
         return "Состояние настроенного UPS неизвестно"
