@@ -133,6 +133,8 @@ def source_installer(tag: str, destination: Path) -> None:
 
 
 def backup_files() -> None:
+    if (BACKUP / "pending").exists():
+        raise RuntimeError("Previous update transaction is incomplete; recovery required")
     if not ROOT.is_dir() or not CONFIG.is_file() or not UNIT.is_file():
         raise RuntimeError("Incomplete installed agent; manual recovery required")
     total = sum(file.stat().st_size for file in ROOT.rglob("*") if file.is_file() and not file.is_symlink())
@@ -153,7 +155,7 @@ def backup_files() -> None:
         if BACKUP.exists():
             shutil.rmtree(BACKUP)
         os.replace(temp, BACKUP)
-        (BACKUP / "pending").write_text("1\n", encoding="ascii")
+        write_json(BACKUP / "pending", {"created_at": datetime.now(timezone.utc).isoformat()})
     finally:
         if temp.exists():
             shutil.rmtree(temp)
@@ -215,6 +217,8 @@ def update() -> int:
         return 0  # systemd also deduplicates requests.
     with lock:
         try:
+            if (BACKUP / "pending").exists():
+                raise RuntimeError("Previous incomplete update must be recovered first")
             request = read_json(STATE / "update_request.json")
             tag, version = str(request.get("tag") or ""), str(request.get("version") or "")
             status("downloading")
