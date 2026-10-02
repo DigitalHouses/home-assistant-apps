@@ -328,7 +328,7 @@ Supported official DigitalHouses products use telemetry policy version 2.
 
 Telemetry reporting is part of supported product operation after affirmative activation using **the existing single boolean configuration switch**: `telemetry_enabled: false|true` for HA Apps; `[telemetry] enabled = false|true` for Linux Agents. Default `false`. When false, on startup log «Не принято условие передачи статистики DigitalHouses — завершение работы» and terminate the product without sending telemetry. When true, start normal runtime and mandatory heartbeat reporting. No new `accept_v2` config key, Ingress, separate activation UI or consent-state file. If a previously accepted user switches it off, the next start must terminate; there is no supported telemetry-free operational mode.
 
-Display next to this switch: «Для статистики DigitalHouses передаются: название приложения/агента, версия и случайный идентификатор установки. Страна определяется сервером по сетевым данным.» plus a link to the policy. Actual protocol-v1 fields (including UUID, server country derivation and network metadata handling) must remain accurately disclosed. Telemetry network failures must never affect an activated product. Before shipping this startup gate to existing protective PVE/UPS deployments, establish safe explicit migration; public rollout remains subject to legal gate.
+Display next to this switch: «Для статистики DigitalHouses отправляются: название приложения/агента, версия и случайный идентификатор установки.» plus a link to the policy. The adjacent description covers only data transmitted by the client, including the installation UUID; do not describe server-side processing or country derivation next to the switch. The full privacy policy separately covers data processing. Telemetry network failures must never affect an activated product. Before shipping this startup gate to existing protective PVE/UPS deployments, establish safe explicit migration; public rollout remains subject to legal gate.
 
 Legacy policy-v1 releases continue to be accepted by the server during migration.
 
@@ -532,7 +532,7 @@ At minimum:
 App telemetry_enabled / Agent [telemetry] enabled -> defaults false
 one visible boolean switch and adjacent description; no separate Ingress / MQTT / web activation UI
 false -> refusal log and startup exit; true -> runtime starts and telemetry schedules
-policy must be linked next to switch; disclose transmitted UUID and server-derived country
+policy must be linked next to switch; describe only transmitted data including UUID, without server processing or country derivation
 fresh install with false -> no new identity, heartbeat, or normal runtime
 user enables existing bool -> new UUID/token created and telemetry schedules
 migration from existing installs -> avoid unplanned shutdown of PVE/UPS protection
