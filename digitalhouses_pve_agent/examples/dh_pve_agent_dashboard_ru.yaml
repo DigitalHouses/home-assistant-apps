@@ -333,6 +333,39 @@ sections:
         grid_options:
           columns: 12
       - type: heading
+        heading: События памяти
+        heading_style: subtitle
+        icon: mdi:memory
+      - type: markdown
+        content: |-
+        content: |-
+          {% set source = 'sensor.dh_pve_agent_memory_history' %}
+          {% set events = state_attr(source, 'events') or [] %}
+          {% set count = states(source) | int(0) %}
+          {% set more = state_attr(source, 'truncated') == true %}
+          {% set journal = state_attr(source, 'journal_status') %}
+          {% set pressure = state_attr(source, 'pressure_status') %}
+          {% if journal != 'ok' or pressure != 'ok' %}
+          ⚪ Диагностика частично недоступна: журнал — {{ journal or 'unknown' }}, PSI/cgroup — {{ pressure or 'unknown' }}.
+          {% endif %}
+          {% if events %}
+          | № | Дата и время | Гость | Событие |
+          |:--:|:--|:--|:--|
+          {% for e in events -%}
+          | {{ loop.index }} | {{ as_timestamp(e.at) | timestamp_custom('%d.%m.%Y %H:%M', true) }} | {{ e.guest }} | {{ '🔴' if e.level == 'red' else '🟠' if e.level == 'orange' else '🟡' }} {{ e.description | replace('|', '/') }} |
+          {% endfor %}
+          {% if more %}
+          Показаны последние {{ events | count }} из {{ count }} событий. Полная история за 30 дней сохранена на PVE.
+        grid_options:
+          columns: 12
+      - type: entities
+        title: Мониторинг OOM / PSI
+        entities:
+          - entity: number.dh_pve_agent_memory_check_interval
+            name: Интервал, мин
+        grid_options:
+          columns: 12
+      - type: heading
         heading_style: subtitle
         icon: mdi:server
         heading: Приложение
