@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.49
+
+- Fix the Proxmox kernel OOM journal scan by passing timezone-independent Unix timestamp arguments to journalctl (instead of ISO-8601 with microseconds/UTC offset, which journalctl cannot parse on the production host).
+- Add a regression test reproducing journalctl's timestamp parsing failure.
+
 ## 0.5.48
 
 - Add passive host/LXC OOM and PSI FULL memory-pressure diagnostics with 30-day retained local history, bounded HA event presentation and a configurable 10–60-minute MQTT poll interval.
