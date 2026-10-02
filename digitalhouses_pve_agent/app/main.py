@@ -6,6 +6,7 @@ import logging
 import signal
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from collections.abc import Callable
 from dataclasses import replace
 from datetime import datetime, timezone
@@ -380,6 +381,8 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
         StateStore(state_dir / "memory_diagnostics.json")
     )
     memory_last_check: float | None = None
+    memory_worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix="dh-pve-memory")
+    memory_pending = None
     recovery = runtime.recover_fan_control()
     if recovery:
         log.warning("Fan control recovery: %s", recovery)
@@ -463,23 +466,31 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
                 runtime.process_events()
                 runtime.tick(time.monotonic())
 
+                if memory_pending is not None and memory_pending.done():
+                    try:
+                        memory_pending.result()
+                    except Exception:
+                        log.exception("Не удалось проверить OOM / Memory Pressure")
+                    finally:
+                        memory_pending = None
+                    bridge.publish_memory_diagnostics(memory_monitor.payload())
+
                 memory_now = time.monotonic()
                 memory_interval = runtime.settings.get("memory_check_interval") * 60
                 if (
-                    memory_last_check is None
-                    or memory_manual_refresh
-                    or memory_now - memory_last_check >= memory_interval
+                    memory_pending is None
+                    and (
+                        memory_last_check is None
+                        or memory_manual_refresh
+                        or memory_now - memory_last_check >= memory_interval
+                    )
                 ):
-                    # Set the clock before I/O to avoid hot loops on failure.
                     memory_last_check = memory_now
-                    try:
-                        memory_monitor.scan(
-                            datetime.now(timezone.utc),
-                            runtime._inventory().get("guests"),
-                        )
-                    except Exception:
-                        log.exception("Не удалось проверить OOM / Memory Pressure")
-                    bridge.publish_memory_diagnostics(memory_monitor.payload())
+                    memory_pending = memory_worker.submit(
+                        memory_monitor.scan,
+                        datetime.now(timezone.utc),
+                        runtime._inventory().get("guests"),
+                    )
                 elif memory_reconnected:
                     bridge.publish_memory_diagnostics(memory_monitor.payload())
 
@@ -577,6 +588,7 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
             bridge.wake_requested.wait(1.0)
             bridge.wake_requested.clear()
     finally:
+        memory_worker.shutdown(wait=False, cancel_futures=True)
         runtime.cancel_fan_calibration()
         runtime.wait_fan_calibration()
         telemetry_runner.stop()
