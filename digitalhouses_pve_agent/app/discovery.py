@@ -118,6 +118,7 @@ def build_discovery_payload(
             "default_entity_id": "button.dh_pve_agent_restart_agent",
             "command_topic": topics.restart_agent,
             "payload_press": "PRESS",
+            "qos": 1,
             "retain": False,
             "device_class": "restart",
             "availability": [_availability(topics.availability)],
