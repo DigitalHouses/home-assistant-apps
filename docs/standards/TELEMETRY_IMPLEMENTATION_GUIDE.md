@@ -146,82 +146,23 @@ Suggested state shape:
 
 Scheduling fields may differ internally, but restart storms must be prevented.
 
-## 5. Consent/configuration contract
+## 5. Простое согласие через существующий переключатель
 
-Telemetry policy version 2 is mandatory behavior **after explicit acceptance** of the current DigitalHouses telemetry/privacy terms.
+В штатной конфигурации App уже есть один `telemetry_enabled: false` (`schema: telemetry_enabled: bool`). Для Linux Agent — `[telemetry] enabled = false`. **Новых параметров и интерфейсов не вводить.** По умолчанию переключатель выключен.
 
-This is not an optional telemetry setting.
+Рядом показать: «Для статистики DigitalHouses передаются: название приложения/агента, версия и случайный идентификатор установки. Страна определяется сервером по сетевым данным.» и ссылку на полные условия обработки данных.
 
-### Подтверждение условий — только через конфигурацию
+При запуске:
 
-Для Home Assistant Apps использовать только штатную конфигурацию App (`config.yaml` / options):
+- `telemetry_enabled = false` или `[telemetry] enabled = false`: журнал «Не принято условие передачи статистики DigitalHouses — завершение работы»; штатно завершить запуск без отправки телеметрии и не запускать рабочий runtime.
+- `telemetry_enabled = true` или `[telemetry] enabled = true`: запуск обычного runtime и обязательная телеметрия; повторных вопросов нет.
+- Если переключатель снят позднее, при следующем запуске снова завершить работу. Ошибки DNS/сервера статистики не влияют на уже разрешённый runtime.
 
-```yaml
-options:
-  telemetry_policy_acceptance: not_accepted
-schema:
-  telemetry_policy_acceptance: list(not_accepted|accept_v2)
-```
+Не создавать отдельные consent-state-файлы, Ingress/веб-страницы активации, версии `accept_v2` или дополнительные переключатели. Текущее состояние переключателя является техническим признаком подтверждения. Не считать установку, обновление или наличие конфигурации подтверждением, если ключ имеет значение `false`.
 
-Для Linux Agents — обычный конфигурационный файл агента, без отдельного интерфейса:
+Имеющийся протокол v1 дополнительно передаёт UUID установки и определяет страну на сервере. Текст в конфигурации не должен вводить в заблуждение, будто передаются **только** имя и версия. При законодательной необходимости отдельного механизма отзыва/удаления данных действуют требования Product Telemetry Policy и legal review; это не дополнительная кнопка штатного интерфейса.
 
-```toml
-[telemetry]
-policy_acceptance = "not_accepted"  # вручную заменить на "accept_v2"
-```
-
-`not_accepted` — начальное значение. Пользователь изучает опубликованную редакцию условий по ссылке из README/DOCS и самостоятельно выбирает `accept_v2`. Настройка является однократным подтверждением условий, а **не** переключателем отправки статистики. Не использовать Ingress, отдельную веб-страницу, MQTT-переключатель или дополнительное подтверждение в UI.
-
-После принятия продукт автоматически фиксирует `accepted_at`, `telemetry_policy_version`, `policy_revision` (или хеш редакции) в постоянном техническом состоянии: `/data` для Apps или `/var/lib/digitalhouses/<product>/` для Agents. Пользователь задаёт только параметр в конфигурации. Конфигурация и запись переживают штатный рестарт/обновление/backup-restore.
-
-Существенно изменённые условия требуют нового явно выбранного значения (например, `accept_v3`). Прежнее значение сохраняется для безопасного чтения старых конфигураций, но не означает принятия новых условий. Старый `telemetry_enabled` не является подтверждением. Нельзя принимать условия автоматически при установке, обновлении или первом запуске.
-
-Отказ или законный отзыв останавливает будущую отправку; без принятия продукт не активируется в обычном поддерживаемом режиме. Для существующих установок с UPS/защитными функциями миграция должна быть спланирована отдельно, без внезапной остановки активной защиты. До закрытия юридического gate публично не включать обязательную телеметрию.
-
-
-Required activation model:
-
-```text
-not accepted
-    ↓ explicit user acceptance
-accepted
-    ↓
-normal supported runtime + mandatory telemetry
-```
-
-Before acceptance:
-
-- do not send telemetry;
-- do not create the impression that the product is fully activated;
-- present a clear consent-required state/instruction;
-- show or link the current telemetry/privacy policy;
-- record no acceptance implicitly from mere installation, startup, upgrade, or network access.
-
-After acceptance:
-
-- no ordinary `telemetry_enabled` opt-out is exposed;
-- minimal policy-v2 telemetry is scheduled automatically;
-- telemetry transport failure never affects normal product health;
-- acceptance state survives restart/upgrade and supported backup/restore.
-
-The acceptance record should persist at least:
-
-```text
-telemetry_policy_version
-accepted_at
-policy_revision or policy content hash
-```
-
-The exact persistence representation is product-specific, but it must be possible to determine which policy revision was explicitly accepted.
-
-Where applicable law requires withdrawal:
-
-- withdrawal stops future telemetry;
-- withdrawal is distinct from deleting retained telemetry history;
-- the product may transition to an explicit `consent_required` / unsupported state rather than silently becoming a telemetry-free supported product;
-- jurisdiction-specific legality of conditioning continued use on consent remains governed by the legal review.
-
-Neither `telemetry_enabled: true` nor `telemetry_enabled: false` in a policy-v1 release constitutes acceptance of policy-v2 terms. An upgrade must not silently infer acceptance from a legacy setting. For safety-critical products (including UPS/shutdown control), plan migration so a consent gate cannot unexpectedly disable active protection during an unattended update; require an explicit, safe activation/migration path before releasing the change.
+Особое требование для UPS/PVE и другого критичного runtime: переход на остановку при `false` нельзя разворачивать неуправляемым обновлением, которое неожиданно выключит мониторинг/защиту. Публичный переход запрещён до закрытия юридического gate.
 
 ## 6. Scheduling contract
 
@@ -433,11 +374,11 @@ Any future retention change must update, together:
 Every product telemetry integration must cover at least:
 
 ```text
-fresh install without acceptance -> no telemetry heartbeat, no newly generated telemetry identity, consent-required/not-activated state
-explicit acceptance of current terms -> policy revision and acceptance time persisted; telemetry identity generated and heartbeat scheduled
-legacy policy-v1 telemetry_enabled true/false -> does not count as policy-v2 acceptance
-refusal or legally required withdrawal -> no future telemetry, no silent continuation of supported runtime without required consent
-accepted production release -> no normal telemetry opt-out in product configuration
+fresh install with telemetry_enabled false -> log missing consent, exit without starting runtime or transmitting telemetry
+user sets telemetry_enabled true -> runtime starts, identity generated and heartbeat scheduled
+only actual boolean state controls activation; no separate accept_v2, consent file, or UI
+switch set to false -> next start logs refusal and stops runtime
+no telemetry-free supported runtime; switch false means product stops
 accepted activation -> UUID/token created
 restart -> same identity
 upgrade -> same identity, new version
@@ -469,10 +410,9 @@ Before implementation:
 - [ ] confirm server allowlist contains that identifier;
 - [ ] confirm product version source;
 - [ ] define persistent telemetry state location;
-- [ ] implement an explicit policy-v2 acceptance gate;
-- [ ] persist accepted policy version/revision and acceptance time;
-- [ ] remove/retire any policy-v1 telemetry opt-in setting;
-- [ ] publish clear user-facing disclosure linking to the shared telemetry policy.
+- [ ] retain existing telemetry_enabled bool (Agent: [telemetry] enabled);
+- [ ] default false; log refusal and terminate startup when false;
+- [ ] show accurate disclosure of all sent/derived fields next to switch, with link to shared telemetry policy.
 
 Implementation:
 
@@ -496,8 +436,8 @@ Verification:
 - [ ] no client country field;
 - [ ] no IP persisted;
 - [ ] no telemetry is sent before explicit acceptance;
-- [ ] refusal leaves product in consent-required / not-activated state;
-- [ ] accepted product has no ordinary telemetry opt-out control;
+- [ ] refusal logs lack of consent and exits without starting runtime;
+- [ ] true allows normal product and telemetry; false stops product, not telemetry alone;
 - [ ] deletion removes installation/history and rotates local identity;
 - [ ] continued use after deletion resumes later under a fresh identity.
 
@@ -533,7 +473,7 @@ docs/standards/RELEASE_POLICY.md
 First audit the current product implementation and report any contract mismatch.
 
 Required constraints:
-- supported official releases use explicit acceptance + mandatory telemetry policy v2; no ordinary runtime opt-out after acceptance;
+- existing telemetry_enabled bool is the single consent switch (Agent [telemetry] enabled): false -> log and exit; true -> normal runtime and mandatory telemetry;
 - protocol v1 payload is exact with telemetry_policy_version=2; do not add product-specific fields;
 - country is never sent by the client;
 - persistent UUIDv4 + 256-bit token survive restart/upgrade/restore;
