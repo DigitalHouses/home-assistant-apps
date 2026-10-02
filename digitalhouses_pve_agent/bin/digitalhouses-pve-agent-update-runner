@@ -1,0 +1,255 @@
+#!/usr/bin/env python3
+"""Independent transactional updater for DigitalHouses PVE Agent.
+
+This runner is installed OUTSIDE the directory replaced by install.sh.
+It uses only Python standard-library modules and never restarts PVE or guests.
+"""
+from __future__ import annotations
+
+import configparser
+import fcntl
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+import urllib.request
+from datetime import datetime, timezone
+from pathlib import Path
+
+PRODUCT = "digitalhouses_pve_agent"
+ROOT = Path("/opt/digitalhouses") / PRODUCT
+STATE = Path("/var/lib") / PRODUCT
+CONFIG = Path("/etc") / PRODUCT / (PRODUCT + ".conf")
+SERVICE = PRODUCT + ".service"
+UNIT = Path("/etc/systemd/system") / SERVICE
+UPDATE_SERVICE = PRODUCT + "-update.service"
+UPDATE_UNIT = Path("/etc/systemd/system") / UPDATE_SERVICE
+RUNNER = Path("/usr/local/libexec") / "digitalhouses-pve-agent-update-runner"
+ROOT_GUIDE = Path("/root/digitalhouses_pve_agent.txt")
+BACKUP = STATE / "update-backup"
+LOCK = STATE / "update.lock"
+TAG_RE = re.compile(r"^digitalhouses_pve_agent-v(\d+)\.(\d+)\.(\d+)$")
+FILES = {"config": CONFIG, "service": UNIT, "update_unit": UPDATE_UNIT,
+         "runner": RUNNER, "guide": ROOT_GUIDE}
+
+
+def write_json(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temp_name = tempfile.mkstemp(prefix=path.name + ".", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            os.fchmod(handle.fileno(), 0o600)
+            json.dump(payload, handle, ensure_ascii=False)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temp_name, path)
+    finally:
+        if os.path.exists(temp_name):
+            os.unlink(temp_name)
+
+
+def status(state: str, error: str | None = None) -> None:
+    write_json(STATE / "update_worker.json", {
+        "state": state, "error": error,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    })
+
+
+def run(command: list[str], *, timeout: int = 180) -> subprocess.CompletedProcess:
+    return subprocess.run(command, text=True, capture_output=True,
+                          timeout=timeout, check=True)
+
+
+def read_json(path: Path) -> dict:
+    value = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(value, dict):
+        raise ValueError(f"Not an object: {path}")
+    return value
+
+
+def guard_ups() -> None:
+    """Recheck NUT directly; unknown/battery power fails closed."""
+    selection = STATE / "ups_selection.json"
+    if not selection.exists():
+        raise RuntimeError("UPS selection missing; refuse update")
+    selected = read_json(selection).get("selected_name")
+    if not selected:
+        return  # Explicitly no UPS configured.
+    if not isinstance(selected, str) or not re.fullmatch(r"[a-zA-Z0-9_.-]+", selected):
+        raise RuntimeError("Invalid configured UPS name")
+    parser = configparser.ConfigParser(interpolation=None)
+    if not parser.read(CONFIG):
+        raise RuntimeError("PVE agent configuration unavailable")
+    host = parser.get("ups", "host", fallback="127.0.0.1")
+    port = parser.getint("ups", "port", fallback=3493)
+    result = run(["upsc", f"{selected}@{host}:{port}"], timeout=7)
+    lines = dict(line.split(":", 1) for line in result.stdout.splitlines() if ":" in line)
+    tokens = set(lines.get("ups.status", "").strip().split())
+    charger = lines.get("battery.charger.status", "").strip().lower()
+    if "OL" not in tokens or tokens.intersection({"OB", "LB", "FSD", "DISCHRG"}) or charger == "discharging":
+        raise RuntimeError("UPS power not confirmed safe for update")
+
+
+def verify_release(tag: str, version: str) -> None:
+    m = TAG_RE.fullmatch(tag)
+    if m is None or ".".join(m.groups()) != version:
+        raise RuntimeError("Invalid canonical release tag/version")
+    request = urllib.request.Request(
+        "https://api.github.com/repos/DigitalHouses/home-assistant-apps/releases/tags/" + tag,
+        headers={"Accept": "application/vnd.github+json",
+                 "User-Agent": "DigitalHouses-PVE-Updater"},
+    )
+    with urllib.request.urlopen(request, timeout=15) as response:
+        release = json.load(response)
+    if (not isinstance(release, dict) or release.get("draft") or
+            release.get("prerelease") or not release.get("published_at") or
+            release.get("tag_name") != tag):
+        raise RuntimeError("Release is not a published stable DigitalHouses PVE release")
+    installed = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
+    old = tuple(int(x) for x in installed.split("."))
+    new = tuple(int(x) for x in m.groups())
+    if len(old) != 3 or new <= old:
+        raise RuntimeError("Requested version is not newer than installed version")
+
+
+def source_installer(tag: str, destination: Path) -> None:
+    url = ("https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/" +
+           tag + "/digitalhouses_pve_agent/install.sh")
+    request = urllib.request.Request(url, headers={"User-Agent": "DigitalHouses-PVE-Updater"})
+    with urllib.request.urlopen(request, timeout=20) as response:
+        payload = response.read(2_000_001)
+    if len(payload) > 2_000_000 or not payload.startswith(b"#!/usr/bin/env bash\n"):
+        raise RuntimeError("Invalid installer response")
+    destination.write_bytes(payload)
+    destination.chmod(0o700)
+
+
+def backup_files() -> None:
+    if not ROOT.is_dir() or not CONFIG.is_file() or not UNIT.is_file():
+        raise RuntimeError("Incomplete installed agent; manual recovery required")
+    total = sum(file.stat().st_size for file in ROOT.rglob("*") if file.is_file() and not file.is_symlink())
+    if shutil.disk_usage(STATE).free < (total * 2 + 128 * 1024 * 1024):
+        raise RuntimeError("Insufficient free space for safe update backup")
+    temp = STATE / "update-backup.new"
+    if temp.exists():
+        shutil.rmtree(temp)
+    temp.mkdir(mode=0o700)
+    try:
+        shutil.copytree(ROOT, temp / "app", symlinks=True)
+        present = []
+        for name, source in FILES.items():
+            if source.exists():
+                shutil.copy2(source, temp / name)
+                present.append(name)
+        write_json(temp / "manifest.json", {"files": present})
+        if BACKUP.exists():
+            shutil.rmtree(BACKUP)
+        os.replace(temp, BACKUP)
+        (BACKUP / "pending").write_text("1\n", encoding="ascii")
+    finally:
+        if temp.exists():
+            shutil.rmtree(temp)
+
+
+def rollback(*, restart: bool) -> None:
+    if not (BACKUP / "pending").exists():
+        return
+    manifest = read_json(BACKUP / "manifest.json")
+    old_app = BACKUP / "app"
+    if not old_app.is_dir():
+        raise RuntimeError("Update backup is incomplete")
+    if ROOT.exists():
+        shutil.rmtree(ROOT)
+    shutil.copytree(old_app, ROOT, symlinks=True)
+    for name, destination in FILES.items():
+        source = BACKUP / name
+        if name in manifest["files"]:
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, destination)
+        else:
+            destination.unlink(missing_ok=True)
+    run(["systemctl", "daemon-reload"], timeout=15)
+    (BACKUP / "pending").unlink(missing_ok=True)
+    if restart:
+        run(["systemctl", "restart", SERVICE], timeout=35)
+
+
+def acquire_lock() -> object | None:
+    STATE.mkdir(parents=True, exist_ok=True)
+    fd = os.open(LOCK, os.O_CREAT | os.O_RDWR, 0o600)
+    handle = os.fdopen(fd, "r+")
+    try:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        handle.close()
+        return None
+    return handle
+
+
+def recover() -> int:
+    lock = acquire_lock()
+    if lock is None:
+        return 0  # The independent updater is still running.
+    with lock:
+        if (BACKUP / "pending").exists():
+            try:
+                rollback(restart=False)  # Already in systemd ExecStartPre.
+                status("error", "Interrupted update rolled back at service startup")
+            except Exception as exc:
+                status("error", f"Recovery failed: {exc}")
+                return 1
+    return 0
+
+
+def update() -> int:
+    lock = acquire_lock()
+    if lock is None:
+        return 0  # systemd also deduplicates requests.
+    with lock:
+        try:
+            request = read_json(STATE / "update_request.json")
+            tag, version = str(request.get("tag") or ""), str(request.get("version") or "")
+            status("downloading")
+            guard_ups()
+            verify_release(tag, version)
+            with tempfile.TemporaryDirectory(prefix="pve-update-") as work:
+                script = Path(work) / "install.sh"
+                source_installer(tag, script)
+                guard_ups()
+                backup_files()
+                status("installing")
+                env = os.environ.copy()
+                env["DIGITALHOUSES_INSTALL_MODE"] = "production"
+                env["DIGITALHOUSES_SOURCE_REF"] = tag
+                subprocess.run(["bash", str(script)], check=True, env=env, timeout=900)
+            status("verifying")
+            if (ROOT / "VERSION").read_text(encoding="utf-8").strip() != version:
+                raise RuntimeError("Installed VERSION differs from release")
+            time.sleep(12)
+            pid = int(run(["systemctl", "show", "-p", "MainPID", "--value", SERVICE],
+                          timeout=15).stdout.strip())
+            if pid <= 0 or run(["systemctl", "is-active", SERVICE], timeout=15).stdout.strip() != "active":
+                raise RuntimeError("Agent failed startup verification")
+            (BACKUP / "pending").unlink(missing_ok=True)
+            status("completed")
+            return 0
+        except Exception as exc:
+            error = str(exc)
+            try:
+                if (BACKUP / "pending").exists():
+                    status("rolling_back", error)
+                    rollback(restart=True)
+            except Exception as restore:
+                error += f"; ROLLBACK FAILED: {restore}"
+            status("error", error)
+            print(f"PVE agent update failed: {error}", file=sys.stderr)
+            return 1
+
+
+if __name__ == "__main__":
+    sys.exit(recover() if sys.argv[1:] == ["--recover"] else update())
