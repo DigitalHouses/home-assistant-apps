@@ -1,9 +1,9 @@
 # Changelog
 
 ## 0.1.19
-- Добавлено обязательное согласие `telemetry_enabled` на сбор данных (название продукта, версия, идентификатор установки) без изменения протокола v1.
-- При `false` Recorder останавливается до подключения к БД/MQTT и отправки статистики; явное `true` позволяет штатный запуск. Сохранённые настройки не меняются при обновлении.
-- Добавлены проверки отказа, разрешённого запуска и контракта конфигурации для CI.
+- Require explicit statistics collection consent via `telemetry_enabled` (product name, version, installation ID) without changing the protocol-v1 payload or transport.
+- When `false`, stop Recorder before initializing database/MQTT connections or sending statistics; an explicit `true` allows normal startup. Preserve existing configuration values during upgrades.
+- Add CI regression tests covering denied consent, allowed startup, and the configuration contract.
 
 ## 0.1.18
 - Publish absolute Recorder row counts in both Top entities ranking sensors instead of rounded thousands, so table consumers receive exact values directly from the ranking payload.
