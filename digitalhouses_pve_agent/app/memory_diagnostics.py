@@ -17,6 +17,9 @@ from .state_store import StateStore
 
 LOG = logging.getLogger(__name__)
 RETENTION_DAYS = 30
+# 30 seconds of PSI FULL per 10 minutes, scaled to the actual observation window.
+PRESSURE_THRESHOLD_PERCENT = 5
+PRESSURE_EVENT_POLICY = "full-5pct-v1"
 # Home Assistant's state attributes have a finite size; keep the complete
 # 30-day history locally and publish only a bounded newest-first window.
 PUBLISHED_EVENTS = 60
@@ -156,6 +159,11 @@ class MemoryDiagnostics:
             LOG.warning("Недоступно сохранённое состояние диагностики памяти: %s", exc)
             state = {}
         self.events = [e for e in state.get("events", []) if isinstance(e, dict)] if isinstance(state.get("events"), list) else []
+        # Full sampled deltas are local-only, including zero and subthreshold samples.
+        self.psi_samples = (
+            [s for s in state["psi_samples"] if isinstance(s, dict)]
+            if isinstance(state.get("psi_samples"), list) else []
+        )
         self.baselines = state.get("baselines", {}) if isinstance(state.get("baselines"), dict) else {}
         self.next_id = max(1, int(state.get("next_id", 1)))
         self.last_scan = _as_datetime(state.get("last_scan"))
@@ -178,6 +186,65 @@ class MemoryDiagnostics:
         self.next_id += 1
         self.events.append(event)
         return event
+
+    def _observe_psi(
+        self,
+        *,
+        guest: str,
+        now: datetime,
+        psi: Mapping[str, int],
+        previous: Mapping[str, object] | None,
+        counters: dict[str, object],
+    ) -> None:
+        """Save every valid interval locally; emit only actionable FULL episodes."""
+        if not isinstance(previous, Mapping):
+            return
+        observed_at = _as_datetime(previous.get("observed_at")) or self.checked_at
+        if observed_at is None:
+            return
+        elapsed_us = int((now - observed_at).total_seconds() * 1_000_000)
+        if elapsed_us <= 0:
+            # Wall clock moved backward or an immediate duplicate sample.
+            return
+        some_delta = psi["some"] - int(previous["some"])
+        full_delta = psi["full"] - int(previous["full"])
+        if some_delta < 0 or full_delta < 0:
+            return
+        self.psi_samples.append({
+            "at": now.isoformat(), "guest": guest,
+            "elapsed_us": elapsed_us, "some_us": some_delta, "full_us": full_delta,
+        })
+        if not full_delta:
+            return  # Zero FULL ends the previously active or pending episode.
+
+        active_id = previous.get("pressure_event")
+        active = next(
+            (e for e in self.events if
+             e.get("id") == active_id and e.get("kind") == "pressure"
+             and e.get("policy") == PRESSURE_EVENT_POLICY),
+            None,
+        )
+        if active is None:
+            # Judge each sampling window by its real elapsed time. This also
+            # handles a 10-60 minute setting change and longer collection gaps.
+            if full_delta * 100 < elapsed_us * PRESSURE_THRESHOLD_PERCENT:
+                counters["pressure_pending_us"] = (
+                    max(0, int(previous.get("pressure_pending_us") or 0)) + full_delta
+                )
+                return
+            # Subthreshold intervals preceding the first qualifying interval
+            # remain part of the same contiguous episode, not new HA events.
+            full_delta += max(0, int(previous.get("pressure_pending_us") or 0))
+            active = self._event(
+                at=now, guest=guest, kind="pressure", level="yellow",
+                description="Memory Pressure FULL", amount=0,
+            )
+            active["policy"] = PRESSURE_EVENT_POLICY
+        active["amount"] = int(active.get("amount", 0)) + full_delta
+        active["description"] = (
+            f"Memory Pressure FULL · задержки {active['amount'] / 1_000_000:.2f} с"
+        )
+        counters["pressure_event"] = active["id"]
 
     def _journal(self, now: datetime, guest_names: Mapping[tuple[str, str], str]) -> set[tuple[str, str]]:
         # Revisit a small overlap to tolerate clock/race boundaries. Dedup by
@@ -306,21 +373,11 @@ class MemoryDiagnostics:
                         amount=kills or oom,
                     )
             if psi is not None:
-                full_delta = psi["full"] - previous["full"]
-                # full total is microseconds, not a percentage. Consecutive
-                # sampled windows are merged, not logged every 10 minutes.
-                active_id = previous.get("pressure_event")
-                if full_delta > 0:
-                    active = next((e for e in self.events if e.get("id") == active_id), None)
-                    if active is None:
-                        active = self._event(
-                            at=now, guest=guest, kind="pressure", level="yellow",
-                            description="Memory Pressure FULL",
-                            amount=0,
-                        )
-                    active["amount"] = int(active.get("amount", 0)) + full_delta
-                    active["description"] = f"Memory Pressure FULL · задержки {active['amount'] / 1_000_000:.2f} с"
-                    counters["pressure_event"] = active["id"]
+                self._observe_psi(
+                    guest=guest, now=now, psi=psi, previous=previous, counters=counters,
+                )
+        if psi is not None:
+            counters["observed_at"] = now.isoformat()
         counters["identity"] = identity
         self.baselines[name] = counters
         return psi is not None and ev is not None
@@ -352,18 +409,11 @@ class MemoryDiagnostics:
                 isinstance(host_previous.get(k), int) and v >= host_previous[k]
                 for k, v in host_psi.items()
             ):
-                delta = host_psi["full"] - host_previous["full"]
-                active_id = host_previous.get("pressure_event")
-                if delta:
-                    active = next((e for e in self.events if e.get("id") == active_id), None)
-                    if active is None:
-                        active = self._event(
-                            at=now, guest="PVE", kind="pressure", level="yellow",
-                            description="Memory Pressure FULL", amount=0,
-                        )
-                    active["amount"] = int(active.get("amount", 0)) + delta
-                    active["description"] = f"Memory Pressure FULL · задержки {active['amount'] / 1_000_000:.2f} с"
-                    host_psi["pressure_event"] = active["id"]
+                self._observe_psi(
+                    guest="PVE", now=now, psi=host_psi,
+                    previous=host_previous, counters=host_psi,
+                )
+            host_psi["observed_at"] = now.isoformat()
             self.baselines["PVE"] = host_psi
         else:
             self.baselines.pop("PVE", None)
@@ -394,6 +444,10 @@ class MemoryDiagnostics:
         cutoff = now - timedelta(days=RETENTION_DAYS)
         self.events = [event for event in self.events if (date := _as_datetime(event.get("at"))) is not None and date >= cutoff]
         self.events.sort(key=lambda event: (str(event.get("at")), int(event.get("id", 0))), reverse=True)
+        self.psi_samples = [
+            sample for sample in self.psi_samples
+            if (date := _as_datetime(sample.get("at"))) is not None and date >= cutoff
+        ]
         # Bound the in-memory cursor set as well as the on-disk form.
         if len(self.seen_journal) > 2000:
             self.seen_journal = set(sorted(self.seen_journal)[-2000:])
@@ -409,6 +463,7 @@ class MemoryDiagnostics:
         # The retained publisher and local state are deliberately separate.
         self.store.save({
             "events": self.events, "next_id": self.next_id,
+            "psi_samples": self.psi_samples,
             "boot_id": self.boot_id,
             "baselines": self.baselines,
             "last_scan": self.last_scan.isoformat() if self.last_scan else None,
@@ -418,10 +473,17 @@ class MemoryDiagnostics:
         return self.payload()
 
     def payload(self) -> dict[str, object]:
+        # Old releases recorded every nonzero FULL delta. Preserve those
+        # legacy events locally, but do not present unverified noise in HA.
+        visible = [
+            e for e in self.events
+            if e.get("kind") != "pressure"
+            or e.get("policy") == PRESSURE_EVENT_POLICY
+        ]
         return {
-            "count": len(self.events),
-            "events": self.events[:PUBLISHED_EVENTS],
-            "truncated": len(self.events) > PUBLISHED_EVENTS,
+            "count": len(visible),
+            "events": visible[:PUBLISHED_EVENTS],
+            "truncated": len(visible) > PUBLISHED_EVENTS,
             "retention_days": RETENTION_DAYS,
             "journal_status": self.journal_status,
             "pressure_status": self.pressure_status,
