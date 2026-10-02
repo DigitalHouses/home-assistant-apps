@@ -28,12 +28,13 @@ SERVICE = PRODUCT + ".service"
 UNIT = Path("/etc/systemd/system") / SERVICE
 UPDATE_SERVICE = PRODUCT + "-update.service"
 UPDATE_UNIT = Path("/etc/systemd/system") / UPDATE_SERVICE
+RECOVERY_UNIT = Path("/etc/systemd/system") / (PRODUCT + "-update-recover.service")
 RUNNER = Path("/usr/local/libexec") / "digitalhouses-pve-agent-update-runner"
 ROOT_GUIDE = Path("/root/digitalhouses_pve_agent.txt")
 BACKUP = STATE / "update-backup"
 LOCK = STATE / "update.lock"
 TAG_RE = re.compile(r"^digitalhouses_pve_agent-v(\d+)\.(\d+)\.(\d+)$")
-FILES = {"config": CONFIG, "service": UNIT, "update_unit": UPDATE_UNIT,
+FILES = {"config": CONFIG, "service": UNIT, "update_unit": UPDATE_UNIT, "recovery_unit": RECOVERY_UNIT,
          "runner": RUNNER, "guide": ROOT_GUIDE}
 
 
