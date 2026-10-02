@@ -158,6 +158,7 @@ class MemoryDiagnostics:
         self.baselines = state.get("baselines", {}) if isinstance(state.get("baselines"), dict) else {}
         self.next_id = max(1, int(state.get("next_id", 1)))
         self.last_scan = _as_datetime(state.get("last_scan"))
+        self.checked_at = _as_datetime(state.get("checked_at"))
         self.seen_journal = set(str(x) for x in state.get("seen_journal", []) if isinstance(x, str))
         self.journal_status = "unknown"
         self.pressure_status = "unknown"
@@ -198,6 +199,7 @@ class MemoryDiagnostics:
 
         self.journal_status = "ok"
         found: set[tuple[str, str]] = set()
+        attempted_events: dict[tuple[str, str], datetime] = {}
         for line in proc.stdout.splitlines():
             try:
                 entry = json.loads(line)
@@ -223,17 +225,27 @@ class MemoryDiagnostics:
             except (KeyError, ValueError, TypeError, OverflowError):
                 at = now
             kind, guest = _guest_for_message(message)
-            name = guest_names.get((kind, guest), "")
-            subject = f"{kind} {guest}" + (f" {name}" if name else "") if kind != "PVE" else "PVE"
-            process = re.search(r"Killed process\s+\d+\s+\(([^)]+)\)", message)
+            key = (kind, guest)
             if killed:
-                description = "OOM Killer: " + (f"процесс {process.group(1)} уничтожен" if process else "процесс уничтожен")
-                severity = "red"
+                process = re.search(r"Killed process\s+\d+\s+\(([^)]+)\)", message)
+                description = "OOM Killer: " + (
+                    f"процесс {process.group(1)} уничтожен" if process
+                    else "процесс уничтожен"
+                )
+                self._event(at=at, guest=guest, kind="oom", level="red", description=description)
+                found.add(key)
             else:
-                description, severity = "Обнаружен OOM (kill не подтверждён)", "orange"
-            self._event(at=at, guest=guest, kind="oom", level=severity, description=description)
-            found.add((kind, guest))
+                # Kernel logs a separate oom-kill header before "Killed
+                # process". Do not count the header as a second incident.
+                attempted_events.setdefault(key, at)
             self.seen_journal.add(cursor)
+        for key, at in attempted_events.items():
+            if key not in found:
+                self._event(
+                    at=at, guest=key[1], kind="oom", level="orange",
+                    description="Обнаружен OOM (kill не подтверждён)",
+                )
+                found.add(key)
         return found
 
     def _sample(
@@ -332,7 +344,14 @@ class MemoryDiagnostics:
         else:
             self.baselines.pop("PVE", None)
 
-        lxc_ids = {guest for kind, guest in names if kind == "LXC" and guest.isdigit()}
+        raw_lxcs = inventory.get("lxcs", {}) if isinstance(inventory, Mapping) else {}
+        lxc_ids = {
+            str(guest_id)
+            for guest_id, raw in raw_lxcs.items()
+            if isinstance(raw, Mapping)
+            and str(raw.get("status")) in ("running", "paused")
+            and str(guest_id).isdigit()
+        } if isinstance(raw_lxcs, Mapping) else set()
         discovered = _lxc_cgroups(self.cgroup_root, lxc_ids)
         for guest_id, path in discovered.items():
             total += 1
@@ -341,7 +360,7 @@ class MemoryDiagnostics:
             except OSError:
                 continue
             # cgroup inode changes after LXC restart; reset baseline.
-            identity = f"{path}:{stat.st_ino}:{stat.st_ctime_ns}"
+            identity = f"{path}:{stat.st_dev}:{stat.st_ino}"
             if self._sample(f"LXC:{guest_id}", path, now, guest=guest_id, journal_seen=seen, identity=identity):
                 ok += 1
         for key in tuple(self.baselines):
@@ -355,12 +374,17 @@ class MemoryDiagnostics:
         # the same interval. Persist seen cursors to deduplicate overlap.
         if self.journal_status == "ok":
             self.last_scan = now
-        self.pressure_status = "ok" if ok == total else "unknown"
+        self.pressure_status = (
+            "ok" if ok == total and set(discovered) == lxc_ids
+            else "unknown"
+        )
+        self.checked_at = now
         # The retained publisher and local state are deliberately separate.
         self.store.save({
             "events": self.events, "next_id": self.next_id,
             "baselines": self.baselines,
             "last_scan": self.last_scan.isoformat() if self.last_scan else None,
+            "checked_at": self.checked_at.isoformat(),
             "seen_journal": sorted(self.seen_journal)[-2000:],
         })
         return self.payload()
@@ -373,5 +397,5 @@ class MemoryDiagnostics:
             "retention_days": RETENTION_DAYS,
             "journal_status": self.journal_status,
             "pressure_status": self.pressure_status,
-            "last_checked": self.last_scan.isoformat() if self.last_scan else None,
+            "last_checked": self.checked_at.isoformat() if self.checked_at else None,
         }
