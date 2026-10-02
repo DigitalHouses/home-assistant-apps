@@ -184,7 +184,7 @@ When upgrading from 0.5.16 or earlier, remove the old `dh_pve_agent_notification
 
 ## Product telemetry
 
-DigitalHouses product telemetry is explicit opt-in and defaults to OFF:
+Установщик спрашивает `Consent to collect statistics (product name, version, installation ID)? [y/N]`. Только `y` сохраняет `enabled = true` и продолжает установку. При `N`/Enter установщик останавливается без изменения действующей службы PVE/UPS. При обновлении сохранённое `true` принимается, а при `false` согласие запрашивается до изменения установки:
 
 ```ini
 [telemetry]

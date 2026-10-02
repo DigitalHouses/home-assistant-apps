@@ -9,8 +9,8 @@ configuration:
     name: Интервал обновления, ч
     description: Интервал между полными сканированиями всех доступных bucket.
   telemetry_enabled:
-    name: Телеметрия использования
-    description: Отправлять минимальную псевдонимную телеметрию DigitalHouses. По умолчанию выключено.
+    name: Statistics collection consent
+    description: Consent to collect statistics (product name, version, installation ID).
   log_level:
     name: Уровень логирования
     description: Детальность журнала приложения.

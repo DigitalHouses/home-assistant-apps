@@ -72,8 +72,8 @@ configuration:
     name: Количество Top entities
     description: Количество сущностей Recorder в каждом рейтинге. По умолчанию 10.
   telemetry_enabled:
-    name: Анонимная телеметрия продукта
-    description: Отправлять в DigitalHouses только идентификатор установки, продукт и версию релиза по protocol v1. По умолчанию выключено.
+    name: Statistics collection consent
+    description: Consent to collect statistics (product name, version, installation ID).
   log_level:
     name: Уровень логирования
     description: Детальность журнала приложения.

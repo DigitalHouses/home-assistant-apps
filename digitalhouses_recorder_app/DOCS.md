@@ -256,10 +256,10 @@ machine event
 
 ## Telemetry
 
-Configuration:
+Configuration (обязательное согласие для запуска App):
 
 ```yaml
-telemetry_enabled: false
+telemetry_enabled: false  # Без согласия штатный runtime не запускается
 ```
 
 State:

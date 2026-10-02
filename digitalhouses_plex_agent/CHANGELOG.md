@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Обязательное согласие на сбор статистики: App останавливается при `telemetry_enabled: false`, а Agent — без `[telemetry] enabled = true`. Установщик Agent запрашивает `y/N` до изменения старой установки. Протокол и обработка недоступности сервера статистики не менялись.
+
 ## 0.7.1
 
 - Fix the first canonical HA/MQTT identity migration from the historical default topic prefix: preserve the regular-expression end-of-line anchor literally so Bash cannot expand it as a positional-argument expression and corrupt the sed command.

@@ -10,6 +10,8 @@ Group=digitalhouses_plex_agent
 WorkingDirectory=/opt/digitalhouses/digitalhouses_plex_agent
 ExecStart=/opt/digitalhouses/digitalhouses_plex_agent/.venv/bin/python -m app.app --config /etc/digitalhouses_plex_agent/digitalhouses_plex_agent.conf
 Restart=on-failure
+# Missing consent is a permanent configuration state, not a restartable crash.
+RestartPreventExitStatus=78
 RestartSec=5
 Environment=PYTHONUNBUFFERED=1
 Environment=PYTHONDONTWRITEBYTECODE=1

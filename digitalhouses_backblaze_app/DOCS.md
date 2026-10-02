@@ -65,7 +65,7 @@ Periodic scans never advance `last_refresh`. The last manual Refresh is persiste
 
 ## Product telemetry
 
-Telemetry is independent of Backblaze collection and disabled by default.
+Согласие `telemetry_enabled` обязательно для запуска App. По умолчанию `false`; при отказе App записывает `Statistics collection consent not granted. Stopping application.` и завершается до инициализации мониторинга. Для существующих установок установите `true` до обновления.
 
 When enabled, a separate worker targets one successful heartbeat per 24 hours with deterministic jitter of up to 30 minutes. Failures use backoff and never affect B2 collection, MQTT, startup or manual refresh.
 

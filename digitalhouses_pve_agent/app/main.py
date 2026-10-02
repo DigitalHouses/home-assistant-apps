@@ -348,6 +348,9 @@ def _restart_denial_reason(
 
 def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
     log = logging.getLogger("digitalhouses_pve_agent")
+    if not config.telemetry.enabled:
+        log.error("Statistics collection consent not granted. Stopping application.")
+        return 78
     shutdown_history_tracker = _shutdown_tracker(state_dir)
     try:
         shutdown_history_tracker.startup()
