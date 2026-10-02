@@ -1,19 +1,41 @@
 """Statistics collection consent regression tests for Internet App."""
 from __future__ import annotations
 
+import importlib.util
 import logging
 import sys
 import unittest
 from pathlib import Path
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 from unittest.mock import patch
 
 
 APP_DIR = Path(__file__).resolve().parents[1] / "rootfs" / "app"
 sys.path.insert(0, str(APP_DIR))
 
-import app as internet_app
 from config import parse_options
+
+
+def load_app_without_mqtt_dependency():
+    """Load startup code without requiring paho-mqtt in the CI test environment."""
+    paho = ModuleType("paho")
+    mqtt = ModuleType("paho.mqtt")
+    client = ModuleType("paho.mqtt.client")
+    paho.mqtt = mqtt
+    mqtt.client = client
+    spec = importlib.util.spec_from_file_location(
+        "internet_app_consent_test", APP_DIR / "app.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    with patch.dict(
+        sys.modules,
+        {"paho": paho, "paho.mqtt": mqtt, "paho.mqtt.client": client},
+    ):
+        spec.loader.exec_module(module)
+    return module
+
+
+internet_app = load_app_without_mqtt_dependency()
 
 
 MESSAGE = "Statistics collection consent not granted. Stopping application."
