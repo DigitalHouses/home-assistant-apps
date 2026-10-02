@@ -45,6 +45,12 @@ The legacy `[ups] poll_interval_seconds` configuration key is accepted only for 
 
 Manual Refresh executes the requested recovery collection sequentially rather than creating a parallel burst. If the Agent started while a VM QEMU Guest Agent was unavailable, restore the guest first and press Refresh to rebuild passthrough disk inventory and SMART state without restarting the PVE Agent. Manual PVE Refresh, UPS Refresh and UPS Scan publish retained operation state (`idle`, `updating`, `error`) with start/finish timestamps, duration and error detail so Home Assistant can show real progress without timers. For the main Refresh button, `sensor.dh_pve_agent_refresh_state` remains `updating` across the complete PVE + configured-UPS flow; `sensor.dh_pve_agent_last_refresh` advances only after the complete flow succeeds.
 
+## OOM and Memory Pressure diagnostics
+
+Passive, read-only memory diagnostics sample the host and running LXC guests every 10 minutes by default. Set `number.dh_pve_agent_memory_check_interval` in Home Assistant to 10, 20, 30, 40, 50 or 60 minutes. Kernel OOM messages and LXC cgroup-v2 OOM counters are recorded separately from PSI `full total` stall time; neighboring samples with continued FULL pressure are one episode. Events seen only inside a VM's guest OS cannot be detected by the PVE host.
+
+The agent retains 30 days of events at `/var/lib/digitalhouses_pve_agent/memory_diagnostics.json`. `sensor.dh_pve_agent_memory_history` publishes the newest 60 events, the full count and a truncation indicator to avoid oversized Home Assistant attributes; an unreadable source is marked unknown rather than treated as healthy. Example dashboard card: [Memory events](examples/dh_pve_agent_memory_diagnostics_card.yaml). No guest commands, memory tuning, alerts or restart actions are performed.
+
 ## Update from Home Assistant
 
 The PVE Agent exposes two non-retained MQTT commands in the existing DH PVE device:
