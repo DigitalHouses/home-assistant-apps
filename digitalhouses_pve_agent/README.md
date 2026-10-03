@@ -242,8 +242,10 @@ Rich presentation, debug diagnostics, the static `sensor.dh_pve_agent_version` a
 Physical ownership is:
 
 ```text
-UPS -> USB -> Proxmox -> NUT
+UPS -> USB or SNMP/network -> Proxmox NUT
 ```
+
+See the [CyberPower RMCARD205 network UPS field case](hardware/cyberpower-rmcard205/README.md) for NUT 2.8.5, SNMPv1 Read/Write, guest/network shutdown ordering, safe diagnostics and rollback. Monitoring is validated; a real emergency UPS output-off cycle is not yet tested. The Agent configuration and MQTT contract are transport-independent.
 
 Proxmox/NUT remains the shutdown authority. Home Assistant never decides to shut down Proxmox and does not expose generic shell, arbitrary `upscmd`, `load.*`, UPS output-off or arbitrary FSD controls.
 
