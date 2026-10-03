@@ -267,8 +267,8 @@ def test_upgrade_keeps_existing_counters_without_inventing_past_incidents(tmp_pa
     current = migrated.snapshot()
     assert current.outages_month == 1
     assert current.outages == []
-    assert current.details_partial_month is True
-    assert current.details_since == clock.now().isoformat()
+    assert current.history_partial_month is True
+    assert current.history_since == clock.now().isoformat()
 
 
 def test_new_month_resets_rows_but_keeps_ongoing_outage(tmp_path):

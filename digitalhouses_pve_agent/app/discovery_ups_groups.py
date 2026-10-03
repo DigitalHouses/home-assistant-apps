@@ -227,8 +227,8 @@ def _line_power_components(topics) -> dict[str, dict[str, object]]:
             "json_attributes_template": (
                 "{{ {'month': value_json.month_key | default(none), "
                 "'outages': value_json.outages | default([]), "
-                "'details_since': value_json.details_since | default(none), "
-                "'details_partial_month': value_json.details_partial_month | default(true), "
+                "'history_since': value_json.history_since | default(none), "
+                "'history_partial_month': value_json.history_partial_month | default(true), "
                 "'omitted_count': value_json.omitted_count | default(0)} | tojson }}"
             ),
         },

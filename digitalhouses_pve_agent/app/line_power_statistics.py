@@ -52,8 +52,8 @@ class LinePowerStatisticsSnapshot:
     last_outage_duration_seconds: int | None
     estimated_restore: bool
     outages: list[dict[str, object]]
-    details_since: str
-    details_partial_month: bool
+    history_since: str
+    history_partial_month: bool
     omitted_count: int
 
     def as_payload(self) -> dict[str, object]:
@@ -345,7 +345,7 @@ class LinePowerStatisticsTracker:
         known = online + offline
         availability = round((online / known) * 100.0, 2) if known > 0 else None
         month = int(str(self._data["month_key"])[5:7])
-        details_since = self._parse_datetime(self._data["outage_history_since"])
+        history_since = self._parse_datetime(self._data["outage_history_since"])
         history = [dict(row) for row in self._data["outage_history"]]
         started = self._data.get("current_outage_started")
         if isinstance(started, str):
@@ -394,7 +394,7 @@ class LinePowerStatisticsTracker:
             ),
             estimated_restore=bool(self._data["estimated_restore"]),
             outages=history[-10:],
-            details_since=self._iso(details_since),
-            details_partial_month=details_since > self._month_start(now),
+            history_since=self._iso(history_since),
+            history_partial_month=history_since > self._month_start(now),
             omitted_count=omitted,
         )

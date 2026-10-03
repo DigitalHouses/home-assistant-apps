@@ -282,7 +282,7 @@ def test_line_power_monthly_discovery_is_canonical_and_grouped():
     outages = c["line_power_outages_month"]
     assert "json_attributes_topic" in outages
     assert "'outages': value_json.outages" in outages["json_attributes_template"]
-    assert "'details_partial_month':" in outages["json_attributes_template"]
+    assert "'history_partial_month':" in outages["json_attributes_template"]
 
     metadata = c["line_power_availability_month"]["json_attributes_template"]
     assert "month_key" in metadata
