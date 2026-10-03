@@ -239,3 +239,53 @@ def test_runtime_executes_beeper_command_and_refreshes_real_feedback(tmp_path):
     assert runtime.last_snapshot is not None
     assert runtime.last_snapshot.beeper_status == "disabled"
     assert bridge.states[-1]["beeper_status"] == "disabled"
+
+
+def test_beeper_supported_matches_actual_discovery_switch():
+    from app.discovery_ups import beeper_switch_discoverable
+
+    caps = _beeper_caps()
+    without_feedback = parse_upsc_output("ups.status: OL\\n")
+    with_feedback = parse_upsc_output(
+        "ups.status: OL\\nups.beeper.status: enabled\\n"
+    )
+    for snapshot, should_exist in (
+        (None, False),
+        (without_feedback, False),
+        (with_feedback, True),
+    ):
+        components = build_ups_discovery_payload(
+            _mqtt(), _identity(), version="0.5.56",
+            snapshot=snapshot, capabilities=caps,
+        )["components"]
+        runtime = object.__new__(UpsRuntime)
+        runtime.capabilities = caps
+        runtime.last_snapshot = snapshot
+        supported = runtime._capabilities_payload()["beeper_control_supported"]
+        assert supported is should_exist
+        assert beeper_switch_discoverable(caps, snapshot) is should_exist
+        assert ("beeper" in components) is should_exist
+
+    assert caps.supports_beeper_switch()
+    assert caps.as_dict()["beeper_control_supported"] is True
+
+
+def test_beeper_incomplete_or_unauthorized_commands_cannot_create_switch():
+    from dataclasses import replace
+
+    snapshot = parse_upsc_output(
+        "ups.status: OL\\nups.beeper.status: enabled\\n"
+    )
+    for caps in (
+        parse_upscmd_list_output("beeper.on - Enable beeper\\n"),
+        replace(_beeper_caps(), controls_enabled=False),
+    ):
+        runtime = object.__new__(UpsRuntime)
+        runtime.capabilities = caps
+        runtime.last_snapshot = snapshot
+        assert runtime._capabilities_payload()["beeper_control_supported"] is False
+        components = build_ups_discovery_payload(
+            _mqtt(), _identity(), version="0.5.56",
+            snapshot=snapshot, capabilities=caps,
+        )["components"]
+        assert "beeper" not in components

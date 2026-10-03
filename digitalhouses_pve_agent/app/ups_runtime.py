@@ -8,7 +8,7 @@ from collections.abc import Callable
 from datetime import datetime
 
 from .config import MqttConfig, UpsConfig
-from .discovery_ups import build_ups_discovery_payload
+from .discovery_ups import beeper_switch_discoverable, build_ups_discovery_payload
 from .identity import HostIdentity
 from .publish_policy import MetricValue, PublishPolicy
 from .operation_status import operation_payload
@@ -355,8 +355,13 @@ class UpsRuntime:
                 "load_control": False,
                 "shutdown_control": False,
                 "supported_features": [],
+                "beeper_control_supported": False,
             }
-        return self.capabilities.as_dict()
+        payload = self.capabilities.as_dict()
+        payload["beeper_control_supported"] = beeper_switch_discoverable(
+            self.capabilities, self.last_snapshot
+        )
+        return payload
 
     def _shutdown_policy_payload(self) -> dict[str, object]:
         if self.shutdown_policy is None:
