@@ -11,6 +11,7 @@ from .ups_nut import UpsSnapshot
 
 
 _SCHEMA_VERSION = 1
+_QUALITY_EVENTS = frozenset(("boost", "trim", "bypass", "overload"))
 _MONTH_LABELS_RU = (
     "январь",
     "февраль",
@@ -55,6 +56,11 @@ class LinePowerStatisticsSnapshot:
     history_since: str
     history_partial_month: bool
     omitted_count: int
+    events: list[dict[str, object]]
+    events_omitted_count: int
+    quality_history_since: str
+    quality_history_partial_month: bool
+    quality_revision: int
 
     def as_payload(self) -> dict[str, object]:
         payload = asdict(self)
@@ -102,6 +108,12 @@ class LinePowerStatisticsTracker:
                 self._data["outage_uncertain"] = bool(
                     self._data.get("current_outage_started")
                 )
+                self._persist()
+            if "quality_history" not in self._data:
+                self._data["quality_history"] = []
+                self._data["quality_active"] = {}
+                self._data["quality_history_since"] = self._iso(self._now())
+                self._data["quality_revision"] = 0
                 self._persist()
 
     def _now(self) -> datetime:
@@ -201,6 +213,30 @@ class LinePowerStatisticsTracker:
             LinePowerStatisticsTracker._parse_datetime(raw.get("outage_history_since"))
             if not isinstance(raw.get("outage_uncertain"), bool):
                 raise StateStoreError("invalid persisted line-power outage uncertainty")
+        if "quality_history" in raw:
+            if not {"quality_active", "quality_history_since", "quality_revision"} <= raw.keys():
+                raise StateStoreError("incomplete power-quality state")
+            history, active = raw["quality_history"], raw["quality_active"]
+            if not isinstance(history, list) or not isinstance(active, dict):
+                raise StateStoreError("invalid power-quality history")
+            LinePowerStatisticsTracker._parse_datetime(raw["quality_history_since"])
+            if type(raw["quality_revision"]) is not int or raw["quality_revision"] < 0:
+                raise StateStoreError("invalid power-quality revision")
+            for row in history:
+                if not isinstance(row, dict) or row.get("event") not in _QUALITY_EVENTS:
+                    raise StateStoreError("invalid power-quality event")
+                LinePowerStatisticsTracker._parse_datetime(row.get("from"))
+                LinePowerStatisticsTracker._parse_datetime(row.get("to"))
+                if (type(row.get("duration_seconds")) is not int
+                    or row["duration_seconds"] < 0
+                    or type(row.get("estimated")) is not bool):
+                    raise StateStoreError("invalid power-quality event data")
+            for event, row in active.items():
+                if event not in _QUALITY_EVENTS or not isinstance(row, dict):
+                    raise StateStoreError("invalid active power-quality event")
+                LinePowerStatisticsTracker._parse_datetime(row.get("from"))
+                if type(row.get("estimated")) is not bool:
+                    raise StateStoreError("invalid power-quality uncertainty")
         return dict(raw)
 
     def _persist(self) -> None:
@@ -229,6 +265,10 @@ class LinePowerStatisticsTracker:
             "outage_history": [],
             "outage_history_since": iso_now,
             "outage_uncertain": state is LinePowerState.OFFLINE,
+            "quality_history": [],
+            "quality_active": {},
+            "quality_history_since": iso_now,
+            "quality_revision": 0,
         }
         self._persist()
 
@@ -261,26 +301,83 @@ class LinePowerStatisticsTracker:
             self._data["outages_month"] = 0
             self._data["outage_history"] = []
             self._data["outage_history_since"] = self._iso(boundary)
+            self._data["quality_history"] = []
+            self._data["quality_history_since"] = self._iso(boundary)
+            self._data["quality_revision"] += 1
             self._data["state_since"] = self._iso(boundary)
             rolled = True
         if rolled:
             self._persist()
         return rolled
 
-    def observe(self, state: LinePowerState) -> bool:
+    def _observe_quality(
+        self, now: datetime, statuses: tuple[str, ...] | None, *,
+        initial: bool = False,
+    ) -> bool:
+        """Track exact NUT quality flags; gaps do not falsely end events."""
+        assert self._data is not None
+        active: dict[str, dict[str, object]] = self._data["quality_active"]
+        changed = False
+        if statuses is None:
+            for row in active.values():
+                if not row["estimated"]:
+                    row["estimated"] = True
+                    changed = True
+            if changed:
+                self._data["quality_revision"] += 1
+            return changed
+
+        observed = _QUALITY_EVENTS.intersection(statuses)
+        for event in list(active):
+            if event not in observed:
+                row = active.pop(event)
+                self._data["quality_history"].append({
+                    "event": event,
+                    "from": row["from"],
+                    "to": self._iso(now),
+                    "duration_seconds": self._seconds(
+                        self._parse_datetime(row["from"]), now
+                    ),
+                    "estimated": bool(row["estimated"])
+                    or self._first_observation_after_load,
+                })
+                changed = True
+        for event in sorted(observed):
+            if event not in active:
+                active[event] = {
+                    "from": self._iso(now),
+                    "estimated": initial or self._first_observation_after_load,
+                }
+                changed = True
+            elif self._first_observation_after_load and not active[event]["estimated"]:
+                active[event]["estimated"] = True
+                changed = True
+        if changed:
+            self._data["quality_revision"] += 1
+        return changed
+
+    def observe(
+        self, state: LinePowerState, *,
+        quality_statuses: tuple[str, ...] | None = None,
+    ) -> bool:
         if not isinstance(state, LinePowerState):
             state = LinePowerState(str(state))
         now = self._now()
         if self._data is None:
             self._initialize(state, now)
+            if self._observe_quality(now, quality_statuses, initial=True):
+                self._persist()
             self._first_observation_after_load = False
             return True
 
         rolled = self._roll_months(now)
         old_state = LinePowerState(str(self._data["last_known_state"]))
+        quality_changed = self._observe_quality(now, quality_statuses)
         if old_state is state:
+            if quality_changed:
+                self._persist()
             self._first_observation_after_load = False
-            return rolled
+            return rolled or quality_changed
 
         self._accumulate_until(now)
         iso_now = self._iso(now)
@@ -359,6 +456,20 @@ class LinePowerStatisticsTracker:
         # MQTT attributes stay bounded while every incident remains stored
         # locally for the current month and the existing counter stays complete.
         omitted = max(0, len(history) - 10)
+        events = [{"event": "outage", **row} for row in history]
+        events.extend(dict(row) for row in self._data["quality_history"])
+        for event, row in self._data["quality_active"].items():
+            events.append({
+                "event": event,
+                "from": row["from"],
+                "to": None,
+                "duration_seconds": self._seconds(
+                    self._parse_datetime(row["from"]), now
+                ),
+                "estimated": bool(row["estimated"]),
+            })
+        events.sort(key=lambda row: (row["from"], row["event"]))
+        quality_since = self._parse_datetime(self._data["quality_history_since"])
 
         return LinePowerStatisticsSnapshot(
             month_key=str(self._data["month_key"]),
@@ -397,4 +508,9 @@ class LinePowerStatisticsTracker:
             history_since=self._iso(history_since),
             history_partial_month=history_since > self._month_start(now),
             omitted_count=omitted,
+            events=events[-10:],
+            events_omitted_count=max(0, len(events) - 10),
+            quality_history_since=self._iso(quality_since),
+            quality_history_partial_month=quality_since > self._month_start(now),
+            quality_revision=int(self._data["quality_revision"]),
         )

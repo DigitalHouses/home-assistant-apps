@@ -364,8 +364,13 @@ class ShutdownAwareUpsRuntime(AdaptiveUpsRuntime):
                 raise
             tracker = self.line_power_statistics_tracker
             if tracker is not None:
+                state = line_power_state_from_snapshot(snapshot, nut_available=True)
                 tracker.observe(
-                    line_power_state_from_snapshot(snapshot, nut_available=True)
+                    state,
+                    quality_statuses=(
+                        tuple(snapshot.normalized_status)
+                        if state is not LinePowerState.UNKNOWN else None
+                    ),
                 )
             self.shutdown_history_tracker.observe_ups(snapshot)
             return snapshot
