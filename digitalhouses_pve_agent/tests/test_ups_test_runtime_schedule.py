@@ -324,7 +324,7 @@ def test_standard_result_transitions_testinprogress_to_ok(tmp_path):
     """The CyberPower SNMP diagnostic codes are normalized generically."""
     clock = {"local": datetime(2026, 10, 4, 0, 48, tzinfo=TZ), "mono": 100.0}
     holder = {"value": parse_upsc_output(
-        "ups.status: OL\\nbattery.charge: 100\\nups.test.result: Ok\\n"
+        "ups.status: OL\nbattery.charge: 100\nups.test.result: Ok\n"
     )}
     bridge, runtime, store, _, calls = _runtime(
         tmp_path, clock=clock, snapshot_holder=holder,
@@ -338,14 +338,14 @@ def test_standard_result_transitions_testinprogress_to_ok(tmp_path):
     assert runtime.test_history[-1]["finished_at"] is None
 
     holder["value"] = parse_upsc_output(
-        "ups.status: OL\\nbattery.charge: 99\\nups.test.result: TestInProgress\\n"
+        "ups.status: OL\nbattery.charge: 99\nups.test.result: TestInProgress\n"
     )
     clock["local"] += timedelta(seconds=10)
     assert runtime.manual_refresh() is True
     assert runtime.test_history[-1]["result"] == "Running"
 
     holder["value"] = parse_upsc_output(
-        "ups.status: OL\\nbattery.charge: 99\\nups.test.result: Ok\\n"
+        "ups.status: OL\nbattery.charge: 99\nups.test.result: Ok\n"
     )
     clock["local"] += timedelta(seconds=20)
     assert runtime.manual_refresh() is True
