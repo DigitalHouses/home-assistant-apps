@@ -245,9 +245,9 @@ def test_beeper_supported_matches_actual_discovery_switch():
     from app.discovery_ups import beeper_switch_discoverable
 
     caps = _beeper_caps()
-    without_feedback = parse_upsc_output("ups.status: OL\\n")
+    without_feedback = parse_upsc_output("ups.status: OL\n")
     with_feedback = parse_upsc_output(
-        "ups.status: OL\\nups.beeper.status: enabled\\n"
+        "ups.status: OL\nups.beeper.status: enabled\n"
     )
     for snapshot, should_exist in (
         (None, False),
@@ -274,10 +274,10 @@ def test_beeper_incomplete_or_unauthorized_commands_cannot_create_switch():
     from dataclasses import replace
 
     snapshot = parse_upsc_output(
-        "ups.status: OL\\nups.beeper.status: enabled\\n"
+        "ups.status: OL\nups.beeper.status: enabled\n"
     )
     for caps in (
-        parse_upscmd_list_output("beeper.on - Enable beeper\\n"),
+        parse_upscmd_list_output("beeper.on - Enable beeper\n"),
         replace(_beeper_caps(), controls_enabled=False),
     ):
         runtime = object.__new__(UpsRuntime)
