@@ -131,3 +131,11 @@ def test_ups_dashboard_contains_no_legacy_public_entity_ids():
     assert ".dh_app_pve_ups_" not in text
     assert re.search(r"\.dh_pve_ups_", text) is None
     assert ".dh_ups_" not in text
+
+def test_ups_dashboard_has_outage_table_without_folding_markdown_lines():
+    text = _text()
+    assert "Отключения городской сети" in text
+    assert "state_attr(entity, 'outages')" in text
+    assert "content: |-" in text
+    assert "outages | reverse" in text
+    assert "С | До | Длительность" in text

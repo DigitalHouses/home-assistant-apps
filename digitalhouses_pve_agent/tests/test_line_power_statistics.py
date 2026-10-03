@@ -193,3 +193,126 @@ def test_naive_local_clock_is_rejected(tmp_path):
 
     with pytest.raises(ValueError, match="timezone-aware"):
         tracker.observe(LinePowerState.ONLINE)
+
+
+def test_monthly_outage_rows_include_active_and_completed_events(tmp_path):
+    clock = Clock("2026-10-01T12:00:00+05:00")
+    path = tmp_path / "line.json"
+    tracker = LinePowerStatisticsTracker(StateStore(path), now_local=clock.now)
+    tracker.observe(LinePowerState.ONLINE)
+    clock.advance(seconds=10)
+    tracker.observe(LinePowerState.OFFLINE)
+    clock.advance(seconds=75)
+    live = tracker.snapshot()
+    assert live.outages_month == 1
+    assert live.outages[0]["to"] is None
+    assert live.outages[0]["duration_seconds"] == 75
+
+    clock.advance(seconds=15)
+    tracker.observe(LinePowerState.ONLINE)
+    done = tracker.snapshot()
+    assert done.outages == [{
+        "from": "2026-10-01T12:00:10+05:00",
+        "to": "2026-10-01T12:01:40+05:00",
+        "duration_seconds": 90,
+        "estimated": False,
+    }]
+    assert done.offline_seconds == 90
+    restarted = LinePowerStatisticsTracker(StateStore(path), now_local=clock.now)
+    assert restarted.snapshot().outages == done.outages
+
+
+def test_unavailable_nut_does_not_make_false_outage_or_restore(tmp_path):
+    clock = Clock("2026-10-02T12:00:00+05:00")
+    tracker = LinePowerStatisticsTracker(StateStore(tmp_path / "line.json"), now_local=clock.now)
+    tracker.observe(LinePowerState.ONLINE)
+    clock.advance(seconds=30)
+    tracker.observe(LinePowerState.UNKNOWN)
+    assert tracker.snapshot().outages == []
+    clock.advance(seconds=10)
+    tracker.observe(LinePowerState.ONLINE)
+    assert tracker.snapshot().outages_month == 0
+
+    clock.advance(seconds=10)
+    tracker.observe(LinePowerState.OFFLINE)
+    clock.advance(seconds=10)
+    tracker.observe(LinePowerState.UNKNOWN)
+    clock.advance(seconds=10)
+    tracker.observe(LinePowerState.OFFLINE)
+    assert tracker.snapshot().outages_month == 1
+    clock.advance(seconds=10)
+    tracker.observe(LinePowerState.ONLINE)
+    rows = tracker.snapshot().outages
+    assert len(rows) == 1
+    assert rows[0]["estimated"] is True
+
+
+def test_upgrade_keeps_existing_counters_without_inventing_past_incidents(tmp_path):
+    path = tmp_path / "line.json"
+    clock = Clock("2026-10-03T12:00:00+05:00")
+    original = LinePowerStatisticsTracker(StateStore(path), now_local=clock.now)
+    original.observe(LinePowerState.ONLINE)
+    clock.advance(seconds=10)
+    original.observe(LinePowerState.OFFLINE)
+    clock.advance(seconds=5)
+    original.observe(LinePowerState.ONLINE)
+    from app.state_store import StateStore as Store
+    persisted = Store(path).load()
+    persisted.pop("outage_history")
+    persisted.pop("outage_history_since")
+    persisted.pop("outage_uncertain")
+    Store(path).save(persisted)
+
+    migrated = LinePowerStatisticsTracker(Store(path), now_local=clock.now)
+    current = migrated.snapshot()
+    assert current.outages_month == 1
+    assert current.outages == []
+    assert current.history_partial_month is True
+    assert current.history_since == clock.now().isoformat()
+
+
+def test_new_month_resets_rows_but_keeps_ongoing_outage(tmp_path):
+    clock = Clock("2026-09-30T23:59:50+05:00")
+    tracker = LinePowerStatisticsTracker(StateStore(tmp_path / "line.json"), now_local=clock.now)
+    tracker.observe(LinePowerState.OFFLINE)
+    clock.advance(seconds=20)
+    current = tracker.snapshot()
+    assert current.outages_month == 0
+    assert current.offline_seconds == 10
+    assert len(current.outages) == 1
+    assert current.outages[0]["from"] == "2026-09-30T23:59:50+05:00"
+    assert current.outages[0]["to"] is None
+    clock.advance(seconds=10)
+    tracker.observe(LinePowerState.ONLINE)
+    assert len(tracker.snapshot().outages) == 1
+    assert tracker.snapshot().outages[0]["duration_seconds"] == 30
+
+
+def test_mqtt_recent_rows_bounded_but_local_monthly_incidents_complete(tmp_path):
+    clock = Clock("2026-10-04T00:00:00+05:00")
+    store = StateStore(tmp_path / "line.json")
+    tracker = LinePowerStatisticsTracker(store, now_local=clock.now)
+    tracker.observe(LinePowerState.ONLINE)
+    for _ in range(15):
+        clock.advance(seconds=5)
+        tracker.observe(LinePowerState.OFFLINE)
+        clock.advance(seconds=5)
+        tracker.observe(LinePowerState.ONLINE)
+    snap = tracker.snapshot()
+    assert snap.outages_month == 15
+    assert len(snap.outages) == 10
+    assert snap.omitted_count == 5
+    assert len(store.load()["outage_history"]) == 15
+
+
+def test_corrupt_detailed_history_fails_closed(tmp_path):
+    from app.state_store import StateStoreError
+    path = tmp_path / "line.json"
+    clock = Clock("2026-10-04T00:00:00+05:00")
+    tracker = LinePowerStatisticsTracker(StateStore(path), now_local=clock.now)
+    tracker.observe(LinePowerState.ONLINE)
+    data = StateStore(path).load()
+    data["outage_history"] = [{"from": "broken"}]
+    StateStore(path).save(data)
+    with pytest.raises(StateStoreError):
+        LinePowerStatisticsTracker(StateStore(path), now_local=clock.now)

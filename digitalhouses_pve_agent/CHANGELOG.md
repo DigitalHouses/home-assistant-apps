@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.54
+
+- Persist individual observed city line-power outages (start, restoration, duration, uncertain transitions) alongside existing current-month UPS statistics, with backward-compatible migration and no fabricated historical events.
+- Expose the 10 most recent current-month incidents as attributes on the existing UPS outage-count sensor; preserve authoritative whole-month totals and local incident records, including an outage active across midnight or interrupted NUT connectivity.
+- Add a Russian Markdown outage table to the UPS dashboard and a standalone card; use literal multiline YAML with explicit Markdown row separators.
+- Add regression tests for ongoing outages, closure, restart, NUT unknown states, month rollover, legacy saved state and bounded MQTT attributes.
+
 ## 0.5.53
 
 - Recognize NUT `ups.test.result: Ok` as Passed and `InvalidTest` as Failed, regardless of UPS vendor or USB/SNMP transport. The previous parser left completed standard battery tests indefinitely Running.
