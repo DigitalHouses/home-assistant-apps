@@ -309,7 +309,7 @@ def test_ups_runtime_records_fsd_and_publishes_readiness_and_budget(tmp_path):
         now_iso=lambda: "2026-09-14T01:00:00+05:00",
         now_monotonic=lambda: 100.0,
         reader=lambda config: snapshot,
-        capability_reader=lambda config: SimpleNamespace(as_dict=lambda: {"available": True, "count": 0, "commands": [], "battery_tests": [], "beeper_control": False, "load_control": False, "shutdown_control": False, "supported_features": []}),
+        capability_reader=lambda config: SimpleNamespace(supports_beeper_switch=lambda: False, as_dict=lambda: {"available": True, "count": 0, "commands": [], "battery_tests": [], "beeper_control": False, "load_control": False, "shutdown_control": False, "supported_features": []}),
         shutdown_policy_reader=lambda: policy,
         shutdown_history_tracker=tracker,
     )
