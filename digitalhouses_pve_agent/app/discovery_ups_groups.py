@@ -223,6 +223,14 @@ def _line_power_components(topics) -> dict[str, dict[str, object]]:
             "availability": availability,
             "availability_mode": "all",
             "icon": "mdi:counter",
+            "json_attributes_topic": state_topic,
+            "json_attributes_template": (
+                "{{ {'month': value_json.month_key | default(none), "
+                "'outages': value_json.outages | default([]), "
+                "'details_since': value_json.details_since | default(none), "
+                "'details_partial_month': value_json.details_partial_month | default(true), "
+                "'omitted_count': value_json.omitted_count | default(0)} | tojson }}"
+            ),
         },
         "line_power_availability_month": {
             "platform": "sensor",

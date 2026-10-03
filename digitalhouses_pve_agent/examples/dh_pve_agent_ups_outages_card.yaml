@@ -1,0 +1,45 @@
+type: markdown
+content: |-
+  {%- set entity = 'sensor.dh_pve_agent_ups_line_power_outages_month' -%}
+  {%- set outages = state_attr(entity, 'outages') or [] -%}
+  {%- set month = state_attr(entity, 'month') or '' -%}
+  {%- set partial = state_attr(entity, 'details_partial_month') | default(true, true) -%}
+  {%- set since = state_attr(entity, 'details_since') -%}
+  {%- set omitted = state_attr(entity, 'omitted_count') | int(0) -%}
+  {%- set month_names = {
+    '01':'январь', '02':'февраль', '03':'март', '04':'апрель',
+    '05':'май', '06':'июнь', '07':'июль', '08':'август',
+    '09':'сентябрь', '10':'октябрь', '11':'ноябрь', '12':'декабрь'
+  } -%}
+  {%- set ns = namespace(rows=[]) -%}
+  {%- for r in outages | reverse -%}
+    {%- set started = as_local(as_datetime(r['from'])).strftime('%d.%m %H:%M:%S') if r['from'] else '—' -%}
+    {%- set ended = as_local(as_datetime(r['to'])).strftime('%d.%m %H:%M:%S') if r['to'] else ('нет данных' if is_state('binary_sensor.dh_pve_agent_ups_line_power', 'unavailable') else 'сейчас') -%}
+    {%- set seconds = r['duration_seconds'] | int(0) -%}
+    {%- set duration = ('%02d:%02d:%02d' | format(seconds // 3600, (seconds % 3600) // 60, seconds % 60)) if seconds >= 3600 else ('%02d:%02d' | format(seconds // 60, seconds % 60)) -%}
+    {%- set duration = ('≈ ' if r['estimated'] else '') ~ duration -%}
+    {%- set ns.rows = ns.rows + ['| ' ~ loop.index ~ ' | ' ~ started ~ ' | ' ~ ended ~ ' | **' ~ duration ~ '** |'] -%}
+  {%- endfor -%}
+  {%- set total = states(entity) -%}
+  {%- set secs = states('sensor.dh_pve_agent_ups_line_power_offline_month') | int(0) -%}
+  {%- set total_time = '%02d:%02d:%02d' | format(secs // 3600, (secs % 3600) // 60, secs % 60) -%}
+  {%- set caption = '## Отключения городской сети — ' ~ month_names.get(month[5:7], 'текущий месяц') -%}
+  {%- set header = '| № | С | До | Длительность |\n|:---:|:---|:---|---:|\n' -%}
+  {%- if outages | count > 0 -%}
+    {{ caption ~ '\n\n' ~ header ~ (ns.rows | join('\n')) }}
+  {%- else -%}
+    {{ caption ~ '\n\n' ~ 'Подробных записей пока нет.' }}
+  {%- endif -%}
+  {{ '\n\n**Всего за месяц:** ' ~ (total if total not in ['unknown','unavailable','none',''] else '—') ~ ' · **' ~ total_time ~ '** без питания' }}
+  {%- if omitted > 0 -%}
+    {{ '\n\n_Показаны последние 10, ещё ' ~ omitted ~ ' записей хранятся на PVE._' }}
+  {%- endif -%}
+  {%- if partial and since -%}
+    {{ '\n\n_Подробная история ведётся с ' ~ as_local(as_datetime(since)).strftime('%d.%m.%Y %H:%M') ~ '. Более ранние отключения учтены в итогах, но без детализации._' }}
+  {%- endif -%}
+  {%- if outages | selectattr('estimated') | list | count > 0 -%}
+    {{ '\n\n_≈ Время ориентировочное: наблюдался перезапуск агента или перерыв связи с NUT._' }}
+  {%- endif -%}
+grid_options:
+  columns: 12
+  rows: auto

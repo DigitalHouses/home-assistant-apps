@@ -51,6 +51,10 @@ class LinePowerStatisticsSnapshot:
     last_restore: str | None
     last_outage_duration_seconds: int | None
     estimated_restore: bool
+    outages: list[dict[str, object]]
+    details_since: str
+    details_partial_month: bool
+    omitted_count: int
 
     def as_payload(self) -> dict[str, object]:
         payload = asdict(self)
@@ -90,6 +94,15 @@ class LinePowerStatisticsTracker:
         if raw:
             self._data = self._validate_loaded(raw)
             self._first_observation_after_load = True
+            # v1 statistics already exist; retain their counters without
+            # claiming unavailable per-incident history was reconstructed.
+            if "outage_history" not in self._data:
+                self._data["outage_history"] = []
+                self._data["outage_history_since"] = self._iso(self._now())
+                self._data["outage_uncertain"] = bool(
+                    self._data.get("current_outage_started")
+                )
+                self._persist()
 
     def _now(self) -> datetime:
         value = self.now_local()
@@ -172,6 +185,22 @@ class LinePowerStatisticsTracker:
             LinePowerState(str(raw["last_known_state"]))
         except ValueError as exc:
             raise StateStoreError("invalid persisted line-power state") from exc
+        if "outage_history" in raw:
+            history = raw["outage_history"]
+            if not isinstance(history, list):
+                raise StateStoreError("invalid persisted line-power outage history")
+            for item in history:
+                if not isinstance(item, dict):
+                    raise StateStoreError("invalid persisted line-power outage row")
+                LinePowerStatisticsTracker._parse_datetime(item.get("from"))
+                LinePowerStatisticsTracker._parse_datetime(item.get("to"))
+                if (type(item.get("duration_seconds")) is not int
+                        or item["duration_seconds"] < 0
+                        or not isinstance(item.get("estimated"), bool)):
+                    raise StateStoreError("invalid persisted line-power outage facts")
+            LinePowerStatisticsTracker._parse_datetime(raw.get("outage_history_since"))
+            if not isinstance(raw.get("outage_uncertain"), bool):
+                raise StateStoreError("invalid persisted line-power outage uncertainty")
         return dict(raw)
 
     def _persist(self) -> None:
@@ -197,6 +226,9 @@ class LinePowerStatisticsTracker:
             "last_restore": None,
             "last_outage_duration_seconds": None,
             "estimated_restore": False,
+            "outage_history": [],
+            "outage_history_since": iso_now,
+            "outage_uncertain": state is LinePowerState.OFFLINE,
         }
         self._persist()
 
@@ -227,6 +259,8 @@ class LinePowerStatisticsTracker:
             self._data["offline_accumulated_seconds"] = 0
             self._data["unknown_accumulated_seconds"] = 0
             self._data["outages_month"] = 0
+            self._data["outage_history"] = []
+            self._data["outage_history_since"] = self._iso(boundary)
             self._data["state_since"] = self._iso(boundary)
             rolled = True
         if rolled:
@@ -256,18 +290,31 @@ class LinePowerStatisticsTracker:
                 self._data["outages_month"] = int(self._data["outages_month"]) + 1
                 self._data["current_outage_started"] = iso_now
                 self._data["last_failure"] = iso_now
+                self._data["outage_uncertain"] = old_state is LinePowerState.UNKNOWN
             self._data["estimated_restore"] = False
+        elif state is LinePowerState.UNKNOWN:
+            if self._data.get("current_outage_started") is not None:
+                self._data["outage_uncertain"] = True
         elif state is LinePowerState.ONLINE:
             outage_started = self._data.get("current_outage_started")
             if isinstance(outage_started, str):
                 started = self._parse_datetime(outage_started)
                 self._data["last_outage_duration_seconds"] = self._seconds(started, now)
                 self._data["last_restore"] = iso_now
-                self._data["estimated_restore"] = bool(
+                estimated = bool(
                     self._first_observation_after_load
                     or old_state is LinePowerState.UNKNOWN
+                    or self._data.get("outage_uncertain", False)
                 )
+                self._data["estimated_restore"] = estimated
+                self._data["outage_history"].append({
+                    "from": outage_started,
+                    "to": iso_now,
+                    "duration_seconds": self._seconds(started, now),
+                    "estimated": estimated,
+                })
                 self._data["current_outage_started"] = None
+                self._data["outage_uncertain"] = False
 
         self._data["last_known_state"] = state.value
         self._data["state_since"] = iso_now
@@ -298,6 +345,20 @@ class LinePowerStatisticsTracker:
         known = online + offline
         availability = round((online / known) * 100.0, 2) if known > 0 else None
         month = int(str(self._data["month_key"])[5:7])
+        details_since = self._parse_datetime(self._data["outage_history_since"])
+        history = [dict(row) for row in self._data["outage_history"]]
+        started = self._data.get("current_outage_started")
+        if isinstance(started, str):
+            history.append({
+                "from": started,
+                "to": None,
+                "duration_seconds": self._seconds(self._parse_datetime(started), now),
+                "estimated": bool(self._data.get("outage_uncertain", False))
+                or state is LinePowerState.UNKNOWN,
+            })
+        # MQTT attributes stay bounded while every incident remains stored
+        # locally for the current month and the existing counter stays complete.
+        omitted = max(0, len(history) - 10)
 
         return LinePowerStatisticsSnapshot(
             month_key=str(self._data["month_key"]),
@@ -332,4 +393,8 @@ class LinePowerStatisticsTracker:
                 else None
             ),
             estimated_restore=bool(self._data["estimated_restore"]),
+            outages=history[-10:],
+            details_since=self._iso(details_since),
+            details_partial_month=details_since > self._month_start(now),
+            omitted_count=omitted,
         )
