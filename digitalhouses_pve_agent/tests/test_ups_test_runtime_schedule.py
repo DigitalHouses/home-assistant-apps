@@ -318,3 +318,43 @@ def test_standard_battery_test_is_manual_only(tmp_path):
     assert calls == ["standard"]
     assert runtime.test_schedule == schedule_before
     assert runtime.test_history[-1]["type"] == "Standard"
+
+
+def test_standard_result_transitions_testinprogress_to_ok(tmp_path):
+    """The CyberPower SNMP diagnostic codes are normalized generically."""
+    clock = {"local": datetime(2026, 10, 4, 0, 48, tzinfo=TZ), "mono": 100.0}
+    holder = {"value": parse_upsc_output(
+        "ups.status: OL\nbattery.charge: 100\nups.test.result: Ok\n"
+    )}
+    bridge, runtime, store, _, calls = _runtime(
+        tmp_path, clock=clock, snapshot_holder=holder,
+    )
+    assert runtime.startup() is True
+    bridge.ups_test_standard_requested.set()
+    assert runtime.process_events() is True
+    assert calls == ["standard"]
+    # A result unchanged from the pre-test snapshot is not accepted as new.
+    assert runtime.test_history[-1]["result"] == "Started"
+    assert runtime.test_history[-1]["finished_at"] is None
+
+    holder["value"] = parse_upsc_output(
+        "ups.status: OL\nbattery.charge: 99\nups.test.result: TestInProgress\n"
+    )
+    clock["local"] += timedelta(seconds=10)
+    assert runtime.manual_refresh() is True
+    assert runtime.test_history[-1]["result"] == "Running"
+
+    holder["value"] = parse_upsc_output(
+        "ups.status: OL\nbattery.charge: 99\nups.test.result: Ok\n"
+    )
+    clock["local"] += timedelta(seconds=20)
+    assert runtime.manual_refresh() is True
+    record = runtime.test_history[-1]
+    assert record["type"] == "Standard"
+    assert record["source"] == "Manual"
+    assert record["result"] == "Passed"
+    assert record["nut_result"] == "Ok"
+    assert record["duration_seconds"] == 30
+    assert record["battery_charge_before"] == 100.0
+    assert record["battery_charge_after"] == 99.0
+    assert store.load()["test_history"][-1]["result"] == "Passed"

@@ -27,6 +27,11 @@ def test_normalize_known_nut_battery_test_results():
     assert normalize_test_result("Test in progress") == "Running"
     assert normalize_test_result("Aborted") == "Stopped"
     assert normalize_test_result("Failed") == "Failed"
+    assert normalize_test_result("Ok") == "Passed"
+    assert normalize_test_result(" OK ") == "Passed"
+    assert normalize_test_result("InvalidTest") == "Failed"
+    assert normalize_test_result("No test initiated") == "Unknown"
+    assert normalize_test_result("not ok") == "Unknown"
     assert normalize_test_result(None) == "Unknown"
 
 

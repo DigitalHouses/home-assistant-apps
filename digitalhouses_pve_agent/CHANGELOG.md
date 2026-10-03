@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.53
+
+- Recognize NUT `ups.test.result: Ok` as Passed and `InvalidTest` as Failed, regardless of UPS vendor or USB/SNMP transport. The previous parser left completed standard battery tests indefinitely Running.
+- Preserve pre-test-result correlation: an unchanged old `Ok` never closes a new test prematurely; finish only after a fresh `TestInProgress` followed by `Ok` or another definitive result.
+- Add state-machine and normalization regression tests. No UPS commands, scheduling, NUT settings or MQTT entity identities change.
+
 ## 0.5.52
 
 - Support the NUT `test.battery.start` standard battery test as a separate manual-only capability and MQTT button, independent of USB/SNMP transport and manufacturer.
