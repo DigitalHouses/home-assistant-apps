@@ -31,6 +31,7 @@ _STATUS = {
 
 _CONFIG = {
     "capabilities",
+    "standard_test_supported",
     "quick_test_supported",
     "deep_test_supported",
     "stop_test_supported",

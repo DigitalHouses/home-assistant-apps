@@ -9,6 +9,7 @@ from .config import UpsConfig
 
 
 _BATTERY_TEST_COMMANDS = {
+    "standard": "test.battery.start",
     "quick": "test.battery.start.quick",
     "deep": "test.battery.start.deep",
     "stop": "test.battery.stop",
@@ -146,6 +147,7 @@ class UpsCapabilities:
             "shutdown_control": self.shutdown_control,
             "supported_features": list(self.supported_features),
             "test_controls_enabled": self.controls_enabled,
+            "standard_test_supported": self.supports_test("standard"),
             "quick_test_supported": self.supports_test("quick"),
             "deep_test_supported": self.supports_test("deep"),
             "stop_test_supported": self.supports_test("stop"),
@@ -166,7 +168,7 @@ def parse_upscmd_list_output(text: str) -> UpsCapabilities:
     command_set = set(commands)
     battery_tests = tuple(
         action
-        for action in ("quick", "deep", "stop")
+        for action in ("standard", "quick", "deep", "stop")
         if _BATTERY_TEST_COMMANDS[action] in command_set
     )
     beeper_control = any(command.startswith("beeper.") for command in commands)
