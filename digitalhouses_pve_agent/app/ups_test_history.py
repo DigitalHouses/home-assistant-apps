@@ -14,6 +14,10 @@ def normalize_test_result(value: str | None) -> str:
         return "Unknown"
     if "progress" in text or "running" in text:
         return "Running"
+    if text == "ok":
+        return "Passed"
+    if text == "invalidtest":
+        return "Failed"
     if "pass" in text or "success" in text:
         return "Passed"
     if "abort" in text or "stop" in text or "cancel" in text:
