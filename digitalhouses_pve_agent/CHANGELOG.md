@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.55
+
+- Add UPS power-quality intervals (Boost, Trim, Bypass and Overload) to the existing monthly line-power event history, using NUT's canonical status flags rather than device-specific rules or voltage thresholds.
+- Preserve the outage counter, outage history and accumulated power-availability totals; present a unified chronological list of the latest 10 power events in HA with a new Event column.
+- Persist complete current-month quality intervals alongside the existing line-power data; mark uncertain observations after agent restarts or NUT gaps, without inventing events before collection began.
+- Publish new quality transitions immediately even while mains power remains online, preserving the normal low-frequency monthly statistics cadence.
+- Extend regression tests for quality events, persistence, UNKNOWN states, MQTT publication and Markdown presentation.
+
 ## 0.5.54
 
 - Persist individual observed city line-power outages (start, restoration, duration, uncertain transitions) alongside existing current-month UPS statistics, with backward-compatible migration and no fabricated historical events.

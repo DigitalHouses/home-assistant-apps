@@ -129,3 +129,26 @@ def test_manual_refresh_forces_statistics_publication():
 
     assert len(manual) == 1
     assert manual[0].reason == "manual_refresh"
+
+
+def test_quality_changes_publish_immediately_while_mains_stays_online():
+    router = UpsPresentationRouter(source_interval_seconds=10.0)
+    base = _stats("online")
+    base["quality_revision"] = 0
+    first = _stats_publications(router, _payload(base), now=0.0, force=True)
+    assert len(first) == 1
+
+    unchanged = dict(base, online_seconds=10)
+    assert _stats_publications(router, _payload(unchanged), now=10.0) == []
+
+    boost_started = dict(base, quality_revision=1)
+    started = _stats_publications(router, _payload(boost_started), now=11.0)
+    assert len(started) == 1
+    assert started[0].reason == "quality_change"
+
+    boost_ongoing = dict(base, quality_revision=1, online_seconds=21)
+    assert _stats_publications(router, _payload(boost_ongoing), now=21.0) == []
+    boost_ended = dict(base, quality_revision=2)
+    ended = _stats_publications(router, _payload(boost_ended), now=22.0)
+    assert len(ended) == 1
+    assert ended[0].reason == "quality_change"

@@ -134,8 +134,18 @@ def test_ups_dashboard_contains_no_legacy_public_entity_ids():
 
 def test_ups_dashboard_has_outage_table_without_folding_markdown_lines():
     text = _text()
-    assert "Отключения городской сети" in text
-    assert "state_attr(entity, 'outages')" in text
+    assert "События питания" in text
+    assert "state_attr(entity, 'events')" in text
     assert "content: |-" in text
-    assert "outages | reverse" in text
-    assert "С | До | Длительность" in text
+    assert "events | reverse" in text
+    assert "Событие | С | До | Длительность" in text
+
+
+def test_ups_dashboard_shows_quality_events_and_preserves_markdown_rows():
+    text = _text()
+    card = (ROOT / "examples" / "dh_pve_agent_ups_outages_card.yaml").read_text()
+    for value in ("Событие", "'boost'", "'trim'", "'bypass'", "'overload'", "events | reverse", "join('\\n')"):
+        assert value in text
+        assert value in card
+    assert "content: |-" in card
+    assert "|:---:|:---|:---|:---|---:|" in card

@@ -226,3 +226,35 @@ def test_build_ups_runtime_uses_dedicated_line_power_store(tmp_path, monkeypatch
     assert runtime.line_power_statistics_tracker.store.path == (
         tmp_path / "line_power_statistics.json"
     )
+
+
+def test_runtime_captures_boost_without_fabricating_an_outage(tmp_path):
+    clock = {"iso": "2026-10-04T02:00:00+05:00", "mono": 0.0}
+    current = {"snapshot": parse_upsc_output("ups.status: OL\n")}
+    bridge = GroupBridge()
+    tracker = LinePowerStatisticsTracker(
+        StateStore(tmp_path / "line_power_statistics.json"),
+        now_local=lambda: datetime.fromisoformat(clock["iso"]),
+    )
+    runtime = ShutdownAwareUpsRuntime(
+        config=_ups_config(), mqtt_config=_mqtt(), bridge=bridge,
+        identity=_identity(), version="0.5.55",
+        state_store=StateStore(tmp_path / "ups.json"),
+        now_iso=lambda: clock["iso"],
+        now_local=lambda: datetime.fromisoformat(clock["iso"]),
+        now_monotonic=lambda: clock["mono"],
+        reader=lambda config: current["snapshot"],
+        capability_reader=_capabilities,
+        shutdown_policy_reader=lambda: None,
+        shutdown_history_tracker=ShutdownTracker(),
+        line_power_statistics_tracker=tracker,
+    )
+    assert runtime.startup() is True
+    current["snapshot"] = parse_upsc_output("ups.status: OL BOOST\n")
+    clock["iso"], clock["mono"] = "2026-10-04T02:00:10+05:00", 10.0
+    assert runtime.tick(clock["mono"]) is True
+    assert tracker.snapshot().events[0]["event"] == "boost"
+    assert tracker.snapshot().outages_month == 0
+    assert bridge.groups[-1][0] == "line_power_statistics" or any(
+        name == "line_power_statistics" for name, _ in bridge.groups
+    )

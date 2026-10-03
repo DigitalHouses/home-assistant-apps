@@ -24,6 +24,7 @@ class LinePowerStatisticsGroup:
     def __init__(self) -> None:
         self._last_published_at: float | None = None
         self._last_published_state: str | None = None
+        self._last_quality_revision: int | None = None
 
     def observe(
         self,
@@ -35,6 +36,7 @@ class LinePowerStatisticsGroup:
     ) -> UpsPublication | None:
         state_value = data.get("state")
         state = state_value if isinstance(state_value, str) else "unknown"
+        revision = data.get("quality_revision")
 
         reason: str | None = None
         if manual:
@@ -43,6 +45,8 @@ class LinePowerStatisticsGroup:
             reason = "force"
         elif state != self._last_published_state:
             reason = "state_change"
+        elif revision != self._last_quality_revision:
+            reason = "quality_change"
         else:
             interval = (
                 self.OFFLINE_INTERVAL_SECONDS
@@ -57,6 +61,7 @@ class LinePowerStatisticsGroup:
 
         self._last_published_at = float(now)
         self._last_published_state = state
+        self._last_quality_revision = revision
         return UpsPublication(
             group="line_power_statistics",
             payload=dict(data),
