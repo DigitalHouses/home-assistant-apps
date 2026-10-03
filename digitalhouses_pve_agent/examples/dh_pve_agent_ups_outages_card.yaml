@@ -3,7 +3,7 @@ content: |-
   {%- set entity = 'sensor.dh_pve_agent_ups_line_power_outages_month' -%}
   {%- set outages = state_attr(entity, 'outages') or [] -%}
   {%- set month = state_attr(entity, 'month') or '' -%}
-  {%- set partial = state_attr(entity, 'details_partial_month') | default(true, true) -%}
+  {%- set partial = state_attr(entity, 'details_partial_month') | default(true) -%}
   {%- set since = state_attr(entity, 'details_since') -%}
   {%- set omitted = state_attr(entity, 'omitted_count') | int(0) -%}
   {%- set month_names = {
