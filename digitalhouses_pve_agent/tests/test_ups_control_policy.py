@@ -111,7 +111,7 @@ def test_upscmd_capability_query_is_read_only_and_bounded():
     )]
 
 
-def test_battery_test_executor_maps_only_three_safe_actions_and_hides_password():
+def test_battery_test_executor_maps_only_allowlisted_actions_and_hides_password():
     executor = _require("run_ups_battery_test")
     calls = []
     config = SimpleNamespace(
@@ -128,6 +128,7 @@ def test_battery_test_executor_maps_only_three_safe_actions_and_hides_password()
         return subprocess.CompletedProcess(command, 0, stdout="OK\n", stderr="")
 
     for action, nut_command in (
+        ("standard", "test.battery.start"),
         ("quick", "test.battery.start.quick"),
         ("deep", "test.battery.start.deep"),
         ("stop", "test.battery.stop"),
@@ -225,6 +226,7 @@ AT ONLINE * CANCEL-TIMER earlyshutdown
 
 def test_ups_topics_and_mqtt_events_cover_battery_test_buttons_statically():
     ups = build_ups_topics(_mqtt(), _identity())
+    assert hasattr(ups, "test_standard")
     assert hasattr(ups, "test_quick")
     assert hasattr(ups, "test_deep")
     assert hasattr(ups, "test_stop")
@@ -232,6 +234,8 @@ def test_ups_topics_and_mqtt_events_cover_battery_test_buttons_statically():
     events = MqttEvents(build_topics(_mqtt(), _identity()), RuntimeSettings())
     events.configure_ups(ups)
 
+    assert events.handle_message(ups.test_standard, b"PRESS") is True
+    assert events.ups_test_standard_requested.is_set()
     assert events.handle_message(ups.test_quick, b"PRESS") is True
     assert events.ups_test_quick_requested.is_set()
     assert events.handle_message(ups.test_deep, b"PRESS") is True

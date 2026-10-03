@@ -18,6 +18,7 @@ class Bridge:
     def __init__(self):
         self.ups_refresh_requested = threading.Event()
         self.ups_reconnect_requested = threading.Event()
+        self.ups_test_standard_requested = threading.Event()
         self.ups_test_quick_requested = threading.Event()
         self.ups_test_deep_requested = threading.Event()
         self.ups_test_stop_requested = threading.Event()
@@ -76,11 +77,12 @@ def _config():
 def _capabilities():
     return UpsCapabilities(
         commands=(
+            "test.battery.start",
             "test.battery.start.quick",
             "test.battery.start.deep",
             "test.battery.stop",
         ),
-        battery_tests=("quick", "deep", "stop"),
+        battery_tests=("standard", "quick", "deep", "stop"),
         beeper_control=False,
         load_control=False,
         shutdown_control=False,
@@ -302,3 +304,17 @@ def test_internal_test_correlation_field_is_not_published(tmp_path):
 
     assert "nut_result_before" in store.load()["test_history"][-1]
     assert "nut_result_before" not in bridge.states[-1]["test_history"][-1]
+
+
+def test_standard_battery_test_is_manual_only(tmp_path):
+    clock = {"local": datetime(2026, 9, 13, 10, 0, tzinfo=TZ), "mono": 100.0}
+    bridge, runtime, _, _, calls = _runtime(tmp_path, clock=clock)
+    assert runtime.startup() is True
+    schedule_before = {key: dict(value) for key, value in runtime.test_schedule.items()}
+    assert set(schedule_before) == {"quick", "deep"}
+
+    bridge.ups_test_standard_requested.set()
+    assert runtime.process_events() is True
+    assert calls == ["standard"]
+    assert runtime.test_schedule == schedule_before
+    assert runtime.test_history[-1]["type"] == "Standard"

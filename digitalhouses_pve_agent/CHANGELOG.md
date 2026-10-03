@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.52
+
+- Support the NUT `test.battery.start` standard battery test as a separate manual-only capability and MQTT button, independent of USB/SNMP transport and manufacturer.
+- Preserve existing Quick/Deep/Stop commands and schedules; never infer that the generic test is quick or map it to runtime calibration.
+- Add capability, NUT credentials, MQTT and runtime regression tests without live UPS commands.
+
 ## 0.5.51
 
 - Classify PSI memory FULL incidents only when the interval's stalled time reaches at least 5% of its actual elapsed duration (30 seconds per 10 minutes), proportional to configured or delayed scan intervals.
