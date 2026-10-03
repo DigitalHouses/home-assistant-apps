@@ -103,6 +103,30 @@ The observed card values were `ups.delay.shutdown=180` seconds and `ups.delay.st
 
 **Not yet verified**: an actual FSD path, successful physical execution of `shutdown.return`, UPS output cycling, recovery on return of mains, and whether the remaining 180 seconds is sufficient for the actual host tail. A maintenance-window test requires separate approval and shutdown budget validation. The override is not a guarantee of UPS cut-off without those tests.
 
+### Battery diagnostic result codes
+
+For the standard manual NUT test (`test.battery.start`), the CyberPower
+SNMP MIB exposes the following *observed/defined* `ups.test.result` strings:
+
+| NUT value | Meaning for the history |
+| --- | --- |
+| `TestInProgress` | Running, not yet finished |
+| `Ok` | Passed |
+| `Failed` | Failed |
+| `InvalidTest` | Failed (invalid diagnostic request) |
+
+Version 0.5.52 of the PVE Agent did not recognize the final `Ok` value,
+so an already-running history record could remain indefinitely open.
+The generic NUT result parser is corrected in 0.5.53 without any
+model-, vendor- or transport-specific logic.
+
+Read only: `upsc ups@127.0.0.1 ups.test.result`,
+`upsc ups@127.0.0.1 ups.test.date`. Never presume a test
+finished just because a short duration passed; check the actual NUT
+result and distinguish it from a pre-test value. The completed time
+in PVE Agent history is the **first observed** completion time, not a
+hardware-provided exact timestamp.
+
 ### Read-only audit
 
 ```bash
