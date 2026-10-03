@@ -9,6 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_control_surface_is_limited_to_battery_tests():
     assert _BATTERY_TEST_COMMANDS == {
+        "standard": "test.battery.start",
         "quick": "test.battery.start.quick",
         "deep": "test.battery.start.deep",
         "stop": "test.battery.stop",

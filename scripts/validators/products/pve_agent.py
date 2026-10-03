@@ -6,7 +6,7 @@ from typing import Any
 
 from validators.common import fail, require_files
 
-EXPECTED_VERSION = "0.5.51"
+EXPECTED_VERSION = "0.5.52"
 EXPECTED_TOPIC_PREFIX = "DigitalHouses/Global/digitalhouses_pve_agent"
 EXPECTED_DEVICE_NAME = "DH PVE"
 EXPECTED_REFRESH_ENTITY = "button.dh_pve_agent_refresh"
@@ -288,6 +288,7 @@ def validate_digitalhouses_pve_agent(
             '"battery_fully_charged"',
             '"shutdown_committed"',
             '"config_changed"',
+            '"standard_test_supported"',
             '"quick_test_supported"',
             '"deep_test_supported"',
             '"stop_test_supported"',

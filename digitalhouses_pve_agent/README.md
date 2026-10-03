@@ -10,7 +10,7 @@ Native Linux agent for **Proxmox VE 8.x** that publishes host, CPU, memory, stor
 
 The canonical product and runtime identity is **DigitalHouses PVE Agent** / `digitalhouses_pve_agent`: systemd service `digitalhouses_pve_agent.service`, filesystem roots under `/opt/digitalhouses/digitalhouses_pve_agent`, `/etc/digitalhouses_pve_agent` and `/var/lib/digitalhouses_pve_agent`, MQTT base `DigitalHouses/Global/digitalhouses_pve_agent/<instance>`, and Home Assistant entity prefix `dh_pve_agent_*`. Version 0.5.30 performs the corrected one-time controlled migration from the former `dh_pve_app` / `dh_app_pve_*` runtime, including deterministic cleanup of retained data owned by the legacy MQTT instance namespace.
 
-Current source release: `VERSION` is `0.5.51`.
+Current source release: `VERSION` is `0.5.52`.
 
 ## Home Assistant dashboard
 
@@ -49,7 +49,7 @@ Manual Refresh executes the requested recovery collection sequentially rather th
 
 Passive, read-only memory diagnostics sample the host and running LXC guests every 10 minutes by default. Set `number.dh_pve_agent_memory_check_interval` in Home Assistant to 10, 20, 30, 40, 50 or 60 minutes. Kernel OOM messages and LXC cgroup-v2 OOM counters are always recorded without a threshold. PSI `full total` becomes a Home Assistant incident only when the increase reaches at least 5% of the actual elapsed observation window (30 seconds per 10 minutes, 180 seconds per hour); consecutive nonzero intervals are merged into one episode once the threshold is reached. Events seen only inside a VM's guest OS cannot be detected by the PVE host.
 
-The agent retains 30 days of events **and every PSI interval delta, including zero and small delays**, at `/var/lib/digitalhouses_pve_agent/memory_diagnostics.json`. Raw PSI samples are local-only and never published to Home Assistant. Pressure events recorded before 0.5.51 remain in local 30-day history but are excluded from the new HA incident table because their severity was not verified against an elapsed observation window. `sensor.dh_pve_agent_memory_history` publishes the newest 60 events, the full count and a truncation indicator to avoid oversized Home Assistant attributes; an unreadable source is marked unknown rather than treated as healthy. Example dashboard card: [Memory events](examples/dh_pve_agent_memory_diagnostics_card.yaml). No guest commands, memory tuning, alerts or restart actions are performed.
+The agent retains 30 days of events **and every PSI interval delta, including zero and small delays**, at `/var/lib/digitalhouses_pve_agent/memory_diagnostics.json`. Raw PSI samples are local-only and never published to Home Assistant. Pressure events recorded before 0.5.52 remain in local 30-day history but are excluded from the new HA incident table because their severity was not verified against an elapsed observation window. `sensor.dh_pve_agent_memory_history` publishes the newest 60 events, the full count and a truncation indicator to avoid oversized Home Assistant attributes; an unreadable source is marked unknown rather than treated as healthy. Example dashboard card: [Memory events](examples/dh_pve_agent_memory_diagnostics_card.yaml). No guest commands, memory tuning, alerts or restart actions are performed.
 
 ## Update from Home Assistant
 
@@ -167,7 +167,7 @@ UPS monitoring is optional. The always-present PVE device exposes `binary_sensor
 - `on` + `binary_sensor.dh_pve_agent_ups_available = off` — a UPS is provisioned but NUT cannot currently read it; this is a real availability problem and must remain visible;
 - `on` + UPS available — show the full UPS dashboard.
 
-UPS controls that depend on hardware capabilities have stable diagnostic facts: `binary_sensor.dh_pve_agent_ups_quick_test_supported`, `binary_sensor.dh_pve_agent_ups_deep_test_supported`, `binary_sensor.dh_pve_agent_ups_stop_test_supported`, and `binary_sensor.dh_pve_agent_ups_beeper_control_supported`. UI cards may use these facts for visibility instead of referencing an entity that the UPS does not support.
+UPS controls that depend on hardware capabilities have stable diagnostic facts: `binary_sensor.dh_pve_agent_ups_standard_test_supported`, `binary_sensor.dh_pve_agent_ups_quick_test_supported`, `binary_sensor.dh_pve_agent_ups_deep_test_supported`, `binary_sensor.dh_pve_agent_ups_stop_test_supported`, and `binary_sensor.dh_pve_agent_ups_beeper_control_supported`. UI cards may use these facts for visibility instead of referencing an entity that the UPS does not support.
 
 ## UPS status, charger and battery semantics
 
@@ -321,6 +321,7 @@ A software-trigger shutdown reason is recorded only after the fixed helper retur
 Supported controls are capability-driven:
 
 - Refresh;
+- Standard battery test (`test.battery.start`, manual-only, device-defined duration; not treated as Quick or Deep);
 - Quick battery test;
 - Deep battery test;
 - Stop test;
@@ -348,7 +349,7 @@ Production install/update is release-tag only. Version 0.5.30 is the corrected c
 For the canonical runtime, install/update/reinstall never clears the current canonical MQTT namespace. Canonical retained MQTT cleanup is owned exclusively by the supported uninstaller.
 
 ```bash
-TAG=digitalhouses_pve_agent-v0.5.51
+TAG=digitalhouses_pve_agent-v0.5.52
 DIGITALHOUSES_SOURCE_REF="$TAG" \
   bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$TAG/digitalhouses_pve_agent/install.sh")
 ```

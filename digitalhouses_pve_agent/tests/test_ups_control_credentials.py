@@ -7,6 +7,7 @@ from app.ups_control import list_ups_commands
 
 
 COMMANDS = (
+    "test.battery.start - Start vendor standard test\n"
     "test.battery.start.quick - Start quick test\n"
     "test.battery.start.deep - Start deep test\n"
     "test.battery.stop - Stop test\n"
@@ -51,6 +52,7 @@ def test_battery_test_buttons_require_both_capability_and_command_credentials():
         capabilities=without_credentials,
     )["components"]
     assert "capabilities" in components
+    assert "test_standard" not in components
     assert "test_quick" not in components
     assert "test_deep" not in components
     assert "test_stop" not in components
@@ -70,6 +72,7 @@ def test_battery_test_buttons_require_both_capability_and_command_credentials():
         snapshot=None,
         capabilities=with_credentials,
     )["components"]
+    assert "test_standard" in components
     assert "test_quick" in components
     assert "test_deep" in components
     assert "test_stop" in components

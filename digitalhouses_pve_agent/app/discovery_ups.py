@@ -178,6 +178,22 @@ def build_ups_discovery_payload(
                 "'supported_features': value_json.capabilities.supported_features | default([])} | tojson }}"
             ),
         },
+        "standard_test_supported": {
+            "platform": "binary_sensor",
+            "name": "Standard battery test supported",
+            "unique_id": uid("standard_test_supported"),
+            "default_entity_id": "binary_sensor.dh_pve_agent_ups_standard_test_supported",
+            "state_topic": topics.state,
+            "value_template": (
+                "{{ 'ON' if value_json.capabilities.standard_test_supported | default(false) else 'OFF' }}"
+            ),
+            "payload_on": "ON",
+            "payload_off": "OFF",
+            "availability": [app_availability],
+            "availability_mode": "all",
+            "entity_category": "diagnostic",
+            "icon": "mdi:battery-check",
+        },
         "quick_test_supported": {
             "platform": "binary_sensor",
             "name": "Quick battery test supported",
@@ -473,6 +489,12 @@ def build_ups_discovery_payload(
         }
 
     if capabilities is not None:
+        if capabilities.supports_test("standard"):
+            add_button(
+                "test_standard", "Standard battery test",
+                "button.dh_pve_agent_ups_test_standard",
+                topics.test_standard, "mdi:battery-check",
+            )
         if capabilities.supports_test("quick"):
             add_button(
                 "test_quick", "Quick battery test", "button.dh_pve_agent_ups_test_quick",

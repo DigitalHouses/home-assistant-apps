@@ -39,6 +39,7 @@ class UpsTopics:
     refresh: str
     refresh_operation: str
     beeper_set: str
+    test_standard: str
     test_quick: str
     test_deep: str
     test_stop: str
@@ -132,6 +133,7 @@ def build_ups_topics(mqtt: MqttConfig, identity: HostIdentity) -> UpsTopics:
         refresh=f"{base}/refresh",
         refresh_operation=f"{base}/refresh/operation",
         beeper_set=f"{base}/beeper/set",
+        test_standard=f"{base}/test/standard",
         test_quick=f"{base}/test/quick",
         test_deep=f"{base}/test/deep",
         test_stop=f"{base}/test/stop",

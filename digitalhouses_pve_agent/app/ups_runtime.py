@@ -1058,6 +1058,7 @@ class UpsRuntime:
             handled = True
 
         for action, attr in (
+            ("standard", "ups_test_standard_requested"),
             ("quick", "ups_test_quick_requested"),
             ("deep", "ups_test_deep_requested"),
             ("stop", "ups_test_stop_requested"),
