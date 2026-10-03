@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.56
+
+- Align the UPS beeper capability binary sensor with actual MQTT Discovery of `switch.dh_pve_agent_ups_beeper`: require an ON command, an OFF command, NUT command credentials, and readable `ups.beeper.status` feedback.
+- Keep `beeper_control` command-inventory diagnostics unchanged. Do not create feedback-less synthetic switches or assume a missing status means the beeper is off.
+- Cover command-only, feedback-backed, incomplete, and unauthorized NUT beeper capabilities with regression tests.
+
 ## 0.5.55
 
 - Add UPS power-quality intervals (Boost, Trim, Bypass and Overload) to the existing monthly line-power event history, using NUT's canonical status flags rather than device-specific rules or voltage thresholds.

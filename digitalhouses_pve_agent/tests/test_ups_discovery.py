@@ -219,6 +219,7 @@ def test_discovery_exposes_stable_ui_capability_facts():
     assert "deep_test_supported" in components["deep_test_supported"]["value_template"]
     assert "stop_test_supported" in components["stop_test_supported"]["value_template"]
     assert "beeper_control_supported" in components["beeper_control_supported"]["value_template"]
+    assert "beeper" in components
 
 
 def test_ups_device_metadata_uses_real_hardware_identity():

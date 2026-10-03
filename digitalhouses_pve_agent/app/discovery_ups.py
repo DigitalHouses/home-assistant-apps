@@ -11,6 +11,19 @@ from .ups_nut import UpsSnapshot
 from .ups_shutdown_policy import UpsShutdownPolicy
 
 
+def beeper_switch_discoverable(
+    capabilities: UpsCapabilities | None,
+    snapshot: UpsSnapshot | None,
+) -> bool:
+    """A switch requires both ON/OFF commands and readable feedback."""
+    return bool(
+        capabilities is not None
+        and capabilities.supports_beeper_switch()
+        and snapshot is not None
+        and snapshot.beeper_status is not None
+    )
+
+
 def _availability(topic: str) -> dict[str, str]:
     return {
         "topic": topic,
@@ -510,11 +523,7 @@ def build_ups_discovery_payload(
                 "test_stop", "Stop battery test", "button.dh_pve_agent_ups_test_stop",
                 topics.test_stop, "mdi:stop-circle-outline",
             )
-        if (
-            capabilities.supports_beeper_switch()
-            and snapshot is not None
-            and snapshot.beeper_status is not None
-        ):
+        if beeper_switch_discoverable(capabilities, snapshot):
             components["beeper"] = {
                 "platform": "switch",
                 "name": "Beeper",

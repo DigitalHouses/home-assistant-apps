@@ -139,6 +139,7 @@ def runtime(tmp_path, bridge):
         now_monotonic=lambda: 100.0,
         reader=lambda config: snapshot,
         capability_reader=lambda config: SimpleNamespace(
+            supports_beeper_switch=lambda: False,
             as_dict=lambda: {
                 "available": True,
                 "count": 0,
