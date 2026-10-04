@@ -202,7 +202,9 @@ def build_discovery_payload(
             "json_attributes_template": (
                 "{{ {'error': value_json.error | default(none), "
                 "'checked_at': value_json.checked_at | default(none), "
-                "'installed_version': value_json.installed_version | default(none)} | tojson }}"
+                "'installed_version': value_json.installed_version | default(none), "
+                "'installation_status': value_json.installation_status | default(none), "
+                "'installation_error': value_json.installation_error | default(none)} | tojson }}"
             ),
         },
         "refresh_state": {

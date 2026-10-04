@@ -188,3 +188,78 @@ def test_launch_is_fixed_systemd_unit_and_records_exact_release(tmp_path, monkey
     assert called.call_args.args[0] == [
         "systemctl", "start", "--no-block", "digitalhouses_pve_agent-update.service"
     ]
+
+
+def test_completed_install_does_not_mask_a_newer_successful_no_updates_check(tmp_path):
+    manager = UpdateManager(tmp_path, "0.5.56")
+    manager.worker.save({
+        "state": "completed",
+        "error": None,
+        "updated_at": "2026-10-03T21:11:06+00:00",
+    })
+    manager._last_check = time.monotonic()
+    # Post-install worker result is initially meaningful until a newer check.
+    assert manager._payload()["status"] == "completed"
+    manager._check_result = ("digitalhouses_pve_agent-v0.5.56", "0.5.56")
+    bridge = Mock()
+    bridge.publish_update_state.return_value = True
+
+    manager.tick(bridge)
+    payload = bridge.publish_update_state.call_args.args[0]
+    assert payload["available"] is False
+    assert payload["latest_version"] == "0.5.56"
+    assert payload["status"] == "idle"
+    assert payload["error"] is None
+    assert payload["installation_status"] == "completed"
+    assert payload["installation_error"] is None
+    assert manager.worker.load()["state"] == "completed"
+
+    # After a restart the persisted check timestamp still beats the old worker.
+    restarted = UpdateManager(tmp_path, "0.5.56")
+    restarted.known = True
+    assert restarted._payload()["status"] == "idle"
+
+
+def test_newer_worker_result_wins_and_check_failures_remain_visible(tmp_path):
+    manager = UpdateManager(tmp_path, "0.5.56")
+    manager.known = True
+    manager.checked = "2026-10-04T00:00:00+00:00"
+    manager.latest = "0.5.56"
+    manager.worker.save({
+        "state": "completed",
+        "error": None,
+        "updated_at": "2026-10-04T00:01:00+00:00",
+    })
+    assert manager._payload()["status"] == "completed"
+
+    # A subsequent check failure reports the check error, not installation.
+    manager._status = "error"
+    manager._status_error = "HTTP Error 500"
+    assert manager._payload()["status"] == "error"
+    assert manager._payload()["error"] == "HTTP Error 500"
+
+    # A later successful check supersedes even an old failed install,
+    # without discarding the installation failure from diagnostics.
+    manager.worker.save({
+        "state": "error",
+        "error": "Install failed",
+        "updated_at": "2026-10-04T00:01:00+00:00",
+    })
+    manager.checked = "2026-10-04T00:02:00+00:00"
+    manager._status = "idle"
+    manager._status_error = None
+    payload = manager._payload()
+    assert payload["status"] == "idle"
+    assert payload["installation_status"] == "error"
+    assert payload["installation_error"] == "Install failed"
+
+
+def test_updater_discovery_keeps_separate_installation_diagnostics():
+    _, identity = _topics()
+    components = build_discovery_payload(
+        _config(), identity, version="0.5.57",
+    )["components"]
+    attrs = components["update_status"]["json_attributes_template"]
+    assert "installation_status" in attrs
+    assert "installation_error" in attrs
+    assert "checked_at" in attrs

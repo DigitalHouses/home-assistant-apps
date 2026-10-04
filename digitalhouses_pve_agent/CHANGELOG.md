@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.57
+
+- Fix stale `completed` (or `error`) install-worker results overriding a newer successful Check updates operation. When the installed version is current, the live status is `idle` with `update_available=off`, rather than falsely reporting that another installation just finished.
+- Compare persisted UTC check/worker timestamps, including after agent restarts. Preserve real in-progress install states and errors, and expose historical `installation_status`/`installation_error` separately in the update-status diagnostic attributes.
+- Cover current-version checks, persisted restart state, newer install results, and check failures with regression tests.
+
 ## 0.5.56
 
 - Align the UPS beeper capability binary sensor with actual MQTT Discovery of `switch.dh_pve_agent_ups_beeper`: require an ON command, an OFF command, NUT command credentials, and readable `ups.beeper.status` feedback.
