@@ -145,6 +145,17 @@ class UpdateManager:
     def _payload(self) -> dict[str, object]:
         worker = self._worker_status()
         worker_state = worker.get("state")
+        # A terminal install result is historical after a newer successful
+        # release check. Preserve it separately as installation_status, but
+        # do not label a fresh "no updates" check as a new installation.
+        worker_is_latest = True
+        if self.known and self.checked:
+            try:
+                checked_at = datetime.fromisoformat(self.checked)
+                updated_at = datetime.fromisoformat(str(worker.get("updated_at")))
+                worker_is_latest = updated_at > checked_at
+            except (TypeError, ValueError):
+                worker_is_latest = False
         if worker_state in BUSY_PHASES:
             status = worker_state
             error = worker.get("error")
@@ -152,7 +163,11 @@ class UpdateManager:
             status, error = self._status, self._status_error
         if self._checking and worker_state not in BUSY_PHASES:
             status, error = "checking", None
-        elif worker_state in {"completed", "error"} and self._status == "idle":
+        elif (
+            worker_state in {"completed", "error"}
+            and self._status == "idle"
+            and worker_is_latest
+        ):
             status, error = worker_state, worker.get("error")
         available = (
             (stable_version(self.latest) > stable_version(self.version))
@@ -165,6 +180,8 @@ class UpdateManager:
             "error": error,
             "checked_at": self.checked or None,
             "installed_version": self.version,
+            "installation_status": worker_state,
+            "installation_error": worker.get("error"),
         }
 
     def tick(self, bridge: object, *, check: bool = False, install: bool = False,
