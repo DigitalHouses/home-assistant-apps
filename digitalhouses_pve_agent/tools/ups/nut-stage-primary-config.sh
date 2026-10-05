@@ -42,19 +42,15 @@ if [[ ! "$ups_name" =~ ^[A-Za-z0-9_.-]+$ ]]; then echo "ERROR: unsafe UPS name" 
 if [[ ! "$driver" =~ ^[A-Za-z0-9_.-]+$ ]]; then echo "ERROR: unsafe driver name" >&2; exit 2; fi
 if [[ "$port" == *$'\n'* || "$port" == *$'\r'* ]]; then echo "ERROR: unsafe port value" >&2; exit 2; fi
 if [[ -n "$ondelay" && ! "$ondelay" =~ ^[0-9]+$ ]]; then echo "ERROR: --ondelay must be a non-negative integer" >&2; exit 2; fi
-if [[ ! -t 0 || ! -r /dev/tty ]]; then echo "ERROR: interactive terminal required for password input" >&2; exit 1; fi
-
-read -r -s -p "dh_primary_user password: " password </dev/tty
-printf '\n' >/dev/tty
-read -r -s -p "Repeat password: " password_repeat </dev/tty
-printf '\n' >/dev/tty
-
-if [[ -z "$password" ]]; then echo "ERROR: empty password is not allowed" >&2; exit 1; fi
-if [[ "$password" != "$password_repeat" ]]; then echo "ERROR: passwords do not match" >&2; exit 1; fi
-if [[ "$password" == *$'\n'* || "$password" == *$'\r'* || "$password" =~ [[:space:]] ]]; then
-    echo "ERROR: password must not contain whitespace/newlines because it is used in a NUT MONITOR directive" >&2
+if ! command -v openssl >/dev/null 2>&1; then
+    echo "ERROR: openssl is required to generate the local PRIMARY service credential" >&2
     exit 1
 fi
+
+# Generate a service credential instead of accepting it on the command line.
+# The secret is written only to the private staging files and is never printed.
+password="$(openssl rand -hex 24)"
+password_repeat="$password"
 
 mkdir -p "$output_dir"
 chmod 0700 "$output_dir"
