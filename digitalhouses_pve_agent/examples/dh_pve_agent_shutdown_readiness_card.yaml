@@ -5,6 +5,10 @@ cards:
       {% set readiness = 'sensor.dh_pve_agent_ups_shutdown_readiness' %}
       {% set status = states(readiness) %}
       {% set issues = state_attr(readiness, 'issues') or [] %}
+      {% set policy_details =
+          'nut_role_not_primary' in issues or
+          'nut_monitor_not_active' in issues or
+          'shutdown_disabled' in issues %}
 
       {% if status == 'ok' %}
       ## 🟢 Готовность shutdown: готово
@@ -13,42 +17,50 @@ cards:
       {% elif status == 'warning' %}
       ## 🟠 Готовность shutdown: требуется настройка
 
-      Автоматическое выключение PVE от UPS настроено не полностью.
+      Автоматическое PVE от UPS настроено не полностью.
 
       ### Что проверить
 
-      {% for issue in issues %}
-      {% if issue == 'shutdown_policy_unavailable' %}
-      **⚠️ Конфигурация shutdown недоступна**  
+      {% if 'nut_unavailable' in issues %}
+      **🔴 Связь с UPS через NUT**  
+      UPS сейчас не читается. Проверьте подключение, driver, имя UPS и работу NUT server.
+      {% endif %}
+
+      {% if 'shutdown_policy_unavailable' in issues %}
+      **⚠️ Конфигурация shutdown**  
       Агент не смог прочитать текущую политику NUT. Проверьте конфигурацию NUT и выполните read-only preflight.
-      {% elif issue == 'nut_unavailable' %}
-      **⚠️ UPS не читается через NUT**  
-      Проверьте подключение UPS, driver, имя UPS и работу NUT server.
-      {% elif issue == 'shutdown_policy_not_enabled' %}
-      **⚠️ Политика автоматического shutdown ещё не включена**  
-      Завершите настройку NUT PRIMARY и финальную проверку shutdown policy.
-      {% elif issue == 'nut_role_not_primary' %}
-      **⚠️ Роль NUT не настроена**  
-      Этот PVE не определён как PRIMARY для UPS. Проверьте локальную запись MONITOR.
-      {% elif issue == 'nut_monitor_not_active' %}
-      **⚠️ Мониторинг UPS не запущен**  
-      NUT monitor сейчас не активен. Запускайте его только после проверки driver, PRIMARY и shutdown policy.
-      {% elif issue == 'shutdown_disabled' %}
-      **⚠️ Автоматическое выключение PVE отключено**  
-      NUT пока не может выполнить реальный shutdown хоста. Проверьте SHUTDOWNCMD после безопасного commissioning.
-      {% elif issue == 'power_restore_delay_unreadable' %}
-      **⚠️ Не определена задержка восстановления питания**  
-      Агент не видит `ondelay` выбранного UPS. Проверьте поддержку и настройку параметра в driver.
-      {% elif issue == 'shutdown_budget_unavailable' %}
-      **⚠️ Не удалось рассчитать время на выключение гостей**  
-      Проверьте lifecycle VM/LXC и параметры `startup/order/down` в PVE.
-      {% elif issue == 'previous_host_shutdown_unclean' %}
-      **⚠️ Предыдущий shutdown PVE завершился некорректно**  
+      {% endif %}
+
+      {% if 'shutdown_policy_not_enabled' in issues or policy_details %}
+      **⚠️ Автоматический shutdown от UPS**  
+      {% if 'nut_role_not_primary' in issues %}• Роль NUT: этот PVE ещё не настроен как **PRIMARY**.  
+      {% endif %}{% if 'nut_monitor_not_active' in issues %}• Мониторинг UPS: **NUT monitor не запущен**.  
+      {% endif %}{% if 'shutdown_disabled' in issues %}• Выключение PVE: **shutdown command ещё не включён**.  
+      {% endif %}{% if not policy_details %}• Shutdown policy ещё не активирована.  
+      {% endif %}
+      Завершите безопасный commissioning по инструкции ниже. Не включайте shutdown вслепую до проверки driver, UPS и цепочки гостей.
+      {% endif %}
+
+      {% if 'power_restore_delay_unreadable' in issues %}
+      **⚠️ Восстановление питания**  
+      Агент не видит задержку включения UPS после возврата сети (`ondelay`). Проверьте поддержку и настройку параметра выбранным driver.
+      {% endif %}
+
+      {% if 'shutdown_budget_unavailable' in issues %}
+      **⚠️ Время на выключение гостей**  
+      Не удалось рассчитать shutdown budget. Проверьте lifecycle VM/LXC и параметры `startup/order/down` в PVE.
+      {% endif %}
+
+      {% if 'previous_host_shutdown_unclean' in issues %}
+      **🔴 Предыдущий shutdown PVE завершился некорректно**  
       Проверьте историю остановки и system journal до следующего теста UPS shutdown.
-      {% elif issue == 'previous_host_shutdown_unknown' %}
+      {% elif 'previous_host_shutdown_unknown' in issues %}
       **⚠️ Результат предыдущего shutdown не подтверждён**  
       В истории недостаточно данных, чтобы подтвердить корректное выключение PVE.
-      {% elif issue.startswith('vm:') or issue.startswith('lxc:') %}
+      {% endif %}
+
+      {% for issue in issues %}
+      {% if issue.startswith('vm:') or issue.startswith('lxc:') %}
       {% set p = issue.split(':') %}
       {% set kind = 'VM' if p[0] == 'vm' else 'LXC' %}
       {% set guest_id = p[1] if p | length > 1 else '?' %}
@@ -66,12 +78,32 @@ cards:
       **⚠️ {{ kind }} {{ guest_id }} · требуется проверка shutdown**  
       Подробности сохранены в диагностике агента.
       {% endif %}
-      {% else %}
-      **⚠️ Требуется дополнительная проверка**  
-      Агент обнаружил состояние, для которого нет пользовательского пояснения в этой версии карточки.
+      {% endif %}
+      {% endfor %}
+
+      {% set known = [
+          'shutdown_policy_unavailable',
+          'nut_unavailable',
+          'shutdown_policy_not_enabled',
+          'nut_role_not_primary',
+          'nut_monitor_not_active',
+          'shutdown_disabled',
+          'power_restore_delay_unreadable',
+          'shutdown_budget_unavailable',
+          'previous_host_shutdown_unclean',
+          'previous_host_shutdown_unknown'
+      ] %}
+      {% set ns = namespace(unknown=false) %}
+      {% for issue in issues %}
+        {% if issue not in known and not issue.startswith('vm:') and not issue.startswith('lxc:') %}
+          {% set ns.unknown = true %}
+        {% endif %}
+      {% endfor %}
+      {% if ns.unknown %}
+      **⚠️ Дополнительная диагностика**  
+      Агент обнаружил состояние, для которого в этой версии карточки ещё нет пользовательского пояснения. Откройте инструкцию и read-only preflight.
       {% endif %}
 
-      {% endfor %}
       {% elif status == 'skip' %}
       ## ⚪ Готовность shutdown: UPS/NUT не контролируется
 
@@ -89,11 +121,9 @@ cards:
       Агент не исправляет NUT/PVE автоматически. Инструкция объясняет driver, PRIMARY, безопасный commissioning, проверку и финальное включение shutdown.
 
   - type: entities
-    title: Диагностика shutdown
+    title: Данные shutdown
     show_header_toggle: false
     entities:
-      - entity: sensor.dh_pve_agent_ups_shutdown_readiness
-        name: Технический статус readiness
       - entity: sensor.dh_pve_agent_ups_guest_shutdown_budget
         name: Shutdown budget VM/LXC
       - entity: sensor.dh_pve_agent_previous_shutdown
