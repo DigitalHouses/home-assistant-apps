@@ -73,7 +73,7 @@ if [[ -r /etc/nut/ups.conf ]]; then
     }' /etc/nut/ups.conf || true
 fi
 
-section "DigitalHouses PVE Agent preflight"
+section "DigitalHouses PVE Agent preflight (optional)"
 APP=/opt/digitalhouses/digitalhouses_pve_agent
 CFG=/etc/digitalhouses_pve_agent/digitalhouses_pve_agent.conf
 STATE=/var/lib/digitalhouses_pve_agent
@@ -81,7 +81,8 @@ if [[ -x "$APP/.venv/bin/python" && -r "$CFG" ]]; then
     PYTHONPATH="$APP" "$APP/.venv/bin/python" -m app.main \
         --config "$CFG" --state-dir "$STATE" --ups-policy-preflight || true
 else
-    echo "Agent runtime/config not available; preflight skipped"
+    echo "DigitalHouses PVE Agent is not installed/configured; Agent preflight skipped."
+    echo "Host/NUT/UPS audit above is still valid."
 fi
 
 echo
