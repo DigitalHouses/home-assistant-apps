@@ -66,11 +66,36 @@ else
     echo "/etc/nut/upsmon.conf: not readable"
 fi
 
-section "Configured restore delay"
+section "Power restore delay"
+runtime_delay_found=0
+if have upsc; then
+    while IFS= read -r ups_name; do
+        [[ -n "$ups_name" ]] || continue
+        start_delay="$(upsc "$ups_name@127.0.0.1" ups.delay.start 2>/dev/null || true)"
+        if [[ -n "$start_delay" ]]; then
+            printf 'runtime %s ups.delay.start=%s\n' "$ups_name" "$start_delay"
+            runtime_delay_found=1
+        fi
+    done < <(upsc -l 127.0.0.1 2>/dev/null || true)
+fi
+if [[ "$runtime_delay_found" -eq 0 ]]; then
+    echo "runtime ups.delay.start: not available"
+fi
+
+configured_delay_found=0
 if [[ -r /etc/nut/ups.conf ]]; then
-    awk '/^[[:space:]]*#/ {next} /^[[:space:]]*ondelay[[:space:]]*=/ {
-        line=$0; sub(/^[[:space:]]*/, "", line); print line
-    }' /etc/nut/ups.conf || true
+    while IFS= read -r line; do
+        [[ -n "$line" ]] || continue
+        printf 'configured %s\n' "$line"
+        configured_delay_found=1
+    done < <(
+        awk '/^[[:space:]]*#/ {next} /^[[:space:]]*ondelay[[:space:]]*=/ {
+            line=$0; sub(/^[[:space:]]*/, "", line); print line
+        }' /etc/nut/ups.conf
+    )
+fi
+if [[ "$configured_delay_found" -eq 0 ]]; then
+    echo "configured ondelay: not set"
 fi
 
 section "DigitalHouses PVE Agent preflight (optional)"
