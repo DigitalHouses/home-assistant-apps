@@ -90,5 +90,7 @@ def test_shutdown_card_links_to_setup_guide_and_uses_human_guidance():
     assert "UPS_SHUTDOWN_SETUP.md" in text
     assert "требуется настройка" in text
     assert "Что проверить" in text
-    assert "Роль NUT" in text
+    assert "Главный сервер UPS" in text
     assert "Автоматическое выключение PVE" in text
+    assert "{{ issue }}" not in text
+    assert "Безопасное выключение PVE" in text
