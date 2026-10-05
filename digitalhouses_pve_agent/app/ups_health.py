@@ -68,7 +68,7 @@ def ups_problem_observations(
         UpsProblemObservation(
             problem_id="replace_battery",
             active=snapshot.replace_battery,
-            severity="warning",
+            severity="critical",
         ),
         UpsProblemObservation(
             problem_id="bypass",

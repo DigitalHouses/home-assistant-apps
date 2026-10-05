@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.58
+
+- Treat NUT `RB` / Replace Battery as a critical UPS problem while preserving edge-based machine Events (`replace_battery_started` / `replace_battery_cleared`).
+- Add an hourly Home Assistant notification reminder while the canonical Replace Battery problem remains active; reminders stop automatically when the UPS clears the condition and do not fabricate repeated machine Events.
+- Make UPS shutdown readiness actionable with human-readable HA guidance, a dedicated UPS/NUT commissioning guide, and safe read-only/package/staging helper tools that never perform FSD, arbitrary UPS output commands or a live shutdown test.
+
 ## 0.5.57
 
 - Fix stale `completed` (or `error`) install-worker results overriding a newer successful Check updates operation. When the installed version is current, the live status is `idle` with `update_available=off`, rather than falsely reporting that another installation just finished.

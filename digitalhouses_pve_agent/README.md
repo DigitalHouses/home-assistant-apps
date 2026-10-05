@@ -10,7 +10,7 @@ Native Linux agent for **Proxmox VE 8.x** that publishes host, CPU, memory, stor
 
 The canonical product and runtime identity is **DigitalHouses PVE Agent** / `digitalhouses_pve_agent`: systemd service `digitalhouses_pve_agent.service`, filesystem roots under `/opt/digitalhouses/digitalhouses_pve_agent`, `/etc/digitalhouses_pve_agent` and `/var/lib/digitalhouses_pve_agent`, MQTT base `DigitalHouses/Global/digitalhouses_pve_agent/<instance>`, and Home Assistant entity prefix `dh_pve_agent_*`. Version 0.5.30 performs the corrected one-time controlled migration from the former `dh_pve_app` / `dh_app_pve_*` runtime, including deterministic cleanup of retained data owned by the legacy MQTT instance namespace.
 
-Current source release: `VERSION` is `0.5.57`.
+Current source release: `VERSION` is `0.5.58`.
 
 ## Home Assistant dashboard
 
@@ -171,7 +171,7 @@ UPS controls that depend on hardware capabilities have stable diagnostic facts: 
 
 ## UPS status, charger and battery semantics
 
-Canonical UPS status is derived from NUT tokens into stable machine states such as `online`, `on_battery`, `boost`, `trim`, `bypass`, `overload`, `low_battery` and `replace_battery`. Raw NUT status tokens remain available diagnostically.
+Canonical UPS status is derived from NUT tokens into stable machine states such as `online`, `on_battery`, `boost`, `trim`, `bypass`, `overload`, `low_battery` and `replace_battery`. Raw NUT status tokens remain available diagnostically. NUT `RB` / `replace_battery` is a critical UPS problem. The machine Event remains edge-based (`replace_battery_started` / `replace_battery_cleared`); the bundled local Home Assistant notification packages add a separate hourly reminder while `binary_sensor.dh_pve_agent_ups_replace_battery_problem` remains ON.
 
 Canonical charger state is exposed as `sensor.dh_pve_agent_ups_battery_charger_status` with machine values `charging`, `discharging`, `floating`, `resting`, `idle` or `unknown`. `battery.charger.status` has priority. `CHRG`/`DISCHRG` are charger fallback evidence only when a direct charger status is not available; a present but unknown direct value is not overridden by token fallback.
 
@@ -338,6 +338,12 @@ Supported controls are capability-driven:
 
 Quick and Deep schedules are independent. A scheduled test can temporarily set its configured beeper mode; the original physical beeper state is restored after completion, failure or stop. Manual tests use the current beeper state and do not apply a temporary override.
 
+## UPS / NUT setup guide
+
+For first-time UPS/NUT commissioning, driver selection, PRIMARY setup, Agent credentials, safe validation and final shutdown activation, see [UPS / NUT shutdown setup](docs/UPS_SHUTDOWN_SETUP.md).
+
+The commissioning helpers live in `tools/ups/`. The long-running Agent remains read-only with respect to `/etc/nut`.
+
 ## Read-only preflight
 
 A non-destructive UPS/NUT/PVE safety report is available without MQTT:
@@ -358,7 +364,7 @@ Production install/update is release-tag only. Version 0.5.30 is the corrected c
 For the canonical runtime, install/update/reinstall never clears the current canonical MQTT namespace. Canonical retained MQTT cleanup is owned exclusively by the supported uninstaller.
 
 ```bash
-TAG=digitalhouses_pve_agent-v0.5.57
+TAG=digitalhouses_pve_agent-v0.5.58
 DIGITALHOUSES_SOURCE_REF="$TAG" \
   bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$TAG/digitalhouses_pve_agent/install.sh")
 ```

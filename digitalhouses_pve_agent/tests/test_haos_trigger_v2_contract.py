@@ -100,6 +100,10 @@ def test_ui_open_and_cancel_wait_for_app_owned_draft_ack_before_state_transition
 def test_notification_package_uses_simple_event_trigger_flow():
     assert NOTIFICATION_PACKAGE.exists()
     text = NOTIFICATION_PACKAGE.read_text(encoding="utf-8")
+    live_text = text.split(
+        "\n    - id: dh_pve_agent_replace_battery_reminder",
+        1,
+    )[0]
 
     for token in (
         "event.dh_pve_agent_diagnostic",
@@ -126,7 +130,11 @@ def test_notification_package_uses_simple_event_trigger_flow():
         "binary_sensor.bs_global_system_boot_completed",
         "time_pattern",
     ):
-        assert forbidden not in text
+        assert forbidden not in live_text
+
+    assert "id: dh_pve_agent_replace_battery_reminder" in text
+    assert "trigger: time_pattern" in text
+    assert "binary_sensor.dh_pve_agent_ups_replace_battery_problem" in text
 
 
 def test_russian_notification_package_uses_public_direct_action():

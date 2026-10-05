@@ -732,7 +732,8 @@ dh_pve_agent_notification_local_package:
               sequence:
                 - action: persistent_notification.create
                   data:
-                    title: "🔋⚠️ UPS: требуется замена батареи"
+                    notification_id: dh_pve_agent_ups_replace_battery
+                    title: "🔋🔴 UPS: требуется замена батареи"
                     message: >-
                       UPS сообщил REPLACE BATTERY · заряд: {{ trigger.to_state.attributes.battery_charge_percent | default('—', true) }}% · напряжение батареи: {{ trigger.to_state.attributes.battery_voltage_v | default('—', true) }} В.
 
@@ -744,6 +745,7 @@ dh_pve_agent_notification_local_package:
               sequence:
                 - action: persistent_notification.create
                   data:
+                    notification_id: dh_pve_agent_ups_replace_battery
                     title: "🔋✅ UPS: предупреждение о замене батареи снято"
                     message: >-
                       Заряд: {{ trigger.to_state.attributes.battery_charge_percent | default('—', true) }}% · напряжение батареи: {{ trigger.to_state.attributes.battery_voltage_v | default('—', true) }} В.
@@ -987,3 +989,24 @@ dh_pve_agent_notification_local_package:
                     title: "🔋⚙️ Конфигурация UPS Trigger изменена"
                     message: >-
                       Заряд: {{ trigger.to_state.attributes.old_values.shutdown_battery_charge_threshold_percent }}% → {{ trigger.to_state.attributes.new_values.shutdown_battery_charge_threshold_percent }}% · дополнительный запас: {{ trigger.to_state.attributes.old_values.runtime_reserve_seconds }} с → {{ trigger.to_state.attributes.new_values.runtime_reserve_seconds }} с.
+
+    - id: dh_pve_agent_replace_battery_reminder
+      alias: DH PVE Agent · Напоминание о замене батареи
+      mode: single
+
+      triggers:
+        - trigger: time_pattern
+          minutes: "0"
+
+      conditions:
+        - condition: state
+          entity_id: binary_sensor.dh_pve_agent_ups_replace_battery_problem
+          state: "on"
+
+      actions:
+        - action: persistent_notification.create
+          data:
+            notification_id: dh_pve_agent_ups_replace_battery
+            title: "🔋🔴 UPS: батарея всё ещё требует замены"
+            message: >-
+              {% set charge = states('sensor.dh_pve_agent_ups_battery_charge') %}{% set voltage = states('sensor.dh_pve_agent_ups_battery_voltage') %}REPLACE BATTERY остаётся активным · заряд: {{ '—' if charge in ['unknown', 'unavailable', 'none', ''] else charge }}% · напряжение батареи: {{ '—' if voltage in ['unknown', 'unavailable', 'none', ''] else voltage }} В. Напоминание повторяется каждый час, пока UPS не снимет это состояние.
