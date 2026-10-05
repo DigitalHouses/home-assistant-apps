@@ -338,6 +338,12 @@ Supported controls are capability-driven:
 
 Quick and Deep schedules are independent. A scheduled test can temporarily set its configured beeper mode; the original physical beeper state is restored after completion, failure or stop. Manual tests use the current beeper state and do not apply a temporary override.
 
+## UPS / NUT setup guide
+
+For first-time UPS/NUT commissioning, driver selection, PRIMARY setup, Agent credentials, safe validation and final shutdown activation, see [UPS / NUT shutdown setup](docs/UPS_SHUTDOWN_SETUP.md).
+
+The commissioning helpers live in `tools/ups/`. The long-running Agent remains read-only with respect to `/etc/nut`.
+
 ## Read-only preflight
 
 A non-destructive UPS/NUT/PVE safety report is available without MQTT:
