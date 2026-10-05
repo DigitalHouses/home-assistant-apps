@@ -34,9 +34,9 @@ A normal local PRIMARY installation is ready when all of the following are true:
 4. `nut-monitor.service` is active.
 5. `SHUTDOWNCMD` is a real host shutdown command, not the commissioning placeholder `/bin/true`.
 6. The selected UPS configuration exposes a readable restore delay (`ondelay`) when the driver/device supports it.
-7. DigitalHouses PVE Agent uses the same UPS name and PRIMARY credentials.
+7. If DigitalHouses PVE Agent is installed, it uses the same UPS name and PRIMARY credentials.
 8. Proxmox guest lifecycle settings (`onboot`, `startup: order=...,down=...`) describe the intended shutdown order and timeouts.
-9. The Agent read-only preflight reports no remaining blocking conditions.
+9. If DigitalHouses PVE Agent is installed, its read-only preflight reports no remaining blocking conditions.
 
 A warning in Home Assistant is therefore a request to inspect one of these conditions, not a request to change an Agent setting blindly.
 
@@ -157,7 +157,9 @@ upsc ups@127.0.0.1
 
 Replace `ups` with the selected UPS name.
 
-## 6. Configure DigitalHouses PVE Agent
+## 6. Configure DigitalHouses PVE Agent (optional)
+
+This section is only for hosts where DigitalHouses PVE Agent is installed. If the Agent is not installed, skip this section; NUT and Proxmox shutdown configuration work independently.
 
 Merge the values from `digitalhouses_pve_agent-ups.ini` into:
 
@@ -226,7 +228,7 @@ Apply that change manually to the reviewed `upsmon.conf`, then enable/start the 
 
 This step is intentionally not automated by the commissioning toolkit because it changes the host from monitoring-only to an active emergency shutdown path.
 
-Run the Agent preflight again.
+If DigitalHouses PVE Agent is installed, run its preflight again. Otherwise continue directly to validation.
 
 ## 9. Validate without a live shutdown
 
@@ -236,7 +238,7 @@ Repeat the read-only audit:
 bash <(curl -fsSL https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/main/digitalhouses_pve_agent/tools/ups/nut-readiness-audit.sh)
 ```
 
-Confirm the selected UPS is readable, NUT services have expected state, MONITOR role is PRIMARY, Agent preflight is ready, Home Assistant reports readiness as ready, and the guest shutdown chain/budget match PVE configuration.
+Confirm the selected UPS is readable, NUT services have expected state, and MONITOR role is PRIMARY. If DigitalHouses PVE Agent is installed, also confirm its preflight is ready and the Home Assistant shutdown chain/budget match PVE configuration.
 
 A green readiness result proves internal configuration consistency. It is not proof that a physical power-loss cycle was tested.
 
