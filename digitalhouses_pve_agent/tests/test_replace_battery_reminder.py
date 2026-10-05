@@ -37,8 +37,9 @@ def test_local_packages_repeat_replace_battery_notification_hourly() -> None:
         assert "id: replace_battery_cleared" in text
         assert "trigger: time_pattern" in text
         assert 'minutes: "0"' in text
-        assert "id: replace_battery_reminder" in text
+        assert "id: dh_pve_agent_replace_battery_reminder" in text
         assert "binary_sensor.dh_pve_agent_ups_replace_battery_problem" in text
         assert "sensor.dh_pve_agent_ups_battery_charge" in text
         assert "sensor.dh_pve_agent_ups_battery_voltage" in text
-        assert text.count("replace_battery_reminder") == 2
+        assert "notification_id: dh_pve_agent_ups_replace_battery" in text
+        assert text.count("trigger: time_pattern") == 1

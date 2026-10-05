@@ -383,6 +383,22 @@ Do not mix startup reconciliation into every live-event branch.
 
 Startup reconciliation must still respect the Contract Data Policy and must not turn unknown state into a fabricated healthy state.
 
+### Persistent-condition reminders
+
+A repeated reminder for an unresolved condition is **not** a repeated machine Event.
+
+Keep the live Event automation unchanged. If a critical retained state requires periodic reminders, use a separate local automation:
+
+```text
+live notification automation
+    ← transient machine Events
+
+periodic reminder automation
+    ← timer + authoritative retained current state
+```
+
+The reminder automation checks the current retained state and calls the final delivery action directly. It must stop naturally when that state clears. Do not synthesize duplicate machine Events merely to repeat a notification.
+
 ---
 
 ## 16. Public vs local responsibility
