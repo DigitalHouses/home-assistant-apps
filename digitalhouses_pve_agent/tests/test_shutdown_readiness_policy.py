@@ -67,10 +67,21 @@ def test_broken_production_policy_is_reported_as_warning():
     assert "nut_monitor_not_active" in readiness["issues"]
 
 
-def test_missing_power_restore_delay_is_still_reported():
+def test_live_ups_restore_delay_satisfies_readiness_without_ondelay():
     issues = shutdown_policy_issues(
         _policy(power_restore_delay_seconds=None),
         nut_available=True,
+        ups_start_delay_seconds=300,
+    )
+
+    assert issues == []
+
+
+def test_missing_power_restore_delay_is_still_reported_when_both_sources_missing():
+    issues = shutdown_policy_issues(
+        _policy(power_restore_delay_seconds=None),
+        nut_available=True,
+        ups_start_delay_seconds=None,
     )
 
     assert issues == ["power_restore_delay_unreadable"]
