@@ -49,6 +49,8 @@ def test_staging_tool_never_applies_nut_configuration_or_restarts_services():
     assert "openssl rand -hex 24" in text
     assert 'output_dir="$(realpath -m -- "$output_dir")"' in text
     assert '[[ "$output_dir" != /root/* ]]' in text
+    assert "staging directory must be empty" in text
+    assert 'find "$output_dir" -mindepth 1 -maxdepth 1' in text
     assert "systemctl " not in text
     assert "apt-get " not in text
 
