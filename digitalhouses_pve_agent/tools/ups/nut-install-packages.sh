@@ -10,7 +10,7 @@ Usage:
   nut-install-packages.sh --transport usb|snmp [--no-update]
 
 Installs NUT packages only.
-It does not write /etc/nut and does not start/restart NUT services.
+It does not write /etc/nut and does not invoke service start/restart commands.\nPackage post-install scripts may still initialize units according to Debian policy.
 EOF
 }
 
@@ -37,7 +37,7 @@ if [[ "$transport" == "snmp" ]]; then packages+=(nut-snmp); fi
 echo "=== DigitalHouses PVE Agent · install NUT packages ==="
 echo "Transport: $transport"
 printf 'Packages:'; printf ' %s' "${packages[@]}"; printf '\n'
-echo "No NUT configuration or service state will be changed by this helper."
+echo "This helper does not write NUT configuration or invoke service start/restart commands."\necho "Debian package post-install scripts may still initialize units according to package policy."
 
 if [[ "$do_update" -eq 1 ]]; then apt-get update; fi
 DEBIAN_FRONTEND=noninteractive apt-get install -y "${packages[@]}"
