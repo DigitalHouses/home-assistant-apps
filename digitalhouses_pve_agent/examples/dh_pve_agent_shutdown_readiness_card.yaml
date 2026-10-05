@@ -105,3 +105,5 @@ content: |
 
   {{ ns.sequence_parts | join(' → ') }}
 
+  📖 [Инструкция по настройке UPS/NUT и безопасного shutdown PVE](https://github.com/DigitalHouses/home-assistant-apps/blob/main/digitalhouses_pve_agent/docs/UPS_SHUTDOWN_SETUP.md)
+
