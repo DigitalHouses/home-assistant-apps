@@ -44,7 +44,7 @@ def test_shutdown_readiness_card_contains_no_legacy_public_entity_ids():
 def test_shutdown_readiness_card_keeps_compact_original_layout():
     text = _text()
 
-    assert text.startswith("type: markdown\ncontent: >\n")
+    assert text.startswith("type: markdown\ncontent: |\n")
     assert "### ⚙️ Конфигурация shutdown в PVE" in text
     assert "▶️ Гости (" in text
     assert "🖥️ PVE:" in text
@@ -54,6 +54,8 @@ def test_shutdown_readiness_card_keeps_compact_original_layout():
     assert "Параметры выключения" not in text
     assert "Последняя остановка PVE" not in text
     assert "Как настроить UPS, NUT" not in text
+    assert "<div" not in text
+    assert "</div>" not in text
 
 
 def test_shutdown_readiness_card_translates_machine_issues_for_people():
