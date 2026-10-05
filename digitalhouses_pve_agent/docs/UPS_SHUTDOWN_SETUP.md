@@ -24,6 +24,43 @@ The helper scripts in `tools/ups/` are commissioning tools:
 
 None of these scripts issues FSD, switches UPS output off, runs arbitrary `upscmd`, or performs a live shutdown test.
 
+## Get the commissioning tools from GitHub
+
+This guide may be opened directly on GitHub, so it must not assume that the helper scripts already exist under the installed Agent directory.
+
+Download the three helpers once into a private root-owned working directory:
+
+```bash
+clear
+
+bash <<'BASH'
+set -euo pipefail
+
+REF=main
+TOOLS=/root/digitalhouses-pve-ups-tools
+BASE="https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/${REF}/digitalhouses_pve_agent/tools/ups"
+
+install -d -m 0700 "$TOOLS"
+
+for script in \
+  nut-readiness-audit.sh \
+  nut-install-packages.sh \
+  nut-stage-primary-config.sh
+do
+  curl -fsSL "$BASE/$script" -o "$TOOLS/$script"
+  chmod 0700 "$TOOLS/$script"
+  bash -n "$TOOLS/$script"
+done
+
+echo "UPS commissioning tools: $TOOLS"
+echo "DONE"
+BASH
+
+echo "========== TERMINAL STAYS OPEN =========="
+```
+
+When reading the guide from GitHub `main`, keep `REF=main`. When following a published release tag, set `REF` to that exact tag instead. The commands below use `/root/digitalhouses-pve-ups-tools` and therefore do not depend on whether a particular Agent installation already contains `tools/ups/`.
+
 ## What "ready" means
 
 A normal local PRIMARY installation is ready when all of the following are true:
@@ -45,7 +82,7 @@ A warning in Home Assistant is therefore a request to inspect one of these condi
 On the Proxmox host:
 
 ```bash
-bash /opt/digitalhouses/digitalhouses_pve_agent/tools/ups/nut-readiness-audit.sh
+bash /root/digitalhouses-pve-ups-tools/nut-readiness-audit.sh
 ```
 
 The audit does not modify NUT or PVE. It reports PVE/NUT package state, NUT mode, configured UPS names, service state, USB discovery when available, a password-safe subset of MONITOR configuration, and the Agent preflight.
@@ -55,13 +92,13 @@ The audit does not modify NUT or PVE. It reports PVE/NUT package state, NUT mode
 For a directly connected USB UPS:
 
 ```bash
-bash /opt/digitalhouses/digitalhouses_pve_agent/tools/ups/nut-install-packages.sh --transport usb
+bash /root/digitalhouses-pve-ups-tools/nut-install-packages.sh --transport usb
 ```
 
 For an SNMP/network UPS:
 
 ```bash
-bash /opt/digitalhouses/digitalhouses_pve_agent/tools/ups/nut-install-packages.sh --transport snmp
+bash /root/digitalhouses-pve-ups-tools/nut-install-packages.sh --transport snmp
 ```
 
 Use `--no-update` only when package metadata has already been refreshed. The helper does not create `/etc/nut` configuration and does not itself invoke service start/restart commands. Debian package post-install scripts may still initialize units according to package policy, so check service state with the read-only audit after installation.
@@ -95,7 +132,7 @@ The staging helper never writes to `/etc/nut`. Its output directory must resolve
 Example:
 
 ```bash
-bash /opt/digitalhouses/digitalhouses_pve_agent/tools/ups/nut-stage-primary-config.sh \
+bash /root/digitalhouses-pve-ups-tools/nut-stage-primary-config.sh \
   --ups-name ups \
   --driver usbhid-ups \
   --port auto
@@ -104,7 +141,7 @@ bash /opt/digitalhouses/digitalhouses_pve_agent/tools/ups/nut-stage-primary-conf
 If the selected driver/device supports a known restore delay, add it explicitly:
 
 ```bash
-bash /opt/digitalhouses/digitalhouses_pve_agent/tools/ups/nut-stage-primary-config.sh \
+bash /root/digitalhouses-pve-ups-tools/nut-stage-primary-config.sh \
   --ups-name ups \
   --driver usbhid-ups \
   --port auto \
@@ -231,7 +268,7 @@ Run the Agent preflight again.
 Repeat the read-only audit:
 
 ```bash
-bash /opt/digitalhouses/digitalhouses_pve_agent/tools/ups/nut-readiness-audit.sh
+bash /root/digitalhouses-pve-ups-tools/nut-readiness-audit.sh
 ```
 
 Confirm the selected UPS is readable, NUT services have expected state, MONITOR role is PRIMARY, Agent preflight is ready, Home Assistant reports readiness as ready, and the guest shutdown chain/budget match PVE configuration.
