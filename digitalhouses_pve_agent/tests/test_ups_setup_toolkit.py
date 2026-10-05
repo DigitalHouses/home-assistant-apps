@@ -85,12 +85,13 @@ def test_guide_documents_safe_commissioning_before_production_activation():
     assert "does not rewrite" in text
 
 
-def test_shutdown_card_links_to_setup_guide_and_uses_human_guidance():
+def test_shutdown_card_keeps_compact_ui_and_uses_human_guidance():
     text = _read(CARD)
-    assert "UPS_SHUTDOWN_SETUP.md" in text
-    assert "требуется настройка" in text
-    assert "Что проверить" in text
-    assert "Главный сервер UPS" in text
-    assert "Автоматическое выключение PVE" in text
+    assert "### ⚙️ Конфигурация shutdown в PVE" in text
+    assert "Готовность shutdown" in text
+    assert "Цепочка выключения" in text
+    assert "NUT PRIMARY" in text
+    assert "служба monitor не запущена" in text
+    assert "команда выключения от UPS не активирована" in text
     assert "{{ issue }}" not in text
-    assert "Безопасное выключение PVE" in text
+    assert "UPS_SHUTDOWN_SETUP.md" not in text
