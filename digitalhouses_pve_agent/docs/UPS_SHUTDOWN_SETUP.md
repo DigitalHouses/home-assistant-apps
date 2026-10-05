@@ -94,24 +94,22 @@ Official NUT references:
 
 The staging helper never writes to `/etc/nut`. Its output directory must resolve below `/root` and must be empty, which keeps generated credentials and configuration away from live NUT files.
 
-Example:
+**Do not copy a generic driver/name/port blindly.** First use the read-only audit and NUT discovery output to identify the actual UPS name, driver and port for this host.
+
+Then run the staging helper with the verified values:
 
 ```bash
+UPS_NAME='<verified UPS name>'
+UPS_DRIVER='<verified NUT driver>'
+UPS_PORT='<verified port>'
+
 bash <(curl -fsSL https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/main/digitalhouses_pve_agent/tools/ups/nut-stage-primary-config.sh) \
-  --ups-name ups \
-  --driver usbhid-ups \
-  --port auto
+  --ups-name "$UPS_NAME" \
+  --driver "$UPS_DRIVER" \
+  --port "$UPS_PORT"
 ```
 
-If the selected driver/device supports a known restore delay, add it explicitly:
-
-```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/main/digitalhouses_pve_agent/tools/ups/nut-stage-primary-config.sh) \
-  --ups-name ups \
-  --driver usbhid-ups \
-  --port auto \
-  --ondelay 120
-```
+If the selected driver/device supports a verified restore delay, add `--ondelay <seconds>`. Do not invent an `ondelay` value merely to make readiness green.
 
 The helper generates a cryptographically random local `dh_primary_user` service credential. The secret is written only to the private staging files and is not printed to the terminal. It creates a private staging directory containing `nut.conf`, `ups.conf`, `upsd.conf`, `upsd.users`, `upsmon.conf`, and `digitalhouses_pve_agent-ups.ini`.
 
