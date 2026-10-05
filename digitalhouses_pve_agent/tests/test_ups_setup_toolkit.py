@@ -69,6 +69,7 @@ def test_audit_is_explicitly_read_only():
     assert "READ-ONLY" in text
     assert "--ups-policy-preflight" in text
     assert "nut-scanner -U" in text
+    assert "ups.delay.start" in text
     assert "systemctl restart" not in text
     assert "systemctl start" not in text
     assert "systemctl enable" not in text
