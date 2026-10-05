@@ -1,11 +1,99 @@
 type: vertical-stack
 cards:
+  - type: markdown
+    content: >-
+      {% set readiness = 'sensor.dh_pve_agent_ups_shutdown_readiness' %}
+      {% set status = states(readiness) %}
+      {% set issues = state_attr(readiness, 'issues') or [] %}
+
+      {% if status == 'ok' %}
+      ## 🟢 Готовность shutdown: готово
+
+      PVE и NUT готовы к автоматическому выключению по текущей конфигурации.
+      {% elif status == 'warning' %}
+      ## 🟠 Готовность shutdown: требуется настройка
+
+      Автоматическое выключение PVE от UPS настроено не полностью.
+
+      ### Что проверить
+
+      {% for issue in issues %}
+      {% if issue == 'shutdown_policy_unavailable' %}
+      **⚠️ Конфигурация shutdown недоступна**  
+      Агент не смог прочитать текущую политику NUT. Проверьте конфигурацию NUT и выполните read-only preflight.
+      {% elif issue == 'nut_unavailable' %}
+      **⚠️ UPS не читается через NUT**  
+      Проверьте подключение UPS, driver, имя UPS и работу NUT server.
+      {% elif issue == 'shutdown_policy_not_enabled' %}
+      **⚠️ Политика автоматического shutdown ещё не включена**  
+      Завершите настройку NUT PRIMARY и финальную проверку shutdown policy.
+      {% elif issue == 'nut_role_not_primary' %}
+      **⚠️ Роль NUT не настроена**  
+      Этот PVE не определён как PRIMARY для UPS. Проверьте локальную запись MONITOR.
+      {% elif issue == 'nut_monitor_not_active' %}
+      **⚠️ Мониторинг UPS не запущен**  
+      NUT monitor сейчас не активен. Запускайте его только после проверки driver, PRIMARY и shutdown policy.
+      {% elif issue == 'shutdown_disabled' %}
+      **⚠️ Автоматическое выключение PVE отключено**  
+      NUT пока не может выполнить реальный shutdown хоста. Проверьте SHUTDOWNCMD после безопасного commissioning.
+      {% elif issue == 'power_restore_delay_unreadable' %}
+      **⚠️ Не определена задержка восстановления питания**  
+      Агент не видит `ondelay` выбранного UPS. Проверьте поддержку и настройку параметра в driver.
+      {% elif issue == 'shutdown_budget_unavailable' %}
+      **⚠️ Не удалось рассчитать время на выключение гостей**  
+      Проверьте lifecycle VM/LXC и параметры `startup/order/down` в PVE.
+      {% elif issue == 'previous_host_shutdown_unclean' %}
+      **⚠️ Предыдущий shutdown PVE завершился некорректно**  
+      Проверьте историю остановки и system journal до следующего теста UPS shutdown.
+      {% elif issue == 'previous_host_shutdown_unknown' %}
+      **⚠️ Результат предыдущего shutdown не подтверждён**  
+      В истории недостаточно данных, чтобы подтвердить корректное выключение PVE.
+      {% elif issue.startswith('vm:') or issue.startswith('lxc:') %}
+      {% set p = issue.split(':') %}
+      {% set kind = 'VM' if p[0] == 'vm' else 'LXC' %}
+      {% set guest_id = p[1] if p | length > 1 else '?' %}
+      {% set result = p[2] if p | length > 2 else 'unknown' %}
+      {% if result == 'near_timeout' %}
+      **🟠 {{ kind }} {{ guest_id }} · shutdown близко к timeout**  
+      Фактическое выключение было близко к настроенному `down=`. Проверьте причину и при необходимости увеличьте timeout.
+      {% elif result == 'timeout' %}
+      **🔴 {{ kind }} {{ guest_id }} · превышен shutdown timeout**  
+      Гость достиг настроенного лимита времени. Проверьте его shutdown и значение `down=`.
+      {% elif result == 'forced' %}
+      **🔴 {{ kind }} {{ guest_id }} · потребовалось принудительное выключение**  
+      Проверьте корректность shutdown гостя до использования автоматического UPS shutdown.
+      {% else %}
+      **⚠️ {{ kind }} {{ guest_id }} · требуется проверка shutdown**  
+      Подробности сохранены в диагностике агента.
+      {% endif %}
+      {% else %}
+      **⚠️ Требуется дополнительная проверка**  
+      Агент обнаружил состояние, для которого нет пользовательского пояснения в этой версии карточки.
+      {% endif %}
+
+      {% endfor %}
+      {% elif status == 'skip' %}
+      ## ⚪ Готовность shutdown: UPS/NUT не контролируется
+
+      Для этого PVE проверка UPS shutdown сейчас не применяется.
+      {% else %}
+      ## ⚪ Готовность shutdown: нет данных
+
+      Проверьте доступность DigitalHouses PVE Agent.
+      {% endif %}
+
+      ---
+
+      📖 **[Как настроить UPS, NUT и безопасный shutdown PVE](https://github.com/DigitalHouses/home-assistant-apps/blob/main/digitalhouses_pve_agent/docs/UPS_SHUTDOWN_SETUP.md)**
+
+      Агент не исправляет NUT/PVE автоматически. Инструкция объясняет driver, PRIMARY, безопасный commissioning, проверку и финальное включение shutdown.
+
   - type: entities
-    title: Готовность выключения Proxmox
+    title: Диагностика shutdown
     show_header_toggle: false
     entities:
       - entity: sensor.dh_pve_agent_ups_shutdown_readiness
-        name: Готовность shutdown
+        name: Технический статус readiness
       - entity: sensor.dh_pve_agent_ups_guest_shutdown_budget
         name: Shutdown budget VM/LXC
       - entity: sensor.dh_pve_agent_previous_shutdown
@@ -18,19 +106,20 @@ cards:
       {% set entity = 'sensor.dh_pve_agent_previous_shutdown' %}
       **Последняя остановка PVE**
 
-      Причина (`shutdown_reason`):
+      Причина:
       **{{ state_attr(entity, 'shutdown_reason') | default('unknown', true) }}**
 
-      Результат (`shutdown_clean`):
-      **{{ 'clean' if state_attr(entity, 'shutdown_clean') == true else
-           'unclean' if state_attr(entity, 'shutdown_clean') == false else 'unknown' }}**
+      Результат:
+      **{{ 'корректно' if state_attr(entity, 'shutdown_clean') == true else
+           'некорректно' if state_attr(entity, 'shutdown_clean') == false else 'не подтверждён' }}**
 
-      Питание UPS (`ups_power`):
+      Питание UPS:
       **{{ state_attr(entity, 'ups_power') | default('unknown', true) }}**
 
   - type: markdown
     content: >-
-      `shutdown_budget` и `shutdown_readiness` рассчитывает DigitalHouses PVE Agent из текущей
-      конфигурации Proxmox и сохранённой истории shutdown. После изменения
-      параметров PVE используйте **Обновить**, чтобы приложение перечитало
-      конфигурацию и пересчитало budget.
+      `shutdown_budget` и `shutdown_readiness` рассчитывает DigitalHouses PVE Agent
+      из текущей конфигурации Proxmox/NUT и сохранённой истории shutdown.
+
+      После изменения параметров PVE/NUT используйте **Обновить**, чтобы агент
+      перечитал конфигурацию и пересчитал диагностику.
