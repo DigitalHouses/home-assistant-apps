@@ -252,6 +252,11 @@ dh_pve_agent_notification_local_package:
               - replace_battery_cleared
           id: replace_battery_cleared
 
+        # Hourly reminder while Replace Battery remains active
+        - trigger: time_pattern
+          minutes: "0"
+          id: replace_battery_reminder
+
         # Bypass started
         - trigger: event.received
           target:
@@ -732,9 +737,24 @@ dh_pve_agent_notification_local_package:
               sequence:
                 - action: persistent_notification.create
                   data:
-                    title: "🔋⚠️ UPS: replace battery"
+                    title: "🔋🔴 UPS: replace battery"
                     message: >-
                       UPS reported REPLACE BATTERY · charge: {{ trigger.to_state.attributes.battery_charge_percent | default('—', true) }}% · battery voltage: {{ trigger.to_state.attributes.battery_voltage_v | default('—', true) }} V.
+
+            # Hourly Replace Battery reminder
+            - conditions:
+                - condition: trigger
+                  id:
+                    - replace_battery_reminder
+                - condition: state
+                  entity_id: binary_sensor.dh_pve_agent_ups_replace_battery_problem
+                  state: "on"
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "🔋🔴 UPS: battery still requires replacement"
+                    message: >-
+                      {% set charge = states('sensor.dh_pve_agent_ups_battery_charge') %}{% set voltage = states('sensor.dh_pve_agent_ups_battery_voltage') %}REPLACE BATTERY remains active · charge: {{ '—' if charge in ['unknown', 'unavailable', 'none', ''] else charge }}% · battery voltage: {{ '—' if voltage in ['unknown', 'unavailable', 'none', ''] else voltage }} V. This reminder repeats every hour until the UPS clears the condition.
 
             # Replace battery cleared
             - conditions:

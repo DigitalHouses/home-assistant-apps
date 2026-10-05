@@ -93,7 +93,7 @@ def test_on_battery_is_warning_and_low_battery_escalates_to_critical():
     )
 
 
-def test_overload_is_critical_replace_battery_and_bypass_are_warnings():
+def test_overload_and_replace_battery_are_critical_bypass_is_warning():
     overload = _by_id(parse_upsc_output("ups.status: OL OVER\n"))
     replace_battery = _by_id(parse_upsc_output("ups.status: OL RB\n"))
     bypass = _by_id(parse_upsc_output("ups.status: BYPASS\n"))
@@ -101,7 +101,7 @@ def test_overload_is_critical_replace_battery_and_bypass_are_warnings():
     assert overload["overload"].active is True
     assert overload["overload"].severity == "critical"
     assert replace_battery["replace_battery"].active is True
-    assert replace_battery["replace_battery"].severity == "warning"
+    assert replace_battery["replace_battery"].severity == "critical"
     assert bypass["bypass"].active is True
     assert bypass["bypass"].severity == "warning"
 
