@@ -85,6 +85,16 @@ def test_guide_documents_safe_commissioning_before_production_activation():
     assert "does not rewrite" in text
 
 
+def test_guide_does_not_assume_commissioning_tools_are_installed_under_opt():
+    text = _read(GUIDE)
+
+    assert "Get the commissioning tools from GitHub" in text
+    assert "REF=main" in text
+    assert "/root/digitalhouses-pve-ups-tools" in text
+    assert "raw.githubusercontent.com/DigitalHouses/home-assistant-apps" in text
+    assert "/opt/digitalhouses/digitalhouses_pve_agent/tools/ups/" not in text
+
+
 def test_shutdown_card_keeps_compact_ui_and_uses_human_guidance():
     text = _read(CARD)
     assert "### ⚙️ Конфигурация shutdown в PVE" in text
