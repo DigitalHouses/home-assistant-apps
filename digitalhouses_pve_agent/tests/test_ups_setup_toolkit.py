@@ -85,14 +85,28 @@ def test_guide_documents_safe_commissioning_before_production_activation():
     assert "does not rewrite" in text
 
 
-def test_guide_does_not_assume_commissioning_tools_are_installed_under_opt():
+def test_guide_runs_commissioning_tools_directly_from_github():
     text = _read(GUIDE)
 
-    assert "Get the commissioning tools from GitHub" in text
-    assert "REF=main" in text
-    assert "/root/digitalhouses-pve-ups-tools" in text
-    assert "raw.githubusercontent.com/DigitalHouses/home-assistant-apps" in text
+    raw_base = (
+        "https://raw.githubusercontent.com/DigitalHouses/"
+        "home-assistant-apps/main/digitalhouses_pve_agent/tools/ups/"
+    )
+    assert f"bash <(curl -fsSL {raw_base}nut-readiness-audit.sh)" in text
+    assert f"bash <(curl -fsSL {raw_base}nut-install-packages.sh) --transport usb" in text
+    assert f"bash <(curl -fsSL {raw_base}nut-install-packages.sh) --transport snmp" in text
+    assert f"bash <(curl -fsSL {raw_base}nut-stage-primary-config.sh)" in text
+    assert "DigitalHouses PVE Agent is not required" in text
+    assert "/root/digitalhouses-pve-ups-tools" not in text
     assert "/opt/digitalhouses/digitalhouses_pve_agent/tools/ups/" not in text
+
+
+def test_readiness_audit_is_useful_without_installed_agent():
+    text = _read(TOOLS / "nut-readiness-audit.sh")
+
+    assert "DigitalHouses PVE Agent preflight (optional)" in text
+    assert "Agent preflight skipped" in text
+    assert "Host/NUT/UPS audit above is still valid" in text
 
 
 def test_shutdown_card_keeps_compact_ui_and_uses_human_guidance():
