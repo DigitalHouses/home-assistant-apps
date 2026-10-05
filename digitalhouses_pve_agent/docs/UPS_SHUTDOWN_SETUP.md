@@ -33,7 +33,7 @@ A normal local PRIMARY installation is ready when all of the following are true:
 3. The PVE host has a local `upsmon` MONITOR entry for that UPS with role `primary`.
 4. `nut-monitor.service` is active.
 5. `SHUTDOWNCMD` is a real host shutdown command, not the commissioning placeholder `/bin/true`.
-6. The selected UPS configuration exposes a readable restore delay (`ondelay`) when the driver/device supports it.
+6. The selected UPS exposes a readable restore/start delay through live NUT `ups.delay.start`, or the driver configuration provides `ondelay` when supported.
 7. If DigitalHouses PVE Agent is installed, it uses the same UPS name and PRIMARY credentials.
 8. Proxmox guest lifecycle settings (`onboot`, `startup: order=...,down=...`) describe the intended shutdown order and timeouts.
 9. If DigitalHouses PVE Agent is installed, its read-only preflight reports no remaining blocking conditions.
@@ -294,7 +294,7 @@ The Agent keeps machine-readable reason codes for diagnostics. The Home Assistan
 | `nut_role_not_primary` | This PVE host is not configured as NUT PRIMARY | Local MONITOR entry and `dh_primary_user` |
 | `nut_monitor_not_active` | `nut-monitor` is not active | Final production activation and service state |
 | `shutdown_disabled` | NUT cannot execute the real host shutdown command | Review `SHUTDOWNCMD`; commissioning `/bin/true` is intentionally disabled |
-| `power_restore_delay_unreadable` | Agent cannot read the selected UPS restore delay | Driver support/configuration for `ondelay` |
+| `power_restore_delay_unreadable` | Agent cannot read the selected UPS restore delay | Live NUT `ups.delay.start` and, when supported, driver `ondelay` |
 | `shutdown_budget_unavailable` | PVE shutdown budget cannot be calculated | Guest lifecycle configuration and Agent diagnostics |
 | `previous_host_shutdown_unclean` | A previous UPS-triggered host shutdown was confirmed unclean | Shutdown history and system journal |
 | `previous_host_shutdown_unknown` | Previous UPS-triggered shutdown lacks clean/unclean evidence | Shutdown history and journal retention |
