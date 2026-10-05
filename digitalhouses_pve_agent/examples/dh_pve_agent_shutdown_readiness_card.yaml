@@ -1,7 +1,7 @@
 type: vertical-stack
 cards:
   - type: markdown
-    content: >-
+    content: |
       {% set readiness = 'sensor.dh_pve_agent_ups_shutdown_readiness' %}
       {% set status = states(readiness) %}
       {% set issues = state_attr(readiness, 'issues') or [] %}
@@ -32,12 +32,21 @@ cards:
       {% endif %}
 
       {% if 'shutdown_policy_not_enabled' in issues or policy_details %}
-      **⚠️ Автоматическое выключение PVE от UPS**  
-      {% if 'nut_role_not_primary' in issues %}• Главный сервер UPS: этот PVE ещё не назначен как **NUT PRIMARY**.  
-      {% endif %}{% if 'nut_monitor_not_active' in issues %}• Контроль UPS: служба **NUT monitor не запущена**.  
-      {% endif %}{% if 'shutdown_disabled' in issues %}• Выключение PVE: **команда выключения ещё не активирована**.  
-      {% endif %}{% if not policy_details %}• Политика автоматического выключения ещё не активирована.  
+      **⚠️ Автоматическое выключение PVE от UPS**
+
+      {% if 'nut_role_not_primary' in issues %}
+      - Главный сервер UPS: этот PVE ещё не назначен как **NUT PRIMARY**.
       {% endif %}
+      {% if 'nut_monitor_not_active' in issues %}
+      - Контроль UPS: служба **NUT monitor не запущена**.
+      {% endif %}
+      {% if 'shutdown_disabled' in issues %}
+      - Выключение PVE: **команда выключения ещё не активирована**.
+      {% endif %}
+      {% if not policy_details %}
+      - Политика автоматического выключения ещё не активирована.
+      {% endif %}
+
       Завершите настройку по инструкции ниже. Не включайте автоматическое выключение до проверки UPS и порядка остановки VM/LXC.
       {% endif %}
 
@@ -132,7 +141,7 @@ cards:
         name: История остановок
 
   - type: markdown
-    content: >-
+    content: |
       {% set entity = 'sensor.dh_pve_agent_previous_shutdown' %}
       **Последняя остановка PVE**
 
@@ -147,7 +156,7 @@ cards:
       **{{ state_attr(entity, 'ups_power') | default('unknown', true) }}**
 
   - type: markdown
-    content: >-
+    content: |
       `shutdown_budget` и `shutdown_readiness` рассчитывает DigitalHouses PVE Agent
       из текущей конфигурации Proxmox/NUT и сохранённой истории shutdown.
 

@@ -46,3 +46,13 @@ def test_shutdown_readiness_card_contains_no_legacy_public_entity_ids():
 
     assert ".dh_app_pve_" not in text
     assert re.search(r"\.dh_pve_(?!agent_)", text) is None
+
+
+def test_shutdown_readiness_card_preserves_markdown_layout():
+    text = _text()
+
+    assert "content: >-" not in text
+    assert text.count("content: |") == 3
+    assert "- Главный сервер UPS:" in text
+    assert "- Контроль UPS:" in text
+    assert "- Выключение PVE:" in text
