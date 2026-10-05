@@ -238,7 +238,41 @@ Confirm the selected UPS is readable, NUT services have expected state, MONITOR 
 
 A green readiness result proves internal configuration consistency. It is not proof that a physical power-loss cycle was tested.
 
-## 10. Controlled live shutdown test
+## 10. Configure the Agent software trigger policy
+
+The NUT PRIMARY path is the shutdown authority. DigitalHouses PVE Agent adds a
+software trigger policy on top of that path; it does not replace native NUT Low
+Battery handling.
+
+The software policy is:
+
+```text
+Trigger A: on battery AND battery.charge <= configured charge threshold
+OR
+Trigger B: on battery AND battery.runtime <= shutdown budget + runtime reserve
+OR
+native NUT Low Battery emergency path
+```
+
+In Home Assistant, use the PVE Agent UPS policy controls:
+
+- **Battery charge shutdown threshold**: 10..30 %, step 5;
+- **Runtime reserve**: 60..900 seconds, step 60;
+- **Apply trigger policy**: commits the reviewed draft.
+
+Changing a number edits only the draft. Pressing **Apply** is required to commit
+the policy. The current default runtime reserve is 180 seconds, but choose values
+for the actual UPS load, battery condition, shutdown budget, and operational
+margin rather than copying another site.
+
+The Agent's Apply workflow does not turn Home Assistant into the shutdown
+authority. When a software threshold is reached, the Agent can call only its
+fixed local FSD helper; NUT/Proxmox still owns the actual shutdown path.
+
+After Apply, confirm the committed policy entity, refresh the Agent, and run the
+read-only audit again.
+
+## 11. Controlled live shutdown test
 
 A real FSD/power-loss test is an operational maintenance procedure, not an installation command. The helper scripts in this repository do not perform it.
 
