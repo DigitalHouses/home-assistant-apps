@@ -119,4 +119,4 @@ def test_shutdown_card_keeps_compact_ui_and_uses_human_guidance():
     assert "служба monitor не запущена" in text
     assert "команда выключения от UPS не активирована" in text
     assert "{{ issue }}" not in text
-    assert "UPS_SHUTDOWN_SETUP.md" not in text
+    assert "UPS_SHUTDOWN_SETUP.md" in text
