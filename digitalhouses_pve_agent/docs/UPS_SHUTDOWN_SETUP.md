@@ -64,7 +64,7 @@ For an SNMP/network UPS:
 bash /opt/digitalhouses/digitalhouses_pve_agent/tools/ups/nut-install-packages.sh --transport snmp
 ```
 
-Use `--no-update` only when package metadata has already been refreshed. The helper does not create `/etc/nut` configuration and does not start or restart NUT services.
+Use `--no-update` only when package metadata has already been refreshed. The helper does not create `/etc/nut` configuration and does not itself invoke service start/restart commands. Debian package post-install scripts may still initialize units according to package policy, so check service state with the read-only audit after installation.
 
 ## 3. Identify the UPS and choose the driver
 
@@ -90,7 +90,7 @@ Official NUT references:
 
 ## 4. Generate a safe PRIMARY staging configuration
 
-The staging helper never writes to `/etc/nut`.
+The staging helper never writes to `/etc/nut`. Its output directory must resolve below `/root` and must be empty, which keeps generated credentials and configuration away from live NUT files.
 
 Example:
 
