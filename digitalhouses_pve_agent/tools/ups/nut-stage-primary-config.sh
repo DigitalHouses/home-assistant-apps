@@ -15,7 +15,7 @@ Usage:
     [--ondelay SECONDS] [--output-dir DIR]
 
 Creates a commissioning-safe NUT PRIMARY configuration in a staging directory.
-It NEVER writes /etc/nut and NEVER starts/restarts NUT services.
+It NEVER writes /etc/nut and does not invoke NUT service start/restart actions.
 The generated upsmon.conf intentionally uses SHUTDOWNCMD "/bin/true".
 EOF
 }
@@ -59,7 +59,19 @@ fi
 # Generate a service credential instead of accepting it on the command line.
 # The secret is written only to the private staging files and is never printed.
 password="$(openssl rand -hex 24)"
-mkdir -p "$output_dir"
+
+if [[ -e "$output_dir" ]]; then
+    if [[ ! -d "$output_dir" || -L "$output_dir" ]]; then
+        echo "ERROR: staging path must be a real directory" >&2
+        exit 2
+    fi
+    if find "$output_dir" -mindepth 1 -maxdepth 1 -print -quit | grep -q .; then
+        echo "ERROR: staging directory must be empty: $output_dir" >&2
+        exit 2
+    fi
+else
+    mkdir -m 0700 "$output_dir"
+fi
 chmod 0700 "$output_dir"
 
 cat >"$output_dir/nut.conf" <<'EOF'
@@ -116,7 +128,7 @@ unset password
 
 echo "=== DigitalHouses PVE Agent · NUT PRIMARY staging complete ==="
 echo "Output: $output_dir"
-echo "Nothing was written to /etc/nut; no service was started or restarted."
+echo "Nothing was written to /etc/nut; this helper did not invoke any service start/restart action."
 echo 'SHUTDOWNCMD is "/bin/true" intentionally until final reviewed activation.'
 echo "Configure a supported ondelay before expecting power-restore readiness."
 echo "Guide: digitalhouses_pve_agent/docs/UPS_SHUTDOWN_SETUP.md"
