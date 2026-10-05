@@ -111,7 +111,7 @@ bash /opt/digitalhouses/digitalhouses_pve_agent/tools/ups/nut-stage-primary-conf
   --ondelay 120
 ```
 
-The helper prompts for the local `dh_primary_user` password without putting it in shell history. It creates a private staging directory containing `nut.conf`, `ups.conf`, `upsd.conf`, `upsd.users`, `upsmon.conf`, and `digitalhouses_pve_agent-ups.ini`.
+The helper generates a cryptographically random local `dh_primary_user` service credential. The secret is written only to the private staging files and is not printed to the terminal. It creates a private staging directory containing `nut.conf`, `ups.conf`, `upsd.conf`, `upsd.users`, `upsmon.conf`, and `digitalhouses_pve_agent-ups.ini`.
 
 The generated `upsmon.conf` intentionally contains:
 
