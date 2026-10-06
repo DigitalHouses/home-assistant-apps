@@ -6,6 +6,7 @@
 - Make the UPS/NUT commissioning guide runnable directly from GitHub, with helper commands that work whether or not DigitalHouses PVE Agent is installed.
 - Treat live NUT `ups.delay.start` as the primary observable restore-delay source for readiness, with configured `ondelay` as fallback; this removes false `power_restore_delay_unreadable` warnings on UPS transports such as SNMP/RMCARD that expose the delay at runtime.
 - Extend the read-only UPS audit to report both live `ups.delay.start` and configured `ondelay` without changing NUT/PVE state.
+- Existing correctly configured hosts require no NUT configuration change for the restore-delay readiness fix.
 
 ## 0.5.58
 
