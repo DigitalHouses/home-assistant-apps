@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.21
+- Restore `db_current_hour_records` and `db_today_records` to `state_class: measurement`; these values are database-computed period measurements, not Home Assistant cumulative counters.
+- Use the Home Assistant Supervisor timezone only to calculate local hour/day boundaries, convert those boundaries to Unix epoch, and pass explicit half-open `[start, end)` ranges to both MariaDB and PostgreSQL.
+- Aggregate rolling-hour, current-hour and current-day Recorder counts in one bounded SQL scan per refresh, independent of the database server/session timezone.
+- Add regression coverage for Asia/Almaty UTC conversion, DST-aware local-day boundaries and backend-neutral epoch SQL.
+
 ## 0.1.20
 - Mark the current-hour and current-day Recorder row counters as `total_increasing` so Home Assistant treats their hourly/daily drops as counter resets instead of carrying the previous period's maximum into the new period.
 - Keep the existing local-time boundary calculations and database queries unchanged; the fix is limited to Home Assistant statistics semantics for these two resettable counters.

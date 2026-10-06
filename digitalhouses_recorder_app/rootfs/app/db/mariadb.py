@@ -54,20 +54,35 @@ class MariaDBAdapter(DatabaseAdapter):
         hour_cutoff: float,
         current_hour_start: float,
         today_start: float,
+        period_end: float,
     ) -> dict[str, Any]:
+        range_start = min(hour_cutoff, today_start)
+        rows = self._rows(
+            'SELECT '
+            'COALESCE(SUM(CASE WHEN last_updated_ts >= %s '
+            'AND last_updated_ts < %s THEN 1 ELSE 0 END), 0), '
+            'COALESCE(SUM(CASE WHEN last_updated_ts >= %s '
+            'AND last_updated_ts < %s THEN 1 ELSE 0 END), 0), '
+            'COALESCE(SUM(CASE WHEN last_updated_ts >= %s '
+            'AND last_updated_ts < %s THEN 1 ELSE 0 END), 0) '
+            'FROM states '
+            'WHERE last_updated_ts >= %s AND last_updated_ts < %s',
+            (
+                hour_cutoff,
+                period_end,
+                current_hour_start,
+                period_end,
+                today_start,
+                period_end,
+                range_start,
+                period_end,
+            ),
+        )
+        records_last_hour, records_current_hour, records_today = rows[0]
         return {
-            'records_last_hour': self._one(
-                'SELECT COUNT(*) FROM states WHERE last_updated_ts >= %s',
-                (hour_cutoff,),
-            ),
-            'records_current_hour': self._one(
-                'SELECT COUNT(*) FROM states WHERE last_updated_ts >= %s',
-                (current_hour_start,),
-            ),
-            'records_today': self._one(
-                'SELECT COUNT(*) FROM states WHERE last_updated_ts >= %s',
-                (today_start,),
-            ),
+            'records_last_hour': records_last_hour,
+            'records_current_hour': records_current_hour,
+            'records_today': records_today,
             'db_size_bytes': self._one(
                 'SELECT COALESCE(SUM(data_length + index_length), 0) '
                 'FROM information_schema.tables WHERE table_schema = DATABASE()'

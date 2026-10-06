@@ -52,6 +52,30 @@ class MetricsTests(unittest.TestCase):
         self.assertEqual(datetime.fromtimestamp(start, tz), datetime(2026, 9, 3, 0, 0, tzinfo=tz))
         self.assertEqual(datetime.fromtimestamp(end, tz), datetime(2026, 9, 4, 0, 0, tzinfo=tz))
 
+    def test_almaty_local_midnight_converts_to_expected_utc_epoch(self):
+        tz = ZoneInfo('Asia/Almaty')
+        utc = ZoneInfo('UTC')
+        now = datetime(2026, 10, 6, 6, 0, tzinfo=tz).timestamp()
+        _, day_start = current_period_starts_epoch(now, 'Asia/Almaty')
+        self.assertEqual(
+            datetime.fromtimestamp(day_start, utc),
+            datetime(2026, 10, 5, 19, 0, tzinfo=utc),
+        )
+
+    def test_yesterday_bounds_follow_dst_not_fixed_offset(self):
+        tz = ZoneInfo('Europe/Berlin')
+        now = datetime(2026, 10, 26, 12, 0, tzinfo=tz).timestamp()
+        start, end = yesterday_bounds_epoch(now, 'Europe/Berlin')
+        self.assertEqual(
+            datetime.fromtimestamp(start, tz),
+            datetime(2026, 10, 25, 0, 0, tzinfo=tz),
+        )
+        self.assertEqual(
+            datetime.fromtimestamp(end, tz),
+            datetime(2026, 10, 26, 0, 0, tzinfo=tz),
+        )
+        self.assertEqual(end - start, 25 * 3600)
+
 if __name__ == '__main__':
     unittest.main()
 
