@@ -175,6 +175,11 @@ ranking payload.
 Ranking sensors are presentation data sources for the Top entities tables. Their
 state (`top_records`) and every `top_entities[].records` value use absolute
 Recorder row counts with the `records` unit; they are not scaled to thousands.
+Each `top_entities[]` item also contains `share_percent`, calculated by the
+database against all Recorder rows in the same ranking window before the Top-N
+limit is applied. The 24-hour ranking is a rolling epoch window
+`generated_at - 86400 <= last_updated_ts < generated_at`; it is not tied to a
+calendar day or timezone. The all-time share uses all retained Recorder rows.
 The payload also includes `limit`, `top_entity`, `generated_at` and `period`.
 
 A ranking query failure preserves the previous successful retained ranking.

@@ -31,8 +31,9 @@ class DatabaseAdapter(ABC):
     def top_entities(
         self,
         since_ts: float | None,
+        until_ts: float | None,
         limit: int,
-    ) -> list[tuple[str, int]]:
+    ) -> list[tuple[str, int, float]]:
         raise NotImplementedError
 
     @abstractmethod

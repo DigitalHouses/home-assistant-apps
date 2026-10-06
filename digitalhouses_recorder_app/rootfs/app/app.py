@@ -741,9 +741,11 @@ class DatabaseMonitorApp:
     def collect_top_entities(self, period: str) -> bool:
         generated_ts = time.time()
         since_ts = generated_ts - 86400 if period == '24h' else None
+        until_ts = generated_ts if period == '24h' else None
         try:
             rows = self.adapter.top_entities(
                 since_ts,
+                until_ts,
                 self.config.top_entities_limit,
             )
             snapshot = build_top_entities_snapshot(

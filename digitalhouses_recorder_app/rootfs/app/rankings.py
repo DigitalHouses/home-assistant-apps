@@ -9,7 +9,7 @@ TOP_ENTITIES_ALL_TIME_INTERVAL_SECONDS = 86400
 
 
 def build_top_entities_snapshot(
-    rows: Iterable[tuple[str, int]],
+    rows: Iterable[tuple[str, int, float]],
     period: str,
     generated_ts: float,
     timezone_name: str,
@@ -19,8 +19,9 @@ def build_top_entities_snapshot(
         {
             'entity_id': str(entity_id),
             'records': int(records),
+            'share_percent': round(float(share_percent), 2),
         }
-        for entity_id, records in rows
+        for entity_id, records, share_percent in rows
     ][:limit]
     generated_at = datetime.fromtimestamp(float(generated_ts), ZoneInfo(timezone_name)).isoformat()
     return {

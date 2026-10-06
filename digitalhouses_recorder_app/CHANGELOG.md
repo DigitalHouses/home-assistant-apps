@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.22
+- Add `share_percent` to every Top Recorder entity row, calculated directly by MariaDB/PostgreSQL against all rows in the same ranking window before the Top-N limit is applied.
+- Make the 24-hour ranking an explicit rolling epoch window `now - 86400 <= last_updated_ts < now`, independent of calendar day and timezone.
+- Keep the all-time ranking over all retained Recorder rows and preserve absolute `records` values.
+- Add regression coverage for the shared SQL percentage calculation and bounded rolling-24h query.
+
 ## 0.1.21
 - Restore `db_current_hour_records` and `db_today_records` to `state_class: measurement`; these values are database-computed period measurements, not Home Assistant cumulative counters.
 - Use the Home Assistant Supervisor timezone only to calculate local hour/day boundaries, convert those boundaries to Unix epoch, and pass explicit half-open `[start, end)` ranges to both MariaDB and PostgreSQL.
