@@ -15,6 +15,7 @@ class DatabaseAdapter(ABC):
         hour_cutoff: float,
         current_hour_start: float,
         today_start: float,
+        period_end: float,
     ) -> dict[str, Any]:
         raise NotImplementedError
 

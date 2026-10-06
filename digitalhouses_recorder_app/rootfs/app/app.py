@@ -676,6 +676,7 @@ class DatabaseMonitorApp:
                 now - 3600,
                 current_hour_start,
                 today_start,
+                now,
             )
             size = raw.get('db_size_bytes')
             self.update_state({
