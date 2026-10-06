@@ -370,11 +370,11 @@ class StorageAndRankingTests(unittest.TestCase):
         )
         self.assertEqual(
             components["db_current_hour_records"]["state_class"],
-            "total_increasing",
+            "measurement",
         )
         self.assertEqual(
             components["db_today_records"]["state_class"],
-            "total_increasing",
+            "measurement",
         )
 
     def test_ranking_topics_are_not_main_state_topic(self):
