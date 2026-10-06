@@ -11,8 +11,8 @@ from rankings import build_top_entities_snapshot
 class RankingSnapshotTests(unittest.TestCase):
     def test_snapshot_honors_limit_and_uses_absolute_records(self):
         rows = [
-            ('sensor.alpha', 120),
-            ('binary_sensor.beta', 80),
+            ('sensor.alpha', 120, 12.34),
+            ('binary_sensor.beta', 80, 8.25),
         ]
         generated = datetime.fromisoformat('2026-09-05T03:15:00+05:00').timestamp()
 
@@ -29,7 +29,11 @@ class RankingSnapshotTests(unittest.TestCase):
             '2026-09-05T03:15:00+05:00',
         )
         self.assertEqual(snapshot['top_entities'], [
-            {'entity_id': 'sensor.alpha', 'records': 120},
+            {
+                'entity_id': 'sensor.alpha',
+                'records': 120,
+                'share_percent': 12.34,
+            },
         ])
 
     def test_empty_snapshot_has_zero_state_and_no_top_entity(self):
