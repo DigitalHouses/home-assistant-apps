@@ -231,6 +231,11 @@ Recorder health uses `publish_interval_minutes`, default one minute. Expensive w
 
 A manual refresh collects every enabled group immediately without changing the normal background intervals.
 
+Top-entity ranking rows include the absolute record count and the entity's percentage
+share of all Recorder rows in the same ranking window. The 24-hour ranking uses a
+rolling `now - 24h .. now` epoch window; the all-history ranking uses all retained
+Recorder rows.
+
 ## Configuration examples
 
 PostgreSQL:
