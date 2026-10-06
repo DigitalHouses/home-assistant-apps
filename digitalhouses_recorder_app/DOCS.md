@@ -86,7 +86,10 @@ it to synthetic `false`.
 Recorder App has no user-configurable timezone. At startup, `run.sh` reads the
 Home Assistant Supervisor timezone through `bashio::supervisor.timezone` and
 exports it as `TZ`. Local-hour, local-day and previous-day boundaries all use
-that authoritative timezone. There is no silent UTC fallback.
+that authoritative timezone. The App converts those local boundaries to Unix epoch
+values before querying Recorder, so MariaDB and PostgreSQL use the same numeric
+`last_updated_ts` ranges and do not depend on the database session timezone. There
+is no silent UTC fallback.
 
 ## Recorder count metrics
 
