@@ -319,9 +319,9 @@ def validate_db_monitoring(
         "db_today_records",
     ):
         component = components.get(key) or {}
-        if component.get("state_class") != "total_increasing":
+        if component.get("state_class") != "measurement":
             fail(
-                f"Recorder App {key} must use total_increasing"
+                f"Recorder App {key} must use measurement"
             )
 
     graph_sensor_keys = {
