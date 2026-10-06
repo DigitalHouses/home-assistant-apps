@@ -112,7 +112,12 @@ def parse_guest_shutdown_config(config: str) -> dict[str, object]:
     }
 
 
-def shutdown_policy_issues(policy: object | None, *, nut_available: bool) -> list[str]:
+def shutdown_policy_issues(
+    policy: object | None,
+    *,
+    nut_available: bool,
+    ups_start_delay_seconds: float | None = None,
+) -> list[str]:
     if policy is None:
         return ["shutdown_policy_unavailable"]
 
@@ -127,7 +132,8 @@ def shutdown_policy_issues(policy: object | None, *, nut_available: bool) -> lis
         issues.append("nut_monitor_not_active")
     if getattr(policy, "shutdown_enabled", None) is not True:
         issues.append("shutdown_disabled")
-    if getattr(policy, "power_restore_delay_seconds", None) is None:
+    configured_restore_delay = getattr(policy, "power_restore_delay_seconds", None)
+    if configured_restore_delay is None and ups_start_delay_seconds is None:
         issues.append("power_restore_delay_unreadable")
     return issues
 
@@ -792,6 +798,11 @@ class ShutdownAwareUpsRuntime(AdaptiveUpsRuntime):
             additional_issues=shutdown_policy_issues(
                 self.shutdown_policy,
                 nut_available=self.nut_available,
+                ups_start_delay_seconds=(
+                    self.last_snapshot.ups_start_delay_seconds
+                    if self.last_snapshot is not None
+                    else None
+                ),
             ),
         )
         readiness["shutdown_budget_seconds"] = total_budget

@@ -69,6 +69,7 @@ def test_audit_is_explicitly_read_only():
     assert "READ-ONLY" in text
     assert "--ups-policy-preflight" in text
     assert "nut-scanner -U" in text
+    assert "ups.delay.start" in text
     assert "systemctl restart" not in text
     assert "systemctl start" not in text
     assert "systemctl enable" not in text
@@ -85,12 +86,37 @@ def test_guide_documents_safe_commissioning_before_production_activation():
     assert "does not rewrite" in text
 
 
-def test_shutdown_card_links_to_setup_guide_and_uses_human_guidance():
+def test_guide_runs_commissioning_tools_directly_from_github():
+    text = _read(GUIDE)
+
+    raw_base = (
+        "https://raw.githubusercontent.com/DigitalHouses/"
+        "home-assistant-apps/main/digitalhouses_pve_agent/tools/ups/"
+    )
+    assert f"bash <(curl -fsSL {raw_base}nut-readiness-audit.sh)" in text
+    assert f"bash <(curl -fsSL {raw_base}nut-install-packages.sh) --transport usb" in text
+    assert f"bash <(curl -fsSL {raw_base}nut-install-packages.sh) --transport snmp" in text
+    assert f"bash <(curl -fsSL {raw_base}nut-stage-primary-config.sh)" in text
+    assert "DigitalHouses PVE Agent is not required" in text
+    assert "/root/digitalhouses-pve-ups-tools" not in text
+    assert "/opt/digitalhouses/digitalhouses_pve_agent/tools/ups/" not in text
+
+
+def test_readiness_audit_is_useful_without_installed_agent():
+    text = _read(TOOLS / "nut-readiness-audit.sh")
+
+    assert "DigitalHouses PVE Agent preflight (optional)" in text
+    assert "Agent preflight skipped" in text
+    assert "Host/NUT/UPS audit above is still valid" in text
+
+
+def test_shutdown_card_keeps_compact_ui_and_uses_human_guidance():
     text = _read(CARD)
-    assert "UPS_SHUTDOWN_SETUP.md" in text
-    assert "требуется настройка" in text
-    assert "Что проверить" in text
-    assert "Главный сервер UPS" in text
-    assert "Автоматическое выключение PVE" in text
+    assert "### ⚙️ Конфигурация shutdown в PVE" in text
+    assert "Готовность shutdown" in text
+    assert "Цепочка выключения" in text
+    assert "NUT PRIMARY" in text
+    assert "служба monitor не запущена" in text
+    assert "команда выключения от UPS не активирована" in text
     assert "{{ issue }}" not in text
-    assert "Безопасное выключение PVE" in text
+    assert "UPS_SHUTDOWN_SETUP.md" in text

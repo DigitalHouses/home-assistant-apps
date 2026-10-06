@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.59
+
+- Restore the compact shutdown-readiness card layout while translating machine reason codes into human-readable Russian and keeping a direct link to the UPS/NUT setup guide.
+- Make the UPS/NUT commissioning guide runnable directly from GitHub, with helper commands that work whether or not DigitalHouses PVE Agent is installed.
+- Treat live NUT `ups.delay.start` as the primary observable restore-delay source for readiness, with configured `ondelay` as fallback; this removes false `power_restore_delay_unreadable` warnings on UPS transports such as SNMP/RMCARD that expose the delay at runtime.
+- Extend the read-only UPS audit to report both live `ups.delay.start` and configured `ondelay` without changing NUT/PVE state.
+- Existing correctly configured hosts require no NUT configuration change for the restore-delay readiness fix.
+
 ## 0.5.58
 
 - Treat NUT `RB` / Replace Battery as a critical UPS problem while preserving edge-based machine Events (`replace_battery_started` / `replace_battery_cleared`).

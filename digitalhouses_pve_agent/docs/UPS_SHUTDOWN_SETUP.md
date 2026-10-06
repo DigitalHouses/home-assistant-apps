@@ -16,7 +16,7 @@ UPS -> NUT driver -> upsd -> upsmon PRIMARY -> Proxmox shutdown
 
 Home Assistant is not part of the safety path. The long-running `digitalhouses_pve_agent.service` observes NUT and PVE state but does not rewrite `/etc/nut`.
 
-The helper scripts in `tools/ups/` are commissioning tools:
+The helper scripts in `tools/ups/` are commissioning tools. Commands in this guide execute them directly from GitHub, so they do not depend on a local Agent installation:
 
 - `nut-readiness-audit.sh` is read-only;
 - `nut-install-packages.sh` installs NUT packages only;
@@ -33,10 +33,10 @@ A normal local PRIMARY installation is ready when all of the following are true:
 3. The PVE host has a local `upsmon` MONITOR entry for that UPS with role `primary`.
 4. `nut-monitor.service` is active.
 5. `SHUTDOWNCMD` is a real host shutdown command, not the commissioning placeholder `/bin/true`.
-6. The selected UPS configuration exposes a readable restore delay (`ondelay`) when the driver/device supports it.
-7. DigitalHouses PVE Agent uses the same UPS name and PRIMARY credentials.
+6. The selected UPS exposes a readable restore/start delay through live NUT `ups.delay.start`, or the driver configuration provides `ondelay` when supported.
+7. If DigitalHouses PVE Agent is installed, it uses the same UPS name and PRIMARY credentials.
 8. Proxmox guest lifecycle settings (`onboot`, `startup: order=...,down=...`) describe the intended shutdown order and timeouts.
-9. The Agent read-only preflight reports no remaining blocking conditions.
+9. If DigitalHouses PVE Agent is installed, its read-only preflight reports no remaining blocking conditions.
 
 A warning in Home Assistant is therefore a request to inspect one of these conditions, not a request to change an Agent setting blindly.
 
@@ -45,23 +45,25 @@ A warning in Home Assistant is therefore a request to inspect one of these condi
 On the Proxmox host:
 
 ```bash
-bash /opt/digitalhouses/digitalhouses_pve_agent/tools/ups/nut-readiness-audit.sh
+bash <(curl -fsSL https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/main/digitalhouses_pve_agent/tools/ups/nut-readiness-audit.sh)
 ```
 
 The audit does not modify NUT or PVE. It reports PVE/NUT package state, NUT mode, configured UPS names, service state, USB discovery when available, a password-safe subset of MONITOR configuration, and the Agent preflight.
+
+The command above runs the read-only script directly from this GitHub repository. **DigitalHouses PVE Agent is not required.** If the Agent is installed, the audit also runs its preflight. If it is not installed, the host/NUT/UPS audit still runs normally and the Agent-specific preflight is simply skipped.
 
 ## 2. Install NUT packages
 
 For a directly connected USB UPS:
 
 ```bash
-bash /opt/digitalhouses/digitalhouses_pve_agent/tools/ups/nut-install-packages.sh --transport usb
+bash <(curl -fsSL https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/main/digitalhouses_pve_agent/tools/ups/nut-install-packages.sh) --transport usb
 ```
 
 For an SNMP/network UPS:
 
 ```bash
-bash /opt/digitalhouses/digitalhouses_pve_agent/tools/ups/nut-install-packages.sh --transport snmp
+bash <(curl -fsSL https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/main/digitalhouses_pve_agent/tools/ups/nut-install-packages.sh) --transport snmp
 ```
 
 Use `--no-update` only when package metadata has already been refreshed. The helper does not create `/etc/nut` configuration and does not itself invoke service start/restart commands. Debian package post-install scripts may still initialize units according to package policy, so check service state with the read-only audit after installation.
@@ -92,24 +94,22 @@ Official NUT references:
 
 The staging helper never writes to `/etc/nut`. Its output directory must resolve below `/root` and must be empty, which keeps generated credentials and configuration away from live NUT files.
 
-Example:
+**Do not copy a generic driver/name/port blindly.** First use the read-only audit and NUT discovery output to identify the actual UPS name, driver and port for this host.
+
+Then run the staging helper with the verified values:
 
 ```bash
-bash /opt/digitalhouses/digitalhouses_pve_agent/tools/ups/nut-stage-primary-config.sh \
-  --ups-name ups \
-  --driver usbhid-ups \
-  --port auto
+UPS_NAME='<verified UPS name>'
+UPS_DRIVER='<verified NUT driver>'
+UPS_PORT='<verified port>'
+
+bash <(curl -fsSL https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/main/digitalhouses_pve_agent/tools/ups/nut-stage-primary-config.sh) \
+  --ups-name "$UPS_NAME" \
+  --driver "$UPS_DRIVER" \
+  --port "$UPS_PORT"
 ```
 
-If the selected driver/device supports a known restore delay, add it explicitly:
-
-```bash
-bash /opt/digitalhouses/digitalhouses_pve_agent/tools/ups/nut-stage-primary-config.sh \
-  --ups-name ups \
-  --driver usbhid-ups \
-  --port auto \
-  --ondelay 120
-```
+If the selected driver/device supports a verified restore delay, add `--ondelay <seconds>`. Do not invent an `ondelay` value merely to make readiness green.
 
 The helper generates a cryptographically random local `dh_primary_user` service credential. The secret is written only to the private staging files and is not printed to the terminal. It creates a private staging directory containing `nut.conf`, `ups.conf`, `upsd.conf`, `upsd.users`, `upsmon.conf`, and `digitalhouses_pve_agent-ups.ini`.
 
@@ -155,7 +155,9 @@ upsc ups@127.0.0.1
 
 Replace `ups` with the selected UPS name.
 
-## 6. Configure DigitalHouses PVE Agent
+## 6. Configure DigitalHouses PVE Agent (optional)
+
+This section is only for hosts where DigitalHouses PVE Agent is installed. If the Agent is not installed, skip this section; NUT and Proxmox shutdown configuration work independently.
 
 Merge the values from `digitalhouses_pve_agent-ups.ini` into:
 
@@ -224,17 +226,17 @@ Apply that change manually to the reviewed `upsmon.conf`, then enable/start the 
 
 This step is intentionally not automated by the commissioning toolkit because it changes the host from monitoring-only to an active emergency shutdown path.
 
-Run the Agent preflight again.
+If DigitalHouses PVE Agent is installed, run its preflight again. Otherwise continue directly to validation.
 
 ## 9. Validate without a live shutdown
 
 Repeat the read-only audit:
 
 ```bash
-bash /opt/digitalhouses/digitalhouses_pve_agent/tools/ups/nut-readiness-audit.sh
+bash <(curl -fsSL https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/main/digitalhouses_pve_agent/tools/ups/nut-readiness-audit.sh)
 ```
 
-Confirm the selected UPS is readable, NUT services have expected state, MONITOR role is PRIMARY, Agent preflight is ready, Home Assistant reports readiness as ready, and the guest shutdown chain/budget match PVE configuration.
+Confirm the selected UPS is readable, NUT services have expected state, and MONITOR role is PRIMARY. If DigitalHouses PVE Agent is installed, also confirm its preflight is ready and the Home Assistant shutdown chain/budget match PVE configuration.
 
 A green readiness result proves internal configuration consistency. It is not proof that a physical power-loss cycle was tested.
 
@@ -292,7 +294,7 @@ The Agent keeps machine-readable reason codes for diagnostics. The Home Assistan
 | `nut_role_not_primary` | This PVE host is not configured as NUT PRIMARY | Local MONITOR entry and `dh_primary_user` |
 | `nut_monitor_not_active` | `nut-monitor` is not active | Final production activation and service state |
 | `shutdown_disabled` | NUT cannot execute the real host shutdown command | Review `SHUTDOWNCMD`; commissioning `/bin/true` is intentionally disabled |
-| `power_restore_delay_unreadable` | Agent cannot read the selected UPS restore delay | Driver support/configuration for `ondelay` |
+| `power_restore_delay_unreadable` | Agent cannot read the selected UPS restore delay | Live NUT `ups.delay.start` and, when supported, driver `ondelay` |
 | `shutdown_budget_unavailable` | PVE shutdown budget cannot be calculated | Guest lifecycle configuration and Agent diagnostics |
 | `previous_host_shutdown_unclean` | A previous UPS-triggered host shutdown was confirmed unclean | Shutdown history and system journal |
 | `previous_host_shutdown_unknown` | Previous UPS-triggered shutdown lacks clean/unclean evidence | Shutdown history and journal retention |

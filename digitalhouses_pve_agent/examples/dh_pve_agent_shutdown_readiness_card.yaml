@@ -1,164 +1,109 @@
-type: vertical-stack
-cards:
-  - type: markdown
-    content: |
-      {% set readiness = 'sensor.dh_pve_agent_ups_shutdown_readiness' %}
-      {% set status = states(readiness) %}
-      {% set issues = state_attr(readiness, 'issues') or [] %}
-      {% set policy_details =
-          'nut_role_not_primary' in issues or
-          'nut_monitor_not_active' in issues or
-          'shutdown_disabled' in issues %}
+type: markdown
+content: |
+  {% set readiness = 'sensor.dh_pve_agent_ups_shutdown_readiness' %}
+  {% set guest = 'sensor.dh_pve_agent_ups_guest_shutdown_budget' %}
+  {% set shutdown = 'sensor.dh_pve_agent_ups_shutdown_budget' %}
 
-      {% if status == 'ok' %}
-      ## 🟢 Безопасное выключение PVE: готово
+  {% set guest_budget = states(guest) | int(0) %}
+  {% set total_budget = states(shutdown) | int(0) %}
 
-      PVE и NUT готовы к автоматическому выключению по текущей конфигурации.
-      {% elif status == 'warning' %}
-      ## 🟠 Безопасное выключение PVE: требуется настройка
+  {% set pve_budget =
+      (state_attr(shutdown, 'hostsync_budget_seconds') | int(0)) +
+      (state_attr(shutdown, 'host_tail_budget_seconds') | int(0)) +
+      (state_attr(shutdown, 'finaldelay_seconds') | int(0))
+  %}
 
-      Автоматическое выключение PVE при проблеме с питанием настроено не полностью.
+  {% set running = state_attr(guest, 'running_guests') or [] %}
+  {% set sequence = state_attr(guest, 'shutdown_sequence') or [] %}
 
-      ### Что проверить
+  {% set state = states(readiness) %}
+  {% set issues = state_attr(readiness, 'issues') or [] %}
 
-      {% if 'nut_unavailable' in issues %}
-      **🔴 UPS не отвечает**  
-      Агент сейчас не получает данные от UPS. Проверьте кабель или сеть и работу NUT по инструкции ниже.
-      {% endif %}
+  {% set ns = namespace(sequence_parts=[]) %}
 
-      {% if 'shutdown_policy_unavailable' in issues %}
-      **⚠️ Настройки автоматического выключения не читаются**  
-      Агент не может проверить текущие настройки NUT. Запустите безопасную диагностику по инструкции ниже.
-      {% endif %}
+  {% for group in sequence %}
+    {% if group | count > 1 %}
+      {% set ns.sequence_parts =
+        ns.sequence_parts + ['[' ~ group | join(', ') ~ ']']
+      %}
+    {% elif group | count == 1 %}
+      {% set ns.sequence_parts = ns.sequence_parts + [group[0]] %}
+    {% endif %}
+  {% endfor %}
 
-      {% if 'shutdown_policy_not_enabled' in issues or policy_details %}
-      **⚠️ Автоматическое выключение PVE от UPS**
+  ### ⚙️ Конфигурация shutdown в PVE
 
-      {% if 'nut_role_not_primary' in issues %}
-      - Главный сервер UPS: этот PVE ещё не назначен как **NUT PRIMARY**.
-      {% endif %}
-      {% if 'nut_monitor_not_active' in issues %}
-      - Контроль UPS: служба **NUT monitor не запущена**.
-      {% endif %}
-      {% if 'shutdown_disabled' in issues %}
-      - Выключение PVE: **команда выключения ещё не активирована**.
-      {% endif %}
-      {% if not policy_details %}
-      - Политика автоматического выключения ещё не активирована.
-      {% endif %}
+  ▶️ Гости ({{ running | count }}): {{ '%d:%02d' |
+  format(guest_budget // 60, guest_budget % 60) }}
 
-      Завершите настройку по инструкции ниже. Не включайте автоматическое выключение до проверки UPS и порядка остановки VM/LXC.
-      {% endif %}
+  🖥️ PVE: {{ '%d:%02d' |
+  format(pve_budget // 60, pve_budget % 60) }}
 
-      {% if 'power_restore_delay_unreadable' in issues %}
-      **⚠️ Включение после возврата электричества**  
-      Агент не смог определить, через сколько UPS вернёт питание после восстановления сети. Проверьте параметр NUT `ondelay` по инструкции.
-      {% endif %}
+  ⏱️ **ИТОГО: {{ '%d:%02d' |
+  format(total_budget // 60, total_budget % 60) }}**
 
-      {% if 'shutdown_budget_unavailable' in issues %}
-      **⚠️ Время на выключение VM/LXC**  
-      Агент не смог рассчитать необходимое время для остановки гостей. Проверьте порядок и таймауты `startup/order/down` в PVE.
-      {% endif %}
+  <hr>
 
-      {% if 'previous_host_shutdown_unclean' in issues %}
-      **🔴 Предыдущий shutdown PVE завершился некорректно**  
-      Проверьте историю остановки и system journal до следующего теста UPS shutdown.
-      {% elif 'previous_host_shutdown_unknown' in issues %}
-      **⚠️ Результат предыдущего shutdown не подтверждён**  
-      В истории недостаточно данных, чтобы подтвердить корректное выключение PVE.
-      {% endif %}
+  {% if state in ['ok', 'ready'] %}
 
-      {% for issue in issues %}
-      {% if issue.startswith('vm:') or issue.startswith('lxc:') %}
-      {% set p = issue.split(':') %}
-      {% set kind = 'VM' if p[0] == 'vm' else 'LXC' %}
-      {% set guest_id = p[1] if p | length > 1 else '?' %}
-      {% set result = p[2] if p | length > 2 else 'unknown' %}
-      {% if result == 'near_timeout' %}
-      **🟠 {{ kind }} {{ guest_id }} · shutdown близко к timeout**  
-      Фактическое выключение было близко к настроенному `down=`. Проверьте причину и при необходимости увеличьте timeout.
-      {% elif result == 'timeout' %}
-      **🔴 {{ kind }} {{ guest_id }} · превышен shutdown timeout**  
-      Гость достиг настроенного лимита времени. Проверьте его shutdown и значение `down=`.
-      {% elif result == 'forced' %}
-      **🔴 {{ kind }} {{ guest_id }} · потребовалось принудительное выключение**  
-      Проверьте корректность shutdown гостя до использования автоматического UPS shutdown.
-      {% else %}
-      **⚠️ {{ kind }} {{ guest_id }} · требуется проверка shutdown**  
-      Подробности сохранены в диагностике агента.
-      {% endif %}
-      {% endif %}
-      {% endfor %}
+  🟢 **Готовность shutdown: Готово**
 
-      {% set known = [
-          'shutdown_policy_unavailable',
-          'nut_unavailable',
-          'shutdown_policy_not_enabled',
-          'nut_role_not_primary',
-          'nut_monitor_not_active',
-          'shutdown_disabled',
-          'power_restore_delay_unreadable',
-          'shutdown_budget_unavailable',
-          'previous_host_shutdown_unclean',
-          'previous_host_shutdown_unknown'
-      ] %}
-      {% set ns = namespace(unknown=false) %}
-      {% for issue in issues %}
-        {% if issue not in known and not issue.startswith('vm:') and not issue.startswith('lxc:') %}
-          {% set ns.unknown = true %}
-        {% endif %}
-      {% endfor %}
-      {% if ns.unknown %}
-      **⚠️ Требуется дополнительная проверка**  
-      Агент обнаружил состояние, которое эта карточка пока не может объяснить простым текстом. Откройте инструкцию и запустите безопасную диагностику.
-      {% endif %}
+  {% elif state in ['unknown', 'unavailable', 'skip'] %}
 
-      {% elif status == 'skip' %}
-      ## ⚪ Безопасное выключение PVE: UPS не настроен
+  ⚪ **Готовность shutdown: Нет данных**
 
-      Для этого PVE автоматическое выключение от UPS сейчас не настроено.
-      {% else %}
-      ## ⚪ Безопасное выключение PVE: нет данных
+  {% else %}
 
-      Проверьте доступность DigitalHouses PVE Agent.
-      {% endif %}
+  🟠 **Готовность shutdown: {{ issues | count }}**
+  {% for issue in issues %}
+    {% if issue == 'nut_unavailable' %}
+  {{ loop.index }}. 🔴 UPS · нет связи через NUT
+    {% elif issue == 'shutdown_policy_unavailable' %}
+  {{ loop.index }}. ⚠️ NUT · настройки автоматического выключения недоступны
+    {% elif issue == 'shutdown_policy_not_enabled' %}
+  {{ loop.index }}. ⚠️ PVE · автоматическое выключение от UPS не готово
+    {% elif issue == 'nut_role_not_primary' %}
+  {{ loop.index }}. ⚠️ PVE · не назначен главным сервером UPS (NUT PRIMARY)
+    {% elif issue == 'nut_monitor_not_active' %}
+  {{ loop.index }}. ⚠️ NUT · служба monitor не запущена
+    {% elif issue == 'shutdown_disabled' %}
+  {{ loop.index }}. ⚠️ PVE · команда выключения от UPS не активирована
+    {% elif issue == 'power_restore_delay_unreadable' %}
+  {{ loop.index }}. ⚠️ UPS · не удалось определить задержку включения после возврата питания
+    {% elif issue == 'shutdown_budget_unavailable' %}
+  {{ loop.index }}. ⚠️ PVE · не удалось рассчитать время выключения VM/LXC
+    {% elif issue == 'previous_host_shutdown_unclean' %}
+  {{ loop.index }}. 🔴 PVE · предыдущий shutdown завершился некорректно
+    {% elif issue == 'previous_host_shutdown_unknown' %}
+  {{ loop.index }}. ⚪ PVE · результат предыдущего shutdown не подтверждён
+    {% elif issue.startswith('vm:') and issue.endswith(':near_timeout') %}
+  {{ loop.index }}. 🟠 VM {{ issue.split(':')[1] }} · shutdown близко к timeout
+    {% elif issue.startswith('lxc:') and issue.endswith(':near_timeout') %}
+  {{ loop.index }}. 🟠 LXC {{ issue.split(':')[1] }} · shutdown близко к timeout
+    {% elif issue.startswith('vm:') and issue.endswith(':timeout') %}
+  {{ loop.index }}. 🔴 VM {{ issue.split(':')[1] }} · превышен shutdown timeout
+    {% elif issue.startswith('lxc:') and issue.endswith(':timeout') %}
+  {{ loop.index }}. 🔴 LXC {{ issue.split(':')[1] }} · превышен shutdown timeout
+    {% elif issue.startswith('vm:') and issue.endswith(':forced') %}
+  {{ loop.index }}. 🔴 VM {{ issue.split(':')[1] }} · потребовалось принудительное выключение
+    {% elif issue.startswith('lxc:') and issue.endswith(':forced') %}
+  {{ loop.index }}. 🔴 LXC {{ issue.split(':')[1] }} · потребовалось принудительное выключение
+    {% elif issue.startswith('vm:') %}
+  {{ loop.index }}. ⚠️ VM {{ issue.split(':')[1] }} · требуется проверить shutdown
+    {% elif issue.startswith('lxc:') %}
+  {{ loop.index }}. ⚠️ LXC {{ issue.split(':')[1] }} · требуется проверить shutdown
+    {% else %}
+  {{ loop.index }}. ⚠️ Требуется дополнительная проверка shutdown
+    {% endif %}
+  {% endfor %}
 
-      ---
+  {% endif %}
 
-      📖 **[Как настроить UPS, NUT и безопасное выключение PVE](https://github.com/DigitalHouses/home-assistant-apps/blob/main/digitalhouses_pve_agent/docs/UPS_SHUTDOWN_SETUP.md)**
+  <hr>
 
-      Агент не меняет NUT/PVE автоматически. Инструкция пошагово объясняет подключение UPS, выбор драйвера, настройку NUT PRIMARY, проверку и включение автоматического выключения.
+  🔌 **Цепочка выключения**
 
-  - type: entities
-    title: Параметры выключения
-    show_header_toggle: false
-    entities:
-      - entity: sensor.dh_pve_agent_ups_guest_shutdown_budget
-        name: Shutdown budget VM/LXC
-      - entity: sensor.dh_pve_agent_previous_shutdown
-        name: Предыдущая остановка
-      - entity: sensor.dh_pve_agent_shutdown_history
-        name: История остановок
+  {{ ns.sequence_parts | join(' → ') }}
 
-  - type: markdown
-    content: |
-      {% set entity = 'sensor.dh_pve_agent_previous_shutdown' %}
-      **Последняя остановка PVE**
+  📖 [Инструкция по настройке UPS/NUT и безопасного shutdown PVE](https://github.com/DigitalHouses/home-assistant-apps/blob/main/digitalhouses_pve_agent/docs/UPS_SHUTDOWN_SETUP.md)
 
-      Причина:
-      **{{ state_attr(entity, 'shutdown_reason') | default('unknown', true) }}**
-
-      Результат:
-      **{{ 'корректно' if state_attr(entity, 'shutdown_clean') == true else
-           'некорректно' if state_attr(entity, 'shutdown_clean') == false else 'не подтверждён' }}**
-
-      Питание UPS:
-      **{{ state_attr(entity, 'ups_power') | default('unknown', true) }}**
-
-  - type: markdown
-    content: |
-      `shutdown_budget` и `shutdown_readiness` рассчитывает DigitalHouses PVE Agent
-      из текущей конфигурации Proxmox/NUT и сохранённой истории shutdown.
-
-      После изменения параметров PVE/NUT используйте **Обновить**, чтобы агент
-      перечитал конфигурацию и пересчитал диагностику.
