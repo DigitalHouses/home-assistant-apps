@@ -314,6 +314,16 @@ def validate_db_monitoring(
                 f"Recorder App {key} must use {expected_unit}"
             )
 
+    for key in (
+        "db_current_hour_records",
+        "db_today_records",
+    ):
+        component = components.get(key) or {}
+        if component.get("state_class") != "total_increasing":
+            fail(
+                f"Recorder App {key} must use total_increasing"
+            )
+
     graph_sensor_keys = {
         "db_depth",
         "db_records_per_hour",
