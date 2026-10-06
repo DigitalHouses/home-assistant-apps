@@ -585,12 +585,13 @@ def validate_digitalhouses_pve_agent(
     _require_text(
         app / "examples/dh_pve_agent_shutdown_readiness_card.yaml",
         (
-            "sensor.dh_pve_agent_previous_shutdown",
-            "sensor.dh_pve_agent_shutdown_history",
             "sensor.dh_pve_agent_ups_shutdown_readiness",
             "sensor.dh_pve_agent_ups_guest_shutdown_budget",
-            "shutdown_reason",
-            "shutdown_clean",
+            "sensor.dh_pve_agent_ups_shutdown_budget",
+            "### ⚙️ Конфигурация shutdown в PVE",
+            "Готовность shutdown",
+            "Цепочка выключения",
+            "UPS_SHUTDOWN_SETUP.md",
         ),
         "shutdown readiness card",
     )
