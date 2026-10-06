@@ -368,6 +368,14 @@ class StorageAndRankingTests(unittest.TestCase):
             ],
             "sensor.dh_recorder_app_db_today_records",
         )
+        self.assertEqual(
+            components["db_current_hour_records"]["state_class"],
+            "total_increasing",
+        )
+        self.assertEqual(
+            components["db_today_records"]["state_class"],
+            "total_increasing",
+        )
 
     def test_ranking_topics_are_not_main_state_topic(self):
         components = build_discovery_payload(

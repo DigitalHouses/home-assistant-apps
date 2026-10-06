@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.20
+- Mark the current-hour and current-day Recorder row counters as `total_increasing` so Home Assistant treats their hourly/daily drops as counter resets instead of carrying the previous period's maximum into the new period.
+- Keep the existing local-time boundary calculations and database queries unchanged; the fix is limited to Home Assistant statistics semantics for these two resettable counters.
+- Add regression and product validation coverage for the reset-aware state classes.
+
 ## 0.1.19
 - Require explicit statistics collection consent via `telemetry_enabled` (product name, version, installation ID) without changing the protocol-v1 payload or transport.
 - When `false`, stop Recorder before initializing database/MQTT connections or sending statistics; an explicit `true` allows normal startup. Preserve existing configuration values during upgrades.
