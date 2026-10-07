@@ -52,13 +52,21 @@ class MariaDBAdapter(DatabaseAdapter):
     def medium_metrics(
         self,
         hour_cutoff: float,
+        previous_hour_start: float,
+        previous_hour_end: float,
         current_hour_start: float,
         today_start: float,
         period_end: float,
     ) -> dict[str, Any]:
-        range_start = min(hour_cutoff, today_start)
+        range_start = min(
+            hour_cutoff,
+            previous_hour_start,
+            today_start,
+        )
         rows = self._rows(
             'SELECT '
+            'COALESCE(SUM(CASE WHEN last_updated_ts >= %s '
+            'AND last_updated_ts < %s THEN 1 ELSE 0 END), 0), '
             'COALESCE(SUM(CASE WHEN last_updated_ts >= %s '
             'AND last_updated_ts < %s THEN 1 ELSE 0 END), 0), '
             'COALESCE(SUM(CASE WHEN last_updated_ts >= %s '
@@ -70,6 +78,8 @@ class MariaDBAdapter(DatabaseAdapter):
             (
                 hour_cutoff,
                 period_end,
+                previous_hour_start,
+                previous_hour_end,
                 current_hour_start,
                 period_end,
                 today_start,
@@ -78,9 +88,15 @@ class MariaDBAdapter(DatabaseAdapter):
                 period_end,
             ),
         )
-        records_last_hour, records_current_hour, records_today = rows[0]
+        (
+            records_last_hour,
+            records_previous_hour,
+            records_current_hour,
+            records_today,
+        ) = rows[0]
         return {
             'records_last_hour': records_last_hour,
+            'records_previous_hour': records_previous_hour,
             'records_current_hour': records_current_hour,
             'records_today': records_today,
             'db_size_bytes': self._one(
