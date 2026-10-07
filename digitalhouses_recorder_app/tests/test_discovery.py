@@ -97,7 +97,7 @@ class CanonicalDiscoveryTests(unittest.TestCase):
             components["database_type"]["default_entity_id"],
             "sensor.dh_recorder_app_database_type",
         )
-        self.assertEqual(len(components), 25)
+        self.assertEqual(len(components), 26)
         self.assertTrue(STATE_RETAIN)
 
     def test_canonical_unique_ids_do_not_collide(self):
