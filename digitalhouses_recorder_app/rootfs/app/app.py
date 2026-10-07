@@ -67,6 +67,7 @@ from metrics import (
     db_depth_days,
     iso_from_epoch,
     last_age_seconds,
+    previous_hour_bounds_epoch,
     records_k,
     short_db_version,
     yesterday_bounds_epoch,
@@ -671,9 +672,15 @@ class DatabaseMonitorApp:
             now,
             self.config.timezone,
         )
+        previous_hour_start, previous_hour_end = previous_hour_bounds_epoch(
+            now,
+            self.config.timezone,
+        )
         try:
             raw = self.adapter.medium_metrics(
                 now - 3600,
+                previous_hour_start,
+                previous_hour_end,
                 current_hour_start,
                 today_start,
                 now,
@@ -682,6 +689,9 @@ class DatabaseMonitorApp:
             self.update_state({
                 'db_records_per_hour': records_k(
                     raw.get('records_last_hour')
+                ),
+                'db_previous_hour_records': records_k(
+                    raw.get('records_previous_hour')
                 ),
                 'db_current_hour_records': records_k(
                     raw.get('records_current_hour')
