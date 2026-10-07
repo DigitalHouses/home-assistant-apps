@@ -46,6 +46,9 @@ def load_app_module():
     metrics.last_age_seconds = lambda last_ts, now: (
         None if last_ts is None else max(0, int(now - last_ts))
     )
+    metrics.previous_hour_bounds_epoch = (
+        lambda *args, **kwargs: (0, 0)
+    )
     metrics.records_k = lambda *args, **kwargs: None
     metrics.short_db_version = lambda *args, **kwargs: None
     metrics.yesterday_bounds_epoch = lambda *args, **kwargs: (0, 0)
