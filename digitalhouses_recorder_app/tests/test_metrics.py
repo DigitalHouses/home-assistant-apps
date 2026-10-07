@@ -10,6 +10,7 @@ from metrics import (
     current_period_starts_epoch,
     db_depth_days,
     last_age_seconds,
+    previous_hour_bounds_epoch,
     records_k,
     yesterday_bounds_epoch,
 )
@@ -51,6 +52,25 @@ class MetricsTests(unittest.TestCase):
         start, end = yesterday_bounds_epoch(now, 'Asia/Almaty')
         self.assertEqual(datetime.fromtimestamp(start, tz), datetime(2026, 9, 3, 0, 0, tzinfo=tz))
         self.assertEqual(datetime.fromtimestamp(end, tz), datetime(2026, 9, 4, 0, 0, tzinfo=tz))
+
+    def test_previous_hour_bounds_are_closed_local_hour(self):
+        tz = ZoneInfo('Asia/Almaty')
+        now = datetime(
+            2026, 10, 7, 19, 49, 30, tzinfo=tz
+        ).timestamp()
+        start, end = previous_hour_bounds_epoch(
+            now,
+            'Asia/Almaty',
+        )
+        self.assertEqual(
+            datetime.fromtimestamp(start, tz),
+            datetime(2026, 10, 7, 18, 0, tzinfo=tz),
+        )
+        self.assertEqual(
+            datetime.fromtimestamp(end, tz),
+            datetime(2026, 10, 7, 19, 0, tzinfo=tz),
+        )
+        self.assertEqual(end - start, 3600)
 
     def test_almaty_local_midnight_converts_to_expected_utc_epoch(self):
         tz = ZoneInfo('Asia/Almaty')
