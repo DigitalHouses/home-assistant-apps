@@ -79,6 +79,7 @@ Core diagnostics and controls include:
 | `sensor.dh_recorder_app_db_last` | Latest Recorder state |
 | `sensor.dh_recorder_app_db_depth` | Retained history depth |
 | `sensor.dh_recorder_app_db_records_per_hour` | Recorder writes during the rolling last 60 minutes, K rec/h |
+| `sensor.dh_recorder_app_db_previous_hour_records` | Recorder writes during the previous completed local hour, K records |
 | `sensor.dh_recorder_app_db_current_hour_records` | Recorder writes since the start of the current local hour, K records |
 | `sensor.dh_recorder_app_db_today_records` | Recorder writes since local midnight, K records |
 | `sensor.dh_recorder_app_db_records` | Total Recorder state rows, K records |
@@ -230,6 +231,11 @@ Recorder health uses `publish_interval_minutes`, default one minute. Expensive w
 | Static database information | Startup/reconnect until successful |
 
 A manual refresh collects every enabled group immediately without changing the normal background intervals.
+
+For historical bar charts, use the closed-period measurements:
+`db_previous_hour_records` for hourly bars and `db_yesterday_records` for
+daily bars. `db_current_hour_records` and `db_today_records` remain live
+period-to-date diagnostics.
 
 Top-entity ranking rows include the absolute record count and the entity's percentage
 share of all Recorder rows in the same ranking window. The 24-hour ranking uses a
