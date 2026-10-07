@@ -44,7 +44,7 @@ class PeriodAdapterTests(unittest.TestCase):
         one_calls = []
 
         adapter._rows = lambda sql, params=(): (
-            row_calls.append((sql, params)) or [(7, 11, 13)]
+            row_calls.append((sql, params)) or [(7, 9, 11, 13)]
         )
         adapter._one = lambda sql, params=(): (
             one_calls.append((sql, params)) or 1024
@@ -52,12 +52,15 @@ class PeriodAdapterTests(unittest.TestCase):
 
         result = adapter.medium_metrics(
             hour_cutoff=100.0,
+            previous_hour_start=80.0,
+            previous_hour_end=140.0,
             current_hour_start=140.0,
             today_start=120.0,
             period_end=200.0,
         )
 
         self.assertEqual(result['records_last_hour'], 7)
+        self.assertEqual(result['records_previous_hour'], 9)
         self.assertEqual(result['records_current_hour'], 11)
         self.assertEqual(result['records_today'], 13)
 
@@ -72,11 +75,13 @@ class PeriodAdapterTests(unittest.TestCase):
             (
                 100.0,
                 200.0,
+                80.0,
+                140.0,
                 140.0,
                 200.0,
                 120.0,
                 200.0,
-                100.0,
+                80.0,
                 200.0,
             ),
         )
