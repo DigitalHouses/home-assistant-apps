@@ -254,6 +254,9 @@ def validate_db_monitoring(
         "db_start": (
             "sensor.dh_recorder_app_db_start"
         ),
+        "db_previous_hour_records": (
+            "sensor.dh_recorder_app_db_previous_hour_records"
+        ),
         "db_current_hour_records": (
             "sensor.dh_recorder_app_db_current_hour_records"
         ),
@@ -302,6 +305,7 @@ def validate_db_monitoring(
         "db_records_per_hour": "K rec/h",
         "db_records": "K records",
         "db_yesterday_records": "K records",
+        "db_previous_hour_records": "K records",
         "db_current_hour_records": "K records",
         "db_today_records": "K records",
         "db_top_entities_24h": "records",
@@ -315,6 +319,7 @@ def validate_db_monitoring(
             )
 
     for key in (
+        "db_previous_hour_records",
         "db_current_hour_records",
         "db_today_records",
     ):
@@ -331,6 +336,7 @@ def validate_db_monitoring(
         "db_size",
         "db_yesterday_records",
         "db_last_age",
+        "db_previous_hour_records",
         "db_current_hour_records",
         "db_today_records",
         "db_disk_free",

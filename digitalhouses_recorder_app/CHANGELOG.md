@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.23
+- Add `sensor.dh_recorder_app_db_previous_hour_records` as a scalar `measurement` for the previous completed local hour, calculated from Home Assistant timezone boundaries converted to epoch.
+- Keep `db_yesterday_records` as the previous completed local calendar-day measurement and define it, together with the new previous-hour sensor, as the source for Recorder-backed historical bar charts.
+- Keep `db_current_hour_records` and `db_today_records` as live period-to-date diagnostics rather than historical chart sources.
+- Calculate the previous-hour count inside the existing bounded medium SQL aggregation for both MariaDB and PostgreSQL, without adding a separate database query.
+- Add regression coverage for closed previous-hour boundaries, SQL aggregation and MQTT Discovery.
+
 ## 0.1.22
 - Add `share_percent` to every Top Recorder entity row, calculated directly by MariaDB/PostgreSQL against all rows in the same ranking window before the Top-N limit is applied.
 - Make the 24-hour ranking an explicit rolling epoch window `now - 86400 <= last_updated_ts < now`, independent of calendar day and timezone.

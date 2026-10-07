@@ -13,6 +13,8 @@ class DatabaseAdapter(ABC):
     def medium_metrics(
         self,
         hour_cutoff: float,
+        previous_hour_start: float,
+        previous_hour_end: float,
         current_hour_start: float,
         today_start: float,
         period_end: float,

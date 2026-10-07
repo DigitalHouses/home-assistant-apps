@@ -97,7 +97,7 @@ class CanonicalDiscoveryTests(unittest.TestCase):
             components["database_type"]["default_entity_id"],
             "sensor.dh_recorder_app_database_type",
         )
-        self.assertEqual(len(components), 25)
+        self.assertEqual(len(components), 26)
         self.assertTrue(STATE_RETAIN)
 
     def test_canonical_unique_ids_do_not_collide(self):
@@ -335,6 +335,7 @@ class StorageAndRankingTests(unittest.TestCase):
             "db_records_per_hour": "K rec/h",
             "db_records": "K records",
             "db_yesterday_records": "K records",
+            "db_previous_hour_records": "K records",
             "db_current_hour_records": "K records",
             "db_today_records": "K records",
         }
@@ -354,6 +355,15 @@ class StorageAndRankingTests(unittest.TestCase):
             )
 
         self.assertEqual(
+            components["db_previous_hour_records"][
+                "default_entity_id"
+            ],
+            (
+                "sensor.dh_recorder_app_"
+                "db_previous_hour_records"
+            ),
+        )
+        self.assertEqual(
             components["db_current_hour_records"][
                 "default_entity_id"
             ],
@@ -367,6 +377,10 @@ class StorageAndRankingTests(unittest.TestCase):
                 "default_entity_id"
             ],
             "sensor.dh_recorder_app_db_today_records",
+        )
+        self.assertEqual(
+            components["db_previous_hour_records"]["state_class"],
+            "measurement",
         )
         self.assertEqual(
             components["db_current_hour_records"]["state_class"],

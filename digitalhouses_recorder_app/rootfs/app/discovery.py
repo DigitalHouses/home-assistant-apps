@@ -633,6 +633,18 @@ def _build_components(
     if include_canonical_runtime:
         components.update(
             {
+                "db_previous_hour_records": _component(
+                    identity,
+                    "sensor",
+                    "DB inserted previous hour",
+                    "db_previous_hour_records",
+                    "{{ value_json.db_previous_hour_records }}",
+                    diagnostic=True,
+                    state_class="measurement",
+                    unit_of_measurement="K records",
+                    suggested_display_precision=1,
+                    icon="mdi:clock-outline",
+                ),
                 "db_current_hour_records": _component(
                     identity,
                     "sensor",
