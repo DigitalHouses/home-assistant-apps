@@ -85,8 +85,8 @@ it to synthetic `false`.
 
 Recorder App has no user-configurable timezone. At startup, `run.sh` reads the
 Home Assistant Supervisor timezone through `bashio::supervisor.timezone` and
-exports it as `TZ`. Local-hour, local-day and previous-day boundaries all use
-that authoritative timezone. The App converts those local boundaries to Unix epoch
+exports it as `TZ`. Local-hour, previous-hour, local-day and previous-day
+boundaries all use that authoritative timezone. The App converts those local boundaries to Unix epoch
 values before querying Recorder, so MariaDB and PostgreSQL use the same numeric
 `last_updated_ts` ranges and do not depend on the database session timezone. There
 is no silent UTC fallback.
@@ -98,13 +98,21 @@ changing data is carried only in the entity state, never in dynamic JSON
 attributes. Counts are normalized to thousands with one decimal place.
 
 - `db_records_per_hour`: rolling last 60 minutes, `K rec/h`;
+- `db_previous_hour_records`: previous completed local hour, `K records`;
 - `db_current_hour_records`: since the start of the current local hour, `K records`;
 - `db_today_records`: since local midnight, `K records`;
-- `db_yesterday_records`: previous local calendar day, `K records`;
+- `db_yesterday_records`: previous completed local calendar day, `K records`;
 - `db_records`: all retained Recorder rows, `K records`.
 
-The rolling-hour/current-hour/current-day counters refresh every five minutes.
-Total and previous-day counters remain in the hourly slow group.
+The rolling-hour, previous-hour, current-hour and current-day counters refresh
+every five minutes. Total and previous-day counters remain in the hourly slow
+group.
+
+For Recorder-backed historical bar charts, use the two closed-period sensors:
+`db_previous_hour_records` for hourly bars and `db_yesterday_records` for
+daily bars. Their values represent already completed database intervals, so
+Recorder stores a stable measurement through the following period instead of
+a period-to-date ramp.
 
 ## Storage monitoring
 
