@@ -230,7 +230,9 @@ Recorder health uses `publish_interval_minutes`, default one minute. Expensive w
 | Top entities — all retained history | 1 day |
 | Static database information | Startup/reconnect until successful |
 
-A manual refresh collects every enabled group immediately without changing the normal background intervals.
+The five-minute database metric group is aligned to local five-minute clock boundaries after its immediate startup collection. The hourly history/total group is aligned to the local top of the hour, so calendar-day metrics such as `db_yesterday_records` refresh on the first normal publish cycle at or after local midnight instead of drifting from App startup time.
+
+A manual refresh collects every enabled group immediately without changing the normal background schedule.
 
 For historical bar charts, use the closed-period measurements:
 `db_previous_hour_records` for hourly bars and `db_yesterday_records` for
