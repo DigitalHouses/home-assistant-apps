@@ -48,6 +48,9 @@ def load_app_module():
     metrics.db_depth_days = lambda *args, **kwargs: None
     metrics.iso_from_epoch = lambda *args, **kwargs: None
     metrics.last_age_seconds = lambda *args, **kwargs: None
+    metrics.next_local_boundary_epoch = (
+        lambda *args, **kwargs: 0.0
+    )
     metrics.previous_hour_bounds_epoch = (
         lambda *args, **kwargs: (0, 0)
     )
