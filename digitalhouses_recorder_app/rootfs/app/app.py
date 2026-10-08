@@ -67,13 +67,14 @@ from metrics import (
     db_depth_days,
     iso_from_epoch,
     last_age_seconds,
+    next_local_boundary_epoch,
     previous_hour_bounds_epoch,
     records_k,
     short_db_version,
     yesterday_bounds_epoch,
 )
-MEDIUM_INTERVAL_SECONDS = 300
-SLOW_INTERVAL_SECONDS = 3600
+MEDIUM_INTERVAL_MINUTES = 5
+SLOW_INTERVAL_MINUTES = 60
 STORAGE_INTERVAL_SECONDS = 300
 
 
@@ -834,12 +835,14 @@ class DatabaseMonitorApp:
         self.client.connect_async(host, port, keepalive=60)
         self.client.loop_start()
         self.telemetry_runner.start()
-        next_publish = next_medium = next_slow = next_storage = 0.0
+        next_publish = next_storage = 0.0
+        next_medium_epoch = next_slow_epoch = 0.0
         next_top_24h = next_top_all_time = 0.0
         static_loaded = False
         try:
             while not self.stop_event.is_set():
                 now_mono = time.monotonic()
+                now_epoch = time.time()
                 if self.refresh_requested.is_set():
                     self.manual_refresh()
                 if now_mono >= next_publish:
@@ -847,12 +850,20 @@ class DatabaseMonitorApp:
                     if db_ok:
                         if not static_loaded:
                             static_loaded = self.collect_static()
-                        if now_mono >= next_medium:
+                        if now_epoch >= next_medium_epoch:
                             self.collect_medium()
-                            next_medium = now_mono + MEDIUM_INTERVAL_SECONDS
-                        if now_mono >= next_slow:
+                            next_medium_epoch = next_local_boundary_epoch(
+                                now_epoch,
+                                self.config.timezone,
+                                MEDIUM_INTERVAL_MINUTES,
+                            )
+                        if now_epoch >= next_slow_epoch:
                             self.collect_slow()
-                            next_slow = now_mono + SLOW_INTERVAL_SECONDS
+                            next_slow_epoch = next_local_boundary_epoch(
+                                now_epoch,
+                                self.config.timezone,
+                                SLOW_INTERVAL_MINUTES,
+                            )
                         if now_mono >= next_top_24h:
                             self.collect_top_entities('24h')
                             next_top_24h = now_mono + TOP_ENTITIES_24H_INTERVAL_SECONDS

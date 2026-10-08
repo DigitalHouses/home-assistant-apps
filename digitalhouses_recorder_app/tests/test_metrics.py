@@ -10,6 +10,7 @@ from metrics import (
     current_period_starts_epoch,
     db_depth_days,
     last_age_seconds,
+    next_local_boundary_epoch,
     previous_hour_bounds_epoch,
     records_k,
     yesterday_bounds_epoch,
@@ -52,6 +53,51 @@ class MetricsTests(unittest.TestCase):
         start, end = yesterday_bounds_epoch(now, 'Asia/Almaty')
         self.assertEqual(datetime.fromtimestamp(start, tz), datetime(2026, 9, 3, 0, 0, tzinfo=tz))
         self.assertEqual(datetime.fromtimestamp(end, tz), datetime(2026, 9, 4, 0, 0, tzinfo=tz))
+
+    def test_next_local_five_minute_boundary_is_aligned(self):
+        tz = ZoneInfo('Asia/Almaty')
+        now = datetime(
+            2026, 10, 8, 21, 21, 22, tzinfo=tz
+        ).timestamp()
+        next_run = next_local_boundary_epoch(
+            now,
+            'Asia/Almaty',
+            5,
+        )
+        self.assertEqual(
+            datetime.fromtimestamp(next_run, tz),
+            datetime(2026, 10, 8, 21, 25, tzinfo=tz),
+        )
+
+    def test_next_local_hour_boundary_is_aligned(self):
+        tz = ZoneInfo('Asia/Almaty')
+        now = datetime(
+            2026, 10, 8, 21, 21, 22, tzinfo=tz
+        ).timestamp()
+        next_run = next_local_boundary_epoch(
+            now,
+            'Asia/Almaty',
+            60,
+        )
+        self.assertEqual(
+            datetime.fromtimestamp(next_run, tz),
+            datetime(2026, 10, 8, 22, 0, tzinfo=tz),
+        )
+
+    def test_next_local_hour_boundary_crosses_midnight(self):
+        tz = ZoneInfo('Asia/Almaty')
+        now = datetime(
+            2026, 10, 8, 23, 59, 50, tzinfo=tz
+        ).timestamp()
+        next_run = next_local_boundary_epoch(
+            now,
+            'Asia/Almaty',
+            60,
+        )
+        self.assertEqual(
+            datetime.fromtimestamp(next_run, tz),
+            datetime(2026, 10, 9, 0, 0, tzinfo=tz),
+        )
 
     def test_previous_hour_bounds_are_closed_local_hour(self):
         tz = ZoneInfo('Asia/Almaty')

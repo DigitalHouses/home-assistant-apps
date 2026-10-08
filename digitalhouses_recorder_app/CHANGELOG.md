@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.24
+- Align five-minute medium metrics to local five-minute clock boundaries after the initial startup collection instead of drifting from App start time.
+- Align hourly slow metrics to local top-of-hour boundaries, so `db_yesterday_records` is recalculated on the first publish cycle at/after local midnight instead of up to one hour later.
+- Keep startup collection immediate and preserve existing SQL, timezone-aware period boundaries, manual refresh behavior and database query frequency.
+- Add regression coverage for five-minute, hourly and midnight scheduler boundaries.
+
 ## 0.1.23
 - Add `sensor.dh_recorder_app_db_previous_hour_records` as a scalar `measurement` for the previous completed local hour, calculated from Home Assistant timezone boundaries converted to epoch.
 - Keep `db_yesterday_records` as the previous completed local calendar-day measurement and define it, together with the new previous-hour sensor, as the source for Recorder-backed historical bar charts.
