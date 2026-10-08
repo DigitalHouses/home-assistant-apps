@@ -51,6 +51,24 @@ def current_period_starts_epoch(
     return hour_start.timestamp(), today_start.timestamp()
 
 
+def next_local_boundary_epoch(
+    now_ts: float,
+    timezone_name: str,
+    interval_minutes: int,
+) -> float:
+    if interval_minutes <= 0 or 60 % interval_minutes != 0:
+        raise ValueError("interval_minutes must be a positive divisor of 60")
+    tz = ZoneInfo(timezone_name)
+    now_local = datetime.fromtimestamp(float(now_ts), tz)
+    current_boundary = now_local.replace(
+        minute=(now_local.minute // interval_minutes) * interval_minutes,
+        second=0,
+        microsecond=0,
+    )
+    next_boundary = current_boundary + timedelta(minutes=interval_minutes)
+    return next_boundary.timestamp()
+
+
 def yesterday_bounds_epoch(now_ts: float, timezone_name: str) -> tuple[float, float]:
     tz = ZoneInfo(timezone_name)
     now_local = datetime.fromtimestamp(float(now_ts), tz)
