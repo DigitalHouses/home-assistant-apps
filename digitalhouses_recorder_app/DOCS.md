@@ -97,22 +97,18 @@ Recorder row counts exposed for UI graphs are scalar-only sensors: their
 changing data is carried only in the entity state, never in dynamic JSON
 attributes. Counts are normalized to thousands with one decimal place.
 
-- `db_records_per_hour`: rolling last 60 minutes, `K rec/h`;
-- `db_previous_hour_records`: previous completed local hour, `K records`;
 - `db_current_hour_records`: since the start of the current local hour, `K records`;
 - `db_today_records`: since local midnight, `K records`;
-- `db_yesterday_records`: previous completed local calendar day, `K records`;
 - `db_records`: all retained Recorder rows, `K records`.
 
-The rolling-hour, previous-hour, current-hour and current-day counters refresh
-every five minutes. Total and previous-day counters remain in the hourly slow
-group.
+The current-hour and current-day counters refresh every five minutes. Total
+retained-row count remains in the hourly slow group.
 
-For Recorder-backed historical bar charts, use the two closed-period sensors:
-`db_previous_hour_records` for hourly bars and `db_yesterday_records` for
-daily bars. Their values represent already completed database intervals, so
-Recorder stores a stable measurement through the following period instead of
-a period-to-date ramp.
+For Recorder activity bar charts, use the live period counters directly:
+`db_current_hour_records` grouped by hour and `db_today_records` grouped by
+date. The maintained Lovelace example uses `mini-graph-card` with
+`aggregate_func: delta`; the current incomplete period remains visible and
+empty history buckets render as zero.
 
 ## Storage monitoring
 
