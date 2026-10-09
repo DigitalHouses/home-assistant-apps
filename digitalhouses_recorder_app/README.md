@@ -24,6 +24,8 @@ entity prefix dh_recorder_app
 
 ![DigitalHouses Recorder dashboard](images/dh_db_monitor.png)
 
+Maintained Lovelace example: [examples/lovelace/dh_recorder_app_dashboard.yaml](examples/lovelace/dh_recorder_app_dashboard.yaml)
+
 ## Quick start
 
 1. In Home Assistant open **Settings → Apps → App store → Repositories**.
@@ -78,14 +80,11 @@ Core diagnostics and controls include:
 | `sensor.dh_recorder_app_db_start` | Earliest retained Recorder state |
 | `sensor.dh_recorder_app_db_last` | Latest Recorder state |
 | `sensor.dh_recorder_app_db_depth` | Retained history depth |
-| `sensor.dh_recorder_app_db_records_per_hour` | Recorder writes during the rolling last 60 minutes, K rec/h |
-| `sensor.dh_recorder_app_db_previous_hour_records` | Recorder writes during the previous completed local hour, K records |
 | `sensor.dh_recorder_app_db_current_hour_records` | Recorder writes since the start of the current local hour, K records |
 | `sensor.dh_recorder_app_db_today_records` | Recorder writes since local midnight, K records |
 | `sensor.dh_recorder_app_db_records` | Total Recorder state rows, K records |
 | `sensor.dh_recorder_app_db_size` | Database size |
 | `sensor.dh_recorder_app_db_version` | Database server/version |
-| `sensor.dh_recorder_app_db_yesterday_records` | Previous local-day Recorder writes, K records |
 | `sensor.dh_recorder_app_db_name` | Database name reported by the server |
 | `sensor.dh_recorder_app_db_user` | Database user reported by the server |
 | `binary_sensor.dh_recorder_app_db_connected` | Database connectivity after the first real observation |
@@ -230,14 +229,15 @@ Recorder health uses `publish_interval_minutes`, default one minute. Expensive w
 | Top entities — all retained history | 1 day |
 | Static database information | Startup/reconnect until successful |
 
-The five-minute database metric group is aligned to local five-minute clock boundaries after its immediate startup collection. The hourly history/total group is aligned to the local top of the hour, so calendar-day metrics such as `db_yesterday_records` refresh on the first normal publish cycle at or after local midnight instead of drifting from App startup time.
+The five-minute database metric group is aligned to local five-minute clock boundaries after its immediate startup collection. The hourly history-depth/total-record group is aligned to the local top of the hour instead of drifting from App startup time.
 
 A manual refresh collects every enabled group immediately without changing the normal background schedule.
 
-For historical bar charts, use the closed-period measurements:
-`db_previous_hour_records` for hourly bars and `db_yesterday_records` for
-daily bars. `db_current_hour_records` and `db_today_records` remain live
-period-to-date diagnostics.
+For Recorder activity bar charts, use the live period counters directly:
+`db_current_hour_records` grouped by hour and `db_today_records` grouped by
+date. The maintained dashboard uses `mini-graph-card` with
+`aggregate_func: delta`, which keeps the current incomplete hour/day visible
+while empty history buckets render as zero.
 
 Top-entity ranking rows include the absolute record count and the entity's percentage
 share of all Recorder rows in the same ranking window. The 24-hour ranking uses a
