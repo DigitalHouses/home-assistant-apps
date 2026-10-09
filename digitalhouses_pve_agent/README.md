@@ -10,7 +10,7 @@ Native Linux agent for **Proxmox VE 8.x** that publishes host, CPU, memory, stor
 
 The canonical product and runtime identity is **DigitalHouses PVE Agent** / `digitalhouses_pve_agent`: systemd service `digitalhouses_pve_agent.service`, filesystem roots under `/opt/digitalhouses/digitalhouses_pve_agent`, `/etc/digitalhouses_pve_agent` and `/var/lib/digitalhouses_pve_agent`, MQTT base `DigitalHouses/Global/digitalhouses_pve_agent/<instance>`, and Home Assistant entity prefix `dh_pve_agent_*`. Version 0.5.30 performs the corrected one-time controlled migration from the former `dh_pve_app` / `dh_app_pve_*` runtime, including deterministic cleanup of retained data owned by the legacy MQTT instance namespace.
 
-Current source release: `VERSION` is `0.5.62`.
+Current source release: `VERSION` is `0.5.63`.
 
 ## Home Assistant dashboard
 
@@ -61,7 +61,13 @@ placed immediately after the unchanged PVE problem summary. The obsolete
 standalone Refresh action is removed from the Russian example.
 
 The four controls are **Обновить**, **Версия**, conditional **Новая версия**,
-**Перезапуск**. Install and Restart require an HA confirmation. A foreground
+**Перезапуск**. Install and Restart require an HA confirmation. The card declares
+entity and triggers_update for the authoritative agent-card state and
+version entities, so Home Assistant updates the UI on new MQTT state without
+waiting for the idle timer. The main loop checks incoming version/install
+commands before potentially slow PVE/UPS background work, but does not
+interrupt a collection already in progress. The card never optimistically
+claims a command has started before PVE acknowledges it. A foreground
 operation announces `running` before work, publishes an app-measured final
 duration, shows `success` for five seconds, and returns to `idle`.
 Installation completion is correlated with the exact persisted updater
@@ -414,7 +420,7 @@ Production install/update is release-tag only. Version 0.5.30 is the corrected c
 For the canonical runtime, install/update/reinstall never clears the current canonical MQTT namespace. Canonical retained MQTT cleanup is owned exclusively by the supported uninstaller.
 
 ```bash
-TAG=digitalhouses_pve_agent-v0.5.62
+TAG=digitalhouses_pve_agent-v0.5.63
 DIGITALHOUSES_SOURCE_REF="$TAG" \
   bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$TAG/digitalhouses_pve_agent/install.sh")
 ```

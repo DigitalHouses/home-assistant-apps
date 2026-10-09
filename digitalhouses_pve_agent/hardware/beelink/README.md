@@ -63,7 +63,7 @@ not normal production installation.
 ### Install or repair
 
 ```bash
-TAG=digitalhouses_pve_agent-v0.5.62
+TAG=digitalhouses_pve_agent-v0.5.63
 bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$TAG/digitalhouses_pve_agent/hardware/beelink/install.sh")
 ```
 
@@ -78,7 +78,7 @@ it underneath a running host. It finishes the persistent setup and reports
 ### Read-only check
 
 ```bash
-TAG=digitalhouses_pve_agent-v0.5.62
+TAG=digitalhouses_pve_agent-v0.5.63
 bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$TAG/digitalhouses_pve_agent/hardware/beelink/install.sh") --check
 ```
 
@@ -95,7 +95,7 @@ is present.
 ### Uninstall / rollback
 
 ```bash
-TAG=digitalhouses_pve_agent-v0.5.62
+TAG=digitalhouses_pve_agent-v0.5.63
 bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$TAG/digitalhouses_pve_agent/hardware/beelink/uninstall.sh")
 ```
 

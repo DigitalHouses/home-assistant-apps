@@ -4,6 +4,12 @@
 type: vertical-stack
 cards:
   - type: custom:button-card
+    entity: sensor.dh_pve_agent_card
+    triggers_update:
+      - sensor.dh_pve_agent_card
+      - sensor.dh_pve_agent_version
+      - sensor.dh_pve_agent_latest_version
+      - binary_sensor.dh_pve_agent_update_available
     update_timer: |
       [[[
         const s = states['sensor.dh_pve_agent_card']?.state;

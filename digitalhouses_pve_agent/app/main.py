@@ -478,6 +478,48 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
                         "будет повторена после следующего MQTT reconnect"
                     )
 
+            # Handle incoming user actions before background PVE/UPS diagnostics,
+            # which can take seconds and otherwise delay the first card ACK.
+            # The MQTT callback sets events and wakes this loop immediately.
+            check_updates = bridge.check_updates_requested.is_set()
+            install_update = bridge.install_update_requested.is_set()
+            bridge.check_updates_requested.clear()
+            bridge.install_update_requested.clear()
+            if card.state == "running":
+                check_updates = False
+                install_update = False
+            elif check_updates and not update_manager._is_worker_busy():
+                card.begin("check")
+            elif install_update:
+                card.begin("install")
+            update_manager.tick(
+                bridge,
+                check=check_updates,
+                install=install_update,
+                denial_reason=lambda: _restart_denial_reason(
+                    ups_runtime, ups_startup_attempted=ups_startup_attempted
+                ),
+            )
+            if card.state == "running" and card.operation in {"check", "install"}:
+                result = update_manager._payload()
+                status = result.get("status")
+                if card.operation == "check" and status in {"idle", "error"}:
+                    card.finish(
+                        "check",
+                        error=str(result.get("error") or "GitHub check failed") if status == "error" else None,
+                    )
+                elif card.operation == "install":
+                    outcome = update_manager.install_card_outcome(
+                        card_started_at=card.started_at,
+                    )
+                    if outcome is not None:
+                        success, error = outcome
+                        card.finish(
+                            "install",
+                            error=None if success else (error or "Update failed"),
+                        )
+            card.tick()
+
             if initialized:
                 if bridge.reconnect_requested.is_set():
                     update_manager.publish(bridge)
@@ -599,44 +641,6 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
                     reload_event.clear()
                     log.debug("SIGHUP обработан до инициализации UPS runtime")
 
-            check_updates = bridge.check_updates_requested.is_set()
-            install_update = bridge.install_update_requested.is_set()
-            bridge.check_updates_requested.clear()
-            bridge.install_update_requested.clear()
-            if card.state == "running":
-                check_updates = False
-                install_update = False
-            elif check_updates and not update_manager._is_worker_busy():
-                card.begin("check")
-            elif install_update:
-                card.begin("install")
-            update_manager.tick(
-                bridge,
-                check=check_updates,
-                install=install_update,
-                denial_reason=lambda: _restart_denial_reason(
-                    ups_runtime, ups_startup_attempted=ups_startup_attempted
-                ),
-            )
-            if card.state == "running" and card.operation in {"check", "install"}:
-                result = update_manager._payload()
-                status = result.get("status")
-                if card.operation == "check" and status in {"idle", "error"}:
-                    card.finish(
-                        "check",
-                        error=str(result.get("error") or "GitHub check failed") if status == "error" else None,
-                    )
-                elif card.operation == "install":
-                    outcome = update_manager.install_card_outcome(
-                        card_started_at=card.started_at,
-                    )
-                    if outcome is not None:
-                        success, error = outcome
-                        card.finish(
-                            "install",
-                            error=None if success else (error or "Update failed"),
-                        )
-            card.tick()
             bridge.wake_requested.wait(1.0)
             bridge.wake_requested.clear()
     finally:
