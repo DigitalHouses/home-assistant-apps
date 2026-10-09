@@ -470,12 +470,6 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
                     update_manager.publish(bridge)
                     if card.state == "running" and card.operation == "restart":
                         card.finish("restart")
-                    if card.state == "running" and card.operation == "install":
-                        worker = update_manager._worker_status()
-                        if worker.get("state") == "completed":
-                            card.finish("install")
-                        elif worker.get("state") == "error":
-                            card.finish("install", error=str(worker.get("error") or "Update failed"))
                     card.publish()
                     log.info("Первичная публикация MQTT завершена")
                 else:
@@ -632,8 +626,16 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
                         "check",
                         error=str(result.get("error") or "GitHub check failed") if status == "error" else None,
                     )
-                elif card.operation == "install" and status in {"completed", "error"}:
-                    card.finish("install", error=str(result.get("error") or "Update failed") if status == "error" else None)
+                elif card.operation == "install":
+                    outcome = update_manager.install_card_outcome(
+                        card_started_at=card.started_at,
+                    )
+                    if outcome is not None:
+                        success, error = outcome
+                        card.finish(
+                            "install",
+                            error=None if success else (error or "Update failed"),
+                        )
             card.tick()
             bridge.wake_requested.wait(1.0)
             bridge.wake_requested.clear()

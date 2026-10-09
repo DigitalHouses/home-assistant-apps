@@ -239,3 +239,104 @@ def test_compact_timer_uses_local_browser_monotonic_clock_not_pve_wall_clock():
         assert "Date.now() - start" not in source
         assert "Math.floor((performance.now() - since) / 100)" in source
         assert "Ожидание запуска агента…" in source
+
+def test_installer_finishes_after_new_agent_started_and_automatic_check(tmp_path):
+    """A newer successful GitHub check must not conceal worker completion."""
+    from datetime import datetime, timedelta, timezone
+    from app.update_manager import UpdateManager
+    from app.agent_card import AgentCard
+
+    base = datetime(2026, 10, 9, 17, 0, tzinfo=timezone.utc)
+    instant = lambda delta: (base + timedelta(seconds=delta)).isoformat()
+    card_clock = Clock()
+    old = AgentCard(tmp_path / "agent_card.json", lambda _: True,
+                    clock=card_clock.mono, now=card_clock.iso,
+                    boot_id=lambda: "pve-boot")
+    assert old.begin("install")
+    # Align the test card with the updater transaction timeline.
+    old.started_at = instant(0)
+    old._persist()
+    updater = UpdateManager(tmp_path, "0.5.62")
+    updater.request.save({"version": "0.5.62", "requested_at": instant(1)})
+    updater.worker.save({"state": "verifying", "updated_at": instant(3)})
+    card_clock.advance(10)
+    recovered = AgentCard(tmp_path / "agent_card.json", lambda _: True,
+                          clock=card_clock.mono, now=card_clock.iso,
+                          boot_id=lambda: "pve-boot")
+    assert recovered.state == "running"
+    assert recovered.operation == "install"
+    assert updater.install_card_outcome(card_started_at=instant(0)) is None
+
+    updater.worker.save({"state": "completed", "updated_at": instant(13)})
+    # The aggregate status is IDLE after a fresher automatic GitHub check.
+    updater.known = True
+    updater.latest = "0.5.62"
+    updater.checked = instant(14)
+    assert updater._payload()["status"] == "idle"
+    assert updater.install_card_outcome(card_started_at=recovered.started_at) == (True, None)
+    assert recovered.finish("install")
+    assert recovered.state == "success"
+    assert recovered.duration_seconds == 10.0
+
+
+def test_install_card_reports_worker_error_after_restart(tmp_path):
+    from datetime import datetime, timedelta, timezone
+    from app.update_manager import UpdateManager
+
+    now = datetime(2026, 10, 9, 17, tzinfo=timezone.utc)
+    ts = lambda delta: (now + timedelta(seconds=delta)).isoformat()
+    updater = UpdateManager(tmp_path, "0.5.61")
+    updater.request.save({"version": "0.5.62", "requested_at": ts(1)})
+    updater.worker.save({"state": "error", "error": "Rollback completed",
+                        "updated_at": ts(12)})
+    updater.known = True
+    updater.latest = "0.5.62"
+    updater.checked = ts(14)  # masks old worker's terminal status
+    assert updater._payload()["status"] == "idle"
+    assert updater.install_card_outcome(card_started_at=ts(0)) == (
+        False, "Rollback completed"
+    )
+
+
+def test_install_card_does_not_accept_stale_worker_or_wrong_version(tmp_path):
+    from datetime import datetime, timedelta, timezone
+    from app.update_manager import UpdateManager
+
+    base = datetime(2026, 10, 9, 17, tzinfo=timezone.utc)
+    ts = lambda secs: (base + timedelta(seconds=secs)).isoformat()
+    updater = UpdateManager(tmp_path, "0.5.61")
+    updater.request.save({"version": "0.5.62", "requested_at": ts(1)})
+    updater.worker.save({"state": "completed", "updated_at": ts(12)})
+    result = updater.install_card_outcome(card_started_at=ts(0))
+    assert result[0] is False
+    assert "does not match" in result[1]
+    # A later manual upgrade may move beyond the originally requested version.
+    updater.version = "0.5.63"
+    assert updater.install_card_outcome(card_started_at=ts(0)) == (True, None)
+    # A stale transaction must still be rejected even if the version is newer.
+    assert updater.install_card_outcome(card_started_at=ts(13)) is None
+    updater.worker.save({"state": "error", "error": "Old error",
+                        "updated_at": ts(0)})
+    assert updater.install_card_outcome(card_started_at=ts(0)) is None
+
+
+def test_install_card_denied_by_ups_does_not_report_previous_success(tmp_path):
+    from datetime import datetime, timedelta, timezone
+    from app.update_manager import UpdateManager
+
+    base = datetime(2026, 10, 9, 17, tzinfo=timezone.utc)
+    ts = lambda secs: (base + timedelta(seconds=secs)).isoformat()
+    updater = UpdateManager(tmp_path, "0.5.62")
+    updater.request.save({"version": "0.5.62", "requested_at": ts(-20)})
+    updater.worker.save({"state": "completed", "updated_at": ts(-5)})
+    updater._status, updater._status_error = "error", "UPS on battery"
+    assert updater.install_card_outcome(card_started_at=ts(0)) == (
+        False, "UPS on battery"
+    )
+
+
+def test_main_install_completion_uses_transaction_not_aggregated_status():
+    from pathlib import Path
+    source = (Path(__file__).parents[1] / "app/main.py").read_text()
+    assert "update_manager.install_card_outcome(" in source
+    assert 'card.finish("install", error=str(result.get("error")' not in source

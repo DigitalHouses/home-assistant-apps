@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
-from .state_store import StateStore
+from .state_store import StateStore, StateStoreError
 
 log = logging.getLogger(__name__)
 PRODUCT = "digitalhouses_pve_agent"
@@ -203,6 +203,65 @@ class UpdateManager:
             "installation_error": worker.get("error"),
         }
 
+    def install_card_outcome(
+        self, *, card_started_at: str | None,
+    ) -> tuple[bool, str | None] | None:
+        """Resolve only the foreground installation that this card started.
+
+        The updater writes its *final* worker state after restarting the agent.
+        A later automatic GitHub check may already have made the aggregate
+        update status idle, so it cannot be used to complete an install card.
+        Return (success, error) only for the matching, terminal transaction.
+        """
+        worker = self._worker_status()
+        state = worker.get("state")
+        if state in {"completed", "error"}:
+            try:
+                started = datetime.fromisoformat(str(card_started_at))
+                request = self.request.load()
+                requested = datetime.fromisoformat(str(request.get("requested_at")))
+                finished = datetime.fromisoformat(str(worker.get("updated_at")))
+                target = request.get("version")
+                if not (
+                    started.tzinfo and requested.tzinfo and finished.tzinfo
+                    and requested >= started and finished >= requested
+                    and isinstance(target, str) and target
+                ):
+                    return (
+                        (False, str(self._status_error or "Update failed"))
+                        if self._status == "error" else None
+                    )
+            except (OSError, ValueError, TypeError, StateStoreError):
+                return (
+                    (False, str(self._status_error or "Update failed"))
+                    if self._status == "error" else (
+                        False, "Installation result cannot be verified from persisted state"
+                    )
+                )
+            if state == "error":
+                return False, str(worker.get("error") or "Update failed")
+            try:
+                # Also recover an old stuck card if a newer stable release was
+                # later installed manually. The updater already verified the
+                # original successful transaction; never accept an older
+                # running version as confirmation of a newer release.
+                if stable_version(self.version) >= stable_version(target):
+                    return True, None
+            except ValueError:
+                pass
+            return False, (
+                f"Updater completed but installed agent version {self.version} "
+                f"does not match requested {target}"
+            )
+
+        if state in BUSY_PHASES:
+            return None
+        # A denied preflight, missing release or failure before worker launch
+        # is reported directly by UpdateManager, not by update_worker.json.
+        if self._status == "error":
+            return False, str(self._status_error or "Update failed")
+        return None
+
     def tick(self, bridge: object, *, check: bool = False, install: bool = False,
              denial_reason: Callable[[], str | None] | None = None) -> None:
         self._apply_check()
@@ -246,7 +305,10 @@ class UpdateManager:
                 "requested_at": datetime.now(timezone.utc).isoformat(),
             })
             # Clear the previous result so it cannot hide the queued operation.
-            self.worker.save({"state": "queued", "error": None})
+            self.worker.save({
+                "state": "queued", "error": None,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            })
         except Exception as exc:
             self._status, self._status_error = "error", str(exc)
             log.error("Update request persistence failed: %s", exc)
@@ -257,5 +319,9 @@ class UpdateManager:
                 check=True, capture_output=True, text=True, timeout=8,
             )
         except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
-            self.worker.save({"state": "error", "error": f"Unable to start update service: {exc}"})
+            self.worker.save({
+                "state": "error",
+                "error": f"Unable to start update service: {exc}",
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            })
             log.error("Unable to start update service: %s", exc)

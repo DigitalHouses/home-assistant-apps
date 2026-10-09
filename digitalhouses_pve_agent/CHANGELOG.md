@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.62
+
+- Fix a race in the compact agent card after installation: the independent systemd updater completes verification and writes `update_worker.json: completed` *after* the updated agent has restarted, while a newer GitHub check can already have changed the aggregate update status to `idle`. Reconcile the current install operation directly against its persisted updater transaction on every loop iteration.
+- Report `Версия установлена` with the final measured duration for five seconds when the verified worker result appears, or show the actual updater failure. Do not treat stale results, a different requested release or a mismatched running version as a successful installation.
+- Recover an earlier stuck installation card after a newer stable version has been installed manually, without deleting MQTT Discovery, clearing retained topics or bypassing UPS safety controls.
+- Timestamp local updater launch failures, preserve existing GitHub check and release-install behavior, and add regression coverage for `verifying` at startup, later `completed`, automatic GitHub check masking, rollback errors, stale worker results, version mismatch and UPS denial.
+
 ## 0.5.61
 
 - Fix the unified card's running timer: use the browser's monotonic performance clock from the first observed operation state instead of subtracting the PVE host UTC timestamp from the browser wall clock. This eliminates visible overcount caused by clock skew without generating extra MQTT traffic.
