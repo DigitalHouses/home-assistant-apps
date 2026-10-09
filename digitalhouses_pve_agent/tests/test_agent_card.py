@@ -340,3 +340,64 @@ def test_main_install_completion_uses_transaction_not_aggregated_status():
     source = (Path(__file__).parents[1] / "app/main.py").read_text()
     assert "update_manager.install_card_outcome(" in source
     assert 'card.finish("install", error=str(result.get("error")' not in source
+
+
+
+def test_user_commands_are_acknowledged_before_blocking_background_work():
+    """MQTT check/install request must publish running before background work.
+
+    No new acknowledgement entity: the existing app-owned card remains the
+    authoritative source of truth. This ordering protects the first visible
+    state transition against a slow diagnostics sweep.
+    """
+    from pathlib import Path
+
+    main = (Path(__file__).parents[1] / "app" / "main.py").read_text()
+    loop = main[main.index("        while not stop_event.is_set():"):]
+    assert loop.count('card.begin("check")') == 1
+    assert loop.count('card.begin("install")') == 1
+    assert loop.count("update_manager.tick(") == 1
+    assert loop.index('card.begin("check")') < loop.index("runtime.process_events()")
+    assert loop.index('card.begin("install")') < loop.index("runtime.process_events()")
+    assert loop.index("update_manager.tick(") < loop.index("runtime.tick(time.monotonic())")
+    assert loop.index("card.tick()") < loop.index("ups_runtime.tick(time.monotonic())")
+    assert loop.index('card.begin("restart")') < loop.index('card.begin("check")')
+    # During foreground update/install the existing mutually exclusive
+    # commands must be suppressed; never launch an unrelated refresh.
+    assert 'if card.state == "running" and card.operation in {"check", "install"}:' in loop
+    assert "bridge.refresh_requested.clear()" in loop
+
+
+def test_compact_card_subscribes_to_agent_state_and_version_changes():
+    """button-card must redraw on MQTT update, not wait five seconds."""
+    from pathlib import Path
+    import yaml
+
+    root = Path(__file__).parents[1]
+    single = yaml.safe_load((root / "examples/dh_pve_agent_card_ru.yaml").read_text())
+    dashboard = yaml.safe_load(
+        (root / "examples/dh_pve_agent_dashboard_ru.yaml").read_text()
+    )
+    matches = [
+        card
+        for section in dashboard["sections"]
+        for card in section.get("cards", [])
+        if card.get("type") == "vertical-stack"
+        and card["cards"][0].get("type") == "custom:button-card"
+    ]
+    assert matches == [single]
+    top = single["cards"][0]
+    assert top["entity"] == "sensor.dh_pve_agent_card"
+    assert top["triggers_update"] == [
+        "sensor.dh_pve_agent_card",
+        "sensor.dh_pve_agent_version",
+        "sensor.dh_pve_agent_latest_version",
+        "binary_sensor.dh_pve_agent_update_available",
+    ]
+    assert "5000" in top["update_timer"]  # No high-frequency idle polling.
+    assert "100" in top["update_timer"]  # Local active stopwatch remains.
+    assert "sensor.dh_pve_agent_card" in top["label"]
+    assert len(single["cards"][1]["chips"]) == 4
+    assert "content: Новая версия" in (
+        root / "examples/dh_pve_agent_card_ru.yaml"
+    ).read_text()

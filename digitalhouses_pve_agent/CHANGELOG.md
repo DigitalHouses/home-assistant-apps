@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.63
+
+- Prioritize foreground Check version and Install commands before potentially slow PVE collection, memory diagnostics and UPS background work in the agent main loop. An MQTT command wakes the loop, and the agent publishes the authoritative running transition as soon as that command is accepted. Preserve preflight and mutually exclusive operation gates.
+- Make the compact unified button-card explicitly track the MQTT card, installed version, latest version and verified update availability via entity and triggers_update. State changes now request an immediate Home Assistant redraw rather than relying solely on the five-second idle timer.
+- Keep the running stopwatch client-side at 100 ms (zero additional MQTT traffic), preserve the 5-second final status, conditional update chip, confirmation prompts and existing PVE problems card. No optimistic running state or extra MQTT entities are introduced.
+- Add regressions for user-command priority and identical standalone/embedded Russian card configuration. Blocking synchronous collection already in progress can still delay command processing; it is not interrupted.
+
 ## 0.5.62
 
 - Fix a race in the compact agent card after installation: the independent systemd updater completes verification and writes `update_worker.json: completed` *after* the updated agent has restarted, while a newer GitHub check can already have changed the aggregate update status to `idle`. Reconcile the current install operation directly against its persisted updater transaction on every loop iteration.
