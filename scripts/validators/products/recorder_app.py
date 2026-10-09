@@ -313,9 +313,6 @@ def validate_db_monitoring(
             )
 
     for retired_key in (
-        "db_records_per_hour",
-        "db_previous_hour_records",
-        "db_yesterday_records",
     ):
         if retired_key in components:
             fail(
