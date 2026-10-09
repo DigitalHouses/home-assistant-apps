@@ -123,7 +123,7 @@ def test_ru_dashboard_has_problem_card_then_unified_agent_card():
     yaml = (Path(__file__).parents[1] / "examples" /
             "dh_pve_agent_dashboard_ru.yaml").read_text()
     problems = yaml.index("entity: sensor.dh_pve_agent_problems")
-    agent = yaml.index("entity: sensor.dh_pve_agent_card")
+    agent = yaml.index("type: custom:button-card")
     assert problems < agent
     assert yaml.count("heading: Приложение") == 0
     assert "content: Новая версия" in yaml
