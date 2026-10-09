@@ -371,33 +371,31 @@ def test_user_commands_are_acknowledged_before_blocking_background_work():
 def test_compact_card_subscribes_to_agent_state_and_version_changes():
     """button-card must redraw on MQTT update, not wait five seconds."""
     from pathlib import Path
-    import yaml
 
     root = Path(__file__).parents[1]
-    single = yaml.safe_load((root / "examples/dh_pve_agent_card_ru.yaml").read_text())
-    dashboard = yaml.safe_load(
-        (root / "examples/dh_pve_agent_dashboard_ru.yaml").read_text()
-    )
-    matches = [
-        card
-        for section in dashboard["sections"]
-        for card in section.get("cards", [])
-        if card.get("type") == "vertical-stack"
-        and card["cards"][0].get("type") == "custom:button-card"
-    ]
-    assert matches == [single]
-    top = single["cards"][0]
-    assert top["entity"] == "sensor.dh_pve_agent_card"
-    assert top["triggers_update"] == [
+    source = (root / "examples/dh_pve_agent_card_ru.yaml").read_text()
+    dashboard = (root / "examples/dh_pve_agent_dashboard_ru.yaml").read_text()
+    # The standalone YAML is embedded in the full dashboard, with the root
+    # stack indented eight columns. No PyYAML dependency in agent CI.
+    lines = [line for line in source.splitlines() if not line.startswith("#")]
+    assert lines[0] == "type: vertical-stack"
+    embedded = "      - type: vertical-stack\n" + "\n".join(
+        ("        " + line) if line else "" for line in lines[1:]
+    ) + "\n"
+    assert dashboard.count(embedded) == 1
+
+    card = source.split("    tap_action:", 1)[0]
+    assert "entity: sensor.dh_pve_agent_card" in card
+    assert "triggers_update:\n" in card
+    for required in (
         "sensor.dh_pve_agent_card",
         "sensor.dh_pve_agent_version",
         "sensor.dh_pve_agent_latest_version",
         "binary_sensor.dh_pve_agent_update_available",
-    ]
-    assert "5000" in top["update_timer"]  # No high-frequency idle polling.
-    assert "100" in top["update_timer"]  # Local active stopwatch remains.
-    assert "sensor.dh_pve_agent_card" in top["label"]
-    assert len(single["cards"][1]["chips"]) == 4
-    assert "content: Новая версия" in (
-        root / "examples/dh_pve_agent_card_ru.yaml"
-    ).read_text()
+    ):
+        assert ("      - " + required + "\n") in card
+    assert "? 100 : 5000;" in card
+    assert "content: Обновить" in source
+    assert "content: Версия" in source
+    assert "content: Новая версия" in source
+    assert "content: Перезапуск" in source
