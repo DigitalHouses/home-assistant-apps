@@ -110,6 +110,7 @@ def validate_db_monitoring(
             app / "tests/test_contracts.py",
             app / "tests/test_identity_migration.py",
             app / "tests/test_telemetry.py",
+            app / "examples/lovelace/dh_recorder_app_dashboard.yaml",
         ],
     )
 
@@ -183,6 +184,34 @@ def validate_db_monitoring(
         fail(
             f"{app.name}: completed slug migration runtime "
             "must be removed"
+        )
+
+    dashboard = (
+        app / "examples/lovelace/dh_recorder_app_dashboard.yaml"
+    ).read_text(encoding="utf-8")
+    for retired_entity_id in (
+        "sensor.dh_recorder_app_db_records_per_hour",
+        "sensor.dh_recorder_app_db_previous_hour_records",
+        "sensor.dh_recorder_app_db_yesterday_records",
+    ):
+        if retired_entity_id in dashboard:
+            fail(
+                "Recorder App dashboard must not reference retired entity "
+                f"{retired_entity_id}"
+            )
+    for live_entity_id in (
+        "sensor.dh_recorder_app_db_current_hour_records",
+        "sensor.dh_recorder_app_db_today_records",
+    ):
+        if live_entity_id not in dashboard:
+            fail(
+                "Recorder App dashboard missing live period sensor "
+                f"{live_entity_id}"
+            )
+    if dashboard.count("aggregate_func: delta") < 2:
+        fail(
+            "Recorder App dashboard must use delta aggregation "
+            "for hourly and daily activity"
         )
 
     discovery = _import_discovery(app)
