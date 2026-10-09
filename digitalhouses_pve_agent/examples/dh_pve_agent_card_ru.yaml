@@ -1,0 +1,170 @@
+# DigitalHouses PVE Agent · compact unified card
+# Requires Mushroom and custom:button-card >= 5.0 for update_timer.
+# Place immediately below the existing PVE problems card.
+type: vertical-stack
+cards:
+  - type: custom:button-card
+    entity: sensor.dh_pve_agent_card
+    update_timer: |
+      [[[
+        return states['sensor.dh_pve_agent_card']?.state === 'running'
+          ? 100 : 30000;
+      ]]]
+    show_icon: true
+    show_name: true
+    show_label: true
+    icon: |
+      [[[
+        const s = states['sensor.dh_pve_agent_card']?.state;
+        return s === 'running' ? 'mdi:progress-clock'
+          : s === 'error' ? 'mdi:alert-circle'
+          : s === 'success' ? 'mdi:check-circle'
+          : 'mdi:server';
+      ]]]
+    name: |
+      [[[
+        const version = states['sensor.dh_pve_agent_version']?.state;
+        const valid = version && !['unknown','unavailable','none'].includes(version);
+        return 'PVE Agent' + (valid ? ' · v' + version : '');
+      ]]]
+    label: |
+      [[[
+        const item = states['sensor.dh_pve_agent_card'];
+        if (!item || ['unknown','unavailable'].includes(item.state)) {
+          return 'Нет связи с агентом';
+        }
+        const a = item.attributes || {};
+        const operation = a.operation;
+        const names = {
+          refresh: 'Обновление данных',
+          check: 'Проверка версии',
+          install: 'Установка версии',
+          restart: 'Перезапуск агента'
+        };
+        const duration = (value) =>
+          typeof value === 'number'
+          ? value.toFixed(1).replace('.', ',') + ' сек'
+          : '—';
+        if (item.state === 'running') {
+          const start = Date.parse(a.started_at || '');
+          if (!Number.isFinite(start)) return (names[operation] || 'Операция') + '…';
+          const tenths = Math.max(0, Math.floor((Date.now() - start) / 100));
+          const mm = String(Math.floor(tenths / 600)).padStart(2, '0');
+          const ss = String(Math.floor((tenths % 600) / 10)).padStart(2, '0');
+          return (names[operation] || 'Операция') + '… ' + mm + ':' + ss + ',' + tenths % 10;
+        }
+        if (item.state === 'error') {
+          return 'Ошибка: ' + (a.error || 'операция не выполнена');
+        }
+        if (item.state === 'success') {
+          let message = {
+            refresh: 'Обновлено',
+            check: 'Версия проверена',
+            install: 'Версия установлена',
+            restart: 'Агент перезапущен'
+          }[operation] || 'Готово';
+          if (operation === 'check') {
+            const available = states['binary_sensor.dh_pve_agent_update_available']?.state;
+            message = available === 'on' ? 'Доступна новая версия'
+              : available === 'off' ? 'Версия актуальна' : 'Проверка завершена';
+          }
+          return message + ' · ' + duration(a.duration_seconds);
+        }
+        const ts = Date.parse(a.last_collection_at || '');
+        if (!Number.isFinite(ts)) return 'Ожидание данных';
+        const sec = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+        if (sec < 60) return 'Обновлено ' + sec + ' сек назад';
+        const min = Math.floor(sec / 60);
+        if (min < 60) return 'Обновлено ' + min + ' мин назад';
+        const hr = Math.floor(min / 60);
+        if (hr < 24) return 'Обновлено ' + hr + ' ч назад';
+        return 'Обновлено ' + Math.floor(hr / 24) + ' д назад';
+      ]]]
+    styles:
+      card:
+        - padding: 12px
+        - text-align: left
+      grid:
+        - grid-template-areas: '"i n" "i l"'
+        - grid-template-columns: 48px 1fr
+        - grid-template-rows: min-content min-content
+      img_cell:
+        - width: 40px
+        - justify-content: start
+      icon:
+        - width: 26px
+        - color: |
+            [[[
+              const s = states['sensor.dh_pve_agent_card']?.state;
+              return s === 'error' ? 'var(--error-color)'
+                : s === 'running' ? 'var(--info-color, var(--primary-color))'
+                : 'var(--success-color, var(--primary-color))';
+            ]]]
+      name:
+        - justify-self: start
+        - font-size: 14px
+        - font-weight: 600
+      label:
+        - justify-self: start
+        - white-space: normal
+        - text-align: left
+        - font-size: 13px
+        - color: var(--secondary-text-color)
+    tap_action:
+      action: more-info
+
+  - type: custom:mushroom-chips-card
+    alignment: center
+    chips:
+      - type: template
+        icon: mdi:refresh
+        content: Обновить
+        tap_action:
+          action: perform-action
+          perform_action: button.press
+          target:
+            entity_id: button.dh_pve_agent_refresh
+
+      - type: template
+        icon: mdi:cloud-search
+        content: Версия
+        tap_action:
+          action: perform-action
+          perform_action: button.press
+          target:
+            entity_id: button.dh_pve_agent_check_updates
+
+      - type: conditional
+        conditions:
+          - entity: binary_sensor.dh_pve_agent_update_available
+            state: "on"
+        chip:
+          type: template
+          icon: mdi:package-down
+          icon_color: orange
+          content: Новая версия
+          tap_action:
+            action: perform-action
+            perform_action: button.press
+            target:
+              entity_id: button.dh_pve_agent_update
+            confirmation:
+              text: >-
+                Установить новую версию PVE Agent?
+                Мониторинг и логика UPS временно прервутся.
+
+      - type: template
+        icon: mdi:restart
+        content: Перезапуск
+        tap_action:
+          action: perform-action
+          perform_action: button.press
+          target:
+            entity_id: button.dh_pve_agent_restart_agent
+          confirmation:
+            text: >-
+              Перезапустить PVE Agent?
+              Мониторинг и логика UPS временно прервутся.
+              Сам Proxmox и его гости не перезапускаются.
+grid_options:
+  columns: 12

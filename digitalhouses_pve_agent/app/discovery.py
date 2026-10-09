@@ -202,9 +202,31 @@ def build_discovery_payload(
             "json_attributes_template": (
                 "{{ {'error': value_json.error | default(none), "
                 "'checked_at': value_json.checked_at | default(none), "
+                "'check_started_at': value_json.check_started_at | default(none), "
+                "'check_duration_seconds': value_json.check_duration_seconds | default(none), "
                 "'installed_version': value_json.installed_version | default(none), "
                 "'installation_status': value_json.installation_status | default(none), "
                 "'installation_error': value_json.installation_error | default(none)} | tojson }}"
+            ),
+        },
+        "agent_card": {
+            "platform": "sensor",
+            "name": "Agent card",
+            "unique_id": uid("agent_card"),
+            "default_entity_id": "sensor.dh_pve_agent_card",
+            "state_topic": topics.agent_card_state,
+            "value_template": "{{ value_json.state | default('idle') }}",
+            "availability": [_availability(topics.availability)],
+            "entity_category": "diagnostic",
+            "icon": "mdi:server",
+            "json_attributes_topic": topics.agent_card_state,
+            "json_attributes_template": (
+                "{{ {'operation': value_json.operation | default(none), "
+                "'started_at': value_json.started_at | default(none), "
+                "'finished_at': value_json.finished_at | default(none), "
+                "'duration_seconds': value_json.duration_seconds | default(none), "
+                "'last_collection_at': value_json.last_collection_at | default(none), "
+                "'error': value_json.error | default(none)} | tojson }}"
             ),
         },
         "refresh_state": {

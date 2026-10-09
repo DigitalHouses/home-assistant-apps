@@ -51,6 +51,40 @@ Passive, read-only memory diagnostics sample the host and running LXC guests eve
 
 The agent retains 30 days of events **and every PSI interval delta, including zero and small delays**, at `/var/lib/digitalhouses_pve_agent/memory_diagnostics.json`. Raw PSI samples are local-only and never published to Home Assistant. Pressure events recorded before 0.5.57 remain in local 30-day history but are excluded from the new HA incident table because their severity was not verified against an elapsed observation window. `sensor.dh_pve_agent_memory_history` publishes the newest 60 events, the full count and a truncation indicator to avoid oversized Home Assistant attributes; an unreadable source is marked unknown rather than treated as healthy. Example dashboard card: [Memory events](examples/dh_pve_agent_memory_diagnostics_card.yaml). No guest commands, memory tuning, alerts or restart actions are performed.
 
+## Compact Agent control card (UI v2)
+
+The single app-owned diagnostic entity `sensor.dh_pve_agent_card` is the
+source of truth for the compact card in
+[`examples/dh_pve_agent_card_ru.yaml`](examples/dh_pve_agent_card_ru.yaml).
+Use the included card directly or the updated Russian dashboard. The card is
+placed immediately after the unchanged PVE problem summary. The obsolete
+standalone Refresh action is removed from the Russian example.
+
+The four controls are **Обновить**, **Версия**, conditional **Новая версия**,
+**Перезапуск**. Install and Restart require an HA confirmation. A foreground
+operation announces `running` before work, publishes an app-measured final
+duration, shows `success` for five seconds, and returns to `idle`.
+Failures stay visible until another user action. Restart records intent before
+exit and only reports success after the new agent starts and publishes via
+MQTT; UPS safety gates still apply.
+
+While the operation is running, the card interpolates tenths from its
+app-published `started_at` without publishing an MQTT timer every 100 ms.
+For this active-timer presentation the example needs
+[`custom:button-card`](https://github.com/custom-cards/button-card) with
+`update_timer` support plus Mushroom chips. The agent stores the final
+measured elapsed time and remains authoritative.
+
+The idle **Обновлено N времени назад** comes from `last_collection_at` in
+the same agent-card sensor, set by successful automatic *or* manual sampling
+and published at most once per 30 seconds. This is collection freshness,
+not the time of the last MQTT state change and not a claim that every heavy
+collector just ran. Collector FAST/SLOW/HEALTH schedules remain unchanged.
+The canonical `sensor.dh_pve_agent_last_refresh` still means a completed
+explicit full Refresh, preserving the existing Manual Refresh Standard.
+Automatic GitHub checks retain the same accurate check duration/metadata but
+do not interrupt the foreground user operation.
+
 ## Update from Home Assistant
 
 The PVE Agent exposes two non-retained MQTT commands in the existing DH PVE device:

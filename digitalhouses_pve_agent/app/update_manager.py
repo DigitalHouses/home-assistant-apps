@@ -73,6 +73,9 @@ class UpdateManager:
         self._checking = False
         self._check_error: str | None = None
         self._check_result: tuple[str, str] | None = None
+        self._check_start_mono: float | None = None
+        self._check_started_at: str | None = None
+        self._check_duration: float | None = None
         self._published: str | None = None
         self._status_error: str | None = None
         self._status: str = "idle"
@@ -82,9 +85,13 @@ class UpdateManager:
             self.tag = str(cached.get("tag") or "")
             self.latest = str(cached.get("version") or "unknown")
             self.checked = str(cached.get("checked_at") or "")
+            self._check_started_at = cached.get("check_started_at")
+            self._check_duration = cached.get("check_duration_seconds")
         except Exception as exc:
             log.warning("Invalid update cache: %s", exc)
             self.tag, self.latest, self.checked = "", "unknown", ""
+            self._check_started_at = None
+            self._check_duration = None
         self.known = False  # A stale cached check is never proof of availability.
 
     def start_check(self) -> bool:
@@ -95,6 +102,9 @@ class UpdateManager:
             self._status = "checking"
             self._status_error = None
             self._last_check = time.monotonic()
+            self._check_start_mono = self._last_check
+            self._check_started_at = datetime.now(timezone.utc).isoformat()
+            self._check_duration = None
         threading.Thread(target=self._fetch_release, name="pve-update-check", daemon=True).start()
         return True
 
@@ -108,6 +118,9 @@ class UpdateManager:
         with self._lock:
             self._check_result = result
             self._check_error = error
+            self._check_duration = round(max(0, time.monotonic() - (
+                self._check_start_mono if self._check_start_mono is not None else time.monotonic()
+            )), 3)
             self._checking = False
 
     def _is_worker_busy(self) -> bool:
@@ -132,7 +145,11 @@ class UpdateManager:
             self.known = True
             self._status, self._status_error = "idle", None
         try:
-            self.cache.save({"tag": self.tag, "version": self.latest, "checked_at": self.checked})
+            self.cache.save({
+                "tag": self.tag, "version": self.latest, "checked_at": self.checked,
+                "check_started_at": self._check_started_at,
+                "check_duration_seconds": self._check_duration,
+            })
         except Exception as exc:
             log.warning("Update cache save failed: %s", exc)
 
@@ -179,6 +196,8 @@ class UpdateManager:
             "status": status,
             "error": error,
             "checked_at": self.checked or None,
+            "check_started_at": self._check_started_at,
+            "check_duration_seconds": self._check_duration,
             "installed_version": self.version,
             "installation_status": worker_state,
             "installation_error": worker.get("error"),
