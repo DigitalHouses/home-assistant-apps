@@ -75,6 +75,13 @@ For this active-timer presentation the example needs
 `update_timer` support plus Mushroom chips. The agent stores the final
 measured elapsed time and remains authoritative.
 
+When a verified new stable release exists, the idle card instead shows
+`PVE Agent · v<installed> → v<latest>` and `Доступна новая версия` with
+a warning-colored icon, until installation or a later successful version
+check clears the update flag. A running operation and its five-second
+completion status take precedence; unknown GitHub availability must never
+be presented as a verified new release.
+
 The idle **Обновлено N времени назад** comes from `last_collection_at` in
 the same agent-card sensor, set by successful automatic *or* manual sampling
 and published at most once per 30 seconds. This is collection freshness,

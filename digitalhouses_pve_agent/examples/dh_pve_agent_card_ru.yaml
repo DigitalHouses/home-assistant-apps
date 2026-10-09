@@ -7,7 +7,7 @@ cards:
     update_timer: |
       [[[
         return states['sensor.dh_pve_agent_card']?.state === 'running'
-          ? 100 : 30000;
+          ? 100 : 5000;
       ]]]
     show_icon: true
     show_name: true
@@ -15,16 +15,24 @@ cards:
     icon: |
       [[[
         const s = states['sensor.dh_pve_agent_card']?.state;
+        const upgrade = states['binary_sensor.dh_pve_agent_update_available']?.state === 'on';
         return s === 'running' ? 'mdi:progress-clock'
           : s === 'error' ? 'mdi:alert-circle'
           : s === 'success' ? 'mdi:check-circle'
+          : upgrade ? 'mdi:package-up'
           : 'mdi:server';
       ]]]
     name: |
       [[[
-        const version = states['sensor.dh_pve_agent_version']?.state;
-        const valid = version && !['unknown','unavailable','none'].includes(version);
-        return 'PVE Agent' + (valid ? ' · v' + version : '');
+        const installed = states['sensor.dh_pve_agent_version']?.state;
+        const latest = states['sensor.dh_pve_agent_latest_version']?.state;
+        const available = states['binary_sensor.dh_pve_agent_update_available']?.state === 'on';
+        const valid = (v) =>
+          typeof v === 'string' && !['unknown', 'unavailable', 'none', ''].includes(v);
+        const upgrade = available && valid(installed) && valid(latest) && latest !== installed;
+        return 'PVE Agent' + (valid(installed)
+          ? ' · v' + installed + (upgrade ? ' → v' + latest : '')
+          : '');
       ]]]
     label: |
       [[[
@@ -69,6 +77,10 @@ cards:
           }
           return message + ' · ' + duration(a.duration_seconds);
         }
+        // A verified new release stays visible after the five-second result.
+        if (states['binary_sensor.dh_pve_agent_update_available']?.state === 'on') {
+          return 'Доступна новая версия';
+        }
         const ts = Date.parse(a.last_collection_at || '');
         if (!Number.isFinite(ts)) return 'Ожидание данных';
         const sec = Math.max(0, Math.floor((Date.now() - ts) / 1000));
@@ -95,8 +107,11 @@ cards:
         - color: |
             [[[
               const s = states['sensor.dh_pve_agent_card']?.state;
+              const upgrade = states['binary_sensor.dh_pve_agent_update_available']?.state === 'on';
               return s === 'error' ? 'var(--error-color)'
                 : s === 'running' ? 'var(--info-color, var(--primary-color))'
+                : s === 'success' ? 'var(--success-color, var(--primary-color))'
+                : upgrade ? 'var(--warning-color, orange)'
                 : 'var(--success-color, var(--primary-color))';
             ]]]
       name:
