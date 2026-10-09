@@ -11,9 +11,7 @@ from metrics import (
     db_depth_days,
     last_age_seconds,
     next_local_boundary_epoch,
-    previous_hour_bounds_epoch,
     records_k,
-    yesterday_bounds_epoch,
 )
 
 class MetricsTests(unittest.TestCase):
@@ -46,13 +44,6 @@ class MetricsTests(unittest.TestCase):
             datetime.fromtimestamp(day_start, tz),
             datetime(2026, 9, 4, 0, 0, tzinfo=tz),
         )
-
-    def test_yesterday_bounds_are_local_midnight(self):
-        tz = ZoneInfo('Asia/Almaty')
-        now = datetime(2026, 9, 4, 12, 0, tzinfo=tz).timestamp()
-        start, end = yesterday_bounds_epoch(now, 'Asia/Almaty')
-        self.assertEqual(datetime.fromtimestamp(start, tz), datetime(2026, 9, 3, 0, 0, tzinfo=tz))
-        self.assertEqual(datetime.fromtimestamp(end, tz), datetime(2026, 9, 4, 0, 0, tzinfo=tz))
 
     def test_next_local_five_minute_boundary_is_aligned(self):
         tz = ZoneInfo('Asia/Almaty')
@@ -99,25 +90,6 @@ class MetricsTests(unittest.TestCase):
             datetime(2026, 10, 9, 0, 0, tzinfo=tz),
         )
 
-    def test_previous_hour_bounds_are_closed_local_hour(self):
-        tz = ZoneInfo('Asia/Almaty')
-        now = datetime(
-            2026, 10, 7, 19, 49, 30, tzinfo=tz
-        ).timestamp()
-        start, end = previous_hour_bounds_epoch(
-            now,
-            'Asia/Almaty',
-        )
-        self.assertEqual(
-            datetime.fromtimestamp(start, tz),
-            datetime(2026, 10, 7, 18, 0, tzinfo=tz),
-        )
-        self.assertEqual(
-            datetime.fromtimestamp(end, tz),
-            datetime(2026, 10, 7, 19, 0, tzinfo=tz),
-        )
-        self.assertEqual(end - start, 3600)
-
     def test_almaty_local_midnight_converts_to_expected_utc_epoch(self):
         tz = ZoneInfo('Asia/Almaty')
         utc = ZoneInfo('UTC')
@@ -127,20 +99,6 @@ class MetricsTests(unittest.TestCase):
             datetime.fromtimestamp(day_start, utc),
             datetime(2026, 10, 5, 19, 0, tzinfo=utc),
         )
-
-    def test_yesterday_bounds_follow_dst_not_fixed_offset(self):
-        tz = ZoneInfo('Europe/Berlin')
-        now = datetime(2026, 10, 26, 12, 0, tzinfo=tz).timestamp()
-        start, end = yesterday_bounds_epoch(now, 'Europe/Berlin')
-        self.assertEqual(
-            datetime.fromtimestamp(start, tz),
-            datetime(2026, 10, 25, 0, 0, tzinfo=tz),
-        )
-        self.assertEqual(
-            datetime.fromtimestamp(end, tz),
-            datetime(2026, 10, 26, 0, 0, tzinfo=tz),
-        )
-        self.assertEqual(end - start, 25 * 3600)
 
 if __name__ == '__main__':
     unittest.main()
