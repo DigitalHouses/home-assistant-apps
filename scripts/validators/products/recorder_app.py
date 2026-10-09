@@ -254,9 +254,6 @@ def validate_db_monitoring(
         "db_start": (
             "sensor.dh_recorder_app_db_start"
         ),
-        "db_previous_hour_records": (
-            "sensor.dh_recorder_app_db_previous_hour_records"
-        ),
         "db_current_hour_records": (
             "sensor.dh_recorder_app_db_current_hour_records"
         ),
@@ -302,10 +299,7 @@ def validate_db_monitoring(
             )
 
     record_units = {
-        "db_records_per_hour": "K rec/h",
         "db_records": "K records",
-        "db_yesterday_records": "K records",
-        "db_previous_hour_records": "K records",
         "db_current_hour_records": "K records",
         "db_today_records": "K records",
         "db_top_entities_24h": "records",
@@ -318,8 +312,18 @@ def validate_db_monitoring(
                 f"Recorder App {key} must use {expected_unit}"
             )
 
-    for key in (
+    for retired_key in (
+        "db_records_per_hour",
         "db_previous_hour_records",
+        "db_yesterday_records",
+    ):
+        if retired_key in components:
+            fail(
+                "Recorder App retired canonical discovery component "
+                f"must be absent: {retired_key}"
+            )
+
+    for key in (
         "db_current_hour_records",
         "db_today_records",
     ):
