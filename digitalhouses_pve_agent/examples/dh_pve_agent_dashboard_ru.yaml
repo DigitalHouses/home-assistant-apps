@@ -63,7 +63,6 @@ sections:
       - type: vertical-stack
         cards:
           - type: custom:button-card
-            entity: sensor.dh_pve_agent_card
             update_timer: |
               [[[
                 return states['sensor.dh_pve_agent_card']?.state === 'running'
@@ -170,7 +169,7 @@ sections:
                 - font-size: 13px
                 - color: var(--secondary-text-color)
             tap_action:
-              action: more-info
+              action: none
 
           - type: custom:mushroom-chips-card
             alignment: center
