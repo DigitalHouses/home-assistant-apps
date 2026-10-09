@@ -12,9 +12,6 @@ class DatabaseAdapter(ABC):
     @abstractmethod
     def medium_metrics(
         self,
-        hour_cutoff: float,
-        previous_hour_start: float,
-        previous_hour_end: float,
         current_hour_start: float,
         today_start: float,
         period_end: float,
@@ -22,7 +19,7 @@ class DatabaseAdapter(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def slow_metrics(self, yesterday_start: float, today_start: float) -> dict[str, Any]:
+    def slow_metrics(self) -> dict[str, Any]:
         raise NotImplementedError
 
     @abstractmethod
