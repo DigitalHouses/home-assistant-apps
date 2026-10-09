@@ -6,8 +6,10 @@ cards:
   - type: custom:button-card
     update_timer: |
       [[[
-        return states['sensor.dh_pve_agent_card']?.state === 'running'
-          ? 100 : 5000;
+        const s = states['sensor.dh_pve_agent_card']?.state;
+        const awaitingRestart = ['unavailable', 'unknown'].includes(s)
+          && this._dh_pve_timer?.operation === 'restart';
+        return s === 'running' || awaitingRestart ? 100 : 5000;
       ]]]
     show_icon: true
     show_name: true
@@ -16,7 +18,9 @@ cards:
       [[[
         const s = states['sensor.dh_pve_agent_card']?.state;
         const upgrade = states['binary_sensor.dh_pve_agent_update_available']?.state === 'on';
-        return s === 'running' ? 'mdi:progress-clock'
+        const awaitingRestart = ['unavailable', 'unknown'].includes(s)
+          && this._dh_pve_timer?.operation === 'restart';
+        return s === 'running' || awaitingRestart ? 'mdi:progress-clock'
           : s === 'error' ? 'mdi:alert-circle'
           : s === 'success' ? 'mdi:check-circle'
           : upgrade ? 'mdi:package-up'
@@ -37,7 +41,21 @@ cards:
     label: |
       [[[
         const item = states['sensor.dh_pve_agent_card'];
+        // The foreground timer starts when this browser first observes
+        // running, using its own monotonic clock. Never subtract the PVE
+        // server UTC timestamp from the browser wall clock: these clocks
+        // may differ by seconds.
+        const elapsedText = (since) => {
+          const tenths = Math.max(0, Math.floor((performance.now() - since) / 100));
+          const mm = String(Math.floor(tenths / 600)).padStart(2, '0');
+          const ss = String(Math.floor((tenths % 600) / 10)).padStart(2, '0');
+          return mm + ':' + ss + ',' + tenths % 10;
+        };
         if (!item || ['unknown','unavailable'].includes(item.state)) {
+          const pending = this._dh_pve_timer;
+          if (pending?.operation === 'restart') {
+            return 'Ожидание запуска агента… ' + elapsedText(pending.since);
+          }
           return 'Нет связи с агентом';
         }
         const a = item.attributes || {};
@@ -53,12 +71,14 @@ cards:
           ? value.toFixed(1).replace('.', ',') + ' сек'
           : '—';
         if (item.state === 'running') {
-          const start = Date.parse(a.started_at || '');
-          if (!Number.isFinite(start)) return (names[operation] || 'Операция') + '…';
-          const tenths = Math.max(0, Math.floor((Date.now() - start) / 100));
-          const mm = String(Math.floor(tenths / 600)).padStart(2, '0');
-          const ss = String(Math.floor((tenths % 600) / 10)).padStart(2, '0');
-          return (names[operation] || 'Операция') + '… ' + mm + ':' + ss + ',' + tenths % 10;
+          const key = String(operation) + '|' + String(a.started_at || '');
+          if (this._dh_pve_timer?.key !== key) {
+            this._dh_pve_timer = {
+              key: key, operation: operation, since: performance.now()
+            };
+          }
+          return (names[operation] || 'Операция') + '… '
+            + elapsedText(this._dh_pve_timer.since);
         }
         if (item.state === 'error') {
           return 'Ошибка: ' + (a.error || 'операция не выполнена');
@@ -108,8 +128,11 @@ cards:
             [[[
               const s = states['sensor.dh_pve_agent_card']?.state;
               const upgrade = states['binary_sensor.dh_pve_agent_update_available']?.state === 'on';
+              const awaitingRestart = ['unavailable', 'unknown'].includes(s)
+                && this._dh_pve_timer?.operation === 'restart';
               return s === 'error' ? 'var(--error-color)'
-                : s === 'running' ? 'var(--info-color, var(--primary-color))'
+                : s === 'running' || awaitingRestart
+                  ? 'var(--info-color, var(--primary-color))'
                 : s === 'success' ? 'var(--success-color, var(--primary-color))'
                 : upgrade ? 'var(--warning-color, orange)'
                 : 'var(--success-color, var(--primary-color))';
