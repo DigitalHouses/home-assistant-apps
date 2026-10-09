@@ -7,15 +7,15 @@ VALIDATOR = ROOT / "scripts" / "validators" / "products" / "pve_agent.py"
 
 
 def test_0545_version_contract():
-    assert (APP / "VERSION").read_text(encoding="utf-8").strip() == "0.5.59"
+    assert (APP / "VERSION").read_text(encoding="utf-8").strip() == "0.5.60"
 
     validator = VALIDATOR.read_text(encoding="utf-8")
-    assert 'EXPECTED_VERSION = "0.5.59"' in validator
+    assert 'EXPECTED_VERSION = "0.5.60"' in validator
 
     readme = (APP / "README.md").read_text(encoding="utf-8")
     changelog = (APP / "CHANGELOG.md").read_text(encoding="utf-8")
-    assert "Current source release: `VERSION` is `0.5.59`." in readme
-    assert "## 0.5.59" in changelog
+    assert "Current source release: `VERSION` is `0.5.60`." in readme
+    assert "## 0.5.60" in changelog
 
 
 def test_0545_operational_docs_use_current_release_tag():
@@ -25,7 +25,7 @@ def test_0545_operational_docs_use_current_release_tag():
         APP / "hardware" / "beelink" / "README.md",
     ):
         text = path.read_text(encoding="utf-8")
-        assert "digitalhouses_pve_agent-v0.5.59" in text
+        assert "digitalhouses_pve_agent-v0.5.60" in text
 
 
 def test_0545_keeps_0536_runtime_cleanup_and_full_manual_refresh():

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.60
+
+- Introduce a compact unified PVE Agent control card with an App-owned operation state for Refresh, Check version, Install new version and Restart. The standalone Refresh card is replaced by the Refresh chip; the PVE problems card remains unchanged and first.
+- Show a live tenths-of-a-second timer while a user-requested operation runs, retain the measured final duration for five seconds on success, and keep failures visible until the next command. Install and Restart require Home Assistant confirmation.
+- Record the timestamp of successful scheduled or manual data collection independently of the canonical manual full-Refresh timestamp, without changing FAST/SLOW/HEALTH sampling or increasing MQTT publish frequency to 10 Hz.
+- Persist operation context across agent restarts, confirm a successful restart only after the new agent is initialized and connected to MQTT, and retain UPS-related safety restrictions.
+- Record the duration of automatic or user-requested GitHub release checks. Add a single diagnostic MQTT Discovery sensor for the unified card without replacing existing entity IDs.
+- Provide an updated Russian dashboard and standalone compact card template; the live timer requires the custom Button Card frontend in addition to Mushroom. UI validation in Home Assistant is recommended before removing legacy cards.
+
 ## 0.5.59
 
 - Restore the compact shutdown-readiness card layout while translating machine reason codes into human-readable Russian and keeping a direct link to the UPS/NUT setup guide.
