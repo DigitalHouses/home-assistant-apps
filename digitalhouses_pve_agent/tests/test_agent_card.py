@@ -157,3 +157,29 @@ def test_github_check_duration_is_product_owned_and_persisted(tmp_path, monkeypa
     cached = manager.cache.load()
     assert cached['check_started_at'] == payload['check_started_at']
     assert cached['check_duration_seconds'] == payload['check_duration_seconds']
+
+
+def test_compact_card_keeps_verified_update_visible_after_operation_result():
+    """Update alert is persistent only for verified availability, not guessed."""
+    from pathlib import Path
+    root = Path(__file__).parents[1]
+    standalone = (root / "examples/dh_pve_agent_card_ru.yaml").read_text()
+    dashboard = (root / "examples/dh_pve_agent_dashboard_ru.yaml").read_text()
+
+    for yaml in (standalone, dashboard):
+        assert "states['binary_sensor.dh_pve_agent_update_available']?.state === 'on'" in yaml
+        assert "states['sensor.dh_pve_agent_latest_version']?.state" in yaml
+        assert "' → v' + latest" in yaml
+        assert "'Доступна новая версия'" in yaml
+        assert "upgrade ? 'mdi:package-up'" in yaml
+        assert "upgrade ? 'var(--warning-color, orange)'" in yaml
+        assert "content: Новая версия" in yaml
+        # Running, error and five-second result always win over persistent alert.
+        assert yaml.index("if (item.state === 'running')") < yaml.index("if (item.state === 'error')")
+        assert yaml.index("if (item.state === 'error')") < yaml.index("if (item.state === 'success')")
+        assert yaml.index("if (item.state === 'success')") < yaml.index(
+            "// A verified new release stays visible after the five-second result."
+        )
+        assert yaml.index("// A verified new release stays visible") < yaml.index(
+            "const ts = Date.parse(a.last_collection_at || '');"
+        )
