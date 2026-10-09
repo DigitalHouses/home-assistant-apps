@@ -631,7 +631,6 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
                     card.finish(
                         "check",
                         error=str(result.get("error") or "GitHub check failed") if status == "error" else None,
-                        measured_seconds=result.get("check_duration_seconds"),
                     )
                 elif card.operation == "install" and status in {"completed", "error"}:
                     card.finish("install", error=str(result.get("error") or "Update failed") if status == "error" else None)

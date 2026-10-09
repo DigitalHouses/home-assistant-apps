@@ -183,3 +183,59 @@ def test_compact_card_keeps_verified_update_visible_after_operation_result():
         assert yaml.index("// A verified new release stays visible") < yaml.index(
             "const ts = Date.parse(a.last_collection_at || '');"
         )
+
+
+def test_restart_duration_ignores_wall_clock_skew_between_processes(tmp_path):
+    """A two-second clock correction must not shorten a restarted operation."""
+    clock = Clock()
+    path = tmp_path / "card.json"
+    boot = lambda: "same-pve-boot"
+    first = AgentCard(path, lambda _: True, clock=clock.mono, now=clock.iso,
+                      boot_id=boot)
+    first.begin("restart")
+    clock.advance(10)
+    # The host wall clock moved backward by two seconds while restarting.
+    skewed_wall = lambda: (
+        clock.origin + timedelta(seconds=clock.seconds - 2)
+    ).isoformat()
+    second = AgentCard(path, lambda _: True, clock=clock.mono, now=skewed_wall,
+                       boot_id=boot)
+    assert second.state == "running"
+    assert second._started_monotonic == 0.0
+    assert second.finish("restart")
+    assert second.duration_seconds == 10.0  # old implementation: 8.0
+    assert "_started_monotonic" not in second.payload()
+    assert "_start_boot_id" not in second.payload()
+
+
+def test_install_cross_process_uses_monotonic_and_falls_back_across_host_reboot(tmp_path):
+    clock = Clock()
+    path = tmp_path / "card.json"
+    origin = AgentCard(path, lambda _: True, clock=clock.mono, now=clock.iso,
+                       boot_id=lambda: "old-boot")
+    origin.begin("install")
+    clock.advance(8)
+    # Different PVE boot ID means the monotonic tick has lost its origin.
+    new_boot = AgentCard(
+        path, lambda _: True, clock=lambda: 1.0, now=clock.iso,
+        boot_id=lambda: "new-boot",
+    )
+    assert new_boot.state == "running"
+    assert new_boot._started_monotonic is None
+    assert new_boot.finish("install")
+    assert new_boot.duration_seconds == 8.0
+
+
+def test_compact_timer_uses_local_browser_monotonic_clock_not_pve_wall_clock():
+    from pathlib import Path
+    root = Path(__file__).parents[1]
+    for path in [
+        root / "examples/dh_pve_agent_card_ru.yaml",
+        root / "examples/dh_pve_agent_dashboard_ru.yaml",
+    ]:
+        source = path.read_text()
+        assert "performance.now()" in source
+        assert "this._dh_pve_timer" in source
+        assert "Date.now() - start" not in source
+        assert "Math.floor((performance.now() - since) / 100)" in source
+        assert "Ожидание запуска агента…" in source

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.61
+
+- Fix the unified card's running timer: use the browser's monotonic performance clock from the first observed operation state instead of subtracting the PVE host UTC timestamp from the browser wall clock. This eliminates visible overcount caused by clock skew without generating extra MQTT traffic.
+- Keep the Restart countdown visible as 'Ожидание запуска агента…' while MQTT briefly marks the agent unavailable, and resume normal operation feedback after the agent reconnects.
+- Persist the Linux monotonic start time and boot identity for Restart and Install so a service/process restart preserves accurate operation duration even if the host wall clock is adjusted. Fall back to the wall-clock timestamp for a different host boot or legacy state file; do not expose the internal clock checkpoint over MQTT.
+- Align the Check version card result with the full user-visible command duration rather than just the GitHub HTTP request duration. The HTTP-only measurement remains available in the existing update diagnostic state.
+- Cover time-skew, restart recovery, host reboot fallback, card YAML integrity and frontend timer formatting with regression tests. All previously agreed chip actions, five-second results and UPS protections remain unchanged.
+
 ## 0.5.60
 
 - Introduce a compact unified PVE Agent control card with an App-owned operation state for Refresh, Check version, Install new version and Restart. The standalone Refresh card is replaced by the Refresh chip; the PVE problems card remains unchanged and first.

@@ -6,6 +6,7 @@ scheduled release checks update data freshness without stealing the card.
 from __future__ import annotations
 
 import time
+import math
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
@@ -21,16 +22,27 @@ def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def linux_boot_id() -> str | None:
+    """The monotonic clock is comparable across processes on the same Linux boot."""
+    try:
+        return Path("/proc/sys/kernel/random/boot_id").read_text().strip() or None
+    except OSError:
+        return None
+
+
 class AgentCard:
     def __init__(
         self, path: Path, publisher: Callable[[dict[str, object]], bool],
         *, clock: Callable[[], float] = time.monotonic,
         now: Callable[[], str] = utc_now,
+        boot_id: Callable[[], str | None] = linux_boot_id,
     ) -> None:
         self.store = StateStore(path)
         self.publisher = publisher
         self.clock = clock
         self.now = now
+        self._boot_id = boot_id()
+        self._start_boot_id: str | None = None
         self._started_monotonic: float | None = None
         self._result_monotonic: float | None = None
         self._last_collection_publish: float | None = None
@@ -45,6 +57,22 @@ class AgentCard:
         self.finished_at = saved.get("finished_at")
         self.duration_seconds = saved.get("duration_seconds")
         self.error = saved.get("error")
+        if self.state == "running" and self.operation in {"restart", "install"}:
+            persisted_boot = saved.get("_start_boot_id")
+            persisted_mono = saved.get("_started_monotonic")
+            # Reuse CLOCK_MONOTONIC across service restarts, but never
+            # across a reboot or with an untrusted/legacy state file.
+            if (
+                isinstance(persisted_boot, str)
+                and persisted_boot
+                and persisted_boot == self._boot_id
+                and isinstance(persisted_mono, (int, float))
+                and not isinstance(persisted_mono, bool)
+                and math.isfinite(persisted_mono)
+                and 0 <= persisted_mono <= self.clock()
+            ):
+                self._started_monotonic = float(persisted_mono)
+                self._start_boot_id = persisted_boot
         if self.state == "running" and self.operation not in {"restart", "install"}:
             # Only a service restart and an external update worker can survive
             # this Python process. Anything else was interrupted.
@@ -67,7 +95,11 @@ class AgentCard:
             return None
 
     def _persist(self) -> None:
-        self.store.save(self.payload())
+        state = self.payload()
+        # Internal-only checkpoint. Do not expose clock origins over MQTT.
+        state["_started_monotonic"] = self._started_monotonic
+        state["_start_boot_id"] = self._start_boot_id
+        self.store.save(state)
 
     def payload(self) -> dict[str, object]:
         return {
@@ -95,6 +127,7 @@ class AgentCard:
         self.duration_seconds = None
         self.error = None
         self._started_monotonic = self.clock()
+        self._start_boot_id = self._boot_id
         self._result_monotonic = None
         self._persist()
         self.publish()
@@ -118,6 +151,7 @@ class AgentCard:
         self.error = error
         self._result_monotonic = self.clock() if not error else None
         self._started_monotonic = None
+        self._start_boot_id = None
         self._persist()
         self.publish()
         return True
