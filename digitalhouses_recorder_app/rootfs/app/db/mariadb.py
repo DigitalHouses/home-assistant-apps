@@ -51,24 +51,12 @@ class MariaDBAdapter(DatabaseAdapter):
 
     def medium_metrics(
         self,
-        hour_cutoff: float,
-        previous_hour_start: float,
-        previous_hour_end: float,
         current_hour_start: float,
         today_start: float,
         period_end: float,
     ) -> dict[str, Any]:
-        range_start = min(
-            hour_cutoff,
-            previous_hour_start,
-            today_start,
-        )
         rows = self._rows(
             'SELECT '
-            'COALESCE(SUM(CASE WHEN last_updated_ts >= %s '
-            'AND last_updated_ts < %s THEN 1 ELSE 0 END), 0), '
-            'COALESCE(SUM(CASE WHEN last_updated_ts >= %s '
-            'AND last_updated_ts < %s THEN 1 ELSE 0 END), 0), '
             'COALESCE(SUM(CASE WHEN last_updated_ts >= %s '
             'AND last_updated_ts < %s THEN 1 ELSE 0 END), 0), '
             'COALESCE(SUM(CASE WHEN last_updated_ts >= %s '
@@ -76,27 +64,16 @@ class MariaDBAdapter(DatabaseAdapter):
             'FROM states '
             'WHERE last_updated_ts >= %s AND last_updated_ts < %s',
             (
-                hour_cutoff,
-                period_end,
-                previous_hour_start,
-                previous_hour_end,
                 current_hour_start,
                 period_end,
                 today_start,
                 period_end,
-                range_start,
+                today_start,
                 period_end,
             ),
         )
-        (
-            records_last_hour,
-            records_previous_hour,
-            records_current_hour,
-            records_today,
-        ) = rows[0]
+        records_current_hour, records_today = rows[0]
         return {
-            'records_last_hour': records_last_hour,
-            'records_previous_hour': records_previous_hour,
             'records_current_hour': records_current_hour,
             'records_today': records_today,
             'db_size_bytes': self._one(
@@ -105,14 +82,10 @@ class MariaDBAdapter(DatabaseAdapter):
             ),
         }
 
-    def slow_metrics(self, yesterday_start: float, today_start: float) -> dict[str, Any]:
+    def slow_metrics(self) -> dict[str, Any]:
         return {
             'db_start_ts': self._one('SELECT MIN(last_updated_ts) FROM states'),
             'records_total': self._one('SELECT COUNT(*) FROM states'),
-            'records_yesterday': self._one(
-                'SELECT COUNT(*) FROM states WHERE last_updated_ts >= %s AND last_updated_ts < %s',
-                (yesterday_start, today_start),
-            ),
         }
 
     def static_metrics(self) -> dict[str, Any]:

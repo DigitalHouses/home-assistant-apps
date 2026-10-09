@@ -68,10 +68,8 @@ from metrics import (
     iso_from_epoch,
     last_age_seconds,
     next_local_boundary_epoch,
-    previous_hour_bounds_epoch,
     records_k,
     short_db_version,
-    yesterday_bounds_epoch,
 )
 MEDIUM_INTERVAL_MINUTES = 5
 SLOW_INTERVAL_MINUTES = 60
@@ -673,27 +671,14 @@ class DatabaseMonitorApp:
             now,
             self.config.timezone,
         )
-        previous_hour_start, previous_hour_end = previous_hour_bounds_epoch(
-            now,
-            self.config.timezone,
-        )
         try:
             raw = self.adapter.medium_metrics(
-                now - 3600,
-                previous_hour_start,
-                previous_hour_end,
                 current_hour_start,
                 today_start,
                 now,
             )
             size = raw.get('db_size_bytes')
             self.update_state({
-                'db_records_per_hour': records_k(
-                    raw.get('records_last_hour')
-                ),
-                'db_previous_hour_records': records_k(
-                    raw.get('records_previous_hour')
-                ),
                 'db_current_hour_records': records_k(
                     raw.get('records_current_hour')
                 ),
@@ -713,17 +698,13 @@ class DatabaseMonitorApp:
 
     def collect_slow(self) -> bool:
         now = time.time()
-        start_yesterday, start_today = yesterday_bounds_epoch(now, self.config.timezone)
         try:
-            raw = self.adapter.slow_metrics(start_yesterday, start_today)
+            raw = self.adapter.slow_metrics()
             start_ts = raw.get('db_start_ts')
             self.update_state({
                 'db_start': iso_from_epoch(start_ts),
                 'db_depth': db_depth_days(start_ts, now, self.config.timezone),
                 'db_records': records_k(raw.get('records_total')),
-                'db_yesterday_records': records_k(
-                    raw.get('records_yesterday')
-                ),
             })
             return True
         except Exception as exc:

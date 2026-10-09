@@ -69,25 +69,6 @@ def next_local_boundary_epoch(
     return next_boundary.timestamp()
 
 
-def yesterday_bounds_epoch(now_ts: float, timezone_name: str) -> tuple[float, float]:
-    tz = ZoneInfo(timezone_name)
-    now_local = datetime.fromtimestamp(float(now_ts), tz)
-    today_start = datetime.combine(now_local.date(), datetime.min.time(), tzinfo=tz)
-    yesterday_start = today_start - timedelta(days=1)
-    return yesterday_start.timestamp(), today_start.timestamp()
-
-
-def previous_hour_bounds_epoch(
-    now_ts: float,
-    timezone_name: str,
-) -> tuple[float, float]:
-    current_hour_start, _ = current_period_starts_epoch(
-        now_ts,
-        timezone_name,
-    )
-    return current_hour_start - 3600.0, current_hour_start
-
-
 def short_db_version(raw: str | None, engine: str) -> str | None:
     if raw is None:
         return None

@@ -97,7 +97,7 @@ class CanonicalDiscoveryTests(unittest.TestCase):
             components["database_type"]["default_entity_id"],
             "sensor.dh_recorder_app_database_type",
         )
-        self.assertEqual(len(components), 26)
+        self.assertEqual(len(components), 23)
         self.assertTrue(STATE_RETAIN)
 
     def test_canonical_unique_ids_do_not_collide(self):
@@ -328,14 +328,11 @@ class StorageAndRankingTests(unittest.TestCase):
 
     def test_record_ui_sensors_are_scalar_k_values(self):
         components = build_discovery_payload(
-            "0.1.18",
+            "0.1.25",
             include_storage=True,
         )["components"]
         expected = {
-            "db_records_per_hour": "K rec/h",
             "db_records": "K records",
-            "db_yesterday_records": "K records",
-            "db_previous_hour_records": "K records",
             "db_current_hour_records": "K records",
             "db_today_records": "K records",
         }
@@ -355,15 +352,6 @@ class StorageAndRankingTests(unittest.TestCase):
             )
 
         self.assertEqual(
-            components["db_previous_hour_records"][
-                "default_entity_id"
-            ],
-            (
-                "sensor.dh_recorder_app_"
-                "db_previous_hour_records"
-            ),
-        )
-        self.assertEqual(
             components["db_current_hour_records"][
                 "default_entity_id"
             ],
@@ -379,10 +367,6 @@ class StorageAndRankingTests(unittest.TestCase):
             "sensor.dh_recorder_app_db_today_records",
         )
         self.assertEqual(
-            components["db_previous_hour_records"]["state_class"],
-            "measurement",
-        )
-        self.assertEqual(
             components["db_current_hour_records"]["state_class"],
             "measurement",
         )
@@ -390,6 +374,24 @@ class StorageAndRankingTests(unittest.TestCase):
             components["db_today_records"]["state_class"],
             "measurement",
         )
+
+    def test_retired_canonical_record_sensors_are_absent(self):
+        components = build_discovery_payload(
+            "0.1.25"
+        )["components"]
+        for key in (
+            "db_records_per_hour",
+            "db_previous_hour_records",
+            "db_yesterday_records",
+        ):
+            self.assertNotIn(key, components)
+
+    def test_legacy_bridge_keeps_historical_retired_components(self):
+        components = build_legacy_discovery_payload(
+            "0.1.15"
+        )["components"]
+        self.assertIn("db_records_per_hour", components)
+        self.assertIn("db_yesterday_records", components)
 
     def test_ranking_topics_are_not_main_state_topic(self):
         components = build_discovery_payload(

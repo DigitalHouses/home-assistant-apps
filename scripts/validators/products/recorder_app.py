@@ -110,6 +110,7 @@ def validate_db_monitoring(
             app / "tests/test_contracts.py",
             app / "tests/test_identity_migration.py",
             app / "tests/test_telemetry.py",
+            app / "examples/lovelace/dh_recorder_app_dashboard.yaml",
         ],
     )
 
@@ -185,6 +186,34 @@ def validate_db_monitoring(
             "must be removed"
         )
 
+    dashboard = (
+        app / "examples/lovelace/dh_recorder_app_dashboard.yaml"
+    ).read_text(encoding="utf-8")
+    for retired_entity_id in (
+        "sensor.dh_recorder_app_db_records_per_hour",
+        "sensor.dh_recorder_app_db_previous_hour_records",
+        "sensor.dh_recorder_app_db_yesterday_records",
+    ):
+        if retired_entity_id in dashboard:
+            fail(
+                "Recorder App dashboard must not reference retired entity "
+                f"{retired_entity_id}"
+            )
+    for live_entity_id in (
+        "sensor.dh_recorder_app_db_current_hour_records",
+        "sensor.dh_recorder_app_db_today_records",
+    ):
+        if live_entity_id not in dashboard:
+            fail(
+                "Recorder App dashboard missing live period sensor "
+                f"{live_entity_id}"
+            )
+    if dashboard.count("aggregate_func: delta") < 2:
+        fail(
+            "Recorder App dashboard must use delta aggregation "
+            "for hourly and daily activity"
+        )
+
     discovery = _import_discovery(app)
 
     if discovery.BASE_TOPIC != EXPECTED_BASE_TOPIC:
@@ -254,9 +283,6 @@ def validate_db_monitoring(
         "db_start": (
             "sensor.dh_recorder_app_db_start"
         ),
-        "db_previous_hour_records": (
-            "sensor.dh_recorder_app_db_previous_hour_records"
-        ),
         "db_current_hour_records": (
             "sensor.dh_recorder_app_db_current_hour_records"
         ),
@@ -302,10 +328,7 @@ def validate_db_monitoring(
             )
 
     record_units = {
-        "db_records_per_hour": "K rec/h",
         "db_records": "K records",
-        "db_yesterday_records": "K records",
-        "db_previous_hour_records": "K records",
         "db_current_hour_records": "K records",
         "db_today_records": "K records",
         "db_top_entities_24h": "records",
@@ -318,8 +341,15 @@ def validate_db_monitoring(
                 f"Recorder App {key} must use {expected_unit}"
             )
 
+    for retired_key in (
+    ):
+        if retired_key in components:
+            fail(
+                "Recorder App retired canonical discovery component "
+                f"must be absent: {retired_key}"
+            )
+
     for key in (
-        "db_previous_hour_records",
         "db_current_hour_records",
         "db_today_records",
     ):

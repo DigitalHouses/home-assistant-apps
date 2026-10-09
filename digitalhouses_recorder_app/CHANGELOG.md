@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.25
+- Remove unused canonical Recorder sensors `db_records_per_hour`, `db_previous_hour_records` and `db_yesterday_records` so Home Assistant stops recording new state/statistics for metrics no longer used by the dashboard.
+- Keep `db_current_hour_records` and `db_today_records` as the live period counters and trim MariaDB/PostgreSQL period queries to calculate only those counters.
+- Publish the reduced canonical MQTT device discovery payload; Home Assistant removes omitted device-discovery components while the historical 0.1.15 legacy bridge builder remains unchanged for rollback-contract tests.
+- Add the maintained Lovelace dashboard example using `mini-graph-card` with `delta` aggregation for hourly/daily Recorder activity and `last` for database size.
+
 ## 0.1.24
 - Align five-minute medium metrics to local five-minute clock boundaries after the initial startup collection instead of drifting from App start time.
 - Align hourly slow metrics to local top-of-hour boundaries, so `db_yesterday_records` is recalculated on the first publish cycle at/after local midnight instead of up to one hour later.

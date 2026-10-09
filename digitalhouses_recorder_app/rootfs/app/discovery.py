@@ -440,17 +440,6 @@ def _build_components(
             unit_of_measurement="d",
             icon="mdi:calendar-range",
         ),
-        "db_records_per_hour": _component(
-            identity,
-            "sensor",
-            "DB records per hour",
-            "db_records_per_hour",
-            "{{ value_json.db_records_per_hour }}",
-            diagnostic=True,
-            state_class="measurement",
-            unit_of_measurement="K rec/h",
-            icon="mdi:database-arrow-down",
-        ),
         "db_records": _component(
             identity,
             "sensor",
@@ -485,18 +474,6 @@ def _build_components(
             db_required=False,
             db_static_required=True,
             icon="mdi:database-cog",
-        ),
-        "db_yesterday_records": _component(
-            identity,
-            "sensor",
-            "DB inserted yesterday",
-            "db_yesterday_records",
-            "{{ value_json.db_yesterday_records }}",
-            diagnostic=True,
-            state_class="measurement",
-            unit_of_measurement="K records",
-            suggested_display_precision=1,
-            icon="mdi:calendar-arrow-left",
         ),
         "db_name": _component(
             identity,
@@ -630,21 +607,41 @@ def _build_components(
         ),
     }
 
-    if include_canonical_runtime:
+    if not include_canonical_runtime:
+        # Historical bridge payload contract: keep the released 0.1.15
+        # components available to rollback/tests even though current runtime
+        # no longer publishes the legacy discovery topic.
         components.update(
             {
-                "db_previous_hour_records": _component(
+                "db_records_per_hour": _component(
                     identity,
                     "sensor",
-                    "DB inserted previous hour",
-                    "db_previous_hour_records",
-                    "{{ value_json.db_previous_hour_records }}",
+                    "DB records per hour",
+                    "db_records_per_hour",
+                    "{{ value_json.db_records_per_hour }}",
+                    diagnostic=True,
+                    state_class="measurement",
+                    unit_of_measurement="K rec/h",
+                    icon="mdi:database-arrow-down",
+                ),
+                "db_yesterday_records": _component(
+                    identity,
+                    "sensor",
+                    "DB inserted yesterday",
+                    "db_yesterday_records",
+                    "{{ value_json.db_yesterday_records }}",
                     diagnostic=True,
                     state_class="measurement",
                     unit_of_measurement="K records",
                     suggested_display_precision=1,
-                    icon="mdi:clock-outline",
+                    icon="mdi:calendar-arrow-left",
                 ),
+            }
+        )
+
+    if include_canonical_runtime:
+        components.update(
+            {
                 "db_current_hour_records": _component(
                     identity,
                     "sensor",

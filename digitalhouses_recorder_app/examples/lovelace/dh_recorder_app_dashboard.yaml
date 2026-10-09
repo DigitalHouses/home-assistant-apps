@@ -1,0 +1,429 @@
+title: DH Recorder
+path: recorder
+icon: mdi:database
+type: sections
+max_columns: 4
+sections:
+  - type: grid
+    cards:
+      - type: heading
+        heading: Состояние базы данных
+        heading_style: title
+        icon: mdi:database-check
+      - type: heading
+        heading: Информация
+        heading_style: subtitle
+        icon: mdi:information
+      - type: custom:mushroom-template-card
+        entity: sensor.dh_recorder_app_db_version
+        primary: '{{ states(''sensor.dh_recorder_app_db_version'') }}'
+        secondary: >-
+          БД: {{ states('sensor.dh_recorder_app_db_name') }} {{ '\n'
+          }}Пользователь: {{ states('sensor.dh_recorder_app_db_user') }}
+        icon: mdi:database-cog
+        icon_color: blue
+        multiline_secondary: true
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: 12
+          rows: auto
+      - type: custom:mushroom-template-card
+        entity: binary_sensor.dh_recorder_app_db_connected
+        primary: >-
+          {% if not is_state('binary_sensor.dh_recorder_app_db_connected', 'on')
+          %}
+            База данных недоступна
+          {% elif not is_state('binary_sensor.dh_recorder_app_recorder_writing',
+          'on') %}
+            Recorder не записывает данные
+          {% else %}
+            База данных работает штатно
+          {% endif %}
+        secondary: >-
+          {% set connected =
+          is_state('binary_sensor.dh_recorder_app_db_connected', 'on') %} {% set
+          writing = is_state('binary_sensor.dh_recorder_app_recorder_writing',
+          'on') %} {% set age = states('sensor.dh_recorder_app_db_last_age') %}
+
+          Подключение: {{ 'OK' if connected else 'ОШИБКА' }} {{ '\n' }}Recorder:
+          {{ 'идёт запись' if writing else 'нет записи' }} {{ '\n' }}Последняя
+          запись: {{ age }} с назад
+        icon: >-
+          {% if not is_state('binary_sensor.dh_recorder_app_db_connected', 'on')
+          %}
+            mdi:database-off
+          {% elif not is_state('binary_sensor.dh_recorder_app_recorder_writing',
+          'on') %}
+            mdi:database-alert
+          {% else %}
+            mdi:database-check
+          {% endif %}
+        icon_color: >-
+          {% if not is_state('binary_sensor.dh_recorder_app_db_connected', 'on')
+          %}
+            red
+          {% elif not is_state('binary_sensor.dh_recorder_app_recorder_writing',
+          'on') %}
+            orange
+          {% else %}
+            green
+          {% endif %}
+        multiline_secondary: true
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: 12
+      - type: heading
+        heading_style: subtitle
+        icon: mdi:refresh
+        heading: Обновить данные
+      - type: custom:mushroom-template-card
+        entity: button.dh_recorder_app_db_refresh
+        primary: Обновить Recorder
+        secondary: >-
+          {% set ts = states('sensor.dh_recorder_app_db_last_refresh') %} {% if
+          ts not in ['unknown', 'unavailable', 'none', ''] %}
+            Последнее обновление:
+            {{ as_timestamp(ts) | timestamp_custom('%d.%m.%Y %H:%M:%S', true) }}
+          {% else %}
+            Последнее обновление: —
+          {% endif %}
+        icon: mdi:refresh
+        icon_color: purple
+        badge_icon: |-
+          {% if is_state('binary_sensor.dh_recorder_app_db_connected', 'on') %}
+            mdi:check
+          {% else %}
+            mdi:alert
+          {% endif %}
+        badge_color: |-
+          {% if is_state('binary_sensor.dh_recorder_app_db_connected', 'on') %}
+            green
+          {% else %}
+            red
+          {% endif %}
+        entity_id:
+          - sensor.dh_recorder_app_db_last_refresh
+          - binary_sensor.dh_recorder_app_db_connected
+        tap_action:
+          action: perform-action
+          perform_action: button.press
+          target:
+            entity_id: button.dh_recorder_app_db_refresh
+        hold_action:
+          action: more-info
+        grid_options:
+          columns: 12
+          rows: 1
+      - type: heading
+        heading: База данных
+        heading_style: subtitle
+        icon: mdi:database-cog
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: custom:mushroom-template-card
+            entity: sensor.dh_recorder_app_db_size
+            primary: Размер БД
+            secondary: '{{ states(''sensor.dh_recorder_app_db_size'') }} MiB'
+            icon: mdi:database
+            icon_color: blue
+            tap_action:
+              action: more-info
+          - type: custom:mushroom-template-card
+            entity: sensor.dh_recorder_app_db_records
+            primary: Записей
+            secondary: '{{ states(''sensor.dh_recorder_app_db_records'') }} тыс.'
+            icon: mdi:database-marker
+            icon_color: cyan
+            tap_action:
+              action: more-info
+          - type: custom:mushroom-template-card
+            entity: sensor.dh_recorder_app_db_depth
+            primary: Глубина истории
+            secondary: '{{ states(''sensor.dh_recorder_app_db_depth'') }} дн.'
+            icon: mdi:calendar-range
+            icon_color: purple
+            tap_action:
+              action: more-info
+          - type: custom:mushroom-template-card
+            entity: sensor.dh_recorder_app_db_today_records
+            primary: Записано сегодня
+            secondary: '{{ states(''sensor.dh_recorder_app_db_today_records'') }} тыс.'
+            icon: mdi:calendar-today
+            icon_color: blue
+            tap_action:
+              action: more-info
+          - type: custom:mushroom-template-card
+            entity: sensor.dh_recorder_app_db_current_hour_records
+            primary: За текущий час
+            secondary: '{{ states(''sensor.dh_recorder_app_db_current_hour_records'') }} тыс.'
+            icon: mdi:clock-outline
+            icon_color: cyan
+            tap_action:
+              action: more-info
+          - type: custom:mushroom-template-card
+            entity: sensor.dh_recorder_app_db_last_age
+            primary: Последняя запись
+            secondary: >-
+              {% set age = states('sensor.dh_recorder_app_db_last_age') |
+              int(9999) %} {% if age == 1 %}
+                1 секунду назад
+              {% elif age % 10 in [2, 3, 4] and age % 100 not in [12, 13, 14] %}
+                {{ age }} секунды назад
+              {% else %}
+                {{ age }} секунд назад
+              {% endif %}
+            icon: mdi:database-clock
+            icon_color: >-
+              {% set age = states('sensor.dh_recorder_app_db_last_age') |
+              int(9999) %} {% if age >= 300 %}
+                red
+              {% elif age >= 120 %}
+                orange
+              {% else %}
+                green
+              {% endif %}
+            tap_action:
+              action: more-info
+      - type: heading
+        heading: История
+        heading_style: subtitle
+        icon: mdi:information-outline
+      - type: custom:mushroom-template-card
+        entity: sensor.dh_recorder_app_db_start
+        primary: Начало истории
+        secondary: >-
+          {% if states('sensor.dh_recorder_app_db_start') not in ['unknown',
+          'unavailable'] %}
+            {{ as_timestamp(states('sensor.dh_recorder_app_db_start'))
+               | timestamp_custom('%d.%m.%Y %H:%M:%S', true) }}
+          {% else %}
+            Недоступно
+          {% endif %}
+        icon: mdi:database-clock-outline
+        icon_color: green
+        tap_action:
+          action: more-info
+      - type: custom:mushroom-template-card
+        entity: sensor.dh_recorder_app_db_last
+        primary: Последняя запись
+        secondary: >-
+          {% if states('sensor.dh_recorder_app_db_last') not in ['unknown',
+          'unavailable'] %}
+            {{ as_timestamp(states('sensor.dh_recorder_app_db_last'))
+               | timestamp_custom('%d.%m.%Y %H:%M:%S', true) }}
+          {% else %}
+            Недоступно
+          {% endif %}
+        icon: mdi:database-clock
+        icon_color: green
+        tap_action:
+          action: more-info
+  - type: grid
+    cards:
+      - type: heading
+        heading: Диск базы данных
+        heading_style: title
+        icon: mdi:harddisk
+      - type: heading
+        heading: Дисковое пространство
+        heading_style: subtitle
+        icon: mdi:harddisk
+      - type: custom:entity-progress-card-template
+        entity: sensor.dh_recorder_app_db_disk_used_percentage
+        name: >-
+          {% set pct = states('sensor.dh_recorder_app_db_disk_used_percentage')
+          | float(0) %} Диск БД · {{ '%.1f' | format(pct) }}%
+        secondary: >-
+          {% set used = states('sensor.dh_recorder_app_db_disk_used') | float(0)
+          %} {% set total = states('sensor.dh_recorder_app_db_disk_total') |
+          float(0) %} Занято {{ '%.1f' | format(used) }} / {{ '%.1f' |
+          format(total) }} GB
+        percent: >-
+          {{ '%.1f' |
+          format(states('sensor.dh_recorder_app_db_disk_used_percentage') |
+          float(0)) }}
+        icon: >-
+          {% set used = states('sensor.dh_recorder_app_db_disk_used_percentage')
+          | float(0) %} {% set threshold =
+          states('number.dh_recorder_app_db_disk_usage_threshold') | float(80)
+          %} {{ 'mdi:harddisk-alert' if used >= threshold else
+          'mdi:harddisk-check' }}
+        color: >-
+          {% set used = states('sensor.dh_recorder_app_db_disk_used_percentage')
+          | float(0) %} {% set threshold =
+          states('number.dh_recorder_app_db_disk_usage_threshold') | float(80)
+          %} {{ 'red' if used >= threshold else 'green' }}
+        bar_color: >-
+          {% set used = states('sensor.dh_recorder_app_db_disk_used_percentage')
+          | float(0) %} {% set threshold =
+          states('number.dh_recorder_app_db_disk_usage_threshold') | float(80)
+          %} {{ 'red' if used >= threshold else 'green' }}
+        bar_size: medium
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: 12
+          rows: 1
+      - type: heading
+        heading: Порог заполнения диска
+        heading_style: subtitle
+        icon: mdi:database-alert
+      - type: custom:mushroom-number-card
+        entity: number.dh_recorder_app_db_disk_usage_threshold
+        name: Заполнение диска
+        icon: mdi:database-alert
+        display_mode: buttons
+        fill_container: true
+        grid_options:
+          columns: 14
+          rows: 1
+        layout: horizontal
+      - type: heading
+        heading: Использование диска · 10 дней
+        heading_style: subtitle
+        icon: mdi:chart-line
+      - square: false
+        type: grid
+        columns: 2
+        cards:
+          - type: tile
+            entity: sensor.dh_recorder_app_db_disk_used_percentage
+            name: Disk used, %
+            icon: mdi:cpu-64-bit
+            vertical: false
+            features:
+              - type: trend-graph
+                hours_to_show: 3
+                detail: true
+            features_position: bottom
+          - type: tile
+            entity: sensor.dh_recorder_app_db_disk_used
+            name: Disk used, Gb
+            icon: mdi:movie-cog
+            features_position: bottom
+            features:
+              - type: trend-graph
+                hours_to_show: 3
+                detail: true
+      - type: heading
+        heading: Рост базы данных · 10 дней
+        heading_style: subtitle
+        icon: mdi:database-arrow-up
+  - type: grid
+    cards:
+      - type: heading
+        heading: Активность Recorder
+        heading_style: title
+        icon: mdi:database-edit
+      - type: heading
+        heading: Динамика количество записей по дням
+        heading_style: subtitle
+        icon: mdi:database-marker
+      - type: custom:mini-graph-card
+        entities:
+          - sensor.dh_recorder_app_db_size
+        name: Размер БД
+        hours_to_show: 240
+        aggregate_func: last
+        group_by: date
+        show:
+          graph: bar
+          show_points: true
+      - type: heading
+        heading: Новых записей за день
+        heading_style: subtitle
+        icon: mdi:calendar-arrow-left
+      - type: custom:mini-graph-card
+        entities:
+          - sensor.dh_recorder_app_db_today_records
+        name: Новых записей за день
+        hours_to_show: 240
+        aggregate_func: delta
+        group_by: date
+        show:
+          graph: bar
+          show_points: true
+      - type: heading
+        heading: Новых записей за час
+        heading_style: subtitle
+        icon: mdi:database-arrow-down
+      - type: custom:mini-graph-card
+        entities:
+          - sensor.dh_recorder_app_db_current_hour_records
+        name: Новых записей за час
+        hours_to_show: 24
+        aggregate_func: delta
+        group_by: hour
+        show:
+          graph: bar
+          show_points: true
+  - type: grid
+    cards:
+      - type: heading
+        heading_style: title
+        heading: Топ сущностей Recorder
+        icon: mdi:record-circle
+      - type: markdown
+        title: Top Recorder entities · 24 часа
+        content: >
+          {% set results =
+          state_attr('sensor.dh_recorder_app_db_top_entities_24h',
+          'top_entities') or [] %}
+
+          {% set generated =
+          state_attr('sensor.dh_recorder_app_db_top_entities_24h',
+          'generated_at') %}
+
+
+          Сформировано: {% if generated %}{{
+          as_local(as_datetime(generated)).strftime('%d.%m.%Y %H:%M') }}{% else
+          %}нет данных{% endif %} - обновляется раз в час
+
+
+          | % | count | Entity |
+
+          | ---: | ---: | :--- |
+
+          {%- for r in results %}
+
+          | {{ '%.2f' | format(r.share_percent | float(0)) }}% | {{ r.records }}
+          | {% if r.share_percent | float(0) >= 10 %}🔴 {% elif r.share_percent
+          | float(0) >= 5 %}🟡 {% endif %}{{ r.entity_id | replace('|',
+          '&#124;') }} |
+
+          {%- endfor %}
+      - type: markdown
+        title: Top Recorder entities · вся история
+        content: >
+          {% set results =
+          state_attr('sensor.dh_recorder_app_db_top_entities_all_time',
+          'top_entities') or [] %}
+
+          {% set generated =
+          state_attr('sensor.dh_recorder_app_db_top_entities_all_time',
+          'generated_at') %}
+
+
+          Сформировано: {% if generated %}{{
+          as_local(as_datetime(generated)).strftime('%d.%m.%Y %H:%M') }}{% else
+          %}нет данных{% endif %} - обновляется раз в 24 часа
+
+
+          | % | count | Entity |
+
+          | ---: | ---: | :--- |
+
+          {%- for r in results %}
+
+          | {{ '%.2f' | format(r.share_percent | float(0)) }}% | {{ r.records }}
+          | {% if r.share_percent | float(0) >= 10 %}🔴 {% elif r.share_percent
+          | float(0) >= 5 %}🟡 {% endif %}{{ r.entity_id | replace('|',
+          '&#124;') }} |
+
+          {%- endfor %}
+cards: []
+badges: []

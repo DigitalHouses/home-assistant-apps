@@ -51,12 +51,8 @@ def load_app_module():
     metrics.next_local_boundary_epoch = (
         lambda *args, **kwargs: 0.0
     )
-    metrics.previous_hour_bounds_epoch = (
-        lambda *args, **kwargs: (0, 0)
-    )
     metrics.records_k = lambda *args, **kwargs: None
     metrics.short_db_version = lambda *args, **kwargs: None
-    metrics.yesterday_bounds_epoch = lambda *args, **kwargs: (0, 0)
 
     stubs = {
         'paho': paho,
