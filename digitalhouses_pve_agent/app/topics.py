@@ -28,6 +28,7 @@ class Topics:
     update_check: str = ""
     update_install: str = ""
     update_state: str = ""
+    agent_card_state: str = ""
     legacy_discoveries: tuple[str, ...] = ()
 
 
@@ -108,6 +109,7 @@ def build_topics(mqtt: MqttConfig, identity: HostIdentity) -> Topics:
         update_check=f"{base}/update/check",
         update_install=f"{base}/update/install",
         update_state=f"{base}/update/state",
+        agent_card_state=f"{base}/agent/card",
         legacy_discoveries=(
             f"{discovery_prefix}/device/{legacy_device_id}/config",
             f"{discovery_prefix}/device/{older_legacy_device_id}/config",

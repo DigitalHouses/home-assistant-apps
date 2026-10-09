@@ -23,6 +23,7 @@ from .machine_event_outbox import MachineEventOutbox
 from .memory_diagnostics import MemoryDiagnostics
 from .mqtt_bridge import MqttBridge
 from .operation_status import operation_payload
+from .agent_card import AgentCard
 from .production import _run
 from .publish_policy import PublishPolicy
 from .pve_cache import read_pve_version
@@ -377,6 +378,16 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
     )
     telemetry_runner = TelemetryRunner(_telemetry_client(config, state_dir))
     update_manager = UpdateManager(state_dir, _version())
+    card = AgentCard(state_dir / "agent_card.json", bridge.publish_agent_card)
+    runtime.collection_observer = card.collected
+
+    def observe_card_operation(operation: str, phase: str, error: str | None) -> None:
+        if phase == "start":
+            card.begin(operation)
+        elif phase == "end":
+            card.finish(operation, error=error)
+
+    runtime.card_operation_observer = observe_card_operation
     memory_monitor = MemoryDiagnostics(
         StateStore(state_dir / "memory_diagnostics.json")
     )
@@ -435,14 +446,19 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
             if bridge.restart_requested.is_set():
                 bridge.restart_requested.clear()
                 denied = (
-                    "Выполняется обновление агента" if update_manager._is_worker_busy()
+                    "Другая операция уже выполняется" if card.state == "running"
+                    else "Выполняется обновление агента" if update_manager._is_worker_busy()
                     else _restart_denial_reason(
                         ups_runtime, ups_startup_attempted=ups_startup_attempted
                     )
                 )
                 if denied:
+                    if card.state != "running":
+                        card.begin("restart")
+                        card.finish("restart", error=denied)
                     log.warning("MQTT Restart Agent отклонён: %s", denied)
                 else:
+                    card.begin("restart")
                     restart_requested = True
                     log.warning("Ручной перезапуск агента через MQTT")
                     break
@@ -452,6 +468,15 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
                 if initialized:
                     bridge.publish_ups_scan_operation(operation_payload("idle"))
                     update_manager.publish(bridge)
+                    if card.state == "running" and card.operation == "restart":
+                        card.finish("restart")
+                    if card.state == "running" and card.operation == "install":
+                        worker = update_manager._worker_status()
+                        if worker.get("state") == "completed":
+                            card.finish("install")
+                        elif worker.get("state") == "error":
+                            card.finish("install", error=str(worker.get("error") or "Update failed"))
+                    card.publish()
                     log.info("Первичная публикация MQTT завершена")
                 else:
                     log.warning(
@@ -462,7 +487,11 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
             if initialized:
                 if bridge.reconnect_requested.is_set():
                     update_manager.publish(bridge)
+                    card.publish()
                 memory_reconnected = bridge.reconnect_requested.is_set()
+                if card.state == "running" and card.operation in {"check", "install"}:
+                    # Avoid starting an unrelated operation behind the active card.
+                    bridge.refresh_requested.clear()
                 memory_manual_refresh = bridge.refresh_requested.is_set()
                 memory_force_due = memory_force_due or memory_manual_refresh
                 runtime.process_events()
@@ -580,6 +609,13 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
             install_update = bridge.install_update_requested.is_set()
             bridge.check_updates_requested.clear()
             bridge.install_update_requested.clear()
+            if card.state == "running":
+                check_updates = False
+                install_update = False
+            elif check_updates and not update_manager._is_worker_busy():
+                card.begin("check")
+            elif install_update:
+                card.begin("install")
             update_manager.tick(
                 bridge,
                 check=check_updates,
@@ -588,6 +624,18 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
                     ups_runtime, ups_startup_attempted=ups_startup_attempted
                 ),
             )
+            if card.state == "running" and card.operation in {"check", "install"}:
+                result = update_manager._payload()
+                status = result.get("status")
+                if card.operation == "check" and status in {"idle", "error"}:
+                    card.finish(
+                        "check",
+                        error=str(result.get("error") or "GitHub check failed") if status == "error" else None,
+                        measured_seconds=result.get("check_duration_seconds"),
+                    )
+                elif card.operation == "install" and status in {"completed", "error"}:
+                    card.finish("install", error=str(result.get("error") or "Update failed") if status == "error" else None)
+            card.tick()
             bridge.wake_requested.wait(1.0)
             bridge.wake_requested.clear()
     finally:

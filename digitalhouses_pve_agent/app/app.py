@@ -90,6 +90,8 @@ class DhPveRuntime:
         self.app_version = app_version
         self.agent_started_at = agent_started_at
         self.ups_configured = bool(ups_configured)
+        self.collection_observer = None
+        self.card_operation_observer = None
         self.manual_refresh_followup: Callable[[], bool] | None = None
         self._pve_version_fingerprint: str | None = None
         self._subsystems: dict[str, SubsystemState] = {}
@@ -389,6 +391,13 @@ class DhPveRuntime:
         ):
             candidate_refresh = collected_at
 
+        if callable(self.collection_observer) and any(
+            self._subsystems.get(name) is not None
+            and self._subsystems[name].available
+            for name in selected if name in self.collectors
+        ):
+            self.collection_observer(collected_at)
+
         if self._group_capable():
             return self._run_group_publication(
                 selected=selected,
@@ -485,6 +494,9 @@ class DhPveRuntime:
     def manual_refresh(self) -> bool:
         started_at = self.now_iso()
         started_monotonic = self.now_monotonic()
+        observer = self.card_operation_observer
+        if callable(observer):
+            observer("refresh", "start", None)
         in_progress = getattr(self.bridge, "refresh_in_progress", None)
         publisher = getattr(self.bridge, "publish_refresh_operation", None)
         if in_progress is not None:
@@ -540,10 +552,17 @@ class DhPveRuntime:
                         ),
                     )
                 )
+            if callable(observer):
+                observer("refresh", "end", None if success else (
+                    "collector failure: " + ", ".join(failed) if failed
+                    else "publication/follow-up refresh failed"
+                ))
             if self._static_collectors_available():
                 self._prime_version_fingerprint()
             return success
         except Exception as exc:
+            if callable(observer):
+                observer("refresh", "end", f"{type(exc).__name__}: {exc}")
             if callable(publisher):
                 publisher(
                     operation_payload(

@@ -499,6 +499,13 @@ class MqttBridge(MqttEvents):
             retain=True,
         )
 
+    def publish_agent_card(self, payload: dict[str, object]) -> bool:
+        return self._publish(
+            self.topics.agent_card_state,
+            json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+            retain=True,
+        )
+
     def publish_update_state(self, payload: dict[str, object]) -> bool:
         return self._publish(
             self.topics.update_state,
