@@ -98,6 +98,59 @@ class TokenRefreshTests(unittest.TestCase):
                             collector.collect_playback()
                         request.assert_called_once_with()
 
+    def test_401_to_200_after_reconciliation_without_restarting_collector(self):
+        with TemporaryDirectory() as tmp:
+            source = Path(tmp) / ".LocalAdminToken"
+            token_copy = Path(tmp) / "agent-token"
+            request_file = Path(tmp) / "refresh-request"
+            source.write_text("new-token\n")
+            token_copy.write_text("old-token\n")
+            config = PlexApiConfig(
+                enabled=True, base_url="http://127.0.0.1:32400",
+                token_file=token_copy, timeout_seconds=3,
+                library_refresh_seconds=3600,
+            )
+            collector = PlexApiCollector(config)
+            attempts = []
+
+            class Response:
+                headers = {}
+                def __enter__(self):
+                    return self
+                def __exit__(self, *_args):
+                    return None
+                def read(self):
+                    return b'<MediaContainer size="0" />'
+
+            def urlopen(req, timeout):
+                auth = req.get_header("X-plex-token")
+                attempts.append(auth)
+                if auth != "new-token":
+                    raise urllib.error.HTTPError(req.full_url, 401, "Unauthorized", {}, None)
+                return Response()
+
+            with patch("app.plex_api.AGENT_TOKEN", token_copy):
+                with patch("app.plex_api.urllib.request.urlopen", side_effect=urlopen):
+                    with patch(
+                        "app.plex_api.request_token_refresh",
+                        side_effect=lambda: token_refresh.request_token_refresh(
+                            request_file, cooldown_seconds=0.0,
+                        ),
+                    ):
+                        with patch.object(token_refresh, "_next_request_at", 0.0):
+                            with self.assertRaisesRegex(PlexApiError, "401"):
+                                collector.collect_playback()
+                            self.assertTrue(request_file.is_file())
+                    with patch.object(token_refresh.os, "geteuid", return_value=0):
+                        with patch.object(token_refresh.os, "fchown"):
+                            changed = token_refresh.sync_token(
+                                source, token_copy, group_gid=os.getgid(),
+                                validator=lambda t: t == "new-token",
+                            )
+                    self.assertEqual(changed, "UPDATED")
+                    self.assertEqual(collector.collect_playback(), ())
+            self.assertEqual(attempts, ["old-token", "new-token"])
+
     def test_503_or_custom_token_must_not_trigger_sync(self):
         with TemporaryDirectory() as tmp:
             token = Path(tmp) / "custom-token"
