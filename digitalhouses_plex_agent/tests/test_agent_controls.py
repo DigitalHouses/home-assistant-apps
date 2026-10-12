@@ -79,7 +79,7 @@ def test_card_restart_survives_process_restart(tmp_path):
 
 def test_discovery_exposes_controls_in_existing_mqtt_device(tmp_path):
     conf = tmp_path / "agent.conf"
-    conf.write_text("[mqtt]\\nhost=mqtt\\n")
+    conf.write_text("[mqtt]\nhost=mqtt\n")
     config = load_config(conf)
     topics = build_topics(config)
     discovery = build_discovery_payload(
