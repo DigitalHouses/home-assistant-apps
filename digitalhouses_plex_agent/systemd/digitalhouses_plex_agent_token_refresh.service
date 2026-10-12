@@ -1,7 +1,6 @@
 [Unit]
 Description=Reconcile DigitalHouses Plex Agent local API token
 After=plexmediaserver.service
-ConditionPathExists=/var/lib/plexmediaserver/Library/Application Support/Plex Media Server/.LocalAdminToken
 
 [Service]
 Type=oneshot
