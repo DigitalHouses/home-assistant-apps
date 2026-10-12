@@ -1,7 +1,7 @@
 type: sections
 max_columns: 4
 title: Plex
-path: plex
+path: plex-agent
 icon: mdi:plex
 sections:
   - type: grid
@@ -171,7 +171,6 @@ sections:
                 - color: var(--secondary-text-color)
             tap_action:
               action: none
-        
           - type: custom:mushroom-chips-card
             alignment: center
             chips:
@@ -183,7 +182,6 @@ sections:
                   perform_action: button.press
                   target:
                     entity_id: button.dh_plex_agent_refresh
-        
               - type: template
                 icon: mdi:cloud-search
                 content: Версия
@@ -192,11 +190,10 @@ sections:
                   perform_action: button.press
                   target:
                     entity_id: button.dh_plex_agent_check_updates
-        
               - type: conditional
                 conditions:
                   - entity: binary_sensor.dh_plex_agent_update_available
-                    state: "on"
+                    state: 'on'
                 chip:
                   type: template
                   icon: mdi:package-down
@@ -209,9 +206,8 @@ sections:
                       entity_id: button.dh_plex_agent_update
                     confirmation:
                       text: >-
-                        Установить новую версию Plex Agent?
-                        Мониторинг Plex временно прервётся. Plex Media Server продолжит работу.
-        
+                        Установить новую версию Plex Agent? Мониторинг Plex
+                        временно прервётся. Plex Media Server продолжит работу.
               - type: template
                 icon: mdi:restart
                 content: Перезапуск
@@ -222,39 +218,23 @@ sections:
                     entity_id: button.dh_plex_agent_restart_agent
                   confirmation:
                     text: >-
-                      Перезапустить Plex Agent?
-                      Мониторинг Plex временно прервётся.
-                      Plex Media Server не перезапускается.
+                      Перезапустить Plex Agent? Мониторинг Plex временно
+                      прервётся. Plex Media Server не перезапускается.
         grid_options:
           columns: 12
       - type: custom:mushroom-template-card
-        entity: binary_sensor.dh_plex_agent_server_running
-        primary: Plex Media Server
-        secondary: |-
-          {% if is_state('binary_sensor.dh_plex_agent_server_running', 'on') %}
-            Работает
-          {% else %}
-            Остановлен
-          {% endif %}
-        icon: mdi:plex
-        icon_color: |-
-          {% if is_state('binary_sensor.dh_plex_agent_server_running', 'on') %}
-            green
-          {% else %}
-            red
-          {% endif %}
-        tap_action:
-          action: more-info
-      - type: custom:mushroom-template-card
-        entity: sensor.dh_plex_agent_last_boot
-        primary: Время работы Plex сервера
+        entity: sensor.dh_plex_agent_uptime
+        primary: >-
+          Время работа (DH Plex Agent {{ states('sensor.dh_plex_agent_version')
+          }})
         secondary: >-
-          {% set boot = states(entity) %}
-          {% if boot not in ['unknown', 'unavailable', 'none', ''] %}
-            {% set sec = (as_timestamp(now()) - as_timestamp(boot)) | int %}
+          {% set value = states(entity) %} {% if value not in ['unknown',
+          'unavailable', 'none', ''] %}
+            {% set sec = value | float(0) | int %}
             {% set days = sec // 86400 %}
             {% set hours = (sec % 86400) // 3600 %}
             {% set minutes = (sec % 3600) // 60 %}
+
             {% if days > 0 %}
               {{ days }} д. {{ '%02d:%02d' | format(hours, minutes) }}
             {% else %}
@@ -264,23 +244,37 @@ sections:
             Нет данных
           {% endif %}
         icon: mdi:timer-outline
-        icon_color: >-
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: 12
+          rows: 1
+        color: |-
           {% if states(entity) not in ['unknown', 'unavailable', 'none', ''] %}
             green
           {% else %}
             grey
           {% endif %}
-        tap_action:
-          action: more-info
+        features_position: bottom
       - type: custom:mushroom-template-card
-        entity: sensor.dh_plex_agent_playback_count
-        primary: Воспроизведение
+        entity: binary_sensor.dh_plex_agent_server_running
+        primary: Plex Media Server
         secondary: >-
-          {{ states('sensor.dh_plex_agent_playback_count') }} active session(s)
-        icon: mdi:play-network
-        icon_color: |-
-          {% if states('sensor.dh_plex_agent_playback_count') | int(0) > 0 %}
+          {% if is_state('binary_sensor.dh_plex_agent_server_running', 'on') %}
+            Работает
+          {% elif is_state('binary_sensor.dh_plex_agent_server_running', 'off')
+          %}
+            Остановлен
+          {% else %}
+            Недоступен
+          {% endif %}
+        icon: mdi:plex
+        icon_color: >-
+          {% if is_state('binary_sensor.dh_plex_agent_server_running', 'on') %}
             green
+          {% elif is_state('binary_sensor.dh_plex_agent_server_running', 'off')
+          %}
+            red
           {% else %}
             grey
           {% endif %}
@@ -288,7 +282,7 @@ sections:
           action: more-info
       - type: custom:mushroom-template-card
         entity: sensor.dh_plex_agent_activity
-        primary: Активность
+        primary: Работа Plex
         secondary: |-
           {% set s = states('sensor.dh_plex_agent_activity') %}
           {% set names = {
@@ -323,9 +317,11 @@ sections:
           {% endif %}
         icon_color: >-
           {% set s = states('sensor.dh_plex_agent_activity') %}
+
           {% if s == 'idle' %}
             green
-          {% elif s in ['scanner', 'credits_detection', 'intro_detection', 'thumbnail_generation'] %}
+          {% elif s in ['scanner', 'credits_detection', 'intro_detection',
+          'thumbnail_generation'] %}
             blue
           {% elif s == 'transcoding' %}
             orange
@@ -337,31 +333,11 @@ sections:
         tap_action:
           action: more-info
       - type: custom:mushroom-template-card
-        entity: sensor.dh_plex_agent_current_item
-        primary: Текущий объект
-        secondary: >-
-          {% set item = states('sensor.dh_plex_agent_current_item') %}
-          {% if item in ['none', 'unknown', 'unavailable', ''] %}
-            Нет активного объекта
-          {% else %}
-            {{ item }}
-          {% endif %}
-        icon: mdi:movie-open
-        icon_color: >-
-          {% if states('sensor.dh_plex_agent_current_item') not in ['none', 'unknown', 'unavailable', ''] %}
-            blue
-          {% else %}
-            grey
-          {% endif %}
-        multiline_secondary: true
-        tap_action:
-          action: more-info
-      - type: custom:mushroom-template-card
         entity: button.dh_plex_agent_refresh
         primary: Обновить
         secondary: >-
-          {% set v = states('sensor.dh_plex_agent_last_refresh') %}
-          {% if v in ['unknown', 'unavailable', 'none', ''] %}
+          {% set v = states('sensor.dh_plex_agent_last_refresh') %} {% if v in
+          ['unknown', 'unavailable', 'none', ''] %}
             Ещё не выполнялось
           {% else %}
             {{ as_timestamp(v) | timestamp_custom('%d.%m.%Y %H:%M:%S', true) }}
@@ -374,189 +350,226 @@ sections:
           target:
             entity_id: button.dh_plex_agent_refresh
         grid_options:
+          columns: 6
+          rows: 1
+      - type: custom:mushroom-template-card
+        entity: button.dh_plex_agent_refresh
+        primary: Последняя публикация
+        secondary: >-
+          {% set v = states('sensor.dh_plex_agent_last_publication') %} {% if v
+          in ['unknown', 'unavailable', 'none', ''] %}
+            Ещё не выполнялось
+          {% else %}
+            {{ as_timestamp(v) | timestamp_custom('%d.%m.%Y %H:%M:%S', true) }}
+          {% endif %}
+        icon: mdi:information
+        icon_color: blue
+        tap_action:
+          action: perform-action
+          perform_action: button.press
+          target:
+            entity_id: button.dh_plex_agent_refresh
+        grid_options:
+          columns: 6
+          rows: 1
+      - type: heading
+        heading_style: title
+        icon: mdi:history
+        heading: Воспроизведение
+      - type: custom:mushroom-template-card
+        entity: sensor.dh_plex_agent_playback_started_at
+        primary: Воспроизведение
+        secondary: >-
+          {% set v = states('sensor.dh_plex_agent_playback_started_at') %} {% if
+          is_state('binary_sensor.dh_plex_agent_playback_active', 'on')
+                and v not in ['unknown', 'unavailable', 'none', ''] %}
+            {% set sec = (as_timestamp(now()) - as_timestamp(v)) | int(0) %}
+            {% set days = sec // 86400 %}
+            {% set hours = (sec % 86400) // 3600 %}
+            {% set minutes = (sec % 3600) // 60 %}
+            {% if days > 0 %}
+              Запущено {{ days }} д. {{ hours }} ч. назад
+            {% elif hours > 0 %}
+              Запущено {{ hours }} ч. {{ minutes }} мин. назад
+            {% elif minutes > 0 %}
+              Запущено {{ minutes }} мин. назад
+            {% else %}
+              Запущено меньше минуты назад
+            {% endif %}
+          {% else %}
+            Нет активного воспроизведения
+          {% endif %}
+        icon: mdi:play-circle
+        color: |-
+          {% if is_state('binary_sensor.dh_plex_agent_playback_active', 'on') %}
+            green
+          {% else %}
+            grey
+          {% endif %}
+        tap_action:
+          action: more-info
+        grid_options:
           columns: 12
           rows: 1
+        features_position: bottom
       - type: markdown
-        title: Plex — активная работа
+        title: Сейчас воспроизводится
         content: >
-          {% set items = state_attr('sensor.dh_plex_agent_current_item', 'items') or [] %}
-
-          {% set transcoder = states('sensor.dh_plex_agent_transcoder_count') | int(0) %}
-
-          {% set scanner = state_attr('sensor.dh_plex_agent_current_item', 'scanner_count') | int(0) %}
-
-          {% set playback = states('sensor.dh_plex_agent_playback_count') | int(0) %}
-
-          {% set activity = states('sensor.dh_plex_agent_activity') %}
+          {% set sessions = state_attr('sensor.dh_plex_agent_playback_sessions',
+          'sessions') or [] %}
 
 
-          <table>
+          {% if sessions | count == 0 %}
 
-          <tr>
-            <td>▶️ <b>Playback:</b> {{ playback }}</td>
-            <td>🎬 <b>Activity:</b> {{ activity }}</td>
-          </tr>
+          _Нет активного воспроизведения._
 
-          <tr>
-            <td>⚙️ <b>Transcoder:</b> {{ transcoder }}</td>
-            <td>🔎 <b>Scanner:</b> {{ scanner }}</td>
-          </tr>
-
-          </table>
-
-
-          **Active files**
-
-
-          | # | Media |
-
-          | :---: | :--- |
-
-          {%- for item in items %}
-
-          | {{ loop.index }} | {{ item | replace('|', '&#124;') }} |
-
-          {%- endfor %}
-
-          {%- if items | count == 0 %}
-
-          | — | No active media processing |
-
-          {%- endif %}
-      - type: heading
-        heading: Activity history
-        heading_style: title
-        icon: mdi:plex
-      - type: logbook
-        title: Plex Activity History
-        hours_to_show: 6
-        entities:
-          - sensor.dh_plex_agent_activity
-  - type: grid
-    cards:
-      - type: heading
-        heading: CPU Plex
-        heading_style: title
-        icon: mdi:cpu-64-bit
-      - type: custom:mini-graph-card
-        name: Plex CPU
-        icon: mdi:cpu-64-bit
-        entities:
-          - entity: sensor.dh_plex_agent_cpu
-            name: CPU
-        hours_to_show: 6
-        points_per_hour: 6
-        line_width: 2
-        height: 75
-        show:
-          labels: true
-          points: false
-          legend: true
-          extrema: true
-          fill: fade
-      - type: custom:mini-graph-card
-        name: Scanner CPU
-        icon: mdi:magnify-scan
-        entities:
-          - entity: sensor.dh_plex_agent_scanner_cpu
-            name: CPU
-        hours_to_show: 6
-        points_per_hour: 6
-        line_width: 2
-        height: 75
-        show:
-          labels: true
-          points: false
-          legend: true
-          extrema: true
-          fill: fade
-      - type: custom:mini-graph-card
-        name: Transcoder CPU
-        icon: mdi:movie-cog
-        entities:
-          - entity: sensor.dh_plex_agent_transcoder_cpu
-            name: CPU
-        hours_to_show: 6
-        points_per_hour: 6
-        line_width: 2
-        height: 75
-        show:
-          labels: true
-          points: false
-          legend: true
-          extrema: true
-          fill: fade
-      - type: heading
-        heading: GPU / Транскодинг
-        heading_style: title
-        icon: mdi:gpu
-      - type: entities
-        state_color: true
-        show_header_toggle: false
-        entities:
-          - entity: binary_sensor.dh_plex_agent_hardware_transcode_active
-            name: Hardware transcode
-          - entity: sensor.dh_plex_agent_gpu_video
-            name: GPU Video
-          - entity: sensor.dh_plex_agent_gpu_render
-            name: GPU Render
-          - entity: sensor.dh_plex_agent_gpu_video_enhance
-            name: GPU Video Enhance
-          - entity: sensor.dh_plex_agent_gpu_frequency
-            name: GPU Frequency
-          - entity: sensor.dh_plex_agent_gpu_temperature
-            name: GPU Temperature
-  - type: grid
-    cards:
-      - type: heading
-        heading: Playback
-        heading_style: title
-        icon: mdi:play-box-multiple
-      - type: entities
-        state_color: true
-        show_header_toggle: false
-        entities:
-          - entity: binary_sensor.dh_plex_agent_playback_active
-            name: Any Playback
-          - entity: binary_sensor.dh_plex_agent_video_playback_active
-            name: Video
-          - entity: binary_sensor.dh_plex_agent_audio_playback_active
-            name: Audio
-          - entity: sensor.dh_plex_agent_playback_started_at
-            name: Запущено
-      - type: markdown
-        title: Активные сессии
-        content: >
-          {% set sessions = state_attr('sensor.dh_plex_agent_playback_sessions', 'sessions') or [] %}
-
-
-          | Type | Media | User | Client | Mode |
-
-          | :---: | :--- | :--- | :--- | :--- |
-
-          {%- for s in sessions %}
-
-          {% set kind = '🎵' if s.content_type == 'audio' else '🎬' %}
-
-          {% if s.content_type == 'audio' %}
-            {% set media = ((s.artist or '') ~ ' — ' ~ (s.title or '')) | trim(' —') %}
-          {% elif s.media_type == 'episode' %}
-            {% set media = ((s.series or '') ~ ' · S' ~ '%02d'|format(s.season or 0) ~ 'E' ~ '%02d'|format(s.episode or 0) ~ ' · ' ~ (s.title or '')) | trim(' ·') %}
           {% else %}
-            {% set media = (s.title or '') ~ ((' (' ~ s.year ~ ')') if s.year else '') %}
+
+
+          {% for s in sessions %}
+
+
+          {% if s.get('content_type') == 'audio' %}
+
+          🎵 **{{ s.get('title', '—') }}**
+
+
+          {{ s.get('artist', '—') }}{% if s.get('album') %} · {{ s.get('album')
+          }}{% endif %}{% if s.get('album_year') %} · {{ s.get('album_year')
+          }}{% endif %}
+
+
+          **{{ s.get('mode', 'Unknown') }}** · {{ s.get('user', '—') }} · {{
+          s.get('player', '—') }}{% if s.get('location') %} · {{
+          s.get('location') | upper }}{% endif %}
+
+
+          {% if s.get('audio_codec') %}{{ s.get('audio_codec') | upper }}{%
+          endif %}{% if s.get('audio_channels') %} · {{ s.get('audio_channels')
+          }} ch{% endif %}{% if s.get('sample_rate_hz') %} · {{
+          (s.get('sample_rate_hz') / 1000) | round(1) }} kHz{% endif %}{% if
+          s.get('media_bitrate_kbps') %} · {{ s.get('media_bitrate_kbps') }}
+          kbps{% endif %}
+
+
+          {% else %}
+
+          🎬 **{{ s.get('title', '—') }}**{% if s.get('year') %} ({{
+          s.get('year') }}){% endif %}
+
+
+          {% if s.get('media_type') == 'episode' %}
+
+          {{ s.get('series', '—') }}{% if s.get('season') and s.get('episode')
+          %} · S{{ '%02d' | format(s.get('season') | int) }}E{{ '%02d' |
+          format(s.get('episode') | int) }}{% endif %}
+
+
           {% endif %}
 
-          | {{ kind }} | {{ media | replace('|', '&#124;') }} | {{ s.user or '—' }} | {{ s.player or s.device or '—' }} | {{ s.mode or 'Unknown' }} |
+          **{{ s.get('mode', 'Unknown') }}** · {{ s.get('user', '—') }} · {{
+          s.get('player', '—') }}{% if s.get('device') and s.get('device') !=
+          s.get('player') %} · {{ s.get('device') }}{% endif %}{% if
+          s.get('location') %} · {{ s.get('location') | upper }}{% endif %}
 
-          {%- endfor %}
 
-          {%- if sessions | count == 0 %}
+          {% if s.get('video_resolution') %}{{ s.get('video_resolution') }}p{%
+          endif %}{% if s.get('video_codec') %} · {{ s.get('video_codec') |
+          upper }}{% endif %}{% if s.get('audio_codec') %} · {{
+          s.get('audio_codec') | upper }}{% endif %}{% if
+          s.get('bandwidth_kbps') %} · {{ s.get('bandwidth_kbps') }} kbps{%
+          endif %}{% if s.get('hardware_transcode') %} · ⚙️ HW{% endif %}
 
-          | — | No active playback | — | — | — |
 
-          {%- endif %}
+          {% endif %}
+
+
+          {% if not loop.last %}
+
+          ---
+
+          {% endif %}
+
+
+          {% endfor %}
+
+          {% endif %}
+  - type: grid
+    cards:
       - type: heading
-        heading: Активность процессов
+        heading_style: title
+        icon: mdi:cpu-64-bit
+        heading: Load history
+      - square: false
+        type: grid
+        columns: 2
+        cards:
+          - type: tile
+            entity: sensor.dh_plex_agent_cpu
+            name: Plex CPU
+            icon: mdi:cpu-64-bit
+            features_position: bottom
+            features:
+              - type: trend-graph
+                hours_to_show: 3
+                detail: true
+          - type: tile
+            entity: sensor.dh_plex_agent_transcoder_cpu
+            name: Transcoder CPU
+            icon: mdi:movie-cog
+            features_position: bottom
+            features:
+              - type: trend-graph
+                hours_to_show: 3
+                detail: true
+          - type: tile
+            entity: sensor.dh_plex_agent_gpu_render
+            name: GPU Render
+            icon: mdi:expansion-card
+            vertical: false
+            features:
+              - type: trend-graph
+                hours_to_show: 3
+                detail: true
+            features_position: bottom
+          - type: tile
+            entity: sensor.dh_plex_agent_gpu_video
+            name: GPU Video
+            icon: mdi:video
+            features_position: bottom
+            features:
+              - type: trend-graph
+                hours_to_show: 3
+                detail: true
+          - type: tile
+            entity: sensor.dh_plex_agent_gpu_video_enhance
+            name: GPU Video Enhance
+            icon: mdi:video-high-definition
+            features_position: bottom
+            features:
+              - type: trend-graph
+                hours_to_show: 3
+                detail: true
+          - type: tile
+            entity: sensor.dh_plex_agent_scanner_cpu
+            name: Scanner CPU
+            icon: mdi:magnify-scan
+            features_position: bottom
+            features:
+              - type: trend-graph
+                hours_to_show: 3
+                detail: true
+      - type: logbook
+        title: Plex Activity History (24 hr)
+        hours_to_show: 24
+        target:
+          entity_id:
+            - sensor.dh_plex_agent_activity
+        name_detail: auto
+  - type: grid
+    cards:
+      - type: heading
+        heading: Фоновые задачи
         heading_style: title
         icon: mdi:cog-play
       - type: entities
@@ -573,6 +586,8 @@ sections:
             name: Thumbnail Generation
           - entity: binary_sensor.dh_plex_agent_transcoder_running
             name: Transcoder
+          - entity: sensor.dh_plex_agent_transcoder_count
+            name: Transcoder Processes
       - type: entities
         title: Process Details
         show_header_toggle: false
@@ -587,6 +602,23 @@ sections:
         heading: Библиотеки
         heading_style: title
         icon: mdi:folder-multiple-play
+      - type: custom:mushroom-template-card
+        entity: sensor.dh_plex_agent_libraries
+        primary: Библиотеки Plex
+        secondary: >-
+          {% set n = states('sensor.dh_plex_agent_libraries') %} {% if n in
+          ['unknown', 'unavailable', 'none', ''] %}
+            Недоступно
+          {% else %}
+            {{ n }} библиотек
+          {% endif %}
+        icon: mdi:folder-multiple-play
+        icon_color: blue
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: 12
+          rows: 1
       - type: custom:auto-entities
         card:
           type: entities
@@ -599,60 +631,20 @@ sections:
               options:
                 secondary_info: last-changed
         sort:
-          method: name
+          method: entity_id
         show_empty: true
       - type: heading
         heading: Диагностика
         heading_style: title
         icon: mdi:stethoscope
-      - type: entities
+      - color: state
+        type: entities
         show_header_toggle: false
-        state_color: true
         entities:
-          - entity: sensor.dh_plex_agent_collector_status
-            name: Process Collector
           - entity: sensor.dh_plex_agent_api_status
             name: Plex API
-          - entity: sensor.dh_plex_agent_libraries
-            name: Libraries
-          - entity: sensor.dh_plex_agent_version
-            name: Версия агента
-          - entity: sensor.dh_plex_agent_started_at
-            name: Агент запущен
-          - entity: sensor.dh_plex_agent_publication_profile
-            name: Профиль публикации
-          - entity: sensor.dh_plex_agent_last_publication
-            name: Последняя публикация
-          - entity: sensor.dh_plex_agent_last_refresh
-            name: Последний Refresh
-badges:
-  - type: entity
-    entity: binary_sensor.dh_plex_agent_server_running
-    name: Plex
-    show_name: true
-    show_state: true
-    show_icon: true
-  - type: entity
-    entity: sensor.dh_plex_agent_playback_count
-    name: Playback
-    show_name: true
-    show_state: true
-    show_icon: true
-  - type: entity
-    entity: binary_sensor.dh_plex_agent_video_playback_active
-    name: Video
-    show_name: true
-    show_state: true
-    show_icon: true
-  - type: entity
-    entity: sensor.dh_plex_agent_cpu
-    name: CPU
-    show_name: true
-    show_state: true
-    show_icon: true
-header:
-  card:
-    type: markdown
-    text_only: true
-    content: '# Plex media server'
+          - entity: sensor.dh_plex_agent_collector_status
+            name: Process Collector
+badges: []
+header: {}
 cards: []
