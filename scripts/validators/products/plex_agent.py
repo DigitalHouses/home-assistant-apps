@@ -51,6 +51,13 @@ EXPECTED_ENTITY_IDS = {
     "publication_profile": "sensor.dh_plex_agent_publication_profile",
     "last_publication": "sensor.dh_plex_agent_last_publication",
     "refresh": "button.dh_plex_agent_refresh",
+    "agent_card": "sensor.dh_plex_agent_card",
+    "check_updates": "button.dh_plex_agent_check_updates",
+    "update": "button.dh_plex_agent_update",
+    "restart_agent": "button.dh_plex_agent_restart_agent",
+    "update_available": "binary_sensor.dh_plex_agent_update_available",
+    "latest_version": "sensor.dh_plex_agent_latest_version",
+    "update_status": "sensor.dh_plex_agent_update_status",
 }
 
 
@@ -113,6 +120,13 @@ def validate_plex_agent(
             app / "app/api_runtime.py",
             app / "app/build_info.py",
             app / "app/state_store.py",
+            app / "app/agent_card.py",
+            app / "app/update_manager.py",
+            app / "bin/digitalhouses-plex-agent-update-runner",
+            app / "systemd/digitalhouses_plex_agent-update.service",
+            app / "systemd/digitalhouses_plex_agent-update.path",
+            app / "systemd/digitalhouses_plex_agent-update-recover.service",
+            app / "examples/lovelace/plex_agent_card_ru.yaml",
             app / "app/telemetry.py",
             app / "app/migration_cleanup.py",
             app / "app/presentation.py",
@@ -177,6 +191,11 @@ def validate_plex_agent(
         "collector_availability": f"{expected_base}/collector_availability",
         "plex_api_availability": f"{expected_base}/plex_api_availability",
         "refresh": f"{expected_base}/refresh",
+        "update_check": f"{expected_base}/update/check",
+        "update_install": f"{expected_base}/update/install",
+        "update_state": f"{expected_base}/update/state",
+        "restart_agent": f"{expected_base}/restart",
+        "agent_card_state": f"{expected_base}/agent/card",
         "discovery": (
             "homeassistant/device/"
             f"{EXPECTED_DEVICE_ID}/config"
@@ -208,6 +227,27 @@ def validate_plex_agent(
             fail(f"Plex Agent missing discovery component {key}")
         if component.get("default_entity_id") != expected_entity_id:
             fail(f"Plex Agent default_entity_id changed for {key}")
+
+    # The control card and updater deliberately share the canonical MQTT
+    # device; their retained state must not be routed to collector groups.
+    controls = {
+        "agent_card": topics.agent_card_state,
+        "latest_version": topics.update_state,
+        "update_status": topics.update_state,
+        "update_available": topics.update_state,
+    }
+    for key, topic in controls.items():
+        if components[key].get("state_topic") != topic:
+            fail(f"Plex Agent control state routing changed for {key}")
+    for key, topic in {
+        "check_updates": topics.update_check,
+        "update": topics.update_install,
+        "restart_agent": topics.restart_agent,
+    }.items():
+        if components[key].get("command_topic") != topic:
+            fail(f"Plex Agent command topic changed for {key}")
+        if components[key].get("retain") is not False:
+            fail(f"Plex Agent command must be non-retained: {key}")
 
     grouped = {
         "activity": "activity",
