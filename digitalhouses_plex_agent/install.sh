@@ -12,6 +12,9 @@ SERVICE_NAME="${APP_NAME}.service"
 GPU_SERVICE_NAME="${APP_NAME}_gpu_helper.service"
 TOKEN_REFRESH_SERVICE_NAME="${APP_NAME}_token_refresh.service"
 TOKEN_REFRESH_PATH_NAME="${APP_NAME}_token_refresh.path"
+UPDATE_UNIT_NAME="${APP_NAME}-update.service"
+UPDATE_RECOVER_NAME="${APP_NAME}-update-recover.service"
+UPDATE_PATH_NAME="${APP_NAME}-update.path"
 LEGACY_SERVICE_NAME="${LEGACY_APP_NAME}.service"
 LEGACY_GPU_SERVICE_NAME="digitalhouses_plex_gpu_helper.service"
 
@@ -51,6 +54,11 @@ UNIT_FILE="/etc/systemd/system/${SERVICE_NAME}"
 GPU_UNIT_FILE="/etc/systemd/system/${GPU_SERVICE_NAME}"
 TOKEN_REFRESH_SERVICE_FILE="/etc/systemd/system/${TOKEN_REFRESH_SERVICE_NAME}"
 TOKEN_REFRESH_PATH_FILE="/etc/systemd/system/${TOKEN_REFRESH_PATH_NAME}"
+UPDATE_UNIT_FILE="/etc/systemd/system/${UPDATE_UNIT_NAME}"
+UPDATE_RECOVER_FILE="/etc/systemd/system/${UPDATE_RECOVER_NAME}"
+UPDATE_PATH_FILE="/etc/systemd/system/${UPDATE_PATH_NAME}"
+UPDATE_RUNNER_FILE="/usr/local/libexec/digitalhouses-plex-agent-update-runner"
+UPDATE_PRIVATE_DIR="/var/lib/digitalhouses-plex-updater"
 PLEX_LOCAL_ADMIN_TOKEN="/var/lib/plexmediaserver/Library/Application Support/Plex Media Server/.LocalAdminToken"
 PLEX_API_TOKEN_FILE="${CONFIG_DIR}/plex_local_admin_token"
 TOKEN_DROPIN_DIR="/etc/systemd/system/${SERVICE_NAME}.d"
@@ -172,6 +180,8 @@ install -d -o root -g root -m 0755 "${APP_DIR}"
 install -d -o root -g "${SERVICE_GROUP}" -m 0750 "${CONFIG_DIR}"
 install -d -o "${SERVICE_USER}" -g "${SERVICE_GROUP}" -m 0750 "${STATE_DIR}"
 install -d -o root -g root -m 0755 /var/lib/digitalhouses
+install -d -o root -g "${SERVICE_GROUP}" -m 0750 "${UPDATE_PRIVATE_DIR}"
+install -d -o root -g root -m 0755 /usr/local/libexec
 install -d -o "${SERVICE_USER}" -g "${SERVICE_GROUP}" -m 0700 "${TELEMETRY_STATE_DIR}"
 
 legacy_runtime_present=0
@@ -202,7 +212,9 @@ restore_legacy_runtime() {
     systemctl disable --now "${SERVICE_NAME}" >/dev/null 2>&1
     systemctl disable --now "${GPU_SERVICE_NAME}" >/dev/null 2>&1
     systemctl disable --now "${TOKEN_REFRESH_PATH_NAME}" >/dev/null 2>&1
+    systemctl disable --now "${UPDATE_PATH_NAME}" >/dev/null 2>&1
     rm -f "${TOKEN_REFRESH_SERVICE_FILE}" "${TOKEN_REFRESH_PATH_FILE}"
+    rm -f "${UPDATE_UNIT_FILE}" "${UPDATE_RECOVER_FILE}" "${UPDATE_PATH_FILE}" "${UPDATE_RUNNER_FILE}"
     systemctl daemon-reload >/dev/null 2>&1 || true
 
     rm -f "${CONFIG_FILE}" "${PLEX_API_TOKEN_FILE}"
@@ -453,6 +465,13 @@ install -o root -g root -m 0644 \
 install -o root -g root -m 0644 \
     "${APP_DIR}/systemd/${TOKEN_REFRESH_PATH_NAME}" \
     "${TOKEN_REFRESH_PATH_FILE}"
+install -o root -g root -m 0755 \
+    "${APP_DIR}/bin/digitalhouses-plex-agent-update-runner" \
+    "${UPDATE_RUNNER_FILE}"
+for unit in "${UPDATE_UNIT_NAME}" "${UPDATE_RECOVER_NAME}" "${UPDATE_PATH_NAME}"; do
+    install -o root -g root -m 0644 \
+        "${APP_DIR}/systemd/${unit}" "/etc/systemd/system/${unit}"
+done
 
 # 0.2.0 used a systemd LoadCredential drop-in. Remove both historical and
 # canonical locations during upgrade.
@@ -464,6 +483,11 @@ systemctl daemon-reload
 # Only this on-demand unit runs as root. The main agent merely writes
 # a rate-limited request marker in its existing private state directory.
 systemctl enable --now "${TOKEN_REFRESH_PATH_NAME}" >/dev/null
+systemctl enable --now "${UPDATE_PATH_NAME}" >/dev/null
+if ! systemctl is-active --quiet "${UPDATE_PATH_NAME}"; then
+    echo "Plex update watcher failed to start."
+    exit 1
+fi
 if ! systemctl is-active --quiet "${TOKEN_REFRESH_PATH_NAME}"; then
     echo "Plex token auto-recovery watcher failed to start."
     exit 1
