@@ -10,6 +10,8 @@ SOURCE_PRODUCT_DIR="${PRODUCT_ID}"
 
 SERVICE_NAME="${APP_NAME}.service"
 GPU_SERVICE_NAME="${APP_NAME}_gpu_helper.service"
+TOKEN_REFRESH_SERVICE_NAME="${APP_NAME}_token_refresh.service"
+TOKEN_REFRESH_PATH_NAME="${APP_NAME}_token_refresh.path"
 LEGACY_SERVICE_NAME="${LEGACY_APP_NAME}.service"
 LEGACY_GPU_SERVICE_NAME="digitalhouses_plex_gpu_helper.service"
 
@@ -47,6 +49,8 @@ STATE_DIR="/var/lib/${APP_NAME}"
 TELEMETRY_STATE_DIR="/var/lib/digitalhouses/${APP_NAME}"
 UNIT_FILE="/etc/systemd/system/${SERVICE_NAME}"
 GPU_UNIT_FILE="/etc/systemd/system/${GPU_SERVICE_NAME}"
+TOKEN_REFRESH_SERVICE_FILE="/etc/systemd/system/${TOKEN_REFRESH_SERVICE_NAME}"
+TOKEN_REFRESH_PATH_FILE="/etc/systemd/system/${TOKEN_REFRESH_PATH_NAME}"
 PLEX_LOCAL_ADMIN_TOKEN="/var/lib/plexmediaserver/Library/Application Support/Plex Media Server/.LocalAdminToken"
 PLEX_API_TOKEN_FILE="${CONFIG_DIR}/plex_local_admin_token"
 TOKEN_DROPIN_DIR="/etc/systemd/system/${SERVICE_NAME}.d"
@@ -197,6 +201,9 @@ restore_legacy_runtime() {
     set +e
     systemctl disable --now "${SERVICE_NAME}" >/dev/null 2>&1
     systemctl disable --now "${GPU_SERVICE_NAME}" >/dev/null 2>&1
+    systemctl disable --now "${TOKEN_REFRESH_PATH_NAME}" >/dev/null 2>&1
+    rm -f "${TOKEN_REFRESH_SERVICE_FILE}" "${TOKEN_REFRESH_PATH_FILE}"
+    systemctl daemon-reload >/dev/null 2>&1 || true
 
     rm -f "${CONFIG_FILE}" "${PLEX_API_TOKEN_FILE}"
     rm -f "${MIGRATION_MARKER}" "${MIGRATION_IN_PROGRESS}"
@@ -440,6 +447,12 @@ install -o root -g root -m 0644 \
 install -o root -g root -m 0644 \
     "${APP_DIR}/systemd/${GPU_SERVICE_NAME}" \
     "${GPU_UNIT_FILE}"
+install -o root -g root -m 0644 \
+    "${APP_DIR}/systemd/${TOKEN_REFRESH_SERVICE_NAME}" \
+    "${TOKEN_REFRESH_SERVICE_FILE}"
+install -o root -g root -m 0644 \
+    "${APP_DIR}/systemd/${TOKEN_REFRESH_PATH_NAME}" \
+    "${TOKEN_REFRESH_PATH_FILE}"
 
 # 0.2.0 used a systemd LoadCredential drop-in. Remove both historical and
 # canonical locations during upgrade.
@@ -447,6 +460,14 @@ rm -f "${TOKEN_DROPIN_FILE}" "${LEGACY_TOKEN_DROPIN_FILE}"
 rmdir "${TOKEN_DROPIN_DIR}" "${LEGACY_TOKEN_DROPIN_DIR}" 2>/dev/null || true
 
 systemctl daemon-reload
+
+# Only this on-demand unit runs as root. The main agent merely writes
+# a rate-limited request marker in its existing private state directory.
+systemctl enable --now "${TOKEN_REFRESH_PATH_NAME}" >/dev/null
+if ! systemctl is-active --quiet "${TOKEN_REFRESH_PATH_NAME}"; then
+    echo "Plex token auto-recovery watcher failed to start."
+    exit 1
+fi
 
 if [[ "${intel_gpu_present}" -eq 1 ]] && command -v intel_gpu_top >/dev/null 2>&1; then
     systemctl enable "${GPU_SERVICE_NAME}" >/dev/null

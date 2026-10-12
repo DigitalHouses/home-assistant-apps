@@ -1,0 +1,9 @@
+[Unit]
+Description=Watch DigitalHouses Plex Agent token refresh requests
+
+[Path]
+PathModified=/var/lib/digitalhouses_plex_agent/token-refresh-request
+Unit=digitalhouses_plex_agent_token_refresh.service
+
+[Install]
+WantedBy=multi-user.target
