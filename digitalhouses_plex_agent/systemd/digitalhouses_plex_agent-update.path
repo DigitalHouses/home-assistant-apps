@@ -1,0 +1,9 @@
+[Unit]
+Description=Watch DigitalHouses Plex Agent update requests
+
+[Path]
+PathModified=/var/lib/digitalhouses_plex_agent/update-install-request
+Unit=digitalhouses_plex_agent-update.service
+
+[Install]
+WantedBy=multi-user.target
