@@ -54,6 +54,31 @@ sensor.dh_recorder_app_started_at
 `Started at` is generated once when the Python App process starts. It is a
 timezone-aware ISO8601 timestamp with Home Assistant `device_class: timestamp`.
 
+## Compact status and control card
+
+The canonical Recorder device also exposes the App-owned UI operation contract:
+
+```text
+sensor.dh_recorder_app_card
+button.dh_recorder_app_check_updates
+sensor.dh_recorder_app_latest_version
+binary_sensor.dh_recorder_app_update_available
+```
+
+The existing `button.dh_recorder_app_db_refresh` remains the authoritative full
+refresh control. Its execution is surfaced through `sensor.dh_recorder_app_card`
+as `running -> success/error` with operation timestamps and duration.
+
+Release checks query published stable GitHub Releases for tags matching
+`digitalhouses_recorder_app-vMAJOR.MINOR.PATCH`. Drafts, prereleases and other
+product tags are ignored. The same isolated check runs on demand and every
+24 hours; a GitHub/API failure does not affect Recorder monitoring.
+
+App installation and restart remain Supervisor-owned. The maintained compact
+card uses the standard Supervisor update entity with backup-before-update and
+`hassio.app_restart`; the Recorder App does not gain additional Supervisor
+permissions.
+
 ## Database support
 
 - PostgreSQL: manual database connection.

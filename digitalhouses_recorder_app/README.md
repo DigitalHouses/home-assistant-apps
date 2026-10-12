@@ -24,7 +24,7 @@ entity prefix dh_recorder_app
 
 ![DigitalHouses Recorder dashboard](images/dh_db_monitor.png)
 
-Maintained Lovelace example: [examples/lovelace/dh_recorder_app_dashboard.yaml](examples/lovelace/dh_recorder_app_dashboard.yaml)
+Maintained Lovelace examples: [full dashboard](examples/lovelace/dh_recorder_app_dashboard.yaml) and [compact Russian control card](examples/lovelace/recorder_app_card_ru.yaml)
 
 ## Quick start
 
@@ -56,6 +56,7 @@ Recorder App publishes one canonical MQTT Discovery device with:
 - optional filesystem free, used, total and used percentage;
 - configurable Top-N Recorder entities for the last 24 hours and all retained history;
 - on-demand full refresh and last successful refresh timestamp;
+- compact App status/control state with explicit stable-release checks;
 - App-owned disk-usage threshold;
 - machine events for DB/Recorder/storage transitions;
 - common runtime diagnostics: App Version and Started at.
@@ -93,6 +94,10 @@ Core diagnostics and controls include:
 | `sensor.dh_recorder_app_db_top_entities_24h` | Top Recorder entities for 24h |
 | `sensor.dh_recorder_app_db_top_entities_all_time` | Top Recorder entities across retained history |
 | `button.dh_recorder_app_db_refresh` | Full on-demand refresh |
+| `sensor.dh_recorder_app_card` | Compact-card operation state and timing |
+| `button.dh_recorder_app_check_updates` | Check the latest published stable Recorder App release |
+| `sensor.dh_recorder_app_latest_version` | Latest published stable Recorder App version |
+| `binary_sensor.dh_recorder_app_update_available` | Stable Recorder App update availability |
 | `sensor.dh_recorder_app_db_last_refresh` | Last successful full manual refresh |
 | `number.dh_recorder_app_db_disk_usage_threshold` | App-owned storage threshold |
 | `event.dh_recorder_app_diagnostic` | Machine transition events |

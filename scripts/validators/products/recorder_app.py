@@ -105,12 +105,15 @@ def validate_db_monitoring(
         root,
         [
             app / "rootfs/app/contracts.py",
+            app / "rootfs/app/control.py",
             app / "rootfs/app/identity_migration.py",
             app / "rootfs/app/telemetry.py",
             app / "tests/test_contracts.py",
+            app / "tests/test_control.py",
             app / "tests/test_identity_migration.py",
             app / "tests/test_telemetry.py",
             app / "examples/lovelace/dh_recorder_app_dashboard.yaml",
+            app / "examples/lovelace/recorder_app_card_ru.yaml",
         ],
     )
 
@@ -214,6 +217,32 @@ def validate_db_monitoring(
             "for hourly and daily activity"
         )
 
+    card = (
+        app / "examples/lovelace/recorder_app_card_ru.yaml"
+    ).read_text(encoding="utf-8")
+    for required_card_text in (
+        "sensor.dh_recorder_app_card",
+        "sensor.dh_recorder_app_latest_version",
+        "binary_sensor.dh_recorder_app_update_available",
+        "button.dh_recorder_app_db_refresh",
+        "button.dh_recorder_app_check_updates",
+        "update.digitalhouses_recorder_app_update",
+        "perform_action: update.install",
+        "backup: true",
+        "perform_action: hassio.app_restart",
+        "app: 8133339d_digitalhouses_recorder_app",
+    ):
+        if required_card_text not in card:
+            fail(
+                "Recorder App compact card missing "
+                f"{required_card_text!r}"
+            )
+        if required_card_text not in dashboard:
+            fail(
+                "Recorder App dashboard missing compact-card "
+                f"contract {required_card_text!r}"
+            )
+
     discovery = _import_discovery(app)
 
     if discovery.BASE_TOPIC != EXPECTED_BASE_TOPIC:
@@ -297,6 +326,18 @@ def validate_db_monitoring(
         ),
         "db_refresh": (
             "button.dh_recorder_app_db_refresh"
+        ),
+        "app_card": (
+            "sensor.dh_recorder_app_card"
+        ),
+        "check_updates": (
+            "button.dh_recorder_app_check_updates"
+        ),
+        "latest_version": (
+            "sensor.dh_recorder_app_latest_version"
+        ),
+        "update_available": (
+            "binary_sensor.dh_recorder_app_update_available"
         ),
         "db_disk_usage_threshold": (
             "number.dh_recorder_app_"
