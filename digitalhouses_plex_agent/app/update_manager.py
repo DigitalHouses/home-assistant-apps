@@ -66,7 +66,7 @@ class UpdateManager:
         self.dir = state_dir
         self.version = version
         self.request = StateStore(state_dir / "update_request.json")
-        self.worker = StateStore(state_dir / "update_worker.json")
+        self.worker = StateStore(Path("/var/lib/digitalhouses-plex-updater/update_worker.json"))
         self._lock = threading.Lock()
         self._thread: threading.Thread | None = None
         self._pending: tuple[tuple[str, str] | None, str | None, float] | None = None
@@ -167,7 +167,6 @@ class UpdateManager:
                 "tag": self.tag, "version": self.latest,
                 "requested_at": requested_at,
             })
-            self.worker.save({"state": "queued", "updated_at": requested_at})
             (self.dir / "update-install-request").write_text(
                 "install\n", encoding="ascii"
             )
