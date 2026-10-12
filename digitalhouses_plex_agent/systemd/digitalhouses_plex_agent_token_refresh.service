@@ -1,0 +1,21 @@
+[Unit]
+Description=Reconcile DigitalHouses Plex Agent local API token
+After=plexmediaserver.service
+ConditionPathExists=/var/lib/plexmediaserver/Library/Application Support/Plex Media Server/.LocalAdminToken
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+WorkingDirectory=/opt/digitalhouses/digitalhouses_plex_agent
+ExecStart=/usr/bin/python3 -m app.token_refresh
+Environment=PYTHONPATH=/opt/digitalhouses/digitalhouses_plex_agent
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/etc/digitalhouses_plex_agent
+RestrictSUIDSGID=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
