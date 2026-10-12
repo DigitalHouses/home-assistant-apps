@@ -19,13 +19,13 @@ from .state_store import StateStore
 log = logging.getLogger(__name__)
 PRODUCT = "digitalhouses_plex_agent"
 RELEASES_URL = "https://api.github.com/repos/DigitalHouses/home-assistant-apps/releases"
-STABLE_TAG = re.compile(r"^digitalhouses_plex_agent-v(\\d+)\\.(\\d+)\\.(\\d+)$")
+STABLE_TAG = re.compile(r"^digitalhouses_plex_agent-v(\d+)\.(\d+)\.(\d+)$")
 CHECK_INTERVAL = 24 * 3600
 BUSY_PHASES = {"queued", "downloading", "installing", "verifying", "rolling_back"}
 
 
 def stable_version(value: str) -> tuple[int, int, int]:
-    if re.fullmatch(r"\\d+\\.\\d+\\.\\d+", value) is None:
+    if re.fullmatch(r"\d+\.\d+\.\d+", value) is None:
         raise ValueError("Invalid stable version")
     return tuple(int(part) for part in value.split("."))
 
@@ -169,7 +169,7 @@ class UpdateManager:
             })
             self.worker.save({"state": "queued", "updated_at": requested_at})
             (self.dir / "update-install-request").write_text(
-                "install\\n", encoding="ascii"
+                "install\n", encoding="ascii"
             )
         except Exception as exc:
             return False, f"Не удалось запросить установку: {type(exc).__name__}"
