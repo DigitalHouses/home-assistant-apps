@@ -32,6 +32,8 @@ TOPICS = {
     "traffic_availability": f"{MQTT_BASE_TOPIC}/traffic_availability",
     "recent_results": f"{MQTT_BASE_TOPIC}/recent_results",
     "servers": f"{MQTT_BASE_TOPIC}/servers",
+    "card_state": f"{MQTT_BASE_TOPIC}/app/card",
+    "update_state": f"{MQTT_BASE_TOPIC}/update/state",
     "result_availability": f"{MQTT_BASE_TOPIC}/result_availability",
     "minimum_download_command": f"{MQTT_BASE_TOPIC}/thresholds/minimum_download/set",
     "minimum_upload_command": f"{MQTT_BASE_TOPIC}/thresholds/minimum_upload/set",
@@ -497,6 +499,81 @@ def build_discovery_payload(
             "payload_press": "REFRESH_SERVERS",
             "entity_category": "config",
             "icon": "mdi:refresh",
+            "availability": availability,
+        },
+        "refresh": {
+            "platform": "button",
+            "name": "Refresh",
+            "unique_id": f"{ENTITY_PREFIX}_refresh",
+            "default_entity_id": f"button.{ENTITY_PREFIX}_refresh",
+            "command_topic": TOPICS["command"],
+            "payload_press": "REFRESH_UI",
+            "entity_category": "diagnostic",
+            "icon": "mdi:refresh",
+            "availability": availability,
+        },
+        "app_card": {
+            "platform": "sensor",
+            "name": "App card",
+            "unique_id": f"{ENTITY_PREFIX}_card",
+            "default_entity_id": f"sensor.{ENTITY_PREFIX}_card",
+            "state_topic": TOPICS["card_state"],
+            "value_template": "{{ value_json.state | default('idle') }}",
+            "json_attributes_topic": TOPICS["card_state"],
+            "json_attributes_template": (
+                "{{ dict(operation=value_json.operation, "
+                "started_at=value_json.started_at, "
+                "finished_at=value_json.finished_at, "
+                "duration_seconds=value_json.duration_seconds, "
+                "error=value_json.error) | tojson }}"
+            ),
+            "entity_category": "diagnostic",
+            "icon": "mdi:web",
+            "availability": availability,
+        },
+        "check_updates": {
+            "platform": "button",
+            "name": "Check updates",
+            "unique_id": f"{ENTITY_PREFIX}_check_updates",
+            "default_entity_id": f"button.{ENTITY_PREFIX}_check_updates",
+            "command_topic": TOPICS["command"],
+            "payload_press": "CHECK_UPDATES",
+            "entity_category": "diagnostic",
+            "icon": "mdi:cloud-search",
+            "availability": availability,
+        },
+        "latest_version": {
+            "platform": "sensor",
+            "name": "Latest version",
+            "unique_id": f"{ENTITY_PREFIX}_latest_version",
+            "default_entity_id": f"sensor.{ENTITY_PREFIX}_latest_version",
+            "state_topic": TOPICS["update_state"],
+            "value_template": "{{ value_json.latest_version | default('unknown') }}",
+            "json_attributes_topic": TOPICS["update_state"],
+            "json_attributes_template": (
+                "{{ dict(status=value_json.status, "
+                "error=value_json.error, "
+                "checked_at=value_json.checked_at, "
+                "check_duration_seconds=value_json.check_duration_seconds) | tojson }}"
+            ),
+            "entity_category": "diagnostic",
+            "icon": "mdi:tag",
+            "availability": availability,
+        },
+        "update_available": {
+            "platform": "binary_sensor",
+            "name": "Update available",
+            "unique_id": f"{ENTITY_PREFIX}_update_available",
+            "default_entity_id": f"binary_sensor.{ENTITY_PREFIX}_update_available",
+            "state_topic": TOPICS["update_state"],
+            "value_template": (
+                "{{ 'ON' if value_json.available == true else "
+                "'OFF' if value_json.available == false else 'unknown' }}"
+            ),
+            "payload_on": "ON",
+            "payload_off": "OFF",
+            "entity_category": "diagnostic",
+            "icon": "mdi:package-up",
             "availability": availability,
         },
         "delete_telemetry": {

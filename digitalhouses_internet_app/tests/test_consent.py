@@ -34,7 +34,7 @@ def load_app_without_mqtt_dependency():
             "paho.mqtt": mqtt,
             "paho.mqtt.client": client,
         }),
-        patch.dict(os.environ, {"APP_VERSION": "0.1.21"}),
+        patch.dict(os.environ, {"APP_VERSION": "0.1.23"}),
     ):
         spec.loader.exec_module(module)
     return module
@@ -92,7 +92,7 @@ class ConsentTests(unittest.TestCase):
         config = (root / "config.yaml").read_text(encoding="utf-8")
         self.assertIn("  telemetry_enabled: false", config)
         self.assertIn("  telemetry_enabled: bool", config)
-        self.assertIn("version: 0.1.22", config)
+        self.assertIn("version: 0.1.23", config)
         for locale in ("en", "ru"):
             text = (root / "translations" / f"{locale}.yaml").read_text(encoding="utf-8")
             self.assertIn(

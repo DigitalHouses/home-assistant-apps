@@ -16,6 +16,7 @@ import paho.mqtt.client as mqtt
 
 from config import AppConfig, ConfigError, load_config
 from connectivity import ConnectivityProbeError, ConnectivitySnapshot, sample
+from control import AppCard, CHECK_INTERVAL_SECONDS, ReleaseChecker
 from contracts import validate_machine_event
 from discovery import (
     DISCOVERY_TOPIC,
@@ -185,6 +186,9 @@ class InternetApp:
             TOPICS["availability"], payload="offline", qos=1, retain=True
         )
 
+        self.release_checker = ReleaseChecker(APP_VERSION)
+        self.app_card = AppCard(self._publish_app_card)
+
     def _on_connect(
         self,
         client: mqtt.Client,
@@ -266,6 +270,8 @@ class InternetApp:
             retain=True,
         )
         self._publish_all()
+        self._publish_update_state()
+        self.app_card.publish()
         self.log.info("MQTT connected")
 
     def _on_message(
@@ -306,6 +312,28 @@ class InternetApp:
                 name="speedtest-manual",
                 daemon=True,
             ).start()
+        elif payload == "REFRESH_UI":
+            if self.app_card.begin("refresh"):
+                threading.Thread(
+                    target=self._refresh_ui,
+                    name="ui-refresh",
+                    daemon=True,
+                ).start()
+        elif payload == "CHECK_UPDATES":
+            if self.app_card.begin("check"):
+                if self.release_checker.begin():
+                    self._publish_update_state()
+                    threading.Thread(
+                        target=self._check_updates,
+                        kwargs={"operation": "check"},
+                        name="release-check-manual",
+                        daemon=True,
+                    ).start()
+                else:
+                    self.app_card.finish(
+                        "check",
+                        error="Release check is already running",
+                    )
         elif payload == "REFRESH_SERVERS":
             threading.Thread(
                 target=self._refresh_servers,
@@ -318,6 +346,61 @@ class InternetApp:
                 name="dh-internet-telemetry-delete",
                 daemon=True,
             ).start()
+
+    def _publish_app_card(self, payload: dict[str, object]) -> bool:
+        if not self.mqtt.is_connected():
+            return False
+        self.mqtt.publish(
+            TOPICS["card_state"],
+            json.dumps(payload),
+            qos=1,
+            retain=True,
+        )
+        return True
+
+    def _publish_update_state(self) -> None:
+        if not self.mqtt.is_connected():
+            return
+        self.mqtt.publish(
+            TOPICS["update_state"],
+            json.dumps(self.release_checker.payload()),
+            qos=1,
+            retain=True,
+        )
+
+    def _refresh_ui(self) -> None:
+        if not self.mqtt.is_connected():
+            self.app_card.finish("refresh", error="MQTT is not connected")
+            return
+        try:
+            self._publish_all()
+            self._publish_update_state()
+        except Exception as exc:
+            self.log.exception("UI refresh failed")
+            self.app_card.finish(
+                "refresh",
+                error=str(exc) or exc.__class__.__name__,
+            )
+            return
+        self.app_card.finish("refresh")
+
+    def _check_updates(self, *, operation: str | None = None) -> None:
+        ok, error = self.release_checker.complete()
+        self._publish_update_state()
+        if operation is not None:
+            self.app_card.finish(
+                operation,
+                error=None if ok else (error or "Release check failed"),
+                measured_seconds=self.release_checker.duration_seconds,
+            )
+
+    def _release_check_loop(self) -> None:
+        while not self.stop_app.is_set():
+            if self.release_checker.begin():
+                self._publish_update_state()
+                self._check_updates()
+            if self.stop_app.wait(CHECK_INTERVAL_SECONDS):
+                return
 
     def _delete_telemetry(self) -> None:
         if self.telemetry.delete():
@@ -1099,6 +1182,12 @@ class InternetApp:
             daemon=True,
         )
         traffic_thread.start()
+        release_check_thread = threading.Thread(
+            target=self._release_check_loop,
+            name="release-check-periodic",
+            daemon=True,
+        )
+        release_check_thread.start()
         try:
             while not self.stop_app.is_set():
                 try:

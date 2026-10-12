@@ -1,42 +1,41 @@
-# DigitalHouses Internet App · compact HAOS control card
+# DigitalHouses Internet App · compact unified card
 # Requires Mushroom and custom:button-card >= 5.0 for update_timer.
-# Uses the Home Assistant Supervisor update entity for the canonical App slug.
+# Runtime operations are App-owned; installation/restart remain Supervisor-owned.
 type: vertical-stack
 cards:
   - type: custom:button-card
-    entity: sensor.dh_internet_app_version
+    entity: sensor.dh_internet_app_card
     triggers_update:
+      - sensor.dh_internet_app_card
       - sensor.dh_internet_app_version
+      - sensor.dh_internet_app_latest_version
+      - binary_sensor.dh_internet_app_update_available
       - binary_sensor.dh_internet_app_internet
-      - sensor.dh_internet_app_speedtest_status
       - sensor.dh_internet_app_problems
       - update.digitalhouses_internet_app_update
     update_timer: |
       [[[
-        const app = states['sensor.dh_internet_app_version'];
-        const speed = states['sensor.dh_internet_app_speedtest_status'];
-        const update = states['update.digitalhouses_internet_app_update'];
-        const updating = update?.attributes?.in_progress === true;
-        const speedtest = speed?.state === 'running';
-        return updating || speedtest ? 1000 : 5000;
+        const s = states['sensor.dh_internet_app_card']?.state;
+        const updating =
+          states['update.digitalhouses_internet_app_update']?.attributes?.in_progress === true;
+        return s === 'running' || updating ? 1000 : 5000;
       ]]]
     show_icon: true
     show_name: true
     show_label: true
     icon: |
       [[[
-        const app = states['sensor.dh_internet_app_version'];
+        const s = states['sensor.dh_internet_app_card']?.state;
         const internet = states['binary_sensor.dh_internet_app_internet']?.state;
-        const speed = states['sensor.dh_internet_app_speedtest_status']?.state;
         const problems = Number(states['sensor.dh_internet_app_problems']?.state || 0);
-        const update = states['update.digitalhouses_internet_app_update'];
-        const updating = update?.attributes?.in_progress === true;
-        const upgrade = update?.state === 'on';
+        const upgrade =
+          states['binary_sensor.dh_internet_app_update_available']?.state === 'on';
+        const updating =
+          states['update.digitalhouses_internet_app_update']?.attributes?.in_progress === true;
 
-        if (!app || ['unknown', 'unavailable'].includes(app.state)) {
-          return 'mdi:alert-circle';
-        }
-        if (updating || speed === 'running') return 'mdi:progress-clock';
+        if (updating || s === 'running') return 'mdi:progress-clock';
+        if (s === 'error') return 'mdi:alert-circle';
+        if (s === 'success') return 'mdi:check-circle';
         if (internet === 'off') return 'mdi:web-off';
         if (Number.isFinite(problems) && problems > 0) return 'mdi:alert-circle';
         if (upgrade) return 'mdi:package-up';
@@ -44,33 +43,26 @@ cards:
       ]]]
     name: |
       [[[
-        const app = states['sensor.dh_internet_app_version'];
-        const update = states['update.digitalhouses_internet_app_update'];
+        const installed = states['sensor.dh_internet_app_version']?.state;
+        const latest = states['sensor.dh_internet_app_latest_version']?.state;
+        const available =
+          states['binary_sensor.dh_internet_app_update_available']?.state === 'on';
         const valid = (v) =>
           typeof v === 'string'
           && !['unknown', 'unavailable', 'none', ''].includes(v);
+        const upgrade =
+          available && valid(installed) && valid(latest) && latest !== installed;
 
-        const installed = valid(app?.state)
-          ? app.state
-          : update?.attributes?.installed_version;
-        const latest = update?.attributes?.latest_version;
-        const upgrade = update?.state === 'on'
-          && valid(installed)
-          && valid(latest)
-          && latest !== installed;
-
-        return 'Internet App'
-          + (valid(installed)
-            ? ' · v' + installed + (upgrade ? ' → v' + latest : '')
-            : '');
+        return 'Internet App' + (valid(installed)
+          ? ' · v' + installed + (upgrade ? ' → v' + latest : '')
+          : '');
       ]]]
     label: |
       [[[
-        const app = states['sensor.dh_internet_app_version'];
+        const item = states['sensor.dh_internet_app_card'];
         const internet = states['binary_sensor.dh_internet_app_internet']?.state;
-        const speed = states['sensor.dh_internet_app_speedtest_status'];
         const problems = Number(states['sensor.dh_internet_app_problems']?.state || 0);
-        const update = states['update.digitalhouses_internet_app_update'];
+        const supervisorUpdate = states['update.digitalhouses_internet_app_update'];
 
         const elapsedText = (since) => {
           const seconds = Math.max(
@@ -81,40 +73,76 @@ cards:
           const ss = String(seconds % 60).padStart(2, '0');
           return mm + ':' + ss;
         };
+        const duration = (value) => {
+          if (typeof value !== 'number') return '—';
+          const seconds = Math.round(Math.max(0, value));
+          const minutes = Math.floor(seconds / 60);
+          return minutes
+            ? minutes + ' мин ' + String(seconds % 60).padStart(2, '0') + ' сек'
+            : seconds + ' сек';
+        };
 
-        if (!app || ['unknown', 'unavailable'].includes(app.state)) {
-          this._dh_internet_timer = null;
-          return 'Нет связи с приложением';
-        }
-
-        if (update?.attributes?.in_progress === true) {
-          if (this._dh_internet_timer?.operation !== 'update') {
+        if (supervisorUpdate?.attributes?.in_progress === true) {
+          if (this._dh_internet_timer?.operation !== 'install') {
             this._dh_internet_timer = {
-              operation: 'update',
+              operation: 'install',
               since: performance.now()
             };
           }
-          const pct = update.attributes.update_percentage;
+          const pct = supervisorUpdate.attributes.update_percentage;
           return 'Установка версии… '
-            + (typeof pct === 'number'
-              ? Math.round(pct) + '% · '
-              : '')
+            + (typeof pct === 'number' ? Math.round(pct) + '% · ' : '')
             + elapsedText(this._dh_internet_timer.since);
         }
 
-        if (speed?.state === 'running') {
-          if (this._dh_internet_timer?.operation !== 'speedtest') {
+        if (!item || ['unknown', 'unavailable'].includes(item.state)) {
+          return 'Нет связи с приложением';
+        }
+
+        const a = item.attributes || {};
+        const operation = a.operation;
+        const names = {
+          refresh: 'Обновление данных',
+          check: 'Проверка версии'
+        };
+
+        if (item.state === 'running') {
+          const key = String(operation) + '|' + String(a.started_at || '');
+          if (this._dh_internet_timer?.key !== key) {
             this._dh_internet_timer = {
-              operation: 'speedtest',
+              key: key,
+              operation: operation,
               since: performance.now()
             };
           }
-          return 'Speedtest… ' + elapsedText(this._dh_internet_timer.since);
+          return (names[operation] || 'Операция') + '… '
+            + elapsedText(this._dh_internet_timer.since);
         }
 
         this._dh_internet_timer = null;
 
-        if (update?.state === 'on') return 'Доступна новая версия';
+        if (item.state === 'error') {
+          return 'Ошибка: ' + (a.error || 'операция не выполнена');
+        }
+
+        if (item.state === 'success') {
+          let message = operation === 'refresh'
+            ? 'Данные обновлены'
+            : operation === 'check'
+              ? (
+                  states['binary_sensor.dh_internet_app_update_available']?.state === 'on'
+                    ? 'Доступна новая версия'
+                    : states['binary_sensor.dh_internet_app_update_available']?.state === 'off'
+                      ? 'Версия актуальна'
+                      : 'Проверка завершена'
+                )
+              : 'Готово';
+          return message + ' · ' + duration(a.duration_seconds);
+        }
+
+        if (states['binary_sensor.dh_internet_app_update_available']?.state === 'on') {
+          return 'Доступна новая версия';
+        }
         if (internet === 'off') return 'Интернет недоступен';
         if (Number.isFinite(problems) && problems > 0) {
           return 'Проблемы: ' + problems;
@@ -137,29 +165,29 @@ cards:
         - width: 26px
         - color: |
             [[[
-              const app = states['sensor.dh_internet_app_version'];
-              const internet = states['binary_sensor.dh_internet_app_internet']?.state;
-              const speed = states['sensor.dh_internet_app_speedtest_status']?.state;
-              const problems = Number(states['sensor.dh_internet_app_problems']?.state || 0);
-              const update = states['update.digitalhouses_internet_app_update'];
-              const updating = update?.attributes?.in_progress === true;
-              const upgrade = update?.state === 'on';
+              const s = states['sensor.dh_internet_app_card']?.state;
+              const internet =
+                states['binary_sensor.dh_internet_app_internet']?.state;
+              const problems =
+                Number(states['sensor.dh_internet_app_problems']?.state || 0);
+              const upgrade =
+                states['binary_sensor.dh_internet_app_update_available']?.state === 'on';
+              const updating =
+                states['update.digitalhouses_internet_app_update']?.attributes?.in_progress === true;
 
-              if (!app || ['unknown', 'unavailable'].includes(app.state)) {
-                return 'var(--error-color)';
-              }
-              if (updating || speed === 'running') {
-                return 'var(--info-color, var(--primary-color))';
-              }
-              if (internet === 'off') return 'var(--error-color)';
-              if (Number.isFinite(problems) && problems > 0) {
-                return 'var(--warning-color, orange)';
-              }
-              if (upgrade) return 'var(--warning-color, orange)';
-              if (internet === 'on') {
-                return 'var(--success-color, var(--primary-color))';
-              }
-              return 'var(--secondary-text-color)';
+              return s === 'error' || internet === 'off'
+                ? 'var(--error-color)'
+                : s === 'running' || updating
+                  ? 'var(--info-color, var(--primary-color))'
+                  : s === 'success'
+                    ? 'var(--success-color, var(--primary-color))'
+                    : Number.isFinite(problems) && problems > 0
+                      ? 'var(--warning-color, orange)'
+                      : upgrade
+                        ? 'var(--warning-color, orange)'
+                        : internet === 'on'
+                          ? 'var(--success-color, var(--primary-color))'
+                          : 'var(--secondary-text-color)';
             ]]]
       name:
         - justify-self: start
@@ -178,33 +206,22 @@ cards:
     alignment: center
     chips:
       - type: template
-        icon: mdi:speedometer
-        content: Speedtest
+        icon: mdi:refresh
+        content: Обновить
         tap_action:
           action: perform-action
           perform_action: button.press
           target:
-            entity_id: button.dh_internet_app_run_speedtest
+            entity_id: button.dh_internet_app_refresh
 
       - type: template
-        entity: update.digitalhouses_internet_app_update
         icon: mdi:cloud-search
-        icon_color: >-
-          {% if is_state('update.digitalhouses_internet_app_update', 'on') %}
-            orange
-          {% elif is_state('update.digitalhouses_internet_app_update', 'off') %}
-            green
-          {% else %}
-            grey
-          {% endif %}
         content: Версия
         tap_action:
           action: perform-action
-          perform_action: homeassistant.update_entity
-          data:
-            entity_id: update.digitalhouses_internet_app_update
-        hold_action:
-          action: more-info
+          perform_action: button.press
+          target:
+            entity_id: button.dh_internet_app_check_updates
 
       - type: conditional
         conditions:

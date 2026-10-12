@@ -34,7 +34,7 @@ All recovery timing belongs to App configuration: maximum cycles, retry interval
 
 ## Current product state
 
-Version `0.1.22` adds the legacy `binary_sensor.internet_status` compatibility alias without changing the canonical Internet entity or its state calculation. The canonical Supervisor identity is permanent, the temporary migration runtime has been removed, and the App remains stable in Home Assistant. The product provides:
+Version `0.1.23` adds App-owned compact-card controls for MQTT snapshot refresh and stable release checks while keeping update installation and restart under Home Assistant Supervisor. The canonical Supervisor identity is permanent, the temporary migration runtime has been removed, and the App remains stable in Home Assistant. The product provides:
 
 - Internet and router reachability;
 - legacy `binary_sensor.internet_status` compatibility alias mirroring `binary_sensor.dh_internet_app_internet`;
@@ -107,6 +107,6 @@ Install one local notification package. It consumes `event.dh_internet_app_event
 
 The reference dashboard uses Mushroom, mini-graph-card and auto-entities. Optional Router and traffic entities are hidden when their mappings are not configured or their mapped source is currently unavailable.
 
-The compact Russian control card requires Mushroom and `custom:button-card >= 5.0`. It deliberately reuses Home Assistant Supervisor's canonical `update.digitalhouses_internet_app_update` entity instead of duplicating update state in MQTT. `Speedtest` starts the App-owned Ookla test, `Версия` forces a refresh of the Supervisor update entity (hold opens more-info), `Новая версия` installs the Supervisor-managed App update with a backup, and `Перезапуск` calls `hassio.app_restart` for the canonical slug `digitalhouses_internet_app`.
+The compact Russian control card requires Mushroom and `custom:button-card >= 5.0`. `Обновить` calls the App-owned `button.dh_internet_app_refresh`, which republishes the current authoritative MQTT snapshot without running Ookla or creating a second calculation path. `Версия` calls `button.dh_internet_app_check_updates`; the App checks published stable GitHub Releases and updates `sensor.dh_internet_app_latest_version`, `binary_sensor.dh_internet_app_update_available` and the foreground card operation state. A lightweight background check uses the same path every 24 hours. Actual installation stays on Home Assistant Supervisor's canonical `update.digitalhouses_internet_app_update` entity, and `Перезапуск` uses `hassio.app_restart` for the canonical slug `digitalhouses_internet_app`. The App keeps its existing `hassio_role: default`; release checking does not broaden Supervisor privileges.
 
 Recorder-facing diagnostics are intentionally low-noise: `sensor.dh_internet_app_problems` changes only when the actual problem list changes, and `sensor.dh_internet_app_availability_month` exposes a two-decimal state plus the stable calendar month while exact outage timing remains App-owned.

@@ -90,6 +90,17 @@ Traffic history keeps the current month plus up to 11 previous observed months u
 
 Temperature, connected-client count, uptime and last-boot bindings are intentionally outside the new App contract.
 
+## Compact control card
+
+The App publishes a small UI-control contract for the maintained Russian compact card:
+
+- `button.dh_internet_app_refresh` republishes the current authoritative retained MQTT snapshot (connectivity, outages, thresholds, server cache, recent results, performance, traffic and problems). It does not run Speedtest, alter thresholds or create a second connectivity calculation.
+- `button.dh_internet_app_check_updates` checks only published, non-draft, non-prerelease GitHub Releases whose tag matches `digitalhouses_internet_app-vX.Y.Z`.
+- `sensor.dh_internet_app_latest_version` and `binary_sensor.dh_internet_app_update_available` contain the result of that check. A background check uses the same path at startup and then every 24 hours; manual checks may be requested at any time when another check is not already running.
+- `sensor.dh_internet_app_card` exposes only transient foreground operation state for `refresh` and `check` so the Lovelace card can show running/success/error and operation duration.
+
+The release check is informational. The App does not update its own container and does not request broader Supervisor permissions. Installation remains owned by Home Assistant Supervisor through `update.digitalhouses_internet_app_update`; restart remains `hassio.app_restart`.
+
 ## Product telemetry
 
 `telemetry_enabled` is required activation consent for statistics collection. Its default is `false`, and the configuration text is `Consent to collect statistics (product name, version, installation ID).` If the setting is absent or `false`, startup logs `Statistics collection consent not granted. Stopping application.` and exits before runtime state initialization, MQTT connections, and telemetry requests. For existing installations, the saved setting persists on upgrade: a previously accepted `true` continues to operate; a `false` or missing setting requires the operator to enable the existing switch and restart. Turning it off stops supported runtime on the next App start without modifying stored identity or product configuration.
