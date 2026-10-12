@@ -71,6 +71,18 @@ class DiscoveryIdentity:
         return f"{self.base_topic}/refresh"
 
     @property
+    def check_updates_command_topic(self) -> str:
+        return f"{self.base_topic}/check_updates"
+
+    @property
+    def card_state_topic(self) -> str:
+        return f"{self.base_topic}/app/card"
+
+    @property
+    def update_state_topic(self) -> str:
+        return f"{self.base_topic}/update/state"
+
+    @property
     def event_topic(self) -> str:
         return f"{self.base_topic}/event/diagnostic"
 
@@ -148,6 +160,11 @@ DISCOVERY_TOPIC = CANONICAL_IDENTITY.discovery_topic
 REFRESH_COMMAND_TOPIC = (
     CANONICAL_IDENTITY.refresh_command_topic
 )
+CHECK_UPDATES_COMMAND_TOPIC = (
+    CANONICAL_IDENTITY.check_updates_command_topic
+)
+CARD_STATE_TOPIC = CANONICAL_IDENTITY.card_state_topic
+UPDATE_STATE_TOPIC = CANONICAL_IDENTITY.update_state_topic
 EVENT_TOPIC = CANONICAL_IDENTITY.event_topic
 DISK_USAGE_THRESHOLD_STATE_TOPIC = (
     CANONICAL_IDENTITY.disk_usage_threshold_state_topic
@@ -696,6 +713,67 @@ def _build_components(
                     db_required=False,
                     device_class="timestamp",
                     icon="mdi:clock-start",
+                ),
+                "app_card": _component(
+                    identity,
+                    "sensor",
+                    "App card",
+                    "card",
+                    "{{ value_json.state | default('idle') }}",
+                    diagnostic=True,
+                    db_required=False,
+                    state_topic=identity.card_state_topic,
+                    icon="mdi:database-search",
+                    json_attributes_topic=identity.card_state_topic,
+                    json_attributes_template=(
+                        "{{ dict(operation=value_json.operation, "
+                        "started_at=value_json.started_at, "
+                        "finished_at=value_json.finished_at, "
+                        "duration_seconds=value_json.duration_seconds, "
+                        "error=value_json.error) | tojson }}"
+                    ),
+                ),
+                "check_updates": _button_component(
+                    identity,
+                    "Check updates",
+                    "check_updates",
+                    identity.check_updates_command_topic,
+                    diagnostic=True,
+                    icon="mdi:cloud-search",
+                ),
+                "latest_version": _component(
+                    identity,
+                    "sensor",
+                    "Latest version",
+                    "latest_version",
+                    "{{ value_json.latest_version | default('unknown') }}",
+                    diagnostic=True,
+                    db_required=False,
+                    state_topic=identity.update_state_topic,
+                    icon="mdi:tag",
+                    json_attributes_topic=identity.update_state_topic,
+                    json_attributes_template=(
+                        "{{ dict(status=value_json.status, "
+                        "error=value_json.error, "
+                        "checked_at=value_json.checked_at, "
+                        "check_duration_seconds=value_json.check_duration_seconds) | tojson }}"
+                    ),
+                ),
+                "update_available": _component(
+                    identity,
+                    "binary_sensor",
+                    "Update available",
+                    "update_available",
+                    (
+                        "{{ 'ON' if value_json.available == true else "
+                        "'OFF' if value_json.available == false else 'unknown' }}"
+                    ),
+                    diagnostic=True,
+                    db_required=False,
+                    state_topic=identity.update_state_topic,
+                    icon="mdi:package-up",
+                    payload_on="ON",
+                    payload_off="OFF",
                 ),
                 "delete_telemetry": _button_component(
                     identity,
