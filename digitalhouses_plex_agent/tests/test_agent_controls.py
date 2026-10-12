@@ -144,3 +144,25 @@ def test_ui_has_only_whole_seconds_and_verified_conditional_action():
     assert "binary_sensor.dh_plex_agent_update_available" in yml
     assert "entity_id: button.dh_plex_agent_update" in yml
     assert "entity_id: button.dh_plex_agent_restart_agent" in yml
+
+
+def test_install_waits_for_first_worker_heartbeat(tmp_path):
+    from app.state_store import StateStore
+    manager = UpdateManager(tmp_path, "0.7.2")
+    manager.worker = StateStore(tmp_path / "worker.json")
+    now = datetime.now(timezone.utc)
+    requested = now.isoformat()
+    started = (now - timedelta(seconds=1)).isoformat()
+    manager.request.save({
+        "tag": "digitalhouses_plex_agent-v0.8.0",
+        "version": "0.8.0",
+        "requested_at": requested,
+    })
+    assert manager.install_outcome(started_at=started) is None
+    manager.worker.save({"state": "downloading", "updated_at": requested})
+    assert manager.install_outcome(started_at=started) is None
+    manager.worker.save({"state": "completed", "updated_at": now.isoformat()})
+    assert manager.install_outcome(started_at=started)[0] is False
+    manager.version = "0.8.0"
+    assert manager.install_outcome(started_at=started) == (True, None)
+
