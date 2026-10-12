@@ -184,8 +184,17 @@ class UpdateManager:
                 return False, "Неверный идентификатор установки"
             if worker.get("state") in BUSY_PHASES:
                 return None
-            finished = datetime.fromisoformat(str(worker.get("updated_at")))
-            if not finished.tzinfo or finished < requested:
+            try:
+                finished = datetime.fromisoformat(str(worker.get("updated_at")))
+            except (TypeError, ValueError):
+                finished = None
+            if finished is None or not finished.tzinfo or finished < requested:
+                # The independent systemd worker is started asynchronously.
+                # A missing/old status is normal immediately after the button
+                # press; only report a failure if the worker never starts.
+                elapsed = (datetime.now(timezone.utc) - requested).total_seconds()
+                if elapsed >= 60:
+                    return False, "Служба обновления не запустилась за 60 секунд"
                 return None
             if worker.get("state") == "error":
                 return False, str(worker.get("error") or "Ошибка обновления")
