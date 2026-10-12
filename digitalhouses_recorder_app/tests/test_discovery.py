@@ -14,6 +14,8 @@ sys.path.insert(
 from discovery import (
     APP_AVAILABILITY_TOPIC,
     BASE_TOPIC,
+    CARD_STATE_TOPIC,
+    CHECK_UPDATES_COMMAND_TOPIC,
     DEVICE_ID,
     DISK_USAGE_THRESHOLD_COMMAND_TOPIC,
     DISK_USAGE_THRESHOLD_STATE_TOPIC,
@@ -26,6 +28,7 @@ from discovery import (
     REFRESH_COMMAND_TOPIC,
     STATE_RETAIN,
     TELEMETRY_DELETE_COMMAND_TOPIC,
+    UPDATE_STATE_TOPIC,
     build_discovery_payload,
     build_legacy_discovery_payload,
 )
@@ -97,7 +100,7 @@ class CanonicalDiscoveryTests(unittest.TestCase):
             components["database_type"]["default_entity_id"],
             "sensor.dh_recorder_app_database_type",
         )
-        self.assertEqual(len(components), 23)
+        self.assertEqual(len(components), 27)
         self.assertTrue(STATE_RETAIN)
 
     def test_canonical_unique_ids_do_not_collide(self):
@@ -177,6 +180,46 @@ class CanonicalDiscoveryTests(unittest.TestCase):
         self.assertEqual(
             delete["command_topic"],
             TELEMETRY_DELETE_COMMAND_TOPIC,
+        )
+
+        app_card = components["app_card"]
+        self.assertEqual(
+            app_card["default_entity_id"],
+            "sensor.dh_recorder_app_card",
+        )
+        self.assertEqual(
+            app_card["state_topic"],
+            CARD_STATE_TOPIC,
+        )
+
+        check_updates = components["check_updates"]
+        self.assertEqual(
+            check_updates["default_entity_id"],
+            "button.dh_recorder_app_check_updates",
+        )
+        self.assertEqual(
+            check_updates["command_topic"],
+            CHECK_UPDATES_COMMAND_TOPIC,
+        )
+
+        latest_version = components["latest_version"]
+        self.assertEqual(
+            latest_version["default_entity_id"],
+            "sensor.dh_recorder_app_latest_version",
+        )
+        self.assertEqual(
+            latest_version["state_topic"],
+            UPDATE_STATE_TOPIC,
+        )
+
+        update_available = components["update_available"]
+        self.assertEqual(
+            update_available["default_entity_id"],
+            "binary_sensor.dh_recorder_app_update_available",
+        )
+        self.assertEqual(
+            update_available["state_topic"],
+            UPDATE_STATE_TOPIC,
         )
 
     def test_db_connected_waits_for_observation(self):
