@@ -55,8 +55,7 @@ sections:
                 if (writing === 'off') return 'mdi:database-alert';
                 if (storageHigh) return 'mdi:harddisk-alert';
                 if (upgrade) return 'mdi:package-up';
-                if (db === 'on' && writing === 'on') return 'mdi:database-check';
-                return 'mdi:database-search';
+                return 'mdi:database';
               ]]]
             name: |
               [[[
