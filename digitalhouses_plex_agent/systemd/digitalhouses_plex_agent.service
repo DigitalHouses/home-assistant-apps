@@ -2,6 +2,8 @@
 Description=DigitalHouses Plex Agent
 After=network-online.target
 Wants=network-online.target
+Requires=digitalhouses_plex_agent-update-recover.service
+After=digitalhouses_plex_agent-update-recover.service
 
 [Service]
 Type=simple
