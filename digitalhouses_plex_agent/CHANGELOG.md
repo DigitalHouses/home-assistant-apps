@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.7.2
+
 - Self-heal a rotated Plex `.LocalAdminToken`: on local API HTTP 401 the unprivileged agent writes a rate-limited request marker; a dedicated systemd path-activated, root-owned one-shot helper validates the original token and atomically updates the protected agent copy. The next poll recovers without restarting the agent or Plex.
 - Do not replace a working token with an unavailable or unauthorized candidate; never expose token values in logs, MQTT, or command output. Keep the main service unprivileged and install/rollback the narrow watcher automatically.
 
