@@ -10,6 +10,60 @@ sections:
         heading: Состояние базы данных
         heading_style: title
         icon: mdi:database-check
+      - type: heading
+        heading: Информация
+        heading_style: subtitle
+        icon: mdi:information
+      - type: custom:mushroom-template-card
+        entity: binary_sensor.dh_recorder_app_db_connected
+        primary: >-
+          {% if not is_state('binary_sensor.dh_recorder_app_db_connected', 'on')
+          %}
+            База данных недоступна
+          {% elif not is_state('binary_sensor.dh_recorder_app_recorder_writing',
+          'on') %}
+            Recorder не записывает данные
+          {% else %}
+            База данных работает штатно
+          {% endif %}
+        secondary: >-
+          {% set connected =
+          is_state('binary_sensor.dh_recorder_app_db_connected', 'on') %} {% set
+          writing = is_state('binary_sensor.dh_recorder_app_recorder_writing',
+          'on') %} {% set age = states('sensor.dh_recorder_app_db_last_age') %}
+
+          Подключение: {{ 'OK' if connected else 'ОШИБКА' }} {{ '\n' }}Recorder:
+          {{ 'идёт запись' if writing else 'нет записи' }} {{ '\n' }}Последняя
+          запись: {{ age }} с назад
+        icon: >-
+          {% if not is_state('binary_sensor.dh_recorder_app_db_connected', 'on')
+          %}
+            mdi:database-off
+          {% elif not is_state('binary_sensor.dh_recorder_app_recorder_writing',
+          'on') %}
+            mdi:database-alert
+          {% else %}
+            mdi:database-check
+          {% endif %}
+        icon_color: >-
+          {% if not is_state('binary_sensor.dh_recorder_app_db_connected', 'on')
+          %}
+            red
+          {% elif not is_state('binary_sensor.dh_recorder_app_recorder_writing',
+          'on') %}
+            orange
+          {% else %}
+            green
+          {% endif %}
+        multiline_secondary: true
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: 12
+      - type: heading
+        heading_style: subtitle
+        icon: mdi:refresh
+        heading: Управление приложением
       - type: vertical-stack
         cards:
           - type: custom:button-card
@@ -55,7 +109,7 @@ sections:
                 if (writing === 'off') return 'mdi:database-alert';
                 if (storageHigh) return 'mdi:harddisk-alert';
                 if (upgrade) return 'mdi:package-up';
-                return 'mdi:database';
+                return 'mdi:robot-outline';
               ]]]
             name: |
               [[[
@@ -281,9 +335,9 @@ sections:
         grid_options:
           columns: 12
       - type: heading
-        heading: Информация
+        heading: База данных
         heading_style: subtitle
-        icon: mdi:information
+        icon: mdi:database-cog
       - type: custom:mushroom-template-card
         entity: sensor.dh_recorder_app_db_version
         primary: '{{ states(''sensor.dh_recorder_app_db_version'') }}'
@@ -298,98 +352,6 @@ sections:
         grid_options:
           columns: 12
           rows: auto
-      - type: custom:mushroom-template-card
-        entity: binary_sensor.dh_recorder_app_db_connected
-        primary: >-
-          {% if not is_state('binary_sensor.dh_recorder_app_db_connected', 'on')
-          %}
-            База данных недоступна
-          {% elif not is_state('binary_sensor.dh_recorder_app_recorder_writing',
-          'on') %}
-            Recorder не записывает данные
-          {% else %}
-            База данных работает штатно
-          {% endif %}
-        secondary: >-
-          {% set connected =
-          is_state('binary_sensor.dh_recorder_app_db_connected', 'on') %} {% set
-          writing = is_state('binary_sensor.dh_recorder_app_recorder_writing',
-          'on') %} {% set age = states('sensor.dh_recorder_app_db_last_age') %}
-
-          Подключение: {{ 'OK' if connected else 'ОШИБКА' }} {{ '\n' }}Recorder:
-          {{ 'идёт запись' if writing else 'нет записи' }} {{ '\n' }}Последняя
-          запись: {{ age }} с назад
-        icon: >-
-          {% if not is_state('binary_sensor.dh_recorder_app_db_connected', 'on')
-          %}
-            mdi:database-off
-          {% elif not is_state('binary_sensor.dh_recorder_app_recorder_writing',
-          'on') %}
-            mdi:database-alert
-          {% else %}
-            mdi:database-check
-          {% endif %}
-        icon_color: >-
-          {% if not is_state('binary_sensor.dh_recorder_app_db_connected', 'on')
-          %}
-            red
-          {% elif not is_state('binary_sensor.dh_recorder_app_recorder_writing',
-          'on') %}
-            orange
-          {% else %}
-            green
-          {% endif %}
-        multiline_secondary: true
-        tap_action:
-          action: more-info
-        grid_options:
-          columns: 12
-      - type: heading
-        heading_style: subtitle
-        icon: mdi:refresh
-        heading: Обновить данные
-      - type: custom:mushroom-template-card
-        entity: button.dh_recorder_app_db_refresh
-        primary: Обновить Recorder
-        secondary: >-
-          {% set ts = states('sensor.dh_recorder_app_db_last_refresh') %} {% if
-          ts not in ['unknown', 'unavailable', 'none', ''] %}
-            Последнее обновление:
-            {{ as_timestamp(ts) | timestamp_custom('%d.%m.%Y %H:%M:%S', true) }}
-          {% else %}
-            Последнее обновление: —
-          {% endif %}
-        icon: mdi:refresh
-        icon_color: purple
-        badge_icon: |-
-          {% if is_state('binary_sensor.dh_recorder_app_db_connected', 'on') %}
-            mdi:check
-          {% else %}
-            mdi:alert
-          {% endif %}
-        badge_color: |-
-          {% if is_state('binary_sensor.dh_recorder_app_db_connected', 'on') %}
-            green
-          {% else %}
-            red
-          {% endif %}
-        entity_id:
-          - sensor.dh_recorder_app_db_last_refresh
-          - binary_sensor.dh_recorder_app_db_connected
-        tap_action:
-          action: perform-action
-          perform_action: button.press
-          target:
-            entity_id: button.dh_recorder_app_db_refresh
-        hold_action:
-          action: more-info
-        grid_options:
-          columns: 12
-          rows: 1
-      - type: heading
-        heading: База данных
-        heading_style: subtitle
-        icon: mdi:database-cog
       - type: grid
         columns: 2
         square: false
@@ -419,22 +381,6 @@ sections:
             tap_action:
               action: more-info
           - type: custom:mushroom-template-card
-            entity: sensor.dh_recorder_app_db_today_records
-            primary: Записано сегодня
-            secondary: '{{ states(''sensor.dh_recorder_app_db_today_records'') }} тыс.'
-            icon: mdi:calendar-today
-            icon_color: blue
-            tap_action:
-              action: more-info
-          - type: custom:mushroom-template-card
-            entity: sensor.dh_recorder_app_db_current_hour_records
-            primary: За текущий час
-            secondary: '{{ states(''sensor.dh_recorder_app_db_current_hour_records'') }} тыс.'
-            icon: mdi:clock-outline
-            icon_color: cyan
-            tap_action:
-              action: more-info
-          - type: custom:mushroom-template-card
             entity: sensor.dh_recorder_app_db_last_age
             primary: Последняя запись
             secondary: >-
@@ -458,10 +404,6 @@ sections:
               {% endif %}
             tap_action:
               action: more-info
-      - type: heading
-        heading: История
-        heading_style: subtitle
-        icon: mdi:information-outline
       - type: custom:mushroom-template-card
         entity: sensor.dh_recorder_app_db_start
         primary: Начало истории
@@ -583,6 +525,16 @@ sections:
         heading: Рост базы данных · 10 дней
         heading_style: subtitle
         icon: mdi:database-arrow-up
+      - type: custom:mini-graph-card
+        entities:
+          - sensor.dh_recorder_app_db_size
+        name: Размер БД
+        hours_to_show: 240
+        aggregate_func: last
+        group_by: date
+        show:
+          graph: bar
+          show_points: true
   - type: grid
     cards:
       - type: heading
@@ -595,8 +547,8 @@ sections:
         icon: mdi:database-marker
       - type: custom:mini-graph-card
         entities:
-          - sensor.dh_recorder_app_db_size
-        name: Размер БД
+          - sensor.dh_recorder_app_db_records
+        name: Количество записей
         hours_to_show: 240
         aggregate_func: last
         group_by: date
