@@ -488,16 +488,36 @@ def validate_presentation_examples(
 
     if "dh_internet_app_" not in dashboard_text:
         fail(f"{app.name}: dashboard must use canonical entities")
-    for required_filter in (
-        'state: "unavailable"',
-        'state: "unknown"',
-        "condition: numeric_state",
+    for required_marker in (
+        "heading: Internet Status",
+        "heading: Current Performance",
+        "heading: Router",
+        "heading: Quality",
+        "heading: Monthly Statistics",
+        "heading: Recent Speedtests",
+        "heading: Recovery Control",
+        "sensor.dh_internet_app_router_download_rate",
+        "sensor.dh_internet_app_router_upload_rate",
+        "sensor.dh_internet_app_traffic_download_month",
+        "sensor.dh_internet_app_traffic_upload_month",
+        "primary: DL This Month",
+        "primary: UL This Month",
+        "Unavailable",
+        "sensor.dh_internet_app_card",
+        "button.dh_internet_app_refresh",
+        "button.dh_internet_app_check_updates",
+        "app: 8133339d_digitalhouses_internet_app",
     ):
-        if required_filter not in dashboard_text:
+        if required_marker not in dashboard_text:
             fail(
-                f"{app.name}: dashboard optional-entity visibility contract "
-                f"is missing {required_filter!r}"
+                f"{app.name}: reference dashboard is missing "
+                f"{required_marker!r}"
             )
+    if "type: custom:auto-entities" in dashboard_text:
+        fail(
+            f"{app.name}: reference dashboard must use the maintained direct "
+            "Router/traffic presentation"
+        )
 
     discovered = {
         item.replace("{ENTITY_PREFIX}", "dh_internet_app")
