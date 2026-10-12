@@ -51,6 +51,10 @@ def validate_internet(root: Path, app: Path, context: dict[str, Any]) -> None:
 
     if config.get("stage") != "stable":
         fail(f"{app.name}: released Internet App stage must remain stable")
+    if config.get("hassio_role") != "default":
+        fail(
+            f"{app.name}: release checks must not broaden Supervisor privileges"
+        )
 
     expected_image = "ghcr.io/digitalhouses/digitalhouses_internet_app"
     if config.get("image") != expected_image:
@@ -134,8 +138,14 @@ def validate_internet(root: Path, app: Path, context: dict[str, Any]) -> None:
     )
     contracts_path = app / "rootfs" / "app" / "contracts.py"
     contracts_test_path = app / "tests" / "test_contracts.py"
-    require_files(root, [contracts_path, contracts_test_path])
+    control_path = app / "rootfs" / "app" / "control.py"
+    control_test_path = app / "tests" / "test_control.py"
+    require_files(
+        root,
+        [contracts_path, contracts_test_path, control_path, control_test_path],
+    )
     contracts_source = contracts_path.read_text(encoding="utf-8")
+    control_source = control_path.read_text(encoding="utf-8")
 
     consent_guard = app_source.find("if not self.config.telemetry_enabled:")
     if consent_guard < 0 or any(
@@ -204,6 +214,33 @@ def validate_internet(root: Path, app: Path, context: dict[str, Any]) -> None:
             f"{app.name}: connectivity entities must stay unavailable "
             "until a real probe observation exists"
         )
+
+    for required_marker in (
+        '"default_entity_id": f"button.{ENTITY_PREFIX}_refresh"',
+        '"payload_press": "REFRESH_UI"',
+        '"default_entity_id": f"button.{ENTITY_PREFIX}_check_updates"',
+        '"payload_press": "CHECK_UPDATES"',
+        '"default_entity_id": f"sensor.{ENTITY_PREFIX}_card"',
+        '"default_entity_id": f"sensor.{ENTITY_PREFIX}_latest_version"',
+        '"default_entity_id": f"binary_sensor.{ENTITY_PREFIX}_update_available"',
+    ):
+        if required_marker not in discovery:
+            fail(
+                f"{app.name}: compact control discovery is missing "
+                f"{required_marker!r}"
+            )
+    for required_marker in (
+        'STABLE_TAG = re.compile(',
+        'digitalhouses_internet_app-v',
+        'CHECK_INTERVAL_SECONDS = 24 * 3600',
+        'class ReleaseChecker:',
+        'class AppCard:',
+    ):
+        if required_marker not in control_source:
+            fail(
+                f"{app.name}: compact control runtime is missing "
+                f"{required_marker!r}"
+            )
 
     recovery_source = (app / "rootfs" / "app" / "recovery.py").read_text(
         encoding="utf-8"
@@ -366,34 +403,30 @@ def validate_presentation_examples(
     control_card_text = control_card_path.read_text(encoding="utf-8")
 
     for required_marker in (
+        "sensor.dh_internet_app_card",
         "sensor.dh_internet_app_version",
+        "sensor.dh_internet_app_latest_version",
+        "binary_sensor.dh_internet_app_update_available",
         "binary_sensor.dh_internet_app_internet",
-        "sensor.dh_internet_app_speedtest_status",
-        "button.dh_internet_app_run_speedtest",
+        "button.dh_internet_app_refresh",
+        "button.dh_internet_app_check_updates",
         "update.digitalhouses_internet_app_update",
-        "perform_action: homeassistant.update_entity",
         "perform_action: update.install",
         "backup: true",
         "perform_action: hassio.app_restart",
         "app: digitalhouses_internet_app",
+        "Обновить",
+        "Версия",
     ):
         if required_marker not in control_card_text:
             fail(
                 f"{app.name}: compact control card is missing "
                 f"{required_marker!r}"
             )
-    for forbidden_marker in (
-        "sensor.dh_internet_app_card",
-        "sensor.dh_internet_app_latest_version",
-        "binary_sensor.dh_internet_app_update_available",
-        "button.dh_internet_app_update",
-        "button.dh_internet_app_restart",
-    ):
-        if forbidden_marker in control_card_text:
-            fail(
-                f"{app.name}: HAOS control card must use Supervisor controls; "
-                f"found duplicate App-owned marker {forbidden_marker!r}"
-            )
+    if "perform_action: homeassistant.update_entity" in control_card_text:
+        fail(
+            f"{app.name}: Version chip must use the App-owned release check"
+        )
 
     if "automation:" in global_text:
         fail(f"{app.name}: global package must remain Recorder-only")

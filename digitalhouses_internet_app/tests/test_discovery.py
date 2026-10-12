@@ -88,6 +88,44 @@ class DiscoveryTests(unittest.TestCase):
             with self.subTest(field=field):
                 self.assertEqual(compatibility[field], canonical[field])
 
+    def test_compact_control_entities(self) -> None:
+        components = build_discovery_payload("0.1.23")["components"]
+
+        expected = {
+            "refresh": "button.dh_internet_app_refresh",
+            "app_card": "sensor.dh_internet_app_card",
+            "check_updates": "button.dh_internet_app_check_updates",
+            "latest_version": "sensor.dh_internet_app_latest_version",
+            "update_available": "binary_sensor.dh_internet_app_update_available",
+        }
+        for key, entity_id in expected.items():
+            with self.subTest(component=key):
+                self.assertEqual(
+                    components[key]["default_entity_id"],
+                    entity_id,
+                )
+
+        self.assertEqual(
+            components["refresh"]["payload_press"],
+            "REFRESH_UI",
+        )
+        self.assertEqual(
+            components["check_updates"]["payload_press"],
+            "CHECK_UPDATES",
+        )
+        self.assertEqual(
+            components["app_card"]["state_topic"],
+            TOPICS["card_state"],
+        )
+        self.assertEqual(
+            components["latest_version"]["state_topic"],
+            TOPICS["update_state"],
+        )
+        self.assertEqual(
+            components["update_available"]["state_topic"],
+            TOPICS["update_state"],
+        )
+
     def test_optional_component_registry_matches_conditional_entities(self) -> None:
         payload = build_discovery_payload(
             "0.1.0",

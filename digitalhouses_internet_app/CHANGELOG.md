@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.23
+
+- Add App-owned compact-card controls matching the established DigitalHouses Agent interaction model: `button.dh_internet_app_refresh`, `button.dh_internet_app_check_updates` and `sensor.dh_internet_app_card`.
+- Make Refresh republish the current authoritative MQTT UI snapshot without running Speedtest or introducing a second connectivity calculation.
+- Add stable GitHub Release checks with `sensor.dh_internet_app_latest_version` and `binary_sensor.dh_internet_app_update_available`; ignore drafts, prereleases and other product tags, and run the same isolated check every 24 hours.
+- Keep container installation and restart Supervisor-owned: the compact card uses the standard Supervisor update entity for installation and `hassio.app_restart` for restart, without increasing the App's Supervisor role.
+- Replace the non-observable `homeassistant.update_entity` Version action in the maintained Russian card with the App-owned release-check button.
+
 ## 0.1.22
 
 - Add the legacy compatibility entity `binary_sensor.internet_status` to the Internet App MQTT Device Discovery contract.
