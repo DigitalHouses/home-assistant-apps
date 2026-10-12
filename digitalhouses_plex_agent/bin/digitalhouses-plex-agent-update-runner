@@ -126,7 +126,7 @@ def backup_files() -> None:
     total = sum(file.stat().st_size for file in ROOT.rglob("*") if file.is_file() and not file.is_symlink())
     if shutil.disk_usage(STATE).free < (total * 2 + 128 * 1024 * 1024):
         raise RuntimeError("Insufficient free space for safe update backup")
-    temp = STATE / "update-backup.new"
+    temp = PRIVATE / "update-backup.new"
     if temp.exists():
         shutil.rmtree(temp)
     temp.mkdir(mode=0o700)
