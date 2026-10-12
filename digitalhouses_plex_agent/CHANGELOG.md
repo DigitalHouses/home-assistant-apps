@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.8.0
+
+- Add the unified DigitalHouses Agent control card, mirroring the production PVE Agent UI with one-second elapsed time (no tenths), app-owned operation states and collection freshness.
+- Add Refresh, Release Check, verified Update and Restart commands, with retained MQTT control commands rejected and no extra Home Assistant helpers or devices.
+- Introduce protected, independent root-only Plex Agent updater, immutable release verification, backups, rollback and interrupted-update recovery; Plex Media Server is never restarted.
+- Persist operation state across agent restarts; only report restart/update success after the new process and independent update worker confirm it.
+
 ## 0.7.2
 
 - Self-heal a rotated Plex `.LocalAdminToken`: on local API HTTP 401 the unprivileged agent writes a rate-limited request marker; a dedicated systemd path-activated, root-owned one-shot helper validates the original token and atomically updates the protected agent copy. The next poll recovers without restarting the agent or Plex.

@@ -11,6 +11,8 @@ import psutil
 from datetime import datetime, timezone
 from pathlib import Path
 
+from .agent_card import AgentCard
+from .update_manager import UpdateManager
 from .activity_classifier import classify_activity
 from .api_runtime import PlexApiRuntime
 from .build_info import load_build_info
@@ -47,6 +49,7 @@ DEFAULT_CONFIG = Path(
     "digitalhouses_plex_agent.conf"
 )
 UPTIME_HEARTBEAT_SECONDS = 60.0
+CONTROL_STATE_DIR = Path("/var/lib/digitalhouses_plex_agent")
 PLAYBACK_STATE_PATH = Path(
     "/var/lib/digitalhouses_plex_agent/playback_session_starts.json"
 )
@@ -150,6 +153,9 @@ def run(config: AppConfig) -> int:
         agent_started_at=_utc_now(),
     )
 
+    card = AgentCard(CONTROL_STATE_DIR / "agent_card.json", mqtt.publish_agent_card)
+    updates = UpdateManager(CONTROL_STATE_DIR, build.version)
+    pending_restart_on_boot = card.state == "running" and card.operation == "restart"
     stop_event = threading.Event()
 
     def request_stop(signum: int, frame: object) -> None:
@@ -197,7 +203,47 @@ def run(config: AppConfig) -> int:
     try:
         while not stop_event.is_set():
             now = time.monotonic()
+            card.tick()
+            # Foreground user operations are acknowledged before the collector.
+            if mqtt.check_updates_requested.is_set():
+                mqtt.check_updates_requested.clear()
+                if card.begin("check") and not updates.start_check(manual=True):
+                    card.finish("check", error="Проверка версии сейчас недоступна")
+
+            if mqtt.install_update_requested.is_set():
+                mqtt.install_update_requested.clear()
+                if card.begin("install"):
+                    accepted, problem = updates.begin_install()
+                    if not accepted:
+                        card.finish("install", error=problem or "Обновление недоступно")
+
+            if mqtt.restart_requested.is_set():
+                mqtt.restart_requested.clear()
+                if card.begin("restart"):
+                    # systemd Restart=on-failure will relaunch just this agent.
+                    # A successful restart is acknowledged by the NEW process.
+                    return 75
+
+            if card.state == "running" and card.operation == "install":
+                outcome = updates.install_outcome(started_at=card.started_at)
+                if outcome is not None and mqtt.connected.is_set():
+                    ok, err = outcome
+                    card.finish("install", error=None if ok else (err or "Ошибка установки"))
+
+            if pending_restart_on_boot and mqtt.connected.is_set():
+                card.finish("restart")
+                pending_restart_on_boot = False
+
+            check_outcome = updates.poll()
+            if check_outcome is not None and card.state == "running" and card.operation == "check":
+                ok, err = check_outcome
+                card.finish("check", error=None if ok else (err or "Ошибка проверки версии"))
+            updates.publish_if_changed(mqtt.publish_update_state, force=mqtt.republish_requested.is_set())
             refresh = mqtt.refresh_requested.is_set()
+            if refresh and not card.begin("refresh"):
+                # A new Refresh command never takes over an active operation.
+                mqtt.refresh_requested.clear()
+                refresh = False
             republish = mqtt.republish_requested.is_set()
             due = now >= next_poll
             uptime_due = now >= next_uptime_heartbeat
@@ -226,6 +272,8 @@ def run(config: AppConfig) -> int:
                         api_runtime.status == "ok",
                         force=True,
                     )
+                    card.publish()
+                    updates.publish_if_changed(mqtt.publish_update_state, force=True)
                     if publication.has_cache and publication.republish_cached():
                         next_uptime_heartbeat = (
                             time.monotonic() + UPTIME_HEARTBEAT_SECONDS
@@ -275,6 +323,7 @@ def run(config: AppConfig) -> int:
                         last_refresh=last_refresh,
                     )
                     collector_failed = False
+                    card.collected(collected_at)
                     if was_failed:
                         log.info("Plex process collector recovered")
                     if mqtt.connected.is_set():
@@ -358,15 +407,26 @@ def run(config: AppConfig) -> int:
                 and state_snapshot is not None
                 and mqtt.connected.is_set()
             ):
-                if publication.publish_snapshot(
+                published = publication.publish_snapshot(
                     state_snapshot,
                     api_runtime.payload(),
                     gpu_payload=gpu_payload,
                     manual_refresh=refresh,
-                ):
+                )
+                if published:
                     next_uptime_heartbeat = (
                         time.monotonic() + UPTIME_HEARTBEAT_SECONDS
                     )
+                if refresh:
+                    if collector_failed or (config.plex_api.enabled and api_runtime.status != "ok"):
+                        card.finish("refresh", error="Ошибка сбора данных Plex")
+                    elif not published:
+                        card.finish("refresh", error="Не удалось опубликовать MQTT")
+                    else:
+                        card.finish("refresh")
+
+            if refresh and not mqtt.connected.is_set():
+                card.finish("refresh", error="Нет соединения MQTT")
 
             if (
                 mqtt.connected.is_set()

@@ -1,0 +1,11 @@
+[Unit]
+Description=Recover interrupted DigitalHouses Plex Agent updates
+After=local-fs.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=/usr/bin/python3 /usr/local/libexec/digitalhouses-plex-agent-update-runner --recover
+TimeoutStartSec=120
+NoNewPrivileges=true

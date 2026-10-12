@@ -24,6 +24,9 @@ class MqttBridge:
         self.log = logging.getLogger(__name__)
 
         self.refresh_requested = threading.Event()
+        self.check_updates_requested = threading.Event()
+        self.install_update_requested = threading.Event()
+        self.restart_requested = threading.Event()
         self.republish_requested = threading.Event()
         self.wake_requested = threading.Event()
         self.connected = threading.Event()
@@ -64,6 +67,9 @@ class MqttBridge:
         self.connected.set()
         client.subscribe(self.topics.ha_status)
         client.subscribe(self.topics.refresh)
+        client.subscribe(self.topics.update_check)
+        client.subscribe(self.topics.update_install)
+        client.subscribe(self.topics.restart_agent)
         client.publish(
             self.topics.app_availability,
             payload="online",
@@ -94,12 +100,26 @@ class MqttBridge:
             payload = message.payload.decode("utf-8", errors="replace").strip()
         except Exception:
             payload = ""
+        if message.retain and message.topic in {
+            self.topics.refresh, self.topics.update_check,
+            self.topics.update_install, self.topics.restart_agent,
+        }:
+            self.log.warning("Ignoring retained Plex control command")
+            return
         if message.topic == self.topics.ha_status and payload.casefold() == "online":
             self.republish_requested.set()
             self.wake_requested.set()
-        elif message.topic == self.topics.refresh and payload == "PRESS":
-            self.refresh_requested.set()
-            self.wake_requested.set()
+        elif payload == "PRESS":
+            controls = {
+                self.topics.refresh: self.refresh_requested,
+                self.topics.update_check: self.check_updates_requested,
+                self.topics.update_install: self.install_update_requested,
+                self.topics.restart_agent: self.restart_requested,
+            }
+            event = controls.get(message.topic)
+            if event is not None:
+                event.set()
+                self.wake_requested.set()
 
     def start(self) -> None:
         self.client.connect_async(
@@ -140,6 +160,16 @@ class MqttBridge:
 
     def publish_discovery(self) -> bool:
         return self._publish_json(self.topics.discovery, self.discovery_payload)
+
+    def publish_agent_card(self, payload: dict[str, object]) -> bool:
+        if not self.connected.is_set():
+            return False
+        return self._publish_json(self.topics.agent_card_state, payload)
+
+    def publish_update_state(self, payload: dict[str, object]) -> bool:
+        if not self.connected.is_set():
+            return False
+        return self._publish_json(self.topics.update_state, payload)
 
     def publish_state(self, payload: dict[str, object]) -> bool:
         """Legacy monolithic publisher retained for compatibility tests/tools."""

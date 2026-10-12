@@ -31,13 +31,13 @@ Lovelace example: [plex-dashboard.yaml](examples/lovelace/plex-dashboard.yaml)
 Production install/update is pinned to the canonical release tag. Current release:
 
 ```text
-digitalhouses_plex_agent-v0.7.2
+digitalhouses_plex_agent-v0.8.0
 ```
 
 From a root shell:
 
 ```bash
-RELEASE_TAG="digitalhouses_plex_agent-v0.7.2"
+RELEASE_TAG="digitalhouses_plex_agent-v0.8.0"
 curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/${RELEASE_TAG}/digitalhouses_plex_agent/install.sh" \
   | DIGITALHOUSES_SOURCE_REF="${RELEASE_TAG}" bash
 ```
@@ -45,7 +45,7 @@ curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/
 From a sudo-capable user:
 
 ```bash
-RELEASE_TAG="digitalhouses_plex_agent-v0.7.2"
+RELEASE_TAG="digitalhouses_plex_agent-v0.8.0"
 curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/${RELEASE_TAG}/digitalhouses_plex_agent/install.sh" \
   | sudo env DIGITALHOUSES_SOURCE_REF="${RELEASE_TAG}" bash
 ```
@@ -81,6 +81,18 @@ On the first `0.7.x` canonical-identity update, the installer preserves the pre-
 If a site deliberately uses a custom MQTT `topic_prefix`, that custom state namespace is not deleted or rewritten. The old Plex Discovery identity is still tombstoned so Home Assistant cannot retain a duplicate legacy device.
 
 The cleanup is idempotent and recorded in canonical persistent state. Historical service/config/state names remain only for migration detection, rollback artifacts, and release history.
+
+## Unified Agent control card
+
+The compact control card is in [`examples/lovelace/plex_agent_card_ru.yaml`](examples/lovelace/plex_agent_card_ru.yaml) and embedded at the top of the [Plex dashboard](examples/lovelace/plex-dashboard.yaml). It follows the production PVE Agent card layout and uses a local **one-second** timer during operations.
+
+The canonical Plex MQTT device exposes `sensor.dh_plex_agent_card` (idle/running/success/error with persisted operation, timestamps, duration and collection freshness), `sensor.dh_plex_agent_latest_version`, `binary_sensor.dh_plex_agent_update_available`, and buttons `refresh`, `check_updates`, `update`, `restart_agent`. No Home Assistant automations, template helpers or second MQTT device are required.
+
+Only published stable GitHub Releases newer than the installed version are eligible for installation; GitHub errors mean **unknown**, not "up-to-date". A non-retained MQTT command is required; retained commands are rejected. A background checker runs outside the media collection loop. Release installation is delegated to a systemd path-activated, root-owned runner outside the application source tree; it validates the Release, takes a protected backup and restores it after install failure. Interrupted updates are recovered before agent startup. Main agent stays unprivileged.
+
+Restart via UI exits with code 75 and relies on `Restart=on-failure`. Both Restart and Install confirm success only after the new process resumes, preserving operation status. The results of user actions show for five seconds; errors persist until another action. Plex Media Server is not restarted.
+
+**Security:** MQTT control topics are administrative endpoints; restrict them to trusted broker clients and protect access to the HA dashboard.
 
 ## Local Plex API authentication
 

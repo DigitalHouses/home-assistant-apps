@@ -1,0 +1,15 @@
+[Unit]
+Description=Independent DigitalHouses Plex Agent update worker
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/etc/digitalhouses_plex_agent/digitalhouses_plex_agent.conf
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=/usr/bin/python3 /usr/local/libexec/digitalhouses-plex-agent-update-runner
+TimeoutStartSec=0
+NoNewPrivileges=true
+PrivateTmp=true
+# No Plex Media Server or VM restart; only agent runtime is replaced.

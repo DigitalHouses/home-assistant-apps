@@ -17,6 +17,11 @@ class Topics:
     collector_availability: str
     plex_api_availability: str
     refresh: str
+    update_check: str
+    update_install: str
+    update_state: str
+    restart_agent: str
+    agent_card_state: str
     discovery: str
     ha_status: str
     device_id: str
@@ -47,6 +52,11 @@ def build_topics(config: AppConfig) -> Topics:
         collector_availability=f"{base}/collector_availability",
         plex_api_availability=f"{base}/plex_api_availability",
         refresh=f"{base}/refresh",
+        update_check=f"{base}/update/check",
+        update_install=f"{base}/update/install",
+        update_state=f"{base}/update/state",
+        restart_agent=f"{base}/restart",
+        agent_card_state=f"{base}/agent/card",
         discovery=(
             f"{config.mqtt.discovery_prefix.strip('/')}/device/{device_id}/config"
         ),
@@ -581,6 +591,76 @@ def build_discovery_payload(
         "entity_category": "diagnostic",
         "icon": "mdi:refresh",
     }
+
+    components["agent_card"] = {
+        "platform": "sensor",
+        "name": "Agent card",
+        "unique_id": uid("agent_card"),
+        "default_entity_id": f"sensor.{prefix}_card",
+        "state_topic": topics.agent_card_state,
+        "value_template": "{{ value_json.state | default('idle') }}",
+        "json_attributes_topic": topics.agent_card_state,
+        "json_attributes_template": (
+            "{{ dict(operation=value_json.operation, "
+            "started_at=value_json.started_at, finished_at=value_json.finished_at, "
+            "duration_seconds=value_json.duration_seconds, error=value_json.error, "
+            "last_collection_at=value_json.last_collection_at) | tojson }}"
+        ),
+        "availability": [_availability(topics.app_availability)],
+        "entity_category": "diagnostic",
+        "icon": "mdi:robot-outline",
+    }
+    for component, name, topic, icon in (
+        ("check_updates", "Check updates", topics.update_check, "mdi:cloud-search"),
+        ("update", "Install update", topics.update_install, "mdi:package-down"),
+        ("restart_agent", "Restart agent", topics.restart_agent, "mdi:restart"),
+    ):
+        components[component] = {
+            "platform": "button",
+            "name": name,
+            "unique_id": uid(component),
+            "default_entity_id": f"button.{prefix}_{component}",
+            "command_topic": topic,
+            "payload_press": "PRESS",
+            "retain": False,
+            "availability": [_availability(topics.app_availability)],
+            "entity_category": "diagnostic",
+            "icon": icon,
+        }
+    components["latest_version"] = _component(
+        platform="sensor", name="Latest version", key=uid("latest_version"),
+        entity_id=f"sensor.{prefix}_latest_version",
+        state_topic=topics.update_state,
+        value_template="{{ value_json.latest_version | default('unknown') }}",
+        app_availability=topics.app_availability,
+        diagnostic=True, icon="mdi:tag",
+    )
+    components["update_available"] = {
+        "platform": "binary_sensor", "name": "Update available",
+        "unique_id": uid("update_available"),
+        "default_entity_id": f"binary_sensor.{prefix}_update_available",
+        "state_topic": topics.update_state,
+        "value_template": (
+            "{{ 'ON' if value_json.available == true else "
+            "'OFF' if value_json.available == false else 'unknown' }}"
+        ),
+        "payload_on": "ON", "payload_off": "OFF",
+        "availability": [_availability(topics.app_availability)],
+        "entity_category": "diagnostic", "icon": "mdi:package-up",
+    }
+    components["update_status"] = _component(
+        platform="sensor", name="Update status", key=uid("update_status"),
+        entity_id=f"sensor.{prefix}_update_status",
+        state_topic=topics.update_state,
+        value_template="{{ value_json.status | default('idle') }}",
+        app_availability=topics.app_availability, diagnostic=True,
+        json_attributes_topic=topics.update_state,
+        json_attributes_template=(
+            "{{ dict(error=value_json.error, checked_at=value_json.checked_at, "
+            "check_duration_seconds=value_json.check_duration_seconds) | tojson }}"
+        ),
+        icon="mdi:update",
+    )
 
     _route_grouped_components(components, topics)
 
