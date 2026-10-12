@@ -1,0 +1,274 @@
+# DigitalHouses Recorder App · compact unified card
+# Requires Mushroom and custom:button-card >= 5.0 for update_timer.
+# Runtime operations are App-owned; installation/restart remain Supervisor-owned.
+type: vertical-stack
+cards:
+  - type: custom:button-card
+    entity: sensor.dh_recorder_app_card
+    triggers_update:
+      - sensor.dh_recorder_app_card
+      - sensor.dh_recorder_app_version
+      - sensor.dh_recorder_app_latest_version
+      - binary_sensor.dh_recorder_app_update_available
+      - binary_sensor.dh_recorder_app_db_connected
+      - binary_sensor.dh_recorder_app_recorder_writing
+      - sensor.dh_recorder_app_db_disk_used_percentage
+      - number.dh_recorder_app_db_disk_usage_threshold
+      - update.digitalhouses_recorder_app_update
+    update_timer: |
+      [[[
+        const s = states['sensor.dh_recorder_app_card']?.state;
+        const updating =
+          states['update.digitalhouses_recorder_app_update']?.attributes?.in_progress === true;
+        return s === 'running' || updating ? 1000 : 5000;
+      ]]]
+    show_icon: true
+    show_name: true
+    show_label: true
+    icon: |
+      [[[
+        const s = states['sensor.dh_recorder_app_card']?.state;
+        const db = states['binary_sensor.dh_recorder_app_db_connected']?.state;
+        const writing = states['binary_sensor.dh_recorder_app_recorder_writing']?.state;
+        const used = Number(states['sensor.dh_recorder_app_db_disk_used_percentage']?.state);
+        const threshold = Number(states['number.dh_recorder_app_db_disk_usage_threshold']?.state);
+        const storageHigh =
+          Number.isFinite(used) && Number.isFinite(threshold) && used >= threshold;
+        const upgrade =
+          states['binary_sensor.dh_recorder_app_update_available']?.state === 'on';
+        const updating =
+          states['update.digitalhouses_recorder_app_update']?.attributes?.in_progress === true;
+
+        if (updating || s === 'running') return 'mdi:progress-clock';
+        if (s === 'error') return 'mdi:alert-circle';
+        if (s === 'success') return 'mdi:check-circle';
+        if (db === 'off') return 'mdi:database-off';
+        if (writing === 'off') return 'mdi:database-alert';
+        if (storageHigh) return 'mdi:harddisk-alert';
+        if (upgrade) return 'mdi:package-up';
+        if (db === 'on' && writing === 'on') return 'mdi:database-check';
+        return 'mdi:database-search';
+      ]]]
+    name: |
+      [[[
+        const installed = states['sensor.dh_recorder_app_version']?.state;
+        const latest = states['sensor.dh_recorder_app_latest_version']?.state;
+        const available =
+          states['binary_sensor.dh_recorder_app_update_available']?.state === 'on';
+        const valid = (v) =>
+          typeof v === 'string'
+          && !['unknown', 'unavailable', 'none', ''].includes(v);
+        const upgrade =
+          available && valid(installed) && valid(latest) && latest !== installed;
+
+        return 'Recorder App' + (valid(installed)
+          ? ' · v' + installed + (upgrade ? ' → v' + latest : '')
+          : '');
+      ]]]
+    label: |
+      [[[
+        const item = states['sensor.dh_recorder_app_card'];
+        const db = states['binary_sensor.dh_recorder_app_db_connected']?.state;
+        const writing = states['binary_sensor.dh_recorder_app_recorder_writing']?.state;
+        const used = Number(states['sensor.dh_recorder_app_db_disk_used_percentage']?.state);
+        const threshold = Number(states['number.dh_recorder_app_db_disk_usage_threshold']?.state);
+        const storageHigh =
+          Number.isFinite(used) && Number.isFinite(threshold) && used >= threshold;
+        const supervisorUpdate = states['update.digitalhouses_recorder_app_update'];
+
+        const elapsedText = (since) => {
+          const seconds = Math.max(
+            0,
+            Math.floor((performance.now() - since) / 1000)
+          );
+          const mm = String(Math.floor(seconds / 60)).padStart(2, '0');
+          const ss = String(seconds % 60).padStart(2, '0');
+          return mm + ':' + ss;
+        };
+        const duration = (value) => {
+          if (typeof value !== 'number') return '—';
+          const seconds = Math.round(Math.max(0, value));
+          const minutes = Math.floor(seconds / 60);
+          return minutes
+            ? minutes + ' мин ' + String(seconds % 60).padStart(2, '0') + ' сек'
+            : seconds + ' сек';
+        };
+
+        if (supervisorUpdate?.attributes?.in_progress === true) {
+          if (this._dh_recorder_timer?.operation !== 'install') {
+            this._dh_recorder_timer = {
+              operation: 'install',
+              since: performance.now()
+            };
+          }
+          const pct = supervisorUpdate.attributes.update_percentage;
+          return 'Установка версии… '
+            + (typeof pct === 'number' ? Math.round(pct) + '% · ' : '')
+            + elapsedText(this._dh_recorder_timer.since);
+        }
+
+        if (!item || ['unknown', 'unavailable'].includes(item.state)) {
+          return 'Нет связи с приложением';
+        }
+
+        const a = item.attributes || {};
+        const operation = a.operation;
+        const names = {
+          refresh: 'Обновление данных',
+          check: 'Проверка версии'
+        };
+
+        if (item.state === 'running') {
+          const key = String(operation) + '|' + String(a.started_at || '');
+          if (this._dh_recorder_timer?.key !== key) {
+            this._dh_recorder_timer = {
+              key: key,
+              operation: operation,
+              since: performance.now()
+            };
+          }
+          return (names[operation] || 'Операция') + '… '
+            + elapsedText(this._dh_recorder_timer.since);
+        }
+
+        this._dh_recorder_timer = null;
+
+        if (item.state === 'error') {
+          return 'Ошибка: ' + (a.error || 'операция не выполнена');
+        }
+
+        if (item.state === 'success') {
+          let message = operation === 'refresh'
+            ? 'Данные обновлены'
+            : operation === 'check'
+              ? (
+                  states['binary_sensor.dh_recorder_app_update_available']?.state === 'on'
+                    ? 'Доступна новая версия'
+                    : states['binary_sensor.dh_recorder_app_update_available']?.state === 'off'
+                      ? 'Версия актуальна'
+                      : 'Проверка завершена'
+                )
+              : 'Готово';
+          return message + ' · ' + duration(a.duration_seconds);
+        }
+
+        if (states['binary_sensor.dh_recorder_app_update_available']?.state === 'on') {
+          return 'Доступна новая версия';
+        }
+        if (db === 'off') return 'База данных недоступна';
+        if (writing === 'off') return 'Recorder не записывает данные';
+        if (storageHigh) {
+          return 'Заполнение диска: ' + used.toFixed(1) + '%';
+        }
+        if (db === 'on' && writing === 'on') return 'Recorder работает штатно';
+        return 'Ожидание данных';
+      ]]]
+    styles:
+      card:
+        - padding: 12px
+        - text-align: left
+      grid:
+        - grid-template-areas: '"i n" "i l"'
+        - grid-template-columns: 48px 1fr
+        - grid-template-rows: min-content min-content
+      img_cell:
+        - width: 40px
+        - justify-content: start
+      icon:
+        - width: 26px
+        - color: |
+            [[[
+              const s = states['sensor.dh_recorder_app_card']?.state;
+              const db = states['binary_sensor.dh_recorder_app_db_connected']?.state;
+              const writing = states['binary_sensor.dh_recorder_app_recorder_writing']?.state;
+              const used = Number(states['sensor.dh_recorder_app_db_disk_used_percentage']?.state);
+              const threshold = Number(states['number.dh_recorder_app_db_disk_usage_threshold']?.state);
+              const storageHigh =
+                Number.isFinite(used) && Number.isFinite(threshold) && used >= threshold;
+              const upgrade =
+                states['binary_sensor.dh_recorder_app_update_available']?.state === 'on';
+              const updating =
+                states['update.digitalhouses_recorder_app_update']?.attributes?.in_progress === true;
+
+              return s === 'error' || db === 'off'
+                ? 'var(--error-color)'
+                : s === 'running' || updating
+                  ? 'var(--info-color, var(--primary-color))'
+                  : s === 'success'
+                    ? 'var(--success-color, var(--primary-color))'
+                    : writing === 'off' || storageHigh || upgrade
+                      ? 'var(--warning-color, orange)'
+                      : db === 'on' && writing === 'on'
+                        ? 'var(--success-color, var(--primary-color))'
+                        : 'var(--secondary-text-color)';
+            ]]]
+      name:
+        - justify-self: start
+        - font-size: 14px
+        - font-weight: 600
+      label:
+        - justify-self: start
+        - white-space: normal
+        - text-align: left
+        - font-size: 13px
+        - color: var(--secondary-text-color)
+    tap_action:
+      action: none
+
+  - type: custom:mushroom-chips-card
+    alignment: center
+    chips:
+      - type: template
+        icon: mdi:refresh
+        content: Обновить
+        tap_action:
+          action: perform-action
+          perform_action: button.press
+          target:
+            entity_id: button.dh_recorder_app_db_refresh
+
+      - type: template
+        icon: mdi:cloud-search
+        content: Версия
+        tap_action:
+          action: perform-action
+          perform_action: button.press
+          target:
+            entity_id: button.dh_recorder_app_check_updates
+
+      - type: conditional
+        conditions:
+          - entity: update.digitalhouses_recorder_app_update
+            state: "on"
+        chip:
+          type: template
+          icon: mdi:package-down
+          icon_color: orange
+          content: Новая версия
+          tap_action:
+            action: perform-action
+            perform_action: update.install
+            target:
+              entity_id: update.digitalhouses_recorder_app_update
+            data:
+              backup: true
+            confirmation:
+              text: >-
+                Установить новую версию Recorder App?
+                Перед обновлением Home Assistant создаст резервную копию App.
+                Мониторинг Recorder временно прервется.
+
+      - type: template
+        icon: mdi:restart
+        content: Перезапуск
+        tap_action:
+          action: perform-action
+          perform_action: hassio.app_restart
+          data:
+            app: 8133339d_digitalhouses_recorder_app
+          confirmation:
+            text: >-
+              Перезапустить Recorder App?
+              Мониторинг Recorder временно прервется.
+grid_options:
+  columns: 12
