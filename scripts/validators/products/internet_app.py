@@ -114,6 +114,8 @@ def validate_internet(root: Path, app: Path, context: dict[str, Any]) -> None:
         'MQTT_BASE_TOPIC = "DigitalHouses/Global/dh_internet_app"',
         '"name": "Version"',
         '"name": "Started at"',
+        '"default_entity_id": "binary_sensor.internet_status"',
+        '"unique_id": f"{ENTITY_PREFIX}_legacy_internet_status"',
         'EVENT_SCHEMA_VERSION = 2',
     )
     for value in required:

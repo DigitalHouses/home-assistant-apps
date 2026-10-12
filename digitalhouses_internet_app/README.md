@@ -34,9 +34,10 @@ All recovery timing belongs to App configuration: maximum cycles, retry interval
 
 ## Current product state
 
-Version `0.1.20` keeps immutable GHCR delivery and adds persistent suppression of transient automatic Speedtest failures. The canonical Supervisor identity is permanent, the temporary migration runtime has been removed, and the App remains stable in Home Assistant. The product provides:
+Version `0.1.22` adds the legacy `binary_sensor.internet_status` compatibility alias without changing the canonical Internet entity or its state calculation. The canonical Supervisor identity is permanent, the temporary migration runtime has been removed, and the App remains stable in Home Assistant. The product provides:
 
 - Internet and router reachability;
+- legacy `binary_sensor.internet_status` compatibility alias mirroring `binary_sensor.dh_internet_app_internet`;
 - current-month outage state persisted under `/data`;
 - `smart | both` recovery state machine;
 - `button | switch` recovery actions via the Home Assistant Core API;

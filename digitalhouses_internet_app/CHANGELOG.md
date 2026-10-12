@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.22
+
+- Add the legacy compatibility entity `binary_sensor.internet_status` to the Internet App MQTT Device Discovery contract.
+- Make the compatibility entity a direct alias of the canonical `binary_sensor.dh_internet_app_internet` state: both use the same retained state topic, `internet_up` value, connectivity availability gate, and ON/OFF payload contract.
+- Keep the canonical entity unchanged and keep the compatibility alias out of the reference Recorder package to avoid duplicate history.
+
 ## 0.1.21
 
 - Require explicit statistics-collection consent via the existing `telemetry_enabled` App option (default `false`) before any runtime state, MQTT client, or telemetry client is initialized.

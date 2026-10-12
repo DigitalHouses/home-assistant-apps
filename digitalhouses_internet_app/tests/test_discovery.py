@@ -32,6 +32,7 @@ class DiscoveryTests(unittest.TestCase):
             "google_connectivity": "binary_sensor.dh_internet_app_google_connectivity",
             "cloudflare_connectivity": "binary_sensor.dh_internet_app_cloudflare_connectivity",
             "internet_status": "binary_sensor.dh_internet_app_internet",
+            "internet_status_compat": "binary_sensor.internet_status",
             "router_status": "binary_sensor.dh_internet_app_router_connectivity",
         }
         for key, entity_id in expected.items():
@@ -47,6 +48,7 @@ class DiscoveryTests(unittest.TestCase):
             "google_connectivity",
             "cloudflare_connectivity",
             "internet_status",
+            "internet_status_compat",
             "router_status",
         ):
             with self.subTest(component=key):
@@ -61,6 +63,30 @@ class DiscoveryTests(unittest.TestCase):
                     components[key]["availability_mode"],
                     "all",
                 )
+
+    def test_legacy_internet_status_alias_matches_canonical_state(self) -> None:
+        components = build_discovery_payload("0.1.22")["components"]
+        canonical = components["internet_status"]
+        compatibility = components["internet_status_compat"]
+
+        self.assertEqual(
+            compatibility["default_entity_id"],
+            "binary_sensor.internet_status",
+        )
+        self.assertEqual(
+            compatibility["unique_id"],
+            "dh_internet_app_legacy_internet_status",
+        )
+        for field in (
+            "state_topic",
+            "value_template",
+            "payload_on",
+            "payload_off",
+            "availability",
+            "availability_mode",
+        ):
+            with self.subTest(field=field):
+                self.assertEqual(compatibility[field], canonical[field])
 
     def test_optional_component_registry_matches_conditional_entities(self) -> None:
         payload = build_discovery_payload(
