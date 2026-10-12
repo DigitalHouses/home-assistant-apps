@@ -276,24 +276,38 @@ class PresentationTests(unittest.TestCase):
         ):
             self.assertNotIn(forbidden, event_method)
 
-    def test_optional_router_and_traffic_cards_hide_unavailable(self) -> None:
+    def test_reference_dashboard_uses_current_router_traffic_and_app_controls(self) -> None:
         dashboard = (
             APP_ROOT
             / "examples"
             / "lovelace"
             / "dh_internet_app_dashboard.yaml"
         ).read_text(encoding="utf-8")
-        router_section = dashboard.split("title: Router telemetry", 1)[1].split(
-            "title: Traffic", 1
-        )[0]
-        traffic_section = dashboard.split("title: Traffic", 1)[1].split(
-            "- type: conditional", 1
-        )[0]
-        for section in (router_section, traffic_section):
-            self.assertIn('state: "unavailable"', section)
-            self.assertIn('state: "unknown"', section)
-        self.assertNotIn("heading: Router & Traffic", dashboard)
-        self.assertIn("condition: numeric_state", dashboard)
+
+        for required in (
+            "heading: Internet Status",
+            "heading: Current Performance",
+            "heading: Router",
+            "heading: Quality",
+            "heading: Monthly Statistics",
+            "heading: Recent Speedtests",
+            "heading: Recovery Control",
+            "sensor.dh_internet_app_router_download_rate",
+            "sensor.dh_internet_app_router_upload_rate",
+            "sensor.dh_internet_app_traffic_download_month",
+            "sensor.dh_internet_app_traffic_upload_month",
+            "primary: DL This Month",
+            "primary: UL This Month",
+            "Unavailable",
+            "sensor.dh_internet_app_card",
+            "button.dh_internet_app_refresh",
+            "button.dh_internet_app_check_updates",
+            "app: 8133339d_digitalhouses_internet_app",
+        ):
+            self.assertIn(required, dashboard)
+
+        self.assertNotIn("title: Router telemetry", dashboard)
+        self.assertNotIn("type: custom:auto-entities", dashboard)
 
     def test_examples_contain_no_legacy_speedtest_entities(self) -> None:
         examples = APP_ROOT / "examples"
