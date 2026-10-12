@@ -2,6 +2,9 @@ import sys
 import types
 from pathlib import Path
 import unittest
+import threading
+from types import SimpleNamespace
+from unittest.mock import Mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -65,6 +68,57 @@ class MqttBridgePlexApiTests(unittest.TestCase):
         new_payload = {"components": {"library_1": {}}}
         bridge.set_discovery_payload(new_payload)
         self.assertIs(bridge.discovery_payload, new_payload)
+
+
+
+class MqttBridgeControlTests(unittest.TestCase):
+    def _bridge(self):
+        b = MqttBridge.__new__(MqttBridge)
+        b.topics = SimpleNamespace(
+            ha_status="homeassistant/status",
+            refresh="plex/refresh",
+            update_check="plex/update/check",
+            update_install="plex/update/install",
+            restart_agent="plex/restart",
+        )
+        b.refresh_requested = threading.Event()
+        b.check_updates_requested = threading.Event()
+        b.install_update_requested = threading.Event()
+        b.restart_requested = threading.Event()
+        b.wake_requested = threading.Event()
+        b.log = Mock()
+        return b
+
+    def test_retained_commands_are_rejected(self):
+        bridge = self._bridge()
+        for topic, event in (
+            (bridge.topics.refresh, bridge.refresh_requested),
+            (bridge.topics.update_check, bridge.check_updates_requested),
+            (bridge.topics.update_install, bridge.install_update_requested),
+            (bridge.topics.restart_agent, bridge.restart_requested),
+        ):
+            bridge._on_message(None, None, SimpleNamespace(
+                topic=topic, payload=b"PRESS", retain=True,
+            ))
+            self.assertFalse(event.is_set())
+
+    def test_exact_press_dispatches_once(self):
+        bridge = self._bridge()
+        for topic, event in (
+            (bridge.topics.refresh, bridge.refresh_requested),
+            (bridge.topics.update_check, bridge.check_updates_requested),
+            (bridge.topics.update_install, bridge.install_update_requested),
+            (bridge.topics.restart_agent, bridge.restart_requested),
+        ):
+            bridge._on_message(None, None, SimpleNamespace(
+                topic=topic, payload=b"NOT-PRESS", retain=False,
+            ))
+            self.assertFalse(event.is_set())
+            bridge._on_message(None, None, SimpleNamespace(
+                topic=topic, payload=b"PRESS", retain=False,
+            ))
+            self.assertTrue(event.is_set())
+            event.clear()
 
 
 if __name__ == "__main__":
