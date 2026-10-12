@@ -194,11 +194,17 @@ jobs:
             /opt/digitalhouses/digitalhouses_plex_agent/.venv/bin
           sudo ln -sf "$(command -v python)" \
             /opt/digitalhouses/digitalhouses_plex_agent/.venv/bin/python
+          sudo install -d /usr/local/libexec
+          sudo install -m 0755 \
+            digitalhouses_plex_agent/bin/digitalhouses-plex-agent-update-runner \
+            /usr/local/libexec/digitalhouses-plex-agent-update-runner
 
-      - name: Validate systemd unit
+      - name: Validate systemd unit and path watchers
         run: |
+          python -m py_compile digitalhouses_plex_agent/bin/digitalhouses-plex-agent-update-runner
           systemd-analyze verify \
-            digitalhouses_plex_agent/systemd/*.service
+            digitalhouses_plex_agent/systemd/*.service \
+            digitalhouses_plex_agent/systemd/*.path
 
   pve-agent:
     name: PVE Agent
