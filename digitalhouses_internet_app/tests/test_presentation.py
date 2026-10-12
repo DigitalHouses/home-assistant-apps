@@ -146,7 +146,7 @@ class PresentationTests(unittest.TestCase):
             "perform_action: update.install",
             "backup: true",
             "perform_action: hassio.app_restart",
-            "app: digitalhouses_internet_app",
+            "app: 8133339d_digitalhouses_internet_app",
             "Обновить",
             "Версия",
         ):
