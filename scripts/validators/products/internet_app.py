@@ -322,9 +322,18 @@ def validate_presentation_examples(
     dashboard_path = (
         app / "examples" / "lovelace" / "dh_internet_app_dashboard.yaml"
     )
+    control_card_path = (
+        app / "examples" / "lovelace" / "internet_app_card_ru.yaml"
+    )
     require_files(
         root,
-        [global_path, notification_path, notification_ru_path, dashboard_path],
+        [
+            global_path,
+            notification_path,
+            notification_ru_path,
+            dashboard_path,
+            control_card_path,
+        ],
     )
 
     global_package = load_yaml(global_path, root)
@@ -354,6 +363,37 @@ def validate_presentation_examples(
     notification_text = notification_path.read_text(encoding="utf-8")
     notification_ru_text = notification_ru_path.read_text(encoding="utf-8")
     dashboard_text = dashboard_path.read_text(encoding="utf-8")
+    control_card_text = control_card_path.read_text(encoding="utf-8")
+
+    for required_marker in (
+        "sensor.dh_internet_app_version",
+        "binary_sensor.dh_internet_app_internet",
+        "sensor.dh_internet_app_speedtest_status",
+        "button.dh_internet_app_run_speedtest",
+        "update.digitalhouses_internet_app_update",
+        "perform_action: homeassistant.update_entity",
+        "perform_action: update.install",
+        "backup: true",
+        "perform_action: hassio.app_restart",
+        "app: digitalhouses_internet_app",
+    ):
+        if required_marker not in control_card_text:
+            fail(
+                f"{app.name}: compact control card is missing "
+                f"{required_marker!r}"
+            )
+    for forbidden_marker in (
+        "sensor.dh_internet_app_card",
+        "sensor.dh_internet_app_latest_version",
+        "binary_sensor.dh_internet_app_update_available",
+        "button.dh_internet_app_update",
+        "button.dh_internet_app_restart",
+    ):
+        if forbidden_marker in control_card_text:
+            fail(
+                f"{app.name}: HAOS control card must use Supervisor controls; "
+                f"found duplicate App-owned marker {forbidden_marker!r}"
+            )
 
     if "automation:" in global_text:
         fail(f"{app.name}: global package must remain Recorder-only")

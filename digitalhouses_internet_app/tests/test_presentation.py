@@ -126,6 +126,38 @@ class PresentationTests(unittest.TestCase):
                 f"{path.relative_to(APP_ROOT)} references unknown entities",
             )
 
+    def test_compact_ru_control_card_uses_supervisor_app_controls(self) -> None:
+        card = (
+            APP_ROOT
+            / "examples"
+            / "lovelace"
+            / "internet_app_card_ru.yaml"
+        ).read_text(encoding="utf-8")
+
+        for required in (
+            "sensor.dh_internet_app_version",
+            "binary_sensor.dh_internet_app_internet",
+            "sensor.dh_internet_app_speedtest_status",
+            "sensor.dh_internet_app_problems",
+            "button.dh_internet_app_run_speedtest",
+            "update.digitalhouses_internet_app_update",
+            "perform_action: homeassistant.update_entity",
+            "perform_action: update.install",
+            "backup: true",
+            "perform_action: hassio.app_restart",
+            "app: digitalhouses_internet_app",
+        ):
+            self.assertIn(required, card)
+
+        for forbidden in (
+            "sensor.dh_internet_app_card",
+            "sensor.dh_internet_app_latest_version",
+            "binary_sensor.dh_internet_app_update_available",
+            "button.dh_internet_app_update",
+            "button.dh_internet_app_restart",
+        ):
+            self.assertNotIn(forbidden, card)
+
     def test_notification_locales_use_direct_flow(self) -> None:
         en, ru = [
             path.read_text(encoding="utf-8")
