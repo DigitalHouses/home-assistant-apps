@@ -96,7 +96,7 @@ The installer copies the token to a protected service-readable file:
 /etc/digitalhouses_plex_agent/plex_local_admin_token
 ```
 
-The copy is owned by `root:digitalhouses_plex_agent` with mode `0640` and is refreshed on install/update when Plex provides `.LocalAdminToken`. The original Plex token permissions are not changed. The token is not stored in MQTT state, logs, or the repository.
+The copy is owned by `root:digitalhouses_plex_agent` with mode `0640` and is initially refreshed on install/update. When the local Plex API responds with HTTP 401, the unprivileged agent writes a rate-limited request in its private state directory; a path-activated **root-owned, one-shot systemd helper** validates Plex's current `.LocalAdminToken` against `127.0.0.1:32400/status/sessions` and atomically updates the protected copy if the token changed. On the next sampling cycle (default 10 seconds) the agent reads the updated copy and resumes without restarting Plex or the agent. Refresh requests are throttled to one per minute if authentication continues to fail. If the original token is missing or rejected by Plex, the helper retains the existing copy and the API status stays in error until the next successful request. The main agent cannot read the original Plex token and cannot run arbitrary commands as root; the original token permissions are unchanged. Tokens are never stored in MQTT state, logs, or the repository. Custom token file paths are not automatically synchronized.
 
 The API collector connects by default only to:
 
