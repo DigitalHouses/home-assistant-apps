@@ -18,9 +18,12 @@ from contracts import (
     validate_static_db_metrics,
 )
 from config import AppConfig, load_config
+from control import AppCard, CHECK_INTERVAL_SECONDS, ReleaseChecker
 from db import create_adapter
 from discovery import (
     APP_AVAILABILITY_TOPIC,
+    CARD_STATE_TOPIC,
+    CHECK_UPDATES_COMMAND_TOPIC,
     DB_AVAILABILITY_TOPIC,
     DB_STATIC_AVAILABILITY_TOPIC,
     DB_STATUS_AVAILABILITY_TOPIC,
@@ -47,6 +50,7 @@ from discovery import (
     TELEMETRY_DELETE_COMMAND_TOPIC,
     TOP_ENTITIES_24H_TOPIC,
     TOP_ENTITIES_ALL_TIME_TOPIC,
+    UPDATE_STATE_TOPIC,
     build_discovery_payload,
 )
 from identity_migration import cleanup_required, mark_cleanup_complete
@@ -129,6 +133,8 @@ class DatabaseMonitorApp:
             version=self.app_version,
         )
         self.telemetry_runner = TelemetryRunner(self.telemetry)
+        self.release_checker = ReleaseChecker(self.app_version)
+        self.app_card = AppCard(self._publish_app_card)
         self.client = self._build_mqtt_client()
 
     def _build_mqtt_client(self) -> mqtt.Client:
@@ -161,6 +167,7 @@ class DatabaseMonitorApp:
         self.mqtt_connected.set()
         client.subscribe(HA_STATUS_TOPIC, qos=1)
         client.subscribe(REFRESH_COMMAND_TOPIC, qos=1)
+        client.subscribe(CHECK_UPDATES_COMMAND_TOPIC, qos=1)
         client.subscribe(
             DISK_USAGE_THRESHOLD_COMMAND_TOPIC,
             qos=1,
@@ -182,6 +189,8 @@ class DatabaseMonitorApp:
         self.publish_state()
         self.publish_rankings()
         self.publish_disk_usage_threshold()
+        self._publish_update_state()
+        self.app_card.publish()
         self._schedule_legacy_cleanup()
         self.log.info(
             "MQTT connected; canonical discovery published"
@@ -302,10 +311,33 @@ class DatabaseMonitorApp:
                     "or running; duplicate request ignored"
                 )
                 return
+            if not self.app_card.begin("refresh"):
+                self.log.debug(
+                    "Recorder App card operation already running; "
+                    "refresh request ignored"
+                )
+                return
             self.refresh_requested.set()
             self.log.info(
                 "Manual full refresh requested"
             )
+            return
+
+        if message.topic == CHECK_UPDATES_COMMAND_TOPIC:
+            if self.app_card.begin("check"):
+                if self.release_checker.begin():
+                    self._publish_update_state()
+                    threading.Thread(
+                        target=self._check_updates,
+                        kwargs={"operation": "check"},
+                        name="dh-recorder-release-check-manual",
+                        daemon=True,
+                    ).start()
+                else:
+                    self.app_card.finish(
+                        "check",
+                        error="Release check is already running",
+                    )
             return
 
         if message.topic == TELEMETRY_DELETE_COMMAND_TOPIC:
@@ -332,6 +364,56 @@ class DatabaseMonitorApp:
             self.publish_state()
             self.publish_rankings()
             self.publish_disk_usage_threshold()
+            self._publish_update_state()
+            self.app_card.publish()
+
+    def _publish_app_card(
+        self,
+        payload: dict[str, object],
+    ) -> bool:
+        if not self.mqtt_connected.is_set():
+            return False
+        self.publish_json(
+            CARD_STATE_TOPIC,
+            payload,
+            retain=True,
+        )
+        return True
+
+    def _publish_update_state(self) -> None:
+        if not self.mqtt_connected.is_set():
+            return
+        self.publish_json(
+            UPDATE_STATE_TOPIC,
+            self.release_checker.payload(),
+            retain=True,
+        )
+
+    def _check_updates(
+        self,
+        *,
+        operation: str | None = None,
+    ) -> None:
+        ok, error = self.release_checker.complete()
+        self._publish_update_state()
+        if operation is not None:
+            self.app_card.finish(
+                operation,
+                error=None if ok else (
+                    error or "Release check failed"
+                ),
+                measured_seconds=(
+                    self.release_checker.duration_seconds
+                ),
+            )
+
+    def _release_check_loop(self) -> None:
+        while not self.stop_event.is_set():
+            if self.release_checker.begin():
+                self._publish_update_state()
+                self._check_updates()
+            if self.stop_event.wait(CHECK_INTERVAL_SECONDS):
+                return
 
     def _delete_telemetry(self) -> None:
         if self.telemetry.delete():
@@ -766,6 +848,7 @@ class DatabaseMonitorApp:
         self.refresh_in_progress.set()
         self.refresh_requested.clear()
         self.log.info('Manual full refresh started')
+        full_success = False
         try:
             db_ok = self.collect_fast()
             refresh_results: list[bool] = [db_ok]
@@ -789,6 +872,14 @@ class DatabaseMonitorApp:
                 self.log.warning('Manual full refresh completed with errors')
         finally:
             self.refresh_in_progress.clear()
+            self.app_card.finish(
+                "refresh",
+                error=(
+                    None
+                    if full_success
+                    else "Refresh completed with errors"
+                ),
+            )
 
     def run(self) -> None:
         db = self.config.database
@@ -816,6 +907,12 @@ class DatabaseMonitorApp:
         self.client.connect_async(host, port, keepalive=60)
         self.client.loop_start()
         self.telemetry_runner.start()
+        release_check_thread = threading.Thread(
+            target=self._release_check_loop,
+            name="dh-recorder-release-check-periodic",
+            daemon=True,
+        )
+        release_check_thread.start()
         next_publish = next_storage = 0.0
         next_medium_epoch = next_slow_epoch = 0.0
         next_top_24h = next_top_all_time = 0.0
