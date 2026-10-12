@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.26
+- Add the App-owned compact-card runtime used by the DigitalHouses management UI: operation state, observable Refresh, and explicit stable-release checks.
+- Publish `sensor.dh_recorder_app_card`, `button.dh_recorder_app_check_updates`, `sensor.dh_recorder_app_latest_version` and `binary_sensor.dh_recorder_app_update_available` under the canonical Recorder MQTT device only.
+- Keep the existing `button.dh_recorder_app_db_refresh` contract and make its full database/storage refresh visible as a timed card operation with success/error completion.
+- Check published stable `digitalhouses_recorder_app-vMAJOR.MINOR.PATCH` GitHub Releases independently every 24 hours and on demand, ignoring drafts, prereleases and other product tags.
+- Add the maintained Russian compact control card and embed it in the Recorder dashboard; installation and restart remain Supervisor-owned with backup-before-update.
+
 ## 0.1.25
 - Remove unused canonical Recorder sensors `db_records_per_hour`, `db_previous_hour_records` and `db_yesterday_records` so Home Assistant stops recording new state/statistics for metrics no longer used by the dashboard.
 - Keep `db_current_hour_records` and `db_today_records` as the live period counters and trim MariaDB/PostgreSQL period queries to calculate only those counters.
