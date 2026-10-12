@@ -2,7 +2,7 @@
 """Independent transactional updater for DigitalHouses Plex Agent.
 
 This runner is installed OUTSIDE the directory replaced by install.sh.
-It uses only Python standard-library modules and never restarts PVE or guests.
+It uses only Python standard-library modules and never restarts Plex Media Server.
 """
 from __future__ import annotations
 
@@ -214,7 +214,7 @@ def update() -> int:
             with tempfile.TemporaryDirectory(prefix="plex-update-") as work:
                 script = Path(work) / "install.sh"
                 source_installer(tag, script)
-                    backup_files()
+                backup_files()
                 status("installing")
                 env = os.environ.copy()
                 env["DIGITALHOUSES_INSTALL_MODE"] = "production"
@@ -223,6 +223,9 @@ def update() -> int:
             status("verifying")
             if (ROOT / "VERSION").read_text(encoding="utf-8").strip() != version:
                 raise RuntimeError("Installed VERSION differs from release")
+            info = (ROOT / "BUILD_INFO").read_text(encoding="utf-8")
+            if f"source = {tag}" not in info:
+                raise RuntimeError("Installed source tag does not match the release")
             time.sleep(12)
             pid = int(run(["systemctl", "show", "-p", "MainPID", "--value", SERVICE],
                           timeout=15).stdout.strip())
