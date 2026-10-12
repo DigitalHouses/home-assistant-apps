@@ -11,6 +11,7 @@ APP_DIR = Path(__file__).resolve().parents[1] / 'rootfs' / 'app'
 sys.path.insert(0, str(APP_DIR))
 
 from discovery import (
+    CHECK_UPDATES_COMMAND_TOPIC,
     DISK_USAGE_THRESHOLD_COMMAND_TOPIC,
     REFRESH_COMMAND_TOPIC,
     TELEMETRY_DELETE_COMMAND_TOPIC,
@@ -119,6 +120,10 @@ class ManualRefreshTests(unittest.TestCase):
             delete=Mock(return_value=True)
         )
         app.telemetry_runner = Mock()
+        app.release_checker = Mock()
+        app.release_checker.begin.return_value = False
+        app.app_card = Mock()
+        app.app_card.begin.return_value = True
         app.legacy_cleanup_pending = False
         app.legacy_cleanup_in_progress = threading.Event()
         return app
@@ -129,6 +134,7 @@ class ManualRefreshTests(unittest.TestCase):
         app._on_message(None, None, Message(REFRESH_COMMAND_TOPIC))
 
         self.assertTrue(app.refresh_requested.is_set())
+        app.app_card.begin.assert_called_once_with("refresh")
 
     def test_refresh_command_is_ignored_while_refresh_is_in_progress(self):
         app = self.make_app()
@@ -137,6 +143,23 @@ class ManualRefreshTests(unittest.TestCase):
         app._on_message(None, None, Message(REFRESH_COMMAND_TOPIC))
 
         self.assertFalse(app.refresh_requested.is_set())
+
+    def test_check_updates_command_starts_release_check(self):
+        app = self.make_app()
+        app.release_checker.begin.return_value = False
+
+        app._on_message(
+            None,
+            None,
+            Message(CHECK_UPDATES_COMMAND_TOPIC),
+        )
+
+        app.app_card.begin.assert_called_once_with("check")
+        app.release_checker.begin.assert_called_once_with()
+        app.app_card.finish.assert_called_once_with(
+            "check",
+            error="Release check is already running",
+        )
 
     def test_on_connect_subscribes_to_refresh_command_topic(self):
         app = self.make_app()
@@ -151,6 +174,10 @@ class ManualRefreshTests(unittest.TestCase):
         app._on_connect(client, None, None, 0)
 
         client.subscribe.assert_any_call(REFRESH_COMMAND_TOPIC, qos=1)
+        client.subscribe.assert_any_call(
+            CHECK_UPDATES_COMMAND_TOPIC,
+            qos=1,
+        )
         client.subscribe.assert_any_call(
             DISK_USAGE_THRESHOLD_COMMAND_TOPIC,
             qos=1,
@@ -261,6 +288,10 @@ class ManualRefreshTests(unittest.TestCase):
         self.assertEqual(app.collect_top_entities.call_count, 2)
         app.collect_storage.assert_called_once_with()
         app.publish_state.assert_called_once_with()
+        app.app_card.finish.assert_called_once_with(
+            "refresh",
+            error=None,
+        )
 
     def test_successful_manual_refresh_updates_last_refresh_timestamp(self):
         app = self.make_app()
@@ -281,6 +312,10 @@ class ManualRefreshTests(unittest.TestCase):
         app.manual_refresh()
 
         app.update_state.assert_not_called()
+        app.app_card.finish.assert_called_once_with(
+            "refresh",
+            error="Refresh completed with errors",
+        )
 
 
 if __name__ == '__main__':
