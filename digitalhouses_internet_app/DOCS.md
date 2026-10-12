@@ -6,6 +6,14 @@
 
 `connectivity_check.interval_seconds` controls the normal probe interval. `attempts` is the number of consecutive observed failed Internet probes required before an outage incident starts. `timeout_seconds` is the timeout for an individual probe. Connectivity remains unknown/unavailable until a real probe completes. Failure to execute the probe mechanism is a diagnostic error, not an observed outage, and therefore does not increment outage confirmation or start recovery.
 
+## Home Assistant Internet status compatibility
+
+The canonical Internet connectivity entity is `binary_sensor.dh_internet_app_internet`.
+
+For compatibility with existing DigitalHouses packages and automations, the App also publishes `binary_sensor.internet_status`. This is not a second probe or a separate calculation: it is an MQTT Discovery alias driven by the same retained App state, the same `internet_up` value, and the same connectivity-observed availability gate as the canonical entity. Therefore both entities transition together and are unavailable together before the first real connectivity observation.
+
+New integrations should use the canonical `binary_sensor.dh_internet_app_internet` entity. The compatibility alias is intentionally excluded from the reference Recorder package so the same connectivity transition is not stored twice.
+
 ## Recovery
 
 Recovery is disabled by default.
