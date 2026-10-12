@@ -96,7 +96,7 @@ def verify_release(tag: str, version: str) -> None:
     if (not isinstance(release, dict) or release.get("draft") or
             release.get("prerelease") or not release.get("published_at") or
             release.get("tag_name") != tag):
-        raise RuntimeError("Release is not a published stable DigitalHouses PVE release")
+        raise RuntimeError("Release is not a published stable DigitalHouses Plex release")
     installed = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
     if not re.fullmatch(r"\d+\.\d+\.\d+", installed):
         raise RuntimeError("Installed version is not a stable release")
