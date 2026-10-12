@@ -10,16 +10,19 @@ DASHBOARD = (
 
 
 class DashboardPlexApiContractTests(unittest.TestCase):
-    def test_dashboard_no_longer_depends_on_native_plex_integration(self):
+    def test_live_dashboard_uses_canonical_plex_agent_entities(self):
         self.assertNotIn("sensor.plex_vm", DASHBOARD)
         self.assertNotIn("update.plex_vm", DASHBOARD)
-        self.assertIn("sensor.dh_plex_agent_playback_count", DASHBOARD)
+        self.assertIn("binary_sensor.dh_plex_agent_playback_active", DASHBOARD)
+        self.assertIn("sensor.dh_plex_agent_playback_started_at", DASHBOARD)
         self.assertIn("sensor.dh_plex_agent_playback_sessions", DASHBOARD)
         self.assertIn("sensor.dh_plex_agent_library_*", DASHBOARD)
 
-    def test_dashboard_exposes_video_and_audio_playback(self):
-        self.assertIn("binary_sensor.dh_plex_agent_video_playback_active", DASHBOARD)
-        self.assertIn("binary_sensor.dh_plex_agent_audio_playback_active", DASHBOARD)
+    def test_live_dashboard_handles_audio_and_video_session_details(self):
+        self.assertIn("s.get('content_type') == 'audio'", DASHBOARD)
+        self.assertIn("s.get('media_type') == 'episode'", DASHBOARD)
+        self.assertIn("s.get('audio_codec')", DASHBOARD)
+        self.assertIn("s.get('video_codec')", DASHBOARD)
 
 
 if __name__ == "__main__":
