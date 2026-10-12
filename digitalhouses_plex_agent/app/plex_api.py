@@ -10,6 +10,7 @@ import urllib.request
 import xml.etree.ElementTree as ET
 
 from .config import PlexApiConfig
+from .token_refresh import AGENT_TOKEN, request_token_refresh
 
 
 class PlexApiError(RuntimeError):
@@ -459,7 +460,19 @@ class PlexApiCollector:
             ) as response:
                 body = response.read()
                 response_headers = dict(response.headers.items())
-        except (OSError, urllib.error.URLError, urllib.error.HTTPError) as exc:
+        except urllib.error.HTTPError as exc:
+            # The service user cannot read Plex's private .LocalAdminToken.
+            # Request the restricted root helper only for local API requests
+            # using the managed copy; the next poll reads the new token.
+            if (
+                exc.code == 401
+                and resolve_token_path(self.config.token_file) == AGENT_TOKEN
+                and urllib.parse.urlsplit(self.config.base_url).hostname
+                in {"localhost", "127.0.0.1", "::1"}
+            ):
+                request_token_refresh()
+            raise PlexApiError(f"Plex API request failed for {path}: {exc}") from exc
+        except (OSError, urllib.error.URLError) as exc:
             raise PlexApiError(f"Plex API request failed for {path}: {exc}") from exc
         try:
             return ET.fromstring(body), response_headers
