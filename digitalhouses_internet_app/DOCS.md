@@ -99,7 +99,7 @@ The App publishes a small UI-control contract for the maintained Russian compact
 - `sensor.dh_internet_app_latest_version` and `binary_sensor.dh_internet_app_update_available` contain the result of that check. A background check uses the same path at startup and then every 24 hours; manual checks may be requested at any time when another check is not already running.
 - `sensor.dh_internet_app_card` exposes only transient foreground operation state for `refresh` and `check` so the Lovelace card can show running/success/error and operation duration.
 
-The release check is informational. The App does not update its own container and does not request broader Supervisor permissions. Installation remains owned by Home Assistant Supervisor through `update.digitalhouses_internet_app_update`; restart remains `hassio.app_restart`.
+The release check is informational. The App does not update its own container and does not request broader Supervisor permissions. Installation remains owned by Home Assistant Supervisor through `update.digitalhouses_internet_app_update`. Restart uses `hassio.app_restart` with the Supervisor installation slug `8133339d_digitalhouses_internet_app`, not the unprefixed `config.yaml` product slug. The `8133339d` prefix is the deterministic Supervisor repository ID for the canonical repository URL `https://github.com/DigitalHouses/home-assistant-apps`.
 
 ## Product telemetry
 

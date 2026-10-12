@@ -414,7 +414,7 @@ def validate_presentation_examples(
         "perform_action: update.install",
         "backup: true",
         "perform_action: hassio.app_restart",
-        "app: digitalhouses_internet_app",
+        "app: 8133339d_digitalhouses_internet_app",
         "Обновить",
         "Версия",
     ):
@@ -426,6 +426,11 @@ def validate_presentation_examples(
     if "perform_action: homeassistant.update_entity" in control_card_text:
         fail(
             f"{app.name}: Version chip must use the App-owned release check"
+        )
+    if "app: digitalhouses_internet_app" in control_card_text:
+        fail(
+            f"{app.name}: restart must use the Supervisor installation slug, "
+            "not the unprefixed config slug"
         )
 
     if "automation:" in global_text:

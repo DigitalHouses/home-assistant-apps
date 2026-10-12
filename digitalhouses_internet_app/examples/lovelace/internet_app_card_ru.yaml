@@ -252,7 +252,7 @@ cards:
           action: perform-action
           perform_action: hassio.app_restart
           data:
-            app: digitalhouses_internet_app
+            app: 8133339d_digitalhouses_internet_app
           confirmation:
             text: >-
               Перезапустить Internet App?
