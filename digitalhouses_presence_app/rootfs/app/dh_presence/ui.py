@@ -287,7 +287,9 @@ load();
 
 
 def start_ingress_ui(token: str, registry_path: str, excluded_users: list[str]):
-    server = ThreadingHTTPServer(("0.0.0.0", 8099),
+    # With host_network the Supervisor reaches its host via the hassio
+    # bridge gateway. Never expose the registration server on a LAN socket.
+    server = ThreadingHTTPServer(("172.30.32.1", 8099),
                                  handler_factory(token, registry_path, set(excluded_users)))
     server.daemon_threads = True
     thread = Thread(target=server.serve_forever, name="PresenceIngress", daemon=True)
