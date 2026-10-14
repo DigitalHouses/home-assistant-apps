@@ -34,3 +34,10 @@
 ## Git workflow
 
 Changes must be made in this repository by feature branch → PR → full CI → normal merge. No direct writes to production HA or `main`. Do not create any additional product repository for Presence.
+
+## Stage 4 — registration bridge CI + on-site acceptance (0.1.11)
+
+- CI: authenticator must use `connection.user` and `connection.remote`; backend candidate list uses one `mobile_app` entry and its `device_tracker` for the same HA user only; no user IP/MAC supplied by browser.
+- CI: App registration save/load schema, duplicate device/MAC rejection, owner name, exclusion by HA User ID, no synthetic arrivals, old entities stable, safe ARP route/probe handling.
+- Field acceptance **pending**: Core bridge installation and WebSocket command availability; App token GET/POST 200 from authenticated bridge; on-link interface `enp6s18` or detected LAN; real ARP reply; selected iPhone vs same-account iPad; Cloudflare rejection; DHCP change/private MAC rotation; no duplicate MQTT Discovery or events.
+- Do not merge field acceptance into a statement that Wi-Fi Engine works: enrollment ARP is a **one-off attestation**, not a continuous presence sensor.
