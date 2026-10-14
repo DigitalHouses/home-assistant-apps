@@ -154,7 +154,7 @@ def test_config_changed_notification_is_direct_and_localized():
     text = RU_NOTIFICATION_PACKAGE.read_text(encoding="utf-8")
 
     assert "id: config_changed" in text
-    assert "Конфигурация UPS Trigger изменена" in text
+    assert "UPS: параметры отключения изменены" in text
     assert "trigger.to_state.attributes.old_values" in text
     assert "trigger.to_state.attributes.new_values" in text
 
