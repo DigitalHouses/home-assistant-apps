@@ -19,8 +19,9 @@ class NotificationPackageTests(unittest.TestCase):
         for event in ("arrival", "departure", "wifi_in", "wifi_out"):
             self.assertIn("id: " + event, code)
         self.assertEqual(code.count("trigger: event.received"), 4)
-        self.assertEqual(code.count("action: logbook.log"), 4)
-        self.assertEqual(code.count("action: persistent_notification.create"), 4)
+        self.assertEqual(code.count("action: script.write2log"), 4)
+        self.assertEqual(code.count("action: logbook.log"), 0)
+        self.assertEqual(code.count("action: persistent_notification.create"), 0)
         self.assertNotIn("id: gps_in", code)
         self.assertNotIn("id: gps_out", code)
 
@@ -29,7 +30,6 @@ class NotificationPackageTests(unittest.TestCase):
         for bad in (
             "action: input_select.select_option",
             "action: alarm_control_panel.alarm_",
-            "action: script.write2log",
             "action: notify.mobile_app_",
         ):
             self.assertNotIn(bad, code)
@@ -48,12 +48,19 @@ class NotificationPackageTests(unittest.TestCase):
         self.assertIn("before_home is Status.NOT_HOME and after_home is Status.HOME", engine)
         self.assertIn("before_home is Status.HOME and after_home is Status.NOT_HOME", engine)
 
-    def test_user_name_is_resolved_not_guessed(self):
+    def test_person_mapping_owned_by_app_and_rendered_directly(self):
         code = PACKAGE.read_text(encoding="utf-8")
-        self.assertIn("resident_user_names", code)
-        self.assertIn("states.person", code)
-        self.assertIn("e.device_tracker", code)
-        self.assertIn("e.resident_name", code)
-        self.assertIn("without a verified name", code.lower())
+        self.assertNotIn("resident_user_names:", code)
+        self.assertNotIn("states.person", code)
+        self.assertIn("event.user_name", code)
+        self.assertIn("event.device_name", code)
         runtime = RUNTIME.read_text(encoding="utf-8")
         self.assertIn('"device_tracker": resident.tracker', runtime)
+        self.assertIn('"user_name": resident.user_name', runtime)
+        self.assertIn('"device_name": resident.name', runtime)
+
+    def test_each_write2log_has_only_title_and_message(self):
+        code = PACKAGE.read_text(encoding="utf-8")
+        self.assertEqual(code.count("- action: script.write2log"), 4)
+        self.assertEqual(code.count("title:"), 4)
+        self.assertEqual(code.count("message:"), 4)
