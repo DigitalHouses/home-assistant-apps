@@ -14,7 +14,17 @@ This application belongs to `DigitalHouses/home-assistant-apps/digitalhouses_pre
 - Excluded users never create entities.
 - MQTT events are non-retained; HA notification packages own human-facing messages.
 
-**Implemented as a staged pilot in 0.1.11:** optional authenticated HA WebSocket registration bridge and on-link active ARP identity binding; residents are enrolled through a mobile UI without copying user names, IPs or MACs to App Configuration. A one-time HA Core custom integration + frontend module installation is required. **Not available yet:** continuous/verified Wi-Fi presence or absence, Wi-Fi/Hybrid corrections and cryptographic proof that a selected same-user Companion device is the one hosting the session. Wi-Fi entity availability remains offline until credible data exists. Selecting `wifi` without an active Wi-Fi engine does not mean anyone is away. Selecting `hybrid` currently uses GPS-only evidence.
+**Staged single-install pilot in 0.1.11:** Native **Supervisor Ingress**
+registration UI is included in the same Home Assistant App. No Core adapter,
+custom integration, frontend resource or `configuration.yaml` edit. The
+user opens the App's **Open Web UI** button, selects the phone GPS tracker
+while using the phone on direct home Wi-Fi, and enrolls. Supervisor supplies
+the authenticated user ID and display name; the App validates a directly
+connected client IP with a fresh ARP reply and stores the MAC locally.
+**Not implemented:** verified continuous Wi-Fi presence/absence, autonomous
+Companion device-to-WebSocket attestation and alarm integration. The current
+working 0.1.10 release remains unchanged until acceptance.
+
 
 ## Presence Lovelace card
 
@@ -24,26 +34,36 @@ A full `sections` page embedding this same card is available as [dashboard YAML]
 
 The mode selector is functional. The status and resident rows are observational. The App exposes genuine operation entities (`sensor.dh_presence_app_card`, `button.dh_presence_app_refresh`, `button.dh_presence_app_check_updates`, refresh-state and version diagnostics) following the [DigitalHouses Unified Status Card](../docs/standards/UNIFIED_PRODUCT_STATUS_CARD_STANDARD.md). Refresh reads currently stored HA tracker states immediately and succeeds when all configured GPS sources have valid last-known evidence and the MQTT state was published. This does not request a new GPS fix from iOS. Version checks query stable product-tagged GitHub Releases. Installation/restart remain Supervisor-owned. GPS last-known `home`/`not_home` and distance remain available even after days without iOS movement; this is **last-known evidence, not live GPS**. Each GPS sensor exposes actual `gps_reported_at`, and the card shows the report time and labels aged results as last-known. An unknown/unavailable/malformed source is still unavailable, and the last confirmed logical state is retained without inventing an arrival/departure. `last_reported` is preferred to `last_updated`; polling HA never fabricates a new report. Distance requires last-known valid coordinates. Each registered phone also gets a Wi-Fi binary sensor; until the independently verified Wi-Fi engine is installed it remains unavailable, rather than pretending the phone is absent. Hybrid limitations remain unchanged.
 
-## WebSocket enrollment (0.1.11)
+## One-click native phone registration (0.1.11 pilot)
 
-Read the [Home Assistant registration bridge setup](registration_bridge/README.md).
-The HA Companion user opens a card on their **own phone** through the direct
-local Home Assistant URL, explicitly selects the phone GPS tracker, and taps
-**Зарегистрировать**. The bridge gets the authenticated HA `connection.user`
-and peer IP server-side, the Presence App validates a fresh IP→MAC ARP reply
-and stores the binding only in its own `/data`. MQTT automatically exposes
-the resident as `Имя жильца (Имя устройства)`.
+1. Install/update **DigitalHouses Presence App** through the normal HA App
+   Store. No extra packages, integration, HACS card or files are needed.
+2. On the **phone being enrolled**, connect to home Wi-Fi and open Home
+   Assistant through its direct local URL, then use **Settings → Apps →
+   DH Presence → Open Web UI** (native Ingress).
+3. Select the phone's existing GPS tracker and press **Зарегистрировать**.
+   The HA user name comes from authenticated Supervisor Ingress headers;
+   IP comes from the verified HA Core transport hop, and MAC from a fresh
+   on-link active ARP response, **not** from manually typed fields.
+4. The App stores the binding under `/data/presence_registrations.json`,
+   enrolls the resident automatically, and the MQTT roster shows
+   `Имя жильца (Устройство)`. Registered residents remain across restarts.
+5. A second phone or iPad under the same HA account must be chosen explicitly
+   and is never auto-enrolled. Admin exclusions require verified HA user ID.
 
-No `resident_names`, explicit user IDs, manually typed IP/MAC or HA Person
-resolution is needed. Device selection is necessary because a single HA user
-may have an iPad and iPhone registered. A first successful enrollment becomes
-effective without restarting the App. A missing bridge does **not** stop
-existing GPS-only residents.
+The included Ingress UI is sufficient for registration and listing enrolled
+phones. The optional Lovelace card uses Mushroom, button-card and Auto
+Entities for advanced monitoring; it is **not a prerequisite** to using the
+App. No manually filled `resident_names` is required for newly enrolled
+phones; that configuration remains only for existing pilot migrations.
 
-The required one-time Core/JS installation is separate from routine
-per-phone registration. The version 0.1.11 App requests host LAN networking
-and only `NET_RAW` privilege for active ARP. This cannot be considered an
-accepted Wi-Fi absence detector or safe alarm input.
+**Security boundary:** Home Assistant Ingress asserts user identity, but
+does not by itself cryptographically prove which of a user's devices sent
+the request. An unexpected proxy/VPN/Cloudflare route, no LAN ARP reply or
+a missing selected GPS tracker fails registration. `host_network` and
+`NET_RAW` for one-off ARP remain blocked by repo acceptance gates until
+tested with local HAOS. No alarm control or negative Wi-Fi evidence is
+enabled by registration.
 
 ## Legacy resident name mapping (migration only; do not configure anew)
 
