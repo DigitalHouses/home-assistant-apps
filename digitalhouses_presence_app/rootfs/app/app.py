@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import queue
+import subprocess
 import signal
 import threading
 import time
@@ -20,6 +21,10 @@ from dh_presence.discovery import DISCOVERY, discovery, topic, with_cleanup
 from dh_presence.storage import load, save
 from dh_presence.modes import ModeSelection
 from dh_presence.operations import Operations, fetch_latest_release, is_newer
+from dh_presence.registration import (
+    load_registry, save_registry, put_registration, get_bridge_requests,
+    active_arp_mac, completed_record, ack_bridge,
+)
 
 LOG = logging.getLogger("dh_presence_app")
 OPTIONS = "/data/options.json"
@@ -27,6 +32,7 @@ STATE = "/data/presence_state.json"
 DISCOVERY_FILE = "/data/presence_discovery.json"
 MODE_FILE = "/data/presence_mode.json"
 OPERATIONS_FILE = "/data/presence_refresh.json"
+REGISTRATIONS_FILE = "/data/presence_registrations.json"
 EVENT_NAMES = {"arrival", "departure", "gps_in", "gps_out", "wifi_in", "wifi_out"}
 STOP = threading.Event()
 WAKE = threading.Event()
@@ -126,10 +132,8 @@ def load_options(path=OPTIONS) -> dict:
             raise ValueError("Duplicate resident_names device_tracker")
         seen_names.add(tracker)
     data["resident_names"] = resident_names
-    # HA user IDs cannot reliably be inferred from a tracker. Reject ambiguous
-    # exclusions rather than silently tracking an excluded administrator.
-    if excludes and any(isinstance(r, str) for r in residents):
-        raise ValueError("exclude_users cannot be verified for tracker-only residents; omit excluded trackers from residents (or use legacy mapped configuration)")
+    # Tracker-only residents without a verified user link are handled
+    # fail-closed by build_engine when exclude_users is set.
     data["presence_mode"] = mode
     return data
 
@@ -279,7 +283,7 @@ class MqttOutput:
         self.client.loop_stop()
 
 
-def build_engine(options: dict, saved: dict) -> Engine:
+def build_engine(options: dict, saved: dict, registrations: list[dict] | None = None) -> Engine:
     engine = Engine(mode=options["presence_mode"], wifi_absence_minutes=options["wifi_absence_minutes"],
                     freshness_seconds=options["gps_freshness_seconds"])
     # Tracker identity is deliberately different from HA User identity. We
@@ -289,15 +293,30 @@ def build_engine(options: dict, saved: dict) -> Engine:
     excludes = set(options["exclude_users"])
     names = {entry["device_tracker"]: entry["user_name"]
              for entry in options.get("resident_names", [])}
+    registered = {r["tracker"]: r for r in (registrations or [])}
     for item in options["residents"]:
         if isinstance(item, str):
+            # No authenticated user-id for a legacy tracker-only entry:
+            # never count it when an HA User exclusion must be enforced.
+            if excludes and item not in registered:
+                continue
             tracker, name, old_state = item, friendly_tracker_name(item), previous.get(item)
         else:
             if item["user_id"] in excludes:
                 continue
             tracker, name = item["gps_tracker"], item["name"]
             old_state = previous.get(tracker) or legacy.get(item["user_id"])
-        engine.add(tracker, name, old_state, user_name=names.get(tracker))
+        link = registered.get(tracker)
+        if link and link["user_id"] in excludes:
+            continue
+        engine.add(tracker, link["device_name"] if link else name, old_state,
+                   user_name=link["user_name"] if link else names.get(tracker))
+    # Dynamic enrollment is durable and independent of the App config's old
+    # residents list. A new resident starts unknown, without synthetic events.
+    for tracker, link in registered.items():
+        if tracker not in engine.residents and link["user_id"] not in excludes:
+            engine.add(tracker, link["device_name"], previous.get(tracker),
+                       user_name=link["user_name"])
     return engine
 
 
@@ -389,12 +408,15 @@ def run():
     version = os.environ["APP_VERSION"]
     options = load_options()
     saved = load(STATE)
-    engine = build_engine(options, saved)
+    registrations = load_registry(REGISTRATIONS_FILE)
+    engine = build_engine(options, saved, registrations)
     modes = ModeSelection(MODE_FILE, options["presence_mode"])
     engine.set_mode(modes.selected)
     operations = Operations(OPERATIONS_FILE)
     latest_version = None
     last_release_check = None
+    last_registration_check = None
+    registration_api_error = None
     token = os.environ["SUPERVISOR_TOKEN"]
     started = datetime.now(timezone.utc).isoformat()
     mqtt_out = MqttOutput(version)
@@ -463,6 +485,47 @@ def run():
                     LOG.info("Presence mode changed from HA UI to %s", engine.mode.value)
                     if engine.mode is Mode.WIFI:
                         LOG.warning("Wi-Fi mode is not operational in this pilot; aggregate presence will be unavailable")
+            # The registered bridge's HTTP API is authenticated through the
+            # existing Supervisor Core token. Registration never comes from an
+            # unauthenticated MQTT command or a client-submitted MAC address.
+            if (last_registration_check is None
+                    or time.monotonic() - last_registration_check >= 15):
+                last_registration_check = time.monotonic()
+                try:
+                    requests = get_bridge_requests(token)
+                    registration_api_error = None
+                except (HTTPError, URLError, OSError, ValueError, TypeError) as exc:
+                    requests = []
+                    problem = api_error_detail(exc)
+                    if registration_api_error != problem:
+                        LOG.warning("Presence WebSocket registration bridge unavailable: %s (GPS polling continues)", problem)
+                        registration_api_error = problem
+                for request in requests[:3]:
+                    try:
+                        if request.get("user_id") in options["exclude_users"]:
+                            LOG.warning("Ignoring excluded user registration request")
+                            continue
+                        mac, iface = active_arp_mac(request["ip"])
+                        entry = completed_record(request, mac)
+                        new_registrations = put_registration(registrations, entry)
+                        save_registry(REGISTRATIONS_FILE, new_registrations)
+                        registrations = new_registrations
+                        resident = engine.residents.get(entry["tracker"])
+                        if resident is None:
+                            engine.add(entry["tracker"], entry["device_name"],
+                                       user_name=entry["user_name"])
+                        else:
+                            resident.user_name = entry["user_name"]
+                            resident.name = entry["device_name"]
+                        # Persist before acknowledging; if Core replays a
+                        # request after a crash, put_registration is idempotent.
+                        ack_bridge(token, request["request_id"], mac)
+                        discovery_ready = synchronize_discovery(mqtt_out, version, engine) if mqtt_out.connected.is_set() else False
+                        LOG.info("Mobile Companion registration accepted: tracker=%s, iface=%s; identity stored locally",
+                                 entry["tracker"], iface)
+                    except (KeyError, TypeError, ValueError, RuntimeError,
+                            OSError, subprocess.TimeoutExpired) as exc:
+                        LOG.warning("Presence registration pending: %s", type(exc).__name__)
             now = datetime.now(timezone.utc)
             name_changed = False
             if home is None:
