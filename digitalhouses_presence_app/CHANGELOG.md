@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.13
+
+- Compact the native registration and administrator diagnostic interfaces for mobile screens.
+- Translate admin GPS, Wi-Fi and registration state labels to Russian status chips.
+- Read HA Core configured time zone and show the last GPS report in it; fall back explicitly to UTC.
+- Add per-device Copy actions for IP and MAC captured at enrollment, without exporting addresses through MQTT or the normal resident API.
+- Keep admin-only server authorization, registration, GPS states and previously reviewed narrow network rights unchanged.
+
 ## 0.1.12
 - Add administrator-only registration diagnostics in the native Ingress UI: resident, device, GPS tracker, enrollment IP/MAC, GPS state and last reported timestamp.
 - Require a verified active Home Assistant administrator group via the existing authenticated Supervisor-to-Core WebSocket for every private debug request. Deny ordinary users and fail closed on errors.
