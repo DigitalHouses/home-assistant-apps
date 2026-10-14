@@ -1,13 +1,13 @@
 # Changelog
 
-## 0.1.11
+## 0.1.11 (draft — single-install acceptance pending)
 
-- Add a minimal HA Core integration with authenticated `dh_presence/candidates`, `dh_presence/register` and registration status WebSocket commands. The user and direct WebSocket peer IP originate server-side, not from editable HA configuration.
-- Resolve a selected user's own Mobile Companion registration to its GPS tracker; never pick an iPad solely because it shares the HA user.
-- Add a short-lived Core registration handoff over authenticated REST; App probes only the on-link phone IP with active ARP, refuses proxy/off-link/ambiguous/no-reply MAC observations, and atomically stores accepted `user_id, user_name, device_name, device_id, tracker, ip, mac` in private App state.
-- Auto-enroll one registered phone/resident with retained confirmed presence and the original MQTT entity identity. The Lovelace roster displays the authenticated user name followed by Companion device name without manual `resident_names` input.
-- Add an explicit mobile registration card, preserve legacy tracker configuration, and enforce HA user exclusions fail-closed.
-- Host network and `NET_RAW` are required only for direct ARP proof. The Core bridge/frontend must be installed once; full HAOS/live iPhone acceptance is still pending. This does not implement Wi-Fi presence/absence or qualify the App for alarm use.
+- Add a native **Supervisor Ingress** interface to the DH Presence Home Assistant App. Installation is through the App Store alone; no `custom_components`, frontend resource, HACS dependency or manual HA configuration is required for registration.
+- Use Supervisor-authenticated Ingress user headers to obtain authoritative HA user ID and display name. Extract the actual Core transport peer from the appended proxy chain; require a direct local HA URL.
+- Let the phone user explicitly choose their GPS `device_tracker`; do **not** infer user ownership or phone authenticity from a shared HA login. Require a fresh on-link active ARP reply for IP→MAC, never a stale neighbour-cache entry or browser-supplied identity.
+- Save the private user/device/IP/MAC binding atomically in the App's own `/data` and auto-enroll its resident with the original stable MQTT identity; the card shows `Имя жильца (Устройство)` without `resident_names`.
+- Preserve legacy pilot configuration and prevent excluded HA users from registering. No Wi-Fi absence handling or alarm integration is enabled.
+- Host LAN network + `NET_RAW` and HAOS client-IP attestation need scoped field acceptance; CI intentionally blocks unvalidated privileged deployment.
 
 
 ## 0.1.10
