@@ -1,4 +1,4 @@
-# DigitalHouses Presence App 0.1.6 — experimental pilot
+# DigitalHouses Presence App 0.1.7 — experimental pilot
 
 ## Configuration
 The App Store's native **Configuration** tab is the supported installation and settings UI. This build deliberately does not register any custom Home Assistant frontend panel.
@@ -40,6 +40,17 @@ Use Home Assistant **Settings → Apps → App Store** and the already configure
 4. In Home Assistant **Settings → Devices & services → MQTT**, verify MQTT integration (not just Mosquitto App) is connected and discovery is enabled with prefix `homeassistant`.
 5. If broker publication succeeded but no device exists, inspect Home Assistant Core logs for `mqtt`, `dh_presence_app`, `discovery`, or `Invalid config`. Do not delete other devices, clear all retained topics, or recreate the MQTT integration.
 6. The App automatically republishes on HA birth and every five minutes. No host-side script needed.
+
+## Local Recorder and notifications
+
+- Local RU package: [`examples/packages/dh_presence_app_notification_local_package_ru.yaml`](examples/packages/dh_presence_app_notification_local_package_ru.yaml).
+- Install under `/config/packages/` with `homeassistant: packages: !include_dir_named packages`, where the package YAML starts directly with `automation:`. Do not put the file's name as another top-level key.
+- `arrival`, `departure`, `wifi_in`, `wifi_out` → `event.received` triggers with explicit IDs; each branch logs one `logbook.log` Activity/Recorder entry and creates one native HA persistent notification. Change the final delivery action locally for Telegram/mobile. There is no intermediate notification event.
+- On `arrival` and `departure`, machine `first_arrival` and `last_departure` flags identify whole-house transitions, rather than examining a potentially stale/final aggregate at event delivery. `unknown` household state must not announce the last exit.
+- Device name is the tracker's `friendly_name`. If an HA `person` entity currently has matching `source`, its name is shown, or an explicit local `resident_user_names` lookup maps stable `resident_id` to a person name. No name is inferred from a tracker string.
+- `Режим дома: присутствие/отсутствие` is **notification text**, not an action changing a security alarm, `select`, or another home-mode helper. The only current HA Select for Presence is the GPS/Wi-Fi/Hybrid observation mode.
+- The experimental App currently emits no verified Wi-Fi source events. Those branches remain dormant until the Wi-Fi engine is implemented and accepted. Do not interpret stale or missing source data as a Wi-Fi disconnection.
+- Recorder history retains entries according to its configured history and event filtering. No direct SQL insert or duplicate storage is introduced.
 
 ## Lovelace dashboard and status card
 
