@@ -356,7 +356,7 @@ sections:
                 [[[
                   return variables.registration_ready ? 'navigate' : 'none';
                 ]]]
-              navigation_path: /hassio/ingress/8133339d_digitalhouses_presence_app
+              navigation_path: /app/8133339d_digitalhouses_presence_app
             hold_action:
               action: more-info
               entity: sensor.dh_presence_app_version
