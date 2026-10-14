@@ -77,7 +77,7 @@ class RegistrationBridgeContractTests(unittest.TestCase):
             'msg["tracker"]',
             "is_local_candidate(remote)",
             "companion_candidates(hass, connection.user.id)",
-            'status"] == "pending"',
+            'item.get("status") == "pending"',
         ):
             with self.subTest(required=required):
                 self.assertIn(required, text)
