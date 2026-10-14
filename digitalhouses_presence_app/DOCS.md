@@ -68,7 +68,9 @@ Supervisor persists `resident_names` alongside the App's other settings. Only en
 
 - [Standalone Russian card](examples/lovelace/presence_app_card_ru.yaml) — paste into Home Assistant as **Manual card (YAML)**.
 - [Full sections view](examples/lovelace/dh_presence_app_dashboard.yaml) — paste into a complete Lovelace view YAML editor.
-- Requires Mushroom and `custom:button-card >= 5.0`, already used by other DigitalHouses dashboards.
+- Requires Mushroom, `custom:button-card >= 5.0` and **HACS Auto Entities** (`custom:auto-entities`). Install Auto Entities before pasting the maintained card/dashboard YAML; otherwise the universal entity list cannot render.
+- Universal auto-entities list discovers `*dh_presence_app_*` across domains (sensors, binary sensors, event, select and native button entities), plus the optional Supervisor `update.digitalhouses_presence_app_update`. New enrolled phones are picked up automatically; no resident key is hardcoded. The existing unified chip actions remain at the top for direct use.
+- `sensor.dh_presence_app_last_refresh` is visible in the list and as a timestamp chip. `unknown` after App restart and before the first **successful manual** `REFRESH` is expected; a periodic GPS poll does not advance it.
 - The resident rows are generated from `binary_sensor.dh_presence_app_residents_home` → `residents` attribute. Distance and GPS freshness use actual per-resident MQTT entity IDs; no local MAC, user ID, IP, or customer-specific tracker is hardcoded.
 - Switch mode via actual HA `select.dh_presence_app_mode`. Wi-Fi-only is explicitly labelled unsupported during pilot. Old GPS reports are explicitly labelled last-known with the original report time; unavailable sources remain marked as such.
 - Events and runtime start time are available through read-only Mushroom chips. Runtime now owns Refresh and Check version commands; restart/install are native Supervisor actions.
