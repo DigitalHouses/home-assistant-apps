@@ -43,5 +43,9 @@ class LovelaceCardTests(unittest.TestCase):
     def test_dashboard_embeds_canonical_card_without_drift(self):
         card = CARD.read_text(encoding="utf-8")
         dashboard = DASHBOARD.read_text(encoding="utf-8")
-        normalized_card = "\n".join("      " + line for line in card.split("\n") if line.strip() and not line.startswith("#"))
+        lines = [line for line in card.split("
+") if line.strip() and not line.startswith("#")]
+        normalized_card = "      - " + lines[0] + "
+" + "
+".join("        " + line for line in lines[1:])
         self.assertIn(normalized_card, dashboard)
