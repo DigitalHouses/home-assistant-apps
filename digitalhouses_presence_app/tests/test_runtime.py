@@ -144,6 +144,26 @@ class RuntimeSafetyTests(unittest.TestCase):
             payload=b"wifi", retain=True))
         self.assertTrue(output.mode_commands.empty())
 
+    def test_mqtt_operation_commands_reject_retained_or_unknown(self):
+        from app import WAKE
+        output = object.__new__(MqttOutput)
+        output.operation_commands = queue.SimpleQueue()
+        WAKE.clear()
+        output._message(None, None, SimpleNamespace(
+            topic="DigitalHouses/Global/dh_presence_app/command",
+            payload=b"REFRESH", retain=True))
+        self.assertTrue(output.operation_commands.empty())
+        output._message(None, None, SimpleNamespace(
+            topic="DigitalHouses/Global/dh_presence_app/command",
+            payload=b"RESTART", retain=False))
+        self.assertTrue(output.operation_commands.empty())
+        output._message(None, None, SimpleNamespace(
+            topic="DigitalHouses/Global/dh_presence_app/command",
+            payload=b"CHECK_UPDATES", retain=False))
+        self.assertEqual(output.operation_commands.get_nowait(), "CHECK_UPDATES")
+        self.assertTrue(WAKE.is_set())
+        WAKE.clear()
+
     def test_api_failure_reports_http_status_without_credentials(self):
         exc = HTTPError("http://supervisor/core/api/config", 403, "Forbidden", None, None)
         detail = api_error_detail(exc)
