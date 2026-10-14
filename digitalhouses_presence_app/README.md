@@ -1,6 +1,6 @@
 # DigitalHouses Presence App
 
-**Status: experimental GPS pilot, version 0.1.10. Wi-Fi sensing is not operational.** Not approved for alarm automation.
+**Status: experimental GPS pilot, version 0.1.11. Wi-Fi sensing is not operational.** Not approved for alarm automation.
 
 This application belongs to `DigitalHouses/home-assistant-apps/digitalhouses_presence_app` and is installed from the Home Assistant **Settings → Apps → App Store** interface after refreshing the configured DigitalHouses repository. No separate GitHub repository, shell installer or manual copy to Home Assistant is needed.
 
@@ -14,7 +14,7 @@ This application belongs to `DigitalHouses/home-assistant-apps/digitalhouses_pre
 - Excluded users never create entities.
 - MQTT events are non-retained; HA notification packages own human-facing messages.
 
-**Not available yet:** in-app registration UI / WebSocket Core adapter; ARP Wi-Fi probing; trustworthy network absence; Wi-Fi/Hybrid correction. Wi-Fi entity availability remains offline until credible data exists. Selecting `wifi` without an active Wi-Fi engine does not mean anyone is away. Selecting `hybrid` currently uses GPS-only evidence.
+**Implemented as a staged pilot in 0.1.11:** optional authenticated HA WebSocket registration bridge and on-link active ARP identity binding; residents are enrolled through a mobile UI without copying user names, IPs or MACs to App Configuration. A one-time HA Core custom integration + frontend module installation is required. **Not available yet:** continuous/verified Wi-Fi presence or absence, Wi-Fi/Hybrid corrections and cryptographic proof that a selected same-user Companion device is the one hosting the session. Wi-Fi entity availability remains offline until credible data exists. Selecting `wifi` without an active Wi-Fi engine does not mean anyone is away. Selecting `hybrid` currently uses GPS-only evidence.
 
 ## Presence Lovelace card
 
@@ -24,7 +24,30 @@ A full `sections` page embedding this same card is available as [dashboard YAML]
 
 The mode selector is functional. The status and resident rows are observational. The App exposes genuine operation entities (`sensor.dh_presence_app_card`, `button.dh_presence_app_refresh`, `button.dh_presence_app_check_updates`, refresh-state and version diagnostics) following the [DigitalHouses Unified Status Card](../docs/standards/UNIFIED_PRODUCT_STATUS_CARD_STANDARD.md). Refresh reads currently stored HA tracker states immediately and succeeds when all configured GPS sources have valid last-known evidence and the MQTT state was published. This does not request a new GPS fix from iOS. Version checks query stable product-tagged GitHub Releases. Installation/restart remain Supervisor-owned. GPS last-known `home`/`not_home` and distance remain available even after days without iOS movement; this is **last-known evidence, not live GPS**. Each GPS sensor exposes actual `gps_reported_at`, and the card shows the report time and labels aged results as last-known. An unknown/unavailable/malformed source is still unavailable, and the last confirmed logical state is retained without inventing an arrival/departure. `last_reported` is preferred to `last_updated`; polling HA never fabricates a new report. Distance requires last-known valid coordinates. Each registered phone also gets a Wi-Fi binary sensor; until the independently verified Wi-Fi engine is installed it remains unavailable, rather than pretending the phone is absent. Hybrid limitations remain unchanged.
 
-## One-time resident naming in the App
+## WebSocket enrollment (0.1.11)
+
+Read the [Home Assistant registration bridge setup](registration_bridge/README.md).
+The HA Companion user opens a card on their **own phone** through the direct
+local Home Assistant URL, explicitly selects the phone GPS tracker, and taps
+**Зарегистрировать**. The bridge gets the authenticated HA `connection.user`
+and peer IP server-side, the Presence App validates a fresh IP→MAC ARP reply
+and stores the binding only in its own `/data`. MQTT automatically exposes
+the resident as `Имя жильца (Имя устройства)`.
+
+No `resident_names`, explicit user IDs, manually typed IP/MAC or HA Person
+resolution is needed. Device selection is necessary because a single HA user
+may have an iPad and iPhone registered. A first successful enrollment becomes
+effective without restarting the App. A missing bridge does **not** stop
+existing GPS-only residents.
+
+The required one-time Core/JS installation is separate from routine
+per-phone registration. The version 0.1.11 App requests host LAN networking
+and only `NET_RAW` privilege for active ARP. This cannot be considered an
+accepted Wi-Fi absence detector or safe alarm input.
+
+## Legacy resident name mapping (migration only; do not configure anew)
+
+
 
 Add an optional `resident_names` mapping under **Settings → Apps → Presence App → Configuration**; the original `residents` list remains unchanged. Example:
 
