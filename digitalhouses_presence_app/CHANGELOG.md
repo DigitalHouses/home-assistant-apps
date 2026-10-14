@@ -1,4 +1,4 @@
-# Changelog
+# Changelog\n\n## 0.1.9\n\n- Rename the existing MQTT device display name to **DH Presence** without changing its stable identifier, unique IDs or topic base.\n- Prefer fresh Home Assistant `last_reported` when available over `last_updated`, which stays unchanged for identical state reports. Stale data remains unavailable and distance still requires coordinates.\n- Discover an individual Wi-Fi binary sensor for each registered phone, with source-specific availability deliberately offline until the independently verified Wi-Fi engine exists.\n- Add actual runtime Refresh/Check Version controls, runtime-owned operation card, last-refresh and latest-release diagnostics; retain Supervisor installation/restart ownership.\n- Bring standalone and full dashboard cards into parity with the unified DigitalHouses control standard.\n- Expand regression tests and clarify feature gates.\n
 
 ## 0.1.8
 
@@ -7,14 +7,6 @@
 - Add `user_name` (nullable) and `device_name` to machine events and `user_name` to aggregate resident attributes, retaining legacy `resident_name` and all existing MQTT entity identities.
 - Update dynamic Lovelace residents list to show user/device labels; add migration, mapping and notification regression tests.
 - No new MQTT devices, independent name service, Wi-Fi engine, or alarm integration.
-
-## 0.1.8
-
-- Direct all four local notification actions to the existing `script.write2log` with `title` and `message`; remove duplicate `logbook.log` and persistent HA notifications.
-- Add a one-time optional `resident_names` configuration list mapping the already enrolled `device_tracker` to a real `user_name`, saved by Supervisor with the App options.
-- Emit `device_name` and nullable `user_name` in machine events while retaining legacy `resident_name`, existing Device ID and entity IDs.
-- Allow the Presence card to display `user_name (device_name)`; no new MQTT entities, Wi-Fi implementation or alarm-mode changes.
-- Add regression tests for mapping validation, compatibility and package delivery.
 
 ## 0.1.7
 
