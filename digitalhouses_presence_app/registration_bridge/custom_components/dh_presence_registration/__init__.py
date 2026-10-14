@@ -149,6 +149,10 @@ async def ws_register(hass, connection, msg):
         connection.send_error(msg["id"], "not_allowed",
                               "Selected Mobile Companion GPS tracker does not belong to this HA user")
         return
+    if not (connection.user.name or "").strip():
+        connection.send_error(msg["id"], "not_allowed",
+                              "Set your Home Assistant user display name first")
+        return
     state = hass.data[DOMAIN]
     async with state["lock"]:
         now = now_utc()
@@ -166,7 +170,7 @@ async def ws_register(hass, connection, msg):
             "status": "pending",
             "created_at": now.isoformat(),
             "user_id": connection.user.id,
-            "user_name": (connection.user.name or "").strip() or "HA user",
+            "user_name": connection.user.name.strip(),
             "device_name": chosen["device_name"],
             "device_id": chosen["device_id"],
             "entry_id": chosen["entry_id"],
