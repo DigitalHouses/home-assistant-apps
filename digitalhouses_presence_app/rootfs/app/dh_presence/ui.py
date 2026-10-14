@@ -370,6 +370,66 @@ async function load(){
    :'Пока нет зарегистрированных устройств';
  }catch(e){q('result').textContent=e.message}
 }
+function gpsLabel(status){
+ return status==='home'?'Дома':status==='not_home'?'Вне дома':'Недоступен';
+}
+function wifiLabel(status){
+ return status==='home'?'Дома':status==='not_home'?'Вне дома':'Недоступен';
+}
+function registrationLabel(status){
+ return status==='registered'?'Зарегистрирован':'Не подтверждена';
+}
+function formattedGpsTime(value,timeZone){
+ if(!value)return '—';
+ const date=new Date(value);
+ if(Number.isNaN(date.getTime()))return '—';
+ const zone=timeZone||'UTC';
+ try{
+  return new Intl.DateTimeFormat('ru-RU',{
+   timeZone:zone,day:'2-digit',month:'2-digit',year:'numeric',
+   hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false
+  }).format(date)+' ('+zone+')';
+ }catch(error){
+  return date.toISOString().replace('T',' ').slice(0,19)+' (UTC)';
+ }
+}
+function debugRow(label,value,copy=false){
+ const row=document.createElement('div');
+ row.className='debug-row';
+ const key=document.createElement('span');
+ key.className='debug-key';key.textContent=label;
+ const val=document.createElement('span');
+ val.className='debug-value';val.textContent=String(value??'—');
+ row.append(key,val);
+ if(copy && value){
+  const btn=document.createElement('button');
+  btn.className='copy-btn';btn.textContent='Копировать';
+  btn.setAttribute('aria-label','Копировать '+label);
+  btn.addEventListener('click',()=>copyValue(String(value),btn));
+  row.append(btn);
+ }
+ return row;
+}
+async function copyValue(value,button){
+ try{
+  if(navigator.clipboard && window.isSecureContext){
+   await navigator.clipboard.writeText(value);
+  }else{
+   const input=document.createElement('textarea');
+   input.value=value;input.setAttribute('readonly','');
+   input.style.cssText='position:fixed;left:-9999px;top:0';
+   document.body.append(input);input.select();
+   try{
+    if(!document.execCommand('copy'))throw Error('copy unavailable');
+   }finally{input.remove();}
+  }
+  button.textContent='Скопировано';
+  setTimeout(()=>{button.textContent='Копировать';},1600);
+ }catch(error){
+  button.textContent='Не удалось';
+  setTimeout(()=>{button.textContent='Копировать';},1600);
+ }
+}
 async function loadAdminDebug(){
  try{
   const data=await api('api/admin/debug');
@@ -381,29 +441,37 @@ async function loadAdminDebug(){
   }
   for(const device of data.residents){
    const article=document.createElement('div');
-   article.style.cssText='padding:10px 0;border-bottom:1px solid #ddd;overflow-wrap:anywhere';
-   const heading=document.createElement('strong');
+   article.className='debug-person';
+   const heading=document.createElement('div');
+   heading.className='debug-name';
    heading.textContent=device.user_name+' ('+device.device_name+')';
    article.append(heading);
-   const fields=[
-    ['GPS tracker',device.tracker],['IP при регистрации',device.ip],
-    ['MAC при регистрации',device.mac],['GPS',device.gps],
-    ['Wi-Fi',device.wifi],['GPS: последний отчёт',device.last_gps_at||'—'],
-    ['Регистрация',device.registration_status],
+   const badges=document.createElement('div');
+   badges.className='debug-badges';
+   const status=[
+    ['GPS: '+gpsLabel(device.gps),device.gps==='home'?'debug-badge--home':device.gps==='not_home'?'debug-badge--away':''],
+    ['Wi-Fi: '+wifiLabel(device.wifi),''],
+    [registrationLabel(device.registration_status),'']
    ];
-   for(const [key,val] of fields){
-    const line=document.createElement('div');
-    line.textContent=key+': '+(val??'—');
-    article.append(line);
+   for(const [label,mod] of status){
+    const chip=document.createElement('span');
+    chip.className='debug-badge'+(mod?' '+mod:'');
+    chip.textContent=label;badges.append(chip);
    }
+   article.append(badges);
+   article.append(
+    debugRow('GPS tracker',device.tracker),
+    debugRow('IP при регистрации',device.ip,true),
+    debugRow('MAC при регистрации',device.mac,true),
+    debugRow('Последний GPS',formattedGpsTime(device.last_gps_at,data.time_zone))
+   );
    destination.append(article);
   }
- }catch(e){
-  if(String(e.message).includes('admin_required')||String(e.message).includes('HTTP 403')){
-   q('adminDebug').hidden=true;return;
-  }
-  // Do not reveal the card to non-admins when the permission check fails.
+ }catch(error){
+  // No access or unavailable HA admin verification: fail closed visually
+  // and through the independently gated private backend.
   q('adminDebug').hidden=true;
+  q('debugList').replaceChildren();
  }
 }
 q('reload').onclick=load;
