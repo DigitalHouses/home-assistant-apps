@@ -1,6 +1,6 @@
 # DigitalHouses Presence App
 
-**Status: experimental GPS pilot, version 0.1.11. Wi-Fi sensing is not operational.** Not approved for alarm automation.
+**Status: experimental GPS pilot, version 0.1.12. Wi-Fi sensing is not operational.** Not approved for alarm automation.
 
 This application belongs to `DigitalHouses/home-assistant-apps/digitalhouses_presence_app` and is installed from the Home Assistant **Settings → Apps → App Store** interface after refreshing the configured DigitalHouses repository. No separate GitHub repository, shell installer or manual copy to Home Assistant is needed.
 
@@ -22,9 +22,16 @@ while using the phone on direct home Wi-Fi, and enrolls. Supervisor supplies
 the authenticated user ID and display name; the App validates a directly
 connected client IP with a fresh ARP reply and stores the MAC locally.
 **Not implemented:** verified continuous Wi-Fi presence/absence, autonomous
-Companion device-to-WebSocket attestation and alarm integration. The current
-working 0.1.10 release remains unchanged until acceptance.
+Companion device-to-WebSocket attestation and alarm integration. The GPS presence engine remains unchanged by the diagnostic update.
 
+
+## Administrator-only network diagnostics (0.1.12)
+
+The native DH Presence interface includes a private **Диагностика регистрации** card. Only an authenticated Home Assistant administrator can see all resident registrations, including the name, device, tracker, IP and MAC recorded at registration, current GPS state and last GPS report time. This does not assert current Wi-Fi reachability.
+
+The App authorizes each private request server-side by using its existing Supervisor token to query Home Assistant Core's administrator list and match the Ingress user ID. Ordinary residents get HTTP 403; authorization failures get 503 without any IP/MAC payload. The ordinary `/api/status` response no longer includes addresses. MQTT/Recorder still do not publish them.
+
+An optional [Lovelace administrator debug launcher](examples/lovelace/presence_admin_debug_card_ru.yaml) uses `hass.user.is_admin` to hide itself for non-admins. The full dashboard and canonical Presence card also include this launcher. No separate integration or additional credential is required.
 
 ## Presence Lovelace card
 
