@@ -48,6 +48,9 @@ class LovelaceCardTests(unittest.TestCase):
         self.assertIn("action: none", code)
         self.assertIn("type: select-options", code)
         self.assertIn("Последнее подтверждение:", code)
+        self.assertIn("По последним GPS-данным:", code)
+        self.assertIn("resident.gps_reported_at", code)
+        self.assertIn("Последние данные проверены", code)
 
     def test_dashboard_embeds_same_card_without_drift(self):
         card = CARD.read_text(encoding="utf-8")
