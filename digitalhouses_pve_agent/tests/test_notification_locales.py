@@ -130,8 +130,8 @@ def test_russian_ups_notifications_format_optional_data_without_fake_units() -> 
         "trim_ended",
     ):
         # Find the choose branch, not the earlier event trigger.
-        section = ru.split("                  id:\\n                    - " + event_id + "\\n              sequence:", 1)[1]
-        section = section.split("\\n\\n            # ", 1)[0]
+        section = ru.split("                  id:\n                    - " + event_id + "\n              sequence:", 1)[1]
+        section = section.split("\n\n            # ", 1)[0]
         assert "is number" in section
         assert "'%g' | format" in section
         assert "default('—', true)" not in section
