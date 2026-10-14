@@ -19,12 +19,15 @@ class PresencePrivilegedPilotTests(unittest.TestCase):
     def test_exactly_approved_0111_pilot_rights_pass(self):
         validate_presence_network_policy(approved(), "0.1.11")
 
+    def test_admin_debug_patch_0112_reuses_exact_same_rights(self):
+        validate_presence_network_policy(approved(), "0.1.12")
+
     def test_old_gps_only_0110_does_not_require_raw_sockets(self):
         validate_presence_network_policy({}, "0.1.10")
 
     def test_refuse_privilege_change_in_any_unreviewed_version(self):
         with self.assertRaisesRegex(ValidationError, "Unreviewed Presence version"):
-            validate_presence_network_policy(approved(), "0.1.12")
+            validate_presence_network_policy(approved(), "0.1.13")
 
     def test_disallow_net_admin_full_access_docker_api_and_disabled_apparmor(self):
         for additional in (

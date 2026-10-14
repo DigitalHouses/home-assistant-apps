@@ -19,6 +19,9 @@ from dh_presence.registration import (
     active_arp_mac, completed_record, load_registry, put_registration,
     save_registry,
 )
+from dh_presence.admin import (
+    is_authorized_ha_admin, AdministratorVerificationUnavailable,
+)
 
 LOG = logging.getLogger(__name__)
 SUPERVISOR_INGRESS = "172.30.32.2"
@@ -80,12 +83,8 @@ def ingress_context(peer: str, headers) -> dict:
     return {**user, "ip": str(actual_client)}
 
 
-def gps_candidates(token: str) -> list[dict]:
-    """Read-only HA Core observation; never guess a person from a tracker.
-
-    Source ownership is NOT cryptographically attested here; the user must
-    explicitly select the actual phone, and ARP proves only network endpoint.
-    """
+def read_core_states(token: str) -> list[dict]:
+    """Fetch the ordinary read-only HA entity state registry."""
     request = Request("http://supervisor/core/api/states",
                       headers={"Authorization": "Bearer " + token,
                                "Accept": "application/json"})
@@ -93,6 +92,16 @@ def gps_candidates(token: str) -> list[dict]:
         states = json.load(result)
     if not isinstance(states, list):
         raise ValueError("Unexpected HA states response")
+    return states
+
+
+def gps_candidates(token: str) -> list[dict]:
+    """Read-only HA Core observation; never guess a person from a tracker.
+
+    Source ownership is NOT cryptographically attested here; the user must
+    explicitly select the actual phone, and ARP proves only network endpoint.
+    """
+    states = read_core_states(token)
     candidates = []
     for item in states:
         if not isinstance(item, dict):
@@ -107,6 +116,37 @@ def gps_candidates(token: str) -> list[dict]:
             name = tracker.split(".", 1)[1].replace("_", " ")
         candidates.append({"tracker": tracker, "device_name": name.strip()[:120]})
     return sorted(candidates, key=lambda r: r["device_name"].casefold())
+
+
+def admin_registration_diagnostics(token: str, registry_path: str) -> list[dict]:
+    """All registered phones including private IP/MAC, for verified HA admins only.
+
+    The stored IP/MAC are enrollment snapshots, not evidence of the phone's
+    current address or its being online. GPS is read from current HA states.
+    """
+    registrations = load_registry(registry_path)
+    states = {
+        item.get("entity_id"): item
+        for item in read_core_states(token)
+        if isinstance(item, dict) and isinstance(item.get("entity_id"), str)
+    }
+    records = []
+    for reg in registrations:
+        gps = states.get(reg["tracker"], {})
+        raw = gps.get("state")
+        source = gps.get("attributes") or {}
+        if not isinstance(source, dict):
+            source = {}
+        records.append({
+            "user_name": reg["user_name"], "device_name": reg["device_name"],
+            "tracker": reg["tracker"], "ip": reg["ip"], "mac": reg["mac"],
+            "gps": raw if raw in ("home", "not_home") else "unavailable",
+            "wifi": "unavailable",  # not a live Wi-Fi presence engine
+            "last_gps_at": gps.get("last_reported") or gps.get("last_updated"),
+            "registration_status": "registered",
+            "ip_mac_note": "Адреса проверены при регистрации; текущий IP/MAC не подтверждён",
+        })
+    return sorted(records, key=lambda row: (row["user_name"].casefold(), row["device_name"].casefold()))
 
 
 def handler_factory(token: str, registry_path: str, excluded_users: set[str]):
@@ -155,16 +195,26 @@ def handler_factory(token: str, registry_path: str, excluded_users: set[str]):
                         self.reply(200, {"user_name": context["user_name"],
                                          "candidates": gps_candidates(token)})
                 elif self.path == "/api/status":
+                    # Regular residents can view only their own names/devices;
+                    # IP/MAC and other residents' details belong to admin debug.
                     records = [x for x in load_registry(registry_path)
                                if x["user_id"] == context["user_id"]]
                     self.reply(200, {"residents": [
                         {"user_name": x["user_name"], "device_name": x["device_name"],
-                         "tracker": x["tracker"], "ip": x["ip"], "mac": x["mac"]}
+                         "tracker": x["tracker"]}
                         for x in records]})
+                elif self.path == "/api/admin/debug":
+                    if not is_authorized_ha_admin(context["user_id"], token):
+                        self.reply(403, {"error": "admin_required"})
+                    else:
+                        self.reply(200, {"residents": admin_registration_diagnostics(
+                            token, registry_path)})
                 else:
                     self.reply(404, {"error": "not_found"})
             except PermissionError as exc:
                 self.reply(403, {"error": str(exc)})
+            except AdministratorVerificationUnavailable:
+                self.reply(503, {"error": "Не удалось подтвердить права администратора"})
             except (ValueError, OSError, KeyError, TypeError) as exc:
                 LOG.warning("Ingress read failed: %s", type(exc).__name__)
                 self.reply(503, {"error": "Registration service temporarily unavailable"})
@@ -239,6 +289,12 @@ pre{white-space:pre-wrap;word-break:break-word}.muted{color:#777}
 <button id="register">Зарегистрировать</button><button id="reload">Обновить</button>
 <pre id="result" role="status"></pre></section>
 <section class="panel"><h3>Мои устройства</h3><div id="residents" class="muted">...</div></section>
+<section class="panel" id="adminDebug" hidden>
+<h3>Диагностика регистрации · администратор</h3>
+<p class="muted">IP и MAC зафиксированы при регистрации — это не подтверждение текущего адреса или присутствия в Wi-Fi.</p>
+<button id="reloadDebug">Обновить диагностику</button>
+<div id="debugList" role="status"></div>
+</section>
 </main><script>
 const q=id=>document.getElementById(id);
 const APP_ROOT=(()=>{
@@ -263,11 +319,49 @@ async function load(){
    o.textContent=x.device_name+' ('+x.tracker+')';q('tracker').append(o);
   }
   q('residents').textContent=s.residents.length?s.residents.map(x=>
-   x.user_name+' ('+x.device_name+') · '+x.ip+' · '+x.mac).join('\\n')
+   x.user_name+' ('+x.device_name+')').join('\\n')
    :'Пока нет зарегистрированных устройств';
  }catch(e){q('result').textContent=e.message}
 }
+async function loadAdminDebug(){
+ try{
+  const data=await api('api/admin/debug');
+  q('adminDebug').hidden=false;
+  const destination=q('debugList');
+  destination.replaceChildren();
+  if(!data.residents.length){
+   destination.textContent='Зарегистрированных устройств пока нет';return;
+  }
+  for(const device of data.residents){
+   const article=document.createElement('div');
+   article.style.cssText='padding:10px 0;border-bottom:1px solid #ddd;overflow-wrap:anywhere';
+   const heading=document.createElement('strong');
+   heading.textContent=device.user_name+' ('+device.device_name+')';
+   article.append(heading);
+   const fields=[
+    ['GPS tracker',device.tracker],['IP при регистрации',device.ip],
+    ['MAC при регистрации',device.mac],['GPS',device.gps],
+    ['Wi-Fi',device.wifi],['GPS: последний отчёт',device.last_gps_at||'—'],
+    ['Регистрация',device.registration_status],
+   ];
+   for(const [key,val] of fields){
+    const line=document.createElement('div');
+    line.textContent=key+': '+(val??'—');
+    article.append(line);
+   }
+   destination.append(article);
+  }
+ }catch(e){
+  if(String(e.message).includes('admin_required')||String(e.message).includes('HTTP 403')){
+   q('adminDebug').hidden=true;return;
+  }
+  // Do not reveal the card to non-admins when the permission check fails.
+  q('adminDebug').hidden=true;
+ }
+}
 q('reload').onclick=load;
+q('reloadDebug').onclick=loadAdminDebug;
+loadAdminDebug();
 q('register').onclick=async()=>{
  const selected=q('tracker').value;
  if(!selected)return;

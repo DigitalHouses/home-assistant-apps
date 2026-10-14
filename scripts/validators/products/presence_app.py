@@ -6,10 +6,10 @@ from validators.common import fail, require_files
 
 
 def validate_presence_network_policy(config: dict, version: str) -> None:
-    """Scoped, explicitly authorized experimental 0.1.11 network policy.
+    """Scoped, explicitly authorized experimental 0.1.11/0.1.12 network policy.
 
     The one-time phone registration probe needs on-link ARP. NET_RAW and
-    host_network are allowed only for 0.1.11, with protected Ingress and
+    host_network are allowed only for 0.1.11 and 0.1.12, with protected Ingress and
     *without* additional broad Linux capabilities, host mounts or Docker API.
     Any later release requires an explicit new policy review.
     """
@@ -20,14 +20,14 @@ def validate_presence_network_policy(config: dict, version: str) -> None:
             or config.get("host_dbus") or config.get("host_uts")
             or config.get("map")):
         fail("Presence cannot request host-wide access, unsafe mounts or elevated Supervisor role")
-    if version == "0.1.11":
+    if version in ("0.1.11", "0.1.12"):
         if config.get("host_network") is not True or config.get("privileged") != ["NET_RAW"]:
-            fail("Presence 0.1.11 pilot permits only host_network and NET_RAW for one-time ARP")
+            fail("Presence experimental registration pilot permits only host_network and NET_RAW for one-time ARP")
         if (config.get("ingress") is not True
                 or config.get("ingress_port") != 8099
                 or config.get("panel_admin") is not False
                 or config.get("ports")):
-            fail("Presence 0.1.11 requires authenticated Ingress with no exposed host ports")
+            fail("Presence registration pilot requires authenticated Ingress with no exposed host ports")
     elif "privileged" in config or config.get("host_network"):
         fail("Unreviewed Presence version cannot request raw sockets or host networking")
 

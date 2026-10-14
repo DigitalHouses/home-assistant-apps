@@ -1,0 +1,58 @@
+# DH Presence · admin-only network identity debug launcher.
+# User role is read from HA frontend; the Ingress backend ALSO checks HA
+# admin group membership before returning private IP/MAC for all residents.
+# The separate admin card is visually hidden from ordinary HA users.
+# Requires the existing custom:button-card.
+type: custom:button-card
+entity: sensor.dh_presence_app_version
+hidden: |
+  [[[
+    return hass.user?.is_admin !== true;
+  ]]]
+show_icon: true
+show_name: true
+show_label: true
+show_state: false
+icon: mdi:lan-check
+name: Диагностика регистрации · администратор
+label: |
+  [[[
+    const v = states['sensor.dh_presence_app_version']?.state || '';
+    const m = v.match(/^(\d+)\.(\d+)\.(\d+)$/);
+    const installed = m && (
+      Number(m[1]) > 0 || Number(m[2]) > 1 ||
+      (Number(m[2]) === 1 && Number(m[3]) >= 12)
+    );
+    return installed
+      ? 'IP / MAC · GPS tracker · время GPS · состояние регистрации'
+      : 'Требуется DH Presence 0.1.12 (сейчас ' + (v || 'неизвестно') + ')';
+  ]]]
+tap_action:
+  action: |
+    [[[
+      const v = states['sensor.dh_presence_app_version']?.state || '';
+      const m = v.match(/^(\d+)\.(\d+)\.(\d+)$/);
+      const installed = m && (
+        Number(m[1]) > 0 || Number(m[2]) > 1 ||
+        (Number(m[2]) === 1 && Number(m[3]) >= 12)
+      );
+      return hass.user?.is_admin === true && installed ? 'navigate' : 'none';
+    ]]]
+  navigation_path: /app/8133339d_digitalhouses_presence_app
+styles:
+  card:
+    - padding: 12px 14px
+    - text-align: left
+  icon:
+    - width: 28px
+    - color: var(--primary-color)
+  name:
+    - justify-self: start
+    - white-space: normal
+    - font-weight: 600
+    - font-size: 14px
+  label:
+    - justify-self: start
+    - white-space: normal
+    - color: var(--secondary-text-color)
+    - font-size: 12px

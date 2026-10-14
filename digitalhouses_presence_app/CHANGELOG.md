@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.12
+- Add administrator-only registration diagnostics in the native Ingress UI: resident, device, GPS tracker, enrollment IP/MAC, GPS state and last reported timestamp.
+- Require a verified active Home Assistant administrator group via the existing authenticated Supervisor-to-Core WebSocket for every private debug request. Deny ordinary users and fail closed on errors.
+- Remove IP/MAC from the regular resident status endpoint; retain addresses only in the private on-disk registry and secure admin debug API.
+- Add an optional admin-only Lovelace launcher and preserve the previously approved narrow LAN/NET_RAW permission scope.
+- This is enrollment debugging only: Wi-Fi presence and absence remain unavailable.
+
 ## 0.1.11 (draft — single-install acceptance pending)
 
 - Add a native **Supervisor Ingress** interface to the DH Presence Home Assistant App. Installation is through the App Store alone; no `custom_components`, frontend resource, HACS dependency or manual HA configuration is required for registration.
