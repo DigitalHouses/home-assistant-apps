@@ -1,4 +1,4 @@
-# DigitalHouses Presence App 0.1.9 — experimental pilot
+# DigitalHouses Presence App 0.1.10 — experimental pilot
 
 ## Configuration
 The App Store's native **Configuration** tab is the supported installation and settings UI. This build deliberately does not register any custom Home Assistant frontend panel.
@@ -24,9 +24,9 @@ There is no manual HA user ID, display name or Mobile Companion device ID input 
 
 ## Source confidence and event semantics
 
-Home Assistant Core is queried through `http://supervisor/core/api`, authorized by `SUPERVISOR_TOKEN`. The GPS entity must have a fresh timezone-aware `last_updated`. Stale, unknown or unavailable data cannot initiate a departure. The last *confirmed* state survives restart in `/data/presence_state.json`; corrupted existing persistence prevents start.
+Home Assistant Core is queried through `http://supervisor/core/api`, authorized by `SUPERVISOR_TOKEN`. A valid GPS source must have a timezone-aware report timestamp (`last_reported` preferred, otherwise `last_updated`). Age alone does not invalidate its last-known position. Unknown, unavailable, malformed or impossible-future tracker values still do not initiate a departure. The last *confirmed* state survives restart in `/data/presence_state.json`; corrupted existing persistence prevents start.
 
-A source/aggregate transition is a machine event only after first real observation of the running process. MQTT retained state is synchronized before transient QoS1 events. Transient events are never replayed after reboot or reconnect. The initial state of an unconfigured home is **unavailable**, not off. Distance is computed from Home latitude/longitude and fresh GPS coordinates, with no additional attributes.
+A source/aggregate transition is a machine event only after first real observation of the running process. MQTT retained state is synchronized before transient QoS1 events. Transient events are never replayed after reboot or reconnect. The initial state of an unconfigured home is **unavailable**, not off. Distance uses last-known GPS coordinates and is not a live movement measurement. The GPS binary sensor reports its original `gps_reported_at` as an attribute.
 
 ## Installation
 
@@ -70,7 +70,7 @@ Supervisor persists `resident_names` alongside the App's other settings. Only en
 - [Full sections view](examples/lovelace/dh_presence_app_dashboard.yaml) — paste into a complete Lovelace view YAML editor.
 - Requires Mushroom and `custom:button-card >= 5.0`, already used by other DigitalHouses dashboards.
 - The resident rows are generated from `binary_sensor.dh_presence_app_residents_home` → `residents` attribute. Distance and GPS freshness use actual per-resident MQTT entity IDs; no local MAC, user ID, IP, or customer-specific tracker is hardcoded.
-- Switch mode via actual HA `select.dh_presence_app_mode`. Wi-Fi-only is explicitly labelled unsupported during pilot. A stale GPS source is flagged; previous confirmed presence is presented as historical rather than live.
+- Switch mode via actual HA `select.dh_presence_app_mode`. Wi-Fi-only is explicitly labelled unsupported during pilot. Old GPS reports are explicitly labelled last-known with the original report time; unavailable sources remain marked as such.
 - Events and runtime start time are available through read-only Mushroom chips. Runtime now owns Refresh and Check version commands; restart/install are native Supervisor actions.
 - HAOS Supervisor owns install and restart. The runtime publishes actual `sensor.dh_presence_app_card` operation state and verified release information. The App never performs its own container update/restart.
 
@@ -84,7 +84,7 @@ Telemetry is not emitted in this experimental preproduction pilot **even when** 
 
 See [testing plan](docs/TEST_PLAN.md), [requirements](docs/REQUIREMENTS.md), and [MQTT contract](docs/MQTT_CONTRACT.md).
 
-## Device naming, GPS freshness, and operations (0.1.9)
+## Device naming, GPS freshness, and operations (0.1.9 historical policy)
 
 - MQTT Device is named **DH Presence**; its immutable identifier stays `dh_presence_app`, preserving HA entity IDs and histories.
 - HA tracker `last_reported` is preferred where provided because identical reports do not advance `last_updated`. No HTTP poll of unchanged source state counts as a new phone report; a stale GPS source remains unavailable.
@@ -92,3 +92,12 @@ See [testing plan](docs/TEST_PLAN.md), [requirements](docs/REQUIREMENTS.md), and
 - Refresh is a full immediate GPS observation and retained MQTT publish, **not** an App restart. Unfresh or missing registered sources make the foreground result an error; no false successful last-refresh timestamp.
 - Check Version filters GitHub Releases for stable `digitalhouses_presence_app-vX.Y.Z` tags. No published release means latest-version diagnostics stay unknown rather than claiming an upgrade. Background check every 24h does not take over the foreground card.
 - Native `update.digitalhouses_presence_app_update` gates the New Version chip. Supervisor install and restart use normal HA actions. No elevated Supervisor permissions are granted to the App.
+
+## Last-known GPS policy (0.1.10)
+
+- Home Assistant is the only GPS source. Its latest valid state and coordinates remain usable for a stationary phone even after multiple days without a new report.
+- `gps_freshness_seconds` is informational for GPS age labels and still applies to Wi-Fi evidence; it no longer disables GPS home/distance.
+- Every registered resident exposes actual `gps_reported_at` in MQTT state and on the GPS binary sensor. The timestamp is never replaced with the time the App polled HA.
+- A manual Refresh checks and republishes the last-known HA state. A successful refresh verifies the read and MQTT publication, not that the phone transmitted a new position.
+- When the source changes to unknown/unavailable, source-specific availability still reports that fact. Previously confirmed household presence is preserved without synthesizing a new transition.
+- Remaining limitation: the last known GPS position can be incorrect after a resident moves without a phone report. This pilot must not yet be used for alarm automation.
