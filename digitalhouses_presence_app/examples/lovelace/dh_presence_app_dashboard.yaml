@@ -154,7 +154,6 @@ sections:
                 - color: var(--secondary-text-color)
             tap_action:
               action: none
-        
           - type: custom:mushroom-chips-card
             alignment: center
             chips:
@@ -202,14 +201,12 @@ sections:
                     app: 8133339d_digitalhouses_presence_app
                   confirmation:
                     text: "Перезапустить DH Presence? Определение присутствия временно прервётся."
-        
           - type: tile
             entity: select.dh_presence_app_mode
             name: Режим присутствия
             icon: mdi:crosshairs-gps
             features:
               - type: select-options
-        
           - type: custom:button-card
             entity: binary_sensor.dh_presence_app_residents_home
             update_timer: 5000
@@ -291,7 +288,6 @@ sections:
                   - width: 100%
             tap_action:
               action: none
-        
           - type: custom:mushroom-chips-card
             alignment: center
             chips:
@@ -302,10 +298,40 @@ sections:
                 tap_action:
                   action: more-info
               - type: template
+                entity: sensor.dh_presence_app_last_refresh
+                icon: mdi:clock-check-outline
+                content: >-
+                  {% set s = states('sensor.dh_presence_app_last_refresh') %}
+                  {% if s in ['unknown', 'unavailable', 'none'] %}
+                    Refresh не выполнялся
+                  {% else %}
+                    Refresh: {{ as_local(as_datetime(s)).strftime('%d.%m %H:%M') }}
+                  {% endif %}
+                tap_action:
+                  action: more-info
+              - type: template
                 entity: sensor.dh_presence_app_started_at
                 icon: mdi:clock-outline
                 content: Запущено
                 tap_action:
                   action: more-info
+          # Auto-entities lists EVERY currently registered Presence entity, including
+          # native Refresh / Check Version buttons and the mode selector.
+          # New resident GPS / Wi-Fi / distance entities appear without YAML edits.
+          - type: custom:auto-entities
+            card:
+              type: entities
+              title: DH Presence · все сущности и управление
+              show_header_toggle: false
+              state_color: true
+            filter:
+              include:
+                - entity_id: "*dh_presence_app_*"
+                # Supervisor update entity is optional and appears only if it exists.
+                - entity_id: update.digitalhouses_presence_app_update
+            sort:
+              method: entity_id
+            unique: true
+            show_empty: false
         grid_options:
           columns: 12

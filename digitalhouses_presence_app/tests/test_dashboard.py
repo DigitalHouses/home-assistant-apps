@@ -52,6 +52,25 @@ class LovelaceCardTests(unittest.TestCase):
         self.assertIn("resident.gps_reported_at", code)
         self.assertIn("Последние данные проверены", code)
 
+    def test_universal_registry_and_controls_are_visible_without_resident_ids(self):
+        code = CARD.read_text(encoding="utf-8")
+        for item in (
+            "custom:auto-entities",
+            'entity_id: "*dh_presence_app_*"',
+            "entity_id: update.digitalhouses_presence_app_update",
+            "method: entity_id",
+            "button.dh_presence_app_refresh",
+            "button.dh_presence_app_check_updates",
+            "select.dh_presence_app_mode",
+            "sensor.dh_presence_app_last_refresh",
+            "Refresh не выполнялся",
+        ):
+            with self.subTest(item=item):
+                self.assertIn(item, code)
+        # The dynamically discovered resident ID is not a hardcoded key.
+        self.assertNotIn("39fb60fca44a2aa6", code)
+        self.assertEqual(code.count("custom:auto-entities"), 1)
+
     def test_dashboard_embeds_same_card_without_drift(self):
         card = CARD.read_text(encoding="utf-8")
         dashboard = DASHBOARD.read_text(encoding="utf-8")
