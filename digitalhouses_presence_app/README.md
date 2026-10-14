@@ -45,7 +45,7 @@ No separate HA frontend resource or adapter is needed.
   **does not navigate**. It does not claim a mobile registration endpoint exists.
 - Once `0.1.11+` has passed network/Ingress acceptance and is installed,
   the launcher opens the native Supervisor Ingress path
-  `/hassio/ingress/8133339d_digitalhouses_presence_app`.
+  `/app/8133339d_digitalhouses_presence_app`.
 - Registration is still performed inside the App's own Ingress page on the
   phone's local Home Assistant connection, not via Lovelace Javascript.
 
