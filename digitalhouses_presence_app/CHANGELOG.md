@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.6
+
+- Compare the MQTT Device Discovery envelope and publication sequence with functioning DigitalHouses Internet App and Recorder App.
+- After MQTT broker acknowledgment, perform a read-only, rate-limited check through HA Core API for the MQTT integration and Presence entity IDs; report discrepancies in App logs.
+- Preserve the native MQTT Device Discovery contract, single MQTT device, resident sensors and non-destructive workflow. An absent entity ID does not conclusively prove discovery rejection when users can rename entities.
+
 ## 0.1.5
 
 - Install the owner-approved rectangular glossy blue Presence App banner as `logo.png` (250×100).
