@@ -321,6 +321,9 @@ sections:
           # Auto-entities lists EVERY currently registered Presence entity, including
           # native Refresh / Check Version buttons and the mode selector.
           # New resident GPS / Wi-Fi / distance entities appear without YAML edits.
+          # Once-per-phone authenticated HA WebSocket registration. This component
+          # is provided by registration_bridge/www/dh-presence-register-card.js.
+          - type: custom:dh-presence-register-card
           - type: custom:auto-entities
             card:
               type: entities
