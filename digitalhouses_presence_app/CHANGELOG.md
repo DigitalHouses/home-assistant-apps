@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.8
+
+- Use the site's `script.write2log(title, message)` as the only notification action for arrival, departure, verified Wi-Fi connection and disconnection. Remove duplicate `logbook.log` and `persistent_notification.create`; Recorder may retain the original MQTT Event state.
+- Allow an optional once-only `resident_names` App Configuration mapping from a registered GPS tracker to a person's name. Persistent Supervisor settings preserve names across App updates; invalid/unregistered/duplicate bindings are rejected.
+- Add `user_name` (nullable) and `device_name` to machine events and `user_name` to aggregate resident attributes, retaining legacy `resident_name` and all existing MQTT entity identities.
+- Update dynamic Lovelace residents list to show user/device labels; add migration, mapping and notification regression tests.
+- No new MQTT devices, independent name service, Wi-Fi engine, or alarm integration.
+
 ## 0.1.7
 
 - Arrival/departure machine events now include authoritative `first_arrival`, `last_departure`, `residents_home_after` and `device_tracker` identity, without changing event types, QoS1 or retained-state ordering.
