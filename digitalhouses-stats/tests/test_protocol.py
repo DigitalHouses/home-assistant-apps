@@ -90,8 +90,8 @@ def test_product_registry_is_complete_and_drives_allowlist() -> None:
         "digitalhouses_speedtest_app",
         "digitalhouses_backblaze_app",
         "digitalhouses_internet_app",
-        "digitalhouses_presence_app",
         "digitalhouses_climate_app",
+        "digitalhouses_presence_app",
     ]
     assert ALLOWED_PRODUCTS == {
         product.identifier
