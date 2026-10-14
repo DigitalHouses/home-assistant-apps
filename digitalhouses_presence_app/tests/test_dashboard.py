@@ -119,6 +119,13 @@ class LovelaceCardTests(unittest.TestCase):
         self.assertIn(embedded, "\n".join(
             line for line in card.splitlines() if line.strip()))
 
+    def test_admin_diagnostics_card_remains_frontend_admin_only(self):
+        card = CARD.read_text(encoding="utf-8")
+        launch = (ROOT / "examples/lovelace/presence_admin_debug_card_ru.yaml").read_text(encoding="utf-8")
+        self.assertIn("hidden:", launch)
+        self.assertIn("hass.user?.is_admin !== true", launch)
+        self.assertIn("Диагностика регистрации", card)
+
     def test_dashboard_embeds_same_card_without_drift(self):
         card = CARD.read_text(encoding="utf-8")
         dashboard = DASHBOARD.read_text(encoding="utf-8")
