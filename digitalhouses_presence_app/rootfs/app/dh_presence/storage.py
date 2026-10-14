@@ -1,27 +1,11 @@
-"""Atomically persist confirmed presence. Corrupted files fail explicitly."""
+"""Atomically persist confirmed presence; accept legacy state only as unlinked history."""
 import json
 import os
 import tempfile
 from pathlib import Path
 
 
-def load(path: str) -> dict:
-    try:
-        content = Path(path).read_text(encoding="utf-8")
-    except FileNotFoundError:
-        return {"schema_version": 1, "residents": []}
-    data = json.loads(content)
-    if not isinstance(data, dict) or type(data.get("schema_version")) is not int or data["schema_version"] != 1 or not isinstance(data.get("residents"), list):
-        raise ValueError("Corrupt Presence state; refusing automatic reset")
-    for item in data["residents"]:
-        if not isinstance(item, dict) or not isinstance(item.get("user_id"), str) or item.get("confirmed") not in ("home", "not_home", "unavailable"):
-            raise ValueError("Corrupt persisted resident")
-    return data
-
-
-def save(path: str, data: dict):
-    if data.get("schema_version") != 1 or not isinstance(data.get("residents"), list):
-        raise ValueError("Invalid persistent state")
+def atomic_json(path: str, data: dict):
     parent = Path(path).parent
     parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=parent, prefix=".presence-")
@@ -41,3 +25,26 @@ def save(path: str, data: dict):
     finally:
         if os.path.exists(tmp):
             os.unlink(tmp)
+
+
+def load(path: str) -> dict:
+    try:
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return {"schema_version": 2, "residents": []}
+    if not isinstance(data, dict) or type(data.get("schema_version")) is not int or data["schema_version"] not in (1, 2) or not isinstance(data.get("residents"), list):
+        raise ValueError("Corrupt Presence state; refusing automatic reset")
+    key = "user_id" if data["schema_version"] == 1 else "tracker"
+    for item in data["residents"]:
+        if not isinstance(item, dict) or not isinstance(item.get(key), str) or item.get("confirmed") not in ("home", "not_home", "unavailable"):
+            raise ValueError("Corrupt persisted resident")
+    return data
+
+
+def save(path: str, data: dict):
+    if data.get("schema_version") != 2 or not isinstance(data.get("residents"), list):
+        raise ValueError("Invalid persistent state v2")
+    for item in data["residents"]:
+        if not isinstance(item, dict) or not isinstance(item.get("tracker"), str) or item.get("confirmed") not in ("home", "not_home", "unavailable"):
+            raise ValueError("Invalid persistent resident")
+    atomic_json(path, data)

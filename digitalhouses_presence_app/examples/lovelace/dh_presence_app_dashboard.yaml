@@ -11,6 +11,9 @@ sections:
         heading_style: title
         icon: mdi:home-account
       - type: tile
+        entity: select.dh_presence_app_mode
+        name: Режим присутствия
+      - type: tile
         entity: binary_sensor.dh_presence_app_residents_home
         name: Жильцы дома
       - type: tile

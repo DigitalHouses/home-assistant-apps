@@ -4,13 +4,13 @@ Status: product scope recorded from the 14 October 2026 Home Assistant prototype
 
 ## Users and registration
 
-- Use Home Assistant user IDs, selected Mobile Companion device, and selected GPS device tracker.
+- Register each resident by one explicit Mobile Companion phone GPS `device_tracker` entity ID. Do not automatically include an iPad or second phone logged in under the same HA account.
 - Registration UI performs a user-initiated WebSocket request on the mobile device. The Home Assistant Core adapter obtains the authenticated `connection.user` and actual peer address server-side; the browser must not provide trusted user identity.
 - Allow registration only with independently confirmed direct local-LAN access. Cloudflare / Tailscale / reverse-proxy addresses are not proof of the phone's LAN IP.
 - Resolve local IP to the device MAC using a **fresh** active ARP observation. Do not treat a stale neighbour-table record as fresh presence.
 - A single HA user can own more than one Companion device; user equality alone does not authenticate a particular selected device. Binding integrity requires an additional proof or an explicit UX limitation.
 - Ordinary residents may register their own devices where permitted. Only administrators can delete registrations or change app-wide settings. Authorize these actions server-side.
-- `exclude_users` consists of stable HA user IDs, configured in the App. Excluded users produce no presence, GPS, Wi-Fi, distance, events, group totals or MQTT entities. HA admin status does not imply exclusion.
+- Exclude HA administrators by not enrolling their trackers. Legacy `exclude_users` (HA User IDs) remains available only for explicitly linked legacy records. For tracker-only records, a nonempty User-ID exclusion list is a configuration error until the WebSocket identity binding can prove ownership; do not silently ignore it.
 
 ## Modes
 
@@ -37,6 +37,7 @@ Hybrid policy: fresh confirmed Wi-Fi HOME can assert presence when GPS says NOT_
 - Individual GPS binary sensor and straight-line distance sensor per included resident.
 - One MQTT Event entity with `arrival, departure, gps_in, gps_out, wifi_in, wifi_out`.
 - Human-facing notifications are rendered only by HA packages: `event.received → trigger.id → choose → local action`.
+- User-editable mode is configured in the App and exposed as `select.dh_presence_app_mode`. HA selection persists in `/data`; changing App Configuration's default wins on next startup.
 - UI includes resident status and source freshness, mobile registration, admin configuration, MQTT/engine diagnostics, and DigitalHouses unified App operation card.
 - Standard telemetry consent flag defaults to false; never include user IDs, IP/MAC, GPS positions, distances, or movement history in telemetry.
 

@@ -1,12 +1,13 @@
 # DigitalHouses Presence App
 
-**Status: experimental installable GPS pilot, version 0.1.0.** Not approved for alarm automation.
+**Status: experimental installable GPS pilot, version 0.1.1.** Not approved for alarm automation.
 
 This application belongs to `DigitalHouses/home-assistant-apps/digitalhouses_presence_app` and is installed from the Home Assistant **Settings → Apps → App Store** interface after refreshing the configured DigitalHouses repository. No separate GitHub repository, shell installer or manual copy to Home Assistant is needed.
 
 ## Pilot capabilities
 
-- Uses the selected Home Assistant Mobile Companion GPS `device_tracker` entity for each configured resident.
+- Registers each resident with **one** explicit GPS `device_tracker` from that resident's phone. Names come from HA; multiple Companion devices signed in as the same user are not automatically included.
+- The startup mode is configured in the App's Configuration tab and can be switched live in HA via `select.dh_presence_app_mode` (on the same MQTT device). HA selection survives restart, while a changed config default takes priority.
 - Publishes a single DigitalHouses Presence MQTT Device, aggregate `binary_sensor.dh_presence_app_residents_home`, individual resident GPS binary sensors and numeric straight-line distance, version/started diagnostics and one MQTT Event.
 - Persists last confirmed logical resident states under `/data`; expired/missing sources never become `not_home`. A never-confirmed aggregate remains unavailable.
 - Excluded users never create entities.
@@ -18,8 +19,8 @@ This application belongs to `DigitalHouses/home-assistant-apps/digitalhouses_pre
 
 1. Add `https://github.com/DigitalHouses/home-assistant-apps` under **Settings → Apps → App Store → Repositories** if not already configured.
 2. Refresh App Store metadata and open **DigitalHouses Presence App** (Experimental).
-3. Install, then open **Configuration** and add residents with actual HA `user_id`, their Mobile Companion `device_id`, and corresponding GPS `device_tracker` entity.
-4. Leave `presence_mode: gps` for this pilot; keep `exclude_users` for any non-resident administrators.
+3. Install, then open **Configuration** and add the phone's exact GPS `device_tracker` entity to the `residents` list (one string per phone). Do not add iPads left at home.
+4. Leave `presence_mode: gps` for functional tracking. After startup, a `select.dh_presence_app_mode` entity is available in the MQTT device and in the example dashboard. Do not register excluded administrators' trackers. Legacy HA User ID exclusions cannot be derived reliably from a tracker alone; a tracker-only roster with `exclude_users` configured fails visibly instead of silently tracking an excluded user.
 5. Save and start the App. Check **Logs** and the `DigitalHouses Presence App` MQTT Device in HA.
 6. For update, use the ordinary Home Assistant Apps interface after a new version is published. Do not install ZIP files or run ad-hoc copy commands.
 

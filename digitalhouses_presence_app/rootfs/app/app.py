@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import queue
 import signal
 import threading
 import time
@@ -14,14 +15,16 @@ from urllib.error import URLError
 from urllib.request import Request, urlopen
 
 import paho.mqtt.client as mqtt
-from dh_presence.core import Engine, Mode, Status, haversine_km
+from dh_presence.core import Engine, Mode, Status, haversine_km, validate_tracker
 from dh_presence.discovery import DISCOVERY, discovery, topic, with_cleanup
 from dh_presence.storage import load, save
+from dh_presence.modes import ModeSelection
 
 LOG = logging.getLogger("dh_presence_app")
 OPTIONS = "/data/options.json"
 STATE = "/data/presence_state.json"
 DISCOVERY_FILE = "/data/presence_discovery.json"
+MODE_FILE = "/data/presence_mode.json"
 EVENT_NAMES = {"arrival", "departure", "gps_in", "gps_out", "wifi_in", "wifi_out"}
 STOP = threading.Event()
 
@@ -82,8 +85,23 @@ def load_options(path=OPTIONS) -> dict:
     if not isinstance(residents, list):
         raise ValueError("Invalid resident list")
     for resident in residents:
-        if not isinstance(resident, dict) or set(resident) != {"user_id", "name", "device_id", "gps_tracker"} or any(not isinstance(v, str) or not v for v in resident.values()):
-            raise ValueError("Invalid resident specification")
+        if isinstance(resident, str):
+            validate_tracker(resident)
+        elif isinstance(resident, dict):
+            # Allow pre-0.1.1 stored config for a controlled migration.
+            if (set(resident) != {"user_id", "name", "device_id", "gps_tracker"}
+                    or any(not isinstance(v, str) or not v for v in resident.values())):
+                raise ValueError("Invalid legacy resident specification")
+            validate_tracker(resident["gps_tracker"])
+        else:
+            raise ValueError("Resident must contain one device_tracker entity ID")
+    tracker_ids = [r if isinstance(r, str) else r["gps_tracker"] for r in residents]
+    if len(tracker_ids) != len(set(tracker_ids)):
+        raise ValueError("Each device_tracker may be registered only once")
+    # HA user IDs cannot reliably be inferred from a tracker. Reject ambiguous
+    # exclusions rather than silently tracking an excluded administrator.
+    if excludes and any(isinstance(r, str) for r in residents):
+        raise ValueError("exclude_users cannot be verified for tracker-only residents; omit excluded trackers from residents (or use legacy mapped configuration)")
     data["presence_mode"] = mode
     return data
 
@@ -105,6 +123,8 @@ class MqttOutput:
         self.cache: dict[str, str] = {}
         self.client.on_connect = self._connected
         self.client.on_disconnect = self._disconnected
+        self.client.on_message = self._message
+        self.mode_commands = queue.SimpleQueue()
         self.client.will_set(topic("availability"), "offline", retain=True, qos=1)
         self.client.connect_async(os.environ["MQTT_HOST"], int(os.environ["MQTT_PORT"]), keepalive=60)
         self.client.loop_start()
@@ -114,7 +134,8 @@ class MqttOutput:
         if reason_code == 0:
             self.cache.clear()
             self.connected.set()
-            LOG.info("MQTT connected")
+            client.subscribe(topic("mode/set"), qos=1)
+            LOG.info("MQTT connected and mode commands subscribed")
         else:
             self.connected.clear()
             LOG.error("MQTT rejected connection: %s", reason_code)
@@ -122,6 +143,18 @@ class MqttOutput:
     def _disconnected(self, client, userdata, *args):
         self.connected.clear()
         LOG.warning("MQTT disconnected")
+
+    def _message(self, client, userdata, msg):
+        if msg.topic != topic("mode/set"):
+            return
+        try:
+            requested = msg.payload.decode("ascii", errors="strict")
+            if len(msg.payload) > 16 or requested not in {m.value for m in Mode}:
+                raise ValueError("invalid mode")
+        except (UnicodeDecodeError, ValueError):
+            LOG.warning("Ignoring invalid MQTT mode command")
+            return
+        self.mode_commands.put(requested)
 
     def publish(self, destination: str, payload, *, retain=True, force=False) -> bool:
         if not self.connected.is_set():
@@ -153,14 +186,34 @@ class MqttOutput:
 def build_engine(options: dict, saved: dict) -> Engine:
     engine = Engine(mode=options["presence_mode"], wifi_absence_minutes=options["wifi_absence_minutes"],
                     freshness_seconds=options["gps_freshness_seconds"])
-    previous = {r["user_id"]: r for r in saved["residents"]}
-    exclude = set(options["exclude_users"])
+    # Tracker identity is deliberately different from HA User identity. We
+    # cannot infer user ownership from the tracker or assume the iPad is a phone.
+    previous = {r["tracker"]: r for r in saved["residents"]} if saved["schema_version"] == 2 else {}
+    legacy = {r["user_id"]: r for r in saved["residents"]} if saved["schema_version"] == 1 else {}
+    excludes = set(options["exclude_users"])
     for item in options["residents"]:
-        if item["user_id"] in exclude:
-            continue
-        engine.add(item["user_id"], item["name"], item["device_id"], item["gps_tracker"], previous.get(item["user_id"]))
+        if isinstance(item, str):
+            tracker, name, old_state = item, friendly_tracker_name(item), previous.get(item)
+        else:
+            if item["user_id"] in excludes:
+                continue
+            tracker, name = item["gps_tracker"], item["name"]
+            old_state = previous.get(tracker) or legacy.get(item["user_id"])
+        engine.add(tracker, name, old_state)
     return engine
 
+
+def friendly_tracker_name(tracker: str) -> str:
+    return tracker.removeprefix("device_tracker.").replace("_", " ").strip()
+
+
+def observe_friendly_name(resident, state: dict) -> bool:
+    attrs = state.get("attributes")
+    label = attrs.get("friendly_name") if isinstance(attrs, dict) else None
+    if isinstance(label, str) and label.strip() and label.strip() != resident.name:
+        resident.name = label.strip()
+        return True
+    return False
 
 def load_discovery() -> dict:
     try:
@@ -195,11 +248,14 @@ def save_discovery(value: dict):
 
 def publish_snapshot(output: MqttOutput, engine: Engine, version: str, started: str) -> bool:
     snapshot = engine.snapshot()
+    if not output.publish(topic("mode/state"), engine.mode.value):
+        return False
     if not output.publish(topic("state"), snapshot):
         return False
-    if not output.publish(topic("presence_observed"), "offline" if engine.overall() is Status.UNAVAILABLE else "online"):
+    if not output.publish(topic("presence_observed"), "offline" if snapshot["status"] == Status.UNAVAILABLE.value else "online"):
         return False
-    if not output.publish(topic("diagnostics"), {"version": version, "started_at": started, "source_status": "gps_only_pilot"}):
+    if not output.publish(topic("diagnostics"), {"version": version, "started_at": started,
+                     "source_status": "wifi_engine_unavailable" if engine.mode is Mode.WIFI else "gps_only_pilot"}):
         return False
     for r in engine.residents.values():
         ok = output.publish(topic("gps/"+r.key+"/availability"), "online" if r.gps is not Status.UNAVAILABLE else "offline")
@@ -216,11 +272,13 @@ def run():
     options = load_options()
     saved = load(STATE)
     engine = build_engine(options, saved)
+    modes = ModeSelection(MODE_FILE, options["presence_mode"])
+    engine.set_mode(modes.selected)
     token = os.environ["SUPERVISOR_TOKEN"]
     started = datetime.now(timezone.utc).isoformat()
     mqtt_out = MqttOutput(version)
     home = None
-    last_discovery_session = None
+    discovery_ready = False
     previous_mqtt_connection = False
     LOG.info("Starting %s version %s, mode=%s, configured_residents=%d", "DigitalHouses Presence App", version, engine.mode.value, len(engine.residents))
     LOG.warning("Pilot safety gate: Wi-Fi detection and automatic registration are NOT active. No Wi-Fi absence can mark a resident away.")
@@ -231,11 +289,23 @@ def run():
             if mqtt_out.connected.is_set() and not previous_mqtt_connection:
                 mqtt_out.publish(topic("availability"), "offline", force=True)
                 if synchronize_discovery(mqtt_out, version, engine):
-                    last_discovery_session = time.monotonic()
+                    discovery_ready = True
                 else:
                     LOG.error("MQTT Discovery not synchronized")
             previous_mqtt_connection = mqtt_out.connected.is_set()
+            while not mqtt_out.mode_commands.empty():
+                requested = mqtt_out.mode_commands.get_nowait()
+                if modes.change(requested):
+                    engine.set_mode(modes.selected)
+                    # Switching the decision source must not synthesize a
+                    # departure/arrival from the same GPS observation.
+                    for resident in engine.residents.values():
+                        resident.initialized = False
+                    LOG.info("Presence mode changed from HA UI to %s", engine.mode.value)
+                    if engine.mode is Mode.WIFI:
+                        LOG.warning("Wi-Fi mode is not operational in this pilot; aggregate presence will be unavailable")
             now = datetime.now(timezone.utc)
+            name_changed = False
             if home is None:
                 try:
                     conf = http_json("http://supervisor/core/api/config", token)
@@ -246,9 +316,10 @@ def run():
             for r in engine.residents.values():
                 try:
                     data = http_json("http://supervisor/core/api/states/" + r.tracker, token)
+                    name_changed = observe_friendly_name(r, data) or name_changed
                     status, distance, observed = gps_from_ha_state(data, now, options["gps_freshness_seconds"], home) if home else (Status.UNAVAILABLE, None, None)
                     if observed is not None and status is not Status.UNAVAILABLE:
-                        events.extend(engine.gps_observation(r.user_id, status, observed, distance))
+                        events.extend(engine.gps_observation(r.tracker, status, observed, distance))
                     else:
                         r.gps = Status.UNAVAILABLE
                         r.distance = None
@@ -257,9 +328,11 @@ def run():
                     r.distance = None
                     LOG.warning("GPS source %s unavailable: %s", r.tracker, type(exc).__name__)
             engine.expire(now)
+            if name_changed and mqtt_out.connected.is_set():
+                discovery_ready = synchronize_discovery(mqtt_out, version, engine)
             # Commit durable current state BEFORE sending retained MQTT state and events.
             save(STATE, engine.persistent())
-            if mqtt_out.connected.is_set() and publish_snapshot(mqtt_out, engine, version, started):
+            if mqtt_out.connected.is_set() and discovery_ready and publish_snapshot(mqtt_out, engine, version, started):
                 for event in events:
                     if event["event_type"] not in EVENT_NAMES:
                         raise ValueError("Invalid internal event")

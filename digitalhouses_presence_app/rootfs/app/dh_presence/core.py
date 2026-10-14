@@ -1,4 +1,4 @@
-"""Pure presence state machine. UNAVAILABLE never means NOT_HOME."""
+"""Pure presence engine. Each resident is identified by one explicitly selected GPS tracker."""
 from __future__ import annotations
 
 import hashlib
@@ -20,10 +20,15 @@ class Mode(str, Enum):
     HYBRID = "hybrid"
 
 
-def resident_key(user_id: str) -> str:
-    if not isinstance(user_id, str) or not user_id:
-        raise ValueError("HA user ID is required")
-    return hashlib.sha256(user_id.encode()).hexdigest()[:16]
+def resident_key(tracker: str) -> str:
+    validate_tracker(tracker)
+    return hashlib.sha256(tracker.encode("utf-8")).hexdigest()[:16]
+
+
+def validate_tracker(tracker: str) -> str:
+    if not isinstance(tracker, str) or not tracker.startswith("device_tracker.") or len(tracker) <= len("device_tracker.") or tracker != tracker.strip():
+        raise ValueError("One valid device_tracker entity ID is required per resident")
+    return tracker
 
 
 def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -39,10 +44,8 @@ def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 
 @dataclass
 class Resident:
-    user_id: str
-    name: str
-    device_id: str
     tracker: str
+    name: str
     confirmed: Status = Status.UNAVAILABLE
     gps: Status = Status.UNAVAILABLE
     wifi: Status = Status.UNAVAILABLE
@@ -54,7 +57,7 @@ class Resident:
 
     @property
     def key(self) -> str:
-        return resident_key(self.user_id)
+        return resident_key(self.tracker)
 
 
 @dataclass
@@ -71,13 +74,14 @@ class Engine:
         if not 30 <= self.freshness_seconds <= 3600:
             raise ValueError("Invalid freshness")
 
-    def add(self, user_id: str, name: str, device_id: str, tracker: str, saved: dict | None = None):
-        if not user_id or not name or not device_id or not tracker.startswith("device_tracker."):
-            raise ValueError("Resident requires HA user ID, name, Mobile Companion device and GPS tracker")
-        if user_id in self.residents:
-            raise ValueError("Duplicate resident")
+    def add(self, tracker: str, name: str, saved: dict | None = None):
+        validate_tracker(tracker)
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError("Resident name cannot be blank")
+        if tracker in self.residents:
+            raise ValueError("Duplicate device_tracker")
         status = Status.UNAVAILABLE if saved is None else Status(saved["confirmed"])
-        self.residents[user_id] = Resident(user_id, name, device_id, tracker, confirmed=status)
+        self.residents[tracker] = Resident(tracker, name.strip(), confirmed=status)
 
     def overall(self) -> Status:
         states = [r.confirmed for r in self.residents.values()]
@@ -86,6 +90,10 @@ class Engine:
         if states and all(s is Status.NOT_HOME for s in states):
             return Status.NOT_HOME
         return Status.UNAVAILABLE
+
+    def set_mode(self, mode: Mode):
+        """Set live decision mode without inventing a source observation or event."""
+        self.mode = Mode(mode)
 
     def _decide(self, r: Resident, now: datetime) -> Status | None:
         gps = r.gps if r.last_gps_at and timedelta(0) <= now-r.last_gps_at <= timedelta(seconds=self.freshness_seconds) else Status.UNAVAILABLE
@@ -113,10 +121,10 @@ class Engine:
             events.append({"event_type": "arrival" if outcome is Status.HOME else "departure", "resident_id": r.key, "source": self.mode.value, "observed_at": when.isoformat()})
         r.initialized = True
 
-    def gps_observation(self, user_id: str, value: Status, when: datetime, distance: float | None = None) -> list[dict]:
+    def gps_observation(self, tracker: str, value: Status, when: datetime, distance: float | None = None) -> list[dict]:
         if when.tzinfo is None or when.utcoffset() is None:
             raise ValueError("Timezone required")
-        r = self.residents[user_id]
+        r = self.residents[tracker]
         value = Status(value)
         if r.last_gps_at is not None and when < r.last_gps_at:
             return []
@@ -131,12 +139,12 @@ class Engine:
             self._change(r, when, events)
         return events
 
-    def wifi_observation(self, user_id: str, value: Status, when: datetime, *, verified: bool) -> list[dict]:
-        """Only verified network evidence may change state. Never call NOT_HOME for ARP timeout."""
+    def wifi_observation(self, tracker: str, value: Status, when: datetime, *, verified: bool) -> list[dict]:
+        """Only independently verified evidence may affect Wi-Fi. No ARP timeout as absence."""
         value = Status(value)
         if value is not Status.UNAVAILABLE and not verified:
             raise ValueError("Wi-Fi evidence not verified")
-        r = self.residents[user_id]
+        r = self.residents[tracker]
         if r.last_wifi_at and when < r.last_wifi_at:
             return []
         before = r.wifi
@@ -166,17 +174,21 @@ class Engine:
             if r.last_wifi_at is None or now-r.last_wifi_at > timedelta(seconds=self.freshness_seconds):
                 r.wifi = Status.UNAVAILABLE
                 r.wifi_absent_since = None
-        # No transitions on source expiration.
 
     def persistent(self) -> dict:
-        return {"schema_version": 1, "residents": [
-            {"user_id": r.user_id, "confirmed": r.confirmed.value}
+        return {"schema_version": 2, "residents": [
+            {"tracker": r.tracker, "confirmed": r.confirmed.value}
             for r in self.residents.values()]}
 
     def snapshot(self) -> dict:
-        return {"mode": self.mode.value, "status": self.overall().value,
+        # Wi-Fi-only has no verified Wi-Fi source in the current pilot. Never
+        # expose retained GPS-based presence as a live Wi-Fi determination.
+        wifi_unsupported = self.mode is Mode.WIFI
+        status = Status.UNAVAILABLE if wifi_unsupported else self.overall()
+        return {"mode": self.mode.value, "status": status.value,
                 "residents_total": len(self.residents),
-                "residents_home": sum(r.confirmed is Status.HOME for r in self.residents.values()),
-                "residents": {r.key: {"name": r.name, "status": r.confirmed.value,
+                "residents_home": 0 if wifi_unsupported else sum(r.confirmed is Status.HOME for r in self.residents.values()),
+                "residents": {r.key: {"name": r.name,
+                                      "status": (Status.UNAVAILABLE.value if wifi_unsupported else r.confirmed.value),
                                       "gps": r.gps.value, "wifi": r.wifi.value}
                               for r in self.residents.values()}}

@@ -4,6 +4,8 @@ Shared device: `DigitalHouses Presence App`.
 Canonical product: `digitalhouses_presence_app`.
 Entity prefix: `dh_presence_app`.
 MQTT base: `DigitalHouses/Global/dh_presence_app`.
+Mode command: `DigitalHouses/Global/dh_presence_app/mode/set`, non-retained.
+Mode state: `DigitalHouses/Global/dh_presence_app/mode/state`, retained.
 Discovery: `homeassistant/device/dh_presence_app/config` (one device config).
 
 | Kind | HA entity | Meaning |
@@ -12,9 +14,12 @@ Discovery: `homeassistant/device/dh_presence_app/config` (one device config).
 | Binary sensor | `binary_sensor.dh_presence_app_<stable_resident_key>_gps_home` | GPS source only, independent of final Hybrid decision |
 | Sensor | `sensor.dh_presence_app_<stable_resident_key>_distance` | GPS great-circle distance in km, without extra attributes |
 | Event | `event.dh_presence_app_event` | Machine-readable resident/source transitions |
+| Select | `select.dh_presence_app_mode` | GPS / Wi-Fi / Hybrid; MQTT command + retained state |
 | Diagnostic sensors | `sensor.dh_presence_app_version`, `sensor.dh_presence_app_started_at` | Common DigitalHouses runtime diagnostics |
 
-Use stable resident keys based on HA user IDs, **not mutable display names**, for entity unique IDs. Dynamic removal/exclusion requires MQTT Discovery cleanup (tombstones) as well as entity removal on first synchronization.
+Use stable resident keys based on the explicitly registered `device_tracker` entity ID, **not HA user IDs or mutable display names**, for entity unique IDs. Dynamic removal/exclusion requires MQTT Discovery cleanup (tombstones) as well as entity removal on first synchronization.
+
+The App's MQTT Select provides the operator's runtime mode; its retained state is derived from an independently persisted selection. When App Configuration mode changes, it overrides the previous UI selection at the next App restart.
 
 The aggregate entity exposes `mode`, `residents`, `residents_total`, `residents_home`; include resident display names and each confirmed status, but no sensitive identifiers or locations. Public attributes should be deliberately bounded and should not update on every probe tick.
 

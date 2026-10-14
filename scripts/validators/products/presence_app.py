@@ -8,7 +8,7 @@ from validators.common import fail, require_files
 def validate_presence(root: Path, app: Path, context: dict) -> None:
     version = context["version"]
     config = context["config"]
-    if version != "0.1.0":
+    if version != "0.1.1":
         # This validator must be updated when changing the pilot's runtime contract.
         if not isinstance(version, str) or not version:
             fail("Presence App version must be valid")
@@ -28,6 +28,8 @@ def validate_presence(root: Path, app: Path, context: dict) -> None:
         fail("Pilot does not have telemetry integration")
     if config.get("options", {}).get("residents") != []:
         fail("Pilot must have zero residents until configured locally")
+    if config.get("schema", {}).get("residents") != ["str"]:
+        fail("Presence App must require exactly one device_tracker string per resident")
 
     require_files(root, [
         app / "icon.png", app / "logo.png",
@@ -35,8 +37,10 @@ def validate_presence(root: Path, app: Path, context: dict) -> None:
         app / "rootfs/app/dh_presence/core.py",
         app / "rootfs/app/dh_presence/discovery.py",
         app / "rootfs/app/dh_presence/storage.py",
+        app / "rootfs/app/dh_presence/modes.py",
         app / "tests/test_core.py",
         app / "tests/test_discovery.py",
+        app / "tests/test_modes.py",
     ])
     for file, width, height in ((app / "icon.png", 128, 128), (app / "logo.png", 250, 100)):
         payload = file.read_bytes()[:24]
@@ -49,7 +53,7 @@ def validate_presence(root: Path, app: Path, context: dict) -> None:
     for required in (
         "DigitalHouses/Global/dh_presence_app", "homeassistant/device/dh_presence_app/config",
         "dh_presence_app_residents_home", "dh_presence_app_event",
-        "dh_presence_app_version", "dh_presence_app_started_at",
+        "dh_presence_app_version", "dh_presence_app_started_at", "dh_presence_app_mode",
     ):
         if required not in source:
             fail(f"Presence App missing stable MQTT contract: {required}")

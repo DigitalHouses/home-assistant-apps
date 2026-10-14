@@ -42,6 +42,19 @@ def discovery(version: str, residents: list[Resident]) -> dict:
             "state_topic": topic("diagnostics"), "value_template": "{{ value_json.started_at }}",
             "device_class": "timestamp", "entity_category": "diagnostic", "availability": availability
         },
+        "mode": {
+            "platform": "select", "name": "Presence mode",
+            "unique_id": "dh_presence_app_mode",
+            "default_entity_id": "select.dh_presence_app_mode",
+            "icon": "mdi:map-marker-radius",
+            "entity_category": "config",
+            "options": ["gps", "wifi", "hybrid"],
+            "command_topic": topic("mode/set"),
+            "state_topic": topic("mode/state"),
+            "qos": 1,
+            "retain": False,
+            "availability": availability
+        },
         "source_status": {
             "platform": "sensor", "name": "Source status", "unique_id": "dh_presence_app_source_status",
             "default_entity_id": "sensor.dh_presence_app_source_status",
