@@ -146,10 +146,14 @@ sections:
                       : status === 'home' ? 'var(--success-color, green)'
                       : 'var(--info-color, var(--primary-color))';
                     const shownState = mode === 'wifi' ? 'Wi-Fi пока недоступен' : personState;
+                    const personName = resident.user_name ? String(resident.user_name) : '';
+                    const deviceName = resident.name || key;
+                    const shownName = personName && personName !== deviceName
+                      ? personName + ' (' + deviceName + ')' : (personName || deviceName);
                     return '<div style="display:flex;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--divider-color)">'
                       + '<ha-icon icon="' + icon + '" style="color:' + color + ';flex:0 0 26px"></ha-icon>'
                       + '<div style="min-width:0;flex:1;text-align:left">'
-                      + '<div style="font-size:14px;font-weight:600;overflow-wrap:anywhere">' + esc(resident.name || key) + '</div>'
+                      + '<div style="font-size:14px;font-weight:600;overflow-wrap:anywhere">' + esc(shownName) + '</div>'
                       + '<div style="font-size:12px;color:var(--secondary-text-color)">' + esc(shownState)
                       + ' · ' + esc(gpsState) + ' · ' + esc(distance) + '</div></div></div>';
                   }).join('');

@@ -185,3 +185,59 @@ class RuntimeSafetyTests(unittest.TestCase):
         with patch("app.http_json", side_effect=[{"components": ["mqtt"]}, {"error": "not a list"}]):
             with self.assertRaises(ValueError):
                 audit_ha_discovery("dummy-token")
+
+    def test_one_time_tracker_to_user_name_binding(self):
+        config = options(resident_names=[
+            {"device_tracker": "device_tracker.iphone", "user_name": "Имя жильца"}
+        ])
+        with tempfile.TemporaryDirectory() as d:
+            f = Path(d) / "options.json"
+            config["presence_mode"] = "gps"
+            f.write_text(json.dumps(config), encoding="utf-8")
+            loaded = load_options(str(f))
+        e = build_engine(loaded, {"schema_version": 2, "residents": []})
+        resident = e.residents["device_tracker.iphone"]
+        self.assertEqual(resident.user_name, "Имя жильца")
+        self.assertEqual(resident.name, "iphone")
+        self.assertTrue(observe_friendly_name(resident, {
+            "attributes": {"friendly_name": "iPhone 13 Pro"}
+        }))
+        self.assertEqual(resident.name, "iPhone 13 Pro")
+        self.assertEqual(resident.user_name, "Имя жильца")
+        self.assertEqual(e.snapshot()["residents"][resident.key]["user_name"], "Имя жильца")
+
+    def test_empty_mapping_keeps_legacy_tracker_friendly_name(self):
+        e = build_engine(options(), {"schema_version": 2, "residents": []})
+        resident = e.residents["device_tracker.iphone"]
+        self.assertIsNone(resident.user_name)
+        self.assertEqual(resident.name, "iphone")
+
+    def test_resident_names_invalid_input_rejected(self):
+        bad = [
+            [{"device_tracker": "device_tracker.unknown", "user_name": "Somebody"}],
+            [{"device_tracker": "person.somebody", "user_name": "Somebody"}],
+            [{"device_tracker": "device_tracker.iphone", "user_name": ""}],
+            [{"device_tracker": "device_tracker.iphone", "user_name": "   "}],
+            [{"device_tracker": "device_tracker.iphone", "user_name": "X"},
+             {"device_tracker": "device_tracker.iphone", "user_name": "Y"}],
+            [{"device_tracker": "device_tracker.iphone", "user_name": "X", "extra": 1}],
+            "not a list",
+        ]
+        for case in bad:
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as d:
+                config = options(resident_names=case)
+                config["presence_mode"] = "gps"
+                f = Path(d) / "options.json"
+                f.write_text(json.dumps(config), encoding="utf-8")
+                with self.assertRaises(ValueError):
+                    load_options(str(f))
+
+    def test_resident_name_mapping_survives_restored_confirmed_state(self):
+        e = build_engine(options(resident_names=[
+            {"device_tracker": "device_tracker.iphone", "user_name": "Имя жильца"}
+        ]), {"schema_version": 2, "residents": [
+            {"tracker": "device_tracker.iphone", "confirmed": "home"}
+        ]})
+        resident = e.residents["device_tracker.iphone"]
+        self.assertEqual(resident.confirmed, Status.HOME)
+        self.assertEqual(resident.user_name, "Имя жильца")

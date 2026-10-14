@@ -152,3 +152,11 @@ class TestEngine(unittest.TestCase):
         for phone in e.residents:
             departures += e.gps_observation(phone, Status.NOT_HOME, T0 + timedelta(minutes=2))
         self.assertEqual(sum(x["last_departure"] for x in departures if x["event_type"] == "departure"), 1)
+
+    def test_user_label_does_not_change_tracker_identity_or_saved_state(self):
+        e = Engine()
+        e.add("device_tracker.phone", "Phone", user_name="Жилец")
+        resident = e.residents["device_tracker.phone"]
+        self.assertEqual(e.snapshot()["residents"][resident.key]["user_name"], "Жилец")
+        self.assertEqual(resident.key, resident_key("device_tracker.phone"))
+        self.assertNotIn("user_name", e.persistent()["residents"][0])

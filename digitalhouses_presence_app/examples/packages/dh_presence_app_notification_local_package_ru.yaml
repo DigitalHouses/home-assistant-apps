@@ -1,19 +1,24 @@
-# DH Presence · local HA package (RU)
+# LOCAL Home Assistant package for DigitalHouses Presence App 0.1.8+
 # Install: /config/packages/dh_presence_app_notification_local_package_ru.yaml
-# Requires: homeassistant: packages: !include_dir_named packages
-# ROOT is automation:, no duplicate package-key wrapper.
-# Recorder stores the Logbook entries subject to filters/retention.
-# Change persistent_notification.create to a local delivery action if needed.
-# Source Wi-Fi event types are not yet emitted by the experimental GPS App.
+# Requires homeassistant: packages: !include_dir_named packages
 #
-# user_name: a local site can set resident_user_names by stable resident_id.
-# Otherwise lookup HA Person whose active 'source' is the event tracker.
-# Without a verified name show only device name, not a guessed resident name.
-# First/last occupancy text does NOT change alarm or security system modes.
-
+# Direct path: native MQTT Event -> event.received -> trigger.id -> choose ->
+# script.write2log(title, message). No intermediary notification envelope,
+# logbook.log or persistent_notification.create duplication.
+#
+# The MQTT Event entity is independently eligible for HA Recorder history
+# subject to the installation's recorder include/exclude/retention rules.
+# The exact Recorder behavior of script.write2log is owned by that local script.
+#
+# Names are configured once in Presence App -> resident_names. The App publishes
+# the resolved user_name and HA-sourced device_name in each machine event.
+# Do not resolve names again in the package or keep a second local name map.
+#
+# "Режим дома" is notification text; NO security/alarm mode is changed.
+# wifi_in/out are dormant while the verified Wi-Fi engine is unimplemented.
 automation:
   - id: dh_presence_app_notifications
-    alias: "DH Presence · Recorder и уведомления"
+    alias: "DH Presence · Уведомления"
     mode: queued
     max: 30
     triggers:
@@ -23,18 +28,21 @@ automation:
         options:
           event_type: [arrival]
         id: arrival
+
       - trigger: event.received
         target:
           entity_id: event.dh_presence_app_event
         options:
           event_type: [departure]
         id: departure
+
       - trigger: event.received
         target:
           entity_id: event.dh_presence_app_event
         options:
           event_type: [wifi_in]
         id: wifi_in
+
       - trigger: event.received
         target:
           entity_id: event.dh_presence_app_event
@@ -43,16 +51,10 @@ automation:
         id: wifi_out
 
     variables:
-      # Optional LOCAL map, filled on the installed HA only.
-      # resident_user_names:
-      #   stable_resident_key: "Имя жильца"
-      resident_user_names: {}
       person_device: >-
-        {% set e = trigger.to_state.attributes %}
-        {% set device = e.resident_name %}
-        {% set configured = resident_user_names.get(e.resident_id) %}
-        {% set matches = states.person | selectattr('attributes.source', 'eq', e.device_tracker) | list %}
-        {% set person = configured if configured else (matches[0].name if matches else '') %}
+        {% set event = trigger.to_state.attributes %}
+        {% set person = event.user_name %}
+        {% set device = event.device_name %}
         {{ person ~ ' (' ~ device ~ ')' if person and person != device else (person if person else device) }}
 
     actions:
@@ -61,18 +63,7 @@ automation:
               - condition: trigger
                 id: arrival
             sequence:
-              - action: logbook.log
-                data:
-                  name: "DH Presence · Прибытие"
-                  entity_id: event.dh_presence_app_event
-                  message: >-
-                    {{ person_device }}.
-                    {% if trigger.to_state.attributes.first_arrival %}
-                      Режим дома: присутствие.
-                    {% else %}
-                      Дома жильцов: {{ trigger.to_state.attributes.residents_home_after }}.
-                    {% endif %}
-              - action: persistent_notification.create
+              - action: script.write2log
                 data:
                   title: "🏠 Прибытие: {{ person_device }}"
                   message: >-
@@ -87,18 +78,7 @@ automation:
               - condition: trigger
                 id: departure
             sequence:
-              - action: logbook.log
-                data:
-                  name: "DH Presence · Убытие"
-                  entity_id: event.dh_presence_app_event
-                  message: >-
-                    {{ person_device }}.
-                    {% if trigger.to_state.attributes.last_departure %}
-                      Режим дома: отсутствие.
-                    {% else %}
-                      Дома жильцов: {{ trigger.to_state.attributes.residents_home_after }}.
-                    {% endif %}
-              - action: persistent_notification.create
+              - action: script.write2log
                 data:
                   title: "🚗 Убытие: {{ person_device }}"
                   message: >-
@@ -113,12 +93,7 @@ automation:
               - condition: trigger
                 id: wifi_in
             sequence:
-              - action: logbook.log
-                data:
-                  name: "DH Presence · Wi-Fi"
-                  entity_id: event.dh_presence_app_event
-                  message: "Подключение устройства: {{ person_device }}."
-              - action: persistent_notification.create
+              - action: script.write2log
                 data:
                   title: "📶 Wi-Fi подключён: {{ person_device }}"
                   message: "Устройство обнаружено в домашней Wi-Fi сети."
@@ -127,12 +102,7 @@ automation:
               - condition: trigger
                 id: wifi_out
             sequence:
-              - action: logbook.log
-                data:
-                  name: "DH Presence · Wi-Fi"
-                  entity_id: event.dh_presence_app_event
-                  message: "Отключение устройства: {{ person_device }}."
-              - action: persistent_notification.create
+              - action: script.write2log
                 data:
                   title: "📵 Wi-Fi отключён: {{ person_device }}"
                   message: "Отсутствие устройства в домашней Wi-Fi сети подтверждено."
