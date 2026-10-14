@@ -72,7 +72,8 @@ class DHPresenceRegisterCard extends HTMLElement {
         ? histories.filter(item => item.status === 'registered') : [];
       this.show(success.length
         ? 'Зарегистрировано: ' + success.map(r => r.device_name
-            + ' (' + r.tracker + ', MAC: ' + (r.mac || '—') + ')').join('; ')
+            + ' (' + r.tracker + ', IP: ' + (r.ip || '—')
+            + ', MAC: ' + (r.mac || '—') + ')').join('; ')
         : this._choices.length
           ? 'Выберите телефон, с которого открыта карточка. После регистрации нажмите «Обновить список».'
           : 'У этой учётной записи нет GPS-трекеров Mobile Companion.');
