@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.11
+
+- Add a minimal HA Core integration with authenticated `dh_presence/candidates`, `dh_presence/register` and registration status WebSocket commands. The user and direct WebSocket peer IP originate server-side, not from editable HA configuration.
+- Resolve a selected user's own Mobile Companion registration to its GPS tracker; never pick an iPad solely because it shares the HA user.
+- Add a short-lived Core registration handoff over authenticated REST; App probes only the on-link phone IP with active ARP, refuses proxy/off-link/ambiguous/no-reply MAC observations, and atomically stores accepted `user_id, user_name, device_name, device_id, tracker, ip, mac` in private App state.
+- Auto-enroll one registered phone/resident with retained confirmed presence and the original MQTT entity identity. The Lovelace roster displays the authenticated user name followed by Companion device name without manual `resident_names` input.
+- Add an explicit mobile registration card, preserve legacy tracker configuration, and enforce HA user exclusions fail-closed.
+- Host network and `NET_RAW` are required only for direct ARP proof. The Core bridge/frontend must be installed once; full HAOS/live iPhone acceptance is still pending. This does not implement Wi-Fi presence/absence or qualify the App for alarm use.
+
+
 ## 0.1.10
 
 - Use the last valid HA GPS state and coordinates for a stationary iPhone even after days without new GPS reports; age alone no longer marks the GPS and distance sensors unavailable.
