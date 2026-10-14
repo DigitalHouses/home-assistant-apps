@@ -54,4 +54,4 @@ Reconnect must not replay events from an old state snapshot. Event duplication/l
 
 ## Product lifecycle
 
-This first directory contains architecture only, without a `digitalhouses.app` marker or runnable App metadata. The repository-wide validator rejects unregistered marker directories. When implementation becomes installable, add marker + full HAOS files + registry + compatibility validator + CI together. Shared core contracts cannot be weakened to fit a prototype.
+**Pilot status 0.1.0:** A runnable, GPS-only experimental Home Assistant App now exists with a `digitalhouses.app` marker, Supervisor configuration, Dockerfile, MQTT publisher, registry entry, compatibility validator, unit tests and CI. It is installed by Home Assistant Supervisor from repository sources (no GHCR `image:`). The Core WebSocket adapter and trusted Wi-Fi engine remain future work; the pilot does not contain those mechanisms and cannot use Wi-Fi absence as evidence. Production-grade GHCR/telemetry and operational acceptance remain separate gates.

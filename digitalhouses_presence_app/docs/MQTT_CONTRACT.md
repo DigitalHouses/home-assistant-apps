@@ -19,9 +19,9 @@ Use stable resident keys based on HA user IDs, **not mutable display names**, fo
 The aggregate entity exposes `mode`, `residents`, `residents_total`, `residents_home`; include resident display names and each confirmed status, but no sensitive identifiers or locations. Public attributes should be deliberately bounded and should not update on every probe tick.
 
 Events: `arrival`, `departure`, `wifi_in`, `wifi_out`, `gps_in`, `gps_out`.
-Payload fields: `schema_version: 2`, `event_type`, stable `resident_id`, `source`, ISO-8601 `observed_at`, plus only event-specific fields defined by validated schema.
+Pilot payload fields: `schema_version: 2`, `event_type`, stable `resident_id`, non-localized resident `resident_name`, `source`, mode and ISO-8601 `observed_at`. Further event-specific fields must be explicitly schema-validated.
 Payloads are facts, not translated messages. Events: QoS 1, `retain=false`. Discovery configuration and authoritative current state may be retained. On a transition, retained state must be synchronized **before** publishing the transient event. No startup or MQTT reconnect event replay.
 
 In GPS mode, Wi-Fi source events do not alter aggregate presence. In Wi-Fi mode, source events must not duplicate an arrival/departure notification; presentation policy belongs to the local HA package.
 
-This is a **design contract**, not an assertion that MQTT transport has been implemented or tested.
+MQTT Discovery, retained state, and transient event publishing are implemented in the experimental pilot. Tests currently validate pure logic and payload shape; real HA / MQTT integration acceptance remains pending.
