@@ -28,6 +28,26 @@ class RuntimeSafetyTests(unittest.TestCase):
         state = {"state": "not_home", "last_updated": (NOW - timedelta(minutes=20)).isoformat()}
         self.assertIs(gps_from_ha_state(state, NOW, 300, (43.2, 76.9))[0], Status.UNAVAILABLE)
 
+    def test_last_reported_recognizes_fresh_unchanged_tracker(self):
+        state = {
+            "state": "not_home",
+            "last_updated": (NOW - timedelta(days=2)).isoformat(),
+            "last_reported": NOW.isoformat(),
+        }
+        status, distance, timestamp = gps_from_ha_state(state, NOW, 300, (43.2, 76.9))
+        self.assertIs(status, Status.NOT_HOME)
+        self.assertIsNone(distance)
+        self.assertEqual(timestamp, NOW)
+
+    def test_stale_report_is_not_rescued_by_old_last_updated(self):
+        state = {
+            "state": "home",
+            "last_updated": (NOW - timedelta(minutes=20)).isoformat(),
+            "last_reported": (NOW - timedelta(minutes=15)).isoformat(),
+        }
+        self.assertIs(gps_from_ha_state(state, NOW, 300, (43.2, 76.9))[0],
+                      Status.UNAVAILABLE)
+
     def test_recent_gps_with_valid_distance(self):
         state = {"state": "home", "last_updated": NOW.isoformat(),
                  "attributes": {"latitude": 43.2, "longitude": 76.9}}
