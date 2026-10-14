@@ -1,0 +1,26 @@
+title: DH Presence
+path: presence
+icon: mdi:home-account
+type: sections
+max_columns: 4
+sections:
+  - type: grid
+    cards:
+      - type: heading
+        heading: Мы дома
+        heading_style: title
+        icon: mdi:home-account
+      - type: tile
+        entity: binary_sensor.dh_presence_app_residents_home
+        name: Жильцы дома
+      - type: tile
+        entity: sensor.dh_presence_app_source_status
+        name: Источники
+      - type: tile
+        entity: sensor.dh_presence_app_version
+        name: Версия
+      - type: tile
+        entity: sensor.dh_presence_app_started_at
+        name: Запущено
+# Per-resident source sensors are created dynamically through MQTT Discovery.
+# This is a read-only starter view, not the final DigitalHouses App status card.

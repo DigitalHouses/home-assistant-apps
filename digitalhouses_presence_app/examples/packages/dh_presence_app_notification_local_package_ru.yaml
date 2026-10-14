@@ -1,0 +1,85 @@
+# HA Package: machine MQTT events → trigger.id → choose → direct notification.
+# Replace persistent_notification.create with your site's delivery service if needed.
+dh_presence_app_notification_local_package:
+  automation:
+    - id: dh_presence_app_notifications
+      alias: "DH Presence · Уведомления"
+      mode: queued
+      max: 20
+      triggers:
+        - trigger: event.received
+          target:
+            entity_id: event.dh_presence_app_event
+          options:
+            event_type: [arrival]
+          id: arrival
+        - trigger: event.received
+          target:
+            entity_id: event.dh_presence_app_event
+          options:
+            event_type: [departure]
+          id: departure
+        - trigger: event.received
+          target:
+            entity_id: event.dh_presence_app_event
+          options:
+            event_type: [wifi_in]
+          id: wifi_in
+        - trigger: event.received
+          target:
+            entity_id: event.dh_presence_app_event
+          options:
+            event_type: [wifi_out]
+          id: wifi_out
+        - trigger: event.received
+          target:
+            entity_id: event.dh_presence_app_event
+          options:
+            event_type: [gps_in]
+          id: gps_in
+        - trigger: event.received
+          target:
+            entity_id: event.dh_presence_app_event
+          options:
+            event_type: [gps_out]
+          id: gps_out
+      actions:
+        - choose:
+            - conditions:
+                - condition: trigger
+                  id: arrival
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "🏠 Прибытие: {{ trigger.to_state.attributes.resident_name }}"
+                    message: >-
+                      Жилец появился дома.
+                      Режим: {{ trigger.to_state.attributes.mode }}.
+            - conditions:
+                - condition: trigger
+                  id: departure
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "🚗 Убытие: {{ trigger.to_state.attributes.resident_name }}"
+                    message: >-
+                      Жилец покинул дом.
+                      Режим: {{ trigger.to_state.attributes.mode }}.
+            - conditions:
+                - condition: trigger
+                  id: wifi_in
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "📶 Wi-Fi: {{ trigger.to_state.attributes.resident_name }} в сети"
+                    message: "Подтверждено присутствие в домашней сети."
+            - conditions:
+                - condition: trigger
+                  id: wifi_out
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "📵 Wi-Fi: {{ trigger.to_state.attributes.resident_name }} не в сети"
+                    message: "Сетевое отсутствие подтверждено."
+# Source-only GPS events remain available for custom site automations.
+# This example does not send duplicate GPS notifications for arrival/departure.

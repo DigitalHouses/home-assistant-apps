@@ -263,7 +263,7 @@ def run():
                 for event in events:
                     if event["event_type"] not in EVENT_NAMES:
                         raise ValueError("Invalid internal event")
-                    mqtt_out.publish(topic("event"), {"schema_version": 2, "mode": engine.mode.value, **event}, retain=False, force=True)
+                    mqtt_out.publish(topic("event"), {"schema_version": 2, "mode": engine.mode.value, "resident_name": next(r.name for r in engine.residents.values() if r.key == event["resident_id"]), **event}, retain=False, force=True)
             STOP.wait(options["gps_poll_interval_seconds"])
     finally:
         mqtt_out.stop()
