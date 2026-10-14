@@ -109,7 +109,7 @@ def test_local_packages_keep_language_in_local_yaml() -> None:
     assert re.search(r"[А-Яа-яЁё]", en) is None
 
     assert "батарея заряжена" in ru
-    assert "Конфигурация UPS Trigger изменена" in ru
+    assert "UPS: параметры отключения изменены" in ru
 
 
 def test_readme_describes_local_notification_package() -> None:
@@ -118,3 +118,25 @@ def test_readme_describes_local_notification_package() -> None:
     assert "dh_pve_agent_notification_local_package.yaml" in readme
     assert "trigger.id" in readme
     assert "direct action" in readme
+
+
+def test_russian_ups_notifications_format_optional_data_without_fake_units() -> None:
+    ru = _read(RU_PACKAGE)
+    for event_id in (
+        "battery_fully_charged",
+        "boost_started",
+        "boost_ended",
+        "trim_started",
+        "trim_ended",
+    ):
+        # Find the choose branch, not the earlier event trigger.
+        section = ru.split("                  id:\\n                    - " + event_id + "\\n              sequence:", 1)[1]
+        section = section.split("\\n\\n            # ", 1)[0]
+        assert "is number" in section
+        assert "'%g' | format" in section
+        assert "default('—', true)" not in section
+
+    assert "Входное напряжение нормализовалось" not in ru
+    assert "Настройки применены без изменения значений" in ru
+    assert "Порог отключения по заряду установлен" in ru
+    assert "Резерв времени установлен" in ru
