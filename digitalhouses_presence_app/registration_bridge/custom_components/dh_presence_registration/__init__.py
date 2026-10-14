@@ -43,7 +43,7 @@ def is_local_candidate(remote: str | None) -> bool:
     """
     try:
         ip = ipaddress.ip_address(remote)
-    except ValueError:
+    except (TypeError, ValueError):
         return False
     return (isinstance(ip, ipaddress.IPv4Address)
             and ip.is_private and not ip.is_loopback and not ip.is_link_local
