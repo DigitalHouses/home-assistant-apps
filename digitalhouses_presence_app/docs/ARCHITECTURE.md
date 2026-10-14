@@ -5,7 +5,7 @@
 ```text
 Home Assistant Mobile Companion GPS ──┐
                                       ├── Presence App state engine
-HA Core WebSocket registration adapter ┤       ├── durable confirmed state (/data)
+Supervisor native Ingress registration ┤       ├── durable confirmed state (/data)
 (connection.user + actual peer)        │       ├── retained MQTT state / Discovery
               │                       │       └── non-retained MQTT machine Events
               └── local IP → active ARP┘                 │
@@ -13,7 +13,7 @@ HA Core WebSocket registration adapter ┤       ├── durable confirmed sta
                        single Wi-Fi Engine
 ```
 
-Preferred: one HA App owns network monitoring, GPS decisions, state and MQTT. A minimal supported HA Core adapter owns authenticated WebSocket registration only if required. A regular App cannot read HA Core's `ActiveConnection`. No monkey-patching of Mobile Companion / Home Assistant WebSocket internals. The ARP engine needs L2 reachability and minimal raw-socket privileges: its container feasibility has **not** been proven.
+Preferred: one HA App owns GPS decisions, state, MQTT and the authenticated registration UI. Supervisor Ingress supplies HA user identity; access to HA Core `ActiveConnection` is unnecessary. No monkey-patching of Companion or HA WebSocket internals. The ARP engine needs L2 reachability and minimal raw-socket privileges: its container feasibility has **not** been proven.
 
 If HA App cannot perform safe ARP probing, compare an all-in-one HA custom integration versus App + adapter **before** implementation; avoid two parallel Wi-Fi engines.
 
@@ -56,10 +56,38 @@ Reconnect must not replay events from an old state snapshot. Event duplication/l
 
 **Pilot status 0.1.1:** A runnable, GPS-only experimental Home Assistant App now exists with a `digitalhouses.app` marker, Supervisor configuration, Dockerfile, MQTT publisher, registry entry, compatibility validator, unit tests and CI. It is installed by Home Assistant Supervisor from repository sources (no GHCR `image:`). A single selected `device_tracker` identifies each resident. Native MQTT Select changes the live decision mode, with config-change precedence and persistent UI choice. The Core WebSocket adapter and trusted Wi-Fi engine remain future work; the pilot does not contain those mechanisms and cannot use Wi-Fi absence as evidence. Production-grade GHCR/telemetry and operational acceptance remain separate gates.
 
-## Implemented one-time WebSocket registration pilot (0.1.11; acceptance pending)
+## Native Ingress single-App registration pilot (0.1.11; acceptance pending)
 
-- `registration_bridge/custom_components/dh_presence_registration` registers HA WebSocket candidates/register/status. The user is `connection.user`; local peer is `connection.remote` from Core. A user's own selected `mobile_app` config entry must own the tracker. HA `.storage` stores short-lived registration requests.
-- Core exposes authenticated pending/ack REST endpoints for the Supervisor App. The App acquires actual IP/MAC via host-network on-link `arping` and `NET_RAW`, then writes `/data/presence_registrations.json` (0600) and republish Dynamic MQTT Discovery.
-- Frontend `dh-presence-register-card` uses the actual HA WebSocket connection; no user/name/IP/MAC is trusted from client JavaScript. It requires a one-time local resource installation.
-- No `residents` or `resident_names` App Configuration values are needed for new residents. Existing tracker-only entries remain supported for migration.
-- **Not established:** standalone HA Core bridge deployment, App token privilege for the Core registration REST view, container L2/ARP and multi-device cryptographic binding. Do not connect alarm or claim Wi-Fi presence based on these registration probes.
+The earlier architectural sketch used a separate HA Core adapter. This has
+been **superseded** by documented Supervisor Ingress authentication headers:
+
+```text
+HA Companion / HA user (local Wi-Fi)
+      → authenticated HA Core ingress transport
+      → Supervisor Ingress (user id, display name, proxy chain)
+      → DH Presence App native HTTPS/HTTP web UI
+      → direct LAN on-link ARP
+      → private /data/registration registry
+      → existing one-engine GPS/MQTT discovery and events
+```
+
+- `ingress: true`, port 8099, `panel_admin: false` expose a native HA
+  App panel with no custom integration or JS module. Supervisor only
+  authenticates incoming requests and injects user identity on its
+  documented ingress proxy hop `172.30.32.2`.
+- The App derives the directly connected Core client IP from the
+  second-to-last hop of X-Forwarded-For, **never the untrusted first
+  header value**, with a validated last internal Core hop. Registration
+  is allowed only for a local IP/.local HA URL and on-link IPv4 peer.
+- `arping` performs a fresh one-time IPv4 LAN broadcast with `NET_RAW`;
+  the App refuses off-link paths, proxy/virtual interfaces, failed probes
+  and inconsistent MAC observations.
+- A selected GPS tracker and the authenticated HA user are stored locally.
+  Device ownership proof is an explicit **pilot limitation**: HA Ingress
+  identifies the user, but the App cannot prove that the selected tracker
+  is the physical Companion app hosting the web session.
+- `host_network` + `NET_RAW` remain a **blocked deployment privilege**
+  until a home-only acceptance validates AppArmor, Ingress isolation,
+  correct source IP and raw ARP. The current repo validator must not
+  be weakened just to pass a PR.
+- Wi-Fi presence/absence and alarm integration are out of scope.
