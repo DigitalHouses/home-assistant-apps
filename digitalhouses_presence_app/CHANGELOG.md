@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.5
+
+- Install the owner-approved rectangular glossy blue Presence App banner as `logo.png` (250×100).
+- Preserve the already approved square GPS icon and all runtime MQTT/presence behavior unchanged.
+- Bump the App metadata version so existing HA installations can apply the artwork through the normal App update workflow.
+
 ## 0.1.4
 
 - Instrument MQTT Device Discovery and first state publication with broker QoS1 acknowledgment logging, including the exact topic and component count.

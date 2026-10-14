@@ -1,4 +1,4 @@
-# DigitalHouses Presence App 0.1.4 — experimental pilot
+# DigitalHouses Presence App 0.1.5 — experimental pilot
 
 ## Configuration
 The App Store's native **Configuration** tab is the supported installation and settings UI. This build deliberately does not register any custom Home Assistant frontend panel.
