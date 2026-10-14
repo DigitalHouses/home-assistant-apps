@@ -211,10 +211,10 @@ cards:
         [[[
           const source = states['binary_sensor.dh_presence_app_residents_home'];
           const roster = source?.attributes?.residents || {};
+          const residentLabel = r => String(r?.user_name || '').trim()
+            || String(r?.name || '').trim();
           const entries = Object.entries(roster).sort(
-            (a, b) => String(a[1]?.name || '').localeCompare(
-              String(b[1]?.name || ''), 'ru'
-            )
+            (a, b) => residentLabel(a[1]).localeCompare(residentLabel(b[1]), 'ru')
           );
           if (!entries.length) return '<div style="padding:8px 0;color:var(--secondary-text-color)">Жильцы ещё не зарегистрированы</div>';
           const esc = x => String(x ?? '').replace(/&/g, '&amp;')
@@ -249,10 +249,13 @@ cards:
               : status === 'home' ? 'var(--success-color, green)'
               : 'var(--info-color, var(--primary-color))';
             const shownState = mode === 'wifi' ? 'Wi-Fi пока недоступен' : personState;
-            const personName = resident.user_name ? String(resident.user_name) : '';
-            const deviceName = resident.name || key;
-            const shownName = personName && personName !== deviceName
-              ? personName + ' (' + deviceName + ')' : (personName || deviceName);
+            const personName = typeof resident.user_name === 'string'
+              ? resident.user_name.trim() : '';
+            const deviceName = String(resident.name || key).trim();
+            // Names come only from the App's resident_names configuration.
+            // Never guess the person's name from a phone friendly name.
+            const shownName = (personName || 'Имя не задано')
+              + ' (' + deviceName + ')';
             return '<div style="display:flex;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--divider-color)">'
               + '<ha-icon icon="' + icon + '" style="color:' + color + ';flex:0 0 26px"></ha-icon>'
               + '<div style="min-width:0;flex:1;text-align:left">'
