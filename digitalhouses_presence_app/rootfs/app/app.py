@@ -40,11 +40,12 @@ def parsed_datetime(value: str) -> datetime:
 
 
 def gps_from_ha_state(state: dict, now: datetime, freshness: int, home: tuple) -> tuple[Status, float | None, datetime | None]:
-    """No state/coordinates freshness: unavailable, not not_home."""
+    """Read the last actual HA GPS report; elapsed time alone never invalidates it."""
     if not isinstance(state, dict) or not isinstance(state.get("state"), str):
         return Status.UNAVAILABLE, None, None
     # last_updated does not change on repeated identical HA reports.
-    # Accept fresh last_reported, but never substitute App poll time as evidence.
+    # Keep the actual last_reported (or fallback) timestamp: an App poll
+    # must not fabricate a new phone observation.
     observed_at_raw = state.get("last_reported") or state.get("last_updated")
     if not isinstance(observed_at_raw, str):
         return Status.UNAVAILABLE, None, None
@@ -53,7 +54,9 @@ def gps_from_ha_state(state: dict, now: datetime, freshness: int, home: tuple) -
     except ValueError:
         return Status.UNAVAILABLE, None, None
     age = (now-when).total_seconds()
-    if age < -30 or age > freshness:
+    # iOS may stay motionless for days without a new GPS report.
+    # Freshness is diagnostic only; reject impossible future timestamps.
+    if age < -30:
         return Status.UNAVAILABLE, None, None
     raw = state["state"]
     if raw in ("unavailable", "unknown", ""):
@@ -531,7 +534,7 @@ def run():
                 elif engine.mode is Mode.WIFI:
                     error = "Verified Wi-Fi engine is not active"
                 elif any(r.gps is Status.UNAVAILABLE for r in engine.residents.values()):
-                    error = "One or more GPS trackers have no fresh observation"
+                    error = "One or more GPS trackers have no valid last-known observation"
                 try:
                     operations.finish(error, refresh_succeeded=(error is None))
                 except (OSError, ValueError) as exc:
