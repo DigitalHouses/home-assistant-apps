@@ -41,6 +41,16 @@ Use Home Assistant **Settings → Apps → App Store** and the already configure
 5. If broker publication succeeded but no device exists, inspect Home Assistant Core logs for `mqtt`, `dh_presence_app`, `discovery`, or `Invalid config`. Do not delete other devices, clear all retained topics, or recreate the MQTT integration.
 6. The App automatically republishes on HA birth and every five minutes. No host-side script needed.
 
+## Lovelace dashboard and status card
+
+- [Standalone Russian card](examples/lovelace/presence_app_card_ru.yaml) — paste into Home Assistant as **Manual card (YAML)**.
+- [Full sections view](examples/lovelace/dh_presence_app_dashboard.yaml) — paste into a complete Lovelace view YAML editor.
+- Requires Mushroom and `custom:button-card >= 5.0`, already used by other DigitalHouses dashboards.
+- The resident rows are generated from `binary_sensor.dh_presence_app_residents_home` → `residents` attribute. Distance and GPS freshness use actual per-resident MQTT entity IDs; no local MAC, user ID, IP, or customer-specific tracker is hardcoded.
+- Switch mode via actual HA `select.dh_presence_app_mode`. Wi-Fi-only is explicitly labelled unsupported during pilot. A stale GPS source is flagged; previous confirmed presence is presented as historical rather than live.
+- Events and runtime start time are available through two read-only Mushroom chips. No invented App-owned update/restart services or operations are used.
+- HAOS Supervisor owns install and restart. The standardized foreground `sensor.dh_presence_app_card` runtime operation contract is future work and must not be simulated by frontend YAML.
+
 ## Known limitations
 
 Automatic registration from phone is not available until a minimum authorized HA Core custom integration is implemented and validated. The 14 October WebSocket proof of concept must not be misrepresented as an installed feature. Wi-Fi probing, 15+ minute iPhone sleep qualification and robust negative Wi-Fi verification remain unproven; no scanner or negative ARP result affects presence.
