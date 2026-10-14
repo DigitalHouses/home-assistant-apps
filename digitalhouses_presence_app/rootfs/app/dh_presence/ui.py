@@ -95,6 +95,30 @@ def read_core_states(token: str) -> list[dict]:
     return states
 
 
+def read_core_time_zone(token: str) -> str | None:
+    """Use the Home Assistant configured timezone, not the browser's timezone.
+
+    Debugging must remain available when Core configuration is temporarily
+    inaccessible. In that case the UI explicitly shows UTC, without calling
+    a browser-local time Home Assistant time.
+    """
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+    req = Request("http://supervisor/core/api/config",
+                  headers={"Authorization": "Bearer " + token,
+                           "Accept": "application/json"})
+    try:
+        with urlopen(req, timeout=5) as response:
+            data = json.load(response)
+        zone = data.get("time_zone") if isinstance(data, dict) else None
+        if not isinstance(zone, str) or not zone:
+            return None
+        ZoneInfo(zone)  # Reject invalid timezone data from Core.
+        return zone
+    except (OSError, ValueError, TypeError, ZoneInfoNotFoundError):
+        LOG.warning("Unable to read HA timezone for Presence debug; displaying UTC")
+        return None
+
+
 def gps_candidates(token: str) -> list[dict]:
     """Read-only HA Core observation; never guess a person from a tracker.
 
@@ -207,8 +231,10 @@ def handler_factory(token: str, registry_path: str, excluded_users: set[str]):
                     if not is_authorized_ha_admin(context["user_id"], token):
                         self.reply(403, {"error": "admin_required"})
                     else:
-                        self.reply(200, {"residents": admin_registration_diagnostics(
-                            token, registry_path)})
+                        self.reply(200, {
+                            "residents": admin_registration_diagnostics(token, registry_path),
+                            "time_zone": read_core_time_zone(token),
+                        })
                 else:
                     self.reply(404, {"error": "not_found"})
             except PermissionError as exc:
@@ -273,25 +299,46 @@ HTML = """<!doctype html><html lang="ru"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>DH Presence — регистрация</title>
 <style>
-body{background:var(--primary-background-color,#f6f7f8);color:var(--primary-text-color,#222);font:16px system-ui;margin:0;padding:20px}
-main{max-width:680px;margin:auto}.panel{padding:20px;border-radius:14px;background:var(--card-background-color,#fff);margin:12px 0;box-shadow:0 1px 8px #0001}
-select,button{font:inherit;padding:10px;margin:6px 4px 6px 0;max-width:100%}
-button{border:none;border-radius:8px;background:#2479a5;color:white;cursor:pointer}p{line-height:1.5}
-pre{white-space:pre-wrap;word-break:break-word}.muted{color:#777}
+:root{color-scheme:light dark;-webkit-text-size-adjust:100%}
+body{margin:0;padding:12px;background:var(--primary-background-color,#f5f6f8);color:var(--primary-text-color,#252525);font:14px/1.4 system-ui,-apple-system,sans-serif}
+main{max-width:700px;margin:0 auto}
+h2{font-size:20px;margin:6px 3px 12px}h3{font-size:17px;line-height:1.25;margin:0 0 10px}
+.panel{padding:16px;border-radius:14px;background:var(--card-background-color,#fff);margin:10px 0;box-shadow:0 1px 7px #0000000a}
+p{margin:8px 0 12px;line-height:1.45}
+.muted{color:var(--secondary-text-color,#777)}[hidden]{display:none!important}
+button,select{font:inherit;border-radius:9px;min-height:38px}
+button{cursor:pointer;border:none;padding:8px 12px;background:var(--primary-color,#277ca6);color:#fff}
+button:focus-visible,select:focus-visible{outline:2px solid var(--primary-color,#277ca6);outline-offset:2px}
+select{max-width:100%;width:100%;padding:8px;margin:2px 0 9px;border:1px solid var(--divider-color,#ddd);background:var(--card-background-color,#fff);color:inherit}
+.actions{display:flex;flex-wrap:wrap;gap:8px}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;margin:8px 0 0}
+.device-item{overflow-wrap:anywhere;padding:6px 0;border-top:1px solid var(--divider-color,#ddd)}
+.device-item:first-child{border-top:none}
+.debug-note{font-size:12px;margin:0 0 10px}
+.debug-person{padding:10px 0;border-top:1px solid var(--divider-color,#ddd)}
+.debug-person:first-child{border-top:none}
+.debug-name{font-weight:650;font-size:15px;overflow-wrap:anywhere;margin:0 0 5px}
+.debug-badges{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 6px}
+.debug-badge{display:inline-block;font-size:12px;padding:3px 7px;border-radius:12px;background:var(--secondary-background-color,#f1f2f3);color:var(--primary-text-color,#333)}
+.debug-badge--home{color:var(--success-color,#15804a)}
+.debug-badge--away{color:var(--info-color,#277ca6)}
+.debug-row{display:grid;grid-template-columns:minmax(90px,35%) minmax(0,1fr) auto;gap:5px;align-items:center;padding:5px 0;font-size:13px}
+.debug-key{color:var(--secondary-text-color,#666)}
+.debug-value{min-width:0;overflow-wrap:anywhere;word-break:break-word;font-variant-numeric:tabular-nums}
+.copy-btn{min-height:28px;padding:4px 7px;font-size:12px;white-space:nowrap;border:1px solid var(--divider-color,#bbb);background:transparent;color:var(--primary-color,#277ca6)}
+@media(max-width:430px){body{padding:8px}.panel{padding:13px;margin:8px 0}.debug-row{grid-template-columns:minmax(75px,34%) minmax(0,1fr) auto;gap:4px}.copy-btn{padding:4px 5px}}
 </style></head><body><main>
 <h2>DH Presence</h2>
 <section class="panel"><h3>Регистрация телефона</h3>
-<p>Для регистрации откройте Home Assistant непосредственно с телефона через домашний Wi-Fi и локальный адрес.
-Через Cloudflare/VPN можно просматривать уже зарегистрированные устройства, но регистрацию выполнить нельзя.
-Пользователь определяется автоматически. Выберите <strong>именно этот телефон</strong>.</p>
+<p class="muted">Откройте Home Assistant с регистрируемого телефона через домашний Wi-Fi и локальный адрес. Через Cloudflare/VPN доступны только уже зарегистрированные устройства.</p>
 <div id="who" class="muted">Загрузка...</div>
 <select id="tracker" aria-label="Выбрать телефон"></select>
-<button id="register">Зарегистрировать</button><button id="reload">Обновить</button>
+<div class="actions"><button id="register">Зарегистрировать</button><button id="reload">Обновить</button></div>
 <pre id="result" role="status"></pre></section>
 <section class="panel"><h3>Мои устройства</h3><div id="residents" class="muted">...</div></section>
 <section class="panel" id="adminDebug" hidden>
-<h3>Диагностика регистрации · администратор</h3>
-<p class="muted">IP и MAC зафиксированы при регистрации — это не подтверждение текущего адреса или присутствия в Wi-Fi.</p>
+<h3>Диагностика · администратор</h3>
+<p class="muted debug-note">IP и MAC сохранены при регистрации. Это не проверка текущего адреса или подключения к Wi-Fi.</p>
 <button id="reloadDebug">Обновить диагностику</button>
 <div id="debugList" role="status"></div>
 </section>
@@ -323,6 +370,66 @@ async function load(){
    :'Пока нет зарегистрированных устройств';
  }catch(e){q('result').textContent=e.message}
 }
+function gpsLabel(status){
+ return status==='home'?'Дома':status==='not_home'?'Вне дома':'Недоступен';
+}
+function wifiLabel(status){
+ return status==='home'?'Дома':status==='not_home'?'Вне дома':'Недоступен';
+}
+function registrationLabel(status){
+ return status==='registered'?'Зарегистрирован':'Не подтверждена';
+}
+function formattedGpsTime(value,timeZone){
+ if(!value)return '—';
+ const date=new Date(value);
+ if(Number.isNaN(date.getTime()))return '—';
+ const zone=timeZone||'UTC';
+ try{
+  return new Intl.DateTimeFormat('ru-RU',{
+   timeZone:zone,day:'2-digit',month:'2-digit',year:'numeric',
+   hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false
+  }).format(date)+' ('+zone+')';
+ }catch(error){
+  return date.toISOString().replace('T',' ').slice(0,19)+' (UTC)';
+ }
+}
+function debugRow(label,value,copy=false){
+ const row=document.createElement('div');
+ row.className='debug-row';
+ const key=document.createElement('span');
+ key.className='debug-key';key.textContent=label;
+ const val=document.createElement('span');
+ val.className='debug-value';val.textContent=String(value??'—');
+ row.append(key,val);
+ if(copy && value){
+  const btn=document.createElement('button');
+  btn.className='copy-btn';btn.textContent='Копировать';
+  btn.setAttribute('aria-label','Копировать '+label);
+  btn.addEventListener('click',()=>copyValue(String(value),btn));
+  row.append(btn);
+ }
+ return row;
+}
+async function copyValue(value,button){
+ try{
+  if(navigator.clipboard && window.isSecureContext){
+   await navigator.clipboard.writeText(value);
+  }else{
+   const input=document.createElement('textarea');
+   input.value=value;input.setAttribute('readonly','');
+   input.style.cssText='position:fixed;left:-9999px;top:0';
+   document.body.append(input);input.select();
+   try{
+    if(!document.execCommand('copy'))throw Error('copy unavailable');
+   }finally{input.remove();}
+  }
+  button.textContent='Скопировано';
+  setTimeout(()=>{button.textContent='Копировать';},1600);
+ }catch(error){
+  button.textContent='Не удалось';
+  setTimeout(()=>{button.textContent='Копировать';},1600);
+ }
+}
 async function loadAdminDebug(){
  try{
   const data=await api('api/admin/debug');
@@ -334,29 +441,37 @@ async function loadAdminDebug(){
   }
   for(const device of data.residents){
    const article=document.createElement('div');
-   article.style.cssText='padding:10px 0;border-bottom:1px solid #ddd;overflow-wrap:anywhere';
-   const heading=document.createElement('strong');
+   article.className='debug-person';
+   const heading=document.createElement('div');
+   heading.className='debug-name';
    heading.textContent=device.user_name+' ('+device.device_name+')';
    article.append(heading);
-   const fields=[
-    ['GPS tracker',device.tracker],['IP при регистрации',device.ip],
-    ['MAC при регистрации',device.mac],['GPS',device.gps],
-    ['Wi-Fi',device.wifi],['GPS: последний отчёт',device.last_gps_at||'—'],
-    ['Регистрация',device.registration_status],
+   const badges=document.createElement('div');
+   badges.className='debug-badges';
+   const status=[
+    ['GPS: '+gpsLabel(device.gps),device.gps==='home'?'debug-badge--home':device.gps==='not_home'?'debug-badge--away':''],
+    ['Wi-Fi: '+wifiLabel(device.wifi),''],
+    [registrationLabel(device.registration_status),'']
    ];
-   for(const [key,val] of fields){
-    const line=document.createElement('div');
-    line.textContent=key+': '+(val??'—');
-    article.append(line);
+   for(const [label,mod] of status){
+    const chip=document.createElement('span');
+    chip.className='debug-badge'+(mod?' '+mod:'');
+    chip.textContent=label;badges.append(chip);
    }
+   article.append(badges);
+   article.append(
+    debugRow('GPS tracker',device.tracker),
+    debugRow('IP при регистрации',device.ip,true),
+    debugRow('MAC при регистрации',device.mac,true),
+    debugRow('Последний GPS',formattedGpsTime(device.last_gps_at,data.time_zone))
+   );
    destination.append(article);
   }
- }catch(e){
-  if(String(e.message).includes('admin_required')||String(e.message).includes('HTTP 403')){
-   q('adminDebug').hidden=true;return;
-  }
-  // Do not reveal the card to non-admins when the permission check fails.
+ }catch(error){
+  // No access or unavailable HA admin verification: fail closed visually
+  // and through the independently gated private backend.
   q('adminDebug').hidden=true;
+  q('debugList').replaceChildren();
  }
 }
 q('reload').onclick=load;

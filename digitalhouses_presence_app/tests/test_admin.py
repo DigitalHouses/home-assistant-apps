@@ -79,9 +79,11 @@ class AdminTests(unittest.TestCase):
         with patch("dh_presence.ui.is_authorized_ha_admin", return_value=True):
             with patch("dh_presence.ui.admin_registration_diagnostics",
                        return_value=[{"ip": "192.168.11.54", "mac": "88:b9:45:80:a7:55"}]):
-                req.do_GET()
+                with patch("dh_presence.ui.read_core_time_zone", return_value="Asia/Almaty"):
+                    req.do_GET()
         self.assertEqual(replies[0][0], 200)
         self.assertEqual(replies[0][1]["residents"][0]["ip"], "192.168.11.54")
+        self.assertEqual(replies[0][1]["time_zone"], "Asia/Almaty")
 
     def test_core_admin_unavailable_fails_closed(self):
         req, replies = self.get_request("/api/admin/debug", "admin")
@@ -115,3 +117,33 @@ class AdminTests(unittest.TestCase):
         self.assertEqual(rec["gps"], "home")
         self.assertEqual(rec["wifi"], "unavailable")
         self.assertIn("при регистрации", rec["ip_mac_note"])
+
+    def test_ha_configured_timezone_is_used_without_browser_assumptions(self):
+        from dh_presence.ui import read_core_time_zone
+        class Response:
+            def __enter__(self):
+                return self
+            def __exit__(self, *args):
+                return False
+        with patch("dh_presence.ui.urlopen", return_value=Response()):
+            with patch("dh_presence.ui.json.load", return_value={"time_zone": "Asia/Almaty"}):
+                self.assertEqual(read_core_time_zone("token"), "Asia/Almaty")
+            with patch("dh_presence.ui.json.load", return_value={"time_zone": "Invalid/Zone"}):
+                self.assertIsNone(read_core_time_zone("token"))
+        with patch("dh_presence.ui.urlopen", side_effect=OSError("Core offline")):
+            self.assertIsNone(read_core_time_zone("token"))
+
+    def test_mobile_debug_ui_copy_controls_localized_and_private(self):
+        from dh_presence.ui import HTML
+        for marker in ("debugRow('IP при регистрации',device.ip,true)",
+                       "debugRow('MAC при регистрации',device.mac,true)",
+                       "navigator.clipboard.writeText(value)",
+                       "document.execCommand('copy')",
+                       "timeZone:zone",
+                       "data.time_zone",
+                       "registrationLabel(device.registration_status)",
+                       "gpsLabel(device.gps)", "wifiLabel(device.wifi)",
+                       "q('adminDebug').hidden=true"):
+            with self.subTest(marker=marker):
+                self.assertIn(marker, HTML)
+        self.assertIn("getTime()", HTML)
