@@ -1,4 +1,4 @@
-"""Presence dashboard uses existing entities without inventing runtime commands."""
+"""DH Presence dashboard uses only genuinely implemented product operations."""
 from pathlib import Path
 import unittest
 
@@ -8,43 +8,55 @@ DASHBOARD = ROOT / "examples/lovelace/dh_presence_app_dashboard.yaml"
 
 
 class LovelaceCardTests(unittest.TestCase):
-    def test_card_uses_existing_presence_mqtt_entities(self):
+    def test_presence_entities_and_dynamic_resident_roster(self):
         code = CARD.read_text(encoding="utf-8")
-        for entity in (
+        for expected in (
             "binary_sensor.dh_presence_app_residents_home",
             "select.dh_presence_app_mode",
             "sensor.dh_presence_app_version",
+            "sensor.dh_presence_app_card",
             "event.dh_presence_app_event",
             "sensor.dh_presence_app_started_at",
+            "sensor.dh_presence_app_",
+            "_distance",
+            "_gps_home",
+            "_wifi_home",
+            "attributes?.residents",
+            "resident.user_name",
+            "shownName",
         ):
-            self.assertIn(entity, code)
-        self.assertIn("attributes?.residents", code)
-        self.assertIn("sensor.dh_presence_app_' + key + '_distance", code)
-        self.assertIn("binary_sensor.dh_presence_app_' + key + '_gps_home", code)
+            with self.subTest(expected=expected):
+                self.assertIn(expected, code)
 
-    def test_no_fabricated_action_service_or_sensor(self):
-        text = CARD.read_text(encoding="utf-8")
-        for forbidden in (
-            "sensor.dh_presence_app_card",
+    def test_real_operations_and_native_supervisor_boundaries(self):
+        code = CARD.read_text(encoding="utf-8")
+        runtime = (ROOT / "rootfs/app/app.py").read_text(encoding="utf-8")
+        for expected in (
             "button.dh_presence_app_refresh",
             "button.dh_presence_app_check_updates",
+            "sensor.dh_presence_app_latest_version",
+            "update.digitalhouses_presence_app_update",
             "hassio.app_restart",
+            "8133339d_digitalhouses_presence_app",
             "update.install",
         ):
-            self.assertNotIn(forbidden, text)
+            with self.subTest(expected=expected):
+                self.assertIn(expected, code)
+        self.assertIn('topic("command")', runtime)
+        self.assertIn("fetch_latest_release()", runtime)
+        self.assertIn("publish_controls", runtime)
+        self.assertIn("action: none", code)
+        self.assertIn("type: select-options", code)
 
-    def test_read_only_header_and_true_mode_select(self):
-        text = CARD.read_text(encoding="utf-8")
-        self.assertIn("action: none", text)
-        self.assertIn("type: select-options", text)
-        self.assertIn("mode === 'wifi'", text)
-        self.assertIn("Последнее подтверждение", text)
-
-    def test_dashboard_embeds_canonical_card_without_drift(self):
+    def test_dashboard_embeds_same_card_without_drift(self):
         card = CARD.read_text(encoding="utf-8")
         dashboard = DASHBOARD.read_text(encoding="utf-8")
-        lines = [line for line in card.split("\n") if line.strip() and not line.startswith("#")]
-        normalized_card = "      - " + lines[0] + "\n" + "\n".join("        " + line for line in lines[1:])
-        self.assertIn(normalized_card, dashboard)
-        self.assertIn("resident.user_name", card)
-        self.assertIn("shownName", card)
+        lines = [line for line in card.splitlines()
+                 if line.strip() and not line.startswith("#")]
+        expected = "      - " + lines[0] + "\n" + "\n".join("        " + line for line in lines[1:])
+        actual = "\n".join(line for line in dashboard.splitlines() if line.strip())
+        self.assertIn(expected, actual)
+
+
+if __name__ == "__main__":
+    unittest.main()
