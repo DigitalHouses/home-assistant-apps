@@ -58,6 +58,10 @@ Engineering documentation is separated into shared standards and product-specifi
 
 GitHub is the source of truth for reusable DigitalHouses application code and release provenance.
 
+## Work in progress
+
+- [DigitalHouses Presence App](digitalhouses_presence_app/README.md) — GPS, Wi-Fi and Hybrid resident presence; **design bootstrap only**, not yet an installable Home Assistant App. Its source and release lifecycle will be maintained in this repository.
+
 ## Development
 
 Each product owns its implementation, tests, compatibility contract, and release version. Repository-level validation enforces the common DigitalHouses application contract and dispatches type-specific and product-specific checks.
