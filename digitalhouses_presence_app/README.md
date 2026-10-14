@@ -39,8 +39,9 @@ The mode selector is functional. The status and resident rows are observational.
 1. Install/update **DigitalHouses Presence App** through the normal HA App
    Store. No extra packages, integration, HACS card or files are needed.
 2. On the **phone being enrolled**, connect to home Wi-Fi and open Home
-   Assistant through its direct local URL, then use **Settings → Apps →
-   DH Presence → Open Web UI** (native Ingress).
+   Assistant through its direct local URL, then open **DH Presence**
+   in the HA sidebar (native Ingress). An administrator can also use
+   **Settings → Apps → DH Presence → Open Web UI**.
 3. Select the phone's existing GPS tracker and press **Зарегистрировать**.
    The HA user name comes from authenticated Supervisor Ingress headers;
    IP comes from the verified HA Core transport hop, and MAC from a fresh
