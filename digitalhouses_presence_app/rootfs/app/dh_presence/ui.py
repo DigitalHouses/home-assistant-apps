@@ -26,20 +26,26 @@ CORE_NETWORK = ipaddress.ip_network("172.30.32.0/23")
 TRACKER_RE = re.compile(r"^device_tracker\.[a-z0-9_]+$")
 
 
+def authenticated_ingress_user(peer: str, headers) -> dict:
+    """Only the Supervisor proxy can assert these protected HA user headers."""
+    if peer != SUPERVISOR_INGRESS:
+        raise PermissionError("Only Supervisor Ingress may connect")
+    uid = (headers.get("X-Remote-User-Id") or "").strip()
+    name = (headers.get("X-Remote-User-Display-Name") or "").strip()
+    if not uid or not name or len(uid) > 150 or len(name) > 200:
+        raise PermissionError("Ingress user identity missing")
+    return {"user_id": uid, "user_name": name}
+
+
 def ingress_context(peer: str, headers) -> dict:
-    """Extract the *Core transport peer*, not an untrusted XFF prefix.
+    """Registration additionally requires a verified direct LAN origin.
 
     Core and Supervisor each append a connected peer to X-Forwarded-For;
     the second-to-last entry is the IP directly connected to HA Core.
     A Cloudflare connector with an apparent LAN IP is still refused when
     the original HA URL was not an IP/.local host.
     """
-    if peer != SUPERVISOR_INGRESS:
-        raise PermissionError("Only the Supervisor Ingress proxy may connect")
-    uid = (headers.get("X-Remote-User-Id") or "").strip()
-    name = (headers.get("X-Remote-User-Display-Name") or "").strip()
-    if not uid or not name or len(uid) > 150 or len(name) > 200:
-        raise PermissionError("Ingress user identity missing")
+    user = authenticated_ingress_user(peer, headers)
     forward = [x.strip() for x in (headers.get("X-Forwarded-For") or "").split(",")]
     if len(forward) < 2 or len(forward) > 12:
         raise PermissionError("Ingress proxy chain unavailable")
@@ -68,7 +74,7 @@ def ingress_context(peer: str, headers) -> dict:
             or actual_client.is_loopback
             or actual_client in ipaddress.ip_network("100.64.0.0/10")):
         raise PermissionError("The phone does not have a direct local HA connection")
-    return {"user_id": uid, "user_name": name, "ip": str(actual_client)}
+    return {**user, "ip": str(actual_client)}
 
 
 def gps_candidates(token: str) -> list[dict]:
@@ -122,9 +128,12 @@ def handler_factory(token: str, registry_path: str, excluded_users: set[str]):
         def context(self):
             return ingress_context(self.client_address[0], self.headers)
 
+        def authenticated_user(self):
+            return authenticated_ingress_user(self.client_address[0], self.headers)
+
         def do_GET(self):
             try:
-                context = self.context()
+                context = self.authenticated_user()
                 if self.path.split("?")[0] in ("/", "/index.html"):
                     body = HTML.encode("utf-8")
                     self.send_response(200)
@@ -219,7 +228,8 @@ pre{white-space:pre-wrap;word-break:break-word}.muted{color:#777}
 </style></head><body><main>
 <h2>DH Presence</h2>
 <section class="panel"><h3>Регистрация телефона</h3>
-<p>Откройте Home Assistant непосредственно с телефона через домашний Wi-Fi и локальный адрес.
+<p>Для регистрации откройте Home Assistant непосредственно с телефона через домашний Wi-Fi и локальный адрес.
+Через Cloudflare/VPN можно просматривать уже зарегистрированные устройства, но регистрацию выполнить нельзя.
 Пользователь определяется автоматически. Выберите <strong>именно этот телефон</strong>.</p>
 <div id="who" class="muted">Загрузка...</div>
 <select id="tracker" aria-label="Выбрать телефон"></select>
