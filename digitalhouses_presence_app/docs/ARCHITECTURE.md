@@ -55,3 +55,11 @@ Reconnect must not replay events from an old state snapshot. Event duplication/l
 ## Product lifecycle
 
 **Pilot status 0.1.1:** A runnable, GPS-only experimental Home Assistant App now exists with a `digitalhouses.app` marker, Supervisor configuration, Dockerfile, MQTT publisher, registry entry, compatibility validator, unit tests and CI. It is installed by Home Assistant Supervisor from repository sources (no GHCR `image:`). A single selected `device_tracker` identifies each resident. Native MQTT Select changes the live decision mode, with config-change precedence and persistent UI choice. The Core WebSocket adapter and trusted Wi-Fi engine remain future work; the pilot does not contain those mechanisms and cannot use Wi-Fi absence as evidence. Production-grade GHCR/telemetry and operational acceptance remain separate gates.
+
+## Implemented one-time WebSocket registration pilot (0.1.11; acceptance pending)
+
+- `registration_bridge/custom_components/dh_presence_registration` registers HA WebSocket candidates/register/status. The user is `connection.user`; local peer is `connection.remote` from Core. A user's own selected `mobile_app` config entry must own the tracker. HA `.storage` stores short-lived registration requests.
+- Core exposes authenticated pending/ack REST endpoints for the Supervisor App. The App acquires actual IP/MAC via host-network on-link `arping` and `NET_RAW`, then writes `/data/presence_registrations.json` (0600) and republish Dynamic MQTT Discovery.
+- Frontend `dh-presence-register-card` uses the actual HA WebSocket connection; no user/name/IP/MAC is trusted from client JavaScript. It requires a one-time local resource installation.
+- No `residents` or `resident_names` App Configuration values are needed for new residents. Existing tracker-only entries remain supported for migration.
+- **Not established:** standalone HA Core bridge deployment, App token privilege for the Core registration REST view, container L2/ARP and multi-device cryptographic binding. Do not connect alarm or claim Wi-Fi presence based on these registration probes.
