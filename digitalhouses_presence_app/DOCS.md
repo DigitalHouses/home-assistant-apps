@@ -1,4 +1,4 @@
-# DigitalHouses Presence App 0.1.2 — experimental pilot
+# DigitalHouses Presence App 0.1.3 — experimental pilot
 
 ## Configuration
 The App Store's native **Configuration** tab is the supported installation and settings UI. This build deliberately does not register any custom Home Assistant frontend panel.
@@ -36,7 +36,7 @@ Use Home Assistant **Settings → Apps → App Store** and the already configure
 
 Automatic registration from phone is not available until a minimum authorized HA Core custom integration is implemented and validated. The 14 October WebSocket proof of concept must not be misrepresented as an installed feature. Wi-Fi probing, 15+ minute iPhone sleep qualification and robust negative Wi-Fi verification remain unproven; no scanner or negative ARP result affects presence.
 
-Telemetry is not emitted in this experimental preproduction pilot; the config flag is reserved for the eventual policy-compliant supported release. Do not deploy to Amir, and do not use the pilot to arm/disarm an alarm.
+Telemetry is not emitted in this experimental preproduction pilot **even when** `telemetry_enabled: true`; the config flag is reserved for the eventual policy-compliant supported release. Startup now logs this explicitly. MQTT availability does not demonstrate Home Assistant Core API access. Startup logs the result of the first Core configuration/trackers read; a 403/404 there must be handled as a real Core API or tracker problem, separately from the already removed Bashio timezone lookup. Do not deploy to Amir, and do not use the pilot to arm/disarm an alarm.
 
 ## Next acceptance milestones
 
