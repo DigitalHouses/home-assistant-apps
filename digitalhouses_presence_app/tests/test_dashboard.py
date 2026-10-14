@@ -46,7 +46,8 @@ class LovelaceCardTests(unittest.TestCase):
         self.assertIn("fetch_latest_release()", runtime)
         self.assertIn("publish_controls", runtime)
         self.assertIn("action: none", code)
-        self.assertIn("type: select-options", code)\n        self.assertIn("Последнее подтверждение:", code)
+        self.assertIn("type: select-options", code)
+        self.assertIn("Последнее подтверждение:", code)
 
     def test_dashboard_embeds_same_card_without_drift(self):
         card = CARD.read_text(encoding="utf-8")
