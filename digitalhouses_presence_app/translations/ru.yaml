@@ -1,0 +1,19 @@
+configuration:
+  presence_mode:
+    name: Режим присутствия
+    description: В этой опытной версии работает GPS. Сетевой движок Wi-Fi ещё не включён.
+  wifi_absence_minutes:
+    name: Время подтверждения отсутствия Wi-Fi
+  gps_poll_interval_seconds:
+    name: Период проверки GPS, секунд
+  gps_freshness_seconds:
+    name: Актуальность GPS, секунд
+  residents:
+    name: Жильцы
+    description: HA User ID, имя, Mobile Companion Device ID и GPS device_tracker.
+  exclude_users:
+    name: Исключённые HA User ID
+  telemetry_enabled:
+    name: Согласие на статистику (неактивно в экспериментальной версии)
+  log_level:
+    name: Журналирование

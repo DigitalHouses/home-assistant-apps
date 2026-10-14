@@ -102,6 +102,16 @@
         "status": "pending_controlled_reinstall",
         "target": "digitalhouses_climate_app"
       }
+    },
+    {
+      "id": "digitalhouses_presence_app",
+      "type": "app",
+      "entity_prefix": "dh_presence_app",
+      "display_name": "Presence App",
+      "telemetry_allowed": false,
+      "release": null,
+      "repository_directory": "digitalhouses_presence_app",
+      "haos_slug": "digitalhouses_presence_app"
     }
   ]
 }

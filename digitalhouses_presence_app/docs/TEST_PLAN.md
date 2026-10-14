@@ -26,7 +26,7 @@
 
 ## Stage 3 — safe pilot
 
-- Build functional Home Assistant App: Dockerfile, config, run script, translations, icon/logo, implementation marker, validation, product registry, CI and immutable release pipeline.
+- **Implemented in experimental GPS pilot 0.1.0:** runnable App Dockerfile, config, run script, translations, icon/logo, implementation marker, product validator, registry, CI and MQTT transport. **Pending:** production immutable release pipeline integration, live HA acceptance, Core WebSocket registration adapter, Wi-Fi engine and standard status-card operations.
 - Install only on owner's home HA `192.168.11.33:80` after comparing prior experiment and preserving rollback.
 - Exercise state loss/recovery, source contradiction, restart, long sleep and actual mobile registration.
 - Alarm automation remains **disconnected** until a separate security-oriented acceptance.
