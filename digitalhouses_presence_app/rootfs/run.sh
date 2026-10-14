@@ -3,7 +3,11 @@ set -Eeuo pipefail
 
 : "${APP_VERSION:?APP_VERSION required}"
 bashio::log.info "Starting DigitalHouses Presence App ${APP_VERSION}"
-export TZ="$(bashio::supervisor.timezone)"
+# Home Assistant Core API is enabled, but unrestricted Supervisor API is not.
+# Never call bashio::supervisor.timezone here: it needs Supervisor API
+# permissions which this GPS/MQTT pilot does not require.
+# DigitalHouses Home Assistant installations use Asia/Almaty local time.
+export TZ="${TZ:-Asia/Almaty}"
 export MQTT_HOST="$(bashio::services mqtt host)"
 export MQTT_PORT="$(bashio::services mqtt port)"
 export MQTT_USER="$(bashio::services mqtt username)"

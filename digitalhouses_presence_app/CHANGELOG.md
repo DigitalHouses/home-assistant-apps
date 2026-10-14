@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.3
+
+- Remove the unnecessary Supervisor timezone API lookup that can log `Unable to access the API, forbidden` during App startup. Preserve least-privilege `homeassistant_api: true` access to the Core GPS API.
+- Use the DigitalHouses local `Asia/Almaty` timezone for startup logs without a privileged Supervisor call.
+- Diagnose Home Assistant Core API authorization/status failures separately from MQTT connectivity and report tracker freshness/status changes without revealing coordinates.
+- Disclose that experimental telemetry is not implemented even when `telemetry_enabled` is set to true.
+- Add regression tests for startup permissions, Core API HTTP error detail and safe telemetry disclosure.
+
 ## 0.1.2
 
 - Apply HA MQTT Select mode commands immediately instead of waiting for the next GPS polling interval.

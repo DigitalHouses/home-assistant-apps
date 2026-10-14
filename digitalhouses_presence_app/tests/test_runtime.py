@@ -3,10 +3,11 @@ import queue
 import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
+from urllib.error import HTTPError
 from pathlib import Path
 from types import SimpleNamespace
 
-from app import MqttOutput, gps_from_ha_state, build_engine, load_options, friendly_tracker_name, observe_friendly_name
+from app import MqttOutput, gps_from_ha_state, build_engine, load_options, friendly_tracker_name, observe_friendly_name, api_error_detail
 from dh_presence.core import Mode, Status
 from dh_presence.storage import load, save
 
@@ -121,3 +122,15 @@ class RuntimeSafetyTests(unittest.TestCase):
             topic="DigitalHouses/Global/dh_presence_app/mode/set",
             payload=b"wifi", retain=True))
         self.assertTrue(output.mode_commands.empty())
+
+    def test_api_failure_reports_http_status_without_credentials(self):
+        exc = HTTPError("http://supervisor/core/api/config", 403, "Forbidden", None, None)
+        detail = api_error_detail(exc)
+        self.assertIn("403", detail)
+        self.assertNotIn("supervisor", detail)
+
+    def test_run_script_avoids_privileged_supervisor_timezone_query(self):
+        root = Path(__file__).resolve().parents[1]
+        script = (root / "rootfs/run.sh").read_text(encoding="utf-8")
+        self.assertNotIn("bashio::supervisor.timezone)", script)
+        self.assertIn('TZ="${TZ:-Asia/Almaty}"', script)

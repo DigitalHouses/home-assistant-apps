@@ -1,6 +1,6 @@
 # DigitalHouses Presence App
 
-**Status: experimental installable GPS pilot, version 0.1.2.** Not approved for alarm automation.
+**Status: experimental installable GPS pilot, version 0.1.3.** Not approved for alarm automation.
 
 This application belongs to `DigitalHouses/home-assistant-apps/digitalhouses_presence_app` and is installed from the Home Assistant **Settings → Apps → App Store** interface after refreshing the configured DigitalHouses repository. No separate GitHub repository, shell installer or manual copy to Home Assistant is needed.
 

@@ -11,7 +11,7 @@ import threading
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 import paho.mqtt.client as mqtt
@@ -105,6 +105,13 @@ def load_options(path=OPTIONS) -> dict:
         raise ValueError("exclude_users cannot be verified for tracker-only residents; omit excluded trackers from residents (or use legacy mapped configuration)")
     data["presence_mode"] = mode
     return data
+
+
+def api_error_detail(exc: Exception) -> str:
+    """Report API failure class/status without logging bearer tokens or response bodies."""
+    if isinstance(exc, HTTPError):
+        return f"HTTP {exc.code} ({exc.reason})"
+    return type(exc).__name__
 
 
 def http_json(url: str, token: str, timeout: int = 8):
@@ -285,8 +292,12 @@ def run():
     home = None
     discovery_ready = False
     previous_mqtt_connection = False
+    previous_core_error = None
+    reported_gps_status = {}
     LOG.info("Starting %s version %s, mode=%s, configured_residents=%d", "DigitalHouses Presence App", version, engine.mode.value, len(engine.residents))
     LOG.warning("Pilot safety gate: Wi-Fi detection and automatic registration are NOT active. No Wi-Fi absence can mark a resident away.")
+    if options["telemetry_enabled"]:
+        LOG.warning("Experimental pilot: telemetry_enabled=true, but there is no telemetry sender; no statistics are transmitted.")
     if not engine.residents:
         LOG.warning("No residents configured. Edit App Configuration to add HA user ID, Companion device and GPS tracker.")
     try:
@@ -315,8 +326,13 @@ def run():
                 try:
                     conf = http_json("http://supervisor/core/api/config", token)
                     home = (float(conf["latitude"]), float(conf["longitude"]))
+                    LOG.info("Home Assistant Core API connected; home coordinates resolved for GPS distance")
+                    previous_core_error = None
                 except (URLError, OSError, KeyError, ValueError, TypeError) as exc:
-                    LOG.warning("Home Assistant home coordinates unavailable: %s", type(exc).__name__)
+                    problem = api_error_detail(exc)
+                    if problem != previous_core_error:
+                        LOG.error("Home Assistant Core API /config unavailable: %s; GPS distance and fresh presence remain unavailable until access succeeds", problem)
+                        previous_core_error = problem
             events = []
             for r in engine.residents.values():
                 try:
@@ -324,14 +340,23 @@ def run():
                     name_changed = observe_friendly_name(r, data) or name_changed
                     status, distance, observed = gps_from_ha_state(data, now, options["gps_freshness_seconds"], home) if home else (Status.UNAVAILABLE, None, None)
                     if observed is not None and status is not Status.UNAVAILABLE:
+                        if reported_gps_status.get(r.tracker) != status.value:
+                            LOG.info("GPS tracker %s: %s (fresh observation)", r.tracker, status.value)
+                            reported_gps_status[r.tracker] = status.value
                         events.extend(engine.gps_observation(r.tracker, status, observed, distance))
                     else:
+                        if reported_gps_status.get(r.tracker) != "unavailable":
+                            LOG.warning("GPS tracker %s: source unavailable/stale; last confirmed presence preserved", r.tracker)
+                            reported_gps_status[r.tracker] = "unavailable"
                         r.gps = Status.UNAVAILABLE
                         r.distance = None
                 except (URLError, OSError, ValueError, TypeError, KeyError) as exc:
                     r.gps = Status.UNAVAILABLE
                     r.distance = None
-                    LOG.warning("GPS source %s unavailable: %s", r.tracker, type(exc).__name__)
+                    problem = api_error_detail(exc)
+                    if reported_gps_status.get(r.tracker) != "error:" + problem:
+                        LOG.error("Home Assistant Core API tracker %s unavailable: %s; last confirmed presence preserved", r.tracker, problem)
+                        reported_gps_status[r.tracker] = "error:" + problem
             engine.expire(now)
             if name_changed and mqtt_out.connected.is_set():
                 discovery_ready = synchronize_discovery(mqtt_out, version, engine)
