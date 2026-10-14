@@ -1,4 +1,4 @@
-# DigitalHouses Presence App 0.1.8 — experimental pilot
+# DigitalHouses Presence App 0.1.9 — experimental pilot
 
 ## Configuration
 The App Store's native **Configuration** tab is the supported installation and settings UI. This build deliberately does not register any custom Home Assistant frontend panel.
@@ -16,7 +16,7 @@ There is no manual HA user ID, display name or Mobile Companion device ID input 
 
 **Mode from both places:** `presence_mode` in App Configuration sets the initial/default mode. Home Assistant shows `select.dh_presence_app_mode` on the DigitalHouses Presence App MQTT device (also present in the example Lovelace dashboard). A selection in HA applies immediately (without waiting for GPS polling) and persists in `/data/presence_mode.json`; on restart it is retained unless the App Configuration default was actually changed. Selecting the same mode does not restart anything. Invalid MQTT commands are ignored.
 
-**Wi-Fi pilot limitation:** `gps` works; `hybrid` uses GPS only pending verified Wi-Fi input; selecting `wifi` makes aggregate presence unavailable rather than advertising an old GPS result as a Wi-Fi observation.
+**Wi-Fi pilot limitation:** each registered phone gets a separate Wi-Fi binary sensor in the same DH Presence MQTT Device; it is unavailable pending a real Wi-Fi engine.  `gps` works; `hybrid` uses GPS only pending verified Wi-Fi input; selecting `wifi` makes aggregate presence unavailable rather than advertising an old GPS result as a Wi-Fi observation.
 
 **Excluded administrators:** Only explicitly configured trackers are tracked. The old `exclude_users` HA User ID list is still supported for legacy records that include a known User ID. In the new single-tracker format the app cannot prove the account owner from a `device_tracker` alone; therefore combining tracker-only registration with non-empty `exclude_users` fails loudly. Omit excluded users' trackers from the roster. There is no implicit admin exclusion.
 
@@ -55,20 +55,6 @@ resident_names:
 
 Supervisor persists `resident_names` alongside the App's other settings. Only enrolled GPS trackers are allowed; unregistered or duplicate tracker keys and empty user names are rejected at startup. Leaving `resident_names: []` is safe for existing users. The App continues reading the actual device label from its HA `device_tracker` friendly name; it publishes `user_name` (or null) and `device_name` in machine events. MQTT aggregate resident attributes also include `user_name`. No second HA Person resolver or local package map is used.
 
-## One-time user/device name mapping
-
-Preserve the original `residents` tracker list. Add optional names once in the App's Configuration UI:
-
-```yaml
-residents:
-  - device_tracker.13promax_sky
-resident_names:
-  - device_tracker: device_tracker.13promax_sky
-    user_name: "Имя жильца"
-```
-
-Supervisor stores the App options persistently. Only registered trackers can be mapped; duplicates, blanks, extra keys and unknown trackers are rejected. If a mapping is omitted, the App works as before and reports `user_name: null`, using the actual tracker friendly name as `device_name`. Mapping does not change the stable resident key, device identification or previously confirmed presence.
-
 ## Local Recorder and notifications
 
 - Install [the Russian HA package](examples/packages/dh_presence_app_notification_local_package_ru.yaml) at `/config/packages/dh_presence_app_notification_local_package_ru.yaml`; use `homeassistant: packages: !include_dir_named packages`. The file's top-level key is `automation:`.
@@ -85,8 +71,8 @@ Supervisor stores the App options persistently. Only registered trackers can be 
 - Requires Mushroom and `custom:button-card >= 5.0`, already used by other DigitalHouses dashboards.
 - The resident rows are generated from `binary_sensor.dh_presence_app_residents_home` → `residents` attribute. Distance and GPS freshness use actual per-resident MQTT entity IDs; no local MAC, user ID, IP, or customer-specific tracker is hardcoded.
 - Switch mode via actual HA `select.dh_presence_app_mode`. Wi-Fi-only is explicitly labelled unsupported during pilot. A stale GPS source is flagged; previous confirmed presence is presented as historical rather than live.
-- Events and runtime start time are available through two read-only Mushroom chips. No invented App-owned update/restart services or operations are used.
-- HAOS Supervisor owns install and restart. The standardized foreground `sensor.dh_presence_app_card` runtime operation contract is future work and must not be simulated by frontend YAML.
+- Events and runtime start time are available through read-only Mushroom chips. Runtime now owns Refresh and Check version commands; restart/install are native Supervisor actions.
+- HAOS Supervisor owns install and restart. The runtime publishes actual `sensor.dh_presence_app_card` operation state and verified release information. The App never performs its own container update/restart.
 
 ## Known limitations
 
@@ -97,3 +83,12 @@ Telemetry is not emitted in this experimental preproduction pilot **even when** 
 ## Next acceptance milestones
 
 See [testing plan](docs/TEST_PLAN.md), [requirements](docs/REQUIREMENTS.md), and [MQTT contract](docs/MQTT_CONTRACT.md).
+
+## Device naming, GPS freshness, and operations (0.1.9)
+
+- MQTT Device is named **DH Presence**; its immutable identifier stays `dh_presence_app`, preserving HA entity IDs and histories.
+- HA tracker `last_reported` is preferred where provided because identical reports do not advance `last_updated`. No HTTP poll of unchanged source state counts as a new phone report; a stale GPS source remains unavailable.
+- GPS binary sensor requires a fresh valid HA tracker report. Distance is unavailable unless there are fresh numeric latitude/longitude values. Wi-Fi sensor is present for every registered tracker but is unavailable until independently verified Wi-Fi observations exist.
+- Refresh is a full immediate GPS observation and retained MQTT publish, **not** an App restart. Unfresh or missing registered sources make the foreground result an error; no false successful last-refresh timestamp.
+- Check Version filters GitHub Releases for stable `digitalhouses_presence_app-vX.Y.Z` tags. No published release means latest-version diagnostics stay unknown rather than claiming an upgrade. Background check every 24h does not take over the foreground card.
+- Native `update.digitalhouses_presence_app_update` gates the New Version chip. Supervisor install and restart use normal HA actions. No elevated Supervisor permissions are granted to the App.

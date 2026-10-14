@@ -55,6 +55,64 @@ def discovery(version: str, residents: list[Resident]) -> dict:
             "retain": False,
             "availability": availability
         },
+        "card": {
+            "platform": "sensor", "name": "Operation status",
+            "unique_id": "dh_presence_app_card", "default_entity_id": "sensor.dh_presence_app_card",
+            "state_topic": topic("operations"),
+            "value_template": "{{ value_json.card.state }}",
+            "json_attributes_topic": topic("operations"),
+            "json_attributes_template": "{{ value_json.card | tojson }}",
+            "entity_category": "diagnostic", "availability": availability
+        },
+        "refresh": {
+            "platform": "button", "name": "Refresh",
+            "unique_id": "dh_presence_app_refresh", "default_entity_id": "button.dh_presence_app_refresh",
+            "command_topic": topic("command"), "payload_press": "REFRESH",
+            "entity_category": "config", "availability": availability
+        },
+        "refresh_state": {
+            "platform": "sensor", "name": "Refresh status",
+            "unique_id": "dh_presence_app_refresh_state",
+            "default_entity_id": "sensor.dh_presence_app_refresh_state",
+            "state_topic": topic("operations"),
+            "value_template": "{{ value_json.refresh_state }}",
+            "entity_category": "diagnostic", "availability": availability
+        },
+        "last_refresh": {
+            "platform": "sensor", "name": "Last refresh",
+            "unique_id": "dh_presence_app_last_refresh",
+            "default_entity_id": "sensor.dh_presence_app_last_refresh",
+            "state_topic": topic("operations"),
+            "value_template": "{{ value_json.last_refresh or 'unknown' }}",
+            "device_class": "timestamp", "entity_category": "diagnostic", "availability": availability
+        },
+        "check_updates": {
+            "platform": "button", "name": "Check version",
+            "unique_id": "dh_presence_app_check_updates",
+            "default_entity_id": "button.dh_presence_app_check_updates",
+            "command_topic": topic("command"), "payload_press": "CHECK_UPDATES",
+            "entity_category": "config", "availability": availability
+        },
+        "latest_version": {
+            "platform": "sensor", "name": "Latest release",
+            "unique_id": "dh_presence_app_latest_version",
+            "default_entity_id": "sensor.dh_presence_app_latest_version",
+            "state_topic": topic("release"),
+            "value_template": "{{ value_json.latest_version or 'unknown' }}",
+            "entity_category": "diagnostic", "availability": availability
+        },
+        "update_available": {
+            "platform": "binary_sensor", "name": "Update available",
+            "unique_id": "dh_presence_app_update_available",
+            "default_entity_id": "binary_sensor.dh_presence_app_update_available",
+            "state_topic": topic("release"),
+            "value_template": "{{ 'ON' if value_json.update_available else 'OFF' }}",
+            "availability": [availability, {
+                "topic": topic("release/availability"),
+                "payload_available": "online", "payload_not_available": "offline"
+            }],
+            "availability_mode": "all"
+        },
         "source_status": {
             "platform": "sensor", "name": "Source status", "unique_id": "dh_presence_app_source_status",
             "default_entity_id": "sensor.dh_presence_app_source_status",
@@ -75,6 +133,20 @@ def discovery(version: str, residents: list[Resident]) -> dict:
             "availability_mode": "all",
             "availability": [availability, {"topic": topic("gps/"+r.key+"/availability"), "payload_available": "online", "payload_not_available": "offline"}]
         }
+        components[r.key + "_wifi_home"] = {
+            "platform": "binary_sensor", "name": r.name + " Wi-Fi home",
+            "unique_id": prefix + "_wifi_home",
+            "default_entity_id": "binary_sensor." + prefix + "_wifi_home",
+            "state_topic": topic("state"),
+            "value_template": "{{ 'ON' if value_json.residents['" + r.key + "'].wifi == 'home' else 'OFF' }}",
+            "payload_on": "ON", "payload_off": "OFF",
+            "availability_mode": "all",
+            "availability": [
+                availability,
+                {"topic": topic("wifi/" + r.key + "/availability"),
+                 "payload_available": "online", "payload_not_available": "offline"}
+            ]
+        }
         components[r.key + "_distance"] = {
             "platform": "sensor", "name": r.name + " distance",
             "unique_id": prefix + "_distance", "default_entity_id": "sensor." + prefix + "_distance",
@@ -83,7 +155,7 @@ def discovery(version: str, residents: list[Resident]) -> dict:
             "availability_mode": "all",
             "availability": [availability, {"topic": topic("distance/"+r.key+"/availability"), "payload_available": "online", "payload_not_available": "offline"}]
         }
-    return {"device": {"identifiers": ["dh_presence_app"], "name": "DigitalHouses Presence App",
+    return {"device": {"identifiers": ["dh_presence_app"], "name": "DH Presence",
                        "manufacturer": "DigitalHouses", "model": "Presence App", "sw_version": version},
             "origin": {"name": "DigitalHouses Presence App", "sw_version": version}, "components": components}
 

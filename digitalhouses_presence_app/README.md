@@ -1,6 +1,6 @@
 # DigitalHouses Presence App
 
-**Status: experimental installable GPS pilot, version 0.1.8.** Not approved for alarm automation.
+**Status: experimental GPS pilot, version 0.1.9. Wi-Fi sensing is not operational.** Not approved for alarm automation.
 
 This application belongs to `DigitalHouses/home-assistant-apps/digitalhouses_presence_app` and is installed from the Home Assistant **Settings → Apps → App Store** interface after refreshing the configured DigitalHouses repository. No separate GitHub repository, shell installer or manual copy to Home Assistant is needed.
 
@@ -9,12 +9,12 @@ This application belongs to `DigitalHouses/home-assistant-apps/digitalhouses_pre
 - Registers each resident with **one** explicit GPS `device_tracker` from that resident's phone. Names come from HA; multiple Companion devices signed in as the same user are not automatically included.
 - The startup mode is configured in the App's Configuration tab and can be switched live in HA via `select.dh_presence_app_mode` (on the same MQTT device). HA selection survives restart, while a changed config default takes priority.
 - Logs a confirmed MQTT Discovery publish on `homeassistant/device/dh_presence_app/config`, retries failures, and re-announces on HA birth and periodically. MQTT broker delivery does not prove HA accepted a payload. Version 0.1.6 additionally checks HA Core API for the MQTT integration and expected Presence entities, and logs the result. If none appear, check HA MQTT integration logs for schema errors.
-- Publishes a single DigitalHouses Presence MQTT Device, aggregate `binary_sensor.dh_presence_app_residents_home`, individual resident GPS binary sensors and numeric straight-line distance, version/started diagnostics and one MQTT Event.
+- Publishes one MQTT Device named **DH Presence**, aggregate `binary_sensor.dh_presence_app_residents_home`, individual GPS and Wi-Fi binary sensors and numeric straight-line distance, version/started diagnostics and one MQTT Event.
 - Persists last confirmed logical resident states under `/data`; expired/missing sources never become `not_home`. A never-confirmed aggregate remains unavailable.
 - Excluded users never create entities.
 - MQTT events are non-retained; HA notification packages own human-facing messages.
 
-**Not available yet:** in-app registration UI / WebSocket Core adapter; ARP Wi-Fi probing; trustworthy network absence; Wi-Fi/Hybrid correction and standard App operation card. Selecting `wifi` without an active Wi-Fi engine does not mean anyone is away. Selecting `hybrid` currently uses GPS-only evidence.
+**Not available yet:** in-app registration UI / WebSocket Core adapter; ARP Wi-Fi probing; trustworthy network absence; Wi-Fi/Hybrid correction. Wi-Fi entity availability remains offline until credible data exists. Selecting `wifi` without an active Wi-Fi engine does not mean anyone is away. Selecting `hybrid` currently uses GPS-only evidence.
 
 ## Presence Lovelace card
 
@@ -22,7 +22,7 @@ The maintained [Russian Presence card](examples/lovelace/presence_app_card_ru.ya
 
 A full `sections` page embedding this same card is available as [dashboard YAML](examples/lovelace/dh_presence_app_dashboard.yaml). Both examples require `custom:button-card >= 5.0` and Mushroom. Paste the *card* file under a dashboard **Manual YAML card**; paste the *dashboard* file when editing the complete dashboard view in YAML.
 
-The mode selector is functional. The status and resident rows are observational. The App does not yet implement `sensor.dh_presence_app_card` or product-level refresh/release-check buttons, so this card deliberately does **not** expose pretend operation controls or claim to implement the full [DigitalHouses Unified Status Card](../docs/standards/UNIFIED_PRODUCT_STATUS_CARD_STANDARD.md). App installation/restart remains Supervisor-owned. GPS-unavailable shows the last confirmed state with a warning, not an assertion of live presence. Wi-Fi and Hybrid limitations remain unchanged.
+The mode selector is functional. The status and resident rows are observational. The App exposes genuine operation entities (`sensor.dh_presence_app_card`, `button.dh_presence_app_refresh`, `button.dh_presence_app_check_updates`, refresh-state and version diagnostics) following the [DigitalHouses Unified Status Card](../docs/standards/UNIFIED_PRODUCT_STATUS_CARD_STANDARD.md). Refresh polls current HA trackers immediately and succeeds only when all registered GPS sources are fresh and the state was published. Version checks query stable product-tagged GitHub Releases. Installation/restart remain Supervisor-owned. GPS-unavailable shows the last confirmed logical state with a warning, not an assertion of live presence. Fresh `last_reported` is preferred to a stale `last_updated`, but old/unreported GPS does not become fresh. Distance requires recent coordinates. Each registered phone also gets a Wi-Fi binary sensor; until the independently verified Wi-Fi engine is installed it remains unavailable, rather than pretending the phone is absent. Hybrid limitations remain unchanged.
 
 ## One-time resident naming in the App
 

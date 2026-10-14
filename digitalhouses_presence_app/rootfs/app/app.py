@@ -19,12 +19,14 @@ from dh_presence.core import Engine, Mode, Status, haversine_km, validate_tracke
 from dh_presence.discovery import DISCOVERY, discovery, topic, with_cleanup
 from dh_presence.storage import load, save
 from dh_presence.modes import ModeSelection
+from dh_presence.operations import Operations, fetch_latest_release, is_newer
 
 LOG = logging.getLogger("dh_presence_app")
 OPTIONS = "/data/options.json"
 STATE = "/data/presence_state.json"
 DISCOVERY_FILE = "/data/presence_discovery.json"
 MODE_FILE = "/data/presence_mode.json"
+OPERATIONS_FILE = "/data/presence_refresh.json"
 EVENT_NAMES = {"arrival", "departure", "gps_in", "gps_out", "wifi_in", "wifi_out"}
 STOP = threading.Event()
 WAKE = threading.Event()
@@ -41,7 +43,9 @@ def gps_from_ha_state(state: dict, now: datetime, freshness: int, home: tuple) -
     """No state/coordinates freshness: unavailable, not not_home."""
     if not isinstance(state, dict) or not isinstance(state.get("state"), str):
         return Status.UNAVAILABLE, None, None
-    observed_at_raw = state.get("last_updated")
+    # last_updated does not change on repeated identical HA reports.
+    # Accept fresh last_reported, but never substitute App poll time as evidence.
+    observed_at_raw = state.get("last_reported") or state.get("last_updated")
     if not isinstance(observed_at_raw, str):
         return Status.UNAVAILABLE, None, None
     try:
@@ -188,6 +192,7 @@ class MqttOutput:
         self.client.on_message = self._message
         self.mode_commands = queue.SimpleQueue()
         self.discovery_requests = queue.SimpleQueue()
+        self.operation_commands = queue.SimpleQueue()
         self.client.will_set(topic("availability"), "offline", retain=True, qos=1)
         self.client.connect_async(os.environ["MQTT_HOST"], int(os.environ["MQTT_PORT"]), keepalive=60)
         self.client.loop_start()
@@ -199,8 +204,9 @@ class MqttOutput:
             self.connected.set()
             mode_result = client.subscribe(topic("mode/set"), qos=1)
             birth_result = client.subscribe("homeassistant/status", qos=1)
-            LOG.info("MQTT connected; mode subscription result=%s; HA birth subscription result=%s",
-                     mode_result[0], birth_result[0])
+            command_result = client.subscribe(topic("command"), qos=1)
+            LOG.info("MQTT connected; mode=%s birth=%s commands=%s",
+                     mode_result[0], birth_result[0], command_result[0])
         else:
             self.connected.clear()
             LOG.error("MQTT rejected connection: %s", reason_code)
@@ -214,6 +220,16 @@ class MqttOutput:
             if msg.payload == b"online" and not getattr(msg, "retain", False):
                 self.discovery_requests.put("ha_birth")
                 WAKE.set()
+            return
+        if msg.topic == topic("command"):
+            if getattr(msg, "retain", False):
+                LOG.warning("Ignoring retained MQTT operation command")
+                return
+            if msg.payload in (b"REFRESH", b"CHECK_UPDATES"):
+                self.operation_commands.put(msg.payload.decode("ascii"))
+                WAKE.set()
+            else:
+                LOG.warning("Ignoring invalid MQTT operation command")
             return
         if msg.topic != topic("mode/set"):
             return
@@ -329,7 +345,8 @@ def save_discovery(value: dict):
     os.replace(temp, path)
 
 
-def publish_snapshot(output: MqttOutput, engine: Engine, version: str, started: str) -> bool:
+def publish_snapshot(output: MqttOutput, engine: Engine, version: str, started: str,
+                     operations: Operations, latest_version: str | None) -> bool:
     snapshot = engine.snapshot()
     if not output.publish(topic("mode/state"), engine.mode.value):
         return False
@@ -342,12 +359,27 @@ def publish_snapshot(output: MqttOutput, engine: Engine, version: str, started: 
         return False
     for r in engine.residents.values():
         ok = output.publish(topic("gps/"+r.key+"/availability"), "online" if r.gps is not Status.UNAVAILABLE else "offline")
+        ok = output.publish(topic("wifi/"+r.key+"/availability"), "online" if r.wifi is not Status.UNAVAILABLE else "offline") and ok
         ok = output.publish(topic("distance/"+r.key+"/availability"), "online" if r.distance is not None else "offline") and ok
         if r.distance is not None:
             ok = output.publish(topic("distance/"+r.key), r.distance) and ok
         if not ok:
             return False
+    if not publish_controls(output, operations, version, latest_version):
+        return False
     return output.publish(topic("availability"), "online")
+
+
+def publish_controls(output: MqttOutput, operations: Operations,
+                     installed_version: str, latest_version: str | None) -> bool:
+    if not output.publish(topic("operations"), operations.snapshot()):
+        return False
+    if not output.publish(topic("release"), {
+        "latest_version": latest_version,
+        "update_available": is_newer(installed_version, latest_version),
+    }):
+        return False
+    return output.publish(topic("release/availability"), "online" if latest_version else "offline")
 
 
 def run():
@@ -357,6 +389,9 @@ def run():
     engine = build_engine(options, saved)
     modes = ModeSelection(MODE_FILE, options["presence_mode"])
     engine.set_mode(modes.selected)
+    operations = Operations(OPERATIONS_FILE)
+    latest_version = None
+    last_release_check = None
     token = os.environ["SUPERVISOR_TOKEN"]
     started = datetime.now(timezone.utc).isoformat()
     mqtt_out = MqttOutput(version)
@@ -406,6 +441,14 @@ def run():
                         last_discovery_session = now_monotonic
                     else:
                         LOG.error("MQTT Discovery not synchronized; retrying automatically, retained topic=%s", DISCOVERY)
+            operations.tick()
+            pending_operations = set()
+            while not mqtt_out.operation_commands.empty():
+                pending_operations.add(mqtt_out.operation_commands.get_nowait())
+            refresh_requested = "REFRESH" in pending_operations
+            check_requested = "CHECK_UPDATES" in pending_operations
+            if refresh_requested and operations.begin("refresh"):
+                publish_controls(mqtt_out, operations, version, latest_version)
             while not mqtt_out.mode_commands.empty():
                 requested = mqtt_out.mode_commands.get_nowait()
                 if modes.change(requested):
@@ -459,7 +502,10 @@ def run():
                 discovery_ready = synchronize_discovery(mqtt_out, version, engine)
             # Commit durable current state BEFORE sending retained MQTT state and events.
             save(STATE, engine.persistent())
-            if mqtt_out.connected.is_set() and discovery_ready and publish_snapshot(mqtt_out, engine, version, started):
+            published = (mqtt_out.connected.is_set() and discovery_ready
+                         and publish_snapshot(mqtt_out, engine, version, started,
+                                              operations, latest_version))
+            if published:
                 if not published_state_logged:
                     LOG.info("MQTT presence state published topic=%s residents=%d mode=%s",
                              topic("state"), len(engine.residents), engine.mode.value)
@@ -476,6 +522,39 @@ def run():
                         "device_tracker": resident.tracker,
                         **event
                     }, retain=False, force=True)
+            if refresh_requested:
+                error = None
+                if not published:
+                    error = "MQTT snapshot not acknowledged"
+                elif not engine.residents:
+                    error = "No registered phone trackers"
+                elif engine.mode is Mode.WIFI:
+                    error = "Verified Wi-Fi engine is not active"
+                elif any(r.gps is Status.UNAVAILABLE for r in engine.residents.values()):
+                    error = "One or more GPS trackers have no fresh observation"
+                try:
+                    operations.finish(error, refresh_succeeded=(error is None))
+                except (OSError, ValueError) as exc:
+                    operations.finish("Could not persist refresh: " + type(exc).__name__)
+                publish_controls(mqtt_out, operations, version, latest_version)
+
+            if check_requested and operations.begin("check"):
+                publish_controls(mqtt_out, operations, version, latest_version)
+                last_release_check = time.monotonic()
+                try:
+                    latest_version = fetch_latest_release()
+                    operations.finish()
+                except (URLError, OSError, ValueError, TypeError, KeyError) as exc:
+                    operations.finish("Release check failed: " + api_error_detail(exc))
+                publish_controls(mqtt_out, operations, version, latest_version)
+            elif last_release_check is None or time.monotonic() - last_release_check >= 86400:
+                last_release_check = time.monotonic()
+                try:
+                    latest_version = fetch_latest_release()
+                except (URLError, OSError, ValueError, TypeError, KeyError) as exc:
+                    LOG.warning("Background stable release check unavailable: %s", api_error_detail(exc))
+                publish_controls(mqtt_out, operations, version, latest_version)
+
             # Broker QoS1 acknowledgment is not evidence that HA accepted
             # Discovery. After HA has time to process it, verify read-only via
             # Core REST; log only on change and recheck at a bounded interval.
@@ -498,7 +577,8 @@ def run():
             # Clear BEFORE checking pending commands to avoid a lost wake-up.
             WAKE.clear()
             if not STOP.is_set() and mqtt_out.mode_commands.empty():
-                WAKE.wait(options["gps_poll_interval_seconds"])
+                WAKE.wait(min(options["gps_poll_interval_seconds"],
+                              5 if operations.state == "success" else options["gps_poll_interval_seconds"]))
     finally:
         mqtt_out.stop()
 
