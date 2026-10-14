@@ -29,14 +29,14 @@ class IngressTests(unittest.TestCase):
             "ip": "192.168.11.54",
         })
 
-    def test_ignores_spoofed_xff_prefix(self):
-        # Genuine core transport peer precedes Core's appended Docker hop.
+    def test_rejects_proxy_or_spoofed_xff_prefix(self):
+        # Any extra forwarded hop is inconsistent with direct local Core
+        # access, even if its second-last peer resembles a private LAN phone.
         headers = self.headers(**{
             "X-Forwarded-For": "192.168.11.199, 192.168.11.54, 172.30.32.1",
         })
-        self.assertEqual(
-            ingress_context(SUPERVISOR_INGRESS, headers)["ip"],
-            "192.168.11.54")
+        with self.assertRaises(PermissionError):
+            ingress_context(SUPERVISOR_INGRESS, headers)
 
     def test_rejects_non_supervisor_peer(self):
         with self.assertRaises(PermissionError):
@@ -86,6 +86,11 @@ class IngressTests(unittest.TestCase):
     def test_supervisor_ingress_ip_matches_documented_endpoint(self):
         self.assertEqual(SUPERVISOR_INGRESS, "172.30.32.2")
         self.assertIn(ipaddress.ip_address("172.30.32.1"), CORE_NETWORK)
+
+    def test_ingress_url_without_trailing_slash_still_uses_correct_api_path(self):
+        from dh_presence.ui import HTML
+        self.assertIn("if(!path.endsWith('/'))path+='/'", HTML)
+        self.assertIn("fetch(APP_ROOT+url", HTML)
 
     def test_gps_candidates_only_observations_and_no_user_guessing(self):
         class FakeResponse:
