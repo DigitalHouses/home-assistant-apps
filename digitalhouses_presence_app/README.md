@@ -16,6 +16,14 @@ This application belongs to `DigitalHouses/home-assistant-apps/digitalhouses_pre
 
 **Not available yet:** in-app registration UI / WebSocket Core adapter; ARP Wi-Fi probing; trustworthy network absence; Wi-Fi/Hybrid correction and standard App operation card. Selecting `wifi` without an active Wi-Fi engine does not mean anyone is away. Selecting `hybrid` currently uses GPS-only evidence.
 
+## Presence Lovelace card
+
+The maintained [Russian Presence card](examples/lovelace/presence_app_card_ru.yaml) is a `vertical-stack` that displays the aggregate “Мы дома” state, the actual `select.dh_presence_app_mode` control, and **all** configured residents with their per-phone GPS availability and distance. Residents are resolved dynamically from the shared MQTT binary sensor's `residents` attribute: adding another `device_tracker` to the App configuration does not require editing the card.
+
+A full `sections` page embedding this same card is available as [dashboard YAML](examples/lovelace/dh_presence_app_dashboard.yaml). Both examples require `custom:button-card >= 5.0` and Mushroom. Paste the *card* file under a dashboard **Manual YAML card**; paste the *dashboard* file when editing the complete dashboard view in YAML.
+
+The mode selector is functional. The status and resident rows are observational. The App does not yet implement `sensor.dh_presence_app_card` or product-level refresh/release-check buttons, so this card deliberately does **not** expose pretend operation controls or claim to implement the full [DigitalHouses Unified Status Card](../docs/standards/UNIFIED_PRODUCT_STATUS_CARD_STANDARD.md). App installation/restart remains Supervisor-owned. GPS-unavailable shows the last confirmed state with a warning, not an assertion of live presence. Wi-Fi and Hybrid limitations remain unchanged.
+
 ## Install through Home Assistant
 
 1. Add `https://github.com/DigitalHouses/home-assistant-apps` under **Settings → Apps → App Store → Repositories** if not already configured.
