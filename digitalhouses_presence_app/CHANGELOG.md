@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.4
+
+- Instrument MQTT Device Discovery and first state publication with broker QoS1 acknowledgment logging, including the exact topic and component count.
+- Retry failed MQTT Discovery automatically and republish on Home Assistant MQTT birth and at bounded five-minute intervals.
+- Clarify in diagnostics: broker acknowledgment is distinct from HA MQTT integration accepting a Discovery payload.
+- Refresh 3D blue GPS-location icon and catalog banner consistent with other DigitalHouses Apps.
+- Add regression tests for topic shape, HA birth triggers and unchanged stable component identifiers.
+
 ## 0.1.3
 
 - Remove the unnecessary Supervisor timezone API lookup that can log `Unable to access the API, forbidden` during App startup. Preserve least-privilege `homeassistant_api: true` access to the Core GPS API.
