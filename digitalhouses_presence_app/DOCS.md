@@ -1,4 +1,21 @@
-# DigitalHouses Presence App 0.1.11 — experimental pilot
+# DigitalHouses Presence App 0.1.12 — experimental pilot
+
+## Private administrator debug (0.1.12)
+
+The native Ingress UI has an administrator-only registration diagnostics card.
+For each phone it shows the resident's name, device, GPS tracker, IP and MAC
+**recorded when the device was registered**, GPS state and report timestamp.
+This is a saved network binding, not a claim of current connectivity.
+
+The backend authenticates the Ingress user ID and checks their active
+`system-admin` group against Home Assistant Core through Supervisor's
+authorized `config/auth/list` WebSocket. Unauthorized callers receive 403;
+unavailable verification yields 503. The private endpoint never publishes to
+MQTT or Recorder; the normal resident status API omits IP/MAC.
+
+The additional Lovelace admin diagnostics launcher reads
+`hass.user.is_admin` for visibility and opens the same Ingress panel.
+No manual administrator IDs or configuration changes are needed.
 
 ## Configuration
 The App Store's native **Configuration** tab is the supported installation and settings UI. This build deliberately does not register any custom Home Assistant frontend panel.
