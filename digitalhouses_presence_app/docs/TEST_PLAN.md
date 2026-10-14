@@ -35,9 +35,22 @@
 
 Changes must be made in this repository by feature branch → PR → full CI → normal merge. No direct writes to production HA or `main`. Do not create any additional product repository for Presence.
 
-## Stage 4 — registration bridge CI + on-site acceptance (0.1.11)
+## Stage 4 — native Ingress registration CI + home acceptance (0.1.11)
 
-- CI: authenticator must use `connection.user` and `connection.remote`; backend candidate list uses one `mobile_app` entry and its `device_tracker` for the same HA user only; no user IP/MAC supplied by browser.
-- CI: App registration save/load schema, duplicate device/MAC rejection, owner name, exclusion by HA User ID, no synthetic arrivals, old entities stable, safe ARP route/probe handling.
-- Field acceptance **pending**: Core bridge installation and WebSocket command availability; App token GET/POST 200 from authenticated bridge; on-link interface `enp6s18` or detected LAN; real ARP reply; selected iPhone vs same-account iPad; Cloudflare rejection; DHCP change/private MAC rotation; no duplicate MQTT Discovery or events.
-- Do not merge field acceptance into a statement that Wi-Fi Engine works: enrollment ARP is a **one-off attestation**, not a continuous presence sensor.
+- CI: only Supervisor `172.30.32.2` can reach the enrollment API,
+  authenticated `X-Remote-User-Id` / `X-Remote-User-Display-Name`
+  are required, and XFF uses the actual Core peer, never a spoofed
+  client-controlled prefix.
+- CI: direct local URL is required (no Cloudflare external hostname);
+  validate all GPS source selections against Core states, disallow
+  client-supplied user/IP/MAC, reject duplicate device/MAC,
+  preserve durable private registry and excluded-user behavior.
+- CI: ARP must be fresh, local, unambiguous and non-promoting to
+  Wi-Fi presence. On error no resident registration.
+- **Field pending:** Supervisor Ingress connects to App's port 8099
+  in host-network mode; stable user identity and Core peer IP across
+  direct LAN vs Cloudflare; container permissions for ARP and access
+  only from Supervisor proxy; no false device binding with same-user
+  iPhone+iPad; safe App upgrade/rollback and MQTT history unchanged.
+- Do not weaken the repo's host/raw privilege block before this
+  scoped HAOS acceptance. Do not claim Wi-Fi Engine operational.
