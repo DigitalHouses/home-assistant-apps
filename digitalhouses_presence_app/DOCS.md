@@ -1,4 +1,4 @@
-# DigitalHouses Presence App 0.1.1 — experimental pilot
+# DigitalHouses Presence App 0.1.2 — experimental pilot
 
 ## Configuration
 The App Store's native **Configuration** tab is the supported installation and settings UI. This build deliberately does not register any custom Home Assistant frontend panel.
@@ -14,7 +14,7 @@ residents:
 
 There is no manual HA user ID, display name or Mobile Companion device ID input per resident. Tracker `friendly_name` is used as the MQTT display name after HA supplies it; otherwise the entity ID yields a provisional label. The resident identity is derived from the selected tracker, so an iPad logged in under the same HA account is *not* automatically tracked.
 
-**Mode from both places:** `presence_mode` in App Configuration sets the initial/default mode. Home Assistant shows `select.dh_presence_app_mode` on the DigitalHouses Presence App MQTT device (also present in the example Lovelace dashboard). A selection in HA applies live and persists in `/data/presence_mode.json`; on restart it is retained unless the App Configuration default was actually changed. Selecting the same mode does not restart anything. Invalid MQTT commands are ignored.
+**Mode from both places:** `presence_mode` in App Configuration sets the initial/default mode. Home Assistant shows `select.dh_presence_app_mode` on the DigitalHouses Presence App MQTT device (also present in the example Lovelace dashboard). A selection in HA applies immediately (without waiting for GPS polling) and persists in `/data/presence_mode.json`; on restart it is retained unless the App Configuration default was actually changed. Selecting the same mode does not restart anything. Invalid MQTT commands are ignored.
 
 **Wi-Fi pilot limitation:** `gps` works; `hybrid` uses GPS only pending verified Wi-Fi input; selecting `wifi` makes aggregate presence unavailable rather than advertising an old GPS result as a Wi-Fi observation.
 

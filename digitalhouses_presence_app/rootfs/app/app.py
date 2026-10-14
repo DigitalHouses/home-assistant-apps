@@ -27,6 +27,7 @@ DISCOVERY_FILE = "/data/presence_discovery.json"
 MODE_FILE = "/data/presence_mode.json"
 EVENT_NAMES = {"arrival", "departure", "gps_in", "gps_out", "wifi_in", "wifi_out"}
 STOP = threading.Event()
+WAKE = threading.Event()
 
 
 def parsed_datetime(value: str) -> datetime:
@@ -147,6 +148,9 @@ class MqttOutput:
     def _message(self, client, userdata, msg):
         if msg.topic != topic("mode/set"):
             return
+        if getattr(msg, "retain", False):
+            LOG.warning("Ignoring retained MQTT mode command")
+            return
         try:
             requested = msg.payload.decode("ascii", errors="strict")
             if len(msg.payload) > 16 or requested not in {m.value for m in Mode}:
@@ -155,6 +159,7 @@ class MqttOutput:
             LOG.warning("Ignoring invalid MQTT mode command")
             return
         self.mode_commands.put(requested)
+        WAKE.set()
 
     def publish(self, destination: str, payload, *, retain=True, force=False) -> bool:
         if not self.connected.is_set():
@@ -337,15 +342,22 @@ def run():
                     if event["event_type"] not in EVENT_NAMES:
                         raise ValueError("Invalid internal event")
                     mqtt_out.publish(topic("event"), {"schema_version": 2, "mode": engine.mode.value, "resident_name": next(r.name for r in engine.residents.values() if r.key == event["resident_id"]), **event}, retain=False, force=True)
-            STOP.wait(options["gps_poll_interval_seconds"])
+            # Clear BEFORE checking pending commands to avoid a lost wake-up.
+            WAKE.clear()
+            if not STOP.is_set() and mqtt_out.mode_commands.empty():
+                WAKE.wait(options["gps_poll_interval_seconds"])
     finally:
         mqtt_out.stop()
 
 
 def main():
     logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO").upper(), format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-    signal.signal(signal.SIGTERM, lambda *_: STOP.set())
-    signal.signal(signal.SIGINT, lambda *_: STOP.set())
+    def stop_signal(*_):
+        STOP.set()
+        WAKE.set()
+
+    signal.signal(signal.SIGTERM, stop_signal)
+    signal.signal(signal.SIGINT, stop_signal)
     run()
 
 
