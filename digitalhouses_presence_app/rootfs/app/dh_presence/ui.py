@@ -299,25 +299,46 @@ HTML = """<!doctype html><html lang="ru"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>DH Presence — регистрация</title>
 <style>
-body{background:var(--primary-background-color,#f6f7f8);color:var(--primary-text-color,#222);font:16px system-ui;margin:0;padding:20px}
-main{max-width:680px;margin:auto}.panel{padding:20px;border-radius:14px;background:var(--card-background-color,#fff);margin:12px 0;box-shadow:0 1px 8px #0001}
-select,button{font:inherit;padding:10px;margin:6px 4px 6px 0;max-width:100%}
-button{border:none;border-radius:8px;background:#2479a5;color:white;cursor:pointer}p{line-height:1.5}
-pre{white-space:pre-wrap;word-break:break-word}.muted{color:#777}
+:root{color-scheme:light dark;-webkit-text-size-adjust:100%}
+body{margin:0;padding:12px;background:var(--primary-background-color,#f5f6f8);color:var(--primary-text-color,#252525);font:14px/1.4 system-ui,-apple-system,sans-serif}
+main{max-width:700px;margin:0 auto}
+h2{font-size:20px;margin:6px 3px 12px}h3{font-size:17px;line-height:1.25;margin:0 0 10px}
+.panel{padding:16px;border-radius:14px;background:var(--card-background-color,#fff);margin:10px 0;box-shadow:0 1px 7px #0000000a}
+p{margin:8px 0 12px;line-height:1.45}
+.muted{color:var(--secondary-text-color,#777)}[hidden]{display:none!important}
+button,select{font:inherit;border-radius:9px;min-height:38px}
+button{cursor:pointer;border:none;padding:8px 12px;background:var(--primary-color,#277ca6);color:#fff}
+button:focus-visible,select:focus-visible{outline:2px solid var(--primary-color,#277ca6);outline-offset:2px}
+select{max-width:100%;width:100%;padding:8px;margin:2px 0 9px;border:1px solid var(--divider-color,#ddd);background:var(--card-background-color,#fff);color:inherit}
+.actions{display:flex;flex-wrap:wrap;gap:8px}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;margin:8px 0 0}
+.device-item{overflow-wrap:anywhere;padding:6px 0;border-top:1px solid var(--divider-color,#ddd)}
+.device-item:first-child{border-top:none}
+.debug-note{font-size:12px;margin:0 0 10px}
+.debug-person{padding:10px 0;border-top:1px solid var(--divider-color,#ddd)}
+.debug-person:first-child{border-top:none}
+.debug-name{font-weight:650;font-size:15px;overflow-wrap:anywhere;margin:0 0 5px}
+.debug-badges{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 6px}
+.debug-badge{display:inline-block;font-size:12px;padding:3px 7px;border-radius:12px;background:var(--secondary-background-color,#f1f2f3);color:var(--primary-text-color,#333)}
+.debug-badge--home{color:var(--success-color,#15804a)}
+.debug-badge--away{color:var(--info-color,#277ca6)}
+.debug-row{display:grid;grid-template-columns:minmax(90px,35%) minmax(0,1fr) auto;gap:5px;align-items:center;padding:5px 0;font-size:13px}
+.debug-key{color:var(--secondary-text-color,#666)}
+.debug-value{min-width:0;overflow-wrap:anywhere;word-break:break-word;font-variant-numeric:tabular-nums}
+.copy-btn{min-height:28px;padding:4px 7px;font-size:12px;white-space:nowrap;border:1px solid var(--divider-color,#bbb);background:transparent;color:var(--primary-color,#277ca6)}
+@media(max-width:430px){body{padding:8px}.panel{padding:13px;margin:8px 0}.debug-row{grid-template-columns:minmax(75px,34%) minmax(0,1fr) auto;gap:4px}.copy-btn{padding:4px 5px}}
 </style></head><body><main>
 <h2>DH Presence</h2>
 <section class="panel"><h3>Регистрация телефона</h3>
-<p>Для регистрации откройте Home Assistant непосредственно с телефона через домашний Wi-Fi и локальный адрес.
-Через Cloudflare/VPN можно просматривать уже зарегистрированные устройства, но регистрацию выполнить нельзя.
-Пользователь определяется автоматически. Выберите <strong>именно этот телефон</strong>.</p>
+<p class="muted">Откройте Home Assistant с регистрируемого телефона через домашний Wi-Fi и локальный адрес. Через Cloudflare/VPN доступны только уже зарегистрированные устройства.</p>
 <div id="who" class="muted">Загрузка...</div>
 <select id="tracker" aria-label="Выбрать телефон"></select>
-<button id="register">Зарегистрировать</button><button id="reload">Обновить</button>
+<div class="actions"><button id="register">Зарегистрировать</button><button id="reload">Обновить</button></div>
 <pre id="result" role="status"></pre></section>
 <section class="panel"><h3>Мои устройства</h3><div id="residents" class="muted">...</div></section>
 <section class="panel" id="adminDebug" hidden>
-<h3>Диагностика регистрации · администратор</h3>
-<p class="muted">IP и MAC зафиксированы при регистрации — это не подтверждение текущего адреса или присутствия в Wi-Fi.</p>
+<h3>Диагностика · администратор</h3>
+<p class="muted debug-note">IP и MAC сохранены при регистрации. Это не проверка текущего адреса или подключения к Wi-Fi.</p>
 <button id="reloadDebug">Обновить диагностику</button>
 <div id="debugList" role="status"></div>
 </section>
