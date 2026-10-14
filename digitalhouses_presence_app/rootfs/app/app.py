@@ -389,6 +389,9 @@ def run():
     engine = build_engine(options, saved)
     modes = ModeSelection(MODE_FILE, options["presence_mode"])
     engine.set_mode(modes.selected)
+    operations = Operations(OPERATIONS_FILE)
+    latest_version = None
+    last_release_check = None
     token = os.environ["SUPERVISOR_TOKEN"]
     started = datetime.now(timezone.utc).isoformat()
     mqtt_out = MqttOutput(version)
@@ -438,6 +441,14 @@ def run():
                         last_discovery_session = now_monotonic
                     else:
                         LOG.error("MQTT Discovery not synchronized; retrying automatically, retained topic=%s", DISCOVERY)
+            operations.tick()
+            pending_operations = set()
+            while not mqtt_out.operation_commands.empty():
+                pending_operations.add(mqtt_out.operation_commands.get_nowait())
+            refresh_requested = "REFRESH" in pending_operations
+            check_requested = "CHECK_UPDATES" in pending_operations
+            if refresh_requested and operations.begin("refresh"):
+                publish_controls(mqtt_out, operations, version, latest_version)
             while not mqtt_out.mode_commands.empty():
                 requested = mqtt_out.mode_commands.get_nowait()
                 if modes.change(requested):
@@ -491,7 +502,10 @@ def run():
                 discovery_ready = synchronize_discovery(mqtt_out, version, engine)
             # Commit durable current state BEFORE sending retained MQTT state and events.
             save(STATE, engine.persistent())
-            if mqtt_out.connected.is_set() and discovery_ready and publish_snapshot(mqtt_out, engine, version, started):
+            published = (mqtt_out.connected.is_set() and discovery_ready
+                         and publish_snapshot(mqtt_out, engine, version, started,
+                                              operations, latest_version))
+            if published:
                 if not published_state_logged:
                     LOG.info("MQTT presence state published topic=%s residents=%d mode=%s",
                              topic("state"), len(engine.residents), engine.mode.value)
@@ -508,6 +522,39 @@ def run():
                         "device_tracker": resident.tracker,
                         **event
                     }, retain=False, force=True)
+            if refresh_requested:
+                error = None
+                if not published:
+                    error = "MQTT snapshot not acknowledged"
+                elif not engine.residents:
+                    error = "No registered phone trackers"
+                elif engine.mode is Mode.WIFI:
+                    error = "Verified Wi-Fi engine is not active"
+                elif any(r.gps is Status.UNAVAILABLE for r in engine.residents.values()):
+                    error = "One or more GPS trackers have no fresh observation"
+                try:
+                    operations.finish(error, refresh_succeeded=(error is None))
+                except (OSError, ValueError) as exc:
+                    operations.finish("Could not persist refresh: " + type(exc).__name__)
+                publish_controls(mqtt_out, operations, version, latest_version)
+
+            if check_requested and operations.begin("check"):
+                publish_controls(mqtt_out, operations, version, latest_version)
+                last_release_check = time.monotonic()
+                try:
+                    latest_version = fetch_latest_release()
+                    operations.finish()
+                except (URLError, OSError, ValueError, TypeError, KeyError) as exc:
+                    operations.finish("Release check failed: " + api_error_detail(exc))
+                publish_controls(mqtt_out, operations, version, latest_version)
+            elif last_release_check is None or time.monotonic() - last_release_check >= 86400:
+                last_release_check = time.monotonic()
+                try:
+                    latest_version = fetch_latest_release()
+                except (URLError, OSError, ValueError, TypeError, KeyError) as exc:
+                    LOG.warning("Background stable release check unavailable: %s", api_error_detail(exc))
+                publish_controls(mqtt_out, operations, version, latest_version)
+
             # Broker QoS1 acknowledgment is not evidence that HA accepted
             # Discovery. After HA has time to process it, verify read-only via
             # Core REST; log only on change and recheck at a bounded interval.
@@ -530,7 +577,8 @@ def run():
             # Clear BEFORE checking pending commands to avoid a lost wake-up.
             WAKE.clear()
             if not STOP.is_set() and mqtt_out.mode_commands.empty():
-                WAKE.wait(options["gps_poll_interval_seconds"])
+                WAKE.wait(min(options["gps_poll_interval_seconds"],
+                              5 if operations.state == "success" else options["gps_poll_interval_seconds"]))
     finally:
         mqtt_out.stop()
 
