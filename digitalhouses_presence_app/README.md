@@ -1,6 +1,6 @@
 # DigitalHouses Presence App
 
-**Status: experimental installable GPS pilot, version 0.1.6.** Not approved for alarm automation.
+**Status: experimental installable GPS pilot, version 0.1.7.** Not approved for alarm automation.
 
 This application belongs to `DigitalHouses/home-assistant-apps/digitalhouses_presence_app` and is installed from the Home Assistant **Settings → Apps → App Store** interface after refreshing the configured DigitalHouses repository. No separate GitHub repository, shell installer or manual copy to Home Assistant is needed.
 
@@ -23,6 +23,16 @@ The maintained [Russian Presence card](examples/lovelace/presence_app_card_ru.ya
 A full `sections` page embedding this same card is available as [dashboard YAML](examples/lovelace/dh_presence_app_dashboard.yaml). Both examples require `custom:button-card >= 5.0` and Mushroom. Paste the *card* file under a dashboard **Manual YAML card**; paste the *dashboard* file when editing the complete dashboard view in YAML.
 
 The mode selector is functional. The status and resident rows are observational. The App does not yet implement `sensor.dh_presence_app_card` or product-level refresh/release-check buttons, so this card deliberately does **not** expose pretend operation controls or claim to implement the full [DigitalHouses Unified Status Card](../docs/standards/UNIFIED_PRODUCT_STATUS_CARD_STANDARD.md). App installation/restart remains Supervisor-owned. GPS-unavailable shows the last confirmed state with a warning, not an assertion of live presence. Wi-Fi and Hybrid limitations remain unchanged.
+
+## Recorder and notifications package
+
+The [local Russian HA package](examples/packages/dh_presence_app_notification_local_package_ru.yaml) listens to the existing `event.dh_presence_app_event`, records confirmed arrival/departure and verified Wi-Fi transitions with `logbook.log` (stored in the HA Recorder database subject to filtering/retention), and creates native HA persistent notifications. Source-only GPS transitions are not duplicated as separate notifications.
+
+The first confirmed household arrival (`not_home → home`) reports `Режим дома: присутствие` and the last confirmed household departure (`home → not_home`) reports `Режим дома: отсутствие`. These are authoritative machine flags computed in Presence Engine even if several residents change in one poll. They are **text-only reporting**, never an actual alarm/security mode change.
+
+For `user_name (device_name)`, `device_name` comes from the actual tracker friendly name and `user_name` from a matching Home Assistant Person entity's active tracker, or an optional site-only `resident_user_names` map. If no person name is known, only the device name is shown. No person ownership can be inferred from a `device_tracker` ID alone.
+
+Install as `/config/packages/dh_presence_app_notification_local_package_ru.yaml` using `homeassistant: packages: !include_dir_named packages`. File contents **start with `automation:`** and have no extra package-name wrapper. Validate HA configuration before reloading/restarting automations. `persistent_notification.create` can be replaced locally with a direct mobile/Telegram notifier. Verified Wi-Fi events remain **unimplemented** in experimental App 0.1.7, so Wi-Fi notification branches are prepared but currently inactive.
 
 ## Install through Home Assistant
 

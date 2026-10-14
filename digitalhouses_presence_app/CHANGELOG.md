@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.7
+
+- Arrival/departure machine events now include authoritative `first_arrival`, `last_departure`, `residents_home_after` and `device_tracker` identity, without changing event types, QoS1 or retained-state ordering.
+- Strict first/last flags are determined by whole-house transitions in the engine, including multiple resident changes during a single poll and uncertainty-safe handling.
+- Update native Russian local HA Package for Recorder-backed Logbook recording and notifications on arrival/departure, and future verified Wi-Fi connection/disconnection.
+- Remove the older example's extra invalid top-level package wrapper. No new MQTT Device, entity or invented local notification protocol.
+
 ## 0.1.6
 
 - Compare the MQTT Device Discovery envelope and publication sequence with functioning DigitalHouses Internet App and Recorder App.

@@ -445,7 +445,13 @@ def run():
                 for event in events:
                     if event["event_type"] not in EVENT_NAMES:
                         raise ValueError("Invalid internal event")
-                    mqtt_out.publish(topic("event"), {"schema_version": 2, "mode": engine.mode.value, "resident_name": next(r.name for r in engine.residents.values() if r.key == event["resident_id"]), **event}, retain=False, force=True)
+                    resident = next(r for r in engine.residents.values() if r.key == event["resident_id"])
+                    mqtt_out.publish(topic("event"), {
+                        "schema_version": 2, "mode": engine.mode.value,
+                        "resident_name": resident.name,
+                        "device_tracker": resident.tracker,
+                        **event
+                    }, retain=False, force=True)
             # Broker QoS1 acknowledgment is not evidence that HA accepted
             # Discovery. After HA has time to process it, verify read-only via
             # Core REST; log only on change and recheck at a bounded interval.
