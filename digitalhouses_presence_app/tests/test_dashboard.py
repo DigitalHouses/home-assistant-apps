@@ -81,21 +81,18 @@ class LovelaceCardTests(unittest.TestCase):
         # Friendly phone labels are never used as invented human names.
         self.assertNotIn("(personName || deviceName)", card)
 
-    def test_registration_control_uses_authenticated_websocket_not_manual_identity(self):
+    def test_single_install_ingress_without_custom_registration_resources(self):
         card = CARD.read_text(encoding="utf-8")
-        js = (ROOT / "registration_bridge/www/dh-presence-register-card.js").read_text(encoding="utf-8")
-        core = (ROOT / "registration_bridge/custom_components/dh_presence_registration/__init__.py").read_text(encoding="utf-8")
-        self.assertIn("type: custom:dh-presence-register-card", card)
-        self.assertIn("type: 'dh_presence/candidates'", js)
-        self.assertIn("type: 'dh_presence/register'", js)
-        self.assertIn("this._hass.connection.sendMessagePromise", js)
-        self.assertIn("entry_id: choice.entry_id", js)
-        self.assertIn("tracker: choice.tracker", js)
-        for unsafe in ("user_name: ", "user_id: ", "ip: ", "mac: "):
-            self.assertNotIn(unsafe, js)
-        self.assertIn("connection.user.id", core)
-        self.assertIn("remote = connection.remote", core)
-        self.assertIn("companion_candidates(hass, connection.user.id)", core)
+        config = (ROOT / "config.yaml").read_text(encoding="utf-8")
+        ui = (ROOT / "rootfs/app/dh_presence/ui.py").read_text(encoding="utf-8")
+        self.assertNotIn("custom:dh-presence-register-card", card)
+        self.assertIn("ingress: true", config)
+        self.assertIn("ingress_port: 8099", config)
+        self.assertIn("X-Remote-User-Id", ui)
+        self.assertIn("X-Remote-User-Display-Name", ui)
+        self.assertIn("api/register", ui)
+        self.assertIn("start_ingress_ui", ui)
+        self.assertFalse((ROOT / "registration_bridge").exists())
 
     def test_dashboard_embeds_same_card_without_drift(self):
         card = CARD.read_text(encoding="utf-8")
