@@ -332,3 +332,8 @@ Examples:
 - product runtime contracts define Speedtest, scan, calibration, recovery and other specialized actions.
 
 The same UI contract applies across Apps, Agents, and separate DigitalHouses repositories such as Climate when those products expose qualifying user-triggered operations.
+
+## 17. Aggregate product status card is a separate contract
+
+The [Unified Product Status Card Standard](UNIFIED_PRODUCT_STATUS_CARD_STANDARD.md) defines the single compact product-level status/control card, including its aggregate `sensor.<prefix>_card` and `idle | running | success | error` state machine. These aggregate states do **not** replace this document's per-operation `idle | updating | error` sensor contract. Both can coexist without renaming or reinterpreting released operation-state entities.
+
