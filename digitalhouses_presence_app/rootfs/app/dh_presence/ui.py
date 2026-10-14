@@ -95,6 +95,30 @@ def read_core_states(token: str) -> list[dict]:
     return states
 
 
+def read_core_time_zone(token: str) -> str | None:
+    """Use the Home Assistant configured timezone, not the browser's timezone.
+
+    Debugging must remain available when Core configuration is temporarily
+    inaccessible. In that case the UI explicitly shows UTC, without calling
+    a browser-local time Home Assistant time.
+    """
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+    req = Request("http://supervisor/core/api/config",
+                  headers={"Authorization": "Bearer " + token,
+                           "Accept": "application/json"})
+    try:
+        with urlopen(req, timeout=5) as response:
+            data = json.load(response)
+        zone = data.get("time_zone") if isinstance(data, dict) else None
+        if not isinstance(zone, str) or not zone:
+            return None
+        ZoneInfo(zone)  # Reject invalid timezone data from Core.
+        return zone
+    except (OSError, ValueError, TypeError, ZoneInfoNotFoundError):
+        LOG.warning("Unable to read HA timezone for Presence debug; displaying UTC")
+        return None
+
+
 def gps_candidates(token: str) -> list[dict]:
     """Read-only HA Core observation; never guess a person from a tracker.
 
@@ -207,8 +231,10 @@ def handler_factory(token: str, registry_path: str, excluded_users: set[str]):
                     if not is_authorized_ha_admin(context["user_id"], token):
                         self.reply(403, {"error": "admin_required"})
                     else:
-                        self.reply(200, {"residents": admin_registration_diagnostics(
-                            token, registry_path)})
+                        self.reply(200, {
+                            "residents": admin_registration_diagnostics(token, registry_path),
+                            "time_zone": read_core_time_zone(token),
+                        })
                 else:
                     self.reply(404, {"error": "not_found"})
             except PermissionError as exc:
