@@ -17,6 +17,22 @@ class TestDiscovery(unittest.TestCase):
         self.assertEqual(components["mode"]["platform"], "select")
         self.assertEqual(components["mode"]["command_topic"], topic("mode/set"))
 
+    def test_requested_device_name_and_wifi_sensor(self):
+        e = Engine()
+        e.add("device_tracker.13promax_sky", "13ProMAX .SKY")
+        payload = discovery("0.1.9", list(e.residents.values()))
+        self.assertEqual(payload["device"]["name"], "DH Presence")
+        components = payload["components"]
+        key = next(iter(e.residents.values())).key
+        wifi = components[key + "_wifi_home"]
+        self.assertEqual(wifi["default_entity_id"],
+                         "binary_sensor.dh_presence_app_" + key + "_wifi_home")
+        self.assertEqual(wifi["availability_mode"], "all")
+        self.assertIn("wifi/" + key + "/availability", wifi["availability"][1]["topic"])
+        self.assertEqual(components["refresh"]["payload_press"], "REFRESH")
+        self.assertEqual(components["check_updates"]["payload_press"], "CHECK_UPDATES")
+        self.assertEqual(components["card"]["state_topic"], topic("operations"))
+
     def test_discovery_tombstones(self):
         e = Engine()
         e.add("device_tracker.phone", "Resident")
@@ -32,7 +48,7 @@ class TestDiscovery(unittest.TestCase):
         self.assertEqual(DISCOVERY, "homeassistant/device/dh_presence_app/config")
         self.assertEqual(config["device"]["identifiers"], ["dh_presence_app"])
         self.assertEqual(config["origin"]["name"], "DigitalHouses Presence App")
-        self.assertEqual(len(config["components"]), 8)
+        self.assertEqual(len(config["components"]), 16)
         for component in config["components"].values():
             self.assertIn(component["platform"], {"binary_sensor", "event", "select", "sensor"})
             self.assertIn("unique_id", component)
