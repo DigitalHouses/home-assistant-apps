@@ -34,6 +34,21 @@ A full `sections` page embedding this same card is available as [dashboard YAML]
 
 The mode selector is functional. The status and resident rows are observational. The App exposes genuine operation entities (`sensor.dh_presence_app_card`, `button.dh_presence_app_refresh`, `button.dh_presence_app_check_updates`, refresh-state and version diagnostics) following the [DigitalHouses Unified Status Card](../docs/standards/UNIFIED_PRODUCT_STATUS_CARD_STANDARD.md). Refresh reads currently stored HA tracker states immediately and succeeds when all configured GPS sources have valid last-known evidence and the MQTT state was published. This does not request a new GPS fix from iOS. Version checks query stable product-tagged GitHub Releases. Installation/restart remain Supervisor-owned. GPS last-known `home`/`not_home` and distance remain available even after days without iOS movement; this is **last-known evidence, not live GPS**. Each GPS sensor exposes actual `gps_reported_at`, and the card shows the report time and labels aged results as last-known. An unknown/unavailable/malformed source is still unavailable, and the last confirmed logical state is retained without inventing an arrival/departure. `last_reported` is preferred to `last_updated`; polling HA never fabricates a new report. Distance requires last-known valid coordinates. Each registered phone also gets a Wi-Fi binary sensor; until the independently verified Wi-Fi engine is installed it remains unavailable, rather than pretending the phone is absent. Hybrid limitations remain unchanged.
 
+## Registration launcher card (optional)
+
+The maintained Russian dashboard includes a **Регистрация телефона**
+`custom:button-card` launcher. A standalone card is available as
+[`presence_registration_card_ru.yaml`](examples/lovelace/presence_registration_card_ru.yaml).
+No separate HA frontend resource or adapter is needed.
+
+- On released `0.1.10`, the launcher states registration is unavailable and
+  **does not navigate**. It does not claim a mobile registration endpoint exists.
+- Once `0.1.11+` has passed network/Ingress acceptance and is installed,
+  the launcher opens the native Supervisor Ingress path
+  `/hassio/ingress/8133339d_digitalhouses_presence_app`.
+- Registration is still performed inside the App's own Ingress page on the
+  phone's local Home Assistant connection, not via Lovelace Javascript.
+
 ## One-click native phone registration (0.1.11 pilot)
 
 1. Install/update **DigitalHouses Presence App** through the normal HA App
