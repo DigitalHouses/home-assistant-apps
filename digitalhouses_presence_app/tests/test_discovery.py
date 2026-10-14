@@ -32,6 +32,9 @@ class TestDiscovery(unittest.TestCase):
         self.assertEqual(components["refresh"]["payload_press"], "REFRESH")
         self.assertEqual(components["check_updates"]["payload_press"], "CHECK_UPDATES")
         self.assertEqual(components["card"]["state_topic"], topic("operations"))
+        self.assertEqual(components[key + "_gps_home"]["json_attributes_topic"], topic("state"))
+        self.assertIn("gps_reported_at", components[key + "_gps_home"]["json_attributes_template"])
+        self.assertIn("gps_freshness_seconds", components["residents_home"]["json_attributes_template"])
 
     def test_discovery_tombstones(self):
         e = Engine()

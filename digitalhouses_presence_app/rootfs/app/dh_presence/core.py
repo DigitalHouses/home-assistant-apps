@@ -103,7 +103,10 @@ class Engine:
         self.mode = Mode(mode)
 
     def _decide(self, r: Resident, now: datetime) -> Status | None:
-        gps = r.gps if r.last_gps_at and timedelta(0) <= now-r.last_gps_at <= timedelta(seconds=self.freshness_seconds) else Status.UNAVAILABLE
+        # A phone may remain still for days. An old, valid HA GPS report is
+        # the last known position, not a failed observation. Wi-Fi evidence
+        # still requires independently verified, fresh observations.
+        gps = r.gps if r.last_gps_at and now >= r.last_gps_at else Status.UNAVAILABLE
         wifi = r.wifi if r.last_wifi_at and timedelta(0) <= now-r.last_wifi_at <= timedelta(seconds=self.freshness_seconds) else Status.UNAVAILABLE
         if self.mode is Mode.GPS:
             return gps if gps is not Status.UNAVAILABLE else None
@@ -185,9 +188,9 @@ class Engine:
 
     def expire(self, now: datetime):
         for r in self.residents.values():
-            if r.last_gps_at is None or now-r.last_gps_at > timedelta(seconds=self.freshness_seconds):
-                r.gps = Status.UNAVAILABLE
-                r.distance = None
+            # Do not erase last known GPS status/distance solely because
+            # iOS has not sent a new report. Unknown source values are handled
+            # explicitly by the runtime, never as a synthetic departure.
             if r.last_wifi_at is None or now-r.last_wifi_at > timedelta(seconds=self.freshness_seconds):
                 r.wifi = Status.UNAVAILABLE
                 r.wifi_absent_since = None
@@ -203,10 +206,12 @@ class Engine:
         wifi_unsupported = self.mode is Mode.WIFI
         status = Status.UNAVAILABLE if wifi_unsupported else self.overall()
         return {"mode": self.mode.value, "status": status.value,
-                "residents_total": len(self.residents),
+                "residents_total": len(self.residents), "gps_freshness_seconds": self.freshness_seconds,
                 "residents_home": 0 if wifi_unsupported else sum(r.confirmed is Status.HOME for r in self.residents.values()),
                 "residents": {r.key: {"name": r.name,
                                       "user_name": r.user_name,
                                       "status": (Status.UNAVAILABLE.value if wifi_unsupported else r.confirmed.value),
-                                      "gps": r.gps.value, "wifi": r.wifi.value}
+                                      "gps": r.gps.value,
+                                      "gps_reported_at": r.last_gps_at.isoformat() if r.last_gps_at else None,
+                                      "wifi": r.wifi.value}
                               for r in self.residents.values()}}

@@ -21,7 +21,7 @@ def discovery(version: str, residents: list[Resident]) -> dict:
             "state_topic": topic("state"),
             "value_template": "{{ 'ON' if value_json.status == 'home' else 'OFF' }}",
             "json_attributes_topic": topic("state"),
-            "json_attributes_template": "{{ {'mode': value_json.mode, 'residents': value_json.residents, 'residents_total': value_json.residents_total, 'residents_home': value_json.residents_home} | tojson }}",
+            "json_attributes_template": "{{ {'mode': value_json.mode, 'residents': value_json.residents, 'residents_total': value_json.residents_total, 'residents_home': value_json.residents_home, 'gps_freshness_seconds': value_json.gps_freshness_seconds} | tojson }}",
             "payload_on": "ON", "payload_off": "OFF",
             "availability": aggregate, "availability_mode": "all"
         },
@@ -129,6 +129,8 @@ def discovery(version: str, residents: list[Resident]) -> dict:
             "default_entity_id": "binary_sensor." + prefix + "_gps_home",
             "state_topic": topic("state"),
             "value_template": "{{ 'ON' if value_json.residents['" + r.key + "'].gps == 'home' else 'OFF' }}",
+            "json_attributes_topic": topic("state"),
+            "json_attributes_template": "{{ {'gps_reported_at': value_json.residents['" + r.key + "'].gps_reported_at} | tojson }}",
             "payload_on": "ON", "payload_off": "OFF",
             "availability_mode": "all",
             "availability": [availability, {"topic": topic("gps/"+r.key+"/availability"), "payload_available": "online", "payload_not_available": "offline"}]

@@ -1,5 +1,5 @@
 name: DigitalHouses Presence App
-version: 0.1.9
+version: 0.1.10
 slug: digitalhouses_presence_app
 description: Experimental safety-first GPS presence with MQTT Discovery; Wi-Fi engine pending validation.
 url: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_presence_app

@@ -36,11 +36,32 @@ class TestEngine(unittest.TestCase):
         events = e.gps_observation("device_tracker.iphone", Status.NOT_HOME, T0 + timedelta(minutes=1))
         self.assertEqual([x["event_type"] for x in events], ["gps_out", "departure"])
 
-    def test_unavailable_preserves_last_known(self):
+    def test_idle_phone_for_two_days_preserves_gps_and_distance(self):
         e = self.engine()
-        e.gps_observation("device_tracker.iphone", Status.HOME, T0)
-        e.expire(T0 + timedelta(hours=1))
+        e.gps_observation("device_tracker.iphone", Status.HOME, T0, distance=0.13)
+        e.expire(T0 + timedelta(days=2))
+        resident = e.residents["device_tracker.iphone"]
         self.assertIs(e.overall(), Status.HOME)
+        self.assertIs(resident.gps, Status.HOME)
+        self.assertEqual(resident.distance, 0.13)
+        self.assertEqual(e.snapshot()["residents"][resident.key]["gps_reported_at"], T0.isoformat())
+        self.assertEqual(e.gps_observation("device_tracker.iphone", Status.HOME, T0, 0.13), [])
+        self.assertIs(e.overall(), Status.HOME)
+        events = e.gps_observation("device_tracker.iphone", Status.NOT_HOME, T0 + timedelta(days=2, seconds=1))
+        self.assertEqual([x["event_type"] for x in events], ["gps_out", "departure"])
+
+    def test_idle_phone_in_hybrid_mode_does_not_become_away(self):
+        e = self.engine(Mode.HYBRID)
+        e.gps_observation("device_tracker.iphone", Status.HOME, T0)
+        e.expire(T0 + timedelta(days=2))
+        self.assertIs(e.overall(), Status.HOME)
+        self.assertEqual(e.gps_observation("device_tracker.iphone", Status.HOME, T0), [])
+
+    def test_unknown_initial_source_remains_unavailable(self):
+        e = self.engine()
+        e.expire(T0 + timedelta(days=2))
+        self.assertIs(e.overall(), Status.UNAVAILABLE)
+        self.assertIs(e.residents["device_tracker.iphone"].gps, Status.UNAVAILABLE)
 
     def test_wifi_no_unverified_absence(self):
         e = self.engine(Mode.HYBRID)
