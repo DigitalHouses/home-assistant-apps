@@ -46,3 +46,5 @@ class LovelaceCardTests(unittest.TestCase):
         lines = [line for line in card.split("\n") if line.strip() and not line.startswith("#")]
         normalized_card = "      - " + lines[0] + "\n" + "\n".join("        " + line for line in lines[1:])
         self.assertIn(normalized_card, dashboard)
+        self.assertIn("resident.user_name", card)
+        self.assertIn("shownName", card)
