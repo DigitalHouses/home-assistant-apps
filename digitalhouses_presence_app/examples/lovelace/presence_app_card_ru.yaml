@@ -1,92 +1,175 @@
-# DigitalHouses Presence App · overview card (RU)
-# Uses only published Presence MQTT entities: no imaginary App refresh/check buttons.
-# Requires custom:button-card >= 5.0 and Mushroom cards.
-# Read-only status; the mode tile is an actual Home Assistant MQTT select.
+# DH Presence · unified status/control and resident overview
+# Mushroom + custom:button-card 5+; native Supervisor owns App install/restart.
 type: vertical-stack
 cards:
   - type: custom:button-card
-    entity: binary_sensor.dh_presence_app_residents_home
+    entity: sensor.dh_presence_app_card
     triggers_update:
+      - sensor.dh_presence_app_card
+      - sensor.dh_presence_app_version
+      - sensor.dh_presence_app_latest_version
+      - binary_sensor.dh_presence_app_update_available
       - binary_sensor.dh_presence_app_residents_home
       - select.dh_presence_app_mode
-      - sensor.dh_presence_app_version
-      - sensor.dh_presence_app_source_status
-    update_timer: 5000
+      - update.digitalhouses_presence_app_update
+    update_timer: |
+      [[[
+        const state = states['sensor.dh_presence_app_card']?.state;
+        const updating = states['update.digitalhouses_presence_app_update']?.attributes?.in_progress === true;
+        return state === 'running' || updating ? 1000 : 5000;
+      ]]]
     show_icon: true
     show_name: true
     show_label: true
     icon: |
       [[[
-        const mode = states['select.dh_presence_app_mode']?.state;
-        const status = states['binary_sensor.dh_presence_app_residents_home']?.state;
-        if (mode === 'wifi') return 'mdi:wifi-off';
-        if (status === 'on') return 'mdi:home-account';
-        if (status === 'off') return 'mdi:home-export-outline';
+        const status = states['sensor.dh_presence_app_card']?.state;
+        const home = states['binary_sensor.dh_presence_app_residents_home']?.state;
+        const newer = states['binary_sensor.dh_presence_app_update_available']?.state === 'on';
+        const updating = states['update.digitalhouses_presence_app_update']?.attributes?.in_progress === true;
+        if (updating || status === 'running') return 'mdi:progress-clock';
+        if (status === 'error') return 'mdi:alert-circle';
+        if (status === 'success') return 'mdi:check-circle';
+        if (newer) return 'mdi:package-up';
+        if (home === 'on') return 'mdi:home-account';
+        if (home === 'off') return 'mdi:home-export-outline';
         return 'mdi:home-question';
       ]]]
     name: |
       [[[
-        const v = states['sensor.dh_presence_app_version']?.state;
-        return 'Мы дома' + (v && !['unknown', 'unavailable'].includes(v) ? ' · v' + v : '');
+        const installed = states['sensor.dh_presence_app_version']?.state;
+        const latest = states['sensor.dh_presence_app_latest_version']?.state;
+        const newer = states['binary_sensor.dh_presence_app_update_available']?.state === 'on';
+        const valid = x => x && !['unknown', 'unavailable', 'none'].includes(x);
+        return 'DH Presence' + (valid(installed) ? ' · v' + installed : '')
+          + (newer && valid(latest) && latest !== installed ? ' → v' + latest : '');
       ]]]
     label: |
       [[[
-        const item = states['binary_sensor.dh_presence_app_residents_home'];
-        const mode = states['select.dh_presence_app_mode']?.state;
-        const label = mode === 'hybrid' ? 'Hybrid (пока GPS)'
-          : mode === 'wifi' ? 'Wi-Fi (пока не работает)'
-          : mode === 'gps' ? 'GPS' : 'Режим неизвестен';
-        if (mode === 'wifi') return label + ' · Определение недоступно';
-        if (!item || !['on', 'off'].includes(item.state)) {
-          return label + ' · Нет достоверного общего состояния';
+        const item = states['sensor.dh_presence_app_card'];
+        const updater = states['update.digitalhouses_presence_app_update'];
+        const elapsed = (since) => {
+          const n = Math.max(0, Math.floor((performance.now() - since) / 1000));
+          return String(Math.floor(n / 60)).padStart(2,'0') + ':' + String(n % 60).padStart(2,'0');
+        };
+        const duration = v => typeof v === 'number' ? Math.round(v) + ' сек' : '—';
+        if (updater?.attributes?.in_progress === true) {
+          if (this._dh_presence_timer?.kind !== 'install')
+            this._dh_presence_timer = {kind:'install', since:performance.now()};
+          const percent = updater.attributes.update_percentage;
+          return 'Установка версии… ' + (typeof percent === 'number' ? Math.round(percent) + '% · ' : '')
+            + elapsed(this._dh_presence_timer.since);
         }
-        const roster = item.attributes?.residents || {};
-        const ids = Object.keys(roster);
-        const stale = ids.some(k => !['on', 'off'].includes(
-          states['binary_sensor.dh_presence_app_' + k + '_gps_home']?.state
-        ));
-        const n = item.attributes?.residents_home;
-        const total = item.attributes?.residents_total;
-        const count = Number.isInteger(n) && Number.isInteger(total)
-          ? ' · Дома ' + n + ' из ' + total : '';
-        const text = item.state === 'on' ? 'Есть дома' : 'Никого дома';
-        return label + ' · ' + (stale ? 'Последнее подтверждение: ' : '')
-          + text + count + (stale ? ' · GPS устарел/недоступен' : '');
+        if (!item || ['unknown','unavailable'].includes(item.state))
+          return 'Нет связи с приложением';
+        const attrs = item.attributes || {};
+        if (item.state === 'running') {
+          const key = attrs.operation + '|' + attrs.started_at;
+          if (this._dh_presence_timer?.key !== key)
+            this._dh_presence_timer = {key:key, since:performance.now()};
+          const name = attrs.operation === 'refresh' ? 'Обновление присутствия' : 'Проверка версии';
+          return name + '… ' + elapsed(this._dh_presence_timer.since);
+        }
+        this._dh_presence_timer = null;
+        if (item.state === 'error') return 'Ошибка: ' + (attrs.error || 'операция не выполнена');
+        if (item.state === 'success')
+          return (attrs.operation === 'refresh' ? 'Данные обновлены' : 'Проверка версии завершена')
+            + ' · ' + duration(attrs.duration_seconds);
+        const mode = states['select.dh_presence_app_mode']?.state;
+        const overall = states['binary_sensor.dh_presence_app_residents_home']?.state;
+        const n = states['binary_sensor.dh_presence_app_residents_home']?.attributes?.residents_home;
+        const total = states['binary_sensor.dh_presence_app_residents_home']?.attributes?.residents_total;
+        const count = Number.isInteger(n) && Number.isInteger(total) ? ' · Дома ' + n + '/' + total : '';
+        const label = mode === 'wifi' ? 'Wi-Fi ещё не активирован'
+          : mode === 'hybrid' ? 'Hybrid: пока только GPS' : 'GPS';
+        const newer = states['binary_sensor.dh_presence_app_update_available']?.state === 'on';
+        const home = overall === 'on' ? 'Есть дома' : overall === 'off' ? 'Никого дома' : 'Нет свежих данных';
+        return label + ' · ' + home + count + (newer ? ' · Доступна новая версия' : '');
       ]]]
     styles:
       card:
-        - padding: 14px
+        - padding: 12px
         - text-align: left
       grid:
         - grid-template-areas: '"i n" "i l"'
         - grid-template-columns: 48px 1fr
         - grid-template-rows: min-content min-content
       img_cell:
-        - width: 42px
+        - width: 40px
         - justify-content: start
       icon:
-        - width: 29px
+        - width: 28px
         - color: |
             [[[
-              const mode = states['select.dh_presence_app_mode']?.state;
-              const s = states['binary_sensor.dh_presence_app_residents_home']?.state;
-              return mode === 'wifi' ? 'var(--warning-color, orange)'
-                : s === 'on' ? 'var(--success-color, green)'
-                : s === 'off' ? 'var(--info-color, var(--primary-color))'
-                : 'var(--warning-color, orange)';
+              const c = states['sensor.dh_presence_app_card']?.state;
+              if (c === 'error') return 'var(--error-color)';
+              if (c === 'running') return 'var(--info-color, var(--primary-color))';
+              if (c === 'success') return 'var(--success-color)';
+              if (states['binary_sensor.dh_presence_app_update_available']?.state === 'on')
+                return 'var(--warning-color, orange)';
+              return states['binary_sensor.dh_presence_app_residents_home']?.state === 'on'
+                ? 'var(--success-color)' : 'var(--secondary-text-color)';
             ]]]
       name:
         - justify-self: start
-        - font-size: 15px
+        - font-size: 14px
         - font-weight: 600
       label:
         - justify-self: start
-        - text-align: left
         - white-space: normal
+        - text-align: left
         - font-size: 13px
         - color: var(--secondary-text-color)
     tap_action:
       action: none
+
+  - type: custom:mushroom-chips-card
+    alignment: center
+    chips:
+      - type: template
+        icon: mdi:refresh
+        content: Обновить
+        tap_action:
+          action: perform-action
+          perform_action: button.press
+          target:
+            entity_id: button.dh_presence_app_refresh
+      - type: template
+        icon: mdi:cloud-search
+        content: Версия
+        tap_action:
+          action: perform-action
+          perform_action: button.press
+          target:
+            entity_id: button.dh_presence_app_check_updates
+      - type: conditional
+        conditions:
+          - entity: update.digitalhouses_presence_app_update
+            state: "on"
+        chip:
+          type: template
+          icon: mdi:package-down
+          icon_color: orange
+          content: Новая версия
+          tap_action:
+            action: perform-action
+            perform_action: update.install
+            target:
+              entity_id: update.digitalhouses_presence_app_update
+            data:
+              backup: true
+            confirmation:
+              text: "Установить новую версию DH Presence? Приложение временно остановится."
+      - type: template
+        icon: mdi:restart
+        content: Перезапуск
+        tap_action:
+          action: perform-action
+          perform_action: hassio.app_restart
+          data:
+            app: 8133339d_digitalhouses_presence_app
+          confirmation:
+            text: "Перезапустить DH Presence? Определение присутствия временно прервётся."
 
   - type: tile
     entity: select.dh_presence_app_mode
@@ -119,6 +202,7 @@ cards:
           const mode = states['select.dh_presence_app_mode']?.state;
           return entries.map(([key, resident]) => {
             const gps = states['binary_sensor.dh_presence_app_' + key + '_gps_home']?.state;
+            const wifi = states['binary_sensor.dh_presence_app_' + key + '_wifi_home']?.state;
             const distanceRaw = states['sensor.dh_presence_app_' + key + '_distance']?.state;
             const distance = distanceRaw && !['unknown', 'unavailable'].includes(distanceRaw)
               && Number.isFinite(Number(distanceRaw))
@@ -128,6 +212,8 @@ cards:
               : status === 'not_home' ? 'Вне дома' : 'Не определено';
             const gpsState = gps === 'on' ? 'GPS: дома'
               : gps === 'off' ? 'GPS: вне дома' : 'GPS: нет свежих данных';
+            const wifiState = wifi === 'on' ? 'Wi-Fi: дома'
+              : wifi === 'off' ? 'Wi-Fi: вне дома' : 'Wi-Fi: не активен';
             const icon = mode === 'wifi' ? 'mdi:wifi-off'
               : status === 'home' ? 'mdi:home-account'
               : status === 'not_home' ? 'mdi:map-marker-outline'
@@ -146,7 +232,8 @@ cards:
               + '<div style="min-width:0;flex:1;text-align:left">'
               + '<div style="font-size:14px;font-weight:600;overflow-wrap:anywhere">' + esc(shownName) + '</div>'
               + '<div style="font-size:12px;color:var(--secondary-text-color)">' + esc(shownState)
-              + ' · ' + esc(gpsState) + ' · ' + esc(distance) + '</div></div></div>';
+              + ' · ' + esc(gpsState) + ' · ' + esc(wifiState)
+              + ' · ' + esc(distance) + '</div></div></div>';
           }).join('');
         ]]]
     styles:
