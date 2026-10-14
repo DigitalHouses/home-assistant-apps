@@ -543,7 +543,11 @@ def run():
             for r in engine.residents.values():
                 try:
                     data = http_json("http://supervisor/core/api/states/" + r.tracker, token)
-                    name_changed = observe_friendly_name(r, data) or name_changed
+                    # A WebSocket-enrolled resident's device name is
+                    # registered once from the selected Mobile Companion entry,
+                    # not inferred from a possibly renamed GPS entity.
+                    if not any(x["tracker"] == r.tracker for x in registrations):
+                        name_changed = observe_friendly_name(r, data) or name_changed
                     status, distance, observed = gps_from_ha_state(data, now, options["gps_freshness_seconds"], home) if home else (Status.UNAVAILABLE, None, None)
                     if observed is not None and status is not Status.UNAVAILABLE:
                         if reported_gps_status.get(r.tracker) != status.value:
