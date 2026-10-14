@@ -1,5 +1,5 @@
 name: DigitalHouses Presence App
-version: 0.1.10
+version: 0.1.11
 slug: digitalhouses_presence_app
 description: Experimental safety-first GPS presence with MQTT Discovery; Wi-Fi engine pending validation.
 url: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_presence_app
@@ -12,6 +12,10 @@ init: false
 stage: experimental
 backup: cold
 homeassistant_api: true
+# Only host LAN L2 + packet sockets; no NET_ADMIN or privileged host control.
+host_network: true
+privileged:
+  - NET_RAW
 services:
   - mqtt:need
 options:
