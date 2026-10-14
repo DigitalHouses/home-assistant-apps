@@ -1,6 +1,6 @@
 # DigitalHouses Presence App
 
-**Status: experimental GPS pilot, version 0.1.12. Wi-Fi sensing is not operational.** Not approved for alarm automation.
+**Status: experimental GPS pilot, version 0.1.13. Wi-Fi sensing is not operational.** Not approved for alarm automation.
 
 This application belongs to `DigitalHouses/home-assistant-apps/digitalhouses_presence_app` and is installed from the Home Assistant **Settings → Apps → App Store** interface after refreshing the configured DigitalHouses repository. No separate GitHub repository, shell installer or manual copy to Home Assistant is needed.
 
@@ -27,7 +27,7 @@ Companion device-to-WebSocket attestation and alarm integration. The GPS presenc
 
 ## Administrator-only network diagnostics (0.1.12)
 
-The native DH Presence interface includes a private **Диагностика регистрации** card. Only an authenticated Home Assistant administrator can see all resident registrations, including the name, device, tracker, IP and MAC recorded at registration, current GPS state and last GPS report time. This does not assert current Wi-Fi reachability.
+The native DH Presence interface includes a private **Диагностика регистрации** card. In 0.1.13 the view is compact on phones, status labels are in Russian, the last GPS report uses the HA-configured timezone (explicit UTC fallback), and saved IP/MAC fields have one-tap Copy buttons. Only an authenticated Home Assistant administrator can see all resident registrations, including the name, device, tracker, IP and MAC recorded at registration, current GPS state and last GPS report time. This does not assert current Wi-Fi reachability.
 
 The App authorizes each private request server-side by using its existing Supervisor token to query Home Assistant Core's administrator list and match the Ingress user ID. Ordinary residents get HTTP 403; authorization failures get 503 without any IP/MAC payload. The ordinary `/api/status` response no longer includes addresses. MQTT/Recorder still do not publish them.
 
