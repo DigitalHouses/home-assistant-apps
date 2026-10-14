@@ -24,9 +24,13 @@ def options(**kw):
 
 
 class RuntimeSafetyTests(unittest.TestCase):
-    def test_stale_tracker_never_becomes_absent(self):
-        state = {"state": "not_home", "last_updated": (NOW - timedelta(minutes=20)).isoformat()}
-        self.assertIs(gps_from_ha_state(state, NOW, 300, (43.2, 76.9))[0], Status.UNAVAILABLE)
+    def test_old_valid_tracker_retains_last_known_away(self):
+        when = NOW - timedelta(days=2)
+        state = {"state": "not_home", "last_updated": when.isoformat()}
+        status, distance, observed = gps_from_ha_state(state, NOW, 300, (43.2, 76.9))
+        self.assertIs(status, Status.NOT_HOME)
+        self.assertIsNone(distance)
+        self.assertEqual(observed, when)
 
     def test_last_reported_recognizes_fresh_unchanged_tracker(self):
         state = {
@@ -39,12 +43,21 @@ class RuntimeSafetyTests(unittest.TestCase):
         self.assertIsNone(distance)
         self.assertEqual(timestamp, NOW)
 
-    def test_stale_report_is_not_rescued_by_old_last_updated(self):
+    def test_old_report_is_still_last_known_home_with_distance(self):
+        when = NOW - timedelta(days=2)
         state = {
             "state": "home",
-            "last_updated": (NOW - timedelta(minutes=20)).isoformat(),
-            "last_reported": (NOW - timedelta(minutes=15)).isoformat(),
+            "last_updated": (NOW - timedelta(days=3)).isoformat(),
+            "last_reported": when.isoformat(),
+            "attributes": {"latitude": 43.21, "longitude": 76.9},
         }
+        status, distance, observed = gps_from_ha_state(state, NOW, 300, (43.2, 76.9))
+        self.assertIs(status, Status.HOME)
+        self.assertIsInstance(distance, float)
+        self.assertEqual(observed, when)
+
+    def test_future_report_is_not_trusted(self):
+        state = {"state": "home", "last_reported": (NOW + timedelta(minutes=2)).isoformat()}
         self.assertIs(gps_from_ha_state(state, NOW, 300, (43.2, 76.9))[0],
                       Status.UNAVAILABLE)
 
