@@ -47,8 +47,11 @@ def ingress_context(peer: str, headers) -> dict:
     """
     user = authenticated_ingress_user(peer, headers)
     forward = [x.strip() for x in (headers.get("X-Forwarded-For") or "").split(",")]
-    if len(forward) < 2 or len(forward) > 12:
-        raise PermissionError("Ingress proxy chain unavailable")
+    # Direct LAN Core requests have exactly two appended hops: browser Core
+    # peer and Core-to-Supervisor. Any earlier XFF hop implies a proxy/tunnel,
+    # and must not be used to enroll a phone even if the last peer is LAN.
+    if len(forward) != 2:
+        raise PermissionError("Registration requires a direct HA Core connection")
     try:
         core_peer = ipaddress.ip_address(forward[-1])
         actual_client = ipaddress.ip_address(forward[-2])
@@ -238,8 +241,14 @@ pre{white-space:pre-wrap;word-break:break-word}.muted{color:#777}
 <section class="panel"><h3>Мои устройства</h3><div id="residents" class="muted">...</div></section>
 </main><script>
 const q=id=>document.getElementById(id);
+const APP_ROOT=(()=>{
+ let path=window.location.pathname;
+ if(path.endsWith('/index.html'))path=path.slice(0,-'index.html'.length);
+ if(!path.endsWith('/'))path+='/';
+ return path;
+})();
 async function api(url,options={}){
- const res=await fetch(url,{cache:'no-store',...options});
+ const res=await fetch(APP_ROOT+url,{cache:'no-store',...options});
  const data=await res.json();
  if(!res.ok)throw Error(data.error||'HTTP '+res.status);
  return data;
