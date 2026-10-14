@@ -52,5 +52,6 @@ Changes must be made in this repository by feature branch → PR → full CI →
   direct LAN vs Cloudflare; container permissions for ARP and access
   only from Supervisor proxy; no false device binding with same-user
   iPhone+iPad; safe App upgrade/rollback and MQTT history unchanged.
-- Do not weaken the repo's host/raw privilege block before this
-  scoped HAOS acceptance. Do not claim Wi-Fi Engine operational.
+- The user's experimental home pilot authorizes exact `host_network`
+  plus `NET_RAW` in version `0.1.11`, with negative policy tests. Continue
+  to deny broader privileges; field validation of Ingress and ARP is pending. Do not claim Wi-Fi Engine operational.
