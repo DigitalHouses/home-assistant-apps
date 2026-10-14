@@ -41,21 +41,31 @@ Use Home Assistant **Settings → Apps → App Store** and the already configure
 5. If broker publication succeeded but no device exists, inspect Home Assistant Core logs for `mqtt`, `dh_presence_app`, `discovery`, or `Invalid config`. Do not delete other devices, clear all retained topics, or recreate the MQTT integration.
 6. The App automatically republishes on HA birth and every five minutes. No host-side script needed.
 
-## Authenticated resident registration (0.1.11)
+## Native authenticated Ingress registration (0.1.11 pilot)
 
-Use the [registration bridge](registration_bridge/README.md) to register a
-phone while its owner is authenticated in Home Assistant over the direct LAN.
-The Core adapter binds HA User → selected Mobile Companion entry/GPS
-device_tracker → actual WebSocket peer IP, while the App performs active
-on-link ARP for the MAC and persists the mapping in its own registration
-file. **No manual resident names or MAC/IP input.**
+No adapter, HA custom integration or dashboard JavaScript resource is needed.
+Install DH Presence from the Home Assistant App Store, open its **Open Web UI**
+(Ingress), select the phone's GPS tracker and press **Зарегистрировать**
+while connected through the phone's direct local HA URL.
 
-The same HA User may own an iPhone and an iPad; explicitly select the
-primary phone. The Core adapter does not claim it can cryptographically
-attest the selected app's physical identity from the WebSocket alone.
-Cloudflare/Tailscale/proxy registration is rejected, and Wi-Fi absence
-remains unavailable. Field proof on the home HAOS with a locked iPhone
-and same-account iPad remains an acceptance requirement.
+Supervisor provides `X-Remote-User-Id` and
+`X-Remote-User-Display-Name`. Its authenticated proxy forwards the
+actual HA Core transport peer in the last two X-Forwarded-For hops.
+The App rejects missing/spoofed proxy identities, nonlocal URLs and remote
+clients. It then verifies a fresh active ARP reply on the connected LAN
+before recording the MAC. The browser provides only the explicitly selected
+GPS tracker, not an IP, MAC or HA username.
+
+The App stores accepted registration in
+`/data/presence_registrations.json` mode 0600 and dynamically enrolls
+the resident, including name and device in MQTT state. Legacy `residents`
+and `resident_names` configuration remain supported solely for migration.
+
+This authentication identifies the HA user, not cryptographically which
+physical phone owns a chosen tracker. A second phone/iPad using the same
+HA account must be explicitly selected; field acceptance and cross-device
+identity proof remain open. Do not use for alarm decisions. ARP here is a
+**one-time enrollment probe**, not a Wi-Fi presence or absence signal.
 
 ## Legacy one-time names in App Configuration (not for new installs)
 
@@ -95,7 +105,7 @@ Supervisor persists `resident_names` alongside the App's other settings. Only en
 
 ## Known limitations
 
-WebSocket registration bridge and active ARP one-time enrollment are implemented in the 0.1.11 code, but require installation of the separate Core adapter/frontend module and live HAOS field acceptance before claiming operational readiness. The 14 October WebSocket proof of concept must not be misrepresented as an installed feature. Wi-Fi probing, 15+ minute iPhone sleep qualification and robust negative Wi-Fi verification remain unproven; no scanner or negative ARP result affects presence.
+Native Ingress registration and active ARP one-time enrollment are implemented in the 0.1.11 draft without any Core adapter, but require live HAOS field acceptance of forwarded client-IP provenance, host networking and raw socket permissions before claiming operational readiness. The 14 October WebSocket proof of concept must not be misrepresented as an installed feature. Wi-Fi probing, 15+ minute iPhone sleep qualification and robust negative Wi-Fi verification remain unproven; no scanner or negative ARP result affects presence.
 
 Telemetry is not emitted in this experimental preproduction pilot **even when** `telemetry_enabled: true`; the config flag is reserved for the eventual policy-compliant supported release. Startup now logs this explicitly. MQTT availability does not demonstrate Home Assistant Core API access. Startup logs the result of the first Core configuration/trackers read; a 403/404 there must be handled as a real Core API or tracker problem, separately from the already removed Bashio timezone lookup. Do not deploy to Amir, and do not use the pilot to arm/disarm an alarm.
 
