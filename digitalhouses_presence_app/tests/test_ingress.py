@@ -21,6 +21,17 @@ class IngressTests(unittest.TestCase):
         hdrs.update(kw)
         return hdrs
 
+    def test_ingress_server_listens_only_on_internal_host_bridge(self):
+        from dh_presence.ui import start_ingress_ui
+        with patch("dh_presence.ui.ThreadingHTTPServer") as server_cls:
+            with patch("dh_presence.ui.Thread") as thread_cls:
+                server_cls.return_value = SimpleNamespace(
+                    serve_forever=lambda: None,
+                )
+                start_ingress_ui("fake", "/tmp/presence-test-registry", [])
+                self.assertEqual(server_cls.call_args.args[0], ("172.30.32.1", 8099))
+                thread_cls.return_value.start.assert_called_once()
+
     def test_valid_authenticated_local_user_ip(self):
         context = ingress_context(SUPERVISOR_INGRESS, self.headers())
         self.assertEqual(context, {
