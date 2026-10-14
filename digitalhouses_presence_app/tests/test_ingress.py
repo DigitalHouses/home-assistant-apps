@@ -5,7 +5,8 @@ from unittest.mock import patch
 from types import SimpleNamespace
 
 from dh_presence.ui import (
-    CORE_NETWORK, SUPERVISOR_INGRESS, gps_candidates, ingress_context,
+    CORE_NETWORK, SUPERVISOR_INGRESS, authenticated_ingress_user,
+    gps_candidates, ingress_context,
 )
 
 
@@ -46,6 +47,17 @@ class IngressTests(unittest.TestCase):
         hdrs.pop("X-Remote-User-Id")
         with self.assertRaises(PermissionError):
             ingress_context(SUPERVISOR_INGRESS, hdrs)
+
+    def test_remote_authenticated_user_can_view_but_not_register(self):
+        headers = self.headers(**{
+            "X-Forwarded-Host": "myhouse.digitalhouses.vip",
+            "X-Forwarded-For": "10.0.1.20, 172.30.32.1",
+        })
+        self.assertEqual(
+            authenticated_ingress_user(SUPERVISOR_INGRESS, headers)["user_name"],
+            "Жилец")
+        with self.assertRaises(PermissionError):
+            ingress_context(SUPERVISOR_INGRESS, headers)
 
     def test_rejects_cloudflare_external_host(self):
         headers = self.headers(**{
