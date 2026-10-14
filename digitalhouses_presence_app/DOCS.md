@@ -1,11 +1,13 @@
-# DigitalHouses Presence App 0.1.12 — experimental pilot
+# DigitalHouses Presence App 0.1.13 — experimental pilot
 
-## Private administrator debug (0.1.12)
+## Private administrator debug (0.1.12+, compact UI in 0.1.13)
 
 The native Ingress UI has an administrator-only registration diagnostics card.
 For each phone it shows the resident's name, device, GPS tracker, IP and MAC
 **recorded when the device was registered**, GPS state and report timestamp.
 This is a saved network binding, not a claim of current connectivity.
+
+In 0.1.13, the native UI displays compact responsive rows, Russian status chips and Copy actions for enrollment IP and MAC. The last GPS report is formatted in Home Assistant's configured time zone from the authenticated Core config endpoint; if unavailable, UTC is labelled explicitly. The admin API permissions and regular resident privacy remain unchanged.
 
 The backend authenticates the Ingress user ID and checks their active
 `system-admin` group against Home Assistant Core through Supervisor's
