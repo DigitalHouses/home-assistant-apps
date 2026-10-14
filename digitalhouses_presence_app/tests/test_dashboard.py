@@ -71,6 +71,16 @@ class LovelaceCardTests(unittest.TestCase):
         self.assertNotIn("39fb60fca44a2aa6", code)
         self.assertEqual(code.count("custom:auto-entities"), 1)
 
+    def test_resident_name_precedes_device_and_missing_names_are_explicit(self):
+        card = CARD.read_text(encoding="utf-8")
+        self.assertIn("residentLabel(a[1]).localeCompare(residentLabel(b[1]), 'ru')", card)
+        self.assertIn("typeof resident.user_name === 'string'", card)
+        self.assertIn("resident.user_name.trim()", card)
+        self.assertIn("const shownName = (personName || 'Имя не задано')", card)
+        self.assertIn("+ ' (' + deviceName + ')'", card)
+        # Friendly phone labels are never used as invented human names.
+        self.assertNotIn("(personName || deviceName)", card)
+
     def test_dashboard_embeds_same_card_without_drift(self):
         card = CARD.read_text(encoding="utf-8")
         dashboard = DASHBOARD.read_text(encoding="utf-8")
