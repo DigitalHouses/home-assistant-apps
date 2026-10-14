@@ -1,4 +1,14 @@
-# Changelog\n\n## 0.1.9\n\n- Rename the existing MQTT device display name to **DH Presence** without changing its stable identifier, unique IDs or topic base.\n- Prefer fresh Home Assistant `last_reported` when available over `last_updated`, which stays unchanged for identical state reports. Stale data remains unavailable and distance still requires coordinates.\n- Discover an individual Wi-Fi binary sensor for each registered phone, with source-specific availability deliberately offline until the independently verified Wi-Fi engine exists.\n- Add actual runtime Refresh/Check Version controls, runtime-owned operation card, last-refresh and latest-release diagnostics; retain Supervisor installation/restart ownership.\n- Bring standalone and full dashboard cards into parity with the unified DigitalHouses control standard.\n- Expand regression tests and clarify feature gates.\n
+# Changelog
+
+## 0.1.9
+
+- Rename the existing MQTT device display name to **DH Presence** without changing its stable identifier, unique IDs or topic base.
+- Prefer fresh Home Assistant `last_reported` when available over `last_updated`, which stays unchanged for identical state reports. Stale data remains unavailable and distance still requires coordinates.
+- Discover an individual Wi-Fi binary sensor for each registered phone, with source-specific availability deliberately offline until the independently verified Wi-Fi engine exists.
+- Add actual runtime Refresh/Check Version controls, runtime-owned operation card, last-refresh and latest-release diagnostics; retain Supervisor installation/restart ownership.
+- Bring standalone and full dashboard cards into parity with the unified DigitalHouses control standard.
+- Expand regression tests and clarify feature gates.
+
 
 ## 0.1.8
 
