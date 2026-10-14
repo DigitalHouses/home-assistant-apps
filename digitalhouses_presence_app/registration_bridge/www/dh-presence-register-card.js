@@ -65,9 +65,17 @@ class DHPresenceRegisterCard extends HTMLElement {
         option.textContent = item.device_name + ' · ' + item.tracker;
         select.appendChild(option);
       }
-      this.show(this._choices.length
-        ? 'Устройства получены из вашей учётной записи HA. Выберите телефон, с которого открыта карточка.'
-        : 'У этой учётной записи нет зарегистрированных GPS-трекеров Mobile Companion.');
+      const histories = await this._hass.connection.sendMessagePromise({
+        type: 'dh_presence/registration_status',
+      });
+      const success = Array.isArray(histories)
+        ? histories.filter(item => item.status === 'registered') : [];
+      this.show(success.length
+        ? 'Зарегистрировано: ' + success.map(r => r.device_name
+            + ' (' + r.tracker + ', MAC: ' + (r.mac || '—') + ')').join('; ')
+        : this._choices.length
+          ? 'Выберите телефон, с которого открыта карточка. После регистрации нажмите «Обновить список».'
+          : 'У этой учётной записи нет GPS-трекеров Mobile Companion.');
     } catch (error) {
       this.show('Адаптер WebSocket не готов: ' + (error.message || String(error)), true);
     } finally { this._busy = false; }
