@@ -1,4 +1,4 @@
-# DigitalHouses Presence App 0.1.10 — experimental pilot
+# DigitalHouses Presence App 0.1.11 — experimental pilot
 
 ## Configuration
 The App Store's native **Configuration** tab is the supported installation and settings UI. This build deliberately does not register any custom Home Assistant frontend panel.
@@ -41,7 +41,23 @@ Use Home Assistant **Settings → Apps → App Store** and the already configure
 5. If broker publication succeeded but no device exists, inspect Home Assistant Core logs for `mqtt`, `dh_presence_app`, `discovery`, or `Invalid config`. Do not delete other devices, clear all retained topics, or recreate the MQTT integration.
 6. The App automatically republishes on HA birth and every five minutes. No host-side script needed.
 
-## One-time names in the App
+## Authenticated resident registration (0.1.11)
+
+Use the [registration bridge](registration_bridge/README.md) to register a
+phone while its owner is authenticated in Home Assistant over the direct LAN.
+The Core adapter binds HA User → selected Mobile Companion entry/GPS
+device_tracker → actual WebSocket peer IP, while the App performs active
+on-link ARP for the MAC and persists the mapping in its own registration
+file. **No manual resident names or MAC/IP input.**
+
+The same HA User may own an iPhone and an iPad; explicitly select the
+primary phone. The Core adapter does not claim it can cryptographically
+attest the selected app's physical identity from the WebSocket alone.
+Cloudflare/Tailscale/proxy registration is rejected, and Wi-Fi absence
+remains unavailable. Field proof on the home HAOS with a locked iPhone
+and same-account iPad remains an acceptance requirement.
+
+## Legacy one-time names in App Configuration (not for new installs)
 
 Set resident human names in the App's **Configuration** tab; existing `residents` tracker strings remain unchanged:
 
@@ -79,7 +95,7 @@ Supervisor persists `resident_names` alongside the App's other settings. Only en
 
 ## Known limitations
 
-Automatic registration from phone is not available until a minimum authorized HA Core custom integration is implemented and validated. The 14 October WebSocket proof of concept must not be misrepresented as an installed feature. Wi-Fi probing, 15+ minute iPhone sleep qualification and robust negative Wi-Fi verification remain unproven; no scanner or negative ARP result affects presence.
+WebSocket registration bridge and active ARP one-time enrollment are implemented in the 0.1.11 code, but require installation of the separate Core adapter/frontend module and live HAOS field acceptance before claiming operational readiness. The 14 October WebSocket proof of concept must not be misrepresented as an installed feature. Wi-Fi probing, 15+ minute iPhone sleep qualification and robust negative Wi-Fi verification remain unproven; no scanner or negative ARP result affects presence.
 
 Telemetry is not emitted in this experimental preproduction pilot **even when** `telemetry_enabled: true`; the config flag is reserved for the eventual policy-compliant supported release. Startup now logs this explicitly. MQTT availability does not demonstrate Home Assistant Core API access. Startup logs the result of the first Core configuration/trackers read; a 403/404 there must be handled as a real Core API or tracker problem, separately from the already removed Bashio timezone lookup. Do not deploy to Amir, and do not use the pilot to arm/disarm an alarm.
 
