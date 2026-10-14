@@ -21,10 +21,8 @@ from dh_presence.discovery import DISCOVERY, discovery, topic, with_cleanup
 from dh_presence.storage import load, save
 from dh_presence.modes import ModeSelection
 from dh_presence.operations import Operations, fetch_latest_release, is_newer
-from dh_presence.registration import (
-    load_registry, save_registry, put_registration, get_bridge_requests,
-    active_arp_mac, completed_record, ack_bridge,
-)
+from dh_presence.registration import load_registry
+from dh_presence.ui import start_ingress_ui
 
 LOG = logging.getLogger("dh_presence_app")
 OPTIONS = "/data/options.json"
@@ -416,8 +414,8 @@ def run():
     latest_version = None
     last_release_check = None
     last_registration_check = None
-    registration_api_error = None
     token = os.environ["SUPERVISOR_TOKEN"]
+    ingress = start_ingress_ui(token, REGISTRATIONS_FILE, options["exclude_users"])
     started = datetime.now(timezone.utc).isoformat()
     mqtt_out = MqttOutput(version)
     home = None
@@ -431,11 +429,11 @@ def run():
     last_discovery_audit = None
     last_discovery_audit_status = None
     LOG.info("Starting %s version %s, mode=%s, configured_residents=%d", "DigitalHouses Presence App", version, engine.mode.value, len(engine.residents))
-    LOG.warning("Pilot safety gate: Wi-Fi detection and automatic registration are NOT active. No Wi-Fi absence can mark a resident away.")
+    LOG.warning("Pilot safety gate: Wi-Fi presence/absence is NOT active. Phone registration is restricted to verified local Ingress enrollment.")
     if options["telemetry_enabled"]:
         LOG.warning("Experimental pilot: telemetry_enabled=true, but there is no telemetry sender; no statistics are transmitted.")
     if not engine.residents:
-        LOG.warning("No residents configured. Edit App Configuration to add a GPS device_tracker entity for each resident.")
+        LOG.info("No residents registered yet; use the DH Presence Ingress UI on a local phone")
     try:
         while not STOP.is_set():
             connected = mqtt_out.connected.is_set()
@@ -485,47 +483,34 @@ def run():
                     LOG.info("Presence mode changed from HA UI to %s", engine.mode.value)
                     if engine.mode is Mode.WIFI:
                         LOG.warning("Wi-Fi mode is not operational in this pilot; aggregate presence will be unavailable")
-            # The registered bridge's HTTP API is authenticated through the
-            # existing Supervisor Core token. Registration never comes from an
-            # unauthenticated MQTT command or a client-submitted MAC address.
+            # Ingress writes the private registration database atomically.
+            # One engine observes the new roster without a service restart,
+            # without a second Core adapter, and without synthetic events.
             if (last_registration_check is None
-                    or time.monotonic() - last_registration_check >= 15):
+                    or time.monotonic() - last_registration_check >= 5):
                 last_registration_check = time.monotonic()
-                try:
-                    requests = get_bridge_requests(token)
-                    registration_api_error = None
-                except (HTTPError, URLError, OSError, ValueError, TypeError) as exc:
-                    requests = []
-                    problem = api_error_detail(exc)
-                    if registration_api_error != problem:
-                        LOG.warning("Presence WebSocket registration bridge unavailable: %s (GPS polling continues)", problem)
-                        registration_api_error = problem
-                for request in requests[:3]:
-                    try:
-                        if request.get("user_id") in options["exclude_users"]:
-                            LOG.warning("Ignoring excluded user registration request")
+                latest = load_registry(REGISTRATIONS_FILE)
+                if latest != registrations:
+                    registrations = latest
+                    changed = False
+                    for item in registrations:
+                        if item["user_id"] in options["exclude_users"]:
                             continue
-                        mac, iface = active_arp_mac(request["ip"])
-                        entry = completed_record(request, mac)
-                        new_registrations = put_registration(registrations, entry)
-                        save_registry(REGISTRATIONS_FILE, new_registrations)
-                        registrations = new_registrations
-                        resident = engine.residents.get(entry["tracker"])
+                        resident = engine.residents.get(item["tracker"])
                         if resident is None:
-                            engine.add(entry["tracker"], entry["device_name"],
-                                       user_name=entry["user_name"])
-                        else:
-                            resident.user_name = entry["user_name"]
-                            resident.name = entry["device_name"]
-                        # Persist before acknowledging; if Core replays a
-                        # request after a crash, put_registration is idempotent.
-                        ack_bridge(token, request["request_id"], mac)
+                            engine.add(item["tracker"], item["device_name"],
+                                       saved=next((x for x in saved["residents"]
+                                                   if x.get("tracker") == item["tracker"]), None),
+                                       user_name=item["user_name"])
+                            changed = True
+                        elif (resident.user_name != item["user_name"]
+                              or resident.name != item["device_name"]):
+                            resident.user_name = item["user_name"]
+                            resident.name = item["device_name"]
+                            changed = True
+                    if changed:
                         discovery_ready = synchronize_discovery(mqtt_out, version, engine) if mqtt_out.connected.is_set() else False
-                        LOG.info("Mobile Companion registration accepted: tracker=%s, iface=%s; identity stored locally",
-                                 entry["tracker"], iface)
-                    except (KeyError, TypeError, ValueError, RuntimeError,
-                            OSError, subprocess.TimeoutExpired) as exc:
-                        LOG.warning("Presence registration pending: %s", type(exc).__name__)
+                        LOG.info("DH Presence registered resident roster synchronized")
             now = datetime.now(timezone.utc)
             name_changed = False
             if home is None:
@@ -651,6 +636,8 @@ def run():
                               5 if operations.state == "success" else options["gps_poll_interval_seconds"]))
     finally:
         mqtt_out.stop()
+        ingress.shutdown()
+        ingress.server_close()
 
 
 def main():
