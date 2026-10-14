@@ -133,6 +133,7 @@ class MqttOutput:
         self.client.on_disconnect = self._disconnected
         self.client.on_message = self._message
         self.mode_commands = queue.SimpleQueue()
+        self.discovery_requests = queue.SimpleQueue()
         self.client.will_set(topic("availability"), "offline", retain=True, qos=1)
         self.client.connect_async(os.environ["MQTT_HOST"], int(os.environ["MQTT_PORT"]), keepalive=60)
         self.client.loop_start()
@@ -142,8 +143,10 @@ class MqttOutput:
         if reason_code == 0:
             self.cache.clear()
             self.connected.set()
-            client.subscribe(topic("mode/set"), qos=1)
-            LOG.info("MQTT connected and mode commands subscribed")
+            mode_result = client.subscribe(topic("mode/set"), qos=1)
+            birth_result = client.subscribe("homeassistant/status", qos=1)
+            LOG.info("MQTT connected; mode subscription result=%s; HA birth subscription result=%s",
+                     mode_result[0], birth_result[0])
         else:
             self.connected.clear()
             LOG.error("MQTT rejected connection: %s", reason_code)
@@ -153,6 +156,11 @@ class MqttOutput:
         LOG.warning("MQTT disconnected")
 
     def _message(self, client, userdata, msg):
+        if msg.topic == "homeassistant/status":
+            if msg.payload == b"online" and not getattr(msg, "retain", False):
+                self.discovery_requests.put("ha_birth")
+                WAKE.set()
+            return
         if msg.topic != topic("mode/set"):
             return
         if getattr(msg, "retain", False):
@@ -176,13 +184,16 @@ class MqttOutput:
             return True
         info = self.client.publish(destination, message, qos=1, retain=retain)
         if info.rc != mqtt.MQTT_ERR_SUCCESS:
+            LOG.error("MQTT publish rejected topic=%s rc=%s", destination, info.rc)
             self.connected.clear()
             return False
         try:
             info.wait_for_publish(timeout=6)
-        except (RuntimeError, ValueError):
+        except (RuntimeError, ValueError) as exc:
+            LOG.error("MQTT publish acknowledgment failed topic=%s error=%s", destination, type(exc).__name__)
             return False
         if not info.is_published():
+            LOG.error("MQTT publish not acknowledged topic=%s", destination)
             return False
         if retain:
             self.cache[destination] = message
@@ -242,11 +253,15 @@ def synchronize_discovery(output: MqttOutput, version: str, engine: Engine) -> b
     current = discovery(version, list(engine.residents.values()))
     old = load_discovery()
     if old.get("components") and not output.publish(DISCOVERY, with_cleanup(old, current), force=True):
+        LOG.error("MQTT Discovery cleanup publish failed topic=%s", DISCOVERY)
         return False
     if not output.publish(DISCOVERY, current, force=True):
+        LOG.error("MQTT Discovery config publish failed topic=%s", DISCOVERY)
         return False
     # Config is stored separately from logical resident state.
     save_discovery(current)
+    LOG.info("MQTT Discovery published topic=%s components=%d device=%s (QoS1, retained)",
+             DISCOVERY, len(current["components"]), current["device"]["name"])
     return True
 
 
@@ -292,7 +307,10 @@ def run():
     home = None
     discovery_ready = False
     previous_mqtt_connection = False
+    last_discovery_attempt = None
+    last_discovery_session = None
     previous_core_error = None
+    published_state_logged = False
     reported_gps_status = {}
     LOG.info("Starting %s version %s, mode=%s, configured_residents=%d", "DigitalHouses Presence App", version, engine.mode.value, len(engine.residents))
     LOG.warning("Pilot safety gate: Wi-Fi detection and automatic registration are NOT active. No Wi-Fi absence can mark a resident away.")
@@ -302,13 +320,34 @@ def run():
         LOG.warning("No residents configured. Edit App Configuration to add HA user ID, Companion device and GPS tracker.")
     try:
         while not STOP.is_set():
-            if mqtt_out.connected.is_set() and not previous_mqtt_connection:
+            connected = mqtt_out.connected.is_set()
+            if not connected:
+                discovery_ready = False
+                last_discovery_session = None
+                published_state_logged = False
+            if connected and not previous_mqtt_connection:
+                # Do not announce online until retained discovery and live states
+                # have been published successfully.
                 mqtt_out.publish(topic("availability"), "offline", force=True)
-                if synchronize_discovery(mqtt_out, version, engine):
-                    discovery_ready = True
-                else:
-                    LOG.error("MQTT Discovery not synchronized")
-            previous_mqtt_connection = mqtt_out.connected.is_set()
+                discovery_ready = False
+                last_discovery_session = None
+            previous_mqtt_connection = connected
+            ha_birth = False
+            while not mqtt_out.discovery_requests.empty():
+                mqtt_out.discovery_requests.get_nowait()
+                ha_birth = True
+            now_monotonic = time.monotonic()
+            if connected and (ha_birth or last_discovery_session is None
+                              or now_monotonic - last_discovery_session >= 300):
+                # Retry a failed Discovery every GPS polling interval, and
+                # re-announce after HA starts and every 5 minutes.
+                if last_discovery_attempt is None or ha_birth or now_monotonic - last_discovery_attempt >= max(10, options["gps_poll_interval_seconds"]):
+                    last_discovery_attempt = now_monotonic
+                    discovery_ready = synchronize_discovery(mqtt_out, version, engine)
+                    if discovery_ready:
+                        last_discovery_session = now_monotonic
+                    else:
+                        LOG.error("MQTT Discovery not synchronized; retrying automatically, retained topic=%s", DISCOVERY)
             while not mqtt_out.mode_commands.empty():
                 requested = mqtt_out.mode_commands.get_nowait()
                 if modes.change(requested):
@@ -363,6 +402,10 @@ def run():
             # Commit durable current state BEFORE sending retained MQTT state and events.
             save(STATE, engine.persistent())
             if mqtt_out.connected.is_set() and discovery_ready and publish_snapshot(mqtt_out, engine, version, started):
+                if not published_state_logged:
+                    LOG.info("MQTT presence state published topic=%s residents=%d mode=%s",
+                             topic("state"), len(engine.residents), engine.mode.value)
+                    published_state_logged = True
                 for event in events:
                     if event["event_type"] not in EVENT_NAMES:
                         raise ValueError("Invalid internal event")

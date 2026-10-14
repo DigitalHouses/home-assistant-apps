@@ -134,3 +134,23 @@ class RuntimeSafetyTests(unittest.TestCase):
         script = (root / "rootfs/run.sh").read_text(encoding="utf-8")
         self.assertNotIn("bashio::supervisor.timezone)", script)
         self.assertIn('TZ="${TZ:-Asia/Almaty}"', script)
+
+    def test_homeassistant_birth_requests_discovery(self):
+        from app import WAKE
+        output = object.__new__(MqttOutput)
+        output.mode_commands = queue.SimpleQueue()
+        output.discovery_requests = queue.SimpleQueue()
+        WAKE.clear()
+        output._message(None, None, SimpleNamespace(
+            topic="homeassistant/status", payload=b"online", retain=False))
+        self.assertEqual(output.discovery_requests.get_nowait(), "ha_birth")
+        self.assertTrue(WAKE.is_set())
+        WAKE.clear()
+
+    def test_retained_birth_does_not_trigger_discovery(self):
+        output = object.__new__(MqttOutput)
+        output.mode_commands = queue.SimpleQueue()
+        output.discovery_requests = queue.SimpleQueue()
+        output._message(None, None, SimpleNamespace(
+            topic="homeassistant/status", payload=b"online", retain=True))
+        self.assertTrue(output.discovery_requests.empty())
