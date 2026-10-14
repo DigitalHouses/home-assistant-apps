@@ -115,15 +115,18 @@ class RuntimeSafetyTests(unittest.TestCase):
         e = build_engine(opts, {"schema_version": 2, "residents": []})
         self.assertEqual(list(e.residents), ["device_tracker.phone"])
 
-    def test_exclusions_fail_loudly_for_tracker_only(self):
+    def test_unbound_trackers_cannot_bypass_excluded_user_policy(self):
         with tempfile.TemporaryDirectory() as d:
             cfg = options()
             cfg["presence_mode"] = "gps"
             cfg["exclude_users"] = ["admin-id"]
             f = Path(d) / "options.json"
             f.write_text(json.dumps(cfg), encoding="utf-8")
-            with self.assertRaisesRegex(ValueError, "exclude_users"):
-                load_options(str(f))
+            loaded = load_options(str(f))
+            engine = build_engine(loaded, {"schema_version": 2, "residents": []})
+            # A legacy string has no authenticated HA-user binding. Safe
+            # default is to skip it rather than monitor an excluded admin.
+            self.assertFalse(engine.residents)
 
     def test_one_string_per_resident_in_options(self):
         with tempfile.TemporaryDirectory() as d:

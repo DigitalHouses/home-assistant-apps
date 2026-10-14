@@ -81,6 +81,42 @@ class LovelaceCardTests(unittest.TestCase):
         # Friendly phone labels are never used as invented human names.
         self.assertNotIn("(personName || deviceName)", card)
 
+    def test_single_install_ingress_without_custom_registration_resources(self):
+        card = CARD.read_text(encoding="utf-8")
+        config = (ROOT / "config.yaml").read_text(encoding="utf-8")
+        ui = (ROOT / "rootfs/app/dh_presence/ui.py").read_text(encoding="utf-8")
+        self.assertNotIn("custom:dh-presence-register-card", card)
+        self.assertIn("ingress: true", config)
+        self.assertIn("ingress_port: 8099", config)
+        self.assertIn("X-Remote-User-Id", ui)
+        self.assertIn("X-Remote-User-Display-Name", ui)
+        self.assertIn("api/register", ui)
+        self.assertIn("start_ingress_ui", ui)
+        self.assertFalse((ROOT / "registration_bridge").exists())
+
+    def test_phone_registration_launcher_is_safe_and_single_install(self):
+        card = CARD.read_text(encoding="utf-8")
+        launcher = (ROOT / "examples/lovelace/presence_registration_card_ru.yaml").read_text(encoding="utf-8")
+        config = (ROOT / "config.yaml").read_text(encoding="utf-8")
+        self.assertIn("ingress: true", config)
+        self.assertIn("registration_ready", launcher)
+        self.assertIn("version[2] >= 11", launcher)
+        self.assertIn("variables.registration_ready ? 'navigate' : 'none'", launcher)
+        self.assertIn("/hassio/ingress/8133339d_digitalhouses_presence_app", launcher)
+        self.assertIn("Пока недоступно", launcher)
+        self.assertIn("Регистрация телефона", launcher)
+        self.assertIn("type: custom:button-card", launcher)
+        self.assertNotIn("custom:dh-presence-register-card", card)
+        self.assertEqual(card.count("name: Регистрация телефона"), 1)
+        # The same launcher is embedded in the maintained card, not duplicated
+        # as a separate public system or custom frontend resource.
+        noncomment = [line for line in launcher.splitlines()
+                      if line.strip() and not line.startswith("#")]
+        embedded = "  - " + noncomment[0] + "\n" + "\n".join(
+            "    " + line for line in noncomment[1:])
+        self.assertIn(embedded, "\n".join(
+            line for line in card.splitlines() if line.strip()))
+
     def test_dashboard_embeds_same_card_without_drift(self):
         card = CARD.read_text(encoding="utf-8")
         dashboard = DASHBOARD.read_text(encoding="utf-8")

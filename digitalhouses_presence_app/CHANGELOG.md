@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.11 (draft — single-install acceptance pending)
+
+- Add a native **Supervisor Ingress** interface to the DH Presence Home Assistant App. Installation is through the App Store alone; no `custom_components`, frontend resource, HACS dependency or manual HA configuration is required for registration.
+- Use Supervisor-authenticated Ingress user headers to obtain authoritative HA user ID and display name. Extract the actual Core transport peer from the appended proxy chain; require a direct local HA URL.
+- Let the phone user explicitly choose their GPS `device_tracker`; do **not** infer user ownership or phone authenticity from a shared HA login. Require a fresh on-link active ARP reply for IP→MAC, never a stale neighbour-cache entry or browser-supplied identity.
+- Save the private user/device/IP/MAC binding atomically in the App's own `/data` and auto-enroll its resident with the original stable MQTT identity; the card shows `Имя жильца (Устройство)` without `resident_names`.
+- Preserve legacy pilot configuration and prevent excluded HA users from registering. No Wi-Fi absence handling or alarm integration is enabled.
+- Host LAN network + only `NET_RAW` are explicitly authorized for this 0.1.11 experimental pilot and guarded by restrictive validator tests; live HAOS client-IP and ARP acceptance is still pending.
+
+
 ## 0.1.10
 
 - Use the last valid HA GPS state and coordinates for a stationary iPhone even after days without new GPS reports; age alone no longer marks the GPS and distance sensors unavailable.

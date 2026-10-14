@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import queue
+import subprocess
 import signal
 import threading
 import time
@@ -20,6 +21,8 @@ from dh_presence.discovery import DISCOVERY, discovery, topic, with_cleanup
 from dh_presence.storage import load, save
 from dh_presence.modes import ModeSelection
 from dh_presence.operations import Operations, fetch_latest_release, is_newer
+from dh_presence.registration import load_registry
+from dh_presence.ui import start_ingress_ui
 
 LOG = logging.getLogger("dh_presence_app")
 OPTIONS = "/data/options.json"
@@ -27,6 +30,7 @@ STATE = "/data/presence_state.json"
 DISCOVERY_FILE = "/data/presence_discovery.json"
 MODE_FILE = "/data/presence_mode.json"
 OPERATIONS_FILE = "/data/presence_refresh.json"
+REGISTRATIONS_FILE = "/data/presence_registrations.json"
 EVENT_NAMES = {"arrival", "departure", "gps_in", "gps_out", "wifi_in", "wifi_out"}
 STOP = threading.Event()
 WAKE = threading.Event()
@@ -126,10 +130,8 @@ def load_options(path=OPTIONS) -> dict:
             raise ValueError("Duplicate resident_names device_tracker")
         seen_names.add(tracker)
     data["resident_names"] = resident_names
-    # HA user IDs cannot reliably be inferred from a tracker. Reject ambiguous
-    # exclusions rather than silently tracking an excluded administrator.
-    if excludes and any(isinstance(r, str) for r in residents):
-        raise ValueError("exclude_users cannot be verified for tracker-only residents; omit excluded trackers from residents (or use legacy mapped configuration)")
+    # Tracker-only residents without a verified user link are handled
+    # fail-closed by build_engine when exclude_users is set.
     data["presence_mode"] = mode
     return data
 
@@ -279,7 +281,7 @@ class MqttOutput:
         self.client.loop_stop()
 
 
-def build_engine(options: dict, saved: dict) -> Engine:
+def build_engine(options: dict, saved: dict, registrations: list[dict] | None = None) -> Engine:
     engine = Engine(mode=options["presence_mode"], wifi_absence_minutes=options["wifi_absence_minutes"],
                     freshness_seconds=options["gps_freshness_seconds"])
     # Tracker identity is deliberately different from HA User identity. We
@@ -289,15 +291,30 @@ def build_engine(options: dict, saved: dict) -> Engine:
     excludes = set(options["exclude_users"])
     names = {entry["device_tracker"]: entry["user_name"]
              for entry in options.get("resident_names", [])}
+    registered = {r["tracker"]: r for r in (registrations or [])}
     for item in options["residents"]:
         if isinstance(item, str):
+            # No authenticated user-id for a legacy tracker-only entry:
+            # never count it when an HA User exclusion must be enforced.
+            if excludes and item not in registered:
+                continue
             tracker, name, old_state = item, friendly_tracker_name(item), previous.get(item)
         else:
             if item["user_id"] in excludes:
                 continue
             tracker, name = item["gps_tracker"], item["name"]
             old_state = previous.get(tracker) or legacy.get(item["user_id"])
-        engine.add(tracker, name, old_state, user_name=names.get(tracker))
+        link = registered.get(tracker)
+        if link and link["user_id"] in excludes:
+            continue
+        engine.add(tracker, link["device_name"] if link else name, old_state,
+                   user_name=link["user_name"] if link else names.get(tracker))
+    # Dynamic enrollment is durable and independent of the App config's old
+    # residents list. A new resident starts unknown, without synthetic events.
+    for tracker, link in registered.items():
+        if tracker not in engine.residents and link["user_id"] not in excludes:
+            engine.add(tracker, link["device_name"], previous.get(tracker),
+                       user_name=link["user_name"])
     return engine
 
 
@@ -389,13 +406,16 @@ def run():
     version = os.environ["APP_VERSION"]
     options = load_options()
     saved = load(STATE)
-    engine = build_engine(options, saved)
+    registrations = load_registry(REGISTRATIONS_FILE)
+    engine = build_engine(options, saved, registrations)
     modes = ModeSelection(MODE_FILE, options["presence_mode"])
     engine.set_mode(modes.selected)
     operations = Operations(OPERATIONS_FILE)
     latest_version = None
     last_release_check = None
+    last_registration_check = None
     token = os.environ["SUPERVISOR_TOKEN"]
+    ingress = start_ingress_ui(token, REGISTRATIONS_FILE, options["exclude_users"])
     started = datetime.now(timezone.utc).isoformat()
     mqtt_out = MqttOutput(version)
     home = None
@@ -409,11 +429,11 @@ def run():
     last_discovery_audit = None
     last_discovery_audit_status = None
     LOG.info("Starting %s version %s, mode=%s, configured_residents=%d", "DigitalHouses Presence App", version, engine.mode.value, len(engine.residents))
-    LOG.warning("Pilot safety gate: Wi-Fi detection and automatic registration are NOT active. No Wi-Fi absence can mark a resident away.")
+    LOG.warning("Pilot safety gate: Wi-Fi presence/absence is NOT active. Phone registration is restricted to verified local Ingress enrollment.")
     if options["telemetry_enabled"]:
         LOG.warning("Experimental pilot: telemetry_enabled=true, but there is no telemetry sender; no statistics are transmitted.")
     if not engine.residents:
-        LOG.warning("No residents configured. Edit App Configuration to add a GPS device_tracker entity for each resident.")
+        LOG.info("No residents registered yet; use the DH Presence Ingress UI on a local phone")
     try:
         while not STOP.is_set():
             connected = mqtt_out.connected.is_set()
@@ -463,6 +483,34 @@ def run():
                     LOG.info("Presence mode changed from HA UI to %s", engine.mode.value)
                     if engine.mode is Mode.WIFI:
                         LOG.warning("Wi-Fi mode is not operational in this pilot; aggregate presence will be unavailable")
+            # Ingress writes the private registration database atomically.
+            # One engine observes the new roster without a service restart,
+            # without a second Core adapter, and without synthetic events.
+            if (last_registration_check is None
+                    or time.monotonic() - last_registration_check >= 5):
+                last_registration_check = time.monotonic()
+                latest = load_registry(REGISTRATIONS_FILE)
+                if latest != registrations:
+                    registrations = latest
+                    changed = False
+                    for item in registrations:
+                        if item["user_id"] in options["exclude_users"]:
+                            continue
+                        resident = engine.residents.get(item["tracker"])
+                        if resident is None:
+                            engine.add(item["tracker"], item["device_name"],
+                                       saved=next((x for x in saved["residents"]
+                                                   if x.get("tracker") == item["tracker"]), None),
+                                       user_name=item["user_name"])
+                            changed = True
+                        elif (resident.user_name != item["user_name"]
+                              or resident.name != item["device_name"]):
+                            resident.user_name = item["user_name"]
+                            resident.name = item["device_name"]
+                            changed = True
+                    if changed:
+                        discovery_ready = synchronize_discovery(mqtt_out, version, engine) if mqtt_out.connected.is_set() else False
+                        LOG.info("DH Presence registered resident roster synchronized")
             now = datetime.now(timezone.utc)
             name_changed = False
             if home is None:
@@ -480,7 +528,11 @@ def run():
             for r in engine.residents.values():
                 try:
                     data = http_json("http://supervisor/core/api/states/" + r.tracker, token)
-                    name_changed = observe_friendly_name(r, data) or name_changed
+                    # A WebSocket-enrolled resident's device name is
+                    # registered once from the selected Mobile Companion entry,
+                    # not inferred from a possibly renamed GPS entity.
+                    if not any(x["tracker"] == r.tracker for x in registrations):
+                        name_changed = observe_friendly_name(r, data) or name_changed
                     status, distance, observed = gps_from_ha_state(data, now, options["gps_freshness_seconds"], home) if home else (Status.UNAVAILABLE, None, None)
                     if observed is not None and status is not Status.UNAVAILABLE:
                         if reported_gps_status.get(r.tracker) != status.value:
@@ -584,6 +636,8 @@ def run():
                               5 if operations.state == "success" else options["gps_poll_interval_seconds"]))
     finally:
         mqtt_out.stop()
+        ingress.shutdown()
+        ingress.server_close()
 
 
 def main():
