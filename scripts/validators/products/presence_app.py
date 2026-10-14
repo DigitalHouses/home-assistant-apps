@@ -5,6 +5,33 @@ import struct
 from validators.common import fail, require_files
 
 
+def validate_presence_network_policy(config: dict, version: str) -> None:
+    """Scoped, explicitly authorized experimental 0.1.11 network policy.
+
+    The one-time phone registration probe needs on-link ARP. NET_RAW and
+    host_network are allowed only for 0.1.11, with protected Ingress and
+    *without* additional broad Linux capabilities, host mounts or Docker API.
+    Any later release requires an explicit new policy review.
+    """
+    if (config.get("full_access") or config.get("docker_api")
+            or config.get("apparmor") is False
+            or config.get("hassio_role", "default") != "default"
+            or config.get("host_pid") or config.get("host_ipc")
+            or config.get("host_dbus") or config.get("host_uts")
+            or config.get("map")):
+        fail("Presence cannot request host-wide access, unsafe mounts or elevated Supervisor role")
+    if version == "0.1.11":
+        if config.get("host_network") is not True or config.get("privileged") != ["NET_RAW"]:
+            fail("Presence 0.1.11 pilot permits only host_network and NET_RAW for one-time ARP")
+        if (config.get("ingress") is not True
+                or config.get("ingress_port") != 8099
+                or config.get("panel_admin") is not False
+                or config.get("ports")):
+            fail("Presence 0.1.11 requires authenticated Ingress with no exposed host ports")
+    elif "privileged" in config or config.get("host_network"):
+        fail("Unreviewed Presence version cannot request raw sockets or host networking")
+
+
 def validate_presence(root: Path, app: Path, context: dict) -> None:
     version = context["version"]
     config = context["config"]
@@ -22,8 +49,7 @@ def validate_presence(root: Path, app: Path, context: dict) -> None:
         fail("Presence App needs HA Core API")
     if "mqtt:need" not in config.get("services", []):
         fail("Presence App requires MQTT service")
-    if "privileged" in config or config.get("host_network") or config.get("full_access"):
-        fail("Unvalidated raw-socket or host privileges forbidden in GPS pilot")
+    validate_presence_network_policy(config, version)
     if config.get("options", {}).get("telemetry_enabled") is not False:
         fail("Pilot does not have telemetry integration")
     if config.get("options", {}).get("residents") != []:
@@ -38,6 +64,10 @@ def validate_presence(root: Path, app: Path, context: dict) -> None:
         app / "rootfs/app/dh_presence/discovery.py",
         app / "rootfs/app/dh_presence/storage.py",
         app / "rootfs/app/dh_presence/modes.py",
+        app / "rootfs/app/dh_presence/registration.py",
+        app / "rootfs/app/dh_presence/ui.py",
+        app / "tests/test_registration.py",
+        app / "tests/test_ingress.py",
         app / "tests/test_core.py",
         app / "tests/test_discovery.py",
         app / "tests/test_modes.py",
