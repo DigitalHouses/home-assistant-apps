@@ -7,7 +7,7 @@
 - Let the phone user explicitly choose their GPS `device_tracker`; do **not** infer user ownership or phone authenticity from a shared HA login. Require a fresh on-link active ARP reply for IP→MAC, never a stale neighbour-cache entry or browser-supplied identity.
 - Save the private user/device/IP/MAC binding atomically in the App's own `/data` and auto-enroll its resident with the original stable MQTT identity; the card shows `Имя жильца (Устройство)` without `resident_names`.
 - Preserve legacy pilot configuration and prevent excluded HA users from registering. No Wi-Fi absence handling or alarm integration is enabled.
-- Host LAN network + `NET_RAW` and HAOS client-IP attestation need scoped field acceptance; CI intentionally blocks unvalidated privileged deployment.
+- Host LAN network + only `NET_RAW` are explicitly authorized for this 0.1.11 experimental pilot and guarded by restrictive validator tests; live HAOS client-IP and ARP acceptance is still pending.
 
 
 ## 0.1.10
