@@ -46,6 +46,7 @@ def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 class Resident:
     tracker: str
     name: str
+    user_name: str | None = None
     confirmed: Status = Status.UNAVAILABLE
     gps: Status = Status.UNAVAILABLE
     wifi: Status = Status.UNAVAILABLE
@@ -74,14 +75,20 @@ class Engine:
         if not 30 <= self.freshness_seconds <= 3600:
             raise ValueError("Invalid freshness")
 
-    def add(self, tracker: str, name: str, saved: dict | None = None):
+    def add(self, tracker: str, name: str, saved: dict | None = None,
+            user_name: str | None = None):
         validate_tracker(tracker)
         if not isinstance(name, str) or not name.strip():
-            raise ValueError("Resident name cannot be blank")
+            raise ValueError("Resident device name cannot be blank")
+        if user_name is not None and (not isinstance(user_name, str) or not user_name.strip()):
+            raise ValueError("Resident user name cannot be blank")
         if tracker in self.residents:
             raise ValueError("Duplicate device_tracker")
         status = Status.UNAVAILABLE if saved is None else Status(saved["confirmed"])
-        self.residents[tracker] = Resident(tracker, name.strip(), confirmed=status)
+        self.residents[tracker] = Resident(
+            tracker, name.strip(), user_name=user_name.strip() if user_name else None,
+            confirmed=status
+        )
 
     def overall(self) -> Status:
         states = [r.confirmed for r in self.residents.values()]
@@ -199,6 +206,7 @@ class Engine:
                 "residents_total": len(self.residents),
                 "residents_home": 0 if wifi_unsupported else sum(r.confirmed is Status.HOME for r in self.residents.values()),
                 "residents": {r.key: {"name": r.name,
+                                      "user_name": r.user_name,
                                       "status": (Status.UNAVAILABLE.value if wifi_unsupported else r.confirmed.value),
                                       "gps": r.gps.value, "wifi": r.wifi.value}
                               for r in self.residents.values()}}

@@ -99,6 +99,26 @@ def load_options(path=OPTIONS) -> dict:
     tracker_ids = [r if isinstance(r, str) else r["gps_tracker"] for r in residents]
     if len(tracker_ids) != len(set(tracker_ids)):
         raise ValueError("Each device_tracker may be registered only once")
+    # Optional one-time resident identity mapping, stored by HA Supervisor in
+    # the App's own persistent options alongside the registered trackers.
+    # Do not infer household person identity from a tracker's friendly_name.
+    resident_names = data.get("resident_names", [])
+    if not isinstance(resident_names, list):
+        raise ValueError("resident_names must be a list")
+    seen_names = set()
+    for entry in resident_names:
+        if not isinstance(entry, dict) or set(entry) != {"device_tracker", "user_name"}:
+            raise ValueError("Each resident_names entry requires device_tracker and user_name")
+        tracker = validate_tracker(entry["device_tracker"])
+        name = entry["user_name"]
+        if not isinstance(name, str) or not name.strip() or len(name.strip()) > 120:
+            raise ValueError("Invalid resident user_name")
+        if tracker not in tracker_ids:
+            raise ValueError("resident_names contains an unregistered device_tracker")
+        if tracker in seen_names:
+            raise ValueError("Duplicate resident_names device_tracker")
+        seen_names.add(tracker)
+    data["resident_names"] = resident_names
     # HA user IDs cannot reliably be inferred from a tracker. Reject ambiguous
     # exclusions rather than silently tracking an excluded administrator.
     if excludes and any(isinstance(r, str) for r in residents):
@@ -248,6 +268,8 @@ def build_engine(options: dict, saved: dict) -> Engine:
     previous = {r["tracker"]: r for r in saved["residents"]} if saved["schema_version"] == 2 else {}
     legacy = {r["user_id"]: r for r in saved["residents"]} if saved["schema_version"] == 1 else {}
     excludes = set(options["exclude_users"])
+    names = {entry["device_tracker"]: entry["user_name"]
+             for entry in options.get("resident_names", [])}
     for item in options["residents"]:
         if isinstance(item, str):
             tracker, name, old_state = item, friendly_tracker_name(item), previous.get(item)
@@ -256,7 +278,7 @@ def build_engine(options: dict, saved: dict) -> Engine:
                 continue
             tracker, name = item["gps_tracker"], item["name"]
             old_state = previous.get(tracker) or legacy.get(item["user_id"])
-        engine.add(tracker, name, old_state)
+        engine.add(tracker, name, old_state, user_name=names.get(tracker))
     return engine
 
 
@@ -449,6 +471,8 @@ def run():
                     mqtt_out.publish(topic("event"), {
                         "schema_version": 2, "mode": engine.mode.value,
                         "resident_name": resident.name,
+                        "device_name": resident.name,
+                        "user_name": resident.user_name,
                         "device_tracker": resident.tracker,
                         **event
                     }, retain=False, force=True)

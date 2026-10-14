@@ -11,6 +11,14 @@ configuration:
   residents:
     name: Registered residents
     description: Add one GPS device_tracker entity ID for each tracked phone; names are resolved from Home Assistant.
+  resident_names:
+    name: Resident names
+    description: One-time phone tracker to resident name mapping. Only trackers enrolled in residents are allowed.
+    fields:
+      device_tracker:
+        name: GPS tracker
+      user_name:
+        name: Resident name
   exclude_users:
     name: Excluded Home Assistant user IDs (legacy mappings only)
   telemetry_enabled:

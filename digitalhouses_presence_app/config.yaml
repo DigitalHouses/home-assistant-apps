@@ -1,5 +1,5 @@
 name: DigitalHouses Presence App
-version: 0.1.7
+version: 0.1.8
 slug: digitalhouses_presence_app
 description: Experimental safety-first GPS presence with MQTT Discovery; Wi-Fi engine pending validation.
 url: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_presence_app
@@ -20,6 +20,7 @@ options:
   gps_poll_interval_seconds: 30
   gps_freshness_seconds: 300
   residents: []
+  resident_names: []
   exclude_users: []
   telemetry_enabled: false
   log_level: info
@@ -30,6 +31,9 @@ schema:
   gps_freshness_seconds: int(30,3600)
   residents:
     - str
+  resident_names:
+    - device_tracker: str
+      user_name: str
   exclude_users:
     - str
   telemetry_enabled: bool
