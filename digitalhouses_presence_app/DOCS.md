@@ -55,14 +55,28 @@ resident_names:
 
 Supervisor persists `resident_names` alongside the App's other settings. Only enrolled GPS trackers are allowed; unregistered or duplicate tracker keys and empty user names are rejected at startup. Leaving `resident_names: []` is safe for existing users. The App continues reading the actual device label from its HA `device_tracker` friendly name; it publishes `user_name` (or null) and `device_name` in machine events. MQTT aggregate resident attributes also include `user_name`. No second HA Person resolver or local package map is used.
 
+## One-time user/device name mapping
+
+Preserve the original `residents` tracker list. Add optional names once in the App's Configuration UI:
+
+```yaml
+residents:
+  - device_tracker.13promax_sky
+resident_names:
+  - device_tracker: device_tracker.13promax_sky
+    user_name: "Имя жильца"
+```
+
+Supervisor stores the App options persistently. Only registered trackers can be mapped; duplicates, blanks, extra keys and unknown trackers are rejected. If a mapping is omitted, the App works as before and reports `user_name: null`, using the actual tracker friendly name as `device_name`. Mapping does not change the stable resident key, device identification or previously confirmed presence.
+
 ## Local Recorder and notifications
 
-- [Russian HA Package](examples/packages/dh_presence_app_notification_local_package_ru.yaml) for `/config/packages/` using `homeassistant: packages: !include_dir_named packages`; package root must be `automation:`.
-- The four triggers `arrival`, `departure`, `wifi_in`, `wifi_out` directly invoke **`script.write2log`** with `title` and `message`. No `logbook.log` or `persistent_notification.create` calls are made; no source-only GPS duplicate notifications.
-- Person and device labels come from the App-provided machine event: `user_name (device_name)` if mapped; otherwise just `device_name`.
-- `first_arrival` and `last_departure` are authoritative App-computed transition flags for text `Режим дома: присутствие/отсутствие`. They are not security/alarm commands.
-- The native MQTT Event entity `event.dh_presence_app_event` is available to HA Recorder if its filters allow it. Whether the local notification script additionally records a message is determined by the site's own `script.write2log`; the public App makes no assumption.
-- The GPS-only pilot does **not yet generate** `wifi_in`/`wifi_out`. No missing ARP reply is a legitimate Wi-Fi departure.
+- Install [the Russian HA package](examples/packages/dh_presence_app_notification_local_package_ru.yaml) at `/config/packages/dh_presence_app_notification_local_package_ru.yaml`; use `homeassistant: packages: !include_dir_named packages`. The file's top-level key is `automation:`.
+- `arrival`, `departure`, `wifi_in`, `wifi_out` each uses `event.received → trigger.id → choose → script.write2log`, exactly one direct call with `title` and `message`. No duplicate `logbook.log`, `persistent_notification.create` or intermediate notification event.
+- The MQTT Event entity may be retained in Recorder history according to existing Recorder filters and retention. Any logging performed inside `script.write2log` itself remains a local responsibility; this package does not write SQL.
+- `first_arrival` / `last_departure` are machine event facts, not inferred from the later aggregate state. `Режим дома: присутствие/отсутствие` is notification text only, not a security-mode change.
+- Person and device names are supplied by the App itself from one-time Supervisor name mapping plus the tracker's HA friendly name; the package has no name registry and never queries HA `person`.
+- Wi-Fi branches remain inactive while the independently verified Wi-Fi engine is not available. GPS source events are not independently notified to avoid duplicates.
 
 ## Lovelace dashboard and status card
 

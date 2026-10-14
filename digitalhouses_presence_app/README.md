@@ -40,13 +40,13 @@ Each entry explicitly associates **one registered tracker** with a person's name
 
 ## Recorder and notifications package
 
-The [local Russian HA Package](examples/packages/dh_presence_app_notification_local_package_ru.yaml) listens to the existing non-retained `event.dh_presence_app_event` and calls **`script.write2log` once** with `title` and `message` for each confirmed arrival, departure, and (once implemented) verified Wi-Fi connect/disconnect. No parallel `logbook.log`, `persistent_notification.create`, extra notification event, or name map is created.
+[The local Russian HA package](examples/packages/dh_presence_app_notification_local_package_ru.yaml) processes the existing `event.dh_presence_app_event` directly. For `arrival`, `departure` and future verified `wifi_in` / `wifi_out`, it calls the site's existing `script.write2log` **once** with `title` and `message`. No duplicate `logbook.log`, `persistent_notification.create` or extra MQTT device is introduced. The MQTT Event entity can be stored by Home Assistant Recorder, subject to the local Recorder filters and retention. Whether `write2log` also logs anything is specific to that local script.
 
-HA Recorder can store the native MQTT Event entity's history when it is included by the site's Recorder configuration. The site's `script.write2log` owns its actual notification/logging behavior; the App does not assume that script writes Recorder rows.
+First confirmed arrival (whole-house `not_home → home`) produces `Режим дома: присутствие`; final confirmed departure (`home → not_home`) produces `Режим дома: отсутствие`. These are messages, not physical alarm/security mode changes.
 
-The first confirmed household arrival reports `Режим дома: присутствие`, and the last confirmed departure reports `Режим дома: отсутствие`. Engine-generated `first_arrival`/`last_departure` flags ensure no false first/last message on unknown or simultaneous state transitions. These are **notification texts only**: there is no automatic alarm or home/security mode change.
+The App owns a one-time `device_tracker` → `user_name` map through the optional `resident_names` list in Supervisor App Configuration. Existing `residents` entries remain unchanged. The App publishes `user_name` (or JSON null) and the real GPS tracker friendly name `device_name` on machine events. The local package displays `user_name (device_name)`, or the device name alone when unmapped; it does not search `person` or maintain a duplicate name dictionary.
 
-Install as `/config/packages/dh_presence_app_notification_local_package_ru.yaml` using `homeassistant: packages: !include_dir_named packages`; the file starts directly with `automation:`. The site must provide `script.write2log` with `title` and `message`. Validate HA configuration and reload automations / restart Core. Wi-Fi source events remain inactive in this GPS-only pilot.
+Install the package in `/config/packages/dh_presence_app_notification_local_package_ru.yaml` with `homeassistant: packages: !include_dir_named packages` and check that `script.write2log` accepts `title` and `message`. Wi-Fi events are not emitted until the verified Wi-Fi engine is implemented.
 
 ## Install through Home Assistant
 

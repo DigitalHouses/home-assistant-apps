@@ -8,6 +8,14 @@
 - Update dynamic Lovelace residents list to show user/device labels; add migration, mapping and notification regression tests.
 - No new MQTT devices, independent name service, Wi-Fi engine, or alarm integration.
 
+## 0.1.8
+
+- Direct all four local notification actions to the existing `script.write2log` with `title` and `message`; remove duplicate `logbook.log` and persistent HA notifications.
+- Add a one-time optional `resident_names` configuration list mapping the already enrolled `device_tracker` to a real `user_name`, saved by Supervisor with the App options.
+- Emit `device_name` and nullable `user_name` in machine events while retaining legacy `resident_name`, existing Device ID and entity IDs.
+- Allow the Presence card to display `user_name (device_name)`; no new MQTT entities, Wi-Fi implementation or alarm-mode changes.
+- Add regression tests for mapping validation, compatibility and package delivery.
+
 ## 0.1.7
 
 - Arrival/departure machine events now include authoritative `first_arrival`, `last_departure`, `residents_home_after` and `device_tracker` identity, without changing event types, QoS1 or retained-state ordering.
