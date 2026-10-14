@@ -1,7 +1,7 @@
 configuration:
   presence_mode:
     name: Presence mode
-    description: GPS is supported in this pilot; Wi-Fi and Hybrid do not have an active Wi-Fi engine.
+    description: Sets initial/default mode; change at runtime using select.dh_presence_app_mode. Wi-Fi engine is not available yet.
   wifi_absence_minutes:
     name: Hybrid Wi-Fi absence timeout
   gps_poll_interval_seconds:
@@ -10,9 +10,9 @@ configuration:
     name: GPS source freshness
   residents:
     name: Registered residents
-    description: Add Home Assistant user ID, display name, Companion device ID and GPS tracker entity ID.
+    description: Add one GPS device_tracker entity ID for each tracked phone; names are resolved from Home Assistant.
   exclude_users:
-    name: Excluded Home Assistant user IDs
+    name: Excluded Home Assistant user IDs (legacy mappings only)
   telemetry_enabled:
     name: Statistics collection consent (inactive in experimental pilot)
   log_level:

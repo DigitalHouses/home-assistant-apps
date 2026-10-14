@@ -1,16 +1,26 @@
-# DigitalHouses Presence App 0.1.0 — experimental pilot
+# DigitalHouses Presence App 0.1.1 — experimental pilot
 
 ## Configuration
 The App Store's native **Configuration** tab is the supported installation and settings UI. This build deliberately does not register any custom Home Assistant frontend panel.
 
-For every resident:
-- `user_id`: permanent Home Assistant user identifier, not display name
-- `name`: friendly label
-- `device_id`: selected Mobile Companion device identifier (recorded but not cryptographically verified in this version)
-- `gps_tracker`: exact HA `device_tracker.*` provided by that Companion device
+Select **one GPS phone tracker per resident** using the Home Assistant App configuration:
 
-`exclude_users` is a list of HA user IDs. Exclusion is explicit, not inferred from HA admin permissions.
-`presence_mode=gps` is the functional pilot mode. `hybrid` has GPS input only; `wifi` has no Wi-Fi input and will preserve restored state or remain unknown. Any network presence decision requires additional safety validation.
+```yaml
+presence_mode: gps
+residents:
+  - device_tracker.serzhan_iphone
+  - device_tracker.asylmura_iphone
+```
+
+There is no manual HA user ID, display name or Mobile Companion device ID input per resident. Tracker `friendly_name` is used as the MQTT display name after HA supplies it; otherwise the entity ID yields a provisional label. The resident identity is derived from the selected tracker, so an iPad logged in under the same HA account is *not* automatically tracked.
+
+**Mode from both places:** `presence_mode` in App Configuration sets the initial/default mode. Home Assistant shows `select.dh_presence_app_mode` on the DigitalHouses Presence App MQTT device (also present in the example Lovelace dashboard). A selection in HA applies live and persists in `/data/presence_mode.json`; on restart it is retained unless the App Configuration default was actually changed. Selecting the same mode does not restart anything. Invalid MQTT commands are ignored.
+
+**Wi-Fi pilot limitation:** `gps` works; `hybrid` uses GPS only pending verified Wi-Fi input; selecting `wifi` makes aggregate presence unavailable rather than advertising an old GPS result as a Wi-Fi observation.
+
+**Excluded administrators:** Only explicitly configured trackers are tracked. The old `exclude_users` HA User ID list is still supported for legacy records that include a known User ID. In the new single-tracker format the app cannot prove the account owner from a `device_tracker` alone; therefore combining tracker-only registration with non-empty `exclude_users` fails loudly. Omit excluded users' trackers from the roster. There is no implicit admin exclusion.
+
+**Migration from 0.1.0:** the previous user-ID-keyed saved state cannot be securely linked to a new tracker. Its old file is read, but new tracker records initialize as unknown and establish a baseline from fresh GPS data without generating fake arrival/departure events. Only stored v2 tracker identities are subsequently restored. Back up the App before upgrading if historical configuration is important.
 
 ## Source confidence and event semantics
 

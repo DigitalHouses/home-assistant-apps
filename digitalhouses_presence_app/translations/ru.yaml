@@ -1,7 +1,7 @@
 configuration:
   presence_mode:
     name: Режим присутствия
-    description: В этой опытной версии работает GPS. Сетевой движок Wi-Fi ещё не включён.
+    description: Задаёт начальный режим. Режим можно изменить в HA через select.dh_presence_app_mode; Wi-Fi ещё не реализован.
   wifi_absence_minutes:
     name: Время подтверждения отсутствия Wi-Fi
   gps_poll_interval_seconds:
@@ -9,10 +9,10 @@ configuration:
   gps_freshness_seconds:
     name: Актуальность GPS, секунд
   residents:
-    name: Жильцы
-    description: HA User ID, имя, Mobile Companion Device ID и GPS device_tracker.
+    name: Телефоны жильцов
+    description: Один GPS device_tracker мобильного телефона на жильца. Имя определяется из Home Assistant.
   exclude_users:
-    name: Исключённые HA User ID
+    name: Исключённые HA User ID (только legacy)
   telemetry_enabled:
     name: Согласие на статистику (неактивно в экспериментальной версии)
   log_level:
