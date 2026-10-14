@@ -100,3 +100,55 @@ class TestEngine(unittest.TestCase):
         e.residents["device_tracker.iphone"].initialized = False
         self.assertEqual(e.gps_observation("device_tracker.iphone", Status.NOT_HOME, T0 + timedelta(seconds=2)), [])
         self.assertEqual(e.snapshot()["status"], "unavailable")
+
+    def test_first_arrival_and_last_departure_are_strict_overall_transitions(self):
+        e = Engine()
+        e.add("device_tracker.one", "Phone A")
+        e.add("device_tracker.two", "Phone B")
+        e.gps_observation("device_tracker.one", Status.NOT_HOME, T0)
+        e.gps_observation("device_tracker.two", Status.NOT_HOME, T0)
+        # Initial observations do not emit synthetic arrival/departure.
+        first = e.gps_observation("device_tracker.one", Status.HOME, T0 + timedelta(seconds=10))
+        arrival = [x for x in first if x["event_type"] == "arrival"][0]
+        self.assertTrue(arrival["first_arrival"])
+        self.assertFalse(arrival["last_departure"])
+        self.assertEqual(arrival["residents_home_after"], 1)
+        second = e.gps_observation("device_tracker.two", Status.HOME, T0 + timedelta(seconds=11))
+        arrival2 = [x for x in second if x["event_type"] == "arrival"][0]
+        self.assertFalse(arrival2["first_arrival"])
+        self.assertEqual(arrival2["residents_home_after"], 2)
+        left_first = e.gps_observation("device_tracker.one", Status.NOT_HOME, T0 + timedelta(seconds=12))
+        departure1 = [x for x in left_first if x["event_type"] == "departure"][0]
+        self.assertFalse(departure1["last_departure"])
+        self.assertEqual(departure1["residents_home_after"], 1)
+        left_last = e.gps_observation("device_tracker.two", Status.NOT_HOME, T0 + timedelta(seconds=13))
+        departure2 = [x for x in left_last if x["event_type"] == "departure"][0]
+        self.assertTrue(departure2["last_departure"])
+        self.assertEqual(departure2["residents_home_after"], 0)
+
+    def test_unavailable_household_never_claims_first_or_last(self):
+        e = Engine()
+        e.add("device_tracker.one", "Phone A")
+        e.add("device_tracker.two", "Phone B")
+        e.gps_observation("device_tracker.one", Status.NOT_HOME, T0)
+        e.gps_observation("device_tracker.one", Status.HOME, T0 + timedelta(seconds=1))
+        first = e.gps_observation("device_tracker.one", Status.NOT_HOME, T0 + timedelta(seconds=2))
+        departure = [x for x in first if x["event_type"] == "departure"][0]
+        self.assertFalse(departure["last_departure"])
+        self.assertFalse(departure["first_arrival"])
+        self.assertIs(e.overall(), Status.UNAVAILABLE)
+
+    def test_simultaneous_changes_have_one_first_and_one_last(self):
+        e = Engine()
+        e.add("device_tracker.one", "Phone A")
+        e.add("device_tracker.two", "Phone B")
+        for phone in e.residents:
+            e.gps_observation(phone, Status.NOT_HOME, T0)
+        arrivals = []
+        for phone in e.residents:
+            arrivals += e.gps_observation(phone, Status.HOME, T0 + timedelta(minutes=1))
+        self.assertEqual(sum(x["first_arrival"] for x in arrivals if x["event_type"] == "arrival"), 1)
+        departures = []
+        for phone in e.residents:
+            departures += e.gps_observation(phone, Status.NOT_HOME, T0 + timedelta(minutes=2))
+        self.assertEqual(sum(x["last_departure"] for x in departures if x["event_type"] == "departure"), 1)

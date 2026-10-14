@@ -116,9 +116,19 @@ class Engine:
             r.initialized = True
             return
         before = r.confirmed
+        before_home = self.overall()
         r.confirmed = outcome
+        after_home = self.overall()
         if r.initialized and before is not Status.UNAVAILABLE:
-            events.append({"event_type": "arrival" if outcome is Status.HOME else "departure", "resident_id": r.key, "source": self.mode.value, "observed_at": when.isoformat()})
+            events.append({
+                "event_type": "arrival" if outcome is Status.HOME else "departure",
+                "resident_id": r.key,
+                "source": self.mode.value,
+                "observed_at": when.isoformat(),
+                "first_arrival": before_home is Status.NOT_HOME and after_home is Status.HOME,
+                "last_departure": before_home is Status.HOME and after_home is Status.NOT_HOME,
+                "residents_home_after": sum(x.confirmed is Status.HOME for x in self.residents.values()),
+            })
         r.initialized = True
 
     def gps_observation(self, tracker: str, value: Status, when: datetime, distance: float | None = None) -> list[dict]:
