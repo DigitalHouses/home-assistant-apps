@@ -109,6 +109,10 @@ class Operations:
         if self.state == "success" and self._success_at is not None and time.monotonic() - self._success_at >= 5:
             self.state = "idle"
             self.operation = None
+            self.started_at = None
+            self.finished_at = None
+            self.duration_seconds = None
+            self.error = None
             self._success_at = None
             return True
         return False
