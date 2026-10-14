@@ -145,7 +145,7 @@ def test_russian_notification_package_uses_public_direct_action():
     assert "высокая температура CPU" in text
     assert "CPU throttling" in text
     assert "заполнение хранилища" in text
-    assert "Входное напряжение" in text or "входное напряжение" in text
+    assert "Вход: " in text
     assert "батарея заряжена" in text
 
 
@@ -155,8 +155,8 @@ def test_config_changed_notification_is_direct_and_localized():
 
     assert "id: config_changed" in text
     assert "UPS: параметры отключения изменены" in text
-    assert "trigger.to_state.attributes.old_values" in text
-    assert "trigger.to_state.attributes.new_values" in text
+    assert "old = a.old_values" in text
+    assert "new = a.new_values" in text
 
 
 def test_ui_closes_trigger_editor_only_for_valid_v2_config_changed_contract():
