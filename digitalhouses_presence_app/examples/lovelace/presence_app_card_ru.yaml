@@ -311,6 +311,73 @@ cards:
         content: Запущено
         tap_action:
           action: more-info
+  # Built-in phone registration opens the App's authenticated Supervisor
+  # Ingress UI. It is disabled in GPS-only 0.1.10 and needs no extra resources.
+  - type: custom:button-card
+    entity: sensor.dh_presence_app_version
+    triggers_update:
+      - sensor.dh_presence_app_version
+    show_icon: true
+    show_name: true
+    show_label: true
+    show_state: false
+    variables:
+      registration_ready: |
+        [[[
+          const installed = states['sensor.dh_presence_app_version']?.state || '';
+          const match = installed.match(/^(\d+)\.(\d+)\.(\d+)$/);
+          if (!match) return false;
+          const version = match.slice(1).map(Number);
+          return version[0] > 0 || version[1] > 1
+            || (version[1] === 1 && version[2] >= 11);
+        ]]]
+    icon: |
+      [[[
+        return variables.registration_ready
+          ? 'mdi:cellphone-link' : 'mdi:cellphone-off';
+      ]]]
+    name: Регистрация телефона
+    label: |
+      [[[
+        const version = states['sensor.dh_presence_app_version']?.state || 'не определена';
+        return variables.registration_ready
+          ? 'Открыть DH Presence · зарегистрировать телефон по домашнему Wi-Fi'
+          : 'Пока недоступно · требуется DH Presence 0.1.11 (установлена ' + version + ')';
+      ]]]
+    tap_action:
+      action: |
+        [[[
+          return variables.registration_ready ? 'navigate' : 'none';
+        ]]]
+      navigation_path: /hassio/ingress/8133339d_digitalhouses_presence_app
+    hold_action:
+      action: more-info
+      entity: sensor.dh_presence_app_version
+    styles:
+      card:
+        - padding: 12px 14px
+      grid:
+        - grid-template-areas: '"i n" "i l"'
+        - grid-template-columns: 40px 1fr
+        - grid-template-rows: min-content min-content
+      icon:
+        - width: 28px
+        - color: |
+            [[[
+              return variables.registration_ready
+                ? 'var(--primary-color)'
+                : 'var(--disabled-text-color)';
+            ]]]
+      name:
+        - justify-self: start
+        - font-size: 14px
+        - font-weight: 600
+      label:
+        - justify-self: start
+        - white-space: normal
+        - text-align: left
+        - font-size: 12px
+        - color: var(--secondary-text-color)
   # Auto-entities lists EVERY currently registered Presence entity, including
   # native Refresh / Check Version buttons and the mode selector.
   # New resident GPS / Wi-Fi / distance entities appear without YAML edits.
