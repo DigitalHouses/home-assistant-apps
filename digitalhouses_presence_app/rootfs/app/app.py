@@ -114,6 +114,40 @@ def api_error_detail(exc: Exception) -> str:
     return type(exc).__name__
 
 
+
+def audit_ha_discovery(token: str) -> tuple[str, str]:
+    """Read only: check HA MQTT integration and expected entity IDs.
+
+    Entity IDs can be renamed by the user. A negative result does not prove
+    HA rejected the device, and broker PUBACK never proves HA acceptance.
+    """
+    config = http_json("http://supervisor/core/api/config", token)
+    components = config.get("components")
+    if isinstance(components, list) and "mqtt" not in components:
+        return ("mqtt_not_loaded",
+                "Home Assistant Core /config does not list the MQTT integration. "
+                "A running MQTT broker App is not the same as a configured HA MQTT integration.")
+    states = http_json("http://supervisor/core/api/states", token)
+    if not isinstance(states, list):
+        raise ValueError("HA /api/states response is not a list")
+    entity_ids = {entry["entity_id"] for entry in states
+                  if isinstance(entry, dict) and isinstance(entry.get("entity_id"), str)}
+    expected = {
+        "sensor.dh_presence_app_version",
+        "select.dh_presence_app_mode",
+        "binary_sensor.dh_presence_app_residents_home",
+    }
+    observed = sorted(expected.intersection(entity_ids))
+    if observed:
+        return ("found", "Expected Presence MQTT entities visible in HA: "
+                + ", ".join(observed))
+    mqtt_hint = "mqtt" if isinstance(components, list) and "mqtt" in components else "unknown"
+    return ("not_found",
+            "No expected Presence MQTT entity IDs in HA state registry (mqtt component=%s). "
+            "Entities could be renamed; inspect HA Core log for MQTT Discovery schema errors, "
+            "and compare MQTT broker/discovery prefix. Do not delete MQTT devices." % mqtt_hint)
+
+
 def http_json(url: str, token: str, timeout: int = 8):
     req = Request(url, headers={"Authorization": "Bearer " + token, "Accept": "application/json"})
     with urlopen(req, timeout=timeout) as r:
@@ -312,12 +346,14 @@ def run():
     previous_core_error = None
     published_state_logged = False
     reported_gps_status = {}
+    last_discovery_audit = None
+    last_discovery_audit_status = None
     LOG.info("Starting %s version %s, mode=%s, configured_residents=%d", "DigitalHouses Presence App", version, engine.mode.value, len(engine.residents))
     LOG.warning("Pilot safety gate: Wi-Fi detection and automatic registration are NOT active. No Wi-Fi absence can mark a resident away.")
     if options["telemetry_enabled"]:
         LOG.warning("Experimental pilot: telemetry_enabled=true, but there is no telemetry sender; no statistics are transmitted.")
     if not engine.residents:
-        LOG.warning("No residents configured. Edit App Configuration to add HA user ID, Companion device and GPS tracker.")
+        LOG.warning("No residents configured. Edit App Configuration to add a GPS device_tracker entity for each resident.")
     try:
         while not STOP.is_set():
             connected = mqtt_out.connected.is_set()
@@ -410,6 +446,25 @@ def run():
                     if event["event_type"] not in EVENT_NAMES:
                         raise ValueError("Invalid internal event")
                     mqtt_out.publish(topic("event"), {"schema_version": 2, "mode": engine.mode.value, "resident_name": next(r.name for r in engine.residents.values() if r.key == event["resident_id"]), **event}, retain=False, force=True)
+            # Broker QoS1 acknowledgment is not evidence that HA accepted
+            # Discovery. After HA has time to process it, verify read-only via
+            # Core REST; log only on change and recheck at a bounded interval.
+            if (discovery_ready and last_discovery_session is not None
+                    and time.monotonic() - last_discovery_session >= 10
+                    and (last_discovery_audit is None
+                         or time.monotonic() - last_discovery_audit >= 180)):
+                last_discovery_audit = time.monotonic()
+                try:
+                    audit_status, audit_detail = audit_ha_discovery(token)
+                except (URLError, OSError, ValueError, TypeError, KeyError) as exc:
+                    audit_status = "audit_error:" + api_error_detail(exc)
+                    audit_detail = "HA discovery read-only audit failed: " + api_error_detail(exc)
+                if audit_status != last_discovery_audit_status:
+                    if audit_status == "found":
+                        LOG.info("HA MQTT Discovery acceptance check: %s", audit_detail)
+                    else:
+                        LOG.warning("HA MQTT Discovery acceptance check: %s", audit_detail)
+                    last_discovery_audit_status = audit_status
             # Clear BEFORE checking pending commands to avoid a lost wake-up.
             WAKE.clear()
             if not STOP.is_set() and mqtt_out.mode_commands.empty():

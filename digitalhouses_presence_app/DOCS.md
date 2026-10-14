@@ -1,4 +1,4 @@
-# DigitalHouses Presence App 0.1.5 — experimental pilot
+# DigitalHouses Presence App 0.1.6 — experimental pilot
 
 ## Configuration
 The App Store's native **Configuration** tab is the supported installation and settings UI. This build deliberately does not register any custom Home Assistant frontend panel.
@@ -36,9 +36,10 @@ Use Home Assistant **Settings → Apps → App Store** and the already configure
 
 1. Inspect App log for `MQTT Discovery published topic=homeassistant/device/dh_presence_app/config components=...`. This proves broker QoS1 acknowledgment only, not acceptance by HA.
 2. Inspect `MQTT presence state published` to prove live-state path.
-3. In Home Assistant **Settings → Devices & services → MQTT**, verify MQTT integration (not just Mosquitto App) is connected and discovery is enabled with prefix `homeassistant`.
-4. If broker publication succeeded but no device exists, inspect Home Assistant Core logs for `mqtt`, `dh_presence_app`, `discovery`, or `Invalid config`. Do not delete other devices, clear all retained topics, or recreate the MQTT integration.
-5. The App automatically republishes on HA birth and every five minutes. No host-side script needed.
+3. Wait one GPS polling interval and inspect the App log for `HA MQTT Discovery acceptance check`: it checks HA Core for the MQTT integration and expected Presence entity IDs. If none appear, note that entities may have been renamed.
+4. In Home Assistant **Settings → Devices & services → MQTT**, verify MQTT integration (not just Mosquitto App) is connected and discovery is enabled with prefix `homeassistant`.
+5. If broker publication succeeded but no device exists, inspect Home Assistant Core logs for `mqtt`, `dh_presence_app`, `discovery`, or `Invalid config`. Do not delete other devices, clear all retained topics, or recreate the MQTT integration.
+6. The App automatically republishes on HA birth and every five minutes. No host-side script needed.
 
 ## Known limitations
 

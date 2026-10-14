@@ -2,12 +2,13 @@ import json
 import queue
 import tempfile
 import unittest
+from unittest.mock import patch
 from datetime import datetime, timedelta, timezone
 from urllib.error import HTTPError
 from pathlib import Path
 from types import SimpleNamespace
 
-from app import MqttOutput, gps_from_ha_state, build_engine, load_options, friendly_tracker_name, observe_friendly_name, api_error_detail
+from app import MqttOutput, gps_from_ha_state, build_engine, load_options, friendly_tracker_name, observe_friendly_name, api_error_detail, audit_ha_discovery
 from dh_presence.core import Mode, Status
 from dh_presence.storage import load, save
 
@@ -154,3 +155,33 @@ class RuntimeSafetyTests(unittest.TestCase):
         output._message(None, None, SimpleNamespace(
             topic="homeassistant/status", payload=b"online", retain=True))
         self.assertTrue(output.discovery_requests.empty())
+
+    def test_ha_discovery_audit_found(self):
+        config = {"components": ["mqtt", "api"]}
+        states = [{"entity_id": "sensor.dh_presence_app_version", "state": "0.1.6"}]
+        with patch("app.http_json", side_effect=[config, states]) as mock_api:
+            status, detail = audit_ha_discovery("dummy-token")
+        self.assertEqual(status, "found")
+        self.assertIn("sensor.dh_presence_app_version", detail)
+        self.assertEqual(mock_api.call_count, 2)
+
+    def test_ha_discovery_audit_mqtt_not_loaded(self):
+        config = {"components": ["api", "mobile_app"]}
+        with patch("app.http_json", return_value=config) as mock_api:
+            status, detail = audit_ha_discovery("dummy-token")
+        self.assertEqual(status, "mqtt_not_loaded")
+        self.assertIn("MQTT integration", detail)
+        self.assertEqual(mock_api.call_count, 1)
+
+    def test_ha_discovery_audit_missing_expected_entities(self):
+        config = {"components": ["mqtt", "api"]}
+        states = [{"entity_id": "sensor.dh_internet_app_version", "state": "0.1.23"}]
+        with patch("app.http_json", side_effect=[config, states]):
+            status, detail = audit_ha_discovery("dummy-token")
+        self.assertEqual(status, "not_found")
+        self.assertIn("could be renamed", detail)
+
+    def test_ha_discovery_audit_malformed_state_response(self):
+        with patch("app.http_json", side_effect=[{"components": ["mqtt"]}, {"error": "not a list"}]):
+            with self.assertRaises(ValueError):
+                audit_ha_discovery("dummy-token")
