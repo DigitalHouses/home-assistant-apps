@@ -77,8 +77,7 @@ phones; that configuration remains only for existing pilot migrations.
 does not by itself cryptographically prove which of a user's devices sent
 the request. An unexpected proxy/VPN/Cloudflare route, no LAN ARP reply or
 a missing selected GPS tracker fails registration. `host_network` and
-`NET_RAW` for one-off ARP remain blocked by repo acceptance gates until
-tested with local HAOS. No alarm control or negative Wi-Fi evidence is
+`NET_RAW` for one-off ARP are now **explicitly approved for the 0.1.11 experimental pilot**, guarded by an exact-capability repo validator and negative tests. Live on-site HAOS Ingress/ARP acceptance still needs to be performed after installation. No alarm control or negative Wi-Fi evidence is
 enabled by registration.
 
 ## Legacy resident name mapping (migration only; do not configure anew)
