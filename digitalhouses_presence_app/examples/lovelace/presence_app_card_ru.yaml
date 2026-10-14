@@ -73,7 +73,7 @@ cards:
         this._dh_presence_timer = null;
         if (item.state === 'error') return 'Ошибка: ' + (attrs.error || 'операция не выполнена');
         if (item.state === 'success')
-          return (attrs.operation === 'refresh' ? 'Данные обновлены' : 'Проверка версии завершена')
+          return (attrs.operation === 'refresh' ? 'Последние данные проверены' : 'Проверка версии завершена')
             + ' · ' + duration(attrs.duration_seconds);
         const mode = states['select.dh_presence_app_mode']?.state;
         const overall = states['binary_sensor.dh_presence_app_residents_home']?.state;
@@ -84,14 +84,19 @@ cards:
           : mode === 'hybrid' ? 'Hybrid: пока только GPS' : 'GPS';
         const newer = states['binary_sensor.dh_presence_app_update_available']?.state === 'on';
         const roster = states['binary_sensor.dh_presence_app_residents_home']?.attributes?.residents || {};
-        const stale = Object.keys(roster).some(key => !['on','off'].includes(
+        const sourceUnavailable = Object.keys(roster).some(key => !['on','off'].includes(
           states['binary_sensor.dh_presence_app_' + key + '_gps_home']?.state
         ));
+        const freshness = Number(states['binary_sensor.dh_presence_app_residents_home']?.attributes?.gps_freshness_seconds) || 300;
+        const old = Object.values(roster).some(r => r?.gps_reported_at
+          && Date.now() - Date.parse(r.gps_reported_at) > freshness * 1000);
         const observed = overall === 'on' ? 'Есть дома'
           : overall === 'off' ? 'Никого дома' : 'Нет свежих данных';
-        const home = stale && ['on','off'].includes(overall)
-          ? 'Последнее подтверждение: ' + observed : observed;
-        return label + ' · ' + home + count + (stale ? ' · GPS устарел' : '')
+        const home = sourceUnavailable && ['on','off'].includes(overall)
+          ? 'Последнее подтверждение: ' + observed
+          : old && ['on','off'].includes(overall)
+          ? 'По последним GPS-данным: ' + observed : observed;
+        return label + ' · ' + home + count + (sourceUnavailable ? ' · GPS недоступен' : '')
           + (newer ? ' · Доступна новая версия' : '');
       ]]]
     styles:
@@ -116,10 +121,13 @@ cards:
               if (states['binary_sensor.dh_presence_app_update_available']?.state === 'on')
                 return 'var(--warning-color, orange)';
               const roster = states['binary_sensor.dh_presence_app_residents_home']?.attributes?.residents || {};
-              const stale = Object.keys(roster).some(key => !['on','off'].includes(
+              const sourceUnavailable = Object.keys(roster).some(key => !['on','off'].includes(
                 states['binary_sensor.dh_presence_app_' + key + '_gps_home']?.state
               ));
-              if (stale) return 'var(--warning-color, orange)';
+              const freshness = Number(states['binary_sensor.dh_presence_app_residents_home']?.attributes?.gps_freshness_seconds) || 300;
+              const old = Object.values(roster).some(r => r?.gps_reported_at
+                && Date.now() - Date.parse(r.gps_reported_at) > freshness * 1000);
+              if (sourceUnavailable || old) return 'var(--warning-color, orange)';
               return states['binary_sensor.dh_presence_app_residents_home']?.state === 'on'
                 ? 'var(--success-color)' : 'var(--secondary-text-color)';
             ]]]
@@ -223,8 +231,13 @@ cards:
             const status = resident.status;
             const personState = status === 'home' ? 'Дома'
               : status === 'not_home' ? 'Вне дома' : 'Не определено';
-            const gpsState = gps === 'on' ? 'GPS: дома'
-              : gps === 'off' ? 'GPS: вне дома' : 'GPS: нет свежих данных';
+            const lastGps = resident.gps_reported_at;
+            const gpsDate = lastGps && !Number.isNaN(Date.parse(lastGps))
+              ? new Date(lastGps).toLocaleString('ru-RU', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})
+              : null;
+            const gpsState = (gps === 'on' ? 'GPS: дома'
+              : gps === 'off' ? 'GPS: вне дома' : 'GPS: источник недоступен')
+              + (gpsDate ? ' (от ' + gpsDate + ')' : '');
             const wifiState = wifi === 'on' ? 'Wi-Fi: дома'
               : wifi === 'off' ? 'Wi-Fi: вне дома' : 'Wi-Fi: не активен';
             const icon = mode === 'wifi' ? 'mdi:wifi-off'
