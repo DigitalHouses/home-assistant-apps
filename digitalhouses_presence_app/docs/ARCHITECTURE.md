@@ -86,8 +86,9 @@ HA Companion / HA user (local Wi-Fi)
   Device ownership proof is an explicit **pilot limitation**: HA Ingress
   identifies the user, but the App cannot prove that the selected tracker
   is the physical Companion app hosting the web session.
-- `host_network` + `NET_RAW` remain a **blocked deployment privilege**
-  until a home-only acceptance validates AppArmor, Ingress isolation,
-  correct source IP and raw ARP. The current repo validator must not
-  be weakened just to pass a PR.
+- `host_network` + `NET_RAW` were **explicitly approved for this
+  experimental 0.1.11 home pilot** only. Repository validator enforces
+  exactly this capability and Ingress, with no extra ports, mounts, role or
+  disabled AppArmor. Live field verification of source IP, Ingress isolation
+  and ARP remains pending; deny higher privileges or production claims.
 - Wi-Fi presence/absence and alarm integration are out of scope.
