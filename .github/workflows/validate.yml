@@ -90,6 +90,39 @@ jobs:
             --tag digitalhouses-internet-ci:"$APP_VERSION" \
             digitalhouses_internet_app
 
+  presence-app:
+    name: Presence App
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install runtime test dependencies
+        run: python -m pip install --disable-pip-version-check paho-mqtt
+
+      - name: Compile Python
+        run: python -m compileall -q digitalhouses_presence_app/rootfs/app digitalhouses_presence_app/tests
+
+      - name: Run unit tests
+        env:
+          PYTHONPATH: digitalhouses_presence_app/rootfs/app
+        run: python -m unittest discover -s digitalhouses_presence_app/tests -v
+
+      - name: Check shell syntax
+        run: bash -n digitalhouses_presence_app/rootfs/run.sh
+
+      - name: Build Presence App image
+        run: |
+          APP_VERSION="$(awk '$1 == "version:" {print $2; exit}' digitalhouses_presence_app/config.yaml)"
+          test -n "$APP_VERSION"
+          docker build --build-arg BUILD_VERSION="$APP_VERSION" --build-arg BUILD_ARCH=amd64 --tag digitalhouses-presence-ci:"$APP_VERSION" digitalhouses_presence_app
+
   recorder-app:
     name: Recorder App
     runs-on: ubuntu-latest

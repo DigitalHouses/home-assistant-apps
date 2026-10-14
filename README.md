@@ -60,7 +60,7 @@ GitHub is the source of truth for reusable DigitalHouses application code and re
 
 ## Work in progress
 
-- [DigitalHouses Presence App](digitalhouses_presence_app/README.md) — GPS, Wi-Fi and Hybrid resident presence; **design bootstrap only**, not yet an installable Home Assistant App. Its source and release lifecycle will be maintained in this repository.
+- [DigitalHouses Presence App](digitalhouses_presence_app/README.md) — **Experimental GPS pilot** for resident presence with MQTT Discovery. Installable through Home Assistant App Store from source; Wi-Fi detection and mobile registration are not yet operational.
 
 ## Development
 
