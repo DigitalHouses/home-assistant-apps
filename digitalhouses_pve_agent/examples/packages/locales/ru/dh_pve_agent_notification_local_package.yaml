@@ -887,7 +887,6 @@ dh_pve_agent_notification_local_package:
                       {%- if a.output_voltage_v is number -%}
                         {%- set ns.parts = ns.parts + ['выход: ' ~ ('%g' | format(a.output_voltage_v)) ~ ' В'] -%}
                       {%- endif -%}
-                      
                       {{- ns.parts | join(' · ') if ns.parts else 'UPS не передал измерения напряжения' -}}.
 
             # Включён AVR Boost
@@ -931,7 +930,6 @@ dh_pve_agent_notification_local_package:
                       {%- if a.output_voltage_v is number -%}
                         {%- set ns.parts = ns.parts + ['выход: ' ~ ('%g' | format(a.output_voltage_v)) ~ ' В'] -%}
                       {%- endif -%}
-                      
                       {{- ns.parts | join(' · ') if ns.parts else 'UPS не передал измерения напряжения' -}}.
 
             # NUT FSD активирован
