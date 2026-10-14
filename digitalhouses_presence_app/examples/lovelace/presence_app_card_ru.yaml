@@ -83,8 +83,16 @@ cards:
         const label = mode === 'wifi' ? 'Wi-Fi ещё не активирован'
           : mode === 'hybrid' ? 'Hybrid: пока только GPS' : 'GPS';
         const newer = states['binary_sensor.dh_presence_app_update_available']?.state === 'on';
-        const home = overall === 'on' ? 'Есть дома' : overall === 'off' ? 'Никого дома' : 'Нет свежих данных';
-        return label + ' · ' + home + count + (newer ? ' · Доступна новая версия' : '');
+        const roster = states['binary_sensor.dh_presence_app_residents_home']?.attributes?.residents || {};
+        const stale = Object.keys(roster).some(key => !['on','off'].includes(
+          states['binary_sensor.dh_presence_app_' + key + '_gps_home']?.state
+        ));
+        const observed = overall === 'on' ? 'Есть дома'
+          : overall === 'off' ? 'Никого дома' : 'Нет свежих данных';
+        const home = stale && ['on','off'].includes(overall)
+          ? 'Последнее подтверждение: ' + observed : observed;
+        return label + ' · ' + home + count + (stale ? ' · GPS устарел' : '')
+          + (newer ? ' · Доступна новая версия' : '');
       ]]]
     styles:
       card:
@@ -107,6 +115,11 @@ cards:
               if (c === 'success') return 'var(--success-color)';
               if (states['binary_sensor.dh_presence_app_update_available']?.state === 'on')
                 return 'var(--warning-color, orange)';
+              const roster = states['binary_sensor.dh_presence_app_residents_home']?.attributes?.residents || {};
+              const stale = Object.keys(roster).some(key => !['on','off'].includes(
+                states['binary_sensor.dh_presence_app_' + key + '_gps_home']?.state
+              ));
+              if (stale) return 'var(--warning-color, orange)';
               return states['binary_sensor.dh_presence_app_residents_home']?.state === 'on'
                 ? 'var(--success-color)' : 'var(--secondary-text-color)';
             ]]]
