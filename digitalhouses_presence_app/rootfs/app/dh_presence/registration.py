@@ -1,8 +1,8 @@
-"""Registration transfer from HA authenticated WebSocket bridge to Presence App.
+"""Private mobile enrollment registry owned by the single DH Presence App.
 
-A pending request cannot become an enrolled resident without an on-link fresh
-ARP reply. No neighbour cache, ping failure, VPN/proxy or browser-provided MAC
-is accepted as identity evidence. Do not reuse this probe as a presence sensor.
+Supervisor Ingress authenticates the user. An on-link active ARP reply provides
+the current LAN MAC; stale neighbour cache and browser-supplied IP/MAC are never
+accepted as proof. One-time ARP must not become a presence/absence detector.
 """
 from __future__ import annotations
 
@@ -12,12 +12,10 @@ import os
 from pathlib import Path
 import re
 import subprocess
-from urllib.request import Request, urlopen
 
 from dh_presence.storage import atomic_json
 
 MAC_RE = re.compile(r"^(?:[0-9a-f]{2}:){5}[0-9a-f]{2}$")
-API_BASE = "http://supervisor/core/api/dh_presence/registration"
 BAD_INTERFACES = ("lo", "veth", "docker", "br-", "wg", "tun", "tailscale", "zt")
 
 
@@ -77,27 +75,6 @@ def put_registration(residents: list[dict], entry: dict) -> list[dict]:
         if old["mac"] == clean["mac"] and old["tracker"] != clean["tracker"]:
             raise ValueError("Wi-Fi MAC already bound to a different resident")
     return [*(r for r in residents if r["tracker"] != clean["tracker"]), clean]
-
-
-def get_bridge_requests(token: str) -> list[dict]:
-    req = Request(API_BASE + "/pending", headers={"Authorization": "Bearer " + token,
-                                                     "Accept": "application/json"})
-    with urlopen(req, timeout=6) as response:
-        result = json.load(response)
-    if not isinstance(result, dict) or not isinstance(result.get("requests"), list):
-        raise ValueError("Malformed bridge response")
-    return result["requests"]
-
-
-def ack_bridge(token: str, request_id: str, mac: str):
-    payload = json.dumps({"request_id": request_id, "mac": normalized_mac(mac)}).encode()
-    req = Request(API_BASE + "/ack", payload, method="POST",
-                  headers={"Authorization": "Bearer " + token,
-                           "Content-Type": "application/json"})
-    with urlopen(req, timeout=6) as response:
-        result = json.load(response)
-    if result.get("success") is not True:
-        raise ValueError("Bridge registration not acknowledged")
 
 
 def run_checked(argv: list[str], timeout: float = 5) -> str:
