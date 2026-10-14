@@ -1,0 +1,183 @@
+# DigitalHouses Presence App · overview card (RU)
+# Uses only published Presence MQTT entities: no imaginary App refresh/check buttons.
+# Requires custom:button-card >= 5.0 and Mushroom cards.
+# Read-only status; the mode tile is an actual Home Assistant MQTT select.
+type: vertical-stack
+cards:
+  - type: custom:button-card
+    entity: binary_sensor.dh_presence_app_residents_home
+    triggers_update:
+      - binary_sensor.dh_presence_app_residents_home
+      - select.dh_presence_app_mode
+      - sensor.dh_presence_app_version
+      - sensor.dh_presence_app_source_status
+    update_timer: 5000
+    show_icon: true
+    show_name: true
+    show_label: true
+    icon: |
+      [[[
+        const mode = states['select.dh_presence_app_mode']?.state;
+        const status = states['binary_sensor.dh_presence_app_residents_home']?.state;
+        if (mode === 'wifi') return 'mdi:wifi-off';
+        if (status === 'on') return 'mdi:home-account';
+        if (status === 'off') return 'mdi:home-export-outline';
+        return 'mdi:home-question';
+      ]]]
+    name: |
+      [[[
+        const v = states['sensor.dh_presence_app_version']?.state;
+        return 'Мы дома' + (v && !['unknown', 'unavailable'].includes(v) ? ' · v' + v : '');
+      ]]]
+    label: |
+      [[[
+        const item = states['binary_sensor.dh_presence_app_residents_home'];
+        const mode = states['select.dh_presence_app_mode']?.state;
+        const label = mode === 'hybrid' ? 'Hybrid (пока GPS)'
+          : mode === 'wifi' ? 'Wi-Fi (пока не работает)'
+          : mode === 'gps' ? 'GPS' : 'Режим неизвестен';
+        if (mode === 'wifi') return label + ' · Определение недоступно';
+        if (!item || !['on', 'off'].includes(item.state)) {
+          return label + ' · Нет достоверного общего состояния';
+        }
+        const roster = item.attributes?.residents || {};
+        const ids = Object.keys(roster);
+        const stale = ids.some(k => !['on', 'off'].includes(
+          states['binary_sensor.dh_presence_app_' + k + '_gps_home']?.state
+        ));
+        const n = item.attributes?.residents_home;
+        const total = item.attributes?.residents_total;
+        const count = Number.isInteger(n) && Number.isInteger(total)
+          ? ' · Дома ' + n + ' из ' + total : '';
+        const text = item.state === 'on' ? 'Есть дома' : 'Никого дома';
+        return label + ' · ' + (stale ? 'Последнее подтверждение: ' : '')
+          + text + count + (stale ? ' · GPS устарел/недоступен' : '');
+      ]]]
+    styles:
+      card:
+        - padding: 14px
+        - text-align: left
+      grid:
+        - grid-template-areas: '"i n" "i l"'
+        - grid-template-columns: 48px 1fr
+        - grid-template-rows: min-content min-content
+      img_cell:
+        - width: 42px
+        - justify-content: start
+      icon:
+        - width: 29px
+        - color: |
+            [[[
+              const mode = states['select.dh_presence_app_mode']?.state;
+              const s = states['binary_sensor.dh_presence_app_residents_home']?.state;
+              return mode === 'wifi' ? 'var(--warning-color, orange)'
+                : s === 'on' ? 'var(--success-color, green)'
+                : s === 'off' ? 'var(--info-color, var(--primary-color))'
+                : 'var(--warning-color, orange)';
+            ]]]
+      name:
+        - justify-self: start
+        - font-size: 15px
+        - font-weight: 600
+      label:
+        - justify-self: start
+        - text-align: left
+        - white-space: normal
+        - font-size: 13px
+        - color: var(--secondary-text-color)
+    tap_action:
+      action: none
+
+  - type: tile
+    entity: select.dh_presence_app_mode
+    name: Режим присутствия
+    icon: mdi:crosshairs-gps
+    features:
+      - type: select-options
+
+  - type: custom:button-card
+    entity: binary_sensor.dh_presence_app_residents_home
+    update_timer: 5000
+    show_icon: false
+    show_label: false
+    show_name: true
+    name: Жильцы
+    custom_fields:
+      people: |
+        [[[
+          const source = states['binary_sensor.dh_presence_app_residents_home'];
+          const roster = source?.attributes?.residents || {};
+          const entries = Object.entries(roster).sort(
+            (a, b) => String(a[1]?.name || '').localeCompare(
+              String(b[1]?.name || ''), 'ru'
+            )
+          );
+          if (!entries.length) return '<div style="padding:8px 0;color:var(--secondary-text-color)">Жильцы ещё не зарегистрированы</div>';
+          const esc = x => String(x ?? '').replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+          const mode = states['select.dh_presence_app_mode']?.state;
+          return entries.map(([key, resident]) => {
+            const gps = states['binary_sensor.dh_presence_app_' + key + '_gps_home']?.state;
+            const distanceRaw = states['sensor.dh_presence_app_' + key + '_distance']?.state;
+            const distance = distanceRaw && !['unknown', 'unavailable'].includes(distanceRaw)
+              && Number.isFinite(Number(distanceRaw))
+              ? Number(distanceRaw).toFixed(2) + ' км' : '—';
+            const status = resident.status;
+            const personState = status === 'home' ? 'Дома'
+              : status === 'not_home' ? 'Вне дома' : 'Не определено';
+            const gpsState = gps === 'on' ? 'GPS: дома'
+              : gps === 'off' ? 'GPS: вне дома' : 'GPS: нет свежих данных';
+            const icon = mode === 'wifi' ? 'mdi:wifi-off'
+              : status === 'home' ? 'mdi:home-account'
+              : status === 'not_home' ? 'mdi:map-marker-outline'
+              : 'mdi:help-circle-outline';
+            const color = mode === 'wifi' || gps !== 'on' && gps !== 'off'
+              ? 'var(--warning-color, orange)'
+              : status === 'home' ? 'var(--success-color, green)'
+              : 'var(--info-color, var(--primary-color))';
+            const shownState = mode === 'wifi' ? 'Wi-Fi пока недоступен' : personState;
+            return '<div style="display:flex;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--divider-color)">'
+              + '<ha-icon icon="' + icon + '" style="color:' + color + ';flex:0 0 26px"></ha-icon>'
+              + '<div style="min-width:0;flex:1;text-align:left">'
+              + '<div style="font-size:14px;font-weight:600;overflow-wrap:anywhere">' + esc(resident.name || key) + '</div>'
+              + '<div style="font-size:12px;color:var(--secondary-text-color)">' + esc(shownState)
+              + ' · ' + esc(gpsState) + ' · ' + esc(distance) + '</div></div></div>';
+          }).join('');
+        ]]]
+    styles:
+      card:
+        - padding: 12px 14px
+        - text-align: left
+      grid:
+        - grid-template-areas: '"n" "people"'
+        - grid-template-columns: 1fr
+        - grid-template-rows: min-content auto
+      name:
+        - justify-self: start
+        - font-size: 14px
+        - font-weight: 600
+      custom_fields:
+        people:
+          - justify-self: stretch
+          - width: 100%
+    tap_action:
+      action: none
+
+  - type: custom:mushroom-chips-card
+    alignment: center
+    chips:
+      - type: template
+        entity: event.dh_presence_app_event
+        icon: mdi:history
+        content: События
+        tap_action:
+          action: more-info
+      - type: template
+        entity: sensor.dh_presence_app_started_at
+        icon: mdi:clock-outline
+        content: Запущено
+        tap_action:
+          action: more-info
+grid_options:
+  columns: 12
