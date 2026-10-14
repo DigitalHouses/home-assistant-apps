@@ -41,8 +41,9 @@ def is_authorized_ha_admin(user_id: str, token: str) -> bool:
                 raise AdministratorVerificationUnavailable("HA Core WS authorization denied")
             ws.send(json.dumps({"id": 1, "type": "config/auth/list"}))
             result = json.loads(ws.recv(timeout=5))
-    except (OSError, TimeoutError, ValueError, TypeError, KeyError,
-            RuntimeError) as exc:
+    except Exception as exc:
+        # Fail closed for any WebSocket transport, timeout or protocol error.
+        # Only an explicit, valid admin role result may unlock diagnostics.
         raise AdministratorVerificationUnavailable("Unable to verify HA admin status") from exc
 
     if (not isinstance(result, dict) or result.get("type") != "result"
