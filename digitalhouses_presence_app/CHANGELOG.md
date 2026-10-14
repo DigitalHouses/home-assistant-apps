@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.10
+
+- Use the last valid HA GPS state and coordinates for a stationary iPhone even after days without new GPS reports; age alone no longer marks the GPS and distance sensors unavailable.
+- Publish the genuine source observation timestamp as `gps_reported_at` and the configured age-warning threshold as diagnostic metadata.
+- Label aged readings as last-known and show their original report date on both dashboards.
+- Manual Refresh succeeds on valid last-known HA observations and acknowledged MQTT publication; it never asserts that the phone acquired a fresh location.
+- Keep invalid/unknown source handling and the no-fabricated-events guarantee; leave the Wi-Fi engine unimplemented.
+- Cover two-day GPS silence, retained distance, timestamp provenance and repeated observations in regression tests.
+
+
 ## 0.1.9
 
 - Rename the existing MQTT device display name to **DH Presence** without changing its stable identifier, unique IDs or topic base.
