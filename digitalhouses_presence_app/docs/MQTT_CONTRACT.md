@@ -12,10 +12,13 @@ Discovery: `homeassistant/device/dh_presence_app/config` (one device config).
 | --- | --- | --- |
 | Binary sensor | `binary_sensor.dh_presence_app_residents_home` | ON if at least one included resident is confirmed home, OFF only when every included resident is confirmed not_home; unknown if no safe aggregate determination |
 | Binary sensor | `binary_sensor.dh_presence_app_<stable_resident_key>_gps_home` | GPS source only, independent of final Hybrid decision |
-| Binary sensor | `binary_sensor.dh_presence_app_<stable_resident_key>_wifi_home` | Wi-Fi source only; unavailable until a verified Wi-Fi engine publishes evidence |\n| Sensor | `sensor.dh_presence_app_<stable_resident_key>_distance` | GPS great-circle distance in km, without extra attributes |
+| Binary sensor | `binary_sensor.dh_presence_app_<stable_resident_key>_wifi_home` | Wi-Fi source only; unavailable until a verified Wi-Fi engine publishes evidence |
+| Sensor | `sensor.dh_presence_app_<stable_resident_key>_distance` | GPS great-circle distance in km, without extra attributes |
 | Event | `event.dh_presence_app_event` | Machine-readable resident/source transitions |
 | Select | `select.dh_presence_app_mode` | GPS / Wi-Fi / Hybrid; MQTT command + retained state |
-| Diagnostic sensors | `sensor.dh_presence_app_version`, `sensor.dh_presence_app_started_at` | Common DigitalHouses runtime diagnostics |\n| Controls | `button.dh_presence_app_refresh`, `button.dh_presence_app_check_updates`, `sensor.dh_presence_app_card` | Actual runtime Refresh and stable-release check |\n| Control diagnostics | `sensor.dh_presence_app_refresh_state`, `sensor.dh_presence_app_last_refresh`, `sensor.dh_presence_app_latest_version`, `binary_sensor.dh_presence_app_update_available` | Standard runtime operations and version reporting |
+| Diagnostic sensors | `sensor.dh_presence_app_version`, `sensor.dh_presence_app_started_at` | Common DigitalHouses runtime diagnostics |
+| Controls | `button.dh_presence_app_refresh`, `button.dh_presence_app_check_updates`, `sensor.dh_presence_app_card` | Actual runtime Refresh and stable-release check |
+| Control diagnostics | `sensor.dh_presence_app_refresh_state`, `sensor.dh_presence_app_last_refresh`, `sensor.dh_presence_app_latest_version`, `binary_sensor.dh_presence_app_update_available` | Standard runtime operations and version reporting |
 
 Use stable resident keys based on the explicitly registered `device_tracker` entity ID, **not HA user IDs or mutable display names**, for entity unique IDs. Dynamic removal/exclusion requires MQTT Discovery cleanup (tombstones) as well as entity removal on first synchronization.
 
@@ -31,4 +34,4 @@ In GPS mode, Wi-Fi source events do not alter aggregate presence. In Wi-Fi mode,
 
 MQTT Discovery, retained state, and transient event publishing are implemented in the experimental pilot. Tests currently validate pure logic and payload shape; real HA / MQTT integration acceptance remains pending.
 
-Version 0.1.9 adds Wi-Fi placeholder availability topics and the runtime controls above. Existing identifiers, GPS distance, aggregate and MQTT event topics stay unchanged. No Wi-Fi transition events are emitted before verified Wi-Fi observations.\n
+Version 0.1.9 adds Wi-Fi placeholder availability topics and the runtime controls above. Existing identifiers, GPS distance, aggregate and MQTT event topics stay unchanged. No Wi-Fi transition events are emitted before verified Wi-Fi observations.
