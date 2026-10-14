@@ -55,6 +55,7 @@ def test_empty_dashboard_products_lists_full_catalog() -> None:
         "digitalhouses_speedtest_app",
         "digitalhouses_backblaze_app",
         "digitalhouses_internet_app",
+        "digitalhouses_presence_app",
         "digitalhouses_climate_app",
     ]
     assert all(row["observed_installations"] == 0 for row in rows)

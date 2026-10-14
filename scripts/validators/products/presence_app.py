@@ -40,7 +40,7 @@ def validate_presence(root: Path, app: Path, context: dict) -> None:
     ])
     for file, width, height in ((app / "icon.png", 128, 128), (app / "logo.png", 250, 100)):
         payload = file.read_bytes()[:24]
-        if len(payload) != 24 or payload[:8] != b"\\x89PNG\\r\\n\\x1a\\n":
+        if len(payload) != 24 or payload[:8] != bytes.fromhex("89504e470d0a1a0a"):
             fail(f"{file.name}: invalid PNG")
         if struct.unpack(">II", payload[16:24]) != (width, height):
             fail(f"{file.name}: wrong PNG dimensions")
