@@ -50,5 +50,5 @@ class TestDiscovery(unittest.TestCase):
         self.assertEqual(config["origin"]["name"], "DigitalHouses Presence App")
         self.assertEqual(len(config["components"]), 16)
         for component in config["components"].values():
-            self.assertIn(component["platform"], {"binary_sensor", "event", "select", "sensor"})
+            self.assertIn(component["platform"], {"binary_sensor", "event", "select", "sensor", "button"})
             self.assertIn("unique_id", component)
