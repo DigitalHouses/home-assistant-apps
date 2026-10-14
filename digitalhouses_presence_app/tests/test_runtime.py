@@ -117,3 +117,7 @@ class RuntimeSafetyTests(unittest.TestCase):
         self.assertTrue(output.mode_commands.empty())
         output._message(None, None, SimpleNamespace(topic="DigitalHouses/Global/dh_presence_app/mode/set", payload=b"hybrid"))
         self.assertEqual(output.mode_commands.get_nowait(), "hybrid")
+        output._message(None, None, SimpleNamespace(
+            topic="DigitalHouses/Global/dh_presence_app/mode/set",
+            payload=b"wifi", retain=True))
+        self.assertTrue(output.mode_commands.empty())

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.2
+
+- Apply HA MQTT Select mode commands immediately instead of waiting for the next GPS polling interval.
+- Ignore retained MQTT commands so reconnecting to the broker cannot overwrite a persisted operator choice.
+- Keep one-field tracker registration and App Configuration → MQTT Select precedence unchanged.
+
 ## 0.1.1
 
 - Register each resident using a single GPS `device_tracker` entity ID in App Configuration; names are read from Home Assistant tracker attributes.
