@@ -18,7 +18,7 @@
 # "Режим дома" is notification text; NO security/alarm mode is changed.
 # wifi_in: confirmed registered MAC reappears after initial observation.
 # wifi_lost: 15 minutes without positive ARP proof: NOT verified disconnect.
-# wifi_out remains reserved for future independently verified disconnection.
+# wifi_out means 15m of completed ARP no-reply checks; iOS sleep can mimic loss.
 # No notification is generated at App startup from its first baseline probe.
 automation:
   - id: dh_presence_app_notifications
@@ -83,6 +83,10 @@ automation:
         В течение {{ trigger.to_state.attributes.timeout_minutes | default(15, true) }} минут
         устройство не подтвердило присутствие в домашней Wi-Fi сети.
         Это не означает подтверждённое отключение или уход.
+      wifi_out_message: >-
+        Устройство не обнаружено при проверках локальной сети в течение
+        {{ trigger.to_state.attributes.timeout_minutes | default(15, true) }} минут.
+        Это проверка ARP-доступности, а не доказательство отключения Wi-Fi.
     actions:
       - choose:
           - conditions:
@@ -123,4 +127,4 @@ automation:
             sequence:
               - action: script.write2log
                 data: >-
-                  {{ {'title': '📵 Wi-Fi отключён: ' ~ person_device, 'message': 'Отключение от Wi-Fi подтверждено независимым источником.'} | tojson }}
+                  {{ {'title': '📵 Wi-Fi не обнаружен: ' ~ person_device, 'message': wifi_out_message} | tojson }}
