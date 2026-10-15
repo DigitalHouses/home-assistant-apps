@@ -135,7 +135,7 @@ class RegistrationTests(unittest.TestCase):
     def test_completed_arp_zero_response_is_negative_not_probe_failure(self):
         cmd = ["arping", "-I", "enp6s18", "-c", "2", "-w", "3", "192.168.11.54"]
         with patch("dh_presence.registration.subprocess.run", return_value=SimpleNamespace(
-                returncode=1, stdout="Sent 2 probes (2 broadcast(s))\\nReceived 0 response(s)\\n",
+                returncode=1, stdout="Sent 2 probes (2 broadcast(s))\nReceived 0 response(s)\n",
                 stderr="")):
             with self.assertRaises(ArpNoReply):
                 run_checked(cmd)
