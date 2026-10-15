@@ -141,6 +141,12 @@ class ProblemAwareRuntime(DynamicDiscoveryRuntime):
                 observed_at=self.now_iso(),
                 context=pve_problem_context(transition.current, inputs),
                 active_problem_count=aggregate.count,
+                duration_seconds=(
+                    self.problem_event_debouncer.duration_seconds(state_id)
+                    if (state_id := transition.current.problem_id) == "cpu_throttling"
+                    and transition.event_type == "problem_recovered"
+                    else None
+                ),
             )
             if not self.bridge.publish_diagnostic_event(payload):
                 return False
