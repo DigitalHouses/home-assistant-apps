@@ -12,6 +12,10 @@ Every 60 seconds the App probes the enrolled private LAN IP with direct `arping`
 
 The maintained dashboard dynamically creates a Mushroom card for each configured resident (name + device): final presence status and its transition timestamp; GPS status/transition timestamp; Wi-Fi status/transition timestamp. Unknown timestamps render as a dash. All timestamps originate in the App's existing MQTT resident roster, and are shown in the browser's local timezone. There is no manual per-person YAML configuration and no IP/MAC exposed in MQTT.
 
+## Notification switches (0.1.18)
+
+The DH Presence MQTT device publishes three persisted MQTT switches: `switch.dh_presence_app_notify_presence` (default ON: `arrival`/`departure`), `switch.dh_presence_app_notify_gps` (default OFF: `gps_in`/`gps_out`) and `switch.dh_presence_app_notify_wifi` (default OFF: `wifi_in`/`wifi_out`/`wifi_lost`). Homeowners control them from HA Device or Lovelace, independently of GPS/Wi-Fi/Hybrid choice. They suppress only human `script.write2log` notifications in the [local HA package](examples/packages/dh_presence_app_notification_merge_named_ru.yaml), never MQTT Event publishing or Recorder. Settings survive restarts; do not add HA `input_boolean` helpers. For existing merge-named installations, replace the local notification package with the updated keyed example after the app upgrade.
+
 ## Pilot capabilities
 
 - Registers each resident with **one** explicit GPS `device_tracker` from that resident's phone. Names come from HA; multiple Companion devices signed in as the same user are not automatically included.
