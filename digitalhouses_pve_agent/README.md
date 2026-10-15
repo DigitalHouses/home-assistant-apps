@@ -256,11 +256,12 @@ The PVE HA examples are:
 
 - `examples/packages/dh_pve_agent_package.yaml` — non-language helpers, Recorder and Logbook;
 - `examples/packages/dh_pve_agent_notification_local_package.yaml` — English local notification example;
-- `examples/packages/locales/ru/dh_pve_agent_notification_local_package.yaml` — Russian site-local notification package.
+- `examples/packages/locales/ru/dh_pve_agent_notification_local_package.yaml` — portable Russian notification example (`persistent_notification.create`);
+- `examples/packages/locales/ru/dh_pve_agent_notification_write2admins.yaml` — optional DigitalHouses Russian admin-chat variant (`script.write2admins`), based on the deployed site notification contract.
 
-Install the base package and one local notification package. The local package gives every user-visible situation its own `event.received` trigger and matching `trigger.id`, routes it through `choose`, and calls the delivery service directly. For example, `line_power_lost` is the exact place to edit the text shown when the UPS switches to battery, `line_power_restored` is the restore event, `boost_started` is the exact place for AVR Boost, and `cpu_throttling_started` or `storage_usage_high` are the exact places for those PVE alerts. The bundled text demonstrates the event-time context fields, such as UPS charge/runtime/load/input voltage or PVE temperature/frequency/threshold/free space.
+Install the base package and **exactly one** local notification package. The portable examples and the `write2admins` variant share the same package key and automation ID; never install them together. The admin-chat variant requires an existing Home Assistant `script.write2admins` accepting `title` and `message`. The script adds the home identifier itself, so the notification package must not hardcode a site name. The local package gives every user-visible situation its own `event.received` trigger and matching `trigger.id`, routes it through `choose`, and calls the delivery service directly. For example, `line_power_lost` is the exact place to edit the text shown when the UPS switches to battery, `line_power_restored` is the restore event, `boost_started` is the exact place for AVR Boost, and `cpu_throttling_started` or `storage_usage_high` are the exact places for those PVE alerts. The bundled text demonstrates the event-time context fields, such as UPS charge/runtime/load/input voltage or PVE temperature/frequency/threshold/free space.
 
-Both public notification examples use `persistent_notification.create`. A user may replace that direct action with any local `notify.*`, script or other Home Assistant service.
+The two portable notification examples use `persistent_notification.create`. The additional Russian admin-chat variant routes all 48 PVE/UPS notifications, including NFS failure and restoration, to `script.write2admins` without changing trigger IDs, title/message fields or the PVE Agent. A user may also replace the direct action in a portable example with any local `notify.*`, script or other Home Assistant service.
 
 Event data is read directly from `trigger.to_state.attributes`. The notification automation does not create another Home Assistant notification event and does not repeat the producer's machine-event schema validation.
 
@@ -536,6 +537,10 @@ run `pvesm` or change TrueNAS, NFS, or backup configuration.
 The passive monitor runs even when MQTT is temporarily disconnected. It does
 not restart any guest, reconnect a mount, or intervene in backup processes.
 
-The public notification examples use `persistent_notification.create` to work
-without private scripts. Site-specific packages can use `script.write2log`
-instead when it is installed in Home Assistant.
+The portable notification examples use `persistent_notification.create` to work
+without private scripts. For DigitalHouses admin chat, install the optional
+`examples/packages/locales/ru/dh_pve_agent_notification_write2admins.yaml`
+instead of the portable Russian example: it calls `script.write2admins`
+with the unchanged `title`/`message` parameters, and the script supplies
+the site identifier. Sites using a different private delivery script may
+still customize their local copy without changing the Agent.
