@@ -164,3 +164,51 @@ def test_debounce_emits_start_after_delay_and_debounces_recovery():
     due = debouncer.due(now=170.0, current_states={"cpu_throttling": inactive})
     assert len(due) == 1
     assert due[0].event_type == "problem_recovered"
+
+
+def test_debounced_throttling_duration_is_measured_between_observations():
+    debouncer = PveProblemEventDebouncer(delay_seconds=30.0)
+    inactive = _state("cpu_throttling", active=False, metric="throttling", value=False)
+    active = _state("cpu_throttling", active=True, metric="throttling", value=True)
+
+    start = ProblemTransition("problem_started", inactive, active)
+    debouncer.observe(start, now=100.0)
+    assert debouncer.duration_seconds("cpu_throttling") is None
+    due = debouncer.due(now=130.0, current_states={"cpu_throttling": active})
+    assert len(due) == 1
+    debouncer.acknowledge(due[0])
+
+    recovery = ProblemTransition("problem_recovered", active, inactive)
+    debouncer.observe(recovery, now=183.0)
+    assert debouncer.duration_seconds("cpu_throttling") == 83
+    assert debouncer.due(now=212.0, current_states={"cpu_throttling": inactive}) == ()
+    due = debouncer.due(now=213.0, current_states={"cpu_throttling": inactive})
+    assert len(due) == 1
+    event = semantic_pve_problem_event(
+        due[0],
+        observed_at="2026-10-15T17:10:00+05:00",
+        duration_seconds=debouncer.duration_seconds("cpu_throttling"),
+    )
+    assert event["duration_seconds"] == 83
+    debouncer.acknowledge(due[0])
+    assert debouncer.duration_seconds("cpu_throttling") is None
+
+
+def test_short_throttling_flap_never_publishes_a_duration():
+    debouncer = PveProblemEventDebouncer(delay_seconds=30.0)
+    inactive = _state("cpu_throttling", active=False, metric="throttling", value=False)
+    active = _state("cpu_throttling", active=True, metric="throttling", value=True)
+    debouncer.observe(ProblemTransition("problem_started", inactive, active), now=100.0)
+    debouncer.observe(ProblemTransition("problem_recovered", active, inactive), now=115.0)
+    assert debouncer.duration_seconds("cpu_throttling") is None
+    assert debouncer.due(now=150.0, current_states={"cpu_throttling": inactive}) == ()
+
+
+def test_unrelated_pve_event_does_not_get_duration_field():
+    active = _state("storage_local_percent_used", active=True, metric="percent_used", value=91, average=91, threshold=90)
+    event = semantic_pve_problem_event(
+        ProblemTransition("problem_started", None, active),
+        observed_at="2026-10-15T17:10:00+05:00",
+        duration_seconds=83,
+    )
+    assert "duration_seconds" not in event
