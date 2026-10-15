@@ -3,9 +3,9 @@
 # Requires homeassistant: packages: !include_dir_named packages
 #
 # Direct path: native MQTT Event -> event.received -> trigger.id -> choose ->
-# script.write2log(title, message). Each service data is a Jinja-generated
-# JSON dictionary with short Jinja expressions. Longer conditional messages
-# are prepared as separate variables; no duplicate Logbook entry.
+# script.write2log(title, message). Native YAML data fields preserve
+# Unicode emoji without JSON/UTF-16 surrogate conversion. Longer conditional
+# messages are prepared as separate variables; no duplicate Logbook entry.
 #
 # The MQTT Event entity is independently eligible for HA Recorder history
 # subject to the installation's recorder include/exclude/retention rules.
