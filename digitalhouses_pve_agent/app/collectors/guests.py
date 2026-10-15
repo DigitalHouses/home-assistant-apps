@@ -5,7 +5,7 @@ import re
 from dataclasses import dataclass
 from typing import Mapping
 
-PCI_BDF_RE = re.compile(r"(?P<pci>(?:[0-9a-fA-F]{4}:)?[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\.[0-7])")
+PCI_BDF_RE = re.compile(r"(?P<pci>(?:[0-9a-fA-F]{4}:)?[0-9a-fA-F]{2}:[0-9a-fA-F]{2}(?:\.[0-7])?)(?![0-9a-fA-F.])")
 HOSTPCI_LINE_RE = re.compile(r"^(?P<key>hostpci\d+):\s*(?P<value>.+)$", re.MULTILINE)
 USB_LINE_RE = re.compile(r"^(?P<key>usb\d+):\s*(?P<value>.+)$", re.MULTILINE)
 USB_HOST_RE = re.compile(r"(?:^|,)host=(?P<host>[^,\s]+)")
@@ -78,6 +78,10 @@ class GuestBlockDevice:
 
 def normalize_pci(value: str) -> str:
     value = value.strip().lower()
+    # Proxmox hostpci accepts a whole slot without a function suffix.
+    # Resolve it through function 0 to match the function-qualified lspci catalog.
+    if re.fullmatch(r"(?:[0-9a-f]{4}:)?[0-9a-f]{2}:[0-9a-f]{2}", value):
+        value += ".0"
     if re.fullmatch(r"[0-9a-f]{2}:[0-9a-f]{2}\.[0-7]", value):
         return "0000:" + value
     if re.fullmatch(r"[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}\.[0-7]", value):
