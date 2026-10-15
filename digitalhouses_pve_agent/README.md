@@ -508,3 +508,30 @@ Live shutdown commissioning is a separate reviewed gate after code, configuratio
 Report reproducible bugs or feature requests through the repository [Issues](https://github.com/DigitalHouses/home-assistant-apps/issues). Security-sensitive reports follow the repository [security policy](../.github/SECURITY.md).
 
 DigitalHouses PVE Agent is provided under the repository [MIT License](../LICENSE).
+
+
+### Passive NFS failure monitoring (read-only)
+
+The agent watches enabled **NFS** storages in \`/etc/pve/storage.cfg\`, respecting
+each storage's \`disable\` and \`nodes\` settings. It does not access an NFS mount,
+run \`pvesm\` or change TrueNAS, NFS, or backup configuration.
+
+* Polls filtered **journald** entries every 15 seconds in a bounded worker.
+* Two \`pvestatd: storage 'ID' is not online\` entries within 60 seconds open
+  one incident; a matching kernel \`nfs: server IP not responding\` opens it immediately.
+* Treats the underlying cause as **unknown** even when NFS unavailability is
+  established. Kernel IP evidence is correlated only with a matching server
+  configured in PVE (no DNS lookup).
+* Never interprets a lack of journal errors as recovery. Recovery requires
+  two distinct, fresh PVE RRD samples newer than the last failure, separated
+  by at least 15 seconds, with 20 seconds free of new errors.
+* Persists open incidents, recent history and pending MQTT events in
+  \`/var/lib/digitalhouses_pve_agent/nfs_incidents.json\`.
+* Emits \`storage_nfs_unavailable\` and \`storage_nfs_restored\` on the existing
+  PVE diagnostic event topic (QoS 1, non-retained), and retained status at
+  \`<agent-base>/nfs/diagnostics\`. Home Assistant notification package examples
+  handle both events. Broker acknowledgement does not prove HA consumed an
+  event; if HA itself is offline, live notification delivery is not guaranteed.
+
+The passive monitor runs even when MQTT is temporarily disconnected. It does
+not restart any guest, reconnect a mount, or intervene in backup processes.
