@@ -55,6 +55,7 @@ class Resident:
     wifi_absent_since: datetime | None = None
     wifi_last_probe_at: datetime | None = None
     wifi_probe_result: str = "not_checked"
+    wifi_monitor_initialized: bool = False
     distance: float | None = None
     initialized: bool = False
 
@@ -193,19 +194,38 @@ class Engine:
                 r.wifi_absent_since = None
             r.wifi = value
             r.last_wifi_at = when
-            if r.initialized and before in (Status.HOME, Status.NOT_HOME) and before is not value:
-                events.append({"event_type": "wifi_in" if value is Status.HOME else "wifi_out", "resident_id": r.key, "source": "wifi", "observed_at": when.isoformat()})
+            # Only real source transitions after the first monitor sample
+            # produce link notifications. Initial probe is a baseline, not a
+            # synthetic phone arrival after an App restart.
+            if (r.wifi_monitor_initialized and before is not value
+                    and (value is Status.HOME or before is Status.HOME)):
+                events.append({
+                    "event_type": "wifi_in" if value is Status.HOME else "wifi_out",
+                    "resident_id": r.key, "source": "wifi",
+                    "observed_at": when.isoformat(),
+                })
             self._change(r, when, events)
         return events
 
-    def expire(self, now: datetime):
+    def expire(self, now: datetime) -> list[dict]:
+        events = []
         for r in self.residents.values():
-            # Do not erase last known GPS status/distance solely because
-            # iOS has not sent a new report. Unknown source values are handled
-            # explicitly by the runtime, never as a synthetic departure.
+            # iOS may sleep without replying to ARP. Loss of positive Wi-Fi
+            # evidence after the grace period is NOT verified disconnection.
             if r.last_wifi_at is None or now-r.last_wifi_at >= timedelta(minutes=self.wifi_absence_minutes):
+                if (r.wifi is Status.HOME and r.wifi_monitor_initialized
+                        and r.last_wifi_at is not None):
+                    events.append({
+                        "event_type": "wifi_lost",
+                        "resident_id": r.key,
+                        "source": "wifi",
+                        "observed_at": now.isoformat(),
+                        "last_verified_at": r.last_wifi_at.isoformat(),
+                        "timeout_minutes": self.wifi_absence_minutes,
+                    })
                 r.wifi = Status.UNAVAILABLE
                 r.wifi_absent_since = None
+        return events
 
     def persistent(self) -> dict:
         return {"schema_version": 2, "residents": [
