@@ -1,4 +1,4 @@
-# DigitalHouses Presence App 0.1.14 — experimental pilot
+# DigitalHouses Presence App 0.1.15 — experimental pilot
 
 ## Private administrator debug (0.1.12+, compact UI in 0.1.13)
 
@@ -124,10 +124,18 @@ resident_names:
 
 Supervisor persists `resident_names` alongside the App's other settings. Only enrolled GPS trackers are allowed; unregistered or duplicate tracker keys and empty user names are rejected at startup. Leaving `resident_names: []` is safe for existing users. The App continues reading the actual device label from its HA `device_tracker` friendly name; it publishes `user_name` (or null) and `device_name` in machine events. MQTT aggregate resident attributes also include `user_name`. No second HA Person resolver or local package map is used.
 
+## Wi-Fi link notification semantics (0.1.15)
+
+- First active ARP sample after App startup is a **baseline**; it does not send an artificial Wi-Fi connection notification.
+- After baseline, a registered phone's fresh matching MAC changes Wi-Fi from unavailable to HOME and emits `wifi_in` once. It is machine evidence of MAC response, not proof of AP association.
+- After `wifi_absence_minutes` (default 15) without any fresh positive MAC, the Wi-Fi source becomes unavailable and emits `wifi_lost` **once**. The package says "Wi-Fi не подтверждается", **never** "Отключился" or "Жилец ушёл" based only on ARP silence.
+- When a MAC reply returns, another `wifi_in` may be emitted. Duplicate probes and App restarts must not spam write2log. `wifi_out` remains dormant pending independently confirmed disconnection.
+- Only `script.write2log(title, message)` runs for each event; names come from the existing App registration records, not another mapping.
+
 ## Local Recorder and notifications
 
 - Install [the Russian HA package](examples/packages/dh_presence_app_notification_local_package_ru.yaml) at `/config/packages/dh_presence_app_notification_local_package_ru.yaml`; use `homeassistant: packages: !include_dir_named packages`. The file's top-level key is `automation:`.
-- `arrival`, `departure`, `wifi_in`, `wifi_out` each uses `event.received → trigger.id → choose → script.write2log`, exactly one direct call with `title` and `message`. No duplicate `logbook.log`, `persistent_notification.create` or intermediate notification event.
+- `arrival`, `departure`, `wifi_in`, `wifi_lost`, and future verified `wifi_out` each uses `event.received → trigger.id → choose → script.write2log`, exactly one direct call with `title` and `message`. No duplicate `logbook.log`, `persistent_notification.create` or intermediate notification event.
 - The MQTT Event entity may be retained in Recorder history according to existing Recorder filters and retention. Any logging performed inside `script.write2log` itself remains a local responsibility; this package does not write SQL.
 - `first_arrival` / `last_departure` are machine event facts, not inferred from the later aggregate state. `Режим дома: присутствие/отсутствие` is notification text only, not a security-mode change.
 - Person and device names are supplied by the App itself from one-time Supervisor name mapping plus the tracker's HA friendly name; the package has no name registry and never queries HA `person`.
