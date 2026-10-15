@@ -22,6 +22,7 @@ from dh_presence.storage import load, save
 from dh_presence.modes import ModeSelection
 from dh_presence.operations import Operations, fetch_latest_release, is_newer
 from dh_presence.registration import load_registry
+from dh_presence.wifi import poll_registered_wifi, WIFI_PROBE_INTERVAL_SECONDS
 from dh_presence.ui import start_ingress_ui
 
 LOG = logging.getLogger("dh_presence_app")
@@ -375,7 +376,7 @@ def publish_snapshot(output: MqttOutput, engine: Engine, version: str, started: 
     if not output.publish(topic("presence_observed"), "offline" if snapshot["status"] == Status.UNAVAILABLE.value else "online"):
         return False
     if not output.publish(topic("diagnostics"), {"version": version, "started_at": started,
-                     "source_status": "wifi_engine_unavailable" if engine.mode is Mode.WIFI else "gps_only_pilot"}):
+                     "source_status": "wifi_positive_arp_only" if engine.mode is Mode.WIFI else "gps_with_positive_wifi_probe"}):
         return False
     for r in engine.residents.values():
         ok = output.publish(topic("gps/"+r.key+"/availability"), "online" if r.gps is not Status.UNAVAILABLE else "offline")
@@ -414,6 +415,7 @@ def run():
     latest_version = None
     last_release_check = None
     last_registration_check = None
+    last_wifi_probe = None
     token = os.environ["SUPERVISOR_TOKEN"]
     ingress = start_ingress_ui(token, REGISTRATIONS_FILE, options["exclude_users"])
     started = datetime.now(timezone.utc).isoformat()
@@ -429,7 +431,7 @@ def run():
     last_discovery_audit = None
     last_discovery_audit_status = None
     LOG.info("Starting %s version %s, mode=%s, configured_residents=%d", "DigitalHouses Presence App", version, engine.mode.value, len(engine.residents))
-    LOG.warning("Pilot safety gate: Wi-Fi presence/absence is NOT active. Phone registration is restricted to verified local Ingress enrollment.")
+    LOG.warning("Wi-Fi positive-only pilot: fresh MAC-matched LAN ARP establishes HOME; unanswered ARP never establishes NOT_HOME or wifi_out.")
     if options["telemetry_enabled"]:
         LOG.warning("Experimental pilot: telemetry_enabled=true, but there is no telemetry sender; no statistics are transmitted.")
     if not engine.residents:
@@ -482,7 +484,7 @@ def run():
                         resident.initialized = False
                     LOG.info("Presence mode changed from HA UI to %s", engine.mode.value)
                     if engine.mode is Mode.WIFI:
-                        LOG.warning("Wi-Fi mode is not operational in this pilot; aggregate presence will be unavailable")
+                        LOG.info("Wi-Fi mode requires verified MAC; missed replies become unavailable, never away")
             # Ingress writes the private registration database atomically.
             # One engine observes the new roster without a service restart,
             # without a second Core adapter, and without synthetic events.
@@ -491,6 +493,7 @@ def run():
                 last_registration_check = time.monotonic()
                 latest = load_registry(REGISTRATIONS_FILE)
                 if latest != registrations:
+                    last_wifi_probe = None  # Observe newly registered devices promptly.
                     registrations = latest
                     changed = False
                     for item in registrations:
@@ -538,7 +541,7 @@ def run():
                         if reported_gps_status.get(r.tracker) != status.value:
                             LOG.info("GPS tracker %s: %s (fresh observation)", r.tracker, status.value)
                             reported_gps_status[r.tracker] = status.value
-                        events.extend(engine.gps_observation(r.tracker, status, observed, distance))
+                        events.extend(engine.gps_observation(r.tracker, status, observed, distance, decision_at=now))
                     else:
                         if reported_gps_status.get(r.tracker) != "unavailable":
                             LOG.warning("GPS tracker %s: source unavailable/stale; last confirmed presence preserved", r.tracker)
@@ -552,7 +555,16 @@ def run():
                     if reported_gps_status.get(r.tracker) != "error:" + problem:
                         LOG.error("Home Assistant Core API tracker %s unavailable: %s; last confirmed presence preserved", r.tracker, problem)
                         reported_gps_status[r.tracker] = "error:" + problem
-            engine.expire(now)
+            # One native Wi-Fi engine checks each enrolled phone against its
+            # stored IP/MAC every minute. ARP misses never mean absence.
+            if (last_wifi_probe is None
+                    or time.monotonic() - last_wifi_probe >= WIFI_PROBE_INTERVAL_SECONDS):
+                last_wifi_probe = time.monotonic()
+                events.extend(poll_registered_wifi(
+                    engine, [x for x in registrations if x["user_id"] not in options["exclude_users"]],
+                    datetime.now(timezone.utc),
+                ))
+            engine.expire(datetime.now(timezone.utc))
             if name_changed and mqtt_out.connected.is_set():
                 discovery_ready = synchronize_discovery(mqtt_out, version, engine)
             # Commit durable current state BEFORE sending retained MQTT state and events.
@@ -583,8 +595,9 @@ def run():
                     error = "MQTT snapshot not acknowledged"
                 elif not engine.residents:
                     error = "No registered phone trackers"
-                elif engine.mode is Mode.WIFI:
-                    error = "Verified Wi-Fi engine is not active"
+                elif engine.mode is Mode.WIFI and not any(
+                        r.wifi is Status.HOME for r in engine.residents.values()):
+                    error = "No currently verified Wi-Fi phone; silent ARP is not proof of absence"
                 elif any(r.gps is Status.UNAVAILABLE for r in engine.residents.values()):
                     error = "One or more GPS trackers have no valid last-known observation"
                 try:
