@@ -4,8 +4,8 @@
 #
 # Direct path: native MQTT Event -> event.received -> trigger.id -> choose ->
 # script.write2log(title, message). Each service data is a Jinja-generated
-# JSON dictionary (official HA action syntax), avoiding a validation error
-# on nested templated YAML dictionaries. No duplicate Logbook entry.
+# JSON dictionary with short Jinja expressions. Longer conditional messages
+# are prepared as separate variables; no duplicate Logbook entry.
 #
 # The MQTT Event entity is independently eligible for HA Recorder history
 # subject to the installation's recorder include/exclude/retention rules.
@@ -64,10 +64,25 @@ automation:
     variables:
       person_device: >-
         {% set event = trigger.to_state.attributes %}
-        {% set person = event.user_name %}
-        {% set device = event.device_name %}
-        {{ person ~ ' (' ~ device ~ ')' if person and person != device else (person if person else device) }}
-
+        {% set person = event.user_name | default('', true) %}
+        {% set device = event.device_name | default('', true) %}
+        {{ person ~ ' (' ~ device ~ ')' if person and device and person != device else (person or device or 'Неизвестное устройство') }}
+      arrival_message: >-
+        {% if trigger.to_state.attributes.first_arrival | default(false) %}
+          Режим дома: присутствие.
+        {% else %}
+          Прибыл ещё один жилец. Дома: {{ trigger.to_state.attributes.residents_home_after | default('?', true) }}.
+        {% endif %}
+      departure_message: >-
+        {% if trigger.to_state.attributes.last_departure | default(false) %}
+          Режим дома: отсутствие.
+        {% else %}
+          Жилец покинул дом. Дома: {{ trigger.to_state.attributes.residents_home_after | default('?', true) }}.
+        {% endif %}
+      wifi_lost_message: >-
+        В течение {{ trigger.to_state.attributes.timeout_minutes | default(15, true) }} минут
+        устройство не подтвердило присутствие в домашней Wi-Fi сети.
+        Это не означает подтверждённое отключение или уход.
     actions:
       - choose:
           - conditions:
@@ -76,15 +91,7 @@ automation:
             sequence:
               - action: script.write2log
                 data: >-
-                  {{ {
-                    'title': '🏠 Прибытие: ' ~ person_device,
-                    'message': (
-                      'Режим дома: присутствие.'
-                      if trigger.to_state.attributes.first_arrival
-                      else 'Прибыл ещё один жилец. Дома: '
-                           ~ trigger.to_state.attributes.residents_home_after ~ '.'
-                    )
-                  } | tojson }}
+                  {{ {'title': '🏠 Прибытие: ' ~ person_device, 'message': arrival_message} | tojson }}
 
           - conditions:
               - condition: trigger
@@ -92,15 +99,7 @@ automation:
             sequence:
               - action: script.write2log
                 data: >-
-                  {{ {
-                    'title': '🚗 Убытие: ' ~ person_device,
-                    'message': (
-                      'Режим дома: отсутствие.'
-                      if trigger.to_state.attributes.last_departure
-                      else 'Жилец покинул дом. Дома: '
-                           ~ trigger.to_state.attributes.residents_home_after ~ '.'
-                    )
-                  } | tojson }}
+                  {{ {'title': '🚗 Убытие: ' ~ person_device, 'message': departure_message} | tojson }}
 
           - conditions:
               - condition: trigger
@@ -108,10 +107,7 @@ automation:
             sequence:
               - action: script.write2log
                 data: >-
-                  {{ {
-                    'title': '📶 Wi-Fi обнаружен: ' ~ person_device,
-                    'message': 'Домашняя Wi-Fi сеть: устройство подтверждено по зарегистрированному MAC.'
-                  } | tojson }}
+                  {{ {'title': '📶 Wi-Fi обнаружен: ' ~ person_device, 'message': 'Устройство подтверждено по зарегистрированному MAC.'} | tojson }}
 
           - conditions:
               - condition: trigger
@@ -119,13 +115,7 @@ automation:
             sequence:
               - action: script.write2log
                 data: >-
-                  {{ {
-                    'title': '📵 Wi-Fi не подтверждается: ' ~ person_device,
-                    'message': 'В течение '
-                      ~ (trigger.to_state.attributes.timeout_minutes | default(15, true))
-                      ~ ' минут устройство не подтвердило присутствие в домашней Wi-Fi сети. '
-                      ~ 'Это не означает подтверждённое отключение или уход.'
-                  } | tojson }}
+                  {{ {'title': '📵 Wi-Fi не подтверждается: ' ~ person_device, 'message': wifi_lost_message} | tojson }}
 
           - conditions:
               - condition: trigger
@@ -133,7 +123,4 @@ automation:
             sequence:
               - action: script.write2log
                 data: >-
-                  {{ {
-                    'title': '📵 Wi-Fi отключён: ' ~ person_device,
-                    'message': 'Отсутствие устройства в домашней Wi-Fi сети подтверждено.'
-                  } | tojson }}
+                  {{ {'title': '📵 Wi-Fi отключён: ' ~ person_device, 'message': 'Отключение от Wi-Fi подтверждено независимым источником.'} | tojson }}
