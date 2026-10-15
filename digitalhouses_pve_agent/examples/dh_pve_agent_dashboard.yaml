@@ -16,40 +16,84 @@ sections:
 
       # Keep the aggregate problem card first. The App owns the problem list;
       # Lovelace only renders the retained sensor presentation.
-      - type: custom:mushroom-template-card
-        entity: sensor.dh_pve_agent_problems
-        primary: >-
-          {% set active = state_attr('sensor.dh_pve_agent_problems', 'active') or [] %}
-          {% if states('sensor.dh_pve_agent_problems') in ['unknown', 'unavailable'] %}
-            Состояние проблем недоступно
-          {% elif active | count == 0 %}
-            Все нормально
+      type: custom:mushroom-template-card
+      entity: sensor.dh_pve_agent_problems
+      primary: |-
+        {% set active = state_attr('sensor.dh_pve_agent_problems', 'active') or [] %}
+        {% set nfs = state_attr('sensor.dh_pve_agent_nfs_problems', 'active') or {} %}
+        {% set total = (active | count) + (nfs | count) %}
+        {% if total > 0 %}
+          Обнаружено проблем: {{ total }}
+        {% elif states('sensor.dh_pve_agent_problems') in ['unknown', 'unavailable', 'none', ''] or states('sensor.dh_pve_agent_nfs_problems') in ['unknown', 'unavailable', 'none', ''] %}
+          Нет данных о проблемах
+        {% else %}
+          Проблем не обнаружено
+        {% endif %}
+      secondary: |-
+        {% set active = state_attr('sensor.dh_pve_agent_problems', 'active') or [] %}
+        {% set nfs = state_attr('sensor.dh_pve_agent_nfs_problems', 'active') or {} %}
+        {% if active | count == 0 and nfs | count == 0 %}
+          {% if states('sensor.dh_pve_agent_problems') in ['unknown', 'unavailable', 'none', ''] or states('sensor.dh_pve_agent_nfs_problems') in ['unknown', 'unavailable', 'none', ''] %}
+            Состояние мониторинга недоступно.
           {% else %}
-            Обнаружены проблемы · {{ active | count }}
+            Система работает штатно.
           {% endif %}
-        secondary: |-
-          {% set active = state_attr('sensor.dh_pve_agent_problems', 'active') or [] %}
-          {% if active | count == 0 %}
-            Активных проблем нет
-          {% else %}
-            {% for item in active %}
-            • {{ item.object_name }} — {{ item.summary }}{% if item.details %} · {{ item.details }}{% endif %}
-            {% endfor %}
-          {% endif %}
-        icon: >-
-          {% set active = state_attr('sensor.dh_pve_agent_problems', 'active') or [] %}
-          {{ 'mdi:alert-circle' if active | count > 0 else 'mdi:check-circle' }}
-        icon_color: >-
-          {% if states('sensor.dh_pve_agent_problems') in ['unknown', 'unavailable'] %}
-            grey
-          {% elif (state_attr('sensor.dh_pve_agent_problems', 'active') or []) | count > 0 %}
-            red
-          {% else %}
-            green
-          {% endif %}
-        multiline_secondary: true
-        tap_action:
-          action: more-info
+        {% else %}
+          {% for item in active %}
+            {% set id = item.get('problem_id', '') %}
+            {% set name = item.get('object_name', 'Объект') %}
+            {% set average = item.get('average') %}
+            {% set threshold = item.get('threshold') %}
+            {% if id == 'cpu_temperature' %}
+              • {{ name }} — высокая температура{% if average is number and threshold is number %}: {{ average | round(1) }} °C · порог {{ threshold | round(0) }} °C{% endif %}
+            {% elif id == 'cpu_throttling' %}
+              • {{ name }} — троттлинг процессора
+            {% elif id.startswith('storage_') and id.endswith('_percent_used') %}
+              • {{ name }} — заполнение хранилища{% if average is number and threshold is number %}: {{ average | round(1) }}% · порог {{ threshold | round(0) }}%{% endif %}
+            {% elif id.startswith('disk_') and id.endswith('_temperature') %}
+              • {{ name }} — высокая температура{% if average is number and threshold is number %}: {{ average | round(1) }} °C · порог {{ threshold | round(0) }} °C{% endif %}
+            {% elif id.startswith('disk_') and id.endswith('_smart') %}
+              • {{ name }} — ошибка SMART
+            {% elif id.startswith('gpu_') and id.endswith('_temperature') %}
+              • {{ name }} — высокая температура GPU{% if average is number and threshold is number %}: {{ average | round(1) }} °C · порог {{ threshold | round(0) }} °C{% endif %}
+            {% elif id.startswith('fan_') and id.endswith('_control_restore') %}
+              • {{ name }} — не восстановлено управление вентилятором
+            {% else %}
+              • {{ name }} — {{ id or 'неизвестная проблема' }}
+            {% endif %}
+          {% endfor %}
+          {% for name, data in nfs.items() %}
+            • {{ name }} — NFS недоступен{% if data.get('server') %} · сервер {{ data.get('server') }}{% endif %}{% if data.get('started_at') %} · с {{ as_timestamp(data.get('started_at')) | timestamp_custom('%d.%m %H:%M', true) }}{% endif %}
+          {% endfor %}
+        {% endif %}
+      icon: |-
+        {% set active = state_attr('sensor.dh_pve_agent_problems', 'active') or [] %}
+        {% set nfs = state_attr('sensor.dh_pve_agent_nfs_problems', 'active') or {} %}
+        {% if (active | count) + (nfs | count) > 0 %}
+          mdi:alert-circle
+        {% elif states('sensor.dh_pve_agent_problems') in ['unknown', 'unavailable', 'none', ''] or states('sensor.dh_pve_agent_nfs_problems') in ['unknown', 'unavailable', 'none', ''] %}
+          mdi:help-circle-outline
+        {% else %}
+          mdi:check-circle
+        {% endif %}
+      icon_color: |-
+        {% set active = state_attr('sensor.dh_pve_agent_problems', 'active') or [] %}
+        {% set nfs = state_attr('sensor.dh_pve_agent_nfs_problems', 'active') or {} %}
+        {% if (active | count) + (nfs | count) > 0 %}
+          red
+        {% elif states('sensor.dh_pve_agent_problems') in ['unknown', 'unavailable', 'none', ''] or states('sensor.dh_pve_agent_nfs_problems') in ['unknown', 'unavailable', 'none', ''] %}
+          grey
+        {% else %}
+          green
+        {% endif %}
+      multiline_secondary: true
+      tap_action:
+        action: more-info
+      hold_action:
+        action: more-info
+        entity: sensor.dh_pve_agent_nfs_problems
+      grid_options:
+        columns: 12
 
       - type: custom:mushroom-template-card
         entity: sensor.dh_pve_agent_system
