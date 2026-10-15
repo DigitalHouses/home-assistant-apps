@@ -1,6 +1,6 @@
 # DigitalHouses Presence App
 
-**Status: experimental GPS pilot, version 0.1.14. Verified Wi-Fi HOME only; Wi-Fi absence is not operational.** Not approved for alarm automation.
+**Status: experimental GPS pilot, version 0.1.15. Verified Wi-Fi HOME only; Wi-Fi absence is not operational.** Not approved for alarm automation.
 
 This application belongs to `DigitalHouses/home-assistant-apps/digitalhouses_presence_app` and is installed from the Home Assistant **Settings → Apps → App Store** interface after refreshing the configured DigitalHouses repository. No separate GitHub repository, shell installer or manual copy to Home Assistant is needed.
 
@@ -128,13 +128,13 @@ Each entry explicitly associates **one registered tracker** with a person's name
 
 ## Recorder and notifications package
 
-[The local Russian HA package](examples/packages/dh_presence_app_notification_local_package_ru.yaml) processes the existing `event.dh_presence_app_event` directly. For `arrival`, `departure` and future verified `wifi_in` / `wifi_out`, it calls the site's existing `script.write2log` **once** with `title` and `message`. No duplicate `logbook.log`, `persistent_notification.create` or extra MQTT device is introduced. The MQTT Event entity can be stored by Home Assistant Recorder, subject to the local Recorder filters and retention. Whether `write2log` also logs anything is specific to that local script.
+[The local Russian HA package](examples/packages/dh_presence_app_notification_local_package_ru.yaml) processes the existing `event.dh_presence_app_event` directly. For `arrival`, `departure`, verified `wifi_in`, and `wifi_lost` (missing Wi-Fi confirmation), plus future genuinely verified `wifi_out`, it calls the site's existing `script.write2log` **once** with `title` and `message`. No duplicate `logbook.log`, `persistent_notification.create` or extra MQTT device is introduced. The MQTT Event entity can be stored by Home Assistant Recorder, subject to the local Recorder filters and retention. Whether `write2log` also logs anything is specific to that local script.
 
 First confirmed arrival (whole-house `not_home → home`) produces `Режим дома: присутствие`; final confirmed departure (`home → not_home`) produces `Режим дома: отсутствие`. These are messages, not physical alarm/security mode changes.
 
 The App owns a one-time `device_tracker` → `user_name` map through the optional `resident_names` list in Supervisor App Configuration. Existing `residents` entries remain unchanged. The App publishes `user_name` (or JSON null) and the real GPS tracker friendly name `device_name` on machine events. The local package displays `user_name (device_name)`, or the device name alone when unmapped; it does not search `person` or maintain a duplicate name dictionary.
 
-Install the package in `/config/packages/dh_presence_app_notification_local_package_ru.yaml` with `homeassistant: packages: !include_dir_named packages` and check that `script.write2log` accepts `title` and `message`. Wi-Fi events are not emitted until the verified Wi-Fi engine is implemented.
+Install the package in `/config/packages/dh_presence_app_notification_local_package_ru.yaml` with `homeassistant: packages: !include_dir_named packages` and check that `script.write2log` accepts `title` and `message`. The App emits `wifi_in` only after an initial baseline has been observed; it emits `wifi_lost` once after the configured 15-minute loss of positive Wi-Fi proof. An iPhone failing ARP does **not** mean a verified disconnect; `wifi_out` remains reserved for future stronger proof.
 
 ## Install through Home Assistant
 
