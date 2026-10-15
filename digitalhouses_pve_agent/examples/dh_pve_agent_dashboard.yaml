@@ -16,7 +16,7 @@ sections:
 
       # Keep the aggregate problem card first. The App owns the problem list;
       # Lovelace only renders the retained sensor presentation.
-      type: custom:mushroom-template-card
+      type: custom:mushroom-legacy-template-card
       entity: sensor.dh_pve_agent_problems
       entity_id:
         - sensor.dh_pve_agent_problems
