@@ -146,8 +146,8 @@ class LovelaceCardTests(unittest.TestCase):
                 start = source.index("# Dynamic Mushroom cards:")
                 end = source.index("type: custom:mushroom-chips-card", start)
                 roster = source[start:end]
-                self.assertIn("\\n" + indent + "[\\n", roster)
-                self.assertIn("\\n" + indent + "{% endfor %}\\n" + indent + "]\\n", roster)
+                self.assertIn("\n" + indent + "[\n", roster)
+                self.assertIn("\n" + indent + "{% endfor %}\n" + indent + "]\n", roster)
                 self.assertEqual(roster.count("{% for key, resident in roster | dictsort %}"), 1)
                 self.assertEqual(roster.count("{% endfor %}"), 1)
 
