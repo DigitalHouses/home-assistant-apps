@@ -18,6 +18,9 @@ sections:
       # Lovelace only renders the retained sensor presentation.
       type: custom:mushroom-template-card
       entity: sensor.dh_pve_agent_problems
+      entity_id:
+        - sensor.dh_pve_agent_problems
+        - sensor.dh_pve_agent_nfs_problems
       primary: |-
         {% set active = state_attr('sensor.dh_pve_agent_problems', 'active') or [] %}
         {% set nfs = state_attr('sensor.dh_pve_agent_nfs_problems', 'active') or {} %}
