@@ -31,7 +31,9 @@ class NotificationPackageTests(unittest.TestCase):
         self.assertIn("Wi-Fi не подтверждается", code)
         self.assertIn("Это не означает подтверждённое отключение или уход", code)
         self.assertIn("timeout_minutes", code)
-        self.assertIn("wifi_out remains reserved", code)
+        self.assertIn("wifi_out means 15m of completed ARP", code)
+        self.assertIn("wifi_out_message:", code)
+        self.assertIn("не доказательство отключения Wi-Fi", code)
         self.assertNotIn("resident_names.", code)
         self.assertNotIn("dh_presence_app_notification_local_package:\\n", code)
 
