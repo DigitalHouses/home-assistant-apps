@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.15 — Wi-Fi notifications through write2log
+
+- Emit `wifi_in` on a **real** matching-MAC Wi-Fi reappearance after a startup baseline; never emit a synthetic connection solely because the App restarted.
+- Emit `wifi_lost` once when positive Wi-Fi evidence expires after the configured 15-minute window. Preserve UNKNOWN/UNAVAILABLE semantics: no fake `wifi_out`, resident departure or security-mode action.
+- Update the native HA notification package to send `script.write2log` for both events with user/device labels from the app and truthful Russian text.
+- Extend MQTT Event Discovery with `wifi_lost`; retain `wifi_out` only for future independently verified disconnection. No new HA entities or notification services.
+- Add tests for startup suppression, repeated ARP misses, single lost/reconnect notification and lack of false departure.
+
 ## 0.1.14 — Wi-Fi positive-evidence pilot
 
 - Use the existing one-time Ingress registration IP/MAC to verify a resident phone locally via fresh active ARP every 60 seconds; no Nmap, NetAlertX, router API or additional integration.
