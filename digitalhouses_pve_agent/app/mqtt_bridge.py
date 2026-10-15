@@ -401,6 +401,14 @@ class MqttBridge(MqttEvents):
             retain=True,
         )
 
+    def publish_nfs_diagnostics(self, payload: dict[str, object]) -> bool:
+        """Retained NFS incident status; no guest or NFS mount operations."""
+        return self._publish(
+            f"{self.topics.base}/nfs/diagnostics",
+            json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+            retain=True,
+        )
+
     def publish_memory_diagnostics(self, payload: dict[str, object]) -> bool:
         """Publish bounded read-only memory history as retained MQTT state."""
         return self._publish(
