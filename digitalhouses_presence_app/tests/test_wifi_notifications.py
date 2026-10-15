@@ -1,4 +1,4 @@
-"""Wi-Fi link notifications: honest loss-of-proof, never a fake disconnection."""
+"""Wi-Fi link notifications: debounced network reachability and unknown failures."""
 import unittest
 from datetime import datetime, timedelta, timezone
 
@@ -15,7 +15,7 @@ PHONE = {"user_id": "ha-user", "user_name": "Serzhan",
 
 def sample(positive):
     return lambda _: WifiEvidence(
-        positive, "mac_verified" if positive else "no_verified_reply",
+        positive, "mac_verified" if positive else "no_reply",
         "enp6s18" if positive else None
     )
 
@@ -33,32 +33,38 @@ class LinkEventTests(unittest.TestCase):
         self.assertFalse([x for x in first if x["event_type"] == "wifi_in"])
         self.assertEqual(e.residents[PHONE["tracker"]].wifi, Status.HOME)
 
-    def test_wifi_link_loss_once_after_15_minutes_then_reconnect_once(self):
+    def test_wifi_link_disappearance_after_15_negative_minutes_then_reconnect(self):
         e = self.engine()
         self.assertFalse(poll_registered_wifi(e, [PHONE], NOW, sample(True)))
         events = []
-        for minute in range(1, 15):
+        for minute in range(1, 16):
             when = NOW + timedelta(minutes=minute)
             events += poll_registered_wifi(e, [PHONE], when, sample(False))
             events += e.expire(when)
-        self.assertEqual(events, [])
-        when = NOW + timedelta(minutes=15)
+        self.assertFalse(events)
+        self.assertEqual(e.residents[PHONE["tracker"]].wifi, Status.HOME)
+        when = NOW + timedelta(minutes=16)
         events += poll_registered_wifi(e, [PHONE], when, sample(False))
         events += e.expire(when)
-        lost = [item for item in events if item["event_type"] == "wifi_lost"]
-        self.assertEqual(len(lost), 1)
-        self.assertEqual(lost[0]["timeout_minutes"], 15)
-        self.assertEqual(lost[0]["last_verified_at"], NOW.isoformat())
-        self.assertEqual(e.residents[PHONE["tracker"]].wifi, Status.UNAVAILABLE)
+        self.assertEqual([x["event_type"] for x in events], ["wifi_out"])
+        self.assertEqual(events[0]["timeout_minutes"], 15)
+        self.assertEqual(e.residents[PHONE["tracker"]].wifi, Status.NOT_HOME)
+        # In GPS-only mode, the network status must not override GPS.
         self.assertEqual(e.residents[PHONE["tracker"]].confirmed, Status.HOME)
-        self.assertFalse(any(x["event_type"] in ("wifi_out", "departure")
-                             for x in events))
-        self.assertEqual(e.expire(when + timedelta(minutes=1)), [])
         returned = poll_registered_wifi(
-            e, [PHONE], when + timedelta(minutes=2), sample(True))
+            e, [PHONE], when + timedelta(minutes=1), sample(True))
         self.assertEqual([x["event_type"] for x in returned], ["wifi_in"])
         self.assertEqual(poll_registered_wifi(
-            e, [PHONE], when + timedelta(minutes=3), sample(True)), [])
+            e, [PHONE], when + timedelta(minutes=2), sample(True)), [])
+
+    def test_probe_failure_never_reports_wifi_out_or_departure(self):
+        e = self.engine()
+        poll_registered_wifi(e, [PHONE], NOW, sample(True))
+        events = poll_registered_wifi(
+            e, [PHONE], NOW + timedelta(minutes=1),
+            lambda _: WifiEvidence(False, "probe_error"))
+        self.assertEqual(events, [])
+        self.assertEqual(e.residents[PHONE["tracker"]].wifi, Status.UNAVAILABLE)
 
     def test_initial_unknown_is_baselined_then_first_actual_mac_is_wifi_in(self):
         e = self.engine()
