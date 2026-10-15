@@ -72,5 +72,10 @@ class NotificationPackageTests(unittest.TestCase):
     def test_each_write2log_has_only_title_and_message(self):
         code = PACKAGE.read_text(encoding="utf-8")
         self.assertEqual(code.count("- action: script.write2log"), 5)
-        self.assertEqual(code.count("title:"), 5)
-        self.assertEqual(code.count("message:"), 5)
+        # Every service data field is one validated string template returning
+        # a JSON dictionary, not a nested YAML dict that HA rejected.
+        self.assertEqual(code.count("data: >-"), 5)
+        self.assertEqual(code.count("} | tojson }}"), 5)
+        self.assertNotIn("data:\\n                  title:", code)
+        self.assertEqual(code.count("'title':"), 5)
+        self.assertEqual(code.count("'message':"), 5)
