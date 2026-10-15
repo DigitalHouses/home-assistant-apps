@@ -393,7 +393,8 @@ function registrationLabel(status){
 }
 function wifiProbeLabel(status){
  const labels={
-  mac_verified:'MAC совпадает',no_verified_reply:'Ответа нет · присутствие неизвестно',
+  mac_verified:'MAC совпадает',no_reply:'ARP: устройство не отвечает',
+  probe_error:'Проверка сети не выполнена',
   mac_mismatch:'IP принадлежит другому MAC',not_registered:'Нет привязки',
   not_checked:'Проверка не выполнялась'
  };
