@@ -55,3 +55,12 @@ Changes must be made in this repository by feature branch → PR → full CI →
 - The user's experimental home pilot authorizes exact `host_network`
   plus `NET_RAW` in version `0.1.11`, with negative policy tests. Continue
   to deny broader privileges; field validation of Ingress and ARP is pending. Do not claim Wi-Fi Engine operational.
+
+## Wi-Fi positive-only pilot acceptance (0.1.14)
+
+- CI verifies matching ARP MAC yields HOME and the existing MQTT Wi-Fi binary sensor becomes available; legacy GPS output remains unchanged.
+- Test iPhone locked/asleep at home: repeated failed ARP replies must not cause NOT_HOME, `wifi_out`, `departure` or 'last resident left'. After 15 minutes the Wi-Fi source becomes unavailable only.
+- Test a different MAC on a reused DHCP IP: discard Wi-Fi HOME proof immediately; never adopt the new phone. No raw IP/MAC in MQTT attributes.
+- Test `wifi` mode starts unknown until MAC match then reports HOME; `hybrid` overrides old GPS away when Wi-Fi is freshly verified. GPS default remains unchanged.
+- Field inspect the per-resident Wi-Fi binary sensor's `wifi_last_verified_at` and `wifi_probe_result` and the admin Ingress diagnostics; check private-MAC rotation and DHCP reassignment fail closed.
+- Do not mark Wi-Fi absence or 15-minute departure accepted without independent, positive disconnect evidence.
