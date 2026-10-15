@@ -90,6 +90,34 @@ class WifiEvidenceTests(unittest.TestCase):
                           decision_at=T0+timedelta(minutes=1))
         self.assertEqual(e.residents[LINK["tracker"]].confirmed, Status.HOME)
 
+    def test_sleeping_iphone_does_not_depart_due_to_replayed_old_gps_away(self):
+        e = engine(Mode.HYBRID, "not_home")
+        old = T0 - timedelta(days=1)
+        e.gps_observation(LINK["tracker"], Status.NOT_HOME, old)
+        poll_registered_wifi(
+            e, [LINK], T0,
+            lambda rec: WifiEvidence(True, "mac_verified", "enp6s18"))
+        self.assertEqual(e.snapshot()["status"], "home")
+        departures = []
+        for minute in range(1, 18):
+            now = T0 + timedelta(minutes=minute)
+            departures += poll_registered_wifi(
+                e, [LINK], now,
+                lambda rec: WifiEvidence(False, "no_verified_reply"))
+            e.expire(now)
+            departures += e.gps_observation(
+                LINK["tracker"], Status.NOT_HOME, old, decision_at=now)
+        self.assertEqual(e.snapshot()["status"], "home")
+        self.assertFalse(any(x["event_type"] in ("departure", "wifi_out")
+                             for x in departures))
+        # New, genuinely later GPS evidence still affects hybrid presence.
+        newly_reported = T0 + timedelta(minutes=18)
+        events = e.gps_observation(
+            LINK["tracker"], Status.NOT_HOME, newly_reported,
+            decision_at=newly_reported)
+        self.assertEqual(e.snapshot()["status"], "not_home")
+        self.assertTrue(any(x["event_type"] == "departure" for x in events))
+
     def test_wrong_mac_invalidates_wifi_home_without_claiming_away(self):
         e = engine(Mode.WIFI)
         poll_registered_wifi(e, [LINK], T0,
