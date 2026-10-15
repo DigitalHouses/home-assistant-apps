@@ -5,8 +5,6 @@ import re
 from dataclasses import dataclass
 from typing import Mapping
 
-PCI_BDF_RE = re.compile(r"(?P<pci>(?:[0-9a-fA-F]{4}:)?[0-9a-fA-F]{2}:[0-9a-fA-F]{2}(?:\.[0-7])?)(?![0-9a-fA-F.])")
-HOSTPCI_LINE_RE = re.compile(r"^(?P<key>hostpci\d+):\s*(?P<value>.+)$", re.MULTILINE)
 USB_LINE_RE = re.compile(r"^(?P<key>usb\d+):\s*(?P<value>.+)$", re.MULTILINE)
 USB_HOST_RE = re.compile(r"(?:^|,)host=(?P<host>[^,\s]+)")
 USB_ID_RE = re.compile(r"^(?P<vendor>[0-9a-fA-F]{4}):(?P<product>[0-9a-fA-F]{4})$")
@@ -186,31 +184,6 @@ def parse_lspci_catalog(text: str) -> dict[str, dict[str, str]]:
             "device_id": "0x" + match.group("device").lower(),
         }
     return result
-
-
-def parse_hostpci(
-    config: str,
-    pci_catalog: Mapping[str, Mapping[str, str]],
-) -> tuple[PassthroughDevice, ...]:
-    result: list[PassthroughDevice] = []
-    for match in HOSTPCI_LINE_RE.finditer(config):
-        bdf = PCI_BDF_RE.search(match.group("value"))
-        if not bdf:
-            continue
-        pci = normalize_pci(bdf.group("pci"))
-        meta = pci_catalog.get(pci, {})
-        result.append(
-            PassthroughDevice(
-                config_key=match.group("key"),
-                pci_address=pci,
-                pci_class=str(meta.get("pci_class") or "unknown"),
-                class_name=str(meta.get("class_name") or "Unknown PCI device"),
-                model=str(meta.get("model") or pci),
-                vendor_id=str(meta.get("vendor_id")) if meta.get("vendor_id") else None,
-                device_id=str(meta.get("device_id")) if meta.get("device_id") else None,
-            )
-        )
-    return tuple(result)
 
 
 def parse_usb_passthrough(config: str) -> tuple[UsbPassthroughConfig, ...]:

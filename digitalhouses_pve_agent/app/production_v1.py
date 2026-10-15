@@ -485,6 +485,17 @@ class ResilientProductionCollectors(ProductionCollectors):
             if path is not None and path in scan_paths:
                 continue
 
+            # Native Proxmox PCI lookup is temporarily unavailable: do not
+            # evict a formerly discovered passthrough disk just because its
+            # owning VM cannot be resolved this cycle.
+            if isinstance(path, str) and path.startswith("guest:") and self.topology is not None:
+                errors_reader = getattr(self.topology, "pci_inventory_errors", None)
+                errors = errors_reader() if callable(errors_reader) else {}
+                guest_id = path.split(":", 2)[1]
+                if isinstance(errors, Mapping) and ("_global" in errors or guest_id in errors):
+                    mark_unavailable(path, "native PCI inventory unavailable")
+                    continue
+
             count = int(missing_counts.get(disk_id, 0) or 0) + 1
             missing_counts[disk_id] = count
             if count < MISSING_CONFIRMATIONS:

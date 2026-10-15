@@ -1,6 +1,12 @@
 # Changelog
 
-## 0.5.64
+## 0.5.65
+
+- Replace handwritten Proxmox `hostpci` configuration parsing with one read-only native `PVE::QemuConfig` / `PVE::QemuServer::PCI::parse_hostpci` helper per STATIC topology refresh or targeted guest rescan; no new 60-second polling. Resolve slot/function passthrough and unambiguous PCI Resource Mappings using the authoritative native PCI function list.
+- Retain previous PCI assignments and guest disk history on helper or mapping errors instead of guessing or tombstoning storage. Ambiguous multi-alternative mappings are reported and left unresolved; class/vendor identifiers, passthrough owner IDs, SMART monitoring and existing MQTT entity identities remain stable.
+- Exercise native JSON validation, multi-function slots, mappings, ambiguity, transient errors and release contracts in regression tests. PVE 8.4 native parser confirmed on Ruslan VM700; PVE 9 live acceptance remains pending.
+
+## 0.5.65
 
 - Discover physical disks in TrueNAS/other VMs when Proxmox PCI passthrough uses a whole-slot address without a function suffix, such as `hostpci0: 0000:00:17`. The agent now resolves the slot to function 0 for topology discovery while leaving the VM configuration unchanged.
 - Add parser and VM700 topology regressions for a physical SATA disk discovered through QEMU Guest Agent; preserve function-qualified PCI handling and normal SMART/HA publication.

@@ -118,6 +118,7 @@ class GuestAwareProductionCollectors(ResilientProductionCollectors):
             "revision": snapshot.revision,
             "assignments": assignments,
             "host_usb": host_usb,
+            "pci_inventory_errors": self.topology.pci_inventory_errors(),
         }
         return CollectorSample(
             data=data,

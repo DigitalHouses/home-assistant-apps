@@ -1,0 +1,84 @@
+#!/usr/bin/perl
+# Read-only Proxmox PCI passthrough inventory. One invocation per topology refresh.
+use strict;
+use warnings;
+use JSON::PP;
+use PVE::QemuConfig;
+use PVE::QemuServer::PCI;
+
+my @devices;
+my @errors;
+
+for my $vmid (@ARGV) {
+    die "invalid VMID\n" if $vmid !~ /\A[0-9]{1,9}\z/;
+
+    my $conf = eval { PVE::QemuConfig->load_config($vmid) };
+    if ($@ || ref($conf) ne 'HASH') {
+        push @errors, {
+            guest_id => "$vmid",
+            message => "unable to load VM configuration: " . ($@ || 'no configuration'),
+        };
+        next;
+    }
+
+    for my $key (sort grep { /\Ahostpci[0-9]+\z/ } keys %$conf) {
+        my $parsed = eval {
+            PVE::QemuServer::PCI::parse_hostpci($conf->{$key})
+        };
+        if ($@ || ref($parsed) ne 'HASH') {
+            push @errors, {
+                guest_id => "$vmid",
+                config_key => $key,
+                message => "native hostpci parser failed: " . ($@ || 'invalid response'),
+            };
+            next;
+        }
+
+        my $alternatives = $parsed->{ids};
+        if (ref($alternatives) ne 'ARRAY' || scalar(@$alternatives) != 1) {
+            # Multiple resource-mapping alternatives are not necessarily active.
+            # Never assign every candidate device to the VM as if it were live.
+            push @errors, {
+                guest_id => "$vmid",
+                config_key => $key,
+                message => 'PCI mapping is ambiguous: multiple alternatives or none',
+            };
+            next;
+        }
+
+        my $functions = $alternatives->[0];
+        if (ref($functions) ne 'ARRAY' || !@$functions) {
+            push @errors, {
+                guest_id => "$vmid",
+                config_key => $key,
+                message => 'native parser returned no PCI functions',
+            };
+            next;
+        }
+
+        for my $function (@$functions) {
+            if (ref($function) ne 'HASH') {
+                push @errors, {
+                    guest_id => "$vmid",
+                    config_key => $key,
+                    message => 'native parser returned invalid PCI metadata',
+                };
+                next;
+            }
+            push @devices, {
+                guest_id => "$vmid",
+                config_key => $key,
+                pci_address => $function->{id},
+                pci_class => $function->{class},
+                vendor_id => $function->{vendor},
+                device_id => $function->{device},
+            };
+        }
+    }
+}
+
+print JSON::PP->new->canonical->encode({
+    schema => 1,
+    devices => \@devices,
+    errors => \@errors,
+}), "\n";

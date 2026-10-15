@@ -3,7 +3,6 @@ from pathlib import Path
 from app.collectors.guests import (
     is_physical_guest_disk,
     parse_cluster_resources,
-    parse_hostpci,
     parse_lspci_catalog,
     parse_pct_list,
     parse_qga_lsblk,
@@ -42,24 +41,10 @@ def test_parse_cluster_resources_returns_vm_and_lxc_in_one_pass():
     assert lxcs["150"].status == "stopped"
 
 
-def test_parse_hostpci_resolves_storage_controller_and_gpu():
+def test_lspci_catalog_retains_labels_for_native_pci_inventory():
     catalog = parse_lspci_catalog(LSPCI_TEXT)
-    storage = parse_hostpci((FIX / "vm_700.conf").read_text(), catalog)
-    gpu = parse_hostpci((FIX / "vm_501.conf").read_text(), catalog)
-    assert storage[0].pci_address == "0000:00:17.0"
-    assert storage[0].pci_class.startswith("01")
-    assert gpu[0].pci_class.startswith("03")
-
-
-def test_parse_hostpci_supports_proxmox_slot_without_function():
-    catalog = parse_lspci_catalog(LSPCI_TEXT)
-
-    # PVE emits hostpci0: 0000:00:17 for whole-slot passthrough.
-    for value in ("0000:00:17", "00:17", "0000:00:17,pcie=1"):
-        storage = parse_hostpci(f"hostpci0: {value}\n", catalog)
-        assert len(storage) == 1
-        assert storage[0].pci_address == "0000:00:17.0"
-        assert storage[0].pci_class == "0106"
+    assert catalog["0000:00:17.0"]["pci_class"] == "0106"
+    assert catalog["0000:00:02.0"]["pci_class"] == "0300"
 
 
 def test_qga_lsblk_excludes_qemu_system_disk_and_keeps_physical_ssd():

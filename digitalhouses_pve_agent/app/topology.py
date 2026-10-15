@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import platform
 import re
 import time
@@ -16,14 +17,17 @@ from .collectors.guests import (
     UsbDevice,
     UsbPassthroughConfig,
     is_physical_guest_disk,
-    parse_hostpci,
     parse_lspci_catalog,
     parse_qga_lsblk,
     parse_udev_properties,
     parse_usb_passthrough,
     usb_display_name,
 )
+from .pci_native import parse_native_pci_inventory
 from .pve_cache import read_pve_rrd, read_pve_vmlist
+
+_LOG = logging.getLogger(__name__)
+_NATIVE_PCI_SCRIPT = Path(__file__).resolve().parents[1] / "bin" / "pve-pci-inventory"
 
 Runner = Callable[..., str]
 ConfigReader = Callable[[str, str], str]
@@ -134,6 +138,8 @@ class TopologyManager:
         self._vm_configs: dict[str, str] = {}
         self._lxc_configs: dict[str, str] = {}
         self._pci_catalog: dict[str, dict[str, str]] = {}
+        self._pci_assignments: dict[str, PciAssignment] = {}
+        self._pci_inventory_errors: dict[str, str] = {}
         self._usb_inventory: dict[str, UsbDevice] = {}
         self._gpu_catalog_text = ""
         self._qga_last_probe: dict[str, float] = {}
@@ -224,7 +230,7 @@ class TopologyManager:
         except Exception:
             return
 
-        hostpci = ",".join(item.config_key for item in storage_devices)
+        hostpci = ",".join(sorted({item.config_key for item in storage_devices}))
         seen: set[tuple[str, str]] = set()
         for block in block_devices:
             if not is_physical_guest_disk(block):
@@ -326,21 +332,68 @@ class TopologyManager:
             result[entry.name] = device
         return result
 
-    def _build_pci_assignments(
+    def pci_inventory_errors(self) -> dict[str, str]:
+        return dict(self._pci_inventory_errors)
+
+    def _refresh_native_pci(
         self,
         vms: Mapping[str, GuestRecord],
-    ) -> dict[str, PciAssignment]:
-        result: dict[str, PciAssignment] = {}
-        for guest_id, config in self._vm_configs.items():
-            guest = vms.get(guest_id, GuestRecord("vm", guest_id, f"VM {guest_id}", "unknown"))
-            for device in parse_hostpci(config, self._pci_catalog):
-                result[device.pci_address] = PciAssignment(
-                    owner_kind="vm",
-                    owner_id=guest_id,
-                    owner_name=guest.name,
-                    device=device,
-                )
-        return result
+        guest_ids: tuple[str, ...] | None = None,
+    ) -> None:
+        """Read native PCI ownership only on topology scan or targeted guest rescan.
+
+        A process/parse error preserves the last good topology; per-guest errors
+        preserve only that VM's previous PCI assignments. No regex fallback.
+        """
+        requested = tuple(sorted(guest_ids if guest_ids is not None else vms))
+        current = dict(self._pci_assignments)
+        if not requested:
+            if guest_ids is None:
+                self._pci_assignments = {}
+                self._pci_inventory_errors = {}
+            return
+        try:
+            raw = self._run(
+                ["perl", str(_NATIVE_PCI_SCRIPT), *requested],
+                timeout=20.0,
+            )
+            native, errors = parse_native_pci_inventory(
+                raw, set(requested), self._pci_catalog,
+            )
+        except Exception as exc:
+            message = f"{type(exc).__name__}: {exc}"
+            self._pci_inventory_errors = {**self._pci_inventory_errors, "_global": message}
+            _LOG.error("Native Proxmox PCI inventory failed; retaining previous PCI topology: %s", message)
+            return
+
+        result = {
+            pci: value for pci, value in current.items()
+            if value.owner_id not in requested and value.owner_id in vms
+        }
+        for pci, (guest_id, device) in native.items():
+            if guest_id in errors:
+                continue
+            guest = vms[guest_id]
+            result[pci] = PciAssignment(
+                owner_kind="vm",
+                owner_id=guest_id,
+                owner_name=guest.name,
+                device=device,
+            )
+        for pci, assignment in current.items():
+            if assignment.owner_id in errors and assignment.owner_id in vms:
+                result[pci] = assignment
+        self._pci_assignments = result
+        if guest_ids is None:
+            self._pci_inventory_errors = errors
+        else:
+            self._pci_inventory_errors = {
+                **{key: value for key, value in self._pci_inventory_errors.items()
+                   if key not in requested and key != "_global"},
+                **errors,
+            }
+        for vmid, error in errors.items():
+            _LOG.error("Native PCI inventory VM %s: %s; preserving prior assignments", vmid, error)
 
     def _build_usb_assignments(
         self,
@@ -474,7 +527,11 @@ class TopologyManager:
         lxcs: Mapping[str, GuestRecord],
         qga: Mapping[str, str],
     ) -> TopologySnapshot:
-        pci = self._build_pci_assignments(vms)
+        pci = {
+            address: replace(assignment, owner_name=vms[assignment.owner_id].name)
+            for address, assignment in self._pci_assignments.items()
+            if assignment.owner_id in vms
+        }
         usb = self._build_usb_assignments(vms)
         host_usb = self._host_usb_devices(usb)
         gpu_owners = self._build_gpu_owners(vms, lxcs, pci)
@@ -510,12 +567,16 @@ class TopologyManager:
 
         self._vm_configs = {guest_id: self._read_config("vm", guest_id) for guest_id in vms}
         self._lxc_configs = {guest_id: self._read_config("lxc", guest_id) for guest_id in lxcs}
+        self._refresh_native_pci(vms)
 
         qga: dict[str, str] = {}
         for guest_id, guest in vms.items():
             config = self._vm_configs.get(guest_id, "")
             qga[guest_id] = self._qga_state(guest, config, force=True)
-            devices = parse_hostpci(config, self._pci_catalog)
+            devices = tuple(
+                assignment.device for assignment in self._pci_assignments.values()
+                if assignment.owner_id == guest_id
+            )
             self._probe_guest_storage(guest, devices, qga[guest_id])
 
         self._snapshot = self._compose_snapshot(vms, lxcs, qga)
@@ -537,8 +598,12 @@ class TopologyManager:
                 return
             config = self._read_config("vm", guest_id)
             self._vm_configs[guest_id] = config
+            self._refresh_native_pci(vms, (guest_id,))
             qga[guest_id] = self._qga_state(guest, config, force=True)
-            devices = parse_hostpci(config, self._pci_catalog)
+            devices = tuple(
+                assignment.device for assignment in self._pci_assignments.values()
+                if assignment.owner_id == guest_id
+            )
             self._probe_guest_storage(guest, devices, qga[guest_id])
         else:
             guest = lxcs.get(guest_id)
