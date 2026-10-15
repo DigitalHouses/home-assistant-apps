@@ -20,6 +20,7 @@ from dh_presence.core import Engine, Mode, Status, haversine_km, validate_tracke
 from dh_presence.discovery import DISCOVERY, discovery, topic, with_cleanup
 from dh_presence.storage import load, save
 from dh_presence.modes import ModeSelection
+from dh_presence.notifications import NotificationSelection, NOTIFICATION_KEYS
 from dh_presence.operations import Operations, fetch_latest_release, is_newer
 from dh_presence.registration import load_registry
 from dh_presence.wifi import poll_registered_wifi, WIFI_PROBE_INTERVAL_SECONDS
@@ -30,6 +31,7 @@ OPTIONS = "/data/options.json"
 STATE = "/data/presence_state.json"
 DISCOVERY_FILE = "/data/presence_discovery.json"
 MODE_FILE = "/data/presence_mode.json"
+NOTIFICATIONS_FILE = "/data/presence_notifications.json"
 OPERATIONS_FILE = "/data/presence_refresh.json"
 REGISTRATIONS_FILE = "/data/presence_registrations.json"
 EVENT_NAMES = {"arrival", "departure", "gps_in", "gps_out", "wifi_in", "wifi_out", "wifi_lost"}
@@ -197,6 +199,7 @@ class MqttOutput:
         self.client.on_disconnect = self._disconnected
         self.client.on_message = self._message
         self.mode_commands = queue.SimpleQueue()
+        self.notification_commands = queue.SimpleQueue()
         self.discovery_requests = queue.SimpleQueue()
         self.operation_commands = queue.SimpleQueue()
         self.client.will_set(topic("availability"), "offline", retain=True, qos=1)
@@ -211,8 +214,12 @@ class MqttOutput:
             mode_result = client.subscribe(topic("mode/set"), qos=1)
             birth_result = client.subscribe("homeassistant/status", qos=1)
             command_result = client.subscribe(topic("command"), qos=1)
-            LOG.info("MQTT connected; mode=%s birth=%s commands=%s",
-                     mode_result[0], birth_result[0], command_result[0])
+            notification_results = [
+                client.subscribe(topic("notifications/" + key + "/set"), qos=1)[0]
+                for key in NOTIFICATION_KEYS
+            ]
+            LOG.info("MQTT connected; mode=%s birth=%s commands=%s notifications=%s",
+                     mode_result[0], birth_result[0], command_result[0], notification_results)
         else:
             self.connected.clear()
             LOG.error("MQTT rejected connection: %s", reason_code)
@@ -237,6 +244,16 @@ class MqttOutput:
             else:
                 LOG.warning("Ignoring invalid MQTT operation command")
             return
+        for key in NOTIFICATION_KEYS:
+            if msg.topic == topic("notifications/" + key + "/set"):
+                if getattr(msg, "retain", False):
+                    LOG.warning("Ignoring retained MQTT notification command")
+                elif msg.payload in (b"ON", b"OFF"):
+                    self.notification_commands.put((key, msg.payload.decode("ascii")))
+                    WAKE.set()
+                else:
+                    LOG.warning("Ignoring invalid MQTT notification command key=%s", key)
+                return
         if msg.topic != topic("mode/set"):
             return
         if getattr(msg, "retain", False):
@@ -367,10 +384,16 @@ def save_discovery(value: dict):
 
 
 def publish_snapshot(output: MqttOutput, engine: Engine, version: str, started: str,
-                     operations: Operations, latest_version: str | None) -> bool:
+                     operations: Operations, latest_version: str | None,
+                     notifications: NotificationSelection | None = None) -> bool:
     snapshot = engine.snapshot()
     if not output.publish(topic("mode/state"), engine.mode.value):
         return False
+    if notifications is not None:
+        for key in NOTIFICATION_KEYS:
+            if not output.publish(topic("notifications/" + key + "/state"),
+                                  notifications.mqtt_state(key)):
+                return False
     # Source/aggregate availability must be committed BEFORE the retained
     # snapshot. Otherwise an invalid/unconfirmed GPS or sleeping iPhone first
     # renders as OFF and only afterwards becomes unavailable in HA Recorder.
@@ -419,6 +442,7 @@ def run():
     registrations = load_registry(REGISTRATIONS_FILE)
     engine = build_engine(options, saved, registrations)
     modes = ModeSelection(MODE_FILE, options["presence_mode"])
+    notifications = NotificationSelection(NOTIFICATIONS_FILE)
     engine.set_mode(modes.selected)
     operations = Operations(OPERATIONS_FILE)
     latest_version = None
@@ -483,6 +507,13 @@ def run():
             check_requested = "CHECK_UPDATES" in pending_operations
             if refresh_requested and operations.begin("refresh"):
                 publish_controls(mqtt_out, operations, version, latest_version)
+            while not mqtt_out.notification_commands.empty():
+                key, requested = mqtt_out.notification_commands.get_nowait()
+                try:
+                    if notifications.change(key, requested):
+                        LOG.info("Notification channel %s set to %s", key, requested)
+                except (OSError, ValueError) as exc:
+                    LOG.error("Notification setting not saved: %s", type(exc).__name__)
             while not mqtt_out.mode_commands.empty():
                 requested = mqtt_out.mode_commands.get_nowait()
                 if modes.change(requested):
@@ -580,7 +611,7 @@ def run():
             save(STATE, engine.persistent())
             published = (mqtt_out.connected.is_set() and discovery_ready
                          and publish_snapshot(mqtt_out, engine, version, started,
-                                              operations, latest_version))
+                                              operations, latest_version, notifications))
             if published:
                 if not published_state_logged:
                     LOG.info("MQTT presence state published topic=%s residents=%d mode=%s",
@@ -653,7 +684,8 @@ def run():
                     last_discovery_audit_status = audit_status
             # Clear BEFORE checking pending commands to avoid a lost wake-up.
             WAKE.clear()
-            if not STOP.is_set() and mqtt_out.mode_commands.empty():
+            if (not STOP.is_set() and mqtt_out.mode_commands.empty()
+                    and mqtt_out.notification_commands.empty()):
                 WAKE.wait(min(options["gps_poll_interval_seconds"],
                               5 if operations.state == "success" else options["gps_poll_interval_seconds"]))
     finally:
