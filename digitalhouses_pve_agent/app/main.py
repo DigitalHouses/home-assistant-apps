@@ -21,6 +21,7 @@ from .identity import resolve_identity
 from .migration_cleanup import cleanup_legacy_mqtt_namespace
 from .machine_event_outbox import MachineEventOutbox
 from .memory_diagnostics import MemoryDiagnostics
+from .nfs_monitor import NfsFailureMonitor, POLL_SECONDS as NFS_POLL_SECONDS
 from .mqtt_bridge import MqttBridge
 from .operation_status import operation_payload
 from .agent_card import AgentCard
@@ -395,6 +396,14 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
     memory_worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix="dh-pve-memory")
     memory_pending = None
     memory_force_due = False
+    nfs_monitor = NfsFailureMonitor(
+        StateStore(state_dir / "nfs_incidents.json"),
+        node_name=resolve_identity(config.general).hostname,
+        bridge=bridge,
+    )
+    nfs_worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix="dh-pve-nfs")
+    nfs_pending = None
+    nfs_last_check: float | None = None
     recovery = runtime.recover_fan_control()
     if recovery:
         log.warning("Fan control recovery: %s", recovery)
@@ -641,10 +650,28 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
                     reload_event.clear()
                     log.debug("SIGHUP обработан до инициализации UPS runtime")
 
+            # Independent of HA/MQTT initialization: an outage must still be
+            # recorded locally when the broker is unavailable.
+            if nfs_pending is not None and nfs_pending.done():
+                try:
+                    nfs_pending.result()
+                except Exception:
+                    log.exception("Ошибка пассивного NFS мониторинга")
+                finally:
+                    nfs_pending = None
+            nfs_now = time.monotonic()
+            if (
+                nfs_pending is None
+                and (nfs_last_check is None or nfs_now - nfs_last_check >= NFS_POLL_SECONDS)
+            ):
+                nfs_last_check = nfs_now
+                nfs_pending = nfs_worker.submit(nfs_monitor.scan)
+
             bridge.wake_requested.wait(1.0)
             bridge.wake_requested.clear()
     finally:
         memory_worker.shutdown(wait=False, cancel_futures=True)
+        nfs_worker.shutdown(wait=False, cancel_futures=True)
         runtime.cancel_fan_calibration()
         runtime.wait_fan_calibration()
         telemetry_runner.stop()
