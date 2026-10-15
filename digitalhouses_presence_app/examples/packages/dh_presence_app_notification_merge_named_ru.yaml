@@ -1,0 +1,115 @@
+# DH Presence App · local HA notifications for !include_dir_merge_named
+# File: /config/packages/Global/DH_APP/dh_presence_app_notification.yaml
+# Requires: homeassistant: packages: !include_dir_merge_named packages
+# Keep dh_presence_app.yaml separate for Recorder. Do not duplicate this automation.
+# Events are native MQTT Event entities; script.write2log owns notifications.
+# No extra notification helper or standalone app entity.
+dh_presence_app_notification:
+  automation:
+    - id: dh_presence_app_notifications
+      alias: "DH Presence · Уведомления"
+      mode: queued
+      max: 30
+      triggers:
+        - trigger: event.received
+          target:
+            entity_id: event.dh_presence_app_event
+          options:
+            event_type: [arrival]
+          id: arrival
+
+        - trigger: event.received
+          target:
+            entity_id: event.dh_presence_app_event
+          options:
+            event_type: [departure]
+          id: departure
+
+        - trigger: event.received
+          target:
+            entity_id: event.dh_presence_app_event
+          options:
+            event_type: [wifi_in]
+          id: wifi_in
+
+        - trigger: event.received
+          target:
+            entity_id: event.dh_presence_app_event
+          options:
+            event_type: [wifi_lost]
+          id: wifi_lost
+
+        - trigger: event.received
+          target:
+            entity_id: event.dh_presence_app_event
+          options:
+            event_type: [wifi_out]
+          id: wifi_out
+
+      variables:
+        person_device: >-
+          {% set event = trigger.to_state.attributes %}
+          {% set person = event.user_name | default('', true) %}
+          {% set device = event.device_name | default('', true) %}
+          {{ person ~ ' (' ~ device ~ ')' if person and device and person != device else (person or device or 'Неизвестное устройство') }}
+        arrival_message: >-
+          {% if trigger.to_state.attributes.first_arrival | default(false) %}
+            Режим дома: присутствие.
+          {% else %}
+            Прибыл ещё один жилец. Дома: {{ trigger.to_state.attributes.residents_home_after | default('?', true) }}.
+          {% endif %}
+        departure_message: >-
+          {% if trigger.to_state.attributes.last_departure | default(false) %}
+            Режим дома: отсутствие.
+          {% else %}
+            Жилец покинул дом. Дома: {{ trigger.to_state.attributes.residents_home_after | default('?', true) }}.
+          {% endif %}
+        wifi_lost_message: >-
+          В течение {{ trigger.to_state.attributes.timeout_minutes | default(15, true) }} минут
+          устройство не подтвердило присутствие в домашней Wi-Fi сети.
+          Это не означает подтверждённое отключение или уход.
+        wifi_out_message: >-
+          Устройство не обнаружено при проверках локальной сети в течение
+          {{ trigger.to_state.attributes.timeout_minutes | default(15, true) }} минут.
+          Это проверка ARP-доступности, а не доказательство отключения Wi-Fi.
+      actions:
+        - choose:
+            - conditions:
+                - condition: trigger
+                  id: arrival
+              sequence:
+                - action: script.write2log
+                  data: >-
+                    {{ {'title': '🏠 Прибытие: ' ~ person_device, 'message': arrival_message} | tojson }}
+
+            - conditions:
+                - condition: trigger
+                  id: departure
+              sequence:
+                - action: script.write2log
+                  data: >-
+                    {{ {'title': '🚗 Убытие: ' ~ person_device, 'message': departure_message} | tojson }}
+
+            - conditions:
+                - condition: trigger
+                  id: wifi_in
+              sequence:
+                - action: script.write2log
+                  data: >-
+                    {{ {'title': '📶 Wi-Fi обнаружен: ' ~ person_device, 'message': 'Устройство подтверждено по зарегистрированному MAC.'} | tojson }}
+
+            - conditions:
+                - condition: trigger
+                  id: wifi_lost
+              sequence:
+                - action: script.write2log
+                  data: >-
+                    {{ {'title': '📵 Wi-Fi не подтверждается: ' ~ person_device, 'message': wifi_lost_message} | tojson }}
+
+            - conditions:
+                - condition: trigger
+                  id: wifi_out
+              sequence:
+                - action: script.write2log
+                  data: >-
+                    {{ {'title': '📵 Wi-Fi не обнаружен: ' ~ person_device, 'message': wifi_out_message} | tojson }}
