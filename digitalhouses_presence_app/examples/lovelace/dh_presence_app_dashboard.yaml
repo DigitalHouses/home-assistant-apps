@@ -91,8 +91,8 @@ sections:
                 const n = states['binary_sensor.dh_presence_app_residents_home']?.attributes?.residents_home;
                 const total = states['binary_sensor.dh_presence_app_residents_home']?.attributes?.residents_total;
                 const count = Number.isInteger(n) && Number.isInteger(total) ? ' · Дома ' + n + '/' + total : '';
-                const label = mode === 'wifi' ? 'Wi-Fi ещё не активирован'
-                  : mode === 'hybrid' ? 'Hybrid: пока только GPS' : 'GPS';
+                const label = mode === 'wifi' ? 'Wi-Fi · ARP'
+                  : mode === 'hybrid' ? 'Hybrid · GPS + Wi-Fi' : 'GPS';
                 const newer = states['binary_sensor.dh_presence_app_update_available']?.state === 'on';
                 const roster = states['binary_sensor.dh_presence_app_residents_home']?.attributes?.residents || {};
                 const sourceUnavailable = Object.keys(roster).some(key => !['on','off'].includes(
