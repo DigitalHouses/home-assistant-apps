@@ -55,6 +55,45 @@ def discovery(version: str, residents: list[Resident]) -> dict:
             "retain": False,
             "availability": availability
         },
+        "notify_presence": {
+            "platform": "switch", "name": "Notify · Presence",
+            "unique_id": "dh_presence_app_notify_presence",
+            "default_entity_id": "switch.dh_presence_app_notify_presence",
+            "icon": "mdi:home-account",
+            "entity_category": "config",
+            "command_topic": topic("notifications/presence/set"),
+            "state_topic": topic("notifications/presence/state"),
+            "payload_on": "ON", "payload_off": "OFF",
+            "state_on": "ON", "state_off": "OFF",
+            "qos": 1, "retain": False,
+            "availability": availability
+        },
+        "notify_gps": {
+            "platform": "switch", "name": "Notify · GPS",
+            "unique_id": "dh_presence_app_notify_gps",
+            "default_entity_id": "switch.dh_presence_app_notify_gps",
+            "icon": "mdi:crosshairs-gps",
+            "entity_category": "config",
+            "command_topic": topic("notifications/gps/set"),
+            "state_topic": topic("notifications/gps/state"),
+            "payload_on": "ON", "payload_off": "OFF",
+            "state_on": "ON", "state_off": "OFF",
+            "qos": 1, "retain": False,
+            "availability": availability
+        },
+        "notify_wifi": {
+            "platform": "switch", "name": "Notify · Wi-Fi",
+            "unique_id": "dh_presence_app_notify_wifi",
+            "default_entity_id": "switch.dh_presence_app_notify_wifi",
+            "icon": "mdi:wifi",
+            "entity_category": "config",
+            "command_topic": topic("notifications/wifi/set"),
+            "state_topic": topic("notifications/wifi/state"),
+            "payload_on": "ON", "payload_off": "OFF",
+            "state_on": "ON", "state_off": "OFF",
+            "qos": 1, "retain": False,
+            "availability": availability
+        },
         "card": {
             "platform": "sensor", "name": "Operation status",
             "unique_id": "dh_presence_app_card", "default_entity_id": "sensor.dh_presence_app_card",
