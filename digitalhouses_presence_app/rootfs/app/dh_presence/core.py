@@ -151,10 +151,16 @@ class Engine:
         value = Status(value)
         if r.last_gps_at is not None and when < r.last_gps_at:
             return []
+        # HA returns the same last-known iOS GPS observation on every poll.
+        # A repeated report is not new evidence and must not undo a newer
+        # Wi-Fi HOME decision after the Wi-Fi source becomes uncertain.
+        repeated = (r.initialized and r.last_gps_at == when and r.gps is value)
         before = r.gps
         r.gps = value
         r.last_gps_at = when if value is not Status.UNAVAILABLE else r.last_gps_at
         r.distance = distance if value is not Status.UNAVAILABLE else None
+        if repeated:
+            return []  # No synthetic presence events from repeated old GPS.
         events = []
         if r.initialized and before in (Status.HOME, Status.NOT_HOME) and value in (Status.HOME, Status.NOT_HOME) and before is not value:
             events.append({"event_type": "gps_in" if value is Status.HOME else "gps_out", "resident_id": r.key, "source": "gps", "observed_at": when.isoformat()})
