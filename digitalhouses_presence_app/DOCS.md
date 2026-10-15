@@ -27,6 +27,10 @@ A missing route, command failure, permission error, timeout, off-link IP, or IP/
 
 **Field observation required:** iOS may sleep through ARP while associated. The OFF state is ARP reachability, **not** an authenticated disassociation. Monitor for several days. Never treat this unaccepted experimental mechanism as sufficient to arm security or to issue safety-critical commands. Existing package uses `script.write2log` for human notifications and describes the uncertainty.
 
+## Home Assistant local notification package
+
+For the user's existing `homeassistant: packages: !include_dir_merge_named packages` loader, use [the keyed notifications YAML](examples/packages/dh_presence_app_notification_merge_named_ru.yaml) as `dh_presence_app_notification.yaml` and keep `dh_presence_app.yaml` (Recorder) separate. Do not install the canonical keyless `!include_dir_named` example into a merge-named directory. In v0.1.17 the `wifi_out` notification explicitly describes *15 minutes of completed ARP misses*, not independently verified Wi-Fi radio disconnection.
+
 ## Configuration
 The App Store's native **Configuration** tab is the supported installation and settings UI. This build deliberately does not register any custom Home Assistant frontend panel.
 
