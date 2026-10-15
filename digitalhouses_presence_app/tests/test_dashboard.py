@@ -136,27 +136,31 @@ class LovelaceCardTests(unittest.TestCase):
         self.assertIn("Диагностика регистрации", card)
 
     def test_auto_entities_uses_native_filter_not_generated_json(self):
-        import yaml
+        # The CI Presence runner deliberately has no PyYAML dependency; the
+        # standalone YAML is checked for structure independently of it.
         standalone = ROOT / "examples/lovelace/presence_residents_auto_entities_ru.yaml"
-        source = yaml.safe_load(standalone.read_text(encoding="utf-8"))
-        self.assertEqual(source["type"], "custom:auto-entities")
-        self.assertEqual(source["card_param"], "cards")
-        self.assertEqual(source["card"]["type"], "vertical-stack")
-        self.assertNotIn("template", source["filter"])
-        self.assertEqual(len(source["filter"]["include"]), 1)
-        include = source["filter"]["include"][0]
-        self.assertEqual(include["entity_id"], "binary_sensor.dh_presence_app_*_wifi_home")
-        self.assertEqual(include["options"]["type"], "custom:mushroom-template-card")
-        self.assertEqual(include["options"]["entity"], "this.entity_id")
-        for field in ("primary", "secondary", "icon", "color"):
-            self.assertIn("{{", include["options"][field])
-        for loaded in (yaml.safe_load(CARD.read_text(encoding="utf-8")),
-                       yaml.safe_load(DASHBOARD.read_text(encoding="utf-8"))):
-            self.assertIsInstance(loaded, dict)
-        self.assertIn(
-            standalone.read_text(encoding="utf-8").strip().splitlines()[0],
-            CARD.read_text(encoding="utf-8")
-        )
+        source = standalone.read_text(encoding="utf-8")
+        self.assertTrue(source.startswith("type: custom:auto-entities\\n"))
+        for required in (
+            "card_param: cards",
+            "  include:",
+            'entity_id: "binary_sensor.dh_presence_app_*_wifi_home"',
+            "type: custom:mushroom-template-card",
+            "entity: this.entity_id",
+            "multiline_secondary: true",
+            "status_changed_at",
+            "gps_changed_at",
+            "wifi_changed_at",
+        ):
+            with self.subTest(required=required):
+                self.assertIn(required, source)
+        self.assertNotIn("  template: |", source)
+        self.assertNotIn("roster | dictsort", source)
+        for file in (CARD, DASHBOARD):
+            content = file.read_text(encoding="utf-8")
+            self.assertIn('entity_id: "binary_sensor.dh_presence_app_*_wifi_home"', content)
+            self.assertIn("entity: this.entity_id", content)
+            self.assertNotIn("roster | dictsort", content)
 
     def test_dashboard_embeds_same_card_without_drift(self):
         card = CARD.read_text(encoding="utf-8")
