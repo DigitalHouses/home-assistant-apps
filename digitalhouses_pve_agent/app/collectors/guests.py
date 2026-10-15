@@ -5,10 +5,6 @@ import re
 from dataclasses import dataclass
 from typing import Mapping
 
-USB_LINE_RE = re.compile(r"^(?P<key>usb\d+):\s*(?P<value>.+)$", re.MULTILINE)
-USB_HOST_RE = re.compile(r"(?:^|,)host=(?P<host>[^,\s]+)")
-USB_ID_RE = re.compile(r"^(?P<vendor>[0-9a-fA-F]{4}):(?P<product>[0-9a-fA-F]{4})$")
-USB_PORT_RE = re.compile(r"^\d+-\d+(?:\.\d+)*$")
 LSPCI_RE = re.compile(
     r"^(?P<pci>[0-9a-fA-F]{4}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\.[0-7])\s+"
     r"(?P<label>.+?)\s+\[(?P<class>[0-9a-fA-F]{4})\]:\s+"
@@ -184,36 +180,6 @@ def parse_lspci_catalog(text: str) -> dict[str, dict[str, str]]:
             "device_id": "0x" + match.group("device").lower(),
         }
     return result
-
-
-def parse_usb_passthrough(config: str) -> tuple[UsbPassthroughConfig, ...]:
-    result: list[UsbPassthroughConfig] = []
-    for match in USB_LINE_RE.finditer(config):
-        value = match.group("value")
-        host_match = USB_HOST_RE.search(value)
-        if not host_match:
-            continue
-        host = host_match.group("host").strip().lower()
-        if host == "spice":
-            continue
-        usb_id: str | None = None
-        physical_port: str | None = None
-        id_match = USB_ID_RE.fullmatch(host)
-        if id_match:
-            usb_id = f"{id_match.group('vendor').lower()}:{id_match.group('product').lower()}"
-        elif USB_PORT_RE.fullmatch(host):
-            physical_port = host
-        else:
-            continue
-        result.append(
-            UsbPassthroughConfig(
-                config_key=match.group("key"),
-                host=host,
-                usb_id=usb_id,
-                physical_port=physical_port,
-            )
-        )
-    return tuple(result)
 
 
 def parse_udev_properties(text: str) -> dict[str, str]:

@@ -9,7 +9,7 @@ import json
 import re
 from typing import Mapping
 
-from .collectors.guests import PassthroughDevice
+from .collectors.guests import PassthroughDevice, UsbPassthroughConfig
 
 _PCI_ID = re.compile(r"^[0-9a-fA-F]{4}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\.[0-7]$")
 _HEX_ID = re.compile(r"^0x[0-9a-fA-F]{4}$")
@@ -84,3 +84,69 @@ def parse_native_pci_inventory(
         )
 
     return parsed, errors
+
+
+_USB_KEY = re.compile(r"^usb[0-9]+$")
+_USB_PORT = re.compile(r"^[0-9]+-[0-9]+(?:\.[0-9]+)*$")
+
+
+def parse_native_usb_inventory(
+    raw: str,
+    requested_vmids: set[str],
+) -> tuple[dict[str, tuple[UsbPassthroughConfig, ...]], dict[str, str]]:
+    """Decode selectors emitted by native Proxmox USB parser, never VM config text."""
+    payload = json.loads(raw)
+    if not isinstance(payload, dict) or payload.get("schema") != 1:
+        raise ValueError("unsupported native passthrough inventory schema")
+    devices, failures = payload.get("usb_devices"), payload.get("usb_errors")
+    if not isinstance(devices, list) or not isinstance(failures, list):
+        raise ValueError("native USB inventory lacks devices/errors")
+
+    errors: dict[str, str] = {}
+    for item in failures:
+        if not isinstance(item, dict) or not isinstance(item.get("guest_id"), str):
+            raise ValueError("invalid native USB error")
+        vmid = item["guest_id"]
+        if vmid not in requested_vmids:
+            raise ValueError("native USB error has unexpected VMID")
+        message = item.get("message")
+        if not isinstance(message, str) or not message.strip():
+            raise ValueError("invalid native USB error message")
+        errors[vmid] = (errors.get(vmid, "") + "; " if vmid in errors else "") + message.strip()
+
+    result: dict[str, list[UsbPassthroughConfig]] = {}
+    seen: set[tuple[str, str]] = set()
+    for item in devices:
+        if not isinstance(item, dict):
+            raise ValueError("native USB item is not an object")
+        vmid, key = item.get("guest_id"), item.get("config_key")
+        if (
+            not isinstance(vmid, str) or vmid not in requested_vmids
+            or not isinstance(key, str) or not _USB_KEY.fullmatch(key)
+            or (vmid, key) in seen
+        ):
+            raise ValueError("invalid/duplicate native USB identity")
+        seen.add((vmid, key))
+        vendor, product, port = (
+            item.get("vendor_id"), item.get("product_id"), item.get("physical_port")
+        )
+        if port is not None:
+            if vendor is not None or product is not None or not isinstance(port, str) or not _USB_PORT.fullmatch(port):
+                raise ValueError("invalid native USB port selector")
+            config = UsbPassthroughConfig(
+                config_key=key, host=port, usb_id=None, physical_port=port
+            )
+        else:
+            if (
+                not isinstance(vendor, str) or not isinstance(product, str)
+                or not re.fullmatch(r"[0-9a-fA-F]{4}", vendor)
+                or not re.fullmatch(r"[0-9a-fA-F]{4}", product)
+            ):
+                raise ValueError("invalid native USB VID/PID selector")
+            usb_id = f"{vendor.lower()}:{product.lower()}"
+            config = UsbPassthroughConfig(
+                config_key=key, host=usb_id, usb_id=usb_id, physical_port=None
+            )
+        result.setdefault(vmid, []).append(config)
+
+    return {vmid: tuple(configs) for vmid, configs in result.items()}, errors

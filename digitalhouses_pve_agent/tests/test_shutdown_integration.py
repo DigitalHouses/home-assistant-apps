@@ -20,7 +20,8 @@ class _Runner:
         if argv == ("lspci", "-Dnn"):
             return ""
         if argv and argv[0] == "perl" and argv[1].endswith("pve-pci-inventory"):
-            return json.dumps({"schema": 1, "devices": [], "errors": []})
+            return json.dumps({"schema": 1, "devices": [], "errors": [],
+                               "usb_devices": [], "usb_errors": []})
         if argv[:2] == ("qm", "agent"):
             return ""
         raise AssertionError(argv)

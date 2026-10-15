@@ -77,7 +77,8 @@ class GuestAwareProductionCollectors(ResilientProductionCollectors):
                     if device is not None
                     else assignment.config.host
                 ),
-                "connected": device is not None,
+                "connected": (None if assignment.resolution == "ambiguous" else device is not None),
+                "resolution": assignment.resolution,
             }
 
         # Preserve the legacy shared /dev/dri -> LXC mapping as topology too.
@@ -118,6 +119,7 @@ class GuestAwareProductionCollectors(ResilientProductionCollectors):
             "revision": snapshot.revision,
             "assignments": assignments,
             "host_usb": host_usb,
+            "usb_inventory_errors": self.topology.usb_inventory_errors(),
             "pci_inventory_errors": self.topology.pci_inventory_errors(),
         }
         return CollectorSample(

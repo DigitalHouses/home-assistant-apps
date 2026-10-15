@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.66
+
+- Resolve VM USB passthrough configuration through Proxmox's native `PVE::JSONSchema::parse_property_string('pve-qm-usb')` and `PVE::QemuServer::USB::parse_usb_device`, including USB Resource Mapping, using the existing read-only PCI helper and scan cadence. Remove handwritten USB configuration parsing.
+- Match physical USB devices against sysfs by exact port or by unique VID:PID only. Duplicate devices/VM selectors no longer get an arbitrary owner, and unassigned or ambiguous physical devices are not silently hidden.
+- Preserve last-known USB mappings when native parsing fails, expose `usb_inventory_errors` and per-assignment resolution without changing existing MQTT entity IDs. Include regression tests using actual configurations from Ruslan and home sites plus duplicates and mapping failures.
+
 ## 0.5.65
 
 - Replace handwritten Proxmox `hostpci` configuration parsing with one read-only native `PVE::QemuConfig` / `PVE::QemuServer::PCI::parse_hostpci` helper per STATIC topology refresh or targeted guest rescan; no new 60-second polling. Resolve slot/function passthrough and unambiguous PCI Resource Mappings using the authoritative native PCI function list.

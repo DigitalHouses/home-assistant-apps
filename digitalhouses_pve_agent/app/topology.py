@@ -20,10 +20,9 @@ from .collectors.guests import (
     parse_lspci_catalog,
     parse_qga_lsblk,
     parse_udev_properties,
-    parse_usb_passthrough,
     usb_display_name,
 )
-from .pci_native import parse_native_pci_inventory
+from .pci_native import parse_native_pci_inventory, parse_native_usb_inventory
 from .pve_cache import read_pve_rrd, read_pve_vmlist
 
 _LOG = logging.getLogger(__name__)
@@ -48,6 +47,7 @@ class UsbAssignment:
     owner_name: str
     config: UsbPassthroughConfig
     device: UsbDevice | None
+    resolution: str = "missing"
 
 
 @dataclass(frozen=True)
@@ -141,6 +141,8 @@ class TopologyManager:
         self._pci_assignments: dict[str, PciAssignment] = {}
         self._pci_inventory_errors: dict[str, str] = {}
         self._usb_inventory: dict[str, UsbDevice] = {}
+        self._usb_configs: dict[str, tuple[UsbPassthroughConfig, ...]] = {}
+        self._usb_inventory_errors: dict[str, str] = {}
         self._gpu_catalog_text = ""
         self._qga_last_probe: dict[str, float] = {}
         self._storage_sources: dict[tuple[str, str], GuestStorageSource] = {}
@@ -335,6 +337,9 @@ class TopologyManager:
     def pci_inventory_errors(self) -> dict[str, str]:
         return dict(self._pci_inventory_errors)
 
+    def usb_inventory_errors(self) -> dict[str, str]:
+        return dict(self._usb_inventory_errors)
+
     def _refresh_native_pci(
         self,
         vms: Mapping[str, GuestRecord],
@@ -351,6 +356,8 @@ class TopologyManager:
             if guest_ids is None:
                 self._pci_assignments = {}
                 self._pci_inventory_errors = {}
+                self._usb_configs = {}
+                self._usb_inventory_errors = {}
             return
         try:
             raw = self._run(
@@ -363,7 +370,8 @@ class TopologyManager:
         except Exception as exc:
             message = f"{type(exc).__name__}: {exc}"
             self._pci_inventory_errors = {**self._pci_inventory_errors, "_global": message}
-            _LOG.error("Native Proxmox PCI inventory failed; retaining previous PCI topology: %s", message)
+            self._usb_inventory_errors = {**self._usb_inventory_errors, "_global": message}
+            _LOG.error("Native Proxmox passthrough inventory failed; retaining previous topology: %s", message)
             return
 
         result = {
@@ -395,58 +403,117 @@ class TopologyManager:
         for vmid, error in errors.items():
             _LOG.error("Native PCI inventory VM %s: %s; preserving prior assignments", vmid, error)
 
+        # The same native helper resolves USB selectors, including USB Resource
+        # Mapping. Keep USB and PCI failure boundaries independent.
+        try:
+            usb_configs, usb_errors = parse_native_usb_inventory(raw, set(requested))
+        except Exception as exc:
+            message = f"{type(exc).__name__}: {exc}"
+            self._usb_inventory_errors["_global"] = message
+            _LOG.error("Native Proxmox USB inventory failed; preserving prior mappings: %s", message)
+        else:
+            latest = {
+                vmid: configs for vmid, configs in self._usb_configs.items()
+                if vmid not in requested and vmid in vms
+            }
+            for vmid in requested:
+                if vmid in usb_errors:
+                    if vmid in self._usb_configs:
+                        latest[vmid] = self._usb_configs[vmid]
+                else:
+                    latest[vmid] = usb_configs.get(vmid, ())
+            self._usb_configs = latest
+            if guest_ids is None:
+                self._usb_inventory_errors = usb_errors
+            else:
+                self._usb_inventory_errors = {
+                    **{key: value for key, value in self._usb_inventory_errors.items()
+                       if key not in requested and key != "_global"},
+                    **usb_errors,
+                }
+            for vmid, error in usb_errors.items():
+                _LOG.error("Native USB inventory VM %s: %s; retaining prior mappings", vmid, error)
+
     def _build_usb_assignments(
         self,
         vms: Mapping[str, GuestRecord],
     ) -> dict[str, UsbAssignment]:
-        result: dict[str, UsbAssignment] = {}
-        devices = tuple(self._usb_inventory.values())
+        """Resolve unique physical USB devices; never pick first among duplicates.
 
-        for guest_id, config in self._vm_configs.items():
-            guest = vms.get(
-                guest_id,
-                GuestRecord("vm", guest_id, f"VM {guest_id}", "unknown"),
+        Process explicit port selectors first. VID:PID selectors can claim only
+        the sole remaining matching device and only when a single VM requests it.
+        A configured but ambiguous device has no asserted physical owner.
+        """
+        requests = [
+            (vmid, item)
+            for vmid, configs in sorted(self._usb_configs.items())
+            if vmid in vms
+            for item in configs
+        ]
+        physical = tuple(self._usb_inventory.values())
+        assignments: dict[str, UsbAssignment] = {}
+        resolved: dict[tuple[str, str], tuple[UsbDevice | None, str]] = {}
+        reserved: set[str] = set()
+
+        by_port: dict[str, list[tuple[str, str]]] = {}
+        for vmid, item in requests:
+            if item.physical_port:
+                by_port.setdefault(item.physical_port, []).append((vmid, item.config_key))
+        for port, keys in by_port.items():
+            matches = [device for device in physical if device.physical_port == port]
+            status = "resolved" if len(keys) == 1 and len(matches) == 1 else (
+                "missing" if not matches else "ambiguous"
             )
-            for item in parse_usb_passthrough(config):
-                matches: list[UsbDevice] = []
-                if item.usb_id:
-                    matches = [device for device in devices if device.usb_id == item.usb_id]
-                elif item.physical_port:
-                    matches = [
-                        device
-                        for device in devices
-                        if device.physical_port == item.physical_port
-                    ]
-                device = sorted(matches, key=lambda value: value.sysfs_name)[0] if matches else None
-                key = f"usb_vm_{guest_id}_{item.config_key}"
-                result[key] = UsbAssignment(
-                    owner_kind="vm",
-                    owner_id=guest_id,
-                    owner_name=guest.name,
-                    config=item,
-                    device=device,
-                )
-        return result
+            device = matches[0] if status == "resolved" else None
+            if device is not None:
+                reserved.add(device.sysfs_name)
+            for key in keys:
+                resolved[key] = (device, status)
+
+        by_id: dict[str, list[tuple[str, str]]] = {}
+        for vmid, item in requests:
+            if item.usb_id:
+                by_id.setdefault(item.usb_id, []).append((vmid, item.config_key))
+        for usb_id, keys in by_id.items():
+            matches = [
+                device for device in physical
+                if device.usb_id == usb_id and device.sysfs_name not in reserved
+            ]
+            status = "resolved" if len(keys) == 1 and len(matches) == 1 else (
+                "missing" if not matches else "ambiguous"
+            )
+            device = matches[0] if status == "resolved" else None
+            if device is not None:
+                reserved.add(device.sysfs_name)
+            for key in keys:
+                resolved[key] = (device, status)
+
+        for vmid, item in requests:
+            device, status = resolved.get((vmid, item.config_key), (None, "missing"))
+            key = f"usb_vm_{vmid}_{item.config_key}"
+            assignments[key] = UsbAssignment(
+                owner_kind="vm",
+                owner_id=vmid,
+                owner_name=vms[vmid].name,
+                config=item,
+                device=device,
+                resolution=status,
+            )
+        return assignments
 
     def _host_usb_devices(
         self,
         assignments: Mapping[str, UsbAssignment],
     ) -> dict[str, UsbDevice]:
-        assigned_ids = {
-            item.config.usb_id
-            for item in assignments.values()
-            if item.config.usb_id
-        }
-        assigned_ports = {
-            item.config.physical_port
-            for item in assignments.values()
-            if item.config.physical_port
+        # Hide only positively assigned physical devices. A duplicated VID:PID
+        # does NOT hide all matching USB hardware from the host inventory.
+        assigned = {
+            item.device.sysfs_name for item in assignments.values()
+            if item.device is not None
         }
         return {
-            key: device
-            for key, device in self._usb_inventory.items()
-            if device.usb_id not in assigned_ids
-            and device.physical_port not in assigned_ports
+            key: device for key, device in self._usb_inventory.items()
+            if key not in assigned
         }
 
     def _build_gpu_owners(
@@ -506,6 +573,7 @@ class TopologyManager:
                     "key": value.config.config_key,
                     "host": value.config.host,
                     "connected": value.device is not None,
+                    "resolution": value.resolution,
                 }
                 for key, value in sorted(usb.items())
             },

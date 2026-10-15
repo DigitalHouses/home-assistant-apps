@@ -1,13 +1,17 @@
 #!/usr/bin/perl
-# Read-only Proxmox PCI passthrough inventory. One invocation per topology refresh.
+# Read-only native PVE PCI and USB passthrough inventory. One topology refresh.
 use strict;
 use warnings;
 use JSON::PP;
 use PVE::QemuConfig;
 use PVE::QemuServer::PCI;
+use PVE::QemuServer::USB;
+use PVE::JSONSchema;
 
 my @devices;
 my @errors;
+my @usb_devices;
+my @usb_errors;
 
 for my $vmid (@ARGV) {
     die "invalid VMID\n" if $vmid !~ /\A[0-9]{1,9}\z/;
@@ -15,6 +19,10 @@ for my $vmid (@ARGV) {
     my $conf = eval { PVE::QemuConfig->load_config($vmid) };
     if ($@ || ref($conf) ne 'HASH') {
         push @errors, {
+            guest_id => "$vmid",
+            message => "unable to load VM configuration: " . ($@ || 'no configuration'),
+        };
+        push @usb_errors, {
             guest_id => "$vmid",
             message => "unable to load VM configuration: " . ($@ || 'no configuration'),
         };
@@ -75,10 +83,56 @@ for my $vmid (@ARGV) {
             };
         }
     }
+
+    for my $key (sort grep { /\Ausb[0-9]+\z/ } keys %$conf) {
+        my $options = eval {
+            PVE::JSONSchema::parse_property_string("pve-qm-usb", $conf->{$key});
+        };
+        if ($@ || ref($options) ne 'HASH') {
+            push @usb_errors, {
+                guest_id => "$vmid", config_key => $key,
+                message => "native USB configuration parser failed: " . ($@ || 'invalid response'),
+            };
+            next;
+        }
+
+        my $parsed = eval {
+            PVE::QemuServer::USB::parse_usb_device(
+                $options->{host}, $options->{mapping}
+            );
+        };
+        if ($@ || ref($parsed) ne 'HASH') {
+            push @usb_errors, {
+                guest_id => "$vmid", config_key => $key,
+                message => "native USB device parser failed: " . ($@ || 'invalid response'),
+            };
+            next;
+        }
+        # SPICE USB redirection is not attached host hardware.
+        next if $parsed->{spice};
+
+        my $record = {guest_id => "$vmid", config_key => $key};
+        if (defined($parsed->{vendorid}) && defined($parsed->{productid})) {
+            $record->{vendor_id} = lc($parsed->{vendorid});
+            $record->{product_id} = lc($parsed->{productid});
+        } elsif (defined($parsed->{hostbus}) && defined($parsed->{hostport})) {
+            $record->{physical_port} = "$parsed->{hostbus}-$parsed->{hostport}";
+        } else {
+            push @usb_errors, {
+                guest_id => "$vmid", config_key => $key,
+                message => 'native USB parser returned no device selector',
+            };
+            next;
+        }
+        push @usb_devices, $record;
+    }
+
 }
 
 print JSON::PP->new->canonical->encode({
     schema => 1,
     devices => \@devices,
     errors => \@errors,
+    usb_devices => \@usb_devices,
+    usb_errors => \@usb_errors,
 }), "\n";
