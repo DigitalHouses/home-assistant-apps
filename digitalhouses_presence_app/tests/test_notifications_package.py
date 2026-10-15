@@ -19,23 +19,31 @@ class NotificationPackageTests(unittest.TestCase):
             encoding="utf-8")
         canonical = PACKAGE.read_text(encoding="utf-8")
         self.assertIn("dh_presence_app_notification:\n  automation:", keyed)
-        self.assertEqual(keyed.count("- action: script.write2log"), 5)
-        self.assertEqual(keyed.count("data: >-"), 5)
+        self.assertEqual(keyed.count("- action: script.write2log"), 7)
+        self.assertEqual(keyed.count("data: >-"), 7)
         self.assertNotIn("  recorder:", keyed)
         source = canonical[canonical.index("automation:\n"):]
         expected = "\n".join("  " + line if line else "" for line in source.split("\n"))
         self.assertIn("dh_presence_app_notification:\n" + expected, keyed)
 
-    def test_five_notified_event_types(self):
+    def test_seven_notified_event_types(self):
         code = PACKAGE.read_text(encoding="utf-8")
-        for event in ("arrival", "departure", "wifi_in", "wifi_lost", "wifi_out"):
+        for event in ("arrival", "departure", "gps_in", "gps_out", "wifi_in", "wifi_lost", "wifi_out"):
             self.assertIn("id: " + event, code)
-        self.assertEqual(code.count("trigger: event.received"), 5)
-        self.assertEqual(code.count("action: script.write2log"), 5)
+        self.assertEqual(code.count("trigger: event.received"), 7)
+        self.assertEqual(code.count("action: script.write2log"), 7)
         self.assertEqual(code.count("action: logbook.log"), 0)
         self.assertEqual(code.count("action: persistent_notification.create"), 0)
-        self.assertNotIn("id: gps_in", code)
-        self.assertNotIn("id: gps_out", code)
+        self.assertIn("id: gps_in", code)
+        self.assertIn("id: gps_out", code)
+
+    def test_three_mqtt_switches_gate_only_write2log_notifications(self):
+        code = PACKAGE.read_text(encoding="utf-8")
+        self.assertEqual(code.count("entity_id: switch.dh_presence_app_notify_presence"), 2)
+        self.assertEqual(code.count("entity_id: switch.dh_presence_app_notify_gps"), 2)
+        self.assertEqual(code.count("entity_id: switch.dh_presence_app_notify_wifi"), 3)
+        self.assertEqual(code.count('state: "on"'), 7)
+        self.assertEqual(code.count("action: script.write2log"), 7)
 
     def test_unverified_wifi_loss_is_never_called_confirmed_disconnection(self):
         code = PACKAGE.read_text(encoding="utf-8")
@@ -90,7 +98,7 @@ class NotificationPackageTests(unittest.TestCase):
         lines = code.splitlines()
         templates = [lines[i + 1].strip() for i, line in enumerate(lines[:-1])
                      if line.strip() == "data: >-"]
-        self.assertEqual(len(templates), 5)
+        self.assertEqual(len(templates), 7)
         for template in templates:
             with self.subTest(template=template):
                 self.assertLess(len(template), 170)
@@ -109,11 +117,11 @@ class NotificationPackageTests(unittest.TestCase):
 
     def test_each_write2log_has_only_title_and_message(self):
         code = PACKAGE.read_text(encoding="utf-8")
-        self.assertEqual(code.count("- action: script.write2log"), 5)
+        self.assertEqual(code.count("- action: script.write2log"), 7)
         # Every service data field is one validated string template returning
         # a JSON dictionary, not a nested YAML dict that HA rejected.
-        self.assertEqual(code.count("data: >-"), 5)
-        self.assertEqual(code.count("} | tojson }}"), 5)
+        self.assertEqual(code.count("data: >-"), 7)
+        self.assertEqual(code.count("} | tojson }}"), 7)
         self.assertNotIn("data:\n                  title:", code)
-        self.assertEqual(code.count("'title':"), 5)
-        self.assertEqual(code.count("'message':"), 5)
+        self.assertEqual(code.count("'title':"), 7)
+        self.assertEqual(code.count("'message':"), 7)
