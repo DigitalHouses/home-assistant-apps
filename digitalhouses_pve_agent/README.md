@@ -535,3 +535,7 @@ run `pvesm` or change TrueNAS, NFS, or backup configuration.
 
 The passive monitor runs even when MQTT is temporarily disconnected. It does
 not restart any guest, reconnect a mount, or intervene in backup processes.
+
+The public notification examples use `persistent_notification.create` to work
+without private scripts. Site-specific packages can use `script.write2log`
+instead when it is installed in Home Assistant.
