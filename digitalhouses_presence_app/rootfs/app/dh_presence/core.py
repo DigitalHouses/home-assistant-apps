@@ -53,6 +53,8 @@ class Resident:
     last_gps_at: datetime | None = None
     last_wifi_at: datetime | None = None
     wifi_absent_since: datetime | None = None
+    wifi_last_probe_at: datetime | None = None
+    wifi_probe_result: str = "not_checked"
     distance: float | None = None
     initialized: bool = False
 
@@ -201,17 +203,25 @@ class Engine:
             for r in self.residents.values()]}
 
     def snapshot(self) -> dict:
-        # Wi-Fi-only has no verified Wi-Fi source in the current pilot. Never
-        # expose retained GPS-based presence as a live Wi-Fi determination.
-        wifi_unsupported = self.mode is Mode.WIFI
-        status = Status.UNAVAILABLE if wifi_unsupported else self.overall()
+        # Wi-Fi-only never inherits a retained GPS state. The positive-only
+        # pilot can prove Wi-Fi HOME, but cannot prove Wi-Fi NOT_HOME merely
+        # because a sleeping iPhone fails to answer ARP.
+        states = [r.wifi if self.mode is Mode.WIFI else r.confirmed
+                  for r in self.residents.values()]
+        status = (Status.HOME if Status.HOME in states
+                  else Status.NOT_HOME if states and all(v is Status.NOT_HOME for v in states)
+                  else Status.UNAVAILABLE)
+        residents_home = sum(v is Status.HOME for v in states)
         return {"mode": self.mode.value, "status": status.value,
                 "residents_total": len(self.residents), "gps_freshness_seconds": self.freshness_seconds,
-                "residents_home": 0 if wifi_unsupported else sum(r.confirmed is Status.HOME for r in self.residents.values()),
+                "residents_home": residents_home,
                 "residents": {r.key: {"name": r.name,
                                       "user_name": r.user_name,
-                                      "status": (Status.UNAVAILABLE.value if wifi_unsupported else r.confirmed.value),
+                                      "status": (r.wifi.value if self.mode is Mode.WIFI else r.confirmed.value),
                                       "gps": r.gps.value,
                                       "gps_reported_at": r.last_gps_at.isoformat() if r.last_gps_at else None,
-                                      "wifi": r.wifi.value}
+                                      "wifi": r.wifi.value,
+                                      "wifi_last_verified_at": r.last_wifi_at.isoformat() if r.last_wifi_at else None,
+                                      "wifi_last_probe_at": r.wifi_last_probe_at.isoformat() if r.wifi_last_probe_at else None,
+                                      "wifi_probe_result": r.wifi_probe_result}
                               for r in self.residents.values()}}
