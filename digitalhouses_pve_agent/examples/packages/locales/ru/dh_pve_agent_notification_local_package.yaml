@@ -466,8 +466,8 @@ dh_pve_agent_notification_local_package:
                     message: >-
                       Сбой доступа к NFS-хранилищу: {{ trigger.to_state.attributes.object_name | default('—', true) }} ·
                       NFS: {{ trigger.to_state.attributes.server | default('—', true) }} ·
-                      {{ 'Подтверждение' if 'examples/packages/locales/ru/dh_pve_agent_notification_local_package.yaml'.find('/ru/') >= 0 else 'Evidence' }}: {{ trigger.to_state.attributes.evidence | default('—', true) }} ·
-                      {{ 'Причина неизвестна' if 'examples/packages/locales/ru/dh_pve_agent_notification_local_package.yaml'.find('/ru/') >= 0 else 'Cause unknown' }}.
+                      Подтверждение: {{ trigger.to_state.attributes.evidence | default('—', true) }} ·
+                      Причина неизвестна.
 
             # Хранилище NFS восстановлено
             - conditions:
@@ -481,7 +481,7 @@ dh_pve_agent_notification_local_package:
                     message: >-
                       Восстановлена доступность NFS-хранилища: {{ trigger.to_state.attributes.object_name | default('—', true) }} ·
                       NFS: {{ trigger.to_state.attributes.server | default('—', true) }} ·
-                      {{ 'Длительность' if 'examples/packages/locales/ru/dh_pve_agent_notification_local_package.yaml'.find('/ru/') >= 0 else 'Duration' }}: {{ trigger.to_state.attributes.duration_seconds | default('—', true) }} s.
+                      Длительность: {{ trigger.to_state.attributes.duration_seconds | default('—', true) }} s.
 
             # Высокая температура CPU
             - conditions:
