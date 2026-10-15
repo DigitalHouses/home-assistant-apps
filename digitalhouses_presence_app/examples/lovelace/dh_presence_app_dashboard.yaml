@@ -207,48 +207,43 @@ sections:
             icon: mdi:crosshairs-gps
             features:
               - type: select-options
-          # Dynamic Mushroom cards: registered residents only; no hard-coded keys.
           - type: custom:auto-entities
             card:
               type: vertical-stack
             card_param: cards
             show_empty: false
             filter:
-              template: |
-                {% set roster = state_attr('binary_sensor.dh_presence_app_residents_home', 'residents') or {} %}
-                {% macro fmt(value) -%}
-                  {% if value | default(none, true) -%}
-                    {{ as_local(as_datetime(value)).strftime('%d.%m %H:%M:%S') }}
-                  {%- else -%}
-                    —
-                  {%- endif %}
-                {%- endmacro %}
-                [
-                {% for key, resident in roster | dictsort %}
-                  {% set who = resident.user_name | default('', true) | trim %}
-                  {% set device = resident.name | default(key, true) %}
-                  {% set label = (who if who else 'Имя не задано') ~ ' (' ~ device ~ ')' %}
-                  {% set presence = resident.status | default('unavailable', true) %}
-                  {% set gps = resident.gps | default('unavailable', true) %}
-                  {% set wifi = resident.wifi | default('unavailable', true) %}
-                  {% set present = 'Дома' if presence == 'home' else 'Вне дома' if presence == 'not_home' else 'Не определено' %}
-                  {% set gps_text = 'Дома' if gps == 'home' else 'Вне дома' if gps == 'not_home' else 'Недоступно' %}
-                  {% set wifi_text = 'Обнаружен' if wifi == 'home' else 'Не обнаружен (ARP)' if wifi == 'not_home' else 'Недоступно' %}
-                  {% set lines = 'Итог: ' ~ present ~ ' · с ' ~ fmt(resident.status_changed_at) ~ '\n'
-                     ~ 'GPS: ' ~ gps_text ~ ' · с ' ~ fmt(resident.gps_changed_at) ~ '\n'
-                     ~ 'Wi-Fi: ' ~ wifi_text ~ ' · с ' ~ fmt(resident.wifi_changed_at) %}
-                  {
-                    "type": "custom:mushroom-template-card",
-                    "entity": "binary_sensor.dh_presence_app_residents_home",
-                    "primary": {{ label | tojson }},
-                    "secondary": {{ lines | tojson }},
-                    "icon": {{ ('mdi:home-account' if presence == 'home' else 'mdi:home-export-outline' if presence == 'not_home' else 'mdi:home-question') | tojson }},
-                    "icon_color": {{ ('green' if presence == 'home' else 'blue' if presence == 'not_home' else 'amber') | tojson }},
-                    "multiline_secondary": true,
-                    "tap_action": {"action": "more-info"}
-                  }{{ ',' if not loop.last }}
-                {% endfor %}
-                ]
+              include:
+                - entity_id: "binary_sensor.dh_presence_app_*_wifi_home"
+                  options:
+                    type: custom:mushroom-template-card
+                    entity: this.entity_id
+                    primary: >-
+                      {% set key = entity | replace('binary_sensor.dh_presence_app_', '') | replace('_wifi_home', '') %}
+                      {% set roster = state_attr('binary_sensor.dh_presence_app_residents_home', 'residents') or {} %}
+                      {% set r = roster.get(key, {}) %}
+                      {{ (r.get('user_name') or 'Имя не задано') ~ ' (' ~ (r.get('name') or key) ~ ')' }}
+                    secondary: |-
+                      {% set key = entity | replace('binary_sensor.dh_presence_app_', '') | replace('_wifi_home', '') %}
+                      {% set roster = state_attr('binary_sensor.dh_presence_app_residents_home', 'residents') or {} %}
+                      {% set r = roster.get(key, {}) %}
+                      {% set presence = r.get('status', 'unavailable') %}
+                      {% set gps = r.get('gps', 'unavailable') %}
+                      {% set wifi = r.get('wifi', 'unavailable') %}
+                      Итог: {{ 'Дома' if presence == 'home' else 'Вне дома' if presence == 'not_home' else 'Не определено' }} · {{ as_local(as_datetime(r['status_changed_at'])).strftime('%d.%m %H:%M') if r.get('status_changed_at') else '—' }}
+                      GPS: {{ 'Дома' if gps == 'home' else 'Вне дома' if gps == 'not_home' else 'Недоступно' }} · {{ as_local(as_datetime(r['gps_changed_at'])).strftime('%d.%m %H:%M') if r.get('gps_changed_at') else '—' }}
+                      Wi-Fi: {{ 'Обнаружен' if wifi == 'home' else 'Не обнаружен (ARP)' if wifi == 'not_home' else 'Недоступно' }} · {{ as_local(as_datetime(r['wifi_changed_at'])).strftime('%d.%m %H:%M') if r.get('wifi_changed_at') else '—' }}
+                    icon: >-
+                      {% set key = entity | replace('binary_sensor.dh_presence_app_', '') | replace('_wifi_home', '') %}
+                      {% set r = (state_attr('binary_sensor.dh_presence_app_residents_home', 'residents') or {}).get(key, {}) %}
+                      {{ 'mdi:home-account' if r.get('status') == 'home' else 'mdi:home-export-outline' if r.get('status') == 'not_home' else 'mdi:home-question' }}
+                    color: >-
+                      {% set key = entity | replace('binary_sensor.dh_presence_app_', '') | replace('_wifi_home', '') %}
+                      {% set r = (state_attr('binary_sensor.dh_presence_app_residents_home', 'residents') or {}).get(key, {}) %}
+                      {{ 'green' if r.get('status') == 'home' else 'blue' if r.get('status') == 'not_home' else 'amber' }}
+                    multiline_secondary: true
+                    tap_action:
+                      action: more-info
           - type: custom:mushroom-chips-card
             alignment: center
             chips:
