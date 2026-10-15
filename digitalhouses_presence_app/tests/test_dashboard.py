@@ -18,9 +18,6 @@ class LovelaceCardTests(unittest.TestCase):
             "event.dh_presence_app_event",
             "sensor.dh_presence_app_started_at",
             "sensor.dh_presence_app_",
-            "_distance",
-            "_gps_home",
-            "_wifi_home",
             "attributes?.residents",
             "resident.user_name",
             "custom:mushroom-template-card",
@@ -52,7 +49,7 @@ class LovelaceCardTests(unittest.TestCase):
         self.assertIn("type: select-options", code)
         self.assertIn("Последнее подтверждение:", code)
         self.assertIn("По последним GPS-данным:", code)
-        self.assertIn("resident.gps_reported_at", code)
+        self.assertIn("resident.gps_changed_at", code)
         self.assertIn("Последние данные проверены", code)
 
     def test_universal_registry_and_controls_are_visible_without_resident_ids(self):
