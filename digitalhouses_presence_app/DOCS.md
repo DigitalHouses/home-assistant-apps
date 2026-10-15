@@ -27,6 +27,10 @@ A missing route, command failure, permission error, timeout, off-link IP, or IP/
 
 **Field observation required:** iOS may sleep through ARP while associated. The OFF state is ARP reachability, **not** an authenticated disassociation. Monitor for several days. Never treat this unaccepted experimental mechanism as sufficient to arm security or to issue safety-critical commands. Existing package uses `script.write2log` for human notifications and describes the uncertainty.
 
+## MQTT notification switches (0.1.18)
+
+Three MQTT switches are part of the single DH Presence MQTT Device: `switch.dh_presence_app_notify_presence` (default on; arrival/departure), `switch.dh_presence_app_notify_gps` (default off; gps_in/out) and `switch.dh_presence_app_notify_wifi` (default off; wifi_in/out/lost). The native App persists settings to `/data/presence_notifications.json` and republishes authoritative ON/OFF state after restarts or MQTT reconnects. Owner settings do not alter detection, events or Recorder. An unreachable/unavailable switch fails closed in the local HA automation (no `write2log` for that category); never interpret `unavailable` as ON. The local package triggers on all seven MQTT events and checks the appropriate switch before notification. Multiple switches can be on together; an owner who wants only per-source notifications can disable the Presence switch to avoid duplicate reports.
+
 ## Home Assistant local notification package
 
 For the user's existing `homeassistant: packages: !include_dir_merge_named packages` loader, use [the keyed notifications YAML](examples/packages/dh_presence_app_notification_merge_named_ru.yaml) as `dh_presence_app_notification.yaml` and keep `dh_presence_app.yaml` (Recorder) separate. Do not install the canonical keyless `!include_dir_named` example into a merge-named directory. In v0.1.17 the `wifi_out` notification explicitly describes *15 minutes of completed ARP misses*, not independently verified Wi-Fi radio disconnection.
