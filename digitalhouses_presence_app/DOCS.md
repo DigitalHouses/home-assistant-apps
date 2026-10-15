@@ -1,4 +1,4 @@
-# DigitalHouses Presence App 0.1.13 — experimental pilot
+# DigitalHouses Presence App 0.1.14 — experimental pilot
 
 ## Private administrator debug (0.1.12+, compact UI in 0.1.13)
 
@@ -18,6 +18,30 @@ MQTT or Recorder; the normal resident status API omits IP/MAC.
 The additional Lovelace admin diagnostics launcher reads
 `hass.user.is_admin` for visibility and opens the same Ingress panel.
 No manual administrator IDs or configuration changes are needed.
+
+## Wi-Fi MAC verification (0.1.14; positive evidence only)
+
+Registration persists `device_tracker`, IP and MAC. Every 60 seconds the
+App performs fresh local ARP and confirms **HOME** only when the reply MAC
+equals the enrolled MAC. Existing per-resident Wi-Fi MQTT binary sensors
+publish that home evidence without extra integrations or HA device entities.
+The probe's last verified timestamp and status are diagnostic attributes.
+The administrator Ingress page shows these observations alongside the private
+enrollment IP/MAC, while normal resident API and MQTT do not expose IP/MAC.
+
+iOS sleep, a blocked ARP reply, IP reassignment and subnet failure are
+unverified results. Keep the last positive Wi-Fi HOME up to
+`wifi_absence_minutes` (default 15); then mark the Wi-Fi source
+**unavailable**. Never generate NOT_HOME, `wifi_out`, `departure` or
+a 'last person left' notification from ARP silence. The selected `wifi`
+mode may confirm HOME but cannot yet confirm away. In `hybrid` mode,
+fresh Wi-Fi HOME corrects even an old valid GPS away report; otherwise
+the previous trusted GPS observation applies. GPS mode remains default.
+
+**This is a staged feature, not accepted full Wi-Fi presence/absence.**
+The next step must establish independent, affirmative Wi-Fi disconnection
+evidence without relying on Nmap, the router or NetAlertX. No alarm
+logic may use the Wi-Fi-only unknown state as away.
 
 ## Configuration
 The App Store's native **Configuration** tab is the supported installation and settings UI. This build deliberately does not register any custom Home Assistant frontend panel.

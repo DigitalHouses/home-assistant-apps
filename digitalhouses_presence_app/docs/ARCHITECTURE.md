@@ -92,3 +92,11 @@ HA Companion / HA user (local Wi-Fi)
   disabled AppArmor. Live field verification of source IP, Ingress isolation
   and ARP remains pending; deny higher privileges or production claims.
 - Wi-Fi presence/absence and alarm integration are out of scope.
+
+## Wi-Fi positive-only evidence (0.1.14)
+
+- One native App probe per enrolled tracker each 60s: active on-link ARP to the registered IP; compare the returned unicast MAC against the private registration file. No additional HA device or network monitor.
+- MAC match → Wi-Fi HOME; no reply/mismatch/router outage → uncertain. After `wifi_absence_minutes` of no new positive evidence, mark the source unavailable, **never NOT_HOME**. Avoid false departures caused by sleeping iOS phones.
+- Existing MQTT Wi-Fi entity and aggregate resident attribute carry only source states, probe reason and timestamps, never IP/MAC. Admin Ingress joins private enrollment records with the aggregate Wi-Fi state for debugging.
+- Pure engine uses current decision time when combining a stale-but-valid GPS report with a newer Wi-Fi proof; source GPS timestamps remain true. GPS is the deployment default.
+- Full Wi-Fi negative/disassociation proof remains pending. No router API/Nmap/NetAlertX dependencies may be introduced.

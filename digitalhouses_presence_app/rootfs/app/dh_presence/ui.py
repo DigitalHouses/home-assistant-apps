@@ -22,6 +22,7 @@ from dh_presence.registration import (
 from dh_presence.admin import (
     is_authorized_ha_admin, AdministratorVerificationUnavailable,
 )
+from dh_presence.core import resident_key
 
 LOG = logging.getLogger(__name__)
 SUPERVISOR_INGRESS = "172.30.32.2"
@@ -154,8 +155,16 @@ def admin_registration_diagnostics(token: str, registry_path: str) -> list[dict]
         for item in read_core_states(token)
         if isinstance(item, dict) and isinstance(item.get("entity_id"), str)
     }
+    aggregate = states.get("binary_sensor.dh_presence_app_residents_home", {})
+    attrs = aggregate.get("attributes", {})
+    roster = attrs.get("residents", {}) if isinstance(attrs, dict) else {}
+    if not isinstance(roster, dict):
+        roster = {}
     records = []
     for reg in registrations:
+        wifi_data = roster.get(resident_key(reg["tracker"]), {})
+        if not isinstance(wifi_data, dict):
+            wifi_data = {}
         gps = states.get(reg["tracker"], {})
         raw = gps.get("state")
         source = gps.get("attributes") or {}
@@ -165,7 +174,10 @@ def admin_registration_diagnostics(token: str, registry_path: str) -> list[dict]
             "user_name": reg["user_name"], "device_name": reg["device_name"],
             "tracker": reg["tracker"], "ip": reg["ip"], "mac": reg["mac"],
             "gps": raw if raw in ("home", "not_home") else "unavailable",
-            "wifi": "unavailable",  # not a live Wi-Fi presence engine
+            "wifi": wifi_data.get("wifi", "unavailable"),
+            "wifi_last_verified_at": wifi_data.get("wifi_last_verified_at"),
+            "wifi_last_probe_at": wifi_data.get("wifi_last_probe_at"),
+            "wifi_probe_result": wifi_data.get("wifi_probe_result", "not_checked"),
             "last_gps_at": gps.get("last_reported") or gps.get("last_updated"),
             "registration_status": "registered",
             "ip_mac_note": "Адреса проверены при регистрации; текущий IP/MAC не подтверждён",
@@ -379,6 +391,14 @@ function wifiLabel(status){
 function registrationLabel(status){
  return status==='registered'?'Зарегистрирован':'Не подтверждена';
 }
+function wifiProbeLabel(status){
+ const labels={
+  mac_verified:'MAC совпадает',no_verified_reply:'Ответа нет · присутствие неизвестно',
+  mac_mismatch:'IP принадлежит другому MAC',not_registered:'Нет привязки',
+  not_checked:'Проверка не выполнялась'
+ };
+ return labels[status]||'Нет данных';
+}
 function formattedGpsTime(value,timeZone){
  if(!value)return '—';
  const date=new Date(value);
@@ -463,7 +483,9 @@ async function loadAdminDebug(){
     debugRow('GPS tracker',device.tracker),
     debugRow('IP при регистрации',device.ip,true),
     debugRow('MAC при регистрации',device.mac,true),
-    debugRow('Последний GPS',formattedGpsTime(device.last_gps_at,data.time_zone))
+    debugRow('Последний GPS',formattedGpsTime(device.last_gps_at,data.time_zone)),
+    debugRow('Wi-Fi: подтверждён',formattedGpsTime(device.wifi_last_verified_at,data.time_zone)),
+    debugRow('Проверка Wi-Fi',wifiProbeLabel(device.wifi_probe_result))
    );
    destination.append(article);
   }

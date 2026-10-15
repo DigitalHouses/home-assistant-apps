@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.14 — Wi-Fi positive-evidence pilot
+
+- Use the existing one-time Ingress registration IP/MAC to verify a resident phone locally via fresh active ARP every 60 seconds; no Nmap, NetAlertX, router API or additional integration.
+- Matching MAC sets the resident's existing Wi-Fi MQTT binary sensor to HOME and may correct a GPS away observation in hybrid mode. IP mismatch, ARP silence, failed probe or missing registration never produce NOT_HOME.
+- After 15 minutes without another positive Wi-Fi reply, stop asserting Wi-Fi HOME and report unavailable, preserving the last confirmed household state. This is **not** verified absence; no wifi_out or last-departure event from silent iPhones.
+- Expose non-identifying last successful Wi-Fi observation and probe reason on the existing MQTT resident state and show them in administrator Ingress diagnostics; keep IP/MAC private.
+- Fix hybrid decision-time calculations when an iOS GPS tracker reports an old but valid timestamp: current Wi-Fi evidence must not be ignored by time-travelling to GPS report time.
+- Preserve GPS as default mode and maintain exact previously approved host_network/NET_RAW privileges. Wi-Fi-only can confirm HOME; absence remains unavailable until independent negative evidence is designed and field-tested.
+
 ## 0.1.13
 
 - Compact the native registration and administrator diagnostic interfaces for mobile screens.

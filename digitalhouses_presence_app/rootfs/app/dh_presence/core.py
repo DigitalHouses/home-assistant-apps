@@ -53,6 +53,8 @@ class Resident:
     last_gps_at: datetime | None = None
     last_wifi_at: datetime | None = None
     wifi_absent_since: datetime | None = None
+    wifi_last_probe_at: datetime | None = None
+    wifi_probe_result: str = "not_checked"
     distance: float | None = None
     initialized: bool = False
 
@@ -107,7 +109,7 @@ class Engine:
         # the last known position, not a failed observation. Wi-Fi evidence
         # still requires independently verified, fresh observations.
         gps = r.gps if r.last_gps_at and now >= r.last_gps_at else Status.UNAVAILABLE
-        wifi = r.wifi if r.last_wifi_at and timedelta(0) <= now-r.last_wifi_at <= timedelta(seconds=self.freshness_seconds) else Status.UNAVAILABLE
+        wifi = r.wifi if r.last_wifi_at and timedelta(0) <= now-r.last_wifi_at <= timedelta(minutes=self.wifi_absence_minutes) else Status.UNAVAILABLE
         if self.mode is Mode.GPS:
             return gps if gps is not Status.UNAVAILABLE else None
         if self.mode is Mode.WIFI:
@@ -141,22 +143,32 @@ class Engine:
             })
         r.initialized = True
 
-    def gps_observation(self, tracker: str, value: Status, when: datetime, distance: float | None = None) -> list[dict]:
+    def gps_observation(self, tracker: str, value: Status, when: datetime, distance: float | None = None,
+                        *, decision_at: datetime | None = None) -> list[dict]:
         if when.tzinfo is None or when.utcoffset() is None:
             raise ValueError("Timezone required")
         r = self.residents[tracker]
         value = Status(value)
         if r.last_gps_at is not None and when < r.last_gps_at:
             return []
+        # HA returns the same last-known iOS GPS observation on every poll.
+        # A repeated report is not new evidence and must not undo a newer
+        # Wi-Fi HOME decision after the Wi-Fi source becomes uncertain.
+        repeated = (r.initialized and r.last_gps_at == when and r.gps is value)
         before = r.gps
         r.gps = value
         r.last_gps_at = when if value is not Status.UNAVAILABLE else r.last_gps_at
         r.distance = distance if value is not Status.UNAVAILABLE else None
+        if repeated:
+            return []  # No synthetic presence events from repeated old GPS.
         events = []
         if r.initialized and before in (Status.HOME, Status.NOT_HOME) and value in (Status.HOME, Status.NOT_HOME) and before is not value:
             events.append({"event_type": "gps_in" if value is Status.HOME else "gps_out", "resident_id": r.key, "source": "gps", "observed_at": when.isoformat()})
         if value is not Status.UNAVAILABLE:
-            self._change(r, when, events)
+            # The GPS source can be days old for a stationary iPhone.
+            # Evaluate Wi-Fi evidence against current wall time, never against
+            # that old GPS observation timestamp.
+            self._change(r, decision_at or when, events)
         return events
 
     def wifi_observation(self, tracker: str, value: Status, when: datetime, *, verified: bool) -> list[dict]:
@@ -191,7 +203,7 @@ class Engine:
             # Do not erase last known GPS status/distance solely because
             # iOS has not sent a new report. Unknown source values are handled
             # explicitly by the runtime, never as a synthetic departure.
-            if r.last_wifi_at is None or now-r.last_wifi_at > timedelta(seconds=self.freshness_seconds):
+            if r.last_wifi_at is None or now-r.last_wifi_at >= timedelta(minutes=self.wifi_absence_minutes):
                 r.wifi = Status.UNAVAILABLE
                 r.wifi_absent_since = None
 
@@ -201,17 +213,25 @@ class Engine:
             for r in self.residents.values()]}
 
     def snapshot(self) -> dict:
-        # Wi-Fi-only has no verified Wi-Fi source in the current pilot. Never
-        # expose retained GPS-based presence as a live Wi-Fi determination.
-        wifi_unsupported = self.mode is Mode.WIFI
-        status = Status.UNAVAILABLE if wifi_unsupported else self.overall()
+        # Wi-Fi-only never inherits a retained GPS state. The positive-only
+        # pilot can prove Wi-Fi HOME, but cannot prove Wi-Fi NOT_HOME merely
+        # because a sleeping iPhone fails to answer ARP.
+        states = [r.wifi if self.mode is Mode.WIFI else r.confirmed
+                  for r in self.residents.values()]
+        status = (Status.HOME if Status.HOME in states
+                  else Status.NOT_HOME if states and all(v is Status.NOT_HOME for v in states)
+                  else Status.UNAVAILABLE)
+        residents_home = sum(v is Status.HOME for v in states)
         return {"mode": self.mode.value, "status": status.value,
                 "residents_total": len(self.residents), "gps_freshness_seconds": self.freshness_seconds,
-                "residents_home": 0 if wifi_unsupported else sum(r.confirmed is Status.HOME for r in self.residents.values()),
+                "residents_home": residents_home,
                 "residents": {r.key: {"name": r.name,
                                       "user_name": r.user_name,
-                                      "status": (Status.UNAVAILABLE.value if wifi_unsupported else r.confirmed.value),
+                                      "status": (r.wifi.value if self.mode is Mode.WIFI else r.confirmed.value),
                                       "gps": r.gps.value,
                                       "gps_reported_at": r.last_gps_at.isoformat() if r.last_gps_at else None,
-                                      "wifi": r.wifi.value}
+                                      "wifi": r.wifi.value,
+                                      "wifi_last_verified_at": r.last_wifi_at.isoformat() if r.last_wifi_at else None,
+                                      "wifi_last_probe_at": r.wifi_last_probe_at.isoformat() if r.wifi_last_probe_at else None,
+                                      "wifi_probe_result": r.wifi_probe_result}
                               for r in self.residents.values()}}
