@@ -28,12 +28,15 @@ class PresencePrivilegedPilotTests(unittest.TestCase):
     def test_wifi_positive_only_0114_uses_same_narrow_privileges(self):
         validate_presence_network_policy(approved(), "0.1.14")
 
+    def test_wifi_notifications_0115_keep_same_minimal_network_rights(self):
+        validate_presence_network_policy(approved(), "0.1.15")
+
     def test_old_gps_only_0110_does_not_require_raw_sockets(self):
         validate_presence_network_policy({}, "0.1.10")
 
     def test_refuse_privilege_change_in_any_unreviewed_version(self):
         with self.assertRaisesRegex(ValidationError, "Unreviewed Presence version"):
-            validate_presence_network_policy(approved(), "0.1.15")
+            validate_presence_network_policy(approved(), "0.1.16")
 
     def test_disallow_net_admin_full_access_docker_api_and_disabled_apparmor(self):
         for additional in (
