@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.18 — MQTT notification switches per household
+
+- Add three independent persistent MQTT switches in the existing DH Presence device: Notify · Presence, Notify · GPS, Notify · Wi-Fi. Defaults ON/OFF/OFF respectively to preserve core arrival/departure notices without duplicating notifications.
+- Route `arrival`/`departure`, `gps_in`/`gps_out`, and `wifi_in`/`wifi_out`/`wifi_lost` through HA package `script.write2log` only when their corresponding MQTT switch is ON. MQTT events, source checks, mode decision engine and Recorder are never filtered.
+- Persist switches under `/data/presence_notifications.json`, reject stale retained and invalid MQTT commands, publish authoritative retained ON/OFF states and restore on restart.
+- Provide updated packages for both `!include_dir_named` and `!include_dir_merge_named`. No additional HA helpers or security privileges.
+
+
 ## 0.1.17 — Hybrid Wi-Fi network-reachability pilot and Mushroom residents
 
 - Interpret only successfully completed local `arping` probes with explicit zero-reply summary as negative observations; route/interface/permission/command errors and conflicting MACs yield `unavailable` and restart the negative streak.
