@@ -90,7 +90,7 @@ def run_checked(argv: list[str], timeout: float = 5) -> str:
         # invalid interface, permission, route and subprocess errors are not.
         if (argv and argv[0] == "arping" and result.returncode == 1
                 and not result.stderr.strip()
-                and re.search(r"(?i)\\bReceived\\s+0\\s+response\\(s\\)", result.stdout)):
+                and re.search(r"(?i)\bReceived\s+0\s+response\(s\)", result.stdout)):
             raise ArpNoReply("Active on-link ARP completed without a reply")
         raise RuntimeError("Probe command failed: " + argv[0])
     return result.stdout
