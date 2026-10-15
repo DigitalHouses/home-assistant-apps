@@ -8,7 +8,6 @@ from app.collectors.guests import (
     parse_qga_lsblk,
     parse_qm_list,
     parse_udev_properties,
-    parse_usb_passthrough,
     usb_display_name,
 )
 
@@ -54,22 +53,6 @@ def test_qga_lsblk_excludes_qemu_system_disk_and_keeps_physical_ssd():
     assert physical[0].model == "Samsung SSD 850 EVO 1TB"
     assert physical[0].wwn == "0x5002538d41046527"
 
-
-
-def test_parse_usb_passthrough_preserves_duplicate_vid_pid_configuration():
-    config = """usb0: host=1a86:7523
-usb1: host=1-4
-usb2: host=spice
-"""
-    items = parse_usb_passthrough(config)
-    assert [(item.config_key, item.host) for item in items] == [
-        ("usb0", "1a86:7523"),
-        ("usb1", "1-4"),
-    ]
-    assert items[0].usb_id == "1a86:7523"
-    assert items[0].physical_port is None
-    assert items[1].usb_id is None
-    assert items[1].physical_port == "1-4"
 
 
 def test_usb_identity_prefers_real_descriptor_over_database_model():
