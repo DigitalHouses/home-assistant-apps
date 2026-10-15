@@ -248,6 +248,7 @@ sections:
                     "tap_action": {"action": "more-info"}
                   }{{ ',' if not loop.last }}
                 {% endfor %}
+                ]
           - type: custom:mushroom-chips-card
             alignment: center
             chips:
