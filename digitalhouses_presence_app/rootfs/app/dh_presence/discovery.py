@@ -141,6 +141,8 @@ def discovery(version: str, residents: list[Resident]) -> dict:
             "default_entity_id": "binary_sensor." + prefix + "_wifi_home",
             "state_topic": topic("state"),
             "value_template": "{{ 'ON' if value_json.residents['" + r.key + "'].wifi == 'home' else 'OFF' }}",
+            "json_attributes_topic": topic("state"),
+            "json_attributes_template": "{{ {'wifi_last_verified_at': value_json.residents['" + r.key + "'].wifi_last_verified_at, 'wifi_last_probe_at': value_json.residents['" + r.key + "'].wifi_last_probe_at, 'wifi_probe_result': value_json.residents['" + r.key + "'].wifi_probe_result} | tojson }}",
             "payload_on": "ON", "payload_off": "OFF",
             "availability_mode": "all",
             "availability": [
