@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.68
+
+- Expose the existing passive NFS incident status as a retained Home Assistant MQTT Discovery diagnostic sensor (`sensor.dh_pve_agent_nfs_problems`), without adding monitoring probes.
+- Update the PVE Mushroom problems card to include NFS outages, their server and start time in the combined problem count and display.
+- Keep the legacy PVE problems sensor, event topics and NFS incident persistence unchanged.
+
+
 ## 0.5.67
 
 - Add read-only NFS availability monitoring from Proxmox journald with persistent incidents and deduplicated MQTT notifications.
