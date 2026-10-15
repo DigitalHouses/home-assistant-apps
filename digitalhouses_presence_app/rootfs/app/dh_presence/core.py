@@ -109,7 +109,7 @@ class Engine:
         # the last known position, not a failed observation. Wi-Fi evidence
         # still requires independently verified, fresh observations.
         gps = r.gps if r.last_gps_at and now >= r.last_gps_at else Status.UNAVAILABLE
-        wifi = r.wifi if r.last_wifi_at and timedelta(0) <= now-r.last_wifi_at <= timedelta(seconds=self.freshness_seconds) else Status.UNAVAILABLE
+        wifi = r.wifi if r.last_wifi_at and timedelta(0) <= now-r.last_wifi_at <= timedelta(minutes=self.wifi_absence_minutes) else Status.UNAVAILABLE
         if self.mode is Mode.GPS:
             return gps if gps is not Status.UNAVAILABLE else None
         if self.mode is Mode.WIFI:
@@ -197,7 +197,7 @@ class Engine:
             # Do not erase last known GPS status/distance solely because
             # iOS has not sent a new report. Unknown source values are handled
             # explicitly by the runtime, never as a synthetic departure.
-            if r.last_wifi_at is None or now-r.last_wifi_at > timedelta(seconds=self.freshness_seconds):
+            if r.last_wifi_at is None or now-r.last_wifi_at >= timedelta(minutes=self.wifi_absence_minutes):
                 r.wifi = Status.UNAVAILABLE
                 r.wifi_absent_since = None
 
