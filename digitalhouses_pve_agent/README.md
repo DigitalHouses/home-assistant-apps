@@ -10,7 +10,7 @@ Native Linux agent for **Proxmox VE 8.x** that publishes host, CPU, memory, stor
 
 The canonical product and runtime identity is **DigitalHouses PVE Agent** / `digitalhouses_pve_agent`: systemd service `digitalhouses_pve_agent.service`, filesystem roots under `/opt/digitalhouses/digitalhouses_pve_agent`, `/etc/digitalhouses_pve_agent` and `/var/lib/digitalhouses_pve_agent`, MQTT base `DigitalHouses/Global/digitalhouses_pve_agent/<instance>`, and Home Assistant entity prefix `dh_pve_agent_*`. Version 0.5.30 performs the corrected one-time controlled migration from the former `dh_pve_app` / `dh_app_pve_*` runtime, including deterministic cleanup of retained data owned by the legacy MQTT instance namespace.
 
-Current source release: `VERSION` is `0.5.66`.
+Current source release: `VERSION` is `0.5.67`.
 
 VM USB passthrough configuration is resolved by the same read-only native Proxmox helper as PCI: `PVE::JSONSchema` and `PVE::QemuServer::USB`, including USB Resource Mapping. USB physical inventory stays sysfs-based; exact USB ports are assigned first, and ambiguous VID:PID matches remain unassigned until they can be identified without guessing. Errors are exposed as `usb_inventory_errors` and previous confirmed mappings are retained. No additional timer or MQTT entity identities.
 
@@ -424,7 +424,7 @@ Production install/update is release-tag only. Version 0.5.30 is the corrected c
 For the canonical runtime, install/update/reinstall never clears the current canonical MQTT namespace. Canonical retained MQTT cleanup is owned exclusively by the supported uninstaller.
 
 ```bash
-TAG=digitalhouses_pve_agent-v0.5.66
+TAG=digitalhouses_pve_agent-v0.5.67
 DIGITALHOUSES_SOURCE_REF="$TAG" \
   bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$TAG/digitalhouses_pve_agent/install.sh")
 ```
@@ -508,3 +508,34 @@ Live shutdown commissioning is a separate reviewed gate after code, configuratio
 Report reproducible bugs or feature requests through the repository [Issues](https://github.com/DigitalHouses/home-assistant-apps/issues). Security-sensitive reports follow the repository [security policy](../.github/SECURITY.md).
 
 DigitalHouses PVE Agent is provided under the repository [MIT License](../LICENSE).
+
+
+### Passive NFS failure monitoring (read-only)
+
+The agent watches enabled **NFS** storages in `/etc/pve/storage.cfg`, respecting
+each storage's `disable` and `nodes` settings. It does not access an NFS mount,
+run `pvesm` or change TrueNAS, NFS, or backup configuration.
+
+* Polls filtered **journald** entries every 15 seconds in a bounded worker.
+* Two `pvestatd: storage 'ID' is not online` entries within 60 seconds open
+  one incident; a matching kernel `nfs: server IP not responding` opens it immediately.
+* Treats the underlying cause as **unknown** even when NFS unavailability is
+  established. Kernel IP evidence is correlated only with a matching server
+  configured in PVE (no DNS lookup).
+* Never interprets a lack of journal errors as recovery. Recovery requires
+  two distinct, fresh PVE RRD samples newer than the last failure, separated
+  by at least 15 seconds, with 20 seconds free of new errors.
+* Persists open incidents, recent history and pending MQTT events in
+  `/var/lib/digitalhouses_pve_agent/nfs_incidents.json`.
+* Emits `storage_nfs_unavailable` and `storage_nfs_restored` on the existing
+  PVE diagnostic event topic (QoS 1, non-retained), and retained status at
+  `<agent-base>/nfs/diagnostics`. Home Assistant notification package examples
+  handle both events. Broker acknowledgement does not prove HA consumed an
+  event; if HA itself is offline, live notification delivery is not guaranteed.
+
+The passive monitor runs even when MQTT is temporarily disconnected. It does
+not restart any guest, reconnect a mount, or intervene in backup processes.
+
+The public notification examples use `persistent_notification.create` to work
+without private scripts. Site-specific packages can use `script.write2log`
+instead when it is installed in Home Assistant.

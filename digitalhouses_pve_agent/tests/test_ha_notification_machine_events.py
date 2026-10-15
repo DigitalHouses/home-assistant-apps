@@ -14,6 +14,8 @@ EVENT_TYPES = (
     "cpu_throttling_cleared",
     "storage_usage_high",
     "storage_usage_normal",
+    "storage_nfs_unavailable",
+    "storage_nfs_restored",
     "disk_temperature_high",
     "disk_temperature_normal",
     "gpu_temperature_high",

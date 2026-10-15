@@ -201,6 +201,8 @@ def test_problem_aggregate_and_native_mqtt_event_are_canonical():
         "cpu_throttling_cleared",
         "storage_usage_high",
         "storage_usage_normal",
+        "storage_nfs_unavailable",
+        "storage_nfs_restored",
         "disk_temperature_high",
         "disk_temperature_normal",
         "gpu_temperature_high",

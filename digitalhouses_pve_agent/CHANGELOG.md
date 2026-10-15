@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.67
+
+- Add read-only NFS availability monitoring from Proxmox journald with persistent incidents and deduplicated MQTT notifications.
+- Require fresh PVE storage RRD data before recording recovery; avoid calls into NFS mounts and changes to backups/TrueNAS.
+- Add Russian and English HA notification samples and regression tests for the Ruslan outage.
+
+
 ## 0.5.66
 
 - Resolve VM USB passthrough configuration through Proxmox's native `PVE::JSONSchema::parse_property_string('pve-qm-usb')` and `PVE::QemuServer::USB::parse_usb_device`, including USB Resource Mapping, using the existing read-only PCI helper and scan cadence. Remove handwritten USB configuration parsing.
