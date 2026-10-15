@@ -93,7 +93,7 @@ def test_dashboard_keeps_problem_summary_first_with_full_problem_list_and_colors
 
     first_column = text.split("heading: Производительность", 1)[0]
     for token in (
-        "type: custom:mushroom-template-card",
+        "type: custom:mushroom-legacy-template-card",
         "state_attr('sensor.dh_pve_agent_problems', 'active')",
         "item.get('object_name', 'Объект')",
         "sensor.dh_pve_agent_nfs_problems",
