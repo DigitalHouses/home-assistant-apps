@@ -75,6 +75,8 @@ class WifiEvidenceTests(unittest.TestCase):
         self.assertEqual(e.snapshot()["status"], "home")
         self.assertEqual(e.snapshot()["residents_home"], 1)
         e.expire(T0 + timedelta(minutes=6))
+        self.assertEqual(e.snapshot()["status"], "home")
+        e.expire(T0 + timedelta(minutes=16))
         self.assertEqual(e.snapshot()["status"], "unavailable")
         self.assertEqual(e.snapshot()["residents_home"], 0)
 
