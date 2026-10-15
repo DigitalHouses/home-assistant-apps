@@ -4,6 +4,7 @@ import queue
 import tempfile
 import unittest
 from pathlib import Path
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -87,7 +88,7 @@ class NotificationSwitchTests(unittest.TestCase):
         e = Engine()
         e.add("device_tracker.iphone", "iPhone")
         e.gps_observation("device_tracker.iphone", Status.HOME,
-                          __import__("datetime").datetime.now(__import__("datetime").timezone.utc))
+                          datetime.now(timezone.utc))
         with tempfile.TemporaryDirectory() as tmp:
             pref = NotificationSelection(str(Path(tmp) / "n.json"))
             output = FakeOutput()
