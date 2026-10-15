@@ -69,6 +69,28 @@ class NotificationPackageTests(unittest.TestCase):
         self.assertIn('"user_name": resident.user_name', runtime)
         self.assertIn('"device_name": resident.name', runtime)
 
+    def test_write2log_data_templates_are_short_and_self_contained(self):
+        # Long Jinja conditionals inside service data caused an actual
+        # TemplateSyntaxError on HA Core 2026.10.1 in the field.
+        code = PACKAGE.read_text(encoding="utf-8")
+        lines = code.splitlines()
+        templates = [lines[i + 1].strip() for i, line in enumerate(lines[:-1])
+                     if line.strip() == "data: >-"]
+        self.assertEqual(len(templates), 5)
+        for template in templates:
+            with self.subTest(template=template):
+                self.assertLess(len(template), 170)
+                self.assertTrue(template.startswith("{{ {"))
+                self.assertTrue(template.endswith("} | tojson }}"))
+                self.assertIn("'title':", template)
+                self.assertIn("'message':", template)
+                self.assertNotIn("trigger.to_state", template)
+        for variable in ("arrival_message:", "departure_message:",
+                         "wifi_lost_message:"):
+            self.assertIn(variable, code)
+        self.assertIn("if trigger.to_state.attributes.first_arrival", code)
+        self.assertIn("if trigger.to_state.attributes.last_departure", code)
+
     def test_each_write2log_has_only_title_and_message(self):
         code = PACKAGE.read_text(encoding="utf-8")
         self.assertEqual(code.count("- action: script.write2log"), 5)
