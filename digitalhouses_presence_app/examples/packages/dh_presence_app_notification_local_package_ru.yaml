@@ -113,8 +113,9 @@ automation:
                 state: "on"
             sequence:
               - action: script.write2log
-                data: >-
-                  {{ {'title': '🏠 Прибытие: ' ~ person_device, 'message': arrival_message} | tojson }}
+                data:
+                  title: "🏠 Прибытие: {{ person_device }}"
+                  message: "{{ arrival_message }}"
 
           - conditions:
               - condition: trigger
@@ -124,8 +125,9 @@ automation:
                 state: "on"
             sequence:
               - action: script.write2log
-                data: >-
-                  {{ {'title': '🚗 Убытие: ' ~ person_device, 'message': departure_message} | tojson }}
+                data:
+                  title: "🚗 Убытие: {{ person_device }}"
+                  message: "{{ departure_message }}"
 
           - conditions:
               - condition: trigger
@@ -135,8 +137,9 @@ automation:
                 state: "on"
             sequence:
               - action: script.write2log
-                data: >-
-                  {{ {'title': '📍 GPS дома: ' ~ person_device, 'message': 'GPS-трекер вошёл в домашнюю зону.'} | tojson }}
+                data:
+                  title: "📍 GPS дома: {{ person_device }}"
+                  message: "GPS-трекер вошёл в домашнюю зону."
 
           - conditions:
               - condition: trigger
@@ -146,8 +149,9 @@ automation:
                 state: "on"
             sequence:
               - action: script.write2log
-                data: >-
-                  {{ {'title': '📍 GPS вне дома: ' ~ person_device, 'message': 'GPS-трекер вышел из домашней зоны.'} | tojson }}
+                data:
+                  title: "📍 GPS вне дома: {{ person_device }}"
+                  message: "GPS-трекер вышел из домашней зоны."
 
           - conditions:
               - condition: trigger
@@ -157,8 +161,9 @@ automation:
                 state: "on"
             sequence:
               - action: script.write2log
-                data: >-
-                  {{ {'title': '📶 Wi-Fi обнаружен: ' ~ person_device, 'message': 'Устройство подтверждено по зарегистрированному MAC.'} | tojson }}
+                data:
+                  title: "📶 Wi-Fi обнаружен: {{ person_device }}"
+                  message: "Устройство подтверждено по зарегистрированному MAC."
 
           - conditions:
               - condition: trigger
@@ -168,8 +173,9 @@ automation:
                 state: "on"
             sequence:
               - action: script.write2log
-                data: >-
-                  {{ {'title': '📵 Wi-Fi не подтверждается: ' ~ person_device, 'message': wifi_lost_message} | tojson }}
+                data:
+                  title: "📵 Wi-Fi не подтверждается: {{ person_device }}"
+                  message: "{{ wifi_lost_message }}"
 
           - conditions:
               - condition: trigger
@@ -179,5 +185,6 @@ automation:
                 state: "on"
             sequence:
               - action: script.write2log
-                data: >-
-                  {{ {'title': '📵 Wi-Fi не обнаружен: ' ~ person_device, 'message': wifi_out_message} | tojson }}
+                data:
+                  title: "📵 Wi-Fi не обнаружен: {{ person_device }}"
+                  message: "{{ wifi_out_message }}"
