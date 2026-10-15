@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.64
+
+- Discover physical disks in TrueNAS/other VMs when Proxmox PCI passthrough uses a whole-slot address without a function suffix, such as `hostpci0: 0000:00:17`. The agent now resolves the slot to function 0 for topology discovery while leaving the VM configuration unchanged.
+- Add parser and VM700 topology regressions for a physical SATA disk discovered through QEMU Guest Agent; preserve function-qualified PCI handling and normal SMART/HA publication.
+
 ## 0.5.63
 
 - Prioritize foreground Check version and Install commands before potentially slow PVE collection, memory diagnostics and UPS background work in the agent main loop. An MQTT command wakes the loop, and the agent publishes the authoritative running transition as soon as that command is accepted. Preserve preflight and mutually exclusive operation gates.
