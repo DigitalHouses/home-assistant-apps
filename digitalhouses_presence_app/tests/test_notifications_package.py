@@ -82,6 +82,8 @@ class NotificationPackageTests(unittest.TestCase):
                 self.assertLess(len(template), 170)
                 self.assertTrue(template.startswith("{{ {"))
                 self.assertTrue(template.endswith("} | tojson }}"))
+                self.assertEqual(template.count("{{"), 1)
+                self.assertEqual(template.count("}}"), 1)
                 self.assertIn("'title':", template)
                 self.assertIn("'message':", template)
                 self.assertNotIn("trigger.to_state", template)
