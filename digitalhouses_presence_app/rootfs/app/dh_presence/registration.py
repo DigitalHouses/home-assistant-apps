@@ -18,6 +18,10 @@ from dh_presence.storage import atomic_json
 MAC_RE = re.compile(r"^(?:[0-9a-f]{2}:){5}[0-9a-f]{2}$")
 BAD_INTERFACES = ("lo", "veth", "docker", "br-", "wg", "tun", "tailscale", "zt")
 
+class ArpNoReply(RuntimeError):
+    """A valid local active ARP probe completed without a response."""
+
+
 
 def normalized_mac(raw: str) -> str:
     mac = str(raw).strip().lower()
@@ -81,6 +85,13 @@ def run_checked(argv: list[str], timeout: float = 5) -> str:
     result = subprocess.run(argv, check=False, capture_output=True, text=True,
                             timeout=timeout)
     if result.returncode != 0:
+        # iputils arping exits 1 when no response was received. Only an
+        # explicit zero-response summary with no stderr is negative evidence;
+        # invalid interface, permission, route and subprocess errors are not.
+        if (argv and argv[0] == "arping" and result.returncode == 1
+                and not result.stderr.strip()
+                and re.search(r"(?i)\\bReceived\\s+0\\s+response\\(s\\)", result.stdout)):
+            raise ArpNoReply("Active on-link ARP completed without a reply")
         raise RuntimeError("Probe command failed: " + argv[0])
     return result.stdout
 
