@@ -22,8 +22,16 @@ class FakeRunner:
         if argv and argv[0] == "perl" and argv[1].endswith("pve-pci-inventory"):
             if getattr(self, "native_failure", False):
                 raise RuntimeError("native helper unavailable")
+            usb_devices = [
+                {"guest_id": vmid, "config_key": "usb0",
+                 "vendor_id": "1a86", "product_id": "7523"}
+                for vmid in ("110", "99100") if vmid in argv[2:]
+            ]
             if getattr(self, "native_inventory", None) is not None:
-                return json.dumps(self.native_inventory)
+                payload = dict(self.native_inventory)
+                payload.setdefault("usb_devices", usb_devices)
+                payload.setdefault("usb_errors", [])
+                return json.dumps(payload)
             devices = []
             if "700" in argv[2:]:
                 devices.append({
@@ -37,7 +45,8 @@ class FakeRunner:
                     "pci_address": "0000:00:02.0", "pci_class": "0x030000",
                     "vendor_id": "0x8086", "device_id": "0x46d1",
                 })
-            return json.dumps({"schema": 1, "devices": devices, "errors": []})
+            return json.dumps({"schema": 1, "devices": devices, "errors": [],
+                               "usb_devices": usb_devices, "usb_errors": []})
         if argv[:2] == ("qm", "agent"):
             return ""
         if argv[:4] == ("udevadm", "info", "--query=property", "--path"):
@@ -286,6 +295,115 @@ def test_targeted_rescan_uses_native_helper_only_after_guest_status_change(tmp_p
     _write_pve_cache(tmp_path, vm700_status="running")
     manager.poll_guest_status()
     assert any(call[0] == "perl" and call[-1] == "700" for call in runner.calls)
+
+
+def test_native_usb_keeps_home_and_ruslan_unique_vid_pid_ownership(tmp_path: Path):
+    _write_pve_cache(tmp_path, vm700_status="running")
+    _write_usb_inventory(tmp_path)
+    runner = FakeRunner()
+    manager = _manager(tmp_path, runner)
+    snapshot = manager.full_scan()
+
+    for vmid in ("110", "99100"):
+        record = snapshot.usb[f"usb_vm_{vmid}_usb0"]
+        # Two configured VMs ask for the same USB VID/PID.
+        # A unique physical device cannot be assigned to both.
+        assert record.resolution == "ambiguous"
+        assert record.device is None
+    assert "1-3" in snapshot.host_usb
+    assert "1-4" in snapshot.host_usb
+
+
+def test_usb_single_vm_unique_physical_device_resolves(tmp_path: Path):
+    _write_pve_cache(tmp_path, vm700_status="running")
+    _write_usb_inventory(tmp_path)
+    runner = FakeRunner()
+    runner.native_inventory = {
+        "schema": 1, "devices": [], "errors": [],
+        "usb_devices": [
+            {"guest_id": "110", "config_key": "usb0",
+             "vendor_id": "1a86", "product_id": "7523"}
+        ],
+        "usb_errors": [],
+    }
+    manager = _manager(tmp_path, runner)
+    snapshot = manager.full_scan()
+    record = snapshot.usb["usb_vm_110_usb0"]
+    assert record.resolution == "resolved"
+    assert record.device.sysfs_name == "1-3"
+    assert "1-3" not in snapshot.host_usb
+    assert "1-4" in snapshot.host_usb
+
+
+def test_duplicate_usb_vid_pid_never_assigns_first_or_hides_second(tmp_path: Path):
+    _write_pve_cache(tmp_path, vm700_status="running")
+    _write_usb_inventory(tmp_path)
+    _write_usb_device(tmp_path / "usb", "1-5", vendor="1a86", product_id="7523")
+    runner = FakeRunner()
+    runner.native_inventory = {
+        "schema": 1, "devices": [], "errors": [],
+        "usb_devices": [
+            {"guest_id": "110", "config_key": "usb0",
+             "vendor_id": "1a86", "product_id": "7523"}
+        ],
+        "usb_errors": [],
+    }
+    manager = _manager(tmp_path, runner)
+    snapshot = manager.full_scan()
+    record = snapshot.usb["usb_vm_110_usb0"]
+    assert record.device is None
+    assert record.resolution == "ambiguous"
+    assert "1-3" in snapshot.host_usb and "1-5" in snapshot.host_usb
+
+
+def test_usb_explicit_port_resolves_before_vid_pid_and_targeted_rescan(tmp_path: Path):
+    _write_pve_cache(tmp_path, vm700_status="running")
+    _write_usb_inventory(tmp_path)
+    _write_usb_device(tmp_path / "usb", "1-5", vendor="1a86", product_id="7523")
+    runner = FakeRunner()
+    runner.native_inventory = {
+        "schema": 1, "devices": [], "errors": [],
+        "usb_devices": [
+            {"guest_id": "110", "config_key": "usb0", "physical_port": "1-3"},
+            {"guest_id": "99100", "config_key": "usb0",
+             "vendor_id": "1a86", "product_id": "7523"},
+        ],
+        "usb_errors": [],
+    }
+    manager = _manager(tmp_path, runner)
+    snapshot = manager.full_scan()
+    assert snapshot.usb["usb_vm_110_usb0"].device.sysfs_name == "1-3"
+    assert snapshot.usb["usb_vm_99100_usb0"].device.sysfs_name == "1-5"
+    assert "1-3" not in snapshot.host_usb and "1-5" not in snapshot.host_usb
+
+
+def test_usb_native_mapping_failure_keeps_previous_identity_and_diagnostic(tmp_path: Path):
+    _write_pve_cache(tmp_path, vm700_status="running")
+    _write_usb_inventory(tmp_path)
+    runner = FakeRunner()
+    runner.native_inventory = {
+        "schema": 1, "devices": [], "errors": [],
+        "usb_devices": [
+            {"guest_id": "110", "config_key": "usb0",
+             "vendor_id": "1a86", "product_id": "7523"}
+        ],
+        "usb_errors": [],
+    }
+    manager = _manager(tmp_path, runner)
+    manager.full_scan()
+    assert manager.snapshot.usb["usb_vm_110_usb0"].device is not None
+
+    runner.native_inventory = {
+        "schema": 1, "devices": [], "errors": [],
+        "usb_devices": [],
+        "usb_errors": [
+            {"guest_id": "110", "config_key": "usb0",
+             "message": "USB mapping not found"}
+        ],
+    }
+    snapshot = manager.full_scan()
+    assert snapshot.usb["usb_vm_110_usb0"].device is not None
+    assert "110" in manager.usb_inventory_errors()
 
 
 def test_unchanged_status_poll_uses_only_pve_cache_and_no_guest_list_subprocesses(tmp_path: Path):
