@@ -73,4 +73,7 @@ def poll_registered_wifi(
             resident.wifi_absent_since = None
         # All other no-replies preserve the last positive observation until
         # engine.expire makes it unknown. They NEVER mark NOT_HOME.
+        # Baseline first observation separately to avoid notifications from
+        # service startup when a phone was already connected to Wi-Fi.
+        resident.wifi_monitor_initialized = True
     return events
