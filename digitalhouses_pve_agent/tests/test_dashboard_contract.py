@@ -82,6 +82,15 @@ def test_dashboard_keeps_problem_summary_first_with_full_problem_list_and_colors
     system = text.index("entity: sensor.dh_pve_agent_system")
     assert problems < system
 
+    # The card uses two independent MQTT sensors and must re-render for
+    # either entity, including an NFS incident with unchanged PVE problems.
+    card = text[problems:system]
+    assert (
+        "entity_id:\n"
+        "        - sensor.dh_pve_agent_problems\n"
+        "        - sensor.dh_pve_agent_nfs_problems"
+    ) in card
+
     first_column = text.split("heading: Производительность", 1)[0]
     for token in (
         "type: custom:mushroom-template-card",
