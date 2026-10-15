@@ -413,7 +413,7 @@ def publish_snapshot(output: MqttOutput, engine: Engine, version: str, started: 
     if not output.publish(topic("state"), snapshot):
         return False
     if not output.publish(topic("diagnostics"), {"version": version, "started_at": started,
-                     "source_status": "wifi_positive_arp_only" if engine.mode is Mode.WIFI else "gps_with_positive_wifi_probe"}):
+                     "source_status": "wifi_arp_reachability_pilot" if engine.mode is Mode.WIFI else "gps_with_arp_reachability_pilot"}):
         return False
     for r in engine.residents.values():
         if r.distance is not None and not output.publish(topic("distance/"+r.key), r.distance):
@@ -464,7 +464,7 @@ def run():
     last_discovery_audit = None
     last_discovery_audit_status = None
     LOG.info("Starting %s version %s, mode=%s, configured_residents=%d", "DigitalHouses Presence App", version, engine.mode.value, len(engine.residents))
-    LOG.warning("Wi-Fi positive-only pilot: fresh MAC-matched LAN ARP establishes HOME; unanswered ARP never establishes NOT_HOME or wifi_out.")
+    LOG.warning("Experimental ARP reachability pilot: 15 minutes of completed no-reply checks sets Wi-Fi OFF; iOS sleep can appear absent.")
     if options["telemetry_enabled"]:
         LOG.warning("Experimental pilot: telemetry_enabled=true, but there is no telemetry sender; no statistics are transmitted.")
     if not engine.residents:
@@ -524,7 +524,7 @@ def run():
                         resident.initialized = False
                     LOG.info("Presence mode changed from HA UI to %s", engine.mode.value)
                     if engine.mode is Mode.WIFI:
-                        LOG.info("Wi-Fi mode requires verified MAC; missed replies become unavailable, never away")
+                        LOG.info("Wi-Fi mode: verified MAC means HOME; 15 minutes of completed ARP no-reply checks means NOT_HOME")
             # Ingress writes the private registration database atomically.
             # One engine observes the new roster without a service restart,
             # without a second Core adapter, and without synthetic events.
