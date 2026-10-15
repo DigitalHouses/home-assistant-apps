@@ -371,20 +371,29 @@ def publish_snapshot(output: MqttOutput, engine: Engine, version: str, started: 
     snapshot = engine.snapshot()
     if not output.publish(topic("mode/state"), engine.mode.value):
         return False
-    if not output.publish(topic("state"), snapshot):
+    # Source/aggregate availability must be committed BEFORE the retained
+    # snapshot. Otherwise an invalid/unconfirmed GPS or sleeping iPhone first
+    # renders as OFF and only afterwards becomes unavailable in HA Recorder.
+    # Publish after the availability update to avoid spurious false OFF edges.
+    if not output.publish(topic("presence_observed"),
+                          "offline" if snapshot["status"] == Status.UNAVAILABLE.value else "online"):
         return False
-    if not output.publish(topic("presence_observed"), "offline" if snapshot["status"] == Status.UNAVAILABLE.value else "online"):
+    for r in engine.residents.values():
+        ok = output.publish(topic("gps/"+r.key+"/availability"),
+                            "online" if r.gps is not Status.UNAVAILABLE else "offline")
+        ok = output.publish(topic("wifi/"+r.key+"/availability"),
+                            "online" if r.wifi is not Status.UNAVAILABLE else "offline") and ok
+        ok = output.publish(topic("distance/"+r.key+"/availability"),
+                            "online" if r.distance is not None else "offline") and ok
+        if not ok:
+            return False
+    if not output.publish(topic("state"), snapshot):
         return False
     if not output.publish(topic("diagnostics"), {"version": version, "started_at": started,
                      "source_status": "wifi_positive_arp_only" if engine.mode is Mode.WIFI else "gps_with_positive_wifi_probe"}):
         return False
     for r in engine.residents.values():
-        ok = output.publish(topic("gps/"+r.key+"/availability"), "online" if r.gps is not Status.UNAVAILABLE else "offline")
-        ok = output.publish(topic("wifi/"+r.key+"/availability"), "online" if r.wifi is not Status.UNAVAILABLE else "offline") and ok
-        ok = output.publish(topic("distance/"+r.key+"/availability"), "online" if r.distance is not None else "offline") and ok
-        if r.distance is not None:
-            ok = output.publish(topic("distance/"+r.key), r.distance) and ok
-        if not ok:
+        if r.distance is not None and not output.publish(topic("distance/"+r.key), r.distance):
             return False
     if not publish_controls(output, operations, version, latest_version):
         return False

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.16 — MQTT unknown-state fix
+
+- Preserve UNKNOWN/UNAVAILABLE as a distinct state in GPS, Wi-Fi and aggregate MQTT binary sensor value templates. A sleeping iPhone must not be temporarily displayed as a confirmed OFF before HA applies source availability.
+- Publish per-source and aggregate availability before each retained snapshot so Home Assistant Recorder does not see a false OFF edge before a true unavailable transition.
+- Keep stable SHA-256 resident IDs, person labels, Recorder entity IDs, event contracts, Wi-Fi positive-only evidence, 15-minute grace and the exact approved network privileges unchanged.
+- Wi-Fi notifications are driven by the independent MQTT Event entity and the HA notification package, not by every `binary_sensor` state transition. Verify the automation is active before diagnosing a missed notification.
+
 ## 0.1.15 — Wi-Fi notifications through write2log
 
 - Emit `wifi_in` on a **real** matching-MAC Wi-Fi reappearance after a startup baseline; never emit a synthetic connection solely because the App restarted.
