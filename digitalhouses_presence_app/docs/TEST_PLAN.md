@@ -64,3 +64,11 @@ Changes must be made in this repository by feature branch → PR → full CI →
 - Test `wifi` mode starts unknown until MAC match then reports HOME; `hybrid` overrides old GPS away when Wi-Fi is freshly verified. GPS default remains unchanged.
 - Field inspect the per-resident Wi-Fi binary sensor's `wifi_last_verified_at` and `wifi_probe_result` and the admin Ingress diagnostics; check private-MAC rotation and DHCP reassignment fail closed.
 - Do not mark Wi-Fi absence or 15-minute departure accepted without independent, positive disconnect evidence.
+
+## Wi-Fi notification acceptance (0.1.15)
+
+- Observe an already connected phone at App startup: first positive ARP produces **no** artificial `wifi_in`.
+- After 15 minutes with no matching MAC, expect exactly one `wifi_lost` event and a single `script.write2log` warning that Wi-Fi is **not confirmed**; no `wifi_out` or household departure.
+- Return a matching-MAC ARP reply: expect one `wifi_in` and one `script.write2log` notification. Repeated subsequent probes do not notify again.
+- Confirm MQTT Event includes `user_name`, `device_name` and `timeout_minutes` without exposing private IP/MAC.
+- Confirm the package's root keys are valid for `packages: !include_dir_named packages`; do not add a duplicate name wrapper. Test on HAOS with iPhone sleep and actual Core Recorder configuration.

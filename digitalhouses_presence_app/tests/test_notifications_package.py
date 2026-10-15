@@ -14,16 +14,26 @@ class NotificationPackageTests(unittest.TestCase):
         self.assertIn("\nautomation:\n", content)
         self.assertNotIn("\ndh_presence_app_notification_local_package:\n", content)
 
-    def test_exactly_four_notified_transition_types(self):
+    def test_five_notified_event_types(self):
         code = PACKAGE.read_text(encoding="utf-8")
-        for event in ("arrival", "departure", "wifi_in", "wifi_out"):
+        for event in ("arrival", "departure", "wifi_in", "wifi_lost", "wifi_out"):
             self.assertIn("id: " + event, code)
-        self.assertEqual(code.count("trigger: event.received"), 4)
-        self.assertEqual(code.count("action: script.write2log"), 4)
+        self.assertEqual(code.count("trigger: event.received"), 5)
+        self.assertEqual(code.count("action: script.write2log"), 5)
         self.assertEqual(code.count("action: logbook.log"), 0)
         self.assertEqual(code.count("action: persistent_notification.create"), 0)
         self.assertNotIn("id: gps_in", code)
         self.assertNotIn("id: gps_out", code)
+
+    def test_unverified_wifi_loss_is_never_called_confirmed_disconnection(self):
+        code = PACKAGE.read_text(encoding="utf-8")
+        self.assertIn("id: wifi_lost", code)
+        self.assertIn("Wi-Fi не подтверждается", code)
+        self.assertIn("Это не означает подтверждённое отключение или уход", code)
+        self.assertIn("timeout_minutes", code)
+        self.assertIn("wifi_out remains reserved", code)
+        self.assertNotIn("resident_names.", code)
+        self.assertNotIn("dh_presence_app_notification_local_package:\\n", code)
 
     def test_no_fabricated_home_security_actions(self):
         code = PACKAGE.read_text(encoding="utf-8")
@@ -61,6 +71,6 @@ class NotificationPackageTests(unittest.TestCase):
 
     def test_each_write2log_has_only_title_and_message(self):
         code = PACKAGE.read_text(encoding="utf-8")
-        self.assertEqual(code.count("- action: script.write2log"), 4)
-        self.assertEqual(code.count("title:"), 4)
-        self.assertEqual(code.count("message:"), 4)
+        self.assertEqual(code.count("- action: script.write2log"), 5)
+        self.assertEqual(code.count("title:"), 5)
+        self.assertEqual(code.count("message:"), 5)

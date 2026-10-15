@@ -32,7 +32,7 @@ DISCOVERY_FILE = "/data/presence_discovery.json"
 MODE_FILE = "/data/presence_mode.json"
 OPERATIONS_FILE = "/data/presence_refresh.json"
 REGISTRATIONS_FILE = "/data/presence_registrations.json"
-EVENT_NAMES = {"arrival", "departure", "gps_in", "gps_out", "wifi_in", "wifi_out"}
+EVENT_NAMES = {"arrival", "departure", "gps_in", "gps_out", "wifi_in", "wifi_out", "wifi_lost"}
 STOP = threading.Event()
 WAKE = threading.Event()
 
@@ -564,7 +564,7 @@ def run():
                     engine, [x for x in registrations if x["user_id"] not in options["exclude_users"]],
                     datetime.now(timezone.utc),
                 ))
-            engine.expire(datetime.now(timezone.utc))
+            events.extend(engine.expire(datetime.now(timezone.utc)))
             if name_changed and mqtt_out.connected.is_set():
                 discovery_ready = synchronize_discovery(mqtt_out, version, engine)
             # Commit durable current state BEFORE sending retained MQTT state and events.

@@ -3,7 +3,7 @@ from .core import Resident
 
 BASE = "DigitalHouses/Global/dh_presence_app"
 DISCOVERY = "homeassistant/device/dh_presence_app/config"
-EVENT_TYPES = ["arrival", "departure", "gps_in", "gps_out", "wifi_in", "wifi_out"]
+EVENT_TYPES = ["arrival", "departure", "gps_in", "gps_out", "wifi_in", "wifi_out", "wifi_lost"]
 
 
 def topic(suffix: str) -> str:
