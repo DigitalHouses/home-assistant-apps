@@ -132,6 +132,25 @@ class LovelaceCardTests(unittest.TestCase):
         self.assertIn("hass.user?.is_admin !== true", launch)
         self.assertIn("Диагностика регистрации", card)
 
+    def test_dynamic_mushroom_roster_returns_a_closed_json_array(self):
+        # Auto-Entities needs a parseable JSON list of card objects.
+        # Omitting the final ] produces an empty card without a useful
+        # frontend error; protect both the standalone and dashboard copies.
+        card = CARD.read_text(encoding="utf-8")
+        dashboard = DASHBOARD.read_text(encoding="utf-8")
+        for label, source, indent in (
+            ("standalone", card, "        "),
+            ("dashboard", dashboard, "                "),
+        ):
+            with self.subTest(label=label):
+                start = source.index("# Dynamic Mushroom cards:")
+                end = source.index("type: custom:mushroom-chips-card", start)
+                roster = source[start:end]
+                self.assertIn("\\n" + indent + "[\\n", roster)
+                self.assertIn("\\n" + indent + "{% endfor %}\\n" + indent + "]\\n", roster)
+                self.assertEqual(roster.count("{% for key, resident in roster | dictsort %}"), 1)
+                self.assertEqual(roster.count("{% endfor %}"), 1)
+
     def test_dashboard_embeds_same_card_without_drift(self):
         card = CARD.read_text(encoding="utf-8")
         dashboard = DASHBOARD.read_text(encoding="utf-8")
