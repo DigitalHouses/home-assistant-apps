@@ -140,7 +140,7 @@ class LovelaceCardTests(unittest.TestCase):
         # standalone YAML is checked for structure independently of it.
         standalone = ROOT / "examples/lovelace/presence_residents_auto_entities_ru.yaml"
         source = standalone.read_text(encoding="utf-8")
-        self.assertTrue(source.startswith("type: custom:auto-entities\\n"))
+        self.assertTrue(source.startswith("type: custom:auto-entities\n"))
         for required in (
             "card_param: cards",
             "  include:",
