@@ -172,6 +172,34 @@ def test_full_scan_builds_vm700_storage_and_vm501_gpu_ownership_without_guest_li
     assert not any(call[:2] in {("qm", "list"), ("qm", "config"), ("pct", "config")} for call in runner.calls)
 
 
+def test_full_scan_discovers_vm700_storage_with_functionless_hostpci(tmp_path: Path):
+    _write_pve_cache(tmp_path, vm700_status="running")
+    runner = FakeRunner()
+
+    def read_slot_only_config(kind: str, guest_id: str) -> str:
+        config = config_reader(kind, guest_id)
+        if kind == "vm" and guest_id == "700":
+            return config.replace("hostpci0: 0000:00:17.0", "hostpci0: 0000:00:17")
+        return config
+
+    manager = TopologyManager(
+        runner=runner,
+        dri_to_pci={},
+        config_reader=read_slot_only_config,
+        pve_root=tmp_path,
+        usb_sys_root=tmp_path / "usb",
+        node_name="pve",
+        now_epoch=lambda: 110.0,
+    )
+
+    snapshot = manager.full_scan()
+
+    assert snapshot.pci["0000:00:17.0"].owner_id == "700"
+    assert snapshot.pci["0000:00:17.0"].device.pci_class == "0106"
+    assert [source.device_path for source in manager.vm_storage_sources()] == ["/dev/sdb"]
+    assert any(call[:4] == ("qm", "guest", "exec", "700") for call in runner.calls)
+
+
 def test_unchanged_status_poll_uses_only_pve_cache_and_no_guest_list_subprocesses(tmp_path: Path):
     _write_pve_cache(tmp_path, vm700_status="running")
     runner = FakeRunner()

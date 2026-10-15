@@ -51,6 +51,17 @@ def test_parse_hostpci_resolves_storage_controller_and_gpu():
     assert gpu[0].pci_class.startswith("03")
 
 
+def test_parse_hostpci_supports_proxmox_slot_without_function():
+    catalog = parse_lspci_catalog(LSPCI_TEXT)
+
+    # PVE emits hostpci0: 0000:00:17 for whole-slot passthrough.
+    for value in ("0000:00:17", "00:17", "0000:00:17,pcie=1"):
+        storage = parse_hostpci(f"hostpci0: {value}\n", catalog)
+        assert len(storage) == 1
+        assert storage[0].pci_address == "0000:00:17.0"
+        assert storage[0].pci_class == "0106"
+
+
 def test_qga_lsblk_excludes_qemu_system_disk_and_keeps_physical_ssd():
     items = parse_qga_lsblk((FIX / "qga_lsblk_vm700.json").read_text())
     physical = [item for item in items if is_physical_guest_disk(item)]
