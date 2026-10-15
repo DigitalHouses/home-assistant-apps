@@ -143,7 +143,8 @@ class Engine:
             })
         r.initialized = True
 
-    def gps_observation(self, tracker: str, value: Status, when: datetime, distance: float | None = None) -> list[dict]:
+    def gps_observation(self, tracker: str, value: Status, when: datetime, distance: float | None = None,
+                        *, decision_at: datetime | None = None) -> list[dict]:
         if when.tzinfo is None or when.utcoffset() is None:
             raise ValueError("Timezone required")
         r = self.residents[tracker]
@@ -158,7 +159,10 @@ class Engine:
         if r.initialized and before in (Status.HOME, Status.NOT_HOME) and value in (Status.HOME, Status.NOT_HOME) and before is not value:
             events.append({"event_type": "gps_in" if value is Status.HOME else "gps_out", "resident_id": r.key, "source": "gps", "observed_at": when.isoformat()})
         if value is not Status.UNAVAILABLE:
-            self._change(r, when, events)
+            # The GPS source can be days old for a stationary iPhone.
+            # Evaluate Wi-Fi evidence against current wall time, never against
+            # that old GPS observation timestamp.
+            self._change(r, decision_at or when, events)
         return events
 
     def wifi_observation(self, tracker: str, value: Status, when: datetime, *, verified: bool) -> list[dict]:
