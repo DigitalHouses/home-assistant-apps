@@ -460,7 +460,7 @@ dh_pve_agent_notification_local_package:
                   id:
                     - storage_nfs_unavailable
               sequence:
-                - action: persistent_notification.create
+                - action: script.write2log
                   data:
                     title: "🛢️🔴 PVE: NFS-хранилище недоступно"
                     message: >-
@@ -475,7 +475,7 @@ dh_pve_agent_notification_local_package:
                   id:
                     - storage_nfs_restored
               sequence:
-                - action: persistent_notification.create
+                - action: script.write2log
                   data:
                     title: "🛢️🟢 PVE: NFS-хранилище восстановлено"
                     message: >-
@@ -489,7 +489,7 @@ dh_pve_agent_notification_local_package:
                   id:
                     - cpu_temperature_high
               sequence:
-                - action: persistent_notification.create
+                - action: script.write2log
                   data:
                     title: "🌡️⚠️ PVE: высокая температура CPU"
                     message: >-
@@ -501,7 +501,7 @@ dh_pve_agent_notification_local_package:
                   id:
                     - cpu_temperature_normal
               sequence:
-                - action: persistent_notification.create
+                - action: script.write2log
                   data:
                     title: "🌡️✅ PVE: температура CPU в норме"
                     message: >-
@@ -513,7 +513,7 @@ dh_pve_agent_notification_local_package:
                   id:
                     - cpu_throttling_started
               sequence:
-                - action: persistent_notification.create
+                - action: script.write2log
                   data:
                     title: "⚙️⚠️ PVE: CPU throttling"
                     message: >-
@@ -525,7 +525,7 @@ dh_pve_agent_notification_local_package:
                   id:
                     - cpu_throttling_cleared
               sequence:
-                - action: persistent_notification.create
+                - action: script.write2log
                   data:
                     title: "⚙️✅ PVE: CPU throttling прекратился"
                     message: >-
@@ -537,7 +537,7 @@ dh_pve_agent_notification_local_package:
                   id:
                     - storage_usage_high
               sequence:
-                - action: persistent_notification.create
+                - action: script.write2log
                   data:
                     title: "💾⚠️ PVE: заполнение хранилища {{ trigger.to_state.attributes.object_name }}"
                     message: >-
@@ -549,7 +549,7 @@ dh_pve_agent_notification_local_package:
                   id:
                     - storage_usage_normal
               sequence:
-                - action: persistent_notification.create
+                - action: script.write2log
                   data:
                     title: "💾✅ PVE: хранилище {{ trigger.to_state.attributes.object_name }} в норме"
                     message: >-
@@ -561,7 +561,7 @@ dh_pve_agent_notification_local_package:
                   id:
                     - disk_temperature_high
               sequence:
-                - action: persistent_notification.create
+                - action: script.write2log
                   data:
                     title: "🌡️⚠️ PVE: высокая температура {{ trigger.to_state.attributes.object_name }}"
                     message: >-
@@ -573,7 +573,7 @@ dh_pve_agent_notification_local_package:
                   id:
                     - disk_temperature_normal
               sequence:
-                - action: persistent_notification.create
+                - action: script.write2log
                   data:
                     title: "🌡️✅ PVE: температура {{ trigger.to_state.attributes.object_name }} в норме"
                     message: >-
@@ -585,7 +585,7 @@ dh_pve_agent_notification_local_package:
                   id:
                     - gpu_temperature_high
               sequence:
-                - action: persistent_notification.create
+                - action: script.write2log
                   data:
                     title: "🎮🌡️⚠️ PVE: высокая температура {{ trigger.to_state.attributes.object_name }}"
                     message: >-
@@ -597,7 +597,7 @@ dh_pve_agent_notification_local_package:
                   id:
                     - gpu_temperature_normal
               sequence:
-                - action: persistent_notification.create
+                - action: script.write2log
                   data:
                     title: "🎮🌡️✅ PVE: температура {{ trigger.to_state.attributes.object_name }} в норме"
                     message: >-
@@ -609,7 +609,7 @@ dh_pve_agent_notification_local_package:
                   id:
                     - fan_control_restore_failed
               sequence:
-                - action: persistent_notification.create
+                - action: script.write2log
                   data:
                     title: "🌀❌ PVE: не восстановлено управление {{ trigger.to_state.attributes.object_name }}"
                     message: >-
@@ -621,7 +621,7 @@ dh_pve_agent_notification_local_package:
                   id:
                     - fan_control_restored
               sequence:
-                - action: persistent_notification.create
+                - action: script.write2log
                   data:
                     title: "🌀✅ PVE: управление {{ trigger.to_state.attributes.object_name }} восстановлено"
                     message: >-
@@ -633,7 +633,7 @@ dh_pve_agent_notification_local_package:
                   id:
                     - disk_smart_failed
               sequence:
-                - action: persistent_notification.create
+                - action: script.write2log
                   data:
                     title: "💾🔴 PVE: SMART CRITICAL {{ trigger.to_state.attributes.object_name }}"
                     message: >-
@@ -645,7 +645,7 @@ dh_pve_agent_notification_local_package:
                   id:
                     - disk_smart_restored
               sequence:
-                - action: persistent_notification.create
+                - action: script.write2log
                   data:
                     title: "💾✅ PVE: SMART {{ trigger.to_state.attributes.object_name }} в норме"
                     message: >-
@@ -657,7 +657,7 @@ dh_pve_agent_notification_local_package:
                   id:
                     - nut_unavailable
               sequence:
-                - action: persistent_notification.create
+                - action: script.write2log
                   data:
                     title: "🔋❌ UPS: NUT недоступен"
                     message: >-
@@ -669,7 +669,7 @@ dh_pve_agent_notification_local_package:
                   id:
                     - nut_restored
               sequence:
-                - action: persistent_notification.create
+                - action: script.write2log
                   data:
                     title: "🔋✅ UPS: связь с NUT восстановлена"
                     message: >-
@@ -681,7 +681,7 @@ dh_pve_agent_notification_local_package:
                   id:
                     - power_state_unknown
               sequence:
-                - action: persistent_notification.create
+                - action: script.write2log
                   data:
                     title: "🔋⚠️ UPS: состояние питания неизвестно"
                     message: >-
@@ -693,7 +693,7 @@ dh_pve_agent_notification_local_package:
                   id:
                     - power_state_restored
               sequence:
-                - action: persistent_notification.create
+                - action: script.write2log
                   data:
                     title: "🔋✅ UPS: состояние питания определено"
                     message: >-
@@ -705,7 +705,7 @@ dh_pve_agent_notification_local_package:
                   id:
                     - line_power_lost
               sequence:
-                - action: persistent_notification.create
+                - action: script.write2log
                   data:
                     title: "🔌⚠️ Электричество отключено"
                     message: >-
@@ -717,7 +717,7 @@ dh_pve_agent_notification_local_package:
                   id:
                     - line_power_restored
               sequence:
-                - action: persistent_notification.create
+                - action: script.write2log
                   data:
                     title: "🔌✅ Электричество восстановлено"
                     message: >-
@@ -729,7 +729,7 @@ dh_pve_agent_notification_local_package:
                   id:
                     - low_battery_started
               sequence:
-                - action: persistent_notification.create
+                - action: script.write2log
                   data:
                     title: "🔋❗ UPS: низкий заряд батареи"
                     message: >-
@@ -741,7 +741,7 @@ dh_pve_agent_notification_local_package:
                   id:
                     - low_battery_cleared
               sequence:
-                - action: persistent_notification.create
+                - action: script.write2log
                   data:
                     title: "🔋✅ UPS: низкий заряд батареи снят"
                     message: >-
@@ -753,7 +753,7 @@ dh_pve_agent_notification_local_package:
                   id:
                     - high_battery_started
               sequence:
-                - action: persistent_notification.create
+                - action: script.write2log
                   data:
                     title: "🔋⚠️ UPS: HIGH BATTERY"
                     message: >-
@@ -765,7 +765,7 @@ dh_pve_agent_notification_local_package:
                   id:
                     - high_battery_cleared
               sequence:
-                - action: persistent_notification.create
+                - action: script.write2log
                   data:
                     title: "🔋✅ UPS: HIGH BATTERY снят"
                     message: >-
@@ -777,7 +777,7 @@ dh_pve_agent_notification_local_package:
                   id:
                     - replace_battery_started
               sequence:
-                - action: persistent_notification.create
+                - action: script.write2log
                   data:
                     notification_id: dh_pve_agent_ups_replace_battery
                     title: "🔋🔴 UPS: требуется замена батареи"
@@ -790,7 +790,7 @@ dh_pve_agent_notification_local_package:
                   id:
                     - replace_battery_cleared
               sequence:
-                - action: persistent_notification.create
+                - action: script.write2log
                   data:
                     notification_id: dh_pve_agent_ups_replace_battery
                     title: "🔋✅ UPS: предупреждение о замене батареи снято"
@@ -803,7 +803,7 @@ dh_pve_agent_notification_local_package:
                   id:
                     - bypass_started
               sequence:
-                - action: persistent_notification.create
+                - action: script.write2log
                   data:
                     title: "🔋⚠️ UPS: включён Bypass"
                     message: >-
@@ -815,7 +815,7 @@ dh_pve_agent_notification_local_package:
                   id:
                     - bypass_ended
               sequence:
-                - action: persistent_notification.create
+                - action: script.write2log
                   data:
                     title: "🔋✅ UPS: Bypass отключён"
                     message: >-
@@ -827,7 +827,7 @@ dh_pve_agent_notification_local_package:
                   id:
                     - calibration_started
               sequence:
-                - action: persistent_notification.create
+                - action: script.write2log
                   data:
                     title: "🔋🧪 UPS: начата калибровка"
                     message: >-
@@ -839,7 +839,7 @@ dh_pve_agent_notification_local_package:
                   id:
                     - calibration_ended
               sequence:
-                - action: persistent_notification.create
+                - action: script.write2log
                   data:
                     title: "🔋✅ UPS: калибровка завершена"
                     message: >-
@@ -851,7 +851,7 @@ dh_pve_agent_notification_local_package:
                   id:
                     - output_off
               sequence:
-                - action: persistent_notification.create
+                - action: script.write2log
                   data:
                     title: "🔋⏹️ UPS: выход отключён"
                     message: >-
@@ -863,7 +863,7 @@ dh_pve_agent_notification_local_package:
                   id:
                     - output_restored
               sequence:
-                - action: persistent_notification.create
+                - action: script.write2log
                   data:
                     title: "🔋✅ UPS: выход восстановлен"
                     message: >-
@@ -875,7 +875,7 @@ dh_pve_agent_notification_local_package:
                   id:
                     - overload_started
               sequence:
-                - action: persistent_notification.create
+                - action: script.write2log
                   data:
                     title: "🔋❌ UPS: перегрузка"
                     message: >-
@@ -887,7 +887,7 @@ dh_pve_agent_notification_local_package:
                   id:
                     - overload_cleared
               sequence:
-                - action: persistent_notification.create
+                - action: script.write2log
                   data:
                     title: "🔋✅ UPS: перегрузка устранена"
                     message: >-
@@ -899,7 +899,7 @@ dh_pve_agent_notification_local_package:
                   id:
                     - trim_started
               sequence:
-                - action: persistent_notification.create
+                - action: script.write2log
                   data:
                     title: "⚡⚠️ UPS: включён AVR Trim"
                     message: >-
@@ -922,7 +922,7 @@ dh_pve_agent_notification_local_package:
                   id:
                     - trim_ended
               sequence:
-                - action: persistent_notification.create
+                - action: script.write2log
                   data:
                     title: "⚡ℹ️ UPS: AVR Trim отключён"
                     message: >-
@@ -942,7 +942,7 @@ dh_pve_agent_notification_local_package:
                   id:
                     - boost_started
               sequence:
-                - action: persistent_notification.create
+                - action: script.write2log
                   data:
                     title: "⚡⚠️ UPS: включён AVR Boost"
                     message: >-
@@ -965,7 +965,7 @@ dh_pve_agent_notification_local_package:
                   id:
                     - boost_ended
               sequence:
-                - action: persistent_notification.create
+                - action: script.write2log
                   data:
                     title: "⚡ℹ️ UPS: AVR Boost отключён"
                     message: >-
@@ -985,7 +985,7 @@ dh_pve_agent_notification_local_package:
                   id:
                     - forced_shutdown_started
               sequence:
-                - action: persistent_notification.create
+                - action: script.write2log
                   data:
                     title: "🔋🛑 UPS: начат Forced Shutdown"
                     message: >-
@@ -997,7 +997,7 @@ dh_pve_agent_notification_local_package:
                   id:
                     - forced_shutdown_cleared
               sequence:
-                - action: persistent_notification.create
+                - action: script.write2log
                   data:
                     title: "🔋✅ UPS: Forced Shutdown завершён"
                     message: >-
@@ -1009,7 +1009,7 @@ dh_pve_agent_notification_local_package:
                   id:
                     - alarm_started
               sequence:
-                - action: persistent_notification.create
+                - action: script.write2log
                   data:
                     title: "🔋🚨 UPS: активна аварийная сигнализация"
                     message: >-
@@ -1021,7 +1021,7 @@ dh_pve_agent_notification_local_package:
                   id:
                     - alarm_cleared
               sequence:
-                - action: persistent_notification.create
+                - action: script.write2log
                   data:
                     title: "🔋✅ UPS: аварийная сигнализация снята"
                     message: >-
@@ -1033,7 +1033,7 @@ dh_pve_agent_notification_local_package:
                   id:
                     - battery_discharge_level_crossed
               sequence:
-                - action: persistent_notification.create
+                - action: script.write2log
                   data:
                     title: "🔋⚠️ UPS: заряд {{ trigger.to_state.attributes.current_charge_percent }}%"
                     message: >-
@@ -1045,7 +1045,7 @@ dh_pve_agent_notification_local_package:
                   id:
                     - battery_fully_charged
               sequence:
-                - action: persistent_notification.create
+                - action: script.write2log
                   data:
                     title: "🔋✅ UPS: батарея заряжена"
                     message: >-
@@ -1068,7 +1068,7 @@ dh_pve_agent_notification_local_package:
                   id:
                     - shutdown_committed
               sequence:
-                - action: persistent_notification.create
+                - action: script.write2log
                   data:
                     title: "🔋🛑 PVE: начато аварийное выключение"
                     message: >-
@@ -1080,7 +1080,7 @@ dh_pve_agent_notification_local_package:
                   id:
                     - config_changed
               sequence:
-                - action: persistent_notification.create
+                - action: script.write2log
                   data:
                     title: "🔋⚙️ UPS: параметры отключения изменены"
                     message: >-
