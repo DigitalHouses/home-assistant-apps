@@ -190,6 +190,15 @@ def test_problem_aggregate_and_native_mqtt_event_are_canonical():
     assert aggregate["json_attributes_topic"] == f"{topics.base}/problems/presentation"
     assert aggregate["entity_category"] == "diagnostic"
 
+    nfs = c["nfs_problems"]
+    assert nfs["platform"] == "sensor"
+    assert nfs["default_entity_id"] == "sensor.dh_pve_agent_nfs_problems"
+    assert nfs["state_topic"] == f"{topics.base}/nfs/diagnostics"
+    assert nfs["json_attributes_topic"] == nfs["state_topic"]
+    assert "value_json.active" in nfs["value_template"]
+    assert nfs["entity_category"] == "diagnostic"
+    assert nfs["availability"][0]["topic"] == topics.availability
+
     event = c["diagnostic_event"]
     assert event["platform"] == "event"
     assert event["default_entity_id"] == "event.dh_pve_agent_diagnostic"
