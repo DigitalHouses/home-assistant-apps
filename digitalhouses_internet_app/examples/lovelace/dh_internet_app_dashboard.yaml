@@ -438,7 +438,7 @@ sections:
         secondary: >-
           {% set v =
           state_attr('sensor.dh_internet_app_speedtest_status','tested_at') %}
-          {% set dt = as_datetime(v) %} {{ as_local(dt).strftime('%d.%m.%Y
+          {% set dt = as_datetime(v, none) %} {{ as_local(dt).strftime('%d.%m.%Y
           %H:%M:%S') if dt else 'No successful test' }}
         icon: mdi:clock-check-outline
         icon_color: green
