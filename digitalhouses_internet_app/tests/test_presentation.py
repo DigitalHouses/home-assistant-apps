@@ -309,6 +309,18 @@ class PresentationTests(unittest.TestCase):
         self.assertNotIn("title: Router telemetry", dashboard)
         self.assertNotIn("type: custom:auto-entities", dashboard)
 
+    def test_last_speedtest_card_handles_unavailable_timestamp(self) -> None:
+        dashboard = (
+            APP_ROOT / "examples" / "lovelace" / "dh_internet_app_dashboard.yaml"
+        ).read_text(encoding="utf-8")
+        block = dashboard.split("primary: Last Speedtest", 1)[1].split(
+            "icon: mdi:clock-check-outline", 1
+        )[0]
+
+        self.assertIn("as_datetime(v, none)", block)
+        self.assertIn("if dt else 'No successful test'", block)
+        self.assertNotIn("as_datetime(v) %}", block)
+
     def test_examples_contain_no_legacy_speedtest_entities(self) -> None:
         examples = APP_ROOT / "examples"
         for path in examples.rglob("*.yaml"):
