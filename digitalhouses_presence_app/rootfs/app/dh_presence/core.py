@@ -53,6 +53,9 @@ class Resident:
     last_gps_at: datetime | None = None
     last_wifi_at: datetime | None = None
     wifi_absent_since: datetime | None = None
+    confirmed_changed_at: datetime | None = None
+    gps_changed_at: datetime | None = None
+    wifi_changed_at: datetime | None = None
     wifi_last_probe_at: datetime | None = None
     wifi_probe_result: str = "not_checked"
     wifi_monitor_initialized: bool = False
@@ -90,7 +93,9 @@ class Engine:
         status = Status.UNAVAILABLE if saved is None else Status(saved["confirmed"])
         self.residents[tracker] = Resident(
             tracker, name.strip(), user_name=user_name.strip() if user_name else None,
-            confirmed=status
+            confirmed=status,
+            confirmed_changed_at=(datetime.fromisoformat(saved["confirmed_changed_at"])
+                if saved and saved.get("confirmed_changed_at") else None),
         )
 
     def overall(self) -> Status:
@@ -110,17 +115,18 @@ class Engine:
         # the last known position, not a failed observation. Wi-Fi evidence
         # still requires independently verified, fresh observations.
         gps = r.gps if r.last_gps_at and now >= r.last_gps_at else Status.UNAVAILABLE
-        wifi = r.wifi if r.last_wifi_at and timedelta(0) <= now-r.last_wifi_at <= timedelta(minutes=self.wifi_absence_minutes) else Status.UNAVAILABLE
+        wifi = (Status.NOT_HOME if r.wifi is Status.NOT_HOME
+                else r.wifi if r.wifi is Status.HOME and r.last_wifi_at
+                    and timedelta(0) <= now-r.last_wifi_at <= timedelta(minutes=self.wifi_absence_minutes + 2)
+                else Status.UNAVAILABLE)
         if self.mode is Mode.GPS:
             return gps if gps is not Status.UNAVAILABLE else None
         if self.mode is Mode.WIFI:
             return wifi if wifi is not Status.UNAVAILABLE else None
-        if wifi is Status.HOME:
-            return Status.HOME
-        if (wifi is Status.NOT_HOME and r.wifi_absent_since is not None
-                and now-r.wifi_absent_since >= timedelta(minutes=self.wifi_absence_minutes)
-                and r.confirmed is Status.HOME):
-            return Status.NOT_HOME
+        if wifi in (Status.HOME, Status.NOT_HOME):
+            # Hybrid uses completed, debounced ARP absence even if iOS GPS
+            # still says HOME. Infrastructure errors never produce NOT_HOME.
+            return wifi
         return gps if gps is not Status.UNAVAILABLE else None
 
     def _change(self, r: Resident, when: datetime, events: list[dict]):
@@ -131,6 +137,7 @@ class Engine:
         before = r.confirmed
         before_home = self.overall()
         r.confirmed = outcome
+        r.confirmed_changed_at = when
         after_home = self.overall()
         if r.initialized and before is not Status.UNAVAILABLE:
             events.append({
@@ -158,6 +165,8 @@ class Engine:
         repeated = (r.initialized and r.last_gps_at == when and r.gps is value)
         before = r.gps
         r.gps = value
+        if value is not Status.UNAVAILABLE and value is not before:
+            r.gps_changed_at = when
         r.last_gps_at = when if value is not Status.UNAVAILABLE else r.last_gps_at
         r.distance = distance if value is not Status.UNAVAILABLE else None
         if repeated:
@@ -185,6 +194,8 @@ class Engine:
         if value is Status.UNAVAILABLE:
             r.wifi = Status.UNAVAILABLE
             r.wifi_absent_since = None
+            if before is not Status.UNAVAILABLE:
+                r.wifi_changed_at = when
         else:
             gap = (when-r.last_wifi_at).total_seconds() if r.last_wifi_at else None
             if value is Status.NOT_HOME:
@@ -193,7 +204,9 @@ class Engine:
             else:
                 r.wifi_absent_since = None
             r.wifi = value
-            r.last_wifi_at = when
+            r.last_wifi_at = when if value is Status.HOME else r.last_wifi_at
+            if before is not value:
+                r.wifi_changed_at = when
             # Only real source transitions after the first monitor sample
             # produce link notifications. Initial probe is a baseline, not a
             # synthetic phone arrival after an App restart.
@@ -207,12 +220,48 @@ class Engine:
             self._change(r, when, events)
         return events
 
+    def wifi_no_reply(self, tracker: str, when: datetime) -> list[dict]:
+        """A completed on-link ARP probe returned no matching phone reply.
+
+        Require 15 minutes of consecutive successful negative probes. Technical
+        probe failures reset this sequence; they never become NOT_HOME.
+        """
+        r = self.residents[tracker]
+        if (r.wifi_absent_since is None or
+                (r.wifi_last_probe_at is not None
+                 and (when-r.wifi_last_probe_at).total_seconds() > 150)):
+            r.wifi_absent_since = when
+        if when-r.wifi_absent_since < timedelta(minutes=self.wifi_absence_minutes):
+            return []
+        if r.wifi is Status.NOT_HOME:
+            return []
+        before = r.wifi
+        r.wifi = Status.NOT_HOME
+        r.wifi_changed_at = when
+        events = []
+        if r.wifi_monitor_initialized and before is Status.HOME:
+            events.append({"event_type": "wifi_out", "resident_id": r.key,
+                           "source": "wifi", "observed_at": when.isoformat(),
+                           "timeout_minutes": self.wifi_absence_minutes})
+        self._change(r, when, events)
+        return events
+
+    def wifi_probe_failed(self, tracker: str, when: datetime):
+        """No validated observation. Mark only the source as unknown."""
+        r = self.residents[tracker]
+        if r.wifi is not Status.UNAVAILABLE:
+            r.wifi_changed_at = when
+        r.wifi = Status.UNAVAILABLE
+        r.wifi_absent_since = None
+
     def expire(self, now: datetime) -> list[dict]:
         events = []
         for r in self.residents.values():
             # iOS may sleep without replying to ARP. Loss of positive Wi-Fi
             # evidence after the grace period is NOT verified disconnection.
-            if r.last_wifi_at is None or now-r.last_wifi_at >= timedelta(minutes=self.wifi_absence_minutes):
+            if (r.wifi_absent_since is None
+                    and (r.last_wifi_at is None
+                         or now-r.last_wifi_at >= timedelta(minutes=self.wifi_absence_minutes))):
                 if (r.wifi is Status.HOME and r.wifi_monitor_initialized
                         and r.last_wifi_at is not None):
                     events.append({
@@ -223,13 +272,16 @@ class Engine:
                         "last_verified_at": r.last_wifi_at.isoformat(),
                         "timeout_minutes": self.wifi_absence_minutes,
                     })
+                if r.wifi is not Status.UNAVAILABLE:
+                    r.wifi_changed_at = now
                 r.wifi = Status.UNAVAILABLE
-                r.wifi_absent_since = None
         return events
 
     def persistent(self) -> dict:
         return {"schema_version": 2, "residents": [
-            {"tracker": r.tracker, "confirmed": r.confirmed.value}
+            {"tracker": r.tracker, "confirmed": r.confirmed.value,
+             "confirmed_changed_at": r.confirmed_changed_at.isoformat()
+                 if r.confirmed_changed_at else None}
             for r in self.residents.values()]}
 
     def snapshot(self) -> dict:
@@ -248,9 +300,16 @@ class Engine:
                 "residents": {r.key: {"name": r.name,
                                       "user_name": r.user_name,
                                       "status": (r.wifi.value if self.mode is Mode.WIFI else r.confirmed.value),
+                                      "status_changed_at": ((r.wifi_changed_at if self.mode is Mode.WIFI
+                                          else r.confirmed_changed_at).isoformat()
+                                          if (r.wifi_changed_at if self.mode is Mode.WIFI
+                                          else r.confirmed_changed_at) else None),
                                       "gps": r.gps.value,
+                                      "gps_changed_at": r.gps_changed_at.isoformat() if r.gps_changed_at else None,
                                       "gps_reported_at": r.last_gps_at.isoformat() if r.last_gps_at else None,
                                       "wifi": r.wifi.value,
+                                      "wifi_changed_at": r.wifi_changed_at.isoformat() if r.wifi_changed_at else None,
+                                      "wifi_no_reply_since": r.wifi_absent_since.isoformat() if r.wifi_absent_since else None,
                                       "wifi_last_verified_at": r.last_wifi_at.isoformat() if r.last_wifi_at else None,
                                       "wifi_last_probe_at": r.wifi_last_probe_at.isoformat() if r.wifi_last_probe_at else None,
                                       "wifi_probe_result": r.wifi_probe_result}
