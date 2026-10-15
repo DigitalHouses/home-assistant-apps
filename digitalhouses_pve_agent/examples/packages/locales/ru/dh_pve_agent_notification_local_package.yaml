@@ -143,6 +143,24 @@ dh_pve_agent_notification_local_package:
               - disk_smart_restored
           id: disk_smart_restored
 
+        # Хранилище NFS перестало отвечать
+        - trigger: event.received
+          target:
+            entity_id: event.dh_pve_agent_diagnostic
+          options:
+            event_type:
+              - storage_nfs_unavailable
+          id: storage_nfs_unavailable
+
+        # Хранилище NFS восстановлено
+        - trigger: event.received
+          target:
+            entity_id: event.dh_pve_agent_diagnostic
+          options:
+            event_type:
+              - storage_nfs_restored
+          id: storage_nfs_restored
+
         # UPS semantic events
         # NUT недоступен
         - trigger: event.received
@@ -436,6 +454,35 @@ dh_pve_agent_notification_local_package:
 
       actions:
         - choose:
+            # Хранилище NFS перестало отвечать
+            - conditions:
+                - condition: trigger
+                  id:
+                    - storage_nfs_unavailable
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "🛢️🔴 PVE: NFS-хранилище недоступно"
+                    message: >-
+                      Сбой доступа к NFS-хранилищу: {{ trigger.to_state.attributes.object_name | default('—', true) }} ·
+                      NFS: {{ trigger.to_state.attributes.server | default('—', true) }} ·
+                      {{ 'Подтверждение' if 'examples/packages/locales/ru/dh_pve_agent_notification_local_package.yaml'.find('/ru/') >= 0 else 'Evidence' }}: {{ trigger.to_state.attributes.evidence | default('—', true) }} ·
+                      {{ 'Причина неизвестна' if 'examples/packages/locales/ru/dh_pve_agent_notification_local_package.yaml'.find('/ru/') >= 0 else 'Cause unknown' }}.
+
+            # Хранилище NFS восстановлено
+            - conditions:
+                - condition: trigger
+                  id:
+                    - storage_nfs_restored
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "🛢️🟢 PVE: NFS-хранилище восстановлено"
+                    message: >-
+                      Восстановлена доступность NFS-хранилища: {{ trigger.to_state.attributes.object_name | default('—', true) }} ·
+                      NFS: {{ trigger.to_state.attributes.server | default('—', true) }} ·
+                      {{ 'Длительность' if 'examples/packages/locales/ru/dh_pve_agent_notification_local_package.yaml'.find('/ru/') >= 0 else 'Duration' }}: {{ trigger.to_state.attributes.duration_seconds | default('—', true) }} s.
+
             # Высокая температура CPU
             - conditions:
                 - condition: trigger
