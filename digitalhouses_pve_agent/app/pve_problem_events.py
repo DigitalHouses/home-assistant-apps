@@ -80,6 +80,7 @@ def semantic_pve_problem_event(
     observed_at: str,
     context: Mapping[str, object] | None = None,
     active_problem_count: int | None = None,
+    duration_seconds: int | None = None,
 ) -> dict[str, object]:
     event_type = _event_type(transition)
     if event_type is None:
@@ -107,6 +108,8 @@ def semantic_pve_problem_event(
     }
     if active_problem_count is not None:
         payload["active_problem_count"] = active_problem_count
+    if event_type == "cpu_throttling_cleared" and duration_seconds is not None:
+        payload["duration_seconds"] = duration_seconds
 
     if state.metric == "temperature_c":
         payload.update(
@@ -274,12 +277,17 @@ class PveProblemEventDebouncer:
         self.delay_seconds = max(0.0, float(delay_seconds))
         self._pending: dict[str, _Pending] = {}
         self._notified_active: set[str] = set()
+        # Monotonic observation timestamps for already detected problems.
+        self._started_at: dict[str, float] = {}
+        self._recovered_at: dict[str, float] = {}
 
     def observe(self, transition: ProblemTransition, *, now: float) -> None:
         problem_id = transition.current.problem_id
         event_type = transition.event_type
 
         if event_type == "problem_started":
+            self._started_at.setdefault(problem_id, float(now))
+            self._recovered_at.pop(problem_id, None)
             pending = self._pending.get(problem_id)
             if pending is not None and pending.transition.event_type == "problem_recovered":
                 self._pending.pop(problem_id, None)
@@ -298,9 +306,14 @@ class PveProblemEventDebouncer:
             if pending is not None and pending.transition.event_type == "problem_started":
                 self._pending.pop(problem_id, None)
                 if problem_id not in self._notified_active:
+                    self._started_at.pop(problem_id, None)
+                    self._recovered_at.pop(problem_id, None)
                     return
             if problem_id not in self._notified_active:
+                self._started_at.pop(problem_id, None)
+                self._recovered_at.pop(problem_id, None)
                 return
+            self._recovered_at[problem_id] = float(now)
             self._pending[problem_id] = _Pending(
                 transition=transition,
                 due_at=float(now) + self.delay_seconds,
@@ -330,6 +343,14 @@ class PveProblemEventDebouncer:
             )
         return tuple(ready)
 
+    def duration_seconds(self, problem_id: str) -> int | None:
+        """Observed active interval, excluding the recovery debounce delay."""
+        start = self._started_at.get(problem_id)
+        end = self._recovered_at.get(problem_id)
+        if start is None or end is None:
+            return None
+        return max(0, int(round(end - start)))
+
     def acknowledge(self, transition: ProblemTransition) -> None:
         problem_id = transition.current.problem_id
         pending = self._pending.get(problem_id)
@@ -339,4 +360,6 @@ class PveProblemEventDebouncer:
             self._notified_active.add(problem_id)
         elif transition.event_type == "problem_recovered":
             self._notified_active.discard(problem_id)
+            self._started_at.pop(problem_id, None)
+            self._recovered_at.pop(problem_id, None)
         self._pending.pop(problem_id, None)
