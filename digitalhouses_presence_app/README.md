@@ -1,31 +1,16 @@
 # DigitalHouses Presence App
 
-**Status: experimental GPS pilot, version 0.1.15. Verified Wi-Fi HOME only; Wi-Fi absence is not operational.** Not approved for alarm automation.
+**Status: experimental GPS + debounced ARP network-reachability pilot, version 0.1.17.** Observe for several days; do not use for alarm arming until accepted.
 
-This application belongs to `DigitalHouses/home-assistant-apps/digitalhouses_presence_app` and is installed from the Home Assistant **Settings → Apps → App Store** interface after refreshing the configured DigitalHouses repository. No separate GitHub repository, shell installer or manual copy to Home Assistant is needed.
+This application belongs to `DigitalHouses/home-assistant-apps/digitalhouses_presence_app` and is installed via **Settings → Apps → App Store**.
 
-## Native Wi-Fi presence — first safety stage (0.1.14)
+## Wi-Fi presence and hybrid mode (0.1.17)
 
-The existing registered phone IP/MAC is checked every 60 seconds through the
-App's own on-link ARP. A **fresh reply from the exact registered MAC** is
-evidence of **Wi-Fi HOME**, even if iOS GPS still reports away. This works
-with `gps`, `wifi` and `hybrid` modes using the existing MQTT Wi-Fi binary
-sensor. The default decision mode remains `gps`.
+Every 60 seconds the App probes the enrolled private LAN IP with direct `arping`. A valid reply from the exact registered MAC means Wi-Fi HOME. A *completed* ARP probe with **zero responses** for 15 consecutive minutes (configurable) means the device is not reachable by ARP: Wi-Fi binary sensor **OFF**. This may generate `wifi_out` and in `hybrid` mode an actual departure / last-person-left decision even if the last iOS GPS reading was HOME. A later verified MAC response restores HOME. Default `gps` mode remains independent of Wi-Fi absence.
 
-A sleeping iPhone may not answer ARP while it remains at home. Therefore
-**no reply, invalid route, MAC mismatch or network failure is not an absence
-event**. The last confirmed Wi-Fi HOME is retained for the configured
-`wifi_absence_minutes` (default 15), then Wi-Fi becomes **unavailable**;
-it never becomes NOT_HOME from missed ARP. No `wifi_out` or household
-departure is generated from silence. `wifi` mode shows HOME only while
-verified; otherwise unknown, not away. `hybrid` can use confirmed Wi-Fi
-HOME to correct GPS and otherwise falls back to last-known GPS.
+**Important limitation:** iOS may not answer ARP during sleep while still on Wi-Fi. Wi-Fi OFF here means *not detected by active LAN probe*, not proof of Wi-Fi being switched off. On-link route, execution or permission failures and MAC conflicts produce `unavailable` instead, reset the absence timer and never produce a negative presence transition. No Nmap, router, NetAlertX or extra HA tracking entity is required.
 
-The admin-only Ingress diagnostics also show the last MAC-verified observation
-and probe reason. IP/MAC never enter MQTT or Recorder. DHCP IP changes and
-iOS private-MAC rotation require re-verification/registration in this stage.
-A trustworthy **negative** LAN source is still required to implement the
-previously discussed 15-minute automatic departure.
+The maintained dashboard dynamically creates a Mushroom card for each configured resident (name + device): final presence status and its transition timestamp; GPS status/transition timestamp; Wi-Fi status/transition timestamp. Unknown timestamps render as a dash. All timestamps originate in the App's existing MQTT resident roster, and are shown in the browser's local timezone. There is no manual per-person YAML configuration and no IP/MAC exposed in MQTT.
 
 ## Pilot capabilities
 

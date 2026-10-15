@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.17 — Hybrid Wi-Fi network-reachability pilot and Mushroom residents
+
+- Interpret only successfully completed local `arping` probes with explicit zero-reply summary as negative observations; route/interface/permission/command errors and conflicting MACs yield `unavailable` and restart the negative streak.
+- After 15 minutes of consecutive negative ARP probes (60s poll), publish resident Wi-Fi OFF, `wifi_out`, and in `hybrid` mode override stale GPS HOME with NOT_HOME / `departure`; matching-MAC ARP reply restores HOME / `wifi_in` / `arrival`. Pure GPS mode does not use network absence.
+- Publish per-resident status transition timestamps for final decision, GPS, and Wi-Fi in the existing retained MQTT roster (no extra entities). Preserve final decision timestamp across restarts when available; never claim old timestamps are current observations.
+- Display dynamically generated per-resident Mushroom cards with localized timestamps. Update administrator diagnostics and truthful `script.write2log` Wi-Fi wording for ARP reachability rather than confirmed radio disconnection.
+- **Pilot warning:** an iPhone may sleep through ARP while still associated with Wi-Fi. `off` is network unreachability, not proof that the Wi-Fi toggle is off. Observe behavior for several days before approving this method for presence/alarm control.
+
+
 ## 0.1.16 — MQTT unknown-state fix
 
 - Preserve UNKNOWN/UNAVAILABLE as a distinct state in GPS, Wi-Fi and aggregate MQTT binary sensor value templates. A sleeping iPhone must not be temporarily displayed as a confirmed OFF before HA applies source availability.

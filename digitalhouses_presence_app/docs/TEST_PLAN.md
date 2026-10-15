@@ -65,10 +65,34 @@ Changes must be made in this repository by feature branch → PR → full CI →
 - Field inspect the per-resident Wi-Fi binary sensor's `wifi_last_verified_at` and `wifi_probe_result` and the admin Ingress diagnostics; check private-MAC rotation and DHCP reassignment fail closed.
 - Do not mark Wi-Fi absence or 15-minute departure accepted without independent, positive disconnect evidence.
 
-## Wi-Fi notification acceptance (0.1.15)
+## Wi-Fi / hybrid field observation (0.1.17 — at least 3 days)
 
-- Observe an already connected phone at App startup: first positive ARP produces **no** artificial `wifi_in`.
-- After 15 minutes with no matching MAC, expect exactly one `wifi_lost` event and a single `script.write2log` warning that Wi-Fi is **not confirmed**; no `wifi_out` or household departure.
-- Return a matching-MAC ARP reply: expect one `wifi_in` and one `script.write2log` notification. Repeated subsequent probes do not notify again.
-- Confirm MQTT Event includes `user_name`, `device_name` and `timeout_minutes` without exposing private IP/MAC.
-- Confirm the package's root keys are valid for `packages: !include_dir_named packages`; do not add a duplicate name wrapper. Test on HAOS with iPhone sleep and actual Core Recorder configuration.
+This pilot deliberately interprets completed local ARP misses as **network not
+detected** after 15 consecutive minutes, including in hybrid mode. It is not
+reliable proof of the iOS Wi-Fi toggle or association state. Do not authorize
+alarm/shutdown/security decisions based on this pilot until observed and accepted.
+
+- **On Wi-Fi, unlocked and sleeping:** log any false OFF or departure while
+  resident remains home, including the exact time, `wifi_probe_result`, and
+  timestamps in the Mushroom roster.
+- **Wi-Fi deliberately switched off:** after 15 continuous minutes with valid
+  `no_reply` probes, one Wi-Fi OFF and `wifi_out` event should occur. In
+  `hybrid`, a HOME resident may also emit `departure` (last departure only
+  if the whole household becomes NOT_HOME). No repeated notifications.
+- **Wi-Fi switched on:** one matching MAC response should restore Wi-Fi HOME,
+  `wifi_in`, and (if prior resident decision was away) `arrival`.
+- **App restart:** a first successful HOME probe is a baseline, not a
+  synthetic `wifi_in`; remembered resident decision timestamps must not be
+  rewritten to the restart time. Initial unknown timestamps display `—`.
+- **Failed probe:** disconnected network/route, execution permissions, missing
+  tool or MAC mismatch yields Wi-Fi `unavailable` and resets the 15-minute
+  negative streak; no fabricated `wifi_out` / `departure`.
+- **Dashboard:** resident roster grows automatically with registered residents
+  and displays local times for final/GPS/Wi-Fi changes. No IP/MAC leakage.
+- **Notifications:** one `script.write2log` per emitted machine event; local
+  `!include_dir_merge_named` package has only one automation and accurately
+  labels Wi-Fi OFF as ARP nonresponse, not verified radio disconnection.
+
+Observe at least 3 days of normal iOS sleep/wake, Wi-Fi off/on, and changing
+GPS reports; any false departure while actually at home must be treated as a
+failed pilot acceptance requiring adjustment or reversion to GPS mode.

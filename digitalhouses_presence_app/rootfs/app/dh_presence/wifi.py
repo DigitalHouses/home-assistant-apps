@@ -1,11 +1,9 @@
-"""Conservative native Wi-Fi presence evidence for registered phones.
+"""Native registered-MAC ARP observations: positive, completed negative, unknown.
 
-The only positive Wi-Fi signal in this pilot is a fresh, direct on-link ARP
-reply whose source MAC matches the phone's verified enrollment MAC. A missed
-reply, wrong MAC, unreachable subnet or probe error is NEVER proof of absence.
-Do not add negative presence or `wifi_out` from these observations.
-
-iOS sleep mode may silence ARP while the phone remains on Wi-Fi.
+A completed on-link ARP with zero replies can yield NOT_HOME after a continuous
+configured grace period. Infrastructure errors or conflicting MACs are unknown.
+iOS can sleep through ARP; this is experimental network reachability, not
+cryptographic proof of Wi-Fi disconnection.
 """
 from __future__ import annotations
 
@@ -14,7 +12,7 @@ from datetime import datetime, timezone
 import logging
 
 from .core import Engine, Status
-from .registration import active_arp_mac, normalized_mac
+from .registration import ArpNoReply, active_arp_mac, normalized_mac
 
 LOG = logging.getLogger(__name__)
 WIFI_PROBE_INTERVAL_SECONDS = 60
@@ -32,9 +30,10 @@ def probe_registered_phone(record: dict, arp_probe=active_arp_mac) -> WifiEviden
     expected = normalized_mac(record["mac"])
     try:
         received, interface = arp_probe(record["ip"])
+    except ArpNoReply:
+        return WifiEvidence(False, "no_reply")
     except (RuntimeError, OSError, ValueError, TimeoutError):
-        # `arping` no-reply and host-route problems are UNKNOWN, not away.
-        return WifiEvidence(False, "no_verified_reply")
+        return WifiEvidence(False, "probe_error")
     if normalized_mac(received) != expected:
         # IP reassignment or proxying: don't confuse someone else's device.
         return WifiEvidence(False, "mac_mismatch")
@@ -59,21 +58,19 @@ def poll_registered_wifi(
             resident.wifi = Status.UNAVAILABLE
             continue
         evidence = probe(record)
-        resident.wifi_last_probe_at = observed_at
-        resident.wifi_probe_result = evidence.reason
         if evidence.positive:
             events.extend(engine.wifi_observation(
                 resident.tracker, Status.HOME, observed_at, verified=True
             ))
-            # A real matching MAC updates the last confirmed Wi-Fi contact.
-        elif evidence.reason == "mac_mismatch":
-            # The saved IP now belongs to a different device; no Wi-Fi HOME
-            # evidence should survive this identity conflict.
-            resident.wifi = Status.UNAVAILABLE
-            resident.wifi_absent_since = None
-        # All other no-replies preserve the last positive observation until
-        # engine.expire makes it unknown. They NEVER mark NOT_HOME.
-        # Baseline first observation separately to avoid notifications from
-        # service startup when a phone was already connected to Wi-Fi.
+        elif evidence.reason == "no_reply":
+            events.extend(engine.wifi_no_reply(resident.tracker, observed_at))
+        else:
+            # MAC conflict, route problems and command failures are unknown,
+            # not proof that the resident left.
+            engine.wifi_probe_failed(resident.tracker, observed_at)
+        resident.wifi_last_probe_at = observed_at
+        resident.wifi_probe_result = evidence.reason
+        # First successful positive sample is a baseline, not a synthetic
+        # notification. A debounced completed negative is a later transition.
         resident.wifi_monitor_initialized = True
     return events

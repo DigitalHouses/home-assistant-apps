@@ -14,6 +14,18 @@ class NotificationPackageTests(unittest.TestCase):
         self.assertIn("\nautomation:\n", content)
         self.assertNotIn("\ndh_presence_app_notification_local_package:\n", content)
 
+    def test_merge_named_local_package_matches_canonical_notifications(self):
+        keyed = (ROOT / "examples/packages/dh_presence_app_notification_merge_named_ru.yaml").read_text(
+            encoding="utf-8")
+        canonical = PACKAGE.read_text(encoding="utf-8")
+        self.assertIn("dh_presence_app_notification:\n  automation:", keyed)
+        self.assertEqual(keyed.count("- action: script.write2log"), 5)
+        self.assertEqual(keyed.count("data: >-"), 5)
+        self.assertNotIn("  recorder:", keyed)
+        source = canonical[canonical.index("automation:\n"):]
+        expected = "\n".join("  " + line if line else "" for line in source.split("\n"))
+        self.assertIn("dh_presence_app_notification:\n" + expected, keyed)
+
     def test_five_notified_event_types(self):
         code = PACKAGE.read_text(encoding="utf-8")
         for event in ("arrival", "departure", "wifi_in", "wifi_lost", "wifi_out"):
@@ -31,9 +43,11 @@ class NotificationPackageTests(unittest.TestCase):
         self.assertIn("Wi-Fi не подтверждается", code)
         self.assertIn("Это не означает подтверждённое отключение или уход", code)
         self.assertIn("timeout_minutes", code)
-        self.assertIn("wifi_out remains reserved", code)
+        self.assertIn("wifi_out means 15m of completed ARP", code)
+        self.assertIn("wifi_out_message:", code)
+        self.assertIn("не доказательство отключения Wi-Fi", code)
         self.assertNotIn("resident_names.", code)
-        self.assertNotIn("dh_presence_app_notification_local_package:\\n", code)
+        self.assertNotIn("dh_presence_app_notification_local_package:\n", code)
 
     def test_no_fabricated_home_security_actions(self):
         code = PACKAGE.read_text(encoding="utf-8")
@@ -100,6 +114,6 @@ class NotificationPackageTests(unittest.TestCase):
         # a JSON dictionary, not a nested YAML dict that HA rejected.
         self.assertEqual(code.count("data: >-"), 5)
         self.assertEqual(code.count("} | tojson }}"), 5)
-        self.assertNotIn("data:\\n                  title:", code)
+        self.assertNotIn("data:\n                  title:", code)
         self.assertEqual(code.count("'title':"), 5)
         self.assertEqual(code.count("'message':"), 5)

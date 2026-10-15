@@ -19,29 +19,17 @@ The additional Lovelace admin diagnostics launcher reads
 `hass.user.is_admin` for visibility and opens the same Ingress panel.
 No manual administrator IDs or configuration changes are needed.
 
-## Wi-Fi MAC verification (0.1.14; positive evidence only)
+## Debounced ARP Wi-Fi presence (0.1.17 — experimental)
 
-Registration persists `device_tracker`, IP and MAC. Every 60 seconds the
-App performs fresh local ARP and confirms **HOME** only when the reply MAC
-equals the enrolled MAC. Existing per-resident Wi-Fi MQTT binary sensors
-publish that home evidence without extra integrations or HA device entities.
-The probe's last verified timestamp and status are diagnostic attributes.
-The administrator Ingress page shows these observations alongside the private
-enrollment IP/MAC, while normal resident API and MQTT do not expose IP/MAC.
+Registered iOS phone IP and MAC are retained privately; the App performs an on-link active ARP probe every 60 seconds. A reply from the enrolled MAC marks HOME. Only a successful local ARP command with an explicit *zero responses* summary counts as a negative probe. Fifteen continuous minutes of such probes mark the Wi-Fi binary sensor OFF and emit `wifi_out`. In hybrid mode, negative Wi-Fi overrules the old GPS HOME decision and can emit `departure`; a positive ARP reply emits `wifi_in` and can restore `arrival`. GPS-only mode is not affected.
 
-iOS sleep, a blocked ARP reply, IP reassignment and subnet failure are
-unverified results. Keep the last positive Wi-Fi HOME up to
-`wifi_absence_minutes` (default 15); then mark the Wi-Fi source
-**unavailable**. Never generate NOT_HOME, `wifi_out`, `departure` or
-a 'last person left' notification from ARP silence. The selected `wifi`
-mode may confirm HOME but cannot yet confirm away. In `hybrid` mode,
-fresh Wi-Fi HOME corrects even an old valid GPS away report; otherwise
-the previous trusted GPS observation applies. GPS mode remains default.
+A missing route, command failure, permission error, timeout, off-link IP, or IP/MAC conflict is **unavailable**, not OFF; it resets a negative-streak timer. This distinction is intentionally conservative. Status timestamps in the retained resident MQTT roster are `status_changed_at`, `gps_changed_at`, `wifi_changed_at`, and `wifi_no_reply_since`. `wifi_last_verified_at` remains the last positive MAC observation; `wifi_last_probe_at` is the most recent probe attempt. The maintained Lovelace dashboard renders dynamic Mushroom resident cards using these timestamps; no resident IDs are hardcoded.
 
-**This is a staged feature, not accepted full Wi-Fi presence/absence.**
-The next step must establish independent, affirmative Wi-Fi disconnection
-evidence without relying on Nmap, the router or NetAlertX. No alarm
-logic may use the Wi-Fi-only unknown state as away.
+**Field observation required:** iOS may sleep through ARP while associated. The OFF state is ARP reachability, **not** an authenticated disassociation. Monitor for several days. Never treat this unaccepted experimental mechanism as sufficient to arm security or to issue safety-critical commands. Existing package uses `script.write2log` for human notifications and describes the uncertainty.
+
+## Home Assistant local notification package
+
+For the user's existing `homeassistant: packages: !include_dir_merge_named packages` loader, use [the keyed notifications YAML](examples/packages/dh_presence_app_notification_merge_named_ru.yaml) as `dh_presence_app_notification.yaml` and keep `dh_presence_app.yaml` (Recorder) separate. Do not install the canonical keyless `!include_dir_named` example into a merge-named directory. In v0.1.17 the `wifi_out` notification explicitly describes *15 minutes of completed ARP misses*, not independently verified Wi-Fi radio disconnection.
 
 ## Configuration
 The App Store's native **Configuration** tab is the supported installation and settings UI. This build deliberately does not register any custom Home Assistant frontend panel.

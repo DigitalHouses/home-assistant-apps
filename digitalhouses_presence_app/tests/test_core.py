@@ -76,10 +76,10 @@ class TestEngine(unittest.TestCase):
         e.wifi_observation("device_tracker.iphone", Status.HOME, T0 + timedelta(seconds=5), verified=True)
         self.assertIs(e.overall(), Status.HOME)
 
-    def test_arp_gaps_do_not_prove_absence(self):
+    def test_one_negative_arp_probe_does_not_override_gps_home(self):
         e = self.engine(Mode.HYBRID)
         e.gps_observation("device_tracker.iphone", Status.HOME, T0)
-        e.wifi_observation("device_tracker.iphone", Status.NOT_HOME, T0 + timedelta(minutes=1), verified=True)
+        e.wifi_no_reply("device_tracker.iphone", T0 + timedelta(minutes=1))
         e.expire(T0 + timedelta(minutes=5))
         self.assertIs(e.overall(), Status.HOME)
 

@@ -4,9 +4,10 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+from types import SimpleNamespace
 
 from dh_presence.registration import (
-    active_arp_mac, completed_record, load_registry, normalized_mac,
+    ArpNoReply, active_arp_mac, completed_record, load_registry, normalized_mac, run_checked,
     put_registration, save_registry, validate_entry,
 )
 from dh_presence.core import Mode, Status
@@ -130,6 +131,24 @@ class RegistrationTests(unittest.TestCase):
         ]):
             with self.assertRaises(ValueError):
                 active_arp_mac("192.168.11.54")
+
+    def test_completed_arp_zero_response_is_negative_not_probe_failure(self):
+        cmd = ["arping", "-I", "enp6s18", "-c", "2", "-w", "3", "192.168.11.54"]
+        with patch("dh_presence.registration.subprocess.run", return_value=SimpleNamespace(
+                returncode=1, stdout="Sent 2 probes (2 broadcast(s))\nReceived 0 response(s)\n",
+                stderr="")):
+            with self.assertRaises(ArpNoReply):
+                run_checked(cmd)
+        with patch("dh_presence.registration.subprocess.run", return_value=SimpleNamespace(
+                returncode=1, stdout="", stderr="operation not permitted")):
+            with self.assertRaises(RuntimeError) as error:
+                run_checked(cmd)
+            self.assertNotIsInstance(error.exception, ArpNoReply)
+        with patch("dh_presence.registration.subprocess.run", return_value=SimpleNamespace(
+                returncode=2, stdout="Received 0 response(s)", stderr="")):
+            with self.assertRaises(RuntimeError) as error:
+                run_checked(cmd)
+            self.assertNotIsInstance(error.exception, ArpNoReply)
 
     def test_conflicting_arp_macs_are_rejected(self):
         with patch("dh_presence.registration.run_checked", side_effect=[

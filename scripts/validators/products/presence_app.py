@@ -6,7 +6,7 @@ from validators.common import fail, require_files
 
 
 def validate_presence_network_policy(config: dict, version: str) -> None:
-    """Scoped, explicitly authorized experimental 0.1.11–0.1.15 network policy.
+    """Scoped, reviewed experimental Presence on-link ARP network policy.
 
     The one-time phone registration probe needs on-link ARP. NET_RAW and
     host_network are allowed only for explicitly reviewed pilot versions, with protected Ingress and
@@ -20,7 +20,7 @@ def validate_presence_network_policy(config: dict, version: str) -> None:
             or config.get("host_dbus") or config.get("host_uts")
             or config.get("map")):
         fail("Presence cannot request host-wide access, unsafe mounts or elevated Supervisor role")
-    if version in ("0.1.11", "0.1.12", "0.1.13", "0.1.14", "0.1.15", "0.1.16"):
+    if version in ("0.1.11", "0.1.12", "0.1.13", "0.1.14", "0.1.15", "0.1.16", "0.1.17"):
         if config.get("host_network") is not True or config.get("privileged") != ["NET_RAW"]:
             fail("Presence experimental registration pilot permits only host_network and NET_RAW for one-time ARP")
         if (config.get("ingress") is not True

@@ -18,12 +18,12 @@ class LovelaceCardTests(unittest.TestCase):
             "event.dh_presence_app_event",
             "sensor.dh_presence_app_started_at",
             "sensor.dh_presence_app_",
-            "_distance",
-            "_gps_home",
-            "_wifi_home",
             "attributes?.residents",
             "resident.user_name",
-            "shownName",
+            "custom:mushroom-template-card",
+            "resident.status_changed_at",
+            "resident.gps_changed_at",
+            "resident.wifi_changed_at",
         ):
             with self.subTest(expected=expected):
                 self.assertIn(expected, code)
@@ -49,7 +49,7 @@ class LovelaceCardTests(unittest.TestCase):
         self.assertIn("type: select-options", code)
         self.assertIn("Последнее подтверждение:", code)
         self.assertIn("По последним GPS-данным:", code)
-        self.assertIn("resident.gps_reported_at", code)
+        self.assertIn("resident.gps_changed_at", code)
         self.assertIn("Последние данные проверены", code)
 
     def test_universal_registry_and_controls_are_visible_without_resident_ids(self):
@@ -69,17 +69,23 @@ class LovelaceCardTests(unittest.TestCase):
                 self.assertIn(item, code)
         # The dynamically discovered resident ID is not a hardcoded key.
         self.assertNotIn("39fb60fca44a2aa6", code)
-        self.assertEqual(code.count("custom:auto-entities"), 1)
+        self.assertEqual(code.count("custom:auto-entities"), 2)
 
-    def test_resident_name_precedes_device_and_missing_names_are_explicit(self):
+    def test_dynamic_mushroom_roster_has_names_states_and_transition_times(self):
         card = CARD.read_text(encoding="utf-8")
-        self.assertIn("residentLabel(a[1]).localeCompare(residentLabel(b[1]), 'ru')", card)
-        self.assertIn("typeof resident.user_name === 'string'", card)
-        self.assertIn("resident.user_name.trim()", card)
-        self.assertIn("const shownName = (personName || 'Имя не задано')", card)
-        self.assertIn("+ ' (' + deviceName + ')'", card)
-        # Friendly phone labels are never used as invented human names.
-        self.assertNotIn("(personName || deviceName)", card)
+        self.assertIn("roster | dictsort", card)
+        self.assertIn("resident.user_name", card)
+        self.assertIn("resident.name", card)
+        self.assertIn("Имя не задано", card)
+        self.assertIn("custom:mushroom-template-card", card)
+        self.assertIn("multiline_secondary", card)
+        self.assertIn("as_local(as_datetime(value))", card)
+        for attr in ("status_changed_at", "gps_changed_at", "wifi_changed_at"):
+            self.assertIn("resident." + attr, card)
+        self.assertIn("Не обнаружен (ARP)", card)
+        self.assertIn("Hybrid · GPS + Wi-Fi", card)
+        self.assertNotIn("Hybrid: пока только GPS", card)
+        self.assertNotIn("39fb60fca44a2aa6", card)
 
     def test_single_install_ingress_without_custom_registration_resources(self):
         card = CARD.read_text(encoding="utf-8")
