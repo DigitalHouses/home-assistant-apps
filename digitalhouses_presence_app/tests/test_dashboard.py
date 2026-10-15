@@ -19,11 +19,13 @@ class LovelaceCardTests(unittest.TestCase):
             "sensor.dh_presence_app_started_at",
             "sensor.dh_presence_app_",
             "attributes?.residents",
-            "resident.user_name",
             "custom:mushroom-template-card",
-            "resident.status_changed_at",
-            "resident.gps_changed_at",
-            "resident.wifi_changed_at",
+            "entity: this.entity_id",
+            "binary_sensor.dh_presence_app_*_wifi_home",
+            "r.get('user_name')",
+            "r.get('status_changed_at')",
+            "r.get('gps_changed_at')",
+            "r.get('wifi_changed_at')",
         ):
             with self.subTest(expected=expected):
                 self.assertIn(expected, code)
@@ -49,7 +51,7 @@ class LovelaceCardTests(unittest.TestCase):
         self.assertIn("type: select-options", code)
         self.assertIn("Последнее подтверждение:", code)
         self.assertIn("По последним GPS-данным:", code)
-        self.assertIn("resident.gps_changed_at", code)
+        self.assertIn("r.get('gps_changed_at')", code)
         self.assertIn("Последние данные проверены", code)
 
     def test_universal_registry_and_controls_are_visible_without_resident_ids(self):
@@ -73,19 +75,20 @@ class LovelaceCardTests(unittest.TestCase):
 
     def test_dynamic_mushroom_roster_has_names_states_and_transition_times(self):
         card = CARD.read_text(encoding="utf-8")
-        self.assertIn("roster | dictsort", card)
-        self.assertIn("resident.user_name", card)
-        self.assertIn("resident.name", card)
-        self.assertIn("Имя не задано", card)
+        self.assertIn('entity_id: "binary_sensor.dh_presence_app_*_wifi_home"', card)
+        self.assertIn("entity: this.entity_id", card)
         self.assertIn("custom:mushroom-template-card", card)
-        self.assertIn("multiline_secondary", card)
-        self.assertIn("as_local(as_datetime(value))", card)
+        self.assertIn("multiline_secondary: true", card)
+        self.assertIn("r.get('user_name')", card)
+        self.assertIn("r.get('name')", card)
+        self.assertIn("Имя не задано", card)
         for attr in ("status_changed_at", "gps_changed_at", "wifi_changed_at"):
-            self.assertIn("resident." + attr, card)
+            self.assertIn(attr, card)
         self.assertIn("Не обнаружен (ARP)", card)
         self.assertIn("Hybrid · GPS + Wi-Fi", card)
         self.assertNotIn("Hybrid: пока только GPS", card)
         self.assertNotIn("39fb60fca44a2aa6", card)
+        self.assertNotIn("roster | dictsort", card)
 
     def test_single_install_ingress_without_custom_registration_resources(self):
         card = CARD.read_text(encoding="utf-8")
@@ -131,6 +134,33 @@ class LovelaceCardTests(unittest.TestCase):
         self.assertIn("hidden:", launch)
         self.assertIn("hass.user?.is_admin !== true", launch)
         self.assertIn("Диагностика регистрации", card)
+
+    def test_auto_entities_uses_native_filter_not_generated_json(self):
+        # The CI Presence runner deliberately has no PyYAML dependency; the
+        # standalone YAML is checked for structure independently of it.
+        standalone = ROOT / "examples/lovelace/presence_residents_auto_entities_ru.yaml"
+        source = standalone.read_text(encoding="utf-8")
+        self.assertTrue(source.startswith("type: custom:auto-entities\n"))
+        for required in (
+            "card_param: cards",
+            "  include:",
+            'entity_id: "binary_sensor.dh_presence_app_*_wifi_home"',
+            "type: custom:mushroom-template-card",
+            "entity: this.entity_id",
+            "multiline_secondary: true",
+            "status_changed_at",
+            "gps_changed_at",
+            "wifi_changed_at",
+        ):
+            with self.subTest(required=required):
+                self.assertIn(required, source)
+        self.assertNotIn("  template: |", source)
+        self.assertNotIn("roster | dictsort", source)
+        for file in (CARD, DASHBOARD):
+            content = file.read_text(encoding="utf-8")
+            self.assertIn('entity_id: "binary_sensor.dh_presence_app_*_wifi_home"', content)
+            self.assertIn("entity: this.entity_id", content)
+            self.assertNotIn("roster | dictsort", content)
 
     def test_dashboard_embeds_same_card_without_drift(self):
         card = CARD.read_text(encoding="utf-8")
