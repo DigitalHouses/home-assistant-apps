@@ -396,11 +396,16 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
     memory_worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix="dh-pve-memory")
     memory_pending = None
     memory_force_due = False
-    nfs_monitor = NfsFailureMonitor(
-        StateStore(state_dir / "nfs_incidents.json"),
-        node_name=resolve_identity(config.general).hostname,
-        bridge=bridge,
-    )
+    try:
+        nfs_monitor = NfsFailureMonitor(
+            StateStore(state_dir / "nfs_incidents.json"),
+            node_name=resolve_identity(config.general).hostname,
+            bridge=bridge,
+        )
+    except Exception:
+        # Corrupt advisory monitor state must never prevent PVE/UPS startup.
+        log.exception("NFS monitor init failed; PVE/UPS monitoring continues")
+        nfs_monitor = None
     nfs_worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix="dh-pve-nfs")
     nfs_pending = None
     nfs_last_check: float | None = None
@@ -661,7 +666,8 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
                     nfs_pending = None
             nfs_now = time.monotonic()
             if (
-                nfs_pending is None
+                nfs_monitor is not None
+                and nfs_pending is None
                 and (nfs_last_check is None or nfs_now - nfs_last_check >= NFS_POLL_SECONDS)
             ):
                 nfs_last_check = nfs_now
