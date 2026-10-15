@@ -101,8 +101,8 @@ sub parse_hostpci {
 """)
     jsonschema = tmp_path / "PVE" / "JSONSchema.pm"
     usb = tmp_path / "PVE" / "QemuServer" / "USB.pm"
-    jsonschema.write_text("package PVE::JSONSchema; 1;\\n".replace("\\\\n", "\\n"))
-    usb.write_text("package PVE::QemuServer::USB; 1;\\n".replace("\\\\n", "\\n"))
+    jsonschema.write_text("package PVE::JSONSchema; 1;\n")
+    usb.write_text("package PVE::QemuServer::USB; 1;\n")
     result = subprocess.run(
         ["perl", "-I", str(tmp_path), str(SCRIPT), "700", "701", "702"],
         capture_output=True, text=True, check=True, timeout=10,
