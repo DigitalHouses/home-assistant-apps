@@ -488,15 +488,14 @@ def test_usb_topology_keeps_duplicate_vm_assignments_and_host_devices(tmp_path: 
     snapshot = manager.full_scan()
 
     assert sorted(snapshot.usb) == ["usb_vm_110_usb0", "usb_vm_99100_usb0"]
-    assert snapshot.usb["usb_vm_110_usb0"].device is not None
-    assert snapshot.usb["usb_vm_110_usb0"].device.usb_id == "1a86:7523"
-    assert snapshot.usb["usb_vm_110_usb0"].device.display_name == (
-        "QinHeng Electronics CH340 serial converter"
-    )
-    assert snapshot.usb["usb_vm_99100_usb0"].device is not None
+    assert snapshot.usb["usb_vm_110_usb0"].device is None
+    assert snapshot.usb["usb_vm_99100_usb0"].device is None
+    assert snapshot.usb["usb_vm_110_usb0"].resolution == "ambiguous"
+    assert snapshot.usb["usb_vm_99100_usb0"].resolution == "ambiguous"
 
     assert sorted(device.usb_id for device in snapshot.host_usb.values()) == [
         "0764:0601",
+        "1a86:7523",
         "8087:0026",
     ]
     assert {
@@ -504,6 +503,7 @@ def test_usb_topology_keeps_duplicate_vm_assignments_and_host_devices(tmp_path: 
         for device in snapshot.host_usb.values()
     } == {
         "0764:0601": "Cyber Power System, Inc. PR3000ELCDSL",
+        "1a86:7523": "QinHeng Electronics CH340 serial converter",
         "8087:0026": "Intel Corp. AX201 Bluetooth",
     }
 
