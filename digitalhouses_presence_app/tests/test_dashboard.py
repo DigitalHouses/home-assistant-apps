@@ -30,6 +30,12 @@ class LovelaceCardTests(unittest.TestCase):
             with self.subTest(expected=expected):
                 self.assertIn(expected, code)
 
+    def test_notification_switches_visible_in_both_cards(self):
+        for path in (CARD, DASHBOARD):
+            s = path.read_text(encoding="utf-8")
+            for key in ("presence", "gps", "wifi"):
+                self.assertIn("switch.dh_presence_app_notify_" + key, s)
+
     def test_real_operations_and_native_supervisor_boundaries(self):
         code = CARD.read_text(encoding="utf-8")
         runtime = (ROOT / "rootfs/app/app.py").read_text(encoding="utf-8")

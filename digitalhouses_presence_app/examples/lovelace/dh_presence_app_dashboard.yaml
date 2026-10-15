@@ -207,6 +207,20 @@ sections:
             icon: mdi:crosshairs-gps
             features:
               - type: select-options
+          - type: entities
+            title: Уведомления DH Presence
+            show_header_toggle: false
+            entities:
+              - entity: switch.dh_presence_app_notify_presence
+                name: Итоговое присутствие
+                icon: mdi:home-account
+              - entity: switch.dh_presence_app_notify_gps
+                name: GPS
+                icon: mdi:crosshairs-gps
+              - entity: switch.dh_presence_app_notify_wifi
+                name: Wi-Fi
+                icon: mdi:wifi
+
           - type: custom:auto-entities
             card:
               type: vertical-stack

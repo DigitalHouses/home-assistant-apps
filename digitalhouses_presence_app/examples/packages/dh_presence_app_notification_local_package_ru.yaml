@@ -20,6 +20,8 @@
 # wifi_lost: 15 minutes without positive ARP proof: NOT verified disconnect.
 # wifi_out means 15m of completed ARP no-reply checks; iOS sleep can mimic loss.
 # No notification is generated at App startup from its first baseline probe.
+# MQTT switches independently gate write2log: Presence defaults ON, GPS OFF,
+# Wi-Fi OFF; device events and Recorder remain unfiltered.
 automation:
   - id: dh_presence_app_notifications
     alias: "DH Presence · Уведомления"
@@ -39,6 +41,20 @@ automation:
         options:
           event_type: [departure]
         id: departure
+
+      - trigger: event.received
+        target:
+          entity_id: event.dh_presence_app_event
+        options:
+          event_type: [gps_in]
+        id: gps_in
+
+      - trigger: event.received
+        target:
+          entity_id: event.dh_presence_app_event
+        options:
+          event_type: [gps_out]
+        id: gps_out
 
       - trigger: event.received
         target:
@@ -92,6 +108,9 @@ automation:
           - conditions:
               - condition: trigger
                 id: arrival
+              - condition: state
+                entity_id: switch.dh_presence_app_notify_presence
+                state: "on"
             sequence:
               - action: script.write2log
                 data: >-
@@ -100,6 +119,9 @@ automation:
           - conditions:
               - condition: trigger
                 id: departure
+              - condition: state
+                entity_id: switch.dh_presence_app_notify_presence
+                state: "on"
             sequence:
               - action: script.write2log
                 data: >-
@@ -107,7 +129,32 @@ automation:
 
           - conditions:
               - condition: trigger
+                id: gps_in
+              - condition: state
+                entity_id: switch.dh_presence_app_notify_gps
+                state: "on"
+            sequence:
+              - action: script.write2log
+                data: >-
+                  {{ {'title': '📍 GPS дома: ' ~ person_device, 'message': 'GPS-трекер вошёл в домашнюю зону.'} | tojson }}
+
+          - conditions:
+              - condition: trigger
+                id: gps_out
+              - condition: state
+                entity_id: switch.dh_presence_app_notify_gps
+                state: "on"
+            sequence:
+              - action: script.write2log
+                data: >-
+                  {{ {'title': '📍 GPS вне дома: ' ~ person_device, 'message': 'GPS-трекер вышел из домашней зоны.'} | tojson }}
+
+          - conditions:
+              - condition: trigger
                 id: wifi_in
+              - condition: state
+                entity_id: switch.dh_presence_app_notify_wifi
+                state: "on"
             sequence:
               - action: script.write2log
                 data: >-
@@ -116,6 +163,9 @@ automation:
           - conditions:
               - condition: trigger
                 id: wifi_lost
+              - condition: state
+                entity_id: switch.dh_presence_app_notify_wifi
+                state: "on"
             sequence:
               - action: script.write2log
                 data: >-
@@ -124,6 +174,9 @@ automation:
           - conditions:
               - condition: trigger
                 id: wifi_out
+              - condition: state
+                entity_id: switch.dh_presence_app_notify_wifi
+                state: "on"
             sequence:
               - action: script.write2log
                 data: >-

@@ -51,7 +51,7 @@ class TestDiscovery(unittest.TestCase):
         self.assertEqual(DISCOVERY, "homeassistant/device/dh_presence_app/config")
         self.assertEqual(config["device"]["identifiers"], ["dh_presence_app"])
         self.assertEqual(config["origin"]["name"], "DigitalHouses Presence App")
-        self.assertEqual(len(config["components"]), 16)
+        self.assertEqual(len(config["components"]), 19)
         for component in config["components"].values():
-            self.assertIn(component["platform"], {"binary_sensor", "event", "select", "sensor", "button"})
+            self.assertIn(component["platform"], {"binary_sensor", "event", "select", "sensor", "button", "switch"})
             self.assertIn("unique_id", component)

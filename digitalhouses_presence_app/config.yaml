@@ -1,5 +1,5 @@
 name: DigitalHouses Presence App
-version: 0.1.17
+version: 0.1.18
 slug: digitalhouses_presence_app
 description: Experimental GPS + Wi-Fi via registered MAC; 15m completed ARP no-replies may mean away in hybrid. iOS sleep can mislead.
 url: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_presence_app
