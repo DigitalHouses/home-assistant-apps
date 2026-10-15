@@ -19,6 +19,25 @@ class FakeRunner:
         self.calls.append(argv)
         if argv == ("lspci", "-Dnn"):
             return LSPCI
+        if argv and argv[0] == "perl" and argv[1].endswith("pve-pci-inventory"):
+            if getattr(self, "native_failure", False):
+                raise RuntimeError("native helper unavailable")
+            if getattr(self, "native_inventory", None) is not None:
+                return json.dumps(self.native_inventory)
+            devices = []
+            if "700" in argv[2:]:
+                devices.append({
+                    "guest_id": "700", "config_key": "hostpci0",
+                    "pci_address": "0000:00:17.0", "pci_class": "0x010601",
+                    "vendor_id": "0x8086", "device_id": "0x54d3",
+                })
+            if "501" in argv[2:]:
+                devices.append({
+                    "guest_id": "501", "config_key": "hostpci0",
+                    "pci_address": "0000:00:02.0", "pci_class": "0x030000",
+                    "vendor_id": "0x8086", "device_id": "0x46d1",
+                })
+            return json.dumps({"schema": 1, "devices": devices, "errors": []})
         if argv[:2] == ("qm", "agent"):
             return ""
         if argv[:4] == ("udevadm", "info", "--query=property", "--path"):
@@ -198,6 +217,75 @@ def test_full_scan_discovers_vm700_storage_with_functionless_hostpci(tmp_path: P
     assert snapshot.pci["0000:00:17.0"].device.pci_class == "0106"
     assert [source.device_path for source in manager.vm_storage_sources()] == ["/dev/sdb"]
     assert any(call[:4] == ("qm", "guest", "exec", "700") for call in runner.calls)
+
+
+def test_multifunction_pci_inventory_keeps_every_function_and_single_hostpci_key(tmp_path: Path):
+    _write_pve_cache(tmp_path, vm700_status="running")
+    runner = FakeRunner()
+    runner.native_inventory = {
+        "schema": 1,
+        "errors": [],
+        "devices": [
+            {
+                "guest_id": "700", "config_key": "hostpci0",
+                "pci_address": f"0000:00:17.{function}", "pci_class": "0x010601",
+                "vendor_id": "0x8086", "device_id": "0x54d3",
+            }
+            for function in (0, 1)
+        ],
+    }
+    manager = _manager(tmp_path, runner)
+    snapshot = manager.full_scan()
+
+    assert sorted(snapshot.pci) == ["0000:00:17.0", "0000:00:17.1"]
+    assert [source.passthrough_hostpci for source in manager.vm_storage_sources()] == ["hostpci0"]
+
+
+def test_native_failure_preserves_last_good_pci_assignment_and_reports_error(tmp_path: Path):
+    _write_pve_cache(tmp_path, vm700_status="running")
+    runner = FakeRunner()
+    manager = _manager(tmp_path, runner)
+    manager.full_scan()
+    assert "0000:00:17.0" in manager.snapshot.pci
+
+    runner.native_failure = True
+    manager.full_scan()
+
+    assert "0000:00:17.0" in manager.snapshot.pci
+    assert "_global" in manager.pci_inventory_errors()
+    assert manager.vm_storage_sources()[0].device_path == "/dev/sdb"
+
+
+def test_unresolvable_mapping_does_not_publish_candidate_pci_devices(tmp_path: Path):
+    _write_pve_cache(tmp_path, vm700_status="running")
+    runner = FakeRunner()
+    runner.native_inventory = {
+        "schema": 1,
+        "devices": [],
+        "errors": [{"guest_id": "700", "config_key": "hostpci0",
+                    "message": "PCI mapping is ambiguous"}],
+    }
+    manager = _manager(tmp_path, runner)
+    snapshot = manager.full_scan()
+
+    assert "0000:00:17.0" not in snapshot.pci
+    assert manager.vm_storage_sources() == ()
+    assert "700" in manager.pci_inventory_errors()
+
+
+def test_targeted_rescan_uses_native_helper_only_after_guest_status_change(tmp_path: Path):
+    _write_pve_cache(tmp_path, vm700_status="stopped")
+    runner = FakeRunner()
+    manager = _manager(tmp_path, runner)
+    manager.full_scan()
+    runner.calls.clear()
+
+    manager.poll_guest_status()
+    assert not any(call and call[0] == "perl" for call in runner.calls)
+
+    _write_pve_cache(tmp_path, vm700_status="running")
+    manager.poll_guest_status()
+    assert any(call[0] == "perl" and call[-1] == "700" for call in runner.calls)
 
 
 def test_unchanged_status_poll_uses_only_pve_cache_and_no_guest_list_subprocesses(tmp_path: Path):
