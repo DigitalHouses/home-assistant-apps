@@ -86,8 +86,10 @@ def test_dashboard_keeps_problem_summary_first_with_full_problem_list_and_colors
     for token in (
         "type: custom:mushroom-template-card",
         "state_attr('sensor.dh_pve_agent_problems', 'active')",
-        "item.object_name",
-        "item.summary",
+        "item.get('object_name', 'Объект')",
+        "sensor.dh_pve_agent_nfs_problems",
+        "nfs.items()",
+        "NFS недоступен",
         "green",
         "red",
     ):
