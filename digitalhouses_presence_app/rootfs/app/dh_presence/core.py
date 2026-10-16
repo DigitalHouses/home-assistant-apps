@@ -61,6 +61,7 @@ class Resident:
     # Last decision backed by a real MAC reply or a fully debounced no-reply
     # sequence. Technical UNAVAILABLE never changes notification history.
     wifi_last_decisive: Status = Status.UNAVAILABLE
+    wifi_method_baseline_pending: bool = False
     wifi_monitor_initialized: bool = False
     distance: float | None = None
     initialized: bool = False
@@ -199,6 +200,7 @@ class Engine:
             r.wifi_last_probe_at = None
             r.wifi_last_decisive = Status.UNAVAILABLE
             r.wifi_monitor_initialized = False
+            r.wifi_method_baseline_pending = True
             r.wifi_probe_result = "disabled" if disabled else "reconfiguring"
             if self.mode is not Mode.GPS:
                 fallback = self._decide(r, when)
@@ -239,7 +241,8 @@ class Engine:
             # is not a real departure. Compare the latest decisive evidence,
             # not the current diagnostic sensor state, to avoid duplicate
             # wifi_in when ARP replies resume after an unknown interval.
-            if (r.wifi_monitor_initialized and prior_decisive is not value
+            if (r.wifi_monitor_initialized and not r.wifi_method_baseline_pending
+                    and prior_decisive is not value
                     and (value is Status.HOME or prior_decisive is Status.HOME)):
                 events.append({
                     "event_type": "wifi_in" if value is Status.HOME else "wifi_out",
@@ -247,6 +250,7 @@ class Engine:
                     "observed_at": when.isoformat(),
                 })
             r.wifi_last_decisive = value
+            r.wifi_method_baseline_pending = False
             self._change(r, when, events)
         return events
 
@@ -269,11 +273,12 @@ class Engine:
         r.wifi = Status.NOT_HOME
         r.wifi_changed_at = when
         events = []
-        if r.wifi_monitor_initialized and prior_decisive is Status.HOME:
+        if r.wifi_monitor_initialized and not r.wifi_method_baseline_pending and prior_decisive is Status.HOME:
             events.append({"event_type": "wifi_out", "resident_id": r.key,
                            "source": "wifi", "observed_at": when.isoformat(),
                            "timeout_minutes": self.wifi_absence_minutes})
         r.wifi_last_decisive = Status.NOT_HOME
+        r.wifi_method_baseline_pending = False
         self._change(r, when, events)
         return events
 
