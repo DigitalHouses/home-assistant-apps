@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.19 — Cleaner operational logging
+
+- Move scheduled five-minute MQTT Discovery re-announcement messages from INFO to DEBUG, keeping initial synchronization, reconnection and recovery visible at INFO. MQTT payloads, retained QoS1 delivery, and resynchronization cadence are unchanged.
+- Log successfully published transient presence events (arrival/departure, GPS, Wi-Fi) at INFO, without publishing extra MQTT events or altering source decisions.
+- Classify intermittent HA Core API gateway errors (HTTP 502/503/504) as WARNING rather than ERROR, retain a deduplicated message and log tracker recovery at INFO. Other API failures remain ERROR.
+- Report the configured Wi-Fi absence period in startup/mode logs instead of assuming 15 minutes. Startup warnings about experimental ARP and unsupported telemetry remain visible.
+
+
 ## 0.1.18 — MQTT notification switches per household
 
 - Add three independent persistent MQTT switches in the existing DH Presence device: Notify · Presence, Notify · GPS, Notify · Wi-Fi. Defaults ON/OFF/OFF respectively to preserve core arrival/departure notices without duplicating notifications.

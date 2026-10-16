@@ -359,7 +359,7 @@ def load_discovery() -> dict:
     return data
 
 
-def synchronize_discovery(output: MqttOutput, version: str, engine: Engine) -> bool:
+def synchronize_discovery(output: MqttOutput, version: str, engine: Engine, *, routine: bool = False) -> bool:
     current = discovery(version, list(engine.residents.values()))
     old = load_discovery()
     if old.get("components") and not output.publish(DISCOVERY, with_cleanup(old, current), force=True):
@@ -370,8 +370,10 @@ def synchronize_discovery(output: MqttOutput, version: str, engine: Engine) -> b
         return False
     # Config is stored separately from logical resident state.
     save_discovery(current)
-    LOG.info("MQTT Discovery published topic=%s components=%d device=%s (QoS1, retained)",
-             DISCOVERY, len(current["components"]), current["device"]["name"])
+    # Retained re-announcements are routine broker maintenance, not state changes.
+    LOG.log(logging.DEBUG if routine else logging.INFO,
+            "MQTT Discovery published topic=%s components=%d device=%s (QoS1, retained)",
+            DISCOVERY, len(current["components"]), current["device"]["name"])
     return True
 
 
@@ -464,7 +466,8 @@ def run():
     last_discovery_audit = None
     last_discovery_audit_status = None
     LOG.info("Starting %s version %s, mode=%s, configured_residents=%d", "DigitalHouses Presence App", version, engine.mode.value, len(engine.residents))
-    LOG.warning("Experimental ARP reachability pilot: 15 minutes of completed no-reply checks sets Wi-Fi OFF; iOS sleep can appear absent.")
+    LOG.warning("Experimental ARP reachability pilot: %d minutes of completed no-reply checks sets Wi-Fi OFF; iOS sleep can appear absent.",
+                options["wifi_absence_minutes"])
     if options["telemetry_enabled"]:
         LOG.warning("Experimental pilot: telemetry_enabled=true, but there is no telemetry sender; no statistics are transmitted.")
     if not engine.residents:
@@ -494,7 +497,8 @@ def run():
                 # re-announce after HA starts and every 5 minutes.
                 if last_discovery_attempt is None or ha_birth or now_monotonic - last_discovery_attempt >= max(10, options["gps_poll_interval_seconds"]):
                     last_discovery_attempt = now_monotonic
-                    discovery_ready = synchronize_discovery(mqtt_out, version, engine)
+                    routine = last_discovery_session is not None and not ha_birth and discovery_ready
+                    discovery_ready = synchronize_discovery(mqtt_out, version, engine, routine=routine)
                     if discovery_ready:
                         last_discovery_session = now_monotonic
                     else:
@@ -524,7 +528,8 @@ def run():
                         resident.initialized = False
                     LOG.info("Presence mode changed from HA UI to %s", engine.mode.value)
                     if engine.mode is Mode.WIFI:
-                        LOG.info("Wi-Fi mode: verified MAC means HOME; 15 minutes of completed ARP no-reply checks means NOT_HOME")
+                        LOG.info("Wi-Fi mode: verified MAC means HOME; %d minutes of completed ARP no-reply checks means NOT_HOME",
+                                 options["wifi_absence_minutes"])
             # Ingress writes the private registration database atomically.
             # One engine observes the new roster without a service restart,
             # without a second Core adapter, and without synthetic events.
@@ -579,7 +584,9 @@ def run():
                     status, distance, observed = gps_from_ha_state(data, now, options["gps_freshness_seconds"], home) if home else (Status.UNAVAILABLE, None, None)
                     if observed is not None and status is not Status.UNAVAILABLE:
                         if reported_gps_status.get(r.tracker) != status.value:
-                            LOG.info("GPS tracker %s: %s (fresh observation)", r.tracker, status.value)
+                            recovered = str(reported_gps_status.get(r.tracker, "")).startswith("error:")
+                            LOG.info("GPS tracker %s: %s (%s)", r.tracker, status.value,
+                                     "Core API recovered" if recovered else "source available")
                             reported_gps_status[r.tracker] = status.value
                         events.extend(engine.gps_observation(r.tracker, status, observed, distance, decision_at=now))
                     else:
@@ -593,7 +600,8 @@ def run():
                     r.distance = None
                     problem = api_error_detail(exc)
                     if reported_gps_status.get(r.tracker) != "error:" + problem:
-                        LOG.error("Home Assistant Core API tracker %s unavailable: %s; last confirmed presence preserved", r.tracker, problem)
+                        log_method = LOG.warning if isinstance(exc, HTTPError) and exc.code in (502, 503, 504) else LOG.error
+                        log_method("Home Assistant Core API tracker %s unavailable: %s; last confirmed presence preserved", r.tracker, problem)
                         reported_gps_status[r.tracker] = "error:" + problem
             # One native Wi-Fi engine checks each enrolled phone against its
             # stored IP/MAC every minute. ARP misses never mean absence.
@@ -621,14 +629,16 @@ def run():
                     if event["event_type"] not in EVENT_NAMES:
                         raise ValueError("Invalid internal event")
                     resident = next(r for r in engine.residents.values() if r.key == event["resident_id"])
-                    mqtt_out.publish(topic("event"), {
+                    if mqtt_out.publish(topic("event"), {
                         "schema_version": 2, "mode": engine.mode.value,
                         "resident_name": resident.name,
                         "device_name": resident.name,
                         "user_name": resident.user_name,
                         "device_tracker": resident.tracker,
                         **event
-                    }, retain=False, force=True)
+                    }, retain=False, force=True):
+                        LOG.info("MQTT presence event published type=%s tracker=%s mode=%s",
+                                 event["event_type"], resident.tracker, engine.mode.value)
             if refresh_requested:
                 error = None
                 if not published:

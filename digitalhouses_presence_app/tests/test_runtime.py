@@ -2,13 +2,13 @@ import json
 import queue
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from datetime import datetime, timedelta, timezone
 from urllib.error import HTTPError
 from pathlib import Path
 from types import SimpleNamespace
 
-from app import MqttOutput, gps_from_ha_state, build_engine, load_options, friendly_tracker_name, observe_friendly_name, api_error_detail, audit_ha_discovery
+from app import MqttOutput, gps_from_ha_state, build_engine, load_options, friendly_tracker_name, observe_friendly_name, api_error_detail, audit_ha_discovery, synchronize_discovery
 from dh_presence.core import Mode, Status
 from dh_presence.storage import load, save
 
@@ -24,6 +24,32 @@ def options(**kw):
 
 
 class RuntimeSafetyTests(unittest.TestCase):
+    def test_discovery_log_levels_distinguish_first_publish_from_routine(self):
+        # Routine HA birth/300s publication still happens with QoS1 retain;
+        # only its diagnostic INFO noise moves to DEBUG.
+        engine = build_engine(options(), {"schema_version": 2, "residents": []})
+        output = SimpleNamespace(publish=Mock(return_value=True))
+        with patch("app.load_discovery", return_value={"components": {}}), \
+             patch("app.save_discovery") as saved:
+            with self.assertLogs("dh_presence_app", level="DEBUG") as first:
+                self.assertTrue(synchronize_discovery(output, "0.1.19", engine))
+            with self.assertLogs("dh_presence_app", level="DEBUG") as periodic:
+                self.assertTrue(synchronize_discovery(output, "0.1.19", engine, routine=True))
+        self.assertEqual(len(first.records), 1)
+        self.assertEqual(first.records[0].levelname, "INFO")
+        self.assertEqual(len(periodic.records), 1)
+        self.assertEqual(periodic.records[0].levelname, "DEBUG")
+        self.assertEqual(output.publish.call_count, 2)
+        self.assertEqual(saved.call_count, 2)
+        self.assertEqual(output.publish.call_args.kwargs,
+                         {"force": True})
+
+    def test_routine_discovery_logging_needs_healthy_existing_session(self):
+        source = (Path(__file__).resolve().parents[1] / "rootfs/app/app.py").read_text(
+            encoding="utf-8")
+        self.assertIn("last_discovery_session is not None and not ha_birth and discovery_ready",
+                      source)
+
     def test_old_valid_tracker_retains_last_known_away(self):
         when = NOW - timedelta(days=2)
         state = {"state": "not_home", "last_updated": when.isoformat()}
