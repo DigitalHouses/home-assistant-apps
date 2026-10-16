@@ -184,6 +184,30 @@ class Engine:
             self._change(r, decision_at or when, events)
         return events
 
+    def reset_wifi_methods(self, when: datetime, *, disabled: bool = False) -> None:
+        """Changing household probe methods starts a fresh baseline, no synthetic events.
+
+        In Wi-Fi-only mode, disabling all methods must yield unknown, never the
+        previously confirmed presence. Hybrid falls back to existing GPS evidence.
+        """
+        for r in self.residents.values():
+            if r.wifi is not Status.UNAVAILABLE:
+                r.wifi_changed_at = when
+            r.wifi = Status.UNAVAILABLE
+            r.wifi_absent_since = None
+            r.last_wifi_at = None
+            r.wifi_last_probe_at = None
+            r.wifi_last_decisive = Status.UNAVAILABLE
+            r.wifi_monitor_initialized = False
+            r.wifi_probe_result = "disabled" if disabled else "reconfiguring"
+            if self.mode is not Mode.GPS:
+                fallback = self._decide(r, when)
+                status = fallback if fallback is not None else Status.UNAVAILABLE
+                if r.confirmed is not status:
+                    r.confirmed = status
+                    r.confirmed_changed_at = when
+                r.initialized = False
+
     def wifi_observation(self, tracker: str, value: Status, when: datetime, *, verified: bool) -> list[dict]:
         """Only independently verified evidence may affect Wi-Fi. No ARP timeout as absence."""
         value = Status(value)
