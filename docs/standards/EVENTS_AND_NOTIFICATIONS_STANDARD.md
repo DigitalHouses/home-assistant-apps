@@ -249,6 +249,7 @@ WebSocket log serialization. Keep native Unicode in the original YAML scalar.
 
 This constraint applies to **HA package YAML**, not to JSON serialization
 inside MQTT Discovery contracts or Python application code.
+The repository test suite rejects this filter in all HA package YAML files.
 
 ## 8. Trigger IDs
 
