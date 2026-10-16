@@ -224,6 +224,32 @@ A person opening the YAML should immediately see which event produces which mess
 
 ---
 
+### Unicode-safe service data (mandatory)
+
+**Never use the Jinja `tojson` filter inside Home Assistant YAML packages.**
+This rule applies to every DigitalHouses HA package, including notification,
+Recorder and other local packages, regardless of whether the template currently
+contains emoji. Do not serialize a complete service-data mapping through a
+single Jinja expression.
+
+For services that accept `title` and `message`, pass ordinary YAML fields,
+with short Jinja substitutions only where dynamic text is needed:
+
+```yaml
+- action: script.write2log
+  data:
+    title: "📶 Wi-Fi обнаружен: {{ person_device }}"
+    message: "Устройство подтверждено по зарегистрированному MAC."
+```
+
+Reason: JSON serialization can escape non-BMP Unicode (emoji) as UTF-16
+surrogate pairs. The Home Assistant template/YAML service-data rendering path
+may leave these pairs as invalid UTF-8 strings, breaking log file writes and
+WebSocket log serialization. Keep native Unicode in the original YAML scalar.
+
+This constraint applies to **HA package YAML**, not to JSON serialization
+inside MQTT Discovery contracts or Python application code.
+
 ## 8. Trigger IDs
 
 Every notification trigger must have an explicit, readable `id`.
