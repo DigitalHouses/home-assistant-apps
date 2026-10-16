@@ -1,6 +1,6 @@
 # DigitalHouses Presence App
 
-**Status: experimental GPS + debounced ARP network-reachability pilot, version 0.1.22.** Observe for several days; do not use for alarm arming until accepted.
+**Status: experimental GPS + configurable PING/ARP network-reachability pilot, version 0.1.22.** Observe for several days; do not use for alarm arming until accepted.
 
 This application belongs to `DigitalHouses/home-assistant-apps/digitalhouses_presence_app` and is installed via **Settings → Apps → App Store**.
 
