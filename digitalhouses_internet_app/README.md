@@ -69,6 +69,29 @@ MQTT/device/entity identities remain unchanged under `dh_internet_app`.
 
 The completed procedure and release history are retained in [the slug migration record](../docs/digitalhouses_internet_app/slug-migration.md).
 
+
+## Router SNMP example: Ruslan UX7
+
+The optional [local router SNMP package](examples/packages/dh_internet_app_router_snmp_local_package.yaml) publishes exactly two cumulative **raw byte** sources for the UniFi Express 7 at `192.168.2.1`, WAN `eth1` / `ifIndex 7`:
+
+- `sensor.dh_internet_app_router_wan_download_cumulative` — IF-MIB `ifHCInOctets.7` (WAN RX).
+- `sensor.dh_internet_app_router_wan_upload_cumulative` — IF-MIB `ifHCOutOctets.7` (WAN TX).
+
+In the Internet App configuration, set the **two fields together**:
+
+```yaml
+traffic:
+  traffic_download_total: sensor.dh_internet_app_router_wan_download_cumulative
+  traffic_upload_total: sensor.dh_internet_app_router_wan_upload_cumulative
+  router_wan_status: ""
+  router_download_rate: ""
+  router_upload_rate: ""
+```
+
+Copy the package to the site's local Network packages folder only if the Home Assistant loader uses `!include_dir_merge_named`. For `!include_dir_named`, remove the outer `dh_internet_app_router_snmp_local_package:` key and unindent the `sensor:` section by two spaces. Before activating the new package, remove the legacy `router_dl_ul_sensors_package` to avoid duplicate SNMP polling. Check HA configuration and restart HA Core; SNMP YAML sensors are not created by restarting the Internet App alone. Verify both raw sensor states are numeric and increase with traffic, then restart the App with the bindings above.
+
+The App probes Router connectivity independently, samples the source counters every minute and owns traffic baselines, resets, monthly accounting, MQTT sensors and Recorder-facing history. Do **not** add `utility_meter`, template conversions or parallel totals to this adapter. The App's accumulated totals start from their first observation and do not automatically import historic Speedtest App/HA utility meter data. No WAN status or instantaneous rate is inferred from these counters. To reuse this example at another site, confirm its WAN interface/index, IP and SNMP read-only community; restrict SNMPv2c to trusted local clients.
+
 ## Runtime contract behavior
 
 Connectivity is considered **unknown** until a real ICMP probe completes. During startup, or when the probe mechanism itself cannot execute, the four connectivity entities are unavailable rather than being reported as down. Probe execution failures do not advance outage confirmation and cannot start automatic recovery.
@@ -98,6 +121,7 @@ See [DigitalHouses Product Telemetry Policy](../docs/standards/PRODUCT_TELEMETRY
 The Home Assistant layer is deliberately split by responsibility:
 
 - `examples/packages/dh_internet_app_global_package.yaml` — Recorder whitelist only;
+- `examples/packages/dh_internet_app_router_snmp_local_package.yaml` — **optional, Ruslan UX7-specific** read-only SNMP WAN byte-counter sources;
 - `examples/packages/dh_internet_app_notification_local_package.yaml` — English direct-delivery example;
 - `examples/packages/locales/ru/dh_internet_app_notification_local_package.yaml` — Russian public direct-delivery example;
 - `examples/lovelace/dh_internet_app_dashboard.yaml` — reference Sections dashboard;
