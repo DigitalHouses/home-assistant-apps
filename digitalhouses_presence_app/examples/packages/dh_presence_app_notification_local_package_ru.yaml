@@ -16,7 +16,7 @@
 # The HA package never keeps a second resident-name table.
 #
 # "Режим дома" is notification text; NO security/alarm mode is changed.
-# wifi_in: confirmed registered MAC reappears after initial observation.
+# wifi_in: enabled network method confirms a real source transition after baseline.
 # wifi_lost: no fresh positive network check; NOT a verified disconnect.
 # wifi_out means completed negative enabled-method checks; phone sleep can mimic loss.
 # No notification is generated at App startup from its first baseline probe.
