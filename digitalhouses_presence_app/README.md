@@ -1,6 +1,6 @@
 # DigitalHouses Presence App
 
-**Status: experimental GPS + debounced ARP network-reachability pilot, version 0.1.21.** Observe for several days; do not use for alarm arming until accepted.
+**Status: experimental GPS + configurable PING/ARP network-reachability pilot, version 0.1.22.** Observe for several days; do not use for alarm arming until accepted.
 
 This application belongs to `DigitalHouses/home-assistant-apps/digitalhouses_presence_app` and is installed via **Settings → Apps → App Store**.
 
@@ -11,6 +11,19 @@ Every 60 seconds the App probes the enrolled private LAN IP with direct `arping`
 **Important limitation:** iOS may not answer ARP during sleep while still on Wi-Fi. Wi-Fi OFF here means *not detected by active LAN probe*, not proof of Wi-Fi being switched off. On-link route, execution or permission failures and MAC conflicts produce `unavailable` instead, reset the absence timer and never produce a negative presence transition. No Nmap, router, NetAlertX or extra HA tracking entity is required.
 
 The maintained dashboard dynamically creates a Mushroom card for each configured resident (name + device): final presence status and its transition timestamp; GPS status/transition timestamp; Wi-Fi status/transition timestamp. Unknown timestamps render as a dash. All timestamps originate in the App's existing MQTT resident roster, and are shown in the browser's local timezone. There is no manual per-person YAML configuration and no IP/MAC exposed in MQTT.
+
+## Global household Wi-Fi detection switches (0.1.22)
+
+Two persisted MQTT switches on the **existing DH Presence device** control **all registered phones**, not individual residents:
+
+- `switch.dh_presence_app_ping` — ICMP echo to the registered private IP; default OFF.
+- `switch.dh_presence_app_arp` — active ARP with exact registered MAC verification; default ON (legacy behavior).
+
+Both ON: **any successful method → Wi-Fi HOME**. Only when **both** enabled checks finish with explicit no-reply does the configured `wifi_absence_minutes` negative debounce run; probe errors or ARP MAC conflicts are inconclusive. If both OFF, Wi-Fi monitoring is disabled and its sensors report UNAVAILABLE (not OFF). GPS mode stays independent; Hybrid falls back to GPS during Wi-Fi uncertainty. Switching either method from HA establishes a new Wi-Fi baseline without creating synthetic events; switches are stored in `/data/presence_probes.json`. PING and ARP are checked every 60 seconds on each enrolled phone. These are **detection** switches, not the separate Notify · Wi-Fi switch.
+
+**Reliability:** An ICMP reply proves that *something* answers at the enrolled IP, not the MAC or phone identity. Keep DHCP reservations for all registered phones, especially PING-only. If ARP detects a MAC mismatch, even a positive PING does not prove the registered phone is present. Failed commands and ambiguous responses are UNKNOWN, not confirmed absence. Phones may ignore both ICMP and ARP while sleeping. A completed no-reply debounce only means LAN reachability was lost; it is **not proof of Wi-Fi disassociation**. Wi-Fi-only/Hybrid absence should not be used for security until field-tested.
+
+The maintained Lovelace card and dashboard expose the same two global detection switches. The notification package examples were reworded for either method; existing local HA packages must be updated separately if their human-readable messages still mention ARP specifically. The event types and automations did not change.
 
 ## Notification switches (0.1.18)
 

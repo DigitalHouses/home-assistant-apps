@@ -16,9 +16,9 @@
 # The HA package never keeps a second resident-name table.
 #
 # "Режим дома" is notification text; NO security/alarm mode is changed.
-# wifi_in: confirmed registered MAC reappears after initial observation.
-# wifi_lost: 15 minutes without positive ARP proof: NOT verified disconnect.
-# wifi_out means 15m of completed ARP no-reply checks; iOS sleep can mimic loss.
+# wifi_in: enabled network method confirms a real source transition after baseline.
+# wifi_lost: no fresh positive network check; NOT a verified disconnect.
+# wifi_out means completed negative enabled-method checks; phone sleep can mimic loss.
 # No notification is generated at App startup from its first baseline probe.
 # MQTT switches independently gate write2log: Presence defaults ON, GPS OFF,
 # Wi-Fi OFF; device events and Recorder remain unfiltered.
@@ -102,7 +102,7 @@ automation:
       wifi_out_message: >-
         Устройство не обнаружено при проверках локальной сети в течение
         {{ trigger.to_state.attributes.timeout_minutes | default(15, true) }} минут.
-        Это проверка ARP-доступности, а не доказательство отключения Wi-Fi.
+        Это проверка доступности выбранными методами PING/ARP, а не доказательство отключения Wi-Fi.
     actions:
       - choose:
           - conditions:
@@ -163,7 +163,7 @@ automation:
               - action: script.write2log
                 data:
                   title: "📶 Wi-Fi обнаружен: {{ person_device }}"
-                  message: "Устройство подтверждено по зарегистрированному MAC."
+                  message: "Устройство обнаружено выбранным методом проверки локальной сети."
 
           - conditions:
               - condition: trigger

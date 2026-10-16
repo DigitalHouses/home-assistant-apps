@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.22 — Global household PING and ARP detection switches
+
+- Two persisted MQTT switches in the existing DH Presence device: `switch.dh_presence_app_ping` (OFF by default) and `switch.dh_presence_app_arp` (ON by default). Both apply to all registered phones; not separate switches per resident, no additional MQTT device.
+- Probe the enrolled private IPv4 address with ICMP PING and/or on-link ARP MAC verification once per minute. With both enabled, either successful check means HOME; only all completed negative checks start the configured `wifi_absence_minutes` absence debounce. Operational failures and ARP MAC conflicts yield UNAVAILABLE rather than a false departure.
+- Both OFF disables network monitoring, leaves Wi-Fi sensor UNAVAILABLE, and GPS remains independent. Switching methods immediately re-baselines Wi-Fi without synthetic arrival/departure or duplicate `wifi_in`; settings survive App restarts and MQTT reconnects.
+- Preserve the original presence modes, per-resident GPS/Wi-Fi sensors, MQTT event topics, Recorder contract and notification switches. Preserve `host_network` + `NET_RAW` access; add the `iputils-ping` binary without additional permissions.
+- Add PING/ARP switches to maintained dashboards and make Wi-Fi source diagnostics and example notification wording method-neutral. No separate HA helpers.
+- **Pilot limitation:** PING identifies an IP responder, not an authenticated phone. Keep DHCP address reservations; neither PING nor ARP silence proves radio disassociation (iOS and Android power saving). The selected negative debounce may still produce false absences; do not use for safety-critical automation.
+
+
 ## 0.1.21 — Prevent duplicate Wi-Fi arrival notifications
 
 - Keep the most recent decisive Wi-Fi evidence (verified registered-MAC HOME or completed debounced ARP NOT_HOME) separately from temporary `unavailable` source status.
