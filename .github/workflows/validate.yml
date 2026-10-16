@@ -146,7 +146,9 @@ jobs:
         run: python -m unittest discover -s digitalhouses_recorder_app/tests -v
 
       - name: Check shell syntax
-        run: bash -n digitalhouses_recorder_app/rootfs/run.sh
+        run: |
+          bash -n digitalhouses_recorder_app/rootfs/run.sh
+          bash -n digitalhouses_recorder_app/scripts/create_storage_ssh_user.sh
 
       - name: Build Recorder App image
         run: |
