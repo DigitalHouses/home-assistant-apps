@@ -85,7 +85,7 @@ dh_presence_app_notification:
         wifi_out_message: >-
           Устройство не обнаружено при проверках локальной сети в течение
           {{ trigger.to_state.attributes.timeout_minutes | default(15, true) }} минут.
-          Это проверка ARP-доступности, а не доказательство отключения Wi-Fi.
+          Это проверка доступности выбранными методами PING/ARP, а не доказательство отключения Wi-Fi.
       actions:
         - choose:
             - conditions:
@@ -146,7 +146,7 @@ dh_presence_app_notification:
                 - action: script.write2log
                   data:
                     title: "📶 Wi-Fi обнаружен: {{ person_device }}"
-                    message: "Устройство подтверждено по зарегистрированному MAC."
+                    message: "Устройство обнаружено выбранным методом проверки локальной сети."
 
             - conditions:
                 - condition: trigger
