@@ -91,7 +91,12 @@ sections:
                 const n = states['binary_sensor.dh_presence_app_residents_home']?.attributes?.residents_home;
                 const total = states['binary_sensor.dh_presence_app_residents_home']?.attributes?.residents_total;
                 const count = Number.isInteger(n) && Number.isInteger(total) ? ' · Дома ' + n + '/' + total : '';
-                const label = mode === 'wifi' ? 'Wi-Fi · ARP'
+                const ping = states['switch.dh_presence_app_ping']?.state;
+                const arp = states['switch.dh_presence_app_arp']?.state;
+                const methods = ping === 'on' && arp === 'on' ? 'PING + ARP'
+                  : ping === 'on' ? 'PING' : arp === 'on' ? 'ARP'
+                  : ping === 'off' && arp === 'off' ? 'отключён' : 'нет данных';
+                const label = mode === 'wifi' ? 'Wi-Fi · ' + methods
                   : mode === 'hybrid' ? 'Hybrid · GPS + Wi-Fi' : 'GPS';
                 const newer = states['binary_sensor.dh_presence_app_update_available']?.state === 'on';
                 const roster = states['binary_sensor.dh_presence_app_residents_home']?.attributes?.residents || {};
@@ -208,6 +213,17 @@ sections:
             features:
               - type: select-options
           - type: entities
+            title: Обнаружение Wi-Fi · весь дом
+            show_header_toggle: false
+            entities:
+              - entity: switch.dh_presence_app_ping
+                name: PING
+                icon: mdi:lan-connect
+              - entity: switch.dh_presence_app_arp
+                name: ARP
+                icon: mdi:lan-check
+
+          - type: entities
             title: Уведомления DH Presence
             show_header_toggle: false
             entities:
@@ -246,7 +262,7 @@ sections:
                       {% set wifi = r.get('wifi', 'unavailable') %}
                       Итог: {{ 'Дома' if presence == 'home' else 'Вне дома' if presence == 'not_home' else 'Не определено' }} · {{ as_local(as_datetime(r['status_changed_at'])).strftime('%d.%m %H:%M') if r.get('status_changed_at') else '—' }}
                       GPS: {{ 'Дома' if gps == 'home' else 'Вне дома' if gps == 'not_home' else 'Недоступно' }} · {{ as_local(as_datetime(r['gps_changed_at'])).strftime('%d.%m %H:%M') if r.get('gps_changed_at') else '—' }}
-                      Wi-Fi: {{ 'Обнаружен' if wifi == 'home' else 'Не обнаружен (ARP)' if wifi == 'not_home' else 'Недоступно' }} · {{ as_local(as_datetime(r['wifi_changed_at'])).strftime('%d.%m %H:%M') if r.get('wifi_changed_at') else '—' }}
+                      Wi-Fi: {{ 'Обнаружен' if wifi == 'home' else 'Не обнаружен (проверка сети)' if wifi == 'not_home' else 'Недоступно' }} · {{ as_local(as_datetime(r['wifi_changed_at'])).strftime('%d.%m %H:%M') if r.get('wifi_changed_at') else '—' }}
                     icon: >-
                       {% set key = entity | replace('binary_sensor.dh_presence_app_', '') | replace('_wifi_home', '') %}
                       {% set r = (state_attr('binary_sensor.dh_presence_app_residents_home', 'residents') or {}).get(key, {}) %}
