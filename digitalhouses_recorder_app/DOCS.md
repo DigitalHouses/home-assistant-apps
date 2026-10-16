@@ -171,6 +171,48 @@ log in and run `df`; sudo/root access is not required.
 The first SSH host key is stored in `/data/ssh_known_hosts` and verified on
 later connections.
 
+#### Standard SSH storage account (new sites)
+
+For external PostgreSQL/MariaDB running on a Linux host or LXC, create
+the dedicated `dh_recorder` account **inside that database host/container**,
+not on the Proxmox host. Run the repo-maintained setup script as root:
+
+```bash
+curl -fsSLo /tmp/dh-recorder-storage-user.sh \
+  https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/main/digitalhouses_recorder_app/scripts/create_storage_ssh_user.sh &&
+bash /tmp/dh-recorder-storage-user.sh
+```
+
+The script creates a normal Linux login with its own group, asks interactively
+for a password (without printing or storing it), and verifies `df -h /` using
+that account. It does not grant sudo/root, change PostgreSQL, or modify
+the SSH daemon.
+
+The script is **idempotent**: an existing `dh_recorder` account is left
+unchanged. To intentionally change its password, run:
+
+```bash
+bash /tmp/dh-recorder-storage-user.sh --reset-password
+```
+
+Recorder App configuration for an external database:
+
+| Option | Value |
+| --- | --- |
+| `storage.source` | `ssh` |
+| `storage.ssh_host` | Database host IP or empty (reuse DB host) |
+| `storage.ssh_port` | `22` |
+| `storage.ssh_username` | `dh_recorder` |
+| `storage.ssh_password` | Password chosen during provisioning |
+| `storage.path` | Empty (automatic detection) |
+
+SSH must already be running on the database host and allow password
+authentication for the dedicated account. The setup script intentionally
+does not weaken or override the site's SSH security policy.
+Check SSH access separately if the App reports authentication errors.
+Use the password for the **Linux SSH account**, never the PostgreSQL
+database password.
+
 ### Disabled
 
 Disabled omits the four storage entities.
