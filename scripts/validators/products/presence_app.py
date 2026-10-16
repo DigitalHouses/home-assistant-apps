@@ -65,6 +65,8 @@ def validate_presence(root: Path, app: Path, context: dict) -> None:
         app / "rootfs/app/dh_presence/storage.py",
         app / "rootfs/app/dh_presence/modes.py",
         app / "rootfs/app/dh_presence/notifications.py",
+        app / "rootfs/app/dh_presence/probes.py",
+        app / "tests/test_probe_switches.py",
         app / "rootfs/app/dh_presence/registration.py",
         app / "rootfs/app/dh_presence/wifi.py",
         app / "tests/test_wifi.py",
