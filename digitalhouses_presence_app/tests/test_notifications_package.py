@@ -20,7 +20,7 @@ class NotificationPackageTests(unittest.TestCase):
         canonical = PACKAGE.read_text(encoding="utf-8")
         self.assertIn("dh_presence_app_notification:\n  automation:", keyed)
         self.assertEqual(keyed.count("- action: script.write2log"), 7)
-        self.assertEqual(keyed.count("data: >-"), 7)
+        self.assertEqual(keyed.count('title: "'), 7)
         self.assertNotIn("  recorder:", keyed)
         source = canonical[canonical.index("automation:\n"):]
         expected = "\n".join("  " + line if line else "" for line in source.split("\n"))
@@ -91,37 +91,34 @@ class NotificationPackageTests(unittest.TestCase):
         self.assertIn('"user_name": resident.user_name', runtime)
         self.assertIn('"device_name": resident.name', runtime)
 
-    def test_write2log_data_templates_are_short_and_self_contained(self):
-        # Long Jinja conditionals inside service data caused an actual
-        # TemplateSyntaxError on HA Core 2026.10.1 in the field.
+    def test_write2log_data_fields_are_explicit_and_utf8_safe(self):
+        # HA 2026.10.1: Jinja tojson can leave escaped emoji surrogate
+        # halves in the HA service-data rendering pipeline.
         code = PACKAGE.read_text(encoding="utf-8")
-        lines = code.splitlines()
-        templates = [lines[i + 1].strip() for i, line in enumerate(lines[:-1])
-                     if line.strip() == "data: >-"]
-        self.assertEqual(len(templates), 7)
-        for template in templates:
-            with self.subTest(template=template):
-                self.assertLess(len(template), 170)
-                self.assertTrue(template.startswith("{{ {"))
-                self.assertTrue(template.endswith("} | tojson }}"))
-                self.assertEqual(template.count("{{"), 1)
-                self.assertEqual(template.count("}}"), 1)
-                self.assertIn("'title':", template)
-                self.assertIn("'message':", template)
-                self.assertNotIn("trigger.to_state", template)
+        self.assertEqual(code.count("- action: script.write2log"), 7)
+        self.assertEqual(code.count('title: "'), 7)
+        self.assertEqual(code.count('message: "'), 7)
+        self.assertNotIn("| tojson", code)
+        self.assertNotIn("data: >-", code)
+        for line in code.splitlines():
+            if 'title: "' in line:
+                title = line.split('title: "', 1)[1].rsplit('"', 1)[0]
+                self.assertEqual(title.count("{{ person_device }}"), 1)
+                title.replace("{{ person_device }}", "Serzhan (13ProMAX .SKY)").encode("utf-8")
         for variable in ("arrival_message:", "departure_message:",
-                         "wifi_lost_message:"):
+                         "wifi_lost_message:", "wifi_out_message:"):
             self.assertIn(variable, code)
         self.assertIn("if trigger.to_state.attributes.first_arrival", code)
         self.assertIn("if trigger.to_state.attributes.last_departure", code)
 
     def test_each_write2log_has_only_title_and_message(self):
+        import re
         code = PACKAGE.read_text(encoding="utf-8")
         self.assertEqual(code.count("- action: script.write2log"), 7)
-        # Every service data field is one validated string template returning
-        # a JSON dictionary, not a nested YAML dict that HA rejected.
-        self.assertEqual(code.count("data: >-"), 7)
-        self.assertEqual(code.count("} | tojson }}"), 7)
-        self.assertNotIn("data:\n                  title:", code)
-        self.assertEqual(code.count("'title':"), 7)
-        self.assertEqual(code.count("'message':"), 7)
+        blocks = re.findall(
+            r'(?m)^[ ]+data:\n[ ]+title: "[^"\n]+"\n[ ]+message: "[^"\n]+"',
+            code,
+        )
+        self.assertEqual(len(blocks), 7)
+        self.assertNotIn("data: >-", code)
+        self.assertNotIn("} | tojson }}", code)
