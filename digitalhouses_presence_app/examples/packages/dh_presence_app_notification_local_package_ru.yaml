@@ -3,9 +3,9 @@
 # Requires homeassistant: packages: !include_dir_named packages
 #
 # Direct path: native MQTT Event -> event.received -> trigger.id -> choose ->
-# script.write2log(title, message). Native YAML data fields preserve
-# Unicode emoji without JSON/UTF-16 surrogate conversion. Longer conditional
-# messages are prepared as separate variables; no duplicate Logbook entry.
+# script.write2log(title, message). Each service data is a Jinja-generated
+# JSON dictionary with short Jinja expressions. Longer conditional messages
+# are prepared as separate variables; no duplicate Logbook entry.
 #
 # The MQTT Event entity is independently eligible for HA Recorder history
 # subject to the installation's recorder include/exclude/retention rules.
@@ -113,9 +113,8 @@ automation:
                 state: "on"
             sequence:
               - action: script.write2log
-                data:
-                  title: "🏠 Прибытие: {{ person_device }}"
-                  message: "{{ arrival_message }}"
+                data: >-
+                  {{ {'title': '🏠 Прибытие: ' ~ person_device, 'message': arrival_message} | tojson }}
 
           - conditions:
               - condition: trigger
@@ -125,9 +124,8 @@ automation:
                 state: "on"
             sequence:
               - action: script.write2log
-                data:
-                  title: "🚗 Убытие: {{ person_device }}"
-                  message: "{{ departure_message }}"
+                data: >-
+                  {{ {'title': '🚗 Убытие: ' ~ person_device, 'message': departure_message} | tojson }}
 
           - conditions:
               - condition: trigger
@@ -137,9 +135,8 @@ automation:
                 state: "on"
             sequence:
               - action: script.write2log
-                data:
-                  title: "📍 GPS дома: {{ person_device }}"
-                  message: "GPS-трекер вошёл в домашнюю зону."
+                data: >-
+                  {{ {'title': '📍 GPS дома: ' ~ person_device, 'message': 'GPS-трекер вошёл в домашнюю зону.'} | tojson }}
 
           - conditions:
               - condition: trigger
@@ -149,9 +146,8 @@ automation:
                 state: "on"
             sequence:
               - action: script.write2log
-                data:
-                  title: "📍 GPS вне дома: {{ person_device }}"
-                  message: "GPS-трекер вышел из домашней зоны."
+                data: >-
+                  {{ {'title': '📍 GPS вне дома: ' ~ person_device, 'message': 'GPS-трекер вышел из домашней зоны.'} | tojson }}
 
           - conditions:
               - condition: trigger
@@ -161,9 +157,8 @@ automation:
                 state: "on"
             sequence:
               - action: script.write2log
-                data:
-                  title: "📶 Wi-Fi обнаружен: {{ person_device }}"
-                  message: "Устройство подтверждено по зарегистрированному MAC."
+                data: >-
+                  {{ {'title': '📶 Wi-Fi обнаружен: ' ~ person_device, 'message': 'Устройство подтверждено по зарегистрированному MAC.'} | tojson }}
 
           - conditions:
               - condition: trigger
@@ -173,9 +168,8 @@ automation:
                 state: "on"
             sequence:
               - action: script.write2log
-                data:
-                  title: "📵 Wi-Fi не подтверждается: {{ person_device }}"
-                  message: "{{ wifi_lost_message }}"
+                data: >-
+                  {{ {'title': '📵 Wi-Fi не подтверждается: ' ~ person_device, 'message': wifi_lost_message} | tojson }}
 
           - conditions:
               - condition: trigger
@@ -185,6 +179,5 @@ automation:
                 state: "on"
             sequence:
               - action: script.write2log
-                data:
-                  title: "📵 Wi-Fi не обнаружен: {{ person_device }}"
-                  message: "{{ wifi_out_message }}"
+                data: >-
+                  {{ {'title': '📵 Wi-Fi не обнаружен: ' ~ person_device, 'message': wifi_out_message} | tojson }}

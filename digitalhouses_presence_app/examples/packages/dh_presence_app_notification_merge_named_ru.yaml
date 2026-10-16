@@ -96,9 +96,8 @@ dh_presence_app_notification:
                   state: "on"
               sequence:
                 - action: script.write2log
-                  data:
-                    title: "🏠 Прибытие: {{ person_device }}"
-                    message: "{{ arrival_message }}"
+                  data: >-
+                    {{ {'title': '🏠 Прибытие: ' ~ person_device, 'message': arrival_message} | tojson }}
 
             - conditions:
                 - condition: trigger
@@ -108,9 +107,8 @@ dh_presence_app_notification:
                   state: "on"
               sequence:
                 - action: script.write2log
-                  data:
-                    title: "🚗 Убытие: {{ person_device }}"
-                    message: "{{ departure_message }}"
+                  data: >-
+                    {{ {'title': '🚗 Убытие: ' ~ person_device, 'message': departure_message} | tojson }}
 
             - conditions:
                 - condition: trigger
@@ -120,9 +118,8 @@ dh_presence_app_notification:
                   state: "on"
               sequence:
                 - action: script.write2log
-                  data:
-                    title: "📍 GPS дома: {{ person_device }}"
-                    message: "GPS-трекер вошёл в домашнюю зону."
+                  data: >-
+                    {{ {'title': '📍 GPS дома: ' ~ person_device, 'message': 'GPS-трекер вошёл в домашнюю зону.'} | tojson }}
 
             - conditions:
                 - condition: trigger
@@ -132,9 +129,8 @@ dh_presence_app_notification:
                   state: "on"
               sequence:
                 - action: script.write2log
-                  data:
-                    title: "📍 GPS вне дома: {{ person_device }}"
-                    message: "GPS-трекер вышел из домашней зоны."
+                  data: >-
+                    {{ {'title': '📍 GPS вне дома: ' ~ person_device, 'message': 'GPS-трекер вышел из домашней зоны.'} | tojson }}
 
             - conditions:
                 - condition: trigger
@@ -144,9 +140,8 @@ dh_presence_app_notification:
                   state: "on"
               sequence:
                 - action: script.write2log
-                  data:
-                    title: "📶 Wi-Fi обнаружен: {{ person_device }}"
-                    message: "Устройство подтверждено по зарегистрированному MAC."
+                  data: >-
+                    {{ {'title': '📶 Wi-Fi обнаружен: ' ~ person_device, 'message': 'Устройство подтверждено по зарегистрированному MAC.'} | tojson }}
 
             - conditions:
                 - condition: trigger
@@ -156,9 +151,8 @@ dh_presence_app_notification:
                   state: "on"
               sequence:
                 - action: script.write2log
-                  data:
-                    title: "📵 Wi-Fi не подтверждается: {{ person_device }}"
-                    message: "{{ wifi_lost_message }}"
+                  data: >-
+                    {{ {'title': '📵 Wi-Fi не подтверждается: ' ~ person_device, 'message': wifi_lost_message} | tojson }}
 
             - conditions:
                 - condition: trigger
@@ -168,6 +162,5 @@ dh_presence_app_notification:
                   state: "on"
               sequence:
                 - action: script.write2log
-                  data:
-                    title: "📵 Wi-Fi не обнаружен: {{ person_device }}"
-                    message: "{{ wifi_out_message }}"
+                  data: >-
+                    {{ {'title': '📵 Wi-Fi не обнаружен: ' ~ person_device, 'message': wifi_out_message} | tojson }}
