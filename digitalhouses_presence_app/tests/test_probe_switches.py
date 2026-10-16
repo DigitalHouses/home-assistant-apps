@@ -179,6 +179,23 @@ class ProbeSwitchTests(unittest.TestCase):
             e, [PHONE], NOW + timedelta(minutes=2),
             lambda _: WifiEvidence(True, "ping_reply")), [])
 
+    def test_first_post_switch_no_reply_then_home_is_silent_baseline(self):
+        e = Engine(mode=Mode.GPS, wifi_absence_minutes=15)
+        e.add(PHONE["tracker"], "iPhone")
+        e.gps_observation(PHONE["tracker"], Status.HOME, NOW)
+        poll_registered_wifi(e, [PHONE], NOW,
+                             lambda _: WifiEvidence(True, "mac_verified"))
+        e.reset_wifi_methods(NOW + timedelta(seconds=5))
+        self.assertEqual(poll_registered_wifi(
+            e, [PHONE], NOW + timedelta(minutes=1),
+            lambda _: WifiEvidence(False, "no_reply")), [])
+        self.assertEqual(poll_registered_wifi(
+            e, [PHONE], NOW + timedelta(minutes=2),
+            lambda _: WifiEvidence(True, "ping_reply")), [])
+        self.assertEqual(poll_registered_wifi(
+            e, [PHONE], NOW + timedelta(minutes=3),
+            lambda _: WifiEvidence(True, "ping_reply")), [])
+
     def test_hybrid_switch_change_falls_back_to_known_gps(self):
         e = Engine(mode=Mode.HYBRID)
         e.add(PHONE["tracker"], "iPhone")
