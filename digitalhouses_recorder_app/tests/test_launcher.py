@@ -69,7 +69,7 @@ bashio::log.info() { :; }
                     text=True,
                     check=True,
                 )
-                self.assertEqual("LOOKUP:mysql:host" in run.stderr, should_query)
+                self.assertEqual("LOOKUP:mysql:port" in run.stderr, should_query)
                 expected_host = "mysql.local" if should_query else ""
                 self.assertIn(f"MYSQL_HOST={expected_host}", run.stdout)
 
