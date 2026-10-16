@@ -17,14 +17,14 @@ fi
 
 # Remove the legacy 0.1.0 polling group after upgrade. Internal medium/slow
 # query cadences are no longer exposed in the user configuration.
-OPTIONS_JSON="$(bashio::addon.options)"
+OPTIONS_JSON="$(bashio::app.options)"
 if bashio::jq.exists "${OPTIONS_JSON}" '.poll'; then
     bashio::log.info "Removing legacy 'poll' configuration option."
-    bashio::addon.option 'poll'
+    bashio::app.option 'poll'
 fi
 if bashio::jq.exists "${OPTIONS_JSON}" '.timezone'; then
     bashio::log.info "Removing legacy 'timezone' configuration option."
-    bashio::addon.option 'timezone'
+    bashio::app.option 'timezone'
 fi
 
 export MQTT_HOST="$(bashio::services mqtt host)"
@@ -39,18 +39,24 @@ fi
 
 
 
-if MYSQL_HOST_VALUE="$(bashio::services mysql host 2>/dev/null)" && [[ -n "${MYSQL_HOST_VALUE}" ]]; then
-    export MYSQL_SERVICE_HOST="${MYSQL_HOST_VALUE}"
-    export MYSQL_SERVICE_PORT="$(bashio::services mysql port)"
-    export MYSQL_SERVICE_USER="$(bashio::services mysql username)"
-    export MYSQL_SERVICE_PASSWORD="$(bashio::services mysql password)"
-    bashio::log.info "Supervisor MySQL service detected."
-else
-    export MYSQL_SERVICE_HOST=""
-    export MYSQL_SERVICE_PORT=""
-    export MYSQL_SERVICE_USER=""
-    export MYSQL_SERVICE_PASSWORD=""
-    bashio::log.info "Supervisor MySQL service is not available; manual MariaDB mode remains available."
+# The Supervisor MySQL API is only relevant to MariaDB in supervisor mode.
+# Querying it for PostgreSQL/manual MariaDB generates misleading API errors.
+export MYSQL_SERVICE_HOST=""
+export MYSQL_SERVICE_PORT=""
+export MYSQL_SERVICE_USER=""
+export MYSQL_SERVICE_PASSWORD=""
+
+if [[ "$(bashio::config 'database_type')" == "mariadb" ]] &&
+   [[ "$(bashio::config 'mariadb.connection')" == "supervisor" ]]; then
+    if MYSQL_HOST_VALUE="$(bashio::services mysql host 2>/dev/null)" && [[ -n "${MYSQL_HOST_VALUE}" ]]; then
+        export MYSQL_SERVICE_HOST="${MYSQL_HOST_VALUE}"
+        export MYSQL_SERVICE_PORT="$(bashio::services mysql port)"
+        export MYSQL_SERVICE_USER="$(bashio::services mysql username)"
+        export MYSQL_SERVICE_PASSWORD="$(bashio::services mysql password)"
+        bashio::log.info "Supervisor MySQL service detected."
+    else
+        bashio::log.info "Supervisor MySQL service is not available; manual MariaDB mode remains available."
+    fi
 fi
 
 exec python3 /app/app.py
