@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.21 — Prevent duplicate Wi-Fi arrival notifications
+
+- Keep the most recent decisive Wi-Fi evidence (verified registered-MAC HOME or completed debounced ARP NOT_HOME) separately from temporary `unavailable` source status.
+- Do not emit another `wifi_in` when ARP recovers after a probe error, MAC mismatch or temporary freshness timeout if the previous decisive state was already HOME.
+- Preserve a real `wifi_out` followed by `wifi_in` when consecutive valid negative probes establish NOT_HOME, including transitions interrupted by technical probe errors; no fictitious departure is emitted solely because ARP fails.
+- Add regression tests for unknown/recovery and real out/in sequences. MQTT event names/topics, Recorder, Home Assistant notification package and owner notification switches are unchanged.
+
+
 ## 0.1.20 — DigitalHouses branding alignment
 
 - Replace `icon.png` (128 × 128) and `logo.png` (250 × 100) with the approved dark-navy neon-blue house + resident + red magnifier design, matching Internet and Recorder Apps.
