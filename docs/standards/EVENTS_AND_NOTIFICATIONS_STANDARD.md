@@ -236,7 +236,7 @@ For services that accept `title` and `message`, pass ordinary YAML fields,
 with short Jinja substitutions only where dynamic text is needed:
 
 ```yaml
-- action: script.write2log
+- action: persistent_notification.create
   data:
     title: "📶 Wi-Fi обнаружен: {{ person_device }}"
     message: "Устройство подтверждено по зарегистрированному MAC."
