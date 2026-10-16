@@ -295,7 +295,15 @@ Storage collection can be automatic, explicit SSH, or disabled.
 
 For Supervisor MariaDB, automatic mode uses Home Assistant OS host storage information. For external PostgreSQL/MariaDB, storage can be collected through a normal SSH user that can log in and run `df`; root access is not required.
 
-See [Technical documentation](DOCS.md) for path autodetection and PostgreSQL cluster selection.
+For new external database hosts, provision the standard unprivileged SSH user with
+[`scripts/create_storage_ssh_user.sh`](scripts/create_storage_ssh_user.sh),
+run **as root inside the database Linux host/LXC**. The script is safe to
+repeat and never changes the SSH daemon or database configuration. The
+username to configure in Recorder App is `dh_recorder`.
+
+See [Technical documentation](DOCS.md#standard-ssh-storage-account-new-sites) for
+the one-command installation, password reset, required settings,
+path autodetection and PostgreSQL cluster selection.
 
 ## Backup and restore
 
