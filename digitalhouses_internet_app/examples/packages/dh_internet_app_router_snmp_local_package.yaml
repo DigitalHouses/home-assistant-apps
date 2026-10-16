@@ -1,0 +1,43 @@
+# ==============================================================================
+# DIGITALHOUSES INTERNET APP — ROUTER WAN SNMP SOURCES (LOCAL)
+# Example: Ruslan Home · Ubiquiti UniFi Express 7 (UX7)
+#
+# Deploy under /config/packages/Local/Network/ when Home Assistant uses
+#   homeassistant: {packages: !include_dir_merge_named packages}
+#
+# LOCAL adapter only. All monthly/total traffic accounting is App-owned.
+# Set both resulting entity IDs in DigitalHouses Internet App -> traffic.
+# Do not install simultaneously with the previous router_dl_ul_sensors_package.
+#
+# Router LAN IP: 192.168.2.1
+# SNMP: v2c, read-only community "public" (restrict to trusted LAN hosts)
+# WAN: eth1, ifIndex 7. Verify the WAN ifIndex on every other router.
+# ==============================================================================
+
+dh_internet_app_router_snmp_local_package:
+  sensor:
+    # IF-MIB::ifHCInOctets.7 — cumulative WAN RX in bytes (Download).
+    - platform: snmp
+      host: 192.168.2.1
+      name: dh_internet_app_router_wan_download_cumulative
+      unique_id: dh_internet_app_router_wan_download_cumulative
+      community: public
+      version: 2c
+      baseoid: 1.3.6.1.2.1.31.1.1.1.6.7
+      scan_interval: 60
+      accept_errors: true
+      device_class: data_size
+      unit_of_measurement: B
+
+    # IF-MIB::ifHCOutOctets.7 — cumulative WAN TX in bytes (Upload).
+    - platform: snmp
+      host: 192.168.2.1
+      name: dh_internet_app_router_wan_upload_cumulative
+      unique_id: dh_internet_app_router_wan_upload_cumulative
+      community: public
+      version: 2c
+      baseoid: 1.3.6.1.2.1.31.1.1.1.10.7
+      scan_interval: 60
+      accept_errors: true
+      device_class: data_size
+      unit_of_measurement: B
