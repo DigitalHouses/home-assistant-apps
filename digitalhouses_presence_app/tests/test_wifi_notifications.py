@@ -80,6 +80,57 @@ class LinkEventTests(unittest.TestCase):
         self.assertFalse(events)
         self.assertEqual(e.residents[PHONE["tracker"]].wifi, Status.UNAVAILABLE)
 
+    def test_no_duplicate_wifi_in_after_probe_failure(self):
+        # The source may go HOME -> UNAVAILABLE -> HOME without a verified
+        # departure. That is a recovery, not another arrival.
+        e = self.engine()
+        self.assertEqual(poll_registered_wifi(e, [PHONE], NOW, sample(False)), [])
+        first = poll_registered_wifi(e, [PHONE], NOW + timedelta(minutes=1), sample(True))
+        self.assertEqual([event["event_type"] for event in first], ["wifi_in"])
+        failure = poll_registered_wifi(
+            e, [PHONE], NOW + timedelta(minutes=2),
+            lambda _: WifiEvidence(False, "probe_error"))
+        self.assertFalse(failure)
+        self.assertEqual(e.residents[PHONE["tracker"]].wifi, Status.UNAVAILABLE)
+        again = poll_registered_wifi(e, [PHONE], NOW + timedelta(minutes=3), sample(True))
+        self.assertEqual(again, [])
+        self.assertEqual(e.residents[PHONE["tracker"]].wifi, Status.HOME)
+
+    def test_no_duplicate_wifi_in_after_lost_freshness(self):
+        e = Engine(mode=Mode.GPS, wifi_absence_minutes=1)
+        e.add(PHONE["tracker"], PHONE["device_name"], user_name="Serzhan")
+        e.gps_observation(PHONE["tracker"], Status.HOME, NOW)
+        poll_registered_wifi(e, [PHONE], NOW, sample(False))
+        first = poll_registered_wifi(e, [PHONE], NOW + timedelta(minutes=1), sample(True))
+        self.assertEqual([event["event_type"] for event in first], ["wifi_in"])
+        lost = e.expire(NOW + timedelta(minutes=2, seconds=5))
+        self.assertEqual([event["event_type"] for event in lost], ["wifi_lost"])
+        self.assertEqual(e.residents[PHONE["tracker"]].wifi, Status.UNAVAILABLE)
+        resumed = poll_registered_wifi(e, [PHONE], NOW + timedelta(minutes=3), sample(True))
+        self.assertEqual(resumed, [], "Recovery from unknown must not report another wifi_in")
+        self.assertEqual(e.residents[PHONE["tracker"]].wifi, Status.HOME)
+
+    def test_verified_wifi_out_then_in_even_with_intermediate_failure(self):
+        e = Engine(mode=Mode.GPS, wifi_absence_minutes=1)
+        e.add(PHONE["tracker"], PHONE["device_name"], user_name="Serzhan")
+        e.gps_observation(PHONE["tracker"], Status.HOME, NOW)
+        poll_registered_wifi(e, [PHONE], NOW, sample(True))
+        error = poll_registered_wifi(
+            e, [PHONE], NOW + timedelta(minutes=1),
+            lambda _: WifiEvidence(False, "probe_error"))
+        self.assertFalse(error)
+        poll_registered_wifi(e, [PHONE], NOW + timedelta(minutes=2), sample(False))
+        away = poll_registered_wifi(e, [PHONE], NOW + timedelta(minutes=3), sample(False))
+        self.assertEqual([event["event_type"] for event in away], ["wifi_out"])
+        error2 = poll_registered_wifi(
+            e, [PHONE], NOW + timedelta(minutes=4),
+            lambda _: WifiEvidence(False, "mac_mismatch"))
+        self.assertFalse(error2)
+        home = poll_registered_wifi(e, [PHONE], NOW + timedelta(minutes=5), sample(True))
+        self.assertEqual([event["event_type"] for event in home], ["wifi_in"])
+        self.assertFalse(poll_registered_wifi(
+            e, [PHONE], NOW + timedelta(minutes=6), sample(True)))
+
     def test_discovery_exposes_native_wifi_lost_event_type(self):
         d = discovery("0.1.15", list(self.engine().residents.values()))
         self.assertIn("wifi_lost", d["components"]["event"]["event_types"])
