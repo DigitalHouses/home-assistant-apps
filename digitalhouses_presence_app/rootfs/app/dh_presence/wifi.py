@@ -9,7 +9,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import ipaddress
 import logging
+import re
+import subprocess
 
 from .core import Engine, Status
 from .registration import ArpNoReply, active_arp_mac, normalized_mac
@@ -25,19 +28,78 @@ class WifiEvidence:
     interface: str | None = None
 
 
-def probe_registered_phone(record: dict, arp_probe=active_arp_mac) -> WifiEvidence:
-    """Use registered IP+MAC; never discover/guess an unrelated resident."""
-    expected = normalized_mac(record["mac"])
-    try:
-        received, interface = arp_probe(record["ip"])
-    except ArpNoReply:
+def active_ping_ip(ip_text: str, runner=subprocess.run) -> bool:
+    """One fresh ICMP probe to a registered private IPv4 address.
+
+    Success authenticates IP reachability, not phone identity. A missing ICMP
+    response is meaningful only when ping completes and reports packet loss.
+    All command/route/permission failures are UNKNOWN, not absence.
+    """
+    ip = ipaddress.ip_address(ip_text)
+    if not isinstance(ip, ipaddress.IPv4Address) or not ip.is_private or ip.is_loopback or ip.is_link_local:
+        raise ValueError("PING requires a registered private LAN IPv4 address")
+    result = runner(["ping", "-n", "-c", "1", "-W", "2", ip_text],
+                    capture_output=True, text=True, timeout=4, check=False)
+    output = result.stdout or ""
+    success = re.search(r"\b[1-9]\d*\s+(?:packets\s+)?received\b", output)
+    no_reply = re.search(r"\b0\s+(?:packets\s+)?received\b", output)
+    if result.returncode == 0 and success:
+        return True
+    if result.returncode == 1 and no_reply and not result.stderr.strip():
+        return False
+    raise RuntimeError("ICMP probe failed or returned ambiguous output")
+
+
+def probe_registered_phone(
+    record: dict, arp_probe=active_arp_mac, *,
+    ping_probe=active_ping_ip, use_ping: bool = False, use_arp: bool = True,
+) -> WifiEvidence:
+    """Combine enabled methods: any positive means HOME, all verified misses mean no_reply.
+
+    An explicit ARP MAC mismatch takes precedence over an ICMP response:
+    address reassignment must never be mistaken for the enrolled phone.
+    PING-only relies on a stable private IP/DHCP reservation, not MAC identity.
+    """
+    if not use_ping and not use_arp:
+        return WifiEvidence(False, "disabled")
+
+    arp_positive = False
+    arp_negative = False
+    arp_interface = None
+    arp_error = None
+    if use_arp:
+        expected = normalized_mac(record["mac"])
+        try:
+            received, arp_interface = arp_probe(record["ip"])
+            if normalized_mac(received) != expected:
+                return WifiEvidence(False, "mac_mismatch")
+            arp_positive = True
+        except ArpNoReply:
+            arp_negative = True
+        except (RuntimeError, OSError, ValueError, TimeoutError):
+            arp_error = "probe_error"
+
+    ping_positive = False
+    ping_negative = False
+    ping_error = None
+    if use_ping:
+        try:
+            ping_positive = ping_probe(record["ip"]) is True
+            ping_negative = not ping_positive
+        except (RuntimeError, OSError, ValueError, TimeoutError, subprocess.SubprocessError):
+            ping_error = "ping_error"
+
+    if arp_positive and ping_positive:
+        return WifiEvidence(True, "mac_and_ping_verified", arp_interface)
+    if arp_positive:
+        return WifiEvidence(True, "mac_verified", arp_interface)
+    if ping_positive:
+        return WifiEvidence(True, "ping_reply")
+    if arp_error or ping_error:
+        return WifiEvidence(False, arp_error or ping_error)
+    if (not use_arp or arp_negative) and (not use_ping or ping_negative):
         return WifiEvidence(False, "no_reply")
-    except (RuntimeError, OSError, ValueError, TimeoutError):
-        return WifiEvidence(False, "probe_error")
-    if normalized_mac(received) != expected:
-        # IP reassignment or proxying: don't confuse someone else's device.
-        return WifiEvidence(False, "mac_mismatch")
-    return WifiEvidence(True, "mac_verified", interface)
+    return WifiEvidence(False, "probe_error")
 
 
 def poll_registered_wifi(
@@ -70,7 +132,8 @@ def poll_registered_wifi(
             engine.wifi_probe_failed(resident.tracker, observed_at)
         resident.wifi_last_probe_at = observed_at
         resident.wifi_probe_result = evidence.reason
-        # First successful positive sample is a baseline, not a synthetic
-        # notification. A debounced completed negative is a later transition.
-        resident.wifi_monitor_initialized = True
+        # First sample after a method change is a baseline; neither a live
+        # MQTT toggle nor a restart may synthesize arrival or departure.
+        if evidence.reason != "disabled":
+            resident.wifi_monitor_initialized = True
     return events
