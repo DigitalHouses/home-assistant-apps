@@ -45,7 +45,14 @@ def active_ping_ip(ip_text: str, runner=subprocess.run) -> bool:
     no_reply = re.search(r"\b0\s+(?:packets\s+)?received\b", output)
     if result.returncode == 0 and success:
         return True
-    if result.returncode == 1 and no_reply and not result.stderr.strip():
+    # ICMP failures from a router/interface may still print "0 received".
+    # Reject them as unknown instead of treating network failure as absence.
+    network_error = re.search(
+        r"(?i)(destination\s+(?:host|net|network)\s+unreachable|network\s+is\s+unreachable|"
+        r"\b[1-9]\d*\s+errors?\b|time\s+exceeded|sendmsg:|operation\s+not\s+permitted)",
+        output,
+    )
+    if result.returncode == 1 and no_reply and not result.stderr.strip() and not network_error:
         return False
     raise RuntimeError("ICMP probe failed or returned ambiguous output")
 
