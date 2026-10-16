@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.20 — DigitalHouses branding alignment
+
+- Replace `icon.png` (128 × 128) and `logo.png` (250 × 100) with the approved dark-navy neon-blue house + resident + red magnifier design, matching Internet and Recorder Apps.
+- Preserve image aspect ratios and the canonical Supervisor App asset paths. Presence runtime behavior, MQTT entity/event contracts, GPS/Wi-Fi logic, notifications and privileges are unchanged.
+
+
 ## 0.1.19 — Cleaner operational logging
 
 - Move scheduled five-minute MQTT Discovery re-announcement messages from INFO to DEBUG, keeping initial synchronization, reconnection and recovery visible at INFO. MQTT payloads, retained QoS1 delivery, and resynchronization cadence are unchanged.
