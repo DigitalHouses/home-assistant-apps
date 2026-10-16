@@ -1,7 +1,7 @@
 configuration:
   presence_mode:
     name: Режим присутствия
-    description: Задаёт начальный режим. Режим можно изменить в HA через select.dh_presence_app_mode; Wi-Fi ещё не реализован.
+    description: Задаёт начальный режим. Режим можно изменить через select.dh_presence_app_mode, а проверку сети — глобальными переключателями PING и ARP в устройстве DH Presence.
   wifi_absence_minutes:
     name: Время подтверждения отсутствия Wi-Fi
   gps_poll_interval_seconds:
