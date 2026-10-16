@@ -160,6 +160,10 @@ class ProbeSwitchTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             active_ping_ip(PHONE["ip"], fake(2, "0 received", "unreachable"))
         with self.assertRaises(RuntimeError):
+            active_ping_ip(PHONE["ip"], fake(
+                1, "From gateway: Destination Host Unreachable\\n"
+                   "1 packets transmitted, 0 received, +1 errors, 100% packet loss"))
+        with self.assertRaises(RuntimeError):
             active_ping_ip(PHONE["ip"], fake(1, "", "command failed"))
 
     def test_switching_methods_no_synthetic_events_or_old_wifi_home(self):
