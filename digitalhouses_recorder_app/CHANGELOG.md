@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.27
+- Replace deprecated Bashio `bashio::addon.options` and `bashio::addon.option` calls with their supported `bashio::app.*` equivalents while retaining migration of historical App options.
+- Query the Supervisor MySQL service only when MariaDB uses `connection: supervisor`; prevent misleading Supervisor API errors on PostgreSQL or manual MariaDB installations.
+- Preserve database, MQTT, telemetry and SSH storage monitoring behavior.
+
 ## 0.1.26
 - Add the App-owned compact-card runtime used by the DigitalHouses management UI: operation state, observable Refresh, and explicit stable-release checks.
 - Publish `sensor.dh_recorder_app_card`, `button.dh_recorder_app_check_updates`, `sensor.dh_recorder_app_latest_version` and `binary_sensor.dh_recorder_app_update_available` under the canonical Recorder MQTT device only.
