@@ -57,8 +57,13 @@ bashio::log.info() { :; }
                     TEST_MARIADB_CONNECTION=connection,
                 )
                 run = subprocess.run(
-                    ["bash", "-c", stubs + "\\n" + mysql_block +
-                     '\\nprintf "MYSQL_HOST=%s\\\\n" "$MYSQL_SERVICE_HOST"\\n'],
+                    [
+                        "bash",
+                        "-c",
+                        chr(10).join(
+                            [stubs, mysql_block, 'echo "MYSQL_HOST=$MYSQL_SERVICE_HOST"']
+                        ),
+                    ],
                     env=env,
                     capture_output=True,
                     text=True,
