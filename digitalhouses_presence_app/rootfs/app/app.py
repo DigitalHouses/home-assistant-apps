@@ -439,8 +439,11 @@ def publish_snapshot(output: MqttOutput, engine: Engine, version: str, started: 
             return False
     if not output.publish(topic("state"), snapshot):
         return False
+    methods = "_".join(key for key in PROBE_KEYS if probes and probes.enabled[key]) if probes else "arp"
+    methods = methods or "disabled"
     if not output.publish(topic("diagnostics"), {"version": version, "started_at": started,
-                     "source_status": "wifi_arp_reachability_pilot" if engine.mode is Mode.WIFI else "gps_with_arp_reachability_pilot"}):
+                     "source_status": ("wifi_" if engine.mode is Mode.WIFI else "gps_with_")
+                     + methods + "_reachability_pilot"}):
         return False
     for r in engine.residents.values():
         if r.distance is not None and not output.publish(topic("distance/"+r.key), r.distance):
@@ -496,7 +499,7 @@ def run():
     LOG.info("Starting %s version %s, mode=%s, configured_residents=%d, ping=%s, arp=%s",
              "DigitalHouses Presence App", version, engine.mode.value, len(engine.residents),
              probes.enabled["ping"], probes.enabled["arp"])
-    LOG.warning("Experimental ARP reachability pilot: %d minutes of completed no-reply checks sets Wi-Fi OFF; iOS sleep can appear absent.",
+    LOG.warning("Experimental PING/ARP reachability pilot: %d minutes of completed enabled-method no-reply checks sets Wi-Fi OFF; sleeping phones may appear absent.",
                 options["wifi_absence_minutes"])
     if options["telemetry_enabled"]:
         LOG.warning("Experimental pilot: telemetry_enabled=true, but there is no telemetry sender; no statistics are transmitted.")
@@ -571,7 +574,7 @@ def run():
                         resident.initialized = False
                     LOG.info("Presence mode changed from HA UI to %s", engine.mode.value)
                     if engine.mode is Mode.WIFI:
-                        LOG.info("Wi-Fi mode: verified MAC means HOME; %d minutes of completed ARP no-reply checks means NOT_HOME",
+                        LOG.info("Wi-Fi mode: enabled-method positive means HOME; %d minutes of completed negative checks means NOT_HOME",
                                  options["wifi_absence_minutes"])
             # Ingress writes the private registration database atomically.
             # One engine observes the new roster without a service restart,
