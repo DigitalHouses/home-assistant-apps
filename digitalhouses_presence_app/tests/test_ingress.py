@@ -1,12 +1,14 @@
 """Single-install Supervisor Ingress security and identity unit tests."""
 import ipaddress
+import io
+import json
 import unittest
 from unittest.mock import patch
 from types import SimpleNamespace
 
 from dh_presence.ui import (
     CORE_NETWORK, SUPERVISOR_INGRESS, authenticated_ingress_user,
-    find_router_wifi_tracker, gps_candidates, ingress_context,
+    find_router_wifi_tracker, gps_candidates, ingress_context, handler_factory,
 )
 
 
@@ -167,6 +169,107 @@ class IngressTests(unittest.TestCase):
         self.assertIn("api('api/lookup-wifi'", HTML)
         self.assertIn("'X-Presence-Request':'lookup-wifi'", HTML)
         self.assertIn("placeholder.value=''", HTML)
+
+
+    def registration_request(self, resident_records, *, selected="device_tracker.13promax_sky",
+                             current_user="resident-ha-user",
+                             current_mac="88:b9:45:80:a7:55",
+                             detected="device_tracker.13promax_sky_2"):
+        """Exercise real POST handler with isolated read-only HA/ARP stubs."""
+        cls = handler_factory("token", "/tmp/registrations.json", set())
+        request = object.__new__(cls)
+        request.path = "/api/register"
+        request.headers = {"Content-Length": "64", "X-Presence-Request": "register"}
+        request.rfile = io.BytesIO(json.dumps({"tracker": selected}).encode())
+        request.client_address = ("172.30.32.2", 12345)
+        request.context = lambda: {
+            "user_id": current_user, "user_name": "Тест",
+            "ip": "192.168.11.54",
+        }
+        replies = []
+        request.reply = lambda status, body: replies.append((status, body))
+        def update_registry(_path, updated):
+            resident_records[:] = updated
+        states = [
+            {"entity_id": detected, "state": "home", "attributes": {
+                "source_type": "router", "network_type": "WLAN",
+                "mac_address": current_mac}},
+        ] if detected else []
+        with patch("dh_presence.ui.gps_candidates", return_value=[
+            {"tracker": selected, "device_name": "13ProMAX .SKY"}]):
+            with patch("dh_presence.ui.active_arp_mac", return_value=(current_mac, "vmbr0")):
+                with patch("dh_presence.ui.read_core_states", return_value=states):
+                    with patch("dh_presence.ui.load_registry",
+                               side_effect=lambda path: list(resident_records)):
+                        with patch("dh_presence.ui.save_registry",
+                                   side_effect=update_registry) as write:
+                            request.do_POST()
+        return replies[0], write.call_count
+
+    def test_register_upgrades_existing_record_without_duplicate_or_identity_change(self):
+        original = {
+            "user_id": "resident-ha-user", "user_name": "Original name",
+            "device_name": "Original device", "device_id": "original-device-id",
+            "entry_id": "original-entry-id", "tracker": "device_tracker.13promax_sky",
+            "ip": "192.168.11.54", "mac": "88:b9:45:80:a7:55",
+        }
+        residents = [dict(original)]
+        (status, body), writes = self.registration_request(residents)
+        self.assertEqual(status, 200)
+        self.assertTrue(body["updated"])
+        self.assertEqual(body["wifi_tracker"], "device_tracker.13promax_sky_2")
+        self.assertEqual(writes, 1)
+        self.assertEqual(len(residents), 1)
+        self.assertEqual(
+            residents[0], {**original, "wifi_tracker": "device_tracker.13promax_sky_2"})
+
+        # Repeating with the same router entity is idempotent.
+        (status, body), _ = self.registration_request(residents)
+        self.assertEqual(status, 200)
+        self.assertEqual(
+            residents[0], {**original, "wifi_tracker": "device_tracker.13promax_sky_2"})
+
+    def test_router_unavailable_keeps_existing_link_when_register_pressed(self):
+        residents = [{
+            "user_id": "resident-ha-user", "user_name": "Тест",
+            "device_name": "13ProMAX .SKY", "device_id": "tracker:device_tracker.13promax_sky",
+            "entry_id": "gps:device_tracker.13promax_sky",
+            "tracker": "device_tracker.13promax_sky", "ip": "192.168.11.54",
+            "mac": "88:b9:45:80:a7:55",
+            "wifi_tracker": "device_tracker.13promax_sky_2",
+        }]
+        (status, body), _ = self.registration_request(residents, detected=None)
+        self.assertEqual(status, 200)
+        self.assertEqual(body["wifi_link_status"], "not_found")
+        self.assertEqual(residents[0]["wifi_tracker"], "device_tracker.13promax_sky_2")
+
+    def test_register_new_phone_persists_link_and_other_user_cannot_take_over(self):
+        residents = []
+        (status, body), _ = self.registration_request(residents)
+        self.assertEqual(status, 200)
+        self.assertFalse(body["updated"])
+        self.assertEqual(residents[0]["wifi_tracker"], "device_tracker.13promax_sky_2")
+        before = list(residents)
+        (status, _), writes = self.registration_request(residents, current_user="other-user")
+        self.assertEqual(status, 400)
+        self.assertEqual(writes, 0)
+        self.assertEqual(residents, before)
+
+    def test_register_wrong_mac_cannot_replace_existing_phone(self):
+        residents = [{
+            "user_id": "resident-ha-user", "user_name": "Тест",
+            "device_name": "13ProMAX .SKY", "device_id": "tracker:device_tracker.13promax_sky",
+            "entry_id": "gps:device_tracker.13promax_sky",
+            "tracker": "device_tracker.13promax_sky", "ip": "192.168.11.54",
+            "mac": "88:b9:45:80:a7:55",
+        }]
+        (status, _), writes = self.registration_request(
+            residents, current_mac="8a:43:3e:74:09:83",
+            detected="device_tracker.iphone")
+        self.assertEqual(status, 400)
+        self.assertEqual(writes, 0)
+        self.assertNotIn("wifi_tracker", residents[0])
+
 
 
 if __name__ == "__main__":
