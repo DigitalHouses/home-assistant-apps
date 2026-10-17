@@ -43,7 +43,21 @@ Verify:
 - schema-v2 performance events are emitted;
 - restoring the threshold clears the current problem without rewriting the historical Recent Results snapshot.
 
-## 3. Server catalog
+## 3. Multiple preferred Speedtest servers (v0.1.24)
+
+Open the App configuration in the regular Home Assistant form. Add two numeric entries to `speedtest.server_ids`, in order: `68000`, then `38516`. Keep `automatic_server_fallback: true`. Save and reopen the form.
+
+Verify:
+
+- saving succeeds (Supervisor does not report `Invalid list for option 'server_ids'`);
+- the form retains both separate IDs in the correct order;
+- Edit in YAML shows a two-item `server_ids` list, not a scalar;
+- YAML with unquoted integer list items `- 68000` and `- 38516` saves correctly;
+- startup logs do not report configuration errors;
+- preferred server attempts are made in order; an automatic selection is attempted only after both preferred attempts fail;
+- an empty list still selects a server automatically.
+
+## 4. Server catalog
 
 Press `button.dh_internet_app_refresh_servers`.
 
@@ -53,7 +67,7 @@ Verify:
 - Available servers receives a refreshed timestamp and server list;
 - no periodic server-catalog polling appears in the App log.
 
-## 4. Outage and persistence
+## 5. Outage and persistence
 
 With Recovery still disabled, create a controlled Internet outage.
 
@@ -81,7 +95,7 @@ Verify:
 - the Outages sensor still contains every outage recorded in the current month; only dashboard presentation may limit the visible rows;
 - `connection_restored` is emitted.
 
-## 5. Notification presentation
+## 6. Notification presentation
 
 Install exactly one local notification package.
 
@@ -89,7 +103,7 @@ Verify that each supported `event.dh_internet_app_event` machine event activates
 
 Verify there is no secondary `dh_internet_app_notification` event, Notification Envelope, adapter layer or duplicated machine-schema validation. Notification text must read required event data directly from `trigger.to_state.attributes`.
 
-## 6. Optional Router and traffic bindings
+## 7. Optional Router and traffic bindings
 
 Configure only Router WAN/current-rate mappings first.
 
@@ -112,7 +126,7 @@ Remove an optional mapping and restart the App.
 
 Verify the previously discovered optional MQTT component is removed.
 
-## 7. Product telemetry
+## 8. Product telemetry
 
 With `telemetry_enabled: false`, restart the App and verify no heartbeat request is logged or observed.
 
@@ -120,7 +134,7 @@ Then explicitly enable `telemetry_enabled: true` and restart the released App. V
 
 Press `button.dh_internet_app_delete_telemetry` and verify the server-side installation record is removed. Disable telemetry again if the installation should stop reporting.
 
-## 8. Recovery — only after read-only tests pass
+## 9. Recovery — only after read-only tests pass
 
 Use known-good Home Assistant `button.*` or `switch.*` recovery entities.
 
@@ -149,7 +163,7 @@ Verify:
 - active cooldown is not bypassed;
 - a restart between cycles waits through a retry guard before another power action.
 
-## 9. Immutable delivery, backup and restore
+## 10. Immutable delivery, backup and restore
 
 Install or update the current production App from the DigitalHouses App repository.
 

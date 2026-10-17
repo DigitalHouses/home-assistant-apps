@@ -46,7 +46,21 @@ Before every manual or periodic Speedtest, the App performs a fresh connectivity
 
 ### Server selection
 
-`speedtest.server_ids` is an ordered list of preferred Ookla server IDs. Empty means automatic selection. Configured IDs are tried in order; when `automatic_server_fallback` is enabled, one final automatic-selection attempt follows them.
+`speedtest.server_ids` is an ordered list of positive Ookla server IDs. Empty means automatic selection. Configured IDs are tried in order; when `automatic_server_fallback` is enabled, one final automatic-selection attempt follows them.
+
+From v0.1.24, the standard Home Assistant configuration form accepts several IDs: add each numeric ID as its own value/chip. Its Supervisor schema validates these text entries, and the runtime converts them to integers. Existing numeric YAML lists remain valid and keep their order:
+
+```yaml
+speedtest:
+  periodic_enabled: true
+  interval_minutes: 30
+  timeout_seconds: 240
+  server_ids:
+    - 68000
+    - 38516
+  automatic_server_fallback: true
+```
+
 
 ```yaml
 speedtest:

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.24
+
+- Fix the Home Assistant configuration form for `speedtest.server_ids`: replace the numeric-list field that the frontend incorrectly renders as a single number with a validated multi-entry numeric-text field.
+- Continue accepting the same ordered YAML list of positive integer Ookla IDs (for example, `[68000, 38516]`); normalize Supervisor string entries to runtime integers while preserving previously saved integer lists, order, and deduplication.
+- Keep the existing preferred-server retry sequence, optional automatic fallback, option key, MQTT entities and persisted state unchanged.
+
 ## 0.1.23
 
 - Add App-owned compact-card controls matching the established DigitalHouses Agent interaction model: `button.dh_internet_app_refresh`, `button.dh_internet_app_check_updates` and `sensor.dh_internet_app_card`.

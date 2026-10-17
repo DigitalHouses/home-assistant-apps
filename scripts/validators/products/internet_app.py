@@ -33,8 +33,10 @@ def validate_internet(root: Path, app: Path, context: dict[str, Any]) -> None:
         fail(f"{app.name}: speedtest options and schema must be mappings")
     if speedtest_options.get("server_ids") != []:
         fail(f"{app.name}: server_ids must default to an empty list")
-    if speedtest_schema.get("server_ids") != ["int"]:
-        fail(f"{app.name}: server_ids must remain a list of integer IDs")
+    # [int] loses multiple=true in the Home Assistant UI; a validated string
+    # list renders as a multi-value field, and the App converts IDs to int.
+    if speedtest_schema.get("server_ids") != ["match(^[1-9][0-9]*$)"]:
+        fail(f"{app.name}: server_ids must support positive numeric multi-value UI")
     if "traffic" not in options:
         fail(f"{app.name}: traffic must be an App option")
     if options.get("telemetry_enabled") is not False:

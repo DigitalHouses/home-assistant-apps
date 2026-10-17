@@ -34,7 +34,7 @@ All recovery timing belongs to App configuration: maximum cycles, retry interval
 
 ## Current product state
 
-Version `0.1.23` adds App-owned compact-card controls for MQTT snapshot refresh and stable release checks while keeping update installation and restart under Home Assistant Supervisor. The canonical Supervisor identity is permanent, the temporary migration runtime has been removed, and the App remains stable in Home Assistant. The product provides:
+Version `0.1.24` fixes editing multiple preferred Ookla server IDs in the Home Assistant configuration form. Version `0.1.23` introduced App-owned compact-card controls and stable release checks while keeping update installation and restart under Home Assistant Supervisor. The canonical Supervisor identity is permanent, the temporary migration runtime has been removed, and the App remains stable in Home Assistant. The product provides:
 
 - Internet and router reachability;
 - legacy `binary_sensor.internet_status` compatibility alias mirroring `binary_sensor.dh_internet_app_internet`;
