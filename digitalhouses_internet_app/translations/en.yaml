@@ -30,7 +30,7 @@ configuration:
         description: Maximum time allowed for one Ookla Speedtest attempt.
       server_ids:
         name: Preferred server IDs (list)
-        description: Numeric Ookla IDs in priority order. If the visual form submits a single number, use Edit in YAML and set server_ids to [68000, 38516]. Leave the list empty for automatic selection.
+        description: Add each numeric Ookla server ID as a separate item in priority order (for example, 68000 then 38516). YAML numeric lists remain supported. Leave the list empty for automatic selection.
       automatic_server_fallback:
         name: Automatic server fallback
         description: After preferred servers fail, try one automatic Ookla server selection.
