@@ -48,6 +48,19 @@ Before every manual or periodic Speedtest, the App performs a fresh connectivity
 
 `speedtest.server_ids` is an ordered list of preferred Ookla server IDs. Empty means automatic selection. Configured IDs are tried in order; when `automatic_server_fallback` is enabled, one final automatic-selection attempt follows them.
 
+```yaml
+speedtest:
+  periodic_enabled: true
+  interval_minutes: 30
+  timeout_seconds: 240
+  server_ids:
+    - 68000
+    - 38516
+  automatic_server_fallback: true
+```
+
+**Supervisor configuration editor:** `server_ids` must remain a YAML list, even with a single ID (`server_ids: [68000]`). Some frontend forms can submit a scalar (`server_ids: 68000`), which Supervisor rejects with `Invalid list for option 'server_ids'`. In that case use the App Configuration tab's **Edit in YAML** action and enter the list as above. Do not replace the list schema with a scalar or comma-separated string: multiple preferred servers and their order are part of the supported contract. App/runtime updates cannot change the built-in Home Assistant configuration form.
+
 The server catalog is on-demand: `button.dh_internet_app_refresh_servers` updates one diagnostic `sensor.dh_internet_app_available_servers`. There is no background server-catalog polling.
 
 ## Quality thresholds
