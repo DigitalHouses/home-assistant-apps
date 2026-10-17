@@ -16,7 +16,7 @@ from threading import Lock, Thread
 from urllib.request import Request, urlopen
 
 from dh_presence.registration import (
-    active_arp_mac, completed_record, load_registry, put_registration,
+    active_arp_mac, completed_record, load_registry, normalized_mac, put_registration,
     save_registry,
 )
 from dh_presence.admin import (
@@ -143,6 +143,44 @@ def gps_candidates(token: str) -> list[dict]:
     return sorted(candidates, key=lambda r: r["device_name"].casefold())
 
 
+def find_router_wifi_tracker(states: list[dict], registered_mac: str) -> dict:
+    """Match one HA router tracker by verified phone MAC; never use IP/name.
+
+    WLAN metadata may disappear while a router tracker is not_home; only
+    explicit LAN records are excluded. Duplicates must not be auto-selected.
+    """
+    expected = normalized_mac(registered_mac)
+    matches = []
+    for item in states:
+        if not isinstance(item, dict):
+            continue
+        entity = item.get("entity_id")
+        attrs = item.get("attributes")
+        if (not isinstance(entity, str) or not TRACKER_RE.fullmatch(entity)
+                or not isinstance(attrs, dict)
+                or attrs.get("source_type") != "router"
+                or attrs.get("network_type") == "LAN"):
+            continue
+        raw_mac = attrs.get("mac_address") or attrs.get("mac")
+        if not isinstance(raw_mac, str):
+            continue
+        try:
+            if normalized_mac(raw_mac) != expected:
+                continue
+        except ValueError:
+            continue
+        matches.append({
+            "tracker": entity,
+            "state": item.get("state") if item.get("state") in ("home", "not_home")
+                     else "unavailable",
+        })
+    if not matches:
+        return {"status": "not_found"}
+    if len(matches) != 1:
+        return {"status": "multiple", "count": len(matches)}
+    return {"status": "matched", **matches[0]}
+
+
 def admin_registration_diagnostics(token: str, registry_path: str) -> list[dict]:
     """All registered phones including private IP/MAC, for verified HA admins only.
 
@@ -260,11 +298,12 @@ def handler_factory(token: str, registry_path: str, excluded_users: set[str]):
         def do_POST(self):
             try:
                 context = self.context()
-                if self.path != "/api/register":
+                if self.path not in ("/api/register", "/api/lookup-wifi"):
                     return self.reply(404, {"error": "not_found"})
                 if context["user_id"] in excluded_users:
                     return self.reply(403, {"error": "excluded_ha_user"})
-                if self.headers.get("X-Presence-Request") != "register":
+                expected_action = "register" if self.path == "/api/register" else "lookup-wifi"
+                if self.headers.get("X-Presence-Request") != expected_action:
                     return self.reply(403, {"error": "missing_request_proof"})
                 size = int(self.headers.get("Content-Length", "0"))
                 if not 1 <= size <= 1024:
@@ -280,6 +319,12 @@ def handler_factory(token: str, registry_path: str, excluded_users: set[str]):
                 # A verified *direct* ARP reply is required; never infer MAC
                 # from neighbour cache, Wi-Fi misses or a browser field.
                 mac, iface = active_arp_mac(context["ip"])
+                if self.path == "/api/lookup-wifi":
+                    # Preview only: no identity binding or registry modification.
+                    # The MAC belongs to the local browser phone, not by proof
+                    # to the GPS tracker selected in the dropdown.
+                    return self.reply(200, find_router_wifi_tracker(
+                        read_core_states(token), mac))
                 record = completed_record({
                     **context,
                     **choice,
@@ -345,6 +390,7 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;margin:8px 0 0}
 <p class="muted">Откройте Home Assistant с регистрируемого телефона через домашний Wi-Fi и локальный адрес. Через Cloudflare/VPN доступны только уже зарегистрированные устройства.</p>
 <div id="who" class="muted">Загрузка...</div>
 <select id="tracker" aria-label="Выбрать телефон"></select>
+<p id="wifiLookup" class="muted" role="status">Выберите устройство для поиска Wi-Fi-трекера по MAC текущего телефона.</p>
 <div class="actions"><button id="register">Зарегистрировать</button><button id="reload">Обновить</button></div>
 <pre id="result" role="status"></pre></section>
 <section class="panel"><h3>Мои устройства</h3><div id="residents" class="muted">...</div></section>
@@ -373,6 +419,10 @@ async function load(){
   const [c,s]=await Promise.all([api('api/candidates'),api('api/status')]);
   q('who').textContent='Пользователь: '+c.user_name;
   q('tracker').replaceChildren();
+  const placeholder=document.createElement('option');
+  placeholder.value='';placeholder.textContent='Выберите устройство...';
+  q('tracker').append(placeholder);
+  q('wifiLookup').textContent='Выберите устройство для поиска Wi-Fi-трекера.';
   for(const x of c.candidates){
    const o=document.createElement('option');o.value=x.tracker;
    o.textContent=x.device_name+' ('+x.tracker+')';q('tracker').append(o);
@@ -497,7 +547,39 @@ async function loadAdminDebug(){
   q('debugList').replaceChildren();
  }
 }
-q('reload').onclick=load;
+let lookupRequest=0;
+async function lookupWifiTracker(){
+ const selected=q('tracker').value;
+ const current=++lookupRequest;
+ if(!selected){
+  q('wifiLookup').textContent='Выберите устройство для поиска Wi-Fi-трекера.';
+  return;
+ }
+ q('wifiLookup').textContent='Поиск Wi-Fi-трекера по MAC текущего телефона...';
+ try{
+  const result=await api('api/lookup-wifi',{
+   method:'POST',
+   headers:{'Content-Type':'application/json','X-Presence-Request':'lookup-wifi'},
+   body:JSON.stringify({tracker:selected})
+  });
+  if(current!==lookupRequest||q('tracker').value!==selected)return;
+  if(result.status==='matched'){
+   q('wifiLookup').textContent='Wi-Fi-трекер найден: '+result.tracker+' · '+result.state+
+    ' (MAC телефона, открывшего эту страницу)';
+  }else if(result.status==='multiple'){
+   q('wifiLookup').textContent='Найдено '+result.count+
+    ' трекеров с одним MAC. Автоматический выбор запрещён.';
+  }else{
+   q('wifiLookup').textContent='Wi-Fi-трекер с MAC текущего телефона не найден.';
+  }
+ }catch(e){
+  if(current!==lookupRequest||q('tracker').value!==selected)return;
+  q('wifiLookup').textContent='Wi-Fi-поиск недоступен: '+e.message+
+   '. Регистрацию можно выполнить отдельно.';
+ }
+}
+q('tracker').addEventListener('change',lookupWifiTracker);
+q('reload').onclick=()=>{++lookupRequest;load()};
 q('reloadDebug').onclick=loadAdminDebug;
 loadAdminDebug();
 q('register').onclick=async()=>{
