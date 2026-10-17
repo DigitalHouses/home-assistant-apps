@@ -47,7 +47,16 @@ def validate_entry(entry: dict) -> dict:
     if not isinstance(ip, ipaddress.IPv4Address) or not ip.is_private or ip.is_loopback or ip.is_link_local:
         raise ValueError("Nonlocal registration IP")
     normalized_mac(entry["mac"])
-    return {key: entry[key] for key in required}
+    clean = {key: entry[key] for key in required}
+    wifi_tracker = entry.get("wifi_tracker")
+    if wifi_tracker is not None:
+        if (not isinstance(wifi_tracker, str)
+                or not re.fullmatch(r"device_tracker\\.[a-z0-9_]+", wifi_tracker)):
+            raise ValueError("Invalid Wi-Fi device_tracker binding")
+        if wifi_tracker == entry["tracker"]:
+            raise ValueError("Wi-Fi tracker must differ from GPS tracker")
+        clean["wifi_tracker"] = wifi_tracker
+    return clean
 
 
 def load_registry(path: str) -> list[dict]:
@@ -74,10 +83,19 @@ def put_registration(residents: list[dict], entry: dict) -> list[dict]:
     clean = validate_entry(entry)
     # A single Mobile Companion device cannot silently become two residents.
     for old in residents:
+        if old["tracker"] == clean["tracker"]:
+            if old["user_id"] != clean["user_id"]:
+                raise ValueError("Registered GPS tracker belongs to another HA user")
+            if normalized_mac(old["mac"]) != normalized_mac(clean["mac"]):
+                raise ValueError("Registered GPS tracker has a different Wi-Fi MAC")
         if old["device_id"] == clean["device_id"] and old["tracker"] != clean["tracker"]:
             raise ValueError("Device already bound to a different tracker")
-        if old["mac"] == clean["mac"] and old["tracker"] != clean["tracker"]:
+        if (normalized_mac(old["mac"]) == normalized_mac(clean["mac"])
+                and old["tracker"] != clean["tracker"]):
             raise ValueError("Wi-Fi MAC already bound to a different resident")
+        if (clean.get("wifi_tracker") and old.get("wifi_tracker") == clean["wifi_tracker"]
+                and old["tracker"] != clean["tracker"]):
+            raise ValueError("Wi-Fi tracker already bound to a different resident")
     return [*(r for r in residents if r["tracker"] != clean["tracker"]), clean]
 
 
