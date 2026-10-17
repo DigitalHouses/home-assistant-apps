@@ -100,6 +100,25 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.speedtest.server_ids, (68000, 38516))
         self.assertTrue(config.speedtest.automatic_server_fallback)
 
+    def test_speedtest_supervisor_string_ids_are_normalized(self) -> None:
+        raw = base_options()
+        raw["speedtest"]["server_ids"] = ["68000", "38516", "68000"]
+        config = parse_options(raw)
+        self.assertEqual(config.speedtest.server_ids, (68000, 38516))
+        self.assertTrue(config.speedtest.automatic_server_fallback)
+
+    def test_speedtest_mixed_legacy_and_ui_ids(self) -> None:
+        raw = base_options()
+        raw["speedtest"]["server_ids"] = [68000, "38516", 68000]
+        self.assertEqual(parse_options(raw).speedtest.server_ids, (68000, 38516))
+
+    def test_speedtest_invalid_server_ids_are_rejected(self) -> None:
+        for invalid in ("0", "-2", "12x", "012", "", True, None, 1.5):
+            raw = base_options()
+            raw["speedtest"]["server_ids"] = [invalid]
+            with self.subTest(value=invalid), self.assertRaises(ConfigError):
+                parse_options(raw)
+
     def test_speedtest_scalar_server_id_is_not_a_list(self) -> None:
         raw = base_options()
         raw["speedtest"]["server_ids"] = 68000
