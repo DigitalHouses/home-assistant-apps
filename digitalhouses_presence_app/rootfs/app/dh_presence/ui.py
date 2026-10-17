@@ -211,6 +211,10 @@ def admin_registration_diagnostics(token: str, registry_path: str) -> list[dict]
         records.append({
             "user_name": reg["user_name"], "device_name": reg["device_name"],
             "tracker": reg["tracker"], "ip": reg["ip"], "mac": reg["mac"],
+            "wifi_tracker": reg.get("wifi_tracker"),
+            "wifi_tracker_state": (
+                states.get(reg["wifi_tracker"], {}).get("state", "unavailable")
+                if reg.get("wifi_tracker") else "unavailable"),
             "gps": raw if raw in ("home", "not_home") else "unavailable",
             "wifi": wifi_data.get("wifi", "unavailable"),
             "wifi_last_verified_at": wifi_data.get("wifi_last_verified_at"),
@@ -275,7 +279,7 @@ def handler_factory(token: str, registry_path: str, excluded_users: set[str]):
                                if x["user_id"] == context["user_id"]]
                     self.reply(200, {"residents": [
                         {"user_name": x["user_name"], "device_name": x["device_name"],
-                         "tracker": x["tracker"]}
+                         "tracker": x["tracker"], "wifi_tracker": x.get("wifi_tracker")}
                         for x in records]})
                 elif self.path == "/api/admin/debug":
                     if not is_authorized_ha_admin(context["user_id"], token):
@@ -325,21 +329,43 @@ def handler_factory(token: str, registry_path: str, excluded_users: set[str]):
                     # to the GPS tracker selected in the dropdown.
                     return self.reply(200, find_router_wifi_tracker(
                         read_core_states(token), mac))
-                record = completed_record({
-                    **context,
-                    **choice,
-                    "device_id": "tracker:" + tracker,
-                    "entry_id": "gps:" + tracker,
-                }, mac)
+                # A router outage must not erase an existing association or
+                # prevent GPS enrollment.
+                try:
+                    wifi_match = find_router_wifi_tracker(read_core_states(token), mac)
+                except (OSError, ValueError, TypeError) as exc:
+                    LOG.warning("Router Wi-Fi matching unavailable: %s", type(exc).__name__)
+                    wifi_match = {"status": "unavailable"}
                 with lock:
-                    before = load_registry(registry_path)
-                    after = put_registration(before, record)
-                    save_registry(registry_path, after)
-                LOG.info("Confirmed phone enrollment: tracker=%s iface=%s", tracker, iface)
+                    previous = load_registry(registry_path)
+                    existing = next((r for r in previous if r["tracker"] == tracker), None)
+                    if existing is not None:
+                        # Updating an existing GPS record must not silently
+                        # transfer ownership or replace the registered MAC.
+                        if existing["user_id"] != context["user_id"]:
+                            raise ValueError("GPS tracker registered to another HA user")
+                        if normalized_mac(existing["mac"]) != normalized_mac(mac):
+                            raise ValueError("Registered phone MAC differs from current device")
+                        record = dict(existing)
+                    else:
+                        record = completed_record({
+                            **context,
+                            **choice,
+                            "device_id": "tracker:" + tracker,
+                            "entry_id": "gps:" + tracker,
+                        }, mac)
+                    if wifi_match["status"] == "matched":
+                        record["wifi_tracker"] = wifi_match["tracker"]
+                    updated = put_registration(previous, record)
+                    save_registry(registry_path, updated)
+                LOG.info("Phone registration persisted: tracker=%s existing=%s wifi_match=%s iface=%s",
+                         tracker, existing is not None, wifi_match["status"], iface)
                 self.reply(200, {
-                    "registered": True, "user_name": record["user_name"],
+                    "registered": True, "updated": existing is not None,
+                    "user_name": record["user_name"],
                     "device_name": record["device_name"], "tracker": tracker,
-                    "ip": record["ip"], "mac": mac,
+                    "wifi_tracker": record.get("wifi_tracker"),
+                    "wifi_link_status": wifi_match["status"],
                 })
             except PermissionError as exc:
                 self.reply(403, {"error": str(exc)})
@@ -532,6 +558,8 @@ async function loadAdminDebug(){
    article.append(badges);
    article.append(
     debugRow('GPS tracker',device.tracker),
+     debugRow('Wi-Fi tracker',device.wifi_tracker||'Не привязан'),
+     debugRow('Wi-Fi tracker · состояние',device.wifi_tracker_state),
     debugRow('IP при регистрации',device.ip,true),
     debugRow('MAC при регистрации',device.mac,true),
     debugRow('Последний GPS',formattedGpsTime(device.last_gps_at,data.time_zone)),
@@ -592,7 +620,9 @@ q('register').onclick=async()=>{
    method:'POST',headers:{'Content-Type':'application/json','X-Presence-Request':'register'},
    body:JSON.stringify({tracker:selected})
   });
-  q('result').textContent='Зарегистрирован: '+out.user_name+' ('+out.device_name+')';
+  q('result').textContent=(out.updated?'Обновлена регистрация: ':'Зарегистрирован: ')+
+   out.user_name+' ('+out.device_name+')'+
+   (out.wifi_tracker?' · Wi-Fi tracker: '+out.wifi_tracker:' · Wi-Fi tracker не найден');
   await load();
  }catch(e){q('result').textContent='Регистрация не завершена: '+e.message}
 };
