@@ -51,7 +51,7 @@ def validate_entry(entry: dict) -> dict:
     wifi_tracker = entry.get("wifi_tracker")
     if wifi_tracker is not None:
         if (not isinstance(wifi_tracker, str)
-                or not re.fullmatch(r"device_tracker\\.[a-z0-9_]+", wifi_tracker)):
+                or not re.fullmatch(r"device_tracker\.[a-z0-9_]+", wifi_tracker)):
             raise ValueError("Invalid Wi-Fi device_tracker binding")
         if wifi_tracker == entry["tracker"]:
             raise ValueError("Wi-Fi tracker must differ from GPS tracker")
