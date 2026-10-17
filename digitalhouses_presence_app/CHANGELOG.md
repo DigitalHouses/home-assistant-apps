@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.24 — Save router Wi-Fi association on Register
+
+- On local Ingress `Register`, look up exactly one HA router `device_tracker` by freshly confirmed phone MAC and save its entity ID as the optional `wifi_tracker` field in the existing private resident registration.
+- For already registered GPS devices, re-registration with the same authenticated HA user and verified MAC updates the Wi-Fi link in place without creating another resident or overwriting their original enrollment identity, device name or IP. Another user or a conflicting MAC is rejected.
+- Legacy registration schema v1 files migrate transparently without re-enrollment; new optional Wi-Fi field survives atomic writes and restart. If HA or the router tracker is temporarily unavailable, retain the existing Wi-Fi binding without erasing it. Reject multiple HA tracker matches.
+- Show stored Wi-Fi tracker and live state in admin diagnostics, and return the associated entity to the registering user. This version only **stores** the association; GPS and running Wi-Fi PING/ARP presence decision, MQTT, notification switches, and network privileges remain unchanged.
+
 ## 0.1.23 — Preview router Wi-Fi tracker when selecting a registration device
 
 - On an explicit GPS phone choice in the Ingress registration select, perform a read-only lookup for a router `device_tracker` using the current local phone's freshly verified ARP MAC.

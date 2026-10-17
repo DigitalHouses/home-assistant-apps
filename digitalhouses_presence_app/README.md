@@ -1,8 +1,14 @@
 # DigitalHouses Presence App
 
-**Status: experimental GPS + configurable PING/ARP network-reachability pilot, version 0.1.22.** Observe for several days; do not use for alarm arming until accepted.
+**Status: experimental GPS + configurable PING/ARP network-reachability pilot, version 0.1.24.** Observe for several days; do not use for alarm arming until accepted.
 
 This application belongs to `DigitalHouses/home-assistant-apps/digitalhouses_presence_app` and is installed via **Settings → Apps → App Store**.
+
+## Stored router Wi-Fi tracker (0.1.24)
+
+From the local Ingress phone registration UI, selecting a GPS tracker previews a matching HA router `device_tracker` by the phone's actively ARP-verified MAC. Pressing **Зарегистрировать** now persists the matched `wifi_tracker` on the same resident registry record. On an existing registered GPS tracker (same authenticated user, same verified MAC), only the Wi-Fi link is updated; registration fields are preserved. If no unique router tracker is available, GPS registration still works and a previously stored Wi-Fi link is retained. Admin debug displays the linked entity and its current HA state. Older registry files load without changes.
+
+**Important:** This is a stored association only. The App still uses its existing PING/ARP probes for actual Wi-Fi status and does not yet switch the presence engine to HA router trackers. GPS and notifications remain unchanged.
 
 ## Wi-Fi presence and hybrid mode (0.1.17)
 

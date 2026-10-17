@@ -63,6 +63,43 @@ class RegistrationTests(unittest.TestCase):
         self.assertEqual(len(newer), 1)
         self.assertEqual(newer[0]["ip"], "192.168.11.55")
 
+    def test_wifi_tracker_binding_persists_across_restart_without_migration(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = str(Path(d) / "registration.json")
+            original = record()
+            save_registry(path, [original])
+            self.assertNotIn("wifi_tracker", load_registry(path)[0])
+            updated = record(wifi_tracker="device_tracker.13promax_sky_2")
+            save_registry(path, put_registration(load_registry(path), updated))
+            self.assertEqual(
+                load_registry(path)[0]["wifi_tracker"],
+                "device_tracker.13promax_sky_2")
+            self.assertEqual(load_registry(path)[0]["user_id"], original["user_id"])
+            self.assertEqual(len(load_registry(path)), 1)
+
+    def test_registration_rejects_bad_or_shared_router_trackers(self):
+        for invalid in ("", "sensor.router", "device_tracker.iphone",
+                        "device_tracker.Invalid", 123, None):
+            with self.subTest(invalid=invalid):
+                if invalid is None:
+                    continue  # None means absent (legacy record).
+                with self.assertRaises(ValueError):
+                    validate_entry(record(wifi_tracker=invalid))
+        first = record(wifi_tracker="device_tracker.zte_iphone")
+        other = record(tracker="device_tracker.another_phone",
+                       device_id="another-phone-id",
+                       mac="8a:43:3e:74:09:83",
+                       wifi_tracker="device_tracker.zte_iphone")
+        with self.assertRaisesRegex(ValueError, "already bound"):
+            put_registration([first], other)
+
+    def test_re_registration_cannot_transfer_existing_gps_or_replace_mac(self):
+        existing = [record()]
+        with self.assertRaisesRegex(ValueError, "another HA user"):
+            put_registration(existing, record(user_id="other-user"))
+        with self.assertRaisesRegex(ValueError, "different Wi-Fi MAC"):
+            put_registration(existing, record(mac="8a:43:3e:74:09:83"))
+
     def test_reject_duplicate_mac_device_or_corrupt_registry(self):
         registered = [record()]
         for changed in [
