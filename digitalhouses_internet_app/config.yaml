@@ -1,5 +1,5 @@
 name: DigitalHouses Internet App
-version: 0.1.23
+version: 0.1.24
 slug: digitalhouses_internet_app
 description: Internet availability, Ookla Speedtest, traffic accounting and automatic ONT/router recovery through MQTT Discovery.
 url: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_internet_app
@@ -63,8 +63,10 @@ schema:
     periodic_enabled: bool
     interval_minutes: int(5,720)
     timeout_seconds: int(30,600)
+    # Text-tag UI supports multiple values; Supervisor validates digit-only positive IDs.
+    # Runtime normalizes saved string IDs back to integers (also supports older int arrays).
     server_ids:
-      - int
+      - match(^[1-9][0-9]*$)
     automatic_server_fallback: bool
   traffic:
     traffic_download_total: str
