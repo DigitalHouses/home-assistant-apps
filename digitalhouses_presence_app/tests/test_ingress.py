@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 from dh_presence.ui import (
     CORE_NETWORK, SUPERVISOR_INGRESS, authenticated_ingress_user,
-    gps_candidates, ingress_context,
+    find_router_wifi_tracker, gps_candidates, ingress_context,
 )
 
 
@@ -124,6 +124,49 @@ class IngressTests(unittest.TestCase):
             "tracker": "device_tracker.13promax_sky",
             "device_name": "13ProMAX .SKY",
         }])
+
+
+    def test_router_wifi_tracker_match_by_registered_mac(self):
+        states = [
+            {"entity_id": "device_tracker.13promax_sky",
+             "state": "home", "attributes": {
+                 "source_type": "gps", "mac_address": "88:B9:45:80:A7:55"}},
+            {"entity_id": "device_tracker.not_a_phone",
+             "state": "home", "attributes": {
+                 "source_type": "router", "network_type": "LAN",
+                 "mac_address": "88:B9:45:80:A7:55"}},
+            {"entity_id": "device_tracker.13promax_sky_2",
+             "state": "home", "attributes": {
+                 "source_type": "router", "network_type": "WLAN",
+                 "mac_address": "88:B9:45:80:A7:55", "ip_address": "192.168.11.54"}},
+        ]
+        self.assertEqual(
+            find_router_wifi_tracker(states, "88:b9:45:80:a7:55"),
+            {"status": "matched", "tracker": "device_tracker.13promax_sky_2",
+             "state": "home"})
+        self.assertEqual(find_router_wifi_tracker(states, "8a:43:3e:74:09:83"),
+                         {"status": "not_found"})
+
+    def test_router_tracker_absent_and_ambiguous_matches(self):
+        away = {"entity_id": "device_tracker.iphone", "state": "not_home",
+                "attributes": {"source_type": "router",
+                               "mac_address": "8A:43:3E:74:09:83"}}
+        self.assertEqual(find_router_wifi_tracker([away], "8a:43:3e:74:09:83"),
+                         {"status": "matched", "tracker": "device_tracker.iphone",
+                          "state": "not_home"})
+        duplicate = {"entity_id": "device_tracker.iphone_2",
+                     "state": "unknown", "attributes": {
+                         "source_type": "router", "mac": "8a:43:3e:74:09:83"}}
+        self.assertEqual(
+            find_router_wifi_tracker([away, duplicate], "8a:43:3e:74:09:83"),
+            {"status": "multiple", "count": 2})
+
+    def test_wifi_lookup_runs_on_explicit_select_and_not_on_initial_load(self):
+        from dh_presence.ui import HTML
+        self.assertIn("q('tracker').addEventListener('change',lookupWifiTracker)", HTML)
+        self.assertIn("api('api/lookup-wifi'", HTML)
+        self.assertIn("'X-Presence-Request':'lookup-wifi'", HTML)
+        self.assertIn("placeholder.value=''", HTML)
 
 
 if __name__ == "__main__":

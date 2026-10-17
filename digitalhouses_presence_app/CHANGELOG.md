@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.23 — Preview router Wi-Fi tracker when selecting a registration device
+
+- On an explicit GPS phone choice in the Ingress registration select, perform a read-only lookup for a router `device_tracker` using the current local phone's freshly verified ARP MAC.
+- Match normalized MAC and `source_type: router`, not IP or friendly name. Reject explicitly wired LAN trackers, tolerate absent WLAN metadata while `not_home`; reject ambiguous duplicate MAC matches.
+- Show the found entity ID and current state, not-found, ambiguous, or verification error before registration. The MAC belongs to the phone opening the page; choosing a GPS tracker never automatically proves its ownership.
+- Preserve the existing registration proof and persistence, GPS, Wi-Fi PING/ARP detection, MQTT, notifications, privacy constraints and privileges. Preview does not change the configured presence source or persist bindings.
+
 ## 0.1.22 — Global household PING and ARP detection switches
 
 - Two persisted MQTT switches in the existing DH Presence device: `switch.dh_presence_app_ping` (OFF by default) and `switch.dh_presence_app_arp` (ON by default). Both apply to all registered phones; not separate switches per resident, no additional MQTT device.
