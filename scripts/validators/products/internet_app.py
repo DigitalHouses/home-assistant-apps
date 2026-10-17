@@ -27,6 +27,14 @@ def validate_internet(root: Path, app: Path, context: dict[str, Any]) -> None:
         )
     if "speedtest" not in options:
         fail(f"{app.name}: speedtest must be an App option")
+    speedtest_options = options.get("speedtest")
+    speedtest_schema = schema.get("speedtest")
+    if not isinstance(speedtest_options, dict) or not isinstance(speedtest_schema, dict):
+        fail(f"{app.name}: speedtest options and schema must be mappings")
+    if speedtest_options.get("server_ids") != []:
+        fail(f"{app.name}: server_ids must default to an empty list")
+    if speedtest_schema.get("server_ids") != ["int"]:
+        fail(f"{app.name}: server_ids must remain a list of integer IDs")
     if "traffic" not in options:
         fail(f"{app.name}: traffic must be an App option")
     if options.get("telemetry_enabled") is not False:
