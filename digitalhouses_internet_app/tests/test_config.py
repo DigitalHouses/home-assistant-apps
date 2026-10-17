@@ -92,6 +92,20 @@ class ConfigTests(unittest.TestCase):
         with self.assertRaises(ConfigError):
             parse_options(raw)
 
+    def test_speedtest_multiple_preferred_servers_preserve_order(self) -> None:
+        raw = base_options()
+        raw["speedtest"]["server_ids"] = [68000, 38516]
+        raw["speedtest"]["automatic_server_fallback"] = True
+        config = parse_options(raw)
+        self.assertEqual(config.speedtest.server_ids, (68000, 38516))
+        self.assertTrue(config.speedtest.automatic_server_fallback)
+
+    def test_speedtest_scalar_server_id_is_not_a_list(self) -> None:
+        raw = base_options()
+        raw["speedtest"]["server_ids"] = 68000
+        with self.assertRaisesRegex(ConfigError, "server_ids must be a list"):
+            parse_options(raw)
+
     def test_traffic_cumulative_bindings_must_be_paired(self) -> None:
         raw = base_options()
         raw["traffic"]["traffic_download_total"] = "sensor.router_download_total"
