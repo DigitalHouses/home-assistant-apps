@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ipaddress
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -212,12 +213,22 @@ def parse_options(raw: Any) -> AppConfig:
         raise ConfigError("speedtest.server_ids must be a list")
     server_ids: list[int] = []
     for raw_server_id in server_ids_raw:
-        if isinstance(raw_server_id, bool) or not isinstance(raw_server_id, int):
-            raise ConfigError("speedtest.server_ids must contain integers")
-        if raw_server_id <= 0:
-            raise ConfigError("speedtest.server_ids must contain positive integers")
-        if raw_server_id not in server_ids:
-            server_ids.append(raw_server_id)
+        # The Supervisor multi-value text selector stores IDs as strings.
+        # Preserve compatibility with previously saved integer arrays.
+        if isinstance(raw_server_id, bool):
+            raise ConfigError("speedtest.server_ids must contain positive integer IDs")
+        if isinstance(raw_server_id, int):
+            server_id = raw_server_id
+        elif isinstance(raw_server_id, str) and re.fullmatch(
+            r"[1-9][0-9]*", raw_server_id
+        ):
+            server_id = int(raw_server_id)
+        else:
+            raise ConfigError("speedtest.server_ids must contain positive integer IDs")
+        if server_id <= 0:
+            raise ConfigError("speedtest.server_ids must contain positive integer IDs")
+        if server_id not in server_ids:
+            server_ids.append(server_id)
 
     traffic_download_total = _string_option(
         traffic_raw,
