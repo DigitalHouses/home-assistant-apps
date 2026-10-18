@@ -117,8 +117,13 @@ class PresenceLovelaceYamlTests(unittest.TestCase):
                     one = render({"one": roster["one"]}, event_rows[:1])
                     empty = render({}, [])
                     if path == REGISTERED:
-                        self.assertTrue(rendered.startswith("```text\nТелефоны · 2\n"))
-                        self.assertTrue(rendered.endswith("\n```"))
+                        pre = '<pre style="margin:0; padding:0; line-height:1; ' \
+                              'font-family:\'Courier New\',monospace; white-space:pre;">'
+                        self.assertTrue(rendered.startswith(pre + "Телефоны · 2\n"))
+                        self.assertTrue(rendered.endswith("</pre>"))
+                        self.assertEqual(rendered.count("<pre"), 1)
+                        self.assertEqual(rendered.count("</pre>"), 1)
+                        self.assertNotIn("```", rendered)
                         self.assertIn("├─ 📱 Serzhan (iPhone)", rendered)
                         self.assertIn("│  ├─ GPS · phone_1", rendered)
                         self.assertIn("│  └─ Wi-Fi · router_1", rendered)
@@ -127,9 +132,20 @@ class PresenceLovelaceYamlTests(unittest.TestCase):
                         self.assertNotIn("device_tracker.router_1", rendered)
                         self.assertNotIn("device_tracker.phone_2", rendered)
                         self.assertNotIn("title", card)
-                        # One text-fence line per node, exactly as in PVE VM/LXC.
-                        self.assertEqual(len(rendered.splitlines()), 9)
+                        # PVE native <pre> has no Markdown code-block padding
+                        # or extra blank lines; every node remains one line.
+                        self.assertEqual(len(rendered.splitlines()), 7)
                         self.assertTrue(all(line.strip() for line in rendered.splitlines()))
+                        self.assertNotIn("\n\n", rendered)
+                        self.assertEqual(rendered.count("line-height:1"), 1)
+                        # Registered labels originate from HA users/devices:
+                        # never inject unescaped HTML into the raw <pre>.
+                        unsafe = dict(roster["one"],
+                                      registration_label='Phone <script>x</script> & X')
+                        html = render({"one": unsafe}, [])
+                        self.assertNotIn("<script>", html)
+                        self.assertIn("&lt;script&gt;", html)
+                        self.assertIn("&amp;", html)
                         self.assertIn("   └─ Wi-Fi · не привязан", rendered)
                         self.assertIn("└─ 📱 Serzhan (iPhone)", one)
                         self.assertNotIn("├─ 📱", one)

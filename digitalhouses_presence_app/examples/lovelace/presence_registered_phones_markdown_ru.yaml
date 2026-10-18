@@ -18,7 +18,7 @@ content: >-
           indent ~ '└─ Wi-Fi · ' ~ ((phone.wifi_tracker | replace('device_tracker.', '')) if phone.wifi_tracker else 'не привязан')
         ] -%}
       {%- endfor -%}
-      {{ '```text\n' ~ (ns.lines | join('\n')) ~ '\n```' }}
+      <pre style="margin:0; padding:0; line-height:1; font-family:'Courier New',monospace; white-space:pre;">{{ ns.lines | join('\n') | e }}</pre>
     {%- else -%}
       _Нет зарегистрированных телефонов._
     {%- endif -%}
