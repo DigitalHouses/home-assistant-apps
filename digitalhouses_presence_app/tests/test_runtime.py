@@ -24,6 +24,37 @@ def options(**kw):
 
 
 class RuntimeSafetyTests(unittest.TestCase):
+    def test_mqtt_roster_exports_real_source_trackers_without_network_identity(self):
+        saved = {"schema_version": 2, "residents": []}
+        registrations = [
+            {"tracker": "device_tracker.phone_alfa", "wifi_tracker": "device_tracker.wifi_a",
+             "user_id": "user_a", "user_name": "A", "device_name": "Phone A",
+             "mac": "aa:aa:aa:aa:aa:aa", "ip": "192.168.44.51"},
+            {"tracker": "device_tracker.phone_bravo", "wifi_tracker": "device_tracker.wifi_b",
+             "user_id": "user_b", "user_name": "B", "device_name": "Phone B",
+             "mac": "bb:bb:bb:bb:bb:bb", "ip": "192.168.44.52"},
+            {"tracker": "device_tracker.excluded", "wifi_tracker": "device_tracker.wifi_excluded",
+             "user_id": "admin", "user_name": "Admin", "device_name": "Admin phone",
+             "mac": "cc:cc:cc:cc:cc:cc", "ip": "192.168.44.53"},
+        ]
+        e = build_engine(options(residents=[], exclude_users=["admin"]), saved, registrations)
+        roster = e.snapshot()["residents"]
+        gps = {r["gps_tracker"] for r in roster.values()}
+        wifi = {r["wifi_tracker"] for r in roster.values()}
+        self.assertEqual(gps, {"device_tracker.phone_alfa", "device_tracker.phone_bravo"})
+        self.assertEqual(wifi, {"device_tracker.wifi_a", "device_tracker.wifi_b"})
+        serialized = json.dumps(e.snapshot())
+        for forbidden in ("192.168.44.", "aa:aa:aa", "bb:bb:bb", "device_tracker.excluded"):
+            self.assertNotIn(forbidden, serialized)
+
+    def test_gps_only_resident_has_null_wifi_link_not_invented_router_tracker(self):
+        e = build_engine(options(residents=["device_tracker.unlinked"]),
+                         {"schema_version": 2, "residents": []})
+        self.assertEqual(len(e.snapshot()["residents"]), 1)
+        record = next(iter(e.snapshot()["residents"].values()))
+        self.assertEqual(record["gps_tracker"], "device_tracker.unlinked")
+        self.assertIsNone(record["wifi_tracker"])
+
     def test_discovery_log_levels_distinguish_first_publish_from_routine(self):
         # Routine HA birth/300s publication still happens with QoS1 retain;
         # only its diagnostic INFO noise moves to DEBUG.
