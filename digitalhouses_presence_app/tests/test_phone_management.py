@@ -228,7 +228,13 @@ class PhoneManagementTests(unittest.TestCase):
             check.assert_called_once_with("admin-ha-user", "token")
             self.assertIn(200, allowed.responses)
             self.assertIn(("X-Frame-Options", "SAMEORIGIN"), allowed.responses)
-            self.assertIn("frame-src 'self'", HTML)
+            root = request()
+            root.path = "/"
+            root.do_GET()
+            csp_headers = [v for k, v in root.responses if isinstance(k, str)
+                           and k == "Content-Security-Policy"]
+            self.assertEqual(len(csp_headers), 1)
+            self.assertIn("frame-src 'self'", csp_headers[0])
             self.assertIn('src="admin/delete-phone"', HTML)
             self.assertNotIn("frame-src *", HTML)
             self.assertIn(("Cache-Control", "no-store"), allowed.responses)
