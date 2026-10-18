@@ -43,16 +43,20 @@ class NotificationSelection:
         atomic_json(self.path, {"schema_version": 2, "enabled": self.enabled, "zones": self.zones})
 
     def sync_zones(self, zones: dict[str, str]) -> bool:
-        # Keep disabled settings for removed zones, so recreation is safe and predictable.
-        added = False
-        for entity_id in zones:
-            key = zone_key(entity_id)
+        # Removed zones lose their preference. A re-created zone must start OFF.
+        active = {zone_key(entity_id) for entity_id in zones}
+        changed = False
+        for key in list(self.zones):
+            if key not in active:
+                del self.zones[key]
+                changed = True
+        for key in active:
             if key not in self.zones:
                 self.zones[key] = False
-                added = True
-        if added:
+                changed = True
+        if changed:
             self.save()
-        return added
+        return changed
 
     def change(self, key: str, requested: str) -> bool:
         if requested not in ("ON", "OFF"):
