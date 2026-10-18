@@ -334,6 +334,11 @@ def build_engine(options: dict, saved: dict, registrations: list[dict] | None = 
         if tracker not in engine.residents and link["user_id"] not in excludes:
             engine.add(tracker, link["device_name"], previous.get(tracker),
                        user_name=link["user_name"])
+    # The roster is also an inventory source for Lovelace. Include the
+    # persistent router association before the first successful HA poll.
+    for tracker, link in registered.items():
+        if tracker in engine.residents:
+            engine.residents[tracker].wifi_tracker_id = link.get("wifi_tracker")
     return engine
 
 

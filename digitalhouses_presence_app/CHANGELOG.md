@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.26 — Portable source tracker cards for all DigitalHouses sites
+
+- The existing `binary_sensor.dh_presence_app_residents_home` MQTT `residents` roster now publishes `gps_tracker` and optional `wifi_tracker` entity IDs from each active registered resident (and configured GPS-only resident); no new HA entities or per-site configuration.
+- Read-only, standalone Auto Entities cards select **only** the source GPS and router Wi-Fi trackers currently linked to residents, dynamically for every house.
+- The Wi-Fi source link is initialized from the persisted registration even before HA's first successful API poll, then synchronized by the router tracker engine as before.
+- Excluded users remain outside the roster. No IP, MAC or registration secrets are published. GPS, Wi-Fi presence decisions, notifications and privileges are unchanged.
+- Repository CI parses both YAML cards and evaluates their Jinja templates against multiple unrelated house inventories.
+
 ## 0.1.25 — Switch Wi-Fi presence entirely to registered HA router trackers
 
 - All actual Wi-Fi presence is driven by the `wifi_tracker` linked to each resident: HA Core `/api/states` returns the tracker entity, its `source_type: router`, registered matching MAC, and authoritative `home` / `not_home` status.

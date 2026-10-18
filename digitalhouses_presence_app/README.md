@@ -1,8 +1,19 @@
 # DigitalHouses Presence App
 
-**Status: GPS + HA router device_tracker Wi-Fi pilot, version 0.1.25.** Observe router tracker stability before safety-critical automations.
+**Status: GPS + HA router device_tracker Wi-Fi pilot, version 0.1.26.** Observe router tracker stability before safety-critical automations.
 
 This application belongs to `DigitalHouses/home-assistant-apps/digitalhouses_presence_app` and is installed via **Settings → Apps → App Store**.
+
+## Dynamic source tracker cards (0.1.26)
+
+The existing MQTT roster attribute `residents` on `binary_sensor.dh_presence_app_residents_home` includes two source entity IDs for each participating resident: `gps_tracker` (the selected Companion `device_tracker`) and `wifi_tracker` (the router's `device_tracker` linked at registration, if present). These are **entity references**, not extra sensors. Excluded HA users do not appear. The private IP/MAC registration data remains private.
+
+Two portable Lovelace **Auto Entities** YAML cards automatically display only active DH Presence source trackers:
+
+- [GPS trackers](examples/lovelace/presence_gps_trackers_auto_entities_ru.yaml)
+- [Wi-Fi router trackers](examples/lovelace/presence_wifi_trackers_auto_entities_ru.yaml)
+
+Paste each into a separate **Manual YAML** Lovelace card. Both work unchanged on every DigitalHouses site with DH Presence 0.1.26+ and HACS `custom:auto-entities` installed. Newly registered residents and new router bindings appear without manually editing entity IDs. Wi-Fi unlinked residents are omitted from the Wi-Fi card, but still appear in the GPS card. Entity states `home`, `not_home`, and `unavailable` are not filtered, so the list tracks registration membership, not current connection.
 
 ## Stored router Wi-Fi tracker (0.1.24)
 
