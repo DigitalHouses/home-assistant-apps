@@ -424,6 +424,32 @@ def reconcile_registration_roster(engine: Engine, options: dict,
     return changed
 
 
+
+def execute_mqtt_phone_deletion(selection: PhoneRemovalSelection, engine: Engine,
+                                options: dict, path: str, registrations: list[dict],
+                                suppressed: set[str]) -> tuple[bool, bool, list[dict], set[str]]:
+    """Delete only a currently selected, registered resident in this App.
+
+    The same module-level lock protects the private Ingress registration
+    transaction. Selection is cleared *before* any I/O, so even a duplicate
+    MQTT QoS1 press cannot cascade into another deletion.
+    """
+    choices = phone_removal_choices(registrations, list(engine.residents.values()))
+    target = selection.target(choices)
+    selection.clear()
+    if not target:
+        return False, False, registrations, suppressed
+    with REGISTRY_LOCK:
+        latest, disabled = load_registry_state(path)
+        if not any(row["tracker"] == target for row in latest):
+            changed = reconcile_registration_roster(engine, options, latest, disabled)
+            return False, changed, latest, disabled
+        delete_registration(path, target)
+        latest, disabled = load_registry_state(path)
+    changed = reconcile_registration_roster(engine, options, latest, disabled)
+    return True, changed, latest, disabled
+
+
 def friendly_tracker_name(tracker: str) -> str:
     return tracker.removeprefix("device_tracker.").replace("_", " ").strip()
 
@@ -677,6 +703,47 @@ def run():
                             if mqtt_out.connected.is_set() else False)
                         LOG.info("DH Presence phone registry synchronized: active=%d",
                                  len(engine.residents))
+                    phone_selection.refresh(phone_removal_choices(
+                        registrations, list(engine.residents.values())))
+            # Ordered commands: a select immediately followed by button
+            # press always targets that exact selection. The MQTT broker
+            # provides no HA-user admin attestation; Lovelace hides this UI
+            # from ordinary users as presentation, not authorization.
+            roster_changed = False
+            for _ in range(64):
+                try:
+                    action, value = mqtt_out.phone_commands.get_nowait()
+                except queue.Empty:
+                    break
+                choices = phone_removal_choices(registrations, list(engine.residents.values()))
+                if action == "select":
+                    if not phone_selection.select(value, choices):
+                        LOG.warning("Ignoring invalid MQTT removal selection")
+                    continue
+                if action != "delete":
+                    continue
+                target = phone_selection.target(choices)
+                try:
+                    deleted, changed, registrations, suppressed_trackers = execute_mqtt_phone_deletion(
+                        phone_selection, engine, options, REGISTRATIONS_FILE,
+                        registrations, suppressed_trackers)
+                    roster_changed = changed or roster_changed
+                    if deleted:
+                        LOG.info("Phone registration removed by MQTT: tracker=%s", target)
+                    else:
+                        LOG.warning("Phone removal skipped: missing or stale selection")
+                except (OSError, ValueError, LookupError) as exc:
+                    LOG.error("MQTT phone removal failed for %s: %s",
+                              target or "none", type(exc).__name__)
+            phone_selection.refresh(phone_removal_choices(
+                registrations, list(engine.residents.values())))
+            if roster_changed:
+                eligible_keys = {r.key for r in engine.residents.values()}
+                history.prune_residents(eligible_keys)
+                zone_monitor.prune_residents(eligible_keys)
+                discovery_ready = (synchronize_discovery(
+                    mqtt_out, version, engine, zones=zones,
+                    registrations=registrations) if mqtt_out.connected.is_set() else False)
             now = datetime.now(timezone.utc)
             name_changed = False
             if home is None:
@@ -838,6 +905,7 @@ def run():
             WAKE.clear()
             if (not STOP.is_set() and mqtt_out.mode_commands.empty()
                     and mqtt_out.notification_commands.empty()
+                    and mqtt_out.phone_commands.empty()
                     ):
                 WAKE.wait(min(options["gps_poll_interval_seconds"],
                               5 if operations.state == "success" else options["gps_poll_interval_seconds"]))
