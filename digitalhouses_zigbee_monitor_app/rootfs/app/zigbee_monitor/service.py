@@ -292,7 +292,7 @@ class MonitorService:
                     self.monitor.acknowledge_counts(snapshot)
                 self._publish_rankings(epoch=epoch)
                 if self._last_trim_day != epoch // 86400:
-                    self.store.trim_minutes(before_epoch=epoch - 30 * 86400)
+                    self.store.trim_minutes(before_epoch=max(0, epoch - 30 * 86400))
                     self._last_trim_day = epoch // 86400
             if (
                 self._refresh_pending is not None and self._refresh_started is not None
