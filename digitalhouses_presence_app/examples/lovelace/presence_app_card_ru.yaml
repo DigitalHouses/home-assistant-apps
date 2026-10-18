@@ -392,18 +392,18 @@ cards:
     show_label: true
     show_state: false
     icon: mdi:lan-check
-    name: Диагностика регистрации · администратор
+    name: Управление телефонами · администратор
     label: |
       [[[
         const v = states['sensor.dh_presence_app_version']?.state || '';
         const m = v.match(/^(\d+)\.(\d+)\.(\d+)$/);
         const installed = m && (
           Number(m[1]) > 0 || Number(m[2]) > 1 ||
-          (Number(m[2]) === 1 && Number(m[3]) >= 12)
+          (Number(m[2]) === 1 && Number(m[3]) >= 29)
         );
         return installed
-          ? 'IP / MAC · GPS tracker · время GPS · состояние регистрации'
-          : 'Требуется DH Presence 0.1.12 (сейчас ' + (v || 'неизвестно') + ')';
+          ? 'Зарегистрированные телефоны · IP / MAC · удаление'
+          : 'Требуется DH Presence 0.1.29 (сейчас ' + (v || 'неизвестно') + ')';
       ]]]
     tap_action:
       action: |
