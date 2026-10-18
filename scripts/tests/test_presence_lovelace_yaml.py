@@ -21,7 +21,7 @@ class PresenceLovelaceYamlTests(unittest.TestCase):
                 if path == CARD:
                     status = document["cards"][0]
                 else:
-                    status = document["sections"][0]["cards"][0]["cards"][0]
+                    status = document["sections"][0]["cards"][1]["cards"][0]
                 self.assertEqual(status["type"], "custom:button-card")
                 styles = status["styles"]
                 icon = styles["icon"]
