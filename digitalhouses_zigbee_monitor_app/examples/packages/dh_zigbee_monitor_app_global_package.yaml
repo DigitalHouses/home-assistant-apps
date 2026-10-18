@@ -25,6 +25,7 @@ dh_zigbee_monitor_app_global_package:
         - sensor.dh_zigbee_monitor_app_top_7d_details
         - sensor.dh_zigbee_monitor_app_incidents_details
         - sensor.dh_zigbee_monitor_app_inventory_details
+        - sensor.dh_zigbee_monitor_app_refresh_state
         - sensor.dh_zigbee_monitor_app_card
         - sensor.dh_zigbee_monitor_app_version
         - sensor.dh_zigbee_monitor_app_started_at
