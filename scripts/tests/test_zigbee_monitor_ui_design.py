@@ -141,6 +141,16 @@ class ZigbeeMonitorUiDesignTests(unittest.TestCase):
             self.assertIn("Math.round(Math.max(0, t))", yaml_text)
             self.assertNotIn("t.toFixed(1)", yaml_text)
 
+    def test_power_and_mqtt_activity_are_only_inventory_attributes(self):
+        self.assertIn("item.power_label", self.raw_dashboard)
+        self.assertIn("item.last_mqtt_message_at", self.raw_dashboard)
+        self.assertIn("Последний MQTT", self.raw_dashboard)
+        self.assertIn("sensor.dh_zigbee_monitor_app_inventory_details",
+                      self.recorder["exclude"]["entities"])
+        self.assertEqual(
+            set(self.recorder["include"]["entities"]), HISTORICAL,
+        )
+
     def test_inventory_diagnostics_are_ui_only(self):
         self.assertIn("availability_reason_label", self.raw_dashboard)
         self.assertIn("availability_unknown", self.raw_dashboard)
@@ -171,7 +181,7 @@ class ZigbeeMonitorUiDesignTests(unittest.TestCase):
         self.assertEqual((APP / "digitalhouses.app").read_text().strip(), "type = haos_addon")
         config = yaml.safe_load((APP / "config.yaml").read_text(encoding="utf-8"))
         self.assertEqual(config["slug"], "digitalhouses_zigbee_monitor_app")
-        self.assertEqual(config["version"], "0.1.4")
+        self.assertEqual(config["version"], "0.1.5")
         self.assertEqual(config["stage"], "experimental")
 
 

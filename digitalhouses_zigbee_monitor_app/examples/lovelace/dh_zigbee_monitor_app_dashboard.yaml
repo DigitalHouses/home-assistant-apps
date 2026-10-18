@@ -293,10 +293,10 @@ sections:
           **Всего:** {{ state_attr(entity, 'total') }}
           **Без данных availability:** {{ state_attr(entity, 'availability_unknown') }}
 
-          | Устройство | Доступность | Причина |
-          |:--|:--|:--|
+          | Устройство | Питание | Доступность | Последний MQTT (UTC) | Причина |
+          |:--|:--|:--|:--|:--|
           {% for item in items %}
-          | {{ item.name }} | {{ item.availability_label }} | {{ item.availability_reason_label or '—' }} |
+          | {{ item.name }} | {{ item.power_label or 'Неизвестно' }} | {{ item.availability_label }} | {{ item.last_mqtt_message_at or 'Нет наблюдения' }} | {{ item.availability_reason_label or '—' }} |
           {% endfor %}
           {% if state_attr(entity, 'truncated') %}
           *Список ограничен первыми 40 устройствами. Общее число указано выше.*

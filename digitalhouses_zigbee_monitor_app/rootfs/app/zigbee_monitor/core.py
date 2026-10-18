@@ -40,6 +40,7 @@ class Device:
     model: str | None
     manufacturer: str | None
     device_type: str | None
+    power_source: str | None = None
 
     @property
     def identity(self) -> tuple[str, str]:
@@ -174,6 +175,7 @@ def _devices_from_bridge(raw: Any, network_id: str) -> tuple[dict[str, Device], 
             model=_optional_text(definition.get("model"), "definition.model"),
             manufacturer=_optional_text(definition.get("vendor"), "definition.vendor"),
             device_type=kind,
+            power_source=_optional_text(entry.get("power_source"), "power_source"),
         )
         topics[name] = ieee
     return devices, topics
@@ -191,6 +193,9 @@ class ZigbeeMonitor:
             raise ZigbeeMonitorError("duplicate network base_topic")
         self._bases = tuple(sorted(self._by_topic, key=len, reverse=True))
         self._counts: dict[tuple[int, str, str], int] = defaultdict(int)
+        # Actual non-retained MQTT device messages only; never infer Zigbee RF
+        # connectivity or availability from this observational timestamp.
+        self._latest_mqtt: dict[tuple[str, str], int] = {}
 
     @property
     def networks(self) -> tuple[Network, ...]:
@@ -292,6 +297,16 @@ class ZigbeeMonitor:
             else:
                 self._counts.pop(key, None)
 
+    def mqtt_activity_snapshot(self) -> dict[tuple[str, str], int]:
+        """Newest non-retained MQTT device message time pending durable flush."""
+        return dict(self._latest_mqtt)
+
+    def acknowledge_mqtt_activity(self, persisted: Mapping[tuple[str, str], int]) -> None:
+        """Do not discard a newer observation that arrived during persistence."""
+        for identity, timestamp in persisted.items():
+            if self._latest_mqtt.get(identity) == timestamp:
+                self._latest_mqtt.pop(identity, None)
+
     def ingest(
         self, topic: str, payload: bytes, *, retain: bool = False, dup: bool = False,
         observed_at: int | None = None,
@@ -360,6 +375,10 @@ class ZigbeeMonitor:
                     raise ZigbeeMonitorError("invalid observed_at for MQTT message")
                 bucket = ts - ts % 60
                 self._counts[(bucket, network_id, ieee)] += 1
+                identity = (network_id, ieee)
+                self._latest_mqtt[identity] = max(
+                    self._latest_mqtt.get(identity, 0), ts
+                )
             return Observation("device_message", network_id, ieee, counted=not retain and not dup)
         if suffix.endswith("/availability"):
             friendly = suffix[:-len("/availability")]

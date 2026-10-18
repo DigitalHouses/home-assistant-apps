@@ -40,6 +40,12 @@ CREATE TABLE IF NOT EXISTS message_minutes (
 );
 CREATE INDEX IF NOT EXISTS message_minutes_device_idx
     ON message_minutes (ieee_address, bucket_start);
+CREATE TABLE IF NOT EXISTS device_mqtt_activity (
+    network_id TEXT NOT NULL,
+    ieee_address TEXT NOT NULL,
+    last_message_epoch INTEGER NOT NULL CHECK(last_message_epoch >= 0),
+    PRIMARY KEY (network_id, ieee_address)
+);
 """
 
 
@@ -156,9 +162,21 @@ class ActivityStore:
                 rows,
             )
 
+    def last_mqtt_messages(self) -> dict[tuple[str, str], int]:
+        """Actual non-retained MQTT observations, NOT Zigbee RF last_seen."""
+        return {
+            (network_id, ieee): int(epoch)
+            for network_id, ieee, epoch in self.conn.execute(
+                "SELECT network_id, ieee_address, last_message_epoch "
+                "FROM device_mqtt_activity"
+            )
+        }
+
     def commit_counts(
         self,
         counts: Mapping[tuple[int, str, str], int],
+        *,
+        last_messages: Mapping[tuple[str, str], int] | None = None,
     ) -> None:
         """Atomic batch UPSERT; caller acknowledges in-memory counts only after commit.
 
@@ -179,6 +197,15 @@ class ActivityStore:
                 raise ValueError("count must be nonnegative integer")
             if count:
                 rows.append((bucket, network_id, ieee, count))
+        recent = []
+        for (network_id, ieee), epoch in (last_messages or {}).items():
+            if not isinstance(network_id, str) or not network_id:
+                raise ValueError("invalid MQTT activity network id")
+            if not isinstance(ieee, str) or not re.fullmatch(r"0x[0-9a-f]{16}", ieee):
+                raise ValueError("invalid MQTT activity IEEE")
+            if not isinstance(epoch, int) or isinstance(epoch, bool) or epoch < 0:
+                raise ValueError("invalid MQTT activity timestamp")
+            recent.append((network_id, ieee, epoch))
         with self.conn:
             self.conn.executemany(
                 """
@@ -188,6 +215,17 @@ class ActivityStore:
                 DO UPDATE SET messages=message_minutes.messages+excluded.messages
                 """,
                 rows,
+            )
+            self.conn.executemany(
+                """
+                INSERT INTO device_mqtt_activity(network_id, ieee_address, last_message_epoch)
+                VALUES (?, ?, ?)
+                ON CONFLICT(network_id, ieee_address) DO UPDATE SET
+                  last_message_epoch=MAX(
+                    device_mqtt_activity.last_message_epoch, excluded.last_message_epoch
+                  )
+                """,
+                recent,
             )
 
     def top(
