@@ -1,4 +1,4 @@
-# DH Presence · maintained dashboard using same source card
+# DH Presence · четыре колонки · составлено на основе принятого пользовательского дашборда
 title: Мы дома
 path: presence
 icon: mdi:home-account
@@ -229,216 +229,171 @@ sections:
                     app: 8133339d_digitalhouses_presence_app
                   confirmation:
                     text: "Перезапустить DH Presence? Определение присутствия временно прервётся."
-          - type: tile
-            entity: select.dh_presence_app_mode
-            name: Режим присутствия
-            icon: mdi:crosshairs-gps
-            features:
-              - type: select-options
-          - type: entities
-            title: Уведомления DH Presence
-            show_header_toggle: false
-            entities:
-              - entity: switch.dh_presence_app_notify_presence
-                name: Итоговое присутствие
-                icon: mdi:home-account
-              - entity: switch.dh_presence_app_notify_gps
-                name: GPS
-                icon: mdi:crosshairs-gps
-              - entity: switch.dh_presence_app_notify_wifi
-                name: Wi-Fi
-                icon: mdi:wifi
+      - type: custom:button-card
+        entity: sensor.dh_presence_app_version
+        triggers_update:
+          - sensor.dh_presence_app_version
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        variables:
+          registration_ready: |
+            [[[
+              const installed = states['sensor.dh_presence_app_version']?.state || '';
+              const match = installed.match(/^(\d+)\.(\d+)\.(\d+)$/);
+              if (!match) return false;
+              const version = match.slice(1).map(Number);
+              return version[0] > 0 || version[1] > 1
+                || (version[1] === 1 && version[2] >= 11);
+            ]]]
+        icon: |
+          [[[
+            return variables.registration_ready
+              ? 'mdi:cellphone-link' : 'mdi:cellphone-off';
+          ]]]
+        name: Регистрация телефона
+        label: |
+          [[[
+            const version = states['sensor.dh_presence_app_version']?.state || 'не определена';
+            return variables.registration_ready
+              ? 'Открыть DH Presence · зарегистрировать телефон по домашнему Wi-Fi'
+              : 'Пока недоступно · требуется DH Presence 0.1.11 (установлена ' + version + ')';
+          ]]]
+        tap_action:
+          action: |
+            [[[
+              return variables.registration_ready ? 'navigate' : 'none';
+            ]]]
+          navigation_path: /app/8133339d_digitalhouses_presence_app
+        hold_action:
+          action: more-info
+          entity: sensor.dh_presence_app_version
+        styles:
+          card:
+            - padding: 12px 14px
+          grid:
+            - grid-template-areas: '"i n" "i l"'
+            - grid-template-columns: 40px 1fr
+            - grid-template-rows: min-content min-content
+          icon:
+            - width: 28px
+            - color: |
+                [[[
+                  return variables.registration_ready
+                    ? 'var(--primary-color)'
+                    : 'var(--disabled-text-color)';
+                ]]]
+          name:
+            - justify-self: start
+            - font-size: 14px
+            - font-weight: 600
+          label:
+            - justify-self: start
+            - white-space: normal
+            - text-align: left
+            - font-size: 12px
+            - color: var(--secondary-text-color)
 
-          - type: custom:auto-entities
-            card:
-              type: vertical-stack
-            card_param: cards
-            show_empty: false
-            filter:
-              include:
-                - entity_id: "binary_sensor.dh_presence_app_*_wifi_home"
-                  options:
-                    type: custom:mushroom-template-card
-                    entity: this.entity_id
-                    primary: >-
-                      {% set key = entity | replace('binary_sensor.dh_presence_app_', '') | replace('_wifi_home', '') %}
-                      {% set roster = state_attr('binary_sensor.dh_presence_app_residents_home', 'residents') or {} %}
-                      {% set r = roster.get(key, {}) %}
-                      {{ (r.get('user_name') or 'Имя не задано') ~ ' (' ~ (r.get('name') or key) ~ ')' }}
-                    secondary: |-
-                      {% set key = entity | replace('binary_sensor.dh_presence_app_', '') | replace('_wifi_home', '') %}
-                      {% set roster = state_attr('binary_sensor.dh_presence_app_residents_home', 'residents') or {} %}
-                      {% set r = roster.get(key, {}) %}
-                      {% set presence = r.get('status', 'unavailable') %}
-                      {% set gps = r.get('gps', 'unavailable') %}
-                      {% set wifi = r.get('wifi', 'unavailable') %}
-                      Итог: {{ 'Дома' if presence == 'home' else 'Вне дома' if presence == 'not_home' else 'Не определено' }} · {{ as_local(as_datetime(r['status_changed_at'])).strftime('%d.%m %H:%M') if r.get('status_changed_at') else '—' }}
-                      GPS: {{ 'Дома' if gps == 'home' else 'Вне дома' if gps == 'not_home' else 'Недоступно' }} · {{ as_local(as_datetime(r['gps_changed_at'])).strftime('%d.%m %H:%M') if r.get('gps_changed_at') else '—' }}
-                      Wi-Fi: {{ 'Обнаружен' if wifi == 'home' else 'Не подключён (роутер)' if wifi == 'not_home' else 'Недоступно' }} · {{ as_local(as_datetime(r['wifi_changed_at'])).strftime('%d.%m %H:%M') if r.get('wifi_changed_at') else '—' }}
-                    icon: >-
-                      {% set key = entity | replace('binary_sensor.dh_presence_app_', '') | replace('_wifi_home', '') %}
-                      {% set r = (state_attr('binary_sensor.dh_presence_app_residents_home', 'residents') or {}).get(key, {}) %}
-                      {{ 'mdi:home-account' if r.get('status') == 'home' else 'mdi:home-export-outline' if r.get('status') == 'not_home' else 'mdi:home-question' }}
-                    color: >-
-                      {% set key = entity | replace('binary_sensor.dh_presence_app_', '') | replace('_wifi_home', '') %}
-                      {% set r = (state_attr('binary_sensor.dh_presence_app_residents_home', 'residents') or {}).get(key, {}) %}
-                      {{ 'green' if r.get('status') == 'home' else 'blue' if r.get('status') == 'not_home' else 'amber' }}
-                    multiline_secondary: true
-                    tap_action:
-                      action: more-info
-          - type: custom:mushroom-chips-card
-            alignment: center
-            chips:
-              - type: template
-                entity: event.dh_presence_app_event
-                icon: mdi:history
-                content: События
+  - type: grid
+    cards:
+      - type: heading
+        heading_style: title
+        heading: Жильцы
+        icon: mdi:account-group
+      - type: custom:auto-entities
+        card:
+          type: vertical-stack
+        card_param: cards
+        show_empty: false
+        filter:
+          include:
+            - entity_id: "binary_sensor.dh_presence_app_*_wifi_home"
+              options:
+                type: custom:mushroom-template-card
+                entity: this.entity_id
+                primary: >-
+                  {% set key = entity | replace('binary_sensor.dh_presence_app_', '') | replace('_wifi_home', '') %}
+                  {% set roster = state_attr('binary_sensor.dh_presence_app_residents_home', 'residents') or {} %}
+                  {% set r = roster.get(key, {}) %}
+                  {{ (r.get('user_name') or 'Имя не задано') ~ ' (' ~ (r.get('name') or key) ~ ')' }}
+                secondary: |-
+                  {% set key = entity | replace('binary_sensor.dh_presence_app_', '') | replace('_wifi_home', '') %}
+                  {% set roster = state_attr('binary_sensor.dh_presence_app_residents_home', 'residents') or {} %}
+                  {% set r = roster.get(key, {}) %}
+                  {% set presence = r.get('status', 'unavailable') %}
+                  {% set gps = r.get('gps', 'unavailable') %}
+                  {% set wifi = r.get('wifi', 'unavailable') %}
+                  Итог: {{ 'Дома' if presence == 'home' else 'Вне дома' if presence == 'not_home' else 'Не определено' }} · {{ as_local(as_datetime(r['status_changed_at'])).strftime('%d.%m %H:%M') if r.get('status_changed_at') else '—' }}
+                  GPS: {{ 'Дома' if gps == 'home' else 'Вне дома' if gps == 'not_home' else 'Недоступно' }} · {{ as_local(as_datetime(r['gps_changed_at'])).strftime('%d.%m %H:%M') if r.get('gps_changed_at') else '—' }}
+                  Wi-Fi: {{ 'Обнаружен' if wifi == 'home' else 'Не подключён (роутер)' if wifi == 'not_home' else 'Недоступно' }} · {{ as_local(as_datetime(r['wifi_changed_at'])).strftime('%d.%m %H:%M') if r.get('wifi_changed_at') else '—' }}
+                icon: >-
+                  {% set key = entity | replace('binary_sensor.dh_presence_app_', '') | replace('_wifi_home', '') %}
+                  {% set r = (state_attr('binary_sensor.dh_presence_app_residents_home', 'residents') or {}).get(key, {}) %}
+                  {{ 'mdi:home-account' if r.get('status') == 'home' else 'mdi:home-export-outline' if r.get('status') == 'not_home' else 'mdi:home-question' }}
+                color: >-
+                  {% set key = entity | replace('binary_sensor.dh_presence_app_', '') | replace('_wifi_home', '') %}
+                  {% set r = (state_attr('binary_sensor.dh_presence_app_residents_home', 'residents') or {}).get(key, {}) %}
+                  {{ 'green' if r.get('status') == 'home' else 'blue' if r.get('status') == 'not_home' else 'amber' }}
+                multiline_secondary: true
                 tap_action:
                   action: more-info
-              - type: template
-                entity: sensor.dh_presence_app_last_refresh
-                icon: mdi:clock-check-outline
-                content: >-
-                  {% set s = states('sensor.dh_presence_app_last_refresh') %}
-                  {% if s in ['unknown', 'unavailable', 'none'] %}
-                    Refresh не выполнялся
-                  {% else %}
-                    Refresh: {{ as_local(as_datetime(s)).strftime('%d.%m %H:%M') }}
-                  {% endif %}
-                tap_action:
-                  action: more-info
-              - type: template
-                entity: sensor.dh_presence_app_started_at
-                icon: mdi:clock-outline
-                content: Запущено
-                tap_action:
-                  action: more-info
-          # Built-in phone registration opens the App's authenticated Supervisor
-          # Ingress UI. It is disabled in GPS-only 0.1.10 and needs no extra resources.
-          - type: custom:button-card
-            entity: sensor.dh_presence_app_version
-            triggers_update:
-              - sensor.dh_presence_app_version
-            show_icon: true
-            show_name: true
-            show_label: true
-            show_state: false
-            variables:
-              registration_ready: |
-                [[[
-                  const installed = states['sensor.dh_presence_app_version']?.state || '';
-                  const match = installed.match(/^(\d+)\.(\d+)\.(\d+)$/);
-                  if (!match) return false;
-                  const version = match.slice(1).map(Number);
-                  return version[0] > 0 || version[1] > 1
-                    || (version[1] === 1 && version[2] >= 11);
-                ]]]
-            icon: |
-              [[[
-                return variables.registration_ready
-                  ? 'mdi:cellphone-link' : 'mdi:cellphone-off';
-              ]]]
-            name: Регистрация телефона
-            label: |
-              [[[
-                const version = states['sensor.dh_presence_app_version']?.state || 'не определена';
-                return variables.registration_ready
-                  ? 'Открыть DH Presence · зарегистрировать телефон по домашнему Wi-Fi'
-                  : 'Пока недоступно · требуется DH Presence 0.1.11 (установлена ' + version + ')';
-              ]]]
-            tap_action:
-              action: |
-                [[[
-                  return variables.registration_ready ? 'navigate' : 'none';
-                ]]]
-              navigation_path: /app/8133339d_digitalhouses_presence_app
-            hold_action:
-              action: more-info
-              entity: sensor.dh_presence_app_version
-            styles:
-              card:
-                - padding: 12px 14px
-              grid:
-                - grid-template-areas: '"i n" "i l"'
-                - grid-template-columns: 40px 1fr
-                - grid-template-rows: min-content min-content
-              icon:
-                - width: 28px
-                - color: |
-                    [[[
-                      return variables.registration_ready
-                        ? 'var(--primary-color)'
-                        : 'var(--disabled-text-color)';
-                    ]]]
-              name:
-                - justify-self: start
-                - font-size: 14px
-                - font-weight: 600
-              label:
-                - justify-self: start
-                - white-space: normal
-                - text-align: left
-                - font-size: 12px
-                - color: var(--secondary-text-color)
-          # Private network identity diagnostics are available only to HA admins.
-          - type: custom:button-card
-            entity: sensor.dh_presence_app_version
-            hidden: |
-              [[[
-                return hass.user?.is_admin !== true;
-              ]]]
-            show_icon: true
-            show_name: true
-            show_label: true
-            show_state: false
-            icon: mdi:lan-check
-            name: Диагностика регистрации · администратор
-            label: |
-              [[[
-                const v = states['sensor.dh_presence_app_version']?.state || '';
-                const m = v.match(/^(\d+)\.(\d+)\.(\d+)$/);
-                const installed = m && (
-                  Number(m[1]) > 0 || Number(m[2]) > 1 ||
-                  (Number(m[2]) === 1 && Number(m[3]) >= 12)
-                );
-                return installed
-                  ? 'IP / MAC · GPS tracker · время GPS · состояние регистрации'
-                  : 'Требуется DH Presence 0.1.12 (сейчас ' + (v || 'неизвестно') + ')';
-              ]]]
-            tap_action:
-              action: |
-                [[[
-                  const v = states['sensor.dh_presence_app_version']?.state || '';
-                  const m = v.match(/^(\d+)\.(\d+)\.(\d+)$/);
-                  const installed = m && (
-                    Number(m[1]) > 0 || Number(m[2]) > 1 ||
-                    (Number(m[2]) === 1 && Number(m[3]) >= 12)
-                  );
-                  return hass.user?.is_admin === true && installed ? 'navigate' : 'none';
-                ]]]
-              navigation_path: /app/8133339d_digitalhouses_presence_app
-            styles:
-              card:
-                - padding: 12px 14px
-                - text-align: left
-              icon:
-                - width: 28px
-                - color: var(--primary-color)
-              name:
-                - justify-self: start
-                - white-space: normal
-                - font-weight: 600
-                - font-size: 14px
-              label:
-                - justify-self: start
-                - white-space: normal
-                - color: var(--secondary-text-color)
-                - font-size: 12px
-          # Auto-entities lists EVERY currently registered Presence entity, including
-          # native Refresh / Check Version buttons and the mode selector.
-          # New resident GPS / Wi-Fi / distance entities appear without YAML edits.
-          # Phone registration is in the app's native Ingress web UI; no custom
-          # resource or YAML is needed for onboarding.
+      - type: custom:auto-entities
+        card:
+          type: entities
+          title: "📍 DH Presence · GPS-трекеры"
+          show_header_toggle: false
+          state_color: true
+        filter:
+          template: >-
+            {% set residents = state_attr('binary_sensor.dh_presence_app_residents_home', 'residents') or {} %}
+            {{ residents.values() | map(attribute='gps_tracker') | select | join(', ') }}
+        sort:
+          method: name
+        unique: true
+        show_empty: false
+      - type: custom:auto-entities
+        card:
+          type: entities
+          title: "📶 DH Presence · Wi-Fi-трекеры"
+          show_header_toggle: false
+          state_color: true
+        filter:
+          template: >-
+            {% set residents = state_attr('binary_sensor.dh_presence_app_residents_home', 'residents') or {} %}
+            {{ residents.values() | map(attribute='wifi_tracker') | select | join(', ') }}
+        sort:
+          method: name
+        unique: true
+        show_empty: false
+
+  - type: grid
+    cards:
+      - type: heading
+        heading: Уведомления
+        heading_style: title
+      - type: entities
+        title: Уведомления присутствия
+        show_header_toggle: false
+        state_color: true
+        entities:
+          - entity: switch.dh_presence_app_notify_presence
+            name: Прибытие / убытие
+            icon: mdi:home-account
+          - entity: switch.dh_presence_app_notify_gps
+            name: GPS · вход / выход
+            icon: mdi:map-marker
+          - entity: switch.dh_presence_app_notify_wifi
+            name: Wi-Fi · появление / исчезновение
+            icon: mdi:wifi
+  - type: grid
+    cards:
+      - type: heading
+        heading: 'Временная карточка (debug) '
+        heading_style: title
+        icon: mdi:home-account
+      - type: vertical-stack
+        cards:
           - type: custom:auto-entities
             card:
               type: entities
@@ -456,3 +411,4 @@ sections:
             show_empty: false
         grid_options:
           columns: 12
+cards: []
