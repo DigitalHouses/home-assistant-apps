@@ -1,4 +1,4 @@
-# Presence App — proposed MQTT contract (design draft)
+# Presence App — current MQTT contract (0.1.27 experimental)
 
 Shared device: **DH Presence** (stable identifier `dh_presence_app`).
 Canonical product: `digitalhouses_presence_app`.
@@ -26,7 +26,7 @@ The App's MQTT Select provides the operator's runtime mode; its retained state i
 
 The aggregate entity exposes `mode`, `residents`, `residents_total`, `residents_home`, and the informational `gps_freshness_seconds` threshold. Each resident also has the actual source `gps_reported_at` timestamp (or null); individual GPS binary sensors expose it as an attribute. A resident includes the source tracker's `name` (device label), App-configured `user_name` (optional/null), and each confirmed status. No GPS coordinates are exposed. Public attributes should be deliberately bounded and should not update on every probe tick.
 
-Events: `arrival`, `departure`, `wifi_in`, `wifi_out`, `gps_in`, `gps_out`.
+Events: `arrival`, `departure`, `wifi_in`, `wifi_out`, `gps_in`, `gps_out`, legacy `wifi_lost` (not emitted since 0.1.25), and `zone_enter`, `zone_leave` (since 0.1.27).
 Pilot payload fields: `schema_version: 2`, `event_type`, stable `resident_id`, `resident_name` (legacy tracker-friendly label), `device_name` (same HA tracker-friendly label), `user_name` (App-configured name or JSON null), `device_tracker` (configured source entity ID), `source`, `mode`, and ISO-8601 `observed_at`. Names are mapped once in Supervisor App `resident_names` settings and reused in Events; local packages do not resolve Person at delivery. **Arrival/departure** events additionally include `first_arrival`, `last_departure` (booleans), and `residents_home_after` (non-negative integer). A first arrival is **only** asserted when the known overall household status transitions `not_home → home`; a last departure only when it transitions `home → not_home`. Unknown residents preclude claiming an empty household. With multiple residents changing in one poll, these flags are calculated by the engine for each transition, so there is exactly one first and one last transition. No flags are fabricated on GPS/Wi-Fi source-only events.
 Payloads are facts, not translated messages. Events: QoS 1, `retain=false`. Discovery configuration and authoritative current state may be retained. On a transition, retained state must be synchronized **before** publishing the transient event. No startup or MQTT reconnect event replay.
 
@@ -40,9 +40,17 @@ Version 0.1.10 trusts HA's last valid GPS status and coordinates irrespective of
 
 ## Уведомления по зонам (0.1.27)
 
-Зоны читаются из Home Assistant `zone.*`; штатное GPS-состояние зарегистрированного `device_tracker` определяет индивидуальный переход. Числовое состояние `zone.*` не используется для идентификации жильца.
+Зоны читаются из Home Assistant `zone.*`; штатное GPS-состояние зарегистрированного `device_tracker` определяет индивидуальный переход. Собственный ZoneMonitor нужен для применения реестра жильцов и `exclude_users` до публикации события: стандартные HA zone triggers могут включать администраторов, не участвующих в DH Presence. Геофенсинг самостоятельно не рассчитывается. Числовое состояние `zone.*` не используется для идентификации жильца.
 
 Каждая зона получает MQTT switch в общем устройстве `dh_presence_app`: `switch.dh_presence_app_notify_zone_<zone_key>`, где `zone_key` — первые 16 hex символов SHA-256 полного `zone.entity_id`. Topic команд `DigitalHouses/Global/dh_presence_app/notifications/zones/<zone_key>/set`, topic состояния — `.../state`; команды без retain, состояние приложения хранится в JSON, новые зоны выключены. Переименование friendly_name не меняет идентификатор, а переименование самого `entity_id` является изменением идентичности и создаёт новый выключенный переключатель. Удалённые зоны удаляются через Discovery cleanup.
 
 Новые не-retained MQTT events: `zone_enter`, `zone_leave`. Сохранённые поля события v2 расширяются `zone_entity_id`, `zone_name`, `zone_key`. События производятся независимо от состояния переключателя и `presence_mode`. HA-пакет фильтрует разрешённые уведомления через `script.write2log`; для домашней зоны при активном переключателе подавляется дублирующий текст GPS. IP/MAC в событиях отсутствуют.
 
+
+## Local home Wi-Fi and protected diagnostics (0.1.27)
+
+Wi-Fi indicates only presence in the local home network of the HA installation (`zone.home`). A mobile device reaching HA through Cloudflare from an office does not establish local Wi-Fi presence. Runtime Wi-Fi evidence comes from the uniquely MAC-bound HA router `device_tracker`, not periodic active ARP/PING. Zone events for other `zone.*` entities rely on the native GPS tracker zone result.
+
+Registration IP/MAC are retained in the App's private registry and available to authenticated administrators through its Ingress diagnostic card. They are intentionally **not** MQTT sensor attributes or event fields; normal HA MQTT Recorder history does not duplicate this private registration data. The ability to view IP/MAC in a protected administrative HA UI is an accepted requirement, not a violation of the event data contract.
+
+The removal of the former general notification switch and the 0.1.27 zone event extension are already released compatibility changes. This documentation alignment does not alter their MQTT behavior.
