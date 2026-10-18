@@ -78,3 +78,11 @@ Verify actual router tracker reliability, multi-device ownership binding and sit
 - Document MQTT/HA state visibility of published IP/MAC accurately.
   Administrator-only management actions remain on the independently
   authorized App Ingress API.
+
+## Registered-phone deletion from admin-only select card (0.1.32)
+
+- A dedicated removal widget displays **only** to users whose HA frontend reports `is_admin`. It lists actual registrations by user/device label and GPS tracker in an unselected-by-default dropdown; remove requires an explicit confirmation, and refreshes the list.
+- Security is enforced at the App Supervisor Ingress handler, not solely at the Lovelace UI. Every administrative list/GET/delete request is authorized independently against the actual live HA admin identity; non-admin callers and absent authorization fail closed.
+- Destructive MQTT `select`/`button` entities are disallowed: they cannot attest which authenticated HA user sent the command. Reuse the durable backend deletion transaction, including disabled-trackers and no synthetic physical departure.
+- Inline Lovelace embedding uses an ingress-aware HACS card (`custom:addon-iframe-card`) nested in the existing `custom:button-card` admin wrapper, without modifying the security boundary. The built-in admin Ingress page provides the same form without a new HACS dependency.
+- Do not add any new MQTT entities, state attributes, Recorder history, permanent helpers, HA automation, exposed TCP ports or extra Supervisor privileges solely for phone removal.
