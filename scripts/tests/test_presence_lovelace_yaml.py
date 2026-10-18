@@ -15,6 +15,7 @@ DASH = ROOT / "examples/lovelace/dh_presence_app_dashboard.yaml"
 GPS_SOURCES = ROOT / "examples/lovelace/presence_gps_trackers_auto_entities_ru.yaml"
 WIFI_SOURCES = ROOT / "examples/lovelace/presence_wifi_trackers_auto_entities_ru.yaml"
 ZONE_COUNTS = ROOT / "examples/lovelace/presence_zones_auto_entities_ru.yaml"
+REGISTERED = ROOT / "examples/lovelace/presence_registered_phones_markdown_ru.yaml"
 
 
 class PresenceLovelaceYamlTests(unittest.TestCase):
@@ -82,13 +83,16 @@ class PresenceLovelaceYamlTests(unittest.TestCase):
         self.assertEqual(presence[1]["cards"][1]["type"], "custom:mushroom-chips-card")
         self.assertEqual(presence[2]["name"], "Регистрация телефона")
         self.assertEqual(residents[0]["heading"], "Жильцы")
-        self.assertEqual(len(residents), 5)
-        self.assertEqual(residents[1]["card_param"], "cards")
-        self.assertEqual(residents[1]["filter"]["include"][0]["entity_id"],
+        self.assertEqual(len(residents), 7)
+        self.assertEqual(residents[1], yaml.safe_load(REGISTERED.read_text(encoding="utf-8")))
+        self.assertEqual(residents[2]["name"], "Управление телефонами · администратор")
+        self.assertIn("hass.user?.is_admin !== true", residents[2]["hidden"])
+        self.assertEqual(residents[3]["card_param"], "cards")
+        self.assertEqual(residents[3]["filter"]["include"][0]["entity_id"],
                          "binary_sensor.dh_presence_app_*_wifi_home")
-        for card, source_file in ((residents[2], GPS_SOURCES),
-                                  (residents[3], WIFI_SOURCES),
-                                  (residents[4], ZONE_COUNTS)):
+        for card, source_file in ((residents[4], GPS_SOURCES),
+                                  (residents[5], WIFI_SOURCES),
+                                  (residents[6], ZONE_COUNTS)):
             source_card = yaml.safe_load(source_file.read_text(encoding="utf-8"))
             self.assertEqual(card, source_card)
         self.assertEqual(notifications[0]["heading"], "Уведомления")
