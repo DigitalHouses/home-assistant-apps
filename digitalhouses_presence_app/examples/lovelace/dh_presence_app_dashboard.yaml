@@ -246,7 +246,7 @@ sections:
                       {% set wifi = r.get('wifi', 'unavailable') %}
                       Итог: {{ 'Дома' if presence == 'home' else 'Вне дома' if presence == 'not_home' else 'Не определено' }} · {{ as_local(as_datetime(r['status_changed_at'])).strftime('%d.%m %H:%M') if r.get('status_changed_at') else '—' }}
                       GPS: {{ 'Дома' if gps == 'home' else 'Вне дома' if gps == 'not_home' else 'Недоступно' }} · {{ as_local(as_datetime(r['gps_changed_at'])).strftime('%d.%m %H:%M') if r.get('gps_changed_at') else '—' }}
-                      Wi-Fi: {{ 'Обнаружен' if wifi == 'home' else 'Не обнаружен (проверка сети)' if wifi == 'not_home' else 'Недоступно' }} · {{ as_local(as_datetime(r['wifi_changed_at'])).strftime('%d.%m %H:%M') if r.get('wifi_changed_at') else '—' }}
+                      Wi-Fi: {{ 'Обнаружен' if wifi == 'home' else 'Не подключён (роутер)' if wifi == 'not_home' else 'Недоступно' }} · {{ as_local(as_datetime(r['wifi_changed_at'])).strftime('%d.%m %H:%M') if r.get('wifi_changed_at') else '—' }}
                     icon: >-
                       {% set key = entity | replace('binary_sensor.dh_presence_app_', '') | replace('_wifi_home', '') %}
                       {% set r = (state_attr('binary_sensor.dh_presence_app_residents_home', 'residents') or {}).get(key, {}) %}
