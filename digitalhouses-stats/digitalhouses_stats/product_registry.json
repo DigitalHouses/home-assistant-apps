@@ -112,6 +112,20 @@
       "release": null,
       "repository_directory": "digitalhouses_presence_app",
       "haos_slug": "digitalhouses_presence_app"
+    },
+    {
+      "id": "digitalhouses_zigbee_monitor_app",
+      "type": "app",
+      "entity_prefix": "dh_zigbee_monitor_app",
+      "display_name": "Zigbee Monitor App",
+      "telemetry_allowed": true,
+      "release": {
+        "title": "DigitalHouses Zigbee Monitor App",
+        "version_source": "haos_config",
+        "policy_baseline": "0.1.0"
+      },
+      "repository_directory": "digitalhouses_zigbee_monitor_app",
+      "haos_slug": "digitalhouses_zigbee_monitor_app"
     }
   ]
 }
