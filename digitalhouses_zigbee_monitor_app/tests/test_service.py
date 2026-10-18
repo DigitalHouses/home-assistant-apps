@@ -206,7 +206,12 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(json.loads(self.t.last(state_topic("refresh_state")))["state"], "idle")
         self.assertIsNotNone(self.t.last(state_topic("last_refresh")))
         self.assertEqual(self.t.last(validity_topic("offline")), "offline")
-        self.assertEqual(self.t.last(validity_topic("offline_details")), "offline")
+        # The confirmed offline list is valid on a live bridge even when some
+        # peers have unknown availability. Only the scalar zero stays unknown.
+        self.assertEqual(self.t.last(validity_topic("offline_details")), "online")
+        offline_details = json.loads(self.t.last(state_topic("offline_details")))
+        self.assertEqual(offline_details["devices"], [])
+        self.assertFalse(offline_details["availability_complete"])
         details = json.loads(self.t.last(state_topic("inventory_details")))
         self.assertFalse(details["availability_complete"])
         self.assertEqual(details["availability_unknown"], 1)
