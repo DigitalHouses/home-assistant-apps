@@ -76,11 +76,17 @@ class Application:
         version = os.environ.get("APP_VERSION", "")
         if not VERSION_RE.fullmatch(version):
             raise ValueError("APP_VERSION must be SemVer, e.g. 0.1.0")
-        networks = parse_networks(options.get("zigbee2mqtt"))
         self.telemetry = TelemetryClient(enabled=True, version=version)
         self.telemetry_runner = TelemetryRunner(self.telemetry)
         self.store = ActivityStore(Path("/data/activity.sqlite3"))
-        self.monitor = ZigbeeMonitor(networks)
+        # Registry is durable. Existing 0.1.0 manual settings are accepted as a
+        # migration hint, but v0.1.1 requires no network configuration at all.
+        self.monitor = ZigbeeMonitor(self.store.known_networks())
+        legacy = options.get("zigbee2mqtt") or []
+        if legacy:
+            for network in parse_networks(legacy):
+                if network.network_id not in {n.network_id for n in self.monitor.networks}:
+                    self.monitor.add_network(network)
         self.stop_event = threading.Event()
         self._errors_logged: dict[str, float] = {}
         self.client = mqtt.Client(
@@ -178,7 +184,7 @@ class Application:
         self.client.connect_async(host, port, keepalive=60)
         self.client.loop_start()
         self.telemetry_runner.start()
-        self.log.info("Starting %s with %d configured networks", PRODUCT,
+        self.log.info("Starting %s with %d remembered networks; passive MQTT discovery enabled", PRODUCT,
                       len(self.monitor.networks))
         try:
             while not self.stop_event.wait(1):
