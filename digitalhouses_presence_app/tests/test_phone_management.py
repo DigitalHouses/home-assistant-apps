@@ -135,8 +135,8 @@ class PhoneManagementTests(unittest.TestCase):
         self.assertEqual(engine.snapshot()["residents"], {})
 
     def request(self, path="/api/admin/delete-registration", tracker="device_tracker.phone_a",
-                headers=None, body=None, uid="admin"):
-        cls = handler_factory("token", path, set())
+                headers=None, body=None, uid="admin", registry_path="/tmp/phone-registry.json"):
+        cls = handler_factory("token", registry_path, set())
         req = object.__new__(cls)
         req.path = path
         payload = json.dumps({"tracker": tracker}).encode("utf-8") if body is None else body
@@ -158,7 +158,7 @@ class PhoneManagementTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = str(Path(tmp) / "registry.json")
             save_registry(path, [SAMPLE])
-            req, answers = self.request(path=path)
+            req, answers = self.request(registry_path=path)
             # authenticated_ingress_user needs only Supervisor-provided identity,
             # never local-XFF context. Remote CF is valid for admin maintenance.
             with patch("dh_presence.ui.is_authorized_ha_admin", return_value=True):
@@ -175,7 +175,7 @@ class PhoneManagementTests(unittest.TestCase):
             path = str(Path(tmp) / "registry.json")
             save_registry(path, [SAMPLE])
             for authorized in (False,):
-                req, answers = self.request(path=path, uid="resident")
+                req, answers = self.request(registry_path=path, uid="resident")
                 with patch("dh_presence.ui.is_authorized_ha_admin",
                            return_value=authorized):
                     req.do_POST()
@@ -195,7 +195,7 @@ class PhoneManagementTests(unittest.TestCase):
                 {"tracker": "device_tracker.other"},
             ]
             for options in cases:
-                req, answers = self.request(path=path, **options)
+                req, answers = self.request(registry_path=path, **options)
                 with patch("dh_presence.ui.is_authorized_ha_admin", return_value=True):
                     req.do_POST()
                 self.assertIn(answers[0][0], (400, 403, 404))
