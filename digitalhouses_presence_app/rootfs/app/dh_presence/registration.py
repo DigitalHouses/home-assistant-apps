@@ -83,7 +83,7 @@ def _registered_and_disabled(path: str) -> tuple[list[dict], set[str]]:
     disabled_raw = raw.get("disabled_trackers")
     if not isinstance(disabled_raw, list):
         raise ValueError("Missing disabled tracker registry")
-    if (not all(isinstance(t, str) and re.fullmatch(r"device_tracker\\.[a-z0-9_]+", t)
+    if (not all(isinstance(t, str) and re.fullmatch(r"device_tracker\.[a-z0-9_]+", t)
                 for t in disabled_raw) or len(set(disabled_raw)) != len(disabled_raw)):
         raise ValueError("Invalid disabled tracker registry")
     disabled = set(disabled_raw)
@@ -108,7 +108,7 @@ def save_registry(path: str, residents: list[dict],
     if disabled_trackers is None:
         _, disabled_trackers = load_registry_state(path)
     if (not isinstance(disabled_trackers, set)
-            or not all(isinstance(t, str) and re.fullmatch(r"device_tracker\\.[a-z0-9_]+", t)
+            or not all(isinstance(t, str) and re.fullmatch(r"device_tracker\.[a-z0-9_]+", t)
                        for t in disabled_trackers)):
         raise ValueError("Invalid disabled trackers")
     if disabled_trackers.intersection(r["tracker"] for r in clean):
@@ -121,7 +121,7 @@ def save_registry(path: str, residents: list[dict],
 
 def delete_registration(path: str, tracker: str) -> dict:
     """Unregister one exact phone and suppress legacy config re-enrollment."""
-    if not isinstance(tracker, str) or not re.fullmatch(r"device_tracker\\.[a-z0-9_]+", tracker):
+    if not isinstance(tracker, str) or not re.fullmatch(r"device_tracker\.[a-z0-9_]+", tracker):
         raise ValueError("Invalid phone tracker")
     current, disabled = load_registry_state(path)
     record = next((r for r in current if r["tracker"] == tracker), None)
