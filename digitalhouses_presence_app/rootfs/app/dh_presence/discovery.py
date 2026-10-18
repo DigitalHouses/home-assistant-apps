@@ -31,6 +31,16 @@ def discovery(version: str, residents: list[Resident], zones: dict[str, str] | N
             "unique_id": "dh_presence_app_event", "default_entity_id": "event.dh_presence_app_event",
             "state_topic": topic("event"), "event_types": EVENT_TYPES, "availability": availability
         },
+        "recent_events": {
+            "platform": "sensor", "name": "Recent events",
+            "unique_id": "dh_presence_app_recent_events",
+            "default_entity_id": "sensor.dh_presence_app_recent_events",
+            "icon": "mdi:history",
+            "state_topic": topic("events/history"),
+            "value_template": "{{ value_json.count }}",
+            "json_attributes_topic": topic("events/history"),
+            "entity_category": "diagnostic", "availability": availability,
+        },
         "version": {
             "platform": "sensor", "name": "Version", "unique_id": "dh_presence_app_version",
             "default_entity_id": "sensor.dh_presence_app_version",
