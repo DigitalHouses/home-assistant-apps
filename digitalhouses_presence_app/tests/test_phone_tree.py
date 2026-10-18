@@ -1,6 +1,8 @@
 """Registered-phone dashboard tree: App-only formatting and recorder isolation."""
 import json
 import unittest
+from datetime import datetime, timezone, timedelta
+from zoneinfo import ZoneInfo
 from unittest.mock import Mock
 
 from app import publish_snapshot
@@ -25,6 +27,9 @@ class TestDashboardRegistrationTree(unittest.TestCase):
         engine.residents["device_tracker.s_iphone"].gps = Status.HOME
         engine.residents["device_tracker.s_iphone"].wifi = Status.NOT_HOME
         engine.residents["device_tracker.alina"].gps = Status.NOT_HOME
+        engine.residents["device_tracker.alina"].gps_changed_at = datetime(2026, 10, 18, 23, 45, tzinfo=timezone.utc)
+        engine.residents["device_tracker.s_iphone"].gps_changed_at = datetime(2026, 10, 18, 20, 12, tzinfo=timezone.utc)
+        engine.residents["device_tracker.s_iphone"].wifi_changed_at = datetime(2026, 10, 18, 20, 25, tzinfo=timezone.utc)
         regs = [
             enrolled("device_tracker.s_iphone", "13ProMAX .SKY",
                      wifi="device_tracker.s_router"),
@@ -32,18 +37,23 @@ class TestDashboardRegistrationTree(unittest.TestCase):
             enrolled("device_tracker.alina", "iPhone", user="Alina",
                      wifi=None, ip="192.168.8.55", mac="8a:43:3e:74:09:83"),
         ]
-        doc = registered_phones_tree(regs, list(engine.residents.values()))
+        doc = registered_phones_tree(regs, list(engine.residents.values()),
+                                     local_tz=ZoneInfo("Asia/Almaty"))
         self.assertEqual(doc["count"], 2)
         self.assertEqual(doc["tree"].split("\n"), [
             "Зарегистрированные телефоны",
             "├─ 📲 Alina (iPhone)",
             "│  ├─ GPS · 🟠 Не дома · alina",
+            "│  │  └─ Статус с · 19.10.2026 04:45 +05",
             "│  ├─ Wi-Fi · ⚪ Не привязан",
+            "│  │  └─ Статус с · не применимо",
             "│  ├─ IP (рег.) · 192.168.8.55",
             "│  └─ MAC (рег.) · 8a:43:3e:74:09:83",
             "└─ 📲 Serzhan (13ProMAX .SKY)",
             "   ├─ GPS · 🟢 Дома · s_iphone",
+            "   │  └─ Статус с · 19.10.2026 01:12 +05",
             "   ├─ Wi-Fi · 🟠 Не дома · s_router",
+            "   │  └─ Статус с · 19.10.2026 01:25 +05",
             "   ├─ IP (рег.) · 192.168.8.54",
             "   └─ MAC (рег.) · 88:b9:45:80:a7:55",
         ])
@@ -56,6 +66,40 @@ class TestDashboardRegistrationTree(unittest.TestCase):
         gone = registered_phones_tree(regs, list(engine.residents.values()))
         self.assertNotIn("8a:43:3e:74:09:83", gone["tree"])
         self.assertNotIn("192.168.8.55", gone["tree"])
+
+    def test_status_since_uses_transition_not_poll_time(self):
+        engine = Engine()
+        engine.add("device_tracker.p", "iPhone", registered=True)
+        r = engine.residents["device_tracker.p"]
+        row = enrolled("device_tracker.p", "iPhone", wifi="device_tracker.router")
+        before = datetime(2026, 10, 18, 20, 10, tzinfo=timezone.utc)
+        r.gps = Status.HOME
+        r.gps_changed_at = before
+        r.wifi = Status.NOT_HOME
+        r.wifi_changed_at = before + timedelta(minutes=20)
+        tree = registered_phones_tree([row], [r], local_tz=ZoneInfo("Asia/Almaty"))["tree"]
+        self.assertIn("GPS · 🟢 Дома · p\\n   │  └─ Статус с · 19.10.2026 01:10 +05", tree)
+        self.assertIn("Wi-Fi · 🟠 Не дома · router\\n   │  └─ Статус с · 19.10.2026 01:30 +05", tree)
+        # Another ordinary poll without a source change must not rewrite
+        # timestamps in the App-prepared tree/retained MQTT state.
+        self.assertEqual(tree, registered_phones_tree([row], [r],
+                         local_tz=ZoneInfo("Asia/Almaty"))["tree"])
+        self.assertIn("20:10 UTC", registered_phones_tree([row], [r])["tree"])
+        # Unknown: no invented timestamp from the current clock.
+        r.gps_changed_at = None
+        missing = registered_phones_tree([row], [r])["tree"]
+        self.assertIn("GPS · 🟢 Дома · p\\n   │  └─ Статус с · нет данных", missing)
+
+    def test_missing_wifi_binding_has_no_fictional_change_time(self):
+        engine = Engine()
+        engine.add("device_tracker.p", "iPhone", registered=True)
+        r = engine.residents["device_tracker.p"]
+        r.wifi = Status.HOME
+        r.wifi_changed_at = datetime(2026, 10, 18, 20, 15, tzinfo=timezone.utc)
+        row = enrolled("device_tracker.p", "iPhone", wifi=None)
+        tree = registered_phones_tree([row], [r])["tree"]
+        self.assertIn("Wi-Fi · ⚪ Не привязан\\n   │  └─ Статус с · не применимо", tree)
+        self.assertNotIn("20:15 UTC", tree)
 
     def test_source_transitions_update_tree_without_registry_changes(self):
         engine = Engine()
@@ -108,7 +152,7 @@ class TestDashboardRegistrationTree(unittest.TestCase):
         engine.add("device_tracker.p", "Phone", registered=True)
         reg = enrolled("device_tracker.p", "Device\n└─ fake", user="<script>x</script>\rAdmin")
         doc = registered_phones_tree([reg], list(engine.residents.values()))
-        self.assertEqual(len(doc["tree"].splitlines()), 6)
+        self.assertEqual(len(doc["tree"].splitlines()), 8)
         self.assertIn("Device └─ fake", doc["tree"])
         self.assertNotIn("\n└─ fake", doc["tree"])
 
