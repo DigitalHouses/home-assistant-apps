@@ -54,3 +54,11 @@ Wi-Fi indicates only presence in the local home network of the HA installation (
 Registration IP/MAC are retained in the App's private registry and available to authenticated administrators through its Ingress diagnostic card. They are intentionally **not** MQTT sensor attributes or event fields; normal HA MQTT Recorder history does not duplicate this private registration data. The ability to view IP/MAC in a protected administrative HA UI is an accepted requirement, not a violation of the event data contract.
 
 The removal of the former general notification switch and the 0.1.27 zone event extension are already released compatibility changes. This documentation alignment does not alter their MQTT behavior.
+
+## Recent event display state (0.1.28)
+
+The App's own `events_history_limit` App Configuration option (integer 1–20, default 5) sets the maximum number of recent acknowledged machine Events kept in `/data/presence_event_history.json`. This persisted file is an App-owned bounded cache and contains only approved summary fields. When the allowed resident roster changes, history rows for nonparticipating or excluded users are removed. A missing history file starts empty; malformed persisted history is an explicit error, not a silent reset.
+
+The new **diagnostic sensor** `sensor.dh_presence_app_recent_events` shares the existing MQTT Device; state is the bounded event count. It has a single retained state/attributes topic `DigitalHouses/Global/dh_presence_app/events/history` with `{count, limit, items}`. Each item has App-prepared `title`, escaped `details`, and timezone-aware `timestamp` (App publish time). It is **display state**, not a second transient Event/notification-envelope protocol, and does not create additional notification actions. The original `event.dh_presence_app_event` payloads remain machine-readable, non-retained and unchanged.
+
+This history sensor updates on actual machine-event publication or resident/limit change, not on polling ticks. **Exclude the diagnostic sensor from HA Recorder**, because its repeated array attributes are UI data, not history measurements; the original machine Event remains eligible for Recorder according to the home's policy. Registered phone IP/MAC stays private in the administrator Ingress and never enters this MQTT UI history.

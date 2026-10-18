@@ -22,6 +22,7 @@ from dh_presence.storage import load, save
 from dh_presence.modes import ModeSelection
 from dh_presence.notifications import NotificationSelection, NOTIFICATION_KEYS
 from dh_presence.zones import ZoneMonitor, zone_catalog, zone_key
+from dh_presence.history import EventHistory, DEFAULT_LIMIT, MAX_LIMIT
 from dh_presence.operations import Operations, fetch_latest_release, is_newer
 from dh_presence.registration import load_registry
 from dh_presence.router import poll_router_trackers
@@ -34,6 +35,7 @@ DISCOVERY_FILE = "/data/presence_discovery.json"
 MODE_FILE = "/data/presence_mode.json"
 NOTIFICATIONS_FILE = "/data/presence_notifications.json"
 ZONES_FILE = "/data/presence_zones.json"
+HISTORY_FILE = "/data/presence_event_history.json"
 OPERATIONS_FILE = "/data/presence_refresh.json"
 REGISTRATIONS_FILE = "/data/presence_registrations.json"
 EVENT_NAMES = {"arrival", "departure", "gps_in", "gps_out", "wifi_in", "wifi_out", "wifi_lost", "zone_enter", "zone_leave"}
@@ -89,6 +91,10 @@ def load_options(path=OPTIONS) -> dict:
     timeout = data["wifi_absence_minutes"]
     freshness = data["gps_freshness_seconds"]
     poll = data["gps_poll_interval_seconds"]
+    history_limit = data.get("events_history_limit", DEFAULT_LIMIT)
+    if type(history_limit) is not int or not 1 <= history_limit <= MAX_LIMIT:
+        raise ValueError("Invalid events_history_limit")
+    data["events_history_limit"] = history_limit
     if type(timeout) is not int or not 1 <= timeout <= 120:
         raise ValueError("Invalid Wi-Fi timeout")
     if type(freshness) is not int or not 30 <= freshness <= 3600:
@@ -403,7 +409,8 @@ def save_discovery(value: dict):
 def publish_snapshot(output: MqttOutput, engine: Engine, version: str, started: str,
                      operations: Operations, latest_version: str | None,
                      notifications: NotificationSelection | None = None,
-                     zones: dict[str, str] | None = None) -> bool:
+                     zones: dict[str, str] | None = None,
+                     history: EventHistory | None = None) -> bool:
     snapshot = engine.snapshot()
     if not output.publish(topic("mode/state"), engine.mode.value):
         return False
@@ -441,6 +448,8 @@ def publish_snapshot(output: MqttOutput, engine: Engine, version: str, started: 
                          else "gps_with_router_tracker",
     }):
         return False
+    if history is not None and not output.publish(topic("events/history"), history.snapshot()):
+        return False
     for r in engine.residents.values():
         if r.distance is not None and not output.publish(topic("distance/"+r.key), r.distance):
             return False
@@ -470,6 +479,8 @@ def run():
     modes = ModeSelection(MODE_FILE, options["presence_mode"])
     notifications = NotificationSelection(NOTIFICATIONS_FILE)
     zone_monitor = ZoneMonitor(ZONES_FILE)
+    history = EventHistory(HISTORY_FILE, options["events_history_limit"])
+    history.prune_residents({r.key for r in engine.residents.values()})
     zones: dict[str, str] = {}
     zones_loaded = False
     engine.set_mode(modes.selected)
@@ -605,6 +616,7 @@ def run():
                         previous_core_error = problem
             events = []
             zone_monitor.prune_residents({r.key for r in engine.residents.values()})
+            history.prune_residents({r.key for r in engine.residents.values()})
             for r in engine.residents.values():
                 try:
                     data = http_json("http://supervisor/core/api/states/" + r.tracker, token)
@@ -664,7 +676,7 @@ def run():
             save(STATE, engine.persistent())
             published = (mqtt_out.connected.is_set() and discovery_ready
                          and publish_snapshot(mqtt_out, engine, version, started,
-                                              operations, latest_version, notifications, zones))
+                                              operations, latest_version, notifications, zones, history))
             if published:
                 if not published_state_logged:
                     LOG.info("MQTT presence state published topic=%s residents=%d mode=%s",
@@ -674,16 +686,23 @@ def run():
                     if event["event_type"] not in EVENT_NAMES:
                         raise ValueError("Invalid internal event")
                     resident = next(r for r in engine.residents.values() if r.key == event["resident_id"])
-                    if mqtt_out.publish(topic("event"), {
+                    machine_event = {
                         "schema_version": 2, "mode": engine.mode.value,
                         "resident_name": resident.name,
                         "device_name": resident.name,
                         "user_name": resident.user_name,
                         "device_tracker": resident.tracker,
                         **event
-                    }, retain=False, force=True):
+                    }
+                    if mqtt_out.publish(topic("event"), machine_event, retain=False, force=True):
+                        # Only acknowledged machine events enter the durable UI history.
+                        history.record(machine_event)
                         LOG.info("MQTT presence event published type=%s tracker=%s mode=%s",
                                  event["event_type"], resident.tracker, engine.mode.value)
+                # The retained read-only snapshot is separate from transient events.
+                # On broker failure it is retried from the durable ring on the next poll.
+                if events and not mqtt_out.publish(topic("events/history"), history.snapshot()):
+                    LOG.warning("MQTT event history not synchronized; will retry")
             if refresh_requested:
                 error = None
                 if not published:

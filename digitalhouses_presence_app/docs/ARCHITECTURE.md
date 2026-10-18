@@ -53,3 +53,11 @@ The current experimental registration uses narrowly approved `host_network` and 
 The App is experimental and installed from repository sources without a GHCR `image:`. Registry entry `digitalhouses_presence_app` currently has `telemetry_allowed: false` and `release: null`; runtime warns if `telemetry_enabled` is selected but does not send usage statistics. Immutable image delivery and telemetry eligibility are separate, deferred production tasks.
 
 For exact fields and identifiers see [MQTT_CONTRACT.md](MQTT_CONTRACT.md). For scenario coverage see [TEST_PLAN.md](TEST_PLAN.md). For historical release changes see [CHANGELOG.md](../CHANGELOG.md).
+
+## Bounded UI event history (0.1.28)
+
+The App owns a separate bounded and durable **presentation-only** history cache at `/data/presence_event_history.json`. Its size is controlled solely by `events_history_limit` in Supervisor App Configuration (default 5, range 1–20). An entry is appended only after a transient machine Event publish is acknowledged by MQTT; the App prepares its label/details. Existing registered-resident filters apply and excluded/removed residents are removed from the retained cache. Restart never emits synthetic transitions or backfills lost events.
+
+The only HA interface is one new MQTT diagnostic sensor exposing a retained snapshot of App-prepared `items` on `events/history`. The Markdown card simply loops over these items and formats local time. This is a UI state read model, not an alternative event transport or a local HA templated-history engine. No extra helper/automation/second event stream is added.
+
+Because the list changes whenever an Event arrives, **`sensor.dh_presence_app_recent_events` must be excluded from the local Recorder**. The App's own bounded file is authoritative for the short UI history; native machine Event history remains separate under the home's normal Recorder policy.

@@ -409,6 +409,21 @@ sections:
           - entity: switch.dh_presence_app_notify_wifi
             name: Wi-Fi · появление / исчезновение
             icon: mdi:wifi
+      - type: markdown
+        title: "🕘 Последние события DH Presence"
+        content: |-
+          {% set items = state_attr('sensor.dh_presence_app_recent_events', 'items') or [] %}
+          {% for item in items %}
+          **{{ item.title }}**
+
+          {{ item.details }}
+
+          _{{ as_local(as_datetime(item.timestamp)).strftime('%d.%m.%Y · %H:%M:%S') }}_
+
+          {% if not loop.last %}---{% endif %}
+          {% else %}
+          _Событий пока нет._
+          {% endfor %}
   - type: grid
     cards:
       - type: heading

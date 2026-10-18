@@ -1,13 +1,16 @@
 configuration:
   presence_mode:
     name: Presence mode
-    description: Sets initial/default mode; change at runtime using select.dh_presence_app_mode. Wi-Fi engine is not available yet.
+    description: Initial GPS / Wi-Fi / Hybrid mode; change live through select.dh_presence_app_mode.
   wifi_absence_minutes:
     name: Hybrid Wi-Fi absence timeout
   gps_poll_interval_seconds:
     name: GPS poll interval
   gps_freshness_seconds:
     name: GPS source freshness
+  events_history_limit:
+    name: Recent event history size
+    description: Number of latest DH Presence events to retain for the read-only card (1–20, default 5). Exclude this display sensor from Recorder.
   residents:
     name: Registered residents
     description: Add one GPS device_tracker entity ID for each tracked phone; names are resolved from Home Assistant.

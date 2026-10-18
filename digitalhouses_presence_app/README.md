@@ -1,8 +1,27 @@
 # DigitalHouses Presence App
 
-**Status: GPS + HA router device_tracker Wi-Fi pilot, version 0.1.27.** Observe router tracker stability before safety-critical automations.
+**Status: GPS + HA router device_tracker Wi-Fi pilot, version 0.1.28.** Observe router tracker stability before safety-critical automations.
 
 This application belongs to `DigitalHouses/home-assistant-apps/digitalhouses_presence_app` and is installed via **Settings → Apps → App Store**.
+
+## Latest events (0.1.28, App-owned)
+
+The App maintains a private durable **bounded ring of MQTT machine Events confirmed published** (all source, overall and GPS zone transitions) at `/data/presence_event_history.json`. Set `events_history_limit: 5` under **Settings → Apps → DigitalHouses Presence App → Configuration**. Accepted range: 1–20; changing the option and restarting the App trims the ring to the new limit. Restart and MQTT reconnection do not fabricate or replay machine events. Excluded/unregistered residents are removed from stored history when the App processes its eligible roster.
+
+The App publishes the display snapshot via the existing MQTT Device's diagnostic `sensor.dh_presence_app_recent_events`, retained topic `DigitalHouses/Global/dh_presence_app/events/history`. Its state is the number of stored entries; attributes contain `count`, `limit` and **already prepared** `items` (`title`, `details`, `timestamp`). The timestamp denotes when App acknowledged publication of the machine Event; GPS source observation timestamps are preserved in the original machine Events and the private durable journal. Names and zone labels in the UI summary are bounded to 120 characters; IP/MAC/token and unlisted machine-event fields are never copied into this history.
+
+The [recent-events Markdown card](examples/lovelace/presence_recent_events_markdown_ru.yaml) only iterates the supplied items and formats timestamps in the browser's Home Assistant timezone; it does **not** collect, process, classify or store events. The maintained four-column dashboard includes the same card in the Notifications column. No HA helper, template sensor, history automation or extra notifications are required. Installation of a new App release does not automatically replace previously pasted dashboard YAML.
+
+**Recorder requirement:** exclude the UI history sensor from Recorder, since every new Event changes its attributes. Merge this entity into your existing Recorder exclusion list, for example:
+
+```yaml
+recorder:
+  exclude:
+    entities:
+      - sensor.dh_presence_app_recent_events
+```
+
+Do not replace or overwrite unrelated Recorder include/exclude settings. The original `event.dh_presence_app_event` retains its existing independent Recorder policy.
 
 ## Dynamic source tracker cards (0.1.26)
 
