@@ -72,3 +72,28 @@ Phone deletion is an admin-authorized Ingress API operation, **not** an MQTT com
 ## Private phone tree and MQTT boundary (0.1.30)
 
 The compact registration tree showing `IP (рег.)` and `MAC (рег.)` is generated **only** in the authorized administrator Ingress UI using the existing private `/api/admin/debug` response. It is intentionally **not** another sensor or a newly exposed attribute in `binary_sensor.dh_presence_app_residents_home`. The normal HA Markdown phone list continues to show non-private GPS/Wi-Fi tracker IDs only. Registration IP/MAC are snapshots at time of verification and are not current reachability readings. MQTT Events, Recorder and notification contracts do not change.
+
+
+## Dashboard registered phones diagnostic entity (0.1.31)
+
+- `sensor.dh_presence_app_registered_phones` joins the **existing one** DH
+  Presence MQTT Device as a diagnostic sensor, not an additional App or MQTT
+  Discovery Device. The state is the integer registered count.
+- Its single retained state and attributes topic is
+  `DigitalHouses/Global/dh_presence_app/registrations/tree`, JSON object
+  `{count, tree}`. The `tree` string is completely prepared by App and
+  includes registration-time IP/MAC. HA only escapes and displays it.
+- Only registered active/non-excluded phones are included. Removing a phone
+  publishes a new tree without its saved IP/MAC, including after an App restart.
+  Unchanged snapshot payloads are suppressed by the App MQTT cache during
+  ordinary polling.
+- **Security change relative to 0.1.30:** this network registration metadata
+  is now present in the MQTT broker and readable through the diagnostic HA
+  sensor. This is *not* an HA-admin-only interface; use the original Ingress
+  when backend-admin-only secrecy is required. Never claim that hiding the
+  Lovelace card enforces access control.
+- **Recorder exclusion is mandatory:** do not persist this diagnostic sensor
+  or its mutable `tree` attribute. Merge with existing exclusion of
+  `sensor.dh_presence_app_recent_events`. The normal
+  `binary_sensor.dh_presence_app_residents_home` aggregate retains exactly
+  its previous registration-safe attribute schema, events remain unchanged.
