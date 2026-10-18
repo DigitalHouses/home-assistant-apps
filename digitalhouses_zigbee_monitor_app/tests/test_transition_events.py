@@ -164,7 +164,7 @@ class TransitionTests(unittest.TestCase):
         self.receive("plug/availability", b'{"state":"offline"}', dup=True)
         self.receive("plug/availability", b'{"state":"online"}', retain=True)
         self.assertEqual(self.t.events(), [])
-        self.assertEqual(self.t.last(state_topic("offline")), "0")
+        self.assertEqual(self.t.last(validity_topic("offline")), "offline")
 
 
 if __name__ == "__main__":
