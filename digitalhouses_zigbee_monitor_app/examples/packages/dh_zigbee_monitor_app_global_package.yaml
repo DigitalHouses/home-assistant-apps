@@ -1,11 +1,23 @@
-# DigitalHouses Zigbee Monitor · proposed global Recorder policy.
-# Install only alongside the actual HAOS App, after reviewing the site's
-# existing recorder include/exclude filters and package loading scheme.
-# Example path: /config/packages/Global/DH_APP/dh_zigbee_monitor_app_global_package.yaml
-# No local write2admins/write2log dependency is embedded in the public App.
+# =============================================================================
+# DigitalHouses Zigbee Monitor App · minimal Home Assistant Recorder policy.
 #
-# IMPORTANT: Recorder captures state attributes as well as state.
-# Therefore only scalar metrics go to history. UI details/event/card never do.
+# Install only after reviewing the site's active Recorder include/exclude policy
+# and HA packages loading strategy. Do not replace the site's global recorder.
+# Example target:
+# /config/packages/Global/DH_APP/dh_zigbee_monitor_app_global_package.yaml
+#
+# Source of truth:
+#   4 useful numeric scalar state sensors, no dynamic JSON attributes.
+#   App SQLite owns per-device minute aggregates and historical MQTT rankings.
+#   Machine events are not historical state and are excluded from Recorder.
+#
+# IMPORTANT: Home Assistant Recorder filters give an explicit include.entities
+# priority over exclude.entity_globs (when no conflicting domain/glob includes).
+# Therefore Zigbee Monitor is excluded by default; only the four listed
+# entity_ids are explicitly allowed back into history. This avoids recording
+# diagnostic JSON/attributes, version, status card, or future new entities.
+# =============================================================================
+
 dh_zigbee_monitor_app_global_package:
   recorder:
     include:
@@ -13,25 +25,13 @@ dh_zigbee_monitor_app_global_package:
         - sensor.dh_zigbee_monitor_app_networks
         - sensor.dh_zigbee_monitor_app_devices
         - sensor.dh_zigbee_monitor_app_offline
-        - sensor.dh_zigbee_monitor_app_spammers
-        - sensor.dh_zigbee_monitor_app_incidents
         - sensor.dh_zigbee_monitor_app_messages_rate_5m
+
     exclude:
-      entities:
-        - sensor.dh_zigbee_monitor_app_networks_details
-        - sensor.dh_zigbee_monitor_app_offline_details
-        - sensor.dh_zigbee_monitor_app_top_1h_details
-        - sensor.dh_zigbee_monitor_app_top_24h_details
-        - sensor.dh_zigbee_monitor_app_top_7d_details
-        - sensor.dh_zigbee_monitor_app_incidents_details
-        - sensor.dh_zigbee_monitor_app_inventory_details
-        - sensor.dh_zigbee_monitor_app_refresh_state
-        - sensor.dh_zigbee_monitor_app_card
-        - sensor.dh_zigbee_monitor_app_version
-        - sensor.dh_zigbee_monitor_app_started_at
-        - sensor.dh_zigbee_monitor_app_latest_version
-        - sensor.dh_zigbee_monitor_app_last_refresh
-        - binary_sensor.dh_zigbee_monitor_app_update_available
-        - event.dh_zigbee_monitor_app_event
       entity_globs:
-        - sensor.dh_zigbee_monitor_app_*_details
+        - sensor.dh_zigbee_monitor_app_*
+        - binary_sensor.dh_zigbee_monitor_app_*
+        - button.dh_zigbee_monitor_app_*
+        - event.dh_zigbee_monitor_app_*
+      entities:
+        - update.digitalhouses_zigbee_monitor_app_update
