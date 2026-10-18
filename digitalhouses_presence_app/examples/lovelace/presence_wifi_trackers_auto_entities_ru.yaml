@@ -1,0 +1,17 @@
+# Wi-Fi source trackers bound at phone enrollment to DH Presence residents.
+# Requires DH Presence 0.1.26+ and custom:auto-entities (HACS).
+# Missing links are omitted. Source unavailable state is not filtered out.
+type: custom:auto-entities
+card:
+  type: entities
+  title: "📶 DH Presence · Wi-Fi-трекеры"
+  show_header_toggle: false
+  state_color: true
+filter:
+  template: >-
+    {% set residents = state_attr('binary_sensor.dh_presence_app_residents_home', 'residents') or {} %}
+    {{ residents.values() | map(attribute='wifi_tracker') | select | join(', ') }}
+sort:
+  method: name
+unique: true
+show_empty: false
