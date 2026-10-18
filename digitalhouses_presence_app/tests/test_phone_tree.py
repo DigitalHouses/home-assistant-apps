@@ -145,6 +145,19 @@ class TestDashboardRegistrationTree(unittest.TestCase):
         self.assertIn(reg["ip"], by_topic[topic("registrations/tree")]["tree"])
         self.assertNotIn(reg["ip"], json.dumps(by_topic[topic("state")]))
         self.assertNotIn(reg["mac"], json.dumps(by_topic[topic("state")]))
+        # The same registry is reused: the tree is regenerated using the
+        # live GPS/Wi-Fi evidence on each normal App snapshot.
+        engine.residents["device_tracker.p"].gps = Status.HOME
+        engine.residents["device_tracker.p"].wifi = Status.NOT_HOME
+        mqtt.publish.reset_mock()
+        self.assertTrue(publish_snapshot(
+            mqtt, engine, "0.1.34", "2026-10-19T12:00:30+00:00",
+            operations, None, registrations=[reg]))
+        updated = dict((c.args[0], c.args[1]) for c in mqtt.publish.call_args_list)
+        self.assertIn("GPS · 🟢 Дома · p", updated[topic("registrations/tree")]["tree"])
+        self.assertIn("Wi-Fi · ⚪ Не привязан", updated[topic("registrations/tree")]["tree"])
+        self.assertEqual(updated[topic("registrations/tree")]["count"], 1)
+        self.assertNotIn(reg["ip"], json.dumps(updated[topic("state")]))
         # A failed registry publish must fail the snapshot instead of
         # reporting a successful refresh with stale IP/MAC data.
         def publish(topic_name, _value):
