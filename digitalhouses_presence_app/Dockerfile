@@ -1,6 +1,6 @@
 FROM ghcr.io/home-assistant/base:latest
 
-ARG BUILD_VERSION="0.1.32"
+ARG BUILD_VERSION="0.1.33"
 ARG BUILD_ARCH
 
 ENV APP_VERSION="${BUILD_VERSION}" \
