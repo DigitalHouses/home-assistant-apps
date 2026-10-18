@@ -160,6 +160,20 @@ class ActivityStore:
             for ieee, total, name, net in self.conn.execute(query, params)
         ]
 
+    def first_bucket(self) -> int | None:
+        row = self.conn.execute("SELECT MIN(bucket_start) FROM message_minutes").fetchone()
+        return row[0] if row is not None else None
+
+    def sum_messages(self, *, from_epoch: int, until_epoch: int) -> int:
+        if from_epoch >= until_epoch or from_epoch < 0:
+            raise ValueError("invalid message query window")
+        row = self.conn.execute(
+            "SELECT COALESCE(SUM(messages), 0) FROM message_minutes "
+            "WHERE bucket_start >= ? AND bucket_start < ?",
+            (from_epoch, until_epoch),
+        ).fetchone()
+        return int(row[0])
+
     def trim_minutes(self, *, before_epoch: int) -> int:
         """Retention is called explicitly on aggregated data, never on devices."""
         if not isinstance(before_epoch, int) or before_epoch < 0:
