@@ -223,6 +223,7 @@ class ZigbeeMonitorUiDesignTests(unittest.TestCase):
         self.assertNotIn("sensor.dh_zigbee_monitor_app_card", historical)
         self.assertNotIn("event.dh_zigbee_monitor_app_event", historical)
         self.assertEqual(set(self.recorder["exclude"]["entity_globs"]), {
+            "sensor.dh_zigbee_monitor_app_*_details",
             "sensor.dh_zigbee_monitor_app_*",
             "binary_sensor.dh_zigbee_monitor_app_*",
             "button.dh_zigbee_monitor_app_*",
