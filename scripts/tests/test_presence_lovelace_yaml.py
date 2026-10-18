@@ -5,6 +5,7 @@ The Presence runtime unit test job intentionally does not depend on PyYAML.
 """
 import unittest
 from pathlib import Path
+from datetime import datetime
 
 import yaml
 from jinja2 import Environment
@@ -16,6 +17,7 @@ GPS_SOURCES = ROOT / "examples/lovelace/presence_gps_trackers_auto_entities_ru.y
 WIFI_SOURCES = ROOT / "examples/lovelace/presence_wifi_trackers_auto_entities_ru.yaml"
 ZONE_COUNTS = ROOT / "examples/lovelace/presence_zones_auto_entities_ru.yaml"
 REGISTERED = ROOT / "examples/lovelace/presence_registered_phones_markdown_ru.yaml"
+RECENT = ROOT / "examples/lovelace/presence_recent_events_markdown_ru.yaml"
 
 
 class PresenceLovelaceYamlTests(unittest.TestCase):
@@ -66,6 +68,54 @@ class PresenceLovelaceYamlTests(unittest.TestCase):
                                          if r.get(field))
                     self.assertEqual(actual, expected)
                     self.assertNotIn("None", actual)
+
+    def test_compact_markdown_cards_render_without_blank_paragraphs(self):
+        dashboard = yaml.safe_load(DASH.read_text(encoding="utf-8"))
+        residents = dashboard["sections"][1]["cards"]
+        notifications = dashboard["sections"][2]["cards"]
+        cards = (
+            (REGISTERED, residents[1]),
+            (RECENT, notifications[3]),
+        )
+        env = Environment()
+        roster = {
+            "one": {"registered": True, "registration_label": "Serzhan (iPhone)",
+                    "gps_tracker": "device_tracker.phone_1",
+                    "wifi_tracker": "device_tracker.router_1"},
+            "two": {"registered": True, "registration_label": "Alina (iPhone)",
+                    "gps_tracker": "device_tracker.phone_2", "wifi_tracker": None},
+            "old": {"registered": False, "registration_label": None,
+                    "gps_tracker": "device_tracker.legacy",
+                    "wifi_tracker": None},
+        }
+        event_rows = [
+            {"title": "GPS: дома", "details": "Serzhan (iPhone)",
+             "timestamp": "2026-10-18T11:05:00+00:00"},
+            {"title": "Выход из зоны", "details": "Alina · Office",
+             "timestamp": "2026-10-18T11:06:00+00:00"},
+        ]
+        for path, embedded in cards:
+            portable = yaml.safe_load(path.read_text(encoding="utf-8"))
+            with self.subTest(card=path.name):
+                self.assertEqual(portable, embedded)
+                for card in (portable, embedded):
+                    template = env.from_string(card["content"])
+                    rendered = template.render(
+                        state_attr=lambda _, attr: (
+                            roster if attr == "residents" else event_rows),
+                        as_datetime=datetime.fromisoformat,
+                        as_local=lambda value: value,
+                    ).strip()
+                    self.assertNotIn("\n\n", rendered)
+                    self.assertNotIn("\n---", rendered)
+                    self.assertEqual(rendered.count("- **"), 2)
+                    self.assertNotIn("device_tracker.legacy", rendered)
+                    if path == REGISTERED:
+                        self.assertIn("Wi-Fi: не привязан", rendered)
+                        self.assertIn("device_tracker.router_1", rendered)
+                    else:
+                        self.assertIn("18.10.2026", rendered)
+                        self.assertIn("Serzhan (iPhone)", rendered)
 
     def test_dashboard_four_independent_sections_and_dynamic_source_filters(self):
         dashboard = yaml.safe_load(DASH.read_text(encoding="utf-8"))
