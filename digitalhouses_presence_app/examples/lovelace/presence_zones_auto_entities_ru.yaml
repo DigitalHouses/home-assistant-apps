@@ -1,0 +1,17 @@
+# Home Assistant zones: each zone entity's numeric state is the count of HA persons.
+# Portable across houses: no zone names, device IDs, or manually maintained list.
+# This counts HA person entities, not necessarily DH Presence registrations.
+# Requires HACS custom:auto-entities. Does not create sensors or modify zones.
+type: custom:auto-entities
+card:
+  type: entities
+  title: "🌐 Зоны · количество людей"
+  show_header_toggle: false
+  state_color: true
+filter:
+  include:
+    - domain: zone
+sort:
+  method: name
+unique: true
+show_empty: false
