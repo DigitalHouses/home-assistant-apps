@@ -161,3 +161,20 @@ from source diagnostic state (no synthetic departure). Router link
 replacements similarly timestamp unavailable source transition.
 Identical retained payloads are still deduplicated. Continue excluding
 `sensor.dh_presence_app_registered_phones` from Recorder.
+
+## HA-local display timestamps without timezone suffix (0.1.36)
+
+The existing `sensor.dh_presence_app_registered_phones` diagnostic
+`tree` strings keep nested GPS/Wi-Fi `Статус с` rows. Each status
+transition instant is converted in App using the **HA Core-configured
+timezone** and rendered strictly `dd.mm.yyyy hh:mm`, with no
+`+05`, `UTC`, `CET` or other timezone suffixes.
+
+The prior explicit UTC fallback (0.1.35) is **superseded**: until the
+App has a valid HA timezone, timestamps are replaced with
+`местное время недоступно` rather than misleading UTC wall times.
+The runtime retries missing timezone configuration periodically.
+Missing source transition timestamps remain `нет данных`; Wi-Fi
+without a registered link remains `не применимо`. HA display
+templates, MQTT topics and payload shape, Recorder exclusion, and
+registered IP/MAC behavior are unchanged.
