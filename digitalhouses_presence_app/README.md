@@ -1,6 +1,6 @@
 # DigitalHouses Presence App
 
-**Status: experimental GPS + configurable PING/ARP network-reachability pilot, version 0.1.24.** Observe for several days; do not use for alarm arming until accepted.
+**Status: GPS + HA router device_tracker Wi-Fi pilot, version 0.1.25.** Observe router tracker stability before safety-critical automations.
 
 This application belongs to `DigitalHouses/home-assistant-apps/digitalhouses_presence_app` and is installed via **Settings → Apps → App Store**.
 
@@ -10,7 +10,15 @@ From the local Ingress phone registration UI, selecting a GPS tracker previews a
 
 **Important:** This is a stored association only. The App still uses its existing PING/ARP probes for actual Wi-Fi status and does not yet switch the presence engine to HA router trackers. GPS and notifications remain unchanged.
 
-## Wi-Fi presence and hybrid mode (0.1.17)
+## HA router tracker Wi-Fi presence (0.1.25)
+
+After phone registration has saved a unique `wifi_tracker`, DH Presence uses **only** the current HA router `device_tracker` state for Wi-Fi presence. It verifies source `router`, registered MAC and unique association, then maps `home` / `not_home` to the original per-resident MQTT Wi-Fi binary sensor and `wifi_in` / `wifi_out` events. In Wi-Fi/Hybrid modes, those observations drive the existing overall presence logic. An unknown, unavailable, missing, duplicated or mismatching router tracker always yields Wi-Fi UNAVAILABLE, **not** an absence. GPS processing is unchanged. HA router trackers, not IP/hostname/ICMP/ARP, are the Wi-Fi evidence.
+
+Periodic PING and ARP presence polling and their MQTT control switches have been removed. Existing switches are removed using MQTT Discovery cleanup and must be removed from locally customized dashboards. The existing config key `wifi_absence_minutes` is accepted for compatibility with installed App options but is ignored; router status is not debounced and does not expire due to that key. One-time active ARP registration proof still requires `host_network` and `NET_RAW`.
+
+## Historical PING/ARP behavior (0.1.17–0.1.24; retired)
+
+
 
 Every 60 seconds the App probes the enrolled private LAN IP with direct `arping`. A valid reply from the exact registered MAC means Wi-Fi HOME. A *completed* ARP probe with **zero responses** for 15 consecutive minutes (configurable) means the device is not reachable by ARP: Wi-Fi binary sensor **OFF**. This may generate `wifi_out` and in `hybrid` mode an actual departure / last-person-left decision even if the last iOS GPS reading was HOME. A later verified MAC response restores HOME. Default `gps` mode remains independent of Wi-Fi absence.
 
