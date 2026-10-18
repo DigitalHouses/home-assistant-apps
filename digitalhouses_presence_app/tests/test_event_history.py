@@ -97,7 +97,7 @@ class EventHistoryTests(unittest.TestCase):
             for forbidden in ("192.168.8.55", "aa:bb:cc:dd:ee:ff", "auth_token", "secret"):
                 self.assertNotIn(forbidden, snapshot + stored)
             self.assertIn("&lt;script&gt;", snapshot)
-            self.assertIn("\\*C\\*", snapshot)
+            self.assertIn("\\*C\\*", history.snapshot()["items"][0]["details"])
 
     def test_exclusion_prunes_persisted_history(self):
         with tempfile.TemporaryDirectory() as d:
