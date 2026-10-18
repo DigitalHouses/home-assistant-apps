@@ -117,6 +117,31 @@ class ZigbeeMonitorUiDesignTests(unittest.TestCase):
         self.assertEqual(actions[3]["tap_action"]["data"]["app"],
                          "8133339d_digitalhouses_zigbee_monitor_app")
 
+    def test_card_is_strictly_app_status_no_business_metrics(self):
+        standalone = yaml.safe_load(
+            (APP / "examples/lovelace/dh_zigbee_monitor_app_card_ru.yaml")
+            .read_text(encoding="utf-8")
+        )
+        card = standalone["cards"][0]
+        self.assertEqual(set(card["triggers_update"]), {
+            "sensor.dh_zigbee_monitor_app_card",
+            "sensor.dh_zigbee_monitor_app_version",
+            "update.digitalhouses_zigbee_monitor_app_update",
+        })
+        serialized = yaml.safe_dump(card, allow_unicode=True)
+        for forbidden in (
+            "dh_zigbee_monitor_app_devices",
+            "dh_zigbee_monitor_app_offline",
+            "dh_zigbee_monitor_app_incidents",
+            "dh_zigbee_monitor_app_inventory_details",
+            "dh_zigbee_monitor_app_networks_details",
+            "dh_zigbee_monitor_app_latest_version",
+            "dh_zigbee_monitor_app_update_available",
+            "Релиз", "Offline",
+        ):
+            self.assertNotIn(forbidden, serialized)
+        self.assertIn("Приложение запущено", serialized)
+
     def test_verified_supervisor_update_drives_install_chip(self):
         source = APP / "examples/lovelace/dh_zigbee_monitor_app_card_ru.yaml"
         standalone = yaml.safe_load(source.read_text(encoding="utf-8"))
@@ -137,8 +162,8 @@ class ZigbeeMonitorUiDesignTests(unittest.TestCase):
         source = APP / "examples/lovelace/dh_zigbee_monitor_app_card_ru.yaml"
         content = source.read_text(encoding="utf-8")
         for yaml_text in (content, self.raw_dashboard):
-            self.assertIn("Math.floor((performance.now() - start) / 1000)", yaml_text)
-            self.assertIn("Math.round(Math.max(0, seconds))", yaml_text)
+            self.assertIn("Math.floor((performance.now() - since) / 1000)", yaml_text)
+            self.assertIn("Math.round(Math.max(0, value))", yaml_text)
             self.assertNotIn("t.toFixed(1)", yaml_text)
 
     def test_all_dynamic_tables_use_html_not_fragile_markdown_pipes(self):

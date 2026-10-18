@@ -1,8 +1,8 @@
-"""Execute actual custom:button-card JavaScript against representative HA states.
+"""Execute real custom:button-card JS; enforce App-only status responsibility.
 
-The existing YAML shape checks do not catch incorrect product-status priorities,
-a stale newer-version arrow, or confusion between a published GitHub release
-and a Supervisor-installable HAOS App update.
+Zigbee2MQTT, devices, offline, incidents and releases are separate UI concerns.
+Only App card, installed App version and Supervisor install progress may change
+this status card (plus button actions for actual App management).
 """
 from __future__ import annotations
 
@@ -16,195 +16,185 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 CARD = ROOT / "digitalhouses_zigbee_monitor_app/examples/lovelace/dh_zigbee_monitor_app_card_ru.yaml"
-
 NODE = r"""
 const fs = require('fs');
 const input = JSON.parse(fs.readFileSync(0, 'utf8'));
-const perf = {now: () => 12000};
+const performance = {now: () => 12000};
 const ctx = {};
-function evaluate(template) {
-  const raw = template.trim();
-  if (!raw.startsWith('[[[') || !raw.endsWith(']]]'))
-    throw Error('invalid button-card template');
-  return new Function('states', 'performance', raw.slice(3, -3))
-    .call(ctx, input.states, perf);
+function run(code) {
+  const source = code.trim();
+  if (!source.startsWith('[[[') || !source.endsWith(']]]'))
+    throw Error('invalid button-card JS');
+  return new Function('states', 'performance', source.slice(3, -3))
+    .call(ctx, input.states, performance);
 }
 const card = input.card;
-const output = {
-  icon: evaluate(card.icon),
-  name: evaluate(card.name),
-  label: evaluate(card.label),
-  color: evaluate(card.styles.icon[1].color)
-};
-process.stdout.write(JSON.stringify(output));
+process.stdout.write(JSON.stringify({
+  icon: run(card.icon),
+  name: run(card.name),
+  label: run(card.label),
+  color: run(card.styles.icon[1].color),
+}));
 """
 
-CARD_ENTITY = "sensor.dh_zigbee_monitor_app_card"
-SUPERVISOR = "update.digitalhouses_zigbee_monitor_app_update"
+APP = "sensor.dh_zigbee_monitor_app_card"
 VERSION = "sensor.dh_zigbee_monitor_app_version"
-LATEST = "sensor.dh_zigbee_monitor_app_latest_version"
-UPDATE_AVAILABLE = "binary_sensor.dh_zigbee_monitor_app_update_available"
-INVENTORY = "sensor.dh_zigbee_monitor_app_inventory_details"
-NETWORKS = "sensor.dh_zigbee_monitor_app_networks_details"
-DEVICES = "sensor.dh_zigbee_monitor_app_devices"
-OFFLINE = "sensor.dh_zigbee_monitor_app_offline"
+SUPERVISOR = "update.digitalhouses_zigbee_monitor_app_update"
 
 
-@unittest.skipUnless(shutil.which("node"), "Node.js needed to execute button-card JavaScript")
+@unittest.skipUnless(shutil.which("node"), "Node.js required for real button-card JS checks")
 class ZigbeeCardRuntimeTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.card = yaml.safe_load(CARD.read_text(encoding="utf-8"))["cards"][0]
-        cls.chips = yaml.safe_load(CARD.read_text(encoding="utf-8"))["cards"][1]["chips"]
+        cls.card_yaml = CARD.read_text(encoding="utf-8")
+        standalone = yaml.safe_load(cls.card_yaml)["cards"]
+        cls.card = standalone[0]
+        cls.chips = standalone[1]["chips"]
 
     def run_card(self, overrides=None):
         states = {
-            CARD_ENTITY: {"state": "idle", "attributes": {}},
+            APP: {"state": "idle", "attributes": {}},
             VERSION: {"state": "0.1.5"},
-            LATEST: {"state": "0.1.6"},
-            UPDATE_AVAILABLE: {"state": "on"},
-            INVENTORY: {"state": "ready", "attributes": {"availability_unknown": 2}},
-            NETWORKS: {"state": "ready", "attributes": {
-                "networks": [{"network_id": "site_1", "status": "online"}]
-            }},
-            DEVICES: {"state": "6"},
-            OFFLINE: {"state": "unavailable"},
-            SUPERVISOR: {"state": "off", "attributes": {
-                "latest_version": "0.1.5", "in_progress": False
-            }},
+            SUPERVISOR: {"state": "off", "attributes": {"in_progress": False}},
         }
         states.update(overrides or {})
         result = subprocess.run(
-            ["node", "-e", NODE], input=json.dumps({
-                "states": states, "card": self.card,
-            }), text=True, capture_output=True, check=False, timeout=10,
+            ["node", "-e", NODE],
+            input=json.dumps({"states": states, "card": self.card}),
+            text=True, capture_output=True, timeout=10, check=False,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         return json.loads(result.stdout)
 
-    def test_published_release_with_supervisor_off_does_not_claim_installation(self):
+    def test_idle_is_only_app_status(self):
         shown = self.run_card()
-        self.assertIn("v0.1.5 → v0.1.6", shown["name"])
-        self.assertIn("Supervisor не предлагает установку", shown["label"])
-        self.assertNotIn("Можно установить", shown["label"])
-        self.assertIn("warning-color", shown["color"])
-        self.assertNotEqual(shown["icon"], "mdi:check-circle")
-        self.assertEqual(self.chips[2]["conditions"], [
-            {"entity": SUPERVISOR, "state": "on"},
-        ])
-        self.assertEqual(self.chips[2]["chip"]["tap_action"]["perform_action"],
-                         "update.install")
+        self.assertEqual(shown["name"], "DH Zigbee Monitor · v0.1.5")
+        self.assertEqual(shown["label"], "Приложение запущено")
+        self.assertEqual(shown["icon"], "mdi:zigbee")
+        self.assertIn("primary-color", shown["color"])
 
-    def test_version_check_success_with_new_release_is_not_green_healthy(self):
+    def test_application_data_and_release_data_never_change_card(self):
+        baseline = self.run_card()
+        changed = self.run_card({
+            "sensor.dh_zigbee_monitor_app_devices": {"state": "130"},
+            "sensor.dh_zigbee_monitor_app_offline": {"state": "60"},
+            "sensor.dh_zigbee_monitor_app_inventory_details": {
+                "state": "ready", "attributes": {"availability_unknown": 24},
+            },
+            "sensor.dh_zigbee_monitor_app_incidents": {"state": "17"},
+            "sensor.dh_zigbee_monitor_app_networks_details": {
+                "state": "ready", "attributes": {"networks": [{"status": "offline"}]},
+            },
+            "sensor.dh_zigbee_monitor_app_latest_version": {"state": "7.0.0"},
+            "binary_sensor.dh_zigbee_monitor_app_update_available": {"state": "on"},
+        })
+        self.assertEqual(changed, baseline)
+
+    def test_only_three_app_related_entities_drive_card(self):
+        self.assertEqual(set(self.card["triggers_update"]), {APP, VERSION, SUPERVISOR})
+        forbidden = (
+            "dh_zigbee_monitor_app_devices", "dh_zigbee_monitor_app_offline",
+            "dh_zigbee_monitor_app_networks_details",
+            "dh_zigbee_monitor_app_inventory_details",
+            "dh_zigbee_monitor_app_incidents",
+            "dh_zigbee_monitor_app_latest_version",
+            "dh_zigbee_monitor_app_update_available",
+            "Релиз", "Offline", "Supervisor не предлагает",
+        )
+        for value in forbidden:
+            with self.subTest(value=value):
+                self.assertNotIn(value, self.card_yaml)
+
+    def test_app_connectivity_loss_is_not_healthy(self):
+        shown = self.run_card({APP: {"state": "unavailable"}})
+        self.assertEqual(shown["icon"], "mdi:zigbee-off")
+        self.assertEqual(shown["label"], "Нет связи с приложением")
+        self.assertIn("secondary-text-color", shown["color"])
+
+    def test_app_error_is_preserved(self):
+        shown = self.run_card({APP: {"state": "error", "attributes": {
+            "error": "Ошибка чтения MQTT",
+        }}})
+        self.assertEqual(shown["icon"], "mdi:alert-circle")
+        self.assertEqual(shown["label"], "Ошибка: Ошибка чтения MQTT")
+        self.assertIn("error-color", shown["color"])
+
+    def test_app_refresh_operation_monotonic_clock(self):
+        shown = self.run_card({APP: {"state": "running", "attributes": {
+            "operation": "refresh", "started_at": "2026-10-19T00:00:00+05:00",
+        }}})
+        self.assertEqual(shown["icon"], "mdi:progress-clock")
+        self.assertEqual(shown["label"], "Обновление данных… 00:00")
+        self.assertIn("info-color", shown["color"])
+
+    def test_app_version_check_operation_monotonic_clock(self):
+        shown = self.run_card({APP: {"state": "running", "attributes": {
+            "operation": "check", "started_at": "2026-10-19T00:00:00+05:00",
+        }}})
+        self.assertEqual(shown["icon"], "mdi:progress-clock")
+        self.assertEqual(shown["label"], "Проверка версии… 00:00")
+
+    def test_refresh_success_measured_duration(self):
+        shown = self.run_card({APP: {"state": "success", "attributes": {
+            "operation": "refresh", "duration_seconds": 61.4,
+        }}})
+        self.assertEqual(shown["icon"], "mdi:check-circle")
+        self.assertEqual(shown["label"], "Данные обновлены · 1 мин 01 сек")
+        self.assertIn("success-color", shown["color"])
+
+    def test_version_check_success_has_no_release_or_device_status(self):
         shown = self.run_card({
-            CARD_ENTITY: {"state": "success", "attributes": {
+            APP: {"state": "success", "attributes": {
                 "operation": "check", "duration_seconds": 1.2,
-            }}
-        })
-        self.assertIn("Релиз найден", shown["label"])
-        self.assertIn("1 сек", shown["label"])
-        self.assertIn("Supervisor пока не предлагает установку", shown["label"])
-        self.assertNotEqual(shown["icon"], "mdi:check-circle")
-        self.assertIn("warning-color", shown["color"])
-
-    def test_supervisor_installable_is_independent_of_app_release_flag(self):
-        shown = self.run_card({
-            UPDATE_AVAILABLE: {"state": "off"},
-            SUPERVISOR: {"state": "on", "attributes": {
-                "latest_version": "0.1.6", "in_progress": False,
             }},
+            "binary_sensor.dh_zigbee_monitor_app_update_available": {"state": "on"},
+            "sensor.dh_zigbee_monitor_app_latest_version": {"state": "0.1.6"},
         })
-        self.assertIn("v0.1.5 → v0.1.6", shown["name"])
-        self.assertIn("Можно установить обновление", shown["label"])
-        self.assertEqual(self.chips[2]["chip"]["tap_action"]["target"]["entity_id"],
-                         SUPERVISOR)
-        self.assertEqual(self.chips[2]["chip"]["tap_action"]["data"], {"backup": True})
+        self.assertEqual(shown["label"], "Версия проверена · 1 сек")
+        self.assertEqual(shown["icon"], "mdi:check-circle")
 
-    def test_installer_progress_survives_app_disconnect(self):
+    def test_supervisor_install_progress_survives_app_disconnect(self):
         shown = self.run_card({
-            CARD_ENTITY: {"state": "unavailable"},
+            APP: {"state": "unavailable"},
             SUPERVISOR: {"state": "on", "attributes": {
-                "latest_version": "0.1.6", "in_progress": True,
-                "update_percentage": 42,
+                "in_progress": True, "update_percentage": 42,
             }},
         })
         self.assertEqual(shown["icon"], "mdi:progress-clock")
         self.assertIn("42% · 00:00", shown["label"])
         self.assertIn("info-color", shown["color"])
 
-    def test_error_must_win_over_update_availability(self):
-        shown = self.run_card({
-            CARD_ENTITY: {"state": "error", "attributes": {"error": "MQTT недоступен"}},
-        })
-        self.assertEqual(shown["icon"], "mdi:alert-circle")
-        self.assertIn("MQTT недоступен", shown["label"])
-        self.assertIn("error-color", shown["color"])
+    def test_supervisor_update_available_does_not_change_app_status(self):
+        baseline = self.run_card()
+        shown = self.run_card({SUPERVISOR: {
+            "state": "on", "attributes": {"latest_version": "0.1.6",
+                                          "in_progress": False},
+        }})
+        self.assertEqual(shown, baseline)
+        self.assertEqual(self.chips[2]["conditions"], [{
+            "entity": SUPERVISOR, "state": "on",
+        }])
 
-    def test_network_failure_must_win_over_update_or_success(self):
-        shown = self.run_card({
-            NETWORKS: {"state": "ready", "attributes": {
-                "networks": [{"network_id": "site_1", "status": "offline"}],
-            }},
-            CARD_ENTITY: {"state": "success", "attributes": {
-                "operation": "check", "duration_seconds": 2,
-            }},
-        })
-        self.assertEqual(shown["icon"], "mdi:lan-disconnect")
-        self.assertIn("error-color", shown["color"])
-        # Success status remains an operation result, not a false network recovery.
-        self.assertIn("Релиз найден", shown["label"])
-
-    def test_stale_release_flag_cannot_show_downgrade(self):
+    def test_installed_version_only_no_downgrade_or_latest_arrows(self):
         shown = self.run_card({
             VERSION: {"state": "0.1.6"},
-            LATEST: {"state": "0.1.5"},
+            "sensor.dh_zigbee_monitor_app_latest_version": {"state": "0.1.5"},
         })
-        self.assertNotIn("→", shown["name"])
-        self.assertNotIn("Релиз опубликован", shown["label"])
-
-    def test_healthy_idle_and_stable_version_do_not_warn(self):
-        shown = self.run_card({
-            VERSION: {"state": "0.1.6"},
-            LATEST: {"state": "0.1.6"},
-            UPDATE_AVAILABLE: {"state": "off"},
-            INVENTORY: {"state": "ready", "attributes": {"availability_unknown": 0}},
-            OFFLINE: {"state": "0"},
-        })
-        self.assertEqual(shown["icon"], "mdi:zigbee")
         self.assertEqual(shown["name"], "DH Zigbee Monitor · v0.1.6")
-        self.assertEqual(shown["label"], "6 устройств · Offline: 0")
+        self.assertNotIn("→", shown["name"])
 
-    def test_running_check_shows_monotonic_ui_timer(self):
-        shown = self.run_card({
-            CARD_ENTITY: {"state": "running", "attributes": {
-                "operation": "check", "started_at": "2026-10-19T00:00:00+05:00",
-            }},
-        })
-        self.assertEqual(shown["icon"], "mdi:progress-clock")
-        self.assertIn("00:00", shown["label"])
-        self.assertIn("info-color", shown["color"])
-
-    def test_missing_app_does_not_look_healthy(self):
-        shown = self.run_card({
-            CARD_ENTITY: {"state": "unavailable"},
-        })
-        self.assertEqual(shown["icon"], "mdi:zigbee-off")
-        self.assertEqual(shown["label"], "Нет связи с приложением")
-        self.assertIn("secondary-text-color", shown["color"])
-
-    def test_action_targets_and_order_match_reference_haos_apps(self):
+    def test_action_targets_and_order_match_haos_app_standard(self):
         self.assertEqual([
             c.get("content") or c.get("chip", {}).get("content")
             for c in self.chips
         ], ["Обновить", "Версия", "Новая версия", "Перезапуск"])
-        self.assertEqual(
-            self.chips[0]["tap_action"]["target"]["entity_id"],
-            "button.dh_zigbee_monitor_app_refresh",
-        )
-        self.assertEqual(
-            self.chips[1]["tap_action"]["target"]["entity_id"],
-            "button.dh_zigbee_monitor_app_check_updates",
-        )
+        self.assertEqual(self.chips[0]["tap_action"]["target"]["entity_id"],
+                         "button.dh_zigbee_monitor_app_refresh")
+        self.assertEqual(self.chips[1]["tap_action"]["target"]["entity_id"],
+                         "button.dh_zigbee_monitor_app_check_updates")
+        self.assertEqual(self.chips[2]["chip"]["tap_action"]["perform_action"],
+                         "update.install")
+        self.assertEqual(self.chips[2]["chip"]["tap_action"]["data"], {"backup": True})
         self.assertEqual(self.chips[3]["tap_action"]["perform_action"],
                          "hassio.app_restart")
 
