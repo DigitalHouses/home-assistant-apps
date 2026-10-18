@@ -41,6 +41,16 @@ def discovery(version: str, residents: list[Resident], zones: dict[str, str] | N
             "json_attributes_topic": topic("events/history"),
             "entity_category": "diagnostic", "availability": availability,
         },
+        "registered_phones": {
+            "platform": "sensor", "name": "Registered phones",
+            "unique_id": "dh_presence_app_registered_phones",
+            "default_entity_id": "sensor.dh_presence_app_registered_phones",
+            "icon": "mdi:cellphone-link",
+            "state_topic": topic("registrations/tree"),
+            "value_template": "{{ value_json.count }}",
+            "json_attributes_topic": topic("registrations/tree"),
+            "entity_category": "diagnostic", "availability": availability,
+        },
         "version": {
             "platform": "sensor", "name": "Version", "unique_id": "dh_presence_app_version",
             "default_entity_id": "sensor.dh_presence_app_version",

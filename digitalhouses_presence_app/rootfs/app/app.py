@@ -25,6 +25,7 @@ from dh_presence.zones import ZoneMonitor, zone_catalog, zone_key
 from dh_presence.history import EventHistory, DEFAULT_LIMIT, MAX_LIMIT
 from dh_presence.operations import Operations, fetch_latest_release, is_newer
 from dh_presence.registration import load_registry_state
+from dh_presence.phone_tree import registered_phones_tree
 from dh_presence.router import poll_router_trackers
 from dh_presence.ui import start_ingress_ui
 
@@ -448,7 +449,8 @@ def publish_snapshot(output: MqttOutput, engine: Engine, version: str, started: 
                      operations: Operations, latest_version: str | None,
                      notifications: NotificationSelection | None = None,
                      zones: dict[str, str] | None = None,
-                     history: EventHistory | None = None) -> bool:
+                     history: EventHistory | None = None,
+                     registrations: list[dict] | None = None) -> bool:
     snapshot = engine.snapshot()
     if not output.publish(topic("mode/state"), engine.mode.value):
         return False
@@ -487,6 +489,13 @@ def publish_snapshot(output: MqttOutput, engine: Engine, version: str, started: 
     }):
         return False
     if history is not None and not output.publish(topic("events/history"), history.snapshot()):
+        return False
+    # Dedicated UI topic avoids repeating enrollment-time IP/MAC in the
+    # standard presence sensor attributes and Recorder history.
+    # MQTT output.cache deduplicates unchanged registration trees.
+    if registrations is not None and not output.publish(
+            topic("registrations/tree"),
+            registered_phones_tree(registrations, list(engine.residents.values()))):
         return False
     for r in engine.residents.values():
         if r.distance is not None and not output.publish(topic("distance/"+r.key), r.distance):
@@ -705,7 +714,8 @@ def run():
             save(STATE, engine.persistent())
             published = (mqtt_out.connected.is_set() and discovery_ready
                          and publish_snapshot(mqtt_out, engine, version, started,
-                                              operations, latest_version, notifications, zones, history))
+                                              operations, latest_version, notifications, zones, history,
+                                              registrations))
             if published:
                 if not published_state_logged:
                     LOG.info("MQTT presence state published topic=%s residents=%d mode=%s",

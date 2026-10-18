@@ -125,3 +125,29 @@ failed pilot acceptance requiring adjustment or reversion to GPS mode.
 3. Open as a normal HA user or make the admin role verification unavailable: backend denies access, private tree remains hidden, and failure clears any previously rendered IP/MAC values.
 4. Confirm the public Lovelace registered-phone card, `residents_home` attributes, MQTT topics, Event and Recorder still contain **no** registration IP or MAC.
 5. Delete one registration via the existing admin action: refresh removes that phone and its private network details from the tree, with no false departure Event. Verify real re-registration adds it back.
+
+
+## HA Lovelace registered phones with IP/MAC (0.1.31)
+
+1. Upgrade App to 0.1.31 and replace the *existing manually installed*
+   registered-phones Markdown YAML with the new version from this repository.
+   Verify the normal HA dashboard tree shows both `IP (рег.)` and
+   `MAC (рег.)` beneath each phone, along with GPS and Wi-Fi.
+2. Verify the App's single new
+   `sensor.dh_presence_app_registered_phones` diagnostic has numeric state
+   and a multiline `tree` attribute; no markup reconstruction is done by HA.
+3. Verify IP/MAC in this sensor equal the registration snapshots, not current
+   network attachment. Confirm no repeated retained tree publications when
+   GPS polls but no registration details change.
+4. Delete a phone in Ingress, keep it in legacy `residents` config, restart:
+   the new retained tree excludes the deleted phone's IP/MAC and it cannot be
+   re-enrolled silently. Administrators excluded from tracking do not appear.
+5. Confirm the ordinary `residents_home` state attributes and Event payloads
+   still contain no enrollment IP/MAC.
+6. Merge new `sensor.dh_presence_app_registered_phones` entity into the home's
+   existing Recorder exclusion alongside
+   `sensor.dh_presence_app_recent_events`; confirm database does not record
+   the new `tree` attributes.
+7. Verify access classification explicitly: MQTT subscribers and HA users
+   with state access can read network details. Private Ingress remains the
+   stronger choice for administrators-only data.

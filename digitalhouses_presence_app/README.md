@@ -1,8 +1,28 @@
 # DigitalHouses Presence App
 
-**Status: GPS + HA router device_tracker Wi-Fi pilot, version 0.1.30.** Observe router tracker stability before safety-critical automations.
+**Status: GPS + HA router device_tracker Wi-Fi pilot, version 0.1.31.** Observe router tracker stability before safety-critical automations.
 
 This application belongs to `DigitalHouses/home-assistant-apps/digitalhouses_presence_app` and is installed via **Settings → Apps → App Store**.
+
+## IP/MAC in the Home Assistant dashboard tree (0.1.31)
+
+The previous 0.1.30 feature put enrollment IP/MAC **only inside administrator Ingress**, which did not change the **Lovelace Markdown card**. Version 0.1.31 addresses the actual dashboard request. The App, not HA, generates a fully formatted `├─/└─` phone tree with GPS, Wi-Fi, **IP (рег.)**, and **MAC (рег.)** branches. It publishes this display-only read model through one MQTT diagnostic sensor, `sensor.dh_presence_app_registered_phones`, state = registered count, attribute `tree`. The maintained dashboard and [standalone Markdown card](examples/lovelace/presence_registered_phones_markdown_ru.yaml) only show this text in a compact PVE-style `<pre>`, with HTML escaping. Deleted/excluded phones are omitted. The addresses describe the moment of enrollment, not current network attachment.
+
+**Security tradeoff:** the dashboard is backed by MQTT. Unlike the private admin-only Ingress, registration IP/MAC in this diagnostic topic are readable by authorized MQTT subscribers and HA users who can access entity state; hiding the Markdown card from non-admins would not enforce backend access control. On deployments where private IP/MAC must stay admin-only, do not deploy this public tree; use the verified private Ingress view instead. The existing aggregate `binary_sensor.dh_presence_app_residents_home` and machine events continue to exclude IP/MAC.
+
+**Recorder hygiene — required per home:** merge the following with existing Recorder settings; do **not** replace other excludes:
+
+```yaml
+recorder:
+  exclude:
+    entities:
+      - sensor.dh_presence_app_recent_events
+      - sensor.dh_presence_app_registered_phones
+```
+
+This prevents diagnostic strings containing IP/MAC from being repeatedly stored in HA Recorder. The new retained MQTT topic `DigitalHouses/Global/dh_presence_app/registrations/tree` changes only when the registration roster, associated tracker or device name changes (or on a new App publish session); normal GPS polling does not republish unchanged tree text. The App does not modify HA Recorder configuration.
+
+To apply: install App `0.1.31`, update the manually installed phone Markdown YAML from the repository, and apply the Recorder exclusion. An App update does **not** automatically replace manually pasted Lovelace YAML.
 
 ## Private administrator phone tree (0.1.30)
 

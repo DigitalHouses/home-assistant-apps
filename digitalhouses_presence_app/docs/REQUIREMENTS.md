@@ -59,3 +59,22 @@ Verify actual router tracker reliability, multi-device ownership binding and sit
 - The deletion UI must show exact user/device/tracker and require explicit confirmation. Reject forged/retained commands, missing action proof, invalid tracker identifiers and unavailable HA admin verification without modifying registration data.
 - Persist disabled GPS tracker identity on deletion in the **existing** registration registry to prevent resurrection from legacy Supervisor `residents` options. A re-enrollment with direct LAN and fresh MAC explicitly clears the block. Do not modify Supervisor options.
 - Reconcile resident membership in the active App, prune relevant zone/cache data and remove obsolete MQTT Discovery components without publishing a synthetic departure/zone event. Do not alter telemetry, MQTT event names or Recorder entities.
+
+
+## Dashboard phone tree with registration network addresses (0.1.31)
+
+- The existing phone tree in HA must visibly include registered GPS, bound
+  Wi-Fi, enrollment IP and enrollment MAC as distinct child branches; addresses
+  are labelled `(рег.)` and are not interpreted as current connectivity.
+- Logic and data assembly belong exclusively in App. HA receives a complete
+  text `tree` attribute and renders it with PVE's compact native `<pre>`.
+- Excluded users and tombstoned/removed registrations must not appear.
+  Never poll ARP to refresh a read-only display.
+- Isolate private network identity from recorder-tracked presence sensor state.
+  Publish in exactly one new diagnostic entity, with one stable retained MQTT
+  topic and unchanged content deduplication. The diagnostic entity MUST be
+  explicitly excluded by HA Recorder configuration; the App must not replace
+  the home's Recorder settings.
+- Document MQTT/HA state visibility of published IP/MAC accurately.
+  Administrator-only management actions remain on the independently
+  authorized App Ingress API.

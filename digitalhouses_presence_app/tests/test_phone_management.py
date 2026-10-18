@@ -261,25 +261,24 @@ class PhoneManagementTests(unittest.TestCase):
         self.assertIn("white-space:pre", HTML)
         self.assertIn('id="adminDebug" hidden', HTML)
 
-    def test_public_dashboard_and_private_admin_ui_contract(self):
-        from pathlib import Path
+    def test_dashboard_shows_network_tree_from_app_and_admin_interface_remains_secure(self):
         base = Path(__file__).resolve().parents[1]
         card = (base / "examples/lovelace/presence_registered_phones_markdown_ru.yaml").read_text()
         dash = (base / "examples/lovelace/dh_presence_app_dashboard.yaml").read_text()
-        self.assertIn("phone.registration_label", card)
-        self.assertIn("selectattr('registered')", card)
-        self.assertIn("phone.registration_label", dash)
-        for forbidden in ("phone.ip", "phone.mac", "api/admin/delete-registration"):
-            self.assertNotIn(forbidden, card)
-        self.assertNotIn("IP (рег.)", card)
-        self.assertNotIn("MAC (рег.)", card)
-        self.assertNotIn("IP (рег.)", dash)
-        self.assertNotIn("MAC (рег.)", dash)
+        self.assertIn("sensor.dh_presence_app_registered_phones", card)
+        self.assertIn("sensor.dh_presence_app_registered_phones", dash)
+        self.assertIn("tree | e", card)
+        self.assertNotIn("phone.", card)
+        self.assertNotIn("residents_home", card)
+        self.assertNotIn("api/admin/delete-registration", card)
+        self.assertIn("line-height:1", card)
+        # The old private Ingress workflow stays available and independently
+        # verifies admin identity before editing the saved phone registry.
         self.assertIn('is_authorized_ha_admin(context["user_id"], token)',
                       (base / "rootfs/app/dh_presence/ui.py").read_text())
         for marker in (
-                       "X-Presence-Request", "delete-registration",
-                       "Удалить регистрацию", "confirm(", "q('adminDebug').hidden=true"):
+                "X-Presence-Request", "delete-registration",
+                "Удалить регистрацию", "confirm(", "q('adminDebug').hidden=true"):
             self.assertIn(marker, HTML)
 
 
