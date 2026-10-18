@@ -323,7 +323,14 @@ sections:
           *Список недоступных устройств ещё не получен.*
           {% elif rows | length == 0 %}
           Нет подтверждённых offline-устройств.
+          {% if state_attr('sensor.dh_zigbee_monitor_app_offline_details', 'availability_unknown') %}
+          *Без данных availability: {{ state_attr('sensor.dh_zigbee_monitor_app_offline_details', 'availability_unknown') }}.*
+          {% endif %}
           {% else %}
+          **Подтверждено offline:** {{ state_attr('sensor.dh_zigbee_monitor_app_offline_details', 'total') }}
+          {% if not state_attr('sensor.dh_zigbee_monitor_app_offline_details', 'availability_complete') %}
+          *Данные неполные: нет availability у {{ state_attr('sensor.dh_zigbee_monitor_app_offline_details', 'availability_unknown') }} устройств.*
+          {% endif %}
           <table>
           <thead><tr><th>Устройство</th><th>Сеть</th><th>Offline с</th></tr></thead>
           <tbody>
