@@ -64,8 +64,15 @@ class ZigbeeMonitorUiDesignTests(unittest.TestCase):
                          "button.dh_zigbee_monitor_app_refresh")
         self.assertEqual(chips["chips"][1]["tap_action"]["target"]["entity_id"],
                          "button.dh_zigbee_monitor_app_check_updates")
-        self.assertEqual(chips["chips"][2]["chip"]["tap_action"]["perform_action"],
-                         "update.install")
+        self.assertEqual(chips["chips"][2]["conditions"], [{
+            "entity": "binary_sensor.dh_zigbee_monitor_app_update_available",
+            "state": "on",
+        }])
+        self.assertEqual(chips["chips"][2]["chip"]["tap_action"]["action"], "navigate")
+        self.assertEqual(
+            chips["chips"][2]["chip"]["tap_action"]["navigation_path"],
+            "/hassio/addon/8133339d_digitalhouses_zigbee_monitor_app/info",
+        )
         self.assertEqual(chips["chips"][3]["tap_action"]["perform_action"],
                          "hassio.app_restart")
         self.assertEqual(status["tap_action"]["action"], "none")
@@ -96,11 +103,35 @@ class ZigbeeMonitorUiDesignTests(unittest.TestCase):
             ["Обновить", "Версия", "Новая версия", "Перезапуск"],
         )
         self.assertEqual(actions[2]["conditions"][0]["entity"],
-                         "update.digitalhouses_zigbee_monitor_app_update")
-        self.assertEqual(actions[2]["chip"]["tap_action"]["perform_action"], "update.install")
+                         "binary_sensor.dh_zigbee_monitor_app_update_available")
+        self.assertEqual(actions[2]["conditions"][0]["state"], "on")
+        self.assertEqual(actions[2]["chip"]["tap_action"]["action"], "navigate")
+        self.assertEqual(
+            actions[2]["chip"]["tap_action"]["navigation_path"],
+            "/hassio/addon/8133339d_digitalhouses_zigbee_monitor_app/info",
+        )
+        # The App can know of a release before Supervisor offers installation.
+        self.assertNotIn("perform_action", actions[2]["chip"]["tap_action"])
         self.assertEqual(actions[3]["tap_action"]["perform_action"], "hassio.app_restart")
         self.assertEqual(actions[3]["tap_action"]["data"]["app"],
                          "8133339d_digitalhouses_zigbee_monitor_app")
+
+    def test_verified_release_drives_update_chip(self):
+        source = APP / "examples/lovelace/dh_zigbee_monitor_app_card_ru.yaml"
+        standalone = yaml.safe_load(source.read_text(encoding="utf-8"))
+        chip = standalone["cards"][1]["chips"][2]
+        self.assertEqual(chip["conditions"][0]["entity"],
+                         "binary_sensor.dh_zigbee_monitor_app_update_available")
+        self.assertEqual(chip["conditions"][0]["state"], "on")
+        self.assertEqual(chip["chip"]["tap_action"]["action"], "navigate")
+
+    def test_elapsed_and_result_duration_are_whole_seconds(self):
+        source = APP / "examples/lovelace/dh_zigbee_monitor_app_card_ru.yaml"
+        content = source.read_text(encoding="utf-8")
+        for yaml_text in (content, self.raw_dashboard):
+            self.assertIn("Math.floor((performance.now() - start) / 1000)", yaml_text)
+            self.assertIn("Math.round(Math.max(0, t))", yaml_text)
+            self.assertNotIn("t.toFixed(1)", yaml_text)
 
     def test_inventory_diagnostics_are_ui_only(self):
         self.assertIn("availability_reason_label", self.raw_dashboard)
