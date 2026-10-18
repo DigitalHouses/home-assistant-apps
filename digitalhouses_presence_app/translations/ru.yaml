@@ -1,13 +1,16 @@
 configuration:
   presence_mode:
     name: Режим присутствия
-    description: Задаёт начальный режим. Режим можно изменить через select.dh_presence_app_mode, а проверку сети — глобальными переключателями PING и ARP в устройстве DH Presence.
+    description: Начальный режим GPS / Wi-Fi / Hybrid. Переключение доступно также через select.dh_presence_app_mode.
   wifi_absence_minutes:
     name: Время подтверждения отсутствия Wi-Fi
   gps_poll_interval_seconds:
     name: Период проверки GPS, секунд
   gps_freshness_seconds:
     name: Актуальность GPS, секунд
+  events_history_limit:
+    name: Количество последних событий
+    description: Сколько последних событий DH Presence хранить для карточки (1–20, по умолчанию 5). История отображения не должна записываться в Recorder.
   residents:
     name: Телефоны жильцов
     description: Один GPS device_tracker мобильного телефона на жильца. Имя определяется из Home Assistant.
