@@ -96,3 +96,14 @@ alarm/shutdown/security decisions based on this pilot until observed and accepte
 Observe at least 3 days of normal iOS sleep/wake, Wi-Fi off/on, and changing
 GPS reports; any false departure while actually at home must be treated as a
 failed pilot acceptance requiring adjustment or reversion to GPS mode.
+
+## Event-history display regression (0.1.28)
+
+1. Install App with `events_history_limit: 5`. Confirm discovery of diagnostic `sensor.dh_presence_app_recent_events` in the existing MQTT device, with `count=0` on a new install and no fabricated event on startup.
+2. Cause more than five real GPS/Wi-Fi/zone machine Events. Verify only the five latest **acknowledged publications** remain, newest first. The Markdown UI must not subscribe to MQTT, persist data, or maintain template-sensor state itself.
+3. Restart App and MQTT broker; verify the same retained bounded list returns without re-emitting transient MQTT Events or writing additional log messages.
+4. Change Configuration to `events_history_limit: 2`, restart; verify persisted cache and MQTT snapshot trim to two. Invalid values outside 1–20 must fail App option validation.
+5. Exclude an administrator's verified HA User ID; verify no admin zone/source event is produced and previously cached rows for removed users are purged.
+6. Verify persisted ring and MQTT attributes do not include registration IP/MAC, tokens or credentials. Private IP/MAC remain visible only in the admin-only Ingress diagnostics card.
+7. Inspect Recorder exclusions: `sensor.dh_presence_app_recent_events` must be explicitly excluded, so every display update does not add a new Recorder row with array attributes. The existing machine-event entity's Recorder policy is unchanged.
+8. Disconnect MQTT while a local transition occurs. Events not actually published must not enter the App's published-events history or be reconstructed as false notifications.
