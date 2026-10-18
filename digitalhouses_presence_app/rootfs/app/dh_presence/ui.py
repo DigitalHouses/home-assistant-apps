@@ -266,6 +266,23 @@ def handler_factory(token: str, registry_path: str, excluded_users: set[str]):
                     self.send_header("Content-Length", str(len(body)))
                     self.end_headers()
                     self.wfile.write(body)
+                elif self.path.split("?")[0].rstrip("/") == "/admin/delete-phone":
+                    # Dedicated, compact Lovelace-embeddable admin page.
+                    # Do not serve even the form to non-admin HA identities.
+                    if not is_authorized_ha_admin(context["user_id"], token):
+                        self.reply(403, {"error": "admin_required"})
+                    else:
+                        body = ADMIN_DELETE_HTML.encode("utf-8")
+                        self.send_response(200)
+                        self.send_header("Content-Type", "text/html; charset=utf-8")
+                        self.send_header("Cache-Control", "no-store")
+                        self.send_header("X-Frame-Options", "SAMEORIGIN")
+                        self.send_header("X-Content-Type-Options", "nosniff")
+                        self.send_header("Content-Security-Policy",
+                                         "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; img-src 'none'; base-uri 'none'; form-action 'none'")
+                        self.send_header("Content-Length", str(len(body)))
+                        self.end_headers()
+                        self.wfile.write(body)
                 elif self.path == "/api/candidates":
                     if context["user_id"] in excluded_users:
                         self.reply(403, {"error": "excluded_ha_user"})
@@ -404,6 +421,120 @@ def handler_factory(token: str, registry_path: str, excluded_users: set[str]):
 
     return PresenceHandler
 
+
+
+# Separate compact Ingress view for the dashboard. The server checks current
+# HA administrator status on both GET and the existing delete POST. No MQTT
+# command is ever accepted for phone deletion, as it cannot attest an HA user.
+ADMIN_DELETE_HTML = """<!doctype html><html lang="ru"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DH Presence · Удаление телефона</title>
+<style>
+:root{color-scheme:light dark}
+body{margin:0;padding:0;background:transparent;color:var(--primary-text-color,#ddd);font:14px/1.35 system-ui,-apple-system,sans-serif}
+main{padding:12px;min-height:180px;box-sizing:border-box}
+h3{font-size:15px;font-weight:650;margin:0 0 12px}
+label{display:block;color:var(--secondary-text-color,#888);font-size:12px;margin-bottom:5px}
+select{box-sizing:border-box;width:100%;min-height:38px;max-width:100%;padding:7px;border:1px solid var(--divider-color,#777);border-radius:8px;background:var(--card-background-color,#222);color:inherit;font:inherit}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+button{border:0;border-radius:8px;min-height:36px;padding:7px 12px;font:inherit;cursor:pointer}
+button:disabled{opacity:.45;cursor:not-allowed}
+#remove{background:var(--error-color,#b3261e);color:#fff}
+#reload{background:var(--secondary-background-color,#555);color:inherit}
+#status{font-size:12px;margin:10px 0 0;color:var(--secondary-text-color,#888);overflow-wrap:anywhere}
+</style></head><body><main>
+<h3>Удаление зарегистрированного телефона</h3>
+<label for="phone">Телефон</label>
+<select id="phone" aria-label="Выберите зарегистрированный телефон">
+<option value="">Загрузка...</option></select>
+<div class="actions">
+<button id="remove" type="button" disabled>Удалить регистрацию</button>
+<button id="reload" type="button">Обновить список</button>
+</div>
+<p id="status" role="status" aria-live="polite"></p>
+</main><script>
+const q=id=>document.getElementById(id);
+const APP_ROOT=window.location.pathname.replace(/\\/admin\\/delete-phone\\/?$/,'/');
+if(APP_ROOT===window.location.pathname){
+ q('status').textContent='Неверный адрес Ingress';
+ q('remove').disabled=true;
+ q('reload').disabled=true;
+}
+let registrations=new Map();
+let busy=false;
+async function request(path,options={}){
+ const response=await fetch(APP_ROOT+path,{cache:'no-store',credentials:'same-origin',...options});
+ const data=await response.json();
+ if(!response.ok)throw Error(data.error||'HTTP '+response.status);
+ return data;
+}
+function updateButton(){
+ q('remove').disabled=busy||!registrations.has(q('phone').value);
+}
+async function refresh(){
+ if(APP_ROOT===window.location.pathname)return;
+ busy=true;updateButton();
+ q('reload').disabled=true;
+ try{
+  const data=await request('api/admin/debug');
+  if(!Array.isArray(data.residents))throw Error('Invalid registry response');
+  const previous=q('phone').value;
+  const selection=q('phone');
+  registrations=new Map();
+  selection.replaceChildren();
+  const placeholder=document.createElement('option');
+  placeholder.value='';placeholder.textContent='Выберите телефон...';
+  selection.append(placeholder);
+  for(const row of data.residents){
+   if(!row||typeof row.tracker!=='string'||!/^device_tracker\\.[a-z0-9_]+$/.test(row.tracker))continue;
+   if(registrations.has(row.tracker))continue;
+   registrations.set(row.tracker,row);
+   const option=document.createElement('option');
+   option.value=row.tracker;
+   option.textContent=(row.user_name||'—')+' ('+(row.device_name||'—')+') · '+row.tracker;
+   selection.append(option);
+  }
+  selection.value=registrations.has(previous)?previous:'';
+  q('status').textContent=registrations.size?'Выберите телефон и подтвердите удаление.':
+   'Нет зарегистрированных телефонов.';
+ }catch(error){
+  registrations.clear();
+  q('phone').replaceChildren();
+  q('status').textContent='Не удалось загрузить список: '+error.message;
+ }finally{
+  busy=false;q('reload').disabled=false;updateButton();
+ }
+}
+async function removeSelected(){
+ if(busy||!registrations.has(q('phone').value))return;
+ const tracker=q('phone').value;
+ const row=registrations.get(tracker);
+ const label=(row.user_name||'—')+' ('+(row.device_name||'—')+')';
+ if(!confirm('Удалить регистрацию '+label+'?\\n'+tracker+
+             '\\nПриложение прекратит отслеживать этот телефон.'))return;
+ busy=true;updateButton();q('reload').disabled=true;
+ q('status').textContent='Удаление регистрации...';
+ try{
+  const response=await request('api/admin/delete-registration',{
+   method:'POST',
+   headers:{'Content-Type':'application/json',
+            'X-Presence-Request':'delete-registration'},
+   body:JSON.stringify({tracker})
+  });
+  if(response.deleted!==true||response.tracker!==tracker)throw Error('Unexpected deletion response');
+  await refresh();
+  q('status').textContent='Регистрация удалена: '+label;
+ }catch(error){
+  q('status').textContent='Не удалось удалить телефон: '+error.message;
+ }finally{
+  busy=false;q('reload').disabled=false;updateButton();
+ }
+}
+q('phone').addEventListener('change',updateButton);
+q('remove').addEventListener('click',removeSelected);
+q('reload').addEventListener('click',refresh);
+refresh();
+</script></body></html>"""
 
 HTML = """<!doctype html><html lang="ru"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
