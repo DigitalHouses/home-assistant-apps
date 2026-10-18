@@ -159,9 +159,10 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(json.loads(self.t.last(state_topic("card")))["state"], "running")
         self.assertEqual(json.loads(self.t.last(state_topic("refresh_state")))["state"], "updating")
         self.receive("bridge/state", b"online", retain=True)
-        self.assertEqual(json.loads(self.t.last(state_topic("card")))["state"], "running")
-        self.receive("Термостат/availability", b'{"state":"online"}', retain=True)
+        # Inventory and confirmed bridge state are enough: per-device Z2M
+        # availability may legitimately be disabled.
         self.assertEqual(json.loads(self.t.last(state_topic("card")))["state"], "success")
+        self.assertEqual(self.t.last(validity_topic("offline")), "offline")
         self.assertEqual(json.loads(self.t.last(state_topic("refresh_state")))["state"], "idle")
         self.assertIsNotNone(self.t.last(state_topic("last_refresh")))
 
@@ -195,20 +196,51 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(details["devices"][0]["availability_label"], "В сети")
         self.assertEqual(self.t.last(state_topic("offline")), "0")
 
-    def test_manual_refresh_without_availability_fails_and_does_not_claim_success(self):
+    def test_manual_refresh_without_optional_availability_succeeds_and_preserves_unknown(self):
         self.s.connected()
         self.s.receive(ROOT + "/command/refresh", b"PRESS")
         self.receive("bridge/devices", inventory(), retain=True)
+        self.assertIsNone(self.t.last(state_topic("last_refresh")))
         self.receive("bridge/state", b"online", retain=True)
+        self.assertEqual(json.loads(self.t.last(state_topic("card")))["state"], "success")
+        self.assertEqual(json.loads(self.t.last(state_topic("refresh_state")))["state"], "idle")
+        self.assertIsNotNone(self.t.last(state_topic("last_refresh")))
+        self.assertEqual(self.t.last(validity_topic("offline")), "offline")
+        self.assertEqual(self.t.last(validity_topic("offline_details")), "offline")
+        details = json.loads(self.t.last(state_topic("inventory_details")))
+        self.assertFalse(details["availability_complete"])
+        self.assertEqual(details["availability_unknown"], 1)
+        self.assertEqual(details["devices"][0]["availability_reason"], "availability_not_reported")
+        # No delayed error after the successful refresh.
+        self.clock[0] += 30
+        self.s.tick()
+        self.assertEqual(json.loads(self.t.last(state_topic("card")))["state"], "idle")
+
+    def test_refresh_waits_for_actual_bridge_state_even_when_inventory_arrives(self):
+        self.s.connected()
+        # Existing cached bridge state must not satisfy a NEW manual refresh.
+        self.receive("bridge/devices", inventory(), retain=True)
+        self.receive("bridge/state", b"online", retain=True)
+        self.s.receive(ROOT + "/command/refresh", b"PRESS")
+        self.receive("bridge/devices", inventory(), retain=True)
+        self.assertEqual(json.loads(self.t.last(state_topic("card")))["state"], "running")
         self.assertIsNone(self.t.last(state_topic("last_refresh")))
         self.clock[0] += 16
         self.s.tick()
         self.assertEqual(json.loads(self.t.last(state_topic("card")))["state"], "error")
-        self.assertEqual(json.loads(self.t.last(state_topic("refresh_state")))["state"], "error")
+        self.assertIn("bridge:", json.loads(self.t.last(state_topic("card")))["error"])
         self.assertIsNone(self.t.last(state_topic("last_refresh")))
-        self.clock[0] += 60
+
+    def test_refresh_reports_offline_bridge_as_error_not_false_success(self):
+        self.s.connected()
+        self.s.receive(ROOT + "/command/refresh", b"PRESS")
+        self.receive("bridge/devices", inventory(), retain=True)
+        self.receive("bridge/state", b"offline", retain=True)
+        self.assertEqual(json.loads(self.t.last(state_topic("card")))["state"], "running")
+        self.clock[0] += 16
         self.s.tick()
         self.assertEqual(json.loads(self.t.last(state_topic("card")))["state"], "error")
+        self.assertIsNone(self.t.last(state_topic("last_refresh")))
 
     def test_refresh_disallows_duplicate_work_and_success_visible_five_seconds(self):
         self.s.connected()
