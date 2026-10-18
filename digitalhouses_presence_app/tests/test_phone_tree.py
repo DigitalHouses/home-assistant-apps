@@ -4,7 +4,7 @@ import unittest
 from unittest.mock import Mock
 
 from app import publish_snapshot
-from dh_presence.core import Engine
+from dh_presence.core import Engine, Status
 from dh_presence.discovery import discovery, topic
 from dh_presence.phone_tree import registered_phones_tree
 
@@ -21,6 +21,10 @@ class TestDashboardRegistrationTree(unittest.TestCase):
         engine.add("device_tracker.s_iphone", "13ProMAX .SKY", registered=True)
         engine.add("device_tracker.alina", "iPhone", registered=True)
         engine.add("device_tracker.admin", "Excluded", registered=False)
+        # Each branch represents its source, not the overall presence mode.
+        engine.residents["device_tracker.s_iphone"].gps = Status.HOME
+        engine.residents["device_tracker.s_iphone"].wifi = Status.NOT_HOME
+        engine.residents["device_tracker.alina"].gps = Status.NOT_HOME
         regs = [
             enrolled("device_tracker.s_iphone", "13ProMAX .SKY",
                      wifi="device_tracker.s_router"),
@@ -32,14 +36,14 @@ class TestDashboardRegistrationTree(unittest.TestCase):
         self.assertEqual(doc["count"], 2)
         self.assertEqual(doc["tree"].split("\n"), [
             "Зарегистрированные телефоны",
-            "├─ 📱 Alina (iPhone)",
-            "│  ├─ GPS · alina",
-            "│  ├─ Wi-Fi · не привязан",
+            "├─ 📲 Alina (iPhone)",
+            "│  ├─ GPS · 🟠 Не дома · alina",
+            "│  ├─ Wi-Fi · ⚪ Не привязан",
             "│  ├─ IP (рег.) · 192.168.8.55",
             "│  └─ MAC (рег.) · 8a:43:3e:74:09:83",
-            "└─ 📱 Serzhan (13ProMAX .SKY)",
-            "   ├─ GPS · s_iphone",
-            "   ├─ Wi-Fi · s_router",
+            "└─ 📲 Serzhan (13ProMAX .SKY)",
+            "   ├─ GPS · 🟢 Дома · s_iphone",
+            "   ├─ Wi-Fi · 🟠 Не дома · s_router",
             "   ├─ IP (рег.) · 192.168.8.54",
             "   └─ MAC (рег.) · 88:b9:45:80:a7:55",
         ])
@@ -52,6 +56,52 @@ class TestDashboardRegistrationTree(unittest.TestCase):
         gone = registered_phones_tree(regs, list(engine.residents.values()))
         self.assertNotIn("8a:43:3e:74:09:83", gone["tree"])
         self.assertNotIn("192.168.8.55", gone["tree"])
+
+    def test_source_transitions_update_tree_without_registry_changes(self):
+        engine = Engine()
+        engine.add("device_tracker.phone", "iPhone", registered=True)
+        resident = engine.residents["device_tracker.phone"]
+        record = enrolled("device_tracker.phone", "iPhone",
+                          wifi="device_tracker.router")
+        original = registered_phones_tree([record], [resident])
+        self.assertIn("GPS · ⚪ Недоступно · phone", original["tree"])
+        self.assertIn("Wi-Fi · ⚪ Недоступно · router", original["tree"])
+        self.assertNotIn("🟠 Не дома", original["tree"])
+
+        resident.gps = Status.HOME
+        resident.wifi = Status.HOME
+        home = registered_phones_tree([record], [resident])
+        self.assertEqual(home["count"], original["count"])
+        self.assertIn("GPS · 🟢 Дома · phone", home["tree"])
+        self.assertIn("Wi-Fi · 🟢 Дома · router", home["tree"])
+        self.assertNotEqual(home["tree"], original["tree"])
+
+        resident.gps = Status.NOT_HOME
+        resident.wifi = Status.NOT_HOME
+        away = registered_phones_tree([record], [resident])
+        self.assertIn("GPS · 🟠 Не дома · phone", away["tree"])
+        self.assertIn("Wi-Fi · 🟠 Не дома · router", away["tree"])
+        self.assertNotEqual(away["tree"], home["tree"])
+
+        # Router/API outage is not evidence of Wi-Fi absence.
+        resident.wifi = Status.UNAVAILABLE
+        unavailable = registered_phones_tree([record], [resident])
+        self.assertIn("Wi-Fi · ⚪ Недоступно · router", unavailable["tree"])
+        self.assertNotIn("Wi-Fi · 🟠 Не дома", unavailable["tree"])
+        self.assertEqual(unavailable,
+                         registered_phones_tree([record], [resident]))
+
+    def test_wifi_without_router_link_is_not_false_away(self):
+        engine = Engine()
+        engine.add("device_tracker.phone", "iPhone", registered=True)
+        resident = engine.residents["device_tracker.phone"]
+        resident.gps = Status.HOME
+        resident.wifi = Status.NOT_HOME
+        row = enrolled("device_tracker.phone", "iPhone", wifi=None)
+        doc = registered_phones_tree([row], [resident])
+        self.assertIn("GPS · 🟢 Дома · phone", doc["tree"])
+        self.assertIn("Wi-Fi · ⚪ Не привязан", doc["tree"])
+        self.assertNotIn("Wi-Fi · 🟠 Не дома", doc["tree"])
 
     def test_untrusted_registration_names_cannot_create_spoofed_branches(self):
         engine = Engine()
