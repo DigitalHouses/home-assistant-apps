@@ -37,3 +37,12 @@ MQTT Discovery, retained state, and transient event publishing are implemented i
 Version 0.1.9 adds Wi-Fi placeholder availability topics and the runtime controls above. Existing identifiers, GPS distance, aggregate and MQTT event topics stay unchanged. No Wi-Fi transition events are emitted before verified Wi-Fi observations.
 
 Version 0.1.10 trusts HA's last valid GPS status and coordinates irrespective of age. The configured GPS freshness interval controls a **display-only** old-data label, not MQTT GPS availability. Refresh reads/republishes last-known observations without implying new phone GPS data. Unknown/unavailable source states remain unavailable and cannot generate an absence. The original source timestamp is preserved; repeat polls of the same report do not emit events.
+
+## Уведомления по зонам (0.1.27)
+
+Зоны читаются из Home Assistant `zone.*`; штатное GPS-состояние зарегистрированного `device_tracker` определяет индивидуальный переход. Числовое состояние `zone.*` не используется для идентификации жильца.
+
+Каждая зона получает MQTT switch в общем устройстве `dh_presence_app`: `switch.dh_presence_app_notify_zone_<zone_key>`, где `zone_key` — первые 16 hex символов SHA-256 полного `zone.entity_id`. Topic команд `DigitalHouses/Global/dh_presence_app/notifications/zones/<zone_key>/set`, topic состояния — `.../state`; команды без retain, состояние приложения хранится в JSON, новые зоны выключены. Переименование friendly_name не меняет идентификатор, а переименование самого `entity_id` является изменением идентичности и создаёт новый выключенный переключатель. Удалённые зоны удаляются через Discovery cleanup.
+
+Новые не-retained MQTT events: `zone_enter`, `zone_leave`. Сохранённые поля события v2 расширяются `zone_entity_id`, `zone_name`, `zone_key`. События производятся независимо от состояния переключателя и `presence_mode`. HA-пакет фильтрует разрешённые уведомления через `script.write2log`; для домашней зоны при активном переключателе подавляется дублирующий текст GPS. IP/MAC в событиях отсутствуют.
+
