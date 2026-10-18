@@ -96,9 +96,9 @@ automation:
           Жилец покинул дом. Дома: {{ trigger.to_state.attributes.residents_home_after | default('?', true) }}.
         {% endif %}
       wifi_lost_message: >-
-          Источник Wi-Fi временно недоступен. Состояние подключения неизвестно.
+        Источник Wi-Fi временно недоступен. Состояние подключения неизвестно.
       wifi_out_message: >-
-          По данным Wi-Fi-трекера роутера устройство больше не подключено к домашней Wi-Fi сети.
+        По данным Wi-Fi-трекера роутера устройство больше не подключено к домашней Wi-Fi сети.
     actions:
       - choose:
           - conditions:
