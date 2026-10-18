@@ -1,12 +1,12 @@
 # DigitalHouses Presence App
 
-**Status: GPS + HA router device_tracker Wi-Fi pilot, version 0.1.26.** Observe router tracker stability before safety-critical automations.
+**Status: GPS + HA router device_tracker Wi-Fi pilot, version 0.1.27.** Observe router tracker stability before safety-critical automations.
 
 This application belongs to `DigitalHouses/home-assistant-apps/digitalhouses_presence_app` and is installed via **Settings → Apps → App Store**.
 
 ## Dynamic source tracker cards (0.1.26)
 
-The existing MQTT roster attribute `residents` on `binary_sensor.dh_presence_app_residents_home` includes two source entity IDs for each participating resident: `gps_tracker` (the selected Companion `device_tracker`) and `wifi_tracker` (the router's `device_tracker` linked at registration, if present). These are **entity references**, not extra sensors. Excluded HA users do not appear. The private IP/MAC registration data remains private.
+The existing MQTT roster attribute `residents` on `binary_sensor.dh_presence_app_residents_home` includes two source entity IDs for each participating resident: `gps_tracker` (the selected Companion `device_tracker`) and `wifi_tracker` (the router's `device_tracker` linked at registration, if present). These are **entity references**, not extra sensors. Excluded HA users do not appear. IP/MAC registration data is not published to MQTT or Recorder, but is available in the private administrator-only Ingress diagnostics card inside Home Assistant.
 
 Two portable Lovelace **Auto Entities** YAML cards automatically display only active DH Presence source trackers:
 
@@ -56,9 +56,15 @@ Both ON: **any successful method → Wi-Fi HOME**. Only when **both** enabled ch
 
 In 0.1.25, the maintained Lovelace card and dashboard no longer expose PING/ARP switches. Both notification example packages were updated for explicit router disconnection. **Existing locally installed HA packages must be replaced manually**, since App upgrades do not install HA packages.
 
-## Notification switches (0.1.18)
+## Zone and source notification switches (0.1.27)
 
-The DH Presence MQTT device publishes three persisted MQTT switches: `switch.dh_presence_app_notify_presence` (default ON: `arrival`/`departure`), `switch.dh_presence_app_notify_gps` (default OFF: `gps_in`/`gps_out`) and `switch.dh_presence_app_notify_wifi` (default OFF: `wifi_in`/`wifi_out`/`wifi_lost`). Homeowners control them from HA Device or Lovelace, independently of GPS/Wi-Fi/Hybrid choice. They suppress only human `script.write2log` notifications in the [local HA package](examples/packages/dh_presence_app_notification_merge_named_ru.yaml), never MQTT Event publishing or Recorder. Settings survive restarts; do not add HA `input_boolean` helpers. For existing merge-named installations, replace the local notification package with the updated keyed example after the app upgrade.
+The DH Presence MQTT device provides persisted notification switches for each discovered Home Assistant `zone.*` and two independent source switches: `switch.dh_presence_app_notify_gps` and `switch.dh_presence_app_notify_wifi`. Zone switches are generated dynamically, default to OFF, and have stable keys derived from the zone entity ID. The old `switch.dh_presence_app_notify_presence` is retired and removed through MQTT Discovery cleanup. Switching notifications OFF changes only local message delivery; it does not filter events, change presence calculations, or disable Recorder.
+
+**Why the App owns zone transitions:** Native Home Assistant zone triggers can also process non-participating users, including administrators. DH Presence must restrict zone events to its enrolled/eligible resident roster and apply `exclude_users` before zone transition processing. The App reads Home Assistant's already-resolved GPS device-tracker zone state (it does not calculate geofences), maintains a per-resident transition baseline and emits `zone_enter`/`zone_leave` machine events for included residents only. This filtering is part of the App's public zone contract, not a reason to add a second zone location engine.
+
+The local HA notification packages consume `event.dh_presence_app_event` using `event.received → trigger.id → choose → script.write2log`. Each zone switch gates messages for its respective zone. GPS and Wi-Fi source notification switches operate independently of the selected presence mode. For `zone.home`, the package avoids duplicate home GPS notification text when its zone switch is ON. App upgrades do not automatically replace locally installed packages or Lovelace YAML.
+
+**Wi-Fi always means the local home's network (`zone.home`).** Router `device_tracker` state is the Wi-Fi evidence for the HA installation site; remote HA access over Cloudflare is not proof of local Wi-Fi presence. GPS alone covers office and other HA zones. Wi-Fi OFF means absent from the tracked local router network, not proof that the resident physically left home.
 
 ## Pilot capabilities
 
@@ -164,13 +170,13 @@ Each entry explicitly associates **one registered tracker** with a person's name
 
 ## Recorder and notifications package
 
-[The local Russian HA package](examples/packages/dh_presence_app_notification_local_package_ru.yaml) processes the existing `event.dh_presence_app_event` directly. For `arrival`, `departure`, verified `wifi_in`, and `wifi_lost` (missing Wi-Fi confirmation), plus future genuinely verified `wifi_out`, it calls the site's existing `script.write2log` **once** with `title` and `message`. No duplicate `logbook.log`, `persistent_notification.create` or extra MQTT device is introduced. The MQTT Event entity can be stored by Home Assistant Recorder, subject to the local Recorder filters and retention. Whether `write2log` also logs anything is specific to that local script.
+[The local Russian HA package](examples/packages/dh_presence_app_notification_local_package_ru.yaml) processes the existing `event.dh_presence_app_event` directly. For eligible `arrival`, `departure`, `gps_in`, `gps_out`, `wifi_in`, `wifi_out`, `zone_enter` and `zone_leave` events (subject to notification switches), it calls the site's existing `script.write2log` **once** with `title` and `message`. No duplicate `logbook.log`, `persistent_notification.create` or extra MQTT device is introduced. The MQTT Event entity can be stored by Home Assistant Recorder, subject to the local Recorder filters and retention. Whether `write2log` also logs anything is specific to that local script.
 
 First confirmed arrival (whole-house `not_home → home`) produces `Режим дома: присутствие`; final confirmed departure (`home → not_home`) produces `Режим дома: отсутствие`. These are messages, not physical alarm/security mode changes.
 
 The App owns a one-time `device_tracker` → `user_name` map through the optional `resident_names` list in Supervisor App Configuration. Existing `residents` entries remain unchanged. The App publishes `user_name` (or JSON null) and the real GPS tracker friendly name `device_name` on machine events. The local package displays `user_name (device_name)`, or the device name alone when unmapped; it does not search `person` or maintain a duplicate name dictionary.
 
-Install the package in `/config/packages/dh_presence_app_notification_local_package_ru.yaml` with `homeassistant: packages: !include_dir_named packages` and check that `script.write2log` accepts `title` and `message`. The App emits `wifi_in` only after an initial baseline has been observed; it emits `wifi_lost` once after the configured 15-minute loss of positive Wi-Fi proof. An iPhone failing ARP does **not** mean a verified disconnect; `wifi_out` remains reserved for future stronger proof.
+Install the package in `/config/packages/dh_presence_app_notification_local_package_ru.yaml` with `homeassistant: packages: !include_dir_named packages` and check that `script.write2log` accepts `title` and `message`. Since 0.1.25, linked HA router trackers drive Wi-Fi HOME/NOT_HOME, and `wifi_in` / `wifi_out` are emitted after a real transition following initial baseline. `wifi_lost` belongs to retired ARP presence monitoring and is not emitted by the current implementation. `wifi_absence_minutes` remains a legacy, ignored configuration key.
 
 ## Install through Home Assistant
 
