@@ -101,7 +101,7 @@ class TestDashboardRegistrationTree(unittest.TestCase):
         row = enrolled("device_tracker.p", "iPhone")
         # No HA timezone means we must not show UTC as if it were local.
         hidden = registered_phones_tree([row], [r])["tree"]
-        self.assertIn("GPS · 🟢 Дома · p\\n   │  └─ Статус с · местное время недоступно",
+        self.assertIn("GPS · 🟢 Дома · p\n   │  └─ Статус с · местное время недоступно",
                       hidden)
         # When HA timezone is configured, use local wall time only.
         local = registered_phones_tree([row], [r],
