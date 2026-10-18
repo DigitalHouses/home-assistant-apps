@@ -156,7 +156,13 @@ class ServiceTests(unittest.TestCase):
         self.assertIn("zigbee2mqtt_1/bridge/devices", self.t.subscribed)
         self.assertEqual(json.loads(self.t.last(state_topic("card")))["state"], "running")
         self.receive("bridge/devices", inventory(), retain=True)
+        self.assertEqual(json.loads(self.t.last(state_topic("card")))["state"], "running")
+        self.assertEqual(json.loads(self.t.last(state_topic("refresh_state")))["state"], "updating")
+        self.receive("bridge/state", b"online", retain=True)
+        self.assertEqual(json.loads(self.t.last(state_topic("card")))["state"], "running")
+        self.receive("Термостат/availability", b'{"state":"online"}', retain=True)
         self.assertEqual(json.loads(self.t.last(state_topic("card")))["state"], "success")
+        self.assertEqual(json.loads(self.t.last(state_topic("refresh_state")))["state"], "idle")
         self.assertIsNotNone(self.t.last(state_topic("last_refresh")))
 
     def test_refresh_times_out_instead_of_fake_success(self):
@@ -167,6 +173,65 @@ class ServiceTests(unittest.TestCase):
         card = json.loads(self.t.last(state_topic("card")))
         self.assertEqual(card["state"], "error")
         self.assertIn("inventory", card["error"])
+
+    def test_inventory_exposes_unavailable_device_reason_without_recorder_attributes(self):
+        self.s.connected()
+        self.receive("bridge/devices", inventory(), retain=True)
+        self.receive("bridge/state", b"online", retain=True)
+        details = json.loads(self.t.last(state_topic("inventory_details")))
+        self.assertEqual(details["total"], 1)
+        self.assertEqual(details["availability_unknown"], 1)
+        self.assertFalse(details["availability_complete"])
+        d = details["devices"][0]
+        self.assertEqual(d["ieee_address"], IEEE)
+        self.assertEqual(d["availability"], "unknown")
+        self.assertEqual(d["availability_reason"], "availability_not_reported")
+        self.assertEqual(d["availability_reason_label"], "Нет сообщения availability")
+        self.assertEqual(self.t.last(validity_topic("offline")), "offline")
+        self.receive("Термостат/availability", b'{"state":"online"}', retain=True)
+        details = json.loads(self.t.last(state_topic("inventory_details")))
+        self.assertEqual(details["availability_unknown"], 0)
+        self.assertTrue(details["availability_complete"])
+        self.assertEqual(details["devices"][0]["availability_label"], "В сети")
+        self.assertEqual(self.t.last(state_topic("offline")), "0")
+
+    def test_manual_refresh_without_availability_fails_and_does_not_claim_success(self):
+        self.s.connected()
+        self.s.receive(ROOT + "/command/refresh", b"PRESS")
+        self.receive("bridge/devices", inventory(), retain=True)
+        self.receive("bridge/state", b"online", retain=True)
+        self.assertIsNone(self.t.last(state_topic("last_refresh")))
+        self.clock[0] += 16
+        self.s.tick()
+        self.assertEqual(json.loads(self.t.last(state_topic("card")))["state"], "error")
+        self.assertEqual(json.loads(self.t.last(state_topic("refresh_state")))["state"], "error")
+        self.assertIsNone(self.t.last(state_topic("last_refresh")))
+        self.clock[0] += 60
+        self.s.tick()
+        self.assertEqual(json.loads(self.t.last(state_topic("card")))["state"], "error")
+
+    def test_refresh_disallows_duplicate_work_and_success_visible_five_seconds(self):
+        self.s.connected()
+        self.s.receive(ROOT + "/command/refresh", b"PRESS")
+        before = len(self.t.subscribed)
+        self.s.receive(ROOT + "/command/refresh", b"PRESS")
+        self.assertEqual(len(self.t.subscribed), before)
+        self.receive("bridge/devices", inventory(), retain=True)
+        self.receive("bridge/state", b"online", retain=True)
+        self.receive("Термостат/availability", b'{"state":"online"}', retain=True)
+        self.assertEqual(json.loads(self.t.last(state_topic("card")))["state"], "success")
+        self.clock[0] += 4
+        self.s.tick()
+        self.assertEqual(json.loads(self.t.last(state_topic("card")))["state"], "success")
+        self.clock[0] += 2
+        self.s.tick()
+        self.assertEqual(json.loads(self.t.last(state_topic("card")))["state"], "idle")
+
+    def test_refresh_contract_is_recorder_excluded(self):
+        c = build_discovery("0.1.3")["components"]["refresh_state"]
+        self.assertEqual(c["default_entity_id"], "sensor.dh_zigbee_monitor_app_refresh_state")
+        self.assertEqual(c["json_attributes_topic"], state_topic("refresh_state"))
+        self.assertEqual(c["value_template"], "{{ value_json.state }}")
 
     def test_retained_command_is_ignored(self):
         self.s.connected()
