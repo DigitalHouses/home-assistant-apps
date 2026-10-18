@@ -92,8 +92,10 @@ class PresenceLovelaceYamlTests(unittest.TestCase):
             source_card = yaml.safe_load(source_file.read_text(encoding="utf-8"))
             self.assertEqual(card, source_card)
         self.assertEqual(notifications[0]["heading"], "Уведомления")
-        self.assertEqual([e["entity"] for e in notifications[1]["entities"]], [
-            "switch.dh_presence_app_notify_presence",
+        self.assertEqual(notifications[1]["type"], "custom:auto-entities")
+        self.assertEqual(notifications[1]["filter"]["include"][0]["entity_id"],
+                         "switch.dh_presence_app_notify_zone_*")
+        self.assertEqual([e["entity"] for e in notifications[2]["entities"]], [
             "switch.dh_presence_app_notify_gps",
             "switch.dh_presence_app_notify_wifi"])
         self.assertEqual(debug[0]["heading"].strip(), "Временная карточка (debug)")
