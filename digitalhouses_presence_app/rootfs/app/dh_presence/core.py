@@ -47,6 +47,7 @@ class Resident:
     tracker: str
     name: str
     user_name: str | None = None
+    registered: bool = False
     confirmed: Status = Status.UNAVAILABLE
     gps: Status = Status.UNAVAILABLE
     wifi: Status = Status.UNAVAILABLE
@@ -88,7 +89,7 @@ class Engine:
             raise ValueError("Invalid freshness")
 
     def add(self, tracker: str, name: str, saved: dict | None = None,
-            user_name: str | None = None):
+            user_name: str | None = None, *, registered: bool = False):
         validate_tracker(tracker)
         if not isinstance(name, str) or not name.strip():
             raise ValueError("Resident device name cannot be blank")
@@ -99,7 +100,7 @@ class Engine:
         status = Status.UNAVAILABLE if saved is None else Status(saved["confirmed"])
         self.residents[tracker] = Resident(
             tracker, name.strip(), user_name=user_name.strip() if user_name else None,
-            confirmed=status,
+            registered=registered, confirmed=status,
             confirmed_changed_at=(datetime.fromisoformat(saved["confirmed_changed_at"])
                 if saved and saved.get("confirmed_changed_at") else None),
         )
@@ -340,6 +341,11 @@ class Engine:
                 "residents_home": residents_home,
                 "residents": {r.key: {"name": r.name,
                                       "user_name": r.user_name,
+                                      "registered": r.registered,
+                                      "registration_label": (
+                                          (r.user_name + " (" + r.name + ")"
+                                           if r.user_name and r.user_name != r.name else r.name)
+                                          if r.registered else None),
                                       "gps_tracker": r.tracker,
                                       "wifi_tracker": r.wifi_tracker_id,
                                       "status": (r.wifi.value if self.mode is Mode.WIFI else r.confirmed.value),
