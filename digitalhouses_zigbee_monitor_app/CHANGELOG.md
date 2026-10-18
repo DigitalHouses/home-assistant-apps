@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.1.4
+
+- Исправлен ошибочный fail продуктового Refresh при отсутствии
+  опциональных MQTT device availability от Zigbee2MQTT.
+- Refresh, по стандарту Internet App, успешно завершается после
+  получения новых подтверждённых bridge/state и bridge/devices,
+  публикации реальной инвентаризации и состояния сети.
+- Offline и offline_details остаются unavailable при неизвестной
+  availability; фиктивный ноль не публикуется.
+- Проверка bridge/inventory выполняется после команды, устаревшее
+  состояние не считается успешным Refresh; ошибки и timeout
+  различают отсутствие bridge и inventory.
+- Regression tests: Zigbee2MQTT availability выключена, частичная
+  инвентаризация, неответивший bridge, sticky error и duplicate Refresh.
+
 ## 0.1.3
 
 - Инвентаризация MQTT: per-device availability `online/offline/unknown`,
