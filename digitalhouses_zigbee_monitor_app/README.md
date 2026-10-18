@@ -1,0 +1,57 @@
+# DigitalHouses Zigbee Monitor App
+
+**Статус:** проектирование · UI-first · приложение ещё не реализовано.
+
+## Идентификаторы
+
+- Канонический продукт, каталог и будущий Supervisor slug: `digitalhouses_zigbee_monitor_app`
+- Префикс Home Assistant: `dh_zigbee_monitor_app`
+- Имя в интерфейсе: **DH Zigbee Monitor**
+- Тип приложения после реализации: `haos_addon`
+- MQTT namespace: `DigitalHouses/Global/dh_zigbee_monitor_app`
+
+Это приложение будет частью общего каталога `DigitalHouses/home-assistant-apps`, а не отдельным GitHub-репозиторием.
+
+## Цель
+
+Наблюдать за несколькими экземплярами Zigbee2MQTT, находить недоступные устройства,
+вести инциденты и показывать **хит-парад MQTT-активности** и аномального reporting.
+Без паспортов, управления Zigbee-устройствами и автоматического восстановления в первой версии.
+
+**MQTT-публикации — не то же самое, что Zigbee-радиопакеты.** Рейтинг отражает только
+наблюдаемую MQTT-активность, а не полную радионагрузку Zigbee.
+
+## Архитектурные принципы
+
+1. **UI-first:** сначала согласуется Dashboard и его контракт сущностей.
+2. **HA — только представление и действия:** сбор, вычисления, baseline, инциденты и история — внутри App.
+3. **Recorder-safe:** числовые/бинарные исторические сенсоры не содержат динамических JSON-атрибутов. Подробные списки — отдельные сущности с обязательным исключением из Recorder.
+4. **Стабильная идентичность:** физическое устройство определяется IEEE, сеть — `network_id`; имена, MQTT topic и HA `entity_id` не служат ключом истории.
+5. **Честная неопределённость:** потеря источника не превращается в нулевой offline или «здоровую сеть».
+6. **Уведомления:** App публикует машинные MQTT Events; локальные HA-пакеты отвечают за русский текст и `write2admins`/`write2log`.
+7. **Без собственных HA-шаблонных вычислений:** Dashboard форматирует уже готовые значения.
+
+## Проектные документы
+
+- [Архитектура](docs/ARCHITECTURE.md)
+- [Контракт Dashboard, MQTT и Recorder](docs/UI_DATA_CONTRACT.md)
+- [План реализации и приёмки](docs/IMPLEMENTATION_PLAN.md)
+
+Документы отражают текущий проектный черновик. Идентификаторы компонентов и
+набор сущностей фиксируются перед первой реализацией, после утверждения Dashboard.
+
+## Соответствие репозиторию
+
+Перед регистрацией продукта как исполняемого App необходимо добавить
+`digitalhouses.app`, `config.yaml`, `Dockerfile`, `rootfs/`, тесты,
+две локализации, графику, документацию и CI, а также запись в
+`digitalhouses-stats/digitalhouses_stats/product_registry.json`.
+
+**Намеренно нет файла `digitalhouses.app`: это пока проектная папка, не готовое для установки приложение.**
+Не создаём фиктивный релиз или работающую оболочку без согласованного UI и проверенного функционала.
+
+Основные нормативные документы: `docs/standards/DIGITALHOUSES_APP_STANDARD.md`,
+`PRODUCT_NAMING_STANDARD.md`, `CONTRACT_DATA_POLICY.md`,
+`EVENTS_AND_NOTIFICATIONS_STANDARD.md`,
+`UNIFIED_PRODUCT_STATUS_CARD_STANDARD.md`, `MANUAL_REFRESH_STANDARD.md`,
+`IMMUTABLE_DELIVERY_AND_TELEMETRY_STANDARD.md`, `PRODUCT_TELEMETRY_POLICY.md`.
