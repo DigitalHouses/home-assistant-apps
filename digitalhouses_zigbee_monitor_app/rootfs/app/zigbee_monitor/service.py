@@ -19,6 +19,7 @@ from .discovery import (
     APP_AVAILABILITY, DETAILS, DISCOVERY, EVENT_TOPIC, HA_STATUS, HISTORY, ROOT,
     build_discovery, state_topic, validity_topic,
 )
+from .problems import PROBLEM_TYPES, Problem, TrafficDetector, network_problems
 from .storage import ActivityStore
 
 log = logging.getLogger(__name__)
@@ -66,6 +67,10 @@ class MonitorService:
         # recovery, not evidence of a new transition; never emit on cold boot.
         self._event_bridge_state: dict[str, str] = {}
         self._event_device_state: dict[tuple[str, str], str] = {}
+        self._problem_states: dict[tuple[str, str], bool | None] = {}
+        self._traffic_detectors: dict[str, TrafficDetector] = {}
+        self._traffic_started: dict[str, float] = {}
+        self._traffic_metrics: dict[str, dict[str, object]] = {}
         self._refresh_pending: set[str] | None = None
         self._refresh_bridge_pending: set[str] | None = None
         self._refresh_started: float | None = None
@@ -232,11 +237,19 @@ class MonitorService:
             self._offline_since.clear()
             self._event_bridge_state.clear()
             self._event_device_state.clear()
+            self._problem_states.clear()
+            self._traffic_started.clear()
+            self._traffic_metrics.clear()
+            for detector in self._traffic_detectors.values():
+                detector.reset()
             # Persist unavailability first; stale retained data remains hidden
             # until each source is re-observed after reconnect.
             for key in (*HISTORY, *DETAILS):
                 self._validity(key, False, force=True)
-            self._send(DISCOVERY, _json(build_discovery(self.version)), force=True)
+            self._send(
+                DISCOVERY, _json(build_discovery(self.version, self.monitor.networks)),
+                force=True,
+            )
             self._send(state_topic("version"), self.version, force=True)
             self._send(state_topic("started_at"), self.started_at, force=True)
             self._publish_card()
@@ -252,6 +265,8 @@ class MonitorService:
             self._send(APP_AVAILABILITY, "online", force=True)
             self._publish_networks()
             self._publish_incidents()
+            self._publish_problem_settings()
+            self._publish_problems(allow_event=False)
 
     def disconnected(self) -> None:
         with self._lock:
@@ -261,6 +276,11 @@ class MonitorService:
             self._valid.clear()
             self._event_bridge_state.clear()
             self._event_device_state.clear()
+            self._problem_states.clear()
+            self._traffic_started.clear()
+            self._traffic_metrics.clear()
+            for detector in self._traffic_detectors.values():
+                detector.reset()
 
     def _all_live(self) -> bool:
         return bool(self.monitor.networks) and all(
@@ -281,6 +301,139 @@ class MonitorService:
         if availability == "unknown":
             return availability, "availability_not_reported"
         return availability, None
+
+    def _setting_topics(self, network_id: str) -> tuple[str, str]:
+        prefix = f"{ROOT}/settings/{network_id}"
+        return f"{prefix}/rpm_auto/state", f"{prefix}/rpm_threshold/state"
+
+    def _publish_problem_settings(self) -> None:
+        for network in self.monitor.networks:
+            auto, threshold = self.store.network_problem_settings(network.network_id)
+            auto_topic, manual_topic = self._setting_topics(network.network_id)
+            self._send(auto_topic, "ON" if auto else "OFF")
+            self._send(manual_topic, str(threshold))
+
+    def _update_traffic(self, epoch: int) -> None:
+        """Evaluate complete SQLite minutes, never individual MQTT packets.
+
+        One network cannot affect the decision or publishing cadence of another.
+        A source reconnect restarts the warm-up, not the persisted history.
+        """
+        until = epoch - epoch % 60
+        for network in self.monitor.networks:
+            nid = network.network_id
+            status = self.monitor.network_status(nid)
+            if status["bridge_state"] != "online":
+                self._traffic_started.pop(nid, None)
+                self._traffic_detectors.setdefault(nid, TrafficDetector()).reset()
+                self._traffic_metrics.pop(nid, None)
+                continue
+            started = self._traffic_started.setdefault(nid, float(epoch))
+            auto, manual = self.store.network_problem_settings(nid)
+            values = self.store.network_message_minutes(
+                nid, from_epoch=max(0, until - 3900), until_epoch=until,
+            )
+            rpm = sum(values.get(until - 60 * n, 0) for n in range(1, 6)) / 5
+            detector = self._traffic_detectors.setdefault(nid, TrafficDetector())
+            baseline: float | None = None
+            threshold: float | None = float(manual) if not auto else None
+            if auto and epoch - started >= 3900:
+                historical = [
+                    values.get(t, 0) for t in
+                    range(until - 3900, until - 300, 60)
+                ]
+                if len(historical) == 60 and sum(v > 0 for v in historical) >= 20:
+                    baseline = round(sum(historical) / 60, 2)
+                    if baseline >= 4:
+                        threshold = max(1.0, round(baseline * 0.25, 2))
+            if auto and detector.current is True:
+                # Freeze the learned threshold throughout a diagnosed outage.
+                previous = self._traffic_metrics.get(nid, {})
+                threshold = previous.get("threshold") or threshold
+                baseline = previous.get("baseline") or baseline
+            trusted = (
+                status["inventory_observed"] and
+                epoch - started >= (3900 if auto else 600)
+                and threshold is not None
+            )
+            active = detector.observe(
+                now=float(epoch),
+                rpm=rpm if trusted else None,
+                threshold=float(threshold) if trusted else None,
+            )
+            self._traffic_metrics[nid] = {
+                "rpm": round(rpm, 2) if trusted else None,
+                "threshold": threshold, "baseline": baseline,
+                "rpm_auto": auto,
+                "traffic_problem": active,
+                "observed_at": _iso(epoch) if trusted else None,
+            }
+
+    def _publish_problems(self, *, allow_event: bool) -> None:
+        """Publish each known problem, then the coherent aggregate, then events."""
+        active: list[dict[str, object]] = []
+        unknown: list[str] = []
+        transitions: list[tuple[str, Problem]] = []
+        for network in self.monitor.networks:
+            nid = network.network_id
+            status = self.monitor.network_status(nid)
+            observed = [
+                self._availability_diagnostic(nid, d.ieee_address)
+                for d in self.monitor.devices(nid)
+            ]
+            offline = sum(
+                state == "offline" and reason is None for state, reason in observed
+            )
+            metrics = self._traffic_metrics.get(nid, {})
+            for problem in network_problems(
+                network_id=nid, name=network.name,
+                bridge_state=str(status["bridge_state"]),
+                inventory_observed=bool(status["inventory_observed"]),
+                devices=int(status["devices"]),
+                offline=offline,
+                unknown=sum(reason is not None for _state, reason in observed),
+                rpm_problem=metrics.get("traffic_problem"),
+                rpm=metrics.get("rpm"), threshold=metrics.get("threshold"),
+            ):
+                key = nid, problem.kind
+                state_topic = f"{ROOT}/problems/{nid}/{problem.kind}/state"
+                valid_topic = f"{ROOT}/problems/{nid}/{problem.kind}/valid"
+                if problem.active is None:
+                    if not self._send(valid_topic, "offline"):
+                        return
+                    unknown.append(problem.problem_id)
+                else:
+                    if not self._send(state_topic, "ON" if problem.active else "OFF"):
+                        return
+                    if not self._send(valid_topic, "online"):
+                        return
+                    if problem.active:
+                        active.append(problem.presentation())
+                previous = self._problem_states.get(key)
+                if (allow_event and previous is not None and
+                        problem.active is not None and previous != problem.active):
+                    transitions.append(
+                        ("problem_started" if problem.active else "problem_recovered",
+                         problem)
+                    )
+                self._problem_states[key] = problem.active
+        aggregate_valid = bool(self.monitor.networks) and (bool(active) or not unknown)
+        if not self._send(f"{ROOT}/problems/presentation", _json({
+            "severity": "critical" if any(p["severity"] == "critical" for p in active)
+                else "warning" if active else "ok" if not unknown else "unknown",
+            "active": active, "unknown": unknown,
+            "coverage_complete": not unknown and bool(self.monitor.networks),
+        })):
+            return
+        if not self._send(f"{ROOT}/problems/aggregate", str(len(active))):
+            return
+        if not self._send(f"{ROOT}/problems/valid",
+                          "online" if aggregate_valid else "offline"):
+            return
+        for event_type, problem in transitions:
+            self._emit_event(event_type, **problem.presentation(),
+                             previous_state="OFF" if problem.active else "ON",
+                             current_state="ON" if problem.active else "OFF")
 
     def _publish_networks(self) -> None:
         # Until a bridge is verified, zero is not a trustworthy network count.
@@ -305,6 +458,9 @@ class MonitorService:
                 "offline": confirmed_offline if complete or confirmed_offline else None,
                 "availability_complete": complete,
                 "availability_unknown": sum(reason is not None for _, reason in observed),
+                "online": sum(a == "online" and reason is None
+                              for a, reason in observed),
+                **self._traffic_metrics.get(config.network_id, {}),
             })
         self._detail("networks_details", "networks", rows, valid=bool(self.monitor.networks))
 
@@ -541,6 +697,9 @@ class MonitorService:
                     if self._all_live():
                         self._publish_inventory_and_availability()
                 self._publish_rankings(epoch=epoch)
+                self._update_traffic(epoch)
+                self._publish_problems(allow_event=True)
+                self._publish_networks()
                 if self._last_trim_day != epoch // 86400:
                     self.store.trim_minutes(before_epoch=max(0, epoch - 30 * 86400))
                     self._last_trim_day = epoch // 86400
@@ -639,8 +798,46 @@ class MonitorService:
         with self._lock:
             if topic == HA_STATUS:
                 if payload == b"online":
-                    self._send(DISCOVERY, _json(build_discovery(self.version)), force=True)
+                    self._send(
+                        DISCOVERY,
+                        _json(build_discovery(self.version, self.monitor.networks)),
+                        force=True,
+                    )
                 return "ha_status"
+            settings_root = f"{ROOT}/command/settings/"
+            if topic.startswith(settings_root):
+                parts = topic[len(settings_root):].split("/")
+                if len(parts) != 2 or retain:
+                    return "problem_setting_ignored"
+                network_id, kind = parts
+                if network_id not in {n.network_id for n in self.monitor.networks}:
+                    return "problem_setting_ignored"
+                if kind == "rpm_auto" and payload in (b"ON", b"OFF"):
+                    self.store.update_network_problem_settings(
+                        network_id, auto=payload == b"ON",
+                    )
+                elif kind == "rpm_threshold":
+                    try:
+                        value = int(payload.decode("ascii"))
+                        if str(value).encode("ascii") != payload:
+                            return "problem_setting_ignored"
+                        self.store.update_network_problem_settings(
+                            network_id, threshold=value,
+                        )
+                    except (ValueError, UnicodeDecodeError):
+                        return "problem_setting_ignored"
+                else:
+                    return "problem_setting_ignored"
+                self._publish_problem_settings()
+                # Re-evaluate from existing SQLite history; do not fake a probe.
+                self._traffic_detectors.setdefault(
+                    network_id, TrafficDetector(),
+                ).reset()
+                self._traffic_metrics.pop(network_id, None)
+                self._update_traffic(int(self.now()))
+                self._publish_problems(allow_event=False)
+                self._publish_networks()
+                return "problem_setting_updated"
             if topic == f"{ROOT}/command/refresh":
                 if not retain and payload == b"PRESS":
                     self._start_refresh()
@@ -682,8 +879,13 @@ class MonitorService:
                             self._event_device_state.pop(identity, None)
                     if not self.subscribe(network.base_topic + "/#"):
                         log.error("Failed to subscribe to discovered %s", network.base_topic)
+                    self._send(
+                        DISCOVERY, _json(build_discovery(self.version, self.monitor.networks))
+                    )
+                    self._publish_problem_settings()
                     self._publish_networks()
                     self._publish_inventory_and_availability()
+                    self._publish_problems(allow_event=False)
             sample = self.monitor.ingest(
                 topic, payload, retain=retain, dup=dup,
                 observed_at=observed_at,
@@ -759,6 +961,9 @@ class MonitorService:
                 self._publish_networks()
                 self._publish_inventory_and_availability()
                 self._publish_incidents()
+                self._publish_problems(
+                    allow_event=not retain and not dup,
+                )
                 self._try_complete_refresh()
                 if event is not None:
                     self._emit_event(event[0], **event[1])
