@@ -1,6 +1,10 @@
 # DH Zigbee Monitor — план работ (UI-first)
 
-Статус: проектирование. Этапы не подразумевают готовность App к установке.
+Статус: реализация начата. Модуль `rootfs/app/zigbee_monitor` реализует
+первое независимое ядро: конфигурации нескольких сетей, inventory по IEEE,
+сопоставление MQTT device topics, сбор минутных счётчиков и SQLite store.
+Этот этап **ещё не запускается как Home Assistant App**: runtime MQTT,
+Supervisor config, Discovery и релизные файлы будут в следующем этапе.
 
 ## Этап 1 · UI и договор о данных
 
@@ -54,3 +58,19 @@
 - Проверка MQTT Discovery, availability и отсутствие orphan entities.
 - Тесты schema, restart, source loss, dedup, events, immutable release;
   CI green до merge, производственная поставка только immutable GHCR.
+
+## Выполнено · старт ядра (feature/zigbee-monitor-multi-network-core)
+
+- `rootfs/app/zigbee_monitor/core.py`: чистый Z2M MQTT классификатор,
+  явные immutable `network_id`, без зависимости от HA entity IDs.
+- `rootfs/app/zigbee_monitor/storage.py`: SQLite под `/data` в будущем runtime.
+  Сохраняет текущую идентичность устройства и счётчики по UTC минутам,
+  допускает rename/перенос без потери накопленной истории.
+- `tests/test_core.py`, `tests/test_storage.py`: регрессии на идентичность,
+  retained replay, bridge/devices, availability, неверные payload и SQLite.
+- `Validate repository` запускает тесты ядра в CI.
+
+Ограничения текущего этапа: в репозитории нет HAOS запуска, MQTT transport,
+MQTT Discovery и подсистем инцидентов/spam classification. Счётчики сообщения
+не означают реального Zigbee RF packet count. Ни один существующий HA
+Recorder-показатель пока не публикуется.
