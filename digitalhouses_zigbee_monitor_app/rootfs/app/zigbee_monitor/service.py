@@ -131,6 +131,8 @@ class MonitorService:
         """Inventory alone is not a complete source refresh."""
         if self._refresh_pending is None or self._refresh_started is None:
             return
+        if self._refresh_pending:
+            return
         if not self.monitor.networks:
             return
         for config in self.monitor.networks:
