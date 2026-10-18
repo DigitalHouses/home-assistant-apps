@@ -80,6 +80,36 @@ class ZigbeeMonitorUiDesignTests(unittest.TestCase):
         self.assertIn("event.dh_zigbee_monitor_app_event", excluded)
         self.assertIn("sensor.dh_zigbee_monitor_app_card", excluded)
 
+    def test_canonical_card_equals_embedded_dashboard_card(self):
+        source = APP / "examples/lovelace/dh_zigbee_monitor_app_card_ru.yaml"
+        standalone = yaml.safe_load(source.read_text(encoding="utf-8"))
+        self.assertEqual(standalone["type"], "vertical-stack")
+        self.assertEqual(standalone["grid_options"]["columns"], 12)
+        embedded = next(
+            c for section in self.dashboard["sections"] for c in section["cards"]
+            if c.get("type") == "vertical-stack"
+        )
+        self.assertEqual(standalone["cards"], embedded["cards"])
+        actions = standalone["cards"][1]["chips"]
+        self.assertEqual(
+            [a.get("content") or a.get("chip", {}).get("content") for a in actions],
+            ["Обновить", "Версия", "Новая версия", "Перезапуск"],
+        )
+        self.assertEqual(actions[2]["conditions"][0]["entity"],
+                         "update.digitalhouses_zigbee_monitor_app_update")
+        self.assertEqual(actions[2]["chip"]["tap_action"]["perform_action"], "update.install")
+        self.assertEqual(actions[3]["tap_action"]["perform_action"], "hassio.app_restart")
+        self.assertEqual(actions[3]["tap_action"]["data"]["app"],
+                         "8133339d_digitalhouses_zigbee_monitor_app")
+
+    def test_inventory_diagnostics_are_ui_only(self):
+        self.assertIn("availability_reason_label", self.raw_dashboard)
+        self.assertIn("availability_unknown", self.raw_dashboard)
+        self.assertIn("sensor.dh_zigbee_monitor_app_refresh_state",
+                      self.recorder["exclude"]["entities"])
+        self.assertNotIn("sensor.dh_zigbee_monitor_app_refresh_state",
+                         self.recorder["include"]["entities"])
+
     def test_recorder_include_only_scalars(self):
         self.assertEqual(set(self.recorder["include"]["entities"]), HISTORICAL)
         self.assertFalse(HISTORICAL & set(self.recorder["exclude"]["entities"]))
@@ -102,7 +132,7 @@ class ZigbeeMonitorUiDesignTests(unittest.TestCase):
         self.assertEqual((APP / "digitalhouses.app").read_text().strip(), "type = haos_addon")
         config = yaml.safe_load((APP / "config.yaml").read_text(encoding="utf-8"))
         self.assertEqual(config["slug"], "digitalhouses_zigbee_monitor_app")
-        self.assertEqual(config["version"], "0.1.2")
+        self.assertEqual(config["version"], "0.1.3")
         self.assertEqual(config["stage"], "experimental")
 
 

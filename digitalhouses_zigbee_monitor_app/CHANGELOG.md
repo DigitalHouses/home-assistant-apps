@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.3
+
+- Инвентаризация MQTT: per-device availability `online/offline/unknown`,
+  код и русская причина отсутствия данных, сводные `availability_unknown` и
+  `availability_complete`. Данные только в Recorder-excluded `inventory_details`.
+- UI: каноническая компактная карточка управления по стандарту PVE Agent,
+  встроена также в Dashboard; отдельная таблица доступности устройств.
+- Исправлена полнота Manual Refresh: ждём inventory, bridge/state и availability,
+  не записываем успешный last_refresh по одному bridge/devices.
+- Добавлен диагностический `sensor.dh_zigbee_monitor_app_refresh_state`
+  (`idle/updating/error`), не пишется в Recorder.
+- Статус успешной операции показывается 5 секунд, затем возвращается в idle;
+  ошибка сохраняется до следующей команды.
+
 ## 0.1.2
 
 - Исправлен запуск HAOS App: совместимость Alpine `py3-paho-mqtt` 1.x и paho-mqtt 2.x.
