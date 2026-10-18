@@ -69,3 +69,9 @@ The App's same private registration file `/data/presence_registrations.json` sto
 The running App continuously reconciles registered/disabled identity sets: removed residents disappear from the Engine, persisted logical presence, MQTT Discovery (with tombstone cleanup), stored zone baseline and recent-events cache. Removal is configuration change, **not a physical departure**: no `departure` or `zone_leave` Event is fabricated. Unchanged residents' confirmed evidence is preserved; re-enrolled phones start UNKNOWN.
 
 The public HA Markdown card only renders App-supplied `registered` and `registration_label` fields already carried by the aggregate resident roster. Admin management actions occur only through the authenticated existing Ingress HTTP handler (with live HA admin authorization); a Lovelace launcher navigates there but cannot delete by itself. No additional MQTT entity, HA automation/helper or Recorder time-series attribute is created. Private enrollment IP/MAC stay confined to administrator-only Ingress views.
+
+## Ingress private registration tree (0.1.30)
+
+To honor the prior administrator-only enrollment data contract, registered network identity is displayed only inside the pre-existing Ingress administrative view. Its `/api/admin/debug` API already authorizes the HA user's admin role and returns registration-time IP/MAC. A new client-side PVE-style `<pre>` view groups GPS, Wi-Fi, IP and MAC under each phone; it uses `textContent`, preserving literal user labels without HTML injection. Admin authorization failures hide the entire section and clear private DOM text. No independently addressable public MQTT/HA history entity receives IP/MAC.
+
+The ordinary registered-phone Lovelace tree still uses the aggregate MQTT resident roster's already-public fields only. Home Assistant remains a read-only renderer; all authoritative registration/network identity and deletion logic stays in App.
