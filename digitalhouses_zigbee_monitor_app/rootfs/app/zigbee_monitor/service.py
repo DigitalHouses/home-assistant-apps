@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Mapping
 
 from .core import ZigbeeMonitor, ZigbeeMonitorError
+from .autodiscovery import DISCOVERY_FILTERS, discovery_from_bridge
 from .discovery import (
     APP_AVAILABILITY, DETAILS, DISCOVERY, HA_STATUS, HISTORY, ROOT,
     build_discovery, state_topic, validity_topic,
@@ -150,6 +151,9 @@ class MonitorService:
             self._send(state_topic("version"), self.version, force=True)
             self._send(state_topic("started_at"), self.started_at, force=True)
             self._publish_card()
+            for topic_filter in DISCOVERY_FILTERS:
+                if not self.subscribe(topic_filter):
+                    log.error("MQTT discovery subscription failed: %s", topic_filter)
             for network in self.monitor.networks:
                 if not self.subscribe(network.base_topic + "/#"):
                     log.error("Could not subscribe to %s", network.base_topic)
@@ -166,15 +170,15 @@ class MonitorService:
             self._valid.clear()
 
     def _all_live(self) -> bool:
-        return all(
+        return bool(self.monitor.networks) and all(
             (status := self.monitor.network_status(n.network_id))["inventory_observed"]
             and status["bridge_state"] == "online"
             for n in self.monitor.networks
         )
 
     def _publish_networks(self) -> None:
-        # The configured network count is a known fact, not a liveness claim.
-        self._scalar("networks", len(self.monitor.networks))
+        # Until a bridge is recognized, zero is not a trustworthy discovery result.
+        self._scalar("networks", len(self.monitor.networks) if self.monitor.networks else None)
         rows = []
         for config in self.monitor.networks:
             status = self.monitor.network_status(config.network_id)
@@ -194,7 +198,9 @@ class MonitorService:
                 "status": status["bridge_state"], "devices": status["devices"],
                 "offline": off,
             })
-        self._detail("networks_details", "networks", rows, valid=True)
+        self._detail(
+            "networks_details", "networks", rows, valid=bool(self.monitor.networks)
+        )
 
     def _publish_inventory_and_availability(self) -> None:
         live = self._all_live()
@@ -306,8 +312,13 @@ class MonitorService:
     def _start_refresh(self) -> None:
         if not self._card_begin("refresh"):
             return
-        self._refresh_pending = {n.network_id for n in self.monitor.networks}
+        self._refresh_pending = (
+            {n.network_id for n in self.monitor.networks}
+            if self.monitor.networks else {"__discovery__"}
+        )
         self._refresh_started = self.now()
+        for topic_filter in DISCOVERY_FILTERS:
+            self.subscribe(topic_filter)
         for n in self.monitor.networks:
             # Subscribe to retained state, NEVER send a Zigbee2MQTT operation.
             self.subscribe(n.base_topic + "/bridge/devices")
@@ -356,6 +367,29 @@ class MonitorService:
                     if self._card_begin("check"):
                         return "check_updates_requested"
                 return "check_updates_ignored"
+            discovery = discovery_from_bridge(topic, payload)
+            if discovery is not None:
+                preferred_id = next((
+                    n.network_id for n in self.monitor.networks
+                    if n.base_topic == discovery.base_topic
+                ), None)
+                network, changed = self.store.register_network(
+                    discovery.coordinator_ieee, discovery.base_topic,
+                    observed_at=int(self.now()), preferred_id=preferred_id,
+                )
+                if self.monitor.add_network(network):
+                    log.info(
+                        "Zigbee2MQTT network discovered: %s (%s)",
+                        network.base_topic, network.network_id,
+                    )
+                    self._continuous_since = None
+                    if self._refresh_pending is not None:
+                        self._refresh_pending.discard("__discovery__")
+                        self._refresh_pending.add(network.network_id)
+                    if not self.subscribe(network.base_topic + "/#"):
+                        log.error("Failed to subscribe to discovered %s", network.base_topic)
+                    self._publish_networks()
+                    self._publish_inventory_and_availability()
             sample = self.monitor.ingest(
                 topic, payload, retain=retain, dup=dup,
                 observed_at=observed_at,
