@@ -32,12 +32,13 @@ class PackageTests(unittest.TestCase):
         config = yaml.safe_load((APP_DIR / "config.yaml").read_text(encoding="utf-8"))
         self.assertEqual(config["slug"], "digitalhouses_zigbee_monitor_app")
         self.assertEqual(config["name"], "DigitalHouses Zigbee Monitor App")
-        self.assertEqual(config["version"], "0.1.0")
+        self.assertEqual(config["version"], "0.1.1")
         self.assertEqual(config["stage"], "experimental")
         self.assertEqual(config["image"], "ghcr.io/digitalhouses/digitalhouses_zigbee_monitor_app")
         self.assertEqual(config["services"], ["mqtt:need"])
         self.assertFalse(config["options"]["telemetry_enabled"])
-        self.assertEqual(config["options"]["zigbee2mqtt"], [])
+        self.assertNotIn("zigbee2mqtt", config["options"])
+        self.assertNotIn("zigbee2mqtt", config["schema"])
 
     def test_store_images_have_valid_geometry(self):
         for name, expected in (("icon.png", (128, 128)), ("logo.png", (250, 100))):
