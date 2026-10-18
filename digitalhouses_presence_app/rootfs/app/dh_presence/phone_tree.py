@@ -8,6 +8,7 @@ diagnostic entity must be excluded from Recorder.
 from __future__ import annotations
 
 import re
+from datetime import datetime, timezone, tzinfo
 
 from dh_presence.core import Resident, Status
 
@@ -28,9 +29,17 @@ def _presence_label(status: Status) -> str:
     return "⚪ Недоступно"
 
 
+def _since(value: datetime | None, local_tz: tzinfo) -> str:
+    """HA-local time of the last source state change, never the latest poll."""
+    if value is None or value.tzinfo is None or value.utcoffset() is None:
+        return "нет данных"
+    return value.astimezone(local_tz).strftime("%d.%m.%Y %H:%M %Z")
+
+
 def registered_phones_tree(registrations: list[dict],
-                           residents: list[Resident]) -> dict:
-    """Build a current source-status tree from the live App engine."""
+                           residents: list[Resident], *,
+                           local_tz: tzinfo = timezone.utc) -> dict:
+    """Build a live source-status tree with source transition timestamps."""
     permitted = {r.tracker: r for r in residents if r.registered}
     eligible = sorted(
         (reg for reg in registrations if reg["tracker"] in permitted),
@@ -51,13 +60,18 @@ def registered_phones_tree(registrations: list[dict],
                 if wifi_linked else "не привязан")
         gps_status = _presence_label(resident.gps)
         wifi_status = _presence_label(resident.wifi) if wifi_linked else "⚪ Не привязан"
+        gps_since = _since(resident.gps_changed_at, local_tz)
+        wifi_since = (_since(resident.wifi_changed_at, local_tz)
+                      if wifi_linked else "не применимо")
         ip = _label(reg["ip"])
         mac = _label(reg["mac"])
         lines.extend([
             f"{root} 📲 {who} ({device})",
             f"{indent}├─ GPS · {gps_status} · {tracker}",
+            f"{indent}│  └─ Статус с · {gps_since}",
             f"{indent}├─ Wi-Fi · {wifi_status}" +
                 (f" · {wifi}" if wifi_linked else ""),
+            f"{indent}│  └─ Статус с · {wifi_since}",
             f"{indent}├─ IP (рег.) · {ip}",
             f"{indent}└─ MAC (рег.) · {mac}",
         ])
