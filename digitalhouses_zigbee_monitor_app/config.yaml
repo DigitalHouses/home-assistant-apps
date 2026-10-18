@@ -1,7 +1,7 @@
 name: DigitalHouses Zigbee Monitor App
-version: 0.1.0
+version: 0.1.1
 slug: digitalhouses_zigbee_monitor_app
-description: Read-only Zigbee2MQTT inventory, availability and MQTT activity monitoring for Home Assistant.
+description: Automatic Zigbee2MQTT discovery and read-only Zigbee inventory, availability and MQTT activity monitoring.
 url: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_zigbee_monitor_app
 arch:
   - amd64
@@ -18,13 +18,8 @@ timeout: 45
 services:
   - mqtt:need
 options:
-  zigbee2mqtt: []
   telemetry_enabled: false
   log_level: info
 schema:
-  zigbee2mqtt:
-    - network_id: str
-      name: str
-      base_topic: str
   telemetry_enabled: bool
   log_level: list(debug|info|warning|error)

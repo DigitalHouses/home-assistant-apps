@@ -183,8 +183,6 @@ class ZigbeeMonitor:
     """Multi-network stateful MQTT classifier; pure acquisition, not persistence."""
 
     def __init__(self, networks: tuple[Network, ...]) -> None:
-        if not networks:
-            raise ZigbeeMonitorError("at least one network is required")
         self._networks = {cfg.network_id: _NetworkRuntime(cfg) for cfg in networks}
         if len(self._networks) != len(networks):
             raise ZigbeeMonitorError("duplicate network ID")
@@ -197,6 +195,45 @@ class ZigbeeMonitor:
     @property
     def networks(self) -> tuple[Network, ...]:
         return tuple(runtime.config for runtime in self._networks.values())
+
+    def add_network(self, config: Network) -> bool:
+        """Upsert an auto-discovered network without resetting physical-device history.
+
+        An existing logical ID may change base topic, but two logical networks
+        must never share the same base or a nested base topic.
+        """
+        if not _NETWORK_ID.fullmatch(config.network_id):
+            raise ZigbeeMonitorError("invalid discovered network ID")
+        parse_networks([{
+            "network_id": config.network_id, "base_topic": config.base_topic,
+            "name": config.name,
+        }])
+        previous = self._networks.get(config.network_id)
+        if previous is not None and previous.config == config:
+            return False
+        for network_id, runtime in self._networks.items():
+            if network_id == config.network_id:
+                continue
+            old = runtime.config.base_topic
+            if (old == config.base_topic or old.startswith(config.base_topic + "/")
+                    or config.base_topic.startswith(old + "/")):
+                raise ZigbeeMonitorError("ambiguous discovered base_topic")
+        if previous is not None:
+            self._by_topic.pop(previous.config.base_topic, None)
+            if previous.config.base_topic != config.base_topic:
+                previous.bridge_state = "unknown"
+                previous.inventory_observed = False
+                previous.topics.clear()
+                previous.availability.clear()
+                previous.pending_availability.clear()
+            previous.config = config
+            runtime = previous
+        else:
+            runtime = _NetworkRuntime(config)
+            self._networks[config.network_id] = runtime
+        self._by_topic[config.base_topic] = runtime
+        self._bases = tuple(sorted(self._by_topic, key=len, reverse=True))
+        return True
 
     def reset_sources(self) -> None:
         """On MQTT reconnect, invalidate observations but preserve identities/counts.
@@ -232,7 +269,7 @@ class ZigbeeMonitor:
 
     def total_devices(self) -> int | None:
         # Partial inventory never masquerades as the number of devices in all networks.
-        if not all(runtime.inventory_observed for runtime in self._networks.values()):
+        if not self._networks or not all(runtime.inventory_observed for runtime in self._networks.values()):
             return None
         return sum(len(runtime.devices) for runtime in self._networks.values())
 

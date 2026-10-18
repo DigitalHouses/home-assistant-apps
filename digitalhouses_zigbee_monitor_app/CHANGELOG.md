@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.1
+
+- Automatically discover Zigbee2MQTT instances via coordinator-verified retained
+  `bridge/devices` and `bridge/info` MQTT topics (1–3 level base topics).
+- Remove required per-network settings from HAOS App configuration.
+- Persist coordinator IEEE / stable network ID / current base topic in SQLite;
+  rediscover on reconnect and during read-only refresh.
+- Preserve existing 0.1.0 manual network IDs as compatibility hints where possible.
+- Avoid displaying fictitious network count zero before any network is detected.
+
 ## 0.1.0
 
 - Experimental initial release of DigitalHouses Zigbee Monitor App.

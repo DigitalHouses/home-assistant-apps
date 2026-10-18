@@ -1,7 +1,7 @@
 # DigitalHouses Zigbee Monitor App — installation and acceptance
 
-Version: **0.1.0 (experimental)**. Run only after the production GHCR image
-`ghcr.io/digitalhouses/digitalhouses_zigbee_monitor_app:0.1.0` is published
+Version: **0.1.1 (experimental)**. Run only after the production GHCR image
+`ghcr.io/digitalhouses/digitalhouses_zigbee_monitor_app:0.1.1` is published
 and verified by repository release workflows.
 
 ## Requirements
@@ -11,30 +11,40 @@ and verified by repository release workflows.
 - Zigbee2MQTT `availability.enabled: true` on all monitored instances to
   populate offline counts (required for complete availability; default Z2M
   setting is false). Do not trigger Zigbee pings from this App.
-- Configure at least one explicit network with immutable `network_id`.
+- The application discovers networks automatically from Zigbee2MQTT bridge MQTT messages; no network list is needed.
 
-Example Zigbee2MQTT App options:
+Example App options:
 
 ```yaml
-zigbee2mqtt:
-  - network_id: floor_1
-    name: Первый этаж
-    base_topic: zigbee2mqtt_1
-  - network_id: floor_2
-    name: Второй этаж
-    base_topic: zigbee2mqtt_2
 telemetry_enabled: true
 log_level: info
 ```
 
-Names and topics above are examples. No installation-site addresses or
-credentials are embedded in the public application.
+On MQTT connection the App listens to retained `+/bridge/devices` and
+`+/bridge/info` (and equivalent 2–3-component prefixes). A bridge is accepted
+**only if the coordinator IEEE can be validated**. For each confirmed bridge
+the App subscribes to the exact discovered `base_topic/#`. No broker-wide
+`#` subscription or Zigbee2MQTT control request is used.
 
-The `network_id` is a stable logical identifier; `friendly_name` and HA
-`entity_id` are never the database key. Each device is keyed by IEEE, with
-historical minute counts retained through friendly-name changes. History and
-installation-specific telemetry state live under `/data` and are backed up
-with the Home Assistant App (cold backup).
+Coordinator IEEE becomes the durable network identity, and the current
+`base_topic` is an updateable route, stored in `/data/activity.sqlite3`.
+Discovery is rerun after MQTT reconnect, and during manual refresh. Former
+v0.1.0 manual network IDs are retained as migration hints when matching
+bridge topics are recognized. A coordinator *replacement* at an existing
+topic is not automatically treated as the same network: a deliberate
+migration is required to avoid corrupting history.
+
+If none are found, the App stays running and waits for a recognizable
+bridge message. It does **not** publish a false "0 devices" as reliable.
+MQTT bridge info isn't guaranteed to be retained on all installations;
+retained `bridge/devices` provides the boot-time fallback.
+
+Discovery supports Zigbee2MQTT MQTT `base_topic` paths containing **1 to 3
+segments**. Longer hierarchies are not autodetected in this release.
+
+The `network_id` is preserved across base-topic changes; each device is
+keyed by IEEE. History and installation-specific telemetry state live
+under `/data`, backed up with the Home Assistant App (cold backup).
 
 ## Telemetry consent and privacy
 
@@ -58,7 +68,7 @@ Install or merge the reference policy:
 historical scalar sensors are recorded; detail, event and app-card entities
 must remain excluded. Inspect the actual Recorder DB after at least 24 hours.
 
-The first release computes configured network counts, confirmed device and
+The first release computes discovered network counts, confirmed device and
 offline counts, MQTT-message activity rate and TOP lists. Unknown availability
 is never a real zero. The `spammers` and `incidents` scalar entities remain
 unavailable until the respective engines are implemented.

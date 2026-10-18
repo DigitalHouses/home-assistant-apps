@@ -19,9 +19,8 @@ def _translate(root: Path, app: Path, config: dict[str, Any]) -> None:
             item = cfg.get(key)
             if not isinstance(item, dict) or not item.get("name") or not item.get("description"):
                 fail(f"{app.name}: missing {language} translation for {key}")
-        for key in ("network_id", "name", "base_topic"):
-            if key not in cfg["zigbee2mqtt"].get("fields", {}):
-                fail(f"{app.name}: missing {language} zigbee2mqtt.{key} label")
+        if "zigbee2mqtt" in cfg:
+            fail(f"{app.name}: {language} must not expose manual network configuration")
 
 
 def _png(path: Path, *, expected: tuple[int, int]) -> None:
@@ -47,17 +46,14 @@ def validate_zigbee_monitor(root: Path, app: Path, context: dict[str, Any]) -> N
         fail(f"{app.name}: Supervisor MQTT service required")
     if config.get("backup") != "cold":
         fail(f"{app.name}: SQLite must use cold App backups")
-    if options.get("zigbee2mqtt") != []:
-        fail(f"{app.name}: Zigbee2MQTT network list must not hardcode a site")
-    if schema.get("zigbee2mqtt") != [{
-        "network_id": "str", "name": "str", "base_topic": "str"
-    }]:
-        fail(f"{app.name}: network schema must declare stable ID, name and base topic")
+    if "zigbee2mqtt" in options or "zigbee2mqtt" in schema:
+        fail(f"{app.name}: manual network configuration is forbidden; use MQTT auto-discovery")
     if options.get("telemetry_enabled") is not False or schema.get("telemetry_enabled") != "bool":
         fail(f"{app.name}: explicit telemetry consent must default to false")
 
     required = [
         "icon.png", "logo.png", "rootfs/app/app.py", "rootfs/run.sh",
+        "rootfs/app/zigbee_monitor/autodiscovery.py",
         "rootfs/app/zigbee_monitor/core.py",
         "rootfs/app/zigbee_monitor/discovery.py",
         "rootfs/app/zigbee_monitor/service.py",
@@ -86,6 +82,8 @@ def validate_zigbee_monitor(root: Path, app: Path, context: dict[str, Any]) -> N
         fail(f"{app.name}: deletion must rotate the installation token")
     if "self.monitor.reset_sources()" not in service_code:
         fail(f"{app.name}: reconnect must invalidate source observations")
+    if "discovery_from_bridge(" not in service_code or "DISCOVERY_FILTERS" not in service_code:
+        fail(f"{app.name}: verified MQTT bridge auto-discovery is mandatory")
     if "self.monitor.acknowledge_counts(snapshot)" not in service_code:
         fail(f"{app.name}: persisted activity must be acknowledged only after SQLite commit")
 
