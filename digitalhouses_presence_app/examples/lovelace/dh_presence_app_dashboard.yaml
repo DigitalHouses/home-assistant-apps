@@ -385,14 +385,24 @@ sections:
       - type: heading
         heading: Уведомления
         heading_style: title
+      - type: custom:auto-entities
+        card:
+          type: entities
+          title: Уведомления по зонам
+          show_header_toggle: false
+          state_color: true
+        filter:
+          include:
+            - entity_id: "switch.dh_presence_app_notify_zone_*"
+        sort:
+          method: name
+        show_empty: false
+        unique: true
       - type: entities
-        title: Уведомления присутствия
+        title: Источники
         show_header_toggle: false
         state_color: true
         entities:
-          - entity: switch.dh_presence_app_notify_presence
-            name: Прибытие / убытие
-            icon: mdi:home-account
           - entity: switch.dh_presence_app_notify_gps
             name: GPS · вход / выход
             icon: mdi:map-marker

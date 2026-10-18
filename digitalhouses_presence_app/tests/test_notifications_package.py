@@ -28,9 +28,9 @@ class NotificationPackageTests(unittest.TestCase):
 
     def test_seven_notified_event_types(self):
         code = PACKAGE.read_text(encoding="utf-8")
-        for event in ("arrival", "departure", "gps_in", "gps_out", "wifi_in", "wifi_lost", "wifi_out"):
+        for event in ("arrival", "departure", "gps_in", "gps_out", "wifi_in", "wifi_lost", "wifi_out", "zone_enter", "zone_leave"):
             self.assertIn("id: " + event, code)
-        self.assertEqual(code.count("trigger: event.received"), 7)
+        self.assertEqual(code.count("trigger: event.received"), 9)
         self.assertEqual(code.count("action: script.write2log"), 7)
         self.assertEqual(code.count("action: logbook.log"), 0)
         self.assertEqual(code.count("action: persistent_notification.create"), 0)
@@ -39,10 +39,11 @@ class NotificationPackageTests(unittest.TestCase):
 
     def test_three_mqtt_switches_gate_only_write2log_notifications(self):
         code = PACKAGE.read_text(encoding="utf-8")
-        self.assertEqual(code.count("entity_id: switch.dh_presence_app_notify_presence"), 2)
+        self.assertNotIn("switch.dh_presence_app_notify_presence", code)
+        self.assertEqual(code.count("trigger.to_state.attributes.zone_key"), 2)
         self.assertEqual(code.count("entity_id: switch.dh_presence_app_notify_gps"), 2)
         self.assertEqual(code.count("entity_id: switch.dh_presence_app_notify_wifi"), 3)
-        self.assertEqual(code.count('state: "on"'), 7)
+        self.assertEqual(code.count('state: "on"'), 5)
         self.assertEqual(code.count("action: script.write2log"), 7)
 
     def test_router_wifi_out_wording_and_unknown_without_false_claims(self):

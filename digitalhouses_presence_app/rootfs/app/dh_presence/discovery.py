@@ -1,16 +1,17 @@
 """Home Assistant single-device MQTT Discovery payload."""
 from .core import Resident
+from .zones import zone_key
 
 BASE = "DigitalHouses/Global/dh_presence_app"
 DISCOVERY = "homeassistant/device/dh_presence_app/config"
-EVENT_TYPES = ["arrival", "departure", "gps_in", "gps_out", "wifi_in", "wifi_out", "wifi_lost"]
+EVENT_TYPES = ["arrival", "departure", "gps_in", "gps_out", "wifi_in", "wifi_out", "wifi_lost", "zone_enter", "zone_leave"]
 
 
 def topic(suffix: str) -> str:
     return f"{BASE}/{suffix}"
 
 
-def discovery(version: str, residents: list[Resident]) -> dict:
+def discovery(version: str, residents: list[Resident], zones: dict[str, str] | None = None) -> dict:
     availability = {"topic": topic("availability"), "payload_available": "online", "payload_not_available": "offline"}
     aggregate = [availability, {"topic": topic("presence_observed"), "payload_available": "online", "payload_not_available": "offline"}]
     components = {
@@ -53,19 +54,6 @@ def discovery(version: str, residents: list[Resident]) -> dict:
             "state_topic": topic("mode/state"),
             "qos": 1,
             "retain": False,
-            "availability": availability
-        },
-        "notify_presence": {
-            "platform": "switch", "name": "Notify · Presence",
-            "unique_id": "dh_presence_app_notify_presence",
-            "default_entity_id": "switch.dh_presence_app_notify_presence",
-            "icon": "mdi:home-account",
-            "entity_category": "config",
-            "command_topic": topic("notifications/presence/set"),
-            "state_topic": topic("notifications/presence/state"),
-            "payload_on": "ON", "payload_off": "OFF",
-            "state_on": "ON", "state_off": "OFF",
-            "qos": 1, "retain": False,
             "availability": availability
         },
         "notify_gps": {
@@ -197,6 +185,20 @@ def discovery(version: str, residents: list[Resident]) -> dict:
             "state_class": "measurement", "suggested_display_precision": 2,
             "availability_mode": "all",
             "availability": [availability, {"topic": topic("distance/"+r.key+"/availability"), "payload_available": "online", "payload_not_available": "offline"}]
+        }
+    for entity_id, name in sorted((zones or {}).items()):
+        key = zone_key(entity_id)
+        components["notify_zone_" + key] = {
+            "platform": "switch", "name": "Уведомления · " + name,
+            "unique_id": "dh_presence_app_notify_zone_" + key,
+            "default_entity_id": "switch.dh_presence_app_notify_zone_" + key,
+            "icon": "mdi:home" if entity_id == "zone.home" else "mdi:map-marker",
+            "entity_category": "config",
+            "command_topic": topic("notifications/zones/" + key + "/set"),
+            "state_topic": topic("notifications/zones/" + key + "/state"),
+            "payload_on": "ON", "payload_off": "OFF",
+            "state_on": "ON", "state_off": "OFF",
+            "qos": 1, "retain": False, "availability": availability,
         }
     return {"device": {"identifiers": ["dh_presence_app"], "name": "DH Presence",
                        "manufacturer": "DigitalHouses", "model": "Presence App", "sw_version": version},

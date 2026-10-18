@@ -195,7 +195,9 @@ console.log('PASSED '+cases.length+' status scenarios');
     def test_notification_switches_visible_in_both_cards(self):
         for path in (CARD, DASHBOARD):
             s = path.read_text(encoding="utf-8")
-            for key in ("presence", "gps", "wifi"):
+            self.assertIn("switch.dh_presence_app_notify_zone_*", s)
+            self.assertNotIn("switch.dh_presence_app_notify_presence", s)
+            for key in ("gps", "wifi"):
                 self.assertIn("switch.dh_presence_app_notify_" + key, s)
 
     def test_router_tracker_replaces_legacy_detection_switches(self):
@@ -246,7 +248,7 @@ console.log('PASSED '+cases.length+' status scenarios');
                 self.assertIn(item, code)
         # The dynamically discovered resident ID is not a hardcoded key.
         self.assertNotIn("39fb60fca44a2aa6", code)
-        self.assertEqual(code.count("custom:auto-entities"), 2)
+        self.assertEqual(code.count("custom:auto-entities"), 3)
 
     def test_dynamic_mushroom_roster_has_names_states_and_transition_times(self):
         card = CARD.read_text(encoding="utf-8")
@@ -354,7 +356,7 @@ console.log('PASSED '+cases.length+' status scenarios');
         self.assertIn("attribute='wifi_tracker'", dashboard)
         self.assertIn("Зоны · количество людей", dashboard)
         self.assertIn("domain: zone", dashboard)
-        self.assertIn("Прибытие / убытие", dashboard)
+        self.assertIn("Уведомления по зонам", dashboard)
         self.assertIn("Wi-Fi · появление / исчезновение", dashboard)
         self.assertIn("DH Presence · все сущности и управление", dashboard)
         self.assertNotIn("Не обнаружен (ARP)", dashboard)

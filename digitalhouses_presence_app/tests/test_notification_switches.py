@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 from dh_presence.notifications import NotificationSelection, DEFAULTS, NOTIFICATION_KEYS
 from dh_presence.discovery import discovery, topic
+from dh_presence.zones import zone_key
 from dh_presence.core import Engine, Status
 from app import MqttOutput, publish_snapshot
 
@@ -27,15 +28,16 @@ class NotificationSwitchTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = str(Path(tmp) / "notification.json")
             first = NotificationSelection(path)
-            self.assertEqual(first.enabled, {"presence": True, "gps": False, "wifi": False})
-            self.assertFalse(first.change("presence", "ON"))
+            self.assertEqual(first.enabled, {"gps": False, "wifi": False})
+            first.sync_zones({"zone.home": "Дом"})
+            self.assertEqual(first.mqtt_state("zones/" + zone_key("zone.home")), "OFF")
             self.assertTrue(first.change("gps", "ON"))
             self.assertTrue(first.change("wifi", "ON"))
-            self.assertTrue(first.change("presence", "OFF"))
+            self.assertTrue(first.change("zones/" + zone_key("zone.home"), "ON"))
             again = NotificationSelection(path)
-            self.assertEqual(again.enabled, {"presence": False, "gps": True, "wifi": True})
-            self.assertEqual(json.loads(Path(path).read_text())["schema_version"], 1)
-            self.assertEqual(again.mqtt_state("presence"), "OFF")
+            self.assertEqual(again.enabled, {"gps": True, "wifi": True})
+            self.assertEqual(json.loads(Path(path).read_text())["schema_version"], 2)
+            self.assertEqual(again.mqtt_state("zones/" + zone_key("zone.home")), "ON")
             self.assertEqual(again.mqtt_state("wifi"), "ON")
 
     def test_invalid_or_corrupt_settings_fail_closed(self):
@@ -51,8 +53,11 @@ class NotificationSwitchTests(unittest.TestCase):
                 NotificationSelection(str(path))
 
     def test_mqtt_discovery_switches_share_device_and_use_no_retained_commands(self):
-        cfg = discovery("0.1.18", [])
+        cfg = discovery("0.1.27", [], {"zone.home": "Дом"})
         self.assertEqual(cfg["device"]["identifiers"], ["dh_presence_app"])
+        self.assertNotIn("notify_presence", cfg["components"])
+        zone = cfg["components"]["notify_zone_" + zone_key("zone.home")]
+        self.assertEqual(zone["command_topic"], topic("notifications/zones/" + zone_key("zone.home") + "/set"))
         for key in NOTIFICATION_KEYS:
             c = cfg["components"]["notify_" + key]
             self.assertEqual(c["platform"], "switch")
@@ -80,8 +85,10 @@ class NotificationSwitchTests(unittest.TestCase):
         self.assertTrue(output.notification_commands.empty())
         incoming("gps", b"ON")
         incoming("wifi", b"OFF")
+        incoming("zones/" + zone_key("zone.home"), b"ON")
         self.assertEqual(output.notification_commands.get_nowait(), ("gps", "ON"))
         self.assertEqual(output.notification_commands.get_nowait(), ("wifi", "OFF"))
+        self.assertEqual(output.notification_commands.get_nowait(), ("zones/" + zone_key("zone.home"), "ON"))
         self.assertTrue(output.notification_commands.empty())
 
     def test_snapshot_publishes_all_switch_states_without_suppressing_presence(self):
@@ -91,12 +98,13 @@ class NotificationSwitchTests(unittest.TestCase):
                           datetime.now(timezone.utc))
         with tempfile.TemporaryDirectory() as tmp:
             pref = NotificationSelection(str(Path(tmp) / "n.json"))
+            pref.sync_zones({"zone.home": "Дом"})
             output = FakeOutput()
             with patch("app.publish_controls", return_value=True):
                 self.assertTrue(publish_snapshot(output, e, "0.1.18", "2026-10-16T00:00:00+00:00",
-                                                 None, None, pref))
+                                                 None, None, pref, {"zone.home": "Дом"}))
             topics = dict(output.calls)
-            self.assertEqual(topics[topic("notifications/presence/state")], "ON")
+            self.assertEqual(topics[topic("notifications/zones/" + zone_key("zone.home") + "/state")], "OFF")
             self.assertEqual(topics[topic("notifications/gps/state")], "OFF")
             self.assertEqual(topics[topic("notifications/wifi/state")], "OFF")
             self.assertEqual(topics[topic("state")]["status"], "home")

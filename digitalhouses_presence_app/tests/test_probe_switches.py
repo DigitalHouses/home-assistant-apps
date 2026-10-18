@@ -14,7 +14,7 @@ class RetiredProbeControlsTests(unittest.TestCase):
         self.assertNotIn("ping", keys)
         self.assertNotIn("arp", keys)
         self.assertEqual({key for key in keys if key.startswith("notify_")},
-                         {"notify_presence", "notify_gps", "notify_wifi"})
+                         {"notify_gps", "notify_wifi"})
 
     def test_retired_entities_receive_discovery_cleanup(self):
         cfg=discovery("0.1.25", [])
