@@ -270,6 +270,29 @@ sections:
           {% endfor %}
           {% endif %}
       - type: heading
+        heading: Доступность устройств
+        heading_style: subtitle
+        icon: mdi:access-point-network
+      - type: markdown
+        content: |-
+          {% set entity = 'sensor.dh_zigbee_monitor_app_inventory_details' %}
+          {% set items = state_attr(entity, 'devices') or [] %}
+          {% if states(entity) != 'ready' %}
+          *Инвентаризация недоступна.*
+          {% else %}
+          **Всего:** {{ state_attr(entity, 'total') }}
+          **Без данных availability:** {{ state_attr(entity, 'availability_unknown') }}
+
+          | Устройство | Доступность | Причина |
+          |:--|:--|:--|
+          {% for item in items %}
+          | {{ item.name }} | {{ item.availability_label }} | {{ item.availability_reason_label or '—' }} |
+          {% endfor %}
+          {% if state_attr(entity, 'truncated') %}
+          *Список ограничен первыми 40 устройствами. Общее число указано выше.*
+          {% endif %}
+          {% endif %}
+      - type: heading
         heading: Offline-устройства
         heading_style: subtitle
         icon: mdi:lan-disconnect
