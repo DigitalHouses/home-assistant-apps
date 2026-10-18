@@ -1,7 +1,7 @@
 # DigitalHouses Zigbee Monitor App — installation and acceptance
 
-Version: **0.1.4 (experimental)**. Run only after the production GHCR image
-`ghcr.io/digitalhouses/digitalhouses_zigbee_monitor_app:0.1.4` is published
+Version: **0.1.5 (experimental)**. Run only after the production GHCR image
+`ghcr.io/digitalhouses/digitalhouses_zigbee_monitor_app:0.1.5` is published
 and verified by repository release workflows.
 
 ## Requirements
@@ -72,6 +72,37 @@ The first release computes discovered network counts, confirmed device and
 offline counts, MQTT-message activity rate and TOP lists. Unknown availability
 is never a real zero. The `spammers` and `incidents` scalar entities remain
 unavailable until the respective engines are implemented.
+
+## Питание, availability и активность MQTT
+
+App уже подписан на `<base_topic>/#` Zigbee2MQTT. Он читает из
+retained `bridge/devices` официальные поля `type` / `power_source`
+(например `Battery`, `Mains (single phase)`, `DC Source`)
+и показывает их в Recorder-excluded `inventory_details`.
+
+Для каждого IEEE фиксируется дата и время **последней наблюдаемой новой
+публикации MQTT** из его собственного топика; retained/MQTT DUP, события
+групп, служебные `bridge/*` и команды `/set`/`/get` игнорируются.
+Устройство может публиковать MQTT после получения Zigbee-сообщения,
+но эта временная отметка **не является** достоверным временем последней
+радиопередачи Zigbee. Чтобы получить именно это время, Zigbee2MQTT
+должен публиковать отдельный `advanced.last_seen`, а он по умолчанию
+выключен; App не изменяет эту настройку.
+
+Последний MQTT timestamp сохраняется в SQLite вместе с минутными
+агрегатами, без записи каждого сообщения. UI детали обновляются не чаще
+раза в минуту по активности. После перезапуска последнее значение берётся
+из SQLite; у устройств без наблюдений остаётся `null`.
+
+**Политика достоверности:** `availability` берётся исключительно из
+`<base_topic>/<friendly_name>/availability` Zigbee2MQTT, если такой
+статус поступал; без него статус остаётся `unknown`. Не подменяем
+`online` последним MQTT-сообщением и не создаём свои timeout/ping,
+особенно для батарейных EndDevice. Глобальный offline-счётчик остаётся
+`unavailable`, пока нет полной информации по каждой сети.
+
+Источник: https://www.zigbee2mqtt.io/guide/usage/mqtt_topics_and_messages.html
+и https://www.zigbee2mqtt.io/guide/configuration/device-availability.html
 
 ## Ручное «Обновить» (read-only)
 

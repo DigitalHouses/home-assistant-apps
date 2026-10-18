@@ -141,6 +141,45 @@ class ZigbeeMonitorUiDesignTests(unittest.TestCase):
             self.assertIn("Math.round(Math.max(0, t))", yaml_text)
             self.assertNotIn("t.toFixed(1)", yaml_text)
 
+    def test_all_dynamic_tables_use_html_not_fragile_markdown_pipes(self):
+        # Home Assistant renders Markdown-card Jinja before Marked.js.
+        # Jinja removes newlines around for/if tags; Markdown pipe tables then
+        # collapse into plain text, as seen in the 4-column HAOS dashboard.
+        # HTML tr/td structure is independent of output newlines.
+        cards = [card for sec in self.dashboard["sections"]
+                 for card in sec["cards"]
+                 if card.get("type") == "markdown"]
+        templated_tables = [card["content"] for card in cards
+                            if "<table>" in card["content"]]
+        self.assertEqual(len(templated_tables), 7)
+        for content in templated_tables:
+            with self.subTest(table=content[:60]):
+                self.assertEqual(content.count("<table>"), 1)
+                self.assertEqual(content.count("</table>"), 1)
+                self.assertEqual(content.count("<thead>"), 1)
+                self.assertEqual(content.count("<tbody>"), 1)
+                self.assertEqual(content.count("</tbody>"), 1)
+                self.assertIn("<tr>", content)
+                self.assertIn("</tr>", content)
+                self.assertIn("<td>", content)
+                self.assertIn("</td>", content)
+                self.assertIn("{% for ", content)
+                self.assertNotRegex(content, r"(?m)^\s*\|")
+        self.assertIn("item.power_label", self.raw_dashboard)
+        self.assertIn("item.last_mqtt_message_at[5:16]", self.raw_dashboard)
+        self.assertIn("availability_reason_label", self.raw_dashboard)
+        self.assertNotIn("tojson", self.raw_dashboard)
+
+    def test_power_and_mqtt_activity_are_only_inventory_attributes(self):
+        self.assertIn("item.power_label", self.raw_dashboard)
+        self.assertIn("item.last_mqtt_message_at", self.raw_dashboard)
+        self.assertIn("Последний MQTT", self.raw_dashboard)
+        self.assertIn("sensor.dh_zigbee_monitor_app_inventory_details",
+                      self.recorder["exclude"]["entities"])
+        self.assertEqual(
+            set(self.recorder["include"]["entities"]), HISTORICAL,
+        )
+
     def test_inventory_diagnostics_are_ui_only(self):
         self.assertIn("availability_reason_label", self.raw_dashboard)
         self.assertIn("availability_unknown", self.raw_dashboard)
@@ -171,7 +210,7 @@ class ZigbeeMonitorUiDesignTests(unittest.TestCase):
         self.assertEqual((APP / "digitalhouses.app").read_text().strip(), "type = haos_addon")
         config = yaml.safe_load((APP / "config.yaml").read_text(encoding="utf-8"))
         self.assertEqual(config["slug"], "digitalhouses_zigbee_monitor_app")
-        self.assertEqual(config["version"], "0.1.4")
+        self.assertEqual(config["version"], "0.1.5")
         self.assertEqual(config["stage"], "experimental")
 
 
