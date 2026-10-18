@@ -286,7 +286,15 @@ class MonitorService:
                 availability, reason = self._availability_diagnostic(
                     config.network_id, device.ieee_address,
                 )
+                labels = {"online": "В сети", "offline": "Не в сети", "unknown": "Нет данных"}
+                reasons = {
+                    "bridge_unavailable": "Zigbee2MQTT недоступен",
+                    "inventory_missing": "Нет инвентаризации Zigbee2MQTT",
+                    "availability_not_reported": "Нет сообщения availability",
+                }
                 rows.append({
+                    "availability_label": labels.get(availability, "Нет данных"),
+                    "availability_reason_label": reasons.get(reason) if reason else None,
                     "ieee_address": device.ieee_address,
                     "network_id": config.network_id,
                     "network_name": config.name,
