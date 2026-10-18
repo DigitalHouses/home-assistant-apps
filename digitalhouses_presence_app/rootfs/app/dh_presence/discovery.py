@@ -94,28 +94,6 @@ def discovery(version: str, residents: list[Resident]) -> dict:
             "qos": 1, "retain": False,
             "availability": availability
         },
-        "ping": {
-            "platform": "switch", "name": "Detection · PING",
-            "unique_id": "dh_presence_app_ping",
-            "default_entity_id": "switch.dh_presence_app_ping",
-            "icon": "mdi:lan-connect", "entity_category": "config",
-            "command_topic": topic("probes/ping/set"),
-            "state_topic": topic("probes/ping/state"),
-            "payload_on": "ON", "payload_off": "OFF",
-            "state_on": "ON", "state_off": "OFF",
-            "qos": 1, "retain": False, "availability": availability
-        },
-        "arp": {
-            "platform": "switch", "name": "Detection · ARP",
-            "unique_id": "dh_presence_app_arp",
-            "default_entity_id": "switch.dh_presence_app_arp",
-            "icon": "mdi:lan-check", "entity_category": "config",
-            "command_topic": topic("probes/arp/set"),
-            "state_topic": topic("probes/arp/state"),
-            "payload_on": "ON", "payload_off": "OFF",
-            "state_on": "ON", "state_off": "OFF",
-            "qos": 1, "retain": False, "availability": availability
-        },
         "card": {
             "platform": "sensor", "name": "Operation status",
             "unique_id": "dh_presence_app_card", "default_entity_id": "sensor.dh_presence_app_card",
@@ -203,7 +181,7 @@ def discovery(version: str, residents: list[Resident]) -> dict:
             "state_topic": topic("state"),
             "value_template": "{{ 'ON' if value_json.residents['" + r.key + "'].wifi == 'home' else ('OFF' if value_json.residents['" + r.key + "'].wifi == 'not_home' else 'None') }}",
             "json_attributes_topic": topic("state"),
-            "json_attributes_template": "{{ {'wifi_last_verified_at': value_json.residents['" + r.key + "'].wifi_last_verified_at, 'wifi_last_probe_at': value_json.residents['" + r.key + "'].wifi_last_probe_at, 'wifi_probe_result': value_json.residents['" + r.key + "'].wifi_probe_result} | tojson }}",
+            "json_attributes_template": "{{ {'wifi_last_verified_at': value_json.residents['" + r.key + "'].wifi_last_verified_at, 'wifi_last_probe_at': value_json.residents['" + r.key + "'].wifi_last_probe_at, 'wifi_probe_result': value_json.residents['" + r.key + "'].wifi_probe_result, 'wifi_source': value_json.residents['" + r.key + "'].wifi_source} | tojson }}",
             "payload_on": "ON", "payload_off": "OFF",
             "availability_mode": "all",
             "availability": [
