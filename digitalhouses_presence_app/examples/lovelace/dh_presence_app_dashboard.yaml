@@ -302,7 +302,6 @@ sections:
         heading: Жильцы
         icon: mdi:account-group
       - type: markdown
-        title: "📱 Зарегистрированные телефоны"
         content: >-
           {%- set roster =
             state_attr('binary_sensor.dh_presence_app_residents_home', 'residents')
@@ -318,8 +317,8 @@ sections:
                 {%- set indent = '   ' if last else '│  ' -%}
                 {%- set ns.lines = ns.lines + [
                   ('└─' if last else '├─') ~ ' 📱 ' ~ phone.registration_label,
-                  indent ~ '├─ GPS · ' ~ phone.gps_tracker,
-                  indent ~ '└─ Wi-Fi · ' ~ (phone.wifi_tracker or 'не привязан')
+                  indent ~ '├─ GPS · ' ~ (phone.gps_tracker | replace('device_tracker.', '')),
+                  indent ~ '└─ Wi-Fi · ' ~ ((phone.wifi_tracker | replace('device_tracker.', '')) if phone.wifi_tracker else 'не привязан')
                 ] -%}
               {%- endfor -%}
               {{ '```text\n' ~ (ns.lines | join('\n')) ~ '\n```' }}
