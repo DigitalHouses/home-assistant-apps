@@ -16,7 +16,7 @@ from typing import Any, Callable, Mapping
 from .core import ZigbeeMonitor, ZigbeeMonitorError
 from .autodiscovery import DISCOVERY_FILTERS, discovery_from_bridge
 from .discovery import (
-    APP_AVAILABILITY, DETAILS, DISCOVERY, HA_STATUS, HISTORY, ROOT,
+    APP_AVAILABILITY, DETAILS, DISCOVERY, EVENT_TOPIC, HA_STATUS, HISTORY, ROOT,
     build_discovery, state_topic, validity_topic,
 )
 from .storage import ActivityStore
@@ -62,6 +62,10 @@ class MonitorService:
         self._last_flush_minute: int | None = None
         self._last_trim_day: int | None = None
         self._offline_since: dict[tuple[str, str], str | None] = {}
+        # Separate event baselines. Retained MQTT is authoritative state
+        # recovery, not evidence of a new transition; never emit on cold boot.
+        self._event_bridge_state: dict[str, str] = {}
+        self._event_device_state: dict[tuple[str, str], str] = {}
         self._refresh_pending: set[str] | None = None
         self._refresh_bridge_pending: set[str] | None = None
         self._refresh_started: float | None = None
@@ -107,6 +111,19 @@ class MonitorService:
         payload: dict[str, object] = {"state": "ready", key_name: rows, **meta}
         if self._send(state_topic(key), _json(payload)):
             self._validity(key, True)
+
+    def _emit_event(self, event_type: str, **facts: object) -> None:
+        """Transient machine fact after the retained source state is published.
+
+        MQTT transport uses QoS 1. Event payloads are never retained, never
+        localized and never used as substitutes for durable current state.
+        """
+        event = {
+            "schema_version": 1, "event_type": event_type,
+            "observed_at": _iso(self.now()), **facts,
+        }
+        if not self.publish(EVENT_TOPIC, _json(event), False):
+            log.warning("Failed to publish Zigbee Monitor machine event: %s", event_type)
 
     def _publish_card(self) -> None:
         self._send(state_topic("card"), _json(self._card))
@@ -213,6 +230,8 @@ class MonitorService:
                 }
                 self._card_success_until = None
             self._offline_since.clear()
+            self._event_bridge_state.clear()
+            self._event_device_state.clear()
             # Persist unavailability first; stale retained data remains hidden
             # until each source is re-observed after reconnect.
             for key in (*HISTORY, *DETAILS):
@@ -239,6 +258,8 @@ class MonitorService:
             self._continuous_since = None
             self._published.clear()
             self._valid.clear()
+            self._event_bridge_state.clear()
+            self._event_device_state.clear()
 
     def _all_live(self) -> bool:
         return bool(self.monitor.networks) and all(
@@ -273,10 +294,14 @@ class MonitorService:
             complete = (status["inventory_observed"]
                         and status["bridge_state"] == "online"
                         and all(reason is None for _, reason in observed))
+            confirmed_offline = sum(a == "offline" and reason is None
+                                    for a, reason in observed)
             rows.append({
                 "network_id": config.network_id, "name": config.name,
                 "status": status["bridge_state"], "devices": status["devices"],
-                "offline": sum(a == "offline" for a, _ in observed) if complete else None,
+                # A positive value is a guaranteed lower bound, even with
+                # unknown peers. Zero is only valid with complete coverage.
+                "offline": confirmed_offline if complete or confirmed_offline else None,
                 "availability_complete": complete,
                 "availability_unknown": sum(reason is not None for _, reason in observed),
             })
@@ -351,11 +376,17 @@ class MonitorService:
                     (str(row["network_id"]), str(row["ieee_address"]))
                 ),
             }
-            for row in rows if row["availability"] == "offline"
-        ] if complete else []
-        self._scalar("offline", len(offline) if complete else None)
-        self._detail("offline_details", "devices", offline[:40], valid=complete,
-                     total=len(offline), truncated=len(offline) > 40)
+            for row in rows
+            if row["availability"] == "offline" and row["availability_reason"] is None
+        ] if live else []
+        # A confirmed offline remains visible even if another device has not
+        # reported availability. Unknown-only still never becomes fake zero.
+        self._scalar("offline", len(offline) if complete or offline else None)
+        self._detail(
+            "offline_details", "devices", offline[:40], valid=live,
+            total=len(offline), truncated=len(offline) > 40,
+            availability_complete=complete, availability_unknown=unknown,
+        )
         if live and self._continuous_since is None:
             self._continuous_since = self.now()
         elif not live:
@@ -550,6 +581,11 @@ class MonitorService:
                         self._refresh_pending.add(network.network_id)
                         if self._refresh_bridge_pending is not None:
                             self._refresh_bridge_pending.add(network.network_id)
+                    # The new route needs a fresh event baseline.
+                    self._event_bridge_state.pop(network.network_id, None)
+                    for identity in list(self._event_device_state):
+                        if identity[0] == network.network_id:
+                            self._event_device_state.pop(identity, None)
                     if not self.subscribe(network.base_topic + "/#"):
                         log.error("Failed to subscribe to discovered %s", network.base_topic)
                     self._publish_networks()
@@ -570,6 +606,28 @@ class MonitorService:
             if sample.kind == "bridge_state" and self._refresh_bridge_pending is not None:
                 assert sample.network_id is not None
                 self._refresh_bridge_pending.discard(sample.network_id)
+            event: tuple[str, dict[str, object]] | None = None
+            if sample.kind == "bridge_state" and sample.network_id:
+                network_id = sample.network_id
+                current = str(self.monitor.network_status(network_id)["bridge_state"])
+                previous = self._event_bridge_state.get(network_id)
+                self._event_bridge_state[network_id] = current
+                if current == "offline":
+                    # Prevent a bridge restart from creating hundreds of
+                    # synthetic device "recovered" transitions.
+                    for identity in list(self._event_device_state):
+                        if identity[0] == network_id:
+                            self._event_device_state.pop(identity, None)
+                if previous in ("online", "offline") and previous != current and not retain and not dup:
+                    net = next(n for n in self.monitor.networks if n.network_id == network_id)
+                    event = (
+                        "zigbee2mqtt_online" if current == "online" else "zigbee2mqtt_offline",
+                        {
+                            "network_id": network_id, "base_topic": net.base_topic,
+                            "previous_state": previous, "current_state": current,
+                            "severity": "info" if current == "online" else "warning",
+                        },
+                    )
             if sample.kind == "device_availability" and sample.network_id and sample.ieee_address:
                 identity = sample.network_id, sample.ieee_address
                 current = self.monitor.availability(*identity)
@@ -579,10 +637,29 @@ class MonitorService:
                     )
                 else:
                     self._offline_since.pop(identity, None)
+                status = self.monitor.network_status(identity[0])
+                if status["bridge_state"] == "online" and status["inventory_observed"]:
+                    previous = self._event_device_state.get(identity)
+                    self._event_device_state[identity] = current
+                    if previous in ("online", "offline") and previous != current and not retain and not dup:
+                        device = self.monitor.get_device(*identity)
+                        assert device is not None
+                        event = (
+                            "device_online" if current == "online" else "device_offline",
+                            {
+                                "network_id": identity[0],
+                                "ieee_address": identity[1],
+                                "friendly_name": device.friendly_name,
+                                "previous_state": previous, "current_state": current,
+                                "severity": "info" if current == "online" else "warning",
+                            },
+                        )
             if sample.kind in ("inventory", "bridge_state", "device_availability"):
                 self._publish_networks()
                 self._publish_inventory_and_availability()
                 self._try_complete_refresh()
+                if event is not None:
+                    self._emit_event(event[0], **event[1])
             return sample.kind
 
 
