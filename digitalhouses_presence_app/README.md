@@ -1,8 +1,16 @@
 # DigitalHouses Presence App
 
-**Status: GPS + HA router device_tracker Wi-Fi pilot, version 0.1.35.** Observe router tracker stability before safety-critical automations.
+**Status: GPS + HA router device_tracker Wi-Fi pilot, version 0.1.36.** Observe router tracker stability before safety-critical automations.
 
 This application belongs to `DigitalHouses/home-assistant-apps/digitalhouses_presence_app` and is installed via **Settings → Apps → App Store**.
+
+## Локальное время без смещения (0.1.36)
+
+Под GPS и Wi-Fi `Статус с` теперь отображает **только локальные дату и время HA**: `19.10.2026 01:12`. Часовой пояс берётся из настройки `time_zone` Home Assistant и применяется **внутри App** до формирования MQTT `tree`. Ни `+05`, ни `UTC`, ни другие текстовые обозначения зон не добавляются. На летнем/зимнем времени HA применяется корректное смещение, но не выводится в дереве.
+
+Если App временно не может определить часовой пояс HA, он пишет `местное время недоступно` вместо потенциально неправильного UTC и перепроверяет конфигурацию примерно раз в пять минут. Отсутствующий timestamp самого источника по-прежнему `нет данных`, отсутствие привязанного Wi-Fi — `не применимо`.
+
+Обновить App до **0.1.36**. YAML карточки не требуется менять: App продолжает публиковать тот же диагностический `sensor.dh_presence_app_registered_phones`. Сохраняйте исключение этого сенсора из Recorder.
 
 ## Время текущего статуса в дереве (0.1.35)
 

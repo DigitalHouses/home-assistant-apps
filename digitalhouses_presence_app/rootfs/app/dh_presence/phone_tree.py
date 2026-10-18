@@ -8,7 +8,7 @@ diagnostic entity must be excluded from Recorder.
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone, tzinfo
+from datetime import datetime, tzinfo
 
 from dh_presence.core import Resident, Status
 
@@ -29,16 +29,19 @@ def _presence_label(status: Status) -> str:
     return "⚪ Недоступно"
 
 
-def _since(value: datetime | None, local_tz: tzinfo) -> str:
-    """HA-local time of the last source state change, never the latest poll."""
+def _since(value: datetime | None, local_tz: tzinfo | None) -> str:
+    """Show HA-local wall time, without a redundant timezone/UTC offset suffix."""
     if value is None or value.tzinfo is None or value.utcoffset() is None:
         return "нет данных"
-    return value.astimezone(local_tz).strftime("%d.%m.%Y %H:%M %Z")
+    if local_tz is None:
+        # Never misrepresent a UTC time as HA-local if Core config is missing.
+        return "местное время недоступно"
+    return value.astimezone(local_tz).strftime("%d.%m.%Y %H:%M")
 
 
 def registered_phones_tree(registrations: list[dict],
                            residents: list[Resident], *,
-                           local_tz: tzinfo = timezone.utc) -> dict:
+                           local_tz: tzinfo | None = None) -> dict:
     """Build a live source-status tree with source transition timestamps."""
     permitted = {r.tracker: r for r in residents if r.registered}
     eligible = sorted(

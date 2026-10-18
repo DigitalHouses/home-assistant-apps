@@ -45,16 +45,16 @@ class TestDashboardRegistrationTree(unittest.TestCase):
             "Зарегистрированные телефоны",
             "├─ 📲 Alina (iPhone)",
             "│  ├─ GPS · 🟠 Не дома · alina",
-            "│  │  └─ Статус с · 19.10.2026 04:45 +05",
+            "│  │  └─ Статус с · 19.10.2026 04:45",
             "│  ├─ Wi-Fi · ⚪ Не привязан",
             "│  │  └─ Статус с · не применимо",
             "│  ├─ IP (рег.) · 192.168.8.55",
             "│  └─ MAC (рег.) · 8a:43:3e:74:09:83",
             "└─ 📲 Serzhan (13ProMAX .SKY)",
             "   ├─ GPS · 🟢 Дома · s_iphone",
-            "   │  └─ Статус с · 19.10.2026 01:12 +05",
+            "   │  └─ Статус с · 19.10.2026 01:12",
             "   ├─ Wi-Fi · 🟠 Не дома · s_router",
-            "   │  └─ Статус с · 19.10.2026 01:25 +05",
+            "   │  └─ Статус с · 19.10.2026 01:25",
             "   ├─ IP (рег.) · 192.168.8.54",
             "   └─ MAC (рег.) · 88:b9:45:80:a7:55",
         ])
@@ -79,17 +79,53 @@ class TestDashboardRegistrationTree(unittest.TestCase):
         r.wifi = Status.NOT_HOME
         r.wifi_changed_at = before + timedelta(minutes=20)
         tree = registered_phones_tree([row], [r], local_tz=ZoneInfo("Asia/Almaty"))["tree"]
-        self.assertIn("GPS · 🟢 Дома · p\n   │  └─ Статус с · 19.10.2026 01:10 +05", tree)
-        self.assertIn("Wi-Fi · 🟠 Не дома · router\n   │  └─ Статус с · 19.10.2026 01:30 +05", tree)
+        self.assertIn("GPS · 🟢 Дома · p\n   │  └─ Статус с · 19.10.2026 01:10", tree)
+        self.assertIn("Wi-Fi · 🟠 Не дома · router\n   │  └─ Статус с · 19.10.2026 01:30", tree)
         # Another ordinary poll without a source change must not rewrite
         # timestamps in the App-prepared tree/retained MQTT state.
         self.assertEqual(tree, registered_phones_tree([row], [r],
                          local_tz=ZoneInfo("Asia/Almaty"))["tree"])
-        self.assertIn("20:10 UTC", registered_phones_tree([row], [r])["tree"])
+        self.assertIn("18.10.2026 20:10", registered_phones_tree([row], [r],
+                         local_tz=ZoneInfo("UTC"))["tree"])
         # Unknown: no invented timestamp from the current clock.
         r.gps_changed_at = None
         missing = registered_phones_tree([row], [r])["tree"]
         self.assertIn("GPS · 🟢 Дома · p\n   │  └─ Статус с · нет данных", missing)
+
+    def test_local_timezone_is_required_for_unlabeled_wall_time(self):
+        engine = Engine()
+        engine.add("device_tracker.p", "iPhone", registered=True)
+        r = engine.residents["device_tracker.p"]
+        r.gps = Status.HOME
+        r.gps_changed_at = datetime(2026, 10, 18, 20, 10, tzinfo=timezone.utc)
+        row = enrolled("device_tracker.p", "iPhone")
+        # No HA timezone means we must not show UTC as if it were local.
+        hidden = registered_phones_tree([row], [r])["tree"]
+        self.assertIn("GPS · 🟢 Дома · p\n   │  └─ Статус с · местное время недоступно",
+                      hidden)
+        # When HA timezone is configured, use local wall time only.
+        local = registered_phones_tree([row], [r],
+                                      local_tz=ZoneInfo("Asia/Almaty"))["tree"]
+        self.assertIn("Статус с · 19.10.2026 01:10", local)
+        self.assertNotIn("+05", local)
+        self.assertNotIn("UTC", local)
+        self.assertNotIn("20:10", local)
+
+    def test_dst_local_time_has_no_zone_or_offset_suffix(self):
+        engine = Engine()
+        engine.add("device_tracker.p", "iPhone", registered=True)
+        r = engine.residents["device_tracker.p"]
+        r.gps = Status.HOME
+        row = enrolled("device_tracker.p", "iPhone")
+        berlin = ZoneInfo("Europe/Berlin")
+        r.gps_changed_at = datetime(2026, 7, 1, 12, 15, tzinfo=timezone.utc)
+        summer = registered_phones_tree([row], [r], local_tz=berlin)["tree"]
+        self.assertIn("Статус с · 01.07.2026 14:15", summer)
+        self.assertNotIn("CEST", summer)
+        r.gps_changed_at = datetime(2026, 1, 1, 12, 15, tzinfo=timezone.utc)
+        winter = registered_phones_tree([row], [r], local_tz=berlin)["tree"]
+        self.assertIn("Статус с · 01.01.2026 13:15", winter)
+        self.assertNotIn("CET", winter)
 
     def test_missing_wifi_binding_has_no_fictional_change_time(self):
         engine = Engine()
@@ -118,9 +154,9 @@ class TestDashboardRegistrationTree(unittest.TestCase):
         self.assertEqual(events, [])
         self.assertIs(resident.wifi, Status.UNAVAILABLE)
         self.assertEqual(resident.wifi_changed_at, new_time)
-        doc = registered_phones_tree([row], [resident])["tree"]
+        doc = registered_phones_tree([row], [resident], local_tz=ZoneInfo("UTC"))["tree"]
         self.assertIn("Wi-Fi · ⚪ Недоступно · new_router", doc)
-        self.assertIn("Статус с · 18.10.2026 20:00 UTC", doc)
+        self.assertIn("Статус с · 18.10.2026 20:00", doc)
         # An unchanged unavailable state does not reset the transition time.
         poll_router_trackers(engine, [row], [], new_time + timedelta(minutes=3))
         self.assertEqual(resident.wifi_changed_at, new_time)
@@ -226,7 +262,7 @@ class TestDashboardRegistrationTree(unittest.TestCase):
             phone_time_zone=ZoneInfo("Asia/Almaty")))
         updated = dict((c.args[0], c.args[1]) for c in mqtt.publish.call_args_list)
         self.assertIn("GPS · 🟢 Дома · p", updated[topic("registrations/tree")]["tree"])
-        self.assertIn("Статус с · 19.10.2026 01:33 +05",
+        self.assertIn("Статус с · 19.10.2026 01:33",
                       updated[topic("registrations/tree")]["tree"])
         self.assertIn("Wi-Fi · ⚪ Не привязан", updated[topic("registrations/tree")]["tree"])
         self.assertEqual(updated[topic("registrations/tree")]["count"], 1)
