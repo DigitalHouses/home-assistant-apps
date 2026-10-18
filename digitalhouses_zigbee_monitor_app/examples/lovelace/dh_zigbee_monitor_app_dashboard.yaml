@@ -29,7 +29,6 @@ sections:
               - sensor.dh_zigbee_monitor_app_incidents
               - sensor.dh_zigbee_monitor_app_devices
               - sensor.dh_zigbee_monitor_app_inventory_details
-              - sensor.dh_zigbee_monitor_app_offline
               - update.digitalhouses_zigbee_monitor_app_update
             update_timer: |
               [[[
@@ -111,9 +110,17 @@ sections:
                 this._dh_zigbee_timer = null;
                 if (item.state === 'error') return 'Ошибка: ' + (a.error || 'нет подробностей');
                 if (item.state === 'success') {
-                  const t = Number(a.duration_seconds);
-                  return 'Готово' + (Number.isFinite(t) && a.duration_seconds !== null
-                    ? ' · ' + t.toFixed(1).replace('.', ',') + ' сек' : '');
+                  const t = a.duration_seconds;
+                  const seconds = typeof t === 'number' && Number.isFinite(t)
+                    ? Math.round(Math.max(0, t)) : null;
+                  const duration = seconds === null ? '' : ' · ' + (seconds >= 60
+                    ? Math.floor(seconds / 60) + ' мин ' + String(seconds % 60).padStart(2, '0') + ' сек'
+                    : seconds + ' сек');
+                  const hasUpdate = states['binary_sensor.dh_zigbee_monitor_app_update_available']?.state === 'on';
+                  const result = a.operation === 'check'
+                    ? (hasUpdate ? 'Доступна новая версия' : 'Версия проверена')
+                    : a.operation === 'refresh' ? 'Данные обновлены' : 'Готово';
+                  return result + duration;
                 }
                 if (states['binary_sensor.dh_zigbee_monitor_app_update_available']?.state === 'on')
                   return 'Доступна новая версия';
@@ -193,7 +200,7 @@ sections:
                     entity_id: button.dh_zigbee_monitor_app_check_updates
               - type: conditional
                 conditions:
-                  - entity: update.digitalhouses_zigbee_monitor_app_update
+                  - entity: binary_sensor.dh_zigbee_monitor_app_update_available
                     state: "on"
                 chip:
                   type: template
@@ -201,15 +208,11 @@ sections:
                   icon_color: orange
                   content: Новая версия
                   tap_action:
-                    action: perform-action
-                    perform_action: update.install
-                    target:
-                      entity_id: update.digitalhouses_zigbee_monitor_app_update
-                    data:
-                      backup: true
-                    confirmation:
-                      text: Установить обновление Zigbee Monitor? Мониторинг будет временно прерван.
-              - type: template
+
+                    action: navigate
+
+                    navigation_path: /hassio/addon/8133339d_digitalhouses_zigbee_monitor_app/info
+- type: template
                 icon: mdi:restart
                 content: Перезапуск
                 tap_action:
