@@ -261,16 +261,18 @@ class ZigbeeMonitor:
                 _decode_json(payload, "bridge/devices"), network_id,
             )
             changed = network.devices != new_devices or network.topics != new_topics
+            # Invalidate cached availability if an IEEE moved to a new topic.
+            # A retained availability packet for the new topic will restore it.
+            old_devices = network.devices
+            preserved = {
+                ieee: state for ieee, state in network.availability.items()
+                if ieee in old_devices and ieee in new_devices
+                and old_devices[ieee].friendly_name == new_devices[ieee].friendly_name
+            }
             # Make changes atomically; bad inventories cannot wipe a known-good roster.
             network.devices = new_devices
             network.topics = new_topics
-            network.availability = {
-                ieee: state for ieee, state in network.availability.items()
-                if ieee in new_devices and (
-                    ieee in new_devices and network.devices[ieee].friendly_name ==
-                    self._last_friendly_name_placeholder(new_devices[ieee])
-                )
-            }
+            network.availability = preserved
             network.inventory_observed = True
             return Observation("inventory", network_id, inventory_changed=changed)
 
@@ -297,7 +299,3 @@ class ZigbeeMonitor:
             return Observation("device_control_or_unknown", network_id)
         return Observation("unmapped_message", network_id)
 
-    @staticmethod
-    def _last_friendly_name_placeholder(device: Device) -> str:
-        """Placeholder method will be removed after pairing old/new identity."""
-        return device.friendly_name
