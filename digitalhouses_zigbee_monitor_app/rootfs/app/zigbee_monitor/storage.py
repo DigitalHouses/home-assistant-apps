@@ -41,7 +41,9 @@ class ActivityStore:
     def __init__(self, db_path: Path | str) -> None:
         self.path = Path(db_path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        # MQTT callbacks and the aggregation worker share this connection.\n        # MonitorService serializes every operation with a single RLock.\n        self.conn = sqlite3.connect(str(self.path), timeout=10.0, check_same_thread=False)
+        # MQTT callbacks and the aggregation worker share this connection.
+        # MonitorService serializes every operation with a single RLock.
+        self.conn = sqlite3.connect(str(self.path), timeout=10.0, check_same_thread=False)
         self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.executescript(_SCHEMA)
         self.conn.commit()
