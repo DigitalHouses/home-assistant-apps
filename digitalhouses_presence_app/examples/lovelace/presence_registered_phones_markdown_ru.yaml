@@ -8,8 +8,11 @@ content: |-
   {% set devices = roster.values() | selectattr('registered') | list -%}
   {% if devices -%}
   {% for phone in devices -%}
-  - **{{ phone.registration_label }}**  
-    GPS: `{{ phone.gps_tracker }}` · Wi-Fi: {% if phone.wifi_tracker %}`{{ phone.wifi_tracker }}`{% else %}не привязан{% endif %}
+  {% if not loop.first -%}
+  ────────────────────────────  
+  {% endif -%}
+  **{{ phone.registration_label }}**  
+  GPS: `{{ phone.gps_tracker }}` · Wi-Fi: {% if phone.wifi_tracker %}`{{ phone.wifi_tracker }}`{% else %}не привязан{% endif %}  
   {% endfor -%}
   {% else -%}
   _Нет зарегистрированных телефонов._
