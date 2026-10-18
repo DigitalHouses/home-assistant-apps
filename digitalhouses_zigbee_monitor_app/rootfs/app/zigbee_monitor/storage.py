@@ -252,8 +252,12 @@ class ActivityStore:
                 "started_at": _incident_iso(started),
                 "resolved_at": _incident_iso(ended),
                 "resolution_source": source,
-                "duration_seconds": (max(0, ended - started)
-                                     if ended is not None and started is not None else None),
+                "duration_seconds": (
+                    max(0, ended - started)
+                    if ended is not None and started is not None
+                    and source == "live_transition"
+                    else None
+                ),
             }
 
         total = int(self.conn.execute(
