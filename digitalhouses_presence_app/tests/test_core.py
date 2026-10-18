@@ -50,6 +50,36 @@ class TestEngine(unittest.TestCase):
         events = e.gps_observation("device_tracker.iphone", Status.NOT_HOME, T0 + timedelta(days=2, seconds=1))
         self.assertEqual([x["event_type"] for x in events], ["gps_out", "departure"])
 
+    def test_gps_unavailable_transition_time_is_not_previous_home_time(self):
+        e = self.engine()
+        tracker = "device_tracker.iphone"
+        resident = e.residents[tracker]
+        e.gps_observation(tracker, Status.HOME, T0, distance=0.13)
+        self.assertEqual(resident.gps_changed_at, T0)
+        unavailable_at = T0 + timedelta(hours=2)
+        e.gps_unavailable(tracker, unavailable_at)
+        self.assertIs(resident.gps, Status.UNAVAILABLE)
+        self.assertEqual(resident.gps_changed_at, unavailable_at)
+        self.assertIsNone(resident.distance)
+        self.assertEqual(resident.last_gps_at, T0)
+        # Repeated outage polling does not fabricate a new transition time.
+        e.gps_unavailable(tracker, unavailable_at + timedelta(minutes=1))
+        self.assertEqual(resident.gps_changed_at, unavailable_at)
+        self.assertIs(e.overall(), Status.HOME)  # Durable presence is preserved.
+        # Restored old HA last-known home is new to the live source, not an
+        # invented physical arrival from GPS UNAVAILABLE.
+        self.assertEqual(e.gps_observation(tracker, Status.HOME, T0), [])
+        self.assertIs(resident.gps, Status.HOME)
+        self.assertEqual(resident.gps_changed_at, T0)
+
+    def test_unknown_gps_unavailable_without_prior_state_has_no_start_time(self):
+        e = self.engine()
+        tracker = "device_tracker.iphone"
+        e.gps_unavailable(tracker, T0)
+        self.assertIsNone(e.residents[tracker].gps_changed_at)
+        with self.assertRaisesRegex(ValueError, "Timezone-aware"):
+            e.gps_unavailable(tracker, datetime(2026, 10, 14))
+
     def test_idle_phone_in_hybrid_mode_does_not_become_away(self):
         e = self.engine(Mode.HYBRID)
         e.gps_observation("device_tracker.iphone", Status.HOME, T0)
