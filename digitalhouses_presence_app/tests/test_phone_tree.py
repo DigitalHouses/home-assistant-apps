@@ -9,6 +9,7 @@ from app import publish_snapshot
 from dh_presence.core import Engine, Status
 from dh_presence.discovery import discovery, topic
 from dh_presence.phone_tree import registered_phones_tree
+from dh_presence.router import poll_router_trackers
 
 
 def enrolled(tracker, name, *, ip="192.168.8.54", mac="88:b9:45:80:a7:55",
@@ -100,6 +101,29 @@ class TestDashboardRegistrationTree(unittest.TestCase):
         tree = registered_phones_tree([row], [r])["tree"]
         self.assertIn("Wi-Fi · ⚪ Не привязан\n   │  └─ Статус с · не применимо", tree)
         self.assertNotIn("20:15 UTC", tree)
+
+    def test_wifi_binding_change_timestamps_unknown_instead_of_old_home(self):
+        engine = Engine()
+        engine.add("device_tracker.p", "iPhone", registered=True)
+        resident = engine.residents["device_tracker.p"]
+        resident.wifi = Status.HOME
+        resident.wifi_tracker_id = "device_tracker.old_router"
+        original = datetime(2026, 10, 18, 19, 0, tzinfo=timezone.utc)
+        resident.wifi_changed_at = original
+        new_time = original + timedelta(hours=1)
+        row = enrolled("device_tracker.p", "iPhone", wifi="device_tracker.new_router")
+        # New binding is temporarily missing from HA; it cannot inherit
+        # the old router's previous Wi-Fi HOME timestamp.
+        events = poll_router_trackers(engine, [row], [], new_time)
+        self.assertEqual(events, [])
+        self.assertIs(resident.wifi, Status.UNAVAILABLE)
+        self.assertEqual(resident.wifi_changed_at, new_time)
+        doc = registered_phones_tree([row], [resident])["tree"]
+        self.assertIn("Wi-Fi · ⚪ Недоступно · new_router", doc)
+        self.assertIn("Статус с · 18.10.2026 20:00 UTC", doc)
+        # An unchanged unavailable state does not reset the transition time.
+        poll_router_trackers(engine, [row], [], new_time + timedelta(minutes=3))
+        self.assertEqual(resident.wifi_changed_at, new_time)
 
     def test_source_transitions_update_tree_without_registry_changes(self):
         engine = Engine()
