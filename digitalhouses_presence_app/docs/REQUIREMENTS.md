@@ -51,3 +51,11 @@ Verify actual router tracker reliability, multi-device ownership binding and sit
 - Append a history entry only after successful publish of a current MQTT machine Event. Persist a bounded JSON list under `/data`, restore on startup and prune records belonging to excluded/nonparticipating residents.
 - Publish only a read-only retained MQTT diagnostic view for the last N events. The UI has only App-provided label/details/timestamp and local timestamp formatting. Never put IP/MAC/credentials in this history.
 - **Exclude the changing diagnostic history sensor from Home Assistant Recorder**. This is not a per-event measurement history entity; retain the original machine Event contract and any existing Recorder policy for it.
+
+## Registered phone administration (0.1.29)
+
+- Show the registered phone inventory through the existing MQTT aggregate roster. Only verified Ingress registrations have `registered=true`; App-configured legacy trackers must not be shown as registered.
+- Users may view a read-only card without IP/MAC. Only an authenticated HA administrator may list the complete private register or delete a phone, and backend authorization must be independently checked for **each** destructive request.
+- The deletion UI must show exact user/device/tracker and require explicit confirmation. Reject forged/retained commands, missing action proof, invalid tracker identifiers and unavailable HA admin verification without modifying registration data.
+- Persist disabled GPS tracker identity on deletion in the **existing** registration registry to prevent resurrection from legacy Supervisor `residents` options. A re-enrollment with direct LAN and fresh MAC explicitly clears the block. Do not modify Supervisor options.
+- Reconcile resident membership in the active App, prune relevant zone/cache data and remove obsolete MQTT Discovery components without publishing a synthetic departure/zone event. Do not alter telemetry, MQTT event names or Recorder entities.
