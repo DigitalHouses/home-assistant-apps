@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.27 — Уведомления по зонам HA
+
+- Динамические переключатели уведомлений для всех `zone.*` в существующем MQTT-устройстве DH Presence, по умолчанию OFF.
+- Машиночитаемые события `zone_enter` / `zone_leave`, полученные по индивидуальному GPS `device_tracker` и штатному разрешению зон Home Assistant; без собственного геофенсинга.
+- Сохранение зонного baseline, подавление повторов/ложных событий после рестарта, пропуск неизвестных и недоступных GPS-состояний.
+- Миграция настроек уведомлений с v1 на v2, GPS/Wi-Fi сохранены. Старый общий `notify_presence` удалён через MQTT Discovery cleanup.
+- Обновлены оба HA-пакета и примеры Lovelace; домашние зонные уведомления подавляют дублирующий GPS-текст.
+
+
 ## 0.1.26 — Portable source tracker cards for all DigitalHouses sites
 
 - The existing `binary_sensor.dh_presence_app_residents_home` MQTT `residents` roster now publishes `gps_tracker` and optional `wifi_tracker` entity IDs from each active registered resident (and configured GPS-only resident); no new HA entities or per-site configuration.
