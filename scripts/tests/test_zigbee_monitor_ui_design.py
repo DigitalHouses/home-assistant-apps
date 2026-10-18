@@ -138,7 +138,7 @@ class ZigbeeMonitorUiDesignTests(unittest.TestCase):
         content = source.read_text(encoding="utf-8")
         for yaml_text in (content, self.raw_dashboard):
             self.assertIn("Math.floor((performance.now() - start) / 1000)", yaml_text)
-            self.assertIn("Math.round(Math.max(0, t))", yaml_text)
+            self.assertIn("Math.round(Math.max(0, seconds))", yaml_text)
             self.assertNotIn("t.toFixed(1)", yaml_text)
 
     def test_all_dynamic_tables_use_html_not_fragile_markdown_pipes(self):
