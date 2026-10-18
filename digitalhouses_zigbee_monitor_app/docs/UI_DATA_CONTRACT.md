@@ -41,7 +41,8 @@ Recorder OFF:
 
 ### Предварительные сущности
 
-Ниже перечислены **предлагаемые** `default_entity_id`.
+Ниже перечислены **предлагаемые** `default_entity_id`; они уже используются
+в UI-first Dashboard `examples/lovelace/dh_zigbee_monitor_app_dashboard.yaml`.
 Стабильность `unique_id` обязательна; пользовательское переименование
 собственных HA-сущностей может потребовать обновления ссылок в Dashboard.
 
@@ -54,8 +55,10 @@ Recorder OFF:
 | `sensor.dh_zigbee_monitor_app_incidents` | Открытые инциденты | ON |
 | `sensor.dh_zigbee_monitor_app_messages_rate_5m` | Суммарная MQTT-активность за 5-минутное окно | ON |
 | `sensor.dh_zigbee_monitor_app_offline_details` | JSON-список offline | OFF |
-| `sensor.dh_zigbee_monitor_app_spam_details` | ТОП и anomaly ranking | OFF |
-| `sensor.dh_zigbee_monitor_app_inventory_details` | Устройства и группировки | OFF |
+| `sensor.dh_zigbee_monitor_app_top_1h_details` | ТОП MQTT за 1 час | OFF |
+| `sensor.dh_zigbee_monitor_app_top_24h_details` | ТОП MQTT за 24 часа | OFF |
+| `sensor.dh_zigbee_monitor_app_top_7d_details` | ТОП MQTT за 7 дней | OFF |
+| `sensor.dh_zigbee_monitor_app_inventory_details` | Устройства и группировки (предусмотрено для расширения UI) | OFF |
 | `sensor.dh_zigbee_monitor_app_networks_details` | Состояния сетей и качество данных | OFF |
 | `sensor.dh_zigbee_monitor_app_incidents_details` | Текущие инциденты | OFF |
 | `sensor.dh_zigbee_monitor_app_card` | Операции `idle/running/success/error` | OFF |
@@ -89,3 +92,62 @@ Recorder OFF:
 5. Массовый отказ сети выдаёт один агрегированный пользовательский сигнал.
 6. Списки устройств в UI отображаются даже без накопленной HA Recorder-истории.
 7. Состояние отсутствующих источников не маскируется фиктивным `0`.
+
+
+## Контракт первой UI-версии: готовые атрибуты
+
+Сведения о подробностях формирует **только App**, в Home Assistant ничего
+не сортируется, не группируется и не рассчитывается. Пока App отсутствует,
+Dashboard показывает отсутствие данных, а не фиктивные значения.
+
+Для каждой подробной MQTT-сущности:
+
+- state: `ready` лишь после успешного сбора актуальных данных;
+- state: `unavailable` через app/source availability при потере достоверности;
+- основное содержимое: отдельный атрибут-список;
+- `json_attributes_topic` допускается **только** для сущностей Recorder OFF;
+- данные bounded: максимальные размеры, состав записей и отсечение записей
+  задаёт контракт App, не шаблон отображения;
+- при `unknown/unavailable` UI не показывает retained-атрибуты как новые;
+- минимальная структура атрибутов на старте:
+
+| Detail sensor | Атрибут | Поля элемента |
+| --- | --- | --- |
+| `networks_details` | `networks` | `network_id`, `name`, `status`, `devices`, `offline` |
+| `offline_details` | `devices` | `ieee_address`, `network_id`, `name`, `network_name`, `offline_since` |
+| `top_1h_details` | `items` | `ieee_address`, `network_id`, `name`, `messages` |
+| `top_24h_details` | `items` | как выше |
+| `top_7d_details` | `items` | как выше |
+| `incidents_details` | `incidents` | `incident_id`, `kind`, `name`, `started_at` |
+
+Поле `name` здесь **отображаемое**. Для offline и top`*_details` постоянным
+ключом служит `ieee_address`, контекст сети — `network_id`. Для networks
+ключ — `network_id`. Переименования не должны менять статистику.
+
+Времена сейчас выводятся как переданные ISO 8601 строки, без вычисления
+длительности в HA. В будущем App может дополнительно передавать готовое
+отображаемое значение, если согласуем формат.
+
+## Recorder пакет
+
+Согласованный пример:
+`examples/packages/dh_zigbee_monitor_app_global_package.yaml`.
+
+- `recorder.include.entities`: только исторические скалярные метрики;
+- `recorder.exclude.entities`: подробности, карточка, runtime-диагностика, event;
+- `recorder.exclude.entity_globs`: страховка для будущих `*_details`;
+- нельзя заменять уже существующие фильтры `recorder` дома;
+- при site-level `include` и переназначениях entity IDs проверять правила
+  фактического включения/исключения в работающем HA.
+- этот файл сейчас **пример**, а не установленное изменение конфигурации HA.
+
+CI: `scripts/tests/test_zigbee_monitor_ui_design.py`.
+Он проверяет разбор YAML, стандартную статусную карточку, использование
+детальных сущностей, их исключение из Recorder и отсутствие расчётов HA.
+
+## Принцип UI-first
+
+Dashboard согласовывает **что показывать**. Затем App реализует именно эти
+данные; не допускается создание неограниченного количества HA entities
+на каждое физическое устройство. Стандарт `Home Assistant Event` используется
+для переходов, а Recorder — только для ограниченного списка агрегатов.
