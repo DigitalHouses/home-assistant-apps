@@ -1,5 +1,10 @@
 """DH Presence dashboard uses only genuinely implemented product operations."""
 from pathlib import Path
+import json
+import re
+import shutil
+import subprocess
+import textwrap
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -7,7 +12,164 @@ CARD = ROOT / "examples/lovelace/presence_app_card_ru.yaml"
 DASHBOARD = ROOT / "examples/lovelace/dh_presence_app_dashboard.yaml"
 
 
+def status_js(path: Path, key: str) -> str:
+    """Extract the first (aggregate-status) button-card JS template."""
+    lines = path.read_text(encoding="utf-8").splitlines()
+    pattern = r"^\s*" + (r"- color: \|" if key == "color" else re.escape(key) + r": \|") + r"$"
+    for index, line in enumerate(lines):
+        if not re.match(pattern, line):
+            continue
+        indent = len(line) - len(line.lstrip())
+        body = []
+        for following in lines[index + 1:]:
+            if following.strip() and len(following) - len(following.lstrip()) <= indent:
+                break
+            body.append(following)
+        value = textwrap.dedent("\n".join(body)).strip()
+        if value.startswith("[[[") and value.endswith("]]]"):
+            return value[3:-3].strip()
+    raise AssertionError(f"JS template {key} not found in {path}")
+
+
+
 class LovelaceCardTests(unittest.TestCase):
+
+    def test_native_supervisor_update_is_reflected_in_primary_status(self):
+        """Only Supervisor can authorize installing an App update."""
+        for path in (CARD, DASHBOARD):
+            code = path.read_text(encoding="utf-8")
+            for key in ("icon", "name", "label", "color"):
+                expression = status_js(path, key)
+                self.assertIn("update.digitalhouses_presence_app_update", expression)
+                self.assertIn("binary_sensor.dh_presence_app_update_available", expression)
+            self.assertIn("supervisor?.state === 'on'", status_js(path, "icon"))
+            self.assertIn("if (newer) return 'Доступна новая версия';", status_js(path, "label"))
+            self.assertIn("supervisor?.attributes?.latest_version", status_js(path, "name"))
+            self.assertIn("releaseAvailable && valid(checkedLatest)", status_js(path, "name"))
+            self.assertIn("const updating = states['update.digitalhouses_presence_app_update']",
+                          code)
+            self.assertIn("entity: update.digitalhouses_presence_app_update", code)
+            self.assertNotIn("entity: binary_sensor.dh_presence_app_update_available\\n"
+                             "            state: \"on\"", code)
+
+    def test_card_and_dashboard_status_js_do_not_diverge(self):
+        for key in ("icon", "name", "label", "color"):
+            with self.subTest(template=key):
+                self.assertEqual(status_js(CARD, key), status_js(DASHBOARD, key))
+
+    @unittest.skipUnless(shutil.which("node"), "Node is not available for UI behavior test")
+    def test_status_behavior_with_asynchronous_app_and_supervisor_updates(self):
+        """Execute real JS templates under the combinations that caused the bug."""
+        fragments = {key: status_js(CARD, key)
+                     for key in ("icon", "name", "label", "color")}
+        script = r"""
+const src = JSON.parse(process.argv[1]);
+const cases = [
+  {
+    name: 'native update detected, app release flag still off',
+    native: {state:'on', attributes:{installed_version:'0.1.24',latest_version:'0.1.25'}},
+    appFlag: 'off',
+    expected: {icon:'mdi:package-up', name:'DH Presence · v0.1.24 → v0.1.25',
+               label:'Доступна новая версия', color:'var(--warning-color, orange)'}
+  },
+  {
+    name: 'release checked, supervisor install not offered yet',
+    native: {state:'off', attributes:{installed_version:'0.1.24',latest_version:'0.1.24'}},
+    appFlag: 'on', appLatest:'0.1.26',
+    expected: {icon:'mdi:package-up', name:'DH Presence · v0.1.24 → v0.1.26',
+               label:'Доступна новая версия', color:'var(--warning-color, orange)'}
+  },
+  {
+    name: 'supervisor version wins over stale app release version',
+    native: {state:'on', attributes:{installed_version:'0.1.24',latest_version:'0.1.25'}},
+    appFlag: 'on', appLatest:'0.1.20',
+    expected: {name:'DH Presence · v0.1.24 → v0.1.25'}
+  },
+  {
+    name: 'no upgrade means normal presence',
+    native: {state:'off', attributes:{installed_version:'0.1.25', latest_version:'0.1.25'}},
+    appFlag:'off', installed:'0.1.25',
+    expected: {icon:'mdi:home-account', name:'DH Presence · v0.1.25',
+               label:'GPS · Есть дома · Дома 2/2', color:'var(--success-color)'}
+  },
+  {
+    name: 'installing using native progress while app is disconnected',
+    native:{state:'on', attributes:{in_progress:true,update_percentage:45,installed_version:'0.1.24',latest_version:'0.1.25'}},
+    item:{state:'unavailable'}, expected:{icon:'mdi:progress-clock', label:'Установка версии… 45% · 00:00',
+                                        color:'var(--info-color, var(--primary-color))'}
+  },
+  {
+    name:'sticky error overrides available update',
+    native:{state:'on',attributes:{latest_version:'0.1.25'}},
+    item:{state:'error',attributes:{error:'Проверка не выполнена'}},
+    expected:{icon:'mdi:alert-circle',label:'Ошибка: Проверка не выполнена',color:'var(--error-color)'}
+  },
+  {
+    name:'running check overrides available update',
+    native:{state:'on',attributes:{}},
+    item:{state:'running',attributes:{operation:'check',started_at:'2026-10-18T00:00:00+00:00'}},
+    expected:{icon:'mdi:progress-clock',label:'Проверка версии… 00:00',
+              color:'var(--info-color, var(--primary-color))'}
+  },
+  {
+    name:'completed version check notices new update',
+    native:{state:'on',attributes:{}},
+    item:{state:'success',attributes:{operation:'check',duration_seconds:1.25}},
+    expected:{label:'Доступна новая версия · 1,3 сек',icon:'mdi:check-circle'}
+  },
+  {
+    name:'completed version check with no update',
+    native:{state:'off',attributes:{}},
+    item:{state:'success',attributes:{operation:'check',duration_seconds:1.25}},
+    expected:{label:'Версия актуальна · 1,3 сек'}
+  },
+  {
+    name:'Supervisor update can exist even if app is unavailable',
+    native:{state:'on',attributes:{installed_version:'0.1.24',latest_version:'0.1.25'}},
+    item:{state:'unavailable'},
+    expected:{icon:'mdi:package-up',label:'Нет связи с приложением'}
+  },
+  {
+    name:'invalid native version does not create bogus arrow',
+    native:{state:'on',attributes:{latest_version:'unknown'}},
+    appFlag:'off',appLatest:'unknown',
+    expected:{name:'DH Presence · v0.1.24',label:'Доступна новая версия'}
+  }
+];
+const failures=[];
+for(const c of cases){
+  const states = {
+    'sensor.dh_presence_app_card': c.item || {state:'idle',attributes:{}},
+    'sensor.dh_presence_app_version': {state:c.installed||'0.1.24'},
+    'sensor.dh_presence_app_latest_version': {state:c.appLatest||'unknown'},
+    'binary_sensor.dh_presence_app_update_available': {state:c.appFlag||'off'},
+    'binary_sensor.dh_presence_app_residents_home': {state:'on',attributes:{
+      residents_home:2,residents_total:2,residents:{},gps_freshness_seconds:300}},
+    'select.dh_presence_app_mode': {state:'gps'},
+    'update.digitalhouses_presence_app_update': c.native||{state:'off',attributes:{}}
+  };
+  const actual={};
+  for(const key of Object.keys(src)){
+    try {
+      actual[key]=new Function('states','performance',src[key])
+        .call({},states,{now:()=>5000});
+    } catch(e) {
+      failures.push(c.name+' '+key+': '+e.stack);
+    }
+  }
+  for(const [key,expected] of Object.entries(c.expected)){
+    if(actual[key]!==expected) failures.push(
+      c.name+' '+key+' expected '+JSON.stringify(expected)+' got '+JSON.stringify(actual[key]));
+  }
+}
+if(failures.length){console.error(failures.join('\\n'));process.exit(1);}
+console.log('PASSED '+cases.length+' status scenarios');
+"""
+        result = subprocess.run(
+            ["node", "-e", script, json.dumps(fragments, ensure_ascii=False)],
+            capture_output=True, text=True, check=False, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_presence_entities_and_dynamic_resident_roster(self):
         code = CARD.read_text(encoding="utf-8")
         for expected in (

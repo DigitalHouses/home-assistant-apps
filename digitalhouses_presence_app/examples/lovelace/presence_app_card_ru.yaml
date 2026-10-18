@@ -25,80 +25,104 @@ cards:
       [[[
         const status = states['sensor.dh_presence_app_card']?.state;
         const home = states['binary_sensor.dh_presence_app_residents_home']?.state;
-        const newer = states['binary_sensor.dh_presence_app_update_available']?.state === 'on';
-        const updating = states['update.digitalhouses_presence_app_update']?.attributes?.in_progress === true;
+        const supervisor = states['update.digitalhouses_presence_app_update'];
+        const installable = supervisor?.state === 'on';
+        const releaseAvailable = states['binary_sensor.dh_presence_app_update_available']?.state === 'on';
+        const updating = supervisor?.attributes?.in_progress === true;
         if (updating || status === 'running') return 'mdi:progress-clock';
         if (status === 'error') return 'mdi:alert-circle';
         if (status === 'success') return 'mdi:check-circle';
-        if (newer) return 'mdi:package-up';
+        if (installable || releaseAvailable) return 'mdi:package-up';
         if (home === 'on') return 'mdi:home-account';
         if (home === 'off') return 'mdi:home-export-outline';
         return 'mdi:home-question';
       ]]]
+
     name: |
       [[[
-        const installed = states['sensor.dh_presence_app_version']?.state;
-        const latest = states['sensor.dh_presence_app_latest_version']?.state;
-        const newer = states['binary_sensor.dh_presence_app_update_available']?.state === 'on';
-        const valid = x => x && !['unknown', 'unavailable', 'none'].includes(x);
-        return 'DH Presence' + (valid(installed) ? ' · v' + installed : '')
-          + (newer && valid(latest) && latest !== installed ? ' → v' + latest : '');
+        const supervisor = states['update.digitalhouses_presence_app_update'];
+        const releaseAvailable = states['binary_sensor.dh_presence_app_update_available']?.state === 'on';
+        const installable = supervisor?.state === 'on';
+        const valid = v => typeof v === 'string'
+          && v.trim() !== '' && !['unknown', 'unavailable', 'none'].includes(v.toLowerCase());
+        const sensorInstalled = states['sensor.dh_presence_app_version']?.state;
+        const installed = valid(sensorInstalled) ? sensorInstalled : supervisor?.attributes?.installed_version;
+        const supervisorLatest = supervisor?.attributes?.latest_version;
+        const checkedLatest = states['sensor.dh_presence_app_latest_version']?.state;
+        const latest = installable && valid(supervisorLatest) ? supervisorLatest
+          : releaseAvailable && valid(checkedLatest) ? checkedLatest : null;
+        const upgrade = (installable || releaseAvailable) && valid(installed)
+          && valid(latest) && latest !== installed;
+        return 'DH Presence' + (valid(installed)
+          ? ' · v' + installed + (upgrade ? ' → v' + latest : '') : '');
       ]]]
+
     label: |
       [[[
         const item = states['sensor.dh_presence_app_card'];
-        const updater = states['update.digitalhouses_presence_app_update'];
-        const elapsed = (since) => {
+        const supervisor = states['update.digitalhouses_presence_app_update'];
+        const installable = supervisor?.state === 'on';
+        const releaseAvailable = states['binary_sensor.dh_presence_app_update_available']?.state === 'on';
+        const newer = installable || releaseAvailable;
+        const elapsed = since => {
           const n = Math.max(0, Math.floor((performance.now() - since) / 1000));
-          return String(Math.floor(n / 60)).padStart(2,'0') + ':' + String(n % 60).padStart(2,'0');
+          return String(Math.floor(n / 60)).padStart(2, '0') + ':' + String(n % 60).padStart(2, '0');
         };
-        const duration = v => typeof v === 'number' ? Math.round(v) + ' сек' : '—';
-        if (updater?.attributes?.in_progress === true) {
+        const duration = v => typeof v === 'number' && Number.isFinite(v)
+          ? v.toFixed(1).replace('.', ',') + ' сек' : '—';
+        if (supervisor?.attributes?.in_progress === true) {
           if (this._dh_presence_timer?.kind !== 'install')
-            this._dh_presence_timer = {kind:'install', since:performance.now()};
-          const percent = updater.attributes.update_percentage;
-          return 'Установка версии… ' + (typeof percent === 'number' ? Math.round(percent) + '% · ' : '')
+            this._dh_presence_timer = {kind: 'install', since: performance.now()};
+          const percent = supervisor.attributes.update_percentage;
+          return 'Установка версии… '
+            + (typeof percent === 'number' && Number.isFinite(percent) ? Math.round(percent) + '% · ' : '')
             + elapsed(this._dh_presence_timer.since);
         }
-        if (!item || ['unknown','unavailable'].includes(item.state))
+        if (!item || ['unknown', 'unavailable'].includes(item.state))
           return 'Нет связи с приложением';
         const attrs = item.attributes || {};
         if (item.state === 'running') {
-          const key = attrs.operation + '|' + attrs.started_at;
+          const key = String(attrs.operation) + '|' + String(attrs.started_at || '');
           if (this._dh_presence_timer?.key !== key)
-            this._dh_presence_timer = {key:key, since:performance.now()};
-          const name = attrs.operation === 'refresh' ? 'Обновление присутствия' : 'Проверка версии';
+            this._dh_presence_timer = {kind: 'operation', key, since: performance.now()};
+          const name = attrs.operation === 'refresh' ? 'Обновление присутствия'
+            : attrs.operation === 'check' ? 'Проверка версии' : 'Операция';
           return name + '… ' + elapsed(this._dh_presence_timer.since);
         }
         this._dh_presence_timer = null;
-        if (item.state === 'error') return 'Ошибка: ' + (attrs.error || 'операция не выполнена');
-        if (item.state === 'success')
-          return (attrs.operation === 'refresh' ? 'Последние данные проверены' : 'Проверка версии завершена')
-            + ' · ' + duration(attrs.duration_seconds);
+        if (item.state === 'error')
+          return 'Ошибка: ' + (attrs.error || 'операция не выполнена');
+        if (item.state === 'success') {
+          const result = attrs.operation === 'refresh' ? 'Последние данные проверены'
+            : attrs.operation === 'check' ? (newer ? 'Доступна новая версия' : 'Версия актуальна')
+            : 'Готово';
+          return result + ' · ' + duration(attrs.duration_seconds);
+        }
+        // Supervisor is authoritative for install availability, including when
+        // the App's own GitHub release check has not refreshed yet.
+        if (newer) return 'Доступна новая версия';
         const mode = states['select.dh_presence_app_mode']?.state;
         const overall = states['binary_sensor.dh_presence_app_residents_home']?.state;
-        const n = states['binary_sensor.dh_presence_app_residents_home']?.attributes?.residents_home;
-        const total = states['binary_sensor.dh_presence_app_residents_home']?.attributes?.residents_total;
+        const summary = states['binary_sensor.dh_presence_app_residents_home']?.attributes || {};
+        const n = summary.residents_home, total = summary.residents_total;
         const count = Number.isInteger(n) && Number.isInteger(total) ? ' · Дома ' + n + '/' + total : '';
-        const label = mode === 'wifi' ? 'Wi-Fi · трекер роутера'
-          : mode === 'hybrid' ? 'Hybrid · GPS + трекер роутера' : 'GPS';
-        const newer = states['binary_sensor.dh_presence_app_update_available']?.state === 'on';
-        const roster = states['binary_sensor.dh_presence_app_residents_home']?.attributes?.residents || {};
-        const sourceUnavailable = Object.keys(roster).some(key => !['on','off'].includes(
+        const sourceUnavailable = Object.keys(summary.residents || {}).some(key => !['on','off'].includes(
           states['binary_sensor.dh_presence_app_' + key + '_gps_home']?.state
         ));
-        const freshness = Number(states['binary_sensor.dh_presence_app_residents_home']?.attributes?.gps_freshness_seconds) || 300;
-        const old = Object.values(roster).some(r => r?.gps_reported_at
+        const freshness = Number(summary.gps_freshness_seconds) || 300;
+        const old = Object.values(summary.residents || {}).some(r => r?.gps_reported_at
           && Date.now() - Date.parse(r.gps_reported_at) > freshness * 1000);
+        const label = mode === 'wifi' ? 'Wi-Fi · трекер роутера'
+          : mode === 'hybrid' ? 'Hybrid · GPS + трекер роутера' : 'GPS';
         const observed = overall === 'on' ? 'Есть дома'
           : overall === 'off' ? 'Никого дома' : 'Нет свежих данных';
         const home = sourceUnavailable && ['on','off'].includes(overall)
           ? 'Последнее подтверждение: ' + observed
           : old && ['on','off'].includes(overall)
           ? 'По последним GPS-данным: ' + observed : observed;
-        return label + ' · ' + home + count + (sourceUnavailable ? ' · GPS недоступен' : '')
-          + (newer ? ' · Доступна новая версия' : '');
+        return label + ' · ' + home + count + (sourceUnavailable ? ' · GPS недоступен' : '');
       ]]]
+
     styles:
       card:
         - padding: 12px
@@ -113,24 +137,28 @@ cards:
       icon:
         - width: 28px
         - color: |
-            [[[
-              const c = states['sensor.dh_presence_app_card']?.state;
-              if (c === 'error') return 'var(--error-color)';
-              if (c === 'running') return 'var(--info-color, var(--primary-color))';
-              if (c === 'success') return 'var(--success-color)';
-              if (states['binary_sensor.dh_presence_app_update_available']?.state === 'on')
-                return 'var(--warning-color, orange)';
-              const roster = states['binary_sensor.dh_presence_app_residents_home']?.attributes?.residents || {};
-              const sourceUnavailable = Object.keys(roster).some(key => !['on','off'].includes(
-                states['binary_sensor.dh_presence_app_' + key + '_gps_home']?.state
-              ));
-              const freshness = Number(states['binary_sensor.dh_presence_app_residents_home']?.attributes?.gps_freshness_seconds) || 300;
-              const old = Object.values(roster).some(r => r?.gps_reported_at
-                && Date.now() - Date.parse(r.gps_reported_at) > freshness * 1000);
-              if (sourceUnavailable || old) return 'var(--warning-color, orange)';
-              return states['binary_sensor.dh_presence_app_residents_home']?.state === 'on'
-                ? 'var(--success-color)' : 'var(--secondary-text-color)';
-            ]]]
+          [[[
+            const s = states['sensor.dh_presence_app_card']?.state;
+            const supervisor = states['update.digitalhouses_presence_app_update'];
+            const installable = supervisor?.state === 'on';
+            const releaseAvailable = states['binary_sensor.dh_presence_app_update_available']?.state === 'on';
+            if (s === 'running' || supervisor?.attributes?.in_progress === true)
+              return 'var(--info-color, var(--primary-color))';
+            if (s === 'error') return 'var(--error-color)';
+            if (s === 'success') return 'var(--success-color)';
+            if (installable || releaseAvailable) return 'var(--warning-color, orange)';
+            const roster = states['binary_sensor.dh_presence_app_residents_home']?.attributes?.residents || {};
+            const sourceUnavailable = Object.keys(roster).some(key => !['on','off'].includes(
+              states['binary_sensor.dh_presence_app_' + key + '_gps_home']?.state
+            ));
+            const freshness = Number(states['binary_sensor.dh_presence_app_residents_home']?.attributes?.gps_freshness_seconds) || 300;
+            const old = Object.values(roster).some(r => r?.gps_reported_at
+              && Date.now() - Date.parse(r.gps_reported_at) > freshness * 1000);
+            if (sourceUnavailable || old) return 'var(--warning-color, orange)';
+            return states['binary_sensor.dh_presence_app_residents_home']?.state === 'on'
+              ? 'var(--success-color)' : 'var(--secondary-text-color)';
+          ]]]
+
       name:
         - justify-self: start
         - font-size: 14px
