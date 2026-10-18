@@ -64,6 +64,11 @@ class MonitorService:
         self._offline_since: dict[tuple[str, str], str | None] = {}
         self._refresh_pending: set[str] | None = None
         self._refresh_started: float | None = None
+        self._card_success_until: float | None = None
+        self._refresh_state: dict[str, object] = {
+            "state": "idle", "started_at": None, "finished_at": None,
+            "duration_seconds": None, "error": None,
+        }
         self._card: dict[str, object] = {
             "state": "idle", "operation": None, "started_at": None,
             "finished_at": None, "duration_seconds": None, "error": None,
@@ -105,9 +110,56 @@ class MonitorService:
     def _publish_card(self) -> None:
         self._send(state_topic("card"), _json(self._card))
 
+    def _publish_refresh_state(self) -> None:
+        self._send(state_topic("refresh_state"), _json(self._refresh_state))
+
+    def _finish_refresh(self, error: str | None = None) -> None:
+        if self._refresh_state["state"] != "updating":
+            return
+        started = str(self._refresh_state["started_at"])
+        finished = self.now()
+        duration = max(0.0, finished - datetime.fromisoformat(started).timestamp())
+        self._refresh_state = {
+            "state": "error" if error else "idle",
+            "started_at": started, "finished_at": _iso(finished),
+            "duration_seconds": round(duration, 3), "error": error,
+        }
+        self._publish_refresh_state()
+        self._card_finish(error)
+
+    def _try_complete_refresh(self) -> None:
+        """Inventory alone is not a complete source refresh."""
+        if self._refresh_pending is None or self._refresh_started is None:
+            return
+        if self._refresh_pending:
+            return
+        if not self.monitor.networks:
+            return
+        for config in self.monitor.networks:
+            status = self.monitor.network_status(config.network_id)
+            if status["bridge_state"] != "online" or not status["inventory_observed"]:
+                return
+            if any(self.monitor.availability(config.network_id, device.ieee_address)
+                   not in ("online", "offline")
+                   for device in self.monitor.devices(config.network_id)):
+                return
+        if not (self._valid.get("inventory_details") is True
+                and self._valid.get("offline_details") is True):
+            return
+        # Commit last_refresh only after every authoritative state is available.
+        if not self._send(state_topic("last_refresh"), _iso(self.now())):
+            self._refresh_pending = None
+            self._refresh_started = None
+            self._finish_refresh("Не удалось опубликовать последнее обновление")
+            return
+        self._refresh_pending = None
+        self._refresh_started = None
+        self._finish_refresh()
+
     def _card_begin(self, name: str) -> bool:
         if self._card["state"] == "running":
             return False
+        self._card_success_until = None
         self._card = {
             "state": "running", "operation": name, "started_at": _iso(self.now()),
             "finished_at": None, "duration_seconds": None, "error": None,
@@ -122,6 +174,7 @@ class MonitorService:
         finished = self.now()
         duration = max(0.0, finished -
                        datetime.fromisoformat(started_at).timestamp())
+        self._card_success_until = None if error else self.now() + 5
         self._card = {
             "state": "error" if error else "success",
             "operation": self._card["operation"],
@@ -142,6 +195,18 @@ class MonitorService:
             self._valid.clear()
             self._refresh_pending = None
             self._refresh_started = None
+            if self._refresh_state["state"] == "updating":
+                self._refresh_state = {
+                    **self._refresh_state, "state": "error",
+                    "finished_at": _iso(self.now()),
+                    "error": "MQTT отключился во время обновления",
+                }
+                self._card = {
+                    **self._card, "state": "error",
+                    "finished_at": _iso(self.now()),
+                    "error": "MQTT отключился во время обновления",
+                }
+                self._card_success_until = None
             self._offline_since.clear()
             # Persist unavailability first; stale retained data remains hidden
             # until each source is re-observed after reconnect.
@@ -151,6 +216,7 @@ class MonitorService:
             self._send(state_topic("version"), self.version, force=True)
             self._send(state_topic("started_at"), self.started_at, force=True)
             self._publish_card()
+            self._publish_refresh_state()
             for topic_filter in DISCOVERY_FILTERS:
                 if not self.subscribe(topic_filter):
                     log.error("MQTT discovery subscription failed: %s", topic_filter)
@@ -176,73 +242,91 @@ class MonitorService:
             for n in self.monitor.networks
         )
 
+    def _availability_diagnostic(
+        self, network_id: str, ieee: str,
+    ) -> tuple[str, str | None]:
+        status = self.monitor.network_status(network_id)
+        availability = self.monitor.availability(network_id, ieee)
+        if status["bridge_state"] != "online":
+            return availability, "bridge_unavailable"
+        if not status["inventory_observed"]:
+            return availability, "inventory_missing"
+        if availability == "unknown":
+            return availability, "availability_not_reported"
+        return availability, None
+
     def _publish_networks(self) -> None:
-        # Until a bridge is recognized, zero is not a trustworthy discovery result.
+        # Until a bridge is verified, zero is not a trustworthy network count.
         self._scalar("networks", len(self.monitor.networks) if self.monitor.networks else None)
         rows = []
         for config in self.monitor.networks:
             status = self.monitor.network_status(config.network_id)
-            all_availability = (
-                status["inventory_observed"]
-                and all(self.monitor.availability(config.network_id, d.ieee_address) in
-                        ("online", "offline") for d in self.monitor.devices(config.network_id))
-            )
-            off = (
-                sum(self.monitor.availability(config.network_id, d.ieee_address) == "offline"
-                    for d in self.monitor.devices(config.network_id))
-                if all_availability and status["bridge_state"] == "online"
-                else None
-            )
+            observed = [
+                self._availability_diagnostic(config.network_id, d.ieee_address)
+                for d in self.monitor.devices(config.network_id)
+            ]
+            complete = (status["inventory_observed"]
+                        and status["bridge_state"] == "online"
+                        and all(reason is None for _, reason in observed))
             rows.append({
                 "network_id": config.network_id, "name": config.name,
                 "status": status["bridge_state"], "devices": status["devices"],
-                "offline": off,
+                "offline": sum(a == "offline" for a, _ in observed) if complete else None,
+                "availability_complete": complete,
+                "availability_unknown": sum(reason is not None for _, reason in observed),
             })
-        self._detail(
-            "networks_details", "networks", rows, valid=bool(self.monitor.networks)
-        )
+        self._detail("networks_details", "networks", rows, valid=bool(self.monitor.networks))
 
     def _publish_inventory_and_availability(self) -> None:
         live = self._all_live()
-        total = self.monitor.total_devices() if live else None
-        self._scalar("devices", total)
-        # Bound JSON payload. The complete inventory is retained in SQLite.
-        rows = [
-            {
-                "ieee_address": d.ieee_address, "network_id": config.network_id,
-                "name": d.friendly_name, "model": d.model, "manufacturer": d.manufacturer,
-            }
-            for config in self.monitor.networks
-            for d in self.monitor.devices(config.network_id)
-        ]
+        self._scalar("devices", self.monitor.total_devices() if live else None)
+        rows: list[dict[str, object]] = []
+        for config in self.monitor.networks:
+            for device in self.monitor.devices(config.network_id):
+                availability, reason = self._availability_diagnostic(
+                    config.network_id, device.ieee_address,
+                )
+                labels = {"online": "В сети", "offline": "Не в сети", "unknown": "Нет данных"}
+                reasons = {
+                    "bridge_unavailable": "Zigbee2MQTT недоступен",
+                    "inventory_missing": "Нет инвентаризации Zigbee2MQTT",
+                    "availability_not_reported": "Нет сообщения availability",
+                }
+                rows.append({
+                    "availability_label": labels.get(availability, "Нет данных"),
+                    "availability_reason_label": reasons.get(reason) if reason else None,
+                    "ieee_address": device.ieee_address,
+                    "network_id": config.network_id,
+                    "network_name": config.name,
+                    "name": device.friendly_name,
+                    "model": device.model,
+                    "manufacturer": device.manufacturer,
+                    "availability": availability,
+                    "availability_reason": reason,
+                })
         rows.sort(key=lambda d: (str(d["network_id"]), str(d["name"])))
+        unknown = sum(row["availability_reason"] is not None for row in rows)
         self._detail(
             "inventory_details", "devices", rows[:40], valid=live,
             total=len(rows), truncated=len(rows) > 40,
+            availability_complete=live and unknown == 0,
+            availability_unknown=unknown,
         )
-
-        complete = live and all(
-            self.monitor.availability(config.network_id, d.ieee_address)
-            in ("online", "offline")
-            for config in self.monitor.networks
-            for d in self.monitor.devices(config.network_id)
-        )
+        complete = live and unknown == 0
         offline = [
             {
-                "ieee_address": d.ieee_address, "network_id": config.network_id,
-                "name": d.friendly_name, "network_name": config.name,
-                "offline_since": self._offline_since.get((config.network_id, d.ieee_address)),
+                "ieee_address": row["ieee_address"],
+                "network_id": row["network_id"],
+                "name": row["name"], "network_name": row["network_name"],
+                "offline_since": self._offline_since.get(
+                    (str(row["network_id"]), str(row["ieee_address"]))
+                ),
             }
-            for config in self.monitor.networks
-            for d in self.monitor.devices(config.network_id)
-            if self.monitor.availability(config.network_id, d.ieee_address) == "offline"
+            for row in rows if row["availability"] == "offline"
         ] if complete else []
-        offline.sort(key=lambda d: (str(d["network_id"]), str(d["name"])))
         self._scalar("offline", len(offline) if complete else None)
-        self._detail(
-            "offline_details", "devices", offline[:40], valid=complete,
-            total=len(offline), truncated=len(offline) > 40,
-        )
+        self._detail("offline_details", "devices", offline[:40], valid=complete,
+                     total=len(offline), truncated=len(offline) > 40)
         if live and self._continuous_since is None:
             self._continuous_since = self.now()
         elif not live:
@@ -301,17 +385,37 @@ class MonitorService:
                     self.store.trim_minutes(before_epoch=max(0, epoch - 30 * 86400))
                     self._last_trim_day = epoch // 86400
             if (
+                self._card_success_until is not None
+                and self.now() >= self._card_success_until
+                and self._card["state"] == "success"
+            ):
+                self._card_success_until = None
+                self._card = {
+                    "state": "idle", "operation": None,
+                    "started_at": None, "finished_at": None,
+                    "duration_seconds": None, "error": None,
+                }
+                self._publish_card()
+            if (
                 self._refresh_pending is not None and self._refresh_started is not None
                 and self.now() - self._refresh_started > 15
             ):
                 missing = sorted(self._refresh_pending)
                 self._refresh_pending = None
                 self._refresh_started = None
-                self._card_finish("Нет свежего inventory: " + ", ".join(missing))
+                self._finish_refresh(
+                    "Нет полных данных bridge / inventory / availability: "
+                    + ", ".join(missing)
+                )
 
     def _start_refresh(self) -> None:
         if not self._card_begin("refresh"):
             return
+        self._refresh_state = {
+            "state": "updating", "started_at": _iso(self.now()),
+            "finished_at": None, "duration_seconds": None, "error": None,
+        }
+        self._publish_refresh_state()
         self._refresh_pending = (
             {n.network_id for n in self.monitor.networks}
             if self.monitor.networks else {"__discovery__"}
@@ -400,15 +504,9 @@ class MonitorService:
                     self.monitor.devices(sample.network_id),
                     observed_at=int(self.now()),
                 )
-            if sample.kind == "inventory":
-                if self._refresh_pending is not None:
-                    assert sample.network_id is not None
-                    self._refresh_pending.discard(sample.network_id)
-                    if not self._refresh_pending:
-                        self._refresh_pending = None
-                        self._refresh_started = None
-                        self._send(state_topic("last_refresh"), _iso(self.now()))
-                        self._card_finish()
+            if sample.kind == "inventory" and self._refresh_pending is not None:
+                assert sample.network_id is not None
+                self._refresh_pending.discard(sample.network_id)
             if sample.kind == "device_availability" and sample.network_id and sample.ieee_address:
                 identity = sample.network_id, sample.ieee_address
                 current = self.monitor.availability(*identity)
@@ -421,6 +519,7 @@ class MonitorService:
             if sample.kind in ("inventory", "bridge_state", "device_availability"):
                 self._publish_networks()
                 self._publish_inventory_and_availability()
+                self._try_complete_refresh()
             return sample.kind
 
 

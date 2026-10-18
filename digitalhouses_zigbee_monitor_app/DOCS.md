@@ -1,7 +1,7 @@
 # DigitalHouses Zigbee Monitor App — installation and acceptance
 
-Version: **0.1.2 (experimental)**. Run only after the production GHCR image
-`ghcr.io/digitalhouses/digitalhouses_zigbee_monitor_app:0.1.2` is published
+Version: **0.1.3 (experimental)**. Run only after the production GHCR image
+`ghcr.io/digitalhouses/digitalhouses_zigbee_monitor_app:0.1.3` is published
 and verified by repository release workflows.
 
 ## Requirements

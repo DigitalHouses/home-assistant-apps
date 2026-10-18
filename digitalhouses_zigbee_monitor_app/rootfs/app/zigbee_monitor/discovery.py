@@ -95,6 +95,13 @@ def build_discovery(version: str) -> dict[str, Any]:
             entity_category="diagnostic",
             icon="mdi:format-list-bulleted",
         )
+    components["refresh_state"] = _component(
+        "sensor", "refresh_state", "Refresh state",
+        value_template="{{ value_json.state }}",
+        json_attributes_topic=state_topic("refresh_state"),
+        entity_category="diagnostic",
+        icon="mdi:refresh",
+    )
     components["card"] = _component(
         "sensor", "card", "Zigbee Monitor status",
         value_template="{{ value_json.state }}",
