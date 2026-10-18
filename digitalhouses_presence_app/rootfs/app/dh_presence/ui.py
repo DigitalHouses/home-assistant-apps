@@ -442,6 +442,11 @@ button:disabled{opacity:.45;cursor:not-allowed}
 #remove{background:var(--error-color,#b3261e);color:#fff}
 #reload{background:var(--secondary-background-color,#555);color:inherit}
 #status{font-size:12px;margin:10px 0 0;color:var(--secondary-text-color,#888);overflow-wrap:anywhere}
+#confirmation{margin:10px 0 0;padding:9px 10px;border:1px solid var(--error-color,#a33);border-radius:9px}
+#confirmation[hidden]{display:none}
+#confirmation p{margin:0 0 8px;font-size:12px;overflow-wrap:anywhere}
+#accept{background:var(--error-color,#b3261e);color:white}
+#cancel{background:var(--secondary-background-color,#555);color:inherit}
 </style></head><body><main>
 <h3>Удаление зарегистрированного телефона</h3>
 <label for="phone">Телефон</label>
@@ -451,6 +456,12 @@ button:disabled{opacity:.45;cursor:not-allowed}
 <button id="remove" type="button" disabled>Удалить регистрацию</button>
 <button id="reload" type="button">Обновить список</button>
 </div>
+<div id="confirmation" hidden>
+<p id="confirmText"></p>
+<div class="actions">
+<button id="accept" type="button">Да, удалить телефон</button>
+<button id="cancel" type="button">Отмена</button>
+</div></div>
 <p id="status" role="status" aria-live="polite"></p>
 </main><script>
 const q=id=>document.getElementById(id);
@@ -462,6 +473,7 @@ if(APP_ROOT===window.location.pathname){
 }
 let registrations=new Map();
 let busy=false;
+let pendingTracker=null;
 async function request(path,options={}){
  const response=await fetch(APP_ROOT+path,{cache:'no-store',credentials:'same-origin',...options});
  const data=await response.json();
@@ -469,10 +481,16 @@ async function request(path,options={}){
  return data;
 }
 function updateButton(){
- q('remove').disabled=busy||!registrations.has(q('phone').value);
+ q('remove').disabled=busy||pendingTracker!==null||!registrations.has(q('phone').value);
+}
+function cancelConfirmation(){
+ pendingTracker=null;
+ q('confirmation').hidden=true;
+ updateButton();
 }
 async function refresh(){
  if(APP_ROOT===window.location.pathname)return;
+ cancelConfirmation();
  busy=true;updateButton();
  q('reload').disabled=true;
  try{
@@ -505,14 +523,24 @@ async function refresh(){
   busy=false;q('reload').disabled=false;updateButton();
  }
 }
-async function removeSelected(){
- if(busy||!registrations.has(q('phone').value))return;
+function requestRemoval(){
+ if(busy||pendingTracker!==null||!registrations.has(q('phone').value))return;
  const tracker=q('phone').value;
  const row=registrations.get(tracker);
+ pendingTracker=tracker;
  const label=(row.user_name||'—')+' ('+(row.device_name||'—')+')';
- if(!confirm('Удалить регистрацию '+label+'?\\n'+tracker+
-             '\\nПриложение прекратит отслеживать этот телефон.'))return;
- busy=true;updateButton();q('reload').disabled=true;
+ q('confirmText').textContent='Удалить '+label+'? '+tracker+
+  '. Отслеживание телефона будет прекращено.';
+ q('confirmation').hidden=false;
+ updateButton();
+}
+async function confirmRemoval(){
+ if(busy||!pendingTracker||pendingTracker!==q('phone').value||
+    !registrations.has(pendingTracker))return cancelConfirmation();
+ const tracker=pendingTracker;
+ const row=registrations.get(tracker);
+ const label=(row.user_name||'—')+' ('+(row.device_name||'—')+')';
+ busy=true;updateButton();q('reload').disabled=true;q('accept').disabled=true;
  q('status').textContent='Удаление регистрации...';
  try{
   const response=await request('api/admin/delete-registration',{
@@ -527,11 +555,14 @@ async function removeSelected(){
  }catch(error){
   q('status').textContent='Не удалось удалить телефон: '+error.message;
  }finally{
-  busy=false;q('reload').disabled=false;updateButton();
+  busy=false;q('reload').disabled=false;q('accept').disabled=false;
+  cancelConfirmation();
  }
 }
-q('phone').addEventListener('change',updateButton);
-q('remove').addEventListener('click',removeSelected);
+q('phone').addEventListener('change',cancelConfirmation);
+q('remove').addEventListener('click',requestRemoval);
+q('accept').addEventListener('click',confirmRemoval);
+q('cancel').addEventListener('click',cancelConfirmation);
 q('reload').addEventListener('click',refresh);
 refresh();
 </script></body></html>"""
