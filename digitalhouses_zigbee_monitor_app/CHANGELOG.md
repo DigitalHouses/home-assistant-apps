@@ -8,9 +8,9 @@
 - Один агрегатор `sensor.dh_zigbee_monitor_app_problems` с `active`,
   `unknown`, `severity` и `coverage_complete`; нет фиктивного нуля при
   неполных данных. Бинарные статусы и агрегат публикуются при изменении.
-- События `problem_started` и `problem_recovered`: retained bundle
-  публикуется перед transient Event. Перезапуск/retained bootstrap не
-  создают событий.
+- События `problem_started` и `problem_recovered` только для новой
+  аномалии RPM; для Offline уже существуют device/zigbee2mqtt события,
+  не создаём дубликаты уведомлений. Retained bundle прежде Event.
 - Per-network настройки RPM через MQTT Discovery: `switch` автоматического
   порога и `number` ручного (1..10000). Настройки сохраняются в SQLite,
   активируются без рестарта и не требуют паспортов.
