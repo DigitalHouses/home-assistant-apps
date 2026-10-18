@@ -1,5 +1,5 @@
 # DigitalHouses Zigbee Monitor App · UI-first Dashboard
-# Status: DESIGN CONTRACT. The App / MQTT entities do not exist yet.
+# Live App dashboard. Status card is maintained separately in examples/lovelace/dh_zigbee_monitor_app_card_ru.yaml.
 # No demo data are presented as genuine observations.
 # Standard: Unified Product Status Card, Recorder-safe read/detail separation.
 # Optional frontend dependencies: custom:button-card >= 5, Mushroom.
@@ -27,6 +27,9 @@ sections:
               - binary_sensor.dh_zigbee_monitor_app_update_available
               - sensor.dh_zigbee_monitor_app_offline
               - sensor.dh_zigbee_monitor_app_incidents
+              - sensor.dh_zigbee_monitor_app_devices
+              - sensor.dh_zigbee_monitor_app_inventory_details
+              - sensor.dh_zigbee_monitor_app_offline
               - update.digitalhouses_zigbee_monitor_app_update
             update_timer: |
               [[[
@@ -51,6 +54,11 @@ sections:
                 const incidents = states['sensor.dh_zigbee_monitor_app_incidents']?.state;
                 if (incidents && !['unknown','unavailable'].includes(incidents) && Number(incidents) > 0)
                   return 'mdi:alert-network';
+                const offline = states['sensor.dh_zigbee_monitor_app_offline']?.state;
+                if (offline && !['unknown','unavailable'].includes(offline) && Number(offline) > 0)
+                  return 'mdi:alert-network';
+                if (states['sensor.dh_zigbee_monitor_app_inventory_details']?.attributes?.availability_unknown > 0)
+                  return 'mdi:alert-network-outline';
                 return 'mdi:zigbee';
               ]]]
             name: |
@@ -107,11 +115,20 @@ sections:
                   return 'Готово' + (Number.isFinite(t) && a.duration_seconds !== null
                     ? ' · ' + t.toFixed(1).replace('.', ',') + ' сек' : '');
                 }
+                if (states['binary_sensor.dh_zigbee_monitor_app_update_available']?.state === 'on')
+                  return 'Доступна новая версия';
                 const incidents = states['sensor.dh_zigbee_monitor_app_incidents']?.state;
-                if (incidents && !['unknown','unavailable'].includes(incidents)) {
-                  const n = Number(incidents);
-                  if (Number.isInteger(n) && n > 0) return 'Активных инцидентов: ' + n;
-                  if (n === 0) return 'Активных инцидентов нет';
+                if (incidents && !['unknown','unavailable'].includes(incidents) && Number(incidents) > 0)
+                  return 'Активных инцидентов: ' + incidents;
+                const count = states['sensor.dh_zigbee_monitor_app_devices']?.state;
+                const offline = states['sensor.dh_zigbee_monitor_app_offline']?.state;
+                const valid = v => v && !['unknown','unavailable','none'].includes(v);
+                const unknown = states['sensor.dh_zigbee_monitor_app_inventory_details']?.attributes?.availability_unknown;
+                if (valid(count)) {
+                  if (valid(offline)) return count + ' устройств · Offline: ' + offline;
+                  if (typeof unknown === 'number' && unknown > 0)
+                    return count + ' устройств · Нет статуса у ' + unknown;
+                  return count + ' устройств · Offline: нет данных';
                 }
                 return 'Ожидание достоверных данных';
               ]]]
@@ -136,7 +153,11 @@ sections:
                       if (s === 'running') return 'var(--info-color, var(--primary-color))';
                       if (s === 'success') return 'var(--success-color, var(--primary-color))';
                       const n = states['sensor.dh_zigbee_monitor_app_incidents']?.state;
-                      return n && !['unknown','unavailable'].includes(n) && Number(n) > 0
+                      const off = states['sensor.dh_zigbee_monitor_app_offline']?.state;
+                      const unknown = states['sensor.dh_zigbee_monitor_app_inventory_details']?.attributes?.availability_unknown;
+                      return (n && !['unknown','unavailable'].includes(n) && Number(n) > 0) ||
+                        (off && !['unknown','unavailable'].includes(off) && Number(off) > 0) ||
+                        (typeof unknown === 'number' && unknown > 0)
                         ? 'var(--warning-color, orange)' : 'var(--primary-color)';
                     ]]]
               name:
