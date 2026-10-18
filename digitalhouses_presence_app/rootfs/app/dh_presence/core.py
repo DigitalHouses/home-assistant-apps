@@ -50,6 +50,7 @@ class Resident:
     confirmed: Status = Status.UNAVAILABLE
     gps: Status = Status.UNAVAILABLE
     wifi: Status = Status.UNAVAILABLE
+    wifi_source: str = "legacy"  # Runtime router-tracker source bypasses probe freshness
     last_gps_at: datetime | None = None
     last_wifi_at: datetime | None = None
     wifi_absent_since: datetime | None = None
@@ -119,8 +120,11 @@ class Engine:
         # the last known position, not a failed observation. Wi-Fi evidence
         # still requires independently verified, fresh observations.
         gps = r.gps if r.last_gps_at and now >= r.last_gps_at else Status.UNAVAILABLE
-        wifi = (Status.NOT_HOME if r.wifi is Status.NOT_HOME
-                else r.wifi if r.wifi is Status.HOME and r.last_wifi_at
+        # Router trackers are polled from current HA states every runtime loop.
+        # The old PING/ARP freshness threshold must not erase router HOME.
+        wifi = (r.wifi if r.wifi_source == "router" else
+                Status.NOT_HOME if r.wifi is Status.NOT_HOME else
+                r.wifi if r.wifi is Status.HOME and r.last_wifi_at
                     and timedelta(0) <= now-r.last_wifi_at <= timedelta(minutes=self.wifi_absence_minutes + 2)
                 else Status.UNAVAILABLE)
         if self.mode is Mode.GPS:
@@ -344,6 +348,7 @@ class Engine:
                                       "gps_changed_at": r.gps_changed_at.isoformat() if r.gps_changed_at else None,
                                       "gps_reported_at": r.last_gps_at.isoformat() if r.last_gps_at else None,
                                       "wifi": r.wifi.value,
+                                      "wifi_source": r.wifi_source,
                                       "wifi_changed_at": r.wifi_changed_at.isoformat() if r.wifi_changed_at else None,
                                       "wifi_no_reply_since": r.wifi_absent_since.isoformat() if r.wifi_absent_since else None,
                                       "wifi_last_verified_at": r.last_wifi_at.isoformat() if r.last_wifi_at else None,
