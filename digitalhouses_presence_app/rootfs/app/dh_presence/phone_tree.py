@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 
-from dh_presence.core import Resident
+from dh_presence.core import Resident, Status
 
 
 def _label(value: str) -> str:
@@ -19,10 +19,19 @@ def _label(value: str) -> str:
     return re.sub(r"[\x00-\x1f\x7f]+", " ", str(value)).strip()[:120] or "—"
 
 
+def _presence_label(status: Status) -> str:
+    """Return the source's confirmed state; never treat an outage as away."""
+    if status is Status.HOME:
+        return "🟢 Дома"
+    if status is Status.NOT_HOME:
+        return "🟠 Не дома"
+    return "⚪ Недоступно"
+
+
 def registered_phones_tree(registrations: list[dict],
                            residents: list[Resident]) -> dict:
-    """Build a deterministic, self-contained MQTT state only on registry changes."""
-    permitted = {r.tracker for r in residents if r.registered}
+    """Build a current source-status tree from the live App engine."""
+    permitted = {r.tracker: r for r in residents if r.registered}
     eligible = sorted(
         (reg for reg in registrations if reg["tracker"] in permitted),
         key=lambda x: (x["user_name"].casefold(), x["device_name"].casefold(),
@@ -36,16 +45,22 @@ def registered_phones_tree(registrations: list[dict],
         who = _label(reg["user_name"])
         device = _label(reg["device_name"])
         tracker = _label(reg["tracker"].removeprefix("device_tracker."))
+        resident = permitted[reg["tracker"]]
+        wifi_linked = bool(reg.get("wifi_tracker"))
         wifi = (_label(reg["wifi_tracker"].removeprefix("device_tracker."))
-                if reg.get("wifi_tracker") else "не привязан")
+                if wifi_linked else "не привязан")
+        gps_status = _presence_label(resident.gps)
+        wifi_status = _presence_label(resident.wifi) if wifi_linked else "⚪ Не привязан"
         ip = _label(reg["ip"])
         mac = _label(reg["mac"])
         lines.extend([
-            f"{root} 📱 {who} ({device})",
-            f"{indent}├─ GPS · {tracker}",
-            f"{indent}├─ Wi-Fi · {wifi}",
+            f"{root} 📲 {who} ({device})",
+            f"{indent}├─ GPS · {gps_status} · {tracker}",
+            f"{indent}├─ Wi-Fi · {wifi_status}" +
+                (f" · {wifi}" if wifi_linked else ""),
             f"{indent}├─ IP (рег.) · {ip}",
             f"{indent}└─ MAC (рег.) · {mac}",
         ])
-    # State: tiny stable count. One diagnostic 'tree' attribute, not a metric.
+    # State: stable count. The tree attribute updates on live GPS/Wi-Fi changes
+    # but is deduplicated by MqttOutput when neither status nor roster changes.
     return {"count": len(eligible), "tree": "\n".join(lines)}
