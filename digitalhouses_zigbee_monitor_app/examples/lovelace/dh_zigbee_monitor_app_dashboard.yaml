@@ -263,7 +263,7 @@ sections:
           | Устройство | Сеть | Offline с |
           |:--|:--|:--|
           {% for device in rows %}
-          | {{ device.name }} | {{ device.network_name }} | {{ device.offline_since }} |
+          | {{ device.name }} | {{ device.network_name }} | {{ device.offline_since if device.offline_since else 'Неизвестно' }} |
           {% endfor %}
           {% endif %}
       - type: history-graph
