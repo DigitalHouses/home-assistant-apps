@@ -339,7 +339,7 @@ console.log('PASSED '+cases.length+' status scenarios');
 
     def test_dashboard_uses_four_column_resident_layout(self):
         dashboard = DASHBOARD.read_text(encoding="utf-8")
-        self.assertEqual(dashboard.count("  - type: grid\\n"), 4)
+        self.assertEqual(dashboard.splitlines().count("  - type: grid"), 4)
         for heading in ("Присутствие", "Жильцы", "Уведомления",
                         "Временная карточка (debug)"):
             with self.subTest(heading=heading):
