@@ -173,11 +173,12 @@ binary-флага, не по частоте Recorder. Текущий пакет 
   что радиоотсек координатора завис. Активные пробы ZigStar-01,
   health_check, ICMP/TCP и восстановление PoE пока не включены.
 
-События `problem_started`, `problem_recovered` публикуются на старый
+События `problem_started`, `problem_recovered` публикуются **только для
+аномалии RPM** на старый
 topic `DigitalHouses/Global/dh_zigbee_monitor_app/event`
 после изменения retained-состояний. Отдельно продолжают публиковаться
-события availability, поэтому HA-автоматизации могут выбрать только
-нужные типы без удвоения уведомлений.
+события availability/bridge, поэтому HA-автоматизации могут выбирать
+типы событий без удвоения уведомлений.
 
 UI:
 - `examples/lovelace/dh_zigbee_monitor_app_problems_card_ru.yaml` — самостоятельная
