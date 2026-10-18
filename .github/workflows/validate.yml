@@ -30,6 +30,14 @@ jobs:
       - name: Validate repository contract
         run: python scripts/validate_repository.py
 
+      - name: Test Zigbee Monitor core (design-stage)
+        env:
+          PYTHONPATH: digitalhouses_zigbee_monitor_app/rootfs/app
+        run: |
+          python -m compileall -q digitalhouses_zigbee_monitor_app/rootfs/app digitalhouses_zigbee_monitor_app/tests
+          python -m unittest discover -s digitalhouses_zigbee_monitor_app/tests -v
+
+
   speedtest-app:
     name: Speedtest App
     runs-on: ubuntu-latest
