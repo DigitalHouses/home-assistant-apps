@@ -118,6 +118,20 @@ class ZigbeeMonitorUiDesignTests(unittest.TestCase):
         self.assertEqual(actions[3]["tap_action"]["data"]["app"],
                          "8133339d_digitalhouses_zigbee_monitor_app")
 
+    def test_problems_card_identical_in_dashboard(self):
+        standalone = yaml.safe_load(
+            (APP / "examples/lovelace/dh_zigbee_monitor_app_problems_card_ru.yaml")
+            .read_text(encoding="utf-8")
+        )
+        embedded = next(
+            c for section in self.dashboard["sections"] for c in section["cards"]
+            if c.get("entity") == "sensor.dh_zigbee_monitor_app_problems"
+        )
+        self.assertEqual(standalone, embedded)
+        self.assertEqual(standalone["type"], "custom:mushroom-template-card")
+        self.assertIn("state_attr(entity, 'active')", standalone["primary"])
+        self.assertNotIn("tojson", self.raw_dashboard)
+
     def test_card_is_strictly_app_status_no_business_metrics(self):
         standalone = yaml.safe_load(
             (APP / "examples/lovelace/dh_zigbee_monitor_app_card_ru.yaml")
