@@ -568,8 +568,8 @@ function privatePhoneTree(devices){
  // This is private App Ingress presentation. Never publish IP/MAC to MQTT.
  // textContent renders user/device labels literally (not executable HTML).
  const lines=['Зарегистрированные телефоны'];
- const clean=value=>String(value??'—').replace(/[\r\n\t]/g,' ').trim()||'—';
- const shortTracker=value=>clean(value).replace(/^device_tracker\./,'');
+ const clean=value=>String(value??'—').replace(/[\\r\\n\\t]/g,' ').trim()||'—';
+ const shortTracker=value=>clean(value).replace(/^device_tracker\\./,'');
  for(const [index,device] of devices.entries()){
   const last=index===devices.length-1;
   const prefix=last?'   ':'│  ';
