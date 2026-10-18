@@ -5,7 +5,7 @@ The Presence runtime unit test job intentionally does not depend on PyYAML.
 """
 import unittest
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 import yaml
 from jinja2 import Environment
@@ -19,6 +19,7 @@ ZONE_COUNTS = ROOT / "examples/lovelace/presence_zones_auto_entities_ru.yaml"
 REGISTERED = ROOT / "examples/lovelace/presence_registered_phones_markdown_ru.yaml"
 RECENT = ROOT / "examples/lovelace/presence_recent_events_markdown_ru.yaml"
 ADMIN_SELECT = ROOT / "examples/lovelace/presence_admin_remove_phone_card_ru.yaml"
+RESIDENTS = ROOT / "examples/lovelace/presence_residents_auto_entities_ru.yaml"
 
 
 class PresenceLovelaceYamlTests(unittest.TestCase):
@@ -185,6 +186,100 @@ class PresenceLovelaceYamlTests(unittest.TestCase):
         self.assertEqual(debug[1]["cards"][0]["type"], "custom:auto-entities")
         self.assertEqual(debug[1]["cards"][0]["sort"]["method"], "entity_id")
         self.assertEqual(debug[1]["grid_options"]["columns"], 12)
+
+    def test_resident_mushroom_card_relative_status_age(self):
+        """The shipped standalone and dashboard template must agree exactly.
+
+        Use a pinned HA-local test clock to verify grammatical Russian relative
+        durations, missing timestamps, and router source wording. The template
+        contains now(), which triggers HA to re-render once per minute.
+        """
+        standalone = yaml.safe_load(RESIDENTS.read_text(encoding="utf-8"))
+        dashboard = yaml.safe_load(DASH.read_text(encoding="utf-8"))
+        embedded = dashboard["sections"][1]["cards"][3]
+        self.assertEqual(embedded, standalone)
+        self.assertEqual(standalone["type"], "custom:auto-entities")
+        self.assertEqual(standalone["filter"]["include"][0]["entity_id"],
+                         "binary_sensor.dh_presence_app_*_wifi_home")
+        card = standalone["filter"]["include"][0]["options"]
+        self.assertEqual(card["type"], "custom:mushroom-template-card")
+        self.assertTrue(card["multiline_secondary"])
+        self.assertEqual(card["tap_action"], {"action": "more-info"})
+        self.assertNotIn("tojson", card["secondary"])
+        self.assertNotIn("ARP", card["secondary"])
+        self.assertIn("now()", card["secondary"])
+        self.assertIn("status_changed_at", card["secondary"])
+        self.assertIn("gps_changed_at", card["secondary"])
+        self.assertIn("wifi_changed_at", card["secondary"])
+        self.assertNotIn("strftime", card["secondary"])
+
+        template = Environment().from_string(card["secondary"])
+        instant = datetime(2026, 10, 19, 12, 0, tzinfo=timezone.utc)
+
+        def as_timestamp(value, default=None):
+            if value is None:
+                return default
+            if isinstance(value, str):
+                try:
+                    value = datetime.fromisoformat(value)
+                except ValueError:
+                    return default
+            return value.timestamp()
+
+        def render(total_minutes, *, gps_minutes=None, wifi_minutes=None,
+                   missing=False):
+            def stamp(minutes):
+                return ((instant - timedelta(minutes=minutes)).isoformat()
+                        if minutes is not None else None)
+            resident = {
+                "name": "13ProMAX .SKY",
+                "user_name": "Serzhan",
+                "status": "home",
+                "gps": "home",
+                "wifi": "not_home",
+                "status_changed_at": None if missing else stamp(total_minutes),
+                "gps_changed_at": stamp(gps_minutes),
+                "wifi_changed_at": stamp(wifi_minutes),
+            }
+            roster = {"abc": resident}
+            result = template.render(
+                entity="binary_sensor.dh_presence_app_abc_wifi_home",
+                state_attr=lambda entity_id, attribute: roster,
+                as_timestamp=as_timestamp,
+                now=lambda: instant,
+            ).strip()
+            return result
+
+        self.assertEqual(render(120, gps_minutes=60, wifi_minutes=5),
+                         "Итог: Дома · 2 часа назад\n"
+                         "GPS: Дома · 1 час назад\n"
+                         "Wi-Fi: Не подключён (роутер) · 5 минут назад")
+        self.assertEqual(render(60, missing=True), "Итог: Дома · —\n"
+                         "GPS: Дома · —\nWi-Fi: Не подключён (роутер) · —")
+
+        examples = {
+            0: "только что",
+            1: "1 минуту назад",
+            2: "2 минуты назад",
+            5: "5 минут назад",
+            11: "11 минут назад",
+            21: "21 минуту назад",
+            22: "22 минуты назад",
+            60: "1 час назад",
+            120: "2 часа назад",
+            300: "5 часов назад",
+            660: "11 часов назад",
+            1260: "21 час назад",
+            1440: "1 день назад",
+            2880: "2 дня назад",
+            7200: "5 дней назад",
+            15840: "11 дней назад",
+            30240: "21 день назад",
+        }
+        for minutes, phrase in examples.items():
+            with self.subTest(minutes=minutes):
+                self.assertIn("Итог: Дома · " + phrase,
+                              render(minutes).splitlines())
 
     def test_dynamic_zone_people_card_uses_native_zone_domain(self):
         # HA zone entity state is its number of person entities inside
