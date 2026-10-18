@@ -164,6 +164,7 @@ class DurableIncidentsTests(unittest.TestCase):
         self.assertEqual(self.store.incident_history()[2], 0)
         closed = self.details()["recent_resolved"][0]
         self.assertEqual(closed["resolution_source"], "reconciliation")
+        self.assertIsNone(closed["duration_seconds"])  # recovery time not known
 
     def test_availability_before_inventory_is_reconciled(self):
         self.s.disconnected()
