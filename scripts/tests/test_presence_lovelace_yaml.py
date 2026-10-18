@@ -142,7 +142,7 @@ class PresenceLovelaceYamlTests(unittest.TestCase):
         self.assertEqual(presence[1]["cards"][1]["type"], "custom:mushroom-chips-card")
         self.assertEqual(presence[2]["name"], "Регистрация телефона")
         self.assertEqual(residents[0]["heading"], "Жильцы")
-        self.assertEqual(len(residents), 8)
+        self.assertEqual(len(residents), 7)
         self.assertEqual(residents[1], yaml.safe_load(REGISTERED.read_text(encoding="utf-8")))
         # Like the DH PVE Agent VM/LXC tree, the monospace layout needs a
         # full 12-column span to avoid wrapped tracker IDs looking double-spaced.
@@ -153,20 +153,25 @@ class PresenceLovelaceYamlTests(unittest.TestCase):
         self.assertEqual(administrator, yaml.safe_load(ADMIN_SELECT.read_text(encoding="utf-8")))
         self.assertEqual(administrator["type"], "custom:button-card")
         self.assertIn("hass.user?.is_admin !== true", administrator["hidden"])
-        self.assertEqual(administrator["custom_fields"]["manager"]["card"]["type"],
-                         "custom:addon-iframe-card")
-        self.assertEqual(administrator["custom_fields"]["manager"]["card"]["url"],
-                         "8133339d_digitalhouses_presence_app/admin/delete-phone")
-        self.assertEqual(administrator["tap_action"]["action"], "none")
+        wrapper = administrator["custom_fields"]["manager"]["card"]
+        self.assertEqual(wrapper["type"], "entities")
+        self.assertEqual([e["entity"] for e in wrapper["entities"]], [
+            "select.dh_presence_app_remove_phone",
+            "button.dh_presence_app_delete_registration"])
+        action = wrapper["entities"][1]["tap_action"]
+        self.assertEqual(action["action"], "perform-action")
+        self.assertEqual(action["perform_action"], "button.press")
+        self.assertEqual(action["target"]["entity_id"],
+                         "button.dh_presence_app_delete_registration")
+        self.assertIn("confirmation", action)
+        self.assertNotIn("addon-iframe", str(administrator))
         self.assertEqual(administrator["grid_options"], {"columns": 12})
-        self.assertEqual(residents[3]["name"], "Управление телефонами · администратор")
-        self.assertIn("hass.user?.is_admin !== true", residents[3]["hidden"])
-        self.assertEqual(residents[4]["card_param"], "cards")
-        self.assertEqual(residents[4]["filter"]["include"][0]["entity_id"],
+        self.assertEqual(residents[3]["card_param"], "cards")
+        self.assertEqual(residents[3]["filter"]["include"][0]["entity_id"],
                          "binary_sensor.dh_presence_app_*_wifi_home")
-        for card, source_file in ((residents[5], GPS_SOURCES),
-                                  (residents[6], WIFI_SOURCES),
-                                  (residents[7], ZONE_COUNTS)):
+        for card, source_file in ((residents[4], GPS_SOURCES),
+                                  (residents[5], WIFI_SOURCES),
+                                  (residents[6], ZONE_COUNTS)):
             source_card = yaml.safe_load(source_file.read_text(encoding="utf-8"))
             self.assertEqual(card, source_card)
         self.assertEqual(notifications[0]["heading"], "Уведомления")
