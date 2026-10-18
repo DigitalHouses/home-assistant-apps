@@ -1,0 +1,382 @@
+# DigitalHouses Zigbee Monitor App · UI-first Dashboard
+# Status: DESIGN CONTRACT. The App / MQTT entities do not exist yet.
+# No demo data are presented as genuine observations.
+# Standard: Unified Product Status Card, Recorder-safe read/detail separation.
+# Optional frontend dependencies: custom:button-card >= 5, Mushroom.
+title: Zigbee Monitor
+path: zigbee-monitor
+icon: mdi:zigbee
+type: sections
+max_columns: 4
+sections:
+  - type: grid
+    cards:
+      - type: heading
+        heading: Zigbee Monitor
+        heading_style: title
+        icon: mdi:zigbee
+
+      - type: vertical-stack
+        cards:
+          - type: custom:button-card
+            entity: sensor.dh_zigbee_monitor_app_card
+            triggers_update:
+              - sensor.dh_zigbee_monitor_app_card
+              - sensor.dh_zigbee_monitor_app_version
+              - sensor.dh_zigbee_monitor_app_latest_version
+              - binary_sensor.dh_zigbee_monitor_app_update_available
+              - sensor.dh_zigbee_monitor_app_offline
+              - sensor.dh_zigbee_monitor_app_incidents
+              - update.digitalhouses_zigbee_monitor_app_update
+            update_timer: |
+              [[[
+                const s = states['sensor.dh_zigbee_monitor_app_card']?.state;
+                const installing = states['update.digitalhouses_zigbee_monitor_app_update']?.attributes?.in_progress === true;
+                return s === 'running' || installing ? 1000 : 5000;
+              ]]]
+            show_icon: true
+            show_name: true
+            show_label: true
+            icon: |
+              [[[
+                const s = states['sensor.dh_zigbee_monitor_app_card']?.state;
+                if (!s || ['unknown','unavailable'].includes(s)) return 'mdi:zigbee';
+                if (states['update.digitalhouses_zigbee_monitor_app_update']?.attributes?.in_progress === true || s === 'running')
+                  return 'mdi:progress-clock';
+                if (s === 'error') return 'mdi:alert-circle';
+                if (s === 'success') return 'mdi:check-circle';
+                if (states['update.digitalhouses_zigbee_monitor_app_update']?.state === 'on' ||
+                    states['binary_sensor.dh_zigbee_monitor_app_update_available']?.state === 'on')
+                  return 'mdi:package-up';
+                const incidents = states['sensor.dh_zigbee_monitor_app_incidents']?.state;
+                if (incidents && !['unknown','unavailable'].includes(incidents) && Number(incidents) > 0)
+                  return 'mdi:alert-network';
+                return 'mdi:zigbee';
+              ]]]
+            name: |
+              [[[
+                const v = states['sensor.dh_zigbee_monitor_app_version']?.state;
+                const latest = states['sensor.dh_zigbee_monitor_app_latest_version']?.state;
+                const valid = x => typeof x === 'string' && x.length > 0 &&
+                  !['unknown','unavailable','none'].includes(x.toLowerCase());
+                const supervisor = states['update.digitalhouses_zigbee_monitor_app_update'];
+                const available = supervisor?.state === 'on' ||
+                  states['binary_sensor.dh_zigbee_monitor_app_update_available']?.state === 'on';
+                const verifiedLatest = supervisor?.state === 'on' &&
+                  valid(supervisor?.attributes?.latest_version)
+                  ? supervisor.attributes.latest_version : latest;
+                return 'DH Zigbee Monitor' + (valid(v)
+                  ? ' · v' + v + (available && valid(verifiedLatest) && verifiedLatest !== v
+                      ? ' → v' + verifiedLatest : '')
+                  : '');
+              ]]]
+            label: |
+              [[[
+                const item = states['sensor.dh_zigbee_monitor_app_card'];
+                const supervisor = states['update.digitalhouses_zigbee_monitor_app_update'];
+                const formatElapsed = start => {
+                  const t = Math.max(0, Math.floor((performance.now() - start) / 1000));
+                  return String(Math.floor(t / 60)).padStart(2,'0') + ':' +
+                    String(t % 60).padStart(2,'0');
+                };
+                if (supervisor?.attributes?.in_progress === true) {
+                  if (this._dh_zigbee_timer?.kind !== 'install')
+                    this._dh_zigbee_timer = {kind:'install', since:performance.now()};
+                  const pct = supervisor.attributes.update_percentage;
+                  return 'Установка обновления… ' +
+                    (typeof pct === 'number' && Number.isFinite(pct) ? Math.round(pct) + '% · ' : '') +
+                    formatElapsed(this._dh_zigbee_timer.since);
+                }
+                if (!item || ['unknown','unavailable'].includes(item.state)) {
+                  this._dh_zigbee_timer = null;
+                  return 'Нет связи с приложением';
+                }
+                const a = item.attributes || {};
+                if (item.state === 'running') {
+                  const key = String(a.operation) + '|' + String(a.started_at);
+                  if (this._dh_zigbee_timer?.key !== key)
+                    this._dh_zigbee_timer = {kind:'operation', key, since:performance.now()};
+                  const action = a.operation === 'refresh' ? 'Обновление данных'
+                    : a.operation === 'check' ? 'Проверка версии' : 'Операция';
+                  return action + '… ' + formatElapsed(this._dh_zigbee_timer.since);
+                }
+                this._dh_zigbee_timer = null;
+                if (item.state === 'error') return 'Ошибка: ' + (a.error || 'нет подробностей');
+                if (item.state === 'success') {
+                  const t = Number(a.duration_seconds);
+                  return 'Готово' + (Number.isFinite(t) && a.duration_seconds !== null
+                    ? ' · ' + t.toFixed(1).replace('.', ',') + ' сек' : '');
+                }
+                const incidents = states['sensor.dh_zigbee_monitor_app_incidents']?.state;
+                if (incidents && !['unknown','unavailable'].includes(incidents)) {
+                  const n = Number(incidents);
+                  if (Number.isInteger(n) && n > 0) return 'Активных инцидентов: ' + n;
+                  if (n === 0) return 'Активных инцидентов нет';
+                }
+                return 'Ожидание достоверных данных';
+              ]]]
+            styles:
+              card:
+                - padding: 12px
+                - text-align: left
+              grid:
+                - grid-template-areas: '"i n" "i l"'
+                - grid-template-columns: 48px 1fr
+                - grid-template-rows: min-content min-content
+              img_cell:
+                - width: 40px
+                - justify-content: start
+              icon:
+                - width: 28px
+                - color: |
+                    [[[
+                      const s = states['sensor.dh_zigbee_monitor_app_card']?.state;
+                      if (!s || ['unknown','unavailable'].includes(s)) return 'var(--secondary-text-color)';
+                      if (s === 'error') return 'var(--error-color)';
+                      if (s === 'running') return 'var(--info-color, var(--primary-color))';
+                      if (s === 'success') return 'var(--success-color, var(--primary-color))';
+                      const n = states['sensor.dh_zigbee_monitor_app_incidents']?.state;
+                      return n && !['unknown','unavailable'].includes(n) && Number(n) > 0
+                        ? 'var(--warning-color, orange)' : 'var(--primary-color)';
+                    ]]]
+              name:
+                - justify-self: start
+                - font-size: 14px
+                - font-weight: 600
+              label:
+                - justify-self: start
+                - white-space: normal
+                - font-size: 13px
+                - color: var(--secondary-text-color)
+            tap_action:
+              action: none
+
+          - type: custom:mushroom-chips-card
+            alignment: center
+            chips:
+              - type: template
+                icon: mdi:refresh
+                content: Обновить
+                tap_action:
+                  action: perform-action
+                  perform_action: button.press
+                  target:
+                    entity_id: button.dh_zigbee_monitor_app_refresh
+              - type: template
+                icon: mdi:cloud-search
+                content: Версия
+                tap_action:
+                  action: perform-action
+                  perform_action: button.press
+                  target:
+                    entity_id: button.dh_zigbee_monitor_app_check_updates
+              - type: conditional
+                conditions:
+                  - entity: update.digitalhouses_zigbee_monitor_app_update
+                    state: "on"
+                chip:
+                  type: template
+                  icon: mdi:package-down
+                  icon_color: orange
+                  content: Новая версия
+                  tap_action:
+                    action: perform-action
+                    perform_action: update.install
+                    target:
+                      entity_id: update.digitalhouses_zigbee_monitor_app_update
+                    data:
+                      backup: true
+                    confirmation:
+                      text: Установить обновление Zigbee Monitor? Мониторинг будет временно прерван.
+              - type: template
+                icon: mdi:restart
+                content: Перезапуск
+                tap_action:
+                  action: perform-action
+                  perform_action: hassio.app_restart
+                  data:
+                    app: 8133339d_digitalhouses_zigbee_monitor_app
+                  confirmation:
+                    text: Перезапустить Zigbee Monitor? Сбор MQTT-статистики временно прервётся.
+
+      - type: heading
+        heading: Сводка
+        heading_style: subtitle
+        icon: mdi:view-dashboard
+      - type: tile
+        entity: sensor.dh_zigbee_monitor_app_networks
+        name: Сетей Zigbee2MQTT
+        icon: mdi:lan
+      - type: tile
+        entity: sensor.dh_zigbee_monitor_app_devices
+        name: Всего устройств
+        icon: mdi:devices
+      - type: tile
+        entity: sensor.dh_zigbee_monitor_app_offline
+        name: Offline устройств
+        icon: mdi:lan-disconnect
+      - type: tile
+        entity: sensor.dh_zigbee_monitor_app_spammers
+        name: Аномальных устройств
+        icon: mdi:alert-decagram
+      - type: tile
+        entity: sensor.dh_zigbee_monitor_app_incidents
+        name: Активных инцидентов
+        icon: mdi:alert-circle
+      - type: tile
+        entity: sensor.dh_zigbee_monitor_app_messages_rate_5m
+        name: MQTT-сообщений / мин (5 мин)
+        icon: mdi:message-processing
+
+  - type: grid
+    cards:
+      - type: heading
+        heading: Сети Zigbee2MQTT
+        heading_style: title
+        icon: mdi:network
+      - type: markdown
+        content: |
+          {% set networks = state_attr('sensor.dh_zigbee_monitor_app_networks_details', 'networks') %}
+          {% if states('sensor.dh_zigbee_monitor_app_networks_details') in ['unknown', 'unavailable'] or networks is not iterable or networks is string %}
+          *Нет подтверждённых данных о Zigbee-сетях.*
+          {% elif networks | length == 0 %}
+          Сети пока не обнаружены.
+          {% else %}
+          | Сеть | Состояние | Узлов | Offline |
+          |:--|:--|--:|--:|
+          {% for network in networks %}
+          | {{ network.name }} | {{ network.status }} | {{ network.devices }} | {{ network.offline }} |
+          {% endfor %}
+          {% endif %}
+      - type: heading
+        heading: Offline-устройства
+        heading_style: subtitle
+        icon: mdi:lan-disconnect
+      - type: markdown
+        content: |
+          {% set rows = state_attr('sensor.dh_zigbee_monitor_app_offline_details', 'devices') %}
+          {% if states('sensor.dh_zigbee_monitor_app_offline_details') in ['unknown', 'unavailable'] or rows is not iterable or rows is string %}
+          *Список недоступных устройств ещё не получен.*
+          {% elif rows | length == 0 %}
+          Нет подтверждённых offline-устройств.
+          {% else %}
+          | Устройство | Сеть | Offline с |
+          |:--|:--|:--|
+          {% for device in rows %}
+          | {{ device.name }} | {{ device.network_name }} | {{ device.offline_since }} |
+          {% endfor %}
+          {% endif %}
+      - type: history-graph
+        title: Offline — история
+        entities:
+          - entity: sensor.dh_zigbee_monitor_app_offline
+        hours_to_show: 72
+
+  - type: grid
+    cards:
+      - type: heading
+        heading: Хит-парад MQTT
+        heading_style: title
+        icon: mdi:chart-bar
+      - type: markdown
+        content: |
+          **Рейтинг активности — не измерение радиоэфира Zigbee.**
+          Устройства отсортированы в App по количеству полученных MQTT-публикаций.
+          Выявленные аномалии учитываются отдельно.
+      - type: heading
+        heading: За 1 час
+        heading_style: subtitle
+        icon: mdi:clock-outline
+      - type: markdown
+        content: |
+          {% set rows = state_attr('sensor.dh_zigbee_monitor_app_top_1h_details', 'items') %}
+          {% if states('sensor.dh_zigbee_monitor_app_top_1h_details') in ['unknown', 'unavailable'] or rows is not iterable or rows is string %}
+          *Рейтинг за 1 час пока недоступен.*
+          {% elif rows | length == 0 %}
+          Недостаточно данных для рейтинга.
+          {% else %}
+          | # | Устройство | Сообщений |
+          |--:|:--|--:|
+          {% for device in rows %}
+          | {{ loop.index }} | {{ device.name }} | {{ device.messages }} |
+          {% endfor %}
+          {% endif %}
+      - type: heading
+        heading: За 24 часа
+        heading_style: subtitle
+        icon: mdi:calendar-today
+      - type: markdown
+        content: |
+          {% set rows = state_attr('sensor.dh_zigbee_monitor_app_top_24h_details', 'items') %}
+          {% if states('sensor.dh_zigbee_monitor_app_top_24h_details') in ['unknown', 'unavailable'] or rows is not iterable or rows is string %}
+          *Рейтинг за 24 часа пока недоступен.*
+          {% elif rows | length == 0 %}
+          Недостаточно данных для рейтинга.
+          {% else %}
+          | # | Устройство | Сообщений |
+          |--:|:--|--:|
+          {% for device in rows %}
+          | {{ loop.index }} | {{ device.name }} | {{ device.messages }} |
+          {% endfor %}
+          {% endif %}
+      - type: heading
+        heading: За 7 дней
+        heading_style: subtitle
+        icon: mdi:calendar-week
+      - type: markdown
+        content: |
+          {% set rows = state_attr('sensor.dh_zigbee_monitor_app_top_7d_details', 'items') %}
+          {% if states('sensor.dh_zigbee_monitor_app_top_7d_details') in ['unknown', 'unavailable'] or rows is not iterable or rows is string %}
+          *Рейтинг за 7 дней пока недоступен.*
+          {% elif rows | length == 0 %}
+          Недостаточно данных для рейтинга.
+          {% else %}
+          | # | Устройство | Сообщений |
+          |--:|:--|--:|
+          {% for device in rows %}
+          | {{ loop.index }} | {{ device.name }} | {{ device.messages }} |
+          {% endfor %}
+          {% endif %}
+      - type: history-graph
+        title: MQTT-активность — 48 часов
+        entities:
+          - entity: sensor.dh_zigbee_monitor_app_messages_rate_5m
+        hours_to_show: 48
+
+  - type: grid
+    cards:
+      - type: heading
+        heading: Инциденты
+        heading_style: title
+        icon: mdi:alert-circle-outline
+      - type: markdown
+        content: |
+          {% set rows = state_attr('sensor.dh_zigbee_monitor_app_incidents_details', 'incidents') %}
+          {% if states('sensor.dh_zigbee_monitor_app_incidents_details') in ['unknown', 'unavailable'] or rows is not iterable or rows is string %}
+          *Сведения об инцидентах недоступны.*
+          {% elif rows | length == 0 %}
+          Нет подтверждённых активных инцидентов.
+          {% else %}
+          | Тип | Объект | С начала |
+          |:--|:--|:--|
+          {% for incident in rows %}
+          | {{ incident.kind }} | {{ incident.name }} | {{ incident.started_at }} |
+          {% endfor %}
+          {% endif %}
+      - type: history-graph
+        title: Инциденты — история
+        entities:
+          - entity: sensor.dh_zigbee_monitor_app_incidents
+        hours_to_show: 72
+      - type: heading
+        heading: Диагностика приложения
+        heading_style: subtitle
+        icon: mdi:information-outline
+      - type: entities
+        entities:
+          - entity: sensor.dh_zigbee_monitor_app_version
+            name: Версия
+          - entity: sensor.dh_zigbee_monitor_app_started_at
+            name: Процесс запущен
+          - entity: sensor.dh_zigbee_monitor_app_last_refresh
+            name: Последнее ручное обновление

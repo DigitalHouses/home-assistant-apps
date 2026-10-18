@@ -33,12 +33,16 @@
 
 ## Проектные документы
 
+- [UI-first Dashboard (Lovelace YAML)](examples/lovelace/dh_zigbee_monitor_app_dashboard.yaml)
+- [Recorder include/exclude (пример HA-пакета)](examples/packages/dh_zigbee_monitor_app_global_package.yaml)
 - [Архитектура](docs/ARCHITECTURE.md)
 - [Контракт Dashboard, MQTT и Recorder](docs/UI_DATA_CONTRACT.md)
 - [План реализации и приёмки](docs/IMPLEMENTATION_PLAN.md)
 
-Документы отражают текущий проектный черновик. Идентификаторы компонентов и
-набор сущностей фиксируются перед первой реализацией, после утверждения Dashboard.
+Dashboard и Recorder-пакет — **проектные примеры**. В них нет фиктивных
+цифр: до появления исполняемого App сенсоры отсутствуют, а UI показывает
+нехватку данных. При первом релизе App должен реализовать этот MQTT-контракт,
+а тесты подтвердить Recorder ON/OFF для каждой сущности.
 
 ## Соответствие репозиторию
 
