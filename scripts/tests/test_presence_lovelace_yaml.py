@@ -106,8 +106,8 @@ class PresenceLovelaceYamlTests(unittest.TestCase):
                         as_datetime=datetime.fromisoformat,
                         as_local=lambda value: value,
                     ).strip()
-                    self.assertNotIn("\\n\\n", rendered)
-                    self.assertNotIn("\\n---", rendered)
+                    self.assertNotIn("\n\n", rendered)
+                    self.assertNotIn("\n---", rendered)
                     self.assertEqual(rendered.count("- **"), 2)
                     self.assertNotIn("device_tracker.legacy", rendered)
                     if path == REGISTERED:
