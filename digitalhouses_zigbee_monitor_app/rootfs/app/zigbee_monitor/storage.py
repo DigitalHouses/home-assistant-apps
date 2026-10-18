@@ -105,6 +105,8 @@ class ActivityStore:
             raise ValueError("coordinator changed at existing base_topic; requires deliberate migration")
         if row:
             network_id, old_base, display_name = row
+            if old_base != base_topic and display_name == old_base:
+                display_name = base_topic
         else:
             network_id = preferred_id or "z2m_" + coordinator_ieee[2:]
             old_base = None
@@ -121,6 +123,7 @@ class ActivityStore:
                 VALUES (?,?,?,?,?)
                 ON CONFLICT(coordinator_ieee) DO UPDATE SET
                   base_topic=excluded.base_topic,
+                  display_name=excluded.display_name,
                   last_seen=excluded.last_seen
                 """,
                 (coordinator_ieee, network_id, base_topic, display_name, observed_at),
