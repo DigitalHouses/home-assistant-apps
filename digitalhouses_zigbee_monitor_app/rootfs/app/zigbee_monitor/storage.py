@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import sqlite3
 import re
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Mapping
 
@@ -46,7 +47,28 @@ CREATE TABLE IF NOT EXISTS device_mqtt_activity (
     last_message_epoch INTEGER NOT NULL CHECK(last_message_epoch >= 0),
     PRIMARY KEY (network_id, ieee_address)
 );
+-- Durable, bounded-in-frequency transitions; no per-MQTT-packet rows.
+-- Object identity is the immutable coordinator network ID plus device IEEE.
+CREATE TABLE IF NOT EXISTS incidents (
+    incident_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    kind TEXT NOT NULL CHECK(kind IN ('device_offline', 'zigbee2mqtt_offline')),
+    network_id TEXT NOT NULL,
+    object_id TEXT NOT NULL,
+    object_name TEXT NOT NULL,
+    first_observed_at INTEGER NOT NULL CHECK(first_observed_at >= 0),
+    started_at INTEGER CHECK(started_at >= 0),
+    resolved_at INTEGER CHECK(resolved_at >= 0),
+    resolution_source TEXT CHECK(resolution_source IN ('live_transition', 'reconciliation'))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS incidents_one_open_per_object
+    ON incidents(kind, network_id, object_id) WHERE resolved_at IS NULL;
+CREATE INDEX IF NOT EXISTS incidents_recent_closed
+    ON incidents(resolved_at DESC) WHERE resolved_at IS NOT NULL;
 """
+
+
+def _incident_iso(epoch: object) -> str | None:
+    return datetime.fromtimestamp(epoch, timezone.utc).isoformat() if epoch is not None else None
 
 
 class ActivityStore:
@@ -161,6 +183,99 @@ class ActivityStore:
                 """,
                 rows,
             )
+
+    def observe_incident(
+        self, *, kind: str, network_id: str, object_id: str,
+        object_name: str, offline: bool, observed_at: int,
+        live_transition: bool,
+    ) -> bool:
+        """Reconcile one *confirmed* Z2M state with persisted incidents.
+
+        A retained offline snapshot establishes a problem but NOT its onset.
+        Reconciliation after a restart never fabricates transition timestamps.
+        Return whether durable state changed (open/closed), not an event trigger.
+        """
+        if kind not in ("device_offline", "zigbee2mqtt_offline"):
+            raise ValueError("unsupported incident kind")
+        if any(not isinstance(v, str) or not v
+               for v in (network_id, object_id, object_name)):
+            raise ValueError("incident identity and name are required")
+        if not isinstance(offline, bool) or not isinstance(live_transition, bool):
+            raise ValueError("incident states must be bool")
+        if not isinstance(observed_at, int) or isinstance(observed_at, bool) or observed_at < 0:
+            raise ValueError("invalid incident timestamp")
+        with self.conn:
+            existing = self.conn.execute(
+                "SELECT incident_id FROM incidents WHERE "
+                "kind=? AND network_id=? AND object_id=? AND resolved_at IS NULL",
+                (kind, network_id, object_id),
+            ).fetchone()
+            if offline:
+                if existing:
+                    self.conn.execute(
+                        "UPDATE incidents SET object_name=? WHERE incident_id=? "
+                        "AND object_name<>?",
+                        (object_name, existing[0], object_name),
+                    )
+                    return False
+                self.conn.execute(
+                    "INSERT INTO incidents(kind,network_id,object_id,object_name,"
+                    "first_observed_at,started_at) VALUES (?,?,?,?,?,?)",
+                    (kind, network_id, object_id, object_name, observed_at,
+                     observed_at if live_transition else None),
+                )
+                return True
+            if existing is None:
+                return False
+            self.conn.execute(
+                "UPDATE incidents SET resolved_at=?, resolution_source=? "
+                "WHERE incident_id=?",
+                (observed_at, "live_transition" if live_transition
+                 else "reconciliation", existing[0]),
+            )
+            return True
+
+    def incident_history(self, *, open_limit: int = 40,
+                         recent_limit: int = 20) -> tuple[list[dict[str, object]],
+                                                         list[dict[str, object]], int]:
+        """Persisted history, never a misleading state derived from HA Recorder."""
+        def as_dict(row: tuple[object, ...]) -> dict[str, object]:
+            incident_id, kind, network, object_id, original_name, first, started, ended, source = row
+            return {
+                "incident_id": incident_id,
+                "kind": kind,
+                "network_id": network,
+                "object_id": object_id,
+                "ieee_address": object_id if kind == "device_offline" else None,
+                "name": original_name,
+                "first_observed_at": _incident_iso(first),
+                "started_at": _incident_iso(started),
+                "resolved_at": _incident_iso(ended),
+                "resolution_source": source,
+                "duration_seconds": (max(0, ended - started)
+                                     if ended is not None and started is not None else None),
+            }
+
+        total = int(self.conn.execute(
+            "SELECT COUNT(*) FROM incidents WHERE resolved_at IS NULL"
+        ).fetchone()[0])
+        cols = ("incident_id,kind,network_id,object_id,object_name,"
+                "first_observed_at,started_at,resolved_at,resolution_source")
+        active = [
+            as_dict(row) for row in self.conn.execute(
+                f"SELECT {cols} FROM incidents WHERE resolved_at IS NULL "
+                "ORDER BY first_observed_at DESC, incident_id DESC LIMIT ?",
+                (open_limit,),
+            )
+        ]
+        closed = [
+            as_dict(row) for row in self.conn.execute(
+                f"SELECT {cols} FROM incidents WHERE resolved_at IS NOT NULL "
+                "ORDER BY resolved_at DESC, incident_id DESC LIMIT ?",
+                (recent_limit,),
+            )
+        ]
+        return active, closed, total
 
     def last_mqtt_messages(self) -> dict[tuple[str, str], int]:
         """Actual non-retained MQTT observations, NOT Zigbee RF last_seen."""
