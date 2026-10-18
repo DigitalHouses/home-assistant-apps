@@ -196,3 +196,27 @@ failed pilot acceptance requiring adjustment or reversion to GPS mode.
    new MQTT entity, Recorder metric or fake arrival/departure event is created.
 6. Keep the diagnostic sensor excluded from Recorder; it now changes on
    source-status transitions in addition to registrations.
+
+## Current GPS/Wi-Fi status timestamp tree (0.1.35)
+
+1. Update DH Presence App to 0.1.35; keep the existing tree Markdown YAML.
+   For each registered phone, expect GPS and Wi-Fi state rows each followed
+   by an indented `└─ Статус с · dd.mm.yyyy hh:mm TZ` child line.
+   Both source rows still carry the original tracker name and emoji.
+2. In a home configured with `time_zone: Asia/Almaty`, verify UTC
+   source status timestamps convert to UTC+05:00. If HA timezone fails,
+   the fallback is explicitly marked UTC, not an invented local time.
+3. Repeated identical GPS or router Wi-Fi polls must **not** alter the
+   source status-since timestamp or publish an changed retained tree.
+   A genuine independent source state change must update only the
+   matching source timestamp in the next App MQTT snapshot.
+4. A temporarily unavailable GPS or router must show `⚪ Недоступно`
+   with the transition's own time, not the timestamp of the previous
+   `Дома` state. No fake `gps_out`, arrival or departure Events.
+5. Before first source evidence, show `нет данных`. For an unlinked
+   router Wi-Fi tracker, show `не применимо` instead of a fictional
+   transition. After App restart initial source transition timestamps
+   come from fresh source observation/first status evaluation; do not
+   claim restored time that was never persisted.
+6. Verify the same existing MQTT entity/tree and compact PVE-style
+   `line-height:1` card, IP/MAC privacy contract and Recorder exclusion.
