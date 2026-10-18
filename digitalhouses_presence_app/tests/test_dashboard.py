@@ -98,7 +98,7 @@ class LovelaceCardTests(unittest.TestCase):
         for attr in ("status_changed_at", "gps_changed_at", "wifi_changed_at"):
             self.assertIn(attr, card)
         self.assertIn("Не обнаружен (проверка сети)", card)
-        self.assertIn("Hybrid · GPS + Wi-Fi", card)
+        self.assertIn("Hybrid · GPS + трекер роутера", card)
         self.assertNotIn("Hybrid: пока только GPS", card)
         self.assertNotIn("39fb60fca44a2aa6", card)
         self.assertNotIn("roster | dictsort", card)
