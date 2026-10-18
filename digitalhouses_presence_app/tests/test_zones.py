@@ -71,6 +71,10 @@ class ZoneTests(unittest.TestCase):
             settings.change("zones/" + zone_key("zone.office"), "ON")
             restored = NotificationSelection(str(path))
             self.assertEqual(restored.mqtt_state("zones/" + zone_key("zone.office")), "ON")
+            restored.sync_zones({"zone.home": "Дом"})
+            self.assertNotIn(zone_key("zone.office"), restored.zones)
+            restored.sync_zones(ZONES)
+            self.assertEqual(restored.mqtt_state("zones/" + zone_key("zone.office")), "OFF")
             with self.assertRaises(ValueError):
                 restored.change("zones/ffffffffffffffff", "ON")
 
