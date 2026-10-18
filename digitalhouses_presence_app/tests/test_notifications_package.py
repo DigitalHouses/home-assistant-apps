@@ -45,18 +45,17 @@ class NotificationPackageTests(unittest.TestCase):
         self.assertEqual(code.count('state: "on"'), 7)
         self.assertEqual(code.count("action: script.write2log"), 7)
 
-    def test_unverified_wifi_loss_is_never_called_confirmed_disconnection(self):
+    def test_router_wifi_out_wording_and_unknown_without_false_claims(self):
         code = PACKAGE.read_text(encoding="utf-8")
         self.assertIn("id: wifi_lost", code)
         self.assertIn("Wi-Fi не подтверждается", code)
-        self.assertIn("Это не означает подтверждённое отключение или уход", code)
-        self.assertIn("timeout_minutes", code)
-        self.assertIn("wifi_out means completed negative enabled-method checks", code)
-        self.assertIn("выбранными методами PING/ARP", code)
-        self.assertIn("wifi_out_message:", code)
-        self.assertIn("не доказательство отключения Wi-Fi", code)
+        self.assertIn("Источник Wi-Fi временно недоступен", code)
+        self.assertIn("wifi_out now means explicit router device_tracker home -> not_home", code)
+        self.assertIn("По данным Wi-Fi-трекера роутера", code)
+        self.assertNotIn("выбранными методами PING/ARP", code)
+        self.assertNotIn("timeout_minutes", code)
         self.assertNotIn("resident_names.", code)
-        self.assertNotIn("dh_presence_app_notification_local_package:\n", code)
+        self.assertNotIn("dh_presence_app_notification_local_package:\\n", code)
 
     def test_no_fabricated_home_security_actions(self):
         code = PACKAGE.read_text(encoding="utf-8")
