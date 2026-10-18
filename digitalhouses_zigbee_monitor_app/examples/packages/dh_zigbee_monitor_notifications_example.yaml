@@ -1,0 +1,86 @@
+# Optional installation-local example. Copy/adapt to the HAOS site's own
+# packages/automations; do NOT assume this file is already active.
+# DH Zigbee Monitor publishes machine events only, never a Telegram/HA target.
+# This demonstration sends four direct persistent notifications. Replace the
+# delivery action with the site's existing script.write2admins or other target.
+# Do not use Jinja tojson: preserve native UTF-8/emoji.
+automation:
+  - id: dh_zigbee_monitor_machine_event_notifications_example
+    alias: DH Zigbee Monitor · machine events (EXAMPLE)
+    triggers:
+      - trigger: event.received
+        target:
+          entity_id: event.dh_zigbee_monitor_app_event
+        options:
+          event_type:
+            - device_offline
+        id: device_offline
+      - trigger: event.received
+        target:
+          entity_id: event.dh_zigbee_monitor_app_event
+        options:
+          event_type:
+            - device_online
+        id: device_online
+      - trigger: event.received
+        target:
+          entity_id: event.dh_zigbee_monitor_app_event
+        options:
+          event_type:
+            - zigbee2mqtt_offline
+        id: zigbee2mqtt_offline
+      - trigger: event.received
+        target:
+          entity_id: event.dh_zigbee_monitor_app_event
+        options:
+          event_type:
+            - zigbee2mqtt_online
+        id: zigbee2mqtt_online
+    actions:
+      - choose:
+          - conditions:
+              - condition: trigger
+                id: device_offline
+            sequence:
+              - action: persistent_notification.create
+                data:
+                  title: "📵 Zigbee: устройство недоступно"
+                  message: >-
+                    {{ trigger.to_state.attributes.friendly_name }}
+                    ({{ trigger.to_state.attributes.ieee_address }})
+                    в сети {{ trigger.to_state.attributes.network_id }}:
+                    Zigbee2MQTT сообщил offline.
+          - conditions:
+              - condition: trigger
+                id: device_online
+            sequence:
+              - action: persistent_notification.create
+                data:
+                  title: "✅ Zigbee: устройство восстановлено"
+                  message: >-
+                    {{ trigger.to_state.attributes.friendly_name }}
+                    ({{ trigger.to_state.attributes.ieee_address }})
+                    в сети {{ trigger.to_state.attributes.network_id }}:
+                    Zigbee2MQTT сообщил online.
+          - conditions:
+              - condition: trigger
+                id: zigbee2mqtt_offline
+            sequence:
+              - action: persistent_notification.create
+                data:
+                  title: "🔴 Zigbee2MQTT недоступен"
+                  message: >-
+                    Сеть {{ trigger.to_state.attributes.network_id }}
+                    ({{ trigger.to_state.attributes.base_topic }}):
+                    Zigbee2MQTT перешёл в offline.
+          - conditions:
+              - condition: trigger
+                id: zigbee2mqtt_online
+            sequence:
+              - action: persistent_notification.create
+                data:
+                  title: "✅ Zigbee2MQTT восстановлен"
+                  message: >-
+                    Сеть {{ trigger.to_state.attributes.network_id }}
+                    ({{ trigger.to_state.attributes.base_topic }}):
+                    Zigbee2MQTT перешёл в online.
