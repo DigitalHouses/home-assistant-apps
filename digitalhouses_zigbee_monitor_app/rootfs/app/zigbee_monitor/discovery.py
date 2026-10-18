@@ -128,6 +128,18 @@ def build_discovery(version: str) -> dict[str, Any]:
             "availability_mode": "all",
             "entity_category": "diagnostic",
         }
+    components["delete_telemetry"] = {
+        "platform": "button",
+        "name": "Delete DigitalHouses telemetry",
+        "unique_id": f"{PREFIX}_delete_telemetry",
+        "default_entity_id": f"button.{PREFIX}_delete_telemetry",
+        "command_topic": f"{ROOT}/command/delete_telemetry",
+        "payload_press": "DELETE",
+        "availability": _availability(),
+        "availability_mode": "all",
+        "entity_category": "config",
+        "icon": "mdi:database-remove",
+    }
     return {
         "device": {
             "identifiers": [PREFIX],
