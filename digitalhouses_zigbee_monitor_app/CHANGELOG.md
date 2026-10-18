@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.2
+
+- Исправлен запуск HAOS App: совместимость Alpine `py3-paho-mqtt` 1.x и paho-mqtt 2.x.
+- Нормализованы MQTT callbacks `on_connect`/`on_disconnect` для обеих версий.
+- Добавлены регрессионные тесты и обязательный smoke-test MQTT-клиента
+  внутри собранного Docker-образа с реально установленным Alpine paho.
+
 ## 0.1.1
 
 - Automatically discover Zigbee2MQTT instances via coordinator-verified retained
