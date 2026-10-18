@@ -7,6 +7,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from .core import Network
+from .problems import PROBLEM_TYPES
+
 PRODUCT = "digitalhouses_zigbee_monitor_app"
 PREFIX = "dh_zigbee_monitor_app"
 ROOT = "DigitalHouses/Global/dh_zigbee_monitor_app"
@@ -17,6 +20,7 @@ EVENT_TOPIC = f"{ROOT}/event"
 EVENT_TYPES = (
     "device_offline", "device_online",
     "zigbee2mqtt_offline", "zigbee2mqtt_online",
+    "problem_started", "problem_recovered",
 )
 
 HISTORY: dict[str, tuple[str, str | None]] = {
@@ -79,7 +83,7 @@ def _component(platform: str, key: str, name: str, *, valid: bool = False,
     return result
 
 
-def build_discovery(version: str) -> dict[str, Any]:
+def build_discovery(version: str, networks: tuple[Network, ...] = ()) -> dict[str, Any]:
     components: dict[str, dict[str, Any]] = {}
     for key, (name, unit) in HISTORY.items():
         args: dict[str, Any] = {
@@ -148,6 +152,69 @@ def build_discovery(version: str) -> dict[str, Any]:
             "availability_mode": "all",
             "entity_category": "diagnostic",
         }
+    # One stable discovery component set per automatically discovered network.
+    # All controls and problem flags are owned by this App, never HA helpers.
+    for network in networks:
+        nid = network.network_id
+        for kind in PROBLEM_TYPES:
+            key = f"{nid}_{kind}_problem"
+            valid = f"{ROOT}/problems/{nid}/{kind}/valid"
+            components[key] = {
+                "platform": "binary_sensor",
+                "name": f"{network.name}: {kind.replace('_', ' ')}",
+                "unique_id": f"{PREFIX}_{key}",
+                "default_entity_id": f"binary_sensor.{PREFIX}_{key}",
+                "state_topic": f"{ROOT}/problems/{nid}/{kind}/state",
+                "payload_on": "ON", "payload_off": "OFF",
+                "availability": _availability() + [{
+                    "topic": valid,
+                    "payload_available": "online",
+                    "payload_not_available": "offline",
+                }],
+                "availability_mode": "all",
+                "device_class": "problem",
+                "entity_category": "diagnostic",
+            }
+        components[f"{nid}_rpm_auto"] = {
+            "platform": "switch",
+            "name": f"{network.name}: automatic RPM threshold",
+            "unique_id": f"{PREFIX}_{nid}_rpm_auto",
+            "default_entity_id": f"switch.{PREFIX}_{nid}_rpm_auto",
+            "state_topic": f"{ROOT}/settings/{nid}/rpm_auto/state",
+            "command_topic": f"{ROOT}/command/settings/{nid}/rpm_auto",
+            "payload_on": "ON", "payload_off": "OFF",
+            "availability": _availability(),
+            "entity_category": "config",
+            "icon": "mdi:tune-auto",
+        }
+        components[f"{nid}_rpm_threshold"] = {
+            "platform": "number",
+            "name": f"{network.name}: manual RPM threshold",
+            "unique_id": f"{PREFIX}_{nid}_rpm_threshold",
+            "default_entity_id": f"number.{PREFIX}_{nid}_rpm_threshold",
+            "state_topic": f"{ROOT}/settings/{nid}/rpm_threshold/state",
+            "command_topic": f"{ROOT}/command/settings/{nid}/rpm_threshold",
+            "min": 1, "max": 10000, "step": 1,
+            "unit_of_measurement": "messages/min",
+            "availability": _availability(),
+            "entity_category": "config",
+            "icon": "mdi:speedometer-slow",
+        }
+    components["problems"] = {
+        "platform": "sensor", "name": "Zigbee problems",
+        "unique_id": f"{PREFIX}_problems",
+        "default_entity_id": f"sensor.{PREFIX}_problems",
+        "state_topic": f"{ROOT}/problems/aggregate",
+        "availability": _availability() + [{
+            "topic": f"{ROOT}/problems/valid",
+            "payload_available": "online",
+            "payload_not_available": "offline",
+        }],
+        "availability_mode": "all",
+        "json_attributes_topic": f"{ROOT}/problems/presentation",
+        "entity_category": "diagnostic",
+        "icon": "mdi:alert-circle-outline",
+    }
     components["delete_telemetry"] = {
         "platform": "button",
         "name": "Delete DigitalHouses telemetry",

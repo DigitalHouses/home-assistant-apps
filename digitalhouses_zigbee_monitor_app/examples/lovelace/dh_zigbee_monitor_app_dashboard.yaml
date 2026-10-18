@@ -2,7 +2,7 @@
 # Live App dashboard. Status card is maintained separately in examples/lovelace/dh_zigbee_monitor_app_card_ru.yaml.
 # No demo data are presented as genuine observations.
 # Standard: Unified Product Status Card, Recorder-safe read/detail separation.
-# Optional frontend dependencies: custom:button-card >= 5, Mushroom.
+# Optional frontend dependencies: custom:button-card >= 5, Mushroom, custom:auto-entities.
 title: Zigbee Monitor
 path: zigbee-monitor
 icon: mdi:zigbee
@@ -232,14 +232,93 @@ sections:
           Сети пока не обнаружены.
           {% else %}
           <table>
-          <thead><tr><th>Сеть</th><th>Статус</th><th>Узлов</th><th>Offline</th></tr></thead>
+          <thead><tr><th>Сеть</th><th>Bridge</th><th>Total / Online / Offline / ?</th><th>RPM / порог</th></tr></thead>
           <tbody>
           {% for network in networks %}
-          <tr><td>{{ network.name | e }}</td><td>{{ network.status | e }}</td><td>{{ network.devices }}</td><td>{{ network.offline if network.offline is not none else '—' }}</td></tr>
+          <tr><td>{{ network.name | e }}</td><td>{{ network.status | e }}</td><td>{{ network.devices }} / {{ network.online | default('—') }} / {{ network.offline if network.offline is not none else '—' }} / {{ network.availability_unknown }}</td><td>{{ network.rpm if network.rpm is not none else '—' }} / {{ network.threshold if network.threshold is not none else '—' }}</td></tr>
           {% endfor %}
           </tbody>
           </table>
           {% endif %}
+      - type: heading
+        heading: Проблемы Zigbee
+        heading_style: subtitle
+        icon: mdi:alert-circle-outline
+      - type: custom:mushroom-template-card
+        entity: sensor.dh_zigbee_monitor_app_problems
+        primary: |-
+          {% set active = state_attr(entity, 'active') or [] %}
+          {% if states(entity) in ['unknown','unavailable','none',''] %}
+            Нет достоверных данных о проблемах
+          {% elif active | count == 0 %}
+            Проблем не обнаружено
+          {% else %}
+            Обнаружено проблем: {{ active | count }}
+          {% endif %}
+        secondary: |-
+          {% set active = state_attr(entity, 'active') or [] %}
+          {% set unknown = state_attr(entity, 'unknown') or [] %}
+          {% if states(entity) in ['unknown','unavailable','none',''] %}
+            Не все диагностические проверки завершены.
+          {% elif active | count == 0 %}
+            Подтверждённых проблем нет.
+          {% else %}
+            {% for item in active %}
+              {% set id = item.get('category','') %}
+              {% set name = item.get('object_name','Zigbee2MQTT') %}
+              {% set value = item.get('value') %}
+              {% set threshold = item.get('threshold') %}
+              {% if id == 'bridge_offline' %}
+                • {{ name }} — Zigbee2MQTT offline
+              {% elif id == 'devices_offline' %}
+                • {{ name }} — Offline устройств: {{ value }}
+              {% elif id == 'mqtt_traffic_low' %}
+                • {{ name }} — снижение активности{% if value is number and threshold is number %}: {{ value | round(1) }} RPM · порог {{ threshold | round(1) }}{% endif %}
+              {% else %}
+                • {{ name }} — {{ id }}
+              {% endif %}
+            {% endfor %}
+          {% endif %}
+          {% if unknown | count > 0 %}
+            Не все проверки доступны ({{ unknown | count }}).
+          {% endif %}
+        icon: |-
+          {% if states(entity) in ['unknown','unavailable','none',''] %}
+            mdi:help-circle-outline
+          {% elif (state_attr(entity,'active') or []) | count > 0 %}
+            mdi:alert-circle
+          {% else %}
+            mdi:check-circle
+          {% endif %}
+        icon_color: |-
+          {% if states(entity) in ['unknown','unavailable','none',''] %}
+            grey
+          {% elif (state_attr(entity,'active') or []) | count > 0 %}
+            red
+          {% else %}
+            green
+          {% endif %}
+        multiline_secondary: true
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: 12
+      - type: heading
+        heading: Пороги MQTT-активности
+        heading_style: subtitle
+        icon: mdi:tune-variant
+      - type: custom:auto-entities
+        card:
+          type: entities
+          title: Чувствительность сетей
+          show_header_toggle: false
+        filter:
+          include:
+            - entity_id: switch.dh_zigbee_monitor_app_*_rpm_auto
+            - entity_id: number.dh_zigbee_monitor_app_*_rpm_threshold
+        sort:
+          method: name
+        show_empty: false
       - type: heading
         heading: Доступность устройств
         heading_style: subtitle

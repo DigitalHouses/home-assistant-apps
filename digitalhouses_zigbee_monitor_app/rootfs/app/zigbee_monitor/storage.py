@@ -60,6 +60,11 @@ CREATE TABLE IF NOT EXISTS incidents (
     resolved_at INTEGER CHECK(resolved_at >= 0),
     resolution_source TEXT CHECK(resolution_source IN ('live_transition', 'reconciliation'))
 );
+CREATE TABLE IF NOT EXISTS network_problem_settings (
+    network_id TEXT PRIMARY KEY NOT NULL,
+    auto_rpm_threshold INTEGER NOT NULL DEFAULT 1 CHECK(auto_rpm_threshold IN (0,1)),
+    manual_rpm_threshold INTEGER NOT NULL DEFAULT 10 CHECK(manual_rpm_threshold BETWEEN 1 AND 10000)
+);
 CREATE UNIQUE INDEX IF NOT EXISTS incidents_one_open_per_object
     ON incidents(kind, network_id, object_id) WHERE resolved_at IS NULL;
 CREATE INDEX IF NOT EXISTS incidents_recent_closed
@@ -280,6 +285,54 @@ class ActivityStore:
             )
         ]
         return active, closed, total
+
+    def network_problem_settings(self, network_id: str) -> tuple[bool, int]:
+        row = self.conn.execute(
+            "SELECT auto_rpm_threshold,manual_rpm_threshold "
+            "FROM network_problem_settings WHERE network_id=?", (network_id,)
+        ).fetchone()
+        return (bool(row[0]), int(row[1])) if row else (True, 10)
+
+    def update_network_problem_settings(
+        self, network_id: str, *, auto: bool | None = None,
+        threshold: int | None = None,
+    ) -> tuple[bool, int]:
+        if not isinstance(network_id, str) or not network_id:
+            raise ValueError("network_id required")
+        if auto is not None and not isinstance(auto, bool):
+            raise ValueError("auto must be boolean")
+        if threshold is not None and (
+            type(threshold) is not int or not 1 <= threshold <= 10000
+        ):
+            raise ValueError("RPM threshold must be integer 1..10000")
+        old_auto, old_threshold = self.network_problem_settings(network_id)
+        effective_auto = old_auto if auto is None else auto
+        effective_threshold = old_threshold if threshold is None else threshold
+        with self.conn:
+            self.conn.execute(
+                "INSERT INTO network_problem_settings"
+                "(network_id,auto_rpm_threshold,manual_rpm_threshold) VALUES (?,?,?) "
+                "ON CONFLICT(network_id) DO UPDATE SET "
+                "auto_rpm_threshold=excluded.auto_rpm_threshold,"
+                "manual_rpm_threshold=excluded.manual_rpm_threshold",
+                (network_id, int(effective_auto), effective_threshold),
+            )
+        return effective_auto, effective_threshold
+
+    def network_message_minutes(
+        self, network_id: str, *, from_epoch: int, until_epoch: int,
+    ) -> dict[int, int]:
+        if from_epoch < 0 or until_epoch <= from_epoch:
+            raise ValueError("invalid minute range")
+        return {
+            int(epoch): int(count)
+            for epoch, count in self.conn.execute(
+                "SELECT bucket_start,SUM(messages) FROM message_minutes "
+                "WHERE network_id=? AND bucket_start>=? AND bucket_start<? "
+                "GROUP BY bucket_start",
+                (network_id, from_epoch, until_epoch),
+            )
+        }
 
     def last_mqtt_messages(self) -> dict[tuple[str, str], int]:
         """Actual non-retained MQTT observations, NOT Zigbee RF last_seen."""
