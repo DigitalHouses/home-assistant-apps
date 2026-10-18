@@ -177,7 +177,7 @@ class ZigbeeMonitorUiDesignTests(unittest.TestCase):
                  if card.get("type") == "markdown"]
         templated_tables = [card["content"] for card in cards
                             if "<table>" in card["content"]]
-        self.assertEqual(len(templated_tables), 7)
+        self.assertEqual(len(templated_tables), 8)
         for content in templated_tables:
             with self.subTest(table=content[:60]):
                 self.assertEqual(content.count("<table>"), 1)
