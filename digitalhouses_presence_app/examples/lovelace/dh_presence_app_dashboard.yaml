@@ -327,6 +327,8 @@ sections:
               _Нет зарегистрированных телефонов._
             {%- endif -%}
           {%- endif %}
+        grid_options:
+          columns: 12
       - type: custom:button-card
         entity: sensor.dh_presence_app_version
         hidden: |
