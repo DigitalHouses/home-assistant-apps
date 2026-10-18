@@ -1,20 +1,26 @@
 type: markdown
 title: "📱 Зарегистрированные телефоны"
-content: |-
-  {%- set roster = state_attr('binary_sensor.dh_presence_app_residents_home', 'residents') -%}
-  {% if roster is not mapping -%}
-  _Реестр телефонов пока недоступен._
+content: >-
+  {%- set roster =
+    state_attr('binary_sensor.dh_presence_app_residents_home', 'residents')
+  -%}
+  {%- if roster is not mapping -%}
+    _Реестр телефонов пока недоступен._
   {%- else -%}
-  {% set devices = roster.values() | selectattr('registered') | list -%}
-  {% if devices -%}
-  {% for phone in devices -%}
-  {% if not loop.first -%}
-  ────────────────────────────  
-  {% endif -%}
-  **{{ phone.registration_label }}**  
-  GPS: `{{ phone.gps_tracker }}` · Wi-Fi: {% if phone.wifi_tracker %}`{{ phone.wifi_tracker }}`{% else %}не привязан{% endif %}  
-  {% endfor -%}
-  {% else -%}
-  _Нет зарегистрированных телефонов._
-  {%- endif -%}
+    {%- set devices = roster.values() | selectattr('registered') | list -%}
+    {%- if devices -%}
+      {%- set ns = namespace(lines=['Телефоны · ' ~ (devices | count)]) -%}
+      {%- for phone in devices -%}
+        {%- set last = loop.last -%}
+        {%- set indent = '   ' if last else '│  ' -%}
+        {%- set ns.lines = ns.lines + [
+          ('└─' if last else '├─') ~ ' 📱 ' ~ phone.registration_label,
+          indent ~ '├─ GPS · ' ~ phone.gps_tracker,
+          indent ~ '└─ Wi-Fi · ' ~ (phone.wifi_tracker or 'не привязан')
+        ] -%}
+      {%- endfor -%}
+      {{ '```text\n' ~ (ns.lines | join('\n')) ~ '\n```' }}
+    {%- else -%}
+      _Нет зарегистрированных телефонов._
+    {%- endif -%}
   {%- endif %}
