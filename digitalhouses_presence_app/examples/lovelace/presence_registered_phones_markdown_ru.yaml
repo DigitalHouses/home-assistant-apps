@@ -1,7 +1,10 @@
 type: markdown
 title: "📱 Зарегистрированные телефоны"
 content: |-
-  {% set roster = state_attr('binary_sensor.dh_presence_app_residents_home', 'residents') or {} %}
+  {% set roster = state_attr('binary_sensor.dh_presence_app_residents_home', 'residents') %}
+  {% if roster is not mapping %}
+  _Реестр телефонов пока недоступен._
+  {% else %}
   {% set devices = roster.values() | selectattr('registered') | list %}
   {% if devices %}
   {% for phone in devices %}
@@ -18,4 +21,5 @@ content: |-
   {% endfor %}
   {% else %}
   _Нет зарегистрированных телефонов._
+  {% endif %}
   {% endif %}
