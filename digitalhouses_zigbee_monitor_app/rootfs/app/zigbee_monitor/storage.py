@@ -7,6 +7,7 @@ never invents missing data or deletes a physical device on Z2M rename.
 from __future__ import annotations
 
 import sqlite3
+import re
 from pathlib import Path
 from typing import Mapping
 
@@ -14,6 +15,13 @@ from .core import Device
 
 
 _SCHEMA = """
+CREATE TABLE IF NOT EXISTS networks (
+    coordinator_ieee TEXT PRIMARY KEY,
+    network_id TEXT NOT NULL UNIQUE,
+    base_topic TEXT NOT NULL UNIQUE,
+    display_name TEXT NOT NULL,
+    last_seen INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS devices (
     ieee_address TEXT PRIMARY KEY,
     network_id TEXT NOT NULL,
@@ -56,6 +64,68 @@ class ActivityStore:
 
     def __exit__(self, _type: object, _value: object, _trace: object) -> None:
         self.close()
+
+    def known_networks(self) -> tuple["Network", ...]:
+        from .core import Network
+
+        records = self.conn.execute(
+            "SELECT network_id,base_topic,display_name FROM networks "
+            "ORDER BY network_id"
+        ).fetchall()
+        return tuple(Network(network_id, base, name) for network_id, base, name in records)
+
+    def register_network(
+        self, coordinator_ieee: str, base_topic: str, *,
+        observed_at: int, preferred_id: str | None = None,
+    ) -> tuple["Network", bool]:
+        """Resolve coordinator IEEE into a stable logical ID and persist its topic.
+
+        The optional preferred_id migrates a formerly manually configured
+        network only if its base topic agrees with the discovered coordinator.
+        """
+        from .core import Network
+
+        if not isinstance(coordinator_ieee, str) or not re.fullmatch(
+            r"0x[0-9a-f]{16}", coordinator_ieee
+        ):
+            raise ValueError("invalid coordinator IEEE")
+        if not isinstance(observed_at, int) or isinstance(observed_at, bool) or observed_at < 0:
+            raise ValueError("invalid observed_at")
+        if not isinstance(base_topic, str) or not base_topic:
+            raise ValueError("invalid base_topic")
+        row = self.conn.execute(
+            "SELECT network_id, base_topic, display_name FROM networks "
+            "WHERE coordinator_ieee=?", (coordinator_ieee,)
+        ).fetchone()
+        existing = self.conn.execute(
+            "SELECT coordinator_ieee, network_id FROM networks WHERE base_topic=?",
+            (base_topic,),
+        ).fetchone()
+        if existing and existing[0] != coordinator_ieee:
+            raise ValueError("coordinator changed at existing base_topic; requires deliberate migration")
+        if row:
+            network_id, old_base, display_name = row
+        else:
+            network_id = preferred_id or "z2m_" + coordinator_ieee[2:]
+            old_base = None
+            display_name = base_topic
+            if self.conn.execute(
+                "SELECT 1 FROM networks WHERE network_id=?", (network_id,)
+            ).fetchone():
+                raise ValueError("network_id collision")
+        changed = old_base != base_topic
+        with self.conn:
+            self.conn.execute(
+                """
+                INSERT INTO networks(coordinator_ieee,network_id,base_topic,display_name,last_seen)
+                VALUES (?,?,?,?,?)
+                ON CONFLICT(coordinator_ieee) DO UPDATE SET
+                  base_topic=excluded.base_topic,
+                  last_seen=excluded.last_seen
+                """,
+                (coordinator_ieee, network_id, base_topic, display_name, observed_at),
+            )
+        return Network(network_id, base_topic, display_name), changed
 
     def upsert_inventory(self, devices: tuple[Device, ...], *, observed_at: int) -> None:
         if not isinstance(observed_at, int) or isinstance(observed_at, bool) or observed_at < 0:
