@@ -162,7 +162,7 @@ class ZigbeeMonitorUiDesignTests(unittest.TestCase):
         source = APP / "examples/lovelace/dh_zigbee_monitor_app_card_ru.yaml"
         content = source.read_text(encoding="utf-8")
         for yaml_text in (content, self.raw_dashboard):
-            self.assertIn("Math.floor((performance.now() - start) / 1000)", yaml_text)
+            self.assertIn("Math.floor((performance.now() - since) / 1000)", yaml_text)
             self.assertIn("Math.round(Math.max(0, value))", yaml_text)
             self.assertNotIn("t.toFixed(1)", yaml_text)
 
