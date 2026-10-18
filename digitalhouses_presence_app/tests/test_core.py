@@ -66,11 +66,14 @@ class TestEngine(unittest.TestCase):
         e.gps_unavailable(tracker, unavailable_at + timedelta(minutes=1))
         self.assertEqual(resident.gps_changed_at, unavailable_at)
         self.assertIs(e.overall(), Status.HOME)  # Durable presence is preserved.
-        # Restored old HA last-known home is new to the live source, not an
-        # invented physical arrival from GPS UNAVAILABLE.
-        self.assertEqual(e.gps_observation(tracker, Status.HOME, T0), [])
+        # A fresh trusted observation restores GPS status, without
+        # synthesizing a household arrival after a mere source outage.
+        restored_at = unavailable_at + timedelta(minutes=2)
+        self.assertEqual(e.gps_observation(tracker, Status.HOME, restored_at), [])
         self.assertIs(resident.gps, Status.HOME)
-        self.assertEqual(resident.gps_changed_at, T0)
+        self.assertEqual(resident.gps_changed_at, restored_at)
+        self.assertEqual(e.gps_observation(tracker, Status.HOME, restored_at), [])
+        self.assertEqual(resident.gps_changed_at, restored_at)
 
     def test_unknown_gps_unavailable_without_prior_state_has_no_start_time(self):
         e = self.engine()
