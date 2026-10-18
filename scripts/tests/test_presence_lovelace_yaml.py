@@ -119,7 +119,7 @@ class PresenceLovelaceYamlTests(unittest.TestCase):
                     if path == REGISTERED:
                         pre = '<pre style="margin:0; padding:0; line-height:1; ' \
                               'font-family:\'Courier New\',monospace; white-space:pre;">'
-                        self.assertTrue(rendered.startswith(pre + "Телефоны · 2\n"))
+                        self.assertTrue(rendered.startswith(pre + "Зарегистрированные телефоны\n"))
                         self.assertTrue(rendered.endswith("</pre>"))
                         self.assertEqual(rendered.count("<pre"), 1)
                         self.assertEqual(rendered.count("</pre>"), 1)
