@@ -231,8 +231,9 @@ class PhoneManagementTests(unittest.TestCase):
             root = request()
             root.path = "/"
             root.do_GET()
-            csp_headers = [v for k, v in root.responses if isinstance(k, str)
-                           and k == "Content-Security-Policy"]
+            csp_headers = [item[1] for item in root.responses
+                           if isinstance(item, tuple)
+                           and item[0] == "Content-Security-Policy"]
             self.assertEqual(len(csp_headers), 1)
             self.assertIn("frame-src 'self'", csp_headers[0])
             self.assertIn('src="admin/delete-phone"', HTML)
