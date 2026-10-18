@@ -18,8 +18,6 @@ HISTORICAL = {
     "sensor.dh_zigbee_monitor_app_networks",
     "sensor.dh_zigbee_monitor_app_devices",
     "sensor.dh_zigbee_monitor_app_offline",
-    "sensor.dh_zigbee_monitor_app_spammers",
-    "sensor.dh_zigbee_monitor_app_incidents",
     "sensor.dh_zigbee_monitor_app_messages_rate_5m",
 }
 DETAILS = {
@@ -84,11 +82,14 @@ class ZigbeeMonitorUiDesignTests(unittest.TestCase):
         used = set(re.findall(r"state_attr\('([^']+)'", self.raw_dashboard))
         self.assertEqual(used, DETAILS)
         excluded = set(self.recorder["exclude"]["entities"])
-        self.assertTrue(DETAILS.issubset(excluded))
-        self.assertIn("sensor.dh_zigbee_monitor_app_*_details",
-                      self.recorder["exclude"]["entity_globs"])
-        self.assertIn("event.dh_zigbee_monitor_app_event", excluded)
-        self.assertIn("sensor.dh_zigbee_monitor_app_card", excluded)
+        globs = set(self.recorder["exclude"]["entity_globs"])
+        self.assertIn("sensor.dh_zigbee_monitor_app_*", globs)
+        self.assertIn("event.dh_zigbee_monitor_app_*", globs)
+        self.assertIn("binary_sensor.dh_zigbee_monitor_app_*", globs)
+        self.assertTrue(all(name.startswith("sensor.dh_zigbee_monitor_app_")
+                            for name in DETAILS))
+        self.assertEqual(self.recorder["exclude"]["entities"],
+                         ["update.digitalhouses_zigbee_monitor_app_update"])
 
     def test_canonical_card_equals_embedded_dashboard_card(self):
         source = APP / "examples/lovelace/dh_zigbee_monitor_app_card_ru.yaml"
@@ -199,8 +200,8 @@ class ZigbeeMonitorUiDesignTests(unittest.TestCase):
         self.assertIn("item.power_label", self.raw_dashboard)
         self.assertIn("item.last_mqtt_message_at", self.raw_dashboard)
         self.assertIn("Последний MQTT", self.raw_dashboard)
-        self.assertIn("sensor.dh_zigbee_monitor_app_inventory_details",
-                      self.recorder["exclude"]["entities"])
+        self.assertIn("sensor.dh_zigbee_monitor_app_*",
+                      self.recorder["exclude"]["entity_globs"])
         self.assertEqual(
             set(self.recorder["include"]["entities"]), HISTORICAL,
         )
@@ -208,10 +209,27 @@ class ZigbeeMonitorUiDesignTests(unittest.TestCase):
     def test_inventory_diagnostics_are_ui_only(self):
         self.assertIn("availability_reason_label", self.raw_dashboard)
         self.assertIn("availability_unknown", self.raw_dashboard)
-        self.assertIn("sensor.dh_zigbee_monitor_app_refresh_state",
-                      self.recorder["exclude"]["entities"])
+        self.assertIn("sensor.dh_zigbee_monitor_app_*",
+                      self.recorder["exclude"]["entity_globs"])
         self.assertNotIn("sensor.dh_zigbee_monitor_app_refresh_state",
                          self.recorder["include"]["entities"])
+
+    def test_recorder_is_bounded_to_four_real_history_metrics(self):
+        historical = set(self.recorder["include"]["entities"])
+        self.assertEqual(historical, HISTORICAL)
+        self.assertEqual(len(historical), 4)
+        self.assertNotIn("sensor.dh_zigbee_monitor_app_spammers", historical)
+        self.assertNotIn("sensor.dh_zigbee_monitor_app_incidents", historical)
+        self.assertNotIn("sensor.dh_zigbee_monitor_app_card", historical)
+        self.assertNotIn("event.dh_zigbee_monitor_app_event", historical)
+        self.assertEqual(set(self.recorder["exclude"]["entity_globs"]), {
+            "sensor.dh_zigbee_monitor_app_*",
+            "binary_sensor.dh_zigbee_monitor_app_*",
+            "button.dh_zigbee_monitor_app_*",
+            "event.dh_zigbee_monitor_app_*",
+        })
+        self.assertNotIn("domains", self.recorder["include"])
+        self.assertNotIn("entity_globs", self.recorder["include"])
 
     def test_recorder_include_only_scalars(self):
         self.assertEqual(set(self.recorder["include"]["entities"]), HISTORICAL)
