@@ -70,99 +70,59 @@ class PresenceLovelaceYamlTests(unittest.TestCase):
                     self.assertNotIn("None", actual)
 
     def test_presence_markdown_pve_tree_and_events_table(self):
-        """Reuse the PVE dashboard's monospace tree and compact Markdown table."""
+        """The App prepares the full phone tree, HA only displays its text."""
         dashboard = yaml.safe_load(DASH.read_text(encoding="utf-8"))
         residents = dashboard["sections"][1]["cards"]
         notifications = dashboard["sections"][2]["cards"]
-        cards = (
-            (REGISTERED, residents[1]),
-            (RECENT, notifications[3]),
-        )
+        cards = ((REGISTERED, residents[1]), (RECENT, notifications[3]))
         env = Environment()
-        roster = {
-            "one": {"registered": True, "registration_label": "Serzhan (iPhone)",
-                    "gps_tracker": "device_tracker.phone_1",
-                    "wifi_tracker": "device_tracker.router_1"},
-            "two": {"registered": True, "registration_label": "Alina (iPhone)",
-                    "gps_tracker": "device_tracker.phone_2", "wifi_tracker": None},
-            "old": {"registered": False, "registration_label": None,
-                    "gps_tracker": "device_tracker.legacy",
-                    "wifi_tracker": None},
-        }
-        event_rows = [
+        events = [
             {"title": "GPS: дома", "details": "Serzhan (iPhone)",
              "timestamp": "2026-10-18T11:05:00+00:00"},
             {"title": "Выход из зоны", "details": "Alina · Office",
              "timestamp": "2026-10-18T11:06:00+00:00"},
         ]
+        tree = ("Зарегистрированные телефоны\\n"
+                "└─ 📱 Serzhan (13ProMAX .SKY)\\n"
+                "   ├─ GPS · 13promax_sky\\n"
+                "   ├─ Wi-Fi · не привязан\\n"
+                "   ├─ IP (рег.) · 192.168.8.54\\n"
+                "   └─ MAC (рег.) · 88:b9:45:80:a7:55")
         for path, embedded in cards:
             standalone = yaml.safe_load(path.read_text(encoding="utf-8"))
             with self.subTest(card=path.name):
                 self.assertEqual(standalone, embedded)
                 for card in (standalone, embedded):
                     template = env.from_string(card["content"])
-
-                    def render(roster_arg, events_arg):
+                    def render(tree_value, event_rows):
                         return template.render(
-                            state_attr=lambda _, attr: (
-                                roster_arg if attr == "residents" else events_arg),
+                            state_attr=lambda _, attr: tree_value if attr == "tree" else event_rows,
                             as_datetime=datetime.fromisoformat,
                             as_local=lambda value: value,
                         ).strip()
-
-                    rendered = render(roster, event_rows)
-                    self.assertNotIn("device_tracker.legacy", rendered)
-                    self.assertNotIn("──────────────────", rendered)
-                    self.assertNotIn("<table", rendered)
-                    one = render({"one": roster["one"]}, event_rows[:1])
-                    empty = render({}, [])
+                    output = render(tree, events)
+                    self.assertNotIn("──────────────────", output)
                     if path == REGISTERED:
-                        pre = '<pre style="margin:0; padding:0; line-height:1; ' \
-                              'font-family:\'Courier New\',monospace; white-space:pre;">'
-                        self.assertTrue(rendered.startswith(pre + "Зарегистрированные телефоны\n"))
-                        self.assertTrue(rendered.endswith("</pre>"))
-                        self.assertEqual(rendered.count("<pre"), 1)
-                        self.assertEqual(rendered.count("</pre>"), 1)
-                        self.assertNotIn("```", rendered)
-                        self.assertIn("├─ 📱 Serzhan (iPhone)", rendered)
-                        self.assertIn("│  ├─ GPS · phone_1", rendered)
-                        self.assertIn("│  └─ Wi-Fi · router_1", rendered)
-                        self.assertIn("└─ 📱 Alina (iPhone)", rendered)
-                        self.assertNotIn("device_tracker.phone_1", rendered)
-                        self.assertNotIn("device_tracker.router_1", rendered)
-                        self.assertNotIn("device_tracker.phone_2", rendered)
-                        self.assertNotIn("title", card)
-                        # PVE native <pre> has no Markdown code-block padding
-                        # or extra blank lines; every node remains one line.
-                        self.assertEqual(len(rendered.splitlines()), 7)
-                        self.assertTrue(all(line.strip() for line in rendered.splitlines()))
-                        self.assertNotIn("\n\n", rendered)
-                        self.assertEqual(rendered.count("line-height:1"), 1)
-                        # Registered labels originate from HA users/devices:
-                        # never inject unescaped HTML into the raw <pre>.
-                        unsafe = dict(roster["one"],
-                                      registration_label='Phone <script>x</script> & X')
-                        html = render({"one": unsafe}, [])
-                        self.assertNotIn("<script>", html)
-                        self.assertIn("&lt;script&gt;", html)
-                        self.assertIn("&amp;", html)
-                        self.assertIn("   └─ Wi-Fi · не привязан", rendered)
-                        self.assertIn("└─ 📱 Serzhan (iPhone)", one)
-                        self.assertNotIn("├─ 📱", one)
-                        self.assertEqual(empty, "_Нет зарегистрированных телефонов._")
-                        self.assertEqual(render(None, []),
+                        opening = ('<pre style="margin:0; padding:0; line-height:1; '
+                                   'font-family:\\'Courier New\\',monospace; white-space:pre;">')
+                        self.assertEqual(output, opening + tree + "</pre>")
+                        self.assertIn("IP (рег.) · 192.168.8.54", output)
+                        self.assertIn("MAC (рег.) · 88:b9:45:80:a7:55", output)
+                        self.assertNotIn("residents_home", card["content"])
+                        self.assertNotIn("phone.", card["content"])
+                        self.assertIn("sensor.dh_presence_app_registered_phones", card["content"])
+                        self.assertEqual(render(None, events),
                                          "_Реестр телефонов пока недоступен._")
+                        # Labels in App output must not execute HTML.
+                        self.assertIn("&lt;script&gt;", render("<script>", events))
+                        self.assertEqual(card["grid_options"], {"columns": 12})
                     else:
-                        self.assertTrue(rendered.startswith(
-                            "| № | Дата и время | Событие | Детали |\n"
-                            "|:--:|:--|:--|:--|\n"))
-                        self.assertEqual(len(rendered.splitlines()), 4)
-                        self.assertIn("| 1 | 18.10.2026 11:05 | GPS: дома | Serzhan (iPhone) |",
-                                      rendered)
-                        self.assertIn("| 2 | 18.10.2026 11:06 | Выход из зоны | Alina · Office |",
-                                      rendered)
-                        self.assertEqual(len(one.splitlines()), 3)
-                        self.assertEqual(empty, "_Событий пока нет._")
+                        self.assertTrue(output.startswith(
+                            "| № | Дата и время | Событие | Детали |\\n"
+                            "|:--:|:--|:--|:--|\\n"))
+                        self.assertEqual(len(output.splitlines()), 4)
+                        self.assertIn("GPS: дома", output)
+                        self.assertEqual(render(tree, []), "_Событий пока нет._")
 
     def test_dashboard_four_independent_sections_and_dynamic_source_filters(self):
         dashboard = yaml.safe_load(DASH.read_text(encoding="utf-8"))
