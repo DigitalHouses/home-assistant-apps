@@ -80,13 +80,8 @@ cards:
         const n = states['binary_sensor.dh_presence_app_residents_home']?.attributes?.residents_home;
         const total = states['binary_sensor.dh_presence_app_residents_home']?.attributes?.residents_total;
         const count = Number.isInteger(n) && Number.isInteger(total) ? ' · Дома ' + n + '/' + total : '';
-        const ping = states['switch.dh_presence_app_ping']?.state;
-        const arp = states['switch.dh_presence_app_arp']?.state;
-        const methods = ping === 'on' && arp === 'on' ? 'PING + ARP'
-          : ping === 'on' ? 'PING' : arp === 'on' ? 'ARP'
-          : ping === 'off' && arp === 'off' ? 'отключён' : 'нет данных';
-        const label = mode === 'wifi' ? 'Wi-Fi · ' + methods
-          : mode === 'hybrid' ? 'Hybrid · GPS + Wi-Fi' : 'GPS';
+        const label = mode === 'wifi' ? 'Wi-Fi · трекер роутера'
+          : mode === 'hybrid' ? 'Hybrid · GPS + трекер роутера' : 'GPS';
         const newer = states['binary_sensor.dh_presence_app_update_available']?.state === 'on';
         const roster = states['binary_sensor.dh_presence_app_residents_home']?.attributes?.residents || {};
         const sourceUnavailable = Object.keys(roster).some(key => !['on','off'].includes(
@@ -203,17 +198,6 @@ cards:
     icon: mdi:crosshairs-gps
     features:
       - type: select-options
-
-  - type: entities
-    title: Обнаружение Wi-Fi · весь дом
-    show_header_toggle: false
-    entities:
-      - entity: switch.dh_presence_app_ping
-        name: PING
-        icon: mdi:lan-connect
-      - entity: switch.dh_presence_app_arp
-        name: ARP
-        icon: mdi:lan-check
 
   - type: entities
     title: Уведомления DH Presence
