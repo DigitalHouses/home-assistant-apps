@@ -4,15 +4,18 @@
 
 This application belongs to `DigitalHouses/home-assistant-apps/digitalhouses_presence_app` and is installed via **Settings → Apps → App Store**.
 
-## Admin-only phone removal card with select (0.1.32)
+## MQTT select + button: удаление телефона (0.1.33)
 
-The residents section of the maintained four-column dashboard now includes a **separate admin-only phone-management card** with a `select` dropdown, `Удалить регистрацию` and `Обновить список` buttons. The user must select one registered phone and explicitly confirm the precise name/device/GPS tracker before the App removes it. Deletion immediately refreshes the list; no phone is preselected. Empty lists and denied admin verification disable deletion.
+В **том же MQTT Device DH Presence** добавлены две управляющие сущности:
 
-The admin card **embeds a protected App Ingress form** at `/admin/delete-phone`. The server verifies the actual authenticated HA administrator identity when serving the form, when reading the live registration list, **and again** when executing the existing `POST /api/admin/delete-registration`. A Lovelace `hidden` expression only controls visibility; it is not authorization. No MQTT `select` or delete command and no HA helper/automation is created because MQTT cannot authenticate the user performing a destructive action.
+- `select.dh_presence_app_remove_phone` — динамический список регистраций «Имя (телефон) · GPS device_tracker». Начальное и сброшенное значение — «— Выберите телефон —».
+- `button.dh_presence_app_delete_registration` — команда App удалить **выбранный** телефон.
 
-**Inline-card dependency:** to embed an Ingress page reliably into Lovelace, install the HACS custom card **Ingress webpage card** (`custom:addon-iframe-card`, [lovelylain/ha-addon-iframe-card](https://github.com/lovelylain/ha-addon-iframe-card)) once on the HA instance. Plain Home Assistant iframe cards can fail when the Supervisor ingress session has not been established. The maintained dashboard and [portable admin removal card](examples/lovelace/presence_admin_remove_phone_card_ru.yaml) use the new custom card nested in the already-installed `custom:button-card` with role-based visibility. Without the extra card dependency, use the existing **Управление телефонами · администратор** launcher: its authenticated Ingress page also contains the same select/confirmation form. No new Lovelace resource is needed for that fallback.
+**App полностью владеет логикой:** принимает `select`, проверяет его наличие в реестре и исключениях, по отдельному нажатию кнопки атомарно удаляет регистрацию и записывает tombstone в прежний `/data/presence_registrations.json`. Затем синхронизирует состав жильцов и MQTT Discovery, убирает устройство из дерева и выпадающего списка и сбрасывает выбор. Никакого ложного ухода или входа в зоны. Дублированное, некорректное и retained MQTT-нажатие не удаляет следующий телефон. После перезапуска App выбор пустой. Дополнительных датчиков, HA helpers, автоматизаций и Recorder-записей нет.
 
-To install: update App to `0.1.32`, install `custom:addon-iframe-card` via HACS if you want inline removal, and copy the new admin YAML or refreshed full dashboard. Manually pasted dashboards do not update with the App. The registration tree and Recorder exclusions introduced in 0.1.31 remain unchanged.
+[Администраторская Lovelace-карточка](examples/lovelace/presence_admin_remove_phone_card_ru.yaml) и поддерживаемый дашборд отображают **обычные HA select и button** и запрашивают подтверждение перед нажатием. Уже используемый `custom:button-card` скрывает карточку от не-администраторов; **Ingress iframe / HACS addon-iframe-card больше не нужны**. Установить App 0.1.33 и обновить YAML вручную. Предыдущая iframe-форма из 0.1.32 удалена. Старый независимый административный Ingress для просмотра/удаления регистраций остаётся доступен через Apps.
+
+**Граница безопасности:** стандартный MQTT не удостоверяет роль пользователя Home Assistant, отправившего команду. Скрытие карточки `hass.user.is_admin` ограничивает *видимость*, **не запрещает** пользователю с доступом к MQTT или разрешённым HA services отправить `button.press` и команды select. Использовать только с доверенными пользователями/настроенными ACL брокера. Для удаления с реальной серверной проверкой роли администратора использовать существующий native Supervisor Ingress. Не утверждать, что MQTT-удаление защищено per-user HA authorization.
 
 ## IP/MAC in the Home Assistant dashboard tree (0.1.31)
 
