@@ -151,3 +151,12 @@ failed pilot acceptance requiring adjustment or reversion to GPS mode.
 7. Verify access classification explicitly: MQTT subscribers and HA users
    with state access can read network details. Private Ingress remains the
    stronger choice for administrators-only data.
+
+## Administrator dropdown removal UI acceptance (0.1.32)
+
+1. On a running 0.1.32 App, open the admin Ingress page: the new select/delete form must show all currently registered phones with user name, device name and exact GPS `device_tracker`.
+2. Confirm the initial selection is empty and deletion disabled. Selecting a phone enables the request; pressing delete shows an **in-page** confirmation with exact identity, and Cancel performs no POST. Confirm removes exactly the chosen registration and refreshes the dropdown.
+3. Repeat with two phones, with the selected phone already deleted in another browser, and with no phones: stale selections must be rejected or require refreshed listing. The physical departure/zone-leave events must not be synthesized by administrative deletion.
+4. Authenticate as ordinary HA user or invalidate HA admin verification. Direct `GET /admin/delete-phone`, `GET /api/admin/debug` and `POST /api/admin/delete-registration` must deny the operation; the HTML must not contain private rows and frontend `hidden` is not relied upon for authorization.
+5. To embed the selector inside the Lovelace dashboard, install HACS `Ingress webpage card` `custom:addon-iframe-card`, paste [portable YAML](../examples/lovelace/presence_admin_remove_phone_card_ru.yaml) or the new full dashboard, and verify it is absent for non-admins. Test both local Home Assistant and external Cloudflare-authenticated HA sessions. If embedding is not enabled, the existing admin launcher must expose the same select/delete form within App Ingress.
+6. Verify Recorder exclusions and GPS/Wi-Fi presence logic unchanged; no delete MQTT command/entity exists, no additional App privileges were granted. Browser JavaScript/HTML and YAML contract tests should pass in CI.
