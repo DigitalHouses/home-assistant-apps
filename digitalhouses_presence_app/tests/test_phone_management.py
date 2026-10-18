@@ -214,6 +214,53 @@ class PhoneManagementTests(unittest.TestCase):
                                 capture_output=True, text=True, check=False)
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_admin_phone_tree_displays_private_ip_mac_with_compact_pve_lines(self):
+        """Registered IP/MAC must render only inside authorized Ingress."""
+        import shutil
+        import subprocess
+        from dh_presence.ui import HTML
+        if shutil.which("node") is None:
+            self.skipTest("Node is not available")
+        javascript = HTML.split("<script>", 1)[1].split("</script>", 1)[0]
+        start = javascript.index("function privatePhoneTree(devices){")
+        end = javascript.index("async function loadAdminDebug()", start)
+        script = javascript[start:end] + "\n" + (
+            "const devices=JSON.parse(process.argv[1]);"
+            "process.stdout.write(privatePhoneTree(devices));"
+        )
+        second = dict(SAMPLE, user_name="Alina", device_name="iPhone", 
+                      tracker="device_tracker.iphone_alina",
+                      wifi_tracker=None, ip="192.168.8.55",
+                      mac="8a:43:3e:74:09:83")
+        first = dict(SAMPLE, user_name="<Admin>", device_name="13ProMAX .SKY")
+        result = subprocess.run(
+            ["node", "-e", script, json.dumps([first, second], ensure_ascii=False)],
+            capture_output=True, text=True, check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        lines = result.stdout.splitlines()
+        self.assertEqual(len(lines), 11)
+        self.assertEqual(lines[0], "Зарегистрированные телефоны")
+        self.assertEqual(lines[1], "├─ 📱 <Admin> (13ProMAX .SKY)")
+        self.assertEqual(lines[2], "│  ├─ GPS · iphone")
+        self.assertEqual(lines[3], "│  ├─ Wi-Fi · wifi_a")
+        self.assertEqual(lines[4], "│  ├─ IP (рег.) · 192.168.8.54")
+        self.assertEqual(lines[5], "│  └─ MAC (рег.) · 88:b9:45:80:a7:55")
+        self.assertEqual(lines[6], "└─ 📱 Alina (iPhone)")
+        self.assertEqual(lines[7], "   ├─ GPS · iphone_alina")
+        self.assertEqual(lines[8], "   ├─ Wi-Fi · не привязан")
+        self.assertEqual(lines[9], "   ├─ IP (рег.) · 192.168.8.55")
+        self.assertEqual(lines[10], "   └─ MAC (рег.) · 8a:43:3e:74:09:83")
+        self.assertNotIn("\n\n", result.stdout)
+
+        # Browser textContent, not innerHTML, protects untrusted labels.
+        self.assertIn("q('adminPhoneTree').textContent", javascript)
+        self.assertIn("q('adminPhoneTree').textContent=''", javascript)
+        self.assertNotIn("q('adminPhoneTree').innerHTML", javascript)
+        self.assertIn("line-height:1", HTML)
+        self.assertIn("white-space:pre", HTML)
+        self.assertIn('id="adminDebug" hidden', HTML)
+
     def test_public_dashboard_and_private_admin_ui_contract(self):
         from pathlib import Path
         base = Path(__file__).resolve().parents[1]
@@ -224,6 +271,10 @@ class PhoneManagementTests(unittest.TestCase):
         self.assertIn("phone.registration_label", dash)
         for forbidden in ("phone.ip", "phone.mac", "api/admin/delete-registration"):
             self.assertNotIn(forbidden, card)
+        self.assertNotIn("IP (рег.)", card)
+        self.assertNotIn("MAC (рег.)", card)
+        self.assertNotIn("IP (рег.)", dash)
+        self.assertNotIn("MAC (рег.)", dash)
         self.assertIn('is_authorized_ha_admin(context["user_id"], token)',
                       (base / "rootfs/app/dh_presence/ui.py").read_text())
         for marker in (
