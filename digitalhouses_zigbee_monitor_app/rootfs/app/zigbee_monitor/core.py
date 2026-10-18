@@ -198,6 +198,19 @@ class ZigbeeMonitor:
     def networks(self) -> tuple[Network, ...]:
         return tuple(runtime.config for runtime in self._networks.values())
 
+    def reset_sources(self) -> None:
+        """On MQTT reconnect, invalidate observations but preserve identities/counts.
+
+        Previously received retained bridge/device availability is not proof of
+        live state after a transport interruption. Subscriptions must reconcile.
+        """
+        for runtime in self._networks.values():
+            runtime.bridge_state = "unknown"
+            runtime.inventory_observed = False
+            runtime.topics.clear()
+            runtime.availability.clear()
+            runtime.pending_availability.clear()
+
     def network_status(self, network_id: str) -> dict[str, object]:
         r = self._networks[network_id]
         return {
