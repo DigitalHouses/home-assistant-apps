@@ -74,3 +74,27 @@ Supervisor config, Discovery и релизные файлы будут в сле
 MQTT Discovery и подсистем инцидентов/spam classification. Счётчики сообщения
 не означают реального Zigbee RF packet count. Ни один существующий HA
 Recorder-показатель пока не публикуется.
+
+## Реализовано · MQTT transport и read-only HA publisher (следующий PR)
+
+- `rootfs/app/app.py`: MQTT-клиент с Supervisor-provided credentials из
+  переменных среды, LWT, подписка на конфигурируемые Zigbee2MQTT base topics,
+  переподключение, сигнал завершения и read-only release-check.
+- `rootfs/app/zigbee_monitor/discovery.py`: MQTT Device Discovery с постоянными
+  `unique_id`, отдельными состояниями validity для каждого результата,
+  историческими скалярными сенсорами без динамических атрибутов и отдельными
+  сущностями UI details.
+- `rootfs/app/zigbee_monitor/service.py`: сохранение inventory, счетчики
+  offline только при полной достоверной availability, минутный SQLite flush,
+  ТОП 1ч/24ч/7д, guarded 5m rate и управление read-only refresh.
+- `tests/test_service.py`: интеграционные тесты на reconnect, retained,
+  невыдуманный ноль, разделение Recorder, 5m-счетчики, rename и refresh.
+
+**Внимание:** пока продукт остаётся **не устанавливаемым через Supervisor**.
+Нет `config.yaml`, `digitalhouses.app`, упакованного контейнера,
+финальной telemetry v2 и production GHCR образа. Первые runtime-компоненты
+являются проверяемой основой HAOS App, а не выпуском 0.1.0.
+
+**Следующий gate:** оформить Supervisor config, безопасный consent/telemetry
+контракт, release registry, Dockerfile, translations/icons, полный CI и
+installable release после проверки на реальном Zigbee2MQTT.
