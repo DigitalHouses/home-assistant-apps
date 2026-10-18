@@ -51,6 +51,7 @@ class Resident:
     gps: Status = Status.UNAVAILABLE
     wifi: Status = Status.UNAVAILABLE
     wifi_source: str = "legacy"  # Runtime router-tracker source bypasses probe freshness
+    wifi_tracker_id: str | None = None
     last_gps_at: datetime | None = None
     last_wifi_at: datetime | None = None
     wifi_absent_since: datetime | None = None
