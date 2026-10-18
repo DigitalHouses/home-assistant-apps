@@ -356,7 +356,7 @@ console.log('PASSED '+cases.length+' status scenarios');
         self.assertIn("attribute='wifi_tracker'", dashboard)
         self.assertIn("Зоны · количество людей", dashboard)
         self.assertIn("domain: zone", dashboard)
-        self.assertIn("Прибытие / убытие", dashboard)
+        self.assertIn("Уведомления по зонам", dashboard)
         self.assertIn("Wi-Fi · появление / исчезновение", dashboard)
         self.assertIn("DH Presence · все сущности и управление", dashboard)
         self.assertNotIn("Не обнаружен (ARP)", dashboard)
