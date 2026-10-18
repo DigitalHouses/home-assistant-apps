@@ -69,6 +69,10 @@ def poll_router_trackers(
                         reason = "router_" + raw_state
                     else:
                         reason = "router_unavailable"
+        # Treat the first trusted router observation as a baseline even when
+        # persistent overall status was restored from an earlier run.
+        if state is not Status.UNAVAILABLE and not resident.wifi_monitor_initialized:
+            resident.initialized = False
         events.extend(engine.wifi_observation(
             resident.tracker, state, observed_at,
             verified=state is not Status.UNAVAILABLE,
