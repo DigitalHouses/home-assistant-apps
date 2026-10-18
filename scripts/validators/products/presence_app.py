@@ -20,7 +20,7 @@ def validate_presence_network_policy(config: dict, version: str) -> None:
             or config.get("host_dbus") or config.get("host_uts")
             or config.get("map")):
         fail("Presence cannot request host-wide access, unsafe mounts or elevated Supervisor role")
-    if version in ("0.1.11", "0.1.12", "0.1.13", "0.1.14", "0.1.15", "0.1.16", "0.1.17", "0.1.18", "0.1.19", "0.1.20", "0.1.21", "0.1.22", "0.1.23", "0.1.24", "0.1.25", "0.1.26", "0.1.27", "0.1.28"):
+    if version in ("0.1.11", "0.1.12", "0.1.13", "0.1.14", "0.1.15", "0.1.16", "0.1.17", "0.1.18", "0.1.19", "0.1.20", "0.1.21", "0.1.22", "0.1.23", "0.1.24", "0.1.25", "0.1.26", "0.1.27", "0.1.28", "0.1.29"):
         if config.get("host_network") is not True or config.get("privileged") != ["NET_RAW"]:
             fail("Presence experimental registration pilot permits only host_network and NET_RAW for one-time ARP")
         if (config.get("ingress") is not True
@@ -66,6 +66,7 @@ def validate_presence(root: Path, app: Path, context: dict) -> None:
         app / "rootfs/app/dh_presence/modes.py",
         app / "rootfs/app/dh_presence/notifications.py",
         app / "rootfs/app/dh_presence/history.py",
+        app / "tests/test_phone_management.py",
         app / "tests/test_event_history.py",
         app / "rootfs/app/dh_presence/probes.py",
         app / "tests/test_probe_switches.py",
