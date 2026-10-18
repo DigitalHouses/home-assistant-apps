@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.1.6
+
+- Подтверждённые Zigbee2MQTT offline теперь всегда отображаются в offline_details,
+  даже если у других устройств ещё `unknown`; числовой offline = количество
+  **подтверждённых** offline (нижняя граница), при 0+unknown сенсор по-прежнему unavailable.
+- Разделены device availability и state Zigbee2MQTT bridge. При `bridge/state=offline`
+  события массового offline устройств не синтезируются.
+- Машинные MQTT Events через HA Device Discovery, `event.dh_zigbee_monitor_app_event`:
+  `device_offline`, `device_online`, `zigbee2mqtt_offline`, `zigbee2mqtt_online`.
+  Транспорт QoS 1, `retain: false`. Сначала публикуется состояние, затем событие.
+- Запуск App, retained replay, повторные MQTT доставки, первичная инициализация
+  и восстановление MQTT не создают ложных уведомлений: событие только при подтверждённом
+  изменении ранее наблюдавшегося состояния в рабочей сети.
+- Пример локальной HA-автоматизации уведомлений: прямой `event.received` →
+  `trigger.id` → `choose` → delivery без глобальных посредников.
+- Нет Zigbee-запросов, управления устройствами, новых динамических Recorder сущностей.
+  Детектировать перегрузку Z2M по одному `bridge/state` невозможно.
+
 ## 0.1.5
 
 - Источник истины о питании устройств: retained MQTT `bridge/devices`,
