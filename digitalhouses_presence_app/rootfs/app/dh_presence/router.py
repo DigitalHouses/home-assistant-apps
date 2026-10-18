@@ -46,6 +46,17 @@ def poll_router_trackers(
     for resident in engine.residents.values():
         resident.wifi_source = "router"
         record = by_gps.get(resident.tracker)
+        current_link = record.get("wifi_tracker") if record else None
+        if current_link != resident.wifi_tracker_id:
+            # A registration update may replace the linked router entity.
+            # Start from unknown with a fresh baseline, not a fake Wi-Fi out/in.
+            resident.wifi_tracker_id = current_link
+            resident.wifi = Status.UNAVAILABLE
+            resident.wifi_last_decisive = Status.UNAVAILABLE
+            resident.wifi_monitor_initialized = False
+            resident.wifi_method_baseline_pending = False
+            resident.last_wifi_at = None
+            resident.initialized = False
         reason = "router_not_registered"
         state = Status.UNAVAILABLE
         if record is not None:
