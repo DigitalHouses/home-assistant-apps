@@ -255,7 +255,7 @@ class MqttOutput:
                 else:
                     LOG.warning("Ignoring invalid MQTT notification command key=%s", key)
                 return
-         if msg.topic != topic("mode/set"):
+        if msg.topic != topic("mode/set"):
             return
         if getattr(msg, "retain", False):
             LOG.warning("Ignoring retained MQTT mode command")
@@ -397,7 +397,7 @@ def publish_snapshot(output: MqttOutput, engine: Engine, version: str, started: 
             if not output.publish(topic("notifications/" + key + "/state"),
                                   notifications.mqtt_state(key)):
                 return False
-     # Source/aggregate availability must be committed BEFORE the retained
+    # Source/aggregate availability must be committed BEFORE the retained
     # snapshot. Otherwise an invalid/unconfirmed GPS or sleeping iPhone first
     # renders as OFF and only afterwards becomes unavailable in HA Recorder.
     # Publish after the availability update to avoid spurious false OFF edges.
