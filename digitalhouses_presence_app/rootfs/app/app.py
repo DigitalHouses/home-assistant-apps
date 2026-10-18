@@ -24,7 +24,8 @@ from dh_presence.notifications import NotificationSelection, NOTIFICATION_KEYS
 from dh_presence.zones import ZoneMonitor, zone_catalog, zone_key
 from dh_presence.history import EventHistory, DEFAULT_LIMIT, MAX_LIMIT
 from dh_presence.operations import Operations, fetch_latest_release, is_newer
-from dh_presence.registration import load_registry_state
+from dh_presence.registration import REGISTRY_LOCK, delete_registration, load_registry_state
+from dh_presence.phone_removal import EMPTY, PhoneRemovalSelection, phone_removal_choices
 from dh_presence.phone_tree import registered_phones_tree
 from dh_presence.router import poll_router_trackers
 from dh_presence.ui import start_ingress_ui
@@ -211,6 +212,7 @@ class MqttOutput:
         self.notification_commands = queue.SimpleQueue()
         self.discovery_requests = queue.SimpleQueue()
         self.operation_commands = queue.SimpleQueue()
+        self.phone_commands = queue.SimpleQueue()
         self.client.will_set(topic("availability"), "offline", retain=True, qos=1)
         self.client.connect_async(os.environ["MQTT_HOST"], int(os.environ["MQTT_PORT"]), keepalive=60)
         self.client.loop_start()
@@ -228,6 +230,8 @@ class MqttOutput:
                 for key in NOTIFICATION_KEYS
             ]
             client.subscribe(topic("notifications/zones/+/set"), qos=1)
+            client.subscribe(topic("registrations/remove/select/set"), qos=1)
+            client.subscribe(topic("registrations/remove/press"), qos=1)
             LOG.info("MQTT connected; mode=%s birth=%s commands=%s notifications=%s",
                      mode_result[0], birth_result[0], command_result[0],
                      notification_results)
@@ -244,6 +248,30 @@ class MqttOutput:
             if msg.payload == b"online" and not getattr(msg, "retain", False):
                 self.discovery_requests.put("ha_birth")
                 WAKE.set()
+            return
+        if msg.topic == topic("registrations/remove/select/set"):
+            if getattr(msg, "retain", False):
+                LOG.warning("Ignoring retained phone removal selection")
+                return
+            if not 0 < len(msg.payload) <= 512:
+                LOG.warning("Invalid phone selection size")
+                return
+            try:
+                selected = msg.payload.decode("utf-8", errors="strict")
+            except UnicodeDecodeError:
+                LOG.warning("Invalid phone selection encoding")
+                return
+            self.phone_commands.put(("select", selected))
+            WAKE.set()
+            return
+        if msg.topic == topic("registrations/remove/press"):
+            if getattr(msg, "retain", False):
+                LOG.warning("Ignoring retained phone removal button")
+            elif msg.payload == b"DELETE":
+                self.phone_commands.put(("delete", None))
+                WAKE.set()
+            else:
+                LOG.warning("Invalid phone removal button payload")
             return
         if msg.topic == topic("command"):
             if getattr(msg, "retain", False):
@@ -396,6 +424,32 @@ def reconcile_registration_roster(engine: Engine, options: dict,
     return changed
 
 
+
+def execute_mqtt_phone_deletion(selection: PhoneRemovalSelection, engine: Engine,
+                                options: dict, path: str, registrations: list[dict],
+                                suppressed: set[str]) -> tuple[bool, bool, list[dict], set[str]]:
+    """Delete only a currently selected, registered resident in this App.
+
+    The same module-level lock protects the private Ingress registration
+    transaction. Selection is cleared *before* any I/O, so even a duplicate
+    MQTT QoS1 press cannot cascade into another deletion.
+    """
+    choices = phone_removal_choices(registrations, list(engine.residents.values()))
+    target = selection.target(choices)
+    selection.clear()
+    if not target:
+        return False, False, registrations, suppressed
+    with REGISTRY_LOCK:
+        latest, disabled = load_registry_state(path)
+        if not any(row["tracker"] == target for row in latest):
+            changed = reconcile_registration_roster(engine, options, latest, disabled)
+            return False, changed, latest, disabled
+        delete_registration(path, target)
+        latest, disabled = load_registry_state(path)
+    changed = reconcile_registration_roster(engine, options, latest, disabled)
+    return True, changed, latest, disabled
+
+
 def friendly_tracker_name(tracker: str) -> str:
     return tracker.removeprefix("device_tracker.").replace("_", " ").strip()
 
@@ -419,8 +473,12 @@ def load_discovery() -> dict:
     return data
 
 
-def synchronize_discovery(output: MqttOutput, version: str, engine: Engine, *, zones: dict[str, str] | None = None, routine: bool = False) -> bool:
-    current = discovery(version, list(engine.residents.values()), zones)
+def synchronize_discovery(output: MqttOutput, version: str, engine: Engine, *,
+                          zones: dict[str, str] | None = None, routine: bool = False,
+                          registrations: list[dict] | None = None) -> bool:
+    choices = phone_removal_choices(registrations or [], list(engine.residents.values()))
+    current = discovery(version, list(engine.residents.values()), zones,
+                        phone_options=[EMPTY, *choices])
     old = load_discovery()
     if old.get("components") and not output.publish(DISCOVERY, with_cleanup(old, current), force=True):
         LOG.error("MQTT Discovery cleanup publish failed topic=%s", DISCOVERY)
@@ -450,7 +508,8 @@ def publish_snapshot(output: MqttOutput, engine: Engine, version: str, started: 
                      notifications: NotificationSelection | None = None,
                      zones: dict[str, str] | None = None,
                      history: EventHistory | None = None,
-                     registrations: list[dict] | None = None) -> bool:
+                     registrations: list[dict] | None = None,
+                     phone_selection: PhoneRemovalSelection | None = None) -> bool:
     snapshot = engine.snapshot()
     if not output.publish(topic("mode/state"), engine.mode.value):
         return False
@@ -497,6 +556,9 @@ def publish_snapshot(output: MqttOutput, engine: Engine, version: str, started: 
             topic("registrations/tree"),
             registered_phones_tree(registrations, list(engine.residents.values()))):
         return False
+    if phone_selection is not None and not output.publish(
+            topic("registrations/remove/select/state"), phone_selection.selected):
+        return False
     for r in engine.residents.values():
         if r.distance is not None and not output.publish(topic("distance/"+r.key), r.distance):
             return False
@@ -527,6 +589,7 @@ def run():
     notifications = NotificationSelection(NOTIFICATIONS_FILE)
     zone_monitor = ZoneMonitor(ZONES_FILE)
     history = EventHistory(HISTORY_FILE, options["events_history_limit"])
+    phone_selection = PhoneRemovalSelection()
     history.prune_residents({r.key for r in engine.residents.values()})
     zones: dict[str, str] = {}
     zones_loaded = False
@@ -591,7 +654,8 @@ def run():
                 if last_discovery_attempt is None or ha_birth or now_monotonic - last_discovery_attempt >= max(10, options["gps_poll_interval_seconds"]):
                     last_discovery_attempt = now_monotonic
                     routine = last_discovery_session is not None and not ha_birth and discovery_ready
-                    discovery_ready = synchronize_discovery(mqtt_out, version, engine, zones=zones, routine=routine)
+                    discovery_ready = synchronize_discovery(mqtt_out, version, engine, zones=zones, routine=routine,
+                                                            registrations=registrations)
                     if discovery_ready:
                         last_discovery_session = now_monotonic
                     else:
@@ -635,10 +699,51 @@ def run():
                         engine, options, registrations, suppressed_trackers)
                     if changed:
                         discovery_ready = (synchronize_discovery(
-                            mqtt_out, version, engine, zones=zones)
+                            mqtt_out, version, engine, zones=zones, registrations=registrations)
                             if mqtt_out.connected.is_set() else False)
                         LOG.info("DH Presence phone registry synchronized: active=%d",
                                  len(engine.residents))
+                    phone_selection.refresh(phone_removal_choices(
+                        registrations, list(engine.residents.values())))
+            # Ordered commands: a select immediately followed by button
+            # press always targets that exact selection. The MQTT broker
+            # provides no HA-user admin attestation; Lovelace hides this UI
+            # from ordinary users as presentation, not authorization.
+            roster_changed = False
+            for _ in range(64):
+                try:
+                    action, value = mqtt_out.phone_commands.get_nowait()
+                except queue.Empty:
+                    break
+                choices = phone_removal_choices(registrations, list(engine.residents.values()))
+                if action == "select":
+                    if not phone_selection.select(value, choices):
+                        LOG.warning("Ignoring invalid MQTT removal selection")
+                    continue
+                if action != "delete":
+                    continue
+                target = phone_selection.target(choices)
+                try:
+                    deleted, changed, registrations, suppressed_trackers = execute_mqtt_phone_deletion(
+                        phone_selection, engine, options, REGISTRATIONS_FILE,
+                        registrations, suppressed_trackers)
+                    roster_changed = changed or roster_changed
+                    if deleted:
+                        LOG.info("Phone registration removed by MQTT: tracker=%s", target)
+                    else:
+                        LOG.warning("Phone removal skipped: missing or stale selection")
+                except (OSError, ValueError, LookupError) as exc:
+                    LOG.error("MQTT phone removal failed for %s: %s",
+                              target or "none", type(exc).__name__)
+            phone_selection.refresh(phone_removal_choices(
+                registrations, list(engine.residents.values())))
+            if roster_changed:
+                eligible_keys = {r.key for r in engine.residents.values()}
+                history.prune_residents(eligible_keys)
+                zone_monitor.prune_residents(eligible_keys)
+                discovery_ready = (synchronize_discovery(
+                    mqtt_out, version, engine, zones=zones,
+                    registrations=registrations) if mqtt_out.connected.is_set() else False)
             now = datetime.now(timezone.utc)
             name_changed = False
             if home is None:
@@ -709,13 +814,14 @@ def run():
                     resident.wifi_last_probe_at = now
                     resident.wifi_probe_result = "router_api_error"
             if name_changed and mqtt_out.connected.is_set():
-                discovery_ready = synchronize_discovery(mqtt_out, version, engine, zones=zones)
+                discovery_ready = synchronize_discovery(mqtt_out, version, engine, zones=zones,
+                                                        registrations=registrations)
             # Commit durable current state BEFORE sending retained MQTT state and events.
             save(STATE, engine.persistent())
             published = (mqtt_out.connected.is_set() and discovery_ready
                          and publish_snapshot(mqtt_out, engine, version, started,
                                               operations, latest_version, notifications, zones, history,
-                                              registrations))
+                                              registrations, phone_selection))
             if published:
                 if not published_state_logged:
                     LOG.info("MQTT presence state published topic=%s residents=%d mode=%s",
@@ -799,6 +905,7 @@ def run():
             WAKE.clear()
             if (not STOP.is_set() and mqtt_out.mode_commands.empty()
                     and mqtt_out.notification_commands.empty()
+                    and mqtt_out.phone_commands.empty()
                     ):
                 WAKE.wait(min(options["gps_poll_interval_seconds"],
                               5 if operations.state == "success" else options["gps_poll_interval_seconds"]))
