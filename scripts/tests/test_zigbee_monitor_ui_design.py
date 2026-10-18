@@ -164,7 +164,7 @@ class ZigbeeMonitorUiDesignTests(unittest.TestCase):
                 self.assertIn("<td>", content)
                 self.assertIn("</td>", content)
                 self.assertIn("{% for ", content)
-                self.assertNotRegex(content, r"(?m)^\\s*\\|")
+                self.assertNotRegex(content, r"(?m)^\s*\|")
         self.assertIn("item.power_label", self.raw_dashboard)
         self.assertIn("item.last_mqtt_message_at[5:16]", self.raw_dashboard)
         self.assertIn("availability_reason_label", self.raw_dashboard)
