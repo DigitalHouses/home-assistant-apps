@@ -51,6 +51,8 @@ def poll_router_trackers(
             # A registration update may replace the linked router entity.
             # Start from unknown with a fresh baseline, not a fake Wi-Fi out/in.
             resident.wifi_tracker_id = current_link
+            if resident.wifi is not Status.UNAVAILABLE:
+                resident.wifi_changed_at = observed_at
             resident.wifi = Status.UNAVAILABLE
             resident.wifi_last_decisive = Status.UNAVAILABLE
             resident.wifi_monitor_initialized = False
