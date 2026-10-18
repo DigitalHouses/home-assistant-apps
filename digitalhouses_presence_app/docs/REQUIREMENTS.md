@@ -1,46 +1,46 @@
-# DigitalHouses Presence App — requirements
+# DigitalHouses Presence App — current requirements (0.1.27)
 
-Status: product scope recorded from the 14 October 2026 Home Assistant prototype discussion. Implementation and field acceptance pending.
+Status: experimental HAOS App. This document describes the currently implemented contract; deployment reliability and security-sensitive integrations require separate acceptance.
 
-## Users and registration
+## Registration and exclusions
 
-- Register each resident by one explicit Mobile Companion phone GPS `device_tracker` entity ID. Do not automatically include an iPad or second phone logged in under the same HA account.
-- Registration UI performs a user-initiated WebSocket request on the mobile device. The Home Assistant Core adapter obtains the authenticated `connection.user` and actual peer address server-side; the browser must not provide trusted user identity.
-- Allow registration only with independently confirmed direct local-LAN access. Cloudflare / Tailscale / reverse-proxy addresses are not proof of the phone's LAN IP.
-- Resolve local IP to the device MAC using a **fresh** active ARP observation. Do not treat a stale neighbour-table record as fresh presence.
-- A single HA user can own more than one Companion device; user equality alone does not authenticate a particular selected device. Binding integrity requires an additional proof or an explicit UX limitation.
-- Ordinary residents may register their own devices where permitted. Only administrators can delete registrations or change app-wide settings. Authorize these actions server-side.
-- Exclude HA administrators by not enrolling their trackers. Legacy `exclude_users` (HA User IDs) remains available only for explicitly linked legacy records. For tracker-only records, a nonempty User-ID exclusion list is a configuration error until the WebSocket identity binding can prove ownership; do not silently ignore it.
+- Enrol residents using an explicitly selected phone GPS `device_tracker`; never automatically enrol every Companion device under the same HA user.
+- Supervisor Ingress authenticates the HA user. Registration must prove a direct local LAN phone connection and freshly verify the phone's IP/MAC using one-time ARP. Cloudflare/VPN/reverse-proxy access cannot establish LAN presence.
+- A matching Home Assistant router `device_tracker`, bound by verified MAC and stored with the resident registration, provides optional ongoing Wi-Fi presence evidence. Registration ARP must not become periodic presence polling.
+- Only permitted authenticated operators can manage registration and configuration; administrators may inspect the private enrollment diagnostics, including IP/MAC, in the App's HA Ingress UI. No IP/MAC is transmitted in MQTT events, standard presence sensors or telemetry.
+- `exclude_users` excludes verified HA User IDs from the resident roster and from **all** GPS, Wi-Fi, zone transition, distance, aggregate and notification activity. Admins who are excluded must not be tracked via the App's zone processor. Tracker-only legacy records without verified user ownership must fail closed when user-ID exclusions need to be enforced; do not assume a tracker belongs to a specific HA user.
 
-## Modes
+## Sources and mode decisions
 
-| Mode | Authoritative decision | Secondary data |
+| Mode | Authoritative decision | Secondary source |
 | --- | --- | --- |
-| GPS | Fresh GPS home/not_home observation | Wi-Fi source events; GPS distance |
-| Wi-Fi | Trustworthy local network presence/absence | GPS distance |
-| Hybrid | GPS, corrected by independently trustworthy Wi-Fi evidence | Source-specific events and diagnostics |
+| GPS | HA Mobile Companion GPS tracker home/away | Wi-Fi source events and distance |
+| Wi-Fi | HA router tracker home/not_home (verified linked MAC) | GPS diagnostics |
+| Hybrid | GPS with trustworthy router Wi-Fi correction | Independent source events |
 
-Hybrid policy: fresh confirmed Wi-Fi HOME can assert presence when GPS says NOT_HOME; a *verified continuously observed* Wi-Fi NOT_HOME for 15 minutes (configurable) can override GPS HOME. Individual `no_reply` ARP probes never qualify as verified absence. Scanner failure or stale evidence is UNAVAILABLE, not NOT_HOME.
+- Wi-Fi observation belongs only to the HA installation's **local home** (`zone.home`). An office Wi-Fi connection to HA via Cloudflare does not qualify as local Wi-Fi evidence. Other HA zones are GPS-only.
+- A missing, ambiguous, mismatched or unavailable router tracker gives Wi-Fi UNAVAILABLE, never a fabricated NOT_HOME.
+- `wifi_absence_minutes` is a retained configuration compatibility field and is **ignored** since 0.1.25. Do not document legacy timed ARP absence as current behavior.
+- Persist confirmed logical presence; source failures must not invent departures or healthy states. Initial observation is a baseline, not an arrival.
 
-## Safety and persistence
+## Zones and events
 
-- Logical confirmed state (`home/not_home/unknown`) is independent from the availability/freshness of sources.
-- Preserve the last confirmed logical state when source measurements become unavailable; never infer NOT_HOME from missing phone updates, dead battery, socket error or MQTT outage.
-- Never publish OFF for an entirely unknown initial state.
-- A first observation establishes an initial state without fabricating an arrival/departure event. Transitions should emit exactly once, after persisted and retained state is synchronized.
-- Persist registration, stable resident keys, last confirmed state, and evidence timestamps under `/data`. A malformed existing persisted state file is an explicit error, not a silent reset.
-- Stale GPS coordinates must not appear as current distance. Recorder tracks distance history; do not append measurement history as MQTT attributes.
+- Discover existing `zone.*` entities from HA. Use HA's GPS tracker zone classification; **do not** implement independent geographic calculations.
+- The App intentionally owns enrolled-resident zone transitions rather than directly exposing general HA zone triggers, so administrator/excluded users cannot generate DH Presence zone events.
+- Persist per-resident zone baseline under `/data`; suppress repeated, stale, ambiguous, unavailable and initial-baseline transitions.
+- Dynamically create per-zone MQTT notification switches on the same DH Presence device, default OFF. Keep GPS/Wi-Fi notification switches independent and persist selections.
+- Preserve machine-event contract `event.dh_presence_app_event`: `arrival`, `departure`, `gps_in`, `gps_out`, `wifi_in`, `wifi_out`, `wifi_lost` (legacy, no longer produced) and `zone_enter`, `zone_leave`. Events are non-retained; local HA notification packages decide whether to call `script.write2log` based on the corresponding switch.
+- Stable zone switch identity is based on `zone.entity_id`; editing the display name does not change it. A changed zone entity ID creates a new identity.
 
-## MQTT and UI
+## MQTT, Recorder and UI
 
-- One MQTT Device; one aggregate residents-home binary sensor with resident statuses in attributes.
-- Individual GPS binary sensor and straight-line distance sensor per included resident.
-- One MQTT Event entity with `arrival, departure, gps_in, gps_out, wifi_in, wifi_out`.
-- Human-facing notifications are rendered only by HA packages: `event.received → trigger.id → choose → local action`.
-- User-editable mode is configured in the App and exposed as `select.dh_presence_app_mode`. HA selection persists in `/data`; changing App Configuration's default wins on next startup.
-- UI includes resident status and source freshness, mobile registration, admin configuration, MQTT/engine diagnostics, and DigitalHouses unified App operation card.
-- Standard telemetry consent flag defaults to false; never include user IDs, IP/MAC, GPS positions, distances, or movement history in telemetry.
+- One MQTT Device, one aggregate `binary_sensor.dh_presence_app_residents_home`, per-resident GPS/Wi-Fi binary sensors and distance sensors, plus diagnostics, operations, mode selection, notification switches and one Event entity.
+- Preserve released MQTT identifiers and state semantics. Current GPS distance has no changing metadata attributes; do not add extra Recorder counters or dynamic history sensors for zone events.
+- HA's native `zone.*` state is the source for the **person count card**; it counts configured HA persons and is not a count of DH Presence registrations.
+- The private administrator Ingress diagnostics card may show registration IP/MAC, user/device association and source troubleshooting details. Ordinary users cannot retrieve those protected fields; do not confuse admin-only UI with MQTT/Recorder publication.
+- Use the shared DigitalHouses product status/control card. Human-readable messages are generated in the site's HA package rather than the public App.
+- `telemetry_enabled` remains in configuration for the experimental pilot, but this product is not yet admitted to reporting (`telemetry_allowed: false`, `release: null` in the registry). No statistics sender is implemented; telemetry migration is deferred.
 
-## Required proof before alarm integration
+## Acceptance limitations
 
-The iPhone tests do not establish 15+ minute continuously locked iOS reliability, DHCP/private-MAC recovery, multi-phone identity binding, or a trustworthy network-absence detector. Do not enable automatic alarm arming based on Presence App until these are tested and separately accepted.
+Verify actual router tracker reliability, multi-device ownership binding and site-specific exclusions before integrating this pilot with alarms or other safety-sensitive decisions. Presence reports are not a substitute for verified security signals.
