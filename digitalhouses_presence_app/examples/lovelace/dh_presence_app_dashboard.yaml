@@ -148,27 +148,27 @@ sections:
               icon:
                 - width: 28px
                 - color: |
-                  [[[
-                    const s = states['sensor.dh_presence_app_card']?.state;
-                    const supervisor = states['update.digitalhouses_presence_app_update'];
-                    const installable = supervisor?.state === 'on';
-                    const releaseAvailable = states['binary_sensor.dh_presence_app_update_available']?.state === 'on';
-                    if (s === 'running' || supervisor?.attributes?.in_progress === true)
-                      return 'var(--info-color, var(--primary-color))';
-                    if (s === 'error') return 'var(--error-color)';
-                    if (s === 'success') return 'var(--success-color)';
-                    if (installable || releaseAvailable) return 'var(--warning-color, orange)';
-                    const roster = states['binary_sensor.dh_presence_app_residents_home']?.attributes?.residents || {};
-                    const sourceUnavailable = Object.keys(roster).some(key => !['on','off'].includes(
-                      states['binary_sensor.dh_presence_app_' + key + '_gps_home']?.state
-                    ));
-                    const freshness = Number(states['binary_sensor.dh_presence_app_residents_home']?.attributes?.gps_freshness_seconds) || 300;
-                    const old = Object.values(roster).some(r => r?.gps_reported_at
-                      && Date.now() - Date.parse(r.gps_reported_at) > freshness * 1000);
-                    if (sourceUnavailable || old) return 'var(--warning-color, orange)';
-                    return states['binary_sensor.dh_presence_app_residents_home']?.state === 'on'
-                      ? 'var(--success-color)' : 'var(--secondary-text-color)';
-                  ]]]
+                    [[[
+                      const s = states['sensor.dh_presence_app_card']?.state;
+                      const supervisor = states['update.digitalhouses_presence_app_update'];
+                      const installable = supervisor?.state === 'on';
+                      const releaseAvailable = states['binary_sensor.dh_presence_app_update_available']?.state === 'on';
+                      if (s === 'running' || supervisor?.attributes?.in_progress === true)
+                        return 'var(--info-color, var(--primary-color))';
+                      if (s === 'error') return 'var(--error-color)';
+                      if (s === 'success') return 'var(--success-color)';
+                      if (installable || releaseAvailable) return 'var(--warning-color, orange)';
+                      const roster = states['binary_sensor.dh_presence_app_residents_home']?.attributes?.residents || {};
+                      const sourceUnavailable = Object.keys(roster).some(key => !['on','off'].includes(
+                        states['binary_sensor.dh_presence_app_' + key + '_gps_home']?.state
+                      ));
+                      const freshness = Number(states['binary_sensor.dh_presence_app_residents_home']?.attributes?.gps_freshness_seconds) || 300;
+                      const old = Object.values(roster).some(r => r?.gps_reported_at
+                        && Date.now() - Date.parse(r.gps_reported_at) > freshness * 1000);
+                      if (sourceUnavailable || old) return 'var(--warning-color, orange)';
+                      return states['binary_sensor.dh_presence_app_residents_home']?.state === 'on'
+                        ? 'var(--success-color)' : 'var(--secondary-text-color)';
+                    ]]]
 
               name:
                 - justify-self: start
