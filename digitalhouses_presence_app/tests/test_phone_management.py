@@ -211,7 +211,8 @@ class PhoneManagementTests(unittest.TestCase):
         self.assertIn("phone.registration_label", dash)
         for forbidden in ("phone.ip", "phone.mac", "api/admin/delete-registration"):
             self.assertNotIn(forbidden, card)
-        self.assertIn("is_authorized_ha_admin(context[\\"user_id\\"], token)",\n                      (base / "rootfs/app/dh_presence/ui.py").read_text())
+        self.assertIn('is_authorized_ha_admin(context["user_id"], token)',
+                      (base / "rootfs/app/dh_presence/ui.py").read_text())
         for marker in (
                        "X-Presence-Request", "delete-registration",
                        "Удалить регистрацию", "confirm(", "q('adminDebug').hidden=true"):
