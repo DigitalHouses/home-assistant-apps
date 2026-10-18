@@ -220,3 +220,19 @@ failed pilot acceptance requiring adjustment or reversion to GPS mode.
    claim restored time that was never persisted.
 6. Verify the same existing MQTT entity/tree and compact PVE-style
    `line-height:1` card, IP/MAC privacy contract and Recorder exclusion.
+
+## HA local wall-time only in phone tree (0.1.36)
+
+1. Upgrade App to 0.1.36, preserve the existing dashboard YAML.
+   With HA `time_zone: Asia/Almaty`, source event
+   `2026-10-18T20:12:00+00:00` must display
+   `Статус с · 19.10.2026 01:12`, **without** `+05` or `UTC`.
+2. For a DST-observing HA timezone, verify actual local hour adjustment
+   in January vs July, with no timezone suffix on either timestamp.
+3. When HA Core timezone is missing/invalid, **do not substitute**
+   unlabeled UTC: display `местное время недоступно`; retry config
+   periodically and restore local formatting once it becomes valid.
+4. Distinguish missing observation timestamp (`нет данных`) and
+   unlinked router Wi-Fi (`не применимо`). All source status and
+   last-transition semantics remain unchanged. No HA templates, MQTT
+   entities or Recorder writes are added.
