@@ -97,3 +97,29 @@ The compact registration tree showing `IP (рег.)` and `MAC (рег.)` is gene
   `sensor.dh_presence_app_recent_events`. The normal
   `binary_sensor.dh_presence_app_residents_home` aggregate retains exactly
   its previous registration-safe attribute schema, events remain unchanged.
+
+## Phone removal controls (0.1.33)
+
+The same device `dh_presence_app` now discovers:
+
+| Entity | Topic | Description |
+| --- | --- | --- |
+| `select.dh_presence_app_remove_phone` | `registrations/remove/select/set` | Exact current phone selection, **non-retained command**, dynamic options `Имя (телефон) · device_tracker...` plus `— Выберите телефон —` |
+| Same select state | `registrations/remove/select/state` | Selected option retained by App; resets after successful/attempted delete or restart |
+| `button.dh_presence_app_delete_registration` | `registrations/remove/press` | `DELETE` payload, **non-retained command**; App deletes only a current valid selected registration |
+
+Prefix all relative topics with
+`DigitalHouses/Global/dh_presence_app/`. App validates that the selected
+value is among the currently active/non-excluded registrations, re-reads the
+private registry under the shared Ingress lock, tombstones removed trackers,
+updates dynamic MQTT Discovery and removes the phone from
+`sensor.dh_presence_app_registered_phones`. Retained, malformed and stale
+commands are ignored. App does not emit arrival/departure/zone-leave for
+administrative deletion. No new sensor and no Recorder exclusion required
+beyond existing diagnostic history/tree exclusions.
+
+**Threat model:** MQTT command topics do not carry authenticated Home
+Assistant user identity. Lovelace admin visibility is *not* an authorization
+boundary. Users with permitted HA/MQTT service access can issue commands;
+broker ACL and trusted HA users are necessary. Use existing authenticated
+Ingress API for true per-user HA admin authorization.
