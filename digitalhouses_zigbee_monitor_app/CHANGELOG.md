@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.1.8
+
+- Problems Engine по контракту `dh_pve_agent`: независимые подтверждённые
+  `device_class: problem` по каждому автоматически обнаруженному Z2M:
+  `bridge_offline`, `devices_offline`, `mqtt_traffic_low`.
+- Один агрегатор `sensor.dh_zigbee_monitor_app_problems` с `active`,
+  `unknown`, `severity` и `coverage_complete`; нет фиктивного нуля при
+  неполных данных. Бинарные статусы и агрегат публикуются при изменении.
+- События `problem_started` и `problem_recovered`: retained bundle
+  публикуется перед transient Event. Перезапуск/retained bootstrap не
+  создают событий.
+- Per-network настройки RPM через MQTT Discovery: `switch` автоматического
+  порога и `number` ручного (1..10000). Настройки сохраняются в SQLite,
+  активируются без рестарта и не требуют паспортов.
+- Анализ трафика по минутным SQLite-агрегатам независимо по каждой сети;
+  manual: 10-мин прогрев, auto: 65-мин прогрев, достаточная история и
+  личный baseline. При недостатке данных статус unknown. Подтверждение
+  low RPM 5 мин, восстановление 2 мин с 1.3x гистерезисом; не трактовать
+  падение трафика как доказанную неисправность координатора.
+- В `networks_details`: total, online, offline, unknown, per-network
+  RPM, текущий порог и baseline. Новая Mushroom-карточка проблем.
+  Настройки автоматически выведены в Dashboard через auto-entities.
+- Регулярная публикация диагностических snapshot не создаёт новых
+  Recorder-сущностей: установленный allowlist из четырёх скаляров
+  не изменён. Никаких запросов к Zigbee-устройствам и Auto-Healer.
+
 ## 0.1.7
 
 - SQLite engine для подтверждённых инцидентов `device_offline` и
