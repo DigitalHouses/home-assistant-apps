@@ -24,7 +24,7 @@ from dh_presence.notifications import NotificationSelection, NOTIFICATION_KEYS
 from dh_presence.zones import ZoneMonitor, zone_catalog, zone_key
 from dh_presence.history import EventHistory, DEFAULT_LIMIT, MAX_LIMIT
 from dh_presence.operations import Operations, fetch_latest_release, is_newer
-from dh_presence.registration import load_registry
+from dh_presence.registration import load_registry_state
 from dh_presence.router import poll_router_trackers
 from dh_presence.ui import start_ingress_ui
 
@@ -315,7 +315,8 @@ class MqttOutput:
         self.client.loop_stop()
 
 
-def build_engine(options: dict, saved: dict, registrations: list[dict] | None = None) -> Engine:
+def build_engine(options: dict, saved: dict, registrations: list[dict] | None = None,
+                 suppressed_trackers: set[str] | None = None) -> Engine:
     engine = Engine(mode=options["presence_mode"], wifi_absence_minutes=options["wifi_absence_minutes"],
                     freshness_seconds=options["gps_freshness_seconds"])
     # Tracker identity is deliberately different from HA User identity. We
@@ -326,15 +327,18 @@ def build_engine(options: dict, saved: dict, registrations: list[dict] | None = 
     names = {entry["device_tracker"]: entry["user_name"]
              for entry in options.get("resident_names", [])}
     registered = {r["tracker"]: r for r in (registrations or [])}
+    suppressed = suppressed_trackers or set()
     for item in options["residents"]:
         if isinstance(item, str):
+            if item in suppressed:
+                continue
             # No authenticated user-id for a legacy tracker-only entry:
             # never count it when an HA User exclusion must be enforced.
             if excludes and item not in registered:
                 continue
             tracker, name, old_state = item, friendly_tracker_name(item), previous.get(item)
         else:
-            if item["user_id"] in excludes:
+            if item["user_id"] in excludes or item["gps_tracker"] in suppressed:
                 continue
             tracker, name = item["gps_tracker"], item["name"]
             old_state = previous.get(tracker) or legacy.get(item["user_id"])
@@ -342,19 +346,53 @@ def build_engine(options: dict, saved: dict, registrations: list[dict] | None = 
         if link and link["user_id"] in excludes:
             continue
         engine.add(tracker, link["device_name"] if link else name, old_state,
-                   user_name=link["user_name"] if link else names.get(tracker))
+                   user_name=link["user_name"] if link else names.get(tracker),
+                   registered=link is not None)
     # Dynamic enrollment is durable and independent of the App config's old
     # residents list. A new resident starts unknown, without synthetic events.
     for tracker, link in registered.items():
-        if tracker not in engine.residents and link["user_id"] not in excludes:
+        if (tracker not in suppressed and tracker not in engine.residents
+                and link["user_id"] not in excludes):
             engine.add(tracker, link["device_name"], previous.get(tracker),
-                       user_name=link["user_name"])
+                       user_name=link["user_name"], registered=True)
     # The roster is also an inventory source for Lovelace. Include the
     # persistent router association before the first successful HA poll.
     for tracker, link in registered.items():
         if tracker in engine.residents:
             engine.residents[tracker].wifi_tracker_id = link.get("wifi_tracker")
     return engine
+
+
+
+def reconcile_registration_roster(engine: Engine, options: dict,
+                                  registrations: list[dict],
+                                  suppressed_trackers: set[str]) -> bool:
+    """Synchronize live membership after administrator removal/re-registration.
+
+    Existing source/confirmed evidence is preserved for unchanged trackers;
+    removed trackers cannot emit departure and new phones start UNKNOWN.
+    """
+    expected = build_engine(options, {"schema_version": 2, "residents": []},
+                            registrations, suppressed_trackers).residents
+    changed = False
+    for tracker in list(engine.residents):
+        if tracker not in expected:
+            del engine.residents[tracker]
+            changed = True
+    for tracker, candidate in expected.items():
+        current = engine.residents.get(tracker)
+        if current is None:
+            engine.add(tracker, candidate.name, user_name=candidate.user_name,
+                       registered=candidate.registered)
+            engine.residents[tracker].wifi_tracker_id = candidate.wifi_tracker_id
+            changed = True
+            continue
+        for field in ("name", "user_name", "registered", "wifi_tracker_id"):
+            wanted = getattr(candidate, field)
+            if getattr(current, field) != wanted:
+                setattr(current, field, wanted)
+                changed = True
+    return changed
 
 
 def friendly_tracker_name(tracker: str) -> str:
@@ -474,8 +512,8 @@ def run():
     version = os.environ["APP_VERSION"]
     options = load_options()
     saved = load(STATE)
-    registrations = load_registry(REGISTRATIONS_FILE)
-    engine = build_engine(options, saved, registrations)
+    registrations, suppressed_trackers = load_registry_state(REGISTRATIONS_FILE)
+    engine = build_engine(options, saved, registrations, suppressed_trackers)
     modes = ModeSelection(MODE_FILE, options["presence_mode"])
     notifications = NotificationSelection(NOTIFICATIONS_FILE)
     zone_monitor = ZoneMonitor(ZONES_FILE)
@@ -579,28 +617,19 @@ def run():
             if (last_registration_check is None
                     or time.monotonic() - last_registration_check >= 5):
                 last_registration_check = time.monotonic()
-                latest = load_registry(REGISTRATIONS_FILE)
-                if latest != registrations:
-                    registrations = latest
-                    changed = False
-                    for item in registrations:
-                        if item["user_id"] in options["exclude_users"]:
-                            continue
-                        resident = engine.residents.get(item["tracker"])
-                        if resident is None:
-                            engine.add(item["tracker"], item["device_name"],
-                                       saved=next((x for x in saved["residents"]
-                                                   if x.get("tracker") == item["tracker"]), None),
-                                       user_name=item["user_name"])
-                            changed = True
-                        elif (resident.user_name != item["user_name"]
-                              or resident.name != item["device_name"]):
-                            resident.user_name = item["user_name"]
-                            resident.name = item["device_name"]
-                            changed = True
+                latest, disabled = load_registry_state(REGISTRATIONS_FILE)
+                if latest != registrations or disabled != suppressed_trackers:
+                    # One app-owned registry is authoritative even if a legacy
+                    # Supervisor residents option still names a removed phone.
+                    registrations, suppressed_trackers = latest, disabled
+                    changed = reconcile_registration_roster(
+                        engine, options, registrations, suppressed_trackers)
                     if changed:
-                        discovery_ready = synchronize_discovery(mqtt_out, version, engine, zones=zones) if mqtt_out.connected.is_set() else False
-                        LOG.info("DH Presence registered resident roster synchronized")
+                        discovery_ready = (synchronize_discovery(
+                            mqtt_out, version, engine, zones=zones)
+                            if mqtt_out.connected.is_set() else False)
+                        LOG.info("DH Presence phone registry synchronized: active=%d",
+                                 len(engine.residents))
             now = datetime.now(timezone.utc)
             name_changed = False
             if home is None:
