@@ -396,22 +396,46 @@ sections:
           {% if states('sensor.dh_zigbee_monitor_app_incidents_details') in ['unknown', 'unavailable'] or rows is not iterable or rows is string %}
           *Сведения об инцидентах недоступны.*
           {% elif rows | length == 0 %}
-          Нет подтверждённых активных инцидентов.
+          **Подтверждённых активных инцидентов нет.**
+          {% if not state_attr('sensor.dh_zigbee_monitor_app_incidents_details', 'observation_complete') %}
+          *Покрытие неполное — часть устройств или Zigbee2MQTT ещё без данных.*
+          {% endif %}
           {% else %}
+          **Подтверждено инцидентов:** {{ state_attr('sensor.dh_zigbee_monitor_app_incidents_details', 'total') }}
+          {% if not state_attr('sensor.dh_zigbee_monitor_app_incidents_details', 'observation_complete') %}
+          *Покрытие неполное — не все статусы получены.*
+          {% endif %}
           <table>
-          <thead><tr><th>Тип</th><th>Объект</th><th>С начала</th></tr></thead>
+          <thead><tr><th>Объект</th><th>Тип</th><th>Начало (UTC)</th></tr></thead>
           <tbody>
           {% for incident in rows %}
-          <tr><td>{{ incident.kind | e }}</td><td>{{ incident.name | e }}</td><td>{{ incident.started_at | e }}</td></tr>
+          <tr><td>{{ incident.name | e }}</td><td>{{ 'Zigbee2MQTT' if incident.kind == 'zigbee2mqtt_offline' else 'Устройство' }}</td><td>{{ incident.started_at[5:16].replace('T', ' ') if incident.started_at else 'Неизвестно' }}</td></tr>
           {% endfor %}
           </tbody>
           </table>
           {% endif %}
-      - type: history-graph
-        title: Инциденты — история
-        entities:
-          - entity: sensor.dh_zigbee_monitor_app_incidents
-        hours_to_show: 72
+      - type: heading
+        heading: Недавние завершённые инциденты · SQLite
+        heading_style: subtitle
+        icon: mdi:history
+      - type: markdown
+        content: |
+          {% set entity = 'sensor.dh_zigbee_monitor_app_incidents_details' %}
+          {% set rows = state_attr(entity, 'recent_resolved') %}
+          {% if states(entity) in ['unknown', 'unavailable'] or rows is not iterable or rows is string %}
+          *История инцидентов ещё недоступна.*
+          {% elif rows | length == 0 %}
+          Завершённых инцидентов пока нет.
+          {% else %}
+          <table>
+          <thead><tr><th>Объект</th><th>Восстановлен (UTC)</th><th>Длительность</th></tr></thead>
+          <tbody>
+          {% for incident in rows %}
+          <tr><td>{{ incident.name | e }}</td><td>{{ incident.resolved_at[5:16].replace('T', ' ') if incident.resolved_at else '—' }}</td><td>{{ (incident.duration_seconds // 60 ~ ' мин') if incident.duration_seconds is number else 'Неизвестна' }}</td></tr>
+          {% endfor %}
+          </tbody>
+          </table>
+          {% endif %}
       - type: heading
         heading: Диагностика приложения
         heading_style: subtitle

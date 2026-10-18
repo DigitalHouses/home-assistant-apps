@@ -177,7 +177,7 @@ class ZigbeeMonitorUiDesignTests(unittest.TestCase):
                  if card.get("type") == "markdown"]
         templated_tables = [card["content"] for card in cards
                             if "<table>" in card["content"]]
-        self.assertEqual(len(templated_tables), 7)
+        self.assertEqual(len(templated_tables), 8)
         for content in templated_tables:
             with self.subTest(table=content[:60]):
                 self.assertEqual(content.count("<table>"), 1)
@@ -254,7 +254,7 @@ class ZigbeeMonitorUiDesignTests(unittest.TestCase):
         self.assertEqual((APP / "digitalhouses.app").read_text().strip(), "type = haos_addon")
         config = yaml.safe_load((APP / "config.yaml").read_text(encoding="utf-8"))
         self.assertEqual(config["slug"], "digitalhouses_zigbee_monitor_app")
-        self.assertEqual(config["version"], "0.1.6")
+        self.assertEqual(config["version"], "0.1.7")
         self.assertEqual(config["stage"], "experimental")
 
 

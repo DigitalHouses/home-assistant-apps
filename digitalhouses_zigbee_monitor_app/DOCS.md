@@ -1,7 +1,7 @@
 # DigitalHouses Zigbee Monitor App — installation and acceptance
 
-Version: **0.1.6 (experimental)**. Run only after the production GHCR image
-`ghcr.io/digitalhouses/digitalhouses_zigbee_monitor_app:0.1.6` is published
+Version: **0.1.7 (experimental)**. Run only after the production GHCR image
+`ghcr.io/digitalhouses/digitalhouses_zigbee_monitor_app:0.1.7` is published
 and verified by repository release workflows.
 
 ## Requirements
@@ -123,6 +123,53 @@ retained `bridge/devices` официальные поля `type` / `power_source
 
 Источник: https://www.zigbee2mqtt.io/guide/usage/mqtt_topics_and_messages.html
 и https://www.zigbee2mqtt.io/guide/configuration/device-availability.html
+
+## Инциденты, подтверждённые Zigbee2MQTT · SQLite (0.1.7)
+
+Инциденты — отдельный backend-продуктовый показатель, не часть
+унифицированной статусной карточки Zigbee Monitor App. История хранится в
+`/data/activity.sqlite3`, **не в Recorder** и без записи каждого MQTT
+пакета. Две подтверждённые категории:
+
+- `device_offline`: Zigbee2MQTT публикует offline **при живом bridge**;
+- `zigbee2mqtt_offline`: авторитетный `bridge/state=offline`.
+
+Идентификаторы объектов: сеть — постоянный `network_id` координатора
+(IEEE), устройство — `network_id + IEEE`, а не friendly_name.
+На первое подтверждение создаётся ровно один активный инцидент;
+повторные availability не плодят записи. При восстановлении он
+закрывается, а запись остаётся в SQLite.
+
+- В живом переходе `online → offline` точно фиксируется `started_at`.
+- Если после запуска приходит retained `offline`, начало
+  **неизвестно**: `started_at=null`, но `first_observed_at` реально.
+- Восстановление `offline → online` закрывает инцидент с `resolved_at`;
+  длительность публикуется только при известном начале.
+- После перезапуска/разрыва MQTT retained `online` закрывает старую
+  запись как `resolution_source=reconciliation`, но не создаёт
+  дополнительное transient событие; точное время фактического
+  восстановления при этом может быть раньше времени сверки.
+- Когда bridge offline, нельзя выдавать массовые инциденты устройств:
+  device availability временно перестаёт быть достоверной. Ранее
+  открытые device incident записи не удаляются как «восстановленные»;
+  после возвращения источника требуется подтверждение Z2M.
+
+`sensor.dh_zigbee_monitor_app_incidents`: активные подтверждённые
+инциденты; **нулевое значение** допустимо только при полной наблюдаемости
+bridge и availability всех устройств; иначе `unavailable`, если
+подтверждённых проблем нет. Положительное число при неполном
+покрытии — нижняя граница; это указано в details.
+
+`sensor.dh_zigbee_monitor_app_incidents_details`: текущий список
+`incidents` (до 40), `total`, `truncated`, `observation_complete`
+и `recent_resolved` (до 20). Recorder OFF; после восстановления
+история видна в Dashboard без пустого исторического HA-графика.
+SQLite историю не обрезаем без согласованной политики retention.
+
+Не пытаемся распознавать загруженность CPU, MQTT delivery latency или
+«зависание при bridge online» из отсутствия сообщений от батарейных
+датчиков. Это отдельная задача после диагностики доступного
+health/metrics источника.
 
 ## События появления/исчезновения устройств и Zigbee2MQTT
 
@@ -255,6 +302,7 @@ intentionally a view: calculations, filtering and history are App-owned.
 - Source availability depends on Zigbee2MQTT configuration and retained state.
 - No local delivery notifications are installed by the public App: it publishes
   four machine Event types for optional site-local Home Assistant automation.
-- Anomaly detection and incident engine are not implemented yet.
+- Anomaly / spam detection is not implemented yet; confirmed Zigbee2MQTT
+  source/device outage incident engine is included as of 0.1.7.
 - End-to-end tests against a real HAOS installation and Recorder are required
   before declaring production acceptance.
