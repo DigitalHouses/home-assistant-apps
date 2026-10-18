@@ -201,6 +201,19 @@ class PhoneManagementTests(unittest.TestCase):
                 self.assertIn(answers[0][0], (400, 403, 404))
                 self.assertEqual(load_registry(path), [SAMPLE])
 
+    def test_admin_ingress_javascript_is_valid(self):
+        # Ingress JS is embedded in a Python multiline string; escaping errors
+        # can pass Python compileall while breaking the entire phone manager.
+        import shutil
+        import subprocess
+        from dh_presence.ui import HTML
+        if shutil.which("node") is None:
+            self.skipTest("Node is not available")
+        javascript = HTML.split("<script>", 1)[1].split("</script>", 1)[0]
+        result = subprocess.run(["node", "--check"], input=javascript,
+                                capture_output=True, text=True, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_public_dashboard_and_private_admin_ui_contract(self):
         from pathlib import Path
         base = Path(__file__).resolve().parents[1]
