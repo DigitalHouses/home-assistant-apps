@@ -1,5 +1,6 @@
 # DigitalHouses Zigbee Monitor · canonical status/control card
 # Requires Mushroom + custom:button-card >=5.0, Supervisor update integration.
+# App lifecycle and operation results ONLY; Zigbee network/device metrics belong to separate cards.
 # Status is app-owned; install/restart are performed by HA Supervisor.
 type: vertical-stack
 cards:
@@ -8,13 +9,6 @@ cards:
     triggers_update:
       - sensor.dh_zigbee_monitor_app_card
       - sensor.dh_zigbee_monitor_app_version
-      - sensor.dh_zigbee_monitor_app_latest_version
-      - binary_sensor.dh_zigbee_monitor_app_update_available
-      - sensor.dh_zigbee_monitor_app_offline
-      - sensor.dh_zigbee_monitor_app_incidents
-      - sensor.dh_zigbee_monitor_app_devices
-      - sensor.dh_zigbee_monitor_app_inventory_details
-      - sensor.dh_zigbee_monitor_app_networks_details
       - update.digitalhouses_zigbee_monitor_app_update
     update_timer: |
       [[[
@@ -27,78 +21,47 @@ cards:
     show_label: true
     icon: |
       [[[
-        const app = states['sensor.dh_zigbee_monitor_app_card'];
-        const s = app?.state;
-        const supervisor = states['update.digitalhouses_zigbee_monitor_app_update'];
-        if (supervisor?.attributes?.in_progress === true || s === 'running') return 'mdi:progress-clock';
-        if (!app || ['unknown', 'unavailable'].includes(s)) return 'mdi:zigbee-off';
+        const s = states['sensor.dh_zigbee_monitor_app_card']?.state;
+        const installing = states['update.digitalhouses_zigbee_monitor_app_update']
+          ?.attributes?.in_progress === true;
+        if (installing || s === 'running') return 'mdi:progress-clock';
+        if (!s || ['unknown', 'unavailable'].includes(s)) return 'mdi:zigbee-off';
         if (s === 'error') return 'mdi:alert-circle';
-        const networks = states['sensor.dh_zigbee_monitor_app_networks_details']?.attributes?.networks;
-        if (Array.isArray(networks) && networks.some(n => n.status === 'offline'))
-          return 'mdi:lan-disconnect';
-        const offlineState = states['sensor.dh_zigbee_monitor_app_offline']?.state;
-        if (offlineState && !['unknown','unavailable'].includes(offlineState) && Number(offlineState) > 0)
-          return 'mdi:lan-disconnect';
-        const unknown = states['sensor.dh_zigbee_monitor_app_inventory_details']?.attributes?.availability_unknown;
-        if (typeof unknown === 'number' && unknown > 0) return 'mdi:alert-network-outline';
-        const installed = states['sensor.dh_zigbee_monitor_app_version']?.state;
-        const latest = states['sensor.dh_zigbee_monitor_app_latest_version']?.state;
-        const newer = (a, b) => /^\d+\.\d+\.\d+$/.test(a || '') && /^\d+\.\d+\.\d+$/.test(b || '') &&
-          b.split('.').map(Number).some((v, i, arr) => v !== Number(a.split('.')[i]) && arr.slice(0,i).every((x,j) => x === Number(a.split('.')[j])) && v > Number(a.split('.')[i]));
-        if (supervisor?.state === 'on' ||
-            (states['binary_sensor.dh_zigbee_monitor_app_update_available']?.state === 'on' && newer(installed, latest)))
-          return 'mdi:package-up';
         if (s === 'success') return 'mdi:check-circle';
         return 'mdi:zigbee';
       ]]]
     name: |
       [[[
-        const installed = states['sensor.dh_zigbee_monitor_app_version']?.state;
-        const latest = states['sensor.dh_zigbee_monitor_app_latest_version']?.state;
-        const supervisor = states['update.digitalhouses_zigbee_monitor_app_update'];
-        const valid = value => typeof value === 'string' && /^\d+\.\d+\.\d+$/.test(value);
-        const newer = (a, b) => valid(a) && valid(b) &&
-          b.split('.').map(Number).some((v, i, arr) => v !== Number(a.split('.')[i]) && arr.slice(0,i).every((x,j) => x === Number(a.split('.')[j])) && v > Number(a.split('.')[i]));
-        const supervisorLatest = supervisor?.attributes?.latest_version;
-        const canInstall = supervisor?.state === 'on';
-        const published = states['binary_sensor.dh_zigbee_monitor_app_update_available']?.state === 'on';
-        const candidate = canInstall && newer(installed, supervisorLatest)
-          ? supervisorLatest : published && newer(installed, latest) ? latest : null;
-        return 'DH Zigbee Monitor' + (valid(installed)
-          ? ' · v' + installed + (candidate ? ' → v' + candidate : '')
-          : '');
+        const version = states['sensor.dh_zigbee_monitor_app_version']?.state;
+        const valid = typeof version === 'string' && /^\d+\.\d+\.\d+$/.test(version);
+        return 'DH Zigbee Monitor' + (valid ? ' · v' + version : '');
       ]]]
     label: |
       [[[
         const item = states['sensor.dh_zigbee_monitor_app_card'];
         const supervisor = states['update.digitalhouses_zigbee_monitor_app_update'];
-        const installed = states['sensor.dh_zigbee_monitor_app_version']?.state;
-        const latest = states['sensor.dh_zigbee_monitor_app_latest_version']?.state;
-        const validVersion = value => typeof value === 'string' && /^\d+\.\d+\.\d+$/.test(value);
-        const newer = (a, b) => validVersion(a) && validVersion(b) &&
-          b.split('.').map(Number).some((v, i, arr) => v !== Number(a.split('.')[i]) && arr.slice(0,i).every((x,j) => x === Number(a.split('.')[j])) && v > Number(a.split('.')[i]));
-        const canInstall = supervisor?.state === 'on';
-        const published = states['binary_sensor.dh_zigbee_monitor_app_update_available']?.state === 'on' && newer(installed, latest);
-        const formatElapsed = start => {
-          const t = Math.max(0, Math.floor((performance.now() - start) / 1000));
-          return String(Math.floor(t / 60)).padStart(2,'0') + ':' + String(t % 60).padStart(2,'0');
+        const elapsed = since => {
+          const seconds = Math.max(0, Math.floor((performance.now() - since) / 1000));
+          return String(Math.floor(seconds / 60)).padStart(2, '0') + ':' +
+            String(seconds % 60).padStart(2, '0');
         };
-        const duration = seconds => {
-          if (typeof seconds !== 'number' || !Number.isFinite(seconds)) return '';
-          const n = Math.round(Math.max(0, seconds));
-          return ' · ' + (n >= 60
-            ? Math.floor(n / 60) + ' мин ' + String(n % 60).padStart(2,'0') + ' сек'
-            : n + ' сек');
+        const duration = value => {
+          if (typeof value !== 'number' || !Number.isFinite(value)) return '';
+          const seconds = Math.round(Math.max(0, value));
+          return ' · ' + (seconds >= 60
+            ? Math.floor(seconds / 60) + ' мин ' + String(seconds % 60).padStart(2, '0') + ' сек'
+            : seconds + ' сек');
         };
         if (supervisor?.attributes?.in_progress === true) {
           if (this._dh_zigbee_timer?.kind !== 'install')
-            this._dh_zigbee_timer = {kind:'install', since:performance.now()};
-          const pct = supervisor.attributes.update_percentage;
+            this._dh_zigbee_timer = {kind: 'install', since: performance.now()};
+          const percent = supervisor.attributes.update_percentage;
           return 'Установка версии… ' +
-            (typeof pct === 'number' && Number.isFinite(pct) ? Math.round(pct) + '% · ' : '') +
-            formatElapsed(this._dh_zigbee_timer.since);
+            (typeof percent === 'number' && Number.isFinite(percent)
+              ? Math.round(percent) + '% · ' : '') +
+            elapsed(this._dh_zigbee_timer.since);
         }
-        if (!item || ['unknown','unavailable'].includes(item.state)) {
+        if (!item || ['unknown', 'unavailable'].includes(item.state)) {
           this._dh_zigbee_timer = null;
           return 'Нет связи с приложением';
         }
@@ -106,40 +69,20 @@ cards:
         if (item.state === 'running') {
           const key = String(a.operation) + '|' + String(a.started_at || '');
           if (this._dh_zigbee_timer?.key !== key)
-            this._dh_zigbee_timer = {kind:'operation', key, since:performance.now()};
+            this._dh_zigbee_timer = {kind: 'operation', key, since: performance.now()};
           const action = a.operation === 'refresh' ? 'Обновление данных'
             : a.operation === 'check' ? 'Проверка версии' : 'Операция';
-          return action + '… ' + formatElapsed(this._dh_zigbee_timer.since);
+          return action + '… ' + elapsed(this._dh_zigbee_timer.since);
         }
         this._dh_zigbee_timer = null;
-        if (item.state === 'error') return 'Ошибка: ' + (a.error || 'нет подробностей');
+        if (item.state === 'error')
+          return 'Ошибка: ' + (a.error || 'операция не выполнена');
         if (item.state === 'success') {
-          const result = a.operation === 'check'
-            ? canInstall ? 'Версия проверена · доступна установка'
-              : published ? 'Релиз найден · Supervisor пока не предлагает установку'
-              : states['binary_sensor.dh_zigbee_monitor_app_update_available']?.state === 'off'
-                ? 'Версия актуальна' : 'Проверка завершена'
-            : a.operation === 'refresh' ? 'Данные обновлены' : 'Готово';
+          const result = a.operation === 'refresh' ? 'Данные обновлены'
+            : a.operation === 'check' ? 'Версия проверена' : 'Готово';
           return result + duration(a.duration_seconds);
         }
-        const networks = states['sensor.dh_zigbee_monitor_app_networks_details']?.attributes?.networks;
-        const down = Array.isArray(networks) ? networks.filter(n => n.status === 'offline').length : 0;
-        const offlineState = states['sensor.dh_zigbee_monitor_app_offline']?.state;
-        const validCount = value => typeof value === 'string' && /^\d+$/.test(value);
-        const unknown = states['sensor.dh_zigbee_monitor_app_inventory_details']?.attributes?.availability_unknown;
-        const count = states['sensor.dh_zigbee_monitor_app_devices']?.state;
-        let health = down ? 'Zigbee2MQTT недоступен: ' + down
-          : validCount(offlineState) && Number(offlineState) > 0
-            ? 'Offline устройств: ' + offlineState
-          : validCount(count) && typeof unknown === 'number' && unknown > 0
-            ? count + ' устройств · Нет статуса у ' + unknown
-          : validCount(count) && validCount(offlineState)
-            ? count + ' устройств · Offline: ' + offlineState
-          : validCount(count) ? count + ' устройств · Offline: нет данных'
-          : 'Ожидание достоверных данных';
-        if (canInstall) return health + ' · Можно установить обновление';
-        if (published) return health + ' · Релиз опубликован, Supervisor не предлагает установку';
-        return health;
+        return 'Приложение запущено';
       ]]]
     styles:
       card:
@@ -156,28 +99,14 @@ cards:
         - width: 28px
         - color: |
             [[[
-              const item = states['sensor.dh_zigbee_monitor_app_card'];
-              const s = item?.state;
-              const supervisor = states['update.digitalhouses_zigbee_monitor_app_update'];
-              if (supervisor?.attributes?.in_progress === true || s === 'running')
+              const s = states['sensor.dh_zigbee_monitor_app_card']?.state;
+              const installing = states['update.digitalhouses_zigbee_monitor_app_update']
+                ?.attributes?.in_progress === true;
+              if (installing || s === 'running')
                 return 'var(--info-color, var(--primary-color))';
-              if (!item || ['unknown','unavailable'].includes(s)) return 'var(--secondary-text-color)';
+              if (!s || ['unknown', 'unavailable'].includes(s))
+                return 'var(--secondary-text-color)';
               if (s === 'error') return 'var(--error-color)';
-              const networks = states['sensor.dh_zigbee_monitor_app_networks_details']?.attributes?.networks;
-              if (Array.isArray(networks) && networks.some(n => n.status === 'offline'))
-                return 'var(--error-color)';
-              const offline = states['sensor.dh_zigbee_monitor_app_offline']?.state;
-              if (offline && !['unknown','unavailable'].includes(offline) && Number(offline) > 0)
-                return 'var(--warning-color, orange)';
-              const unknown = states['sensor.dh_zigbee_monitor_app_inventory_details']?.attributes?.availability_unknown;
-              if (typeof unknown === 'number' && unknown > 0) return 'var(--warning-color, orange)';
-              const installed = states['sensor.dh_zigbee_monitor_app_version']?.state;
-              const latest = states['sensor.dh_zigbee_monitor_app_latest_version']?.state;
-              const newer = (a, b) => /^\d+\.\d+\.\d+$/.test(a || '') && /^\d+\.\d+\.\d+$/.test(b || '') &&
-                b.split('.').map(Number).some((v, i, arr) => v !== Number(a.split('.')[i]) && arr.slice(0,i).every((x,j) => x === Number(a.split('.')[j])) && v > Number(a.split('.')[i]));
-              if (supervisor?.state === 'on' ||
-                  (states['binary_sensor.dh_zigbee_monitor_app_update_available']?.state === 'on' && newer(installed, latest)))
-                return 'var(--warning-color, orange)';
               if (s === 'success') return 'var(--success-color, var(--primary-color))';
               return 'var(--primary-color)';
             ]]]
