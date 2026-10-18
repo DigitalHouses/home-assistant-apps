@@ -1,102 +1,55 @@
-# Presence App — proposed architecture
+# DigitalHouses Presence App — runtime architecture (0.1.27)
 
-## Boundaries
+Status: experimental HAOS App. Earlier ARP/PING presence pilots (0.1.14–0.1.24) have been superseded by HA router trackers since 0.1.25. Registration still performs **one-time** active ARP verification. See the changelog for historical pilots.
 
-```text
-Home Assistant Mobile Companion GPS ──┐
-                                      ├── Presence App state engine
-Supervisor native Ingress registration ┤       ├── durable confirmed state (/data)
-(connection.user + actual peer)        │       ├── retained MQTT state / Discovery
-              │                       │       └── non-retained MQTT machine Events
-              └── local IP → active ARP┘                 │
-                            ▲                            └── HA packages → notifications
-                       single Wi-Fi Engine
-```
-
-Preferred: one HA App owns GPS decisions, state, MQTT and the authenticated registration UI. Supervisor Ingress supplies HA user identity; access to HA Core `ActiveConnection` is unnecessary. No monkey-patching of Companion or HA WebSocket internals. The ARP engine needs L2 reachability and minimal raw-socket privileges: its container feasibility has **not** been proven.
-
-If HA App cannot perform safe ARP probing, compare an all-in-one HA custom integration versus App + adapter **before** implementation; avoid two parallel Wi-Fi engines.
-
-## Confirmed prototype evidence (14 October 2026)
-
-- Authenticated iPhone WebSocket → HA user → `192.168.11.54` → `88:b9:45:80:a7:55` through interface `enp6s18`.
-- Active ARP with Wi-Fi enabled: 28 responses / 33 probes; isolated misses.
-- Wi-Fi manually off: 28 consecutive misses, with responses after reconnection.
-- Neighbour table showed REACHABLE after active ARP replies stopped, so the cache cannot prove online presence.
-- iOS automatically changed Companion access to Cloudflare when local Wi-Fi was turned off. The externally routed WebSocket client is **not** eligible for local registration.
-
-IP, MAC, interface and SSID observed in the test are **not** configuration constants. Deep-sleep iOS proof and trustworthy negative absence remain open.
-
-## Registration security
-
-1. Verify authorized HA session and registered user selection server-side.
-2. Prove direct local connection, not just a private-looking remote IP. Reject proxy/Tailscale/Cloudflare registration unless separately attested.
-3. Fetch and validate available Companion device and GPS tracker association. Multiple devices per HA user need additional binding validation.
-4. Perform fresh IP→MAC verification without a network-wide scan; persist successful binding only after all checks.
-5. Enforce server-side admin policy for delete and configuration operations.
-6. Use an expiring one-time registration challenge where cross-process handoff is needed; do not expose bearer credentials.
-
-## Source evidence and decision engine
-
-Separate:
-- GPS: `home | not_home | unavailable`, observation/freshness metadata;
-- Wi-Fi: `home | not_home | unavailable`, source-provenance and verified-negative evidence gate;
-- Confirmed logical presence: `home | not_home | unknown`, durable across outages.
-
-Hybrid GPS HOME + verified Wi-Fi absent has a configurable 15-minute continuous qualification period before NOT_HOME. Mere ARP misses and neighbour cache snapshots can only support uncertainty, not verified absence. Breaks in verification reset negative qualification. On source loss/restart keep durable status and diagnostics of stale inputs; do not emit transitions.
-
-Order for a legitimate state transition:
-```text
-Validate new evidence → persist confirmed state → publish retained current state
-→ publish QoS1 non-retained machine event
-```
-Reconnect must not replay events from an old state snapshot. Event duplication/loss rules require explicit transport tests.
-
-## Product lifecycle
-
-**Pilot status 0.1.1:** A runnable, GPS-only experimental Home Assistant App now exists with a `digitalhouses.app` marker, Supervisor configuration, Dockerfile, MQTT publisher, registry entry, compatibility validator, unit tests and CI. It is installed by Home Assistant Supervisor from repository sources (no GHCR `image:`). A single selected `device_tracker` identifies each resident. Native MQTT Select changes the live decision mode, with config-change precedence and persistent UI choice. The Core WebSocket adapter and trusted Wi-Fi engine remain future work; the pilot does not contain those mechanisms and cannot use Wi-Fi absence as evidence. Production-grade GHCR/telemetry and operational acceptance remain separate gates.
-
-## Native Ingress single-App registration pilot (0.1.11; acceptance pending)
-
-The earlier architectural sketch used a separate HA Core adapter. This has
-been **superseded** by documented Supervisor Ingress authentication headers:
+## Responsibilities and data flow
 
 ```text
-HA Companion / HA user (local Wi-Fi)
-      → authenticated HA Core ingress transport
-      → Supervisor Ingress (user id, display name, proxy chain)
-      → DH Presence App native HTTPS/HTTP web UI
-      → direct LAN on-link ARP
-      → private /data/registration registry
-      → existing one-engine GPS/MQTT discovery and events
+HA Mobile Companion GPS device_tracker ────────────┐
+                                                    ├→ enrolled-resident state engine
+HA router Wi-Fi device_tracker (MAC-bound) ─────────┘  ├→ durable confirmed state (/data)
+                                                       ├→ retained MQTT Discovery/state
+HA zone.* catalogue + GPS tracker zone state ─────────→ enrolled-resident ZoneMonitor
+                                                       └→ QoS1 non-retained machine events
+                                                                    ↓
+                                                      local HA notification package
+                                                        event.received / write2log
 ```
 
-- `ingress: true`, port 8099, `panel_admin: false` expose a native HA
-  App panel with no custom integration or JS module. Supervisor only
-  authenticates incoming requests and injects user identity on its
-  documented ingress proxy hop `172.30.32.2`.
-- The App derives the directly connected Core client IP from the
-  second-to-last hop of X-Forwarded-For, **never the untrusted first
-  header value**, with a validated last internal Core hop. Registration
-  is allowed only for a local IP/.local HA URL and on-link IPv4 peer.
-- `arping` performs a fresh one-time IPv4 LAN broadcast with `NET_RAW`;
-  the App refuses off-link paths, proxy/virtual interfaces, failed probes
-  and inconsistent MAC observations.
-- A selected GPS tracker and the authenticated HA user are stored locally.
-  Device ownership proof is an explicit **pilot limitation**: HA Ingress
-  identifies the user, but the App cannot prove that the selected tracker
-  is the physical Companion app hosting the web session.
-- `host_network` + `NET_RAW` were **explicitly approved for this
-  experimental 0.1.11 home pilot** only. Repository validator enforces
-  exactly this capability and Ingress, with no extra ports, mounts, role or
-  disabled AppArmor. Live field verification of source IP, Ingress isolation
-  and ARP remains pending; deny higher privileges or production claims.
-- Wi-Fi presence/absence and alarm integration are out of scope.
+**App-owned zone filtering is intentional.** Native HA zone triggers can consider HA persons outside the DH Presence roster, including administrators. The App processes **only** resident trackers eligible after user-ID exclusions; `exclude_users` is enforced before zone monitoring. The App reuses HA's own zone classification, does **not** calculate a second geofence, persists the last eligible resident zone baseline and publishes `zone_enter`/`zone_leave` after a true observed transition. Ambiguous zone names, stale observations and unavailability do not assert transitions. A new baseline does not fabricate an entrance.
 
-## Wi-Fi positive-only evidence (0.1.14)
+The App owns identity binding, exclusions, source evidence, state persistence, MQTT and authenticated registration. HA owns the geographic zone definitions and underlying tracker state. The local HA package owns language, event gating and delivery; the reusable App does not call private `write2log` services.
 
-- One native App probe per enrolled tracker each 60s: active on-link ARP to the registered IP; compare the returned unicast MAC against the private registration file. No additional HA device or network monitor.
-- MAC match → Wi-Fi HOME; no reply/mismatch/router outage → uncertain. After `wifi_absence_minutes` of no new positive evidence, mark the source unavailable, **never NOT_HOME**. Avoid false departures caused by sleeping iOS phones.
-- Existing MQTT Wi-Fi entity and aggregate resident attribute carry only source states, probe reason and timestamps, never IP/MAC. Admin Ingress joins private enrollment records with the aggregate Wi-Fi state for debugging.
-- Pure engine uses current decision time when combining a stale-but-valid GPS report with a newer Wi-Fi proof; source GPS timestamps remain true. GPS is the deployment default.
-- Full Wi-Fi negative/disassociation proof remains pending. No router API/Nmap/NetAlertX dependencies may be introduced.
+## GPS / Wi-Fi / Hybrid
+
+- GPS: authoritative Companion tracker status, including native HA zone labels and last source report timestamp.
+- Wi-Fi: the resident's saved router `device_tracker` linked by MAC. Only a valid unique `source_type: router` association may supply `home`/`not_home`; source errors/ambiguity become UNAVAILABLE.
+- **Wi-Fi = `zone.home` only**: it represents the *local router network at the HA installation*, not arbitrary HA zones or the phone's ability to reach HA remotely over Cloudflare. Other zones rely on GPS.
+- Hybrid: combines GPS with independently trusted local router tracker evidence according to the existing state engine. `wifi_absence_minutes` is a legacy compatibility option ignored since 0.1.25. Do not treat lost API access as a verified negative.
+- All modes: source-specific machine events and diagnostics remain independent of the aggregate selected mode. Preserve unknown and last-known distinctions; never manufacture departure due to source failure.
+
+## Registration and protected IP/MAC diagnostics
+
+Supervisor native Ingress authenticates the user. Registration requires local direct access to HA; the App verifies the apparent local phone address and performs a fresh on-link ARP MAC proof. This one-time identity binding is not the runtime Wi-Fi monitoring algorithm.
+
+The server keeps enrollment name/user/tracker/IP/MAC in private `/data` state. Home Assistant administrators may see IP and MAC in the private administrative Ingress diagnostics card, with server-side admin authorization. Ordinary residents must not access that data. MQTT states/events, shared dashboards and Recorder do not publish these registration IP/MAC fields.
+
+Multi-device ownership remains an explicit experimental limitation: an authenticated HA user session does not cryptographically attest that the selected Companion tracker belongs to that exact physical device. No alarm automation is accepted on this pilot alone.
+
+The current experimental registration uses narrowly approved `host_network` and `NET_RAW` for the one-time ARP proof only. Do not expand container privileges for routine Wi-Fi presence.
+
+## MQTT contracts, operations, Recorder
+
+- One stable HA MQTT device `dh_presence_app`, published via `homeassistant/device/dh_presence_app/config`.
+- Retained states express current facts; QoS1 non-retained MQTT Event payloads express actual transitions only. Synchronize confirmed state before transient events, never replay old transitions after MQTT reconnect.
+- Public machine events are independent of switch configuration. Zone notification switches are dynamic, persisted and OFF by default; source GPS/Wi-Fi notification switches are independent. The obsolete general presence switch is retired.
+- `script.write2log` is a **site-specific local HA package** action, not a dependency of App execution.
+- Per-resident distance sensor uses the current distance without changing attributes. The aggregate resident roster has bounded status/identity metadata: review Recorder update volume before expanding it. Do not add zone count sensors when native `zone.*` person counts are already available.
+- IP/MAC remain available through admin-only Ingress, not through retained MQTT attributes or machine event payloads.
+- The single status/control card follows the repository's Unified Product Status Card contract. Product runtime owns operation facts; the dashboard formats them.
+
+## Lifecycle and deferred production gates
+
+The App is experimental and installed from repository sources without a GHCR `image:`. Registry entry `digitalhouses_presence_app` currently has `telemetry_allowed: false` and `release: null`; runtime warns if `telemetry_enabled` is selected but does not send usage statistics. Immutable image delivery and telemetry eligibility are separate, deferred production tasks.
+
+For exact fields and identifiers see [MQTT_CONTRACT.md](MQTT_CONTRACT.md). For scenario coverage see [TEST_PLAN.md](TEST_PLAN.md). For historical release changes see [CHANGELOG.md](../CHANGELOG.md).
