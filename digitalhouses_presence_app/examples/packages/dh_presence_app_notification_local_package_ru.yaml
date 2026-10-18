@@ -17,8 +17,8 @@
 #
 # "Режим дома" is notification text; NO security/alarm mode is changed.
 # wifi_in: enabled network method confirms a real source transition after baseline.
-# wifi_lost: no fresh positive network check; NOT a verified disconnect.
-# wifi_out means completed negative enabled-method checks; phone sleep can mimic loss.
+# wifi_lost is a historical event from older versions; no longer emitted since 0.1.25.
+# wifi_out now means explicit router device_tracker home -> not_home.
 # No notification is generated at App startup from its first baseline probe.
 # MQTT switches independently gate write2log: Presence defaults ON, GPS OFF,
 # Wi-Fi OFF; device events and Recorder remain unfiltered.
@@ -96,13 +96,9 @@ automation:
           Жилец покинул дом. Дома: {{ trigger.to_state.attributes.residents_home_after | default('?', true) }}.
         {% endif %}
       wifi_lost_message: >-
-        В течение {{ trigger.to_state.attributes.timeout_minutes | default(15, true) }} минут
-        устройство не подтвердило присутствие в домашней Wi-Fi сети.
-        Это не означает подтверждённое отключение или уход.
+          Источник Wi-Fi временно недоступен. Состояние подключения неизвестно.
       wifi_out_message: >-
-        Устройство не обнаружено при проверках локальной сети в течение
-        {{ trigger.to_state.attributes.timeout_minutes | default(15, true) }} минут.
-        Это проверка доступности выбранными методами PING/ARP, а не доказательство отключения Wi-Fi.
+          По данным Wi-Fi-трекера роутера устройство больше не подключено к домашней Wi-Fi сети.
     actions:
       - choose:
           - conditions:
