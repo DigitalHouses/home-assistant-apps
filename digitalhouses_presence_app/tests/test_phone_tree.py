@@ -78,8 +78,8 @@ class TestDashboardRegistrationTree(unittest.TestCase):
         r.wifi = Status.NOT_HOME
         r.wifi_changed_at = before + timedelta(minutes=20)
         tree = registered_phones_tree([row], [r], local_tz=ZoneInfo("Asia/Almaty"))["tree"]
-        self.assertIn("GPS · 🟢 Дома · p\\n   │  └─ Статус с · 19.10.2026 01:10 +05", tree)
-        self.assertIn("Wi-Fi · 🟠 Не дома · router\\n   │  └─ Статус с · 19.10.2026 01:30 +05", tree)
+        self.assertIn("GPS · 🟢 Дома · p\n   │  └─ Статус с · 19.10.2026 01:10 +05", tree)
+        self.assertIn("Wi-Fi · 🟠 Не дома · router\n   │  └─ Статус с · 19.10.2026 01:30 +05", tree)
         # Another ordinary poll without a source change must not rewrite
         # timestamps in the App-prepared tree/retained MQTT state.
         self.assertEqual(tree, registered_phones_tree([row], [r],
@@ -88,7 +88,7 @@ class TestDashboardRegistrationTree(unittest.TestCase):
         # Unknown: no invented timestamp from the current clock.
         r.gps_changed_at = None
         missing = registered_phones_tree([row], [r])["tree"]
-        self.assertIn("GPS · 🟢 Дома · p\\n   │  └─ Статус с · нет данных", missing)
+        self.assertIn("GPS · 🟢 Дома · p\n   │  └─ Статус с · нет данных", missing)
 
     def test_missing_wifi_binding_has_no_fictional_change_time(self):
         engine = Engine()
@@ -98,7 +98,7 @@ class TestDashboardRegistrationTree(unittest.TestCase):
         r.wifi_changed_at = datetime(2026, 10, 18, 20, 15, tzinfo=timezone.utc)
         row = enrolled("device_tracker.p", "iPhone", wifi=None)
         tree = registered_phones_tree([row], [r])["tree"]
-        self.assertIn("Wi-Fi · ⚪ Не привязан\\n   │  └─ Статус с · не применимо", tree)
+        self.assertIn("Wi-Fi · ⚪ Не привязан\n   │  └─ Статус с · не применимо", tree)
         self.assertNotIn("20:15 UTC", tree)
 
     def test_source_transitions_update_tree_without_registry_changes(self):
