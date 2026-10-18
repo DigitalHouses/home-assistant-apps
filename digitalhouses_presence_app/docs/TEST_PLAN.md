@@ -178,3 +178,21 @@ failed pilot acceptance requiring adjustment or reversion to GPS mode.
    authorization. Use real Ingress admin auth if that guarantee is required.
    Recorder exclusions for recent-events and registered-phones tree are
    unchanged, with no new data-recording entity or App privileges.
+
+## Live GPS/Wi-Fi source status phone tree (0.1.34)
+
+1. Upgrade App to 0.1.34 without editing the existing Lovelace Markdown tree.
+   For a registered phone, verify the first branch icon is 📲 rather than 📱.
+2. At home with confirmed Companion GPS `home` and router Wi-Fi
+   `home`, expect both branches to show `🟢 Дома`, each with its tracker ID.
+3. Simulate a genuine `not_home` observation from either source: only that
+   source's branch becomes `🟠 Не дома`, irrespective of gps/wifi/hybrid
+   mode. Registration data and entity ID do not change.
+4. When GPS is unavailable/stale or router API unavailable, the corresponding
+   source must show `⚪ Недоступно`, **not** false `🟠 Не дома`.
+   Missing Wi-Fi tracker shows `⚪ Не привязан`.
+5. Observe the same `sensor.dh_presence_app_registered_phones` tree attribute
+   update on the next App snapshot while `count` is unchanged. Verify no
+   new MQTT entity, Recorder metric or fake arrival/departure event is created.
+6. Keep the diagnostic sensor excluded from Recorder; it now changes on
+   source-status transitions in addition to registrations.
