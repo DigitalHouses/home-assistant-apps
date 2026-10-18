@@ -83,19 +83,19 @@ class ActivityStore:
 
     def commit_counts(
         self,
-        counts: Mapping[tuple[str, str], int],
-        *,
-        observed_at: int,
+        counts: Mapping[tuple[int, str, str], int],
     ) -> None:
-        """Atomic batch UPSERT; caller acknowledges its in-memory counts only on success.
+        """Atomic batch UPSERT; caller acknowledges in-memory counts only after commit.
 
-        observed_at is the collection bucket timestamp, not a record write time.
+        Each incoming message already has an observed UTC minute bucket.
         """
-        if not isinstance(observed_at, int) or isinstance(observed_at, bool) or observed_at < 0:
-            raise ValueError("observed_at must be a positive Unix timestamp")
-        bucket = observed_at - (observed_at % 60)
         rows = []
-        for (network_id, ieee), count in counts.items():
+        for (bucket, network_id, ieee), count in counts.items():
+            if (
+                not isinstance(bucket, int) or isinstance(bucket, bool)
+                or bucket < 0 or bucket % 60 != 0
+            ):
+                raise ValueError("invalid UTC minute bucket")
             if not isinstance(network_id, str) or not network_id:
                 raise ValueError("invalid network id")
             if not isinstance(ieee, str) or not ieee.startswith("0x"):
