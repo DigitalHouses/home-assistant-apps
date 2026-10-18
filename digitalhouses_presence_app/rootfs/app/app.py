@@ -511,7 +511,7 @@ def publish_snapshot(output: MqttOutput, engine: Engine, version: str, started: 
                      history: EventHistory | None = None,
                      registrations: list[dict] | None = None,
                      phone_selection: PhoneRemovalSelection | None = None,
-                     phone_time_zone: tzinfo = timezone.utc) -> bool:
+                     phone_time_zone: tzinfo | None = None) -> bool:
     snapshot = engine.snapshot()
     if not output.publish(topic("mode/state"), engine.mode.value):
         return False
@@ -606,7 +606,8 @@ def run():
     started = datetime.now(timezone.utc).isoformat()
     mqtt_out = MqttOutput(version)
     home = None
-    phone_time_zone: tzinfo = timezone.utc
+    phone_time_zone: tzinfo | None = None
+    last_zone_retry = None
     discovery_ready = False
     previous_mqtt_connection = False
     last_discovery_attempt = None
@@ -750,22 +751,29 @@ def run():
                     registrations=registrations) if mqtt_out.connected.is_set() else False)
             now = datetime.now(timezone.utc)
             name_changed = False
-            if home is None:
+            if home is None or (phone_time_zone is None and
+                                (last_zone_retry is None or time.monotonic() - last_zone_retry >= 300)):
+                # HA config is authoritative; never infer local time from the
+                # App container (which can run in UTC). Retry missing zone.
+                last_zone_retry = time.monotonic()
                 try:
                     conf = http_json("http://supervisor/core/api/config", token)
-                    home = (float(conf["latitude"]), float(conf["longitude"]))
+                    coordinates = (float(conf["latitude"]), float(conf["longitude"]))
+                    if home is None:
+                        LOG.info("Home Assistant Core API connected; home coordinates resolved for GPS distance")
+                    home = coordinates
+                    tz_name = conf.get("time_zone")
                     try:
-                        tz_name = conf.get("time_zone")
-                        phone_time_zone = ZoneInfo(tz_name) if isinstance(tz_name, str) else timezone.utc
+                        phone_time_zone = ZoneInfo(tz_name) if isinstance(tz_name, str) else None
                     except (ZoneInfoNotFoundError, ValueError):
-                        phone_time_zone = timezone.utc
-                        LOG.warning("HA timezone invalid; phone status times displayed as UTC")
-                    LOG.info("Home Assistant Core API connected; home coordinates resolved for GPS distance")
+                        phone_time_zone = None
+                    if phone_time_zone is None:
+                        LOG.warning("HA timezone unavailable; status tree local times omitted until resolved")
                     previous_core_error = None
                 except (URLError, OSError, KeyError, ValueError, TypeError) as exc:
                     problem = api_error_detail(exc)
                     if problem != previous_core_error:
-                        LOG.error("Home Assistant Core API /config unavailable: %s; GPS distance and fresh presence remain unavailable until access succeeds", problem)
+                        LOG.error("Home Assistant Core API /config unavailable: %s", problem)
                         previous_core_error = problem
             events = []
             zone_monitor.prune_residents({r.key for r in engine.residents.values()})
