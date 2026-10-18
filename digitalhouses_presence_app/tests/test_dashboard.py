@@ -36,13 +36,12 @@ class LovelaceCardTests(unittest.TestCase):
             for key in ("presence", "gps", "wifi"):
                 self.assertIn("switch.dh_presence_app_notify_" + key, s)
 
-    def test_household_detection_switches_in_both_cards(self):
+    def test_router_tracker_replaces_legacy_detection_switches(self):
         for path in (CARD, DASHBOARD):
             s = path.read_text(encoding="utf-8")
-            self.assertEqual(s.count("entity: switch.dh_presence_app_ping"), 1)
-            self.assertEqual(s.count("entity: switch.dh_presence_app_arp"), 1)
-            self.assertIn("Обнаружение Wi-Fi · весь дом", s)
-            self.assertIn("PING + ARP", s)
+            self.assertNotIn("switch.dh_presence_app_ping", s)
+            self.assertNotIn("switch.dh_presence_app_arp", s)
+            self.assertIn("трекер роутера", s)
 
     def test_real_operations_and_native_supervisor_boundaries(self):
         code = CARD.read_text(encoding="utf-8")
@@ -98,8 +97,8 @@ class LovelaceCardTests(unittest.TestCase):
         self.assertIn("Имя не задано", card)
         for attr in ("status_changed_at", "gps_changed_at", "wifi_changed_at"):
             self.assertIn(attr, card)
-        self.assertIn("Не обнаружен (проверка сети)", card)
-        self.assertIn("Hybrid · GPS + Wi-Fi", card)
+        self.assertIn("Не подключён (роутер)", card)
+        self.assertIn("Hybrid · GPS + трекер роутера", card)
         self.assertNotIn("Hybrid: пока только GPS", card)
         self.assertNotIn("39fb60fca44a2aa6", card)
         self.assertNotIn("roster | dictsort", card)

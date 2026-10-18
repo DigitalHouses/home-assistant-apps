@@ -79,13 +79,9 @@ dh_presence_app_notification:
             Жилец покинул дом. Дома: {{ trigger.to_state.attributes.residents_home_after | default('?', true) }}.
           {% endif %}
         wifi_lost_message: >-
-          В течение {{ trigger.to_state.attributes.timeout_minutes | default(15, true) }} минут
-          устройство не подтвердило присутствие в домашней Wi-Fi сети.
-          Это не означает подтверждённое отключение или уход.
+          Источник Wi-Fi временно недоступен. Состояние подключения неизвестно.
         wifi_out_message: >-
-          Устройство не обнаружено при проверках локальной сети в течение
-          {{ trigger.to_state.attributes.timeout_minutes | default(15, true) }} минут.
-          Это проверка доступности выбранными методами PING/ARP, а не доказательство отключения Wi-Fi.
+          По данным Wi-Fi-трекера роутера устройство больше не подключено к домашней Wi-Fi сети.
       actions:
         - choose:
             - conditions:

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.25 — Switch Wi-Fi presence entirely to registered HA router trackers
+
+- All actual Wi-Fi presence is driven by the `wifi_tracker` linked to each resident: HA Core `/api/states` returns the tracker entity, its `source_type: router`, registered matching MAC, and authoritative `home` / `not_home` status.
+- Source entity missing, missing binding, invalid MAC, ambiguous duplicate router trackers, HA API failure, or `unknown` / `unavailable` → Wi-Fi UNAVAILABLE, never a verified negative. No fallback to IP, name, ICMP or ARP.
+- Normal `home -> not_home` and `not_home -> home` transitions drive existing per-resident MQTT binary sensors, `wifi_in/out` and optional `arrival/departure` in Wi-Fi/Hybrid modes. Baseline on startup does not fabricate events, temporary unknown does not duplicate an arrival.
+- No PING/ARP polling at runtime; no detection switches or command subscriptions. Retire switches through existing MQTT Discovery cleanup; remove them from standard dashboard and Lovelace cards.
+- The previous `wifi_absence_minutes` option remains accepted for compatibility but **has no effect** on router states. Router `home` never expires due to it.
+- GPS pipeline, MQTT topics, notification switches and private registration remain unchanged. One-time local ARP during phone registration is retained, hence same narrowly approved `host_network + NET_RAW` privileges.
+
 ## 0.1.24 — Save router Wi-Fi association on Register
 
 - On local Ingress `Register`, look up exactly one HA router `device_tracker` by freshly confirmed phone MAC and save its entity ID as the optional `wifi_tracker` field in the existing private resident registration.

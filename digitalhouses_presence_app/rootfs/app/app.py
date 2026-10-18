@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from functools import partial
 import logging
 import os
 import queue
@@ -22,10 +21,9 @@ from dh_presence.discovery import DISCOVERY, discovery, topic, with_cleanup
 from dh_presence.storage import load, save
 from dh_presence.modes import ModeSelection
 from dh_presence.notifications import NotificationSelection, NOTIFICATION_KEYS
-from dh_presence.probes import ProbeSelection, PROBE_KEYS
 from dh_presence.operations import Operations, fetch_latest_release, is_newer
 from dh_presence.registration import load_registry
-from dh_presence.wifi import poll_registered_wifi, probe_registered_phone, WIFI_PROBE_INTERVAL_SECONDS
+from dh_presence.router import poll_router_trackers
 from dh_presence.ui import start_ingress_ui
 
 LOG = logging.getLogger("dh_presence_app")
@@ -34,7 +32,6 @@ STATE = "/data/presence_state.json"
 DISCOVERY_FILE = "/data/presence_discovery.json"
 MODE_FILE = "/data/presence_mode.json"
 NOTIFICATIONS_FILE = "/data/presence_notifications.json"
-PROBES_FILE = "/data/presence_probes.json"
 OPERATIONS_FILE = "/data/presence_refresh.json"
 REGISTRATIONS_FILE = "/data/presence_registrations.json"
 EVENT_NAMES = {"arrival", "departure", "gps_in", "gps_out", "wifi_in", "wifi_out", "wifi_lost"}
@@ -203,7 +200,6 @@ class MqttOutput:
         self.client.on_message = self._message
         self.mode_commands = queue.SimpleQueue()
         self.notification_commands = queue.SimpleQueue()
-        self.probe_commands = queue.SimpleQueue()
         self.discovery_requests = queue.SimpleQueue()
         self.operation_commands = queue.SimpleQueue()
         self.client.will_set(topic("availability"), "offline", retain=True, qos=1)
@@ -222,13 +218,9 @@ class MqttOutput:
                 client.subscribe(topic("notifications/" + key + "/set"), qos=1)[0]
                 for key in NOTIFICATION_KEYS
             ]
-            probe_results = [
-                client.subscribe(topic("probes/" + key + "/set"), qos=1)[0]
-                for key in PROBE_KEYS
-            ]
-            LOG.info("MQTT connected; mode=%s birth=%s commands=%s notifications=%s probes=%s",
+            LOG.info("MQTT connected; mode=%s birth=%s commands=%s notifications=%s",
                      mode_result[0], birth_result[0], command_result[0],
-                     notification_results, probe_results)
+                     notification_results)
         else:
             self.connected.clear()
             LOG.error("MQTT rejected connection: %s", reason_code)
@@ -262,16 +254,6 @@ class MqttOutput:
                     WAKE.set()
                 else:
                     LOG.warning("Ignoring invalid MQTT notification command key=%s", key)
-                return
-        for key in PROBE_KEYS:
-            if msg.topic == topic("probes/" + key + "/set"):
-                if getattr(msg, "retain", False):
-                    LOG.warning("Ignoring retained MQTT detection method command key=%s", key)
-                elif msg.payload in (b"ON", b"OFF"):
-                    self.probe_commands.put((key, msg.payload.decode("ascii")))
-                    WAKE.set()
-                else:
-                    LOG.warning("Ignoring invalid MQTT detection method command key=%s", key)
                 return
         if msg.topic != topic("mode/set"):
             return
@@ -406,8 +388,7 @@ def save_discovery(value: dict):
 
 def publish_snapshot(output: MqttOutput, engine: Engine, version: str, started: str,
                      operations: Operations, latest_version: str | None,
-                     notifications: NotificationSelection | None = None,
-                     probes: ProbeSelection | None = None) -> bool:
+                     notifications: NotificationSelection | None = None) -> bool:
     snapshot = engine.snapshot()
     if not output.publish(topic("mode/state"), engine.mode.value):
         return False
@@ -415,11 +396,6 @@ def publish_snapshot(output: MqttOutput, engine: Engine, version: str, started: 
         for key in NOTIFICATION_KEYS:
             if not output.publish(topic("notifications/" + key + "/state"),
                                   notifications.mqtt_state(key)):
-                return False
-    if probes is not None:
-        for key in PROBE_KEYS:
-            if not output.publish(topic("probes/" + key + "/state"),
-                                  probes.mqtt_state(key)):
                 return False
     # Source/aggregate availability must be committed BEFORE the retained
     # snapshot. Otherwise an invalid/unconfirmed GPS or sleeping iPhone first
@@ -439,11 +415,11 @@ def publish_snapshot(output: MqttOutput, engine: Engine, version: str, started: 
             return False
     if not output.publish(topic("state"), snapshot):
         return False
-    methods = "_".join(key for key in PROBE_KEYS if probes and probes.enabled[key]) if probes else "arp"
-    methods = methods or "disabled"
-    if not output.publish(topic("diagnostics"), {"version": version, "started_at": started,
-                     "source_status": ("wifi_" if engine.mode is Mode.WIFI else "gps_with_")
-                     + methods + "_reachability_pilot"}):
+    if not output.publish(topic("diagnostics"), {
+        "version": version, "started_at": started,
+        "source_status": "router_tracker" if engine.mode is Mode.WIFI
+                         else "gps_with_router_tracker",
+    }):
         return False
     for r in engine.residents.values():
         if r.distance is not None and not output.publish(topic("distance/"+r.key), r.distance):
@@ -473,15 +449,11 @@ def run():
     engine = build_engine(options, saved, registrations)
     modes = ModeSelection(MODE_FILE, options["presence_mode"])
     notifications = NotificationSelection(NOTIFICATIONS_FILE)
-    probes = ProbeSelection(PROBES_FILE)
     engine.set_mode(modes.selected)
-    if not any(probes.enabled.values()):
-        engine.reset_wifi_methods(datetime.now(timezone.utc), disabled=True)
     operations = Operations(OPERATIONS_FILE)
     latest_version = None
     last_release_check = None
     last_registration_check = None
-    last_wifi_probe = None
     token = os.environ["SUPERVISOR_TOKEN"]
     ingress = start_ingress_ui(token, REGISTRATIONS_FILE, options["exclude_users"])
     started = datetime.now(timezone.utc).isoformat()
@@ -496,11 +468,9 @@ def run():
     reported_gps_status = {}
     last_discovery_audit = None
     last_discovery_audit_status = None
-    LOG.info("Starting %s version %s, mode=%s, configured_residents=%d, ping=%s, arp=%s",
-             "DigitalHouses Presence App", version, engine.mode.value, len(engine.residents),
-             probes.enabled["ping"], probes.enabled["arp"])
-    LOG.warning("Experimental PING/ARP reachability pilot: %d minutes of completed enabled-method no-reply checks sets Wi-Fi OFF; sleeping phones may appear absent.",
-                options["wifi_absence_minutes"])
+    LOG.info("Starting %s version %s mode=%s residents=%d Wi-Fi source=HA router tracker",
+             "DigitalHouses Presence App", version, engine.mode.value,
+             len(engine.residents))
     if options["telemetry_enabled"]:
         LOG.warning("Experimental pilot: telemetry_enabled=true, but there is no telemetry sender; no statistics are transmitted.")
     if not engine.residents:
@@ -551,19 +521,6 @@ def run():
                         LOG.info("Notification channel %s set to %s", key, requested)
                 except (OSError, ValueError) as exc:
                     LOG.error("Notification setting not saved: %s", type(exc).__name__)
-            methods_changed = False
-            while not mqtt_out.probe_commands.empty():
-                key, requested = mqtt_out.probe_commands.get_nowait()
-                try:
-                    if probes.change(key, requested):
-                        methods_changed = True
-                        LOG.info("Household detection method %s set to %s", key, requested)
-                except (OSError, ValueError) as exc:
-                    LOG.error("Detection method setting not saved: %s", type(exc).__name__)
-            if methods_changed:
-                engine.reset_wifi_methods(datetime.now(timezone.utc),
-                                          disabled=not any(probes.enabled.values()))
-                last_wifi_probe = None
             while not mqtt_out.mode_commands.empty():
                 requested = mqtt_out.mode_commands.get_nowait()
                 if modes.change(requested):
@@ -573,9 +530,6 @@ def run():
                     for resident in engine.residents.values():
                         resident.initialized = False
                     LOG.info("Presence mode changed from HA UI to %s", engine.mode.value)
-                    if engine.mode is Mode.WIFI:
-                        LOG.info("Wi-Fi mode: enabled-method positive means HOME; %d minutes of completed negative checks means NOT_HOME",
-                                 options["wifi_absence_minutes"])
             # Ingress writes the private registration database atomically.
             # One engine observes the new roster without a service restart,
             # without a second Core adapter, and without synthetic events.
@@ -584,7 +538,6 @@ def run():
                 last_registration_check = time.monotonic()
                 latest = load_registry(REGISTRATIONS_FILE)
                 if latest != registrations:
-                    last_wifi_probe = None  # Observe newly registered devices promptly.
                     registrations = latest
                     changed = False
                     for item in registrations:
@@ -649,26 +602,34 @@ def run():
                         log_method = LOG.warning if isinstance(exc, HTTPError) and exc.code in (502, 503, 504) else LOG.error
                         log_method("Home Assistant Core API tracker %s unavailable: %s; last confirmed presence preserved", r.tracker, problem)
                         reported_gps_status[r.tracker] = "error:" + problem
-            # One native Wi-Fi engine checks each enrolled phone against its
-            # stored IP/MAC every minute. ARP misses never mean absence.
-            if (last_wifi_probe is None
-                    or time.monotonic() - last_wifi_probe >= WIFI_PROBE_INTERVAL_SECONDS):
-                last_wifi_probe = time.monotonic()
-                if any(probes.enabled.values()):
-                    events.extend(poll_registered_wifi(
-                        engine, [x for x in registrations if x["user_id"] not in options["exclude_users"]],
-                        datetime.now(timezone.utc),
-                        probe=partial(probe_registered_phone,
-                                      use_ping=probes.enabled["ping"], use_arp=probes.enabled["arp"]),
-                    ))
-            events.extend(engine.expire(datetime.now(timezone.utc)))
+            # Router associations are the sole Wi-Fi truth; no periodic LAN probes.
+            try:
+                router_states = http_json("http://supervisor/core/api/states", token)
+                if not isinstance(router_states, list):
+                    raise ValueError("Invalid HA state registry response")
+            except (URLError, OSError, ValueError, TypeError) as exc:
+                LOG.warning("Router tracker API unavailable: %s", api_error_detail(exc))
+                router_states = None
+            if router_states is not None:
+                events.extend(poll_router_trackers(
+                    engine,
+                    [x for x in registrations if x["user_id"] not in options["exclude_users"]],
+                    router_states, now,
+                ))
+            else:
+                for resident in engine.residents.values():
+                    resident.wifi_source = "router"
+                    engine.wifi_observation(
+                        resident.tracker, Status.UNAVAILABLE, now, verified=False)
+                    resident.wifi_last_probe_at = now
+                    resident.wifi_probe_result = "router_api_error"
             if name_changed and mqtt_out.connected.is_set():
                 discovery_ready = synchronize_discovery(mqtt_out, version, engine)
             # Commit durable current state BEFORE sending retained MQTT state and events.
             save(STATE, engine.persistent())
             published = (mqtt_out.connected.is_set() and discovery_ready
                          and publish_snapshot(mqtt_out, engine, version, started,
-                                              operations, latest_version, notifications, probes))
+                                              operations, latest_version, notifications))
             if published:
                 if not published_state_logged:
                     LOG.info("MQTT presence state published topic=%s residents=%d mode=%s",
@@ -696,7 +657,7 @@ def run():
                     error = "No registered phone trackers"
                 elif engine.mode is Mode.WIFI and not any(
                         r.wifi is Status.HOME for r in engine.residents.values()):
-                    error = "No currently verified Wi-Fi phone; silent ARP is not proof of absence"
+                    error = "No currently verified HA router Wi-Fi tracker"
                 elif any(r.gps is Status.UNAVAILABLE for r in engine.residents.values()):
                     error = "One or more GPS trackers have no valid last-known observation"
                 try:
@@ -745,7 +706,7 @@ def run():
             WAKE.clear()
             if (not STOP.is_set() and mqtt_out.mode_commands.empty()
                     and mqtt_out.notification_commands.empty()
-                    and mqtt_out.probe_commands.empty()):
+                    ):
                 WAKE.wait(min(options["gps_poll_interval_seconds"],
                               5 if operations.state == "success" else options["gps_poll_interval_seconds"]))
     finally:
