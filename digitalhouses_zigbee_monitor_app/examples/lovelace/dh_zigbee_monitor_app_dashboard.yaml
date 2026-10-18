@@ -273,11 +273,14 @@ sections:
           {% elif networks | length == 0 %}
           Сети пока не обнаружены.
           {% else %}
-          | Сеть | Состояние | Узлов | Offline |
-          |:--|:--|--:|--:|
+          <table>
+          <thead><tr><th>Сеть</th><th>Статус</th><th>Узлов</th><th>Offline</th></tr></thead>
+          <tbody>
           {% for network in networks %}
-          | {{ network.name }} | {{ network.status }} | {{ network.devices }} | {{ network.offline }} |
+          <tr><td>{{ network.name | e }}</td><td>{{ network.status | e }}</td><td>{{ network.devices }}</td><td>{{ network.offline if network.offline is not none else '—' }}</td></tr>
           {% endfor %}
+          </tbody>
+          </table>
           {% endif %}
       - type: heading
         heading: Доступность устройств
@@ -293,11 +296,18 @@ sections:
           **Всего:** {{ state_attr(entity, 'total') }}
           **Без данных availability:** {{ state_attr(entity, 'availability_unknown') }}
 
-          | Устройство | Питание | Доступность | Последний MQTT (UTC) | Причина |
-          |:--|:--|:--|:--|:--|
+          <table>
+          <thead><tr><th>Устройство / питание</th><th>Статус</th><th>Последний MQTT (UTC)</th></tr></thead>
+          <tbody>
           {% for item in items %}
-          | {{ item.name }} | {{ item.power_label or 'Неизвестно' }} | {{ item.availability_label }} | {{ item.last_mqtt_message_at or 'Нет наблюдения' }} | {{ item.availability_reason_label or '—' }} |
+          <tr>
+          <td><strong>{{ item.name | e }}</strong><small> · {{ (item.power_label or 'Неизвестно') | e }}</small></td>
+          <td>{{ item.availability_label | e }}{% if item.availability_reason_label %}<small> · {{ item.availability_reason_label | e }}</small>{% endif %}</td>
+          <td>{{ item.last_mqtt_message_at[5:16].replace('T', ' ') if item.last_mqtt_message_at else '—' }}</td>
+          </tr>
           {% endfor %}
+          </tbody>
+          </table>
           {% if state_attr(entity, 'truncated') %}
           *Список ограничен первыми 40 устройствами. Общее число указано выше.*
           {% endif %}
@@ -314,11 +324,14 @@ sections:
           {% elif rows | length == 0 %}
           Нет подтверждённых offline-устройств.
           {% else %}
-          | Устройство | Сеть | Offline с |
-          |:--|:--|:--|
+          <table>
+          <thead><tr><th>Устройство</th><th>Сеть</th><th>Offline с</th></tr></thead>
+          <tbody>
           {% for device in rows %}
-          | {{ device.name }} | {{ device.network_name }} | {{ device.offline_since if device.offline_since else 'Неизвестно' }} |
+          <tr><td>{{ device.name | e }}</td><td>{{ device.network_name | e }}</td><td>{{ (device.offline_since or 'Неизвестно') | e }}</td></tr>
           {% endfor %}
+          </tbody>
+          </table>
           {% endif %}
       - type: history-graph
         title: Offline — история
@@ -349,11 +362,14 @@ sections:
           {% elif rows | length == 0 %}
           Недостаточно данных для рейтинга.
           {% else %}
-          | # | Устройство | Сообщений |
-          |--:|:--|--:|
+          <table>
+          <thead><tr><th>#</th><th>Устройство</th><th>Сообщений</th></tr></thead>
+          <tbody>
           {% for device in rows %}
-          | {{ loop.index }} | {{ device.name }} | {{ device.messages }} |
+          <tr><td>{{ loop.index }}</td><td>{{ device.name | e }}</td><td>{{ device.messages }}</td></tr>
           {% endfor %}
+          </tbody>
+          </table>
           {% endif %}
       - type: heading
         heading: За 24 часа
@@ -367,11 +383,14 @@ sections:
           {% elif rows | length == 0 %}
           Недостаточно данных для рейтинга.
           {% else %}
-          | # | Устройство | Сообщений |
-          |--:|:--|--:|
+          <table>
+          <thead><tr><th>#</th><th>Устройство</th><th>Сообщений</th></tr></thead>
+          <tbody>
           {% for device in rows %}
-          | {{ loop.index }} | {{ device.name }} | {{ device.messages }} |
+          <tr><td>{{ loop.index }}</td><td>{{ device.name | e }}</td><td>{{ device.messages }}</td></tr>
           {% endfor %}
+          </tbody>
+          </table>
           {% endif %}
       - type: heading
         heading: За 7 дней
@@ -385,11 +404,14 @@ sections:
           {% elif rows | length == 0 %}
           Недостаточно данных для рейтинга.
           {% else %}
-          | # | Устройство | Сообщений |
-          |--:|:--|--:|
+          <table>
+          <thead><tr><th>#</th><th>Устройство</th><th>Сообщений</th></tr></thead>
+          <tbody>
           {% for device in rows %}
-          | {{ loop.index }} | {{ device.name }} | {{ device.messages }} |
+          <tr><td>{{ loop.index }}</td><td>{{ device.name | e }}</td><td>{{ device.messages }}</td></tr>
           {% endfor %}
+          </tbody>
+          </table>
           {% endif %}
       - type: history-graph
         title: MQTT-активность — 48 часов
@@ -411,11 +433,14 @@ sections:
           {% elif rows | length == 0 %}
           Нет подтверждённых активных инцидентов.
           {% else %}
-          | Тип | Объект | С начала |
-          |:--|:--|:--|
+          <table>
+          <thead><tr><th>Тип</th><th>Объект</th><th>С начала</th></tr></thead>
+          <tbody>
           {% for incident in rows %}
-          | {{ incident.kind }} | {{ incident.name }} | {{ incident.started_at }} |
+          <tr><td>{{ incident.kind | e }}</td><td>{{ incident.name | e }}</td><td>{{ incident.started_at | e }}</td></tr>
           {% endfor %}
+          </tbody>
+          </table>
           {% endif %}
       - type: history-graph
         title: Инциденты — история
