@@ -193,12 +193,17 @@ class TestDashboardRegistrationTree(unittest.TestCase):
         # live GPS/Wi-Fi evidence on each normal App snapshot.
         engine.residents["device_tracker.p"].gps = Status.HOME
         engine.residents["device_tracker.p"].wifi = Status.NOT_HOME
+        engine.residents["device_tracker.p"].gps_changed_at = datetime(
+            2026, 10, 18, 20, 33, tzinfo=timezone.utc)
         mqtt.publish.reset_mock()
         self.assertTrue(publish_snapshot(
             mqtt, engine, "0.1.34", "2026-10-19T12:00:30+00:00",
-            operations, None, registrations=[reg]))
+            operations, None, registrations=[reg],
+            phone_time_zone=ZoneInfo("Asia/Almaty")))
         updated = dict((c.args[0], c.args[1]) for c in mqtt.publish.call_args_list)
         self.assertIn("GPS · 🟢 Дома · p", updated[topic("registrations/tree")]["tree"])
+        self.assertIn("Статус с · 19.10.2026 01:33 +05",
+                      updated[topic("registrations/tree")]["tree"])
         self.assertIn("Wi-Fi · ⚪ Не привязан", updated[topic("registrations/tree")]["tree"])
         self.assertEqual(updated[topic("registrations/tree")]["count"], 1)
         self.assertNotIn(reg["ip"], json.dumps(updated[topic("state")]))
