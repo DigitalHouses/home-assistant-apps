@@ -21,6 +21,7 @@ import paho.mqtt.client as mqtt
 from zigbee_monitor import ActivityStore, ZigbeeMonitor, parse_networks
 from zigbee_monitor.discovery import APP_AVAILABILITY, PRODUCT
 from zigbee_monitor.service import MonitorService
+from zigbee_monitor.telemetry import TelemetryClient, TelemetryRunner
 
 RELEASES_URL = "https://api.github.com/repos/DigitalHouses/home-assistant-apps/releases?per_page=100"
 RELEASE_TAG = re.compile(r"^digitalhouses_zigbee_monitor_app-v(\d+\.\d+\.\d+)$")
@@ -69,10 +70,15 @@ class Application:
             format="%(asctime)s %(levelname)s %(name)s: %(message)s",
         )
         self.log = logging.getLogger(PRODUCT)
+        if options.get("telemetry_enabled") is not True:
+            self.log.error("Не принято условие передачи статистики DigitalHouses — завершение работы")
+            raise SystemExit(1)
         version = os.environ.get("APP_VERSION", "")
         if not VERSION_RE.fullmatch(version):
             raise ValueError("APP_VERSION must be SemVer, e.g. 0.1.0")
         networks = parse_networks(options.get("zigbee2mqtt"))
+        self.telemetry = TelemetryClient(enabled=True, version=version)
+        self.telemetry_runner = TelemetryRunner(self.telemetry)
         self.store = ActivityStore(Path("/data/activity.sqlite3"))
         self.monitor = ZigbeeMonitor(networks)
         self.stop_event = threading.Event()
@@ -130,6 +136,14 @@ class Application:
         else:
             self.service.complete_check(latest=latest)
 
+    def _delete_telemetry(self) -> None:
+        try:
+            ok = self.telemetry.delete()
+        except Exception:
+            self.log.exception("Telemetry deletion failed")
+            ok = False
+        self.service.complete_telemetry_delete(ok)
+
     def _on_message(self, client, userdata, message) -> None:
         del client, userdata
         try:
@@ -141,6 +155,12 @@ class Application:
                 threading.Thread(
                     target=self._check_updates,
                     name="dh-zigbee-version-check",
+                    daemon=True,
+                ).start()
+            elif kind == "delete_telemetry_requested":
+                threading.Thread(
+                    target=self._delete_telemetry,
+                    name="dh-zigbee-telemetry-delete",
                     daemon=True,
                 ).start()
             elif kind == "inventory":
@@ -157,6 +177,7 @@ class Application:
         port = int(os.getenv("MQTT_PORT", "1883"))
         self.client.connect_async(host, port, keepalive=60)
         self.client.loop_start()
+        self.telemetry_runner.start()
         self.log.info("Starting %s with %d configured networks", PRODUCT,
                       len(self.monitor.networks))
         try:
@@ -164,6 +185,7 @@ class Application:
                 self.service.tick()
         finally:
             self.log.info("Stopping Zigbee Monitor")
+            self.telemetry_runner.stop()
             try:
                 if self.client.is_connected():
                     self.client.publish(APP_AVAILABILITY, "offline", qos=1, retain=True)
