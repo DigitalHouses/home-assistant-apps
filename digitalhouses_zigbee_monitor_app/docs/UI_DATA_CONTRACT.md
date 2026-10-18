@@ -51,8 +51,8 @@ Recorder OFF:
 | `sensor.dh_zigbee_monitor_app_networks` | Количество подтверждённых сетей | ON |
 | `sensor.dh_zigbee_monitor_app_devices` | Всего зарегистрированных устройств | ON |
 | `sensor.dh_zigbee_monitor_app_offline` | Подтверждённый offline count | ON |
-| `sensor.dh_zigbee_monitor_app_spammers` | Подтверждённый anomaly count | ON |
-| `sensor.dh_zigbee_monitor_app_incidents` | Открытые инциденты | ON |
+| `sensor.dh_zigbee_monitor_app_spammers` | Аномальные устройства (движок ещё не реализован) | OFF до реализации |
+| `sensor.dh_zigbee_monitor_app_incidents` | Активные инциденты (движок ещё не реализован) | OFF до реализации |
 | `sensor.dh_zigbee_monitor_app_messages_rate_5m` | Суммарная MQTT-активность за 5-минутное окно | ON |
 | `sensor.dh_zigbee_monitor_app_offline_details` | JSON-список offline | OFF |
 | `sensor.dh_zigbee_monitor_app_top_1h_details` | ТОП MQTT за 1 час | OFF |
@@ -133,9 +133,15 @@ Dashboard показывает отсутствие данных, а не фик
 Согласованный пример:
 `examples/packages/dh_zigbee_monitor_app_global_package.yaml`.
 
-- `recorder.include.entities`: только исторические скалярные метрики;
-- `recorder.exclude.entities`: подробности, карточка, runtime-диагностика, event;
-- `recorder.exclude.entity_globs`: страховка для будущих `*_details`;
+- `recorder.include.entities`: только четыре реально вычисляемых исторических
+  показателя: networks, devices, offline и messages_rate_5m.
+- `spammers` и `incidents` остаются исключёнными до реализации движков;
+  при внедрении отдельным изменением можно добавить их в Recorder.
+- `recorder.exclude.entity_globs`: исключить все `sensor/binary_sensor/button/event`
+  с префиксом `dh_zigbee_monitor_app_`; точный allowlist
+  `recorder.include.entities` имеет приоритет над этими glob-паттернами
+  согласно механизму фильтра Home Assistant.
+- Никаких динамических JSON деталей, событий, статуса App, версий и timestamps;
 - нельзя заменять уже существующие фильтры `recorder` дома;
 - при site-level `include` и переназначениях entity IDs проверять правила
   фактического включения/исключения в работающем HA.
