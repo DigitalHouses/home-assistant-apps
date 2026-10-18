@@ -1,7 +1,7 @@
 # DigitalHouses Zigbee Monitor App — installation and acceptance
 
-Version: **0.1.7 (experimental)**. Run only after the production GHCR image
-`ghcr.io/digitalhouses/digitalhouses_zigbee_monitor_app:0.1.7` is published
+Version: **0.1.8 (experimental)**. Run only after the production GHCR image
+`ghcr.io/digitalhouses/digitalhouses_zigbee_monitor_app:0.1.8` is published
 and verified by repository release workflows.
 
 ## Requirements
@@ -123,6 +123,70 @@ retained `bridge/devices` официальные поля `type` / `power_source
 
 Источник: https://www.zigbee2mqtt.io/guide/usage/mqtt_topics_and_messages.html
 и https://www.zigbee2mqtt.io/guide/configuration/device-availability.html
+
+## Problems Engine · независимые признаки по сети (0.1.8)
+
+Автообнаруженные Zigbee2MQTT формируют **три диагностических**
+`binary_sensor` с `device_class: problem`, `entity_category: diagnostic`:
+
+| ID в MQTT Discovery | Значение ON |
+|---|---|
+| `<network_id>_bridge_offline_problem` | Z2M подтвердил `bridge/state=offline` |
+| `<network_id>_devices_offline_problem` | Есть хотя бы одно подтверждённое Offline-устройство при живом Z2M |
+| `<network_id>_mqtt_traffic_low_problem` | Устойчивое снижение RPM относительно порога |
+
+**ON** — подтверждён именно диагностический признак, не поломка
+координатора. **OFF** — при полном достоверном покрытии. Если источник
+неизвестен, флаг `unavailable` по отдельному validity topic.
+`device_offline` и `bridge_offline` — независимые сущности; падение
+Z2M не объявляет автоматическое восстановление каждого устройства.
+
+Агрегатор: `sensor.dh_zigbee_monitor_app_problems`. Числовой state —
+число подтверждённых ON, только достоверный ноль; UI-атрибуты
+`active`, `unknown`, `severity`, `coverage_complete`. Состояние
+и `active` обновляются **немедленно** при смене подтверждённого
+binary-флага, не по частоте Recorder. Текущий пакет Recorder исключает
+все эти diagnostic entities.
+
+К каждому автоматически обнаруженному Z2M добавляются в Home Assistant
+`switch.dh_zigbee_monitor_app_<network_id>_rpm_auto` (автоматический
+порог, по умолчанию ON) и
+`number.dh_zigbee_monitor_app_<network_id>_rpm_threshold`
+(ручной порог, 1…10000 RPM, стандартное значение 10).
+Настройки сохраняются в SQLite и применяются без рестарта.
+
+Алгоритм:
+- MQTT-пакеты считаются постоянно; по минутам — локальная SQLite, без
+  Recorder на каждую сеть.
+- Ручной порог работает после прогрева 10 мин; автоматический после
+  65 мин непрерывного наблюдения и при достаточной исторической
+  активности (минимум 20 активных минут за прежние 60 и среднее >=4 RPM).
+- В автоматическом режиме порог 25% от среднего baseline, чтобы
+  детектировать **резкое падение**, а не нормальные колебания.
+  На время подтверждённой проблемы порог замораживается.
+- Устойчиво низкий RPM в течение 5 мин → ON; восстановление >=130%
+  порога в течение 2 мин → OFF. До достаточной истории — unavailable.
+- Перезапуск App/MQTT очищает временные окна; свежие показатели не
+  выдаются за данные непрерывного наблюдения. Новые настройки в HA
+  не создают ложных transient событий.
+- Сетевой RPM подтверждает лишь **аномалию активности**. Он не доказывает,
+  что радиоотсек координатора завис. Активные пробы ZigStar-01,
+  health_check, ICMP/TCP и восстановление PoE пока не включены.
+
+События `problem_started`, `problem_recovered` публикуются на старый
+topic `DigitalHouses/Global/dh_zigbee_monitor_app/event`
+после изменения retained-состояний. Отдельно продолжают публиковаться
+события availability, поэтому HA-автоматизации могут выбрать только
+нужные типы без удвоения уведомлений.
+
+UI:
+- `examples/lovelace/dh_zigbee_monitor_app_problems_card_ru.yaml` — самостоятельная
+  Mushroom-карточка в стиле PVE Agent;
+- полный Dashboard — сводная таблица всех сетей с RPM и
+  auto-entities для настройки порогов. Для auto-entities нужна
+  установленная frontend-карточка HACS (`custom:auto-entities`).
+- Статусная карточка App остаётся **строго о самом приложении**,
+  никакие прикладные проблемы туда не попадают.
 
 ## Инциденты, подтверждённые Zigbee2MQTT · SQLite (0.1.7)
 
