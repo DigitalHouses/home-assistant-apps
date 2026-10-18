@@ -469,12 +469,18 @@ function registrationLabel(status){
 }
 function wifiProbeLabel(status){
  const labels={
-  mac_verified:'MAC совпадает',no_reply:'ARP: устройство не отвечает',
-  probe_error:'Проверка сети не выполнена',
-  mac_mismatch:'IP принадлежит другому MAC',not_registered:'Нет привязки',
-  not_checked:'Проверка не выполнялась'
+  router_home:'Роутер: подключён',
+  router_not_home:'Роутер: не подключён',
+  router_unavailable:'Трекер недоступен',
+  router_not_linked:'Wi-Fi-трекер не привязан',
+  router_not_registered:'Нет регистрации',
+  router_missing:'Wi-Fi-трекер отсутствует в HA',
+  router_ambiguous:'Несколько трекеров с одним MAC',
+  router_mac_or_source_mismatch:'MAC или источник роутера не совпадает',
+  router_api_error:'Не удалось получить состояния HA',
+  not_checked:'Нет данных'
  };
- return labels[status]||'Нет данных';
+ return labels[status]||String(status||'Нет данных');
 }
 function formattedGpsTime(value,timeZone){
  if(!value)return '—';
