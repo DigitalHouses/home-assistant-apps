@@ -1,17 +1,4 @@
 configuration:
-  zigbee2mqtt:
-    name: Zigbee2MQTT networks
-    description: One entry per Zigbee2MQTT instance. Keep network_id stable even if its name or MQTT base topic changes.
-    fields:
-      network_id:
-        name: Stable network ID
-        description: For example floor_1 or usb. Do not rename it after monitoring begins.
-      name:
-        name: Network name
-        description: Name to display in the Home Assistant dashboard.
-      base_topic:
-        name: MQTT base topic
-        description: Exact Zigbee2MQTT base topic (e.g. zigbee2mqtt_1).
   telemetry_enabled:
     name: DigitalHouses telemetry consent
     description: "DigitalHouses statistics transmit the app name, version and a random installation identifier. The app does not start without consent. Policy: https://github.com/DigitalHouses/home-assistant-apps/blob/main/docs/standards/PRODUCT_TELEMETRY_POLICY.md"
