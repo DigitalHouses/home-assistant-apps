@@ -262,7 +262,7 @@ def handler_factory(token: str, registry_path: str, excluded_users: set[str]):
                     self.send_header("Cache-Control", "no-store")
                     self.send_header("X-Frame-Options", "SAMEORIGIN")
                     self.send_header("Content-Security-Policy",
-                                     "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'")
+                                     "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; frame-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'")
                     self.send_header("Content-Length", str(len(body)))
                     self.end_headers()
                     self.wfile.write(body)
