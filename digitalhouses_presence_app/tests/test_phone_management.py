@@ -242,6 +242,11 @@ class PhoneManagementTests(unittest.TestCase):
             self.assertIn(b'id="phone"', allowed.wfile.getvalue())
             self.assertIn(b'id="confirmation"', allowed.wfile.getvalue())
             self.assertIn(b"api/admin/delete-registration", allowed.wfile.getvalue())
+            # The compact UI submits only via admin-verified Ingress; no
+            # automation, MQTT delete command or direct host port is required.
+            self.assertIn(b'id="accept"', allowed.wfile.getvalue())
+            self.assertIn(b'id="cancel"', allowed.wfile.getvalue())
+            self.assertNotIn(b"mqtt", allowed.wfile.getvalue().lower())
         with patch("dh_presence.ui.is_authorized_ha_admin",
                    side_effect=Exception("admin verification failed")):
             # Unexpected verifier errors must not bypass the security gate.
