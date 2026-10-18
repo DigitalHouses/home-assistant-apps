@@ -95,10 +95,12 @@ class NetworkProblemsTests(unittest.TestCase):
         self.assertEqual(self.status("main", "devices_offline"), "ON")
         self.assertEqual(self.aggregate()["active"][0]["problem_id"],
                          "main:devices_offline")
-        self.assertIn("problem_started", [e["event_type"] for e in self.t.events()])
+        self.assertIn("device_offline", [e["event_type"] for e in self.t.events()])
+        self.assertNotIn("problem_started", [e["event_type"] for e in self.t.events()])
         self.s.receive("z2m/plug/availability", b'{"state":"online"}')
         self.assertEqual(self.status("main", "devices_offline"), "OFF")
-        self.assertIn("problem_recovered", [e["event_type"] for e in self.t.events()])
+        self.assertIn("device_online", [e["event_type"] for e in self.t.events()])
+        self.assertNotIn("problem_recovered", [e["event_type"] for e in self.t.events()])
 
     def test_source_failure_does_not_forge_device_recovery(self):
         self.s.receive("z2m/plug/availability", b'{"state":"offline"}', retain=True)
