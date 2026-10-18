@@ -329,6 +329,12 @@ class MonitorService:
                        "ON" if _version_tuple(latest) > _version_tuple(self.version) else "OFF")
             self._card_finish()
 
+    def complete_telemetry_delete(self, success: bool) -> None:
+        with self._lock:
+            if self._card.get("operation") != "delete_telemetry" or self._card["state"] != "running":
+                return
+            self._card_finish(None if success else "Не удалось удалить телеметрию")
+
     def receive(self, topic: str, payload: bytes, *, retain: bool = False,
                 dup: bool = False, observed_at: int | None = None) -> str:
         """MQTT callback; publishes only snapshots derived from valid observations."""
@@ -341,6 +347,10 @@ class MonitorService:
                 if not retain and payload == b"PRESS":
                     self._start_refresh()
                 return "refresh_command"
+            if topic == f"{ROOT}/command/delete_telemetry":
+                if not retain and payload == b"DELETE" and self._card_begin("delete_telemetry"):
+                    return "delete_telemetry_requested"
+                return "delete_telemetry_ignored"
             if topic == f"{ROOT}/command/check_updates":
                 if not retain and payload == b"PRESS":
                     if self._card_begin("check"):
