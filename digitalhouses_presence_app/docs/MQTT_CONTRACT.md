@@ -123,3 +123,21 @@ Assistant user identity. Lovelace admin visibility is *not* an authorization
 boundary. Users with permitted HA/MQTT service access can issue commands;
 broker ACL and trusted HA users are necessary. Use existing authenticated
 Ingress API for true per-user HA admin authorization.
+
+## Live source labels in phone tree (0.1.34)
+
+`sensor.dh_presence_app_registered_phones` and topic
+`registrations/tree` are **unchanged**. The `tree` attribute now contains
+each phone's live GPS and router Wi-Fi status, read directly from the App
+Engine's independent source fields: `home` → `🟢 Дома`,
+`not_home` → `🟠 Не дома`, `unavailable` → `⚪ Недоступно`.
+A phone without a registered Wi-Fi association displays
+`⚪ Не привязан`; it must not claim `not_home` without evidence.
+Device labels use the 📲 emoji. The App still includes tracker IDs,
+registration IP and MAC. HA only displays the prepared multiline string.
+
+Tree updates may now occur after GPS/Wi-Fi transitions, without changes
+to the registry or the existing sensor's numeric `count` state.
+Identical retained state payloads are suppressed by MQTT cache.
+`sensor.dh_presence_app_registered_phones` must remain excluded from
+Recorder, along with `sensor.dh_presence_app_recent_events`.
