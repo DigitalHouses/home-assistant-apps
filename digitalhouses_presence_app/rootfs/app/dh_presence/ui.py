@@ -437,6 +437,7 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;margin:8px 0 0}
 .debug-value{min-width:0;overflow-wrap:anywhere;word-break:break-word;font-variant-numeric:tabular-nums}
 .copy-btn{min-height:28px;padding:4px 7px;font-size:12px;white-space:nowrap;border:1px solid var(--divider-color,#bbb);background:transparent;color:var(--primary-color,#277ca6)}
 .delete-btn{min-height:34px;background:var(--error-color,#b3261e);margin-top:9px}
+.admin-phone-tree{margin:4px 0 12px;padding:0;line-height:1;font-family:'Courier New',monospace;font-size:13px;white-space:pre;overflow-x:auto;overflow-wrap:normal;color:var(--primary-text-color,#252525)}
 @media(max-width:430px){body{padding:8px}.panel{padding:13px;margin:8px 0}.debug-row{grid-template-columns:minmax(75px,34%) minmax(0,1fr) auto;gap:4px}.copy-btn{padding:4px 5px}}
 </style></head><body><main>
 <h2>DH Presence</h2>
@@ -452,6 +453,7 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;margin:8px 0 0}
 <h3>Зарегистрированные телефоны · администратор</h3>
 <p class="muted debug-note">Здесь можно удалить регистрацию и прекратить отслеживание телефона, даже если трекер остался в старом списке конфигурации App. IP/MAC сохранены на момент регистрации.</p>
 <button id="reloadDebug">Обновить диагностику</button>
+<pre id="adminPhoneTree" class="admin-phone-tree" role="status"></pre>
 <div id="debugList" role="status"></div>
 <pre id="deleteResult" role="status"></pre>
 </section>
@@ -562,12 +564,32 @@ async function copyValue(value,button){
   setTimeout(()=>{button.textContent='Копировать';},1600);
  }
 }
+function privatePhoneTree(devices){
+ // This is private App Ingress presentation. Never publish IP/MAC to MQTT.
+ // textContent renders user/device labels literally (not executable HTML).
+ const lines=['Зарегистрированные телефоны'];
+ const clean=value=>String(value??'—').replace(/[\r\n\t]/g,' ').trim()||'—';
+ const shortTracker=value=>clean(value).replace(/^device_tracker\./,'');
+ for(const [index,device] of devices.entries()){
+  const last=index===devices.length-1;
+  const prefix=last?'   ':'│  ';
+  const name=clean(device.user_name)+' ('+clean(device.device_name)+')';
+  lines.push((last?'└─':'├─')+' 📱 '+name);
+  lines.push(prefix+'├─ GPS · '+shortTracker(device.tracker));
+  lines.push(prefix+'├─ Wi-Fi · '+(device.wifi_tracker?shortTracker(device.wifi_tracker):'не привязан'));
+  lines.push(prefix+'├─ IP (рег.) · '+clean(device.ip));
+  lines.push(prefix+'└─ MAC (рег.) · '+clean(device.mac));
+ }
+ return lines.join('\\n');
+}
 async function loadAdminDebug(){
  try{
   const data=await api('api/admin/debug');
   q('adminDebug').hidden=false;
   const destination=q('debugList');
   destination.replaceChildren();
+  q('adminPhoneTree').textContent=data.residents.length?
+   privatePhoneTree(data.residents):'Зарегистрированных телефонов пока нет';
   if(!data.residents.length){
    destination.textContent='Зарегистрированных устройств пока нет';return;
   }
@@ -634,6 +656,7 @@ async function loadAdminDebug(){
   // No access or unavailable HA admin verification: fail closed visually
   // and through the independently gated private backend.
   q('adminDebug').hidden=true;
+  q('adminPhoneTree').textContent='';
   q('debugList').replaceChildren();
  }
 }
