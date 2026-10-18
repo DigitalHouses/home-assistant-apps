@@ -103,3 +103,11 @@ routine GPS polls. `sensor.dh_presence_app_registered_phones` **must be
 excluded from HA Recorder**, alongside the recent-events sensor; the App never
 writes or modifies the home's Recorder configuration. The existing private
 Ingress view retains actual HA-admin authorization for management/deletion.
+
+## Supervisor Ingress administrator select/delete flow (0.1.32)
+
+The only destructive API remains `POST /api/admin/delete-registration` on the existing trusted private Supervisor Ingress HTTP handler. Normal MQTT state, controls, device Discovery, and HTML card visibility cannot authenticate an HA administrator; therefore no MQTT select/delete command exists.
+
+An additional GET `/admin/delete-phone` returns a compact, iframe-embeddable form only after **server-side live HA admin verification**. This form then reads the existing admin-protected diagnostics, populates a dropdown of exact registered trackers, requires a second explicit on-page confirmation, and submits an action-specific header + JSON body. The backend re-authorizes the same HA identity and atomically removes the exact tracker. The form refreshes its list on success; failure clears/blocks unsafe selections. User/device strings enter DOM using `textContent`, not `innerHTML`, and the page uses a restrictive CSP and no-store.
+
+In Lovelace, the portable wrapper `custom:button-card` hides this view when `hass.user?.is_admin !== true`; that is a **presentation feature**, not the access-control boundary. `custom:addon-iframe-card` is the optional HACS ingress-session-aware dependency for inline embedding. The existing native App Ingress UI embeds the same form for deployments without that dependency. Neither variant adds new MQTT entities, HA scripts, helpers, automation, network ports, or supervisor permissions.
