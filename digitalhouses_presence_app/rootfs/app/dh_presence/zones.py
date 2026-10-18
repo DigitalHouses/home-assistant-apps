@@ -99,7 +99,8 @@ class ZoneMonitor:
             if zone and zone in zones:
                 events.append({"event_type": kind, "resident_id": resident_id,
                                "source": "gps", "observed_at": timestamp,
-                               "zone_entity_id": zone, "zone_name": zones[zone]})
+                               "zone_entity_id": zone, "zone_name": zones[zone],
+                               "zone_key": zone_key(zone)})
         return events
 
     def prune_residents(self, resident_ids: set[str]) -> None:
