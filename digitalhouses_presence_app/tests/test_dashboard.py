@@ -310,7 +310,7 @@ console.log('PASSED '+cases.length+' status scenarios');
         launch = (ROOT / "examples/lovelace/presence_admin_debug_card_ru.yaml").read_text(encoding="utf-8")
         self.assertIn("hidden:", launch)
         self.assertIn("hass.user?.is_admin !== true", launch)
-        self.assertIn("Диагностика регистрации", card)
+        self.assertIn("Управление телефонами · администратор", card)
 
     def test_auto_entities_uses_native_filter_not_generated_json(self):
         # The CI Presence runner deliberately has no PyYAML dependency; the
