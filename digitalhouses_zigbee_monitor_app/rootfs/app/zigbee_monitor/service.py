@@ -285,6 +285,12 @@ class MonitorService:
     def _publish_inventory_and_availability(self) -> None:
         live = self._all_live()
         self._scalar("devices", self.monitor.total_devices() if live else None)
+        # SQLite holds durable timestamps; pending in-memory observations cover
+        # the current incomplete minute. Neither is a Zigbee RF availability
+        # assertion, and retained payloads never produce a timestamp.
+        last_seen = self.store.last_mqtt_messages()
+        for identity, epoch in self.monitor.mqtt_activity_snapshot().items():
+            last_seen[identity] = max(last_seen.get(identity, 0), epoch)
         rows: list[dict[str, object]] = []
         for config in self.monitor.networks:
             for device in self.monitor.devices(config.network_id):
@@ -297,7 +303,25 @@ class MonitorService:
                     "inventory_missing": "Нет инвентаризации Zigbee2MQTT",
                     "availability_not_reported": "Нет сообщения availability",
                 }
+                power = device.power_source
+                power_class = (
+                    "battery" if power == "Battery" else
+                    "mains" if power and power.startswith("Mains") else
+                    "external" if power == "DC Source" else "unknown"
+                )
+                identity = (config.network_id, device.ieee_address)
+                mqtt_seen = last_seen.get(identity)
                 rows.append({
+                    # Power is authoritative inventory metadata from Z2M,
+                    # not a conclusion from Router / EndDevice role.
+                    "device_type": device.device_type,
+                    "power_source": power,
+                    "power_class": power_class,
+                    "power_label": {
+                        "battery": "Батарея", "mains": "Сеть",
+                        "external": "Внешнее питание", "unknown": "Неизвестно",
+                    }[power_class],
+                    "last_mqtt_message_at": _iso(mqtt_seen) if mqtt_seen is not None else None,
                     "availability_label": labels.get(availability, "Нет данных"),
                     "availability_reason_label": reasons.get(reason) if reason else None,
                     "ieee_address": device.ieee_address,
@@ -378,13 +402,19 @@ class MonitorService:
             if self._connected and self._last_flush_minute != current_minute:
                 self._last_flush_minute = current_minute
                 snapshot = self.monitor.counts_snapshot()
-                if snapshot:
+                last_messages = self.monitor.mqtt_activity_snapshot()
+                if snapshot or last_messages:
                     try:
-                        self.store.commit_counts(snapshot)
+                        self.store.commit_counts(snapshot, last_messages=last_messages)
                     except Exception:
                         log.exception("SQLite activity flush failed; retaining counters")
                         return
                     self.monitor.acknowledge_counts(snapshot)
+                    self.monitor.acknowledge_mqtt_activity(last_messages)
+                    # Bounded details entity, explicitly excluded from Recorder.
+                    # Update once per minute, not on every MQTT message.
+                    if self._all_live():
+                        self._publish_inventory_and_availability()
                 self._publish_rankings(epoch=epoch)
                 if self._last_trim_day != epoch // 86400:
                     self.store.trim_minutes(before_epoch=max(0, epoch - 30 * 86400))
