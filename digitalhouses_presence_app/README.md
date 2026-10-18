@@ -4,6 +4,12 @@
 
 This application belongs to `DigitalHouses/home-assistant-apps/digitalhouses_presence_app` and is installed via **Settings → Apps → App Store**.
 
+## Private administrator phone tree (0.1.30)
+
+The App's **existing administrator-only Ingress view** (the `Управление телефонами · администратор` dashboard launcher or **Open Web UI**) now includes a compact PVE-style native `<pre>` phone tree. Every enrolled phone shows its registered name/device, GPS tracker, Wi-Fi tracker, **IP (рег.)** and **MAC (рег.)** as separate child branches. Network addresses are verified **registration-time snapshots**, not proof of current IP or Wi-Fi connectivity. The existing per-device copy controls, diagnostic states and delete-registration actions remain available below the tree.
+
+**Access boundary:** the personal IP/MAC tree lives only in the authenticated Ingress page; the backend verifies current HA administrator role on every `/api/admin/debug` request. It is not possible to safely put these private values in the ordinary Home Assistant MQTT Markdown tree without publishing them to other HA/MQTT users and potentially Recorder. Therefore the public registered-phones Lovelace tree stays GPS/Wi-Fi-only. No additional entities, helper sensors, MQTT state fields, Recorder history or extra privileges are introduced. The private tree uses `textContent` and a fixed single-line `line-height:1` layout.
+
 ## Registered phones and administrator deletion (0.1.29)
 
 The existing MQTT resident roster exposes only the enrolled, eligible phone's stable source tracker IDs and two new **non-secret** fields: `registered` and the App-prepared `registration_label`. An App-configured legacy GPS tracker **without** a verified Ingress enrollment is not misrepresented as registered. The maintained dashboard contains a portable [registered phones Markdown card](examples/lovelace/presence_registered_phones_markdown_ru.yaml), which simply reads those fields. This does not create new entities or counters; no registration IP/MAC is published via MQTT or Recorder. Phones excluded through `exclude_users` are absent from the public roster.
