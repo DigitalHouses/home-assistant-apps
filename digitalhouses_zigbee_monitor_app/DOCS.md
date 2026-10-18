@@ -1,7 +1,7 @@
 # DigitalHouses Zigbee Monitor App — installation and acceptance
 
-Version: **0.1.3 (experimental)**. Run only after the production GHCR image
-`ghcr.io/digitalhouses/digitalhouses_zigbee_monitor_app:0.1.3` is published
+Version: **0.1.4 (experimental)**. Run only after the production GHCR image
+`ghcr.io/digitalhouses/digitalhouses_zigbee_monitor_app:0.1.4` is published
 and verified by repository release workflows.
 
 ## Requirements
@@ -72,6 +72,29 @@ The first release computes discovered network counts, confirmed device and
 offline counts, MQTT-message activity rate and TOP lists. Unknown availability
 is never a real zero. The `spammers` and `incidents` scalar entities remain
 unavailable until the respective engines are implemented.
+
+## Ручное «Обновить» (read-only)
+
+По подтверждённому стандарту Internet App команда `Refresh` обновляет
+фактические данные продукта и показывает статус выполнения, а не требует
+здоровья каждого опционального источника.
+
+Для Zigbee Monitor полнота `Refresh` означает:
+- повторное обнаружение существующих сетей Zigbee2MQTT;
+- получение `bridge/devices` и подтверждённого `bridge/state = online`
+  для каждой обнаруженной сети после начала операции;
+- успешную публикацию доступного инвентаря/состояния.
+
+**Availability каждого отдельного устройства не обязательна для завершения
+Refresh.** Если Zigbee2MQTT не отправляет такие сообщения (например,
+`availability.enabled: false`), `offline` и `offline_details`
+по-прежнему `unavailable`, а диагностический `inventory_details`
+показывает `availability_not_reported`. Мы не записываем фиктивный
+offline = 0.
+
+Если bridge либо inventory недоступны, обновление завершается ошибкой
+после тайм-аута с указанием именно отсутствующей части. `last_refresh`
+изменяется только после подтверждённого успешного обновления.
 
 ## Обновление из статусной карточки
 
