@@ -251,6 +251,7 @@ class MonitorService:
             self.subscribe(f"{ROOT}/command/#")
             self._send(APP_AVAILABILITY, "online", force=True)
             self._publish_networks()
+            self._publish_incidents()
 
     def disconnected(self) -> None:
         with self._lock:
@@ -392,6 +393,99 @@ class MonitorService:
         elif not live:
             self._continuous_since = None
             self._validity("messages_rate_5m", False)
+
+    def _reconcile_incidents(
+        self, *, kind: str, network_id: str | None,
+        device_ieee: str | None, live_event_type: str | None,
+    ) -> None:
+        """Persist confirmed outages and recoveries; retained is state, not event.
+
+        On inventory updates, reconcile retained availability that may have
+        arrived before IEEE mapping. Do not classify bridge-loss as mass
+        device offline. Do not start an incident merely because messages stopped.
+        """
+        if network_id is None:
+            return
+        network = next(n for n in self.monitor.networks if n.network_id == network_id)
+        status = self.monitor.network_status(network_id)
+        source = status["bridge_state"]
+        now_epoch = int(self.now())
+        if kind == "bridge_state" and source in ("online", "offline"):
+            self.store.observe_incident(
+                kind="zigbee2mqtt_offline", network_id=network_id,
+                object_id=network_id, object_name=network.name,
+                offline=source == "offline", observed_at=now_epoch,
+                live_transition=live_event_type in (
+                    "zigbee2mqtt_offline", "zigbee2mqtt_online",
+                ),
+            )
+        if source != "online" or not status["inventory_observed"]:
+            return
+        if kind not in ("bridge_state", "inventory", "device_availability"):
+            return
+        for device in self.monitor.devices(network_id):
+            availability = self.monitor.availability(network_id, device.ieee_address)
+            if availability not in ("online", "offline"):
+                continue
+            self.store.observe_incident(
+                kind="device_offline", network_id=network_id,
+                object_id=device.ieee_address, object_name=device.friendly_name,
+                offline=availability == "offline", observed_at=now_epoch,
+                live_transition=(
+                    kind == "device_availability"
+                    and device_ieee == device.ieee_address
+                    and live_event_type in ("device_offline", "device_online")
+                ),
+            )
+
+    def _publish_incidents(self) -> None:
+        """Never publish a fictitious clean zero on unobserved devices/sources."""
+        active, recent, total_persisted = self.store.incident_history()
+        verified = []
+        seen_networks = False
+        complete = bool(self.monitor.networks)
+        for network in self.monitor.networks:
+            status = self.monitor.network_status(network.network_id)
+            bridge = status["bridge_state"]
+            if bridge in ("online", "offline"):
+                seen_networks = True
+            else:
+                complete = False
+            if bridge == "online":
+                if not status["inventory_observed"]:
+                    complete = False
+                elif any(self.monitor.availability(network.network_id, d.ieee_address)
+                         not in ("online", "offline")
+                         for d in self.monitor.devices(network.network_id)):
+                    complete = False
+        for item in active:
+            status = self.monitor.network_status(str(item["network_id"]))
+            source = status["bridge_state"]
+            if item["kind"] == "zigbee2mqtt_offline":
+                confirmed = source == "offline"
+            else:
+                confirmed = (
+                    source == "online" and status["inventory_observed"]
+                    and self.monitor.availability(str(item["network_id"]),
+                                                  str(item["object_id"])) == "offline"
+                )
+            if confirmed:
+                verified.append(item)
+        active_count = len(verified)
+        # History is complete in SQLite even if the capped detail is truncated.
+        if total_persisted > len(active):
+            # Avoid publishing an invalid undercount when > 40 active incidents:
+            # fetch a count using SQL with the same source verification logic.
+            # This does not affect common residential Zigbee installations.
+            self._validity("incidents", False)
+        else:
+            self._scalar("incidents", active_count if active_count or complete else None)
+        self._detail(
+            "incidents_details", "incidents", verified, valid=seen_networks,
+            total=active_count, truncated=total_persisted > len(active),
+            observation_complete=complete,
+            recent_resolved=recent,
+        )
 
     def _publish_rankings(self, *, epoch: int) -> None:
         # Exclude incomplete current minute; reconnect gaps are shown as partial
@@ -655,8 +749,16 @@ class MonitorService:
                             },
                         )
             if sample.kind in ("inventory", "bridge_state", "device_availability"):
+                # Reconcile and commit durable outage state first.
+                # Device availability may have arrived before retained inventory.
+                self._reconcile_incidents(
+                    kind=sample.kind, network_id=sample.network_id,
+                    device_ieee=sample.ieee_address,
+                    live_event_type=event[0] if event is not None else None,
+                )
                 self._publish_networks()
                 self._publish_inventory_and_availability()
+                self._publish_incidents()
                 self._try_complete_refresh()
                 if event is not None:
                     self._emit_event(event[0], **event[1])
