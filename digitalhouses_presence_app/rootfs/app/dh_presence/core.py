@@ -340,6 +340,8 @@ class Engine:
                 "residents_home": residents_home,
                 "residents": {r.key: {"name": r.name,
                                       "user_name": r.user_name,
+                                      "gps_tracker": r.tracker,
+                                      "wifi_tracker": r.wifi_tracker_id,
                                       "status": (r.wifi.value if self.mode is Mode.WIFI else r.confirmed.value),
                                       "status_changed_at": ((r.wifi_changed_at if self.mode is Mode.WIFI
                                           else r.confirmed_changed_at).isoformat()
