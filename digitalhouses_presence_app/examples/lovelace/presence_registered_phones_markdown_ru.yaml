@@ -1,25 +1,17 @@
 type: markdown
 title: "📱 Зарегистрированные телефоны"
 content: |-
-  {% set roster = state_attr('binary_sensor.dh_presence_app_residents_home', 'residents') %}
-  {% if roster is not mapping %}
+  {%- set roster = state_attr('binary_sensor.dh_presence_app_residents_home', 'residents') -%}
+  {% if roster is not mapping -%}
   _Реестр телефонов пока недоступен._
-  {% else %}
-  {% set devices = roster.values() | selectattr('registered') | list %}
-  {% if devices %}
-  {% for phone in devices %}
-  **{{ phone.registration_label }}**
-
-  GPS: `{{ phone.gps_tracker }}`
-  {% if phone.wifi_tracker %}
-  Wi-Fi: `{{ phone.wifi_tracker }}`
-  {% else %}
-  Wi-Fi: не привязан
-  {% endif %}
-
-  {% if not loop.last %}---{% endif %}
-  {% endfor %}
-  {% else %}
+  {%- else -%}
+  {% set devices = roster.values() | selectattr('registered') | list -%}
+  {% if devices -%}
+  {% for phone in devices -%}
+  - **{{ phone.registration_label }}**  
+    GPS: `{{ phone.gps_tracker }}` · Wi-Fi: {% if phone.wifi_tracker %}`{{ phone.wifi_tracker }}`{% else %}не привязан{% endif %}
+  {% endfor -%}
+  {% else -%}
   _Нет зарегистрированных телефонов._
-  {% endif %}
-  {% endif %}
+  {%- endif -%}
+  {%- endif %}
