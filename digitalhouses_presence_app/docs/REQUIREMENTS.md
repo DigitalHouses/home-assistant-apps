@@ -44,3 +44,10 @@ Status: experimental HAOS App. This document describes the currently implemented
 ## Acceptance limitations
 
 Verify actual router tracker reliability, multi-device ownership binding and site-specific exclusions before integrating this pilot with alarms or other safety-sensitive decisions. Presence reports are not a substitute for verified security signals.
+
+## Recent events UI contract (0.1.28)
+
+- App Configuration `events_history_limit` defaults to 5 (valid 1–20); the App owns truncation, storage and ordering. HA must not keep a parallel last-five list via helpers, templates or automations.
+- Append a history entry only after successful publish of a current MQTT machine Event. Persist a bounded JSON list under `/data`, restore on startup and prune records belonging to excluded/nonparticipating residents.
+- Publish only a read-only retained MQTT diagnostic view for the last N events. The UI has only App-provided label/details/timestamp and local timestamp formatting. Never put IP/MAC/credentials in this history.
+- **Exclude the changing diagnostic history sensor from Home Assistant Recorder**. This is not a per-event measurement history entity; retain the original machine Event contract and any existing Recorder policy for it.
