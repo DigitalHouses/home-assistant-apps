@@ -79,10 +79,24 @@ Verify actual router tracker reliability, multi-device ownership binding and sit
   Administrator-only management actions remain on the independently
   authorized App Ingress API.
 
-## Registered-phone deletion from admin-only select card (0.1.32)
+## MQTT phone removal (0.1.33)
 
-- A dedicated removal widget displays **only** to users whose HA frontend reports `is_admin`. It lists actual registrations by user/device label and GPS tracker in an unselected-by-default dropdown; remove requires an explicit confirmation, and refreshes the list.
-- Security is enforced at the App Supervisor Ingress handler, not solely at the Lovelace UI. Every administrative list/GET/delete request is authorized independently against the actual live HA admin identity; non-admin callers and absent authorization fail closed.
-- Destructive MQTT `select`/`button` entities are disallowed: they cannot attest which authenticated HA user sent the command. Reuse the durable backend deletion transaction, including disabled-trackers and no synthetic physical departure.
-- Inline Lovelace embedding uses an ingress-aware HACS card (`custom:addon-iframe-card`) nested in the existing `custom:button-card` admin wrapper, without modifying the security boundary. The built-in admin Ingress page provides the same form without a new HACS dependency.
-- Do not add any new MQTT entities, state attributes, Recorder history, permanent helpers, HA automation, exposed TCP ports or extra Supervisor privileges solely for phone removal.
+- There are exactly two new entities on the existing MQTT Device:
+  `select.dh_presence_app_remove_phone` and
+  `button.dh_presence_app_delete_registration`.
+  Options are sorted and uniquely identify eligible enrolled phone trackers;
+  the neutral placeholder is always the initial selection.
+- HA only exposes a native entities card (existing admin-hidden
+  `custom:button-card` wrapper). No HACS addon iframe, helper, script,
+  automation or secondary registry is required.
+- The App owns selection, validation, deletion, durable disabled-trackers
+  tombstone, MQTT Discovery/state refresh and no-synthetic-events behavior.
+  Destructive commands are non-retained; invalid/stale selections do nothing,
+  and duplicate presses after a delete are no-ops.
+- **Security compromise accepted for MQTT mode:** HA frontend admin visibility
+  cannot enforce server authorization; MQTT commands carry no HA user role.
+  MQTT clients with publish permission can initiate removal. Document this
+  explicitly, and retain the original authenticated native Ingress flow for
+  truly admin-verified operations.
+- Avoid new Recorder entities, extra privileges, exported private registration
+  metadata beyond the existing tree, manual file editing or network scans.
