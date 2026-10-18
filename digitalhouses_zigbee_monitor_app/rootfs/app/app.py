@@ -22,6 +22,7 @@ from zigbee_monitor import ActivityStore, ZigbeeMonitor, parse_networks
 from zigbee_monitor.discovery import APP_AVAILABILITY, PRODUCT
 from zigbee_monitor.service import MonitorService
 from zigbee_monitor.telemetry import TelemetryClient, TelemetryRunner
+from zigbee_monitor.mqtt_compat import create_mqtt_client, connection_failed
 
 RELEASES_URL = "https://api.github.com/repos/DigitalHouses/home-assistant-apps/releases?per_page=100"
 RELEASE_TAG = re.compile(r"^digitalhouses_zigbee_monitor_app-v(\d+\.\d+\.\d+)$")
@@ -89,9 +90,8 @@ class Application:
                     self.monitor.add_network(network)
         self.stop_event = threading.Event()
         self._errors_logged: dict[str, float] = {}
-        self.client = mqtt.Client(
-            mqtt.CallbackAPIVersion.VERSION2,
-            client_id="dh-zigbee-monitor-app",
+        self.client = create_mqtt_client(
+            mqtt, client_id="dh-zigbee-monitor-app",
         )
         if os.getenv("MQTT_USER"):
             self.client.username_pw_set(
@@ -119,16 +119,18 @@ class Application:
         result, _mid = self.client.subscribe(topic, qos=1)
         return result == mqtt.MQTT_ERR_SUCCESS
 
-    def _on_connect(self, client, userdata, flags, reason_code, properties) -> None:
+    def _on_connect(self, client, userdata, flags, reason_code, properties=None) -> None:
+        # paho-mqtt 1.x calls four args, 2.x callback API v2 calls five.
         del client, userdata, flags, properties
-        if getattr(reason_code, "is_failure", False):
+        if connection_failed(reason_code):
             self.log.error("MQTT connect rejected: %s", reason_code)
             return
         self.service.connected()
         self.log.info("MQTT connected; observing %s Z2M networks", len(self.monitor.networks))
 
-    def _on_disconnect(self, client, userdata, flags, reason_code, properties) -> None:
-        del client, userdata, flags, reason_code, properties
+    def _on_disconnect(self, client, userdata, *callback_args) -> None:
+        # paho-mqtt 1.x: (client, userdata, rc); v2: flags, reason, props.
+        del client, userdata, callback_args
         self.service.disconnected()
         self.log.warning("MQTT disconnected; observations invalidated")
 

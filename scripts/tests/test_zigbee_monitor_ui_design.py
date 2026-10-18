@@ -102,7 +102,7 @@ class ZigbeeMonitorUiDesignTests(unittest.TestCase):
         self.assertEqual((APP / "digitalhouses.app").read_text().strip(), "type = haos_addon")
         config = yaml.safe_load((APP / "config.yaml").read_text(encoding="utf-8"))
         self.assertEqual(config["slug"], "digitalhouses_zigbee_monitor_app")
-        self.assertEqual(config["version"], "0.1.1")
+        self.assertEqual(config["version"], "0.1.2")
         self.assertEqual(config["stage"], "experimental")
 
 
