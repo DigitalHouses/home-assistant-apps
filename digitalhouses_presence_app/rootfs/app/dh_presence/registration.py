@@ -12,6 +12,10 @@ import os
 from pathlib import Path
 import re
 import subprocess
+from threading import RLock
+
+# Shared by Ingress and MQTT mutation in this same single-App process.
+REGISTRY_LOCK = RLock()
 
 from dh_presence.storage import atomic_json
 
