@@ -82,11 +82,11 @@ class PresenceLovelaceYamlTests(unittest.TestCase):
             {"title": "Выход из зоны", "details": "Alina · Office",
              "timestamp": "2026-10-18T11:06:00+00:00"},
         ]
-        tree = ("Зарегистрированные телефоны\\n"
-                "└─ 📱 Serzhan (13ProMAX .SKY)\\n"
-                "   ├─ GPS · 13promax_sky\\n"
-                "   ├─ Wi-Fi · не привязан\\n"
-                "   ├─ IP (рег.) · 192.168.8.54\\n"
+        tree = ("Зарегистрированные телефоны\n"
+                "└─ 📱 Serzhan (13ProMAX .SKY)\n"
+                "   ├─ GPS · 13promax_sky\n"
+                "   ├─ Wi-Fi · не привязан\n"
+                "   ├─ IP (рег.) · 192.168.8.54\n"
                 "   └─ MAC (рег.) · 88:b9:45:80:a7:55")
         for path, embedded in cards:
             standalone = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -94,17 +94,19 @@ class PresenceLovelaceYamlTests(unittest.TestCase):
                 self.assertEqual(standalone, embedded)
                 for card in (standalone, embedded):
                     template = env.from_string(card["content"])
+
                     def render(tree_value, event_rows):
                         return template.render(
                             state_attr=lambda _, attr: tree_value if attr == "tree" else event_rows,
                             as_datetime=datetime.fromisoformat,
                             as_local=lambda value: value,
                         ).strip()
+
                     output = render(tree, events)
                     self.assertNotIn("──────────────────", output)
                     if path == REGISTERED:
-                        opening = ('<pre style="margin:0; padding:0; line-height:1; '
-                                   'font-family:\\'Courier New\\',monospace; white-space:pre;">')
+                        opening = ("<pre style=\"margin:0; padding:0; line-height:1; "
+                                   "font-family:'Courier New',monospace; white-space:pre;\">")
                         self.assertEqual(output, opening + tree + "</pre>")
                         self.assertIn("IP (рег.) · 192.168.8.54", output)
                         self.assertIn("MAC (рег.) · 88:b9:45:80:a7:55", output)
@@ -113,13 +115,12 @@ class PresenceLovelaceYamlTests(unittest.TestCase):
                         self.assertIn("sensor.dh_presence_app_registered_phones", card["content"])
                         self.assertEqual(render(None, events),
                                          "_Реестр телефонов пока недоступен._")
-                        # Labels in App output must not execute HTML.
                         self.assertIn("&lt;script&gt;", render("<script>", events))
                         self.assertEqual(card["grid_options"], {"columns": 12})
                     else:
                         self.assertTrue(output.startswith(
-                            "| № | Дата и время | Событие | Детали |\\n"
-                            "|:--:|:--|:--|:--|\\n"))
+                            "| № | Дата и время | Событие | Детали |\n"
+                            "|:--:|:--|:--|:--|\n"))
                         self.assertEqual(len(output.splitlines()), 4)
                         self.assertIn("GPS: дома", output)
                         self.assertEqual(render(tree, []), "_Событий пока нет._")
