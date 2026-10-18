@@ -352,6 +352,8 @@ console.log('PASSED '+cases.length+' status scenarios');
         self.assertIn("binary_sensor.dh_presence_app_*_wifi_home", dashboard)
         self.assertIn("attribute='gps_tracker'", dashboard)
         self.assertIn("attribute='wifi_tracker'", dashboard)
+        self.assertIn("Зоны · количество людей", dashboard)
+        self.assertIn("domain: zone", dashboard)
         self.assertIn("Прибытие / убытие", dashboard)
         self.assertIn("Wi-Fi · появление / исчезновение", dashboard)
         self.assertIn("DH Presence · все сущности и управление", dashboard)
