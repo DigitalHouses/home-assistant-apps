@@ -21,6 +21,7 @@ from dh_presence.discovery import DISCOVERY, discovery, topic, with_cleanup
 from dh_presence.storage import load, save
 from dh_presence.modes import ModeSelection
 from dh_presence.notifications import NotificationSelection, NOTIFICATION_KEYS
+from dh_presence.zones import ZoneMonitor, zone_catalog, zone_key
 from dh_presence.operations import Operations, fetch_latest_release, is_newer
 from dh_presence.registration import load_registry
 from dh_presence.router import poll_router_trackers
@@ -32,9 +33,10 @@ STATE = "/data/presence_state.json"
 DISCOVERY_FILE = "/data/presence_discovery.json"
 MODE_FILE = "/data/presence_mode.json"
 NOTIFICATIONS_FILE = "/data/presence_notifications.json"
+ZONES_FILE = "/data/presence_zones.json"
 OPERATIONS_FILE = "/data/presence_refresh.json"
 REGISTRATIONS_FILE = "/data/presence_registrations.json"
-EVENT_NAMES = {"arrival", "departure", "gps_in", "gps_out", "wifi_in", "wifi_out", "wifi_lost"}
+EVENT_NAMES = {"arrival", "departure", "gps_in", "gps_out", "wifi_in", "wifi_out", "wifi_lost", "zone_enter", "zone_leave"}
 STOP = threading.Event()
 WAKE = threading.Event()
 
@@ -218,6 +220,7 @@ class MqttOutput:
                 client.subscribe(topic("notifications/" + key + "/set"), qos=1)[0]
                 for key in NOTIFICATION_KEYS
             ]
+            client.subscribe(topic("notifications/zones/+/set"), qos=1)
             LOG.info("MQTT connected; mode=%s birth=%s commands=%s notifications=%s",
                      mode_result[0], birth_result[0], command_result[0],
                      notification_results)
@@ -245,16 +248,22 @@ class MqttOutput:
             else:
                 LOG.warning("Ignoring invalid MQTT operation command")
             return
-        for key in NOTIFICATION_KEYS:
-            if msg.topic == topic("notifications/" + key + "/set"):
-                if getattr(msg, "retain", False):
-                    LOG.warning("Ignoring retained MQTT notification command")
-                elif msg.payload in (b"ON", b"OFF"):
-                    self.notification_commands.put((key, msg.payload.decode("ascii")))
-                    WAKE.set()
-                else:
-                    LOG.warning("Ignoring invalid MQTT notification command key=%s", key)
-                return
+        key = next((k for k in NOTIFICATION_KEYS
+                    if msg.topic == topic("notifications/" + k + "/set")), None)
+        prefix = topic("notifications/zones/")
+        if key is None and msg.topic.startswith(prefix) and msg.topic.endswith("/set"):
+            candidate = msg.topic[len(prefix):-4]
+            if len(candidate) == 16 and all(c in "0123456789abcdef" for c in candidate):
+                key = "zones/" + candidate
+        if key is not None:
+            if getattr(msg, "retain", False):
+                LOG.warning("Ignoring retained MQTT notification command")
+            elif msg.payload in (b"ON", b"OFF"):
+                self.notification_commands.put((key, msg.payload.decode("ascii")))
+                WAKE.set()
+            else:
+                LOG.warning("Ignoring invalid MQTT notification command key=%s", key)
+            return
         if msg.topic != topic("mode/set"):
             return
         if getattr(msg, "retain", False):
@@ -365,8 +374,8 @@ def load_discovery() -> dict:
     return data
 
 
-def synchronize_discovery(output: MqttOutput, version: str, engine: Engine, *, routine: bool = False) -> bool:
-    current = discovery(version, list(engine.residents.values()))
+def synchronize_discovery(output: MqttOutput, version: str, engine: Engine, *, zones: dict[str, str] | None = None, routine: bool = False) -> bool:
+    current = discovery(version, list(engine.residents.values()), zones)
     old = load_discovery()
     if old.get("components") and not output.publish(DISCOVERY, with_cleanup(old, current), force=True):
         LOG.error("MQTT Discovery cleanup publish failed topic=%s", DISCOVERY)
@@ -393,12 +402,18 @@ def save_discovery(value: dict):
 
 def publish_snapshot(output: MqttOutput, engine: Engine, version: str, started: str,
                      operations: Operations, latest_version: str | None,
-                     notifications: NotificationSelection | None = None) -> bool:
+                     notifications: NotificationSelection | None = None,
+                     zones: dict[str, str] | None = None) -> bool:
     snapshot = engine.snapshot()
     if not output.publish(topic("mode/state"), engine.mode.value):
         return False
     if notifications is not None:
         for key in NOTIFICATION_KEYS:
+            if not output.publish(topic("notifications/" + key + "/state"),
+                                  notifications.mqtt_state(key)):
+                return False
+        for entity_id in (zones or {}):
+            key = "zones/" + zone_key(entity_id)
             if not output.publish(topic("notifications/" + key + "/state"),
                                   notifications.mqtt_state(key)):
                 return False
@@ -454,6 +469,9 @@ def run():
     engine = build_engine(options, saved, registrations)
     modes = ModeSelection(MODE_FILE, options["presence_mode"])
     notifications = NotificationSelection(NOTIFICATIONS_FILE)
+    zone_monitor = ZoneMonitor(ZONES_FILE)
+    zones: dict[str, str] = {}
+    zones_loaded = False
     engine.set_mode(modes.selected)
     operations = Operations(OPERATIONS_FILE)
     latest_version = None
@@ -499,14 +517,23 @@ def run():
                 mqtt_out.discovery_requests.get_nowait()
                 ha_birth = True
             now_monotonic = time.monotonic()
-            if connected and (ha_birth or last_discovery_session is None
+            try:
+                new_zones = zone_catalog(http_json("http://supervisor/core/api/states", token))
+                zones_loaded = True
+                if new_zones != zones:
+                    zones = new_zones
+                    notifications.sync_zones(zones)
+                    last_discovery_session = None
+            except (URLError, OSError, ValueError, TypeError, KeyError) as exc:
+                LOG.debug("HA zones temporarily unavailable: %s", type(exc).__name__)
+            if connected and zones_loaded and (ha_birth or last_discovery_session is None
                               or now_monotonic - last_discovery_session >= 300):
                 # Retry a failed Discovery every GPS polling interval, and
                 # re-announce after HA starts and every 5 minutes.
                 if last_discovery_attempt is None or ha_birth or now_monotonic - last_discovery_attempt >= max(10, options["gps_poll_interval_seconds"]):
                     last_discovery_attempt = now_monotonic
                     routine = last_discovery_session is not None and not ha_birth and discovery_ready
-                    discovery_ready = synchronize_discovery(mqtt_out, version, engine, routine=routine)
+                    discovery_ready = synchronize_discovery(mqtt_out, version, engine, zones=zones, routine=routine)
                     if discovery_ready:
                         last_discovery_session = now_monotonic
                     else:
@@ -561,7 +588,7 @@ def run():
                             resident.name = item["device_name"]
                             changed = True
                     if changed:
-                        discovery_ready = synchronize_discovery(mqtt_out, version, engine) if mqtt_out.connected.is_set() else False
+                        discovery_ready = synchronize_discovery(mqtt_out, version, engine, zones=zones) if mqtt_out.connected.is_set() else False
                         LOG.info("DH Presence registered resident roster synchronized")
             now = datetime.now(timezone.utc)
             name_changed = False
@@ -577,6 +604,7 @@ def run():
                         LOG.error("Home Assistant Core API /config unavailable: %s; GPS distance and fresh presence remain unavailable until access succeeds", problem)
                         previous_core_error = problem
             events = []
+            zone_monitor.prune_residents({r.key for r in engine.residents.values()})
             for r in engine.residents.values():
                 try:
                     data = http_json("http://supervisor/core/api/states/" + r.tracker, token)
@@ -593,6 +621,8 @@ def run():
                                      "Core API recovered" if recovered else "source available")
                             reported_gps_status[r.tracker] = status.value
                         events.extend(engine.gps_observation(r.tracker, status, observed, distance, decision_at=now))
+                        if zones_loaded:
+                            events.extend(zone_monitor.observe(r.key, data['state'], observed, zones))
                     else:
                         if reported_gps_status.get(r.tracker) != "unavailable":
                             LOG.warning("GPS tracker %s: source unavailable/stale; last confirmed presence preserved", r.tracker)
@@ -629,12 +659,12 @@ def run():
                     resident.wifi_last_probe_at = now
                     resident.wifi_probe_result = "router_api_error"
             if name_changed and mqtt_out.connected.is_set():
-                discovery_ready = synchronize_discovery(mqtt_out, version, engine)
+                discovery_ready = synchronize_discovery(mqtt_out, version, engine, zones=zones)
             # Commit durable current state BEFORE sending retained MQTT state and events.
             save(STATE, engine.persistent())
             published = (mqtt_out.connected.is_set() and discovery_ready
                          and publish_snapshot(mqtt_out, engine, version, started,
-                                              operations, latest_version, notifications))
+                                              operations, latest_version, notifications, zones))
             if published:
                 if not published_state_logged:
                     LOG.info("MQTT presence state published topic=%s residents=%d mode=%s",
