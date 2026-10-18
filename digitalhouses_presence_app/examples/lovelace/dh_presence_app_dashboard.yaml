@@ -311,8 +311,11 @@ sections:
           {% set devices = roster.values() | selectattr('registered') | list -%}
           {% if devices -%}
           {% for phone in devices -%}
-          - **{{ phone.registration_label }}**  
-            GPS: `{{ phone.gps_tracker }}` · Wi-Fi: {% if phone.wifi_tracker %}`{{ phone.wifi_tracker }}`{% else %}не привязан{% endif %}
+          {% if not loop.first -%}
+          ────────────────────────────  
+          {% endif -%}
+          **{{ phone.registration_label }}**  
+          GPS: `{{ phone.gps_tracker }}` · Wi-Fi: {% if phone.wifi_tracker %}`{{ phone.wifi_tracker }}`{% else %}не привязан{% endif %}  
           {% endfor -%}
           {% else -%}
           _Нет зарегистрированных телефонов._
@@ -467,8 +470,11 @@ sections:
         content: |-
           {%- set items = state_attr('sensor.dh_presence_app_recent_events', 'items') or [] -%}
           {% for item in items -%}
-          - **{{ item.title }}** · {{ item.details }}  
-            _{{ as_local(as_datetime(item.timestamp)).strftime('%d.%m.%Y · %H:%M:%S') }}_
+          {% if not loop.first -%}
+          ────────────────────────────  
+          {% endif -%}
+          **{{ item.title }}** · {{ item.details }}  
+          _{{ as_local(as_datetime(item.timestamp)).strftime('%d.%m.%Y · %H:%M:%S') }}_  
           {% else -%}
           _Событий пока нет._
           {% endfor %}
