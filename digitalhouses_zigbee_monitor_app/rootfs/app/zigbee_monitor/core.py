@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any, Mapping
@@ -68,6 +69,7 @@ class _NetworkRuntime:
     devices: dict[str, Device] = field(default_factory=dict)
     topics: dict[str, str] = field(default_factory=dict)
     availability: dict[str, str] = field(default_factory=dict)
+    pending_availability: dict[str, str] = field(default_factory=dict)
 
 
 def parse_networks(raw: object) -> tuple[Network, ...]:
@@ -190,7 +192,7 @@ class ZigbeeMonitor:
         if len(self._by_topic) != len(networks):
             raise ZigbeeMonitorError("duplicate network base_topic")
         self._bases = tuple(sorted(self._by_topic, key=len, reverse=True))
-        self._counts: dict[tuple[str, str], int] = defaultdict(int)
+        self._counts: dict[tuple[int, str, str], int] = defaultdict(int)
 
     @property
     def networks(self) -> tuple[Network, ...]:
@@ -221,13 +223,28 @@ class ZigbeeMonitor:
             return None
         return sum(len(runtime.devices) for runtime in self._networks.values())
 
-    def drain_counts(self) -> dict[tuple[str, str], int]:
-        result = dict(self._counts)
-        self._counts.clear()
-        return result
+    def counts_snapshot(self) -> dict[tuple[int, str, str], int]:
+        """Snapshot counts for durable batch commit; do not discard until committed."""
+        return dict(self._counts)
+
+    def acknowledge_counts(self, persisted: Mapping[tuple[int, str, str], int]) -> None:
+        """Subtract only committed counts, leaving any newer observations intact."""
+        for key, count in persisted.items():
+            if not isinstance(count, int) or isinstance(count, bool) or count < 0:
+                raise ZigbeeMonitorError("invalid acknowledged MQTT count")
+            available = self._counts.get(key, 0)
+            if count > available:
+                raise ZigbeeMonitorError("cannot acknowledge more messages than observed")
+        for key, count in persisted.items():
+            remaining = self._counts.get(key, 0) - count
+            if remaining:
+                self._counts[key] = remaining
+            else:
+                self._counts.pop(key, None)
 
     def ingest(
         self, topic: str, payload: bytes, *, retain: bool = False, dup: bool = False,
+        observed_at: int | None = None,
     ) -> Observation:
         """Classify one MQTT message; invalid bridge payload raises without state loss."""
         network: _NetworkRuntime | None = None
@@ -272,7 +289,12 @@ class ZigbeeMonitor:
             # Make changes atomically; bad inventories cannot wipe a known-good roster.
             network.devices = new_devices
             network.topics = new_topics
+            for friendly, state in network.pending_availability.items():
+                ieee = new_topics.get(friendly)
+                if ieee is not None:
+                    preserved[ieee] = state
             network.availability = preserved
+            network.pending_availability.clear()
             network.inventory_observed = True
             return Observation("inventory", network_id, inventory_changed=changed)
 
@@ -283,16 +305,25 @@ class ZigbeeMonitor:
         if suffix in network.topics:
             ieee = network.topics[suffix]
             if not retain and not dup:
-                self._counts[(network_id, ieee)] += 1
+                ts = int(time.time()) if observed_at is None else observed_at
+                if not isinstance(ts, int) or isinstance(ts, bool) or ts < 0:
+                    raise ZigbeeMonitorError("invalid observed_at for MQTT message")
+                bucket = ts - ts % 60
+                self._counts[(bucket, network_id, ieee)] += 1
             return Observation("device_message", network_id, ieee, counted=not retain and not dup)
         if suffix.endswith("/availability"):
             friendly = suffix[:-len("/availability")]
             ieee = network.topics.get(friendly)
-            if ieee is None:
-                return Observation("unmapped_availability", network_id)
             data = _decode_json(payload, "device availability")
             if not isinstance(data, dict) or data.get("state") not in ("online", "offline"):
                 raise ZigbeeMonitorError("availability requires online/offline state")
+            if ieee is None:
+                # At cold boot retained availability may arrive before retained
+                # bridge/devices.  Keep a bounded cache until identity is known.
+                if len(network.pending_availability) >= 2048:
+                    raise ZigbeeMonitorError("too many unmapped availability topics")
+                network.pending_availability[friendly] = data["state"]
+                return Observation("unmapped_availability", network_id)
             network.availability[ieee] = data["state"]
             return Observation("device_availability", network_id, ieee)
         if any(suffix.endswith(s) for s in _RESERVED_SUFFIXES):
