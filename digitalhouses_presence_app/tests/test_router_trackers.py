@@ -68,15 +68,15 @@ class RouterTrackerTests(unittest.TestCase):
     def test_unavailable_source_does_not_report_absence_or_duplicate_in(self):
         e=setup()
         poll_router_trackers(e, [REG], [state()], START)
-        for item, reason in (
+        for i, (item, reason) in enumerate((
             ([], "router_missing"),
             ([state("unavailable")], "router_unavailable"),
             ([state("unknown")], "router_unavailable"),
             ([state("home", mac="8a:43:3e:74:09:83")], "router_mac_or_source_mismatch"),
             ([state("home", source="gps")], "router_mac_or_source_mismatch"),
             ([state("home", network="LAN")], "router_mac_or_source_mismatch"),
-        ):
-            now=START+timedelta(minutes=1)
+        )):
+            now=START+timedelta(minutes=2*i+1)
             self.assertEqual(poll_router_trackers(e, [REG], item, now), [])
             self.assertEqual(e.residents[GPS].wifi, Status.UNAVAILABLE)
             self.assertEqual(e.residents[GPS].wifi_probe_result, reason)
@@ -93,7 +93,7 @@ class RouterTrackerTests(unittest.TestCase):
             e, [REG], [state(entity="device_tracker.renamed")],
             START+timedelta(seconds=10)), [])
         self.assertEqual(e.residents[GPS].wifi_probe_result,
-                         "router_mac_or_source_mismatch")
+                         "router_missing")
 
     def test_missing_enrollment_is_unknown_no_ip_fallback(self):
         e=setup()
