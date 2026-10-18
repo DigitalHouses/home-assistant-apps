@@ -242,7 +242,7 @@ class PhoneManagementTests(unittest.TestCase):
         self.assertEqual(len(lines), 11)
         self.assertEqual(lines[0], "Зарегистрированные телефоны")
         self.assertEqual(lines[1], "├─ 📱 <Admin> (13ProMAX .SKY)")
-        self.assertEqual(lines[2], "│  ├─ GPS · iphone")
+        self.assertEqual(lines[2], "│  ├─ GPS · phone_a")
         self.assertEqual(lines[3], "│  ├─ Wi-Fi · wifi_a")
         self.assertEqual(lines[4], "│  ├─ IP (рег.) · 192.168.8.54")
         self.assertEqual(lines[5], "│  └─ MAC (рег.) · 88:b9:45:80:a7:55")
