@@ -11,7 +11,8 @@ def topic(suffix: str) -> str:
     return f"{BASE}/{suffix}"
 
 
-def discovery(version: str, residents: list[Resident], zones: dict[str, str] | None = None) -> dict:
+def discovery(version: str, residents: list[Resident], zones: dict[str, str] | None = None,
+              phone_options: list[str] | None = None) -> dict:
     availability = {"topic": topic("availability"), "payload_available": "online", "payload_not_available": "offline"}
     aggregate = [availability, {"topic": topic("presence_observed"), "payload_available": "online", "payload_not_available": "offline"}]
     components = {
@@ -40,6 +41,27 @@ def discovery(version: str, residents: list[Resident], zones: dict[str, str] | N
             "value_template": "{{ value_json.count }}",
             "json_attributes_topic": topic("events/history"),
             "entity_category": "diagnostic", "availability": availability,
+        },
+        "remove_phone_select": {
+            "platform": "select", "name": "Удаление · телефон",
+            "unique_id": "dh_presence_app_remove_phone",
+            "default_entity_id": "select.dh_presence_app_remove_phone",
+            "icon": "mdi:cellphone-arrow-down",
+            "entity_category": "config",
+            "options": phone_options or ["— Выберите телефон —"],
+            "command_topic": topic("registrations/remove/select/set"),
+            "state_topic": topic("registrations/remove/select/state"),
+            "retain": False, "availability": availability,
+        },
+        "delete_registration": {
+            "platform": "button", "name": "Удалить регистрацию",
+            "unique_id": "dh_presence_app_delete_registration",
+            "default_entity_id": "button.dh_presence_app_delete_registration",
+            "icon": "mdi:cellphone-remove",
+            "entity_category": "config",
+            "command_topic": topic("registrations/remove/press"),
+            "payload_press": "DELETE",
+            "retain": False, "availability": availability,
         },
         "registered_phones": {
             "platform": "sensor", "name": "Registered phones",
