@@ -1,8 +1,18 @@
 # DigitalHouses Presence App
 
-**Status: GPS + HA router device_tracker Wi-Fi pilot, version 0.1.28.** Observe router tracker stability before safety-critical automations.
+**Status: GPS + HA router device_tracker Wi-Fi pilot, version 0.1.29.** Observe router tracker stability before safety-critical automations.
 
 This application belongs to `DigitalHouses/home-assistant-apps/digitalhouses_presence_app` and is installed via **Settings → Apps → App Store**.
+
+## Registered phones and administrator deletion (0.1.29)
+
+The existing MQTT resident roster exposes only the enrolled, eligible phone's stable source tracker IDs and two new **non-secret** fields: `registered` and the App-prepared `registration_label`. An App-configured legacy GPS tracker **without** a verified Ingress enrollment is not misrepresented as registered. The maintained dashboard contains a portable [registered phones Markdown card](examples/lovelace/presence_registered_phones_markdown_ru.yaml), which simply reads those fields. This does not create new entities or counters; no registration IP/MAC is published via MQTT or Recorder. Phones excluded through `exclude_users` are absent from the public roster.
+
+**To delete a phone:** open **DH Presence → Open Web UI** or use the dashboard's admin launcher **Управление телефонами · администратор**. The existing administrator-only Ingress section now lists all registrations (including private enrollment IP/MAC) and provides a per-phone **Удалить регистрацию** button. Confirm the exact user/device/GPS tracker. The backend independently checks authenticated Supervisor Ingress identity, live HA administrator membership and the action-specific request header; non-admins cannot delete. Unlike phone registration, administrative removal is allowed through an existing remote Cloudflare HA session. No direct ARP probe is attempted for deletion.
+
+Deleting a registration immediately persists its GPS tracker as disabled in the **same** registration file (`/data/presence_registrations.json`, schema v2; old v1 files migrate on write). This prevents a legacy manually configured `residents:` option from re-enrolling the phone on App restart. The running App reconciles its roster (normally within its five-second registration check), removes the resident from MQTT Discovery/current-state, zone baseline and local recent-event history, and **does not synthesize a departure event**. Re-registration from the physical phone on direct home LAN, with fresh MAC verification, explicitly clears the disabled marker and starts a new UNKNOWN baseline. No second deletion registry, HA helper or automation is introduced.
+
+Admin-only IP/MAC remain in the private native Ingress diagnostics; the public Lovelace card is intentionally read-only. This product continues to use the Home Assistant App's standard single MQTT Device and privileges.
 
 ## Latest events (0.1.28, App-owned)
 
