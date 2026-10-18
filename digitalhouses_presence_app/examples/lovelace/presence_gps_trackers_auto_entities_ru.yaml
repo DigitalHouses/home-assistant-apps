@@ -1,0 +1,17 @@
+# GPS source trackers linked to active DH Presence residents.
+# Requires DH Presence 0.1.26+ and custom:auto-entities (HACS).
+# Same YAML in every home; no resident- or router-specific entity IDs.
+type: custom:auto-entities
+card:
+  type: entities
+  title: "📍 DH Presence · GPS-трекеры"
+  show_header_toggle: false
+  state_color: true
+filter:
+  template: >-
+    {% set residents = state_attr('binary_sensor.dh_presence_app_residents_home', 'residents') or {} %}
+    {{ residents.values() | map(attribute='gps_tracker') | select | join(', ') }}
+sort:
+  method: name
+unique: true
+show_empty: false
