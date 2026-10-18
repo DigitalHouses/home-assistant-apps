@@ -1,5 +1,5 @@
 name: DigitalHouses Presence App
-version: 0.1.30
+version: 0.1.31
 slug: digitalhouses_presence_app
 description: GPS + HA router Wi-Fi device_tracker presence via verified registered MAC; PING and ARP no longer used for presence.
 url: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_presence_app
