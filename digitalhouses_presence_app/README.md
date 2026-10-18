@@ -4,6 +4,16 @@
 
 This application belongs to `DigitalHouses/home-assistant-apps/digitalhouses_presence_app` and is installed via **Settings → Apps → App Store**.
 
+## Admin-only phone removal card with select (0.1.32)
+
+The residents section of the maintained four-column dashboard now includes a **separate admin-only phone-management card** with a `select` dropdown, `Удалить регистрацию` and `Обновить список` buttons. The user must select one registered phone and explicitly confirm the precise name/device/GPS tracker before the App removes it. Deletion immediately refreshes the list; no phone is preselected. Empty lists and denied admin verification disable deletion.
+
+The admin card **embeds a protected App Ingress form** at `/admin/delete-phone`. The server verifies the actual authenticated HA administrator identity when serving the form, when reading the live registration list, **and again** when executing the existing `POST /api/admin/delete-registration`. A Lovelace `hidden` expression only controls visibility; it is not authorization. No MQTT `select` or delete command and no HA helper/automation is created because MQTT cannot authenticate the user performing a destructive action.
+
+**Inline-card dependency:** to embed an Ingress page reliably into Lovelace, install the HACS custom card **Ingress webpage card** (`custom:addon-iframe-card`, [lovelylain/ha-addon-iframe-card](https://github.com/lovelylain/ha-addon-iframe-card)) once on the HA instance. Plain Home Assistant iframe cards can fail when the Supervisor ingress session has not been established. The maintained dashboard and [portable admin removal card](examples/lovelace/presence_admin_remove_phone_card_ru.yaml) use the new custom card nested in the already-installed `custom:button-card` with role-based visibility. Without the extra card dependency, use the existing **Управление телефонами · администратор** launcher: its authenticated Ingress page also contains the same select/confirmation form. No new Lovelace resource is needed for that fallback.
+
+To install: update App to `0.1.32`, install `custom:addon-iframe-card` via HACS if you want inline removal, and copy the new admin YAML or refreshed full dashboard. Manually pasted dashboards do not update with the App. The registration tree and Recorder exclusions introduced in 0.1.31 remain unchanged.
+
 ## IP/MAC in the Home Assistant dashboard tree (0.1.31)
 
 The previous 0.1.30 feature put enrollment IP/MAC **only inside administrator Ingress**, which did not change the **Lovelace Markdown card**. Version 0.1.31 addresses the actual dashboard request. The App, not HA, generates a fully formatted `├─/└─` phone tree with GPS, Wi-Fi, **IP (рег.)**, and **MAC (рег.)** branches. It publishes this display-only read model through one MQTT diagnostic sensor, `sensor.dh_presence_app_registered_phones`, state = registered count, attribute `tree`. The maintained dashboard and [standalone Markdown card](examples/lovelace/presence_registered_phones_markdown_ru.yaml) only show this text in a compact PVE-style `<pre>`, with HTML escaping. Deleted/excluded phones are omitted. The addresses describe the moment of enrollment, not current network attachment.
