@@ -107,9 +107,24 @@ class PresenceLovelaceYamlTests(unittest.TestCase):
                         as_local=lambda value: value,
                     ).strip()
                     self.assertNotIn("\n\n", rendered)
-                    self.assertNotIn("\n---", rendered)
-                    self.assertEqual(rendered.count("- **"), 2)
+                    self.assertNotIn("---", rendered)
+                    self.assertEqual(rendered.count("────────────────────────────"), 1)
+                    self.assertEqual(rendered.count("**"), 4)
                     self.assertNotIn("device_tracker.legacy", rendered)
+                    one_item = template.render(
+                        state_attr=lambda _, attr: (
+                            {"one": roster["one"]} if attr == "residents"
+                            else event_rows[:1]),
+                        as_datetime=datetime.fromisoformat,
+                        as_local=lambda value: value,
+                    ).strip()
+                    self.assertNotIn("────────────────────────────", one_item)
+                    empty = template.render(
+                        state_attr=lambda _, attr: {} if attr == "residents" else [],
+                        as_datetime=datetime.fromisoformat,
+                        as_local=lambda value: value,
+                    ).strip()
+                    self.assertNotIn("────────────────────────────", empty)
                     if path == REGISTERED:
                         self.assertIn("Wi-Fi: не привязан", rendered)
                         self.assertIn("device_tracker.router_1", rendered)
