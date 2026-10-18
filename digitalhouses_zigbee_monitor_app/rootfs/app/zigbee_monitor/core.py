@@ -336,6 +336,11 @@ class ZigbeeMonitor:
             if state not in {"online", "offline"}:
                 raise ZigbeeMonitorError("bridge/state must be online/offline")
             network.bridge_state = state
+            if state == "offline":
+                # A source outage invalidates cached per-device availability.
+                # Do not turn stale device flags into fresh incidents at recovery.
+                network.availability.clear()
+                network.pending_availability.clear()
             return Observation("bridge_state", network_id)
 
         if suffix == "bridge/devices":
@@ -381,6 +386,9 @@ class ZigbeeMonitor:
                 )
             return Observation("device_message", network_id, ieee, counted=not retain and not dup)
         if suffix.endswith("/availability"):
+            if network.bridge_state == "offline":
+                # Source-wide failure is NOT a set of individual device failures.
+                return Observation("untrusted_availability", network_id)
             friendly = suffix[:-len("/availability")]
             ieee = network.topics.get(friendly)
             data = _decode_json(payload, "device availability")
