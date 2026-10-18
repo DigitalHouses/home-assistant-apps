@@ -317,6 +317,42 @@ sections:
           [[[
             return hass.user?.is_admin !== true;
           ]]]
+        show_icon: false
+        show_name: false
+        show_label: false
+        show_state: false
+        tap_action:
+          action: none
+        hold_action:
+          action: none
+        custom_fields:
+          manager:
+            card:
+              type: custom:addon-iframe-card
+              url: 8133339d_digitalhouses_presence_app/admin/delete-phone
+              aspect_ratio: "80%"
+              hide_background: false
+        styles:
+          card:
+            - padding: 0
+            - border: none
+            - background: transparent
+            - box-shadow: none
+          grid:
+            - grid-template-areas: '"manager"'
+            - grid-template-columns: 1fr
+            - grid-template-rows: min-content
+          custom_fields:
+            manager:
+              - width: 100%
+        grid_options:
+          columns: 12
+      - type: custom:button-card
+        entity: sensor.dh_presence_app_version
+        hidden: |
+          [[[
+            return hass.user?.is_admin !== true;
+          ]]]
         show_icon: true
         show_name: true
         show_label: true
