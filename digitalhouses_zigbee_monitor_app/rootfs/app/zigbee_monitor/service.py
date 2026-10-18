@@ -110,9 +110,54 @@ class MonitorService:
     def _publish_card(self) -> None:
         self._send(state_topic("card"), _json(self._card))
 
+    def _publish_refresh_state(self) -> None:
+        self._send(state_topic("refresh_state"), _json(self._refresh_state))
+
+    def _finish_refresh(self, error: str | None = None) -> None:
+        if self._refresh_state["state"] != "updating":
+            return
+        started = str(self._refresh_state["started_at"])
+        finished = self.now()
+        duration = max(0.0, finished - datetime.fromisoformat(started).timestamp())
+        self._refresh_state = {
+            "state": "error" if error else "idle",
+            "started_at": started, "finished_at": _iso(finished),
+            "duration_seconds": round(duration, 3), "error": error,
+        }
+        self._publish_refresh_state()
+        self._card_finish(error)
+
+    def _try_complete_refresh(self) -> None:
+        """Inventory alone is not a complete source refresh."""
+        if self._refresh_pending is None or self._refresh_started is None:
+            return
+        if not self.monitor.networks:
+            return
+        for config in self.monitor.networks:
+            status = self.monitor.network_status(config.network_id)
+            if status["bridge_state"] != "online" or not status["inventory_observed"]:
+                return
+            if any(self.monitor.availability(config.network_id, device.ieee_address)
+                   not in ("online", "offline")
+                   for device in self.monitor.devices(config.network_id)):
+                return
+        if not (self._valid.get("inventory_details") is True
+                and self._valid.get("offline_details") is True):
+            return
+        # Commit last_refresh only after every authoritative state is available.
+        if not self._send(state_topic("last_refresh"), _iso(self.now())):
+            self._refresh_pending = None
+            self._refresh_started = None
+            self._finish_refresh("Не удалось опубликовать последнее обновление")
+            return
+        self._refresh_pending = None
+        self._refresh_started = None
+        self._finish_refresh()
+
     def _card_begin(self, name: str) -> bool:
         if self._card["state"] == "running":
             return False
+        self._card_success_until = None
         self._card = {
             "state": "running", "operation": name, "started_at": _iso(self.now()),
             "finished_at": None, "duration_seconds": None, "error": None,
@@ -127,6 +172,7 @@ class MonitorService:
         finished = self.now()
         duration = max(0.0, finished -
                        datetime.fromisoformat(started_at).timestamp())
+        self._card_success_until = None if error else self.now() + 5
         self._card = {
             "state": "error" if error else "success",
             "operation": self._card["operation"],
@@ -147,6 +193,18 @@ class MonitorService:
             self._valid.clear()
             self._refresh_pending = None
             self._refresh_started = None
+            if self._refresh_state["state"] == "updating":
+                self._refresh_state = {
+                    **self._refresh_state, "state": "error",
+                    "finished_at": _iso(self.now()),
+                    "error": "MQTT отключился во время обновления",
+                }
+                self._card = {
+                    **self._card, "state": "error",
+                    "finished_at": _iso(self.now()),
+                    "error": "MQTT отключился во время обновления",
+                }
+                self._card_success_until = None
             self._offline_since.clear()
             # Persist unavailability first; stale retained data remains hidden
             # until each source is re-observed after reconnect.
@@ -156,6 +214,7 @@ class MonitorService:
             self._send(state_topic("version"), self.version, force=True)
             self._send(state_topic("started_at"), self.started_at, force=True)
             self._publish_card()
+            self._publish_refresh_state()
             for topic_filter in DISCOVERY_FILTERS:
                 if not self.subscribe(topic_filter):
                     log.error("MQTT discovery subscription failed: %s", topic_filter)
@@ -316,17 +375,37 @@ class MonitorService:
                     self.store.trim_minutes(before_epoch=max(0, epoch - 30 * 86400))
                     self._last_trim_day = epoch // 86400
             if (
+                self._card_success_until is not None
+                and self.now() >= self._card_success_until
+                and self._card["state"] == "success"
+            ):
+                self._card_success_until = None
+                self._card = {
+                    "state": "idle", "operation": None,
+                    "started_at": None, "finished_at": None,
+                    "duration_seconds": None, "error": None,
+                }
+                self._publish_card()
+            if (
                 self._refresh_pending is not None and self._refresh_started is not None
                 and self.now() - self._refresh_started > 15
             ):
                 missing = sorted(self._refresh_pending)
                 self._refresh_pending = None
                 self._refresh_started = None
-                self._card_finish("Нет свежего inventory: " + ", ".join(missing))
+                self._finish_refresh(
+                    "Нет полных данных bridge / inventory / availability: "
+                    + ", ".join(missing)
+                )
 
     def _start_refresh(self) -> None:
         if not self._card_begin("refresh"):
             return
+        self._refresh_state = {
+            "state": "updating", "started_at": _iso(self.now()),
+            "finished_at": None, "duration_seconds": None, "error": None,
+        }
+        self._publish_refresh_state()
         self._refresh_pending = (
             {n.network_id for n in self.monitor.networks}
             if self.monitor.networks else {"__discovery__"}
@@ -415,15 +494,9 @@ class MonitorService:
                     self.monitor.devices(sample.network_id),
                     observed_at=int(self.now()),
                 )
-            if sample.kind == "inventory":
-                if self._refresh_pending is not None:
-                    assert sample.network_id is not None
-                    self._refresh_pending.discard(sample.network_id)
-                    if not self._refresh_pending:
-                        self._refresh_pending = None
-                        self._refresh_started = None
-                        self._send(state_topic("last_refresh"), _iso(self.now()))
-                        self._card_finish()
+            if sample.kind == "inventory" and self._refresh_pending is not None:
+                assert sample.network_id is not None
+                self._refresh_pending.discard(sample.network_id)
             if sample.kind == "device_availability" and sample.network_id and sample.ieee_address:
                 identity = sample.network_id, sample.ieee_address
                 current = self.monitor.availability(*identity)
@@ -436,6 +509,7 @@ class MonitorService:
             if sample.kind in ("inventory", "bridge_state", "device_availability"):
                 self._publish_networks()
                 self._publish_inventory_and_availability()
+                self._try_complete_refresh()
             return sample.kind
 
 
