@@ -227,13 +227,21 @@ cards:
     features:
       - type: select-options
 
+  - type: custom:auto-entities
+    card:
+      type: entities
+      title: Уведомления по зонам
+      show_header_toggle: false
+    filter:
+      include:
+        - entity_id: "switch.dh_presence_app_notify_zone_*"
+    sort:
+      method: name
+    show_empty: false
   - type: entities
     title: Уведомления DH Presence
     show_header_toggle: false
     entities:
-      - entity: switch.dh_presence_app_notify_presence
-        name: Итоговое присутствие
-        icon: mdi:home-account
       - entity: switch.dh_presence_app_notify_gps
         name: GPS
         icon: mdi:crosshairs-gps
