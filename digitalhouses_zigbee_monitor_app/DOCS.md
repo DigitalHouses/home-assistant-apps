@@ -68,6 +68,22 @@ Install or merge the reference policy:
 historical scalar sensors are recorded; detail, event and app-card entities
 must remain excluded. Inspect the actual Recorder DB after at least 24 hours.
 
+Минимальная политика для текущей реализации — **четыре** Recorder ON
+сущности: `networks`, `devices`, `offline`, `messages_rate_5m`.
+Они содержат только числовые states без динамических JSON-атрибутов.
+`spammers` и `incidents` пока являются `unavailable`-заглушками,
+поэтому не участвуют в записи до реализации соответствующих движков.
+
+Важная особенность фильтра HA Recorder:
+`include.entities` содержит точные четыре entity IDs, тогда как
+`exclude.entity_globs` исключает весь префикс Zigbee Monitor
+для `sensor`, `binary_sensor`, `button`, `event`. При таком
+комбинированном фильтре точные `include.entities` имеют приоритет над
+`exclude.entity_globs`, что позволяет записывать только согласованные
+четыре метрики продукта, а остальную конфигурацию Recorder не заменять.
+Проверить **фактически объединённую** site-конфигурацию особенно важно,
+если другие пакеты также задают include/exclude filters.
+
 The App computes discovered network counts, confirmed device and
 offline counts, MQTT-message activity rate and TOP lists. Unknown availability
 is never a real zero. When any device is confirmed offline, that positive count
