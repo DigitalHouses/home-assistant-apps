@@ -244,65 +244,65 @@ sections:
         heading: Проблемы Zigbee
         heading_style: subtitle
         icon: mdi:alert-circle-outline
-      - type: custom:mushroom-template-card
-        entity: sensor.dh_zigbee_monitor_app_problems
-        primary: |-
-          {% set active = state_attr(entity, 'active') or [] %}
-          {% if states(entity) in ['unknown','unavailable','none',''] %}
-            Нет достоверных данных о проблемах
-          {% elif active | count == 0 %}
-            Проблем не обнаружено
-          {% else %}
-            Обнаружено проблем: {{ active | count }}
-          {% endif %}
-        secondary: |-
-          {% set active = state_attr(entity, 'active') or [] %}
-          {% set unknown = state_attr(entity, 'unknown') or [] %}
-          {% if states(entity) in ['unknown','unavailable','none',''] %}
-            Не все диагностические проверки завершены.
-          {% elif active | count == 0 %}
-            Подтверждённых проблем нет.
-          {% else %}
-            {% for item in active %}
-              {% set id = item.get('category','') %}
-              {% set name = item.get('object_name','Zigbee2MQTT') %}
-              {% set value = item.get('value') %}
-              {% set threshold = item.get('threshold') %}
-              {% if id == 'bridge_offline' %}
-                • {{ name }} — Zigbee2MQTT offline
-              {% elif id == 'devices_offline' %}
-                • {{ name }} — Offline устройств: {{ value }}
-              {% elif id == 'mqtt_traffic_low' %}
-                • {{ name }} — снижение активности{% if value is number and threshold is number %}: {{ value | round(1) }} RPM · порог {{ threshold | round(1) }}{% endif %}
-              {% else %}
-                • {{ name }} — {{ id }}
-              {% endif %}
-            {% endfor %}
-          {% endif %}
-          {% if unknown | count > 0 %}
-            Не все проверки доступны ({{ unknown | count }}).
-          {% endif %}
-        icon: |-
-          {% if states(entity) in ['unknown','unavailable','none',''] %}
-            mdi:help-circle-outline
-          {% elif (state_attr(entity,'active') or []) | count > 0 %}
-            mdi:alert-circle
-          {% else %}
-            mdi:check-circle
-          {% endif %}
-        icon_color: |-
-          {% if states(entity) in ['unknown','unavailable','none',''] %}
-            grey
-          {% elif (state_attr(entity,'active') or []) | count > 0 %}
-            red
-          {% else %}
-            green
-          {% endif %}
-        multiline_secondary: true
-        tap_action:
-          action: more-info
-        grid_options:
-          columns: 12
+      type: custom:mushroom-template-card
+      entity: sensor.dh_zigbee_monitor_app_problems
+      primary: |-
+        {% set active = state_attr(entity, 'active') or [] %}
+        {% if states(entity) in ['unknown', 'unavailable', 'none', ''] %}
+          Нет достоверных данных о проблемах
+        {% elif active | count == 0 %}
+          Проблем не обнаружено
+        {% else %}
+          Обнаружено проблем: {{ active | count }}
+        {% endif %}
+      secondary: |-
+        {% set active = state_attr(entity, 'active') or [] %}
+        {% set unknown = state_attr(entity, 'unknown') or [] %}
+        {% if states(entity) in ['unknown', 'unavailable', 'none', ''] %}
+          Нет полного подтверждения состояния Zigbee-сетей.
+        {% elif active | count == 0 %}
+          Подтверждённых проблем нет.
+        {% else %}
+          {% for item in active %}
+            {% set id = item.get('category', '') %}
+            {% set name = item.get('object_name', 'Zigbee2MQTT') %}
+            {% set value = item.get('value') %}
+            {% set threshold = item.get('threshold') %}
+            {% if id == 'bridge_offline' %}
+              • {{ name }} — Zigbee2MQTT offline
+            {% elif id == 'devices_offline' %}
+              • {{ name }} — подтверждено Offline устройств: {{ value }}
+            {% elif id == 'mqtt_traffic_low' %}
+              • {{ name }} — снижена MQTT-активность{% if value is number and threshold is number %}: {{ value | round(1) }} RPM · порог {{ threshold | round(1) }}{% endif %}
+            {% else %}
+              • {{ name }} — {{ id }}
+            {% endif %}
+          {% endfor %}
+        {% endif %}
+        {% if unknown | count > 0 %}
+          Не все диагностические проверки доступны ({{ unknown | count }}).
+        {% endif %}
+      icon: |-
+        {% if states(entity) in ['unknown', 'unavailable', 'none', ''] %}
+          mdi:help-circle-outline
+        {% elif (state_attr(entity, 'active') or []) | count > 0 %}
+          mdi:alert-circle
+        {% else %}
+          mdi:check-circle
+        {% endif %}
+      icon_color: |-
+        {% if states(entity) in ['unknown', 'unavailable', 'none', ''] %}
+          grey
+        {% elif (state_attr(entity, 'active') or []) | count > 0 %}
+          red
+        {% else %}
+          green
+        {% endif %}
+      multiline_secondary: true
+      tap_action:
+        action: more-info
+      grid_options:
+        columns: 12
       - type: heading
         heading: Пороги MQTT-активности
         heading_style: subtitle
