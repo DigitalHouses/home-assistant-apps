@@ -63,6 +63,7 @@ class MonitorService:
         self._last_trim_day: int | None = None
         self._offline_since: dict[tuple[str, str], str | None] = {}
         self._refresh_pending: set[str] | None = None
+        self._refresh_bridge_pending: set[str] | None = None
         self._refresh_started: float | None = None
         self._card_success_until: float | None = None
         self._refresh_state: dict[str, object] = {
@@ -128,31 +129,34 @@ class MonitorService:
         self._card_finish(error)
 
     def _try_complete_refresh(self) -> None:
-        """Inventory alone is not a complete source refresh."""
-        if self._refresh_pending is None or self._refresh_started is None:
+        """Complete after fresh bridge and inventory snapshots, even if Z2M availability is disabled.
+
+        Internet App's product-level Refresh reports success when it has
+        republished its valid current observational state; a missing optional
+        health source does not retroactively fail the whole user action.
+        Zigbee2MQTT availability is independent of inventory and MQTT activity.
+        Its dedicated offline sensors remain unavailable until proven valid.
+        """
+        if (self._refresh_pending is None or
+                self._refresh_bridge_pending is None or self._refresh_started is None):
             return
-        if self._refresh_pending:
+        if self._refresh_pending or self._refresh_bridge_pending:
             return
-        if not self.monitor.networks:
+        if not self.monitor.networks or not self._all_live():
             return
-        for config in self.monitor.networks:
-            status = self.monitor.network_status(config.network_id)
-            if status["bridge_state"] != "online" or not status["inventory_observed"]:
-                return
-            if any(self.monitor.availability(config.network_id, device.ieee_address)
-                   not in ("online", "offline")
-                   for device in self.monitor.devices(config.network_id)):
-                return
-        if not (self._valid.get("inventory_details") is True
-                and self._valid.get("offline_details") is True):
+        # Discovery/inventory are required and must be published. Offline data
+        # are optional: they MUST remain unavailable without per-device samples.
+        if (self._valid.get("networks_details") is not True or
+                self._valid.get("inventory_details") is not True):
             return
-        # Commit last_refresh only after every authoritative state is available.
         if not self._send(state_topic("last_refresh"), _iso(self.now())):
             self._refresh_pending = None
+            self._refresh_bridge_pending = None
             self._refresh_started = None
             self._finish_refresh("Не удалось опубликовать последнее обновление")
             return
         self._refresh_pending = None
+        self._refresh_bridge_pending = None
         self._refresh_started = None
         self._finish_refresh()
 
@@ -194,6 +198,7 @@ class MonitorService:
             self._published.clear()
             self._valid.clear()
             self._refresh_pending = None
+            self._refresh_bridge_pending = None
             self._refresh_started = None
             if self._refresh_state["state"] == "updating":
                 self._refresh_state = {
@@ -400,12 +405,24 @@ class MonitorService:
                 self._refresh_pending is not None and self._refresh_started is not None
                 and self.now() - self._refresh_started > 15
             ):
-                missing = sorted(self._refresh_pending)
+                missing_inventory = sorted(self._refresh_pending)
+                missing_bridge = sorted(self._refresh_bridge_pending or ())
+                unavailable_bridge = [
+                    n.network_id for n in self.monitor.networks
+                    if self.monitor.network_status(n.network_id)["bridge_state"] != "online"
+                    and n.network_id not in missing_bridge
+                ]
                 self._refresh_pending = None
+                self._refresh_bridge_pending = None
                 self._refresh_started = None
+                problems = []
+                if missing_inventory:
+                    problems.append("inventory: " + ", ".join(missing_inventory))
+                if missing_bridge or unavailable_bridge:
+                    problems.append("bridge: " + ", ".join(sorted(
+                        set(missing_bridge + unavailable_bridge))))
                 self._finish_refresh(
-                    "Нет полных данных bridge / inventory / availability: "
-                    + ", ".join(missing)
+                    "Не получены данные Zigbee2MQTT (" + "; ".join(problems or ["MQTT"]) + ")"
                 )
 
     def _start_refresh(self) -> None:
@@ -420,13 +437,24 @@ class MonitorService:
             {n.network_id for n in self.monitor.networks}
             if self.monitor.networks else {"__discovery__"}
         )
+        self._refresh_bridge_pending = {
+            n.network_id for n in self.monitor.networks
+        }
         self._refresh_started = self.now()
-        for topic_filter in DISCOVERY_FILTERS:
-            self.subscribe(topic_filter)
+        subscriptions = list(DISCOVERY_FILTERS)
         for n in self.monitor.networks:
-            # Subscribe to retained state, NEVER send a Zigbee2MQTT operation.
-            self.subscribe(n.base_topic + "/bridge/devices")
-            self.subscribe(n.base_topic + "/bridge/state")
+            # Retained read only. No Zigbee2MQTT control, reporting, interview or ping.
+            subscriptions.extend((
+                n.base_topic + "/bridge/devices",
+                n.base_topic + "/bridge/state",
+            ))
+        for topic_filter in subscriptions:
+            if not self.subscribe(topic_filter):
+                self._refresh_pending = None
+                self._refresh_bridge_pending = None
+                self._refresh_started = None
+                self._finish_refresh("Не удалось подписаться на MQTT: " + topic_filter)
+                return
 
     def complete_check(self, *, latest: str | None, error: str | None = None) -> None:
         """Completion from a bounded non-MQTT release check worker."""
@@ -490,6 +518,8 @@ class MonitorService:
                     if self._refresh_pending is not None:
                         self._refresh_pending.discard("__discovery__")
                         self._refresh_pending.add(network.network_id)
+                        if self._refresh_bridge_pending is not None:
+                            self._refresh_bridge_pending.add(network.network_id)
                     if not self.subscribe(network.base_topic + "/#"):
                         log.error("Failed to subscribe to discovered %s", network.base_topic)
                     self._publish_networks()
@@ -507,6 +537,9 @@ class MonitorService:
             if sample.kind == "inventory" and self._refresh_pending is not None:
                 assert sample.network_id is not None
                 self._refresh_pending.discard(sample.network_id)
+            if sample.kind == "bridge_state" and self._refresh_bridge_pending is not None:
+                assert sample.network_id is not None
+                self._refresh_bridge_pending.discard(sample.network_id)
             if sample.kind == "device_availability" and sample.network_id and sample.ieee_address:
                 identity = sample.network_id, sample.ieee_address
                 current = self.monitor.availability(*identity)
