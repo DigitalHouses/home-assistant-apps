@@ -75,3 +75,31 @@ The public HA Markdown card only renders App-supplied `registered` and `registra
 To honor the prior administrator-only enrollment data contract, registered network identity is displayed only inside the pre-existing Ingress administrative view. Its `/api/admin/debug` API already authorizes the HA user's admin role and returns registration-time IP/MAC. A new client-side PVE-style `<pre>` view groups GPS, Wi-Fi, IP and MAC under each phone; it uses `textContent`, preserving literal user labels without HTML injection. Admin authorization failures hide the entire section and clear private DOM text. No independently addressable public MQTT/HA history entity receives IP/MAC.
 
 The ordinary registered-phone Lovelace tree still uses the aggregate MQTT resident roster's already-public fields only. Home Assistant remains a read-only renderer; all authoritative registration/network identity and deletion logic stays in App.
+
+
+## Dashboard registration identity read model (0.1.31)
+
+At user request, the ordinary Lovelace phone tree now displays the App's
+registration-time IP and MAC, in addition to GPS and Wi-Fi tracker identities.
+This deliberately changes the privacy boundary from the 0.1.30 Ingress-only
+interface. Unlike the private Ingress admin endpoint, MQTT does not authorize
+access per Home Assistant user. Subscribers to the MQTT broker and HA clients
+allowed to read entity state can read the published registration identity. This
+tradeoff must be understood on each home deployment.
+
+The App computes a complete, sorted, line-safe string and publishes it to
+`DigitalHouses/Global/dh_presence_app/registrations/tree`. One MQTT Discovery
+diagnostic `sensor.dh_presence_app_registered_phones` has a count state and
+a `tree` attribute. The App filters records by currently enrolled eligible
+Engine residents to exclude administrative users and delete tombstones.
+HA Markdown merely displays this string, HTML-escaped, with PVE's dense
+monospace `<pre style="line-height:1">` presentation. No HA joins or
+registrations are reconstructed in Jinja.
+
+The new topic is separate from `topic("state")`; presence binary sensor
+attributes and historical events remain free of network enrollment details.
+MQTT publication caching suppresses identical retained payloads during
+routine GPS polls. `sensor.dh_presence_app_registered_phones` **must be
+excluded from HA Recorder**, alongside the recent-events sensor; the App never
+writes or modifies the home's Recorder configuration. The existing private
+Ingress view retains actual HA-admin authorization for management/deletion.
