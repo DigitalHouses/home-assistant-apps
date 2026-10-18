@@ -1,0 +1,171 @@
+"""SQLite storage for stable Zigbee identities and aggregated MQTT activity.
+
+Only minute buckets are persisted, not individual MQTT messages.  The store
+never invents missing data or deletes a physical device on Z2M rename.
+"""
+
+from __future__ import annotations
+
+import sqlite3
+from pathlib import Path
+from typing import Mapping
+
+from .core import Device
+
+
+_SCHEMA = """
+CREATE TABLE IF NOT EXISTS devices (
+    ieee_address TEXT PRIMARY KEY,
+    network_id TEXT NOT NULL,
+    friendly_name TEXT NOT NULL,
+    model TEXT,
+    manufacturer TEXT,
+    device_type TEXT,
+    observed_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS message_minutes (
+    bucket_start INTEGER NOT NULL,
+    network_id TEXT NOT NULL,
+    ieee_address TEXT NOT NULL,
+    messages INTEGER NOT NULL CHECK(messages >= 0),
+    PRIMARY KEY (bucket_start, network_id, ieee_address)
+);
+CREATE INDEX IF NOT EXISTS message_minutes_device_idx
+    ON message_minutes (ieee_address, bucket_start);
+"""
+
+
+class ActivityStore:
+    """Installation-specific persistent data; place file under HAOS /data."""
+
+    def __init__(self, db_path: Path | str) -> None:
+        self.path = Path(db_path)
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.conn = sqlite3.connect(str(self.path), timeout=10.0)
+        self.conn.execute("PRAGMA journal_mode=WAL")
+        self.conn.executescript(_SCHEMA)
+        self.conn.commit()
+
+    def close(self) -> None:
+        self.conn.close()
+
+    def __enter__(self) -> "ActivityStore":
+        return self
+
+    def __exit__(self, _type: object, _value: object, _trace: object) -> None:
+        self.close()
+
+    def upsert_inventory(self, devices: tuple[Device, ...], *, observed_at: int) -> None:
+        if not isinstance(observed_at, int) or isinstance(observed_at, bool) or observed_at < 0:
+            raise ValueError("observed_at must be a positive Unix timestamp")
+        rows = [
+            (d.ieee_address, d.network_id, d.friendly_name, d.model,
+             d.manufacturer, d.device_type, observed_at)
+            for d in devices
+        ]
+        with self.conn:
+            self.conn.executemany(
+                """
+                INSERT INTO devices
+                  (ieee_address, network_id, friendly_name, model,
+                   manufacturer, device_type, observed_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(ieee_address) DO UPDATE SET
+                  network_id=excluded.network_id,
+                  friendly_name=excluded.friendly_name,
+                  model=excluded.model,
+                  manufacturer=excluded.manufacturer,
+                  device_type=excluded.device_type,
+                  observed_at=excluded.observed_at
+                """,
+                rows,
+            )
+
+    def commit_counts(
+        self,
+        counts: Mapping[tuple[str, str], int],
+        *,
+        observed_at: int,
+    ) -> None:
+        """Atomic batch UPSERT; caller acknowledges its in-memory counts only on success.
+
+        observed_at is the collection bucket timestamp, not a record write time.
+        """
+        if not isinstance(observed_at, int) or isinstance(observed_at, bool) or observed_at < 0:
+            raise ValueError("observed_at must be a positive Unix timestamp")
+        bucket = observed_at - (observed_at % 60)
+        rows = []
+        for (network_id, ieee), count in counts.items():
+            if not isinstance(network_id, str) or not network_id:
+                raise ValueError("invalid network id")
+            if not isinstance(ieee, str) or not ieee.startswith("0x"):
+                raise ValueError("invalid IEEE")
+            if not isinstance(count, int) or isinstance(count, bool) or count < 0:
+                raise ValueError("count must be nonnegative integer")
+            if count:
+                rows.append((bucket, network_id, ieee, count))
+        with self.conn:
+            self.conn.executemany(
+                """
+                INSERT INTO message_minutes(bucket_start, network_id, ieee_address, messages)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(bucket_start, network_id, ieee_address)
+                DO UPDATE SET messages=message_minutes.messages+excluded.messages
+                """,
+                rows,
+            )
+
+    def top(
+        self,
+        *,
+        from_epoch: int,
+        until_epoch: int,
+        limit: int = 20,
+        network_id: str | None = None,
+    ) -> list[dict[str, object]]:
+        if (
+            not isinstance(from_epoch, int) or not isinstance(until_epoch, int)
+            or from_epoch >= until_epoch
+        ):
+            raise ValueError("invalid top time window")
+        if not isinstance(limit, int) or isinstance(limit, bool) or not (1 <= limit <= 100):
+            raise ValueError("top limit must be 1..100")
+        # Both bounds operate on whole minute buckets. App publishes complete windows
+        # and keeps the current incomplete minute outside the historical ranking.
+        query = """
+            SELECT m.ieee_address, SUM(m.messages) AS total,
+                   COALESCE(d.friendly_name, m.ieee_address),
+                   COALESCE(d.network_id, m.network_id)
+              FROM message_minutes AS m
+              LEFT JOIN devices AS d ON d.ieee_address = m.ieee_address
+             WHERE m.bucket_start >= ? AND m.bucket_start < ?
+        """
+        params: list[object] = [from_epoch, until_epoch]
+        if network_id is not None:
+            query += " AND m.network_id = ?"
+            params.append(network_id)
+        query += """
+             GROUP BY m.ieee_address
+             ORDER BY total DESC, m.ieee_address ASC
+             LIMIT ?
+        """
+        params.append(limit)
+        return [
+            {
+                "ieee_address": ieee,
+                "messages": total,
+                "name": name,
+                "network_id": net,
+            }
+            for ieee, total, name, net in self.conn.execute(query, params)
+        ]
+
+    def trim_minutes(self, *, before_epoch: int) -> int:
+        """Retention is called explicitly on aggregated data, never on devices."""
+        if not isinstance(before_epoch, int) or before_epoch < 0:
+            raise ValueError("invalid retention cutoff")
+        with self.conn:
+            cursor = self.conn.execute(
+                "DELETE FROM message_minutes WHERE bucket_start < ?", (before_epoch,)
+            )
+        return cursor.rowcount
