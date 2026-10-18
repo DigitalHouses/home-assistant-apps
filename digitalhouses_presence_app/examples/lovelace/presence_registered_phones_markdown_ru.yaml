@@ -1,27 +1,10 @@
 type: markdown
 content: >-
-  {%- set roster =
-    state_attr('binary_sensor.dh_presence_app_residents_home', 'residents')
-  -%}
-  {%- if roster is not mapping -%}
-    _Реестр телефонов пока недоступен._
+  {%- set tree = state_attr('sensor.dh_presence_app_registered_phones', 'tree') -%}
+  {%- if tree is string and tree -%}
+    <pre style="margin:0; padding:0; line-height:1; font-family:'Courier New',monospace; white-space:pre;">{{ tree | e }}</pre>
   {%- else -%}
-    {%- set devices = roster.values() | selectattr('registered') | list -%}
-    {%- if devices -%}
-      {%- set ns = namespace(lines=['Зарегистрированные телефоны']) -%}
-      {%- for phone in devices -%}
-        {%- set last = loop.last -%}
-        {%- set indent = '   ' if last else '│  ' -%}
-        {%- set ns.lines = ns.lines + [
-          ('└─' if last else '├─') ~ ' 📱 ' ~ phone.registration_label,
-          indent ~ '├─ GPS · ' ~ (phone.gps_tracker | replace('device_tracker.', '')),
-          indent ~ '└─ Wi-Fi · ' ~ ((phone.wifi_tracker | replace('device_tracker.', '')) if phone.wifi_tracker else 'не привязан')
-        ] -%}
-      {%- endfor -%}
-      <pre style="margin:0; padding:0; line-height:1; font-family:'Courier New',monospace; white-space:pre;">{{ ns.lines | join('\n') | e }}</pre>
-    {%- else -%}
-      _Нет зарегистрированных телефонов._
-    {%- endif -%}
+    _Реестр телефонов пока недоступен._
   {%- endif %}
 grid_options:
   columns: 12
