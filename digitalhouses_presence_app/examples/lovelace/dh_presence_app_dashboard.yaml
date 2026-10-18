@@ -153,9 +153,9 @@ sections:
                     const supervisor = states['update.digitalhouses_presence_app_update'];
                     const installable = supervisor?.state === 'on';
                     const releaseAvailable = states['binary_sensor.dh_presence_app_update_available']?.state === 'on';
-                    if (s === 'error') return 'var(--error-color)';
                     if (s === 'running' || supervisor?.attributes?.in_progress === true)
                       return 'var(--info-color, var(--primary-color))';
+                    if (s === 'error') return 'var(--error-color)';
                     if (s === 'success') return 'var(--success-color)';
                     if (installable || releaseAvailable) return 'var(--warning-color, orange)';
                     const roster = states['binary_sensor.dh_presence_app_residents_home']?.attributes?.residents || {};
