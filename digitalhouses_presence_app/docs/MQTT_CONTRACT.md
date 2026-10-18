@@ -141,3 +141,23 @@ to the registry or the existing sensor's numeric `count` state.
 Identical retained state payloads are suppressed by MQTT cache.
 `sensor.dh_presence_app_registered_phones` must remain excluded from
 Recorder, along with `sensor.dh_presence_app_recent_events`.
+
+## Status transition times in existing registered-phone tree (0.1.35)
+
+The same retained `DigitalHouses/Global/dh_presence_app/registrations/tree`
+JSON payload continues to expose `{count, tree}`; no extra MQTT
+entities or topics are introduced. For each GPS/Wi-Fi source branch, App
+adds one indented child, `└─ Статус с · dd.mm.yyyy hh:mm TZ`, derived
+from the existing `Resident.gps_changed_at` or
+`Resident.wifi_changed_at` at actual source state transitions,
+**not** last-reported GPS observation or App polling time. Both branches
+use the HA Core `time_zone` configuration (including DST); unavailable
+timezone falls back to explicitly labeled UTC. Initial unknown
+timestamps are `нет данных`, and unbound Wi-Fi `не применимо`.
+
+The App now records GPS source transition to unavailable when Core data
+cannot be read, keeping durable confirmed household presence distinct
+from source diagnostic state (no synthetic departure). Router link
+replacements similarly timestamp unavailable source transition.
+Identical retained payloads are still deduplicated. Continue excluding
+`sensor.dh_presence_app_registered_phones` from Recorder.

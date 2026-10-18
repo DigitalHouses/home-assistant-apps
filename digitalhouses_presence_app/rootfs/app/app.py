@@ -10,7 +10,8 @@ import subprocess
 import signal
 import threading
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, tzinfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -509,7 +510,8 @@ def publish_snapshot(output: MqttOutput, engine: Engine, version: str, started: 
                      zones: dict[str, str] | None = None,
                      history: EventHistory | None = None,
                      registrations: list[dict] | None = None,
-                     phone_selection: PhoneRemovalSelection | None = None) -> bool:
+                     phone_selection: PhoneRemovalSelection | None = None,
+                     phone_time_zone: tzinfo = timezone.utc) -> bool:
     snapshot = engine.snapshot()
     if not output.publish(topic("mode/state"), engine.mode.value):
         return False
@@ -554,7 +556,8 @@ def publish_snapshot(output: MqttOutput, engine: Engine, version: str, started: 
     # MQTT output.cache deduplicates unchanged registration trees.
     if registrations is not None and not output.publish(
             topic("registrations/tree"),
-            registered_phones_tree(registrations, list(engine.residents.values()))):
+            registered_phones_tree(registrations, list(engine.residents.values()),
+                                   local_tz=phone_time_zone)):
         return False
     if phone_selection is not None and not output.publish(
             topic("registrations/remove/select/state"), phone_selection.selected):
@@ -603,6 +606,7 @@ def run():
     started = datetime.now(timezone.utc).isoformat()
     mqtt_out = MqttOutput(version)
     home = None
+    phone_time_zone: tzinfo = timezone.utc
     discovery_ready = False
     previous_mqtt_connection = False
     last_discovery_attempt = None
@@ -750,6 +754,12 @@ def run():
                 try:
                     conf = http_json("http://supervisor/core/api/config", token)
                     home = (float(conf["latitude"]), float(conf["longitude"]))
+                    try:
+                        tz_name = conf.get("time_zone")
+                        phone_time_zone = ZoneInfo(tz_name) if isinstance(tz_name, str) else timezone.utc
+                    except (ZoneInfoNotFoundError, ValueError):
+                        phone_time_zone = timezone.utc
+                        LOG.warning("HA timezone invalid; phone status times displayed as UTC")
                     LOG.info("Home Assistant Core API connected; home coordinates resolved for GPS distance")
                     previous_core_error = None
                 except (URLError, OSError, KeyError, ValueError, TypeError) as exc:
@@ -782,11 +792,9 @@ def run():
                         if reported_gps_status.get(r.tracker) != "unavailable":
                             LOG.warning("GPS tracker %s: source unavailable/stale; last confirmed presence preserved", r.tracker)
                             reported_gps_status[r.tracker] = "unavailable"
-                        r.gps = Status.UNAVAILABLE
-                        r.distance = None
+                        engine.gps_unavailable(r.tracker, now)
                 except (URLError, OSError, ValueError, TypeError, KeyError) as exc:
-                    r.gps = Status.UNAVAILABLE
-                    r.distance = None
+                    engine.gps_unavailable(r.tracker, now)
                     problem = api_error_detail(exc)
                     if reported_gps_status.get(r.tracker) != "error:" + problem:
                         log_method = LOG.warning if isinstance(exc, HTTPError) and exc.code in (502, 503, 504) else LOG.error
@@ -821,7 +829,8 @@ def run():
             published = (mqtt_out.connected.is_set() and discovery_ready
                          and publish_snapshot(mqtt_out, engine, version, started,
                                               operations, latest_version, notifications, zones, history,
-                                              registrations, phone_selection))
+                                              registrations, phone_selection,
+                                              phone_time_zone))
             if published:
                 if not published_state_logged:
                     LOG.info("MQTT presence state published topic=%s residents=%d mode=%s",

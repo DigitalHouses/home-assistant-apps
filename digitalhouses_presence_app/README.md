@@ -1,8 +1,16 @@
 # DigitalHouses Presence App
 
-**Status: GPS + HA router device_tracker Wi-Fi pilot, version 0.1.34.** Observe router tracker stability before safety-critical automations.
+**Status: GPS + HA router device_tracker Wi-Fi pilot, version 0.1.35.** Observe router tracker stability before safety-critical automations.
 
 This application belongs to `DigitalHouses/home-assistant-apps/digitalhouses_presence_app` and is installed via **Settings → Apps → App Store**.
+
+## Время текущего статуса в дереве (0.1.35)
+
+Дерево `sensor.dh_presence_app_registered_phones` под каждой веткой GPS и Wi-Fi содержит ещё одну вложенную строку, например `│  └─ Статус с · 19.10.2026 01:12 +05`. Это **время последнего изменения состояния данного источника**, взятое из уже существующих App `Resident.gps_changed_at` и `Resident.wifi_changed_at`. Ни Recorder, ни HA Markdown/Jinja не вычисляют его, время последнего GPS/Wi-Fi-пакета не подменяет время смены статуса.
+
+App конвертирует время в `time_zone` из HA Core config (обычно Asia/Almaty для домашних объектов). Если часовой пояс отсутствует/ошибочен — используется явная отметка `UTC`. При неизвестном timestamp — `нет данных`; если Wi-Fi не привязан — `не применимо`. В момент первого достоверного наблюдения статус получает отметку; переход в `Недоступно` тоже отмечается, без выдуманного физического ухода.
+
+**Обновление:** установить App **0.1.35**. YAML стандартного дашборда / отдельной Markdown-карточки не меняется. Кеш MQTT подавляет неизменённое дерево; его `tree` атрибут меняется только при реальных переходах/изменениях регистрации, а не каждую секунду. Существующее исключение `sensor.dh_presence_app_registered_phones` из Recorder обязательно сохранить.
 
 ## Состояния GPS и Wi-Fi в дереве (0.1.34)
 
