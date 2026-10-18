@@ -30,13 +30,39 @@ jobs:
       - name: Validate repository contract
         run: python scripts/validate_repository.py
 
-      - name: Test Zigbee Monitor core (design-stage)
-        env:
-          PYTHONPATH: digitalhouses_zigbee_monitor_app/rootfs/app
+  zigbee-monitor-app:
+    name: Zigbee Monitor App
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install test dependencies
+        run: python -m pip install --disable-pip-version-check PyYAML paho-mqtt
+
+      - name: Compile Python
         run: |
           python -m compileall -q digitalhouses_zigbee_monitor_app/rootfs/app digitalhouses_zigbee_monitor_app/tests
-          python -m unittest discover -s digitalhouses_zigbee_monitor_app/tests -v
 
+      - name: Run unit tests
+        env:
+          PYTHONPATH: digitalhouses_zigbee_monitor_app/rootfs/app
+        run: python -m unittest discover -s digitalhouses_zigbee_monitor_app/tests -v
+
+      - name: Check App launcher syntax
+        run: bash -n digitalhouses_zigbee_monitor_app/rootfs/run.sh
+
+      - name: Build Zigbee Monitor App image
+        run: |
+          APP_VERSION="$(awk '$1 == "version:" {print $2; exit}' digitalhouses_zigbee_monitor_app/config.yaml)"
+          test -n "$APP_VERSION"
+          docker build --build-arg BUILD_VERSION="$APP_VERSION" --build-arg BUILD_ARCH=amd64 --tag digitalhouses-zigbee-monitor-ci:"$APP_VERSION" digitalhouses_zigbee_monitor_app
 
   speedtest-app:
     name: Speedtest App
