@@ -301,6 +301,67 @@ sections:
         heading_style: title
         heading: Жильцы
         icon: mdi:account-group
+      - type: markdown
+        title: "📱 Зарегистрированные телефоны"
+        content: |-
+          {% set roster = state_attr('binary_sensor.dh_presence_app_residents_home', 'residents') %}
+          {% if roster is not mapping %}
+          _Реестр телефонов пока недоступен._
+          {% else %}
+          {% set devices = roster.values() | selectattr('registered') | list %}
+          {% if devices %}
+          {% for phone in devices %}
+          **{{ phone.registration_label }}**
+
+          GPS: `{{ phone.gps_tracker }}`
+          {% if phone.wifi_tracker %}
+          Wi-Fi: `{{ phone.wifi_tracker }}`
+          {% else %}
+          Wi-Fi: не привязан
+          {% endif %}
+
+          {% if not loop.last %}---{% endif %}
+          {% endfor %}
+          {% else %}
+          _Нет зарегистрированных телефонов._
+          {% endif %}
+          {% endif %}
+      - type: custom:button-card
+        entity: sensor.dh_presence_app_version
+        hidden: |
+          [[[
+            return hass.user?.is_admin !== true;
+          ]]]
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        icon: mdi:cellphone-remove
+        name: Управление телефонами · администратор
+        label: Список всех регистраций · IP/MAC · удаление телефона
+        tap_action:
+          action: |
+            [[[
+              const v = states['sensor.dh_presence_app_version']?.state || '';
+              const m = v.match(/^(\d+)\.(\d+)\.(\d+)$/);
+              const ready = m && (Number(m[1]) > 0 || Number(m[2]) > 1 ||
+                (Number(m[2]) === 1 && Number(m[3]) >= 29));
+              return hass.user?.is_admin === true && ready ? 'navigate' : 'none';
+            ]]]
+          navigation_path: /app/8133339d_digitalhouses_presence_app
+        styles:
+          card:
+            - padding: 12px 14px
+          icon:
+            - width: 28px
+          name:
+            - justify-self: start
+            - font-size: 14px
+            - font-weight: 600
+          label:
+            - justify-self: start
+            - white-space: normal
+            - color: var(--secondary-text-color)
       - type: custom:auto-entities
         card:
           type: vertical-stack

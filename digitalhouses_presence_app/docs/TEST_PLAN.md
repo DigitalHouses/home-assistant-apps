@@ -107,3 +107,13 @@ failed pilot acceptance requiring adjustment or reversion to GPS mode.
 6. Verify persisted ring and MQTT attributes do not include registration IP/MAC, tokens or credentials. Private IP/MAC remain visible only in the admin-only Ingress diagnostics card.
 7. Inspect Recorder exclusions: `sensor.dh_presence_app_recent_events` must be explicitly excluded, so every display update does not add a new Recorder row with array attributes. The existing machine-event entity's Recorder policy is unchanged.
 8. Disconnect MQTT while a local transition occurs. Events not actually published must not enter the App's published-events history or be reconstructed as false notifications.
+
+## Phone administration acceptance (0.1.29)
+
+1. Enrol a phone, verify it appears in the registered-phone Markdown card and in the authenticated admin Ingress list. Legacy-only unverified trackers must not appear in the registered list.
+2. On an ordinary resident account, the admin management launcher is hidden and the backend rejects direct delete requests. Verify missing action header, malformed payload and unavailable HA admin verification all fail without registry writes.
+3. Authenticate an administrator through local HA and through an already-authorized Cloudflare connection; open the private phone list with enrollment IP/MAC, select the exact phone and confirm deletion. No LAN ARP step is required to delete.
+4. Verify the phone's MQTT source entities are retired via Discovery cleanup, the aggregate resident list updates and no departure/zone event or notification is fabricated.
+5. Keep the deleted phone listed in legacy App Configuration `residents`, restart: the phone stays deleted and untracked because the existing v2 private registry retained its disabled tracker ID.
+6. Re-enrol the physical phone through local Home Assistant with a fresh MAC observation; verify disabled state is cleared and GPS/Wi-Fi presence starts with unknown baseline, not synthetic arrival.
+7. Verify old v1 registration state migrates safely on write, malformed v2 tombstones fail explicitly, and no IP/MAC/secret is introduced to public MQTT or Recorder.

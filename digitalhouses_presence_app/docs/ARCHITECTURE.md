@@ -61,3 +61,11 @@ The App owns a separate bounded and durable **presentation-only** history cache 
 The only HA interface is one new MQTT diagnostic sensor exposing a retained snapshot of App-prepared `items` on `events/history`. The Markdown card simply loops over these items and formats local time. This is a UI state read model, not an alternative event transport or a local HA templated-history engine. No extra helper/automation/second event stream is added.
 
 Because the list changes whenever an Event arrives, **`sensor.dh_presence_app_recent_events` must be excluded from the local Recorder**. The App's own bounded file is authoritative for the short UI history; native machine Event history remains separate under the home's normal Recorder policy.
+
+## Live phone registry management (0.1.29)
+
+The App's same private registration file `/data/presence_registrations.json` stores enrolled devices and the v2 `disabled_trackers` list. Deletion is server-side, admin-authorized, exact-GPS-tracker targeted and atomically persisted. Marking a removed tracker disabled prevents re-entry from the separately retained legacy Supervisor `residents` configuration without mutating Supervisor options. The v1 registry migrates on write; malformed v2 tombstones fail closed. Direct physical local-LAN re-registration removes a matching tombstone after fresh MAC verification.
+
+The running App continuously reconciles registered/disabled identity sets: removed residents disappear from the Engine, persisted logical presence, MQTT Discovery (with tombstone cleanup), stored zone baseline and recent-events cache. Removal is configuration change, **not a physical departure**: no `departure` or `zone_leave` Event is fabricated. Unchanged residents' confirmed evidence is preserved; re-enrolled phones start UNKNOWN.
+
+The public HA Markdown card only renders App-supplied `registered` and `registration_label` fields already carried by the aggregate resident roster. Admin management actions occur only through the authenticated existing Ingress HTTP handler (with live HA admin authorization); a Lovelace launcher navigates there but cannot delete by itself. No additional MQTT entity, HA automation/helper or Recorder time-series attribute is created. Private enrollment IP/MAC stay confined to administrator-only Ingress views.

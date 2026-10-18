@@ -59,24 +59,78 @@ def validate_entry(entry: dict) -> dict:
     return clean
 
 
-def load_registry(path: str) -> list[dict]:
+def _registered_and_disabled(path: str) -> tuple[list[dict], set[str]]:
+    """One atomic-file read: enrolled phones and explicit admin removals.
+
+    Version 2 keeps a small tombstone set so phones formerly listed in
+    Supervisor's legacy 'residents' option do not silently re-enrol after
+    their registration has been deleted. Explicit re-registration clears it.
+    """
     try:
         raw = json.loads(Path(path).read_text(encoding="utf-8"))
     except FileNotFoundError:
-        return []
-    if not isinstance(raw, dict) or raw.get("schema_version") != 1 or not isinstance(raw.get("residents"), list):
+        return [], set()
+    if (not isinstance(raw, dict) or raw.get("schema_version") not in (1, 2)
+            or not isinstance(raw.get("residents"), list)):
         raise ValueError("Corrupt presence registration state")
     residents = [validate_entry(item) for item in raw["residents"]]
     if len({r["tracker"] for r in residents}) != len(residents):
         raise ValueError("Duplicate registration trackers")
-    return residents
+    if raw["schema_version"] == 1:
+        if "disabled_trackers" in raw:
+            raise ValueError("Unexpected legacy disabled trackers")
+        return residents, set()
+    disabled_raw = raw.get("disabled_trackers")
+    if not isinstance(disabled_raw, list):
+        raise ValueError("Missing disabled tracker registry")
+    if (not all(isinstance(t, str) and re.fullmatch(r"device_tracker\.[a-z0-9_]+", t)
+                for t in disabled_raw) or len(set(disabled_raw)) != len(disabled_raw)):
+        raise ValueError("Invalid disabled tracker registry")
+    disabled = set(disabled_raw)
+    if disabled.intersection(r["tracker"] for r in residents):
+        raise ValueError("Registered and disabled tracker overlap")
+    return residents, disabled
 
 
-def save_registry(path: str, residents: list[dict]) -> None:
+def load_registry_state(path: str) -> tuple[list[dict], set[str]]:
+    return _registered_and_disabled(path)
+
+
+def load_registry(path: str) -> list[dict]:
+    return load_registry_state(path)[0]
+
+
+def save_registry(path: str, residents: list[dict],
+                  *, disabled_trackers: set[str] | None = None) -> None:
     clean = [validate_entry(item) for item in residents]
     if len({r["tracker"] for r in clean}) != len(clean):
         raise ValueError("Duplicate registration trackers")
-    atomic_json(path, {"schema_version": 1, "residents": clean})
+    if disabled_trackers is None:
+        _, disabled_trackers = load_registry_state(path)
+    if (not isinstance(disabled_trackers, set)
+            or not all(isinstance(t, str) and re.fullmatch(r"device_tracker\.[a-z0-9_]+", t)
+                       for t in disabled_trackers)):
+        raise ValueError("Invalid disabled trackers")
+    if disabled_trackers.intersection(r["tracker"] for r in clean):
+        raise ValueError("Registered and disabled tracker overlap")
+    atomic_json(path, {
+        "schema_version": 2, "residents": clean,
+        "disabled_trackers": sorted(disabled_trackers),
+    })
+
+
+def delete_registration(path: str, tracker: str) -> dict:
+    """Unregister one exact phone and suppress legacy config re-enrollment."""
+    if not isinstance(tracker, str) or not re.fullmatch(r"device_tracker\.[a-z0-9_]+", tracker):
+        raise ValueError("Invalid phone tracker")
+    current, disabled = load_registry_state(path)
+    record = next((r for r in current if r["tracker"] == tracker), None)
+    if record is None:
+        raise LookupError("Registration does not exist")
+    disabled.add(tracker)
+    save_registry(path, [r for r in current if r["tracker"] != tracker],
+                  disabled_trackers=disabled)
+    return record
 
 
 def put_registration(residents: list[dict], entry: dict) -> list[dict]:

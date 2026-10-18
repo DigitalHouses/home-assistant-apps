@@ -16,8 +16,8 @@ from threading import Lock, Thread
 from urllib.request import Request, urlopen
 
 from dh_presence.registration import (
-    active_arp_mac, completed_record, load_registry, normalized_mac, put_registration,
-    save_registry,
+    active_arp_mac, completed_record, delete_registration, load_registry,
+    load_registry_state, normalized_mac, put_registration, save_registry,
 )
 from dh_presence.admin import (
     is_authorized_ha_admin, AdministratorVerificationUnavailable,
@@ -301,6 +301,28 @@ def handler_factory(token: str, registry_path: str, excluded_users: set[str]):
 
         def do_POST(self):
             try:
+                if self.path == "/api/admin/delete-registration":
+                    # Administrative removal does not require local LAN/ARP;
+                    # only authenticated Supervisor Ingress and verified HA admin.
+                    context = self.authenticated_user()
+                    if not is_authorized_ha_admin(context["user_id"], token):
+                        return self.reply(403, {"error": "admin_required"})
+                    if self.headers.get("X-Presence-Request") != "delete-registration":
+                        return self.reply(403, {"error": "missing_request_proof"})
+                    if self.headers.get("Content-Type", "").split(";")[0].strip() != "application/json":
+                        return self.reply(400, {"error": "invalid_content_type"})
+                    size = int(self.headers.get("Content-Length", "0"))
+                    if not 1 <= size <= 256:
+                        return self.reply(400, {"error": "invalid_body"})
+                    data = json.loads(self.rfile.read(size))
+                    if (not isinstance(data, dict) or set(data) != {"tracker"}
+                            or not isinstance(data["tracker"], str)
+                            or not TRACKER_RE.fullmatch(data["tracker"])):
+                        return self.reply(400, {"error": "invalid_tracker"})
+                    with lock:
+                        removed = delete_registration(registry_path, data["tracker"])
+                    LOG.info("Phone registration removed by HA admin: tracker=%s", removed["tracker"])
+                    return self.reply(200, {"deleted": True, "tracker": removed["tracker"]})
                 context = self.context()
                 if self.path not in ("/api/register", "/api/lookup-wifi"):
                     return self.reply(404, {"error": "not_found"})
@@ -337,7 +359,7 @@ def handler_factory(token: str, registry_path: str, excluded_users: set[str]):
                     LOG.warning("Router Wi-Fi matching unavailable: %s", type(exc).__name__)
                     wifi_match = {"status": "unavailable"}
                 with lock:
-                    previous = load_registry(registry_path)
+                    previous, disabled = load_registry_state(registry_path)
                     existing = next((r for r in previous if r["tracker"] == tracker), None)
                     if existing is not None:
                         # Updating an existing GPS record must not silently
@@ -357,7 +379,8 @@ def handler_factory(token: str, registry_path: str, excluded_users: set[str]):
                     if wifi_match["status"] == "matched":
                         record["wifi_tracker"] = wifi_match["tracker"]
                     updated = put_registration(previous, record)
-                    save_registry(registry_path, updated)
+                    save_registry(registry_path, updated,
+                                  disabled_trackers=disabled - {tracker})
                 LOG.info("Phone registration persisted: tracker=%s existing=%s wifi_match=%s iface=%s",
                          tracker, existing is not None, wifi_match["status"], iface)
                 self.reply(200, {
@@ -369,6 +392,10 @@ def handler_factory(token: str, registry_path: str, excluded_users: set[str]):
                 })
             except PermissionError as exc:
                 self.reply(403, {"error": str(exc)})
+            except AdministratorVerificationUnavailable:
+                self.reply(503, {"error": "Не удалось подтвердить права администратора"})
+            except LookupError:
+                self.reply(404, {"error": "registration_not_found"})
             except (ValueError, TypeError, KeyError, json.JSONDecodeError):
                 self.reply(400, {"error": "Invalid registration or no fresh IP/MAC evidence"})
             except (OSError, RuntimeError) as exc:
@@ -409,6 +436,7 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;margin:8px 0 0}
 .debug-key{color:var(--secondary-text-color,#666)}
 .debug-value{min-width:0;overflow-wrap:anywhere;word-break:break-word;font-variant-numeric:tabular-nums}
 .copy-btn{min-height:28px;padding:4px 7px;font-size:12px;white-space:nowrap;border:1px solid var(--divider-color,#bbb);background:transparent;color:var(--primary-color,#277ca6)}
+.delete-btn{min-height:34px;background:var(--error-color,#b3261e);margin-top:9px}
 @media(max-width:430px){body{padding:8px}.panel{padding:13px;margin:8px 0}.debug-row{grid-template-columns:minmax(75px,34%) minmax(0,1fr) auto;gap:4px}.copy-btn{padding:4px 5px}}
 </style></head><body><main>
 <h2>DH Presence</h2>
@@ -421,10 +449,11 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;margin:8px 0 0}
 <pre id="result" role="status"></pre></section>
 <section class="panel"><h3>Мои устройства</h3><div id="residents" class="muted">...</div></section>
 <section class="panel" id="adminDebug" hidden>
-<h3>Диагностика · администратор</h3>
-<p class="muted debug-note">IP и MAC сохранены при регистрации. Это не проверка текущего адреса или подключения к Wi-Fi.</p>
+<h3>Зарегистрированные телефоны · администратор</h3>
+<p class="muted debug-note">Здесь можно удалить регистрацию и прекратить отслеживание телефона, даже если трекер остался в старом списке конфигурации App. IP/MAC сохранены на момент регистрации.</p>
 <button id="reloadDebug">Обновить диагностику</button>
 <div id="debugList" role="status"></div>
+<pre id="deleteResult" role="status"></pre>
 </section>
 </main><script>
 const q=id=>document.getElementById(id);
@@ -572,6 +601,33 @@ async function loadAdminDebug(){
     debugRow('Wi-Fi: подтверждён',formattedGpsTime(device.wifi_last_verified_at,data.time_zone)),
     debugRow('Проверка Wi-Fi',wifiProbeLabel(device.wifi_probe_result))
    );
+   const remove=document.createElement('button');
+   remove.className='delete-btn';
+   remove.textContent='Удалить регистрацию';
+   remove.setAttribute('aria-label','Удалить регистрацию '+device.device_name);
+   remove.addEventListener('click',async()=>{
+    const label=device.user_name+' ('+device.device_name+')';
+    if(!confirm('Удалить регистрацию '+label+'?\\n'+device.tracker+
+        '\\nПриложение прекратит отслеживание телефона.'))return;
+    remove.disabled=true;
+    q('deleteResult').textContent='Удаление регистрации...';
+    try{
+     await api('api/admin/delete-registration',{
+      method:'POST',
+      headers:{'Content-Type':'application/json',
+               'X-Presence-Request':'delete-registration'},
+      body:JSON.stringify({tracker:device.tracker})
+     });
+     q('deleteResult').textContent='Регистрация удалена: '+label;
+     await loadAdminDebug();
+     await load();
+    }catch(error){
+     q('deleteResult').textContent='Удаление не выполнено: '+error.message;
+    }finally{
+     remove.disabled=false;
+    }
+   });
+   article.append(remove);
    destination.append(article);
   }
  }catch(error){

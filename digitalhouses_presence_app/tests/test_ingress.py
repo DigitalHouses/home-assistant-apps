@@ -188,7 +188,7 @@ class IngressTests(unittest.TestCase):
         }
         replies = []
         request.reply = lambda status, body: replies.append((status, body))
-        def update_registry(_path, updated):
+        def update_registry(_path, updated, **kwargs):
             resident_records[:] = updated
         states = [
             {"entity_id": detected, "state": "home", "attributes": {
@@ -199,8 +199,8 @@ class IngressTests(unittest.TestCase):
             {"tracker": selected, "device_name": "13ProMAX .SKY"}]):
             with patch("dh_presence.ui.active_arp_mac", return_value=(current_mac, "vmbr0")):
                 with patch("dh_presence.ui.read_core_states", return_value=states):
-                    with patch("dh_presence.ui.load_registry",
-                               side_effect=lambda path: list(resident_records)):
+                    with patch("dh_presence.ui.load_registry_state",
+                               side_effect=lambda path: (list(resident_records), set())):
                         with patch("dh_presence.ui.save_registry",
                                    side_effect=update_registry) as write:
                             request.do_POST()
