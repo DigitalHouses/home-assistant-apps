@@ -235,9 +235,9 @@ sections:
         heading_style: title
         icon: mdi:network
       - type: markdown
-        content: >-
+        content: |
           {% set networks = state_attr('sensor.dh_zigbee_monitor_app_networks_details', 'networks') %}
-          {% if networks is not iterable or networks is string %}
+          {% if states('sensor.dh_zigbee_monitor_app_networks_details') in ['unknown', 'unavailable'] or networks is not iterable or networks is string %}
           *Нет подтверждённых данных о Zigbee-сетях.*
           {% elif networks | length == 0 %}
           Сети пока не обнаружены.
@@ -253,9 +253,9 @@ sections:
         heading_style: subtitle
         icon: mdi:lan-disconnect
       - type: markdown
-        content: >-
+        content: |
           {% set rows = state_attr('sensor.dh_zigbee_monitor_app_offline_details', 'devices') %}
-          {% if rows is not iterable or rows is string %}
+          {% if states('sensor.dh_zigbee_monitor_app_offline_details') in ['unknown', 'unavailable'] or rows is not iterable or rows is string %}
           *Список недоступных устройств ещё не получен.*
           {% elif rows | length == 0 %}
           Нет подтверждённых offline-устройств.
@@ -279,7 +279,7 @@ sections:
         heading_style: title
         icon: mdi:chart-bar
       - type: markdown
-        content: >-
+        content: |
           **Рейтинг активности — не измерение радиоэфира Zigbee.**
           Устройства отсортированы в App по количеству полученных MQTT-публикаций.
           Выявленные аномалии учитываются отдельно.
@@ -288,9 +288,9 @@ sections:
         heading_style: subtitle
         icon: mdi:clock-outline
       - type: markdown
-        content: >-
+        content: |
           {% set rows = state_attr('sensor.dh_zigbee_monitor_app_top_1h_details', 'items') %}
-          {% if rows is not iterable or rows is string %}
+          {% if states('sensor.dh_zigbee_monitor_app_top_1h_details') in ['unknown', 'unavailable'] or rows is not iterable or rows is string %}
           *Рейтинг за 1 час пока недоступен.*
           {% elif rows | length == 0 %}
           Недостаточно данных для рейтинга.
@@ -306,9 +306,9 @@ sections:
         heading_style: subtitle
         icon: mdi:calendar-today
       - type: markdown
-        content: >-
+        content: |
           {% set rows = state_attr('sensor.dh_zigbee_monitor_app_top_24h_details', 'items') %}
-          {% if rows is not iterable or rows is string %}
+          {% if states('sensor.dh_zigbee_monitor_app_top_24h_details') in ['unknown', 'unavailable'] or rows is not iterable or rows is string %}
           *Рейтинг за 24 часа пока недоступен.*
           {% elif rows | length == 0 %}
           Недостаточно данных для рейтинга.
@@ -324,9 +324,9 @@ sections:
         heading_style: subtitle
         icon: mdi:calendar-week
       - type: markdown
-        content: >-
+        content: |
           {% set rows = state_attr('sensor.dh_zigbee_monitor_app_top_7d_details', 'items') %}
-          {% if rows is not iterable or rows is string %}
+          {% if states('sensor.dh_zigbee_monitor_app_top_7d_details') in ['unknown', 'unavailable'] or rows is not iterable or rows is string %}
           *Рейтинг за 7 дней пока недоступен.*
           {% elif rows | length == 0 %}
           Недостаточно данных для рейтинга.
@@ -350,9 +350,9 @@ sections:
         heading_style: title
         icon: mdi:alert-circle-outline
       - type: markdown
-        content: >-
+        content: |
           {% set rows = state_attr('sensor.dh_zigbee_monitor_app_incidents_details', 'incidents') %}
-          {% if rows is not iterable or rows is string %}
+          {% if states('sensor.dh_zigbee_monitor_app_incidents_details') in ['unknown', 'unavailable'] or rows is not iterable or rows is string %}
           *Сведения об инцидентах недоступны.*
           {% elif rows | length == 0 %}
           Нет подтверждённых активных инцидентов.
