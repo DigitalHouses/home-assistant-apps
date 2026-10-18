@@ -64,6 +64,11 @@ class MonitorService:
         self._offline_since: dict[tuple[str, str], str | None] = {}
         self._refresh_pending: set[str] | None = None
         self._refresh_started: float | None = None
+        self._card_success_until: float | None = None
+        self._refresh_state: dict[str, object] = {
+            "state": "idle", "started_at": None, "finished_at": None,
+            "duration_seconds": None, "error": None,
+        }
         self._card: dict[str, object] = {
             "state": "idle", "operation": None, "started_at": None,
             "finished_at": None, "duration_seconds": None, "error": None,
@@ -176,73 +181,83 @@ class MonitorService:
             for n in self.monitor.networks
         )
 
+    def _availability_diagnostic(
+        self, network_id: str, ieee: str,
+    ) -> tuple[str, str | None]:
+        status = self.monitor.network_status(network_id)
+        availability = self.monitor.availability(network_id, ieee)
+        if status["bridge_state"] != "online":
+            return availability, "bridge_unavailable"
+        if not status["inventory_observed"]:
+            return availability, "inventory_missing"
+        if availability == "unknown":
+            return availability, "availability_not_reported"
+        return availability, None
+
     def _publish_networks(self) -> None:
-        # Until a bridge is recognized, zero is not a trustworthy discovery result.
+        # Until a bridge is verified, zero is not a trustworthy network count.
         self._scalar("networks", len(self.monitor.networks) if self.monitor.networks else None)
         rows = []
         for config in self.monitor.networks:
             status = self.monitor.network_status(config.network_id)
-            all_availability = (
-                status["inventory_observed"]
-                and all(self.monitor.availability(config.network_id, d.ieee_address) in
-                        ("online", "offline") for d in self.monitor.devices(config.network_id))
-            )
-            off = (
-                sum(self.monitor.availability(config.network_id, d.ieee_address) == "offline"
-                    for d in self.monitor.devices(config.network_id))
-                if all_availability and status["bridge_state"] == "online"
-                else None
-            )
+            observed = [
+                self._availability_diagnostic(config.network_id, d.ieee_address)
+                for d in self.monitor.devices(config.network_id)
+            ]
+            complete = (status["inventory_observed"]
+                        and status["bridge_state"] == "online"
+                        and all(reason is None for _, reason in observed))
             rows.append({
                 "network_id": config.network_id, "name": config.name,
                 "status": status["bridge_state"], "devices": status["devices"],
-                "offline": off,
+                "offline": sum(a == "offline" for a, _ in observed) if complete else None,
+                "availability_complete": complete,
+                "availability_unknown": sum(reason is not None for _, reason in observed),
             })
-        self._detail(
-            "networks_details", "networks", rows, valid=bool(self.monitor.networks)
-        )
+        self._detail("networks_details", "networks", rows, valid=bool(self.monitor.networks))
 
     def _publish_inventory_and_availability(self) -> None:
         live = self._all_live()
-        total = self.monitor.total_devices() if live else None
-        self._scalar("devices", total)
-        # Bound JSON payload. The complete inventory is retained in SQLite.
-        rows = [
-            {
-                "ieee_address": d.ieee_address, "network_id": config.network_id,
-                "name": d.friendly_name, "model": d.model, "manufacturer": d.manufacturer,
-            }
-            for config in self.monitor.networks
-            for d in self.monitor.devices(config.network_id)
-        ]
+        self._scalar("devices", self.monitor.total_devices() if live else None)
+        rows: list[dict[str, object]] = []
+        for config in self.monitor.networks:
+            for device in self.monitor.devices(config.network_id):
+                availability, reason = self._availability_diagnostic(
+                    config.network_id, device.ieee_address,
+                )
+                rows.append({
+                    "ieee_address": device.ieee_address,
+                    "network_id": config.network_id,
+                    "network_name": config.name,
+                    "name": device.friendly_name,
+                    "model": device.model,
+                    "manufacturer": device.manufacturer,
+                    "availability": availability,
+                    "availability_reason": reason,
+                })
         rows.sort(key=lambda d: (str(d["network_id"]), str(d["name"])))
+        unknown = sum(row["availability_reason"] is not None for row in rows)
         self._detail(
             "inventory_details", "devices", rows[:40], valid=live,
             total=len(rows), truncated=len(rows) > 40,
+            availability_complete=live and unknown == 0,
+            availability_unknown=unknown,
         )
-
-        complete = live and all(
-            self.monitor.availability(config.network_id, d.ieee_address)
-            in ("online", "offline")
-            for config in self.monitor.networks
-            for d in self.monitor.devices(config.network_id)
-        )
+        complete = live and unknown == 0
         offline = [
             {
-                "ieee_address": d.ieee_address, "network_id": config.network_id,
-                "name": d.friendly_name, "network_name": config.name,
-                "offline_since": self._offline_since.get((config.network_id, d.ieee_address)),
+                "ieee_address": row["ieee_address"],
+                "network_id": row["network_id"],
+                "name": row["name"], "network_name": row["network_name"],
+                "offline_since": self._offline_since.get(
+                    (str(row["network_id"]), str(row["ieee_address"]))
+                ),
             }
-            for config in self.monitor.networks
-            for d in self.monitor.devices(config.network_id)
-            if self.monitor.availability(config.network_id, d.ieee_address) == "offline"
+            for row in rows if row["availability"] == "offline"
         ] if complete else []
-        offline.sort(key=lambda d: (str(d["network_id"]), str(d["name"])))
         self._scalar("offline", len(offline) if complete else None)
-        self._detail(
-            "offline_details", "devices", offline[:40], valid=complete,
-            total=len(offline), truncated=len(offline) > 40,
-        )
+        self._detail("offline_details", "devices", offline[:40], valid=complete,
+                     total=len(offline), truncated=len(offline) > 40)
         if live and self._continuous_since is None:
             self._continuous_since = self.now()
         elif not live:
