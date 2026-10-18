@@ -389,7 +389,7 @@ class MonitorService:
                 network_id=nid, name=network.name,
                 bridge_state=str(status["bridge_state"]),
                 inventory_observed=bool(status["inventory_observed"]),
-                devices=int(status["devices"]),
+                devices=int(status["devices"] or 0),
                 offline=offline,
                 unknown=sum(reason is not None for _state, reason in observed),
                 rpm_problem=metrics.get("traffic_problem"),
