@@ -24,3 +24,5 @@ content: >-
       _Нет зарегистрированных телефонов._
     {%- endif -%}
   {%- endif %}
+grid_options:
+  columns: 12
