@@ -1,0 +1,20 @@
+configuration:
+  zigbee2mqtt:
+    name: Сети Zigbee2MQTT
+    description: Один элемент на каждый экземпляр Zigbee2MQTT. network_id должен оставаться постоянным при переименовании сети и MQTT base_topic.
+    fields:
+      network_id:
+        name: Постоянный ID сети
+        description: Например floor_1 или usb. Не меняйте после начала накопления истории.
+      name:
+        name: Название сети
+        description: Произвольное русское название для карточек Home Assistant.
+      base_topic:
+        name: MQTT base_topic
+        description: Точный базовый топик Zigbee2MQTT (например zigbee2mqtt_1).
+  telemetry_enabled:
+    name: Согласие на статистику DigitalHouses
+    description: "Для статистики DigitalHouses отправляются: название приложения, версия и случайный идентификатор установки. Без согласия приложение не запускается. Полная политика: https://github.com/DigitalHouses/home-assistant-apps/blob/main/docs/standards/PRODUCT_TELEMETRY_POLICY.md"
+  log_level:
+    name: Уровень журнала
+    description: Подробность диагностических записей приложения.
