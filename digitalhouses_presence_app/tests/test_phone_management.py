@@ -13,7 +13,7 @@ from dh_presence.registration import (
     delete_registration, load_registry, load_registry_state,
     put_registration, save_registry,
 )
-from dh_presence.ui import HTML, handler_factory
+from dh_presence.ui import HTML, ADMIN_DELETE_HTML, handler_factory
 
 SAMPLE = {
     "user_id": "resident-user-1", "user_name": "Serzhan",
@@ -200,6 +200,131 @@ class PhoneManagementTests(unittest.TestCase):
                     req.do_POST()
                 self.assertIn(answers[0][0], (400, 403, 404))
                 self.assertEqual(load_registry(path), [SAMPLE])
+
+    def test_compact_select_page_rejects_non_admin_and_requires_ingress(self):
+        def request(peer="172.30.32.2"):
+            cls = handler_factory("token", "/tmp/test-presence-phone-registry.json", set())
+            req = object.__new__(cls)
+            req.path = "/admin/delete-phone"
+            req.client_address = (peer, 1000)
+            req.headers = {"X-Remote-User-Id": "admin-ha-user",
+                           "X-Remote-User-Display-Name": "Admin"}
+            req.wfile = io.BytesIO()
+            req.responses = []
+            req.reply = lambda status, data: req.responses.append((status, data))
+            req.send_response = lambda status: req.responses.append(status)
+            req.send_header = lambda key, value: req.responses.append((key, value))
+            req.end_headers = lambda: None
+            return req
+
+        with patch("dh_presence.ui.is_authorized_ha_admin", return_value=False):
+            unauthorized = request()
+            unauthorized.do_GET()
+            self.assertEqual(unauthorized.responses, [(403, {"error": "admin_required"})])
+            self.assertEqual(unauthorized.wfile.getvalue(), b"")
+        with patch("dh_presence.ui.is_authorized_ha_admin", return_value=True) as check:
+            allowed = request()
+            allowed.do_GET()
+            check.assert_called_once_with("admin-ha-user", "token")
+            self.assertIn(200, allowed.responses)
+            self.assertIn(("X-Frame-Options", "SAMEORIGIN"), allowed.responses)
+            self.assertIn(("Cache-Control", "no-store"), allowed.responses)
+            self.assertIn(b'id="phone"', allowed.wfile.getvalue())
+            self.assertIn(b'id="confirmation"', allowed.wfile.getvalue())
+            self.assertIn(b"api/admin/delete-registration", allowed.wfile.getvalue())
+        with patch("dh_presence.ui.is_authorized_ha_admin",
+                   side_effect=Exception("admin verification failed")):
+            # Unexpected verifier errors must not bypass the security gate.
+            broken = request()
+            with self.assertRaisesRegex(Exception, "verification failed"):
+                broken.do_GET()
+            self.assertEqual(broken.wfile.getvalue(), b"")
+        with patch("dh_presence.ui.is_authorized_ha_admin", return_value=True):
+            direct = request(peer="192.168.8.1")
+            direct.do_GET()
+            self.assertEqual(direct.responses[0][0], 403)
+            self.assertEqual(direct.wfile.getvalue(), b"")
+
+    def test_inline_select_requires_confirmation_and_uses_admin_ingress_post(self):
+        """Run the actual embedded browser JavaScript with a fake DOM/fetch."""
+        import shutil
+        import subprocess
+        if not shutil.which("node"):
+            self.skipTest("Node is not installed")
+        javascript = ADMIN_DELETE_HTML.split("<script>", 1)[1].split("</script>", 1)[0]
+        check = subprocess.run(["node", "--check"], input=javascript,
+                               capture_output=True, text=True, check=False)
+        self.assertEqual(check.returncode, 0, check.stderr)
+        browser = r"""
+const assert=require('node:assert/strict');
+const elements=new Map();
+function el(id){
+ if(!elements.has(id)){
+  elements.set(id,{
+   id,disabled:false,hidden:false,value:'',textContent:'',children:[],events:{},
+   append(child){this.children.push(child)},
+   replaceChildren(...children){this.children=children;this.value=''},
+   addEventListener(name,listener){this.events[name]=listener},
+  });
+ }
+ return elements.get(id);
+}
+global.document={
+ getElementById:el,
+ createElement:tag=>({tag,value:'',textContent:''}),
+};
+global.window={location:{pathname:'/api/hassio_ingress/abc/admin/delete-phone'}};
+const phones=[
+ {tracker:'device_tracker.phone_a',user_name:'Serzhan',device_name:'13ProMAX .SKY'},
+ {tracker:'device_tracker.phone_b',user_name:'Alina',device_name:'iPhone'},
+];
+const requests=[];
+global.fetch=async (url,options={})=>{
+ requests.push({url,options});
+ if(url.endsWith('/api/admin/debug'))
+  return {ok:true,json:async()=>({residents:phones})};
+ if(url.endsWith('/api/admin/delete-registration')){
+  const value=JSON.parse(options.body);
+  const index=phones.findIndex(p=>p.tracker===value.tracker);
+  if(index>=0)phones.splice(index,1);
+  return {ok:true,json:async()=>({deleted:true,tracker:value.tracker})};
+ }
+ throw Error('unexpected request '+url);
+};
+""" + javascript + r"""
+async function settle(){await new Promise(resolve=>setTimeout(resolve,5))}
+(async()=>{
+ await settle();
+ assert.equal(el('phone').children.length,3);
+ assert.equal(el('remove').disabled,true);
+ el('phone').value='device_tracker.phone_a';
+ el('phone').events.change();
+ assert.equal(el('remove').disabled,false);
+ el('remove').events.click();
+ assert.equal(el('confirmation').hidden,false);
+ assert.equal(requests.filter(r=>r.options.method==='POST').length,0);
+ el('cancel').events.click();
+ assert.equal(el('confirmation').hidden,true);
+ assert.equal(requests.filter(r=>r.options.method==='POST').length,0);
+ el('remove').events.click();
+ el('accept').events.click();
+ await settle();
+ assert.equal(requests.filter(r=>r.options.method==='POST').length,1);
+ const post=requests.find(r=>r.options.method==='POST');
+ assert.equal(post.url,'/api/hassio_ingress/abc/api/admin/delete-registration');
+ assert.equal(post.options.headers['X-Presence-Request'],'delete-registration');
+ assert.deepEqual(JSON.parse(post.options.body),{tracker:'device_tracker.phone_a'});
+ assert.equal(phones.length,1);
+ assert.equal(el('remove').disabled,true);
+ assert.equal(el('confirmation').hidden,true);
+ assert.equal(el('phone').children.length,2);
+ assert.match(el('status').textContent,/Регистрация удалена/);
+ console.log('PASS secure select-confirm-post-refresh');
+})().catch(error=>{console.error(error.stack);process.exit(1)});
+"""
+        result = subprocess.run(["node", "-e", browser],
+                                capture_output=True, text=True, check=False, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_admin_ingress_javascript_is_valid(self):
         # Ingress JS is embedded in a Python multiline string; escaping errors
