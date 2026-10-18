@@ -1,6 +1,6 @@
 # DigitalHouses Presence App
 
-**Status: GPS + HA router device_tracker Wi-Fi pilot, version 0.1.33.** Observe router tracker stability before safety-critical automations.
+**Status: GPS + HA router device_tracker Wi-Fi pilot, version 0.1.34.** Observe router tracker stability before safety-critical automations.
 
 This application belongs to `DigitalHouses/home-assistant-apps/digitalhouses_presence_app` and is installed via **Settings → Apps → App Store**.
 
