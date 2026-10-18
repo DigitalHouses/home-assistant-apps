@@ -377,15 +377,32 @@ sections:
                   {% set r = roster.get(key, {}) %}
                   {{ (r.get('user_name') or 'Имя не задано') ~ ' (' ~ (r.get('name') or key) ~ ')' }}
                 secondary: |-
-                  {% set key = entity | replace('binary_sensor.dh_presence_app_', '') | replace('_wifi_home', '') %}
-                  {% set roster = state_attr('binary_sensor.dh_presence_app_residents_home', 'residents') or {} %}
-                  {% set r = roster.get(key, {}) %}
-                  {% set presence = r.get('status', 'unavailable') %}
-                  {% set gps = r.get('gps', 'unavailable') %}
-                  {% set wifi = r.get('wifi', 'unavailable') %}
-                  Итог: {{ 'Дома' if presence == 'home' else 'Вне дома' if presence == 'not_home' else 'Не определено' }} · {{ as_local(as_datetime(r['status_changed_at'])).strftime('%d.%m %H:%M') if r.get('status_changed_at') else '—' }}
-                  GPS: {{ 'Дома' if gps == 'home' else 'Вне дома' if gps == 'not_home' else 'Недоступно' }} · {{ as_local(as_datetime(r['gps_changed_at'])).strftime('%d.%m %H:%M') if r.get('gps_changed_at') else '—' }}
-                  Wi-Fi: {{ 'Обнаружен' if wifi == 'home' else 'Не подключён (роутер)' if wifi == 'not_home' else 'Недоступно' }} · {{ as_local(as_datetime(r['wifi_changed_at'])).strftime('%d.%m %H:%M') if r.get('wifi_changed_at') else '—' }}
+                  {% set key = entity | replace('binary_sensor.dh_presence_app_', '') | replace('_wifi_home', '') -%}
+                  {% set roster = state_attr('binary_sensor.dh_presence_app_residents_home', 'residents') or {} -%}
+                  {% set r = roster.get(key, {}) -%}
+                  {% set presence = r.get('status', 'unavailable') -%}
+                  {% set gps = r.get('gps', 'unavailable') -%}
+                  {% set wifi = r.get('wifi', 'unavailable') -%}
+                  {% macro ago(value) -%}
+                    {%- set stamp = as_timestamp(value, none) -%}
+                    {%- if stamp is none -%}—
+                    {%- else -%}
+                      {%- set minutes = [((as_timestamp(now()) - stamp) / 60) | int(0), 0] | max -%}
+                      {%- if minutes < 1 -%}только что
+                      {%- elif minutes < 60 -%}
+                        {{- minutes }} {{ 'минуту' if minutes % 10 == 1 and minutes % 100 != 11 else 'минуты' if minutes % 10 in [2, 3, 4] and minutes % 100 not in [12, 13, 14] else 'минут' }} назад
+                      {%- elif minutes < 1440 -%}
+                        {%- set hours = (minutes // 60) | int -%}
+                        {{- hours }} {{ 'час' if hours % 10 == 1 and hours % 100 != 11 else 'часа' if hours % 10 in [2, 3, 4] and hours % 100 not in [12, 13, 14] else 'часов' }} назад
+                      {%- else -%}
+                        {%- set days = (minutes // 1440) | int -%}
+                        {{- days }} {{ 'день' if days % 10 == 1 and days % 100 != 11 else 'дня' if days % 10 in [2, 3, 4] and days % 100 not in [12, 13, 14] else 'дней' }} назад
+                      {%- endif -%}
+                    {%- endif -%}
+                  {%- endmacro -%}
+                  Итог: {{ 'Дома' if presence == 'home' else 'Вне дома' if presence == 'not_home' else 'Не определено' }} · {{ ago(r.get('status_changed_at')) }}
+                  GPS: {{ 'Дома' if gps == 'home' else 'Вне дома' if gps == 'not_home' else 'Недоступно' }} · {{ ago(r.get('gps_changed_at')) }}
+                  Wi-Fi: {{ 'Обнаружен' if wifi == 'home' else 'Не подключён (роутер)' if wifi == 'not_home' else 'Недоступно' }} · {{ ago(r.get('wifi_changed_at')) }}
                 icon: >-
                   {% set key = entity | replace('binary_sensor.dh_presence_app_', '') | replace('_wifi_home', '') %}
                   {% set r = (state_attr('binary_sensor.dh_presence_app_residents_home', 'residents') or {}).get(key, {}) %}
