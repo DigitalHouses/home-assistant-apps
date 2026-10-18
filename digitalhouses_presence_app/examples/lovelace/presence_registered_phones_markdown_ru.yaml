@@ -8,7 +8,7 @@ content: >-
   {%- else -%}
     {%- set devices = roster.values() | selectattr('registered') | list -%}
     {%- if devices -%}
-      {%- set ns = namespace(lines=['Телефоны · ' ~ (devices | count)]) -%}
+      {%- set ns = namespace(lines=['Зарегистрированные телефоны']) -%}
       {%- for phone in devices -%}
         {%- set last = loop.last -%}
         {%- set indent = '   ' if last else '│  ' -%}
