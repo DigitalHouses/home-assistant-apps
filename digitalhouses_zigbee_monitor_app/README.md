@@ -1,16 +1,16 @@
 # DigitalHouses Zigbee Monitor App
 
-**Статус:** проектирование · UI-first · приложение ещё не реализовано.
+**Статус:** экспериментальная реализация 0.1.0. Поставка через Home Assistant Supervisor и GHCR; фактическая установка/приёмка в HAOS ещё не подтверждены.
 
 ## Идентификаторы
 
 - Канонический продукт, каталог и будущий Supervisor slug: `digitalhouses_zigbee_monitor_app`
 - Префикс Home Assistant: `dh_zigbee_monitor_app`
 - Имя в интерфейсе: **DH Zigbee Monitor**
-- Тип приложения после реализации: `haos_addon`
+- Тип приложения: `haos_addon`
 - MQTT namespace: `DigitalHouses/Global/dh_zigbee_monitor_app`
 
-Это приложение будет частью общего каталога `DigitalHouses/home-assistant-apps`, а не отдельным GitHub-репозиторием.
+Это приложение — часть общего каталога `DigitalHouses/home-assistant-apps`, а не отдельным GitHub-репозиторием.
 
 ## Цель
 
@@ -35,6 +35,7 @@
 
 - [UI-first Dashboard (Lovelace YAML)](examples/lovelace/dh_zigbee_monitor_app_dashboard.yaml)
 - [Recorder include/exclude (пример HA-пакета)](examples/packages/dh_zigbee_monitor_app_global_package.yaml)
+- [Инструкция и конфигурация](DOCS.md)
 - [Архитектура](docs/ARCHITECTURE.md)
 - [Контракт Dashboard, MQTT и Recorder](docs/UI_DATA_CONTRACT.md)
 - [План реализации и приёмки](docs/IMPLEMENTATION_PLAN.md)
@@ -51,8 +52,16 @@ Dashboard и Recorder-пакет — **проектные примеры**. В �
 две локализации, графику, документацию и CI, а также запись в
 `digitalhouses-stats/digitalhouses_stats/product_registry.json`.
 
-**Намеренно нет файла `digitalhouses.app`: это пока проектная папка, не готовое для установки приложение.**
-Не создаём фиктивный релиз или работающую оболочку без согласованного UI и проверенного функционала.
+**Установочный контракт уже добавлен:** `digitalhouses.app`, `config.yaml`,
+`Dockerfile`, `rootfs/run.sh`, изображения и RU/EN-переводы.
+
+На момент выпуска 0.1.0 работают инвентаризация, отображение доступности
+Zigbee2MQTT (при включённой availability), агрегаты MQTT и ТОП активности.
+**События инцидентов и классификация аномальных спамеров пока не реализованы;**
+их метрики будут `unavailable` до реализации, не фиктивным нулём.
+
+Установка возможна только после публикации образа GHCR и проверки его
+соответствия релизному тегу. Подтверждение работы на реальном HAOS отдельно.
 
 Основные нормативные документы: `docs/standards/DIGITALHOUSES_APP_STANDARD.md`,
 `PRODUCT_NAMING_STANDARD.md`, `CONTRACT_DATA_POLICY.md`,
