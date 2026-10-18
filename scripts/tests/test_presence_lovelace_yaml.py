@@ -69,7 +69,8 @@ class PresenceLovelaceYamlTests(unittest.TestCase):
                     self.assertEqual(actual, expected)
                     self.assertNotIn("None", actual)
 
-    def test_compact_markdown_cards_render_without_blank_paragraphs(self):
+    def test_presence_markdown_pve_tree_and_events_table(self):
+        """Reuse the PVE dashboard's monospace tree and compact Markdown table."""
         dashboard = yaml.safe_load(DASH.read_text(encoding="utf-8"))
         residents = dashboard["sections"][1]["cards"]
         notifications = dashboard["sections"][2]["cards"]
@@ -95,42 +96,50 @@ class PresenceLovelaceYamlTests(unittest.TestCase):
              "timestamp": "2026-10-18T11:06:00+00:00"},
         ]
         for path, embedded in cards:
-            portable = yaml.safe_load(path.read_text(encoding="utf-8"))
+            standalone = yaml.safe_load(path.read_text(encoding="utf-8"))
             with self.subTest(card=path.name):
-                self.assertEqual(portable, embedded)
-                for card in (portable, embedded):
+                self.assertEqual(standalone, embedded)
+                for card in (standalone, embedded):
                     template = env.from_string(card["content"])
-                    rendered = template.render(
-                        state_attr=lambda _, attr: (
-                            roster if attr == "residents" else event_rows),
-                        as_datetime=datetime.fromisoformat,
-                        as_local=lambda value: value,
-                    ).strip()
-                    self.assertNotIn("\n\n", rendered)
-                    self.assertNotIn("---", rendered)
-                    self.assertEqual(rendered.count("────────────────────────────"), 1)
-                    self.assertEqual(rendered.count("**"), 4)
+
+                    def render(roster_arg, events_arg):
+                        return template.render(
+                            state_attr=lambda _, attr: (
+                                roster_arg if attr == "residents" else events_arg),
+                            as_datetime=datetime.fromisoformat,
+                            as_local=lambda value: value,
+                        ).strip()
+
+                    rendered = render(roster, event_rows)
                     self.assertNotIn("device_tracker.legacy", rendered)
-                    one_item = template.render(
-                        state_attr=lambda _, attr: (
-                            {"one": roster["one"]} if attr == "residents"
-                            else event_rows[:1]),
-                        as_datetime=datetime.fromisoformat,
-                        as_local=lambda value: value,
-                    ).strip()
-                    self.assertNotIn("────────────────────────────", one_item)
-                    empty = template.render(
-                        state_attr=lambda _, attr: {} if attr == "residents" else [],
-                        as_datetime=datetime.fromisoformat,
-                        as_local=lambda value: value,
-                    ).strip()
-                    self.assertNotIn("────────────────────────────", empty)
+                    self.assertNotIn("──────────────────", rendered)
+                    self.assertNotIn("<table", rendered)
+                    one = render({"one": roster["one"]}, event_rows[:1])
+                    empty = render({}, [])
                     if path == REGISTERED:
-                        self.assertIn("Wi-Fi: не привязан", rendered)
-                        self.assertIn("device_tracker.router_1", rendered)
+                        self.assertTrue(rendered.startswith("```text\nТелефоны · 2\n"))
+                        self.assertTrue(rendered.endswith("\n```"))
+                        self.assertIn("├─ 📱 Serzhan (iPhone)", rendered)
+                        self.assertIn("│  ├─ GPS · device_tracker.phone_1", rendered)
+                        self.assertIn("│  └─ Wi-Fi · device_tracker.router_1", rendered)
+                        self.assertIn("└─ 📱 Alina (iPhone)", rendered)
+                        self.assertIn("   └─ Wi-Fi · не привязан", rendered)
+                        self.assertIn("└─ 📱 Serzhan (iPhone)", one)
+                        self.assertNotIn("├─ 📱", one)
+                        self.assertEqual(empty, "_Нет зарегистрированных телефонов._")
+                        self.assertEqual(render(None, []),
+                                         "_Реестр телефонов пока недоступен._")
                     else:
-                        self.assertIn("18.10.2026", rendered)
-                        self.assertIn("Serzhan (iPhone)", rendered)
+                        self.assertTrue(rendered.startswith(
+                            "| № | Дата и время | Событие | Детали |\n"
+                            "|:--:|:--|:--|:--|\n"))
+                        self.assertEqual(len(rendered.splitlines()), 4)
+                        self.assertIn("| 1 | 18.10.2026 11:05 | GPS: дома | Serzhan (iPhone) |",
+                                      rendered)
+                        self.assertIn("| 2 | 18.10.2026 11:06 | Выход из зоны | Alina · Office |",
+                                      rendered)
+                        self.assertEqual(len(one.splitlines()), 3)
+                        self.assertEqual(empty, "_Событий пока нет._")
 
     def test_dashboard_four_independent_sections_and_dynamic_source_filters(self):
         dashboard = yaml.safe_load(DASH.read_text(encoding="utf-8"))
