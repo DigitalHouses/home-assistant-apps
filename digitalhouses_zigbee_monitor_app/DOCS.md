@@ -73,6 +73,25 @@ offline counts, MQTT-message activity rate and TOP lists. Unknown availability
 is never a real zero. The `spammers` and `incidents` scalar entities remain
 unavailable until the respective engines are implemented.
 
+## Обновление из статусной карточки
+
+Кнопка «Версия» обращается к опубликованным GitHub Release и сообщает,
+есть ли новая версия. При подтверждении новая кнопка «Новая версия»
+появляется по состоянию `binary_sensor.dh_zigbee_monitor_app_update_available`.
+Она открывает страницу установленного приложения в Home Assistant Supervisor.
+
+**Установка и резервное копирование остаются под управлением Supervisor.**
+Обнаруженный GitHub-релиз ещё не гарантирует, что Supervisor уже загрузил
+актуальный каталог или сделал обновление доступным. В этом случае обновите
+каталог приложений в HA и затем установите обновление там.
+Команда `update.install` не вызывается, пока нет подтверждённой
+устанавливаемой Supervisor update-сущности.
+
+Таймер операции показывает `мм:сс`, а итоговая длительность округляется
+до целых секунд (как в Internet App). YAML-карточка и Dashboard — это
+отдельные конфигурации Lovelace: обновление Python App **не заменяет**
+ранее вручную вставленный YAML в панели HA.
+
 ## Dashboard
 
 Reference Lovelace:
