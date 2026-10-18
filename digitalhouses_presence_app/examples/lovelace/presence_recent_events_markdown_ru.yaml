@@ -2,12 +2,12 @@ type: markdown
 title: "🕘 Последние события DH Presence"
 content: |-
   {%- set items = state_attr('sensor.dh_presence_app_recent_events', 'items') or [] -%}
-  {% for item in items -%}
-  {% if not loop.first -%}
-  ────────────────────────────  
-  {% endif -%}
-  **{{ item.title }}** · {{ item.details }}  
-  _{{ as_local(as_datetime(item.timestamp)).strftime('%d.%m.%Y · %H:%M:%S') }}_  
-  {% else -%}
+  {%- if items -%}
+  | № | Дата и время | Событие | Детали |
+  |:--:|:--|:--|:--|
+  {% for e in items -%}
+  | {{ loop.index }} | {{ as_local(as_datetime(e.timestamp)).strftime('%d.%m.%Y %H:%M') }} | {{ e.title | replace('|', '/') }} | {{ e.details | replace('|', '/') }} |
+  {% endfor -%}
+  {%- else -%}
   _Событий пока нет._
-  {% endfor %}
+  {%- endif %}

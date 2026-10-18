@@ -303,23 +303,29 @@ sections:
         icon: mdi:account-group
       - type: markdown
         title: "📱 Зарегистрированные телефоны"
-        content: |-
-          {%- set roster = state_attr('binary_sensor.dh_presence_app_residents_home', 'residents') -%}
-          {% if roster is not mapping -%}
-          _Реестр телефонов пока недоступен._
+        content: >-
+          {%- set roster =
+            state_attr('binary_sensor.dh_presence_app_residents_home', 'residents')
+          -%}
+          {%- if roster is not mapping -%}
+            _Реестр телефонов пока недоступен._
           {%- else -%}
-          {% set devices = roster.values() | selectattr('registered') | list -%}
-          {% if devices -%}
-          {% for phone in devices -%}
-          {% if not loop.first -%}
-          ────────────────────────────  
-          {% endif -%}
-          **{{ phone.registration_label }}**  
-          GPS: `{{ phone.gps_tracker }}` · Wi-Fi: {% if phone.wifi_tracker %}`{{ phone.wifi_tracker }}`{% else %}не привязан{% endif %}  
-          {% endfor -%}
-          {% else -%}
-          _Нет зарегистрированных телефонов._
-          {%- endif -%}
+            {%- set devices = roster.values() | selectattr('registered') | list -%}
+            {%- if devices -%}
+              {%- set ns = namespace(lines=['Телефоны · ' ~ (devices | count)]) -%}
+              {%- for phone in devices -%}
+                {%- set last = loop.last -%}
+                {%- set indent = '   ' if last else '│  ' -%}
+                {%- set ns.lines = ns.lines + [
+                  ('└─' if last else '├─') ~ ' 📱 ' ~ phone.registration_label,
+                  indent ~ '├─ GPS · ' ~ phone.gps_tracker,
+                  indent ~ '└─ Wi-Fi · ' ~ (phone.wifi_tracker or 'не привязан')
+                ] -%}
+              {%- endfor -%}
+              {{ '```text\n' ~ (ns.lines | join('\n')) ~ '\n```' }}
+            {%- else -%}
+              _Нет зарегистрированных телефонов._
+            {%- endif -%}
           {%- endif %}
       - type: custom:button-card
         entity: sensor.dh_presence_app_version
@@ -469,15 +475,15 @@ sections:
         title: "🕘 Последние события DH Presence"
         content: |-
           {%- set items = state_attr('sensor.dh_presence_app_recent_events', 'items') or [] -%}
-          {% for item in items -%}
-          {% if not loop.first -%}
-          ────────────────────────────  
-          {% endif -%}
-          **{{ item.title }}** · {{ item.details }}  
-          _{{ as_local(as_datetime(item.timestamp)).strftime('%d.%m.%Y · %H:%M:%S') }}_  
-          {% else -%}
+          {%- if items -%}
+          | № | Дата и время | Событие | Детали |
+          |:--:|:--|:--|:--|
+          {% for e in items -%}
+          | {{ loop.index }} | {{ as_local(as_datetime(e.timestamp)).strftime('%d.%m.%Y %H:%M') }} | {{ e.title | replace('|', '/') }} | {{ e.details | replace('|', '/') }} |
+          {% endfor -%}
+          {%- else -%}
           _Событий пока нет._
-          {% endfor %}
+          {%- endif %}
   - type: grid
     cards:
       - type: heading
