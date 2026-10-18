@@ -116,45 +116,25 @@ automation:
     actions:
       - choose:
           - conditions:
-
               - condition: trigger
-
                 id: zone_enter
-
               - condition: template
-
                 value_template: "{{ is_state('switch.dh_presence_app_notify_zone_' ~ trigger.to_state.attributes.zone_key, 'on') }}"
-
             sequence:
-
               - action: script.write2log
-
                 data:
-
                   title: "{{ '🏠' if trigger.to_state.attributes.zone_entity_id == 'zone.home' else '📍' }}✅ Вход в зону «{{ trigger.to_state.attributes.zone_name }}»: {{ person_device }}"
-
                   message: "Местоположение подтверждено GPS."
-
           - conditions:
-
               - condition: trigger
-
                 id: zone_leave
-
               - condition: template
-
                 value_template: "{{ is_state('switch.dh_presence_app_notify_zone_' ~ trigger.to_state.attributes.zone_key, 'on') }}"
-
             sequence:
-
               - action: script.write2log
-
                 data:
-
                   title: "{{ '🏠' if trigger.to_state.attributes.zone_entity_id == 'zone.home' else '📍' }}🚪 Выход из зоны «{{ trigger.to_state.attributes.zone_name }}»: {{ person_device }}"
-
                   message: "Местоположение подтверждено GPS."
-
 
           - conditions:
               - condition: trigger
@@ -169,7 +149,6 @@ automation:
                 data:
                   title: "📍 GPS дома: {{ person_device }}"
                   message: "GPS-трекер вошёл в домашнюю зону."
-
           - conditions:
               - condition: trigger
                 id: gps_out
@@ -183,7 +162,6 @@ automation:
                 data:
                   title: "📍 GPS вне дома: {{ person_device }}"
                   message: "GPS-трекер вышел из домашней зоны."
-
           - conditions:
               - condition: trigger
                 id: wifi_in
@@ -195,7 +173,6 @@ automation:
                 data:
                   title: "📶 Wi-Fi обнаружен: {{ person_device }}"
                   message: "Устройство обнаружено выбранным методом проверки локальной сети."
-
           - conditions:
               - condition: trigger
                 id: wifi_lost
@@ -207,7 +184,6 @@ automation:
                 data:
                   title: "📵 Wi-Fi не подтверждается: {{ person_device }}"
                   message: "{{ wifi_lost_message }}"
-
           - conditions:
               - condition: trigger
                 id: wifi_out
