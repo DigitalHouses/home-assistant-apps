@@ -13,6 +13,11 @@ ROOT = "DigitalHouses/Global/dh_zigbee_monitor_app"
 DISCOVERY = f"homeassistant/device/{PREFIX}/config"
 APP_AVAILABILITY = f"{ROOT}/availability"
 HA_STATUS = "homeassistant/status"
+EVENT_TOPIC = f"{ROOT}/event"
+EVENT_TYPES = (
+    "device_offline", "device_online",
+    "zigbee2mqtt_offline", "zigbee2mqtt_online",
+)
 
 HISTORY: dict[str, tuple[str, str | None]] = {
     "networks": ("Configured Zigbee2MQTT networks", None),
@@ -95,6 +100,14 @@ def build_discovery(version: str) -> dict[str, Any]:
             entity_category="diagnostic",
             icon="mdi:format-list-bulleted",
         )
+    # Transient machine events: non-retained QoS 1 publications from App.
+    # The MQTT Event entity itself is excluded from the HA Recorder policy.
+    components["event"] = _component(
+        "event", "event", "Zigbee Monitor machine events",
+        state_topic=EVENT_TOPIC, event_types=list(EVENT_TYPES),
+        icon="mdi:alert-network-outline",
+        entity_category="diagnostic",
+    )
     components["refresh_state"] = _component(
         "sensor", "refresh_state", "Refresh state",
         value_template="{{ value_json.state }}",
