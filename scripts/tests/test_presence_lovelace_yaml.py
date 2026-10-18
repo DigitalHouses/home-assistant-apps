@@ -65,6 +65,40 @@ class PresenceLovelaceYamlTests(unittest.TestCase):
                     self.assertEqual(actual, expected)
                     self.assertNotIn("None", actual)
 
+    def test_dashboard_four_independent_sections_and_dynamic_source_filters(self):
+        dashboard = yaml.safe_load(DASH.read_text(encoding="utf-8"))
+        self.assertEqual(dashboard["type"], "sections")
+        self.assertEqual(dashboard["max_columns"], 4)
+        self.assertEqual(dashboard["cards"], [])
+        sections = dashboard["sections"]
+        self.assertEqual(len(sections), 4)
+        for section in sections:
+            self.assertEqual(section["type"], "grid")
+        presence, residents, notifications, debug = [s["cards"] for s in sections]
+        self.assertEqual(presence[0]["heading"], "Присутствие")
+        self.assertEqual(presence[1]["type"], "vertical-stack")
+        self.assertEqual(presence[1]["cards"][0]["type"], "custom:button-card")
+        self.assertEqual(presence[1]["cards"][1]["type"], "custom:mushroom-chips-card")
+        self.assertEqual(presence[2]["name"], "Регистрация телефона")
+        self.assertEqual(residents[0]["heading"], "Жильцы")
+        self.assertEqual(len(residents), 4)
+        self.assertEqual(residents[1]["card_param"], "cards")
+        self.assertEqual(residents[1]["filter"]["include"][0]["entity_id"],
+                         "binary_sensor.dh_presence_app_*_wifi_home")
+        for card, source_file in ((residents[2], GPS_SOURCES),
+                                  (residents[3], WIFI_SOURCES)):
+            source_card = yaml.safe_load(source_file.read_text(encoding="utf-8"))
+            self.assertEqual(card, source_card)
+        self.assertEqual(notifications[0]["heading"], "Уведомления")
+        self.assertEqual([e["entity"] for e in notifications[1]["entities"]], [
+            "switch.dh_presence_app_notify_presence",
+            "switch.dh_presence_app_notify_gps",
+            "switch.dh_presence_app_notify_wifi"])
+        self.assertEqual(debug[0]["heading"].strip(), "Временная карточка (debug)")
+        self.assertEqual(debug[1]["cards"][0]["type"], "custom:auto-entities")
+        self.assertEqual(debug[1]["cards"][0]["sort"]["method"], "entity_id")
+        self.assertEqual(debug[1]["grid_options"]["columns"], 12)
+
     def test_yaml_and_styles_icon_js_block(self):
         for path in (CARD, DASH):
             with self.subTest(path=path.name):

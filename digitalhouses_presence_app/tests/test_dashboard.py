@@ -337,14 +337,28 @@ console.log('PASSED '+cases.length+' status scenarios');
             self.assertIn("entity: this.entity_id", content)
             self.assertNotIn("roster | dictsort", content)
 
-    def test_dashboard_embeds_same_card_without_drift(self):
-        card = CARD.read_text(encoding="utf-8")
+    def test_dashboard_uses_four_column_resident_layout(self):
         dashboard = DASHBOARD.read_text(encoding="utf-8")
-        lines = [line for line in card.splitlines()
-                 if line.strip() and not line.startswith("#")]
-        expected = "      - " + lines[0] + "\n" + "\n".join("        " + line for line in lines[1:])
-        actual = "\n".join(line for line in dashboard.splitlines() if line.strip())
-        self.assertIn(expected, actual)
+        self.assertEqual(dashboard.splitlines().count("  - type: grid"), 4)
+        for heading in ("Присутствие", "Жильцы", "Уведомления",
+                        "Временная карточка (debug)"):
+            with self.subTest(heading=heading):
+                self.assertIn(heading, dashboard)
+        # The status logic is deliberately shared, while sections are
+        # composed independently according to the approved layout.
+        for key in ("icon", "name", "label", "color"):
+            self.assertEqual(status_js(CARD, key), status_js(DASHBOARD, key))
+        self.assertIn("name: Регистрация телефона", dashboard)
+        self.assertIn("binary_sensor.dh_presence_app_*_wifi_home", dashboard)
+        self.assertIn("attribute='gps_tracker'", dashboard)
+        self.assertIn("attribute='wifi_tracker'", dashboard)
+        self.assertIn("Прибытие / убытие", dashboard)
+        self.assertIn("Wi-Fi · появление / исчезновение", dashboard)
+        self.assertIn("DH Presence · все сущности и управление", dashboard)
+        self.assertNotIn("Не обнаружен (ARP)", dashboard)
+        # Four columns remain universal, without per-house tracker IDs.
+        self.assertNotIn("device_tracker.13promax_sky", dashboard)
+        self.assertNotIn("device_tracker.iphone", dashboard)
 
 
 if __name__ == "__main__":
