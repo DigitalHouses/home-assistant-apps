@@ -1,12 +1,8 @@
-# DH Presence · compact administrator phone removal in Lovelace.
-# Requires HACS 'Ingress webpage card' (custom:addon-iframe-card) to create
-# and maintain Home Assistant Supervisor ingress sessions inside Lovelace.
-# Existing custom:button-card hides the view for ordinary HA users.
-# The Ingress endpoint independently verifies HA administrator rights on
-# every GET/POST; UI visibility alone is NOT authorization.
-# For HA without that HACS component, use the existing admin launcher.
+# DH Presence · administrator-only MQTT phone removal, no iframe/HACS.
+# Frontend visibility is convenience, not per-user MQTT authorization.
+# The App owns dynamic phone choices, the button action and registry cleanup.
 type: custom:button-card
-entity: sensor.dh_presence_app_version
+entity: select.dh_presence_app_remove_phone
 hidden: |
   [[[
     return hass.user?.is_admin !== true;
@@ -22,10 +18,23 @@ hold_action:
 custom_fields:
   manager:
     card:
-      type: custom:addon-iframe-card
-      url: 8133339d_digitalhouses_presence_app/admin/delete-phone
-      aspect_ratio: "80%"
-      hide_background: false
+      type: entities
+      title: "Удаление телефона · администратор"
+      show_header_toggle: false
+      entities:
+        - entity: select.dh_presence_app_remove_phone
+          name: Телефон
+          icon: mdi:cellphone
+        - entity: button.dh_presence_app_delete_registration
+          name: Удалить регистрацию
+          icon: mdi:cellphone-remove
+          tap_action:
+            action: perform-action
+            perform_action: button.press
+            target:
+              entity_id: button.dh_presence_app_delete_registration
+            confirmation:
+              text: "Удалить выбранный телефон из DH Presence? Повторная регистрация потребуется с самого телефона."
 styles:
   card:
     - padding: 0
