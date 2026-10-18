@@ -1,7 +1,7 @@
 # DigitalHouses Zigbee Monitor App — installation and acceptance
 
-Version: **0.1.5 (experimental)**. Run only after the production GHCR image
-`ghcr.io/digitalhouses/digitalhouses_zigbee_monitor_app:0.1.5` is published
+Version: **0.1.6 (experimental)**. Run only after the production GHCR image
+`ghcr.io/digitalhouses/digitalhouses_zigbee_monitor_app:0.1.6` is published
 and verified by repository release workflows.
 
 ## Requirements
@@ -68,9 +68,10 @@ Install or merge the reference policy:
 historical scalar sensors are recorded; detail, event and app-card entities
 must remain excluded. Inspect the actual Recorder DB after at least 24 hours.
 
-The first release computes discovered network counts, confirmed device and
+The App computes discovered network counts, confirmed device and
 offline counts, MQTT-message activity rate and TOP lists. Unknown availability
-is never a real zero. The `spammers` and `incidents` scalar entities remain
+is never a real zero. When any device is confirmed offline, that positive count
+is an explicitly partial lower bound if other devices are unknown. The `spammers` and `incidents` scalar entities remain
 unavailable until the respective engines are implemented.
 
 ## Питание, availability и активность MQTT
@@ -99,10 +100,60 @@ retained `bridge/devices` официальные поля `type` / `power_source
 статус поступал; без него статус остаётся `unknown`. Не подменяем
 `online` последним MQTT-сообщением и не создаём свои timeout/ping,
 особенно для батарейных EndDevice. Глобальный offline-счётчик остаётся
-`unavailable`, пока нет полной информации по каждой сети.
+`unavailable`, если нет подтверждённых offline и при этом не вся availability
+известна. Подтверждённые offline отображаются как положительный счётчик и
+в `offline_details` **даже при неизвестных других устройствах**. Метаданные
+`availability_complete` и `availability_unknown` указывают на неполноту.
 
 Источник: https://www.zigbee2mqtt.io/guide/usage/mqtt_topics_and_messages.html
 и https://www.zigbee2mqtt.io/guide/configuration/device-availability.html
+
+## События появления/исчезновения устройств и Zigbee2MQTT
+
+Текущее состояние устройства берётся только из retained
+`<base_topic>/<friendly_name>/availability`. Текущее состояние каждого
+экземпляра Zigbee2MQTT — из retained `<base_topic>/bridge/state`.
+Это два независимых источника: при остановке Z2M нельзя объявлять все
+его устройства offline.
+
+Переходные машинные события публикуются через MQTT Event Discovery:
+`event.dh_zigbee_monitor_app_event`, MQTT topic
+`DigitalHouses/Global/dh_zigbee_monitor_app/event`.
+
+| event_type | Переход |
+|---|---|
+| `device_offline` | подтверждённое online → offline устройства |
+| `device_online` | подтверждённое offline → online устройства |
+| `zigbee2mqtt_offline` | `bridge/state` online → offline |
+| `zigbee2mqtt_online` | `bridge/state` offline → online |
+
+Каждое событие несёт `schema_version=1`, `event_type`,
+`observed_at`, `network_id`, `previous_state`, `current_state` и
+`severity`. Для device-события дополнительно присутствуют
+`ieee_address` и `friendly_name`, для Z2M — `base_topic`.
+Это не локализованное уведомление, а типизированный факт.
+
+Машинные события отправляются **QoS 1, retain=false** после
+публикации retained текущего состояния. Первый известный статус,
+retained при подключении, MQTT DUP и первичная сверка после
+переподключения не генерируют событие. После потери связи с самим
+Zigbee2MQTT baseline устройств сбрасывается, чтобы восстановление
+источника не породило массовые «восстановления» конечных устройств.
+
+Последнее состояние остаётся доступным в `inventory_details`,
+`networks_details`, `offline_details`, независимо от получения Event
+в HA. События не доставляются задним числом после простоя HA.
+
+Включать уведомления для пользователей должен **локальный HA-пакет**.
+Опциональный пример:
+`examples/packages/dh_zigbee_monitor_notifications_example.yaml`.
+Он иллюстрирует прямой `event.received` + `trigger.id` + `choose`
++ `persistent_notification.create`; для production замените действие
+на действующий `script.write2admins` или выбранный `notify.*`.
+
+Ограничение: `bridge/state` различает запущен/остановлен, **но не
+измеряет перегрузку**, зависание без MQTT LWT, длительность задержек
+доставки или загрузку CPU. Никаких фиктивных «overload» событий.
 
 ## Ручное «Обновить» (read-only)
 
@@ -118,10 +169,11 @@ retained `bridge/devices` официальные поля `type` / `power_source
 
 **Availability каждого отдельного устройства не обязательна для завершения
 Refresh.** Если Zigbee2MQTT не отправляет такие сообщения (например,
-`availability.enabled: false`), `offline` и `offline_details`
-по-прежнему `unavailable`, а диагностический `inventory_details`
-показывает `availability_not_reported`. Мы не записываем фиктивный
-offline = 0.
+`availability.enabled: false`), числовой `offline`
+по-прежнему `unavailable`, а `offline_details` показывает пустой
+**подтверждённый** список и флаг неполных данных. Диагностический
+`inventory_details` показывает `availability_not_reported`.
+Мы не записываем фиктивный offline = 0.
 
 Если bridge либо inventory недоступны, обновление завершается ошибкой
 после тайм-аута с указанием именно отсутствующей части. `last_refresh`
@@ -164,6 +216,8 @@ intentionally a view: calculations, filtering and history are App-owned.
 - Does not perform automatic healing, device control, reporting configuration,
   Zigbee interviews or Zigbee pings.
 - Source availability depends on Zigbee2MQTT configuration and retained state.
-- No event-based offline incident notifications or anomaly detection yet.
+- No local delivery notifications are installed by the public App: it publishes
+  four machine Event types for optional site-local Home Assistant automation.
+- Anomaly detection and incident engine are not implemented yet.
 - End-to-end tests against a real HAOS installation and Recorder are required
   before declaring production acceptance.
