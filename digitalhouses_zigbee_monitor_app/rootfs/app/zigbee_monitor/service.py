@@ -410,8 +410,11 @@ class MonitorService:
                     if problem.active:
                         active.append(problem.presentation())
                 previous = self._problem_states.get(key)
-                if (allow_event and previous is not None and
-                        problem.active is not None and previous != problem.active):
+                # Device/bridge transitions already have dedicated machine events.
+                # Do not emit a second generic event for the same failure.
+                if (allow_event and problem.kind == "mqtt_traffic_low"
+                        and previous is not None and problem.active is not None
+                        and previous != problem.active):
                     transitions.append(
                         ("problem_started" if problem.active else "problem_recovered",
                          problem)
