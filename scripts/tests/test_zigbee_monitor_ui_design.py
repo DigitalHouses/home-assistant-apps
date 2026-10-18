@@ -98,9 +98,12 @@ class ZigbeeMonitorUiDesignTests(unittest.TestCase):
             self.assertIn("states('" + item + "') in ['unknown', 'unavailable']",
                           self.raw_dashboard)
 
-    def test_it_is_not_falsely_marked_installable(self):
-        self.assertFalse((APP / "digitalhouses.app").exists())
-        self.assertFalse((APP / "config.yaml").exists())
+    def test_app_is_installable_only_with_canonical_metadata(self):
+        self.assertEqual((APP / "digitalhouses.app").read_text().strip(), "type = haos_addon")
+        config = yaml.safe_load((APP / "config.yaml").read_text(encoding="utf-8"))
+        self.assertEqual(config["slug"], "digitalhouses_zigbee_monitor_app")
+        self.assertEqual(config["version"], "0.1.0")
+        self.assertEqual(config["stage"], "experimental")
 
 
 if __name__ == "__main__":
