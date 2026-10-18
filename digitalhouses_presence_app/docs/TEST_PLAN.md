@@ -117,3 +117,11 @@ failed pilot acceptance requiring adjustment or reversion to GPS mode.
 5. Keep the deleted phone listed in legacy App Configuration `residents`, restart: the phone stays deleted and untracked because the existing v2 private registry retained its disabled tracker ID.
 6. Re-enrol the physical phone through local Home Assistant with a fresh MAC observation; verify disabled state is cleared and GPS/Wi-Fi presence starts with unknown baseline, not synthetic arrival.
 7. Verify old v1 registration state migrates safely on write, malformed v2 tombstones fail explicitly, and no IP/MAC/secret is introduced to public MQTT or Recorder.
+
+## Private IP/MAC phone tree acceptance (0.1.30)
+
+1. Open **Open Web UI** with verified HA administrator identity: observe the compact registered-phone tree containing five lines per phone (device, GPS, Wi-Fi, IP at registration, MAC at registration), plus one root line. Two phones have correct `├─ / └─` ancestry, no extra line spacing.
+2. Verify the IP and MAC are saved enrollment snapshots, not presented as current online values. They must be exactly those in the App's existing registry (no probes on rendering).
+3. Open as a normal HA user or make the admin role verification unavailable: backend denies access, private tree remains hidden, and failure clears any previously rendered IP/MAC values.
+4. Confirm the public Lovelace registered-phone card, `residents_home` attributes, MQTT topics, Event and Recorder still contain **no** registration IP or MAC.
+5. Delete one registration via the existing admin action: refresh removes that phone and its private network details from the tree, with no false departure Event. Verify real re-registration adds it back.
