@@ -191,6 +191,19 @@ class Engine:
             self._change(r, decision_at or when, events)
         return events
 
+    def gps_unavailable(self, tracker: str, when: datetime) -> None:
+        """Mark source outage with the actual transition time, not last GPS report.
+
+        An outage is not physical departure and must never emit gps_out.
+        """
+        if when.tzinfo is None or when.utcoffset() is None:
+            raise ValueError("Timezone-aware timestamp required")
+        r = self.residents[tracker]
+        if r.gps is not Status.UNAVAILABLE:
+            r.gps_changed_at = when
+        r.gps = Status.UNAVAILABLE
+        r.distance = None
+
     def reset_wifi_methods(self, when: datetime, *, disabled: bool = False) -> None:
         """Changing household probe methods starts a fresh baseline, no synthetic events.
 
