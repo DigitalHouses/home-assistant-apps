@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.1.7
+
+- SQLite engine для подтверждённых инцидентов `device_offline` и
+  `zigbee2mqtt_offline`, отдельные сети по стабильному coordinator
+  `network_id`, устройства по IEEE; история сохраняется после рестарта App.
+- На переходе live `online→offline` фиксируем `started_at` и
+  `first_observed_at`. Для retained offline при старте сохраняем
+  `first_observed_at`, но `started_at=null`: не придумываем начало сбоя.
+  Retained recovery после перезапуска закрывает инцидент как reconciliation,
+  не выдавая ложное машинное событие.
+- Скаляр `incidents` показывает только подтверждённые открытые проблемы:
+  положительный lower-bound допустим с неполными статусами; ноль — только
+  при полной достоверной availability. Не добавлен в HA Recorder.
+- `incidents_details` (Recorder OFF): активные инциденты, причина,
+  время первого наблюдения и начала, `recent_resolved` (до 20),
+  фактическая длительность, причина восстановления. Источник SQLite.
+- При потере `bridge/state` устройства не считаются массово offline.
+  Данные availability устройства во время bridge offline игнорируются,
+  прежние availability инвалидаются для исключения ложных событий
+  после восстановления источника.
+- Dashboard: активные + недавние завершённые инциденты. Удалён
+  пустой график Recorder по не записываемому `incidents`.
+- Статусная карточка App и 4-метрический Recorder-пакет не изменены;
+  событие HA `event.dh_zigbee_monitor_app_event` остаётся отдельным
+  machine-only contract без локальных получателей уведомлений.
+
 ## 0.1.6
 
 - Подтверждённые Zigbee2MQTT offline теперь всегда отображаются в offline_details,
