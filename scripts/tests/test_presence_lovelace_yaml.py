@@ -14,6 +14,7 @@ CARD = ROOT / "examples/lovelace/presence_app_card_ru.yaml"
 DASH = ROOT / "examples/lovelace/dh_presence_app_dashboard.yaml"
 GPS_SOURCES = ROOT / "examples/lovelace/presence_gps_trackers_auto_entities_ru.yaml"
 WIFI_SOURCES = ROOT / "examples/lovelace/presence_wifi_trackers_auto_entities_ru.yaml"
+ZONE_COUNTS = ROOT / "examples/lovelace/presence_zones_auto_entities_ru.yaml"
 
 
 class PresenceLovelaceYamlTests(unittest.TestCase):
@@ -81,12 +82,13 @@ class PresenceLovelaceYamlTests(unittest.TestCase):
         self.assertEqual(presence[1]["cards"][1]["type"], "custom:mushroom-chips-card")
         self.assertEqual(presence[2]["name"], "Регистрация телефона")
         self.assertEqual(residents[0]["heading"], "Жильцы")
-        self.assertEqual(len(residents), 4)
+        self.assertEqual(len(residents), 5)
         self.assertEqual(residents[1]["card_param"], "cards")
         self.assertEqual(residents[1]["filter"]["include"][0]["entity_id"],
                          "binary_sensor.dh_presence_app_*_wifi_home")
         for card, source_file in ((residents[2], GPS_SOURCES),
-                                  (residents[3], WIFI_SOURCES)):
+                                  (residents[3], WIFI_SOURCES),
+                                  (residents[4], ZONE_COUNTS)):
             source_card = yaml.safe_load(source_file.read_text(encoding="utf-8"))
             self.assertEqual(card, source_card)
         self.assertEqual(notifications[0]["heading"], "Уведомления")
@@ -98,6 +100,23 @@ class PresenceLovelaceYamlTests(unittest.TestCase):
         self.assertEqual(debug[1]["cards"][0]["type"], "custom:auto-entities")
         self.assertEqual(debug[1]["cards"][0]["sort"]["method"], "entity_id")
         self.assertEqual(debug[1]["grid_options"]["columns"], 12)
+
+    def test_dynamic_zone_people_card_uses_native_zone_domain(self):
+        # HA zone entity state is its number of person entities inside
+        # the zone. We intentionally do not duplicate or recompute counts.
+        text = ZONE_COUNTS.read_text(encoding="utf-8")
+        card = yaml.safe_load(text)
+        self.assertEqual(card["type"], "custom:auto-entities")
+        self.assertEqual(card["card"]["type"], "entities")
+        self.assertIn("количество людей", card["card"]["title"])
+        self.assertEqual(card["filter"], {"include": [{"domain": "zone"}]})
+        self.assertEqual(card["sort"]["method"], "name")
+        self.assertTrue(card["unique"])
+        self.assertFalse(card["show_empty"])
+        self.assertNotIn("zone.home", text)
+        self.assertNotIn("person.", text)
+        self.assertNotIn("device_tracker.", text)
+        self.assertNotIn("state:", text)
 
     def test_yaml_and_styles_icon_js_block(self):
         for path in (CARD, DASH):

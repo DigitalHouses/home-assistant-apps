@@ -367,6 +367,19 @@ sections:
         unique: true
         show_empty: false
 
+      - type: custom:auto-entities
+        card:
+          type: entities
+          title: "🌐 Зоны · количество людей"
+          show_header_toggle: false
+          state_color: true
+        filter:
+          include:
+            - domain: zone
+        sort:
+          method: name
+        unique: true
+        show_empty: false
   - type: grid
     cards:
       - type: heading
