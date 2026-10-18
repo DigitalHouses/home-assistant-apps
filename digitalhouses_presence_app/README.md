@@ -8,7 +8,7 @@ This application belongs to `DigitalHouses/home-assistant-apps/digitalhouses_pre
 
 From the local Ingress phone registration UI, selecting a GPS tracker previews a matching HA router `device_tracker` by the phone's actively ARP-verified MAC. Pressing **Зарегистрировать** now persists the matched `wifi_tracker` on the same resident registry record. On an existing registered GPS tracker (same authenticated user, same verified MAC), only the Wi-Fi link is updated; registration fields are preserved. If no unique router tracker is available, GPS registration still works and a previously stored Wi-Fi link is retained. Admin debug displays the linked entity and its current HA state. Older registry files load without changes.
 
-**Important:** This is a stored association only. The App still uses its existing PING/ARP probes for actual Wi-Fi status and does not yet switch the presence engine to HA router trackers. GPS and notifications remain unchanged.
+**Since 0.1.25:** The stored association directly drives Wi-Fi presence through the HA router tracker; GPS remains independent.
 
 ## HA router tracker Wi-Fi presence (0.1.25)
 
@@ -26,9 +26,9 @@ Every 60 seconds the App probes the enrolled private LAN IP with direct `arping`
 
 The maintained dashboard dynamically creates a Mushroom card for each configured resident (name + device): final presence status and its transition timestamp; GPS status/transition timestamp; Wi-Fi status/transition timestamp. Unknown timestamps render as a dash. All timestamps originate in the App's existing MQTT resident roster, and are shown in the browser's local timezone. There is no manual per-person YAML configuration and no IP/MAC exposed in MQTT.
 
-## Global household Wi-Fi detection switches (0.1.22)
+## Historical PING/ARP detection switches (0.1.22–0.1.24; retired)
 
-Two persisted MQTT switches on the **existing DH Presence device** control **all registered phones**, not individual residents:
+Older versions used two persisted MQTT switches on the DH Presence device; both are removed starting in 0.1.25:
 
 - `switch.dh_presence_app_ping` — ICMP echo to the registered private IP; default OFF.
 - `switch.dh_presence_app_arp` — active ARP with exact registered MAC verification; default ON (legacy behavior).
@@ -37,7 +37,7 @@ Both ON: **any successful method → Wi-Fi HOME**. Only when **both** enabled ch
 
 **Reliability:** An ICMP reply proves that *something* answers at the enrolled IP, not the MAC or phone identity. Keep DHCP reservations for all registered phones, especially PING-only. If ARP detects a MAC mismatch, even a positive PING does not prove the registered phone is present. Failed commands and ambiguous responses are UNKNOWN, not confirmed absence. Phones may ignore both ICMP and ARP while sleeping. A completed no-reply debounce only means LAN reachability was lost; it is **not proof of Wi-Fi disassociation**. Wi-Fi-only/Hybrid absence should not be used for security until field-tested.
 
-The maintained Lovelace card and dashboard expose the same two global detection switches. The notification package examples were reworded for either method; existing local HA packages must be updated separately if their human-readable messages still mention ARP specifically. The event types and automations did not change.
+In 0.1.25, the maintained Lovelace card and dashboard no longer expose PING/ARP switches. Both notification example packages were updated for explicit router disconnection. **Existing locally installed HA packages must be replaced manually**, since App upgrades do not install HA packages.
 
 ## Notification switches (0.1.18)
 
@@ -60,8 +60,7 @@ user opens the App's **Open Web UI** button, selects the phone GPS tracker
 while using the phone on direct home Wi-Fi, and enrolls. Supervisor supplies
 the authenticated user ID and display name; the App validates a directly
 connected client IP with a fresh ARP reply and stores the MAC locally.
-**Not implemented:** verified continuous Wi-Fi presence/absence, autonomous
-Companion device-to-WebSocket attestation and alarm integration. The GPS presence engine remains unchanged by the diagnostic update.
+**Not implemented:** automatic Companion device-to-WebSocket attestation or alarm integration. Continuous Wi-Fi presence now comes from the HA router tracker (0.1.25), while the GPS pipeline remains unchanged.
 
 
 ## Administrator-only network diagnostics (0.1.12)
@@ -78,7 +77,7 @@ The maintained [Russian Presence card](examples/lovelace/presence_app_card_ru.ya
 
 A full `sections` page embedding this same card is available as [dashboard YAML](examples/lovelace/dh_presence_app_dashboard.yaml). Both examples require `custom:button-card >= 5.0`, Mushroom and **[Auto Entities](https://github.com/thomasloven/lovelace-auto-entities)** (install through HACS before opening the dashboard). The universal `auto-entities` section matches every entity containing `dh_presence_app_` (including button/select/event entities) plus the optional native Supervisor update entity. New residents appear without editing YAML. Actions remain at the top in the standard chips and are also accessible as native rows in the entity list; the Refresh stamp chip distinguishes no manual refresh from a completed one. Paste the *card* file under a dashboard **Manual YAML card**; paste the *dashboard* file when editing the complete dashboard view in YAML.
 
-The mode selector is functional. The status and resident rows are observational. The App exposes genuine operation entities (`sensor.dh_presence_app_card`, `button.dh_presence_app_refresh`, `button.dh_presence_app_check_updates`, refresh-state and version diagnostics) following the [DigitalHouses Unified Status Card](../docs/standards/UNIFIED_PRODUCT_STATUS_CARD_STANDARD.md). Refresh reads currently stored HA tracker states immediately and succeeds when all configured GPS sources have valid last-known evidence and the MQTT state was published. This does not request a new GPS fix from iOS. Version checks query stable product-tagged GitHub Releases. Installation/restart remain Supervisor-owned. GPS last-known `home`/`not_home` and distance remain available even after days without iOS movement; this is **last-known evidence, not live GPS**. Each GPS sensor exposes actual `gps_reported_at`, and the card shows the report time and labels aged results as last-known. An unknown/unavailable/malformed source is still unavailable, and the last confirmed logical state is retained without inventing an arrival/departure. `last_reported` is preferred to `last_updated`; polling HA never fabricates a new report. Distance requires last-known valid coordinates. Each registered phone also gets a Wi-Fi binary sensor; until the independently verified Wi-Fi engine is installed it remains unavailable, rather than pretending the phone is absent. Hybrid limitations remain unchanged.
+The mode selector is functional. The status and resident rows are observational. The App exposes genuine operation entities (`sensor.dh_presence_app_card`, `button.dh_presence_app_refresh`, `button.dh_presence_app_check_updates`, refresh-state and version diagnostics) following the [DigitalHouses Unified Status Card](../docs/standards/UNIFIED_PRODUCT_STATUS_CARD_STANDARD.md). Refresh reads currently stored HA tracker states immediately and succeeds when all configured GPS sources have valid last-known evidence and the MQTT state was published. This does not request a new GPS fix from iOS. Version checks query stable product-tagged GitHub Releases. Installation/restart remain Supervisor-owned. GPS last-known `home`/`not_home` and distance remain available even after days without iOS movement; this is **last-known evidence, not live GPS**. Each GPS sensor exposes actual `gps_reported_at`, and the card shows the report time and labels aged results as last-known. An unknown/unavailable/malformed source is still unavailable, and the last confirmed logical state is retained without inventing an arrival/departure. `last_reported` is preferred to `last_updated`; polling HA never fabricates a new report. Distance requires last-known valid coordinates. Each registered phone also gets a Wi-Fi binary sensor sourced exclusively from the linked HA router tracker. If no tracker is linked or HA cannot confirm the source, that Wi-Fi sensor reports unavailable rather than inventing absence.
 
 ## Registration launcher card (optional)
 
