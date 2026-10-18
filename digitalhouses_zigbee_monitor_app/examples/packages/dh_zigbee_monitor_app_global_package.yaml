@@ -29,6 +29,8 @@ dh_zigbee_monitor_app_global_package:
 
     exclude:
       entity_globs:
+        # Explicit, independently validated safety net for JSON detail sensors.
+        - sensor.dh_zigbee_monitor_app_*_details
         - sensor.dh_zigbee_monitor_app_*
         - binary_sensor.dh_zigbee_monitor_app_*
         - button.dh_zigbee_monitor_app_*
