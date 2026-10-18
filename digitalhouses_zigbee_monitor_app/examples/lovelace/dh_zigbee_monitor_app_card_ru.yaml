@@ -185,7 +185,7 @@ cards:
             entity_id: button.dh_zigbee_monitor_app_check_updates
       - type: conditional
         conditions:
-          - entity: binary_sensor.dh_zigbee_monitor_app_update_available
+          - entity: update.digitalhouses_zigbee_monitor_app_update
             state: "on"
         chip:
           type: template
@@ -193,8 +193,17 @@ cards:
           icon_color: orange
           content: Новая версия
           tap_action:
-            action: navigate
-            navigation_path: /hassio/addon/8133339d_digitalhouses_zigbee_monitor_app/info
+            action: perform-action
+            perform_action: update.install
+            target:
+              entity_id: update.digitalhouses_zigbee_monitor_app_update
+            data:
+              backup: true
+            confirmation:
+              text: >-
+                Установить новую версию Zigbee Monitor?
+                Перед обновлением Home Assistant создаст резервную копию App.
+                Сбор MQTT-статистики будет временно прерван.
       - type: template
         icon: mdi:restart
         content: Перезапуск
