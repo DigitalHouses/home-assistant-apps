@@ -152,11 +152,29 @@ failed pilot acceptance requiring adjustment or reversion to GPS mode.
    with state access can read network details. Private Ingress remains the
    stronger choice for administrators-only data.
 
-## Administrator dropdown removal UI acceptance (0.1.32)
+## MQTT select/button phone removal acceptance (0.1.33)
 
-1. On a running 0.1.32 App, open the admin Ingress page: the new select/delete form must show all currently registered phones with user name, device name and exact GPS `device_tracker`.
-2. Confirm the initial selection is empty and deletion disabled. Selecting a phone enables the request; pressing delete shows an **in-page** confirmation with exact identity, and Cancel performs no POST. Confirm removes exactly the chosen registration and refreshes the dropdown.
-3. Repeat with two phones, with the selected phone already deleted in another browser, and with no phones: stale selections must be rejected or require refreshed listing. The physical departure/zone-leave events must not be synthesized by administrative deletion.
-4. Authenticate as ordinary HA user or invalidate HA admin verification. Direct `GET /admin/delete-phone`, `GET /api/admin/debug` and `POST /api/admin/delete-registration` must deny the operation; the HTML must not contain private rows and frontend `hidden` is not relied upon for authorization.
-5. To embed the selector inside the Lovelace dashboard, install HACS `Ingress webpage card` `custom:addon-iframe-card`, paste [portable YAML](../examples/lovelace/presence_admin_remove_phone_card_ru.yaml) or the new full dashboard, and verify it is absent for non-admins. Test both local Home Assistant and external Cloudflare-authenticated HA sessions. If embedding is not enabled, the existing admin launcher must expose the same select/delete form within App Ingress.
-6. Verify Recorder exclusions and GPS/Wi-Fi presence logic unchanged; no delete MQTT command/entity exists, no additional App privileges were granted. Browser JavaScript/HTML and YAML contract tests should pass in CI.
+1. Upgrade to 0.1.33. Verify the DH Presence MQTT Device contains
+   `select.dh_presence_app_remove_phone` and
+   `button.dh_presence_app_delete_registration`, with the App-generated
+   options `— Выберите телефон —`, `Имя (устройство) · device_tracker`.
+   On restart the select must reset to the placeholder.
+2. Paste the standalone admin-only card, or refresh the maintained
+   dashboard YAML. Only HA frontend admins should *see* the control; no
+   `custom:addon-iframe-card` or HACS installation is needed.
+3. Select one of two real phones, press the button, confirm the Lovelace
+   prompt, and check the App has deleted exactly that phone, cleared the
+   selection, updated available options and removed the tree branch.
+   Verify no synthetic departure/zone_leave events, and durable tombstone
+   blocks the old config residents list from resurrecting the phone.
+4. Press delete without selection; replay a retained select, retained DELETE,
+   unknown choice and duplicate non-retained DELETE after success: all must
+   be no-ops. A concurrently deleted selection must be refused.
+5. Verify the surviving phone is unchanged and can still be selected/deleted
+   separately; ensure a phone excluded by user ID cannot appear in choices.
+6. Confirm both MQTT and native Ingress deletion coordinate their writes
+   with the same lock, preserving atomic registry state.
+7. Review security: hiding in Lovelace is not MQTT ACL or HA admin
+   authorization. Use real Ingress admin auth if that guarantee is required.
+   Recorder exclusions for recent-events and registered-phones tree are
+   unchanged, with no new data-recording entity or App privileges.
