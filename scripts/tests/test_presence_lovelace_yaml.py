@@ -159,6 +159,11 @@ class PresenceLovelaceYamlTests(unittest.TestCase):
         self.assertEqual(residents[0]["heading"], "Жильцы")
         self.assertEqual(len(residents), 7)
         self.assertEqual(residents[1], yaml.safe_load(REGISTERED.read_text(encoding="utf-8")))
+        # Like the DH PVE Agent VM/LXC tree, the monospace layout needs a
+        # full 12-column span to avoid wrapped tracker IDs looking double-spaced.
+        self.assertEqual(residents[1]["grid_options"], {"columns": 12})
+        self.assertEqual(yaml.safe_load(REGISTERED.read_text(encoding="utf-8"))["grid_options"],
+                         {"columns": 12})
         self.assertEqual(residents[2]["name"], "Управление телефонами · администратор")
         self.assertIn("hass.user?.is_admin !== true", residents[2]["hidden"])
         self.assertEqual(residents[3]["card_param"], "cards")
