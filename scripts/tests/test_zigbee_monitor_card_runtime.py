@@ -1,8 +1,8 @@
 """Execute real custom:button-card JS; enforce App-only status responsibility.
 
 Zigbee2MQTT, devices, offline, incidents and releases are separate UI concerns.
-Only App card, installed App version and Supervisor install progress may change
-this status card (plus button actions for actual App management).
+Only App card, installed version, latest checked release and Supervisor install
+progress may change this status card (plus App management buttons).
 """
 from __future__ import annotations
 
@@ -39,6 +39,7 @@ process.stdout.write(JSON.stringify({
 
 APP = "sensor.dh_zigbee_monitor_app_card"
 VERSION = "sensor.dh_zigbee_monitor_app_version"
+LATEST = "sensor.dh_zigbee_monitor_app_latest_version"
 SUPERVISOR = "update.digitalhouses_zigbee_monitor_app_update"
 
 
@@ -90,14 +91,13 @@ class ZigbeeCardRuntimeTests(unittest.TestCase):
         })
         self.assertEqual(changed, baseline)
 
-    def test_only_three_app_related_entities_drive_card(self):
-        self.assertEqual(set(self.card["triggers_update"]), {APP, VERSION, SUPERVISOR})
+    def test_only_four_app_related_entities_drive_card(self):
+        self.assertEqual(set(self.card["triggers_update"]), {APP, VERSION, LATEST, SUPERVISOR})
         forbidden = (
             "dh_zigbee_monitor_app_devices", "dh_zigbee_monitor_app_offline",
             "dh_zigbee_monitor_app_networks_details",
             "dh_zigbee_monitor_app_inventory_details",
             "dh_zigbee_monitor_app_incidents",
-            "dh_zigbee_monitor_app_latest_version",
             "dh_zigbee_monitor_app_update_available",
             "Релиз", "Offline", "Supervisor не предлагает",
         )
@@ -142,7 +142,7 @@ class ZigbeeCardRuntimeTests(unittest.TestCase):
         self.assertEqual(shown["label"], "Данные обновлены · 1 мин 01 сек")
         self.assertIn("success-color", shown["color"])
 
-    def test_version_check_success_has_no_release_or_device_status(self):
+    def test_version_check_success_shows_exact_installed_to_latest(self):
         shown = self.run_card({
             APP: {"state": "success", "attributes": {
                 "operation": "check", "duration_seconds": 1.2,
@@ -150,7 +150,7 @@ class ZigbeeCardRuntimeTests(unittest.TestCase):
             "binary_sensor.dh_zigbee_monitor_app_update_available": {"state": "on"},
             "sensor.dh_zigbee_monitor_app_latest_version": {"state": "0.1.6"},
         })
-        self.assertEqual(shown["label"], "Версия проверена · 1 сек")
+        self.assertEqual(shown["label"], "Найдена новая версия: 0.1.5 → 0.1.6")
         self.assertEqual(shown["icon"], "mdi:check-circle")
 
     def test_supervisor_install_progress_survives_app_disconnect(self):
@@ -170,7 +170,10 @@ class ZigbeeCardRuntimeTests(unittest.TestCase):
             "state": "on", "attributes": {"latest_version": "0.1.6",
                                           "in_progress": False},
         }})
-        self.assertEqual(shown, baseline)
+        self.assertEqual(shown["name"], baseline["name"])
+        self.assertEqual(shown["icon"], baseline["icon"])
+        self.assertEqual(shown["color"], baseline["color"])
+        self.assertEqual(shown["label"], "Доступно обновление: 0.1.5 → 0.1.6")
         self.assertEqual(self.chips[2]["conditions"], [{
             "entity": SUPERVISOR, "state": "on",
         }])
@@ -187,7 +190,9 @@ class ZigbeeCardRuntimeTests(unittest.TestCase):
         self.assertEqual([
             c.get("content") or c.get("chip", {}).get("content")
             for c in self.chips
-        ], ["Обновить", "Версия", "Новая версия", "Перезапуск"])
+        ], ["Обновить", "Версия", self.chips[2]["chip"]["content"], "Перезапуск"])
+        self.assertIn("Обновить {{ installed }} → {{ latest }}",
+                      self.chips[2]["chip"]["content"])
         self.assertEqual(self.chips[0]["tap_action"]["target"]["entity_id"],
                          "button.dh_zigbee_monitor_app_refresh")
         self.assertEqual(self.chips[1]["tap_action"]["target"]["entity_id"],
