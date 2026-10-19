@@ -111,9 +111,6 @@ class PresenceLovelaceYamlTests(unittest.TestCase):
             ("wifi_out", {}, (wifi,),
              "📶❌ Отключение от Wi-Fi сети",
              "Устройство Serzhan (13ProMAX .SKY) отключилось от домашней Wi-Fi сети."),
-            ("wifi_lost", {}, (wifi,),
-             "📶⚠️ Wi-Fi не подтверждается: Serzhan (13ProMAX .SKY)",
-             "Источник Wi-Fi временно недоступен. Состояние подключения неизвестно."),
         ]
         for event_type, attrs, enabled, title, message in cases:
             with self.subTest(event_type=event_type, attrs=attrs):
@@ -181,6 +178,7 @@ class PresenceLovelaceYamlTests(unittest.TestCase):
         self.assertEqual(fire("arrival", {"first_arrival": True}, ()), [])
         self.assertEqual(fire("zone_enter", cases[4][1], ()), [])
         self.assertEqual(fire("wifi_in", {}, ()), [])
+        self.assertEqual(fire("wifi_lost", {}, (wifi,)), [])
         for event_type in ("gps_in", "gps_out"):
             self.assertEqual(fire(event_type, {}, (home, wifi, urban)), [])
         # Wi-Fi remains separately opt-in even when no zone switch is enabled.
