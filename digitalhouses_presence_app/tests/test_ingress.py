@@ -174,13 +174,18 @@ class IngressTests(unittest.TestCase):
     def registration_request(self, resident_records, *, selected="device_tracker.13promax_sky",
                              current_user="resident-ha-user",
                              current_mac="88:b9:45:80:a7:55",
-                             detected="device_tracker.13promax_sky_2"):
+                             detected="device_tracker.13promax_sky_2",
+                             resident_name=None):
         """Exercise real POST handler with isolated read-only HA/ARP stubs."""
         cls = handler_factory("token", "/tmp/registrations.json", set())
         request = object.__new__(cls)
         request.path = "/api/register"
-        request.headers = {"Content-Length": "64", "X-Presence-Request": "register"}
-        request.rfile = io.BytesIO(json.dumps({"tracker": selected}).encode())
+        payload = {"tracker": selected}
+        if resident_name is not None:
+            payload["resident_name"] = resident_name
+        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        request.headers = {"Content-Length": str(len(body)), "X-Presence-Request": "register"}
+        request.rfile = io.BytesIO(body)
         request.client_address = ("172.30.32.2", 12345)
         request.context = lambda: {
             "user_id": current_user, "user_name": "Тест",
@@ -228,6 +233,66 @@ class IngressTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(
             residents[0], {**original, "wifi_tracker": "device_tracker.13promax_sky_2"})
+
+    def test_own_phone_can_set_cyrillic_resident_name_without_changing_identity(self):
+        original = {
+            "user_id": "resident-ha-user", "user_name": "Serzhan",
+            "device_name": "Original device", "device_id": "original-device-id",
+            "entry_id": "original-entry-id", "tracker": "device_tracker.13promax_sky",
+            "ip": "192.168.11.54", "mac": "88:b9:45:80:a7:55",
+        }
+        residents = [dict(original)]
+        (status, payload), writes = self.registration_request(
+            residents, resident_name="  Сержан  ")
+        self.assertEqual((status, writes), (200, 1))
+        self.assertTrue(payload["updated"])
+        self.assertEqual(payload["user_name"], "Сержан")
+        self.assertEqual(residents[0]["user_name"], "Сержан")
+        # Re-registering does not rebind or duplicate a tracker, user or MAC.
+        self.assertEqual(len(residents), 1)
+        for key in ("tracker", "user_id", "device_id", "entry_id", "mac", "ip"):
+            self.assertEqual(residents[0][key], original[key])
+        (status, payload), writes = self.registration_request(
+            residents, resident_name="Сержан")
+        self.assertEqual((status, writes), (200, 1))
+        self.assertEqual(residents[0]["user_name"], "Сержан")
+
+    def test_new_registration_prefers_explicit_name_and_legacy_fallback(self):
+        registrations = []
+        (status, payload), writes = self.registration_request(
+            registrations, resident_name="Сержан")
+        self.assertEqual((status, writes), (200, 1))
+        self.assertEqual(payload["user_name"], "Сержан")
+        self.assertEqual(registrations[0]["user_name"], "Сержан")
+        # Tracker-only old API calls cannot erase the resident's chosen label.
+        (status, payload), _ = self.registration_request(registrations)
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["user_name"], "Сержан")
+        other = []
+        (status, payload), _ = self.registration_request(other)
+        self.assertEqual(status, 200)
+        self.assertEqual(other[0]["user_name"], "Тест")
+
+    def test_invalid_name_fails_before_local_arp_and_registry_write(self):
+        for invalid in ("  ", "<script>", "A\\nB", "A\\u202eB", "X" * 81,
+                        123, {}, []):
+            with self.subTest(invalid=invalid):
+                entries = []
+                (status, _), writes = self.registration_request(
+                    entries, resident_name=invalid)
+                self.assertEqual(status, 400)
+                self.assertEqual(writes, 0)
+                self.assertEqual(entries, [])
+
+    def test_ingress_registration_ui_has_resident_name_field(self):
+        from dh_presence.ui import HTML
+        self.assertIn('<label for="residentName">Имя жильца</label>', HTML)
+        self.assertIn('id="residentName" type="text" maxlength="80"', HTML)
+        self.assertIn("placeholder=\"Например: Сержан\"", HTML)
+        self.assertIn("registeredNames=new Map(s.residents.map(x=>[x.tracker,x.user_name]))", HTML)
+        self.assertIn("body:JSON.stringify({tracker:selected,resident_name:residentName})", HTML)
+        self.assertIn("fillResidentName()", HTML)
+        self.assertNotIn("name=\"mac\"", HTML)
 
     def test_router_unavailable_keeps_existing_link_when_register_pressed(self):
         residents = [{
