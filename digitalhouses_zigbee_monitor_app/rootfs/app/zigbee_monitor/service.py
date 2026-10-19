@@ -15,6 +15,7 @@ from typing import Any, Callable, Mapping
 
 from .core import ZigbeeMonitor, ZigbeeMonitorError
 from .autodiscovery import DISCOVERY_FILTERS, discovery_from_bridge
+from .infrastructure import parse_bridge_infrastructure
 from .discovery import (
     APP_AVAILABILITY, DETAILS, DISCOVERY, EVENT_TOPIC, HA_STATUS, HISTORY, ROOT,
     build_discovery, state_topic, validity_topic,
@@ -71,6 +72,7 @@ class MonitorService:
         self._traffic_detectors: dict[str, TrafficDetector] = {}
         self._traffic_started: dict[str, float] = {}
         self._traffic_metrics: dict[str, dict[str, object]] = {}
+        self._bridge_info_seen: set[str] = set()
         self._refresh_pending: set[str] | None = None
         self._refresh_bridge_pending: set[str] | None = None
         self._refresh_started: float | None = None
@@ -240,6 +242,7 @@ class MonitorService:
             self._problem_states.clear()
             self._traffic_started.clear()
             self._traffic_metrics.clear()
+            self._bridge_info_seen.clear()
             for detector in self._traffic_detectors.values():
                 detector.reset()
             # Persist unavailability first; stale retained data remains hidden
@@ -279,6 +282,7 @@ class MonitorService:
             self._problem_states.clear()
             self._traffic_started.clear()
             self._traffic_metrics.clear()
+            self._bridge_info_seen.clear()
             for detector in self._traffic_detectors.values():
                 detector.reset()
 
@@ -453,9 +457,26 @@ class MonitorService:
                         and all(reason is None for _, reason in observed))
             confirmed_offline = sum(a == "offline" and reason is None
                                     for a, reason in observed)
+            metrics = self._traffic_metrics.get(config.network_id, {})
+            decisions = network_problems(
+                network_id=config.network_id, name=config.name,
+                bridge_state=str(status["bridge_state"]),
+                inventory_observed=bool(status["inventory_observed"]),
+                devices=int(status["devices"] or 0),
+                offline=confirmed_offline,
+                unknown=sum(reason is not None for _, reason in observed),
+                rpm_problem=metrics.get("traffic_problem"),
+                rpm=metrics.get("rpm"), threshold=metrics.get("threshold"),
+            )
+            saved = self.store.network_infrastructure(config.network_id)
             rows.append({
                 "network_id": config.network_id, "name": config.name,
                 "status": status["bridge_state"], "devices": status["devices"],
+                "infrastructure": saved["data"] if saved else None,
+                "infrastructure_received_at": saved["received_at"] if saved else None,
+                "infrastructure_seen": config.network_id in self._bridge_info_seen,
+                "problem_active": [p.kind for p in decisions if p.active is True],
+                "problem_unknown": [p.kind for p in decisions if p.active is None],
                 # A positive value is a guaranteed lower bound, even with
                 # unknown peers. Zero is only valid with complete coverage.
                 "offline": confirmed_offline if complete or confirmed_offline else None,
@@ -463,7 +484,7 @@ class MonitorService:
                 "availability_unknown": sum(reason is not None for _, reason in observed),
                 "online": sum(a == "online" and reason is None
                               for a, reason in observed),
-                **self._traffic_metrics.get(config.network_id, {}),
+                **metrics,
             })
         self._detail("networks_details", "networks", rows, valid=bool(self.monitor.networks))
 
@@ -764,6 +785,7 @@ class MonitorService:
             subscriptions.extend((
                 n.base_topic + "/bridge/devices",
                 n.base_topic + "/bridge/state",
+                n.base_topic + "/bridge/info",
             ))
         for topic_filter in subscriptions:
             if not self.subscribe(topic_filter):
@@ -889,6 +911,23 @@ class MonitorService:
                     self._publish_networks()
                     self._publish_inventory_and_availability()
                     self._publish_problems(allow_event=False)
+            # Passive bridge metadata. No Supervisor privilege escalation or false pairing.
+            if topic.endswith("/bridge/info"):
+                network = next((
+                    n for n in self.monitor.networks
+                    if topic == n.base_topic + "/bridge/info"
+                ), None)
+                if network is not None:
+                    infrastructure = parse_bridge_infrastructure(
+                        payload, expected_ieee=self.store.coordinator_ieee(network.network_id),
+                    )
+                    self.store.save_network_infrastructure(
+                        network.network_id, data=infrastructure,
+                        received_at=int(self.now()),
+                    )
+                    self._bridge_info_seen.add(network.network_id)
+                    self._publish_networks()
+                    return "bridge_info"
             sample = self.monitor.ingest(
                 topic, payload, retain=retain, dup=dup,
                 observed_at=observed_at,

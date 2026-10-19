@@ -7,6 +7,7 @@ never invents missing data or deletes a physical device on Z2M rename.
 from __future__ import annotations
 
 import sqlite3
+import json
 import re
 from datetime import datetime, timezone
 from pathlib import Path
@@ -59,6 +60,12 @@ CREATE TABLE IF NOT EXISTS incidents (
     started_at INTEGER CHECK(started_at >= 0),
     resolved_at INTEGER CHECK(resolved_at >= 0),
     resolution_source TEXT CHECK(resolution_source IN ('live_transition', 'reconciliation'))
+);
+-- Safe metadata snapshot from bridge/info (not a raw config).
+CREATE TABLE IF NOT EXISTS network_infrastructure (
+    network_id TEXT PRIMARY KEY NOT NULL,
+    metadata_json TEXT NOT NULL,
+    received_at INTEGER NOT NULL CHECK(received_at >= 0)
 );
 CREATE TABLE IF NOT EXISTS network_problem_settings (
     network_id TEXT PRIMARY KEY NOT NULL,
@@ -285,6 +292,38 @@ class ActivityStore:
             )
         ]
         return active, closed, total
+
+    def coordinator_ieee(self, network_id: str) -> str | None:
+        row = self.conn.execute(
+            "SELECT coordinator_ieee FROM networks WHERE network_id=?", (network_id,),
+        ).fetchone()
+        return row[0] if row else None
+
+    def network_infrastructure(self, network_id: str) -> dict[str, object] | None:
+        row = self.conn.execute(
+            "SELECT metadata_json, received_at FROM network_infrastructure "
+            "WHERE network_id=?", (network_id,),
+        ).fetchone()
+        return {"data": json.loads(row[0]), "received_at": _incident_iso(row[1])} if row else None
+
+    def save_network_infrastructure(
+        self, network_id: str, *, data: dict[str, object], received_at: int,
+    ) -> None:
+        if not isinstance(network_id, str) or not network_id:
+            raise ValueError("network_id is required")
+        if type(received_at) is not int or received_at < 0 or not isinstance(data, dict):
+            raise ValueError("invalid infrastructure snapshot")
+        content = json.dumps(data, separators=(",", ":"), sort_keys=True)
+        if len(content) > 4096:
+            raise ValueError("infrastructure metadata too large")
+        with self.conn:
+            self.conn.execute(
+                "INSERT INTO network_infrastructure(network_id,metadata_json,received_at) "
+                "VALUES(?,?,?) ON CONFLICT(network_id) DO UPDATE SET "
+                "metadata_json=excluded.metadata_json,received_at=excluded.received_at "
+                "WHERE metadata_json<>excluded.metadata_json OR received_at<>excluded.received_at",
+                (network_id, content, received_at),
+            )
 
     def network_problem_settings(self, network_id: str) -> tuple[bool, int]:
         row = self.conn.execute(

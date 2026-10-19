@@ -1,8 +1,28 @@
 # DigitalHouses Zigbee Monitor App — installation and acceptance
 
-Version: **0.1.8 (experimental)**. Run only after the production GHCR image
-`ghcr.io/digitalhouses/digitalhouses_zigbee_monitor_app:0.1.8` is published
+Version: **0.1.9 (experimental)**. Run only after the production GHCR image
+`ghcr.io/digitalhouses/digitalhouses_zigbee_monitor_app:0.1.9` is published
 and verified by repository release workflows.
+
+## Пассивное дерево Zigbee2MQTT (0.1.9)
+
+Дерево — инфраструктурное: одна ветка на автоматически обнаруженный
+координатор/Zigbee2MQTT. Это не граф Zigbee Mesh.
+
+- Источник: retained MQTT bridge/info после подтверждения сети и её IEEE.
+- В SQLite хранится только разрешённый набор полей: тип координатора,
+  версия Zigbee2MQTT, firmware revision, USB/TCP endpoint (без credentials),
+  IP из явного TCP IP URI, Zigbee channel/PAN, время получения.
+- Подробности публикуются только в networks_details (Recorder OFF).
+  Исторический набор из четырёх scalar-сенсоров остаётся без изменений.
+- При отсутствии bridge/info остаётся unknown; старые metadata после MQTT
+  reconnect не выдаются за новый источник.
+- TCP не означает PoE; USB не имеет сетевого Ping. Ретейнд-снимок bridge/info
+  не доказывает работоспособность координатора или Zigbee радиообмена.
+- Supervisor slug, ZigStar model, Critical, power switch и Healer нельзя
+  уверенно обнаружить по одному MQTT. Для списка других Supervisor Apps
+  требуются расширенные права; в 0.1.9 роль default не меняется.
+- Никаких Zigbee-запросов, ручных паспортов и автоматического восстановления.
 
 ## Requirements
 

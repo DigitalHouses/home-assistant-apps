@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.1.9
+
+- Автоматическое дерево Zigbee2MQTT из обнаруженных MQTT-сетей, не Zigbee Mesh.
+  Без паспортов, новых Recorder сущностей и глобального FSM.
+- Пассивный bridge/info: IEEE, координатор, Zigbee firmware revision, Z2M
+  version, USB/TCP endpoint, IP только при явном TCP IP, channel/PAN.
+  Только allowlist в SQLite, без MQTT-паролей и network key.
+- networks_details: infrastructure, флаг получения info в MQTT-сессии,
+  раздельные active/unknown reasons для каждой сети.
+- Supervisor slug, ZigStar, PoE, Critical и Healer не угадываются.
+  Без расширения роли Supervisor (default).
+- Refresh перечитывает также retained bridge/info, но его успешность от
+  наличия необязательных инфраструктурных данных не зависит.
+- Без Zigbee-команд, ping и Auto-Healer.
+
 ## 0.1.8
 
 - Problems Engine по контракту `dh_pve_agent`: независимые подтверждённые
