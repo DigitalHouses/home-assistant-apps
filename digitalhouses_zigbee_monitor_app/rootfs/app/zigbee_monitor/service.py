@@ -416,7 +416,7 @@ class MonitorService:
             if ip and management_address(ip) is None:
                 ping = "invalid"
             else:
-                ping = self._ping_results.get(ieee, "unknown" if ip else "not_configured")
+                ping = self._ping_results.get(f"{ieee}@{ip}", "unknown" if ip else "not_configured")
             rows.append({
                 "ieee": ieee, "name": policy.get("name") or
                 (device.friendly_name if device else ieee),
@@ -603,7 +603,7 @@ class MonitorService:
             )
             ip = policy["management_host"] or auto_ip or ""
             ping = ("invalid" if ip and management_address(ip) is None
-                    else self._ping_results.get(ieee or "", "unknown" if ip else "not_configured"))
+                    else self._ping_results.get(f"{ieee}@{ip}", "unknown" if ip else "not_configured"))
             rows.append({
                 "network_id": config.network_id,
                 "name": config.name,
