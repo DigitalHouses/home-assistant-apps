@@ -227,7 +227,7 @@ sections:
         content: |-
           {% set entity = 'sensor.dh_zigbee_monitor_app_networks_details' %}
           {% set networks = state_attr(entity, 'networks') or [] %}
-          {% set repeaters = state_attr('sensor.dh_zigbee_monitor_app_repeaters_details', 'repeaters') or [] %}
+          {% set repeaters = [] if states('sensor.dh_zigbee_monitor_app_repeaters_details') in ['unknown', 'unavailable'] else state_attr('sensor.dh_zigbee_monitor_app_repeaters_details', 'repeaters') or [] %}
           {% if states(entity) != 'ready' %}
           *Нет подтверждённых данных о Zigbee2MQTT.*
           {% elif networks | count == 0 %}
