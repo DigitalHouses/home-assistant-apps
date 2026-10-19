@@ -165,7 +165,9 @@ class IngressTests(unittest.TestCase):
 
     def test_wifi_lookup_runs_on_explicit_select_and_not_on_initial_load(self):
         from dh_presence.ui import HTML
-        self.assertIn("q('tracker').addEventListener('change',lookupWifiTracker)", HTML)
+        self.assertIn("q('tracker').addEventListener('change',()=>{", HTML)
+        self.assertIn("fillResidentName();", HTML)
+        self.assertIn("lookupWifiTracker();", HTML)
         self.assertIn("api('api/lookup-wifi'", HTML)
         self.assertIn("'X-Presence-Request':'lookup-wifi'", HTML)
         self.assertIn("placeholder.value=''", HTML)
@@ -274,7 +276,7 @@ class IngressTests(unittest.TestCase):
         self.assertEqual(other[0]["user_name"], "Тест")
 
     def test_invalid_name_fails_before_local_arp_and_registry_write(self):
-        for invalid in ("  ", "<script>", "A\\nB", "A\\u202eB", "X" * 81,
+        for invalid in ("  ", "<script>", "A" + chr(10) + "B", "A" + chr(0x202e) + "B", "X" * 81,
                         123, {}, []):
             with self.subTest(invalid=invalid):
                 entries = []
