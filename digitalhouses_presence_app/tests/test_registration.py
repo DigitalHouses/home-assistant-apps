@@ -62,8 +62,8 @@ class RegistrationTests(unittest.TestCase):
                          "Анел Айгүл")
         self.assertEqual(normalize_resident_name("O'Connor-Сержан"),
                          "O'Connor-Сержан")
-        for invalid in (None, 42, [], {}, "", " ", "A\\nB",
-                        "A\\u202eB", "<script>", "x" * 81):
+        for invalid in (None, 42, [], {}, "", " ", "A" + chr(10) + "B",
+                        "A" + chr(0x202e) + "B", "<script>", "x" * 81):
             with self.subTest(invalid=invalid), self.assertRaises(ValueError):
                 normalize_resident_name(invalid)
 
