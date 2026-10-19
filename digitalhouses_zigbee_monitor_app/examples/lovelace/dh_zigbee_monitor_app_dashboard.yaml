@@ -20,11 +20,7 @@ sections:
       # Requires Mushroom + custom:button-card >=5.0, Supervisor update integration.
       # App lifecycle and operation results ONLY; Zigbee network/device metrics belong to separate cards.
       # Status is app-owned; install/restart are performed by HA Supervisor.
-      - # DigitalHouses Zigbee Monitor · canonical status/control card
-        # Requires Mushroom + custom:button-card >=5.0, Supervisor update integration.
-        # App lifecycle and operation results ONLY; Zigbee network/device metrics belong to separate cards.
-        # Status is app-owned; install/restart are performed by HA Supervisor.
-        type: vertical-stack
+      - type: vertical-stack
         cards:
           - type: custom:button-card
             entity: sensor.dh_zigbee_monitor_app_card
