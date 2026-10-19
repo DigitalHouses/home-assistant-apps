@@ -240,30 +240,32 @@ sections:
           {% set infra = n.infrastructure or {} %}
           {% set active = n.problem_active or [] %}
           {% set unknown = n.problem_unknown or [] %}
-          <details open>
-          <summary><strong>{{ '🟥' if active | count else '🟨' if unknown | count else '🟩' }} {{ n.name | e }}</strong></summary>
-          <ul>
-          <li><strong>ID:</strong> {{ n.network_id | e }}</li>
-          <li><strong>Тип:</strong> 👑 Coordinator · {{ infra.coordinator_ieee or '—' }}</li>
-          <li><strong>Connection:</strong> {{ (infra.connection or 'unknown') | upper | e }}{% if infra.serial_port %} · {{ infra.serial_port | e }}{% endif %}</li>
+          <table>
+          <thead>
+          <tr><th>👑 {{ '🟥' if active | count else '🟨' if unknown | count else '🟩' }} {{ n.name | e }}</th></tr>
+          </thead>
+          <tbody>
+          <tr><td><strong>node_id:</strong> {{ n.network_id | e }}</td></tr>
+          <tr><td><strong>IEEE:</strong> {{ (infra.coordinator_ieee or '—') | e }}</td></tr>
+          <tr><td><strong>Connection:</strong> {{ (infra.connection or 'unknown') | upper | e }}{% if infra.serial_port %} · {{ infra.serial_port | e }}{% endif %}</td></tr>
           {% if infra.connection == 'tcp' %}
-          <li><strong>IP / Host:</strong> {{ (infra.ip or infra.network_host or 'не определён') | e }}</li>
+          <tr><td><strong>IP / Host:</strong> {{ (infra.ip or infra.network_host or 'не определён') | e }}</td></tr>
           {% endif %}
-          <li><strong>Adapter:</strong> {{ (infra.coordinator_type or '—') | e }}{% if infra.serial_adapter %} · {{ infra.serial_adapter | e }}{% endif %}</li>
-          <li><strong>Firmware:</strong> {{ infra.firmware_revision if infra.firmware_revision is not none else '—' }}</li>
-          <li><strong>Z2M / Bridge:</strong> {{ (infra.z2m_version or '—') | e }} / {{ n.status | e }}</li>
-          <li><strong>Channel / PAN:</strong> {{ infra.channel if infra.channel is not none else '—' }} / {{ infra.pan_id if infra.pan_id is not none else '—' }}</li>
-          <li><strong>Devices:</strong> {{ n.devices if n.devices is not none else '—' }} всего · {{ n.online }} online · {{ n.offline if n.offline is not none else '—' }} offline · {{ n.availability_unknown }} unknown</li>
-          <li><strong>Pulse:</strong> {{ n.rpm if n.rpm is not none else '—' }} RPM · порог {{ n.threshold if n.threshold is not none else '—' }}</li>
-          <li><strong>Supervisor App:</strong> не сопоставлен</li>
-          <li><strong>Ping / Healer:</strong> не выполняются</li>
-          <li><strong>Info:</strong> {{ 'получен в MQTT-сессии' if n.infrastructure_seen else 'нет данных текущей сессии' }}</li>
-          <li><strong>Проблемы:</strong> {{ active | join(', ') if active | count else 'нет подтверждённых' }}{% if unknown | count %} · неизвестно: {{ unknown | join(', ') }}{% endif %}</li>
-          </ul>
-          </details>
+          <tr><td><strong>Adapter:</strong> {{ (infra.coordinator_type or '—') | e }}{% if infra.serial_adapter %} · {{ infra.serial_adapter | e }}{% endif %}</td></tr>
+          <tr><td><strong>Firmware:</strong> {{ infra.firmware_revision if infra.firmware_revision is not none else '—' }}</td></tr>
+          <tr><td><strong>Z2M / Bridge:</strong> {{ (infra.z2m_version or '—') | e }} / {{ n.status | e }}</td></tr>
+          <tr><td><strong>Channel / PAN:</strong> {{ infra.channel if infra.channel is not none else '—' }} / {{ infra.pan_id if infra.pan_id is not none else '—' }}</td></tr>
+          <tr><td><strong>Devices:</strong> {{ n.devices if n.devices is not none else '—' }} всего · {{ n.online }} online · {{ n.offline if n.offline is not none else '—' }} offline · {{ n.availability_unknown }} unknown</td></tr>
+          <tr><td><strong>Pulse:</strong> {{ n.rpm if n.rpm is not none else '—' }} RPM · порог {{ n.threshold if n.threshold is not none else '—' }}</td></tr>
+          <tr><td><strong>Supervisor App:</strong> не сопоставлен</td></tr>
+          <tr><td><strong>Ping / Healer:</strong> не выполняются</td></tr>
+          <tr><td><strong>Info:</strong> {{ 'получен в MQTT-сессии' if n.infrastructure_seen else 'нет данных текущей сессии' }}</td></tr>
+          <tr><td><strong>Reasons:</strong> {{ active | join(', ') if active | count else 'нет подтверждённых' }}{% if unknown | count %} · unknown: {{ unknown | join(', ') }}{% endif %}</td></tr>
+          </tbody>
+          </table>
           {% endfor %}
 
-          *Info может быть retained. Bridge online и RPM не доказывают наличие связи с координатором. Ping и Auto-Healer не выполняются.*
+          *Info может быть retained. Bridge online и RPM не доказывают связь с координатором. Ping и Auto-Healer не выполняются.*
           {% endif %}
 
       - type: heading
