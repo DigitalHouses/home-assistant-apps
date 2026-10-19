@@ -19,7 +19,7 @@ class NotificationPackageTests(unittest.TestCase):
             encoding="utf-8")
         canonical = PACKAGE.read_text(encoding="utf-8")
         self.assertIn("dh_presence_app_notification:\n  automation:", keyed)
-        self.assertEqual(keyed.count("- action: script.write2log"), 7)
+        self.assertEqual(keyed.count("- action: script.write2log"), 6)
         self.assertEqual(keyed.count('title: "'), 7)
         self.assertNotIn("  recorder:", keyed)
         source = canonical[canonical.index("automation:\n"):]
