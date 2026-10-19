@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 from dh_presence.registration import (
     ArpNoReply, active_arp_mac, completed_record, load_registry, normalized_mac, run_checked,
-    put_registration, save_registry, validate_entry,
+    put_registration, save_registry, validate_entry, normalize_resident_name,
 )
 from dh_presence.core import Mode, Status
 from app import build_engine
@@ -55,6 +55,44 @@ class RegistrationTests(unittest.TestCase):
             self.assertEqual(person.name, "13ProMAX .SKY")
             self.assertIs(person.confirmed, Status.UNAVAILABLE)
             self.assertEqual(engine.snapshot()["residents"][person.key]["user_name"], "Жилец")
+
+    def test_validate_cyrillic_name_and_reject_spoofed_labels(self):
+        self.assertEqual(normalize_resident_name("  Сержан  "), "Сержан")
+        self.assertEqual(normalize_resident_name("Анел  Айгүл"),
+                         "Анел Айгүл")
+        self.assertEqual(normalize_resident_name("O'Connor-Сержан"),
+                         "O'Connor-Сержан")
+        for invalid in (None, 42, [], {}, "", " ", "A\\nB",
+                        "A\\u202eB", "<script>", "x" * 81):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                normalize_resident_name(invalid)
+
+    def test_registry_label_changes_without_new_person_or_events(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = str(Path(d) / "registrations.json")
+            current = put_registration([], record(user_name="Serzhan"))
+            save_registry(path, current)
+            original = load_registry(path)[0]
+            modified = put_registration(current, {
+                **original, "user_name": normalize_resident_name("  Сержан  ")})
+            save_registry(path, modified)
+            result = load_registry(path)[0]
+            self.assertEqual(len(load_registry(path)), 1)
+            self.assertEqual(result["user_name"], "Сержан")
+            for unchanged in ("user_id", "tracker", "mac", "device_name",
+                              "device_id", "entry_id", "ip"):
+                self.assertEqual(result[unchanged], original[unchanged])
+            # At runtime, the updated roster is reconciled in place with no
+            # new source observations or fabricated arrival/departure.
+            from app import reconcile_registration_roster
+            engine = build_engine(opts(), {"schema_version": 2, "residents": []},
+                                  [original])
+            resident = engine.residents[original["tracker"]]
+            self.assertEqual(resident.user_name, "Serzhan")
+            self.assertTrue(reconcile_registration_roster(engine, opts(), [result], set()))
+            self.assertIs(engine.residents[original["tracker"]], resident)
+            self.assertEqual(resident.user_name, "Сержан")
+            self.assertFalse(reconcile_registration_roster(engine, opts(), [result], set()))
 
     def test_re_registration_of_same_tracker_is_idempotent(self):
         r = put_registration([], record())
