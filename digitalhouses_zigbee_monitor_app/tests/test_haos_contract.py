@@ -32,7 +32,7 @@ class PackageTests(unittest.TestCase):
         config = yaml.safe_load((APP_DIR / "config.yaml").read_text(encoding="utf-8"))
         self.assertEqual(config["slug"], "digitalhouses_zigbee_monitor_app")
         self.assertEqual(config["name"], "DigitalHouses Zigbee Monitor App")
-        self.assertEqual(config["version"], "0.1.12")
+        self.assertEqual(config["version"], "0.1.13")
         self.assertEqual(config["stage"], "experimental")
         self.assertEqual(config["image"], "ghcr.io/digitalhouses/digitalhouses_zigbee_monitor_app")
         self.assertEqual(config["services"], ["mqtt:need"])
@@ -42,6 +42,15 @@ class PackageTests(unittest.TestCase):
         self.assertEqual(config["options"]["coordinators"], [])
         self.assertEqual(config["options"]["repeaters"], [])
         self.assertIn("NET_RAW", config["privileged"])
+        # Read-only and narrowly scoped mount: no access to Supervisor's
+        # private storage of other Apps, no elevated role and no host FS.
+        self.assertEqual(config["map"], [{
+            "type": "homeassistant_config",
+            "read_only": True,
+            "path": "/homeassistant",
+        }])
+        self.assertEqual(config["hassio_role"], "default")
+        self.assertNotIn("full_access", config)
 
     def test_store_images_have_valid_geometry(self):
         for name, expected in (("icon.png", (128, 128)), ("logo.png", (250, 100))):
