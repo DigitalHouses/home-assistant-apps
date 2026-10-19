@@ -58,7 +58,7 @@ def parse_bridge_infrastructure(payload: bytes, *, expected_ieee: str | None = N
     if not isinstance(ieee, str) or not _IEEE.fullmatch(ieee.lower()):
         raise ZigbeeMonitorError("bridge/info coordinator IEEE invalid")
     ieee = ieee.lower()
-    if expected_ieee is not None and ieee != expected_ie:
+    if expected_ieee is not None and ieee != expected_ieee:
         raise ZigbeeMonitorError("bridge/info coordinator identity mismatch")
     config = raw.get("config") if isinstance(raw.get("config"), dict) else {}
     serial = config.get("serial") if isinstance(config.get("serial"), dict) else {}
