@@ -17,7 +17,7 @@ from urllib.request import Request, urlopen
 
 from dh_presence.registration import (
     REGISTRY_LOCK, active_arp_mac, completed_record, delete_registration, load_registry,
-    load_registry_state, normalized_mac, put_registration, save_registry,
+    load_registry_state, normalized_mac, normalize_resident_name, put_registration, save_registry,
 )
 from dh_presence.admin import (
     is_authorized_ha_admin, AdministratorVerificationUnavailable,
@@ -335,9 +335,18 @@ def handler_factory(token: str, registry_path: str, excluded_users: set[str]):
                 if not 1 <= size <= 1024:
                     return self.reply(400, {"error": "invalid_body"})
                 data = json.loads(self.rfile.read(size))
-                tracker = data.get("tracker") if isinstance(data, dict) else None
+                if (not isinstance(data, dict)
+                        or set(data) not in ({"tracker"}, {"tracker", "resident_name"})):
+                    return self.reply(400, {"error": "invalid_registration_payload"})
+                tracker = data.get("tracker")
                 if not isinstance(tracker, str):
                     return self.reply(400, {"error": "tracker_required"})
+                # Only registration writes the user-selected display name.
+                # MAC/IP ownership always comes from the authenticated local
+                # session and an actual ARP reply, never a browser field.
+                chosen_name = (normalize_resident_name(data["resident_name"])
+                               if self.path == "/api/register" and "resident_name" in data
+                               else None)
                 choice = next((x for x in gps_candidates(token)
                                if x["tracker"] == tracker), None)
                 if choice is None:
@@ -376,6 +385,10 @@ def handler_factory(token: str, registry_path: str, excluded_users: set[str]):
                             "device_id": "tracker:" + tracker,
                             "entry_id": "gps:" + tracker,
                         }, mac)
+                    if chosen_name is not None:
+                        # Explicit re-enrollment edits the display name only.
+                        # Existing owner, GPS tracker and MAC remain immutable.
+                        record["user_name"] = chosen_name
                     if wifi_match["status"] == "matched":
                         record["wifi_tracker"] = wifi_match["tracker"]
                     updated = put_registration(previous, record)
