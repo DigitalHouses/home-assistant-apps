@@ -106,13 +106,13 @@ class PresenceLovelaceYamlTests(unittest.TestCase):
                             "zone_name": "Urban coffee", "zone_key": urban_key}, (urban,),
              "📍🚪 Serzhan покинул Urban coffee", "Местоположение подтверждено GPS."),
             ("wifi_in", {}, (wifi,),
-             "📶 Wi-Fi обнаружен: Serzhan (13ProMAX .SKY)",
-             "Устройство обнаружено роутером в домашней Wi-Fi сети."),
+             "📶 Подключение к Wi-Fi",
+             "Serzhan (13ProMAX .SKY) подключился к Wi-Fi."),
             ("wifi_out", {}, (wifi,),
-             "📵 Wi-Fi не обнаружен: Serzhan (13ProMAX .SKY)",
-             "По данным Wi-Fi-трекера роутера устройство больше не подключено к домашней Wi-Fi сети."),
+             "📶❌ Отключение от Wi-Fi",
+             "Serzhan (13ProMAX .SKY) отключился от Wi-Fi."),
             ("wifi_lost", {}, (wifi,),
-             "📵 Wi-Fi не подтверждается: Serzhan (13ProMAX .SKY)",
+             "📶⚠️ Wi-Fi не подтверждается: Serzhan (13ProMAX .SKY)",
              "Источник Wi-Fi временно недоступен. Состояние подключения неизвестно."),
         ]
         for event_type, attrs, enabled, title, message in cases:
