@@ -54,22 +54,28 @@ class NotificationPackageTests(unittest.TestCase):
 
     def test_seven_notified_event_types(self):
         code = PACKAGE.read_text(encoding="utf-8")
-        for event in ("arrival", "departure", "gps_in", "gps_out", "wifi_in", "wifi_lost", "wifi_out", "zone_enter", "zone_leave"):
+        for event in ("arrival", "departure", "wifi_in", "wifi_lost", "wifi_out", "zone_enter", "zone_leave"):
             self.assertIn("id: " + event, code)
-        self.assertEqual(code.count("trigger: event.received"), 9)
+        self.assertEqual(code.count("trigger: event.received"), 7)
         self.assertEqual(code.count("action: script.write2log"), 7)
         self.assertEqual(code.count("action: logbook.log"), 0)
         self.assertEqual(code.count("action: persistent_notification.create"), 0)
-        self.assertIn("id: gps_in", code)
-        self.assertIn("id: gps_out", code)
+        # Source-only GPS events remain in the App, but never duplicate
+        # the logical home and information-only geozone notifications.
+        self.assertNotIn("id: gps_in", code)
+        self.assertNotIn("id: gps_out", code)
 
-    def test_three_mqtt_switches_gate_only_write2log_notifications(self):
+    def test_zone_switches_and_explicit_wifi_switch_gate_only_write2log(self):
         code = PACKAGE.read_text(encoding="utf-8")
         self.assertNotIn("switch.dh_presence_app_notify_presence", code)
         self.assertEqual(code.count("trigger.to_state.attributes.zone_key"), 2)
-        self.assertEqual(code.count("entity_id: switch.dh_presence_app_notify_gps"), 2)
+        # A single source of home notices: logical arrival/departure gated
+        # by zone.home, never gps_in/out or duplicate zone.home notices.
+        self.assertEqual(code.count("switch.dh_presence_app_notify_zone_620b51c29b479984"), 2)
+        self.assertEqual(code.count("zone_entity_id != 'zone.home'"), 2)
+        self.assertNotIn("switch.dh_presence_app_notify_gps", code)
         self.assertEqual(code.count("entity_id: switch.dh_presence_app_notify_wifi"), 3)
-        self.assertEqual(code.count('state: "on"'), 5)
+        self.assertEqual(code.count('state: "on"'), 3)
         self.assertEqual(code.count("action: script.write2log"), 7)
 
     def test_router_wifi_out_wording_and_unknown_without_false_claims(self):
@@ -98,8 +104,8 @@ class NotificationPackageTests(unittest.TestCase):
         for required in (
             "trigger.to_state.attributes.first_arrival",
             "trigger.to_state.attributes.last_departure",
-            "Режим дома: присутствие",
-            "Режим дома: отсутствие",
+            "Статус дома: ПРИСУТСТВИЕ",
+            "Статус дома: ОТСУТСТВИЕ",
             "residents_home_after",
         ):
             self.assertIn(required, code)
@@ -130,9 +136,13 @@ class NotificationPackageTests(unittest.TestCase):
         for line in code.splitlines():
             if 'title: "' in line:
                 title = line.split('title: "', 1)[1].rsplit('"', 1)[0]
-                self.assertEqual(title.count("{{ person_device }}"), 1)
-                title.replace("{{ person_device }}", "Serzhan (13ProMAX .SKY)").encode("utf-8")
-        for variable in ("arrival_message:", "departure_message:",
+                placeholders = ("{{ person_name }}", "{{ wifi_person_device }}")
+                self.assertEqual(sum(title.count(v) for v in placeholders), 1)
+                for placeholder in placeholders:
+                    title = title.replace(placeholder, "Serzhan")
+                title.encode("utf-8")
+        for variable in ("person_name:", "wifi_person_device:",
+                         "arrival_message:", "departure_message:",
                          "wifi_lost_message:", "wifi_out_message:"):
             self.assertIn(variable, code)
         self.assertIn("if trigger.to_state.attributes.first_arrival", code)
