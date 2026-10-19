@@ -74,13 +74,23 @@ dh_presence_app_notification:
           {% if trigger.to_state.attributes.first_arrival | default(false) %}
             Статус дома: ПРИСУТСТВИЕ
           {% else %}
-            Дома: {{ trigger.to_state.attributes.residents_home_after | default('?', true) }}
+            {% set count = trigger.to_state.attributes.residents_home_after | int(-1) %}
+            {% if count < 0 %}
+              Дома: нет данных
+            {% else %}
+              Дома {{ count }} {{ 'человека' if count % 100 not in [12, 13, 14] and count % 10 in [2, 3, 4] else 'человек' }}
+            {% endif %}
           {% endif %}
         departure_message: >-
           {% if trigger.to_state.attributes.last_departure | default(false) %}
             Статус дома: ОТСУТСТВИЕ
           {% else %}
-            Дома: {{ trigger.to_state.attributes.residents_home_after | default('?', true) }}
+            {% set count = trigger.to_state.attributes.residents_home_after | int(-1) %}
+            {% if count < 0 %}
+              Дома: нет данных
+            {% else %}
+              Дома {{ count }} {{ 'человека' if count % 100 not in [12, 13, 14] and count % 10 in [2, 3, 4] else 'человек' }}
+            {% endif %}
           {% endif %}
         wifi_lost_message: >-
           Источник Wi-Fi временно недоступен. Состояние подключения неизвестно.
