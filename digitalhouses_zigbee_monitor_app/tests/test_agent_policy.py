@@ -128,7 +128,8 @@ class AgentOptionsTests(unittest.TestCase):
             }],
         }
         self.svc.set_agent_options(settings)
-        self.svc.set_ping_results({COORD: "reachable", REP: "no_response"})
+        self.svc.set_ping_results({f"{COORD}@192.168.11.40": "reachable",
+                                   f"{REP}@192.168.11.41": "no_response"})
         self.assertEqual(self.tree()["agent_name"], "Techroom USB")
         self.assertEqual(self.tree()["ping"], "reachable")
         self.assertTrue(self.tree()["agent_policy"]["critical"])
