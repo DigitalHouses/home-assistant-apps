@@ -1,5 +1,13 @@
 # Changelog
 
+## HA package · английский entity_id автоматизации и русский UI
+
+- Исправлены оба варианта пакета уведомлений для `!include_dir_named` и `!include_dir_merge_named`: исходный английский `alias: DH Presence Notifications`, новая уникальная YAML-идентичность `id: dh_presence_notifications` и русский `friendly_name: DH Presence · Уведомления` через пакетный `homeassistant.customize`.
+- Новый `entity_id` — `automation.dh_presence_notifications` без транслитерации. Разовая смена `id` нужна потому, что HA не пересоздаёт существующий `entity_id` только из изменённого `alias`.
+- В пакете остаётся одна автоматизация (всё тот же обработчик событий `zone_enter`/`zone_leave`, GPS, Wi-Fi, `write2log`); MQTT и версия DH Presence App не изменяются.
+- В уже установленном HA возможна неактивная историческая запись прежнего `entity_id` в Entity Registry — не изменять `.storage` вручную. Добавлены тесты обеих структур YAML и соответствия отображаемого имени.
+
+
 ## Lovelace · относительная длительность состояний (без изменения версии App)
 
 - Карточка жильцов Mushroom в standalone-примере и штатном дашборде показывает `Итог`, `GPS` и `Wi-Fi` с длительностью текущего статуса: `только что`, `1 минуту назад`, `2 часа назад`, `1 день назад` и правильными русскими окончаниями.
