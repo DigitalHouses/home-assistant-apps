@@ -1,8 +1,33 @@
 # DigitalHouses Zigbee Monitor App — installation and acceptance
 
-Version: **0.1.13 (experimental)**. Run only after the production GHCR image
-`ghcr.io/digitalhouses/digitalhouses_zigbee_monitor_app:0.1.13` is published
+Version: **0.1.14 (experimental)**. Run only after the production GHCR image
+`ghcr.io/digitalhouses/digitalhouses_zigbee_monitor_app:0.1.14` is published
 and verified by repository release workflows.
+
+## Диагностика монтирования Zigbee2MQTT (v0.1.14)
+
+После установки откройте **Инструменты разработчика → Состояния**
+и найдите `sensor.dh_zigbee_monitor_app_config_access`.
+Он автоматически проверяется при старте, затем каждую минуту.
+
+Статус сенсора:
+- `ready` — каталог `/homeassistant` смонтирован, директория
+  Zigbee2MQTT найдена, `configuration.yaml` открыт без чтения содержимого;
+- `mount_missing` — mount не подтверждён;
+- `directory_missing` — каталог `zigbee2mqtt` отсутствует в mount;
+- `file_missing` — `configuration.yaml` не найден;
+- `file_unreadable` — файл существует, но не удаётся открыть.
+
+Атрибуты `mount`, `z2m_directory`, `z2m_config` содержат только
+значения `ok`, `missing`, `readable`, `not_readable` или
+`not_checked`. Сырые файлы, секреты, ключи и ошибки файловой системы
+не публикуются. Символьная ссылка для файла отклоняется.
+Наличие доступа к YAML **не подтверждает** соответствие
+Zigbee2MQTT конкретному Supervisor App: это будет отдельная задача.
+
+**Не нужны Docker, терминал хоста HAOS или изменение основного
+`/config/configuration.yaml`.** Если сенсор не появился после
+обновления, сначала проверяйте MQTT Discovery.
 
 ## Чтение конфигурации HAOS (v0.1.13)
 
