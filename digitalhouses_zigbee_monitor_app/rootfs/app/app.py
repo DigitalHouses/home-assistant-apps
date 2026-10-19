@@ -198,8 +198,6 @@ class Application:
         """
         try:
             coordinators, repeaters, legacy = self.service.agent_snapshot()
-            if not coordinators and not repeaters:
-                return
             current = self._supervisor_options.read()
             merged, changed = merge_new_discoveries(
                 current, coordinators, repeaters, legacy=legacy,
@@ -226,9 +224,14 @@ class Application:
                 return
             # Never create an unbounded number of probe workers.
             with ThreadPoolExecutor(max_workers=4) as executor:
-                checks = dict(zip(targets, executor.map(
-                    ping_management_ip, targets.values()
-                )))
+                checks = {
+                    f"{ieee}@{ip}": status
+                    for (ieee, ip), status in zip(
+                        targets.items(), executor.map(
+                            ping_management_ip, targets.values()
+                        )
+                    )
+                }
             self.service.set_ping_results(checks)
         except Exception:
             self.log.exception("IP check failed; not interpreting it as Zigbee failure")
