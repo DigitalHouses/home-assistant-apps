@@ -185,6 +185,16 @@ class PresenceLovelaceYamlTests(unittest.TestCase):
             self.assertEqual(fire(event_type, {}, (home, wifi, urban)), [])
         # Wi-Fi remains separately opt-in even when no zone switch is enabled.
         self.assertEqual(len(fire("wifi_in", {}, (wifi,))), 1)
+        # Notifications are about the device, not the resident's grammatical gender.
+        female = {"user_name": "Anel", "device_name": "Anelkin15"}
+        self.assertEqual(
+            fire("wifi_in", female, (wifi,)),
+            [{"title": "📶✅ Подключение к Wi-Fi сети",
+              "message": "Устройство Anel (Anelkin15) подключено к домашней Wi-Fi сети."}])
+        self.assertEqual(
+            fire("wifi_out", female, (wifi,)),
+            [{"title": "📶❌ Отключение от Wi-Fi сети",
+              "message": "Устройство Anel (Anelkin15) отключилось от домашней Wi-Fi сети."}])
 
     def test_portable_auto_entities_use_live_registered_roster_only(self):
         for path, field in ((GPS_SOURCES, "gps_tracker"),
