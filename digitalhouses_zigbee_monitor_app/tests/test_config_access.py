@@ -94,7 +94,7 @@ class ConfigAccessMQTTTests(unittest.TestCase):
         self.addCleanup(self.store.close)
         self.sent = []
         self.service = MonitorService(
-            ZigbeeMonitor(parse_networks([])), self.store,
+            ZigbeeMonitor(()), self.store,
             publish=lambda topic, body, retain: (self.sent.append((topic, body, retain)) or True),
             subscribe=lambda _: True, version="0.1.14", now=lambda: 1234567890.0,
         )
