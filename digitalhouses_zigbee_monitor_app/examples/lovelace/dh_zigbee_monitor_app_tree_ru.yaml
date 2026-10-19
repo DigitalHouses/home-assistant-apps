@@ -15,57 +15,26 @@ content: |-
   {% set last_root = loop.last and repeaters | count == 0 -%}
   {% set arm = '└─' if last_root else '├─' -%}
   {% set tab = '   ' if last_root else '│  ' -%}
-  {% set infra = n.infrastructure or {} -%}
   {% set policy = n.agent_policy or {} -%}
   {% set active = n.problem_active or [] -%}
   {% set unknown = n.problem_unknown or [] -%}
   {{ arm }} {{ '🟥' if active | count else '🟨' if unknown | count else '🟩' }} {{ n.name | e }}
-  {{ tab }}├─ Координатор: {{ (policy.hardware_model or 'модель не указана') | e }}
-  {{ tab }}│  ├─ IEEE: {{ infra.coordinator_ieee or '—' }}
-  {{ tab }}│  ├─ Подключение: {{ (infra.connection or 'unknown') | upper }}
-  {% if infra.serial_port -%}
-  {{ tab }}│  │  └─ Порт: {{ infra.serial_port | e }}
-  {% endif -%}
-  {{ tab }}│  ├─ Adapter: {{ (infra.serial_adapter or '—') | e }} / {{ (infra.coordinator_type or '—') | e }}
-  {{ tab }}│  ├─ Firmware: {{ infra.firmware_revision if infra.firmware_revision is not none else '—' }}
-  {{ tab }}│  ├─ IP: {{ (n.management_ip or 'не указан') | e }}
-  {{ tab }}│  │  └─ {{ '✅ ping OK' if n.ping == 'reachable' else '❓ нет ICMP-ответа' if n.ping == 'no_response' else '❓ неверный IP' if n.ping == 'invalid' else '❓ не проверен' }}
-  {{ tab }}│  └─ Critical: {{ 'YES' if policy.critical else 'NO' }}
-  {{ tab }}├─ Z2M: {{ (infra.z2m_version or '—') | e }}
-  {{ tab }}│  └─ Bridge: {{ (n.status or 'unknown') | e }}
-  {{ tab }}├─ Zigbee: канал {{ infra.channel if infra.channel is not none else '—' }}
-  {{ tab }}│  └─ PAN: {{ infra.pan_id if infra.pan_id is not none else '—' }}
-  {{ tab }}├─ Устройства: {{ n.devices if n.devices is not none else '—' }}
-  {{ tab }}│  └─ 🟩 {{ n.online if n.online is not none else '—' }} · 🟥 {{ n.offline if n.offline is not none else '—' }} · ❓ {{ n.availability_unknown if n.availability_unknown is not none else '—' }}
-  {{ tab }}├─ MQTT: {{ n.rpm if n.rpm is not none else '—' }} RPM
-  {{ tab }}│  └─ Порог: {{ n.threshold if n.threshold is not none else '—' }}
-  {{ tab }}├─ Supervisor: {{ (policy.addon_slug or 'не указан') | e }}
-  {{ tab }}│  └─ Binding: {{ (policy.binding_state or 'disabled') | e }}
-  {{ tab }}├─ Питание: {{ (policy.power_switch or 'не указан') | e }}
-  {{ tab }}├─ Healer: OFF · {{ (policy.healer_method or 'disabled') | e }}
-  {{ tab }}├─ Info: {{ 'свежий MQTT' if n.infrastructure_seen else 'не подтверждён' }}
-  {{ tab }}└─ Проблемы: {{ active | count }} ON · {{ unknown | count }} unknown
-  {% for problem in active -%}
-  {{ tab }}   {{ '└─' if loop.last and unknown | count == 0 else '├─' }} ON: {{ problem | e }}
-  {% endfor -%}
-  {% for problem in unknown -%}
-  {{ tab }}   {{ '└─' if loop.last else '├─' }} ?: {{ problem | e }}
-  {% endfor -%}
+  {{ tab }}├─ 🏷️ Тип: 👑 Координатор
+  {{ tab }}├─ ⚙️ Железо: {{ (policy.hardware_model or 'не указано') | e }}
+  {{ tab }}├─ 🌐 IP: {{ (n.management_ip or '—') | e }} {{ '✅' if n.ping == 'reachable' else '❓ нет ответа' if n.ping == 'no_response' else '❓' }}
+  {{ tab }}├─ 💊 Healer: OFF
+  {{ tab }}├─ 🔌 Status: {{ (n.status or 'unknown') | e }}{% if n.offline is not none %} · {{ n.offline }} offline{% endif %}
+  {{ tab }}└─ {{ '💔' if 'mqtt_traffic_low' in active else '💓' if n.rpm is not none else '❓' }} Pulse: {{ n.rpm if n.rpm is not none else '—' }} RPM ({{ n.threshold if n.threshold is not none else '—' }})
   {% endfor -%}
   {% for r in repeaters -%}
   {% set arm = '└─' if loop.last else '├─' -%}
   {% set tab = '   ' if loop.last else '│  ' -%}
   {{ arm }} 📡 {{ (r.name or r.ieee) | e }}
-  {{ tab }}├─ IEEE: {{ r.ieee | e }}
-  {{ tab }}├─ Модель: {{ (r.model or 'не указана') | e }}
-  {{ tab }}├─ Zigbee: {{ 'обнаружен' if r.discovered else '❓ не подтверждён' }}
-  {% if r.network_name -%}
-  {{ tab }}│  └─ Сеть: {{ r.network_name | e }}
-  {% endif -%}
-  {{ tab }}├─ Critical: {{ 'YES' if r.critical else 'NO' }}
-  {{ tab }}├─ IP: {{ (r.management_ip or 'не указан') | e }}
-  {{ tab }}│  └─ {{ '✅ ping OK' if r.ping == 'reachable' else '❓ нет ICMP-ответа' if r.ping == 'no_response' else '❓ неверный IP' if r.ping == 'invalid' else '❓ не проверен' }}
-  {{ tab }}└─ Power: {{ (r.power_switch or 'не указан') | e }} · OFF
+  {{ tab }}├─ 🏷️ Тип: 📡 Репитер
+  {{ tab }}├─ ⚙️ Железо: {{ (r.model or 'не указано') | e }}
+  {{ tab }}├─ 🌐 IP: {{ (r.management_ip or '—') | e }} {{ '✅' if r.ping == 'reachable' else '❓ нет ответа' if r.ping == 'no_response' else '❓' }}
+  {{ tab }}├─ 💊 Healer: OFF
+  {{ tab }}└─ 🔌 Status: {{ 'обнаружен' if r.discovered else 'не подтверждён' }}
   {% endfor -%}
   </pre>
   
