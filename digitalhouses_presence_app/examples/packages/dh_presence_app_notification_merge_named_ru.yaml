@@ -51,13 +51,6 @@ dh_presence_app_notification:
           target:
             entity_id: event.dh_presence_app_event
           options:
-            event_type: [wifi_lost]
-          id: wifi_lost
-
-        - trigger: event.received
-          target:
-            entity_id: event.dh_presence_app_event
-          options:
             event_type: [wifi_out]
           id: wifi_out
 
@@ -92,8 +85,6 @@ dh_presence_app_notification:
               Дома {{ count }} {{ 'человека' if count % 100 not in [12, 13, 14] and count % 10 in [2, 3, 4] else 'человек' }}
             {% endif %}
           {% endif %}
-        wifi_lost_message: >-
-          Источник Wi-Fi временно недоступен. Состояние подключения неизвестно.
       actions:
         # One home notification per logical resident arrival/departure;
         # zone.home acts as its MQTT gate regardless of GPS/Wi-Fi/hybrid mode.
@@ -151,17 +142,6 @@ dh_presence_app_notification:
                   data:
                     title: "📶✅ Подключение к Wi-Fi сети"
                     message: "Устройство {{ wifi_person_device }} подключено к домашней Wi-Fi сети."
-            - conditions:
-                - condition: trigger
-                  id: wifi_lost
-                - condition: state
-                  entity_id: switch.dh_presence_app_notify_wifi
-                  state: "on"
-              sequence:
-                - action: script.write2log
-                  data:
-                    title: "📶⚠️ Wi-Fi не подтверждается: {{ wifi_person_device }}"
-                    message: "{{ wifi_lost_message }}"
             - conditions:
                 - condition: trigger
                   id: wifi_out

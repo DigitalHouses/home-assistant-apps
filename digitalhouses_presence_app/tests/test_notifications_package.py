@@ -19,8 +19,8 @@ class NotificationPackageTests(unittest.TestCase):
             encoding="utf-8")
         canonical = PACKAGE.read_text(encoding="utf-8")
         self.assertIn("dh_presence_app_notification:\n  automation:", keyed)
-        self.assertEqual(keyed.count("- action: script.write2log"), 7)
-        self.assertEqual(keyed.count('title: "'), 7)
+        self.assertEqual(keyed.count("- action: script.write2log"), 6)
+        self.assertEqual(keyed.count('title: "'), 6)
         self.assertNotIn("  recorder:", keyed)
         source = canonical[canonical.index("automation:\n"):]
         expected = "\n".join("  " + line if line else "" for line in source.split("\n"))
@@ -44,7 +44,7 @@ class NotificationPackageTests(unittest.TestCase):
                 self.assertNotIn("id: dh_presence_app_notifications", code)
                 self.assertNotIn("alias: \"DH Presence · Уведомления\"", code)
                 self.assertNotIn("automation.dh_presence_uvedomleniia:", code)
-                self.assertEqual(code.count("- action: script.write2log"), 7)
+                self.assertEqual(code.count("- action: script.write2log"), 6)
                 self.assertIn("id: zone_enter", code)
                 self.assertIn("id: zone_leave", code)
         self.assertIn("\nhomeassistant:\n  customize:\n    automation.dh_presence_notifications:\n",
@@ -52,12 +52,12 @@ class NotificationPackageTests(unittest.TestCase):
         self.assertIn("\n  homeassistant:\n    customize:\n      automation.dh_presence_notifications:\n",
                       merged)
 
-    def test_seven_notified_event_types(self):
+    def test_six_notified_event_types(self):
         code = PACKAGE.read_text(encoding="utf-8")
-        for event in ("arrival", "departure", "wifi_in", "wifi_lost", "wifi_out", "zone_enter", "zone_leave"):
+        for event in ("arrival", "departure", "wifi_in", "wifi_out", "zone_enter", "zone_leave"):
             self.assertIn("id: " + event, code)
-        self.assertEqual(code.count("trigger: event.received"), 7)
-        self.assertEqual(code.count("action: script.write2log"), 7)
+        self.assertEqual(code.count("trigger: event.received"), 6)
+        self.assertEqual(code.count("action: script.write2log"), 6)
         self.assertEqual(code.count("action: logbook.log"), 0)
         self.assertEqual(code.count("action: persistent_notification.create"), 0)
         # Source-only GPS events remain in the App, but never duplicate
@@ -74,21 +74,19 @@ class NotificationPackageTests(unittest.TestCase):
         self.assertEqual(code.count("switch.dh_presence_app_notify_zone_620b51c29b479984"), 2)
         self.assertEqual(code.count("zone_entity_id != 'zone.home'"), 2)
         self.assertNotIn("switch.dh_presence_app_notify_gps", code)
-        self.assertEqual(code.count("entity_id: switch.dh_presence_app_notify_wifi"), 3)
-        self.assertEqual(code.count('state: "on"'), 3)
-        self.assertEqual(code.count("action: script.write2log"), 7)
+        self.assertEqual(code.count("entity_id: switch.dh_presence_app_notify_wifi"), 2)
+        self.assertEqual(code.count('state: "on"'), 2)
+        self.assertEqual(code.count("action: script.write2log"), 6)
 
-    def test_router_wifi_out_wording_and_unknown_without_false_claims(self):
+    def test_router_wifi_notifications_include_only_in_and_out(self):
         code = PACKAGE.read_text(encoding="utf-8")
-        self.assertIn("id: wifi_lost", code)
-        self.assertIn("Wi-Fi не подтверждается", code)
-        self.assertIn("Источник Wi-Fi временно недоступен", code)
+        self.assertNotIn("id: wifi_lost", code)
+        self.assertNotIn("Wi-Fi не подтверждается", code)
         self.assertIn("wifi_out now means explicit router device_tracker home -> not_home", code)
         self.assertIn('title: "📶✅ Подключение к Wi-Fi сети"', code)
         self.assertIn('message: "Устройство {{ wifi_person_device }} подключено к домашней Wi-Fi сети."', code)
         self.assertIn('title: "📶❌ Отключение от Wi-Fi сети"', code)
         self.assertIn('message: "Устройство {{ wifi_person_device }} отключилось от домашней Wi-Fi сети."', code)
-        self.assertIn('title: "📶⚠️ Wi-Fi не подтверждается: {{ wifi_person_device }}"', code)
         self.assertNotIn("📵", code)
         self.assertNotIn("По данным Wi-Fi-трекера роутера", code)
         self.assertNotIn("выбранными методами PING/ARP", code)
@@ -139,9 +137,9 @@ class NotificationPackageTests(unittest.TestCase):
         # HA 2026.10.1: Jinja tojson can leave escaped emoji surrogate
         # halves in the HA service-data rendering pipeline.
         code = PACKAGE.read_text(encoding="utf-8")
-        self.assertEqual(code.count("- action: script.write2log"), 7)
-        self.assertEqual(code.count('title: "'), 7)
-        self.assertEqual(code.count('message: "'), 7)
+        self.assertEqual(code.count("- action: script.write2log"), 6)
+        self.assertEqual(code.count('title: "'), 6)
+        self.assertEqual(code.count('message: "'), 6)
         self.assertNotIn("| tojson", code)
         self.assertNotIn("data: >-", code)
         for line in code.splitlines():
@@ -156,8 +154,7 @@ class NotificationPackageTests(unittest.TestCase):
                     title = title.replace(placeholder, "Serzhan")
                 title.encode("utf-8")
         for variable in ("person_name:", "wifi_person_device:",
-                         "arrival_message:", "departure_message:",
-                         "wifi_lost_message:"):
+                         "arrival_message:", "departure_message:"):
             self.assertIn(variable, code)
         self.assertIn("if trigger.to_state.attributes.first_arrival", code)
         self.assertIn("if trigger.to_state.attributes.last_departure", code)
@@ -165,11 +162,11 @@ class NotificationPackageTests(unittest.TestCase):
     def test_each_write2log_has_only_title_and_message(self):
         import re
         code = PACKAGE.read_text(encoding="utf-8")
-        self.assertEqual(code.count("- action: script.write2log"), 7)
+        self.assertEqual(code.count("- action: script.write2log"), 6)
         blocks = re.findall(
             r'(?m)^[ ]+data:\n[ ]+title: "[^"\n]+"\n[ ]+message: "[^"\n]+"',
             code,
         )
-        self.assertEqual(len(blocks), 7)
+        self.assertEqual(len(blocks), 6)
         self.assertNotIn("data: >-", code)
         self.assertNotIn("} | tojson }}", code)
