@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.13
+
+- Конфигурация HA доступна приложению по `/homeassistant` **только для
+  чтения** через Supervisor mapping `homeassistant_config`; никакой
+  записи в файлы HA или повышения роли `hassio_role: default`.
+- Это **подготовка источника данных** для будущего сопоставления
+  Zigbee2MQTT с установленными Apps. В версии 0.1.13 **ещё нет**
+  чтения или разбора `/homeassistant/zigbee2mqtt/configuration.yaml`;
+  координаторы и поля `addon_slug` не изменяются автоматически.
+- Файлы конфигурации HA могут содержать секреты. Запрещено
+  публиковать их содержимое в MQTT, журналах и телеметрии.
+- Dashboard ASCII-дерево, существующие настройки, RPM, Healer и
+  управление Zigbee/PoE **не изменялись**.
+
 ## 0.1.12
 
 - Fix Supervisor own-App Options autofill under `hassio_role: default`:
