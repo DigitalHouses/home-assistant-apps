@@ -94,9 +94,9 @@ class PresenceLovelaceYamlTests(unittest.TestCase):
             ("arrival", {"first_arrival": True, "residents_home_after": 1}, (home,),
              "🏠✅ Serzhan прибыл домой", "Статус дома: ПРИСУТСТВИЕ"),
             ("arrival", {"first_arrival": False, "residents_home_after": 2}, (home,),
-             "🏠✅ Serzhan прибыл домой", "Дома: 2"),
+             "🏠✅ Serzhan прибыл домой", "Дома 2 человека"),
             ("departure", {"last_departure": False, "residents_home_after": 1}, (home,),
-             "🏠🚪 Serzhan покинул дом", "Дома: 1"),
+             "🏠🚪 Serzhan покинул дом", "Дома 1 человек"),
             ("departure", {"last_departure": True, "residents_home_after": 0}, (home,),
              "🏠🚪 Serzhan покинул дом", "Статус дома: ОТСУТСТВИЕ"),
             ("zone_enter", {"zone_entity_id": "zone.urban_coffee",
@@ -119,6 +119,58 @@ class PresenceLovelaceYamlTests(unittest.TestCase):
             with self.subTest(event_type=event_type, attrs=attrs):
                 self.assertEqual(fire(event_type, attrs, enabled),
                                  [{"title": title, "message": message}])
+
+        # Russian agreement for zero, singular, paucal (2-4), 5+, and
+        # the 11-14 exception, including all hundreds variants.
+        grammatical_cases = {
+            0: "человек",
+            1: "человек",
+            2: "человека",
+            3: "человека",
+            4: "человека",
+            5: "человек",
+            11: "человек",
+            12: "человек",
+            13: "человек",
+            14: "человек",
+            15: "человек",
+            20: "человек",
+            21: "человек",
+            22: "человека",
+            23: "человека",
+            24: "человека",
+            25: "человек",
+            101: "человек",
+            102: "человека",
+            104: "человека",
+            111: "человек",
+            112: "человек",
+            114: "человек",
+            121: "человек",
+            122: "человека",
+            125: "человек",
+        }
+        for count, word in grammatical_cases.items():
+            for kind, first_or_last in (("arrival", "first_arrival"),
+                                        ("departure", "last_departure")):
+                with self.subTest(event_type=kind, count=count):
+                    actual = fire(kind, {first_or_last: False,
+                                         "residents_home_after": count}, (home,))
+                    self.assertEqual(actual[0]["message"],
+                                     f"Дома {count} {word}")
+        for missing_count in (None, "?", ""):
+            self.assertEqual(
+                fire("arrival", {"first_arrival": False,
+                                 "residents_home_after": missing_count}, (home,))[0]["message"],
+                "Дома: нет данных"
+            )
+        # Do not replace explicit first/last household statuses with counts.
+        self.assertEqual(fire("arrival", {"first_arrival": True,
+                                          "residents_home_after": 1}, (home,))[0]["message"],
+                         "Статус дома: ПРИСУТСТВИЕ")
+        self.assertEqual(fire("departure", {"last_departure": True,
+                                            "residents_home_after": 0}, (home,))[0]["message"],
+                         "Статус дома: ОТСУТСТВИЕ")
 
         # No second zone.home notification when an arrival/departure is
         # already covered by the logical home state.
