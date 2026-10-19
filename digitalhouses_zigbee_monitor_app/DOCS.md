@@ -1,8 +1,35 @@
 # DigitalHouses Zigbee Monitor App — installation and acceptance
 
-Version: **0.1.9 (experimental)**. Run only after the production GHCR image
-`ghcr.io/digitalhouses/digitalhouses_zigbee_monitor_app:0.1.9` is published
+Version: **0.1.10 (experimental)**. Run only after the production GHCR image
+`ghcr.io/digitalhouses/digitalhouses_zigbee_monitor_app:0.1.10` is published
 and verified by repository release workflows.
+
+## Беспаспортный реестр Zigbee2MQTT (0.1.10)
+
+Сведения каждого агента состоят из двух независимых частей.
+
+- **Автоматически:** сеть по IEEE, base_topic, Bridge, RPM, Zigbee version,
+  serial USB/TCP, очевидный TCP host/IP, данные устройств и Problems.
+- **Пользовательская policy (SQLite, HA UI):** display_name, critical,
+  hardware_model, management_host, healer_method, addon_slug, power_switch.
+  Никаких паспортных YAML и предварительного списка координаторов.
+- Настройки доступны в Dashboard «Настройки агентов» и MQTT Device.
+  Пустое текстовое значение сбрасывает override. Critical = OFF и
+  healer_method = disabled по умолчанию.
+- management_host — **дополнительный интерфейс управления**; для USB
+  не выводится из serial, даже если это ZigStar-01 в режиме USB.
+  Наличие адреса пока не означает успешный Ping.
+- Опция метода восстановления — только **декларация намерения**.
+  Любая привязка Supervisor App или power switch помечена unverified.
+  **Healer в 0.1.10 всегда выключен**, никаких опасных команд
+  в App не реализовано. Неподтверждённые связи запрещено
+  считать готовыми к управлению.
+- Прежний паспортный link_ping_entity не переносится;
+  независимая сетевая диагностика будет реализована отдельно.
+  `critical` — пользовательская характеристика, не подавляет
+  независимые Problem или RPM.
+- Recorder: только прежние четыре скаляра; новые switch/select/text
+  исключены, значения сохранены в SQLite App.
 
 ## Пассивное дерево Zigbee2MQTT (0.1.9)
 
