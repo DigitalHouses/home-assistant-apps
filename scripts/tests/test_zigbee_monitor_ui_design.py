@@ -292,6 +292,9 @@ class ZigbeeMonitorUiDesignTests(unittest.TestCase):
             "sensor.dh_zigbee_monitor_app_*_details",
             "sensor.dh_zigbee_monitor_app_*",
             "binary_sensor.dh_zigbee_monitor_app_*",
+            "switch.dh_zigbee_monitor_app_*",
+            "select.dh_zigbee_monitor_app_*",
+            "text.dh_zigbee_monitor_app_*",
             "button.dh_zigbee_monitor_app_*",
             "event.dh_zigbee_monitor_app_*",
         })
@@ -320,7 +323,7 @@ class ZigbeeMonitorUiDesignTests(unittest.TestCase):
         self.assertEqual((APP / "digitalhouses.app").read_text().strip(), "type = haos_addon")
         config = yaml.safe_load((APP / "config.yaml").read_text(encoding="utf-8"))
         self.assertEqual(config["slug"], "digitalhouses_zigbee_monitor_app")
-        self.assertEqual(config["version"], "0.1.9")
+        self.assertEqual(config["version"], "0.1.10")
         self.assertEqual(config["stage"], "experimental")
 
 
