@@ -207,6 +207,12 @@ class SupervisorOptions:
         return obj
 
     def write(self, options: Mapping[str, Any]) -> None:
+        # Fail closed: never modify the Supervisor settings unless the
+        # Supervisor itself confirms the candidate fits the live schema.
+        checked = self._request("/addons/self/options/validate", dict(options))
+        detail = checked.get("data")
+        if not isinstance(detail, dict) or detail.get("valid") is not True:
+            raise ValueError("Supervisor rejected discovered Zigbee configuration")
         self._request("/addons/self/options", {"options": dict(options)})
 
 
