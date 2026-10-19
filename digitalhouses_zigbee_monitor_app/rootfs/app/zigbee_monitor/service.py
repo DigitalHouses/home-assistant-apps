@@ -14,6 +14,8 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Mapping
 
 from .core import ZigbeeMonitor, ZigbeeMonitorError
+from .agent_options import (normalize_registry, normalize_ieee,
+                            is_recognized_repeater, management_address)
 from .autodiscovery import DISCOVERY_FILTERS, discovery_from_bridge
 from .infrastructure import parse_bridge_infrastructure
 from .discovery import (
@@ -73,6 +75,8 @@ class MonitorService:
         self._traffic_started: dict[str, float] = {}
         self._traffic_metrics: dict[str, dict[str, object]] = {}
         self._bridge_info_seen: set[str] = set()
+        self._agent_registry = normalize_registry({})
+        self._ping_results: dict[str, str] = {}
         self._refresh_pending: set[str] | None = None
         self._refresh_bridge_pending: set[str] | None = None
         self._refresh_started: float | None = None
@@ -269,7 +273,6 @@ class MonitorService:
             self._publish_networks()
             self._publish_incidents()
             self._publish_problem_settings()
-            self._publish_agent_settings()
             self._publish_problems(allow_event=False)
 
     def disconnected(self) -> None:
@@ -318,22 +321,116 @@ class MonitorService:
             self._send(auto_topic, "ON" if auto else "OFF")
             self._send(manual_topic, str(threshold))
 
-    def _publish_agent_settings(self) -> None:
-        for network in self.monitor.networks:
-            policy = self.store.network_agent_policy(network.network_id)
-            prefix = f"{ROOT}/settings/{network.network_id}/agent"
-            for key, value in policy.items():
-                state = ("ON" if value else "OFF") if key == "critical" else str(value)
-                self._send(f"{prefix}/{key}", state)
+    def set_agent_options(self, options: object) -> None:
+        """Apply the installed options snapshot; no Zigbee or Supervisor calls."""
+        with self._lock:
+            self._agent_registry = normalize_registry(options)
+            self._publish_networks()
+
+    def set_ping_results(self, results: dict[str, str]) -> None:
+        """Update presentation only; no ping result is a Zigbee Problem."""
+        with self._lock:
+            self._ping_results = dict(results)
+            self._publish_networks()
+
+    def agent_snapshot(self) -> tuple[list[dict[str, object]],
+                                      list[dict[str, object]],
+                                      dict[str, dict[str, object]]]:
+        """Read-only confirmed IEEE candidates for Supervisor Options autofill."""
+        with self._lock:
+            coords: list[dict[str, object]] = []
+            repeaters: list[dict[str, object]] = []
+            legacy: dict[str, dict[str, object]] = {}
+            for net in self.monitor.networks:
+                ieee = self.store.coordinator_ieee(net.network_id)
+                if ieee:
+                    coords.append({
+                        "ieee": ieee, "name": net.name, "model": "",
+                        "network_id": net.network_id,
+                    })
+                    old = self.store.network_agent_policy(net.network_id)
+                    if old != self.store.default_agent_policy():
+                        legacy[net.network_id] = old
+                if not self.monitor.network_status(net.network_id)["inventory_observed"]:
+                    continue
+                for device in self.monitor.devices(net.network_id):
+                    if is_recognized_repeater(device):
+                        repeaters.append({
+                            "ieee": device.ieee_address, "name": device.friendly_name,
+                            "model": device.model or "", "recognized": True,
+                        })
+            return coords, repeaters, legacy
+
+    def agent_ping_targets(self) -> dict[str, str]:
+        """Only user-entered or explicit TCP-IP; NEVER map USB port to IP."""
+        with self._lock:
+            targets: dict[str, str] = {}
+            coords = {x["ieee"]: x for x in self._agent_registry["coordinators"]}
+            for net in self.monitor.networks:
+                ieee = self.store.coordinator_ieee(net.network_id)
+                opt = coords.get(ieee, {})
+                saved = self.store.network_infrastructure(net.network_id)
+                infra = saved["data"] if saved else {}
+                auto_ip = infra.get("ip") if infra.get("connection") == "tcp" else None
+                ip = management_address(opt.get("management_ip") or auto_ip)
+                if ieee and ip:
+                    targets[ieee] = ip
+            for opt in self._agent_registry["repeaters"]:
+                ieee = str(opt["ieee"])
+                ip = management_address(opt.get("management_ip"))
+                if ip:
+                    targets[ieee] = ip
+            return targets
 
     @staticmethod
     def _binding_state(policy: dict[str, object]) -> str:
-        """An unverified HA entity/slug NEVER makes a destructive action ready."""
-        method = policy["healer_method"]
+        method = policy.get("healer_method", "disabled")
         if method == "disabled":
             return "disabled"
-        required = policy["addon_slug"] if method == "addon_restart" else policy["power_switch"]
+        required = policy.get("addon_slug") if method == "addon_restart" else policy.get("power_switch")
         return "missing_binding" if not required else "unverified"
+
+    def _publish_repeaters(self) -> None:
+        by_ieee: dict[str, tuple[object, object]] = {}
+        for network in self.monitor.networks:
+            if not self.monitor.network_status(network.network_id)["inventory_observed"]:
+                continue
+            for device in self.monitor.devices(network.network_id):
+                by_ieee[device.ieee_address] = (device, network)
+        configured = {
+            str(c["ieee"]): c for c in self._agent_registry["repeaters"]
+        }
+        # Show recognized repeaters immediately, even before option sync.
+        for ieee, (device, _net) in by_ieee.items():
+            if is_recognized_repeater(device) and ieee not in configured:
+                configured[ieee] = {
+                    "ieee": ieee, "name": device.friendly_name,
+                    "model": device.model or "", "critical": False,
+                    "management_ip": "", "power_switch": "",
+                }
+        rows: list[dict[str, object]] = []
+        for ieee, policy in sorted(configured.items()):
+            found = by_ieee.get(ieee)
+            device, network = found if found else (None, None)
+            ip = policy.get("management_ip", "")
+            if ip and management_address(ip) is None:
+                ping = "invalid"
+            else:
+                ping = self._ping_results.get(ieee, "unknown" if ip else "not_configured")
+            rows.append({
+                "ieee": ieee, "name": policy.get("name") or
+                (device.friendly_name if device else ieee),
+                "model": policy.get("model") or (device.model if device else ""),
+                "critical": policy.get("critical", False),
+                "network_name": network.name if network else None,
+                "network_id": network.network_id if network else None,
+                "discovered": bool(found and device.device_type == "Router"),
+                "management_ip": ip, "ping": ping,
+                "power_switch": policy.get("power_switch", ""),
+                "binding_verified": False, "healer_enabled": False,
+            })
+        self._detail("repeaters_details", "repeaters", rows,
+                     valid=bool(self.monitor.networks or rows))
 
     def _update_traffic(self, epoch: int) -> None:
         """Evaluate complete SQLite minutes, never individual MQTT packets.
@@ -487,11 +584,32 @@ class MonitorService:
                 rpm=metrics.get("rpm"), threshold=metrics.get("threshold"),
             )
             saved = self.store.network_infrastructure(config.network_id)
-            policy = self.store.network_agent_policy(config.network_id)
+            ieee = self.store.coordinator_ieee(config.network_id)
+            configured = next(
+                (x for x in self._agent_registry["coordinators"] if x["ieee"] == ieee), {}
+            )
+            policy = {
+                "display_name": configured.get("name", ""),
+                "critical": configured.get("critical", False),
+                "hardware_model": configured.get("model", ""),
+                "management_host": configured.get("management_ip", ""),
+                "addon_slug": configured.get("addon_slug", ""),
+                "healer_method": configured.get("healer_method", "disabled"),
+                "power_switch": configured.get("power_switch", ""),
+            }
+            auto_ip = (
+                saved["data"].get("ip") if saved and saved["data"].get("connection") == "tcp"
+                else None
+            )
+            ip = policy["management_host"] or auto_ip or ""
+            ping = ("invalid" if ip and management_address(ip) is None
+                    else self._ping_results.get(ieee or "", "unknown" if ip else "not_configured"))
             rows.append({
                 "network_id": config.network_id,
                 "name": config.name,
                 "agent_name": policy["display_name"] or config.name,
+                "management_ip": ip,
+                "ping": ping,
                 "agent_policy": {
                     **policy,
                     "binding_state": self._binding_state(policy),
@@ -514,6 +632,7 @@ class MonitorService:
                 **metrics,
             })
         self._detail("networks_details", "networks", rows, valid=bool(self.monitor.networks))
+        self._publish_repeaters()
 
     def _publish_inventory_and_availability(self) -> None:
         live = self._all_live()
@@ -856,29 +975,6 @@ class MonitorService:
                         force=True,
                     )
                 return "ha_status"
-            # User-facing per-network agent fields replace Zigbee Boss passports.
-            # Configuration is inert: never calls Supervisor, MQTT Z2M commands or PoE.
-            agent_root = f"{ROOT}/command/agent/"
-            if topic.startswith(agent_root):
-                parts = topic[len(agent_root):].split("/")
-                if retain or len(parts) != 2:
-                    return "agent_setting_ignored"
-                network_id, field = parts
-                if network_id not in {n.network_id for n in self.monitor.networks}:
-                    return "agent_setting_ignored"
-                try:
-                    if field == "critical":
-                        if payload not in (b"ON", b"OFF"):
-                            return "agent_setting_ignored"
-                        value: str | bool = payload == b"ON"
-                    else:
-                        value = payload.decode("utf-8")
-                    self.store.update_network_agent_policy(network_id, field, value)
-                except (ValueError, UnicodeDecodeError):
-                    return "agent_setting_ignored"
-                self._publish_agent_settings()
-                self._publish_networks()
-                return "agent_setting_updated"
             settings_root = f"{ROOT}/command/settings/"
             if topic.startswith(settings_root):
                 parts = topic[len(settings_root):].split("/")
@@ -958,8 +1054,7 @@ class MonitorService:
                         DISCOVERY, _json(build_discovery(self.version, self.monitor.networks))
                     )
                     self._publish_problem_settings()
-                    self._publish_agent_settings()
-                    self._publish_networks()
+                            self._publish_networks()
                     self._publish_inventory_and_availability()
                     self._publish_problems(allow_event=False)
             # Passive bridge metadata. No Supervisor privilege escalation or false pairing.
