@@ -3,6 +3,7 @@
 # Requires: homeassistant: packages: !include_dir_merge_named packages
 # Keep dh_presence_app.yaml separate for Recorder. Do not duplicate this automation.
 # Events are native MQTT Event entities; script.write2log owns notifications.
+# Home notifications use logical resident arrival/departure; Wi-Fi notices are opt-in.
 # No extra notification helper or standalone app entity.
 dh_presence_app_notification:
   automation:
