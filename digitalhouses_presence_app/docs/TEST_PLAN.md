@@ -89,9 +89,10 @@ alarm/shutdown/security decisions based on this pilot until observed and accepte
   negative streak; no fabricated `wifi_out` / `departure`.
 - **Dashboard:** resident roster grows automatically with registered residents
   and displays local times for final/GPS/Wi-Fi changes. No IP/MAC leakage.
-- **Notifications:** one `script.write2log` per emitted machine event; local
-  `!include_dir_merge_named` package has only one automation and accurately
-  labels Wi-Fi OFF as ARP nonresponse, not verified radio disconnection.
+- **Notifications:** one `script.write2log` for each enabled logical `arrival`/`departure` when `zone.home` is ON. First/last real aggregate transitions include `Статус дома: ПРИСУТСТВИЕ`/`ОТСУТСТВИЕ`; other resident transitions show `Дома: N`. No duplicated `gps_in`/`gps_out` or `zone.home` messages.
+- **Other zones:** `zone_enter` / `zone_leave` yield a single informational notice only with that zone's own switch ON; OFF still emits a machine-readable event.
+- **Wi-Fi source:** `wifi_in` / `wifi_out` and legacy `wifi_lost` produce optional router-network notices **only** when `switch.dh_presence_app_notify_wifi=on`, independently of presence mode and zone switches; OFF does not change evidence or Recorder.
+- **No startup noise:** first baseline, MQTT reconnection, HA refresh, and App restart must never create a synthetic notification.
 
 Observe at least 3 days of normal iOS sleep/wake, Wi-Fi off/on, and changing
 GPS reports; any false departure while actually at home must be treated as a
