@@ -167,8 +167,8 @@ automation:
             sequence:
               - action: script.write2log
                 data:
-                  title: "📶 Подключение к Wi-Fi"
-                  message: "{{ wifi_person_device }} — устройство подключено к Wi-Fi."
+                  title: "📶✅ Подключение к Wi-Fi сети"
+                  message: "Устройство {{ wifi_person_device }} подключено к домашней Wi-Fi сети."
           - conditions:
               - condition: trigger
                 id: wifi_lost
@@ -189,8 +189,8 @@ automation:
             sequence:
               - action: script.write2log
                 data:
-                  title: "📶❌ Отключение от Wi-Fi"
-                  message: "{{ wifi_person_device }} — устройство отключено от Wi-Fi."
+                  title: "📶❌ Отключение от Wi-Fi сети"
+                  message: "Устройство {{ wifi_person_device }} отключилось от домашней Wi-Fi сети."
 
 # English alias generates the canonical entity_id; friendly name stays Russian.
 # The renamed automation id retires the legacy transliterated registry identity.
