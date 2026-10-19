@@ -84,7 +84,13 @@ class NotificationPackageTests(unittest.TestCase):
         self.assertIn("Wi-Fi не подтверждается", code)
         self.assertIn("Источник Wi-Fi временно недоступен", code)
         self.assertIn("wifi_out now means explicit router device_tracker home -> not_home", code)
-        self.assertIn("По данным Wi-Fi-трекера роутера", code)
+        self.assertIn('title: "📶✅ Подключение к Wi-Fi сети"', code)
+        self.assertIn('message: "Устройство {{ wifi_person_device }} подключено к домашней Wi-Fi сети."', code)
+        self.assertIn('title: "📶❌ Отключение от Wi-Fi сети"', code)
+        self.assertIn('message: "Устройство {{ wifi_person_device }} отключилось от домашней Wi-Fi сети."', code)
+        self.assertIn('title: "📶⚠️ Wi-Fi не подтверждается: {{ wifi_person_device }}"', code)
+        self.assertNotIn("📵", code)
+        self.assertNotIn("По данным Wi-Fi-трекера роутера", code)
         self.assertNotIn("выбранными методами PING/ARP", code)
         self.assertNotIn("timeout_minutes", code)
         self.assertNotIn("resident_names.", code)
@@ -142,13 +148,16 @@ class NotificationPackageTests(unittest.TestCase):
             if 'title: "' in line:
                 title = line.split('title: "', 1)[1].rsplit('"', 1)[0]
                 placeholders = ("{{ person_name }}", "{{ wifi_person_device }}")
-                self.assertEqual(sum(title.count(v) for v in placeholders), 1)
+                if "Подключение к Wi-Fi" in title or "Отключение от Wi-Fi" in title:
+                    self.assertEqual(sum(title.count(v) for v in placeholders), 0)
+                else:
+                    self.assertEqual(sum(title.count(v) for v in placeholders), 1)
                 for placeholder in placeholders:
                     title = title.replace(placeholder, "Serzhan")
                 title.encode("utf-8")
         for variable in ("person_name:", "wifi_person_device:",
                          "arrival_message:", "departure_message:",
-                         "wifi_lost_message:", "wifi_out_message:"):
+                         "wifi_lost_message:"):
             self.assertIn(variable, code)
         self.assertIn("if trigger.to_state.attributes.first_arrival", code)
         self.assertIn("if trigger.to_state.attributes.last_departure", code)

@@ -94,8 +94,6 @@ dh_presence_app_notification:
           {% endif %}
         wifi_lost_message: >-
           Источник Wi-Fi временно недоступен. Состояние подключения неизвестно.
-        wifi_out_message: >-
-          По данным Wi-Fi-трекера роутера устройство больше не подключено к домашней Wi-Fi сети.
       actions:
         # One home notification per logical resident arrival/departure;
         # zone.home acts as its MQTT gate regardless of GPS/Wi-Fi/hybrid mode.
@@ -151,8 +149,8 @@ dh_presence_app_notification:
               sequence:
                 - action: script.write2log
                   data:
-                    title: "📶 Wi-Fi обнаружен: {{ wifi_person_device }}"
-                    message: "Устройство обнаружено роутером в домашней Wi-Fi сети."
+                    title: "📶✅ Подключение к Wi-Fi сети"
+                    message: "Устройство {{ wifi_person_device }} подключено к домашней Wi-Fi сети."
             - conditions:
                 - condition: trigger
                   id: wifi_lost
@@ -162,7 +160,7 @@ dh_presence_app_notification:
               sequence:
                 - action: script.write2log
                   data:
-                    title: "📵 Wi-Fi не подтверждается: {{ wifi_person_device }}"
+                    title: "📶⚠️ Wi-Fi не подтверждается: {{ wifi_person_device }}"
                     message: "{{ wifi_lost_message }}"
             - conditions:
                 - condition: trigger
@@ -173,8 +171,8 @@ dh_presence_app_notification:
               sequence:
                 - action: script.write2log
                   data:
-                    title: "📵 Wi-Fi не обнаружен: {{ wifi_person_device }}"
-                    message: "{{ wifi_out_message }}"
+                    title: "📶❌ Отключение от Wi-Fi сети"
+                    message: "Устройство {{ wifi_person_device }} отключилось от домашней Wi-Fi сети."
 
   # English alias generates the canonical entity_id; friendly name stays Russian.
   # The renamed automation id retires the legacy transliterated registry identity.
