@@ -68,6 +68,8 @@ class Resident:
     wifi_monitor_initialized: bool = False
     distance: float | None = None
     initialized: bool = False
+    _defer_presence_decisions: bool = field(default=False, init=False, repr=False)
+    _pending_presence_decisions: set[str] = field(default_factory=set, init=False, repr=False)
 
     @property
     def key(self) -> str:
@@ -117,6 +119,25 @@ class Engine:
         """Set live decision mode without inventing a source observation or event."""
         self.mode = Mode(mode)
 
+    def begin_observation_cycle(self) -> None:
+        """Collect source transitions without publishing interim household decisions."""
+        if any(r._defer_presence_decisions for r in self.residents.values()):
+            raise RuntimeError("Presence observation cycle already active")
+        for r in self.residents.values():
+            r._defer_presence_decisions = True
+            r._pending_presence_decisions.clear()
+
+    def finish_observation_cycle(self, now: datetime) -> list[dict]:
+        """Decide once per resident after GPS and router evidence are both sampled."""
+        events: list[dict] = []
+        for r in self.residents.values():
+            pending = r._pending_presence_decisions.copy()
+            r._pending_presence_decisions.clear()
+            r._defer_presence_decisions = False
+            if pending:
+                self._change(r, now, events)
+        return events
+
     def _decide(self, r: Resident, now: datetime) -> Status | None:
         # A phone may remain still for days. An old, valid HA GPS report is
         # the last known position, not a failed observation. Wi-Fi evidence
@@ -133,13 +154,21 @@ class Engine:
             return gps if gps is not Status.UNAVAILABLE else None
         if self.mode is Mode.WIFI:
             return wifi if wifi is not Status.UNAVAILABLE else None
-        if wifi in (Status.HOME, Status.NOT_HOME):
-            # Hybrid uses completed, debounced ARP absence even if iOS GPS
-            # still says HOME. Infrastructure errors never produce NOT_HOME.
-            return wifi
-        return gps if gps is not Status.UNAVAILABLE else None
+        # In Hybrid, positive evidence from either source proves HOME.
+        # Router NOT_HOME only means the phone disconnected: airplane mode,
+        # a flat battery and physical departure are indistinguishable.
+        # Therefore it must never override last known GPS HOME or by itself
+        # declare departure when GPS is unavailable.
+        if gps is Status.HOME or wifi is Status.HOME:
+            return Status.HOME
+        if gps is Status.NOT_HOME:
+            return Status.NOT_HOME
+        return None
 
     def _change(self, r: Resident, when: datetime, events: list[dict]):
+        if r._defer_presence_decisions:
+            r._pending_presence_decisions.add(r.tracker)
+            return
         outcome = self._decide(r, when)
         if outcome is None or outcome is r.confirmed:
             r.initialized = True
