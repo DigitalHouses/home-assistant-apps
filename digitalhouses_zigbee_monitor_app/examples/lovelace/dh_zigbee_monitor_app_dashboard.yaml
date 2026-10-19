@@ -120,9 +120,15 @@ sections:
                   return result + duration(a.duration_seconds);
                 }
                 const supervisorLatest = supervisor?.attributes?.latest_version;
-                if (supervisor?.state === 'on' && validVersion(installed)
-                    && validVersion(supervisorLatest) && compare(supervisorLatest, installed) > 0)
-                  return 'Доступно обновление: ' + installed + ' → ' + supervisorLatest;
+                if (supervisor?.state === 'on') {
+                  const confirmed = validVersion(supervisorLatest);
+                  const candidate = confirmed ? supervisorLatest : latestChecked;
+                  if (validVersion(installed) && validVersion(candidate)
+                      && compare(candidate, installed) > 0)
+                    return 'Доступно обновление: ' + installed + ' → ' + candidate +
+                      (confirmed ? '' : ' · версия релиза');
+                  return 'Supervisor сообщает об обновлении · версии не определены';
+                }
                 return 'Приложение запущено';
               ]]]
             styles:
@@ -188,16 +194,28 @@ sections:
                     state: "on"
                 chip:
                   type: template
+                  entity: update.digitalhouses_zigbee_monitor_app_update
                   icon: mdi:package-down
                   icon_color: orange
                   content: >-
                     {% set upd = 'update.digitalhouses_zigbee_monitor_app_update' %}
-                    {% set installed = states('sensor.dh_zigbee_monitor_app_version') %}
-                    {% set latest = state_attr(upd, 'latest_version') %}
-                    {% if installed not in ['unknown','unavailable','none',''] and latest %}
-                      Обновить {{ installed }} → {{ latest }}
+                    {% set invalid = [none, '', 'unknown', 'unavailable', 'none'] %}
+                    {% set supervisor_installed = state_attr(upd, 'installed_version') %}
+                    {% set app_installed = states('sensor.dh_zigbee_monitor_app_version') %}
+                    {% set installed = supervisor_installed if supervisor_installed not in invalid else app_installed %}
+                    {% set supervisor_latest = state_attr(upd, 'latest_version') %}
+                    {% set app_latest = states('sensor.dh_zigbee_monitor_app_latest_version') %}
+                    {% set latest = supervisor_latest if supervisor_latest not in invalid else app_latest %}
+                    {% if installed not in invalid and latest not in invalid %}
+                      {% if supervisor_latest not in invalid %}
+                        Обновить {{ installed }} → {{ latest }}
+                      {% else %}
+                        Релиз {{ installed }} → {{ latest }}
+                      {% endif %}
+                    {% elif installed not in invalid %}
+                      Обновить {{ installed }} → ?
                     {% else %}
-                      Новая версия
+                      Обновление · версии не определены
                     {% endif %}
                   tap_action:
                     action: perform-action

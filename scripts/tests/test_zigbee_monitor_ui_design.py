@@ -132,6 +132,15 @@ class ZigbeeMonitorUiDesignTests(unittest.TestCase):
         update_chip = card["cards"][1]["chips"][2]["chip"]
         self.assertIn("Обновить {{ installed }} → {{ latest }}",
                       update_chip["content"])
+        self.assertIn("Релиз {{ installed }} → {{ latest }}", update_chip["content"])
+        self.assertIn("sensor.dh_zigbee_monitor_app_latest_version",
+                      update_chip["content"])
+        self.assertIn("Обновить {{ installed }} → ?", update_chip["content"])
+        self.assertNotIn("Новая версия", update_chip["content"])
+        self.assertEqual(update_chip["entity"],
+                         "update.digitalhouses_zigbee_monitor_app_update")
+        self.assertIn("версии не определены", status["label"])
+        self.assertIn("версия релиза", status["label"])
         self.assertEqual(update_chip["tap_action"]["target"]["entity_id"],
                          "update.digitalhouses_zigbee_monitor_app_update")
         # Regression: this UI-only fix must not rewrite the ASCII tree.

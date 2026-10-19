@@ -99,7 +99,7 @@ class ZigbeeCardRuntimeTests(unittest.TestCase):
             "dh_zigbee_monitor_app_inventory_details",
             "dh_zigbee_monitor_app_incidents",
             "dh_zigbee_monitor_app_update_available",
-            "Релиз", "Offline", "Supervisor не предлагает",
+            "Offline", "Supervisor не предлагает",
         )
         for value in forbidden:
             with self.subTest(value=value):
@@ -178,6 +178,28 @@ class ZigbeeCardRuntimeTests(unittest.TestCase):
             "entity": SUPERVISOR, "state": "on",
         }])
 
+    def test_supervisor_missing_version_uses_checked_app_release(self):
+        shown = self.run_card({
+            VERSION: {"state": "0.1.13"},
+            LATEST: {"state": "0.1.14"},
+            SUPERVISOR: {"state": "on", "attributes": {"in_progress": False}},
+        })
+        self.assertEqual(
+            shown["label"],
+            "Доступно обновление: 0.1.13 → 0.1.14 · версия релиза",
+        )
+
+    def test_supervisor_on_without_version_does_not_fabricate_pair(self):
+        shown = self.run_card({
+            VERSION: {"state": "0.1.13"},
+            LATEST: {"state": "unavailable"},
+            SUPERVISOR: {"state": "on", "attributes": {"in_progress": False}},
+        })
+        self.assertEqual(
+            shown["label"],
+            "Supervisor сообщает об обновлении · версии не определены",
+        )
+
     def test_installed_version_only_no_downgrade_or_latest_arrows(self):
         shown = self.run_card({
             VERSION: {"state": "0.1.6"},
@@ -193,6 +215,11 @@ class ZigbeeCardRuntimeTests(unittest.TestCase):
         ], ["Обновить", "Версия", self.chips[2]["chip"]["content"], "Перезапуск"])
         self.assertIn("Обновить {{ installed }} → {{ latest }}",
                       self.chips[2]["chip"]["content"])
+        self.assertIn("Релиз {{ installed }} → {{ latest }}",
+                      self.chips[2]["chip"]["content"])
+        self.assertIn("sensor.dh_zigbee_monitor_app_latest_version",
+                      self.chips[2]["chip"]["content"])
+        self.assertNotIn("Новая версия", self.chips[2]["chip"]["content"])
         self.assertEqual(self.chips[0]["tap_action"]["target"]["entity_id"],
                          "button.dh_zigbee_monitor_app_refresh")
         self.assertEqual(self.chips[1]["tap_action"]["target"]["entity_id"],
