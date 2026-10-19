@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.12
+
+- Fix Supervisor own-App Options autofill under `hassio_role: default`:
+  `/addons/self/options/validate` is denied by the Supervisor security
+  middleware (403); `POST /addons/self/options` already validates the options
+  against the App schema and is permitted. Remove inaccessible double-validation.
+- Regression test verifies one allowed POST without privilege escalation.
+  Both `coordinators` and `repeaters` remain optional; Healer remains OFF.
+
 ## 0.1.11
 
 - Вместо 0.1.10 MQTT agent controls — два независимых декларативных

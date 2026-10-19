@@ -32,7 +32,7 @@ class PackageTests(unittest.TestCase):
         config = yaml.safe_load((APP_DIR / "config.yaml").read_text(encoding="utf-8"))
         self.assertEqual(config["slug"], "digitalhouses_zigbee_monitor_app")
         self.assertEqual(config["name"], "DigitalHouses Zigbee Monitor App")
-        self.assertEqual(config["version"], "0.1.11")
+        self.assertEqual(config["version"], "0.1.12")
         self.assertEqual(config["stage"], "experimental")
         self.assertEqual(config["image"], "ghcr.io/digitalhouses/digitalhouses_zigbee_monitor_app")
         self.assertEqual(config["services"], ["mqtt:need"])

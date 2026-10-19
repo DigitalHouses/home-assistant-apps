@@ -10,7 +10,7 @@ from unittest.mock import patch
 from zigbee_monitor import ActivityStore, ZigbeeMonitor, parse_networks
 from zigbee_monitor.agent_options import (
     is_recognized_repeater, management_address, merge_new_discoveries,
-    normalize_registry, ping_management_ip,
+    normalize_registry, ping_management_ip, SupervisorOptions,
 )
 from zigbee_monitor.core import Device
 from zigbee_monitor.discovery import DISCOVERY, ROOT
@@ -50,6 +50,21 @@ class AgentOptionsTests(unittest.TestCase):
 
     def tree(self):
         return json.loads(self.last(f"{ROOT}/state/networks_details"))["networks"][0]
+
+    def test_supervisor_autofill_uses_unprivileged_self_options(self):
+        # /addons/self/options/validate is NOT accessible with default role.
+        # POST /addons/self/options already performs Supervisor validation.
+        client = SupervisorOptions(token="fake-test-token")
+        candidate = {
+            "telemetry_enabled": True, "log_level": "info",
+            "coordinators": [], "repeaters": [],
+        }
+        with patch.object(client, "_request",
+                          return_value={"result": "ok", "data": {}}) as req:
+            client.write(candidate)
+        req.assert_called_once_with("/addons/self/options",
+                                    {"options": candidate})
+        self.assertNotIn("/options/validate", str(req.call_args_list))
 
     def test_first_boot_no_config_is_valid_and_controls_are_removed(self):
         comps = json.loads(self.last(DISCOVERY))["components"]
