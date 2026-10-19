@@ -35,6 +35,14 @@
 
 Changes must be made in this repository by feature branch → PR → full CI → normal merge. No direct writes to production HA or `main`. Do not create any additional product repository for Presence.
 
+## Ingress resident name acceptance (0.1.37)
+
+1. Open DH Presence Ingress from **the registered phone via direct HA LAN URL**. `Имя жильца` starts from HA display name on first registration, or the existing stored `user_name` for the selected phone.
+2. Select the existing GPS `device_tracker`, enter `Сержан` and register. Verify the same record retains `user_id`, GPS entity ID, device identity, verified IP/MAC and router Wi-Fi association. There must be only one record.
+3. Within a few seconds the existing MQTT resident roster, compact phone tree, and event user label must use `Сержан`. Renaming must **not** generate `arrival`, `departure`, `zone_enter`, `zone_leave`, or Wi-Fi events.
+4. Reject invalid names (blank, overlong, multiline, control characters, markup), and cross-account/MAC takeover without registry modification. A remote Cloudflare session cannot register or rename.
+5. Restart App, verify persisted name survives and is used by the notification package. No `resident_names` Supervisor mapping should be necessary. Existing registrations without a name update remain valid; tracker-only legacy config remains accepted.
+
 ## Stage 4 — native Ingress registration CI + home acceptance (0.1.11)
 
 - CI: only Supervisor `172.30.32.2` can reach the enrollment API,
