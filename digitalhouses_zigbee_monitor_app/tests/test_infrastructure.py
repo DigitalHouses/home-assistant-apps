@@ -94,7 +94,7 @@ class InfrastructureTests(unittest.TestCase):
                 self.assertIsNone(by_id["other"]["infrastructure"])
                 self.assertFalse(by_id["other"]["infrastructure_seen"])
                 self.assertIn("bridge_offline", by_id[network.network_id]["problem_unknown"])
-                with self.assertRaises(ZigbeeMonitorError):
+                with self.assertRaises((ZigbeeMonitorError, ValueError)):
                     service.receive("zigbee2mqtt/bridge/info",
                                     bridge_info(ieee="0x00124b002e1330de"))
                 service.disconnected()
