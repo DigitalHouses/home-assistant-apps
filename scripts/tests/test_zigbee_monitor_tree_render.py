@@ -25,6 +25,9 @@ class ZigbeeTreeRenderTests(unittest.TestCase):
                      and card.get("heading") == "Дерево Zigbee2MQTT")
         cls.template = cards[index + 1]["content"]
         assert cards[index + 1]["type"] == "markdown"
+        standalone = yaml.safe_load((DASHBOARD.parent /
+            "dh_zigbee_monitor_app_tree_ru.yaml").read_text(encoding="utf-8"))
+        assert standalone == cards[index + 1], "standalone tree diverges from Dashboard"
         cls.engine = Environment(trim_blocks=True, lstrip_blocks=True)
 
     @staticmethod
