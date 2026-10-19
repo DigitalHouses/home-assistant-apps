@@ -232,33 +232,38 @@ sections:
           {% elif networks | count == 0 %}
           *Zigbee2MQTT пока не обнаружены.*
           {% else %}
-          **DH Zigbee Monitor · {{ networks | count }} сетей**
+          {% set total = networks | count %}
+          {% set ending = 'сеть' if total % 10 == 1 and total % 100 != 11 else 'сети' if 2 <= total % 10 <= 4 and not (12 <= total % 100 <= 14) else 'сетей' %}
+          **DH Zigbee Monitor · {{ total }} {{ ending }}**
 
-          <pre>
           {% for n in networks %}
-          {% set arm = '└─' if loop.last else '├─' %}
-          {% set tab = '  ' if loop.last else '│ ' %}
           {% set infra = n.infrastructure or {} %}
           {% set active = n.problem_active or [] %}
           {% set unknown = n.problem_unknown or [] %}
-          {{ arm }} {{ '🟥' if active | count else '🟨' if unknown | count else '🟩' }} {{ n.name | e }} [{{ n.network_id | e }}]
-          {{ tab }} ├─ Тип: Coordinator · IEEE: {{ infra.coordinator_ieee or '—' }}
-          {{ tab }} ├─ Connection: {{ (infra.connection or 'unknown') | upper }}{% if infra.serial_port %} · {{ infra.serial_port | e }}{% endif %}
-          {{ tab }} ├─ IP: {{ infra.ip or 'не определён' }}
-          {{ tab }} ├─ Adapter: {{ infra.coordinator_type or '—' }}{% if infra.serial_adapter %} · {{ infra.serial_adapter | e }}{% endif %}
-          {{ tab }} ├─ Firmware: {{ infra.firmware_revision if infra.firmware_revision is not none else '—' }}
-          {{ tab }} ├─ Z2M: {{ infra.z2m_version or '—' }} · Bridge: {{ n.status | e }}
-          {{ tab }} ├─ Channel / PAN: {{ infra.channel if infra.channel is not none else '—' }} / {{ infra.pan_id if infra.pan_id is not none else '—' }}
-          {{ tab }} ├─ Devices: {{ n.devices if n.devices is not none else '—' }} · Online: {{ n.online }} · Offline: {{ n.offline if n.offline is not none else '—' }} · Unknown: {{ n.availability_unknown }}
-          {{ tab }} ├─ Pulse: {{ n.rpm if n.rpm is not none else '—' }} RPM · Threshold: {{ n.threshold if n.threshold is not none else '—' }}
-          {{ tab }} ├─ Supervisor App: не сопоставлен
-          {{ tab }} ├─ Ping / Healer: не выполняются
-          {{ tab }} ├─ Info: {{ 'получен в MQTT-сессии' if n.infrastructure_seen else 'не получен в текущей сессии' }}
-          {{ tab }} └─ Reasons: {{ active | join(', ') if active | count else '[]' }}{% if unknown | count %} · Unknown: {{ unknown | join(', ') }}{% endif %}
+          <details open>
+          <summary><strong>{{ '🟥' if active | count else '🟨' if unknown | count else '🟩' }} {{ n.name | e }}</strong></summary>
+          <ul>
+          <li><strong>ID:</strong> {{ n.network_id | e }}</li>
+          <li><strong>Тип:</strong> 👑 Coordinator · {{ infra.coordinator_ieee or '—' }}</li>
+          <li><strong>Connection:</strong> {{ (infra.connection or 'unknown') | upper | e }}{% if infra.serial_port %} · {{ infra.serial_port | e }}{% endif %}</li>
+          {% if infra.connection == 'tcp' %}
+          <li><strong>IP / Host:</strong> {{ (infra.ip or infra.network_host or 'не определён') | e }}</li>
+          {% endif %}
+          <li><strong>Adapter:</strong> {{ (infra.coordinator_type or '—') | e }}{% if infra.serial_adapter %} · {{ infra.serial_adapter | e }}{% endif %}</li>
+          <li><strong>Firmware:</strong> {{ infra.firmware_revision if infra.firmware_revision is not none else '—' }}</li>
+          <li><strong>Z2M / Bridge:</strong> {{ (infra.z2m_version or '—') | e }} / {{ n.status | e }}</li>
+          <li><strong>Channel / PAN:</strong> {{ infra.channel if infra.channel is not none else '—' }} / {{ infra.pan_id if infra.pan_id is not none else '—' }}</li>
+          <li><strong>Devices:</strong> {{ n.devices if n.devices is not none else '—' }} всего · {{ n.online }} online · {{ n.offline if n.offline is not none else '—' }} offline · {{ n.availability_unknown }} unknown</li>
+          <li><strong>Pulse:</strong> {{ n.rpm if n.rpm is not none else '—' }} RPM · порог {{ n.threshold if n.threshold is not none else '—' }}</li>
+          <li><strong>Supervisor App:</strong> не сопоставлен</li>
+          <li><strong>Ping / Healer:</strong> не выполняются</li>
+          <li><strong>Info:</strong> {{ 'получен в MQTT-сессии' if n.infrastructure_seen else 'нет данных текущей сессии' }}</li>
+          <li><strong>Проблемы:</strong> {{ active | join(', ') if active | count else 'нет подтверждённых' }}{% if unknown | count %} · неизвестно: {{ unknown | join(', ') }}{% endif %}</li>
+          </ul>
+          </details>
           {% endfor %}
-          </pre>
 
-          *Info может быть retained. Bridge online и RPM не являются подтверждением связи с координатором. Ping и Auto-Healer не выполняются.*
+          *Info может быть retained. Bridge online и RPM не доказывают наличие связи с координатором. Ping и Auto-Healer не выполняются.*
           {% endif %}
 
       - type: heading
@@ -266,7 +271,7 @@ sections:
         heading_style: title
         icon: mdi:network
       - type: markdown
-        content: |
+        content: |-
           {% set networks = state_attr('sensor.dh_zigbee_monitor_app_networks_details', 'networks') %}
           {% if states('sensor.dh_zigbee_monitor_app_networks_details') in ['unknown', 'unavailable'] or networks is not iterable or networks is string %}
           *Нет подтверждённых данных о Zigbee-сетях.*
@@ -274,10 +279,13 @@ sections:
           Сети пока не обнаружены.
           {% else %}
           <table>
-          <thead><tr><th>Сеть</th><th>Bridge</th><th>Total / Online / Offline / ?</th><th>RPM / порог</th></tr></thead>
+          <thead><tr><th>Сеть / Bridge</th><th>Устройства / Pulse</th></tr></thead>
           <tbody>
           {% for network in networks %}
-          <tr><td>{{ network.name | e }}</td><td>{{ network.status | e }}</td><td>{{ network.devices }} / {{ network.online | default('—') }} / {{ network.offline if network.offline is not none else '—' }} / {{ network.availability_unknown }}</td><td>{{ network.rpm if network.rpm is not none else '—' }} / {{ network.threshold if network.threshold is not none else '—' }}</td></tr>
+          <tr>
+          <td><strong>{{ network.name | e }}</strong><div>Bridge: {{ network.status | e }}</div></td>
+          <td><div>{{ network.devices }} всего · {{ network.online | default('—') }} online · {{ network.offline if network.offline is not none else '—' }} offline · {{ network.availability_unknown }} unknown</div><div>{{ network.rpm if network.rpm is not none else '—' }} RPM / порог {{ network.threshold if network.threshold is not none else '—' }}</div></td>
+          </tr>
           {% endfor %}
           </tbody>
           </table>
