@@ -94,8 +94,8 @@ class ZigbeeTreeRenderTests(unittest.TestCase):
             "├─ 📡 Repeater 2", "├─ 📡 Repeater 3",
         ])
         self.assertEqual(branches[7], "└─ 📡 Repeater 4")
-        self.assertTrue(any(x.startswith("│  ├─ Координатор:") for x in lines))
-        self.assertTrue(any(x.startswith("│  ├─ IEEE:") for x in lines))
+        self.assertTrue(any(x.startswith("│  ├─ 🏷️ Тип: 👑 Координатор") for x in lines))
+        self.assertFalse(any("IEEE:" in x for x in lines))
         self.assertNotIn("INTERNAL_ID_NOT_FOR_HEADER", "\n".join(lines))
         self.assertNotIn("WRONG DISPLAY OVERRIDE", "\n".join(lines))
         self.assertNotIn("\nРепитеры\n", "\n".join(lines))
@@ -104,9 +104,12 @@ class ZigbeeTreeRenderTests(unittest.TestCase):
         rendered = self.render([self.network("zigbee2mqtt")], [])
         lines = self.tree_lines(rendered)
         self.assertEqual(lines[:2], ["\\", "└─ 🟩 zigbee2mqtt"])
-        self.assertTrue(any(x.startswith("   ├─ Координатор:") for x in lines))
-        self.assertIn("17.4 RPM", rendered)
-        self.assertIn("Healer: OFF", rendered)
+        self.assertTrue(any(x.startswith("   ├─ 🏷️ Тип: 👑 Координатор") for x in lines))
+        self.assertIn("💓 Pulse: 17.4 RPM (10)", rendered)
+        self.assertIn("🌐 IP: 192.168.11.40 ✅", rendered)
+        self.assertIn("🔌 Status: online · 1 offline", rendered)
+        self.assertIn("💊 Healer: OFF", rendered)
+        self.assertEqual(len(lines), 8, "one root, one node, six compact lines")
 
     def test_repeaters_alone_have_one_shared_root(self):
         lines = self.tree_lines(self.render([], [
@@ -115,14 +118,42 @@ class ZigbeeTreeRenderTests(unittest.TestCase):
         self.assertEqual(lines[0], "\\")
         branches = [x for x in lines if re.match(r"^[├└]─ ", x)]
         self.assertEqual(branches, ["├─ 📡 Hall", "└─ 📡 Garage"])
-        self.assertTrue(any(x.startswith("│  ├─ IEEE:") for x in lines))
-        self.assertTrue(any(x.startswith("   ├─ IEEE:") for x in lines))
+        self.assertTrue(any(x.startswith("│  ├─ 🏷️ Тип: 📡 Репитер") for x in lines))
+        self.assertTrue(any(x.startswith("   ├─ 🏷️ Тип: 📡 Репитер") for x in lines))
+        self.assertEqual(len(lines), 13, "one root, two repeaters with five lines each")
 
     def test_unavailable_networks_cannot_render_stale_network_list(self):
         result = self.render([self.network("STALE NETWORK")],
                              [self.repeater("Hall")], network_state="unavailable")
         self.assertNotIn("STALE NETWORK", result)
         self.assertIn("└─ 📡 Hall", result)
+
+    def test_compact_card_has_only_six_primary_fields_per_coordinator(self):
+        lines = self.tree_lines(self.render([self.network("zigbee2mqtt")], []))
+        self.assertEqual(len(lines), 8)
+        labels = [
+            "🏷️ Тип:", "⚙️ Железо:", "🌐 IP:",
+            "💊 Healer:", "🔌 Status:", "💓 Pulse:",
+        ]
+        for item, label in zip(lines[2:], labels):
+            self.assertIn(label, item)
+        for forbidden in ("Firmware:", "IEEE:", "PAN:", "Adapter:",
+                          "Supervisor:", "Питание:", "Info:",
+                          "network_id", "Причины:"):
+            self.assertNotIn(forbidden, "\\n".join(lines))
+
+    def test_ping_no_answer_is_uncertain_not_device_failure(self):
+        n = self.network("zigbee2mqtt")
+        n["ping"] = "no_response"
+        n["management_ip"] = "192.168.11.40"
+        lines = self.tree_lines(self.render([n], []))
+        self.assertIn("🌐 IP: 192.168.11.40 ❓ нет ответа", "\\n".join(lines))
+        self.assertTrue(lines[1].startswith("└─ 🟩"))
+        n["rpm"] = None
+        n["threshold"] = None
+        rendered = self.render([n], [])
+        self.assertIn("❓ Pulse: — RPM (—)", rendered)
+        self.assertNotIn("💓 Pulse: — RPM", rendered)
 
     def test_empty_network_and_repeater_lists(self):
         result = self.render([], [])
@@ -134,8 +165,10 @@ class ZigbeeTreeRenderTests(unittest.TestCase):
             "zigbee2mqtt", ["mqtt_traffic_low"], ["devices_offline"]
         )], [])
         self.assertIn("🟥 zigbee2mqtt", result)
-        self.assertIn("├─ ON: mqtt_traffic_low", result)
-        self.assertIn("└─ ?: devices_offline", result)
+        self.assertIn("💔 Pulse: 17.4 RPM (10)", result)
+        self.assertIn("🔌 Status: online · 1 offline", result)
+        self.assertNotIn("├─ ON:", result)
+        self.assertNotIn("└─ ?:", result)
         self.assertNotIn("<details", result)
         self.assertNotIn("<table", result)
 
