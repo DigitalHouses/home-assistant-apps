@@ -17,7 +17,7 @@ from urllib.request import Request, urlopen
 
 from dh_presence.registration import (
     REGISTRY_LOCK, active_arp_mac, completed_record, delete_registration, load_registry,
-    load_registry_state, normalized_mac, put_registration, save_registry,
+    load_registry_state, normalized_mac, normalize_resident_name, put_registration, save_registry,
 )
 from dh_presence.admin import (
     is_authorized_ha_admin, AdministratorVerificationUnavailable,
@@ -335,9 +335,18 @@ def handler_factory(token: str, registry_path: str, excluded_users: set[str]):
                 if not 1 <= size <= 1024:
                     return self.reply(400, {"error": "invalid_body"})
                 data = json.loads(self.rfile.read(size))
-                tracker = data.get("tracker") if isinstance(data, dict) else None
+                if (not isinstance(data, dict)
+                        or set(data) not in ({"tracker"}, {"tracker", "resident_name"})):
+                    return self.reply(400, {"error": "invalid_registration_payload"})
+                tracker = data.get("tracker")
                 if not isinstance(tracker, str):
                     return self.reply(400, {"error": "tracker_required"})
+                # Only registration writes the user-selected display name.
+                # MAC/IP ownership always comes from the authenticated local
+                # session and an actual ARP reply, never a browser field.
+                chosen_name = (normalize_resident_name(data["resident_name"])
+                               if self.path == "/api/register" and "resident_name" in data
+                               else None)
                 choice = next((x for x in gps_candidates(token)
                                if x["tracker"] == tracker), None)
                 if choice is None:
@@ -376,6 +385,10 @@ def handler_factory(token: str, registry_path: str, excluded_users: set[str]):
                             "device_id": "tracker:" + tracker,
                             "entry_id": "gps:" + tracker,
                         }, mac)
+                    if chosen_name is not None:
+                        # Explicit re-enrollment edits the display name only.
+                        # Existing owner, GPS tracker and MAC remain immutable.
+                        record["user_name"] = chosen_name
                     if wifi_match["status"] == "matched":
                         record["wifi_tracker"] = wifi_match["tracker"]
                     updated = put_registration(previous, record)
@@ -416,10 +429,10 @@ h2{font-size:20px;margin:6px 3px 12px}h3{font-size:17px;line-height:1.25;margin:
 .panel{padding:16px;border-radius:14px;background:var(--card-background-color,#fff);margin:10px 0;box-shadow:0 1px 7px #0000000a}
 p{margin:8px 0 12px;line-height:1.45}
 .muted{color:var(--secondary-text-color,#777)}[hidden]{display:none!important}
-button,select{font:inherit;border-radius:9px;min-height:38px}
+button,select,input{font:inherit;border-radius:9px;min-height:38px}
 button{cursor:pointer;border:none;padding:8px 12px;background:var(--primary-color,#277ca6);color:#fff}
-button:focus-visible,select:focus-visible{outline:2px solid var(--primary-color,#277ca6);outline-offset:2px}
-select{max-width:100%;width:100%;padding:8px;margin:2px 0 9px;border:1px solid var(--divider-color,#ddd);background:var(--card-background-color,#fff);color:inherit}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--primary-color,#277ca6);outline-offset:2px}
+select,input{box-sizing:border-box;max-width:100%;width:100%;padding:8px;margin:2px 0 9px;border:1px solid var(--divider-color,#ddd);background:var(--card-background-color,#fff);color:inherit}
 .actions{display:flex;flex-wrap:wrap;gap:8px}
 pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;margin:8px 0 0}
 .device-item{overflow-wrap:anywhere;padding:6px 0;border-top:1px solid var(--divider-color,#ddd)}
@@ -444,6 +457,8 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;margin:8px 0 0}
 <section class="panel"><h3>Регистрация телефона</h3>
 <p class="muted">Откройте Home Assistant с регистрируемого телефона через домашний Wi-Fi и локальный адрес. Через Cloudflare/VPN доступны только уже зарегистрированные устройства.</p>
 <div id="who" class="muted">Загрузка...</div>
+<label for="residentName">Имя жильца</label>
+<input id="residentName" type="text" maxlength="80" autocomplete="name" placeholder="Например: Сержан" required>
 <select id="tracker" aria-label="Выбрать телефон"></select>
 <p id="wifiLookup" class="muted" role="status">Выберите устройство для поиска Wi-Fi-трекера по MAC текущего телефона.</p>
 <div class="actions"><button id="register">Зарегистрировать</button><button id="reload">Обновить</button></div>
@@ -471,10 +486,19 @@ async function api(url,options={}){
  if(!res.ok)throw Error(data.error||'HTTP '+res.status);
  return data;
 }
+let registeredNames=new Map();
+let suggestedName='';
+function fillResidentName(){
+ const tracker=q('tracker').value;
+ q('residentName').value=registeredNames.get(tracker)||suggestedName;
+}
 async function load(){
  try{
   const [c,s]=await Promise.all([api('api/candidates'),api('api/status')]);
-  q('who').textContent='Пользователь: '+c.user_name;
+  suggestedName=c.user_name;
+  registeredNames=new Map(s.residents.map(x=>[x.tracker,x.user_name]));
+  const previouslySelected=q('tracker').value;
+  q('who').textContent='Пользователь HA: '+c.user_name;
   q('tracker').replaceChildren();
   const placeholder=document.createElement('option');
   placeholder.value='';placeholder.textContent='Выберите устройство...';
@@ -484,6 +508,9 @@ async function load(){
    const o=document.createElement('option');o.value=x.tracker;
    o.textContent=x.device_name+' ('+x.tracker+')';q('tracker').append(o);
   }
+  if(c.candidates.some(x=>x.tracker===previouslySelected))
+   q('tracker').value=previouslySelected;
+  fillResidentName();
   q('residents').textContent=s.residents.length?s.residents.map(x=>
    x.user_name+' ('+x.device_name+')').join('\\n')
    :'Пока нет зарегистрированных устройств';
@@ -691,19 +718,26 @@ async function lookupWifiTracker(){
    '. Регистрацию можно выполнить отдельно.';
  }
 }
-q('tracker').addEventListener('change',lookupWifiTracker);
+q('tracker').addEventListener('change',()=>{
+ fillResidentName();
+ lookupWifiTracker();
+});
 q('reload').onclick=()=>{++lookupRequest;load()};
 q('reloadDebug').onclick=loadAdminDebug;
 loadAdminDebug();
 q('register').onclick=async()=>{
  const selected=q('tracker').value;
- if(!selected)return;
- if(!confirm('Подтверждаете, что открыли HA на телефоне '+selected+' по домашнему Wi-Fi?'))return;
+ if(!selected){q('result').textContent='Выберите GPS-трекер телефона.';return;}
+ const residentName=q('residentName').value.trim().replace(/\\s+/g,' ');
+ if(!residentName||residentName.length>80){
+  q('result').textContent='Укажите имя жильца (от 1 до 80 символов).';return;
+ }
+ if(!confirm('Зарегистрировать '+residentName+' ('+selected+') с этого телефона через домашний Wi-Fi?'))return;
  q('result').textContent='Проверка локального соединения и MAC...';
  try{
   const out=await api('api/register',{
    method:'POST',headers:{'Content-Type':'application/json','X-Presence-Request':'register'},
-   body:JSON.stringify({tracker:selected})
+   body:JSON.stringify({tracker:selected,resident_name:residentName})
   });
   q('result').textContent=(out.updated?'Обновлена регистрация: ':'Зарегистрирован: ')+
    out.user_name+' ('+out.device_name+')'+
