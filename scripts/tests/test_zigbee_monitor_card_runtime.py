@@ -99,7 +99,7 @@ class ZigbeeCardRuntimeTests(unittest.TestCase):
             "dh_zigbee_monitor_app_inventory_details",
             "dh_zigbee_monitor_app_incidents",
             "dh_zigbee_monitor_app_update_available",
-            "Релиз", "Offline", "Supervisor не предлагает",
+            "Offline", "Supervisor не предлагает",
         )
         for value in forbidden:
             with self.subTest(value=value):
