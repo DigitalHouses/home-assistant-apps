@@ -181,7 +181,9 @@ class ZigbeeMonitorUiDesignTests(unittest.TestCase):
             self.assertIn("Math.round(Math.max(0, value))", yaml_text)
             self.assertNotIn("t.toFixed(1)", yaml_text)
 
-    def test_agent_tree_is_visible_in_standard_ha_markdown(self):
+    def test_original_ascii_agent_tree_is_preserved(self):
+        # Exact v0.1.9 tree layout was confirmed visible on live HA.
+        # Later HTML details and table rewrites removed that visualization.
         cards = [card for section in self.dashboard["sections"]
                  for card in section["cards"]]
         idx = next(i for i, card in enumerate(cards)
@@ -190,22 +192,16 @@ class ZigbeeMonitorUiDesignTests(unittest.TestCase):
         tree = cards[idx + 1]
         self.assertEqual(tree["type"], "markdown")
         template = tree["content"]
-        # HA Markdown hid the entire content when <details>/<summary> was used.
-        # Use the already proven HTML table/tr/td support from the other cards.
-        self.assertNotIn("<pre>", template)
-        self.assertNotIn("<details", template)
-        self.assertNotIn("<summary", template)
-        for tag in ("<table>", "</table>", "<thead>", "<tbody>", "</tbody>",
-                    "<th>", "</th>", "<tr>", "</tr>", "<td>", "</td>"):
-            self.assertIn(tag, template)
-        self.assertEqual(template.count("<table>"), 1)
-        self.assertEqual(template.count("</table>"), 1)
-        self.assertEqual(template.count("<tr>"), template.count("</tr>"))
-        self.assertEqual(template.count("<td>"), template.count("</td>"))
+        self.assertIn("<pre>", template)
+        self.assertIn("</pre>", template)
+        self.assertIn("{{ arm }}", template)
+        self.assertIn("{{ tab }}", template)
+        self.assertIn("├─", template)
+        self.assertIn("└─", template)
         self.assertIn("problem_active", template)
         self.assertIn("problem_unknown", template)
-        self.assertIn("сеть", template)
-        self.assertIn("infra.connection == 'tcp'", template)
+        self.assertNotIn("<details", template)
+        self.assertNotIn("<table>", template)
 
     def test_network_table_uses_two_columns_for_narrow_layout(self):
         cards = [card for section in self.dashboard["sections"]
@@ -230,7 +226,7 @@ class ZigbeeMonitorUiDesignTests(unittest.TestCase):
                  if card.get("type") == "markdown"]
         templated_tables = [card["content"] for card in cards
                             if "<table>" in card["content"]]
-        self.assertEqual(len(templated_tables), 9)
+        self.assertEqual(len(templated_tables), 8)
         for content in templated_tables:
             with self.subTest(table=content[:60]):
                 self.assertEqual(content.count("<table>"), 1)
