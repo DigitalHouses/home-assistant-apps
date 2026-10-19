@@ -150,7 +150,7 @@ dh_presence_app_notification:
                 - action: script.write2log
                   data:
                     title: "📶 Подключение к Wi-Fi"
-                    message: "{{ wifi_person_device }} подключился к Wi-Fi."
+                    message: "{{ wifi_person_device }} — устройство подключено к Wi-Fi."
             - conditions:
                 - condition: trigger
                   id: wifi_lost
@@ -172,7 +172,7 @@ dh_presence_app_notification:
                 - action: script.write2log
                   data:
                     title: "📶❌ Отключение от Wi-Fi"
-                    message: "{{ wifi_person_device }} отключился от Wi-Fi."
+                    message: "{{ wifi_person_device }} — устройство отключено от Wi-Fi."
 
   # English alias generates the canonical entity_id; friendly name stays Russian.
   # The renamed automation id retires the legacy transliterated registry identity.
