@@ -26,6 +26,32 @@ class NotificationPackageTests(unittest.TestCase):
         expected = "\n".join("  " + line if line else "" for line in source.split("\n"))
         self.assertIn("dh_presence_app_notification:\n" + expected, keyed)
 
+    def test_package_seeds_english_entity_id_with_russian_ui_name(self):
+        """Both packages must create a canonical English automation entity ID.
+
+        The deliberately new YAML unique id is the one-time migration away
+        from the old transliterated entity registry identity on existing homes.
+        """
+        standalone = PACKAGE.read_text(encoding="utf-8")
+        merged = (ROOT / "examples/packages/dh_presence_app_notification_merge_named_ru.yaml").read_text(
+            encoding="utf-8")
+        for name, code in (("standalone", standalone), ("merge_named", merged)):
+            with self.subTest(package=name):
+                self.assertEqual(code.count("- id: dh_presence_notifications"), 1)
+                self.assertEqual(code.count('alias: "DH Presence Notifications"'), 1)
+                self.assertEqual(code.count("automation.dh_presence_notifications:"), 1)
+                self.assertEqual(code.count('friendly_name: "DH Presence · Уведомления"'), 1)
+                self.assertNotIn("id: dh_presence_app_notifications", code)
+                self.assertNotIn("alias: \"DH Presence · Уведомления\"", code)
+                self.assertNotIn("automation.dh_presence_uvedomleniia:", code)
+                self.assertEqual(code.count("- action: script.write2log"), 7)
+                self.assertIn("id: zone_enter", code)
+                self.assertIn("id: zone_leave", code)
+        self.assertIn("\nhomeassistant:\n  customize:\n    automation.dh_presence_notifications:\n",
+                      standalone)
+        self.assertIn("\n  homeassistant:\n    customize:\n      automation.dh_presence_notifications:\n",
+                      merged)
+
     def test_seven_notified_event_types(self):
         code = PACKAGE.read_text(encoding="utf-8")
         for event in ("arrival", "departure", "gps_in", "gps_out", "wifi_in", "wifi_lost", "wifi_out", "zone_enter", "zone_leave"):
