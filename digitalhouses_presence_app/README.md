@@ -4,6 +4,16 @@
 
 This application belongs to `DigitalHouses/home-assistant-apps/digitalhouses_presence_app` and is installed via **Settings → Apps → App Store**.
 
+## DH Presence · уведомления о жильцах без дублирования
+
+Штатные HA-пакеты отправляют **один** `script.write2log` на реальное логическое прибытие или уход жильца, а не по одному на каждый источник обнаружения. Уведомления о доме управляются `switch.dh_presence_app_notify_zone_<zone_key(zone.home)>`: при `ON` событие `arrival` даёт **«🏠✅ Serzhan прибыл домой»**, `departure` — **«🏠🚪 Serzhan покинул дом»**. Если переход первый/последний для всего дома, в сообщении добавляется **«Статус дома: ПРИСУТСТВИЕ»** / **«Статус дома: ОТСУТСТВИЕ»**; иначе кратко **«Дома: N»**. Эти поля рассчитывает сам App (`first_arrival`, `last_departure`, `residents_home_after`), включая защиту при неизвестном статусе жильца. Изменение режима `gps`/`wifi`/`hybrid` не создаёт ложных событий.
+
+Остальные `zone.*` — только информационные уведомления, включаемые **отдельным переключателем каждой зоны**: **«📍✅ Serzhan прибыл в Urban coffee»** или **«📍🚪 Serzhan покинул Urban coffee»**. События `zone_enter`/`zone_leave` для `zone.home` не создают второго сообщения: дома используется именно агрегированное решение App. Имя берётся из `user_name`, а `device_name` — запасное значение при отсутствии имени.
+
+**Wi-Fi уведомления сохранены**: `switch.dh_presence_app_notify_wifi=ON` разрешает сообщения `wifi_in`, `wifi_out` (и совместимый `wifi_lost`, если когда-либо встретится); `OFF` запрещает их независимо от режимов и переключателей зон. В Wi-Fi уведомлении остаётся устройство в скобках для диагностики. Включённый Wi-Fi канал может осознанно добавить отдельное сетевое уведомление к сообщению о жильце. Источниковые события `gps_in`/`gps_out` продолжают публиковаться App, но **не создают пользовательских уведомлений**. Существующий MQTT-переключатель GPS пока сохраняется для совместимости; этот упрощённый пакет его не использует, изменение MQTT Discovery — отдельный вопрос.
+
+Обновление касается **только пакета автоматизации HA**. Его необходимо заменить в `/config/packages` и применить перезагрузкой автоматизаций или Core (после `ha core check`), без изменения версии DH Presence App. `write2log` и исходный MQTT Event-контракт не меняются.
+
 ## HA package: каноническое имя автоматизации уведомлений
 
 Оба поддерживаемых варианта пакета (`examples/packages/dh_presence_app_notification_merge_named_ru.yaml` и `examples/packages/dh_presence_app_notification_local_package_ru.yaml`) задают один и тот же стандарт:
@@ -175,7 +185,7 @@ The DH Presence MQTT device provides persisted notification switches for each di
 
 **Why the App owns zone transitions:** Native Home Assistant zone triggers can also process non-participating users, including administrators. DH Presence must restrict zone events to its enrolled/eligible resident roster and apply `exclude_users` before zone transition processing. The App reads Home Assistant's already-resolved GPS device-tracker zone state (it does not calculate geofences), maintains a per-resident transition baseline and emits `zone_enter`/`zone_leave` machine events for included residents only. This filtering is part of the App's public zone contract, not a reason to add a second zone location engine.
 
-The local HA notification packages consume `event.dh_presence_app_event` using `event.received → trigger.id → choose → script.write2log`. Each zone switch gates messages for its respective zone. GPS and Wi-Fi source notification switches operate independently of the selected presence mode. For `zone.home`, the package avoids duplicate home GPS notification text when its zone switch is ON. App upgrades do not automatically replace locally installed packages or Lovelace YAML.
+The local HA notification packages consume `event.dh_presence_app_event` via `event.received → trigger.id → choose → script.write2log`. Only `arrival` / `departure` generate home resident notifications (gated by the `zone.home` switch); `zone_enter` / `zone_leave` generate informational notices for non-home zones only (each gated by its zone switch). The independent Wi-Fi switch gates source notifications regardless of the selected presence mode. `gps_in` / `gps_out` remain App machine events only and do not create a second resident notice. App upgrades do not automatically replace locally installed HA packages or Lovelace YAML.
 
 **Wi-Fi always means the local home's network (`zone.home`).** Router `device_tracker` state is the Wi-Fi evidence for the HA installation site; remote HA access over Cloudflare is not proof of local Wi-Fi presence. GPS alone covers office and other HA zones. Wi-Fi OFF means absent from the tracked local router network, not proof that the resident physically left home.
 
@@ -283,9 +293,9 @@ Each entry explicitly associates **one registered tracker** with a person's name
 
 ## Recorder and notifications package
 
-[The local Russian HA package](examples/packages/dh_presence_app_notification_local_package_ru.yaml) processes the existing `event.dh_presence_app_event` directly. For eligible `arrival`, `departure`, `gps_in`, `gps_out`, `wifi_in`, `wifi_out`, `zone_enter` and `zone_leave` events (subject to notification switches), it calls the site's existing `script.write2log` **once** with `title` and `message`. No duplicate `logbook.log`, `persistent_notification.create` or extra MQTT device is introduced. The MQTT Event entity can be stored by Home Assistant Recorder, subject to the local Recorder filters and retention. Whether `write2log` also logs anything is specific to that local script.
+[The local Russian HA package](examples/packages/dh_presence_app_notification_local_package_ru.yaml) processes the existing `event.dh_presence_app_event` directly. For enabled `arrival`, `departure`, non-home `zone_enter` / `zone_leave`, `wifi_in`, `wifi_out` and legacy `wifi_lost`, it calls the site's existing `script.write2log` **once** with `title` and `message`; source-only `gps_in` / `gps_out` never send duplicate notices. No duplicate `logbook.log`, `persistent_notification.create` or extra MQTT device is introduced. The MQTT Event entity can be stored by Home Assistant Recorder, subject to the local Recorder filters and retention. Whether `write2log` also logs anything is specific to that local script.
 
-First confirmed arrival (whole-house `not_home → home`) produces `Режим дома: присутствие`; final confirmed departure (`home → not_home`) produces `Режим дома: отсутствие`. These are messages, not physical alarm/security mode changes.
+First confirmed arrival (whole-house `not_home → home`) adds `Статус дома: ПРИСУТСТВИЕ`; final confirmed departure (`home → not_home`) adds `Статус дома: ОТСУТСТВИЕ`. On other resident transitions, the same notice only states `Дома: N`. These are messages, not physical alarm/security mode changes.
 
 The App owns a one-time `device_tracker` → `user_name` map through the optional `resident_names` list in Supervisor App Configuration. Existing `residents` entries remain unchanged. The App publishes `user_name` (or JSON null) and the real GPS tracker friendly name `device_name` on machine events. The local package displays `user_name (device_name)`, or the device name alone when unmapped; it does not search `person` or maintain a duplicate name dictionary.
 
