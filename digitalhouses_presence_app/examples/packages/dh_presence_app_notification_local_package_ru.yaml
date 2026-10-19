@@ -15,7 +15,7 @@
 # Presence App; MQTT events already include user_name and device_name.
 # The HA package never keeps a second resident-name table.
 #
-# "Режим дома" is notification text; NO security/alarm mode is changed.
+# "Статус дома" is notification text; NO security/alarm mode is changed.
 # wifi_in: router tracker confirms a real Wi-Fi connection after baseline.
 # wifi_lost is a historical event from older versions; no longer emitted since 0.1.25.
 # wifi_out now means explicit router device_tracker home -> not_home.
