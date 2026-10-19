@@ -218,7 +218,7 @@ class Application:
     def _check_agent_ips(self) -> None:
         """Bounded ICMP checks of explicit management IPs (no RF health claims)."""
         try:
-            targets = self.service.agent_ping_targets()
+            targets = dict(list(self.service.agent_ping_targets().items())[:32])
             if not targets:
                 self.service.set_ping_results({})
                 return
