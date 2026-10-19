@@ -181,6 +181,43 @@ class ZigbeeMonitorUiDesignTests(unittest.TestCase):
             self.assertIn("Math.round(Math.max(0, value))", yaml_text)
             self.assertNotIn("t.toFixed(1)", yaml_text)
 
+    def test_agent_tree_wraps_on_narrow_dashboard_columns(self):
+        cards = [card for section in self.dashboard["sections"]
+                 for card in section["cards"]]
+        idx = next(i for i, card in enumerate(cards)
+                   if card.get("type") == "heading"
+                   and card.get("heading") == "Дерево Zigbee2MQTT")
+        tree = cards[idx + 1]
+        self.assertEqual(tree["type"], "markdown")
+        template = tree["content"]
+        # <pre> introduced a 150px whitespace block and horizontal scrolling.
+        # Explicit HTML list items survive HA Jinja newline folding and wrap.
+        self.assertNotIn("<pre>", template)
+        self.assertNotIn("</pre>", template)
+        self.assertIn("<details open>", template)
+        self.assertIn("<summary>", template)
+        self.assertIn("<ul>", template)
+        self.assertIn("</ul>", template)
+        self.assertEqual(template.count("<li>"), template.count("</li>"))
+        self.assertIn("problem_active", template)
+        self.assertIn("problem_unknown", template)
+        self.assertIn("сеть", template)
+        # USB has no standalone IP ping; TCP hostname/IP is conditional.
+        self.assertIn("infra.connection == 'tcp'", template)
+
+    def test_network_table_uses_two_columns_for_narrow_layout(self):
+        cards = [card for section in self.dashboard["sections"]
+                 for card in section["cards"]]
+        idx = next(i for i, card in enumerate(cards)
+                   if card.get("type") == "heading"
+                   and card.get("heading") == "Сети Zigbee2MQTT")
+        template = cards[idx + 1]["content"]
+        self.assertIn("<th>Сеть / Bridge</th>", template)
+        self.assertIn("<th>Устройства / Pulse</th>", template)
+        self.assertEqual(template.count("<th>"), 2)
+        self.assertIn("<div>", template)
+        self.assertIn("network.offline if network.offline is not none", template)
+
     def test_all_dynamic_tables_use_html_not_fragile_markdown_pipes(self):
         # Home Assistant renders Markdown-card Jinja before Marked.js.
         # Jinja removes newlines around for/if tags; Markdown pipe tables then
