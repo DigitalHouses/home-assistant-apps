@@ -24,6 +24,7 @@ from zigbee_monitor.agent_options import (
     SupervisorOptions, merge_new_discoveries, ping_management_ip,
 )
 from zigbee_monitor.discovery import APP_AVAILABILITY, PRODUCT
+from zigbee_monitor.config_access import probe_config_access
 from zigbee_monitor.service import MonitorService
 from zigbee_monitor.telemetry import TelemetryClient, TelemetryRunner
 from zigbee_monitor.mqtt_compat import create_mqtt_client, connection_failed
@@ -115,6 +116,10 @@ class Application:
             version=version,
         )
         self.service.set_agent_options(options)
+        # Probe the read-only HA map without reading Z2M secrets.
+        # Cache the result before MQTT connect; service republishes on connect.
+        self.service.set_config_access(probe_config_access())
+        self._next_config_probe = time.monotonic() + 60
         self._supervisor_options = SupervisorOptions()
         self._next_agent_sync = 0.0
         self._next_ping = 0.0
@@ -248,6 +253,10 @@ class Application:
             while not self.stop_event.wait(1):
                 self.service.tick()
                 now = time.monotonic()
+                if now >= self._next_config_probe:
+                    self._next_config_probe = now + 60
+                    # Local filesystem metadata/open check only, never file read.
+                    self.service.set_config_access(probe_config_access())
                 if now >= self._next_agent_sync:
                     self._next_agent_sync = now + 60
                     if self._sync_worker is None or not self._sync_worker.is_alive():

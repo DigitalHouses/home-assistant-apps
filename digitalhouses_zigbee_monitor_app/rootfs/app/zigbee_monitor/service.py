@@ -77,6 +77,10 @@ class MonitorService:
         self._bridge_info_seen: set[str] = set()
         self._agent_registry = normalize_registry({})
         self._ping_results: dict[str, str] = {}
+        self._config_access = {
+            "state": "checking", "mount": "not_checked",
+            "z2m_directory": "not_checked", "z2m_config": "not_checked",
+        }
         self._refresh_pending: set[str] | None = None
         self._refresh_bridge_pending: set[str] | None = None
         self._refresh_started: float | None = None
@@ -135,6 +139,32 @@ class MonitorService:
         }
         if not self.publish(EVENT_TOPIC, _json(event), False):
             log.warning("Failed to publish Zigbee Monitor machine event: %s", event_type)
+
+    def set_config_access(self, result: Mapping[str, str]) -> None:
+        """Expose a tiny allowlisted check result; no file text is accepted."""
+        allowed = {
+            "state": frozenset((
+                "ready", "mount_missing", "directory_missing",
+                "file_missing", "file_unreadable"
+            )),
+            "mount": frozenset(("ok", "missing")),
+            "z2m_directory": frozenset(("ok", "missing", "not_checked")),
+            "z2m_config": frozenset((
+                "readable", "missing", "not_readable", "not_checked"
+            )),
+        }
+        with self._lock:
+            normalized = {
+                key: result.get(key) for key in allowed
+            }
+            if any(normalized[key] not in states
+                   for key, states in allowed.items()):
+                raise ValueError("invalid HA config access diagnostic")
+            self._config_access = normalized
+            self._publish_config_access()
+
+    def _publish_config_access(self) -> None:
+        self._send(state_topic("config_access"), _json(self._config_access))
 
     def _publish_card(self) -> None:
         self._send(state_topic("card"), _json(self._card))
@@ -258,6 +288,7 @@ class MonitorService:
                 force=True,
             )
             self._send(state_topic("version"), self.version, force=True)
+            self._publish_config_access()
             self._send(state_topic("started_at"), self.started_at, force=True)
             self._publish_card()
             self._publish_refresh_state()

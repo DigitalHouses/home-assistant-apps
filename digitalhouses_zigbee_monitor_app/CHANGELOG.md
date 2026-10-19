@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.1.14
+
+- Read-only self-check of the `/homeassistant` mount and the fixed path
+  `/homeassistant/zigbee2mqtt/configuration.yaml`, without reading the
+  file contents. Reports only mounted, directory and file openability.
+- New MQTT Discovery diagnostic
+  `sensor.dh_zigbee_monitor_app_config_access` (Recorder excluded):
+  state `ready`, `mount_missing`, `directory_missing`,
+  `file_missing` or `file_unreadable`, and safe boolean-like attributes.
+- Check on startup and every minute. Reject symlinked target, unknown
+  diagnostic values and unexpected secret-like fields.
+- App configuration, Zigbee control, Healer, RPM and **entire Lovelace
+  Dashboard including the original ASCII tree** unchanged.
+- This does NOT parse Zigbee2MQTT YAML or discover App Supervisor slugs.
+
 ## 0.1.13
 
 - Конфигурация HA доступна приложению по `/homeassistant` **только для
