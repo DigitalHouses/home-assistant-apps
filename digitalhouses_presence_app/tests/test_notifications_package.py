@@ -20,7 +20,7 @@ class NotificationPackageTests(unittest.TestCase):
         canonical = PACKAGE.read_text(encoding="utf-8")
         self.assertIn("dh_presence_app_notification:\n  automation:", keyed)
         self.assertEqual(keyed.count("- action: script.write2log"), 6)
-        self.assertEqual(keyed.count('title: "'), 7)
+        self.assertEqual(keyed.count('title: "'), 6)
         self.assertNotIn("  recorder:", keyed)
         source = canonical[canonical.index("automation:\n"):]
         expected = "\n".join("  " + line if line else "" for line in source.split("\n"))
