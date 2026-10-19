@@ -5,3 +5,9 @@ configuration:
   log_level:
     name: Logging level
     description: Runtime diagnostic log verbosity.
+  coordinators:
+    name: Coordinators
+    description: Autodiscovered IEEE identities with optional per-coordinator metadata.
+  repeaters:
+    name: Dedicated repeaters
+    description: Known dedicated models are autodiscovered; other routers may be configured explicitly by IEEE.

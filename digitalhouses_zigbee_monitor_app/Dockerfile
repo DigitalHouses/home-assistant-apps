@@ -1,6 +1,6 @@
 FROM ghcr.io/home-assistant/base:latest
 
-ARG BUILD_VERSION="0.1.10"
+ARG BUILD_VERSION="0.1.12"
 ARG BUILD_ARCH
 
 ENV APP_VERSION="${BUILD_VERSION}" \
@@ -15,7 +15,8 @@ RUN apk add --no-cache \
         ca-certificates \
         python3 \
         py3-paho-mqtt \
-        tzdata
+        tzdata \
+        iputils
 
 COPY rootfs /
 

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import logging
+from concurrent.futures import ThreadPoolExecutor
 import os
 import re
 import signal
@@ -19,6 +20,9 @@ from typing import Any
 import paho.mqtt.client as mqtt
 
 from zigbee_monitor import ActivityStore, ZigbeeMonitor, parse_networks
+from zigbee_monitor.agent_options import (
+    SupervisorOptions, merge_new_discoveries, ping_management_ip,
+)
 from zigbee_monitor.discovery import APP_AVAILABILITY, PRODUCT
 from zigbee_monitor.service import MonitorService
 from zigbee_monitor.telemetry import TelemetryClient, TelemetryRunner
@@ -110,6 +114,12 @@ class Application:
             subscribe=self._subscribe,
             version=version,
         )
+        self.service.set_agent_options(options)
+        self._supervisor_options = SupervisorOptions()
+        self._next_agent_sync = 0.0
+        self._next_ping = 0.0
+        self._sync_worker: threading.Thread | None = None
+        self._ping_worker: threading.Thread | None = None
 
     def _publish(self, topic: str, payload: str, retain: bool) -> bool:
         result = self.client.publish(topic, payload, qos=1, retain=retain)
@@ -180,6 +190,52 @@ class Application:
                 self._errors_logged[key] = now
                 self.log.warning("Rejected invalid MQTT data on %s: %s", key, exc)
 
+    def _sync_agent_options(self) -> None:
+        """Append discovered IEEE once to own Supervisor Options; NEVER overwrite edits.
+
+        This runs off the MQTT callback. A failed Supervisor request is logged
+        and retried later; Zigbee Monitor keeps running with observed data.
+        """
+        try:
+            coordinators, repeaters, legacy = self.service.agent_snapshot()
+            current = self._supervisor_options.read()
+            merged, changed = merge_new_discoveries(
+                current, coordinators, repeaters, legacy=legacy,
+            )
+            if changed:
+                self._supervisor_options.write(merged)
+                self.log.info(
+                    "Saved discovered Zigbee IEEE to own App Options: "
+                    "%d coordinators, %d repeaters",
+                    len(merged.get("coordinators", [])),
+                    len(merged.get("repeaters", [])),
+                )
+            # Catch user changes made in HA Options without rebooting this App.
+            self.service.set_agent_options(merged)
+        except (OSError, ValueError, RuntimeError, KeyError) as exc:
+            self.log.warning("Cannot synchronize own Zigbee App Options: %s", exc)
+
+    def _check_agent_ips(self) -> None:
+        """Bounded ICMP checks of explicit management IPs (no RF health claims)."""
+        try:
+            targets = dict(list(self.service.agent_ping_targets().items())[:32])
+            if not targets:
+                self.service.set_ping_results({})
+                return
+            # Never create an unbounded number of probe workers.
+            with ThreadPoolExecutor(max_workers=4) as executor:
+                checks = {
+                    f"{ieee}@{ip}": status
+                    for (ieee, ip), status in zip(
+                        targets.items(), executor.map(
+                            ping_management_ip, targets.values()
+                        )
+                    )
+                }
+            self.service.set_ping_results(checks)
+        except Exception:
+            self.log.exception("IP check failed; not interpreting it as Zigbee failure")
+
     def run(self) -> None:
         host = os.environ["MQTT_HOST"]
         port = int(os.getenv("MQTT_PORT", "1883"))
@@ -191,6 +247,23 @@ class Application:
         try:
             while not self.stop_event.wait(1):
                 self.service.tick()
+                now = time.monotonic()
+                if now >= self._next_agent_sync:
+                    self._next_agent_sync = now + 60
+                    if self._sync_worker is None or not self._sync_worker.is_alive():
+                        self._sync_worker = threading.Thread(
+                            target=self._sync_agent_options,
+                            name="dh-zigbee-agent-options-sync", daemon=True,
+                        )
+                        self._sync_worker.start()
+                if now >= self._next_ping:
+                    self._next_ping = now + 60
+                    if self._ping_worker is None or not self._ping_worker.is_alive():
+                        self._ping_worker = threading.Thread(
+                            target=self._check_agent_ips,
+                            name="dh-zigbee-management-ping", daemon=True,
+                        )
+                        self._ping_worker.start()
         finally:
             self.log.info("Stopping Zigbee Monitor")
             self.telemetry_runner.stop()

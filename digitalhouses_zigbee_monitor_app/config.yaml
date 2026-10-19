@@ -1,5 +1,5 @@
 name: DigitalHouses Zigbee Monitor App
-version: 0.1.10
+version: 0.1.12
 slug: digitalhouses_zigbee_monitor_app
 description: Automatic Zigbee2MQTT discovery and read-only Zigbee inventory, availability and MQTT activity monitoring.
 url: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_zigbee_monitor_app
@@ -15,11 +15,32 @@ backup: cold
 hassio_api: true
 hassio_role: default
 timeout: 45
+# ICMP only; no network control or elevated Supervisor role.
+privileged:
+  - NET_RAW
 services:
   - mqtt:need
 options:
   telemetry_enabled: false
   log_level: info
+  coordinators: []
+  repeaters: []
 schema:
   telemetry_enabled: bool
   log_level: list(debug|info|warning|error)
+  coordinators:
+    - ieee: str
+      name: str?
+      model: str?
+      critical: bool?
+      management_ip: str?
+      addon_slug: str?
+      healer_method: list(disabled|addon_restart|power_cycle)?
+      power_switch: str?
+  repeaters:
+    - ieee: str
+      name: str?
+      model: str?
+      critical: bool?
+      management_ip: str?
+      power_switch: str?

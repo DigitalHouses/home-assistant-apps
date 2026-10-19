@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.1.12
+
+- Fix Supervisor own-App Options autofill under `hassio_role: default`:
+  `/addons/self/options/validate` is denied by the Supervisor security
+  middleware (403); `POST /addons/self/options` already validates the options
+  against the App schema and is permitted. Remove inaccessible double-validation.
+- Regression test verifies one allowed POST without privilege escalation.
+  Both `coordinators` and `repeaters` remain optional; Healer remains OFF.
+
+## 0.1.11
+
+- Вместо 0.1.10 MQTT agent controls — два независимых декларативных
+  Supervisor App Options списка `coordinators` и `repeaters`. Оба по
+  умолчанию пустые; отсутствие описаний не блокирует запуск.
+- Читаем свои Options через Supervisor API (default role); подтверждённые
+  IEEE автоматически дописываются один раз в собственный конфиг,
+  существующие пользовательские поля никогда не перезаписываются.
+- Только уверенно распознанные выделенные репитеры из Router inventory;
+  прочие Router (розетки, лампы) остаются только в обычном инвентаре.
+  Ручное добавление репитера по IEEE поддерживается.
+- При первом автоматическом добавлении координатора безопасно переносим
+  ранее введённые поля 0.1.10 из SQLite. После миграции пользовательская
+  конфигурация принадлежит исключительно App Options.
+- ICMP Ping выполняется только по явно указанному management_ip или IP
+  из официального TCP endpoint координатора; USB сам IP не получает.
+  Неответ/невалидный адрес — ❓; реальный ответ — ✅. Ping сам по себе
+  не является Zigbee Problem.
+- Исходное ASCII-дерево сохранено, в нём добавлены поля проверки IP,
+  независимая ветка репитеров и статус неактивных привязок.
+- Healer, рестарты Zigbee2MQTT и управление PoE по-прежнему OFF.
+  Recorder: прежние четыре скалярных сенсора; repeater details исключены.
+
 ## 0.1.10
 
 - Беспаспортный реестр агентов: per-network пользовательские поля в SQLite,
