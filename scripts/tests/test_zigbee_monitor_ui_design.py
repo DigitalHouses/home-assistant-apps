@@ -57,7 +57,7 @@ class ZigbeeMonitorUiDesignTests(unittest.TestCase):
         self.assertEqual(chips["type"], "custom:mushroom-chips-card")
         self.assertEqual(
             [c.get("content") or c.get("chip", {}).get("content") for c in chips["chips"]],
-            ["Обновить", "Версия", "Новая версия", "Перезапуск"],
+            ["Обновить", "Версия", chips["chips"][2]["chip"]["content"], "Перезапуск"],
         )
         self.assertEqual(chips["chips"][0]["tap_action"]["target"]["entity_id"],
                          "button.dh_zigbee_monitor_app_refresh")
@@ -105,7 +105,7 @@ class ZigbeeMonitorUiDesignTests(unittest.TestCase):
         actions = standalone["cards"][1]["chips"]
         self.assertEqual(
             [a.get("content") or a.get("chip", {}).get("content") for a in actions],
-            ["Обновить", "Версия", "Новая версия", "Перезапуск"],
+            ["Обновить", "Версия", actions[2]["chip"]["content"], "Перезапуск"],
         )
         self.assertEqual(actions[2]["conditions"][0]["entity"],
                          "update.digitalhouses_zigbee_monitor_app_update")
@@ -118,6 +118,26 @@ class ZigbeeMonitorUiDesignTests(unittest.TestCase):
         self.assertEqual(actions[3]["tap_action"]["perform_action"], "hassio.app_restart")
         self.assertEqual(actions[3]["tap_action"]["data"]["app"],
                          "8133339d_digitalhouses_zigbee_monitor_app")
+
+    def test_version_pair_shown_by_status_and_install_chip(self):
+        source = APP / "examples/lovelace/dh_zigbee_monitor_app_card_ru.yaml"
+        card = yaml.safe_load(source.read_text(encoding="utf-8"))
+        status = card["cards"][0]
+        self.assertIn("sensor.dh_zigbee_monitor_app_latest_version",
+                      status["triggers_update"])
+        self.assertIn("Найдена новая версия:", status["label"])
+        self.assertIn("Актуальная версия:", status["label"])
+        self.assertIn("Доступно обновление:", status["label"])
+        self.assertIn("supervisor?.state === 'on'", status["label"])
+        update_chip = card["cards"][1]["chips"][2]["chip"]
+        self.assertIn("Обновить {{ installed }} → {{ latest }}",
+                      update_chip["content"])
+        self.assertEqual(update_chip["tap_action"]["target"]["entity_id"],
+                         "update.digitalhouses_zigbee_monitor_app_update")
+        # Regression: this UI-only fix must not rewrite the ASCII tree.
+        self.assertIn("<pre>", self.raw_dashboard)
+        self.assertIn("{{ arm }}", self.raw_dashboard)
+        self.assertIn("{{ tab }}", self.raw_dashboard)
 
     def test_problems_card_identical_in_dashboard(self):
         standalone = yaml.safe_load(
@@ -142,6 +162,7 @@ class ZigbeeMonitorUiDesignTests(unittest.TestCase):
         self.assertEqual(set(card["triggers_update"]), {
             "sensor.dh_zigbee_monitor_app_card",
             "sensor.dh_zigbee_monitor_app_version",
+            "sensor.dh_zigbee_monitor_app_latest_version",
             "update.digitalhouses_zigbee_monitor_app_update",
         })
         serialized = yaml.safe_dump(card, allow_unicode=True)
@@ -151,7 +172,6 @@ class ZigbeeMonitorUiDesignTests(unittest.TestCase):
             "dh_zigbee_monitor_app_incidents",
             "dh_zigbee_monitor_app_inventory_details",
             "dh_zigbee_monitor_app_networks_details",
-            "dh_zigbee_monitor_app_latest_version",
             "dh_zigbee_monitor_app_update_available",
             "Релиз", "Offline",
         ):

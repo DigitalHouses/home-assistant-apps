@@ -16,14 +16,18 @@ sections:
         heading_style: title
         icon: mdi:zigbee
 
+      # DigitalHouses Zigbee Monitor · canonical status/control card
+      # Requires Mushroom + custom:button-card >=5.0, Supervisor update integration.
+      # App lifecycle and operation results ONLY; Zigbee network/device metrics belong to separate cards.
+      # Status is app-owned; install/restart are performed by HA Supervisor.
       - type: vertical-stack
         cards:
-        
           - type: custom:button-card
             entity: sensor.dh_zigbee_monitor_app_card
             triggers_update:
               - sensor.dh_zigbee_monitor_app_card
               - sensor.dh_zigbee_monitor_app_version
+              - sensor.dh_zigbee_monitor_app_latest_version
               - update.digitalhouses_zigbee_monitor_app_update
             update_timer: |
               [[[
@@ -55,6 +59,18 @@ sections:
               [[[
                 const item = states['sensor.dh_zigbee_monitor_app_card'];
                 const supervisor = states['update.digitalhouses_zigbee_monitor_app_update'];
+                const installedSensor = states['sensor.dh_zigbee_monitor_app_version']?.state;
+                const latestChecked = states['sensor.dh_zigbee_monitor_app_latest_version']?.state;
+                const validVersion = value => typeof value === 'string' && /^\d+\.\d+\.\d+$/.test(value);
+                const installed = validVersion(installedSensor) ? installedSensor
+                  : supervisor?.attributes?.installed_version;
+                const compare = (x, y) => {
+                  const a = x.split('.').map(Number), b = y.split('.').map(Number);
+                  for (let i = 0; i < 3; i++) {
+                    if (a[i] !== b[i]) return a[i] - b[i];
+                  }
+                  return 0;
+                };
                 const elapsed = since => {
                   const seconds = Math.max(0, Math.floor((performance.now() - since) / 1000));
                   return String(Math.floor(seconds / 60)).padStart(2, '0') + ':' +
@@ -93,10 +109,20 @@ sections:
                 if (item.state === 'error')
                   return 'Ошибка: ' + (a.error || 'операция не выполнена');
                 if (item.state === 'success') {
-                  const result = a.operation === 'refresh' ? 'Данные обновлены'
-                    : a.operation === 'check' ? 'Версия проверена' : 'Готово';
+                  if (a.operation === 'check') {
+                    if (!validVersion(installed) || !validVersion(latestChecked))
+                      return 'Версия проверена · нет достоверной пары версий';
+                    if (compare(latestChecked, installed) > 0)
+                      return 'Найдена новая версия: ' + installed + ' → ' + latestChecked;
+                    return 'Актуальная версия: ' + installed;
+                  }
+                  const result = a.operation === 'refresh' ? 'Данные обновлены' : 'Готово';
                   return result + duration(a.duration_seconds);
                 }
+                const supervisorLatest = supervisor?.attributes?.latest_version;
+                if (supervisor?.state === 'on' && validVersion(installed)
+                    && validVersion(supervisorLatest) && compare(supervisorLatest, installed) > 0)
+                  return 'Доступно обновление: ' + installed + ' → ' + supervisorLatest;
                 return 'Приложение запущено';
               ]]]
             styles:
@@ -136,7 +162,7 @@ sections:
                 - color: var(--secondary-text-color)
             tap_action:
               action: none
-        
+
           - type: custom:mushroom-chips-card
             alignment: center
             chips:
@@ -164,7 +190,15 @@ sections:
                   type: template
                   icon: mdi:package-down
                   icon_color: orange
-                  content: Новая версия
+                  content: >-
+                    {% set upd = 'update.digitalhouses_zigbee_monitor_app_update' %}
+                    {% set installed = states('sensor.dh_zigbee_monitor_app_version') %}
+                    {% set latest = state_attr(upd, 'latest_version') %}
+                    {% if installed not in ['unknown','unavailable','none',''] and latest %}
+                      Обновить {{ installed }} → {{ latest }}
+                    {% else %}
+                      Новая версия
+                    {% endif %}
                   tap_action:
                     action: perform-action
                     perform_action: update.install
@@ -187,6 +221,8 @@ sections:
                     app: 8133339d_digitalhouses_zigbee_monitor_app
                   confirmation:
                     text: Перезапустить Zigbee Monitor? Сбор MQTT-статистики временно прервётся.
+        grid_options:
+          columns: 12
 
       - type: heading
         heading: Сводка
