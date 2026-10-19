@@ -144,7 +144,10 @@ def merge_new_discoveries(
                 "name": str(candidate.get("name") or "")[:64],
                 "model": str(candidate.get("model") or "")[:64],
                 "critical": False,
-                "management_ip": "",
+                "management_ip": (
+                    str(candidate.get("management_ip"))
+                    if management_address(candidate.get("management_ip")) else ""
+                ),
                 "power_switch": "",
             }
             if key == "coordinators":
