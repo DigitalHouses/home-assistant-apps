@@ -979,6 +979,10 @@ class MonitorService:
                         force=True,
                     )
                 return "ha_status"
+            # The v0.1.10 MQTT agent controls are retired; no second
+            # writable configuration source is permitted.
+            if topic.startswith(f"{ROOT}/command/agent/"):
+                return "agent_setting_ignored"
             settings_root = f"{ROOT}/command/settings/"
             if topic.startswith(settings_root):
                 parts = topic[len(settings_root):].split("/")
