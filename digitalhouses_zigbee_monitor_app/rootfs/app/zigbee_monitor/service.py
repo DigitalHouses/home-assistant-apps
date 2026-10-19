@@ -1062,7 +1062,7 @@ class MonitorService:
                         DISCOVERY, _json(build_discovery(self.version, self.monitor.networks))
                     )
                     self._publish_problem_settings()
-                            self._publish_networks()
+                    self._publish_networks()
                     self._publish_inventory_and_availability()
                     self._publish_problems(allow_event=False)
             # Passive bridge metadata. No Supervisor privilege escalation or false pairing.
