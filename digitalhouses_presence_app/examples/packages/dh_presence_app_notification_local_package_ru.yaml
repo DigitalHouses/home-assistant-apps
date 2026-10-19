@@ -16,12 +16,14 @@
 # The HA package never keeps a second resident-name table.
 #
 # "Режим дома" is notification text; NO security/alarm mode is changed.
-# wifi_in: enabled network method confirms a real source transition after baseline.
+# wifi_in: router tracker confirms a real Wi-Fi connection after baseline.
 # wifi_lost is a historical event from older versions; no longer emitted since 0.1.25.
 # wifi_out now means explicit router device_tracker home -> not_home.
 # No notification is generated at App startup from its first baseline probe.
-# MQTT switches gate write2log, never event generation; zones default OFF.
-# Wi-Fi OFF; device events and Recorder remain unfiltered.
+# zone.home gates per-resident home transitions; other zone switches gate informational geofences.
+# GPS source events remain machine-readable but cause no duplicate user notices.
+# Wi-Fi messages remain opt-in through their independent MQTT switch.
+# Device events and Recorder remain unfiltered.
 automation:
   - id: dh_presence_notifications
     alias: "DH Presence Notifications"
@@ -41,20 +43,6 @@ automation:
         options:
           event_type: [departure]
         id: departure
-
-      - trigger: event.received
-        target:
-          entity_id: event.dh_presence_app_event
-        options:
-          event_type: [gps_in]
-        id: gps_in
-
-      - trigger: event.received
-        target:
-          entity_id: event.dh_presence_app_event
-        options:
-          event_type: [gps_out]
-        id: gps_out
 
       - trigger: event.received
         target:
@@ -92,76 +80,76 @@ automation:
         id: wifi_out
 
     variables:
-      person_device: >-
-        {% set event = trigger.to_state.attributes %}
-        {% set person = event.user_name | default('', true) %}
-        {% set device = event.device_name | default('', true) %}
+      person_name: >-
+        {% set ev = trigger.to_state.attributes %}
+        {{ (ev.user_name | default('', true)) or (ev.device_name | default('', true)) or 'Неизвестный жилец' }}
+      wifi_person_device: >-
+        {% set ev = trigger.to_state.attributes %}
+        {% set person = ev.user_name | default('', true) %}
+        {% set device = ev.device_name | default('', true) %}
         {{ person ~ ' (' ~ device ~ ')' if person and device and person != device else (person or device or 'Неизвестное устройство') }}
       arrival_message: >-
         {% if trigger.to_state.attributes.first_arrival | default(false) %}
-          Режим дома: присутствие.
+          Статус дома: ПРИСУТСТВИЕ
         {% else %}
-          Прибыл ещё один жилец. Дома: {{ trigger.to_state.attributes.residents_home_after | default('?', true) }}.
+          Дома: {{ trigger.to_state.attributes.residents_home_after | default('?', true) }}
         {% endif %}
       departure_message: >-
         {% if trigger.to_state.attributes.last_departure | default(false) %}
-          Режим дома: отсутствие.
+          Статус дома: ОТСУТСТВИЕ
         {% else %}
-          Жилец покинул дом. Дома: {{ trigger.to_state.attributes.residents_home_after | default('?', true) }}.
+          Дома: {{ trigger.to_state.attributes.residents_home_after | default('?', true) }}
         {% endif %}
       wifi_lost_message: >-
         Источник Wi-Fi временно недоступен. Состояние подключения неизвестно.
       wifi_out_message: >-
         По данным Wi-Fi-трекера роутера устройство больше не подключено к домашней Wi-Fi сети.
     actions:
+      # One home notification per logical resident arrival/departure;
+      # zone.home acts as its MQTT gate regardless of GPS/Wi-Fi/hybrid mode.
       - choose:
+          - conditions:
+              - condition: trigger
+                id: arrival
+              - condition: template
+                value_template: "{{ is_state('switch.dh_presence_app_notify_zone_620b51c29b479984', 'on') }}"
+            sequence:
+              - action: script.write2log
+                data:
+                  title: "🏠✅ {{ person_name }} прибыл домой"
+                  message: "{{ arrival_message }}"
+          - conditions:
+              - condition: trigger
+                id: departure
+              - condition: template
+                value_template: "{{ is_state('switch.dh_presence_app_notify_zone_620b51c29b479984', 'on') }}"
+            sequence:
+              - action: script.write2log
+                data:
+                  title: "🏠🚪 {{ person_name }} покинул дом"
+                  message: "{{ departure_message }}"
+          # Other zones are informational; suppress zone.home duplicates.
           - conditions:
               - condition: trigger
                 id: zone_enter
               - condition: template
-                value_template: "{{ is_state('switch.dh_presence_app_notify_zone_' ~ trigger.to_state.attributes.zone_key, 'on') }}"
+                value_template: "{{ trigger.to_state.attributes.zone_entity_id != 'zone.home' and is_state('switch.dh_presence_app_notify_zone_' ~ trigger.to_state.attributes.zone_key, 'on') }}"
             sequence:
               - action: script.write2log
                 data:
-                  title: "{{ '🏠' if trigger.to_state.attributes.zone_entity_id == 'zone.home' else '📍' }}✅ Вход в зону «{{ trigger.to_state.attributes.zone_name }}»: {{ person_device }}"
+                  title: "📍✅ {{ person_name }} прибыл в {{ trigger.to_state.attributes.zone_name }}"
                   message: "Местоположение подтверждено GPS."
           - conditions:
               - condition: trigger
                 id: zone_leave
               - condition: template
-                value_template: "{{ is_state('switch.dh_presence_app_notify_zone_' ~ trigger.to_state.attributes.zone_key, 'on') }}"
+                value_template: "{{ trigger.to_state.attributes.zone_entity_id != 'zone.home' and is_state('switch.dh_presence_app_notify_zone_' ~ trigger.to_state.attributes.zone_key, 'on') }}"
             sequence:
               - action: script.write2log
                 data:
-                  title: "{{ '🏠' if trigger.to_state.attributes.zone_entity_id == 'zone.home' else '📍' }}🚪 Выход из зоны «{{ trigger.to_state.attributes.zone_name }}»: {{ person_device }}"
+                  title: "📍🚪 {{ person_name }} покинул {{ trigger.to_state.attributes.zone_name }}"
                   message: "Местоположение подтверждено GPS."
-
-          - conditions:
-              - condition: trigger
-                id: gps_in
-              - condition: state
-                entity_id: switch.dh_presence_app_notify_gps
-                state: "on"
-              - condition: template
-                value_template: "{{ not is_state('switch.dh_presence_app_notify_zone_620b51c29b479984', 'on') }}"
-            sequence:
-              - action: script.write2log
-                data:
-                  title: "📍 GPS дома: {{ person_device }}"
-                  message: "GPS-трекер вошёл в домашнюю зону."
-          - conditions:
-              - condition: trigger
-                id: gps_out
-              - condition: state
-                entity_id: switch.dh_presence_app_notify_gps
-                state: "on"
-              - condition: template
-                value_template: "{{ not is_state('switch.dh_presence_app_notify_zone_620b51c29b479984', 'on') }}"
-            sequence:
-              - action: script.write2log
-                data:
-                  title: "📍 GPS вне дома: {{ person_device }}"
-                  message: "GPS-трекер вышел из домашней зоны."
+          # Wi-Fi is the explicitly enabled, independent optional channel.
           - conditions:
               - condition: trigger
                 id: wifi_in
@@ -171,8 +159,8 @@ automation:
             sequence:
               - action: script.write2log
                 data:
-                  title: "📶 Wi-Fi обнаружен: {{ person_device }}"
-                  message: "Устройство обнаружено выбранным методом проверки локальной сети."
+                  title: "📶 Wi-Fi обнаружен: {{ wifi_person_device }}"
+                  message: "Устройство обнаружено роутером в домашней Wi-Fi сети."
           - conditions:
               - condition: trigger
                 id: wifi_lost
@@ -182,7 +170,7 @@ automation:
             sequence:
               - action: script.write2log
                 data:
-                  title: "📵 Wi-Fi не подтверждается: {{ person_device }}"
+                  title: "📵 Wi-Fi не подтверждается: {{ wifi_person_device }}"
                   message: "{{ wifi_lost_message }}"
           - conditions:
               - condition: trigger
@@ -193,7 +181,7 @@ automation:
             sequence:
               - action: script.write2log
                 data:
-                  title: "📵 Wi-Fi не обнаружен: {{ person_device }}"
+                  title: "📵 Wi-Fi не обнаружен: {{ wifi_person_device }}"
                   message: "{{ wifi_out_message }}"
 
 # English alias generates the canonical entity_id; friendly name stays Russian.
