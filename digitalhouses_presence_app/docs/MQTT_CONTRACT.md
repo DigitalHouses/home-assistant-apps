@@ -32,6 +32,8 @@ Payloads are facts, not translated messages. Events: QoS 1, `retain=false`. Disc
 
 In GPS mode, Wi-Fi source events do not alter aggregate presence. In Wi-Fi mode, source events must not duplicate an arrival/departure notification; presentation policy belongs to the local HA package.
 
+**Hybrid contract (0.1.38):** GPS `home` or verified router Wi-Fi `home` proves resident HOME. Router `not_home` alone is diagnostic network absence, not proof of physical departure: it does not override last GPS `home` or turn GPS `unavailable` into NOT_HOME. With no positive source, GPS `not_home` can establish NOT_HOME; with neither, retain the last confirmed state or UNKNOWN for a new resident. An airplane-mode/discharged phone therefore retains the last GPS HOME while Wi-Fi diagnostics can report `wifi_out` and later `wifi_in`. Actual physical exit with both sources silent is inherently unverifiable. The runtime collects independent GPS/router source edges before evaluating per-resident logical presence once per poll; opposing interim `arrival/departure` cannot be emitted in that same poll. Event schema/IDs and notification gating are unchanged.
+
 MQTT Discovery, retained state, and transient event publishing are implemented in the experimental pilot. Tests currently validate pure logic and payload shape; real HA / MQTT integration acceptance remains pending.
 
 Version 0.1.9 adds Wi-Fi placeholder availability topics and the runtime controls above. Existing identifiers, GPS distance, aggregate and MQTT event topics stay unchanged. No Wi-Fi transition events are emitted before verified Wi-Fi observations.

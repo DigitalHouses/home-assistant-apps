@@ -1,8 +1,14 @@
 # DigitalHouses Presence App
 
-**Status: GPS + HA router device_tracker Wi-Fi pilot, version 0.1.37.** Observe router tracker stability before safety-critical automations.
+**Status: GPS + HA router device_tracker Wi-Fi pilot, version 0.1.38.** Observe router tracker stability before safety-critical automations.
 
 This application belongs to `DigitalHouses/home-assistant-apps/digitalhouses_presence_app` and is installed via **Settings → Apps → App Store**.
+
+## Hybrid: разряженный телефон и авиарежим (0.1.38)
+
+В режиме `hybrid` **положительное доказательство присутствия** от любого источника (`gps=home` или `wifi=home`) сохраняет статус «дома». Одно лишь `wifi=not_home` означает потерю соединения с роутером, **не физический уход**: GPS `home` сохраняет присутствие даже после многих часов без сети. При `gps=unavailable` + `wifi=not_home` сохраняется последнее подтверждённое итоговое состояние; для нового жителя без подтверждений статус остаётся неопределённым. Уход подтверждается GPS `not_home` **при отсутствии Wi-Fi HOME**. Режим `wifi` по-прежнему следует за доказанным состоянием роутерного трекера и не получает эту защиту Hybrid автоматически.
+
+В каждом цикле GPS и Wi-Fi обрабатываются отдельно как диагностические источники (`gps_in/out`, `wifi_in/out`), а итоговый статус и `arrival/departure` вычисляются **ровно один раз после обоих наблюдений**. Поэтому включение авиарежима при последнем GPS `home` вызывает только `wifi_out`, а возвращение сети — `wifi_in` без ложного `arrival`. MQTT IDs, Ingress-реестр, пакеты `script.write2log` и `wifi_absence_minutes` (legacy-опция) остаются неизменными. Истинный уход с выключенным телефоном не распознаётся до появления внешнего подтверждения; это осознанный консервативный выбор, а не гарантия физического присутствия. Для охраны данные без дополнительного подтверждения не использовать.
 
 ## Имена жильцов из Ingress (0.1.37)
 

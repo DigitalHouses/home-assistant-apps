@@ -776,6 +776,9 @@ def run():
                         LOG.error("Home Assistant Core API /config unavailable: %s", problem)
                         previous_core_error = problem
             events = []
+            # GPS and router polling share one logical decision point.
+            # Source wifi_in/out and gps_in/out remain independent diagnostics.
+            engine.begin_observation_cycle()
             zone_monitor.prune_residents({r.key for r in engine.residents.values()})
             history.prune_residents({r.key for r in engine.residents.values()})
             for r in engine.residents.values():
@@ -829,6 +832,9 @@ def run():
                         resident.tracker, Status.UNAVAILABLE, now, verified=False)
                     resident.wifi_last_probe_at = now
                     resident.wifi_probe_result = "router_api_error"
+            # The complete GPS/Wi-Fi snapshot, not an intermediate source,
+            # determines arrival/departure (one decision per resident/poll).
+            events.extend(engine.finish_observation_cycle(now))
             if name_changed and mqtt_out.connected.is_set():
                 discovery_ready = synchronize_discovery(mqtt_out, version, engine, zones=zones,
                                                         registrations=registrations)

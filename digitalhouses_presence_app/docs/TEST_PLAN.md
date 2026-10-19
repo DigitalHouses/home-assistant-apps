@@ -35,6 +35,14 @@
 
 Changes must be made in this repository by feature branch → PR → full CI → normal merge. No direct writes to production HA or `main`. Do not create any additional product repository for Presence.
 
+## Hybrid airplane-mode regression (0.1.38)
+
+1. With `select.dh_presence_app_mode=hybrid`, registered phone GPS `home` and router Wi-Fi `home`, enable airplane mode and let the router report `not_home`. Its Wi-Fi binary sensor becomes OFF and `wifi_out` is published only if the router previously reported HOME; the resident's logical state stays HOME with no `departure` or home-zone alarm message.
+2. Keep the phone disconnected for hours to simulate a flat battery. Last valid GPS `home` still keeps presence HOME regardless of the legacy `wifi_absence_minutes`. Reconnect Wi-Fi without moving: `wifi_in`, **no** `arrival`.
+3. When the GPS source returns `not_home` and no verified Wi-Fi `home` exists, exactly one `departure` is allowed. GPS unavailable + Wi-Fi not_home preserves last known presence and never proves absence.
+4. Inject GPS `not_home` and router Wi-Fi `home` in the same runtime poll from previously GPS HOME / Wi-Fi not_home. Only source events are generated; no temporary household `departure → arrival` pair. After both sources agree away, one departure is emitted.
+5. Confirm GPS-only and Wi-Fi-only mode behaviors, stable MQTT unique IDs, persistent registration, named notifications, and no extra Recorder attributes.
+
 ## Ingress resident name acceptance (0.1.37)
 
 1. Open DH Presence Ingress from **the registered phone via direct HA LAN URL**. `Имя жильца` starts from HA display name on first registration, or the existing stored `user_name` for the selected phone.

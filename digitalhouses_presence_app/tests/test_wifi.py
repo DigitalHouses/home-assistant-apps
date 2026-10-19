@@ -55,7 +55,7 @@ class WifiEvidenceTests(unittest.TestCase):
         self.assertEqual(e.residents["device_tracker.other"].wifi, Status.UNAVAILABLE)
         self.assertFalse(any(x["event_type"] == "wifi_out" for x in events))
 
-    def test_15_minutes_of_completed_no_reply_sets_off_and_departs_in_hybrid(self):
+    def test_15_minutes_of_completed_no_reply_sets_wifi_off_but_not_hybrid_away(self):
         e = engine(Mode.HYBRID)
         e.gps_observation(LINK["tracker"], Status.HOME, T0)
         poll_registered_wifi(e, [LINK], T0,
@@ -67,8 +67,10 @@ class WifiEvidenceTests(unittest.TestCase):
                 e, [LINK], now, lambda rec: WifiEvidence(False, "no_reply"))
             events += e.expire(now)
         self.assertEqual(e.residents[LINK["tracker"]].wifi, Status.NOT_HOME)
-        self.assertEqual(e.residents[LINK["tracker"]].confirmed, Status.NOT_HOME)
-        self.assertEqual([x["event_type"] for x in events], ["wifi_out", "departure"])
+        # Legacy ARP proof can change the Wi-Fi diagnostic source, but a
+        # disconnected or discharged phone must not override GPS HOME.
+        self.assertEqual(e.residents[LINK["tracker"]].confirmed, Status.HOME)
+        self.assertEqual([x["event_type"] for x in events], ["wifi_out"])
         self.assertEqual(e.residents[LINK["tracker"]].wifi_probe_result, "no_reply")
         self.assertEqual(e.snapshot()["residents"][e.residents[LINK["tracker"]].key]["wifi_changed_at"],
                          (T0+timedelta(minutes=16)).isoformat())
@@ -94,7 +96,7 @@ class WifiEvidenceTests(unittest.TestCase):
         self.assertFalse(any(x["event_type"] in ("wifi_out", "departure") for x in events))
         self.assertEqual(e.residents[LINK["tracker"]].confirmed, Status.HOME)
 
-    def test_positive_reply_recovers_from_debounced_away(self):
+    def test_positive_reply_recovers_wifi_without_false_hybrid_arrival(self):
         e = engine(Mode.HYBRID)
         e.gps_observation(LINK["tracker"], Status.HOME, T0)
         poll_registered_wifi(e, [LINK], T0,
@@ -106,7 +108,7 @@ class WifiEvidenceTests(unittest.TestCase):
             e, [LINK], T0+timedelta(minutes=17),
             lambda rec: WifiEvidence(True, "mac_verified", "enp6s18"))
         self.assertEqual(e.residents[LINK["tracker"]].confirmed, Status.HOME)
-        self.assertEqual([x["event_type"] for x in events], ["wifi_in", "arrival"])
+        self.assertEqual([x["event_type"] for x in events], ["wifi_in"])
 
     def test_wifi_only_mode_off_after_completed_negative_not_uncertainty(self):
         e = engine(Mode.WIFI, "home")
@@ -132,7 +134,7 @@ class WifiEvidenceTests(unittest.TestCase):
                           decision_at=T0+timedelta(minutes=1))
         self.assertEqual(e.residents[LINK["tracker"]].confirmed, Status.HOME)
 
-    def test_old_gps_does_not_cancel_hybrid_negative_after_15_minutes(self):
+    def test_new_gps_home_overrides_old_wifi_negative_in_hybrid(self):
         e = engine(Mode.HYBRID, "not_home")
         old = T0 - timedelta(days=1)
         e.gps_observation(LINK["tracker"], Status.NOT_HOME, old)
@@ -150,9 +152,9 @@ class WifiEvidenceTests(unittest.TestCase):
         newly_reported = T0 + timedelta(minutes=18)
         e.gps_observation(LINK["tracker"], Status.HOME, newly_reported,
                           decision_at=newly_reported)
-        # Completed negative ARP remains the hybrid decision until renewed
-        # positive Wi-Fi evidence; a GPS observation alone cannot clear it.
-        self.assertEqual(e.snapshot()["status"], "not_home")
+        # A fresh GPS HOME is positive evidence of presence even when
+        # older Wi-Fi diagnostics still show no connectivity.
+        self.assertEqual(e.snapshot()["status"], "home")
 
     def test_wrong_mac_invalidates_wifi_home_without_claiming_away(self):
         e = engine(Mode.WIFI)

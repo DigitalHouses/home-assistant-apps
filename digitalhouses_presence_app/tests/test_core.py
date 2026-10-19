@@ -116,6 +116,72 @@ class TestEngine(unittest.TestCase):
         e.expire(T0 + timedelta(minutes=5))
         self.assertIs(e.overall(), Status.HOME)
 
+    def test_hybrid_airplane_mode_and_power_loss_keep_home(self):
+        e = self.engine(Mode.HYBRID)
+        t = "device_tracker.iphone"
+        e.gps_observation(t, Status.HOME, T0)
+        e.wifi_observation(t, Status.HOME, T0, verified=True)
+        e.residents[t].wifi_monitor_initialized = True
+        original = e.residents[t].confirmed_changed_at
+        away = e.wifi_observation(
+            t, Status.NOT_HOME, T0 + timedelta(minutes=1), verified=True)
+        self.assertEqual([x["event_type"] for x in away], ["wifi_out"])
+        self.assertIs(e.residents[t].confirmed, Status.HOME)
+        self.assertEqual(e.residents[t].confirmed_changed_at, original)
+        self.assertEqual(e.wifi_observation(
+            t, Status.NOT_HOME, T0 + timedelta(days=2), verified=True), [])
+        restored = e.wifi_observation(
+            t, Status.HOME, T0 + timedelta(days=2, minutes=1), verified=True)
+        self.assertEqual([x["event_type"] for x in restored], ["wifi_in"])
+        self.assertIs(e.overall(), Status.HOME)
+
+    def test_hybrid_departure_needs_gps_away_without_positive_wifi(self):
+        e = self.engine(Mode.HYBRID)
+        t = "device_tracker.iphone"
+        e.gps_observation(t, Status.HOME, T0)
+        e.wifi_observation(t, Status.HOME, T0, verified=True)
+        e.wifi_observation(t, Status.NOT_HOME, T0 + timedelta(minutes=1),
+                           verified=True)
+        events = e.gps_observation(t, Status.NOT_HOME, T0 + timedelta(minutes=2))
+        self.assertEqual([x["event_type"] for x in events], ["gps_out", "departure"])
+
+    def test_hybrid_wifi_away_gps_unknown_cannot_remove_presence(self):
+        e = self.engine(Mode.HYBRID)
+        t = "device_tracker.iphone"
+        e.gps_observation(t, Status.HOME, T0)
+        e.gps_unavailable(t, T0 + timedelta(minutes=1))
+        self.assertEqual(e.wifi_observation(
+            t, Status.NOT_HOME, T0 + timedelta(minutes=2), verified=True), [])
+        self.assertIs(e.overall(), Status.HOME)
+        fresh = self.engine(Mode.HYBRID)
+        fresh.wifi_observation(t, Status.NOT_HOME, T0, verified=True)
+        self.assertIs(fresh.overall(), Status.UNAVAILABLE)
+
+    def test_hybrid_one_decision_after_opposite_source_edges(self):
+        e = self.engine(Mode.HYBRID)
+        t = "device_tracker.iphone"
+        e.gps_observation(t, Status.HOME, T0)
+        e.wifi_observation(t, Status.HOME, T0, verified=True)
+        e.residents[t].wifi_monitor_initialized = True
+        e.wifi_observation(t, Status.NOT_HOME,
+                           T0 + timedelta(minutes=1), verified=True)
+        tick = T0 + timedelta(minutes=2)
+        e.begin_observation_cycle()
+        gps = e.gps_observation(t, Status.NOT_HOME, tick, decision_at=tick)
+        wifi = e.wifi_observation(t, Status.HOME, tick, verified=True)
+        logical = e.finish_observation_cycle(tick)
+        self.assertEqual([x["event_type"] for x in gps + wifi],
+                         ["gps_out", "wifi_in"])
+        self.assertEqual(logical, [])
+        self.assertIs(e.overall(), Status.HOME)
+        tick += timedelta(minutes=1)
+        e.begin_observation_cycle()
+        wifi = e.wifi_observation(t, Status.NOT_HOME, tick, verified=True)
+        logical = e.finish_observation_cycle(tick)
+        self.assertEqual([x["event_type"] for x in wifi + logical],
+                         ["wifi_out", "departure"])
+        self.assertIs(e.overall(), Status.NOT_HOME)
+
     def test_aggregate_unknown_if_any_not_known(self):
         e = self.engine()
         e.add("device_tracker.second", "Second")
