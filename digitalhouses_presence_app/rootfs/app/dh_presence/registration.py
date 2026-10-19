@@ -37,6 +37,26 @@ def normalized_mac(raw: str) -> str:
     return mac
 
 
+def normalize_resident_name(value: str) -> str:
+    """Validate a user-selected resident display name, never an identity key.
+
+    Keep readable Cyrillic and other Unicode names while rejecting control
+    characters, markup and multi-line labels that could spoof event messages.
+    HA user ID and verified tracker/MAC remain the actual identity.
+    """
+    if not isinstance(value, str):
+        raise ValueError("Resident name must be text")
+    # Deliberately reject line breaks and Unicode formatting controls rather
+    # than silently collapsing a potentially forged notification into one line.
+    from unicodedata import category
+    if any(category(char).startswith("C") or char in "<>" for char in value):
+        raise ValueError("Invalid resident name characters")
+    name = " ".join(value.split())
+    if not 1 <= len(name) <= 80:
+        raise ValueError("Resident name must contain 1 to 80 characters")
+    return name
+
+
 def validate_entry(entry: dict) -> dict:
     if not isinstance(entry, dict):
         raise ValueError("Registration must be a map")
