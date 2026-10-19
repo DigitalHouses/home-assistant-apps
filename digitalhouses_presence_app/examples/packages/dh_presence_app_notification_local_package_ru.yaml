@@ -92,7 +92,7 @@ automation:
         {% if trigger.to_state.attributes.first_arrival | default(false) %}
           Статус дома: ПРИСУТСТВИЕ
         {% else %}
-          {% set count = trigger.to_state.attributes.residents_home_after | int(-1) %}
+          {% set count = trigger.to_state.attributes.residents_home_after | default(none) | int(-1) %}
           {% if count < 0 %}
             Дома: нет данных
           {% else %}
@@ -103,7 +103,7 @@ automation:
         {% if trigger.to_state.attributes.last_departure | default(false) %}
           Статус дома: ОТСУТСТВИЕ
         {% else %}
-          {% set count = trigger.to_state.attributes.residents_home_after | int(-1) %}
+          {% set count = trigger.to_state.attributes.residents_home_after | default(none) | int(-1) %}
           {% if count < 0 %}
             Дома: нет данных
           {% else %}
