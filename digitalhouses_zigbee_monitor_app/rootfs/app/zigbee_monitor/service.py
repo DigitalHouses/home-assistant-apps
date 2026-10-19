@@ -344,9 +344,13 @@ class MonitorService:
             for net in self.monitor.networks:
                 ieee = self.store.coordinator_ieee(net.network_id)
                 if ieee:
+                    saved = self.store.network_infrastructure(net.network_id)
+                    meta = saved["data"] if saved else {}
+                    tcp_ip = meta.get("ip") if meta.get("connection") == "tcp" else None
                     coords.append({
                         "ieee": ieee, "name": net.name, "model": "",
                         "network_id": net.network_id,
+                        "management_ip": tcp_ip if management_address(tcp_ip) else "",
                     })
                     old = self.store.network_agent_policy(net.network_id)
                     if old != self.store.default_agent_policy():
