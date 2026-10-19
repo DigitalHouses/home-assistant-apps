@@ -1,8 +1,74 @@
 # DigitalHouses Zigbee Monitor App — installation and acceptance
 
-Version: **0.1.10 (experimental)**. Run only after the production GHCR image
-`ghcr.io/digitalhouses/digitalhouses_zigbee_monitor_app:0.1.10` is published
+Version: **0.1.11 (experimental)**. Run only after the production GHCR image
+`ghcr.io/digitalhouses/digitalhouses_zigbee_monitor_app:0.1.11` is published
 and verified by repository release workflows.
+
+## Единый конфиг координаторов и репитеров (0.1.11)
+
+**Порядок для владельца HA:** запустить с пустыми списками →
+дождаться auto-discovery → открыть штатный конфиг App →
+при желании дополнить поля → посмотреть результат в дереве.
+Без единого объекта в конфиге приложение запускается и выполняет
+Zigbee2MQTT мониторинг.
+
+Схема Supervisor `options`:
+
+```yaml
+telemetry_enabled: true
+log_level: info
+coordinators: []
+repeaters: []
+```
+
+После обнаружения по MQTT появляется, например:
+
+```yaml
+coordinators:
+  - ieee: "0x00124b002e1330dd"
+    name: "zigbee2mqtt"
+    model: ""                  # Физическая модель, если известна
+    critical: false
+    management_ip: ""          # USB сам по себе IP не имеет
+    addon_slug: ""             # Не угадываем чужой Supervisor App
+    healer_method: disabled   # Декларация, действие не выполняется
+    power_switch: ""
+repeaters: []
+```
+
+Дополнительные поля **необязательные**: достаточно IEEE.
+Имена, модель, адрес, Critical, Supervisor App и PoE можно заполнить
+позднее. Отсутствующие поля не считаются ошибкой запуска.
+Репитеры — отдельный список; автодобавляются лишь точно
+распознанные специализированные Router (для текущей версии модель
+ZigStar-01/ZigStar-01 Repeater). *Zigbee Router* не равен
+специализированному репитеру: неизвестные модели остаются только
+в инвентаре, пока пользователь не укажет их вручную.
+
+Детали реализации: `/addons/self/options/config` (GET),
+`/addons/self/options` (POST) с default Supervisor ролью. Перед
+автодобавлением App снова читает собственную текущую конфигурацию,
+объединяет **только отсутствующие IEEE** и не изменяет ни одно
+поле уже введённого объекта. Изменение Options действует после
+следующего запуска Supervisor App; Zigbee Monitor также обновляет
+собственное представление из прочитанных Options без рестарта.
+При отсутствии Supervisor или сетевой ошибке App продолжает
+мониторинг, а следующая попытка синхронизации будет позже.
+При обновлении с 0.1.10 первая запись координатора перенесёт
+имеющиеся пользовательские значения из SQLite, если они корректны.
+
+В дереве IP показывается с **✅** после успешного настоящего ICMP
+Ping и с **❓** при отсутствии ответа, некорректном IP или
+недоступной проверке. Необходим `NET_RAW`, но роль Supervisor
+остаётся `default`; команда Ping ограничена по времени и адресу.
+Неответ по ICMP не доказывает сбой Zigbee (ICMP может блокироваться).
+Ни Ping OK, ни Bridge online не подавляют персональный RPM:
+см. [INCIDENT-001](docs/KNOWN_FAILURE_SCENARIOS.md).
+
+**Безопасность:** никаких активных Zigbee-запросов, выключений PoE
+или перезапусков Zigbee2MQTT, даже если `healer_method` выбран.
+Привязки не верифицированы и Healer всегда OFF. Отдельные
+`repeaters_details` — диагностический JSON, не Recorder.
 
 ## Беспаспортный реестр Zigbee2MQTT (0.1.10)
 
