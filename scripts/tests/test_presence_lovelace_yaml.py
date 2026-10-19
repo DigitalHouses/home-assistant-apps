@@ -36,8 +36,8 @@ class PresenceLovelaceYamlTests(unittest.TestCase):
         self.assertEqual(auto["id"], "dh_presence_notifications")
         self.assertEqual(auto["alias"], "DH Presence Notifications")
         branches = auto["actions"][0]["choose"]
-        self.assertEqual(len(branches), 7)
-        self.assertEqual(len(auto["triggers"]), 7)
+        self.assertEqual(len(branches), 6)
+        self.assertEqual(len(auto["triggers"]), 6)
         self.assertEqual(package["dh_presence_app_notification"]["homeassistant"]["customize"][
             "automation.dh_presence_notifications"]["friendly_name"],
             "DH Presence · Уведомления")
