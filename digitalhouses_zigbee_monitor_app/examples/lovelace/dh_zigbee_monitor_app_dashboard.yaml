@@ -227,12 +227,13 @@ sections:
         content: |-
           {% set entity = 'sensor.dh_zigbee_monitor_app_networks_details' %}
           {% set networks = state_attr(entity, 'networks') or [] %}
+          {% set repeaters = state_attr('sensor.dh_zigbee_monitor_app_repeaters_details', 'repeaters') or [] %}
           {% if states(entity) != 'ready' %}
           *Нет подтверждённых данных о Zigbee2MQTT.*
           {% elif networks | count == 0 %}
           *Zigbee2MQTT пока не обнаружены.*
           {% else %}
-          **DH Zigbee Monitor · {{ networks | count }} сетей**
+          **DH Zigbee Monitor · {{ networks | count }} сетей · {{ repeaters | count }} репитеров**
 
           <pre>
           {% for n in networks %}
@@ -245,10 +246,9 @@ sections:
           {{ arm }} {{ '🟥' if active | count else '🟨' if unknown | count else '🟩' }} {{ n.agent_name | default(n.name) | e }} [{{ n.network_id | e }}]
           {{ tab }} ├─ Тип: Coordinator · IEEE: {{ infra.coordinator_ieee or '—' }}
           {{ tab }} ├─ Connection: {{ (infra.connection or 'unknown') | upper }}{% if infra.serial_port %} · {{ infra.serial_port | e }}{% endif %}
-          {{ tab }} ├─ IP: {{ infra.ip or 'не определён' }}
           {{ tab }} ├─ Critical: {{ 'YES' if policy.critical else 'NO' }}
           {{ tab }} ├─ Model: {{ (policy.hardware_model or 'не определена') | e }}
-          {{ tab }} ├─ Management: {{ (policy.management_host or infra.network_host or 'не указан') | e }}
+          {{ tab }} ├─ IP: {{ n.management_ip or 'не указан' }} · {{ '✅ доступен' if n.ping == 'reachable' else '❓ нет ответа' if n.ping == 'no_response' else '❓ неверный IP' if n.ping == 'invalid' else '❓ не проверен' }}
           {{ tab }} ├─ Adapter: {{ infra.coordinator_type or '—' }}{% if infra.serial_adapter %} · {{ infra.serial_adapter | e }}{% endif %}
           {{ tab }} ├─ Firmware: {{ infra.firmware_revision if infra.firmware_revision is not none else '—' }}
           {{ tab }} ├─ Z2M: {{ infra.z2m_version or '—' }} · Bridge: {{ n.status | e }}
@@ -262,9 +262,19 @@ sections:
           {{ tab }} ├─ Info: {{ 'получен в MQTT-сессии' if n.infrastructure_seen else 'не получен в текущей сессии' }}
           {{ tab }} └─ Reasons: {{ active | join(', ') if active | count else '[]' }}{% if unknown | count %} · Unknown: {{ unknown | join(', ') }}{% endif %}
           {% endfor %}
+          {% if repeaters | count > 0 %}
+          Репитеры
+          {% for r in repeaters %}
+          {{ '└─' if loop.last else '├─' }} 📡 {{ r.name | e }} [{{ r.ieee }}]
+             ├─ Зигби: {{ 'обнаружен' if r.discovered else '❓ не найден в текущем inventory' }}{% if r.network_name %} · {{ r.network_name | e }}{% endif %}
+             ├─ Модель: {{ (r.model or 'не указана') | e }} · Critical: {{ 'YES' if r.critical else 'NO' }}
+             ├─ IP: {{ r.management_ip or 'не указан' }} · {{ '✅ доступен' if r.ping == 'reachable' else '❓ нет ответа' if r.ping == 'no_response' else '❓ неверный IP' if r.ping == 'invalid' else '❓ не проверен' }}
+             └─ Power: {{ (r.power_switch or 'не указан') | e }} · управление OFF
+          {% endfor %}
+          {% endif %}
           </pre>
 
-          *Info может быть retained. Bridge online и RPM не являются подтверждением связи с координатором. Ping и Auto-Healer не выполняются.*
+          *Bridge online и Ping OK не гарантируют работоспособность Zigbee. RPM оценивается независимо. Healer всегда OFF.*
           {% endif %}
 
       - type: heading
@@ -355,32 +365,17 @@ sections:
         grid_options:
           columns: 12
       - type: heading
-        heading: Настройки агентов
+        heading: Конфигурация инфраструктуры
         heading_style: subtitle
-        icon: mdi:account-cog
+        icon: mdi:clipboard-list-outline
       - type: markdown
         content: |-
-          Настройки ниже **заменяют паспорта Zigbee Boss**.
-          Имя, Critical, модель и привязки хранятся в SQLite.
-          Поля Z2M App и выключателя **не проверены и не разрешают восстановление**.
-          Healer остаётся выключенным при любом выборе метода.
-      - type: custom:auto-entities
-        card:
-          type: entities
-          title: Привязки координаторов
-          show_header_toggle: false
-        filter:
-          include:
-            - entity_id: switch.dh_zigbee_monitor_app_*_agent_critical
-            - entity_id: text.dh_zigbee_monitor_app_*_agent_display_name
-            - entity_id: text.dh_zigbee_monitor_app_*_agent_hardware_model
-            - entity_id: text.dh_zigbee_monitor_app_*_agent_management_host
-            - entity_id: select.dh_zigbee_monitor_app_*_agent_healer_method
-            - entity_id: text.dh_zigbee_monitor_app_*_agent_addon_slug
-            - entity_id: text.dh_zigbee_monitor_app_*_agent_power_switch
-        sort:
-          method: name
-        show_empty: false
+          **Координаторы и репитеры:** редактируются в **Настройки → Приложения → DH Zigbee Monitor → Конфигурация**.
+          Новые распознанные IEEE приложение дописывает само, заполняя только достоверные сведения.
+          Остальные поля необязательны; удаление поля не препятствует запуску.
+          ✅ означает успешный ICMP Ping; ❓ — отсутствует ответ, адрес или проверка.
+          Неуспешный Ping не считается самостоятельным Zigbee-отказом.
+          **Восстановление и PoE отключены.**
       - type: heading
         heading: Пороги MQTT-активности
         heading_style: subtitle
