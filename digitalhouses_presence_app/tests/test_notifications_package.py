@@ -109,6 +109,11 @@ class NotificationPackageTests(unittest.TestCase):
             "residents_home_after",
         ):
             self.assertIn(required, code)
+        self.assertEqual(code.count("Дома {{ count }}"), 2)
+        self.assertEqual(code.count("count % 100 not in [12, 13, 14]"), 2)
+        self.assertEqual(code.count("count % 10 in [2, 3, 4]"), 2)
+        self.assertNotIn("Дома: {{", code)
+        self.assertIn("Дома: нет данных", code)
         engine = CORE.read_text(encoding="utf-8")
         self.assertIn("before_home is Status.NOT_HOME and after_home is Status.HOME", engine)
         self.assertIn("before_home is Status.HOME and after_home is Status.NOT_HOME", engine)
