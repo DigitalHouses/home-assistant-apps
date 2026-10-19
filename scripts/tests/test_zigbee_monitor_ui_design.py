@@ -22,6 +22,7 @@ HISTORICAL = {
 }
 DETAILS = {
     "sensor.dh_zigbee_monitor_app_networks_details",
+    "sensor.dh_zigbee_monitor_app_repeaters_details",
     "sensor.dh_zigbee_monitor_app_offline_details",
     "sensor.dh_zigbee_monitor_app_top_1h_details",
     "sensor.dh_zigbee_monitor_app_top_24h_details",
@@ -203,19 +204,14 @@ class ZigbeeMonitorUiDesignTests(unittest.TestCase):
         self.assertNotIn("<details", template)
         self.assertNotIn("<table>", template)
 
-    def test_agent_policy_settings_are_dynamic_and_not_recorded(self):
-        self.assertIn("Настройки агентов", self.raw_dashboard)
-        for platform in ("switch", "select", "text"):
-            self.assertIn(
-                platform + ".dh_zigbee_monitor_app_*",
-                self.recorder["exclude"]["entity_globs"],
-            )
-        for key in ("agent_display_name", "agent_critical",
-                    "agent_hardware_model", "agent_management_host",
-                    "agent_healer_method", "agent_addon_slug",
-                    "agent_power_switch"):
-            self.assertIn(key, self.raw_dashboard)
-        # Regression: the user explicitly retained the original ASCII tree.
+    def test_independent_coordinators_and_repeaters_no_ha_agent_controls(self):
+        self.assertIn("Конфигурация инфраструктуры", self.raw_dashboard)
+        self.assertIn("repeaters_details", self.raw_dashboard)
+        self.assertIn("r.ping == 'reachable'", self.raw_dashboard)
+        self.assertIn("n.ping == 'reachable'", self.raw_dashboard)
+        self.assertNotIn("Настройки агентов", self.raw_dashboard)
+        self.assertNotIn("entity_id: text.dh_zigbee_monitor_app_*_agent_", self.raw_dashboard)
+        # Known good original ASCII layout must not be replaced.
         self.assertIn("<pre>", self.raw_dashboard)
         self.assertIn("{{ arm }}", self.raw_dashboard)
         self.assertIn("{{ tab }}", self.raw_dashboard)
@@ -323,7 +319,7 @@ class ZigbeeMonitorUiDesignTests(unittest.TestCase):
         self.assertEqual((APP / "digitalhouses.app").read_text().strip(), "type = haos_addon")
         config = yaml.safe_load((APP / "config.yaml").read_text(encoding="utf-8"))
         self.assertEqual(config["slug"], "digitalhouses_zigbee_monitor_app")
-        self.assertEqual(config["version"], "0.1.10")
+        self.assertEqual(config["version"], "0.1.11")
         self.assertEqual(config["stage"], "experimental")
 
 
