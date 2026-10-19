@@ -6,6 +6,7 @@ The Presence runtime unit test job intentionally does not depend on PyYAML.
 import unittest
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
+import hashlib
 
 import yaml
 from jinja2 import Environment
@@ -19,10 +20,120 @@ ZONE_COUNTS = ROOT / "examples/lovelace/presence_zones_auto_entities_ru.yaml"
 REGISTERED = ROOT / "examples/lovelace/presence_registered_phones_markdown_ru.yaml"
 RECENT = ROOT / "examples/lovelace/presence_recent_events_markdown_ru.yaml"
 ADMIN_SELECT = ROOT / "examples/lovelace/presence_admin_remove_phone_card_ru.yaml"
+NOTIFICATIONS_PACKAGE = ROOT / "examples/packages/dh_presence_app_notification_merge_named_ru.yaml"
 RESIDENTS = ROOT / "examples/lovelace/presence_residents_auto_entities_ru.yaml"
 
 
 class PresenceLovelaceYamlTests(unittest.TestCase):
+    def test_notification_policy_emits_one_user_message_and_optional_wifi(self):
+        """Exercise the actual shipped HA package templates and switch policy.
+
+        This simulates HA's trigger.id / condition:state / Jinja template
+        evaluation, not a fabricated copy of the notification strings.
+        """
+        package = yaml.safe_load(NOTIFICATIONS_PACKAGE.read_text(encoding="utf-8"))
+        auto = package["dh_presence_app_notification"]["automation"][0]
+        self.assertEqual(auto["id"], "dh_presence_notifications")
+        self.assertEqual(auto["alias"], "DH Presence Notifications")
+        branches = auto["actions"][0]["choose"]
+        self.assertEqual(len(branches), 7)
+        self.assertEqual(len(auto["triggers"]), 7)
+        self.assertEqual(package["dh_presence_app_notification"]["homeassistant"]["customize"][
+            "automation.dh_presence_notifications"]["friendly_name"],
+            "DH Presence · Уведомления")
+        env = Environment()
+        home_key = hashlib.sha256(b"zone.home").hexdigest()[:16]
+        urban_key = hashlib.sha256(b"zone.urban_coffee").hexdigest()[:16]
+        self.assertEqual(home_key, "620b51c29b479984")
+
+        def fire(event_type, attrs=None, enabled=()):
+            payload = {"user_name": "Serzhan", "device_name": "13ProMAX .SKY"}
+            payload.update(attrs or {})
+            trigger = {"to_state": {"attributes": payload}}
+            on = set(enabled)
+
+            def is_state(entity, state):
+                return entity in on and state == "on"
+
+            vars_ = {
+                key: env.from_string(value).render(trigger=trigger).strip()
+                for key, value in auto["variables"].items()
+            }
+            delivered = []
+            for branch in branches:
+                satisfied = True
+                for cond in branch["conditions"]:
+                    if cond["condition"] == "trigger":
+                        satisfied = event_type == cond["id"]
+                    elif cond["condition"] == "state":
+                        satisfied = is_state(cond["entity_id"], cond["state"])
+                    elif cond["condition"] == "template":
+                        rendered = env.from_string(cond["value_template"]).render(
+                            trigger=trigger, is_state=is_state).strip()
+                        satisfied = rendered == "True"
+                    else:
+                        raise AssertionError("Unexpected condition " + str(cond))
+                    if not satisfied:
+                        break
+                if satisfied:
+                    action = branch["sequence"][0]
+                    self.assertEqual(action["action"], "script.write2log")
+                    rendered = {
+                        key: env.from_string(value).render(
+                            trigger=trigger, **vars_).strip()
+                        for key, value in action["data"].items()
+                    }
+                    delivered.append(rendered)
+                    break  # Native HA choose executes the first matching branch.
+            return delivered
+
+        home = "switch.dh_presence_app_notify_zone_" + home_key
+        urban = "switch.dh_presence_app_notify_zone_" + urban_key
+        wifi = "switch.dh_presence_app_notify_wifi"
+        cases = [
+            ("arrival", {"first_arrival": True, "residents_home_after": 1}, (home,),
+             "🏠✅ Serzhan прибыл домой", "Статус дома: ПРИСУТСТВИЕ"),
+            ("arrival", {"first_arrival": False, "residents_home_after": 2}, (home,),
+             "🏠✅ Serzhan прибыл домой", "Дома: 2"),
+            ("departure", {"last_departure": False, "residents_home_after": 1}, (home,),
+             "🏠🚪 Serzhan покинул дом", "Дома: 1"),
+            ("departure", {"last_departure": True, "residents_home_after": 0}, (home,),
+             "🏠🚪 Serzhan покинул дом", "Статус дома: ОТСУТСТВИЕ"),
+            ("zone_enter", {"zone_entity_id": "zone.urban_coffee",
+                            "zone_name": "Urban coffee", "zone_key": urban_key}, (urban,),
+             "📍✅ Serzhan прибыл в Urban coffee", "Местоположение подтверждено GPS."),
+            ("zone_leave", {"zone_entity_id": "zone.urban_coffee",
+                            "zone_name": "Urban coffee", "zone_key": urban_key}, (urban,),
+             "📍🚪 Serzhan покинул Urban coffee", "Местоположение подтверждено GPS."),
+            ("wifi_in", {}, (wifi,),
+             "📶 Wi-Fi обнаружен: Serzhan (13ProMAX .SKY)",
+             "Устройство обнаружено роутером в домашней Wi-Fi сети."),
+            ("wifi_out", {}, (wifi,),
+             "📵 Wi-Fi не обнаружен: Serzhan (13ProMAX .SKY)",
+             "По данным Wi-Fi-трекера роутера устройство больше не подключено к домашней Wi-Fi сети."),
+            ("wifi_lost", {}, (wifi,),
+             "📵 Wi-Fi не подтверждается: Serzhan (13ProMAX .SKY)",
+             "Источник Wi-Fi временно недоступен. Состояние подключения неизвестно."),
+        ]
+        for event_type, attrs, enabled, title, message in cases:
+            with self.subTest(event_type=event_type, attrs=attrs):
+                self.assertEqual(fire(event_type, attrs, enabled),
+                                 [{"title": title, "message": message}])
+
+        # No second zone.home notification when an arrival/departure is
+        # already covered by the logical home state.
+        home_event = {"zone_entity_id": "zone.home", "zone_name": "Дом", "zone_key": home_key}
+        for event_type in ("zone_enter", "zone_leave"):
+            self.assertEqual(fire(event_type, home_event, (home,)), [])
+
+        self.assertEqual(fire("arrival", {"first_arrival": True}, ()), [])
+        self.assertEqual(fire("zone_enter", cases[4][1], ()), [])
+        self.assertEqual(fire("wifi_in", {}, ()), [])
+        for event_type in ("gps_in", "gps_out"):
+            self.assertEqual(fire(event_type, {}, (home, wifi, urban)), [])
+        # Wi-Fi remains separately opt-in even when no zone switch is enabled.
+        self.assertEqual(len(fire("wifi_in", {}, (wifi,))), 1)
+
     def test_portable_auto_entities_use_live_registered_roster_only(self):
         for path, field in ((GPS_SOURCES, "gps_tracker"),
                             (WIFI_SOURCES, "wifi_tracker")):
