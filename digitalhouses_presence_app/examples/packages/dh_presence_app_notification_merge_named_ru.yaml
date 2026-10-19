@@ -6,8 +6,8 @@
 # No extra notification helper or standalone app entity.
 dh_presence_app_notification:
   automation:
-    - id: dh_presence_app_notifications
-      alias: "DH Presence · Уведомления"
+    - id: dh_presence_notifications
+      alias: "DH Presence Notifications"
       mode: queued
       max: 30
       triggers:
@@ -178,3 +178,10 @@ dh_presence_app_notification:
                   data:
                     title: "📵 Wi-Fi не обнаружен: {{ person_device }}"
                     message: "{{ wifi_out_message }}"
+
+  # English alias generates the canonical entity_id; friendly name stays Russian.
+  # The renamed automation id retires the legacy transliterated registry identity.
+  homeassistant:
+    customize:
+      automation.dh_presence_notifications:
+        friendly_name: "DH Presence · Уведомления"

@@ -4,6 +4,19 @@
 
 This application belongs to `DigitalHouses/home-assistant-apps/digitalhouses_presence_app` and is installed via **Settings → Apps → App Store**.
 
+## HA package: каноническое имя автоматизации уведомлений
+
+Оба поддерживаемых варианта пакета (`examples/packages/dh_presence_app_notification_merge_named_ru.yaml` и `examples/packages/dh_presence_app_notification_local_package_ru.yaml`) задают один и тот же стандарт:
+
+- **Технический `entity_id`:** `automation.dh_presence_notifications` (английский).
+- **`id` автоматизации:** `dh_presence_notifications` (английский, уникальный).
+- **`alias` в YAML:** `DH Presence Notifications` (английский, определяет исходный `entity_id` новой сущности).
+- **Имя для пользователей:** `DH Presence · Уведомления` через штатный `homeassistant.customize` внутри пакета (русский).
+
+Автоматизации Home Assistant не поддерживают декларативный `entity_id` как поле YAML; при первоначальном создании используется `alias`, а зарегистрированный `entity_id` закрепляется за уникальным `id`. Поэтому для миграции со старого `automation.dh_presence_uvedomleniia` изменён именно `id` пакета: прежняя автоматизация снимается с загрузки, новая получает английский `entity_id` после проверки конфигурации и перезапуска HA. **Это осознанная разовая смена уникального идентификатора только автоматизации HA**; MQTT-контракт, события, скрипт `write2log` и версия App не меняются.
+
+Уже существовавшая запись старого `entity_id` может оставаться неактивной в HA Entity Registry. Не редактируйте файлы `.storage` вручную и не создавайте вторую автоматизацию для «исправления» имени. После миграции проверьте, что новый `automation.dh_presence_notifications` имеет состояние `on` и прежний `automation.dh_presence_uvedomleniia` отсутствует среди **активных** автоматизаций; при необходимости историческую запись отдельно очищают через поддерживаемый механизм Entity Registry. Иные сайты получают тот же канонический ID с нуля. Если канонический ID уже занят чужой сущностью, устраните конфликт до миграции.
+
 ## Lovelace: относительное время статуса жильцов
 
 Отдельная карточка жильцов `examples/lovelace/presence_residents_auto_entities_ru.yaml` и поддерживаемый `examples/lovelace/dh_presence_app_dashboard.yaml` показывают `Итог`, `GPS` и `Wi-Fi` вместе с **возрастом текущего состояния**, например `1 минуту назад`, `2 часа назад`, `1 день назад`. Точная дата/время из карты жильцов убрана; исходные поля `status_changed_at`, `gps_changed_at` и `wifi_changed_at` продолжают поступать из App.
