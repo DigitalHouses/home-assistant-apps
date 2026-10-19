@@ -280,7 +280,7 @@ sections:
       - type: markdown
         content: |-
           {% set entity = 'sensor.dh_zigbee_monitor_app_networks_details' %}
-          {% set networks = state_attr(entity, 'networks') or [] %}
+          {% set networks = state_attr(entity, 'networks') or [] if states(entity) == 'ready' else [] %}
           {% set repeater_entity = 'sensor.dh_zigbee_monitor_app_repeaters_details' %}
           {% set repeaters = [] if states(repeater_entity) in ['unknown', 'unavailable'] else state_attr(repeater_entity, 'repeaters') or [] %}
           {% if states(entity) != 'ready' and repeaters | count == 0 %}
