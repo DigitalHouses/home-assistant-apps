@@ -33,6 +33,9 @@ dh_zigbee_monitor_app_global_package:
         - sensor.dh_zigbee_monitor_app_*_details
         - sensor.dh_zigbee_monitor_app_*
         - binary_sensor.dh_zigbee_monitor_app_*
+        - switch.dh_zigbee_monitor_app_*
+        - select.dh_zigbee_monitor_app_*
+        - text.dh_zigbee_monitor_app_*
         - button.dh_zigbee_monitor_app_*
         - event.dh_zigbee_monitor_app_*
       entities:

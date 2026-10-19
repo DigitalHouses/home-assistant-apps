@@ -269,6 +269,7 @@ class MonitorService:
             self._publish_networks()
             self._publish_incidents()
             self._publish_problem_settings()
+            self._publish_agent_settings()
             self._publish_problems(allow_event=False)
 
     def disconnected(self) -> None:
@@ -316,6 +317,23 @@ class MonitorService:
             auto_topic, manual_topic = self._setting_topics(network.network_id)
             self._send(auto_topic, "ON" if auto else "OFF")
             self._send(manual_topic, str(threshold))
+
+    def _publish_agent_settings(self) -> None:
+        for network in self.monitor.networks:
+            policy = self.store.network_agent_policy(network.network_id)
+            prefix = f"{ROOT}/settings/{network.network_id}/agent"
+            for key, value in policy.items():
+                state = ("ON" if value else "OFF") if key == "critical" else str(value)
+                self._send(f"{prefix}/{key}", state)
+
+    @staticmethod
+    def _binding_state(policy: dict[str, object]) -> str:
+        """An unverified HA entity/slug NEVER makes a destructive action ready."""
+        method = policy["healer_method"]
+        if method == "disabled":
+            return "disabled"
+        required = policy["addon_slug"] if method == "addon_restart" else policy["power_switch"]
+        return "missing_binding" if not required else "unverified"
 
     def _update_traffic(self, epoch: int) -> None:
         """Evaluate complete SQLite minutes, never individual MQTT packets.
@@ -469,8 +487,17 @@ class MonitorService:
                 rpm=metrics.get("rpm"), threshold=metrics.get("threshold"),
             )
             saved = self.store.network_infrastructure(config.network_id)
+            policy = self.store.network_agent_policy(config.network_id)
             rows.append({
-                "network_id": config.network_id, "name": config.name,
+                "network_id": config.network_id,
+                "name": config.name,
+                "agent_name": policy["display_name"] or config.name,
+                "agent_policy": {
+                    **policy,
+                    "binding_state": self._binding_state(policy),
+                    "healer_enabled": False,
+                    "binding_verified": False,
+                },
                 "status": status["bridge_state"], "devices": status["devices"],
                 "infrastructure": saved["data"] if saved else None,
                 "infrastructure_received_at": saved["received_at"] if saved else None,
@@ -829,6 +856,29 @@ class MonitorService:
                         force=True,
                     )
                 return "ha_status"
+            # User-facing per-network agent fields replace Zigbee Boss passports.
+            # Configuration is inert: never calls Supervisor, MQTT Z2M commands or PoE.
+            agent_root = f"{ROOT}/command/agent/"
+            if topic.startswith(agent_root):
+                parts = topic[len(agent_root):].split("/")
+                if retain or len(parts) != 2:
+                    return "agent_setting_ignored"
+                network_id, field = parts
+                if network_id not in {n.network_id for n in self.monitor.networks}:
+                    return "agent_setting_ignored"
+                try:
+                    if field == "critical":
+                        if payload not in (b"ON", b"OFF"):
+                            return "agent_setting_ignored"
+                        value: str | bool = payload == b"ON"
+                    else:
+                        value = payload.decode("utf-8")
+                    self.store.update_network_agent_policy(network_id, field, value)
+                except (ValueError, UnicodeDecodeError):
+                    return "agent_setting_ignored"
+                self._publish_agent_settings()
+                self._publish_networks()
+                return "agent_setting_updated"
             settings_root = f"{ROOT}/command/settings/"
             if topic.startswith(settings_root):
                 parts = topic[len(settings_root):].split("/")
@@ -908,6 +958,7 @@ class MonitorService:
                         DISCOVERY, _json(build_discovery(self.version, self.monitor.networks))
                     )
                     self._publish_problem_settings()
+                    self._publish_agent_settings()
                     self._publish_networks()
                     self._publish_inventory_and_availability()
                     self._publish_problems(allow_event=False)

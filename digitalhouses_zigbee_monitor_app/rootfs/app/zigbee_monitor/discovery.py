@@ -200,6 +200,49 @@ def build_discovery(version: str, networks: tuple[Network, ...] = ()) -> dict[st
             "entity_category": "config",
             "icon": "mdi:speedometer-slow",
         }
+        # Non-executable replacement for former Zigbee Boss agent passports.
+        settings_prefix = f"{ROOT}/settings/{nid}/agent"
+        command_prefix = f"{ROOT}/command/agent/{nid}"
+        components[f"{nid}_agent_critical"] = {
+            "platform": "switch",
+            "name": f"{network.name}: critical agent",
+            "unique_id": f"{PREFIX}_{nid}_agent_critical",
+            "default_entity_id": f"switch.{PREFIX}_{nid}_agent_critical",
+            "state_topic": f"{settings_prefix}/critical",
+            "command_topic": f"{command_prefix}/critical",
+            "payload_on": "ON", "payload_off": "OFF",
+            "availability": _availability(),
+            "entity_category": "config", "icon": "mdi:alert-decagram",
+        }
+        for field, label, max_len in (
+            ("display_name", "Agent display name", 64),
+            ("hardware_model", "Coordinator hardware model", 64),
+            ("management_host", "Coordinator management host", 253),
+            ("addon_slug", "Bound Z2M Supervisor App slug", 96),
+            ("power_switch", "Bound power switch entity", 128),
+        ):
+            components[f"{nid}_agent_{field}"] = {
+                "platform": "text",
+                "name": f"{network.name}: {label}",
+                "unique_id": f"{PREFIX}_{nid}_agent_{field}",
+                "default_entity_id": f"text.{PREFIX}_{nid}_agent_{field}",
+                "state_topic": f"{settings_prefix}/{field}",
+                "command_topic": f"{command_prefix}/{field}",
+                "min": 0, "max": max_len, "mode": "text",
+                "availability": _availability(), "entity_category": "config",
+                "icon": "mdi:form-textbox",
+            }
+        components[f"{nid}_agent_healer_method"] = {
+            "platform": "select",
+            "name": f"{network.name}: future recovery method (disabled)",
+            "unique_id": f"{PREFIX}_{nid}_agent_healer_method",
+            "default_entity_id": f"select.{PREFIX}_{nid}_agent_healer_method",
+            "state_topic": f"{settings_prefix}/healer_method",
+            "command_topic": f"{command_prefix}/healer_method",
+            "options": ["disabled", "addon_restart", "power_cycle"],
+            "availability": _availability(), "entity_category": "config",
+            "icon": "mdi:shield-lock-outline",
+        }
     components["problems"] = {
         "platform": "sensor", "name": "Zigbee problems",
         "unique_id": f"{PREFIX}_problems",

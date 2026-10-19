@@ -9,6 +9,7 @@ from __future__ import annotations
 import sqlite3
 import json
 import re
+import ipaddress
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Mapping
@@ -66,6 +67,18 @@ CREATE TABLE IF NOT EXISTS network_infrastructure (
     network_id TEXT PRIMARY KEY NOT NULL,
     metadata_json TEXT NOT NULL,
     received_at INTEGER NOT NULL CHECK(received_at >= 0)
+);
+-- Passport-free per-network user policy. No executable permissions implied.
+CREATE TABLE IF NOT EXISTS network_agent_policy (
+    network_id TEXT PRIMARY KEY NOT NULL,
+    display_name TEXT NOT NULL DEFAULT '',
+    critical INTEGER NOT NULL DEFAULT 0 CHECK(critical IN (0,1)),
+    hardware_model TEXT NOT NULL DEFAULT '',
+    management_host TEXT NOT NULL DEFAULT '',
+    healer_method TEXT NOT NULL DEFAULT 'disabled'
+        CHECK(healer_method IN ('disabled','addon_restart','power_cycle')),
+    addon_slug TEXT NOT NULL DEFAULT '',
+    power_switch TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS network_problem_settings (
     network_id TEXT PRIMARY KEY NOT NULL,
@@ -324,6 +337,102 @@ class ActivityStore:
                 "WHERE metadata_json<>excluded.metadata_json OR received_at<>excluded.received_at",
                 (network_id, content, received_at),
             )
+
+    @staticmethod
+    def default_agent_policy() -> dict[str, object]:
+        return {
+            "display_name": "", "critical": False,
+            "hardware_model": "", "management_host": "",
+            "healer_method": "disabled", "addon_slug": "", "power_switch": "",
+        }
+
+    def network_agent_policy(self, network_id: str) -> dict[str, object]:
+        if not isinstance(network_id, str) or not network_id:
+            raise ValueError("network_id required")
+        row = self.conn.execute(
+            "SELECT display_name,critical,hardware_model,management_host,"
+            "healer_method,addon_slug,power_switch FROM network_agent_policy "
+            "WHERE network_id=?", (network_id,),
+        ).fetchone()
+        if row is None:
+            return self.default_agent_policy()
+        return {
+            "display_name": row[0], "critical": bool(row[1]),
+            "hardware_model": row[2], "management_host": row[3],
+            "healer_method": row[4], "addon_slug": row[5],
+            "power_switch": row[6],
+        }
+
+    def update_network_agent_policy(
+        self, network_id: str, key: str, value: str | bool,
+    ) -> dict[str, object]:
+        """Validate one HA UI field; NO Supervisor, Zigbee or power operations."""
+        if not isinstance(network_id, str) or not network_id:
+            raise ValueError("network_id required")
+        fields = (
+            "display_name", "critical", "hardware_model", "management_host",
+            "healer_method", "addon_slug", "power_switch",
+        )
+        if key not in fields:
+            raise ValueError("unknown agent policy field")
+        if key == "critical":
+            if type(value) is not bool:
+                raise ValueError("critical must be boolean")
+        else:
+            if not isinstance(value, str):
+                raise ValueError("agent policy field must be string")
+            if key in ("display_name", "hardware_model"):
+                if len(value) > 64 or any(ord(ch) < 32 or ord(ch) == 127 for ch in value):
+                    raise ValueError("invalid display name or hardware model")
+                value = value.strip()
+            elif key == "management_host":
+                if value:
+                    if len(value) > 253 or value != value.strip() or any(
+                        ch in value for ch in "/\\@?#:\r\n "
+                    ):
+                        # IPv6 literals are accepted below, not URL-like values.
+                        if ":" not in value or any(ch in value for ch in "/\\@?#\r\n "):
+                            raise ValueError("management host must be IP or DNS")
+                    try:
+                        ipaddress.ip_address(value)
+                    except ValueError:
+                        if not re.fullmatch(
+                            r"[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?", value
+                        ) or len(value) > 253 or ".." in value or ":" in value:
+                            raise ValueError("management host must be IP or DNS")
+            elif key == "healer_method":
+                if value not in ("disabled", "addon_restart", "power_cycle"):
+                    raise ValueError("unsupported recovery method")
+            elif key == "addon_slug":
+                if value and (len(value) > 96 or not re.fullmatch(r"[a-z0-9]+(?:_[a-z0-9]+)*", value)):
+                    raise ValueError("invalid Supervisor app slug")
+            elif key == "power_switch":
+                if value and (len(value) > 128 or not re.fullmatch(r"switch\.[a-z0-9_]+", value)):
+                    raise ValueError("invalid switch entity id")
+        previous = self.network_agent_policy(network_id)
+        previous[key] = value
+        with self.conn:
+            # Existing auto-discovery identity is required, not an arbitrary fake agent.
+            if not self.conn.execute(
+                "SELECT 1 FROM networks WHERE network_id=?", (network_id,)
+            ).fetchone():
+                raise ValueError("unknown network identity")
+            self.conn.execute(
+                "INSERT INTO network_agent_policy("
+                "network_id,display_name,critical,hardware_model,management_host,"
+                "healer_method,addon_slug,power_switch) VALUES (?,?,?,?,?,?,?,?) "
+                "ON CONFLICT(network_id) DO UPDATE SET "
+                "display_name=excluded.display_name,critical=excluded.critical,"
+                "hardware_model=excluded.hardware_model,"
+                "management_host=excluded.management_host,"
+                "healer_method=excluded.healer_method,"
+                "addon_slug=excluded.addon_slug,power_switch=excluded.power_switch",
+                (network_id, previous["display_name"], int(previous["critical"]),
+                 previous["hardware_model"], previous["management_host"],
+                 previous["healer_method"], previous["addon_slug"],
+                 previous["power_switch"]),
+            )
+        return previous
 
     def network_problem_settings(self, network_id: str) -> tuple[bool, int]:
         row = self.conn.execute(
