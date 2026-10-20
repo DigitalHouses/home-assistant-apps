@@ -473,6 +473,7 @@ sections:
           include:
             - entity_id: switch.dh_zigbee_monitor_app_*_rpm_auto
             - entity_id: number.dh_zigbee_monitor_app_*_rpm_threshold
+            - entity_id: sensor.dh_zigbee_monitor_app_*_rpm_threshold_effective
         sort:
           method: name
         show_empty: false
@@ -487,22 +488,22 @@ sections:
           - type: custom:auto-entities
             card:
               type: history-graph
-              title: RPM всех Zigbee2MQTT · 24 часа
+              title: RPM EMA 15 мин · все Z2M · 24 часа
               hours_to_show: 24
             filter:
               include:
-                - entity_id: "sensor.dh_zigbee_monitor_app_*_rpm"
+                - entity_id: "sensor.dh_zigbee_monitor_app_*_rpm_smooth"
             sort:
               method: name
             show_empty: false
           - type: custom:auto-entities
             card:
               type: history-graph
-              title: RPM всех Zigbee2MQTT · 7 дней
+              title: RPM EMA 15 мин · все Z2M · 7 дней
               hours_to_show: 168
             filter:
               include:
-                - entity_id: "sensor.dh_zigbee_monitor_app_*_rpm"
+                - entity_id: "sensor.dh_zigbee_monitor_app_*_rpm_smooth"
             sort:
               method: name
             show_empty: false
