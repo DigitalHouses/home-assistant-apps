@@ -543,11 +543,11 @@ sections:
         heading: Offline-устройства
         heading_style: subtitle
         icon: mdi:lan-disconnect
-      type: markdown
+      - type: markdown
       content: |
         {% set entity = 'sensor.dh_zigbee_monitor_app_offline_details' %}
-        {% set rows = state_attr(entity, 'devices') %}
-        {% if states(entity) in ['unknown', 'unavailable'] or rows is not iterable or rows is string %}
+        {% set rows = state_attr('sensor.dh_zigbee_monitor_app_offline_details', 'devices') %}
+        {% if states('sensor.dh_zigbee_monitor_app_offline_details') in ['unknown', 'unavailable'] or rows is not iterable or rows is string %}
         *Список недоступных устройств ещё не получен.*
         {% elif rows | length == 0 %}
         Нет подтверждённых offline-устройств.
