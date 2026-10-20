@@ -74,6 +74,11 @@ class MonitorService:
         self._traffic_detectors: dict[str, TrafficDetector] = {}
         self._traffic_started: dict[str, float] = {}
         self._traffic_metrics: dict[str, dict[str, object]] = {}
+        # Preliminary per-network session RPM uses only fresh device MQTT.
+        # Fixed 1-second buckets cap memory independent of message frequency.
+        self._live_started: dict[str, float] = {}
+        self._live_counts: dict[str, dict[int, int]] = {}
+        self._last_live_slot: int | None = None
         self._bridge_info_seen: set[str] = set()
         self._agent_registry = normalize_registry({})
         self._ping_results: dict[str, str] = {}
@@ -276,6 +281,9 @@ class MonitorService:
             self._problem_states.clear()
             self._traffic_started.clear()
             self._traffic_metrics.clear()
+            self._live_started.clear()
+            self._live_counts.clear()
+            self._last_live_slot = None
             self._bridge_info_seen.clear()
             for detector in self._traffic_detectors.values():
                 detector.reset()
@@ -317,6 +325,9 @@ class MonitorService:
             self._problem_states.clear()
             self._traffic_started.clear()
             self._traffic_metrics.clear()
+            self._live_started.clear()
+            self._live_counts.clear()
+            self._last_live_slot = None
             self._bridge_info_seen.clear()
             for detector in self._traffic_detectors.values():
                 detector.reset()
@@ -467,6 +478,43 @@ class MonitorService:
         self._detail("repeaters_details", "repeaters", rows,
                      valid=bool(self.monitor.networks or rows))
 
+    def _live_rpm(self, nid: str, epoch: int) -> float:
+        """Fresh non-retained MQTT device traffic since this online session.
+
+        Before 300 seconds divide by observed session length (minimum 10
+        seconds avoids huge start-up spikes). Afterward use a 300-second
+        rolling window. This is a *display estimate*, never an alarm input.
+        """
+        started = self._live_started.setdefault(nid, float(epoch))
+        buckets = self._live_counts.setdefault(nid, {})
+        for second in tuple(buckets):
+            if second <= epoch - 300 or second > epoch:
+                buckets.pop(second, None)
+        seconds = max(10.0, min(300.0, float(epoch) - started))
+        return round(60 * sum(buckets.values()) / seconds, 2)
+
+    def _publish_live_rpm(self, epoch: int) -> None:
+        """Refresh live display at most every 10 s, independent of RPM alarms."""
+        changed = False
+        for network in self.monitor.networks:
+            nid = network.network_id
+            if self.monitor.network_status(nid)["bridge_state"] != "online":
+                self._live_started.pop(nid, None)
+                self._live_counts.pop(nid, None)
+                continue
+            metrics = self._traffic_metrics.setdefault(nid, {})
+            if metrics.get("rpm_phase") == "measured":
+                continue
+            live = self._live_rpm(nid, epoch)
+            # The phase itself is part of the display contract: 0 while
+            # warming up MUST NOT be mistaken for confirmed traffic failure.
+            if metrics.get("rpm") != live or metrics.get("rpm_phase") != "warming_up":
+                metrics["rpm"] = live
+                metrics["rpm_phase"] = "warming_up"
+                changed = True
+        if changed:
+            self._publish_networks()
+
     def _update_traffic(self, epoch: int) -> None:
         """Evaluate complete SQLite minutes, never individual MQTT packets.
 
@@ -481,6 +529,8 @@ class MonitorService:
                 self._traffic_started.pop(nid, None)
                 self._traffic_detectors.setdefault(nid, TrafficDetector()).reset()
                 self._traffic_metrics.pop(nid, None)
+                self._live_started.pop(nid, None)
+                self._live_counts.pop(nid, None)
                 continue
             started = self._traffic_started.setdefault(nid, float(epoch))
             auto, manual = self.store.network_problem_settings(nid)
@@ -516,7 +566,8 @@ class MonitorService:
                 threshold=float(threshold) if trusted else None,
             )
             self._traffic_metrics[nid] = {
-                "rpm": round(rpm, 2) if trusted else None,
+                "rpm": round(rpm, 2) if trusted else self._live_rpm(nid, epoch),
+                "rpm_phase": "measured" if trusted else "warming_up",
                 "threshold": threshold, "baseline": baseline,
                 "rpm_auto": auto,
                 "traffic_problem": active,
@@ -885,6 +936,9 @@ class MonitorService:
         with self._lock:
             epoch = int(self.now())
             current_minute = epoch // 60
+            if self._connected and self._last_live_slot != epoch // 10:
+                self._last_live_slot = epoch // 10
+                self._publish_live_rpm(epoch)
             if self._connected and self._last_flush_minute != current_minute:
                 self._last_flush_minute = current_minute
                 snapshot = self.monitor.counts_snapshot()
@@ -1135,6 +1189,10 @@ class MonitorService:
                 current = str(self.monitor.network_status(network_id)["bridge_state"])
                 previous = self._event_bridge_state.get(network_id)
                 self._event_bridge_state[network_id] = current
+                if current == "online":
+                    # A valid bridge-state observation starts display sampling
+                    # immediately, without waiting for five SQLite minutes.
+                    self._publish_live_rpm(int(self.now()))
                 if current == "offline":
                     # Prevent a bridge restart from creating hundreds of
                     # synthetic device "recovered" transitions.
@@ -1177,6 +1235,13 @@ class MonitorService:
                                 "severity": "info" if current == "online" else "warning",
                             },
                         )
+            if sample.kind == "device_message" and sample.counted and sample.network_id:
+                # Never treat retained startup traffic or MQTT duplicates as
+                # fresh evidence. No per-message MQTT publishing (spam guard).
+                if self.monitor.network_status(sample.network_id)["bridge_state"] == "online":
+                    instant = int(self.now())
+                    seconds = self._live_counts.setdefault(sample.network_id, {})
+                    seconds[instant] = seconds.get(instant, 0) + 1
             if sample.kind in ("inventory", "bridge_state", "device_availability"):
                 # Reconcile and commit durable outage state first.
                 # Device availability may have arrived before retained inventory.
