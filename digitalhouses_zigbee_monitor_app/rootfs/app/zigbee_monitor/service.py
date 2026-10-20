@@ -491,6 +491,13 @@ class MonitorService:
                 ping = "invalid"
             else:
                 ping = self._ping_results.get(f"{ieee}@{ip}", "unknown" if ip else "not_configured")
+            # Router presence in inventory is not proof of Zigbee availability.
+            availability, reason = (
+                self._availability_diagnostic(network.network_id, ieee)
+                if found and network else ("unknown", "inventory_missing")
+            )
+            if reason is not None:
+                availability = "unknown"
             rows.append({
                 "ieee": ieee, "name": policy.get("name") or
                 (device.friendly_name if device else ieee),
@@ -499,6 +506,7 @@ class MonitorService:
                 "network_name": network.name if network else None,
                 "network_id": network.network_id if network else None,
                 "discovered": bool(found and device.device_type == "Router"),
+                "availability": availability,
                 "management_ip": ip, "ping": ping,
                 "power_switch": policy.get("power_switch", ""),
                 "binding_verified": False, "healer_enabled": False,

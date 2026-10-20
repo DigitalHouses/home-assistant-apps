@@ -1,7 +1,8 @@
-"""Render real Zigbee Monitor Lovelace Jinja, not merely search YAML text.
+"""Render the real Zigbee Monitor Lovelace Jinja, not just search YAML.
 
-One root backslash, followed by every Z2M and every dedicated repeater as
-independent first-level ASCII branches. No YAML/HTML tree rewrite allowed.
+Networks form first-level ASCII branches. Specialized repeaters appear only
+beneath the network that observed their IEEE; unconfirmed membership is never
+silently treated as belonging to any network.
 """
 from __future__ import annotations
 
@@ -54,10 +55,11 @@ class ZigbeeTreeRenderTests(unittest.TestCase):
         }
 
     @staticmethod
-    def repeater(name):
+    def repeater(name, network_id=None, availability="unknown"):
         return {
             "name": name, "ieee": "0x00158d0000000001", "model": "ZigStar-01",
             "critical": False, "discovered": True, "network_name": "zigbee2mqtt",
+            "network_id": network_id, "availability": availability,
             "management_ip": "", "ping": "not_configured", "power_switch": "",
         }
 
@@ -76,29 +78,28 @@ class ZigbeeTreeRenderTests(unittest.TestCase):
         self.assertNotIn("\n\n", source)
         return source.splitlines()
 
-    def test_three_z2m_and_five_repeaters_are_eight_root_branches(self):
+    def test_three_z2m_and_five_repeaters_nest_only_in_owner_network(self):
         networks = [self.network(name) for name in (
             "zigbee2mqtt", "zigbee2mqtt_office", "zigbee2mqtt_floor2"
         )]
-        repeaters = [self.repeater("Repeater " + str(i)) for i in range(5)]
+        for i, n in enumerate(networks):
+            n["network_id"] = f"network_{i + 1}"
+        repeaters = [self.repeater("Repeater " + str(i), network_id="network_1")
+                     for i in range(5)]
         lines = self.tree_lines(self.render(networks, repeaters))
         self.assertEqual(lines[0], "\\")
         branches = [line for line in lines[1:] if re.match(r"^[├└]─ ", line)]
-        self.assertEqual(len(branches), 8)
-        self.assertEqual(branches[:3], [
+        self.assertEqual(branches, [
             "├─ 🟩 zigbee2mqtt", "├─ 🟩 zigbee2mqtt_office",
-            "├─ 🟩 zigbee2mqtt_floor2",
+            "└─ 🟩 zigbee2mqtt_floor2",
         ])
-        self.assertEqual(branches[3:7], [
-            "├─ 📡 Repeater 0", "├─ 📡 Repeater 1",
-            "├─ 📡 Repeater 2", "├─ 📡 Repeater 3",
-        ])
-        self.assertEqual(branches[7], "└─ 📡 Repeater 4")
-        self.assertTrue(any(x.startswith("│  ├─ 🏷️ Тип: 👑 Координатор") for x in lines))
+        self.assertEqual(sum("📡 Repeaters: 5" in x for x in lines), 1)
+        self.assertEqual(sum("📡 Repeaters: 0" in x for x in lines), 2)
+        self.assertEqual(sum("📡 Repeater " in x for x in lines), 5)
+        self.assertTrue(any("│  │  ├─ 📡 Repeater 0" in x for x in lines))
+        self.assertFalse(any("Репитеры без подтверждённой сети" in x for x in lines))
         self.assertFalse(any("IEEE:" in x for x in lines))
-        self.assertNotIn("INTERNAL_ID_NOT_FOR_HEADER", "\n".join(lines))
-        self.assertNotIn("WRONG DISPLAY OVERRIDE", "\n".join(lines))
-        self.assertNotIn("\nРепитеры\n", "\n".join(lines))
+        self.assertNotIn("WRONG DISPLAY OVERRIDE", "\\n".join(lines))
 
     def test_single_z2m_ends_root_without_repeaters(self):
         rendered = self.render([self.network("zigbee2mqtt")], [])
@@ -110,18 +111,18 @@ class ZigbeeTreeRenderTests(unittest.TestCase):
         self.assertIn("🔌 Status: online", rendered)
         self.assertIn("📦 Devices: 7 (6 online, 1 offline)", rendered)
         self.assertIn("💊 Healer: OFF", rendered)
-        self.assertEqual(len(lines), 9, "one root, one node, seven compact lines")
+        self.assertEqual(len(lines), 10, "one root, one node, eight compact lines")
 
-    def test_repeaters_alone_have_one_shared_root(self):
+    def test_repeaters_alone_are_explicitly_unassigned(self):
         lines = self.tree_lines(self.render([], [
-            self.repeater("Hall"), self.repeater("Garage")
+            self.repeater("Hall"), self.repeater("Garage"),
         ], network_state="unavailable"))
         self.assertEqual(lines[0], "\\")
         branches = [x for x in lines if re.match(r"^[├└]─ ", x)]
-        self.assertEqual(branches, ["├─ 📡 Hall", "└─ 📡 Garage"])
-        self.assertTrue(any(x.startswith("│  ├─ 🏷️ Тип: 📡 Репитер") for x in lines))
-        self.assertTrue(any(x.startswith("   ├─ 🏷️ Тип: 📡 Репитер") for x in lines))
-        self.assertEqual(len(lines), 13, "one root, two repeaters with five lines each")
+        self.assertEqual(branches, ["└─ ❓ Репитеры без подтверждённой сети: 2"])
+        self.assertTrue(any("├─ 📡 Hall" in x for x in lines))
+        self.assertTrue(any("└─ 📡 Garage" in x for x in lines))
+        self.assertEqual(len(lines), 4, "one unassigned root and two repeater entries")
 
     def test_unavailable_networks_cannot_render_stale_network_list(self):
         result = self.render([self.network("STALE NETWORK")],
@@ -131,10 +132,10 @@ class ZigbeeTreeRenderTests(unittest.TestCase):
 
     def test_compact_card_has_seven_primary_fields_per_coordinator(self):
         lines = self.tree_lines(self.render([self.network("zigbee2mqtt")], []))
-        self.assertEqual(len(lines), 9)
+        self.assertEqual(len(lines), 10)
         labels = [
             "🏷️ Тип:", "⚙️ Железо:", "🌐 IP:", "📦 Devices:",
-            "💊 Healer:", "🔌 Status:", "💓 Pulse:",
+            "📡 Repeaters:", "💊 Healer:", "🔌 Status:", "💓 Pulse:",
         ]
         for item, label in zip(lines[2:], labels):
             self.assertIn(label, item)
@@ -142,6 +143,27 @@ class ZigbeeTreeRenderTests(unittest.TestCase):
                           "Supervisor:", "Питание:", "Info:",
                           "network_id", "Причины:"):
             self.assertNotIn(forbidden, "\\n".join(lines))
+
+    def test_router_status_requires_zigbee_availability(self):
+        n = self.network("zigbee2mqtt")
+        rep = self.repeater("TI-bedroom",
+                            network_id=n["network_id"], availability="unknown")
+        rendered = self.render([n], [rep])
+        self.assertIn("📡 Repeaters: 1", rendered)
+        self.assertIn("📡 TI-bedroom", rendered)
+        self.assertIn("🔌 Status: unknown", rendered)
+        rep["availability"] = "offline"
+        self.assertIn("🔌 Status: offline", self.render([n], [rep]))
+        rep["availability"] = "online"
+        self.assertIn("🔌 Status: online", self.render([n], [rep]))
+
+    def test_known_repeater_stays_visible_if_network_unavailable(self):
+        n = self.network("zigbee2mqtt")
+        rep = self.repeater("TI-bedroom", network_id=n["network_id"])
+        rendered = self.render([n], [rep], network_state="unavailable")
+        self.assertNotIn("🟩 zigbee2mqtt", rendered)
+        self.assertIn("Репитеры без подтверждённой сети: 1", rendered)
+        self.assertIn("TI-bedroom", rendered)
 
     def test_ping_no_answer_is_uncertain_not_device_failure(self):
         n = self.network("zigbee2mqtt")

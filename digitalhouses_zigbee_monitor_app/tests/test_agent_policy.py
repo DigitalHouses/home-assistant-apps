@@ -103,6 +103,66 @@ class AgentOptionsTests(unittest.TestCase):
         self.assertFalse(changed)
         self.assertEqual(new, newer)
 
+    def test_ruslan_ti_router_repeaters_belong_to_source_network(self):
+        # Two confirmed Ruslan TI devices belong to z2m_1, not to z2m_2.
+        bedroom = "0x00124b002e1458f9"
+        wardrobe = "0x00124b002e0cc5a6"
+        other = parse_networks([{
+            "network_id": "second", "base_topic": "zigbee2mqtt_2",
+            "name": "Second floor",
+        }])[0]
+        self.svc.monitor.add_network(other)
+        ti_device = Device(bedroom, self.network.network_id, "Repeater-bedroom",
+                           "ti.router", "Custom devices (DiY)", "Router")
+        self.assertTrue(is_recognized_repeater(ti_device))
+        self.assertFalse(is_recognized_repeater(
+            Device(PLUG, "second", "Lamp", "TS0502B", "Tuya", "Router")
+        ))
+        self.assertFalse(is_recognized_repeater(
+            Device(bedroom, "second", "Mobile", "ti.router",
+                   "Custom devices (DiY)", "EndDevice")
+        ))
+        self.svc.receive("zigbee2mqtt/bridge/devices", json.dumps([
+            {"type": "Coordinator", "ieee_address": COORD,
+             "friendly_name": "Coordinator"},
+            {"type": "Router", "ieee_address": bedroom,
+             "friendly_name": "Repeater-bedroom",
+             "definition": {"model": "ti.router", "vendor": "Custom devices (DiY)"}},
+            {"type": "Router", "ieee_address": wardrobe,
+             "friendly_name": "Repeater-wardrobe",
+             "definition": {"model": "ti.router", "vendor": "Custom devices (DiY)"}},
+        ]).encode(), retain=True)
+        self.svc.receive("zigbee2mqtt/bridge/state", b"online", retain=True)
+        self.svc.receive("zigbee2mqtt_2/bridge/devices", json.dumps([
+            {"type": "Coordinator",
+             "ieee_address": "0x00124b002e1048c9",
+             "friendly_name": "Coordinator2"},
+            {"type": "Router", "ieee_address": PLUG,
+             "friendly_name": "Lamp", "definition": {"model": "TS0502B"}},
+        ]).encode(), retain=True)
+        self.svc.receive("zigbee2mqtt_2/bridge/state", b"online", retain=True)
+        self.svc.receive("zigbee2mqtt/Repeater-bedroom/availability",
+                         b'{"state":"online"}', retain=True)
+        self.svc.receive("zigbee2mqtt/Repeater-wardrobe/availability",
+                         b'{"state":"offline"}', retain=True)
+        coords, candidates, _ = self.svc.agent_snapshot()
+        self.assertEqual({x["ieee"] for x in candidates}, {bedroom, wardrobe})
+        self.assertFalse(any(c.get("network_id") == "second" for c in candidates))
+        rows = json.loads(self.last(f"{ROOT}/state/repeaters_details"))["repeaters"]
+        self.assertEqual({r["ieee"] for r in rows}, {bedroom, wardrobe})
+        self.assertEqual({r["network_id"] for r in rows}, {self.network.network_id})
+        self.assertEqual({r["model"] for r in rows}, {"ti.router"})
+        self.assertEqual(
+            {r["name"]: r["availability"] for r in rows},
+            {"Repeater-bedroom": "online", "Repeater-wardrobe": "offline"}
+        )
+        current = {"coordinators": [], "repeaters": []}
+        new, changed = merge_new_discoveries(current, coords, candidates)
+        self.assertTrue(changed)
+        self.assertEqual({r["ieee"] for r in new["repeaters"]}, {bedroom, wardrobe})
+        # Membership is dynamically derived from MQTT, never an editable option.
+        self.assertTrue(all("network_id" not in r for r in new["repeaters"]))
+
     def test_existing_overrides_and_legacy_migration(self):
         cur = {"coordinators": [{"ieee": COORD, "name": "USER NAME",
                                  "critical": True}], "repeaters": []}

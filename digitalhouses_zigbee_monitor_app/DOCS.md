@@ -1,8 +1,20 @@
 # DigitalHouses Zigbee Monitor App — installation and acceptance
 
-Version: **0.1.18 (experimental)**. Run only after the production GHCR image
-`ghcr.io/digitalhouses/digitalhouses_zigbee_monitor_app:0.1.18` is published
+Version: **0.1.19 (experimental)**. Run only after the production GHCR image
+`ghcr.io/digitalhouses/digitalhouses_zigbee_monitor_app:0.1.19` is published
 and verified by repository release workflows.
+
+## TI repeaters and network topology (v0.1.19)
+
+Confirmed Ruslan dedicated Zigbee Router model `ti.router` is recognized
+alongside previously supported ZigStar repeater models. Physical device
+identity is IEEE; membership comes from the actual `bridge/devices`
+source network, never from a user-entered name or model.
+The standalone and dashboard ASCII trees group specialized repeaters
+beneath the owning Z2M network. If inventory does not prove network
+membership, the entry is explicitly unassigned. Repeater status uses
+reported Zigbee availability, never a Ping or inventory presence alone.
+No Healer controls were enabled or changed.
 
 ## Offline device links (v0.1.18)
 

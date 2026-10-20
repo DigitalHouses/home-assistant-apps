@@ -239,10 +239,23 @@ class ZigbeeMonitorUiDesignTests(unittest.TestCase):
         self.assertNotIn("<details", template)
         self.assertNotIn("<table>", template)
 
-    def test_independent_coordinators_and_repeaters_no_ha_agent_controls(self):
+    def test_repeaters_belong_to_verified_zigbee_network_and_no_ha_agent_controls(self):
         self.assertIn("Конфигурация инфраструктуры", self.raw_dashboard)
         self.assertIn("repeaters_details", self.raw_dashboard)
         self.assertIn("r.ping == 'reachable'", self.raw_dashboard)
+        self.assertIn("r.network_id == n.network_id", self.raw_dashboard)
+        self.assertIn("📡 Repeaters:", self.raw_dashboard)
+        self.assertIn("Репитеры без подтверждённой сети", self.raw_dashboard)
+        self.assertIn("r.availability == 'online'", self.raw_dashboard)
+        standalone = yaml.safe_load(
+            (APP / "examples/lovelace/dh_zigbee_monitor_app_tree_ru.yaml")
+            .read_text(encoding="utf-8")
+        )
+        cards = [c for section in self.dashboard["sections"] for c in section["cards"]]
+        idx = next(i for i, c in enumerate(cards)
+                   if c.get("type") == "heading" and
+                   c.get("heading") == "Дерево Zigbee2MQTT")
+        self.assertEqual(cards[idx + 1], standalone)
         self.assertIn("n.ping == 'reachable'", self.raw_dashboard)
         self.assertNotIn("Настройки агентов", self.raw_dashboard)
         self.assertNotIn("entity_id: text.dh_zigbee_monitor_app_*_agent_", self.raw_dashboard)
@@ -431,7 +444,7 @@ class ZigbeeMonitorUiDesignTests(unittest.TestCase):
         self.assertEqual((APP / "digitalhouses.app").read_text().strip(), "type = haos_addon")
         config = yaml.safe_load((APP / "config.yaml").read_text(encoding="utf-8"))
         self.assertEqual(config["slug"], "digitalhouses_zigbee_monitor_app")
-        self.assertEqual(config["version"], "0.1.18")
+        self.assertEqual(config["version"], "0.1.19")
         self.assertEqual(config["stage"], "experimental")
 
 

@@ -23,6 +23,8 @@ _SWITCH = re.compile(r"^switch\.[a-z0-9_]+$")
 _REPEATER_MODELS = frozenset({
     # Explicitly model-identified dedicated repeaters, NOT every Router.
     "ZigStar-01", "ZigStar-01 Repeater",
+    # Ruslan site: TI Z-Stack router firmware, specifically a dedicated repeater.
+    "ti.router",
 })
 _MAX_COORDINATORS = 64
 _MAX_REPEATERS = 256

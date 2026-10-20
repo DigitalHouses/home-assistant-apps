@@ -328,37 +328,56 @@ sections:
           *Zigbee2MQTT и репитеры пока не обнаружены.*
           {% else %}
           **DH Zigbee Monitor · Z2M: {{ networks | count }} · Репитеры: {{ repeaters | count }}**
-          
+        
           <pre>\
+          {% set unbound = namespace(items=[]) -%}
+          {% for r in repeaters -%}
+          {% set member = namespace(found=false) -%}
+          {% for n in networks if r.network_id == n.network_id -%}
+          {% set member.found = true -%}
+          {% endfor -%}
+          {% if not member.found -%}
+          {% set unbound.items = unbound.items + [r] -%}
+          {% endif -%}
+          {% endfor -%}
           {% for n in networks -%}
-          {% set last_root = loop.last and repeaters | count == 0 -%}
+          {% set last_root = loop.last and unbound.items | count == 0 -%}
           {% set arm = '└─' if last_root else '├─' -%}
           {% set tab = '   ' if last_root else '│  ' -%}
           {% set policy = n.agent_policy or {} -%}
           {% set active = n.problem_active or [] -%}
           {% set unknown = n.problem_unknown or [] -%}
+          {% set members = namespace(count=0) -%}
+          {% for r in repeaters if r.network_id == n.network_id -%}
+          {% set members.count = members.count + 1 -%}
+          {% endfor -%}
           {{ arm }} {{ '🟥' if active | count else '🟨' if unknown | count else '🟩' }} {{ n.name | e }}
           {{ tab }}├─ 🏷️ Тип: 👑 Координатор
           {{ tab }}├─ ⚙️ Железо: {{ (policy.hardware_model or 'не указано') | e }}
           {{ tab }}├─ 🌐 IP: {{ (n.management_ip or '—') | e }} {{ '✅' if n.ping == 'reachable' else '❓ нет ответа' if n.ping == 'no_response' else '❓' }}
           {{ tab }}├─ 📦 Devices: {{ n.devices if n.devices is not none else '—' }} ({{ n.online if n.online is not none else '—' }} online, {{ n.offline if n.offline is not none else '—' }} offline{{ ', ' ~ n.availability_unknown ~ ' unknown' if n.availability_unknown else '' }})
+          {{ tab }}├─ 📡 Repeaters: {{ members.count }}
+          {% for r in repeaters if r.network_id == n.network_id -%}
+          {% set rtab = '   ' if loop.last else '│  ' -%}
+          {{ tab }}│  {{ '└─' if loop.last else '├─' }} 📡 {{ (r.name or r.ieee) | e }}
+          {{ tab }}│  {{ rtab }}├─ ⚙️ Железо: {{ (r.model or 'не указано') | e }}
+          {{ tab }}│  {{ rtab }}├─ 🌐 IP: {{ (r.management_ip or '—') | e }} {{ '✅' if r.ping == 'reachable' else '❓ нет ответа' if r.ping == 'no_response' else '❓' }}
+          {{ tab }}│  {{ rtab }}├─ 💊 Healer: OFF
+          {{ tab }}│  {{ rtab }}└─ 🔌 Status: {{ 'online' if r.availability == 'online' else 'offline' if r.availability == 'offline' else 'unknown' }}
+          {% endfor -%}
           {{ tab }}├─ 💊 Healer: OFF
           {{ tab }}├─ 🔌 Status: {{ (n.status or 'unknown') | e }}
           {{ tab }}└─ {{ '💔' if 'mqtt_traffic_low' in active else '💓' if n.rpm is not none else '❓' }} Pulse: {{ n.rpm if n.rpm is not none else '—' }} MPM ({{ n.threshold if n.threshold is not none else '—' }}){{ ' · прогрев' if n.rpm_phase == 'warming_up' else '' }}
           {% endfor -%}
-          {% for r in repeaters -%}
-          {% set arm = '└─' if loop.last else '├─' -%}
-          {% set tab = '   ' if loop.last else '│  ' -%}
-          {{ arm }} 📡 {{ (r.name or r.ieee) | e }}
-          {{ tab }}├─ 🏷️ Тип: 📡 Репитер
-          {{ tab }}├─ ⚙️ Железо: {{ (r.model or 'не указано') | e }}
-          {{ tab }}├─ 🌐 IP: {{ (r.management_ip or '—') | e }} {{ '✅' if r.ping == 'reachable' else '❓ нет ответа' if r.ping == 'no_response' else '❓' }}
-          {{ tab }}├─ 💊 Healer: OFF
-          {{ tab }}└─ 🔌 Status: {{ 'обнаружен' if r.discovered else 'не подтверждён' }}
+          {% if unbound.items | count > 0 -%}
+          └─ ❓ Репитеры без подтверждённой сети: {{ unbound.items | count }}
+          {% for r in unbound.items -%}
+          {{ '   ' }}{{ '└─' if loop.last else '├─' }} 📡 {{ (r.name or r.ieee) | e }} · {{ (r.model or 'не указано') | e }}
           {% endfor -%}
+          {% endif -%}
           </pre>
-          
-          *Bridge online и Ping OK не гарантируют Zigbee. MPM оценивается независимо. Healer OFF.*
+        
+          *Bridge online и Ping OK не гарантируют Zigbee. Статус репитера — по Zigbee availability. MPM независимо. Healer OFF.*
           {% endif %}
 
       - type: heading
