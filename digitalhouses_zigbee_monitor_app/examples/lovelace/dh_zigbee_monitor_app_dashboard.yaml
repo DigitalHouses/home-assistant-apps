@@ -297,13 +297,14 @@ sections:
           {% set policy = n.agent_policy or {} -%}
           {% set active = n.problem_active or [] -%}
           {% set unknown = n.problem_unknown or [] -%}
+          {% set preview = n.rpm_observed | default(none) -%}
           {{ arm }} {{ '🟥' if active | count else '🟨' if unknown | count else '🟩' }} {{ n.name | e }}
           {{ tab }}├─ 🏷️ Тип: 👑 Координатор
           {{ tab }}├─ ⚙️ Железо: {{ (policy.hardware_model or 'не указано') | e }}
           {{ tab }}├─ 🌐 IP: {{ (n.management_ip or '—') | e }} {{ '✅' if n.ping == 'reachable' else '❓ нет ответа' if n.ping == 'no_response' else '❓' }}
           {{ tab }}├─ 💊 Healer: OFF
           {{ tab }}├─ 🔌 Status: {{ (n.status or 'unknown') | e }}{{ ' · ' ~ n.offline ~ ' offline' if n.offline is not none else '' }}
-          {{ tab }}└─ {{ '💔' if 'mqtt_traffic_low' in active else '💓' if n.rpm is not none else '❓' }} Pulse: {{ n.rpm if n.rpm is not none else '—' }} RPM ({{ n.threshold if n.threshold is not none else '—' }})
+          {{ tab }}└─ {{ '💔' if 'mqtt_traffic_low' in active else '💓' if n.rpm is not none else '⏳' if preview is not none else '❓' }} Pulse: {{ n.rpm if n.rpm is not none else preview if preview is not none else '—' }} RPM ({{ n.threshold if n.threshold is not none else 'обучение' if preview is not none else '—' }})
           {% endfor -%}
           {% for r in repeaters -%}
           {% set arm = '└─' if loop.last else '├─' -%}
