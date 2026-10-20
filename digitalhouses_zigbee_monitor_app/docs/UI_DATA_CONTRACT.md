@@ -77,6 +77,9 @@ Recorder OFF:
 ## Контракт отображаемых деталей
 
 - UI читает готовые снимки от App, не анализирует 500 сущностей HA в Jinja.
+- Переход в HA Device разрешает App по точному IEEE из MQTT Device Registry;
+  UI читает только готовый `ha_device_id` и не сопоставляет названия/Entity ID.
+  При неоднозначности ссылка отсутствует.
 - Детали не встраиваются в исторический числовой sensor.
 - Не публиковать огромный безлимитный JSON; ограничить размер и предоставить
   явное число элементов и информацию об усечении (если потребуется).
@@ -116,7 +119,7 @@ Dashboard показывает отсутствие данных, а не фик
 | Detail sensor | Атрибут | Поля элемента |
 | --- | --- | --- |
 | `networks_details` | `networks` | `network_id`, `name`, `status`, `devices`, `offline` |
-| `offline_details` | `devices` | `ieee_address`, `network_id`, `name`, `network_name`, `offline_since` |
+| `offline_details` | `devices` | `ieee_address`, `network_id`, `name`, `network_name`, `offline_since`, опциональный `ha_device_id` |
 | `top_1h_details` | `items` | `ieee_address`, `network_id`, `name`, `messages` |
 | `top_24h_details` | `items` | как выше |
 | `top_7d_details` | `items` | как выше |

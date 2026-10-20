@@ -88,6 +88,8 @@ class MonitorService:
         self._bridge_info_seen: set[str] = set()
         self._agent_registry = normalize_registry({})
         self._ping_results: dict[str, str] = {}
+        # Safe, read-only HA Device Registry links, keyed strictly by IEEE.
+        self._ha_device_links: dict[str, str] = {}
         self._config_access = {
             "state": "checking", "mount": "not_checked",
             "z2m_directory": "not_checked", "z2m_config": "not_checked",
@@ -378,6 +380,22 @@ class MonitorService:
         with self._lock:
             self._agent_registry = normalize_registry(options)
             self._publish_networks()
+
+    def set_ha_device_links(self, links: Mapping[str, str]) -> None:
+        """Update optional HA navigation hints without changing Zigbee evidence."""
+        with self._lock:
+            updated = {
+                ieee: device_id for ieee, device_id in links.items()
+                if normalize_ieee(ieee) == ieee
+                and isinstance(device_id, str)
+                and len(device_id) == 32
+                and all(c in '0123456789abcdef' for c in device_id)
+            }
+            if updated == self._ha_device_links:
+                return
+            self._ha_device_links = updated
+            if self._connected and self._all_live():
+                self._publish_inventory_and_availability()
 
     def set_ping_results(self, results: dict[str, str]) -> None:
         """Update presentation only; no ping result is a Zigbee Problem."""
@@ -849,6 +867,7 @@ class MonitorService:
                 "ieee_address": row["ieee_address"],
                 "network_id": row["network_id"],
                 "name": row["name"], "network_name": row["network_name"],
+                "ha_device_id": self._ha_device_links.get(str(row["ieee_address"])),
                 "offline_since": self._offline_since.get(
                     (str(row["network_id"]), str(row["ieee_address"]))
                 ),

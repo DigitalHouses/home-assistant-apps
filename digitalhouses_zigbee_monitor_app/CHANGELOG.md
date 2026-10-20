@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.18
+
+- Read-only lookup of Home Assistant Device Registry through the existing
+  /homeassistant mount. Only exact MQTT zigbee2mqtt_<IEEE> identifiers are
+  accepted; no name matching and no invented navigation links.
+- Optional offline_details.devices[*].ha_device_id supports HA Device page links.
+  The Recorder-facing offline count remains strictly numeric.
+- Dashboard + standalone offline Lovelace card navigate to HA device page on click,
+  falling back to ordinary text when the HA registry has no verified match.
+- Coordinator/repeater tree, Healer and MQTT metrics remain unchanged.
+
 ## 0.1.17
 
 - Добавлен числовой диагностический сенсор

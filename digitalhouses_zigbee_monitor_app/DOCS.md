@@ -1,8 +1,25 @@
 # DigitalHouses Zigbee Monitor App — installation and acceptance
 
-Version: **0.1.17 (experimental)**. Run only after the production GHCR image
-`ghcr.io/digitalhouses/digitalhouses_zigbee_monitor_app:0.1.17` is published
+Version: **0.1.18 (experimental)**. Run only after the production GHCR image
+`ghcr.io/digitalhouses/digitalhouses_zigbee_monitor_app:0.1.18` is published
 and verified by repository release workflows.
+
+## Offline device links (v0.1.18)
+
+For confirmed offline devices, the Recorder-excluded
+`sensor.dh_zigbee_monitor_app_offline_details` may contain
+`devices[*].ha_device_id`. The App reads the existing read-only
+`/homeassistant/.storage/core.device_registry` metadata and accepts
+only unambiguous HA MQTT device identifiers `zigbee2mqtt_<IEEE>`.
+No entity-name matching, Registry writes or extra Supervisor permissions.
+Missing/unreadable/ambiguous records have no device link.
+
+Standalone Lovelace Markdown card:
+`examples/lovelace/dh_zigbee_monitor_app_offline_card_ru.yaml`.
+The device name opens the HA Device page when a verified registry ID exists.
+The Dashboard in GitHub is an example; existing local HA dashboards must
+be updated separately. Scalar `sensor.dh_zigbee_monitor_app_offline`
+remains unchanged and Recorder-safe.
 
 ## Effective threshold и EMA-тренды (v0.1.17)
 

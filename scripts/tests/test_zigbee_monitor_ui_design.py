@@ -251,6 +251,27 @@ class ZigbeeMonitorUiDesignTests(unittest.TestCase):
         self.assertIn("{{ arm }}", self.raw_dashboard)
         self.assertIn("{{ tab }}", self.raw_dashboard)
 
+    def test_offline_card_navigates_to_registry_verified_ha_device(self):
+        standalone = yaml.safe_load(
+            (APP / "examples/lovelace/dh_zigbee_monitor_app_offline_card_ru.yaml")
+            .read_text(encoding="utf-8")
+        )
+        cards = [c for section in self.dashboard["sections"]
+                 for c in section["cards"]]
+        idx = next(i for i, card in enumerate(cards)
+                   if card.get("type") == "heading"
+                   and card.get("heading") == "Offline-устройства")
+        embedded = cards[idx + 1]
+        self.assertEqual(embedded, standalone)
+        self.assertEqual(embedded["type"], "markdown")
+        template = embedded["content"]
+        self.assertIn("device.ha_device_id", template)
+        self.assertIn('/config/devices/device/', template)
+        self.assertIn("device.name | e", template)
+        self.assertIn("{% else %}{{ device.name | e }}", template)
+        self.assertNotIn("device_id(", template)
+        self.assertNotIn("tojson", template)
+
     def test_network_table_uses_two_columns_for_narrow_layout(self):
         cards = [card for section in self.dashboard["sections"]
                  for card in section["cards"]]
@@ -410,7 +431,7 @@ class ZigbeeMonitorUiDesignTests(unittest.TestCase):
         self.assertEqual((APP / "digitalhouses.app").read_text().strip(), "type = haos_addon")
         config = yaml.safe_load((APP / "config.yaml").read_text(encoding="utf-8"))
         self.assertEqual(config["slug"], "digitalhouses_zigbee_monitor_app")
-        self.assertEqual(config["version"], "0.1.17")
+        self.assertEqual(config["version"], "0.1.18")
         self.assertEqual(config["stage"], "experimental")
 
 
