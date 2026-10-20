@@ -1,8 +1,30 @@
 # DigitalHouses Zigbee Monitor App — installation and acceptance
 
-Version: **0.1.14 (experimental)**. Run only after the production GHCR image
-`ghcr.io/digitalhouses/digitalhouses_zigbee_monitor_app:0.1.14` is published
+Version: **0.1.15 (experimental)**. Run only after the production GHCR image
+`ghcr.io/digitalhouses/digitalhouses_zigbee_monitor_app:0.1.15` is published
 and verified by repository release workflows.
+
+## RPM сразу после запуска (v0.1.15)
+
+После реального MQTT `bridge/state=online` в компактном дереве
+сразу выводится `0.0 RPM · прогрев`: это скорость **новых,
+не-retained сообщений устройств**, а не доказательство живого
+радиоканала. После получения пакетов предварительная RPM
+обновляется раз в 10 секунд по времени наблюдения в текущей
+сессии (не более 300 секунд). Retained-пакеты и MQTT duplicate
+счётчик не увеличивают.
+
+**Запрещено использовать предварительную RPM для предупреждений**
+о скрытом зависании или запуска Healer. Персональные пороги,
+`mqtt_traffic_low` и скаляр Recorder `messages_rate_5m`
+сохраняют прежнюю логику полноты данных и задержки подтверждения.
+Когда детектор готов, используется штатный 5-минутный RPM,
+а метка `прогрев` исчезает.
+
+Обновление до 0.1.15 нужно для мгновенного отображения числа.
+Самостоятельная карточка дерева в примерах добавляет только
+пометку `· прогрев`; старый компактный YAML тоже отобразит
+значение RPM после обновления App, но без метки.
 
 ## Диагностика монтирования Zigbee2MQTT (v0.1.14)
 
