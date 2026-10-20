@@ -1,8 +1,45 @@
 # DigitalHouses Zigbee Monitor App — installation and acceptance
 
-Version: **0.1.16 (experimental)**. Run only after the production GHCR image
-`ghcr.io/digitalhouses/digitalhouses_zigbee_monitor_app:0.1.16` is published
+Version: **0.1.17 (experimental)**. Run only after the production GHCR image
+`ghcr.io/digitalhouses/digitalhouses_zigbee_monitor_app:0.1.17` is published
 and verified by repository release workflows.
+
+## Effective threshold и EMA-тренды (v0.1.17)
+
+Для каждой Z2M приложение публикует два дополнительных скалярных
+сенсора с `state_class: measurement`, без JSON attributes:
+
+- `sensor.dh_zigbee_monitor_app_<network_id>_rpm_threshold_effective`:
+  выбранный порог **независимо от режима**. Ручной отображается
+  сразу; автоматический только после расчёта в действующем
+  baseline-детекторе. Пока значение неизвестно — unavailable.
+- `sensor.dh_zigbee_monitor_app_<network_id>_rpm_smooth`:
+  сглаженный RPM, EMA по 15 одноминутным наблюдениям
+  (`alpha=0.125`). Первое измерение начинает фильтр,
+  следующие приближаются плавно. Состояние не записывается
+  чаще раза в минуту. Разрыв связи даёт unavailable, а
+  не фиктивный ноль. После восстановления EMA начинается заново.
+
+Графики `custom:auto-entities` за 24ч и 7д строятся по `*_rpm_smooth`.
+Исходный RPM `*_rpm` сохраняется для анализа и диагноза;
+`mqtt_traffic_low` и персональные пороги используют исключительно
+несглаженную диагностическую выборку. Не трактовать плавную кривую
+как доказательство непрерывной работоспособности Zigbee.
+
+Для истории добавить в установленный локальный Recorder package:
+`sensor.dh_zigbee_monitor_app_*_rpm_smooth` и
+`sensor.dh_zigbee_monitor_app_*_rpm_threshold_effective`
+к уже существующему `*_rpm`. Подробные сенсоры с JSON остаются
+Recorder OFF. Не заменять весь global Recorder.
+
+В дереве отдельно отображаются `Devices: total (online, offline)`,
+Status остаётся статусом Bridge. Заглушка `spammers` удалена:
+хит-парады MQTT по-прежнему работают, отдельной автоматической
+классификации спама пока нет.
+
+Доступ к `/homeassistant/zigbee2mqtt/configuration.yaml` подтверждён
+только проверкой `os.open` без чтения байтов; реальное извлечение
+настроек Zigbee2MQTT или Supervisor Apps этим релизом не добавляется.
 
 ## Динамические тренды RPM для всех Zigbee2MQTT (v0.1.16)
 
