@@ -72,7 +72,7 @@ class PackageTests(unittest.TestCase):
             ROOT + "/command/delete_telemetry",
         )
         self.assertNotIn("json_attributes_topic", components["offline"])
-        self.assertNotIn("json_attributes_topic", components["spammers"])
+        self.assertNotIn("spammers", components)
 
     def test_consent_is_mandatory_before_runtime(self):
         # Rejected consent must exit before any SQLite or telemetry identity is created.
