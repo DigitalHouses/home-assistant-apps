@@ -30,7 +30,7 @@ secondary: |-
       {% elif id == 'devices_offline' %}
         • {{ name }} — подтверждено Offline устройств: {{ value }}
       {% elif id == 'mqtt_traffic_low' %}
-        • {{ name }} — снижена MQTT-активность{% if value is number and threshold is number %}: {{ value | round(1) }} RPM · порог {{ threshold | round(1) }}{% endif %}
+        • {{ name }} — снижена MQTT-активность{% if value is number and threshold is number %}: {{ value | round(1) }} MPM · порог {{ threshold | round(1) }}{% endif %}
       {% else %}
         • {{ name }} — {{ id }}
       {% endif %}
