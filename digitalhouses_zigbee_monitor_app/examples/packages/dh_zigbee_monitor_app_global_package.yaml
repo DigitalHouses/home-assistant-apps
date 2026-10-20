@@ -7,15 +7,17 @@
 # /config/packages/Global/DH_APP/dh_zigbee_monitor_app_global_package.yaml
 #
 # Source of truth:
-#   4 useful numeric scalar state sensors, no dynamic JSON attributes.
+#   Four existing scalars + dynamic per-network RPM-only numeric time series.
 #   App SQLite owns per-device minute aggregates and historical MQTT rankings.
 #   Machine events are not historical state and are excluded from Recorder.
 #
 # IMPORTANT: Home Assistant Recorder filters give an explicit include.entities
 # priority over exclude.entity_globs (when no conflicting domain/glob includes).
-# Therefore Zigbee Monitor is excluded by default; only the four listed
-# entity_ids are explicitly allowed back into history. This avoids recording
-# diagnostic JSON/attributes, version, status card, or future new entities.
+# We also include exactly sensor.dh_zigbee_monitor_app_*_rpm via a narrow
+# include glob. With a glob include, Home Assistant Recorder's official
+# filter precedence grants that matching scalar priority over a broad glob
+# exclude. Other diagnostic JSON/attributes remain excluded. Test the filter
+# contract before installing into a site's existing Recorder configuration.
 # =============================================================================
 
 dh_zigbee_monitor_app_global_package:
@@ -26,6 +28,8 @@ dh_zigbee_monitor_app_global_package:
         - sensor.dh_zigbee_monitor_app_devices
         - sensor.dh_zigbee_monitor_app_offline
         - sensor.dh_zigbee_monitor_app_messages_rate_5m
+      entity_globs:
+        - sensor.dh_zigbee_monitor_app_*_rpm
 
     exclude:
       entity_globs:
