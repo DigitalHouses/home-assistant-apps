@@ -27,7 +27,6 @@ HISTORY: dict[str, tuple[str, str | None]] = {
     "networks": ("Configured Zigbee2MQTT networks", None),
     "devices": ("Known Zigbee devices", None),
     "offline": ("Offline Zigbee devices", None),
-    "spammers": ("Anomalous Zigbee devices", None),
     "incidents": ("Active Zigbee incidents", None),
     "messages_rate_5m": ("MQTT device messages per minute (5m)", "messages/min"),
 }
@@ -60,6 +59,18 @@ def network_rpm_topic(network_id: str) -> str:
 
 def network_rpm_availability_topic(network_id: str) -> str:
     return f"{ROOT}/networks/{network_id}/rpm/availability"
+
+
+def network_rpm_smooth_topic(network_id: str) -> str:
+    return f"{ROOT}/networks/{network_id}/rpm_smooth/state"
+
+
+def network_rpm_threshold_topic(network_id: str) -> str:
+    return f"{ROOT}/networks/{network_id}/rpm_threshold_effective/state"
+
+
+def network_rpm_threshold_availability_topic(network_id: str) -> str:
+    return f"{ROOT}/networks/{network_id}/rpm_threshold_effective/availability"
 
 
 def _availability(key: str | None = None) -> list[dict[str, str]]:
@@ -191,6 +202,42 @@ def build_discovery(version: str, networks: tuple[Network, ...] = ()) -> dict[st
             "unit_of_measurement": "messages/min",
             "state_class": "measurement",
             "icon": "mdi:chart-line",
+        }
+        # Chart-friendly EMA is visualization only. It does NOT replace
+        # raw RPM in the live tree or any traffic incident calculations.
+        components[f"{nid}_rpm_smooth"] = {
+            "platform": "sensor",
+            "name": f"{network.name}: MQTT RPM · EMA 15m",
+            "unique_id": f"{PREFIX}_{nid}_rpm_smooth",
+            "default_entity_id": f"sensor.{PREFIX}_{nid}_rpm_smooth",
+            "state_topic": network_rpm_smooth_topic(nid),
+            "availability": _availability() + [{
+                "topic": network_rpm_availability_topic(nid),
+                "payload_available": "online",
+                "payload_not_available": "offline",
+            }],
+            "availability_mode": "all",
+            "unit_of_measurement": "messages/min",
+            "state_class": "measurement",
+            "icon": "mdi:chart-bell-curve",
+        }
+        # Effective read-only threshold, whichever mode is active:
+        # manual value or currently learned automatic threshold.
+        components[f"{nid}_rpm_threshold_effective"] = {
+            "platform": "sensor",
+            "name": f"{network.name}: effective RPM threshold",
+            "unique_id": f"{PREFIX}_{nid}_rpm_threshold_effective",
+            "default_entity_id": f"sensor.{PREFIX}_{nid}_rpm_threshold_effective",
+            "state_topic": network_rpm_threshold_topic(nid),
+            "availability": _availability() + [{
+                "topic": network_rpm_threshold_availability_topic(nid),
+                "payload_available": "online",
+                "payload_not_available": "offline",
+            }],
+            "availability_mode": "all",
+            "unit_of_measurement": "messages/min",
+            "state_class": "measurement",
+            "icon": "mdi:speedometer-slow",
         }
         for kind in PROBLEM_TYPES:
             key = f"{nid}_{kind}_problem"

@@ -11,11 +11,11 @@ UI не определяет неисправность, не считает с�
 1. **Статус DH Zigbee Monitor** — стандартная карточка с заголовком и четырьмя
    действиями: Обновить / Версия / Новая версия (при установочном обновлении) /
    Перезапуск (через Supervisor).
-2. **Сводка** — сети, устройства, offline, аномальные спамеры, инциденты,
+2. **Сводка** — сети, устройства, offline, инциденты,
    MQTT-публикации за отчётное окно.
 3. **Сети** — состояние каждого Zigbee2MQTT, степень достоверности и количество устройств.
 4. **Offline** — список устройств, причины, сеть, время начала, динамика.
-5. **Хит-парад** — ТОП-20 по активности и отдельные аномальные устройства;
+5. **Хит-парад** — ТОП-20 по активности без автоматической классификации спама;
    интервалы 1ч/24ч/7д, группировка по сети и модели.
 6. **Инциденты/история** — текущие проблемы и восстановление, агрегированные графики.
 7. **Настройки** — только осмысленные runtime controls; App отвечает за их валидацию.
@@ -51,9 +51,11 @@ Recorder OFF:
 | `sensor.dh_zigbee_monitor_app_networks` | Количество подтверждённых сетей | ON |
 | `sensor.dh_zigbee_monitor_app_devices` | Всего зарегистрированных устройств | ON |
 | `sensor.dh_zigbee_monitor_app_offline` | Подтверждённый offline count | ON |
-| `sensor.dh_zigbee_monitor_app_spammers` | Аномальные устройства (движок ещё не реализован) | OFF до реализации |
 | `sensor.dh_zigbee_monitor_app_incidents` | Активные инциденты (движок ещё не реализован) | OFF до реализации |
 | `sensor.dh_zigbee_monitor_app_messages_rate_5m` | Суммарная MQTT-активность за 5-минутное окно | ON |
+| `sensor.dh_zigbee_monitor_app_<network_id>_rpm` | RPM по сети, исходный, без сглаживания | ON |
+| `sensor.dh_zigbee_monitor_app_<network_id>_rpm_smooth` | EMA(15 минут) только для трендов | ON |
+| `sensor.dh_zigbee_monitor_app_<network_id>_rpm_threshold_effective` | Текущий рассчитанный auto или ручной порог | ON |
 | `sensor.dh_zigbee_monitor_app_offline_details` | JSON-список offline | OFF |
 | `sensor.dh_zigbee_monitor_app_top_1h_details` | ТОП MQTT за 1 час | OFF |
 | `sensor.dh_zigbee_monitor_app_top_24h_details` | ТОП MQTT за 24 часа | OFF |
@@ -134,8 +136,9 @@ Dashboard показывает отсутствие данных, а не фик
 `examples/packages/dh_zigbee_monitor_app_global_package.yaml`.
 
 - `recorder.include.entities`: только четыре реально вычисляемых исторических
-  показателя: networks, devices, offline и messages_rate_5m.
-- `spammers` и `incidents` остаются исключёнными до реализации движков;
+  показателя: networks, devices, offline и messages_rate_5m, а также
+  три числовые динамические семьи RPM/raw, RPM/EMA, effective threshold.
+- заглушка `spammers` удалена из Discovery в 0.1.17; `incidents` реализован;
   при внедрении отдельным изменением можно добавить их в Recorder.
 - `recorder.exclude.entity_globs`: исключить все `sensor/binary_sensor/button/event`
   с префиксом `dh_zigbee_monitor_app_`; точный allowlist

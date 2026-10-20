@@ -21,7 +21,8 @@ from .infrastructure import parse_bridge_infrastructure
 from .discovery import (
     APP_AVAILABILITY, DETAILS, DISCOVERY, EVENT_TOPIC, HA_STATUS, HISTORY, ROOT,
     build_discovery, network_rpm_topic, network_rpm_availability_topic,
-    state_topic, validity_topic,
+    network_rpm_smooth_topic, network_rpm_threshold_topic,
+    network_rpm_threshold_availability_topic, state_topic, validity_topic,
 )
 from .problems import PROBLEM_TYPES, Problem, TrafficDetector, network_problems
 from .storage import ActivityStore
@@ -82,6 +83,8 @@ class MonitorService:
         self._last_live_slot: int | None = None
         # Recorder histories are 1/min; the live tree remains 10-second.
         self._rpm_chart_minute: dict[str, int] = {}
+        # Graph-only EMA(15 one-minute readings), never an alarm input.
+        self._rpm_ema: dict[str, float] = {}
         self._bridge_info_seen: set[str] = set()
         self._agent_registry = normalize_registry({})
         self._ping_results: dict[str, str] = {}
@@ -288,6 +291,7 @@ class MonitorService:
             self._live_counts.clear()
             self._last_live_slot = None
             self._rpm_chart_minute.clear()
+            self._rpm_ema.clear()
             self._bridge_info_seen.clear()
             for detector in self._traffic_detectors.values():
                 detector.reset()
@@ -333,6 +337,7 @@ class MonitorService:
             self._live_counts.clear()
             self._last_live_slot = None
             self._rpm_chart_minute.clear()
+            self._rpm_ema.clear()
             self._bridge_info_seen.clear()
             for detector in self._traffic_detectors.values():
                 detector.reset()
@@ -648,27 +653,53 @@ class MonitorService:
                              previous_state="OFF" if problem.active else "ON",
                              current_state="ON" if problem.active else "OFF")
 
-    def _publish_rpm_chart(self, row: dict[str, object]) -> None:
-        """One Recorder-safe numeric sample per network per minute.
+    def _publish_effective_threshold(self, row: dict[str, object]) -> None:
+        """Publish the actual effective threshold, never the manual default in auto mode.
 
-        A numeric RPM is display-only while warming up; never feed it to
-        the fault detector. An unobserved/offline bridge is unavailable,
-        not an invented zero. All MQTT state/availability are retained.
+        Unknown auto threshold is unavailable (not zero). Manual mode shows the
+        configured value immediately, even before RPM detector warm-up.
         """
         nid = str(row["network_id"])
+        auto, manual = self.store.network_problem_settings(nid)
+        value = row.get("threshold")
+        if value is None and not auto:
+            value = manual
+        availability = network_rpm_threshold_availability_topic(nid)
+        if not isinstance(value, (int, float)) or isinstance(value, bool):
+            self._send(availability, "offline")
+            return
+        if self._send(network_rpm_threshold_topic(nid), f"{float(value):.2f}"):
+            self._send(availability, "online")
+
+    def _publish_rpm_chart(self, row: dict[str, object]) -> None:
+        """Publish raw + graph-only EMA, sampled at most once per minute.
+
+        This smoother NEVER enters TrafficDetector, threshold learning or
+        Healer. No MQTT extra traffic per device message.
+        """
+        nid = str(row["network_id"])
+        self._publish_effective_threshold(row)
         available_topic = network_rpm_availability_topic(nid)
         rpm = row.get("rpm")
         if row.get("status") != "online" or (
             not isinstance(rpm, (int, float)) or isinstance(rpm, bool)
         ):
             self._rpm_chart_minute.pop(nid, None)
+            self._rpm_ema.pop(nid, None)
             self._send(available_topic, "offline")
             return
         minute = int(self.now()) // 60
         if (self._rpm_chart_minute.get(nid) == minute and
                 self._published.get(available_topic) == "online"):
             return
-        if self._send(network_rpm_topic(nid), f"{float(rpm):.2f}"):
+        # EMA over 15 one-minute samples: alpha = 2/(15+1).
+        # New sessions seed with first observed value; no fabricated history.
+        raw = float(rpm)
+        previous = self._rpm_ema.get(nid)
+        smooth = raw if previous is None else previous + 0.125 * (raw - previous)
+        if (self._send(network_rpm_topic(nid), f"{raw:.2f}")
+                and self._send(network_rpm_smooth_topic(nid), f"{smooth:.2f}")):
+            self._rpm_ema[nid] = smooth
             self._send(available_topic, "online")
             self._rpm_chart_minute[nid] = minute
 

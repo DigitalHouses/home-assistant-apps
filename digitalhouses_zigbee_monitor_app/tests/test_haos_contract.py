@@ -32,7 +32,7 @@ class PackageTests(unittest.TestCase):
         config = yaml.safe_load((APP_DIR / "config.yaml").read_text(encoding="utf-8"))
         self.assertEqual(config["slug"], "digitalhouses_zigbee_monitor_app")
         self.assertEqual(config["name"], "DigitalHouses Zigbee Monitor App")
-        self.assertEqual(config["version"], "0.1.16")
+        self.assertEqual(config["version"], "0.1.17")
         self.assertEqual(config["stage"], "experimental")
         self.assertEqual(config["image"], "ghcr.io/digitalhouses/digitalhouses_zigbee_monitor_app")
         self.assertEqual(config["services"], ["mqtt:need"])
@@ -72,7 +72,7 @@ class PackageTests(unittest.TestCase):
             ROOT + "/command/delete_telemetry",
         )
         self.assertNotIn("json_attributes_topic", components["offline"])
-        self.assertNotIn("json_attributes_topic", components["spammers"])
+        self.assertNotIn("spammers", components)
 
     def test_consent_is_mandatory_before_runtime(self):
         # Rejected consent must exit before any SQLite or telemetry identity is created.
