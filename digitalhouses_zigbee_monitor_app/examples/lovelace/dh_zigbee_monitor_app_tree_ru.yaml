@@ -11,12 +11,18 @@ content: |-
   **DH Zigbee Monitor · Z2M: {{ networks | count }} · Репитеры: {{ repeaters | count }}**
 
   <pre>\
-  {% set unbound = namespace(count=0) -%}
-  {% for r in repeaters if not r.network_id -%}
-  {% set unbound.count = unbound.count + 1 -%}
+  {% set unbound = namespace(items=[]) -%}
+  {% for r in repeaters -%}
+  {% set member = namespace(found=false) -%}
+  {% for n in networks if r.network_id == n.network_id -%}
+  {% set member.found = true -%}
+  {% endfor -%}
+  {% if not member.found -%}
+  {% set unbound.items = unbound.items + [r] -%}
+  {% endif -%}
   {% endfor -%}
   {% for n in networks -%}
-  {% set last_root = loop.last and unbound.count == 0 -%}
+  {% set last_root = loop.last and unbound.items | count == 0 -%}
   {% set arm = '└─' if last_root else '├─' -%}
   {% set tab = '   ' if last_root else '│  ' -%}
   {% set policy = n.agent_policy or {} -%}
@@ -44,9 +50,9 @@ content: |-
   {{ tab }}├─ 🔌 Status: {{ (n.status or 'unknown') | e }}
   {{ tab }}└─ {{ '💔' if 'mqtt_traffic_low' in active else '💓' if n.rpm is not none else '❓' }} Pulse: {{ n.rpm if n.rpm is not none else '—' }} MPM ({{ n.threshold if n.threshold is not none else '—' }}){{ ' · прогрев' if n.rpm_phase == 'warming_up' else '' }}
   {% endfor -%}
-  {% if unbound.count > 0 -%}
-  └─ ❓ Репитеры без подтверждённой сети: {{ unbound.count }}
-  {% for r in repeaters if not r.network_id -%}
+  {% if unbound.items | count > 0 -%}
+  └─ ❓ Репитеры без подтверждённой сети: {{ unbound.items | count }}
+  {% for r in unbound.items -%}
      {{ '└─' if loop.last else '├─' }} 📡 {{ (r.name or r.ieee) | e }} · {{ (r.model or 'не указано') | e }}
   {% endfor -%}
   {% endif -%}
