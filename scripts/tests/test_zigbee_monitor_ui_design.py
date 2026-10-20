@@ -380,8 +380,11 @@ class ZigbeeMonitorUiDesignTests(unittest.TestCase):
             self.assertEqual(config["type"], "custom:auto-entities")
             self.assertEqual(config["card"]["type"], "history-graph")
             self.assertEqual(config["card"]["hours_to_show"], hours)
+            self.assertIn("MPM", config["card"]["title"])
+            self.assertIn("порог", config["card"]["title"])
             self.assertEqual(config["filter"]["include"],
-                             [{"entity_id": "sensor.dh_zigbee_monitor_app_*_rpm_smooth"}])
+                             [{"entity_id": "sensor.dh_zigbee_monitor_app_*_rpm_smooth"},
+                              {"entity_id": "sensor.dh_zigbee_monitor_app_*_rpm_threshold_effective"}])
             self.assertFalse(config["show_empty"])
             self.assertEqual(config["sort"]["method"], "name")
 
