@@ -107,9 +107,10 @@ class ZigbeeTreeRenderTests(unittest.TestCase):
         self.assertTrue(any(x.startswith("   ├─ 🏷️ Тип: 👑 Координатор") for x in lines))
         self.assertIn("💓 Pulse: 17.4 RPM (10)", rendered)
         self.assertIn("🌐 IP: 192.168.11.40 ✅", rendered)
-        self.assertIn("🔌 Status: online · 1 offline", rendered)
+        self.assertIn("🔌 Status: online", rendered)
+        self.assertIn("📦 Devices: 7 (6 online, 1 offline)", rendered)
         self.assertIn("💊 Healer: OFF", rendered)
-        self.assertEqual(len(lines), 8, "one root, one node, six compact lines")
+        self.assertEqual(len(lines), 9, "one root, one node, seven compact lines")
 
     def test_repeaters_alone_have_one_shared_root(self):
         lines = self.tree_lines(self.render([], [
@@ -128,11 +129,11 @@ class ZigbeeTreeRenderTests(unittest.TestCase):
         self.assertNotIn("STALE NETWORK", result)
         self.assertIn("└─ 📡 Hall", result)
 
-    def test_compact_card_has_only_six_primary_fields_per_coordinator(self):
+    def test_compact_card_has_seven_primary_fields_per_coordinator(self):
         lines = self.tree_lines(self.render([self.network("zigbee2mqtt")], []))
-        self.assertEqual(len(lines), 8)
+        self.assertEqual(len(lines), 9)
         labels = [
-            "🏷️ Тип:", "⚙️ Железо:", "🌐 IP:",
+            "🏷️ Тип:", "⚙️ Железо:", "🌐 IP:", "📦 Devices:",
             "💊 Healer:", "🔌 Status:", "💓 Pulse:",
         ]
         for item, label in zip(lines[2:], labels):
@@ -166,7 +167,8 @@ class ZigbeeTreeRenderTests(unittest.TestCase):
         )], [])
         self.assertIn("🟥 zigbee2mqtt", result)
         self.assertIn("💔 Pulse: 17.4 RPM (10)", result)
-        self.assertIn("🔌 Status: online · 1 offline", result)
+        self.assertIn("🔌 Status: online", result)
+        self.assertIn("📦 Devices: 7 (6 online, 1 offline)", result)
         self.assertNotIn("├─ ON:", result)
         self.assertNotIn("└─ ?:", result)
         self.assertNotIn("<details", result)
