@@ -45,7 +45,17 @@ sections:
                 const supervisor = states['update.digitalhouses_zigbee_monitor_app_update'];
                 const installing = supervisor?.attributes?.in_progress === true;
                 const release = states['binary_sensor.dh_zigbee_monitor_app_update_available']?.state === 'on';
-                const pending = supervisor?.state === 'on' || release;
+                const installed = states['sensor.dh_zigbee_monitor_app_version']?.state;
+                const latest = states['sensor.dh_zigbee_monitor_app_latest_version']?.state;
+                const valid = v => typeof v === 'string' && /^\d+\.\d+\.\d+$/.test(v);
+                const newer = valid(installed) && valid(latest)
+                  && latest.split('.').map(Number).some((v, i, all) => {
+                    const previous = all.slice(0, i);
+                    const base = installed.split('.').map(Number);
+                    return previous.every((x, j) => x === base[j]) && v > base[i];
+                  });
+                const pending = supervisor?.state === 'on'
+                  || release && (!valid(installed) || !valid(latest) || newer);
                 if (installing || s === 'running') return 'mdi:progress-clock';
                 if (!s || ['unknown', 'unavailable'].includes(s)) return 'mdi:zigbee-off';
                 if (s === 'error') return 'mdi:alert-circle';
@@ -134,17 +144,24 @@ sections:
                 if (item.state === 'success') {
                   if (a.operation === 'check') {
                     return (installer || releaseNewer ? 'Новая версия найдена'
-                      : release ? 'Релиз найден · номер не подтверждён'
-                      : 'Версия актуальна') + duration(a.duration_seconds);
+                      : release && (!valid(installed) || !valid(checkedLatest))
+                        ? 'Проверка завершена · номер не определён'
+                        : 'Версия актуальна') + duration(a.duration_seconds);
                   }
                   const result = a.operation === 'refresh' ? 'Данные обновлены' : 'Готово';
                   return result + duration(a.duration_seconds);
                 }
                 // Supervisor is authoritative for installation; Github check only
                 // establishes release existence. Do not show a nonworking install chip.
-                if (installer) return 'Доступна установка новой версии';
+                if (installer) {
+                  const supLatest = supervisor?.attributes?.latest_version;
+                  return valid(installed) && valid(supLatest) && greater(supLatest, installed)
+                    || releaseNewer ? 'Доступна установка новой версии'
+                    : 'Supervisor предлагает обновление · номер неизвестен';
+                }
                 if (releaseNewer) return 'Новый релиз · Supervisor пока не предлагает установку';
-                if (release) return 'Доступен релиз · версия не определена';
+                if (release && (!valid(installed) || !valid(checkedLatest)))
+                  return 'Доступен релиз · версия не определена';
                 return 'Приложение запущено';
               ]]]
             styles:
@@ -165,12 +182,21 @@ sections:
                       const s = states['sensor.dh_zigbee_monitor_app_card']?.state;
                       const supervisor = states['update.digitalhouses_zigbee_monitor_app_update'];
                       const release = states['binary_sensor.dh_zigbee_monitor_app_update_available']?.state === 'on';
+                      const installed = states['sensor.dh_zigbee_monitor_app_version']?.state;
+                      const latest = states['sensor.dh_zigbee_monitor_app_latest_version']?.state;
+                      const valid = v => typeof v === 'string' && /^\d+\.\d+\.\d+$/.test(v);
+                      const newer = valid(installed) && valid(latest)
+                        && latest.split('.').map(Number).some((v, i, all) => {
+                          const base = installed.split('.').map(Number);
+                          return all.slice(0, i).every((x, j) => x === base[j]) && v > base[i];
+                        });
                       if (supervisor?.attributes?.in_progress === true || s === 'running')
                         return 'var(--info-color, var(--primary-color))';
                       if (!s || ['unknown', 'unavailable'].includes(s))
                         return 'var(--secondary-text-color)';
                       if (s === 'error') return 'var(--error-color)';
-                      if (supervisor?.state === 'on' || release)
+                      if (supervisor?.state === 'on'
+                          || release && (!valid(installed) || !valid(latest) || newer))
                         return 'var(--warning-color, orange)';
                       if (s === 'success') return 'var(--success-color, var(--primary-color))';
                       return 'var(--primary-color)';
