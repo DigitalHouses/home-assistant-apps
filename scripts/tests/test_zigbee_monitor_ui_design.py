@@ -332,6 +332,8 @@ class ZigbeeMonitorUiDesignTests(unittest.TestCase):
         self.assertNotIn("domains", self.recorder["include"])
         self.assertEqual(self.recorder["include"]["entity_globs"], [
             "sensor.dh_zigbee_monitor_app_*_rpm",
+            "sensor.dh_zigbee_monitor_app_*_rpm_smooth",
+            "sensor.dh_zigbee_monitor_app_*_rpm_threshold_effective",
         ])
 
     def test_dynamic_rpm_only_allowed_by_recorder_glob(self):
@@ -342,6 +344,8 @@ class ZigbeeMonitorUiDesignTests(unittest.TestCase):
         allowed = [
             "sensor.dh_zigbee_monitor_app_z2m_00124b002e1330dd_rpm",
             "sensor.dh_zigbee_monitor_app_floor_1_rpm",
+            "sensor.dh_zigbee_monitor_app_floor_1_rpm_smooth",
+            "sensor.dh_zigbee_monitor_app_floor_1_rpm_threshold_effective",
         ]
         denied = [
             "sensor.dh_zigbee_monitor_app_networks_details",
@@ -377,7 +381,7 @@ class ZigbeeMonitorUiDesignTests(unittest.TestCase):
             self.assertEqual(config["card"]["type"], "history-graph")
             self.assertEqual(config["card"]["hours_to_show"], hours)
             self.assertEqual(config["filter"]["include"],
-                             [{"entity_id": "sensor.dh_zigbee_monitor_app_*_rpm"}])
+                             [{"entity_id": "sensor.dh_zigbee_monitor_app_*_rpm_smooth"}])
             self.assertFalse(config["show_empty"])
             self.assertEqual(config["sort"]["method"], "name")
 
