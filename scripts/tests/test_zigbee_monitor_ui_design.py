@@ -125,10 +125,15 @@ class ZigbeeMonitorUiDesignTests(unittest.TestCase):
         status = card["cards"][0]
         self.assertIn("sensor.dh_zigbee_monitor_app_latest_version",
                       status["triggers_update"])
-        self.assertIn("Найдена новая версия:", status["label"])
-        self.assertIn("Актуальная версия:", status["label"])
-        self.assertIn("Доступно обновление:", status["label"])
+        self.assertIn("Новая версия найдена", status["label"])
+        self.assertIn("Версия актуальна", status["label"])
+        self.assertIn("Supervisor пока не предлагает установку", status["label"])
         self.assertIn("supervisor?.state === 'on'", status["label"])
+        self.assertIn("→ v", status["name"])
+        self.assertIn("mdi:package-up", status["icon"])
+        self.assertIn("warning-color", status["styles"]["icon"][1]["color"])
+        self.assertIn("binary_sensor.dh_zigbee_monitor_app_update_available",
+                      status["triggers_update"])
         update_chip = card["cards"][1]["chips"][2]["chip"]
         self.assertIn("Обновить {{ installed }} → {{ latest }}",
                       update_chip["content"])
@@ -139,8 +144,8 @@ class ZigbeeMonitorUiDesignTests(unittest.TestCase):
         self.assertNotIn("Новая версия", update_chip["content"])
         self.assertEqual(update_chip["entity"],
                          "update.digitalhouses_zigbee_monitor_app_update")
-        self.assertIn("версии не определены", status["label"])
-        self.assertIn("версия релиза", status["label"])
+        self.assertIn("номер неизвестен", status["label"])
+        self.assertIn("Новая версия найдена", status["label"])
         self.assertEqual(update_chip["tap_action"]["target"]["entity_id"],
                          "update.digitalhouses_zigbee_monitor_app_update")
         # Regression: this UI-only fix must not rewrite the ASCII tree.
@@ -172,6 +177,7 @@ class ZigbeeMonitorUiDesignTests(unittest.TestCase):
             "sensor.dh_zigbee_monitor_app_card",
             "sensor.dh_zigbee_monitor_app_version",
             "sensor.dh_zigbee_monitor_app_latest_version",
+            "binary_sensor.dh_zigbee_monitor_app_update_available",
             "update.digitalhouses_zigbee_monitor_app_update",
         })
         serialized = yaml.safe_dump(card, allow_unicode=True)
@@ -181,7 +187,6 @@ class ZigbeeMonitorUiDesignTests(unittest.TestCase):
             "dh_zigbee_monitor_app_incidents",
             "dh_zigbee_monitor_app_inventory_details",
             "dh_zigbee_monitor_app_networks_details",
-            "dh_zigbee_monitor_app_update_available",
             "Релиз", "Offline",
         ):
             self.assertNotIn(forbidden, serialized)

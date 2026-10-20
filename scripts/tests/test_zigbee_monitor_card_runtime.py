@@ -41,6 +41,7 @@ APP = "sensor.dh_zigbee_monitor_app_card"
 VERSION = "sensor.dh_zigbee_monitor_app_version"
 LATEST = "sensor.dh_zigbee_monitor_app_latest_version"
 SUPERVISOR = "update.digitalhouses_zigbee_monitor_app_update"
+AVAILABLE = "binary_sensor.dh_zigbee_monitor_app_update_available"
 
 
 @unittest.skipUnless(shutil.which("node"), "Node.js required for real button-card JS checks")
@@ -56,6 +57,7 @@ class ZigbeeCardRuntimeTests(unittest.TestCase):
         states = {
             APP: {"state": "idle", "attributes": {}},
             VERSION: {"state": "0.1.5"},
+            AVAILABLE: {"state": "off"},
             SUPERVISOR: {"state": "off", "attributes": {"in_progress": False}},
         }
         states.update(overrides or {})
@@ -74,7 +76,7 @@ class ZigbeeCardRuntimeTests(unittest.TestCase):
         self.assertEqual(shown["icon"], "mdi:zigbee")
         self.assertIn("primary-color", shown["color"])
 
-    def test_application_data_and_release_data_never_change_card(self):
+    def test_unrelated_zigbee_network_metrics_never_change_card(self):
         baseline = self.run_card()
         changed = self.run_card({
             "sensor.dh_zigbee_monitor_app_devices": {"state": "130"},
@@ -86,20 +88,17 @@ class ZigbeeCardRuntimeTests(unittest.TestCase):
             "sensor.dh_zigbee_monitor_app_networks_details": {
                 "state": "ready", "attributes": {"networks": [{"status": "offline"}]},
             },
-            "sensor.dh_zigbee_monitor_app_latest_version": {"state": "7.0.0"},
-            "binary_sensor.dh_zigbee_monitor_app_update_available": {"state": "on"},
         })
         self.assertEqual(changed, baseline)
 
-    def test_only_four_app_related_entities_drive_card(self):
-        self.assertEqual(set(self.card["triggers_update"]), {APP, VERSION, LATEST, SUPERVISOR})
+    def test_only_five_app_related_entities_drive_card(self):
+        self.assertEqual(set(self.card["triggers_update"]), {APP, VERSION, LATEST, AVAILABLE, SUPERVISOR})
         forbidden = (
             "dh_zigbee_monitor_app_devices", "dh_zigbee_monitor_app_offline",
             "dh_zigbee_monitor_app_networks_details",
             "dh_zigbee_monitor_app_inventory_details",
             "dh_zigbee_monitor_app_incidents",
-            "dh_zigbee_monitor_app_update_available",
-            "Offline", "Supervisor не предлагает",
+            "Offline",
         )
         for value in forbidden:
             with self.subTest(value=value):
@@ -150,8 +149,10 @@ class ZigbeeCardRuntimeTests(unittest.TestCase):
             "binary_sensor.dh_zigbee_monitor_app_update_available": {"state": "on"},
             "sensor.dh_zigbee_monitor_app_latest_version": {"state": "0.1.6"},
         })
-        self.assertEqual(shown["label"], "Найдена новая версия: 0.1.5 → 0.1.6")
-        self.assertEqual(shown["icon"], "mdi:check-circle")
+        self.assertEqual(shown["name"], "DH Zigbee Monitor · v0.1.5 → v0.1.6")
+        self.assertEqual(shown["label"], "Новая версия найдена · 1 сек")
+        self.assertEqual(shown["icon"], "mdi:package-up")
+        self.assertIn("warning-color", shown["color"])
 
     def test_supervisor_install_progress_survives_app_disconnect(self):
         shown = self.run_card({
@@ -164,16 +165,17 @@ class ZigbeeCardRuntimeTests(unittest.TestCase):
         self.assertIn("42% · 00:00", shown["label"])
         self.assertIn("info-color", shown["color"])
 
-    def test_supervisor_update_available_does_not_change_app_status(self):
+    def test_supervisor_installable_update_is_amber_and_title_has_versions(self):
         baseline = self.run_card()
         shown = self.run_card({SUPERVISOR: {
             "state": "on", "attributes": {"latest_version": "0.1.6",
                                           "in_progress": False},
         }})
-        self.assertEqual(shown["name"], baseline["name"])
-        self.assertEqual(shown["icon"], baseline["icon"])
-        self.assertEqual(shown["color"], baseline["color"])
-        self.assertEqual(shown["label"], "Доступно обновление: 0.1.5 → 0.1.6")
+        self.assertNotEqual(shown["name"], baseline["name"])
+        self.assertEqual(shown["name"], "DH Zigbee Monitor · v0.1.5 → v0.1.6")
+        self.assertEqual(shown["icon"], "mdi:package-up")
+        self.assertIn("warning-color", shown["color"])
+        self.assertEqual(shown["label"], "Доступна установка новой версии")
         self.assertEqual(self.chips[2]["conditions"], [{
             "entity": SUPERVISOR, "state": "on",
         }])
@@ -184,10 +186,8 @@ class ZigbeeCardRuntimeTests(unittest.TestCase):
             LATEST: {"state": "0.1.14"},
             SUPERVISOR: {"state": "on", "attributes": {"in_progress": False}},
         })
-        self.assertEqual(
-            shown["label"],
-            "Доступно обновление: 0.1.13 → 0.1.14 · версия релиза",
-        )
+        self.assertEqual(shown["label"], "Supervisor предлагает обновление · номер неизвестен")
+        self.assertEqual(shown["name"], "DH Zigbee Monitor · v0.1.13")
 
     def test_supervisor_on_without_version_does_not_fabricate_pair(self):
         shown = self.run_card({
@@ -197,8 +197,44 @@ class ZigbeeCardRuntimeTests(unittest.TestCase):
         })
         self.assertEqual(
             shown["label"],
-            "Supervisor сообщает об обновлении · версии не определены",
+            "Supervisor предлагает обновление · номер неизвестен",
         )
+
+    def test_release_only_pending_install_shows_amber_without_install_chip(self):
+        shown = self.run_card({
+            VERSION: {"state": "0.1.14"},
+            LATEST: {"state": "0.1.15"},
+            AVAILABLE: {"state": "on"},
+            SUPERVISOR: {"state": "off", "attributes": {"in_progress": False}},
+        })
+        self.assertEqual(shown["name"], "DH Zigbee Monitor · v0.1.14 → v0.1.15")
+        self.assertEqual(shown["icon"], "mdi:package-up")
+        self.assertIn("warning-color", shown["color"])
+        self.assertEqual(shown["label"],
+                         "Новый релиз · Supervisor пока не предлагает установку")
+        self.assertEqual(self.chips[2]["conditions"][0]["state"], "on")
+
+    def test_stale_checked_release_is_not_newer_and_not_warning(self):
+        shown = self.run_card({
+            VERSION: {"state": "0.1.15"},
+            LATEST: {"state": "0.1.14"},
+            AVAILABLE: {"state": "on"},
+        })
+        self.assertEqual(shown["name"], "DH Zigbee Monitor · v0.1.15")
+        self.assertEqual(shown["icon"], "mdi:zigbee")
+        self.assertEqual(shown["label"], "Приложение запущено")
+
+    def test_successful_check_without_new_version_is_green(self):
+        shown = self.run_card({
+            APP: {"state": "success", "attributes": {
+                "operation": "check", "duration_seconds": 3.7,
+            }},
+            LATEST: {"state": "0.1.5"},
+            AVAILABLE: {"state": "off"},
+        })
+        self.assertEqual(shown["name"], "DH Zigbee Monitor · v0.1.5")
+        self.assertEqual(shown["icon"], "mdi:check-circle")
+        self.assertEqual(shown["label"], "Версия актуальна · 4 сек")
 
     def test_installed_version_only_no_downgrade_or_latest_arrows(self):
         shown = self.run_card({
