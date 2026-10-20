@@ -372,7 +372,7 @@ sections:
           {% if unbound.items | count > 0 -%}
           └─ ❓ Репитеры без подтверждённой сети: {{ unbound.items | count }}
           {% for r in unbound.items -%}
-             {{ '└─' if loop.last else '├─' }} 📡 {{ (r.name or r.ieee) | e }} · {{ (r.model or 'не указано') | e }}
+          {{ '   ' }}{{ '└─' if loop.last else '├─' }} 📡 {{ (r.name or r.ieee) | e }} · {{ (r.model or 'не указано') | e }}
           {% endfor -%}
           {% endif -%}
           </pre>
