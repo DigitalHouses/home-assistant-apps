@@ -344,7 +344,7 @@ sections:
           {{ tab }}├─ 📦 Devices: {{ n.devices if n.devices is not none else '—' }} ({{ n.online if n.online is not none else '—' }} online, {{ n.offline if n.offline is not none else '—' }} offline{{ ', ' ~ n.availability_unknown ~ ' unknown' if n.availability_unknown else '' }})
           {{ tab }}├─ 💊 Healer: OFF
           {{ tab }}├─ 🔌 Status: {{ (n.status or 'unknown') | e }}
-          {{ tab }}└─ {{ '💔' if 'mqtt_traffic_low' in active else '💓' if n.rpm is not none else '❓' }} Pulse: {{ n.rpm if n.rpm is not none else '—' }} RPM ({{ n.threshold if n.threshold is not none else '—' }}){{ ' · прогрев' if n.rpm_phase == 'warming_up' else '' }}
+          {{ tab }}└─ {{ '💔' if 'mqtt_traffic_low' in active else '💓' if n.rpm is not none else '❓' }} Pulse: {{ n.rpm if n.rpm is not none else '—' }} MPM ({{ n.threshold if n.threshold is not none else '—' }}){{ ' · прогрев' if n.rpm_phase == 'warming_up' else '' }}
           {% endfor -%}
           {% for r in repeaters -%}
           {% set arm = '└─' if loop.last else '├─' -%}
@@ -358,7 +358,7 @@ sections:
           {% endfor -%}
           </pre>
           
-          *Bridge online и Ping OK не гарантируют Zigbee. RPM оценивается независимо. Healer OFF.*
+          *Bridge online и Ping OK не гарантируют Zigbee. MPM оценивается независимо. Healer OFF.*
           {% endif %}
 
       - type: heading
@@ -379,7 +379,7 @@ sections:
           {% for network in networks %}
           <tr>
           <td><strong>{{ network.name | e }}</strong><div>Bridge: {{ network.status | e }}</div></td>
-          <td><div>{{ network.devices }} всего · {{ network.online | default('—') }} online · {{ network.offline if network.offline is not none else '—' }} offline · {{ network.availability_unknown }} unknown</div><div>{{ network.rpm if network.rpm is not none else '—' }} RPM / порог {{ network.threshold if network.threshold is not none else '—' }}</div></td>
+          <td><div>{{ network.devices }} всего · {{ network.online | default('—') }} online · {{ network.offline if network.offline is not none else '—' }} offline · {{ network.availability_unknown }} unknown</div><div>{{ network.rpm if network.rpm is not none else '—' }} MPM / порог {{ network.threshold if network.threshold is not none else '—' }}</div></td>
           </tr>
           {% endfor %}
           </tbody>
@@ -418,7 +418,7 @@ sections:
               {% elif id == 'devices_offline' %}
                 • {{ name }} — подтверждено Offline устройств: {{ value }}
               {% elif id == 'mqtt_traffic_low' %}
-                • {{ name }} — снижена MQTT-активность{% if value is number and threshold is number %}: {{ value | round(1) }} RPM · порог {{ threshold | round(1) }}{% endif %}
+                • {{ name }} — снижена MQTT-активность{% if value is number and threshold is number %}: {{ value | round(1) }} MPM · порог {{ threshold | round(1) }}{% endif %}
               {% else %}
                 • {{ name }} — {{ id }}
               {% endif %}
@@ -478,7 +478,7 @@ sections:
           method: name
         show_empty: false
       - type: heading
-        heading: Тренды RPM — все Zigbee2MQTT
+        heading: Тренды MPM — все Zigbee2MQTT
         heading_style: subtitle
         icon: mdi:chart-line
       - type: grid
@@ -488,22 +488,24 @@ sections:
           - type: custom:auto-entities
             card:
               type: history-graph
-              title: RPM EMA 15 мин · все Z2M · 24 часа
+              title: MPM · EMA 15 мин + порог · все Z2M · 24 часа
               hours_to_show: 24
             filter:
               include:
                 - entity_id: "sensor.dh_zigbee_monitor_app_*_rpm_smooth"
+                - entity_id: "sensor.dh_zigbee_monitor_app_*_rpm_threshold_effective"
             sort:
               method: name
             show_empty: false
           - type: custom:auto-entities
             card:
               type: history-graph
-              title: RPM EMA 15 мин · все Z2M · 7 дней
+              title: MPM · EMA 15 мин + порог · все Z2M · 7 дней
               hours_to_show: 168
             filter:
               include:
                 - entity_id: "sensor.dh_zigbee_monitor_app_*_rpm_smooth"
+                - entity_id: "sensor.dh_zigbee_monitor_app_*_rpm_threshold_effective"
             sort:
               method: name
             show_empty: false

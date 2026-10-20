@@ -25,7 +25,7 @@ content: |-
   {{ tab }}├─ 📦 Devices: {{ n.devices if n.devices is not none else '—' }} ({{ n.online if n.online is not none else '—' }} online, {{ n.offline if n.offline is not none else '—' }} offline{{ ', ' ~ n.availability_unknown ~ ' unknown' if n.availability_unknown else '' }})
   {{ tab }}├─ 💊 Healer: OFF
   {{ tab }}├─ 🔌 Status: {{ (n.status or 'unknown') | e }}
-  {{ tab }}└─ {{ '💔' if 'mqtt_traffic_low' in active else '💓' if n.rpm is not none else '❓' }} Pulse: {{ n.rpm if n.rpm is not none else '—' }} RPM ({{ n.threshold if n.threshold is not none else '—' }}){{ ' · прогрев' if n.rpm_phase == 'warming_up' else '' }}
+  {{ tab }}└─ {{ '💔' if 'mqtt_traffic_low' in active else '💓' if n.rpm is not none else '❓' }} Pulse: {{ n.rpm if n.rpm is not none else '—' }} MPM ({{ n.threshold if n.threshold is not none else '—' }}){{ ' · прогрев' if n.rpm_phase == 'warming_up' else '' }}
   {% endfor -%}
   {% for r in repeaters -%}
   {% set arm = '└─' if loop.last else '├─' -%}
@@ -39,5 +39,5 @@ content: |-
   {% endfor -%}
   </pre>
   
-  *Bridge online и Ping OK не гарантируют Zigbee. RPM оценивается независимо. Healer OFF.*
+  *Bridge online и Ping OK не гарантируют Zigbee. MPM оценивается независимо. Healer OFF.*
   {% endif %}
