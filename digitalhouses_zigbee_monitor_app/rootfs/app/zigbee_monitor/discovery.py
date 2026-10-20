@@ -54,6 +54,14 @@ def state_topic(key: str) -> str:
     return f"{ROOT}/state/{key}"
 
 
+def network_rpm_topic(network_id: str) -> str:
+    return f"{ROOT}/networks/{network_id}/rpm/state"
+
+
+def network_rpm_availability_topic(network_id: str) -> str:
+    return f"{ROOT}/networks/{network_id}/rpm/availability"
+
+
 def _availability(key: str | None = None) -> list[dict[str, str]]:
     result = [{
         "topic": APP_AVAILABILITY,
@@ -165,6 +173,25 @@ def build_discovery(version: str, networks: tuple[Network, ...] = ()) -> dict[st
     # All controls and problem flags are owned by this App, never HA helpers.
     for network in networks:
         nid = network.network_id
+        # Stable numeric per-network Recorder series. No JSON attributes.
+        # Avoid recording 10-second live UI updates: runtime sends at 1/min.
+        key = f"{nid}_rpm"
+        components[key] = {
+            "platform": "sensor",
+            "name": f"{network.name}: MQTT RPM",
+            "unique_id": f"{PREFIX}_{key}",
+            "default_entity_id": f"sensor.{PREFIX}_{key}",
+            "state_topic": network_rpm_topic(nid),
+            "availability": _availability() + [{
+                "topic": network_rpm_availability_topic(nid),
+                "payload_available": "online",
+                "payload_not_available": "offline",
+            }],
+            "availability_mode": "all",
+            "unit_of_measurement": "messages/min",
+            "state_class": "measurement",
+            "icon": "mdi:chart-line",
+        }
         for kind in PROBLEM_TYPES:
             key = f"{nid}_{kind}_problem"
             valid = f"{ROOT}/problems/{nid}/{kind}/valid"

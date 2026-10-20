@@ -20,7 +20,8 @@ from .autodiscovery import DISCOVERY_FILTERS, discovery_from_bridge
 from .infrastructure import parse_bridge_infrastructure
 from .discovery import (
     APP_AVAILABILITY, DETAILS, DISCOVERY, EVENT_TOPIC, HA_STATUS, HISTORY, ROOT,
-    build_discovery, state_topic, validity_topic,
+    build_discovery, network_rpm_topic, network_rpm_availability_topic,
+    state_topic, validity_topic,
 )
 from .problems import PROBLEM_TYPES, Problem, TrafficDetector, network_problems
 from .storage import ActivityStore
@@ -79,6 +80,8 @@ class MonitorService:
         self._live_started: dict[str, float] = {}
         self._live_counts: dict[str, dict[int, int]] = {}
         self._last_live_slot: int | None = None
+        # Recorder histories are 1/min; the live tree remains 10-second.
+        self._rpm_chart_minute: dict[str, int] = {}
         self._bridge_info_seen: set[str] = set()
         self._agent_registry = normalize_registry({})
         self._ping_results: dict[str, str] = {}
@@ -284,6 +287,7 @@ class MonitorService:
             self._live_started.clear()
             self._live_counts.clear()
             self._last_live_slot = None
+            self._rpm_chart_minute.clear()
             self._bridge_info_seen.clear()
             for detector in self._traffic_detectors.values():
                 detector.reset()
@@ -328,6 +332,7 @@ class MonitorService:
             self._live_started.clear()
             self._live_counts.clear()
             self._last_live_slot = None
+            self._rpm_chart_minute.clear()
             self._bridge_info_seen.clear()
             for detector in self._traffic_detectors.values():
                 detector.reset()
@@ -643,6 +648,30 @@ class MonitorService:
                              previous_state="OFF" if problem.active else "ON",
                              current_state="ON" if problem.active else "OFF")
 
+    def _publish_rpm_chart(self, row: dict[str, object]) -> None:
+        """One Recorder-safe numeric sample per network per minute.
+
+        A numeric RPM is display-only while warming up; never feed it to
+        the fault detector. An unobserved/offline bridge is unavailable,
+        not an invented zero. All MQTT state/availability are retained.
+        """
+        nid = str(row["network_id"])
+        available_topic = network_rpm_availability_topic(nid)
+        rpm = row.get("rpm")
+        if row.get("status") != "online" or (
+            not isinstance(rpm, (int, float)) or isinstance(rpm, bool)
+        ):
+            self._rpm_chart_minute.pop(nid, None)
+            self._send(available_topic, "offline")
+            return
+        minute = int(self.now()) // 60
+        if (self._rpm_chart_minute.get(nid) == minute and
+                self._published.get(available_topic) == "online"):
+            return
+        if self._send(network_rpm_topic(nid), f"{float(rpm):.2f}"):
+            self._send(available_topic, "online")
+            self._rpm_chart_minute[nid] = minute
+
     def _publish_networks(self) -> None:
         # Until a bridge is verified, zero is not a trustworthy network count.
         self._scalar("networks", len(self.monitor.networks) if self.monitor.networks else None)
@@ -717,6 +746,10 @@ class MonitorService:
                               for a, reason in observed),
                 **metrics,
             })
+        # Network time series: only one scalar sample per minute, no JSON.
+        # Unlike networks_details, these are intentionally Recorder-visible.
+        for row in rows:
+            self._publish_rpm_chart(row)
         self._detail("networks_details", "networks", rows, valid=bool(self.monitor.networks))
         self._publish_repeaters()
 

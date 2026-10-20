@@ -1,8 +1,42 @@
 # DigitalHouses Zigbee Monitor App — installation and acceptance
 
-Version: **0.1.15 (experimental)**. Run only after the production GHCR image
-`ghcr.io/digitalhouses/digitalhouses_zigbee_monitor_app:0.1.15` is published
+Version: **0.1.16 (experimental)**. Run only after the production GHCR image
+`ghcr.io/digitalhouses/digitalhouses_zigbee_monitor_app:0.1.16` is published
 and verified by repository release workflows.
+
+## Динамические тренды RPM для всех Zigbee2MQTT (v0.1.16)
+
+Каждый обнаруженный координатор автоматически создаёт числовой
+MQTT sensor `sensor.dh_zigbee_monitor_app_<network_id>_rpm`
+(имя `<имя Zigbee2MQTT>: MQTT RPM`). Он не содержит
+диагностических атрибутов и имеет `state_class: measurement`,
+`unit_of_measurement: messages/min`.
+Это RPM полученных MQTT-публикаций устройств, **не показатель RF**.
+Во время прогрева значение является предварительным и не вызывает
+`mqtt_traffic_low`. После прогрева то же поле представляет штатное
+пятиминутное измерение; alarm-детектор не изменён.
+
+Для снижения нагрузки Recorder сенсор публикуется только
+один раз в минуту на сеть (без записи повторов одного значения).
+Если Bridge недоступен/не подтверждён, сенсор unavailable.
+Скалярные состояния не содержат динамических JSON-атрибутов.
+
+Готовая Lovelace-карточка:
+`examples/lovelace/dh_zigbee_monitor_app_rpm_trends_ru.yaml`.
+Содержит два штатных `history-graph` (24 часа и 7 дней), каждый
+внутри `custom:auto-entities` с фильтром по
+`sensor.dh_zigbee_monitor_app_*_rpm`.
+Любая новая сеть добавится в оба графика автоматически.
+
+**Для появления истории обязательно обновить локальный Recorder
+package** из
+`examples/packages/dh_zigbee_monitor_app_global_package.yaml`.
+Добавится `recorder.include.entity_globs:
+[sensor.dh_zigbee_monitor_app_*_rpm]`; старые четыре
+`include.entities` сохранятся. Применять изменения с учётом
+существующей HA recorder-конфигурации/пакетов, а не заменять
+весь конфиг. До обновления Recorder сенсор будет показывать
+текущее число, но у нового графика не будет полноценной истории.
 
 ## RPM сразу после запуска (v0.1.15)
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import fnmatch
 import unittest
 from pathlib import Path
 
@@ -329,7 +330,56 @@ class ZigbeeMonitorUiDesignTests(unittest.TestCase):
             "event.dh_zigbee_monitor_app_*",
         })
         self.assertNotIn("domains", self.recorder["include"])
-        self.assertNotIn("entity_globs", self.recorder["include"])
+        self.assertEqual(self.recorder["include"]["entity_globs"], [
+            "sensor.dh_zigbee_monitor_app_*_rpm",
+        ])
+
+    def test_dynamic_rpm_only_allowed_by_recorder_glob(self):
+        includes = self.recorder["include"]["entity_globs"]
+        excluded = self.recorder["exclude"]["entity_globs"]
+        # HA Recorder case 4: matching include-glob outranks exclude-glob,
+        # while unrelated diagnostics remain excluded.
+        allowed = [
+            "sensor.dh_zigbee_monitor_app_z2m_00124b002e1330dd_rpm",
+            "sensor.dh_zigbee_monitor_app_floor_1_rpm",
+        ]
+        denied = [
+            "sensor.dh_zigbee_monitor_app_networks_details",
+            "sensor.dh_zigbee_monitor_app_version",
+            "sensor.dh_zigbee_monitor_app_card",
+            "sensor.dh_zigbee_monitor_app_messages_rate_5m_copy",
+            "binary_sensor.dh_zigbee_monitor_app_critical",
+            "number.dh_zigbee_monitor_app_floor_1_rpm_threshold",
+        ]
+        for entity in allowed:
+            self.assertTrue(any(fnmatch.fnmatchcase(entity, p) for p in includes))
+        for entity in denied:
+            self.assertFalse(any(fnmatch.fnmatchcase(entity, p) for p in includes))
+            self.assertTrue(
+                any(fnmatch.fnmatchcase(entity, p) for p in excluded)
+                or not entity.startswith("sensor.dh_zigbee_monitor_app_")
+            )
+
+    def test_dynamic_rpm_graphs_follow_discovery_in_both_periods(self):
+        source = APP / "examples/lovelace/dh_zigbee_monitor_app_rpm_trends_ru.yaml"
+        standalone = yaml.safe_load(source.read_text(encoding="utf-8"))
+        self.assertEqual(standalone["type"], "grid")
+        self.assertEqual(len(standalone["cards"]), 2)
+        cards = [c for sec in self.dashboard["sections"]
+                 for c in sec["cards"]]
+        embedded = next(c for c in cards if c.get("type") == "grid"
+                        and any(x.get("type") == "custom:auto-entities"
+                                for x in c.get("cards", [])))
+        self.assertEqual(embedded, standalone)
+        for index, hours in enumerate((24, 168)):
+            config = standalone["cards"][index]
+            self.assertEqual(config["type"], "custom:auto-entities")
+            self.assertEqual(config["card"]["type"], "history-graph")
+            self.assertEqual(config["card"]["hours_to_show"], hours)
+            self.assertEqual(config["filter"]["include"],
+                             [{"entity_id": "sensor.dh_zigbee_monitor_app_*_rpm"}])
+            self.assertFalse(config["show_empty"])
+            self.assertEqual(config["sort"]["method"], "name")
 
     def test_recorder_include_only_scalars(self):
         self.assertEqual(set(self.recorder["include"]["entities"]), HISTORICAL)
@@ -353,7 +403,7 @@ class ZigbeeMonitorUiDesignTests(unittest.TestCase):
         self.assertEqual((APP / "digitalhouses.app").read_text().strip(), "type = haos_addon")
         config = yaml.safe_load((APP / "config.yaml").read_text(encoding="utf-8"))
         self.assertEqual(config["slug"], "digitalhouses_zigbee_monitor_app")
-        self.assertEqual(config["version"], "0.1.15")
+        self.assertEqual(config["version"], "0.1.16")
         self.assertEqual(config["stage"], "experimental")
 
 
