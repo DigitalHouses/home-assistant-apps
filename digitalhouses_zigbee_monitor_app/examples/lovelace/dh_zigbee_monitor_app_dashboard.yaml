@@ -303,10 +303,6 @@ sections:
         name: Offline устройств
         icon: mdi:lan-disconnect
       - type: tile
-        entity: sensor.dh_zigbee_monitor_app_spammers
-        name: Аномальных устройств
-        icon: mdi:alert-decagram
-      - type: tile
         entity: sensor.dh_zigbee_monitor_app_incidents
         name: Активных инцидентов
         icon: mdi:alert-circle
@@ -345,8 +341,9 @@ sections:
           {{ tab }}├─ 🏷️ Тип: 👑 Координатор
           {{ tab }}├─ ⚙️ Железо: {{ (policy.hardware_model or 'не указано') | e }}
           {{ tab }}├─ 🌐 IP: {{ (n.management_ip or '—') | e }} {{ '✅' if n.ping == 'reachable' else '❓ нет ответа' if n.ping == 'no_response' else '❓' }}
-          {{ tab }}├─ 💊 Healer: OFF
-          {{ tab }}├─ 🔌 Status: {{ (n.status or 'unknown') | e }}{{ ' · ' ~ n.offline ~ ' offline' if n.offline is not none else '' }}
+          {{ tab }}├─ 📦 Devices: {{ n.devices if n.devices is not none else '—' }} ({{ n.online if n.online is not none else '—' }} online, {{ n.offline if n.offline is not none else '—' }} offline{{ ', ' ~ n.availability_unknown ~ ' unknown' if n.availability_unknown else '' }})
+{{ tab }}├─ 💊 Healer: OFF
+          {{ tab }}├─ 🔌 Status: {{ (n.status or 'unknown') | e }}
           {{ tab }}└─ {{ '💔' if 'mqtt_traffic_low' in active else '💓' if n.rpm is not none else '❓' }} Pulse: {{ n.rpm if n.rpm is not none else '—' }} RPM ({{ n.threshold if n.threshold is not none else '—' }}){{ ' · прогрев' if n.rpm_phase == 'warming_up' else '' }}
           {% endfor -%}
           {% for r in repeaters -%}
