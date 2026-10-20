@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.1.19
+
+- Confirmed two TI `ti.router` Zigbee Router repeaters on Ruslan site
+  (`0x00124b002e1458f9`, `0x00124b002e0cc5a6`) belong to
+  `zigbee2mqtt_1`. Recognize exact `ti.router` model as specialized
+  repeater, without classifying every Zigbee Router as one.
+- Nest recognized repeaters beneath their **actual discovered** Zigbee2MQTT
+  network in the established ASCII tree, deriving membership from
+  `bridge/devices` IEEE. Unconfirmed entries remain visible only as
+  unassigned, never silently attached to a guessed network.
+- Report Zigbee repeater availability independently from inventory presence
+  and management IP Ping; unknown remains unknown.
+- Preserve existing Supervisor Options, independent offline device card,
+  MPM trend sensors, Recorder allowlist and Healer OFF. No new HA entities.
+
 ## 0.1.18
 
 - Read-only lookup of Home Assistant Device Registry through the existing
