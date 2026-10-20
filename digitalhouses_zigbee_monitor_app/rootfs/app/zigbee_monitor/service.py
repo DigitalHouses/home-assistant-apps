@@ -515,7 +515,17 @@ class MonitorService:
                 rpm=rpm if trusted else None,
                 threshold=float(threshold) if trusted else None,
             )
+            # Presentation-only 5-minute average: each of the five whole
+            # minute buckets must have occurred AFTER this source reconnected.
+            # Never feed this preview into the fault detector or assert a
+            # valid learned threshold before the 65-minute auto warmup.
+            complete_since = ((int(started) + 59) // 60) * 60
+            preview_ready = (
+                status["inventory_observed"] and
+                until - 300 >= complete_since
+            )
             self._traffic_metrics[nid] = {
+                "rpm_observed": round(rpm, 2) if preview_ready else None,
                 "rpm": round(rpm, 2) if trusted else None,
                 "threshold": threshold, "baseline": baseline,
                 "rpm_auto": auto,
