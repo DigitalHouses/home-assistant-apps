@@ -10,6 +10,7 @@ cards:
       - sensor.dh_zigbee_monitor_app_card
       - sensor.dh_zigbee_monitor_app_version
       - sensor.dh_zigbee_monitor_app_latest_version
+      - binary_sensor.dh_zigbee_monitor_app_update_available
       - update.digitalhouses_zigbee_monitor_app_update
     update_timer: |
       [[[
@@ -23,36 +24,59 @@ cards:
     icon: |
       [[[
         const s = states['sensor.dh_zigbee_monitor_app_card']?.state;
-        const installing = states['update.digitalhouses_zigbee_monitor_app_update']
-          ?.attributes?.in_progress === true;
+        const supervisor = states['update.digitalhouses_zigbee_monitor_app_update'];
+        const installing = supervisor?.attributes?.in_progress === true;
+        const release = states['binary_sensor.dh_zigbee_monitor_app_update_available']?.state === 'on';
+        const pending = supervisor?.state === 'on' || release;
         if (installing || s === 'running') return 'mdi:progress-clock';
         if (!s || ['unknown', 'unavailable'].includes(s)) return 'mdi:zigbee-off';
         if (s === 'error') return 'mdi:alert-circle';
+        // Even immediately after a successful version check, an unresolved
+        // upgrade is an amber PACKAGE, not a green installation-success tick.
+        if (pending) return 'mdi:package-up';
         if (s === 'success') return 'mdi:check-circle';
         return 'mdi:zigbee';
       ]]]
     name: |
       [[[
-        const version = states['sensor.dh_zigbee_monitor_app_version']?.state;
-        const valid = typeof version === 'string' && /^\d+\.\d+\.\d+$/.test(version);
-        return 'DH Zigbee Monitor' + (valid ? ' · v' + version : '');
+        const installedSensor = states['sensor.dh_zigbee_monitor_app_version']?.state;
+        const supervisor = states['update.digitalhouses_zigbee_monitor_app_update'];
+        const valid = v => typeof v === 'string' && /^\d+\.\d+\.\d+$/.test(v);
+        const installed = valid(installedSensor) ? installedSensor
+          : supervisor?.attributes?.installed_version;
+        const checkedLatest = states['sensor.dh_zigbee_monitor_app_latest_version']?.state;
+        const supervisorLatest = supervisor?.attributes?.latest_version;
+        const release = states['binary_sensor.dh_zigbee_monitor_app_update_available']?.state === 'on';
+        const greater = (a, b) => {
+          const x = a.split('.').map(Number), y = b.split('.').map(Number);
+          for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] > y[i];
+          return false;
+        };
+        const installerVersion = supervisor?.state === 'on' && valid(installed)
+          && valid(supervisorLatest) && greater(supervisorLatest, installed);
+        const releaseVersion = release && valid(installed) && valid(checkedLatest)
+          && greater(checkedLatest, installed);
+        const latest = installerVersion ? supervisorLatest : releaseVersion ? checkedLatest : null;
+        return 'DH Zigbee Monitor' + (valid(installed)
+          ? ' · v' + installed + (latest ? ' → v' + latest : '') : '');
       ]]]
     label: |
       [[[
         const item = states['sensor.dh_zigbee_monitor_app_card'];
         const supervisor = states['update.digitalhouses_zigbee_monitor_app_update'];
         const installedSensor = states['sensor.dh_zigbee_monitor_app_version']?.state;
-        const latestChecked = states['sensor.dh_zigbee_monitor_app_latest_version']?.state;
-        const validVersion = value => typeof value === 'string' && /^\d+\.\d+\.\d+$/.test(value);
-        const installed = validVersion(installedSensor) ? installedSensor
-          : supervisor?.attributes?.installed_version;
-        const compare = (x, y) => {
-          const a = x.split('.').map(Number), b = y.split('.').map(Number);
-          for (let i = 0; i < 3; i++) {
-            if (a[i] !== b[i]) return a[i] - b[i];
-          }
-          return 0;
+        const checkedLatest = states['sensor.dh_zigbee_monitor_app_latest_version']?.state;
+        const release = states['binary_sensor.dh_zigbee_monitor_app_update_available']?.state === 'on';
+        const installer = supervisor?.state === 'on';
+        const valid = v => typeof v === 'string' && /^\d+\.\d+\.\d+$/.test(v);
+        const installed = valid(installedSensor) ? installedSensor : supervisor?.attributes?.installed_version;
+        const greater = (a, b) => {
+          const x = a.split('.').map(Number), y = b.split('.').map(Number);
+          for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] > y[i];
+          return false;
         };
+        const releaseNewer = release && valid(installed) && valid(checkedLatest)
+          && greater(checkedLatest, installed);
         const elapsed = since => {
           const seconds = Math.max(0, Math.floor((performance.now() - since) / 1000));
           return String(Math.floor(seconds / 60)).padStart(2, '0') + ':' +
@@ -88,29 +112,21 @@ cards:
           return action + '… ' + elapsed(this._dh_zigbee_timer.since);
         }
         this._dh_zigbee_timer = null;
-        if (item.state === 'error')
-          return 'Ошибка: ' + (a.error || 'операция не выполнена');
+        if (item.state === 'error') return 'Ошибка: ' + (a.error || 'операция не выполнена');
         if (item.state === 'success') {
           if (a.operation === 'check') {
-            if (!validVersion(installed) || !validVersion(latestChecked))
-              return 'Версия проверена · нет достоверной пары версий';
-            if (compare(latestChecked, installed) > 0)
-              return 'Найдена новая версия: ' + installed + ' → ' + latestChecked;
-            return 'Актуальная версия: ' + installed;
+            return (installer || releaseNewer ? 'Новая версия найдена'
+              : release ? 'Релиз найден · номер не подтверждён'
+              : 'Версия актуальна') + duration(a.duration_seconds);
           }
           const result = a.operation === 'refresh' ? 'Данные обновлены' : 'Готово';
           return result + duration(a.duration_seconds);
         }
-        const supervisorLatest = supervisor?.attributes?.latest_version;
-        if (supervisor?.state === 'on') {
-          const confirmed = validVersion(supervisorLatest);
-          const candidate = confirmed ? supervisorLatest : latestChecked;
-          if (validVersion(installed) && validVersion(candidate)
-              && compare(candidate, installed) > 0)
-            return 'Доступно обновление: ' + installed + ' → ' + candidate +
-              (confirmed ? '' : ' · версия релиза');
-          return 'Supervisor сообщает об обновлении · версии не определены';
-        }
+        // Supervisor is authoritative for installation; Github check only
+        // establishes release existence. Do not show a nonworking install chip.
+        if (installer) return 'Доступна установка новой версии';
+        if (releaseNewer) return 'Новый релиз · Supervisor пока не предлагает установку';
+        if (release) return 'Доступен релиз · версия не определена';
         return 'Приложение запущено';
       ]]]
     styles:
@@ -129,13 +145,15 @@ cards:
         - color: |
             [[[
               const s = states['sensor.dh_zigbee_monitor_app_card']?.state;
-              const installing = states['update.digitalhouses_zigbee_monitor_app_update']
-                ?.attributes?.in_progress === true;
-              if (installing || s === 'running')
+              const supervisor = states['update.digitalhouses_zigbee_monitor_app_update'];
+              const release = states['binary_sensor.dh_zigbee_monitor_app_update_available']?.state === 'on';
+              if (supervisor?.attributes?.in_progress === true || s === 'running')
                 return 'var(--info-color, var(--primary-color))';
               if (!s || ['unknown', 'unavailable'].includes(s))
                 return 'var(--secondary-text-color)';
               if (s === 'error') return 'var(--error-color)';
+              if (supervisor?.state === 'on' || release)
+                return 'var(--warning-color, orange)';
               if (s === 'success') return 'var(--success-color, var(--primary-color))';
               return 'var(--primary-color)';
             ]]]
