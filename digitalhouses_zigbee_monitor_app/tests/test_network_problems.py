@@ -160,6 +160,43 @@ class NetworkProblemsTests(unittest.TestCase):
         self.assertEqual(self.status("main", "mqtt_traffic_low"), "OFF")
         self.assertIn("problem_recovered", [e["event_type"] for e in self.t.events()])
 
+    def test_observed_rpm_before_65_min_warmup_is_presentation_only(self):
+        # Five whole 60-second buckets from a known online Z2M are allowed
+        # as a preview, but must not resolve mqtt_traffic_low's unknown state.
+        bucket = int(self.clock[0]) - int(self.clock[0]) % 60
+        self.s._traffic_started["main"] = float(bucket - 360)
+        self.store.commit_counts({
+            (minute, "main", IEEE1): 20
+            for minute in range(bucket - 300, bucket, 60)
+        })
+        self.s._update_traffic(int(self.clock[0]))
+        self.s._publish_networks()
+        rows = json.loads(self.t.last(f"{ROOT}/state/networks_details"))["networks"]
+        main = next(x for x in rows if x["network_id"] == "main")
+        second = next(x for x in rows if x["network_id"] == "second")
+        self.assertEqual(main["rpm_observed"], 20.0)
+        self.assertIsNone(main["rpm"])
+        self.assertIsNone(main["threshold"])
+        self.assertIn("mqtt_traffic_low", main["problem_unknown"])
+        self.assertIsNone(second.get("rpm_observed"))
+        self.assertEqual(self.validity("main", "mqtt_traffic_low"), "offline")
+
+    def test_unobserved_partial_five_minute_window_never_fakes_zero(self):
+        bucket = int(self.clock[0]) - int(self.clock[0]) % 60
+        # 4m of observation after the rounded minute boundary: no full
+        # five-minute window even if the database contains older records.
+        self.s._traffic_started["main"] = float(bucket - 240)
+        self.store.commit_counts({
+            (minute, "main", IEEE1): 30
+            for minute in range(bucket - 300, bucket, 60)
+        })
+        self.s._update_traffic(int(self.clock[0]))
+        self.s._publish_networks()
+        rows = json.loads(self.t.last(f"{ROOT}/state/networks_details"))["networks"]
+        main = next(x for x in rows if x["network_id"] == "main")
+        self.assertIsNone(main["rpm_observed"])
+        self.assertIsNone(main["rpm"])
+
     def test_no_bootstrap_problem_event_or_fake_clean_zero(self):
         self.s.disconnected()
         self.t = Transport()
