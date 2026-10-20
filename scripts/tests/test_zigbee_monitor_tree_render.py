@@ -155,6 +155,26 @@ class ZigbeeTreeRenderTests(unittest.TestCase):
         self.assertIn("❓ Pulse: — RPM (—)", rendered)
         self.assertNotIn("💓 Pulse: — RPM", rendered)
 
+    def test_preview_pulse_during_auto_warmup_is_not_heart_healthy(self):
+        network = self.network("zigbee2mqtt")
+        network["rpm"] = None
+        network["rpm_observed"] = 61.6
+        network["threshold"] = None
+        network["problem_unknown"] = ["mqtt_traffic_low"]
+        text = self.render([network], [])
+        self.assertIn("⏳ Pulse: 61.6 RPM (обучение)", text)
+        self.assertNotIn("💓 Pulse: 61.6", text)
+        self.assertEqual(len(self.tree_lines(text)), 8)
+
+    def test_manual_threshold_is_visible_with_untrusted_preview(self):
+        network = self.network("zigbee2mqtt")
+        network["rpm"] = None
+        network["rpm_observed"] = 12.4
+        network["threshold"] = 10
+        text = self.render([network], [])
+        self.assertIn("⏳ Pulse: 12.4 RPM (10)", text)
+        self.assertNotIn("💓 Pulse: 12.4", text)
+
     def test_empty_network_and_repeater_lists(self):
         result = self.render([], [])
         self.assertNotIn("<pre>", result)
