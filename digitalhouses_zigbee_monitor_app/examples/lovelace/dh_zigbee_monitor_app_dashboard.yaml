@@ -544,37 +544,37 @@ sections:
         heading_style: subtitle
         icon: mdi:lan-disconnect
       - type: markdown
-      content: |
-        {% set entity = 'sensor.dh_zigbee_monitor_app_offline_details' %}
-        {% set rows = state_attr('sensor.dh_zigbee_monitor_app_offline_details', 'devices') %}
-        {% if states('sensor.dh_zigbee_monitor_app_offline_details') in ['unknown', 'unavailable'] or rows is not iterable or rows is string %}
-        *Список недоступных устройств ещё не получен.*
-        {% elif rows | length == 0 %}
-        Нет подтверждённых offline-устройств.
-        {% if state_attr(entity, 'availability_unknown') %}
-        *Без данных availability: {{ state_attr(entity, 'availability_unknown') }}.*
-        {% endif %}
-        {% else %}
-        **Подтверждено offline:** {{ state_attr(entity, 'total') }}
-        {% if not state_attr(entity, 'availability_complete') %}
-        *Данные неполные: нет availability у {{ state_attr(entity, 'availability_unknown') }} устройств.*
-        {% endif %}
-        <table>
-        <thead><tr><th>Устройство</th><th>Сеть</th><th>Offline с</th></tr></thead>
-        <tbody>
-        {% for device in rows %}
-        <tr>
-        <td>{% if device.ha_device_id %}<a href="/config/devices/device/{{ device.ha_device_id | e }}" title="Открыть устройство HA">{{ device.name | e }} ↗</a>{% else %}{{ device.name | e }}{% endif %}</td>
-        <td>{{ device.network_name | e }}</td>
-        <td>{{ (device.offline_since or 'Неизвестно') | e }}</td>
-        </tr>
-        {% endfor %}
-        </tbody>
-        </table>
-        {% if state_attr(entity, 'truncated') %}
-        *Показаны первые 40 устройств из {{ state_attr(entity, 'total') }}.*
-        {% endif %}
-        {% endif %}
+        content: |
+          {% set entity = 'sensor.dh_zigbee_monitor_app_offline_details' %}
+          {% set rows = state_attr('sensor.dh_zigbee_monitor_app_offline_details', 'devices') %}
+          {% if states('sensor.dh_zigbee_monitor_app_offline_details') in ['unknown', 'unavailable'] or rows is not iterable or rows is string %}
+          *Список недоступных устройств ещё не получен.*
+          {% elif rows | length == 0 %}
+          Нет подтверждённых offline-устройств.
+          {% if state_attr(entity, 'availability_unknown') %}
+          *Без данных availability: {{ state_attr(entity, 'availability_unknown') }}.*
+          {% endif %}
+          {% else %}
+          **Подтверждено offline:** {{ state_attr(entity, 'total') }}
+          {% if not state_attr(entity, 'availability_complete') %}
+          *Данные неполные: нет availability у {{ state_attr(entity, 'availability_unknown') }} устройств.*
+          {% endif %}
+          <table>
+          <thead><tr><th>Устройство</th><th>Сеть</th><th>Offline с</th></tr></thead>
+          <tbody>
+          {% for device in rows %}
+          <tr>
+          <td>{% if device.ha_device_id %}<a href="/config/devices/device/{{ device.ha_device_id | e }}" title="Открыть устройство HA">{{ device.name | e }} ↗</a>{% else %}{{ device.name | e }}{% endif %}</td>
+          <td>{{ device.network_name | e }}</td>
+          <td>{{ (device.offline_since or 'Неизвестно') | e }}</td>
+          </tr>
+          {% endfor %}
+          </tbody>
+          </table>
+          {% if state_attr(entity, 'truncated') %}
+          *Показаны первые 40 устройств из {{ state_attr(entity, 'total') }}.*
+          {% endif %}
+          {% endif %}
       - type: history-graph
         title: Offline — история
         entities:
