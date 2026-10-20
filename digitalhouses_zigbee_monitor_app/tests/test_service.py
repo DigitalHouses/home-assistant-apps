@@ -139,6 +139,20 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(rows[0]["name"], "Комната")
         self.assertEqual(rows[0]["ieee_address"], IEEE)
 
+    def test_offline_details_only_add_validated_ha_device_link(self):
+        did = "0123456789abcdef0123456789abcdef"
+        self.s.set_ha_device_links({IEEE: did})
+        self.s.connected()
+        self.receive("bridge/devices", inventory(), retain=True)
+        self.receive("bridge/state", b"online", retain=True)
+        self.receive("Термостат/availability", b'{"state":"offline"}', retain=True)
+        details = json.loads(self.t.last(state_topic("offline_details")))
+        self.assertEqual(details["devices"][0]["ha_device_id"], did)
+        self.assertEqual(self.t.last(state_topic("offline")), "1")
+        self.s.set_ha_device_links({})
+        details = json.loads(self.t.last(state_topic("offline_details")))
+        self.assertIsNone(details["devices"][0]["ha_device_id"])
+
     def test_retained_devices_are_not_ranked_and_no_unproven_zero(self):
         self.s.connected()
         self.receive("bridge/devices", inventory(), retain=True)
