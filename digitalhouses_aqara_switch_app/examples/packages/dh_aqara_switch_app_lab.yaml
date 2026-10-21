@@ -17,6 +17,7 @@ template:
   - light:
       - name: DH Aqara LAB · Люстра
         unique_id: dh_aqara_lab_chandelier
+        default_entity_id: light.dh_aqara_lab_chandelier
         state: "{{ is_state('input_boolean.dh_aqara_lab_chandelier', 'on') }}"
         turn_on:
           action: input_boolean.turn_on
@@ -28,6 +29,7 @@ template:
             entity_id: input_boolean.dh_aqara_lab_chandelier
       - name: DH Aqara LAB · Споты
         unique_id: dh_aqara_lab_spots
+        default_entity_id: light.dh_aqara_lab_spots
         state: "{{ is_state('input_boolean.dh_aqara_lab_spots', 'on') }}"
         turn_on:
           action: input_boolean.turn_on
@@ -39,6 +41,7 @@ template:
             entity_id: input_boolean.dh_aqara_lab_spots
       - name: DH Aqara LAB · LED-лента
         unique_id: dh_aqara_lab_led_strip
+        default_entity_id: light.dh_aqara_lab_led_strip
         state: "{{ is_state('input_boolean.dh_aqara_lab_led_strip', 'on') }}"
         turn_on:
           action: input_boolean.turn_on
