@@ -1,4 +1,7 @@
 configuration:
   log_level:
     name: Logging level
-    description: Diagnostics verbosity (initial scaffold has no device control).
+    description: App runtime diagnostic verbosity.
+  configuration_yaml:
+    name: Rooms and switches (YAML)
+    description: "Single editable configuration: rooms -> switches. Only explicit Scan appends devices. Existing entries are never rewritten."
