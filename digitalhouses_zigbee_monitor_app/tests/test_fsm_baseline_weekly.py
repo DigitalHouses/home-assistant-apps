@@ -213,5 +213,46 @@ class ServiceFSMTests(unittest.TestCase):
                               if topic == EVENT_TOPIC])
 
 
+    def test_minute_history_uses_last_sample_before_boundary_not_next_minute(self):
+        with tempfile.TemporaryDirectory() as temp:
+            clock = [600.0]
+            store = ActivityStore(Path(temp) / "activity.sqlite")
+            self.addCleanup(store.close)
+            service = MonitorService(
+                ZigbeeMonitor(parse_networks([{
+                    "network_id":"site","base_topic":"z2m","name":"Test",
+                }])),store,
+                publish=lambda topic,payload,retain: True,
+                subscribe=lambda topic: True,
+                version="0.1.20",now=lambda:clock[0],
+            )
+            service.connected()
+            service.receive("z2m/bridge/devices",json.dumps([{
+                "ieee_address":"0x00158d0000000001",
+                "type":"Router","friendly_name":"Device",
+            }]).encode(),retain=True)
+            service.receive("z2m/bridge/state",b"online",retain=True)
+            service.tick()
+            clock[0] = 630
+            for _ in range(40):
+                service.receive("z2m/Device",b'{"temperature":20}')
+            service.tick()
+            clock[0] = 659
+            service.tick()
+            before = service._traffic_metrics["site"]["rpm"]
+            clock[0] = 660
+            service.tick()
+            after = service._traffic_metrics["site"]["rpm"]
+            stored = store.conn.execute(
+                "SELECT rpm,valid,healthy FROM network_rpm_minutes "
+                "WHERE network_id='site' AND minute_start=600"
+            ).fetchone()
+            self.assertIsNotNone(stored)
+            self.assertEqual(stored[0],before)
+            self.assertNotEqual(stored[0],after)
+            self.assertEqual(stored[1],1)
+            self.assertEqual(stored[2],1)
+
+
 if __name__ == "__main__":
     unittest.main()
