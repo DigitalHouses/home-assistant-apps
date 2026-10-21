@@ -205,6 +205,11 @@ class Application:
                     result = {"status": "unverified", "reason": "; ".join(unverified)}
                 else:
                     result = resolve_hardware(switch, peers)
+                    if (result["status"] == "same" and peers
+                            and peers[0]["settings"] != switch["settings"]):
+                        result = {"status": "settings_mismatch",
+                                  "reason": "Physical settings differ from saved baseline",
+                                  "observed_ieee": peers[0]["ieee"]}
                 switch["runtime"] = result
                 if result["status"] not in ("same",):
                     problems.append({
