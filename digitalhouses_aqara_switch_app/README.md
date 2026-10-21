@@ -27,6 +27,27 @@ This App is intended for HAOS Supervisor, MQTT and Zigbee2MQTT; Home Assistant s
 
 See [DOCS.md](DOCS.md) for the design contract, and [DigitalHouses standards](../docs/README.md).
 
+## First development milestone: pure contract + virtual HA lights
+
+The repository now contains **tested, read-only** Python modules `aqara_switch.catalog`
+and `aqara_switch.actions`. They validate Zigbee2MQTT device descriptions,
+capture only confirmed MQTT settings, implement append-only manual-scan merge,
+verify exact replacement compatibility, and map button events into a safe,
+allowlisted **plan** for Home Assistant service calls. These functions are not
+connected to the runtime yet and **do not** send MQTT or HA commands.
+
+For a physical-free acceptance stand, copy
+[the LAB virtual light package](examples/packages/dh_aqara_switch_app_lab.yaml)
+to your active HA packages directory and review the three template lights.
+The example [Lovelace LAB card](examples/lovelace/dh_aqara_switch_app_lab_lights_ru.yaml)
+controls them manually. Verify actual entity IDs in Developer Tools; if the
+IDs are occupied by an older entity, HA may add a numeric suffix.
+**Do not deploy or overwrite a site-local HA package automatically.**
+
+The user's home Zigbee2MQTT inventory has **not** been read: access to the
+home HA runtime is not currently available. The remembered Aqara button is a
+candidate for a later real-MQTT test, not a confirmed device.
+
 ## Developer verification
 
 ```bash

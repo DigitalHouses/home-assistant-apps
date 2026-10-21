@@ -1,0 +1,11 @@
+# Local smoke-test panel for virtual Home Assistant lamps.
+# default_entity_id sets the expected IDs at creation, unless already occupied.
+type: entities
+title: DH Aqara · LAB
+entities:
+  - entity: light.dh_aqara_lab_chandelier
+    name: Люстра
+  - entity: light.dh_aqara_lab_spots
+    name: Споты
+  - entity: light.dh_aqara_lab_led_strip
+    name: LED-лента

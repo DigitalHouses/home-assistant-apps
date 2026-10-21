@@ -42,3 +42,21 @@ Future HA UI: single product status card, explicit Scan action and result, group
 ## Release and safety gate
 
 This scaffold intentionally has **no active MQTT subscriptions or commands**. It is registered with `telemetry_allowed=false` and `release=null` until the release and privacy contracts are implemented. A source Docker build is for CI validation only; no published production GHCR image. Tests for the eventual runtime must cover idempotence, HA Areas, multi-Z2M identity, relay-mode restoration, failure recovery, event mapping and single-controller migration.
+
+## Current work in progress: first testable code
+
+This revision adds:
+- Pure `aqara_switch.catalog`: parse MQTT Zigbee2MQTT exposes, reject unknown
+  physical setting values rather than fabricate defaults, idempotent append-only
+  room/switch merge with HA Area lookup injected by caller.
+- Pure `resolve_hardware`: exact match of saved logical ID and structural
+  profile; unknown or incompatible replacements are surfaced, not applied.
+- Pure `aqara_switch.actions`: validated HA service call plans for virtual
+  lights, ordinary lights, switches, covers, fans, scripts and scenes.
+- HA LAB package containing three virtual template lights with persistent
+  input_boolean helpers; no live HA installation or hardware tests yet.
+
+**Not yet implemented**: MQTT runtime subscriptions, HA registry adapter,
+Supervisor options persistence/schema for nested rooms, HA UI Scan button,
+Mode Keeper, Maintenance, Dispatcher transport and actual button-to-light E2E.
+All remain out of scope until the foundation passes CI and the HA LAB works.
