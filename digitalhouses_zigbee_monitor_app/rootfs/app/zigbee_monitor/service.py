@@ -21,6 +21,7 @@ from .infrastructure import parse_bridge_infrastructure
 from .discovery import (
     APP_AVAILABILITY, DETAILS, DISCOVERY, EVENT_TOPIC, HA_STATUS, HISTORY, ROOT,
     build_discovery, network_rpm_topic, network_rpm_availability_topic,
+    network_offline_topic, network_offline_availability_topic,
     network_rpm_threshold_topic,
     network_rpm_threshold_availability_topic, state_topic, validity_topic,
 )
@@ -791,6 +792,23 @@ class MonitorService:
             self._send(available_topic, "online")
             self._rpm_chart_minute[nid] = minute
 
+    def _publish_network_offline_chart(self, row: dict[str, object]) -> None:
+        """Publish confirmed offline as an independent Recorder-visible state.
+
+        An observed positive count is a trusted lower bound, even if some
+        devices have unknown availability; zero requires complete coverage.
+        Transition to unknown/bridge offline via availability, never fake zero.
+        Publish on changes rather than each UI refresh (Recorder-safe).
+        """
+        nid = str(row["network_id"])
+        availability = network_offline_availability_topic(nid)
+        count = row.get("offline")
+        if not isinstance(count, int) or isinstance(count, bool):
+            self._send(availability, "offline")
+            return
+        if self._send(network_offline_topic(nid), str(count)):
+            self._send(availability, "online")
+
     def _publish_networks(self) -> None:
         # Until a bridge is verified, zero is not a trustworthy network count.
         self._scalar("networks", len(self.monitor.networks) if self.monitor.networks else None)
@@ -871,6 +889,7 @@ class MonitorService:
         # Unlike networks_details, these are intentionally Recorder-visible.
         for row in rows:
             self._publish_rpm_chart(row)
+            self._publish_network_offline_chart(row)
         self._detail("networks_details", "networks", rows, valid=bool(self.monitor.networks))
         self._publish_repeaters()
 
