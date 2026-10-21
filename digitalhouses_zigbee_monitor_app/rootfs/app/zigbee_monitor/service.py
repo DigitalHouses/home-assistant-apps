@@ -772,7 +772,7 @@ class MonitorService:
         if not isinstance(value, (int, float)) or isinstance(value, bool):
             self._send(availability, "offline")
             return
-        if self._send(network_rpm_threshold_topic(nid), f"{float(value):.2f}"):
+        if self._send(network_rpm_threshold_topic(nid), str(int(value))):
             self._send(availability, "online")
 
     def _publish_rpm_chart(self, row: dict[str, object]) -> None:
