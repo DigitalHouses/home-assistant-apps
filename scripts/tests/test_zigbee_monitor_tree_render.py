@@ -101,8 +101,8 @@ class ZigbeeTreeRenderTests(unittest.TestCase):
         self.assertEqual(lines[0], "\\")
         branches = [line for line in lines[1:] if re.match(r"^[├└]─ ", line)]
         self.assertEqual(branches, [
-            "├─ 🟩 zigbee2mqtt · HEALTHY", "├─ 🟩 zigbee2mqtt_office · HEALTHY",
-            "└─ 🟩 zigbee2mqtt_floor2 · HEALTHY",
+            "├─ 🟩 zigbee2mqtt · 🟢 HEALTHY", "├─ 🟩 zigbee2mqtt_office · 🟢 HEALTHY",
+            "└─ 🟩 zigbee2mqtt_floor2 · 🟢 HEALTHY",
         ])
         self.assertEqual(sum("📡 Repeaters: 5" in x for x in lines), 1)
         self.assertEqual(sum("📡 Repeaters: 0" in x for x in lines), 2)
@@ -115,14 +115,14 @@ class ZigbeeTreeRenderTests(unittest.TestCase):
     def test_single_z2m_ends_root_without_repeaters(self):
         rendered = self.render([self.network("zigbee2mqtt")], [])
         lines = self.tree_lines(rendered)
-        self.assertEqual(lines[:2], ["\\", "└─ 🟩 zigbee2mqtt · HEALTHY"])
+        self.assertEqual(lines[:2], ["\\", "└─ 🟩 zigbee2mqtt · 🟢 HEALTHY"])
         self.assertTrue(any(x.startswith("   ├─ 🏷️ Тип: 👑 Координатор") for x in lines))
         self.assertIn("💓 Pulse: 17.4 MPM (10)", rendered)
         self.assertIn("🌐 IP: 192.168.11.40 ✅", rendered)
         self.assertIn("🔌 Status: online", rendered)
         self.assertIn("📦 Devices: 7 (6 online, 1 offline)", rendered)
         self.assertIn("💊 Healer: OFF", rendered)
-        self.assertEqual(len(lines), 11, "one root, one node, FSM plus eight compact fields")
+        self.assertEqual(len(lines), 10, "one root, one node, eight compact fields")
 
     def test_repeaters_alone_are_explicitly_unassigned(self):
         lines = self.tree_lines(self.render([], [
@@ -141,11 +141,11 @@ class ZigbeeTreeRenderTests(unittest.TestCase):
         self.assertNotIn("STALE NETWORK", result)
         self.assertIn("└─ 📡 Hall", result)
 
-    def test_compact_card_has_seven_primary_fields_per_coordinator(self):
+    def test_compact_card_has_eight_primary_fields_per_coordinator(self):
         lines = self.tree_lines(self.render([self.network("zigbee2mqtt")], []))
-        self.assertEqual(len(lines), 11)
+        self.assertEqual(len(lines), 10)
         labels = [
-            "🧠 FSM:", "🏷️ Тип:", "⚙️ Железо:", "🌐 IP:", "📦 Devices:",
+            "🏷️ Тип:", "⚙️ Железо:", "🌐 IP:", "📦 Devices:",
             "📡 Repeaters:", "💊 Healer:", "🔌 Status:", "💓 Pulse:",
         ]
         for item, label in zip(lines[2:], labels):
@@ -162,18 +162,28 @@ class ZigbeeTreeRenderTests(unittest.TestCase):
                 network["network_id"]: "CRITICAL"
             }, global_fsm="CRITICAL",
         )
-        self.assertIn("Zigbee Networks · FSM: CRITICAL", result)
-        self.assertIn("🟥 zigbee2mqtt · CRITICAL", result)
-        self.assertIn("🧠 FSM: CRITICAL", result)
+        self.assertIn("Zigbee Networks · 🔴 CRITICAL", result)
+        self.assertIn("🟥 zigbee2mqtt · 🔴 CRITICAL", result)
+        self.assertNotIn("🧠 FSM:", result)
         self.assertNotIn("🟩 zigbee2mqtt", result)
 
-    def test_fsm_reason_is_visible_on_degraded_network(self):
+    def test_fsm_status_circles_and_middle_dot(self):
         network = self.network("zigbee2mqtt")
-        network["fsm"] = "DEGRADED"
         network["fsm_reason"] = "rpm_below_threshold"
-        rendered = self.render([network], [])
-        self.assertIn("🟨 zigbee2mqtt · DEGRADED", rendered)
-        self.assertIn("🧠 FSM: DEGRADED · rpm_below_threshold", rendered)
+        expected = [
+            ("HEALTHY", "🟩", "🟢"),
+            ("DEGRADED", "🟨", "🟠"),
+            ("CRITICAL", "🟥", "🔴"),
+            ("BOOTING", "⬜", "⚪"),
+        ]
+        for state, square, circle in expected:
+            with self.subTest(state=state):
+                network["fsm"] = state
+                rendered = self.render([network], [], global_fsm=state)
+                self.assertIn(f"Zigbee Networks · {circle} {state}", rendered)
+                self.assertIn(f"{square} zigbee2mqtt · {circle} {state}", rendered)
+                self.assertNotIn("🧠 FSM:", rendered)
+                self.assertNotIn("rpm_below_threshold", rendered)
 
     def test_router_status_requires_zigbee_availability(self):
         n = self.network("zigbee2mqtt")
