@@ -24,7 +24,6 @@ from zigbee_monitor.agent_options import (
     SupervisorOptions, merge_new_discoveries, ping_management_ip,
 )
 from zigbee_monitor.discovery import APP_AVAILABILITY, PRODUCT
-from zigbee_monitor.config_access import probe_config_access
 from zigbee_monitor.device_links import load_ha_device_links
 from zigbee_monitor.service import MonitorService
 from zigbee_monitor.telemetry import TelemetryClient, TelemetryRunner
@@ -117,11 +116,10 @@ class Application:
             version=version,
         )
         self.service.set_agent_options(options)
-        # Probe the read-only HA map without reading Z2M secrets.
-        # Cache the result before MQTT connect; service republishes on connect.
-        self.service.set_config_access(probe_config_access())
+        # The HA Device Registry supports confirmed device-page links.
+        # Zigbee2MQTT configuration is sourced exclusively through MQTT.
         self.service.set_ha_device_links(load_ha_device_links())
-        self._next_config_probe = time.monotonic() + 60
+        self._next_device_links_probe = time.monotonic() + 60
         self._supervisor_options = SupervisorOptions()
         self._next_agent_sync = 0.0
         self._next_ping = 0.0
@@ -255,10 +253,8 @@ class Application:
             while not self.stop_event.wait(1):
                 self.service.tick()
                 now = time.monotonic()
-                if now >= self._next_config_probe:
-                    self._next_config_probe = now + 60
-                    # Local filesystem metadata/open check only, never file read.
-                    self.service.set_config_access(probe_config_access())
+                if now >= self._next_device_links_probe:
+                    self._next_device_links_probe = now + 60
                     self.service.set_ha_device_links(load_ha_device_links())
                 if now >= self._next_agent_sync:
                     self._next_agent_sync = now + 60
