@@ -77,7 +77,15 @@ class NetworkFSM:
         if threshold is not None and (type(threshold) is not int or threshold < 0):
             raise ValueError("threshold must be a nonnegative integer")
 
-        if threshold is not None and threshold > 0 and rpm is not None and rpm < threshold:
+        # A confirmed *zero* threshold explicitly disables the traffic
+        # detector. Quiet battery-only networks must remain HEALTHY even after
+        # hours without messages. Clear any previous RPM fault/timer immediately
+        # when AUTO computes 0 or the user selects MANUAL 0. Bridge/observer
+        # and repeater checks remain independent of MQTT traffic.
+        if threshold == 0:
+            self.low_since = None
+            rpm_degraded = False
+        elif threshold is not None and rpm is not None and rpm < threshold:
             if self.low_since is None:
                 self.low_since = now
             low_for = max(0.0, now - self.low_since)
