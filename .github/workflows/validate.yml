@@ -46,6 +46,9 @@ jobs:
       - name: Compile Aqara Switch App
         run: python -m compileall -q digitalhouses_aqara_switch_app/rootfs/app digitalhouses_aqara_switch_app/tests
 
+      - name: Install test dependencies
+        run: python -m pip install --disable-pip-version-check PyYAML
+
       - name: Run Aqara Switch App tests
         run: python -m unittest discover -s digitalhouses_aqara_switch_app/tests -v
 
