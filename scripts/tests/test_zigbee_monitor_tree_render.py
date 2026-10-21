@@ -184,9 +184,9 @@ class ZigbeeTreeRenderTests(unittest.TestCase):
         self.assertIn("пока не обнаружены", result)
 
     def test_problem_details_keep_children_under_correct_parent(self):
-        result = self.render([self.network(
-            "zigbee2mqtt", ["mqtt_traffic_low"], ["devices_offline"]
-        )], [])
+        network = self.network("zigbee2mqtt", ["mqtt_traffic_low"], ["devices_offline"])
+        network["fsm"] = "CRITICAL"
+        result = self.render([network], [])
         self.assertIn("🟥 zigbee2mqtt", result)
         self.assertIn("💔 Pulse: 17.4 MPM (10)", result)
         self.assertIn("🔌 Status: online", result)
