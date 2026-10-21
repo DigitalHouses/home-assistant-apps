@@ -26,7 +26,6 @@ from .mqtt_ui import (
 )
 from .scan import scan_once
 from .supervisor import SupervisorOptions
-from .structured_options import migrate as migrate_structured_options
 
 LOG = logging.getLogger(__name__)
 _IEEE = re.compile(r"^0x[0-9a-f]{16}$")
@@ -375,14 +374,15 @@ class Application:
                     continue
                 if command is None:
                     continue
-                target = command["target"]["entity_id"][0]
+                targets = command["target"]["entity_id"]
+                target_label = ", ".join(targets)
                 try:
-                    self._jobs.put_nowait((name, action, target))
+                    self._jobs.put_nowait((name, action, targets))
                     self._publish_action(state="queued", switch=name, action=action,
-                                         target=target)
+                                         target=target_label)
                 except queue.Full:
                     self._publish_action(state="error", switch=name, action=action,
-                                         target=target, error="Action queue is full")
+                                         target=target_label, error="Action queue is full")
 
     def _run_actions(self):
         """Serial HA calls preserve toggle order and avoid blocking MQTT callbacks."""
@@ -390,19 +390,19 @@ class Application:
             self._ha_client = HAClient(os.environ.get("SUPERVISOR_TOKEN", ""))
         while not self._stop.is_set():
             try:
-                name, action, entity = self._jobs.get(timeout=1)
+                name, action, entities = self._jobs.get(timeout=1)
             except queue.Empty:
                 continue
             try:
-                self._ha_client.toggle(entity)
+                self._ha_client.toggle_targets(entities)
                 self._publish_action(state="accepted", switch=name, action=action,
-                                     target=entity)
+                                     target=", ".join(entities))
                 LOG.info("Aqara %s / %s -> light.toggle %s accepted by HA",
-                         name, action, entity)
+                         name, action, entities)
             except Exception as exc:
                 LOG.exception("Home Assistant light.toggle failed")
                 self._publish_action(state="error", switch=name, action=action,
-                                     target=entity, error=str(exc)[:300])
+                                     target=", ".join(entities), error=str(exc)[:300])
             finally:
                 self._jobs.task_done()
 
@@ -454,10 +454,6 @@ class Application:
             self._scan_lock.release()
 
     def run(self) -> None:
-        # Fail closed until old profiles and bindings have migrated safely.
-        migrated = migrate_structured_options(self.options)
-        with self._mutex:
-            self.config = parse_configuration(migrated)
         host, port = os.environ["MQTT_HOST"], int(os.environ["MQTT_PORT"])
         LOG.info("Starting Aqara Adopt + Mode Keeper + light.toggle MVP %s", self.version)
         threading.Thread(target=self._run_actions, daemon=True,
