@@ -34,7 +34,7 @@ cards:
         const problems = states['sensor.dh_aqara_switch_app_problems']?.attributes?.count;
         return typeof problems === 'number' && problems > 0
           ? 'Проблемы выключателей: ' + problems
-          : 'Наблюдение MQTT · ожидание команды';
+          : 'Scan/Adopt · Mode Keeper · Light Toggle';
       ]]]
     styles:
       card:

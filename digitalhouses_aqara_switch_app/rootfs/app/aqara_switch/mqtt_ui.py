@@ -45,6 +45,7 @@ def configuration(version: str) -> dict:
         "scan_state": sensor("scan_state", "Сканирование", "scan_state", True),
         "scan_details": sensor("scan_details", "Последнее сканирование", "scan_details", True),
         "problems": sensor("problems", "Проблемы", "problems", True),
+        "last_action": sensor("last_action", "Последнее нажатие", "last_action", True),
         "version": {
             "platform": "sensor", "name": "Версия",
             "unique_id": PREFIX + "_version",

@@ -1,9 +1,9 @@
 # DigitalHouses Aqara Switch App — Design & Pilot Contract
 
-Version `0.1.1` is an **experimental manual-scan pilot**. It observes
+Version `0.1.2` is an **experimental Scan/Adopt + settings keeper + light.toggle MVP**. It observes
 Zigbee2MQTT MQTT, reads Home Assistant Device/Area Registry through the
 Supervisor WebSocket proxy, and persists new devices into **own Supervisor
-App Options** only when Scan is explicitly pressed. No physical device writes.
+App Options** only when Scan is explicitly pressed. Later, validated adopted configuration keys may be restored after observed mismatch; relay ON/OFF is never written by Mode Keeper.
 
 ## Sources of truth
 
@@ -69,7 +69,7 @@ privacy/release contracts. No telemetry is transmitted in this pilot.
 
 Светильники, их назначение клавишам, Z2M-группы и проверка состояния каждого участника остаются ответственностью `dh_aqara_switch_app`. Отдельный Light Startup Keeper App не планируется. `bridge/groups` — источник состава группы, не дублировать его вручную; `power_on_behavior` проверяется/применяется **на индивидуальных устройствах** после аппаратной приёмки.
 
-Ключевой контракт: различать «получили нажатие», «команда передана», «наблюдаемое состояние (возможно optimistic)», «аппаратно подтверждено», «частично / unknown / error». В Markdown-дереве показывать последнюю команду и поимённый результат участников группы. Полный контракт и ограничения прямого Binding — в [field lessons](docs/field-lessons-and-recovery.md). В v0.1.1 этого механизма нет.
+Ключевой контракт: различать «получили нажатие», «команда передана», «наблюдаемое состояние (возможно optimistic)», «аппаратно подтверждено», «частично / unknown / error». В Markdown-дереве показывать последнюю команду и поимённый результат участников группы. Полный контракт и ограничения прямого Binding — в [field lessons](docs/field-lessons-and-recovery.md). В v0.1.2 подтверждения исполнения команды светильником ещё нет.
 
 ## Текущая мощность и раскрытие Zigbee-групп (будущий функционал)
 

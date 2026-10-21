@@ -1,7 +1,7 @@
 name: DigitalHouses Aqara Switch App
-version: 0.1.1
+version: 0.1.2
 slug: digitalhouses_aqara_switch_app
-description: Manual-only Aqara MQTT discovery and HA configuration pilot. No relay control.
+description: Aqara Scan/Adopt, physical settings keeper and bound HA light.toggle MVP.
 url: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_aqara_switch_app
 arch:
   - amd64

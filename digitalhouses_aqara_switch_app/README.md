@@ -1,11 +1,12 @@
 # DigitalHouses Aqara Switch App
 
-**v0.1.1 — experimental manual-scan pilot; no physical relay or lighting control.**
+**v0.1.2 — experimental Scan/Adopt + Mode Keeper + one-light toggle MVP.**
 
 This Home Assistant App supports the commissioning flow for Aqara wired switches,
-battery buttons and key panels. It does **not** implement a general automation
-engine. This pilot imports configuration only; Mode Keeper, Maintenance Mode,
-target dispatch and UI deletion are subsequent gated milestones.
+battery buttons and key panels. It is not a general automation engine. This MVP scans and adopts Aqara
+inputs, preserves saved writable switch configuration, and dispatches an
+explicitly bound Aqara action to a single Home Assistant light.toggle target.
+It never switches physical Aqara relay output states itself.
 
 ## Installation and prerequisites
 
@@ -39,6 +40,53 @@ Zigbee2MQTT friendly_name. New physical IEEE with the same name is compared
 against the saved structural fingerprint and flagged when incompatible.
 **No automatic relay restoration occurs in this pilot.**
 
+## First working scenario (0.1.2 MVP)
+
+1. Start the experimental local App, wait until Zigbee2MQTT inventory arrives.
+2. Press `button.dh_aqara_switch_app_scan` **once**. This is the initial
+   Adopt: only newly discovered Aqara inputs are appended to the App Options
+   `configuration_yaml`; captured physical setting values become the baseline.
+3. In Supervisor App Options edit the existing switch's `bindings`. Example
+   under the already imported room/switch (do not replace IEEE/fingerprint):
+
+```yaml
+bindings:
+  single:
+    action: toggle
+    targets:
+      - light.bedroom_spots
+```
+
+The `single` key must exactly match this device's observed `action`
+from Zigbee2MQTT. For other models use their real action names (e.g.
+`single_left`); do not guess. The only executable action in this MVP is
+one explicitly configured `light.toggle` target in HA (one `light.*`
+entity, which may itself represent a Zigbee group in HA). Restart App after
+editing Options to load changes.
+
+4. Press the physical Aqara key. On a fresh non-retained MQTT `action`
+from exactly the adopted model/IEEE/coordinator, the App calls
+`POST /api/services/light/toggle` via Supervisor Core proxy. An
+`accepted` event confirms HA accepted the service call, **not** that
+the bulbs physically turned on. Observe
+`sensor.dh_aqara_switch_app_last_action` for success/error.
+
+**Mode Keeper:** if fresh MQTT telemetry explicitly reports one of the
+writable physical settings as different from its adopted value, the App
+requests restoration through Zigbee2MQTT `.../set`, no more than once
+per 60 seconds per key. Relay `state` / `state_left` etc. are
+**never** captured as adopted modes or written back. At present this is
+best-effort settings restoration: a request is not a proven hardware
+acknowledgement. If the device doesn't report a setting, the App will
+not infer its value or issue a blind command.
+
+**Critical:** disable any legacy automation or old AQPM2 handler
+for exactly the same physical key before enabling a binding, or pressing
+once could toggle twice. Do not remove any unrelated legacy controls.
+If this device is connected to live electrical loads, commissioning its
+operation mode needs a physical safety check; this MVP does not change
+unknown relays during adoption.
+
 ## Home Assistant UI
 
 Examples under [examples/lovelace](examples/lovelace/):
@@ -67,9 +115,9 @@ and individually observed/confirmed states with `partial` / `unknown`
 where appropriate. **Zigbee2MQTT optimistic group or member state is not proof**
 that all physical lamps switched; direct Zigbee Binding can bypass this App.
 See [field lessons: light ownership and command verification](docs/field-lessons-and-recovery.md).
-This is a **future requirement**, not a claim about v0.1.1.
+Group/individual confirmation remains future work beyond 0.1.2.
 
-The pilot status card has working Scan and Supervisor Restart controls. Full
+The status card has working Scan and Supervisor Restart controls. Full
 DigitalHouses release check, Refresh and Install chips are deferred until
 their backends are available; no fake buttons are presented. The tree is
 currently read-only; click-through editing and confirmed deletion are not yet
