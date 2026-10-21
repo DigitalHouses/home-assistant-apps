@@ -195,6 +195,58 @@ class ZeroThresholdServiceTests(unittest.TestCase):
                 for topic, payload, _ in sent
             ))
 
+class RollingBaselineServiceTests(unittest.TestCase):
+    def test_manual_tolerance_trains_24h_mean_and_auto_switches_to_new_threshold(self):
+        with tempfile.TemporaryDirectory() as temp:
+            clock = [600.0]
+            store = ActivityStore(Path(temp) / "activity.sqlite")
+            self.addCleanup(store.close)
+            service = MonitorService(
+                ZigbeeMonitor(parse_networks([{
+                    "network_id": "site", "base_topic": "z2m",
+                    "name": "zigbee2mqtt_2",
+                }])), store,
+                publish=lambda topic, payload, retain: True,
+                subscribe=lambda topic: True,
+                version="0.1.24", now=lambda: clock[0],
+            )
+            service.connected()
+            service.receive("z2m/bridge/devices", json.dumps([{
+                "ieee_address": "0x00158d0000000001",
+                "type": "Router", "friendly_name": "Test",
+            }]).encode(), retain=True)
+            service.receive("z2m/bridge/state", b"online", retain=True)
+            # Network once learned a too-high baseline; operator selected
+            # MANUAL 10. 9.41 MPM must now be HEALTHY, not DEGRADED.
+            store.save_rpm_baseline("site", 20.0, epoch=600)
+            store.update_network_problem_settings("site", auto=False, threshold=10)
+            rate = [9.41]
+            service._live_rpm = lambda nid, epoch: rate[0]
+            for minute in range(64):
+                clock[0] = float(600 + minute * 60)
+                service.tick()
+                self.assertEqual(service._network_fsm["site"].state, "HEALTHY")
+                self.assertEqual(service._traffic_metrics["site"]["threshold"], 10)
+                self.assertFalse(service._traffic_metrics["site"]["traffic_problem"])
+            self.assertAlmostEqual(store.rpm_baseline("site"), 9.41, places=2)
+            # A genuine drop below 90% of 10 remains abnormal. Ineligible
+            # minutes and a DEGRADED/CRITICAL interval must not retrain.
+            frozen = store.rpm_baseline("site")
+            rate[0] = 8.5
+            for minute in range(64, 71):
+                clock[0] = float(600 + minute * 60)
+                service.tick()
+            self.assertEqual(service._network_fsm["site"].state, "CRITICAL")
+            self.assertEqual(store.rpm_baseline("site"), frozen)
+            # Once operator returns to AUTO, the learned 24h baseline
+            # yields floor(9.41/2)=4, recovering the RPM-only incident.
+            store.update_network_problem_settings("site", auto=True)
+            clock[0] += 10
+            service._update_traffic(int(clock[0]))
+            self.assertEqual(service._traffic_metrics["site"]["threshold"], 4)
+            self.assertEqual(service._network_fsm["site"].state, "HEALTHY")
+
+
 class StoreContractTests(unittest.TestCase):
     def setUp(self):
         temp = tempfile.TemporaryDirectory()
