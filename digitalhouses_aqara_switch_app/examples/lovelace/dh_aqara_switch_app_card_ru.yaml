@@ -1,0 +1,73 @@
+# DigitalHouses Aqara Switch App · pilot status/control card
+# Requires Mushroom and custom:button-card. Never invents a successful scan.
+# Check Releases/Install controls are not shown until real version checking is ready.
+type: vertical-stack
+cards:
+  - type: custom:button-card
+    entity: sensor.dh_aqara_switch_app_card
+    show_icon: true
+    show_name: true
+    show_label: true
+    tap_action:
+      action: more-info
+    icon: |
+      [[[
+        const s = states['sensor.dh_aqara_switch_app_card']?.state;
+        return s === 'error' ? 'mdi:alert-circle'
+          : s === 'running' ? 'mdi:progress-clock'
+          : s === 'success' ? 'mdi:check-circle'
+          : 'mdi:light-switch';
+      ]]]
+    name: |
+      [[[
+        const v = states['sensor.dh_aqara_switch_app_version']?.state;
+        return 'DH Aqara Switch' + (v && !['unknown','unavailable'].includes(v) ? ' · v' + v : '');
+      ]]]
+    label: |
+      [[[
+        const ent = states['sensor.dh_aqara_switch_app_card'];
+        if (!ent || ['unknown','unavailable'].includes(ent.state)) return 'Нет связи с приложением';
+        const a = ent.attributes || {};
+        if (ent.state === 'running') return 'Сканирование…';
+        if (ent.state === 'error') return 'Ошибка: ' + (a.error || 'операция не выполнена');
+        if (ent.state === 'success') return 'Сканирование завершено';
+        const problems = states['sensor.dh_aqara_switch_app_problems']?.attributes?.count;
+        return typeof problems === 'number' && problems > 0
+          ? 'Проблемы выключателей: ' + problems
+          : 'Наблюдение MQTT · ожидание команды';
+      ]]]
+    styles:
+      card:
+        - padding: 14px
+      name:
+        - font-weight: 600
+      label:
+        - color: var(--secondary-text-color)
+  - type: custom:mushroom-chips-card
+    alignment: justify
+    chips:
+      - type: template
+        content: Сканировать
+        icon: mdi:radar
+        tap_action:
+          action: perform-action
+          perform_action: button.press
+          target:
+            entity_id: button.dh_aqara_switch_app_scan
+      - type: template
+        content: Перезапуск
+        icon: mdi:restart
+        tap_action:
+          action: perform-action
+          perform_action: hassio.app_restart
+          data:
+            app: digitalhouses_aqara_switch_app
+          confirmation:
+            title: Перезапуск Aqara Switch App
+            text: Перезапустить приложение? На время перезапуска мониторинг и сканирование будут недоступны.
+      - type: entity
+        entity: update.digitalhouses_aqara_switch_app_update
+        name: Обновление
+        icon: mdi:package-up
+        tap_action:
+          action: more-info

@@ -1,0 +1,16 @@
+# Problems card; never treats unverified devices as HEALTHY.
+type: markdown
+content: |-
+  {% set e = 'sensor.dh_aqara_switch_app_problems' %}
+  {% set active = state_attr(e, 'active') or [] %}
+  {% if states(e) != 'ready' %}
+  *Нет подтверждённых данных о проблемах.*
+  {% elif state_attr(e, 'count') == 0 %}
+  ✅ Проблем не обнаружено
+  {% else %}
+  **⚠️ Проблемы: {{ state_attr(e, 'count') }}**
+
+  {% for item in active %}
+  - {{ item.object_name | e }} — {{ item.category | e }}{% if item.reason %}: {{ item.reason | e }}{% endif %}
+  {% endfor %}
+  {% endif %}
