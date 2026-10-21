@@ -165,7 +165,18 @@ Install [the optional HA template lights package](examples/packages/dh_aqara_swi
 in the site's **actual loaded packages directory**, run `ha core check` and
 restart HA to register the virtual lights. The package creates three
 `light.dh_aqara_lab_*` fixtures backed by independent input_booleans.
+The LAB now provides **six independent virtual `template` lights**,
+backed by `input_boolean` (no Zigbee or physical relays). The three
+pre-existing light IDs are preserved; three more were added.
 See the [LAB Lovelace controls](examples/lovelace/dh_aqara_switch_app_lab_lights_ru.yaml).
+For a `type: sections` Lovelace view, add the
+[LAB six-light section](examples/lovelace/dh_aqara_switch_app_lab_section_ru.yaml).
+The canonical package example is
+[dh_aqara_switch_app_lab.yaml](examples/packages/dh_aqara_switch_app_lab.yaml).
+Install it in the **actual loaded HA packages directory**, validate with
+`ha core check`, and restart HA Core to load the new template entities.
+Do not create a second copy of the package. `input_boolean` state
+is restored by Home Assistant when no `initial` is set.
 The LAB package contains no physical relay control and is independent of this App.
 
 ## Safety and release
