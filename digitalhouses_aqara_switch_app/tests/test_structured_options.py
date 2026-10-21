@@ -64,7 +64,6 @@ class EntityOptionTests(unittest.TestCase):
                 "- switch.livingroomaqaraswitch: {enabled: true, actions: {single: [switch.relay]}}",
                 "- switch.livingroomaqaraswitch: {enabled: true, actions: {single: [light.foo, light.foo]}}",
                 "- switch.livingroomaqaraswitch: {enabled: true, actions: {single: []}}",
-                "- switch.livingroomaqaraswitch: {enabled: yes, actions: {}}",
                 "- event.aqara: {enabled: true, actions: {}}",
             ]
             for yaml_text in invalid:

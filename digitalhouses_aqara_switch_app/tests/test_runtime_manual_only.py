@@ -37,7 +37,7 @@ class FakeClient:
 class RuntimeManualTests(unittest.TestCase):
     def test_startup_never_scans_or_writes_options(self):
         options=Mock()
-        options.read.return_value={"configuration_yaml":"rooms: []\n"}
+        options.read.return_value={"switches":"[]"}
         registry=Mock()
         with tempfile.TemporaryDirectory() as td:
             app=Application(types.SimpleNamespace(Client=FakeClient),options=options,
