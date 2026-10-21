@@ -83,7 +83,22 @@ CREATE TABLE IF NOT EXISTS network_agent_policy (
 CREATE TABLE IF NOT EXISTS network_problem_settings (
     network_id TEXT PRIMARY KEY NOT NULL,
     auto_rpm_threshold INTEGER NOT NULL DEFAULT 1 CHECK(auto_rpm_threshold IN (0,1)),
-    manual_rpm_threshold INTEGER NOT NULL DEFAULT 10 CHECK(manual_rpm_threshold BETWEEN 1 AND 10000)
+    manual_rpm_threshold INTEGER NOT NULL DEFAULT 10 CHECK(manual_rpm_threshold BETWEEN 0 AND 10000)
+);
+-- Recorder-independent per-network RPM at one row per observed minute.
+-- Missing observation differs from an observed zero; no synthetic gap filling.
+CREATE TABLE IF NOT EXISTS network_rpm_minutes (
+    network_id TEXT NOT NULL,
+    minute_start INTEGER NOT NULL CHECK(minute_start >= 0),
+    rpm REAL,
+    valid INTEGER NOT NULL CHECK(valid IN (0,1)),
+    healthy INTEGER NOT NULL CHECK(healthy IN (0,1)),
+    PRIMARY KEY(network_id,minute_start)
+);
+CREATE TABLE IF NOT EXISTS network_rpm_baselines (
+    network_id TEXT PRIMARY KEY NOT NULL,
+    baseline REAL NOT NULL CHECK(baseline >= 0),
+    updated_at INTEGER NOT NULL CHECK(updated_at >= 0)
 );
 CREATE UNIQUE INDEX IF NOT EXISTS incidents_one_open_per_object
     ON incidents(kind, network_id, object_id) WHERE resolved_at IS NULL;
@@ -107,6 +122,31 @@ class ActivityStore:
         self.conn = sqlite3.connect(str(self.path), timeout=10.0, check_same_thread=False)
         self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.executescript(_SCHEMA)
+        # Earlier installations have a CHECK(1..10000); rebuild this small
+        # settings table in place, retaining every site's AUTO/MANUAL choices.
+        ddl_row = self.conn.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' "
+            "AND name='network_problem_settings'"
+        ).fetchone()
+        if ddl_row and "BETWEEN 1 AND 10000" in str(ddl_row[0]):
+            with self.conn:
+                self.conn.execute(
+                    "ALTER TABLE network_problem_settings RENAME TO "
+                    "network_problem_settings_legacy"
+                )
+                self.conn.execute(
+                    "CREATE TABLE network_problem_settings ("
+                    "network_id TEXT PRIMARY KEY NOT NULL,"
+                    "auto_rpm_threshold INTEGER NOT NULL DEFAULT 1 "
+                    "CHECK(auto_rpm_threshold IN (0,1)),"
+                    "manual_rpm_threshold INTEGER NOT NULL DEFAULT 10 "
+                    "CHECK(manual_rpm_threshold BETWEEN 0 AND 10000))"
+                )
+                self.conn.execute(
+                    "INSERT INTO network_problem_settings "
+                    "SELECT * FROM network_problem_settings_legacy"
+                )
+                self.conn.execute("DROP TABLE network_problem_settings_legacy")
         self.conn.commit()
 
     def close(self) -> None:
@@ -450,9 +490,9 @@ class ActivityStore:
         if auto is not None and not isinstance(auto, bool):
             raise ValueError("auto must be boolean")
         if threshold is not None and (
-            type(threshold) is not int or not 1 <= threshold <= 10000
+            type(threshold) is not int or not 0 <= threshold <= 10000
         ):
-            raise ValueError("RPM threshold must be integer 1..10000")
+            raise ValueError("RPM threshold must be integer 0..10000")
         old_auto, old_threshold = self.network_problem_settings(network_id)
         effective_auto = old_auto if auto is None else auto
         effective_threshold = old_threshold if threshold is None else threshold
@@ -547,6 +587,118 @@ class ActivityStore:
                 """,
                 recent,
             )
+
+    def rpm_baseline(self, network_id: str) -> float | None:
+        row = self.conn.execute(
+            "SELECT baseline FROM network_rpm_baselines WHERE network_id=?",
+            (network_id,),
+        ).fetchone()
+        return float(row[0]) if row else None
+
+    def save_rpm_baseline(self, network_id: str, baseline: float, *, epoch: int) -> None:
+        import math
+        if not math.isfinite(baseline) or baseline < 0 or epoch < 0:
+            raise ValueError("invalid trusted RPM baseline")
+        with self.conn:
+            self.conn.execute(
+                "INSERT INTO network_rpm_baselines(network_id,baseline,updated_at) "
+                "VALUES (?,?,?) ON CONFLICT(network_id) DO UPDATE SET "
+                "baseline=excluded.baseline,updated_at=excluded.updated_at",
+                (network_id, baseline, epoch),
+            )
+
+    def record_rpm_minute(
+        self, network_id: str, *, minute_start: int,
+        rpm: float | None, healthy: bool,
+    ) -> None:
+        """One bounded sample/minute, not an MQTT-packet log."""
+        import math
+        if minute_start < 0 or minute_start % 60:
+            raise ValueError("invalid minute_start")
+        if rpm is not None and (not math.isfinite(rpm) or rpm < 0):
+            raise ValueError("invalid RPM sample")
+        with self.conn:
+            self.conn.execute(
+                "INSERT INTO network_rpm_minutes"
+                "(network_id,minute_start,rpm,valid,healthy) VALUES (?,?,?,?,?) "
+                "ON CONFLICT(network_id,minute_start) DO UPDATE SET "
+                "rpm=excluded.rpm,valid=excluded.valid,healthy=excluded.healthy",
+                (network_id,minute_start,rpm,int(rpm is not None),
+                 int(healthy and rpm is not None)),
+            )
+
+    def healthy_hour_baseline(
+        self, network_id: str, *, until_epoch: int,
+    ) -> float | None:
+        """Minimum *complete healthy* UTC hour in the last 24 finished hours."""
+        until = until_epoch - until_epoch % 3600
+        start = max(0, until - 24 * 3600)
+        rows = self.conn.execute(
+            "SELECT minute_start,rpm,valid,healthy FROM network_rpm_minutes "
+            "WHERE network_id=? AND minute_start>=? AND minute_start<? "
+            "ORDER BY minute_start", (network_id,start,until),
+        ).fetchall()
+        hours: dict[int,list[tuple[int,float | None,int,int]]] = {}
+        for minute,rpm,valid,healthy in rows:
+            hours.setdefault(int(minute)//3600, []).append(
+                (int(minute),rpm,int(valid),int(healthy))
+            )
+        candidates = []
+        for hour, samples in hours.items():
+            if (len(samples) == 60 and
+                    {m for m,_,_,_ in samples} ==
+                    set(range(hour*3600,(hour+1)*3600,60)) and
+                    all(valid and healthy and rpm is not None
+                        for _,rpm,valid,healthy in samples)):
+                candidates.append(sum(float(rpm) for _,rpm,_,_ in samples) / 60)
+        return round(min(candidates),2) if candidates else None
+
+    def weekly_rpm_summary(
+        self, network_id: str, *, until_epoch: int,
+    ) -> dict[str, object]:
+        """168 hourly and seven contiguous 24h summaries with explicit coverage."""
+        end = (until_epoch//3600 + 1) * 3600
+        start = max(0,end - 168*3600)
+        raw = self.conn.execute(
+            "SELECT minute_start,rpm,valid,healthy FROM network_rpm_minutes "
+            "WHERE network_id=? AND minute_start>=? AND minute_start<? "
+            "ORDER BY minute_start", (network_id,start,end),
+        ).fetchall()
+        slots: dict[int,list[tuple[float,int]]] = {}
+        for minute,rpm,valid,healthy in raw:
+            if valid and rpm is not None:
+                slots.setdefault(int(minute)//3600*3600,[]).append(
+                    (float(rpm),int(healthy))
+                )
+        def summarize(t: int, values: list[tuple[float,int]],
+                      required: int) -> dict[str,object]:
+            readings = [value for value,_ in values]
+            return {
+                "t":t, "min":round(min(readings),2) if readings else None,
+                "avg":round(sum(readings)/len(readings),2) if readings else None,
+                "max":round(max(readings),2) if readings else None,
+                "c":len(values), "ok":len(values)==required and
+                all(healthy for _,healthy in values),
+            }
+        hours = [summarize(t,slots.get(t,[]),60)
+                 for t in range(start,end,3600)]
+        days = []
+        for index in range(7):
+            t = start + index*86400
+            values = [point for hour in range(t,t+86400,3600)
+                      for point in slots.get(hour,[])]
+            day = summarize(t,values,1440)
+            day["healthy_hours"] = sum(
+                1 for hour in hours[index*24:(index+1)*24] if hour["ok"]
+            )
+            days.append(day)
+        return {
+            "state":"ready", "network_id":network_id,
+            "hours":hours, "days":days,
+            "coverage_minutes":sum(int(h["c"]) for h in hours),
+            "expected_minutes":10080, "time_basis":"UTC",
+            "day_window":"contiguous_24h",
+        }
 
     def top(
         self,
