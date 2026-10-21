@@ -1,5 +1,21 @@
 # Changelog — DigitalHouses Aqara Switch App
 
+## 0.1.2
+
+- MVP: explicit Scan is Adopt of new Aqara switches and captures confirmed
+  writable mode/settings values as immutable baseline in Supervisor Options.
+- Mode Keeper observes newly reported drift and requests restoration of only
+  those adopted writable configuration keys, with a 60s minimum retry spacing.
+  Never rewrites a physical ON/OFF output or sets unknown settings.
+- Bound event Dispatcher: accepts non-retained matching Aqara action only for
+  the saved coordinator/IEEE/profile; serially calls HA light.toggle for one
+  explicitly configured light entity. Ignores unbound, duplicate/replayed and
+  non-Aqara events.
+- HA diagnostic last_action sensor: queued, accepted (HA call), error.
+  Accepted is NOT proof that the target light physically changed state.
+- No Zigbee group verification, automatic assignment, HA UI binding editor,
+  power recovery, or automatic physical relay control in this MVP.
+
 ## 0.1.1
 
 - First executable manual-scan Home Assistant App pilot; boot remains manual.
