@@ -48,7 +48,7 @@ class ZigbeeTreeRenderTests(unittest.TestCase):
                 "power_switch": "", "healer_method": "disabled",
             },
             "management_ip": "192.168.11.40", "ping": "reachable",
-            "status": "online", "devices": 7, "online": 6, "offline": 1,
+            "status": "online", "fsm": "HEALTHY", "devices": 7, "online": 6, "offline": 1,
             "availability_unknown": 0, "rpm": 17.4, "threshold": 10,
             "infrastructure_seen": True, "problem_active": problems or [],
             "problem_unknown": unknown or [],
@@ -90,8 +90,8 @@ class ZigbeeTreeRenderTests(unittest.TestCase):
         self.assertEqual(lines[0], "\\")
         branches = [line for line in lines[1:] if re.match(r"^[├└]─ ", line)]
         self.assertEqual(branches, [
-            "├─ 🟩 zigbee2mqtt", "├─ 🟩 zigbee2mqtt_office",
-            "└─ 🟩 zigbee2mqtt_floor2",
+            "├─ 🟩 zigbee2mqtt · HEALTHY", "├─ 🟩 zigbee2mqtt_office · HEALTHY",
+            "└─ 🟩 zigbee2mqtt_floor2 · HEALTHY",
         ])
         self.assertEqual(sum("📡 Repeaters: 5" in x for x in lines), 1)
         self.assertEqual(sum("📡 Repeaters: 0" in x for x in lines), 2)
@@ -104,7 +104,7 @@ class ZigbeeTreeRenderTests(unittest.TestCase):
     def test_single_z2m_ends_root_without_repeaters(self):
         rendered = self.render([self.network("zigbee2mqtt")], [])
         lines = self.tree_lines(rendered)
-        self.assertEqual(lines[:2], ["\\", "└─ 🟩 zigbee2mqtt"])
+        self.assertEqual(lines[:2], ["\\", "└─ 🟩 zigbee2mqtt · HEALTHY"])
         self.assertTrue(any(x.startswith("   ├─ 🏷️ Тип: 👑 Координатор") for x in lines))
         self.assertIn("💓 Pulse: 17.4 MPM (10)", rendered)
         self.assertIn("🌐 IP: 192.168.11.40 ✅", rendered)
