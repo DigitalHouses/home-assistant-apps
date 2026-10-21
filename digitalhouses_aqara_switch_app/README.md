@@ -75,6 +75,12 @@ their backends are available; no fake buttons are presented. The tree is
 currently read-only; click-through editing and confirmed deletion are not yet
 implemented.
 
+## Passive occupied-site logging (experimental)
+
+A standalone [one-group MQTT observer](examples/tests/passive_group_observer_ru.md)
+is available for collecting logs without changing live illumination. It is
+not a published or installed HA App and all states remain unverified.
+
 ## Virtual home LAB
 
 Install [the optional HA template lights package](examples/packages/dh_aqara_switch_app_lab.yaml)
