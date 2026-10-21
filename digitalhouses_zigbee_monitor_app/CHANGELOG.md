@@ -2,6 +2,10 @@
 
 ## 0.1.20
 
+- Remove obsolete Zigbee2MQTT configuration-file probe and its `config_access`
+  diagnostic entity. All Zigbee2MQTT data comes from MQTT; keep only the
+  independent read-only HA Device Registry lookup for verified device links.
+
 - Per-network and global four-state infrastructure FSM: BOOTING, HEALTHY,
   DEGRADED, CRITICAL; preserved, recorder-visible entities and transient
   machine events published after retained FSM states.
