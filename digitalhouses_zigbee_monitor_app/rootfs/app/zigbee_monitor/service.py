@@ -80,6 +80,10 @@ class MonitorService:
         self._global_fsm_published: str | None = None
         self._minute_ineligible: set[tuple[str, int]] = set()
         self._rpm_sample_minute: int | None = None
+        # The completed UTC minute must contain the *last sample obtained
+        # inside that minute*, never the sample measured after rollover.
+        self._rpm_last_minute: dict[str, tuple[int, float | None, bool]] = {}
+        self._rpm_completed: dict[str, tuple[int, float | None, bool]] = {}
         self._traffic_started: dict[str, float] = {}
         self._traffic_metrics: dict[str, dict[str, object]] = {}
         # Preliminary per-network session RPM uses only fresh device MQTT.
@@ -296,6 +300,8 @@ class MonitorService:
             self._fsm_published.clear()
             self._global_fsm_published = None
             self._rpm_sample_minute = None
+            self._rpm_last_minute.clear()
+            self._rpm_completed.clear()
             self._minute_ineligible.clear()
             for fsm in self._network_fsm.values():
                 fsm.low_since = None
@@ -344,6 +350,10 @@ class MonitorService:
         with self._lock:
             self._connected = False
             self._continuous_since = None
+            self._rpm_sample_minute = None
+            self._rpm_last_minute.clear()
+            self._rpm_completed.clear()
+            self._minute_ineligible.clear()
             self._published.clear()
             self._valid.clear()
             self._event_bridge_state.clear()
@@ -582,30 +592,37 @@ class MonitorService:
             self._emit_event(event_type, **fields)
 
     def _record_rpm_samples(self, epoch: int) -> None:
-        """At most one row per completed minute; skipped minutes remain gaps."""
+        """Write completed minutes with their own last observation, never next-minute RPM.
+
+        Real gaps remain missing; an actually observed zero is persisted as zero.
+        A single unhealthy observation invalidates eligibility for the entire
+        preceding minute, independent of any later recovery.
+        """
         minute = epoch // 60
         previous = self._rpm_sample_minute
         self._rpm_sample_minute = minute
         if previous is None or previous != minute - 1:
+            self._rpm_completed.clear()
             self._minute_ineligible = {
                 item for item in self._minute_ineligible if item[1] >= minute
             }
             return
         for network in self.monitor.networks:
             nid = network.network_id
-            metrics = self._traffic_metrics.get(nid, {})
-            rpm = metrics.get("rpm")
+            completed = self._rpm_completed.pop(nid, None)
+            if completed is None or completed[0] != previous:
+                continue
+            _, rpm, was_healthy = completed
             valid = isinstance(rpm, (int, float)) and not isinstance(rpm, bool)
-            healthy = (valid and
-                       self._network_fsm[nid].state == "HEALTHY" and
+            healthy = (valid and was_healthy and
                        (nid, previous) not in self._minute_ineligible)
             self.store.record_rpm_minute(
                 nid, minute_start=previous * 60,
                 rpm=float(rpm) if valid else None,
                 healthy=bool(healthy),
             )
-            # An initial zero seed is temporary: replace it with a minimum
-            # of *complete* healthy hours whenever such observations exist.
+            # The current FSM does not matter for historical samples.
+            # Nevertheless, baseline is frozen while a current fault exists.
             hourly = self.store.healthy_hour_baseline(nid, until_epoch=epoch)
             if hourly is not None and self._network_fsm[nid].state == "HEALTHY":
                 current = self.store.rpm_baseline(nid)
@@ -688,6 +705,16 @@ class MonitorService:
             }
             if fsm.state != "HEALTHY" or low:
                 self._minute_ineligible.add((nid, epoch // 60))
+            # At the UTC boundary retain the last sample of the *finished*
+            # minute before replacing the live metric with this minute's one.
+            current_minute = epoch // 60
+            last = self._rpm_last_minute.get(nid)
+            if last is not None and last[0] != current_minute:
+                self._rpm_completed[nid] = last
+            self._rpm_last_minute[nid] = (
+                current_minute, float(rpm) if rpm is not None else None,
+                fsm.state == "HEALTHY",
+            )
         self._publish_fsm(allow_event=allow_event)
 
     def _publish_problems(self, *, allow_event: bool) -> None:
