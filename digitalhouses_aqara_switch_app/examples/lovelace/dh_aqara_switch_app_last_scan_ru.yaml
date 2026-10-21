@@ -1,0 +1,26 @@
+# Last manual scan, persisted by Python in /data/last_scan.json.
+type: markdown
+content: |-
+  {% set e = 'sensor.dh_aqara_switch_app_scan_details' %}
+  {% set a = state_attr(e, 'added') or [] %}
+  {% set skipped = state_attr(e, 'skipped') or [] %}
+  {% set p = state_attr(e, 'problems') or [] %}
+  {% if states(e) != 'ready' %}
+  *Сканирование ещё не выполнялось или нет данных.*
+  {% else %}
+  **Последнее сканирование**
+
+  Время: {{ state_attr(e, 'completed_at') or '—' }}
+
+  **Найдено: {{ state_attr(e, 'scanned') }} · Добавлено: {{ a | count }} · Пропущено: {{ skipped | count }} · Ошибок: {{ p | count }}**
+
+  {% for item in a %}
+  - ✅ {{ item.name | e }} · HA Area: {{ (item.area_id or 'не назначена') | e }}
+  {% endfor %}
+  {% for name in skipped %}
+  - ➖ {{ name | e }} · уже в конфигурации
+  {% endfor %}
+  {% for item in p %}
+  - ⚠️ {{ (item.name or '?') | e }} · {{ (item.reason or 'ошибка') | e }}
+  {% endfor %}
+  {% endif %}

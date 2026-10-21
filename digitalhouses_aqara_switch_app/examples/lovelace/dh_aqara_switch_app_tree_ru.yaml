@@ -1,0 +1,40 @@
+# One read-only tree, analogous to DigitalHouses Zigbee Monitor App.
+# Business logic is in Python; no UI-owned state or config writes.
+type: markdown
+content: |-
+  {% set entity = 'sensor.dh_aqara_switch_app_devices_details' %}
+  {% set rooms = state_attr(entity, 'rooms') or [] %}
+  {% if states(entity) != 'ready' %}
+  *Нет подтверждённых данных от Aqara Switch App.*
+  {% elif rooms | count == 0 %}
+  *Выключатели пока не импортированы. Нажмите «Сканировать».*
+  {% else %}
+  **Aqara · Комнат: {{ rooms | count }}**
+
+  <pre>
+  {% for room in rooms -%}
+  {{ '└─' if loop.last else '├─' }} 🏠 {{ room.name | e }} ({{ room.switches | count }})
+  {% set tab = '   ' if loop.last else '│  ' -%}
+  {% for device in room.switches -%}
+  {% set state = device.runtime.status if device.runtime is defined else 'unknown' -%}
+  {{ tab }}{{ '└─' if loop.last else '├─' }} {{ '🟢' if state == 'same' else '🟠' if state in ['unverified', 'replacement', 'settings_mismatch'] else '🔴' if state == 'incompatible' else '⚪' }} {{ device.logical_name | e }} · {{ state | e }}
+  {% set inner = tab ~ ('   ' if loop.last else '│  ') -%}
+  {{ inner }}├─ ⚙️ Модель: {{ device.fingerprint.model | e }}
+  {{ inner }}├─ 🔘 Нажатия: {{ (device.fingerprint.actions | join(', ')) | e }}
+  {{ inner }}├─ 🎛️ Режимы:
+  {% for key, value in device.settings.items() -%}
+  {{ inner }}│  {{ '└─' if loop.last else '├─' }} {{ key | e }}: {{ value | string | e }}
+  {% else -%}
+  {{ inner }}│  └─ Нет режимов реле (кнопка/панель)
+  {% endfor -%}
+  {{ inner }}├─ 💡 Назначения:
+  {% for key, bind in device.bindings.items() -%}
+  {{ inner }}│  {{ '└─' if loop.last else '├─' }} {{ key | e }} → {{ (bind.action if bind.action is defined else 'не задано') | e }} · {{ ((bind.targets or []) | join(', ')) | e }}
+  {% else -%}
+  {{ inner }}│  └─ Не назначены
+  {% endfor -%}
+  {{ inner }}└─ 🔌 Щитовое реле: {{ (device.panel_relay or 'не указано') | e }}
+  {% endfor -%}
+  {% endfor -%}
+  </pre>
+  {% endif %}

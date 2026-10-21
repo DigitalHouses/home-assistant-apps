@@ -1,58 +1,86 @@
 # DigitalHouses Aqara Switch App
 
-**Status: experimental, inert scaffold — not a functional release.** The source directory exists to establish the canonical product and its architecture. It currently does not scan Zigbee2MQTT, handle MQTT actions, write device modes, or control Home Assistant. Keep legacy AQPM2 operational until the separately tested cutover.
+**v0.1.1 — experimental manual-scan pilot; no physical relay or lighting control.**
 
-## Purpose and scope
+This Home Assistant App supports the commissioning flow for Aqara wired switches,
+battery buttons and key panels. It does **not** implement a general automation
+engine. This pilot imports configuration only; Mode Keeper, Maintenance Mode,
+target dispatch and UI deletion are subsequent gated milestones.
 
-Declarative mapping of **physical Aqara button/key actions to HA targets**, supporting wired switches, battery buttons, wireless keypads and panels. Supported targets will include lighting, groups, covers, switches, scenes and HA scripts. Compatible wired devices will additionally support Mode Keeper and a controlled Maintenance Mode for pairing/servicing. This is **not** a general automation engine or Zigbee network monitor.
+## Installation and prerequisites
 
-## Requirements agreed for implementation
+- Home Assistant OS with Supervisor and MQTT service (e.g. Mosquitto).
+- Zigbee2MQTT on the same broker, publishing retained `bridge/info` and `bridge/devices`.
+- Home Assistant Device Registry + Area Registry for accurate room membership.
+- This is an **experimental source-built version** with **manual boot**; no
+  immutable released GHCR image yet. Keep AQPM2 as the only active controller.
 
-- **Scan** is launched only by an explicit user action from the HA UI. No startup scan, background scan or periodic scan.
-- The authoritative device inventory, capabilities and actual device settings come from **Zigbee2MQTT MQTT**.
-- Rooms come from **Home Assistant Area Registry**, resolved through its Device Registry, not guessed from Zigbee friendly names.
-- A scan is **idempotent and append-only**: add previously unknown devices; skip *all* existing configured devices without modifications.
-- Identity is **coordinator IEEE + device IEEE**, not the device friendly name.
-- The **Supervisor App Options** hold the user-editable room/device/key-action bindings and desired device modes. HA template passports are removed.
-- Dispatcher interprets only configured supported key actions and executes their corresponding HA commands.
-- Mode Keeper enforces saved relay settings where supported, and Maintenance Mode temporarily overrides eligible modes without rewriting saved settings, then restores each device's individually configured state.
-- A battery device without relays is a pure input device. Never fabricate relays, keys, actions, capabilities or successful commands.
-- Do not modify the old AQPM2 controller or allow overlapping dispatchers before E2E migration acceptance.
+## Configure and scan
 
-## Environment and upgrade contract
+The **only editable source of truth** is the App's Supervisor Options.
+`configuration_yaml` contains the nested tree `rooms → switches` in one
+YAML text field because Supervisor does not support deeper structured fields.
+Initially it is:
 
-This App is intended for HAOS Supervisor, MQTT and Zigbee2MQTT; Home Assistant supplies Area/Device Registries and execution of configured targets. Python logic lives in `rootfs/app/`, persistent state will live under `/data`. No private household bindings are committed.
+```yaml
+rooms: []
+```
 
-**This stage is a source-only scaffold with manual boot and no GHCR release**. Do not deploy it as a working controller. Future production versions will use the immutable image and release workflow required by repository standards.
+The runtime only listens to MQTT upon startup. It does not import any device
+until `button.dh_aqara_switch_app_scan` is pressed in Home Assistant.
+Scan requires a verified coordinator and Zigbee2MQTT inventory and captures
+*confirmed* MQTT settings. Missing physical parameters cause a visible scan
+problem; this release does **not** ask Zigbee devices to change or report state.
 
-See [DOCS.md](DOCS.md) for the design contract, and [DigitalHouses standards](../docs/README.md).
+Only new logical devices are appended to Supervisor Options. Existing entries,
+bindings, room allocation and mode snapshots are **never overwritten** by Scan.
+A registered logical device is identified by coordinator IEEE and its configured
+Zigbee2MQTT friendly_name. New physical IEEE with the same name is compared
+against the saved structural fingerprint and flagged when incompatible.
+**No automatic relay restoration occurs in this pilot.**
 
-## First development milestone: pure contract + virtual HA lights
+## Home Assistant UI
 
-The repository now contains **tested, read-only** Python modules `aqara_switch.catalog`
-and `aqara_switch.actions`. They validate Zigbee2MQTT device descriptions,
-capture only confirmed MQTT settings, implement append-only manual-scan merge,
-verify exact replacement compatibility, and map button events into a safe,
-allowlisted **plan** for Home Assistant service calls. These functions are not
-connected to the runtime yet and **do not** send MQTT or HA commands.
+Examples under [examples/lovelace](examples/lovelace/):
+- [Status / Scan / Supervisor restart card](examples/lovelace/dh_aqara_switch_app_card_ru.yaml)
+- [Room → switch → actions/settings tree](examples/lovelace/dh_aqara_switch_app_tree_ru.yaml)
+- [Last Scan report](examples/lovelace/dh_aqara_switch_app_last_scan_ru.yaml)
+- [Device problem overview](examples/lovelace/dh_aqara_switch_app_problems_ru.yaml)
 
-For a physical-free acceptance stand, copy
-[the LAB virtual light package](examples/packages/dh_aqara_switch_app_lab.yaml)
-to your active HA packages directory and review the three template lights.
-The example [Lovelace LAB card](examples/lovelace/dh_aqara_switch_app_lab_lights_ru.yaml)
-controls them manually. Verify actual entity IDs in Developer Tools; if the
-IDs are occupied by an older entity, HA may add a numeric suffix.
-**Do not deploy or overwrite a site-local HA package automatically.**
+The pilot status card has working Scan and Supervisor Restart controls. Full
+DigitalHouses release check, Refresh and Install chips are deferred until
+their backends are available; no fake buttons are presented. The tree is
+currently read-only; click-through editing and confirmed deletion are not yet
+implemented.
 
-The user's home Zigbee2MQTT inventory has **not** been read: access to the
-home HA runtime is not currently available. The remembered Aqara button is a
-candidate for a later real-MQTT test, not a confirmed device.
+## Virtual home LAB
 
-## Developer verification
+Install [the optional HA template lights package](examples/packages/dh_aqara_switch_app_lab.yaml)
+in the site's **actual loaded packages directory**, run `ha core check` and
+restart HA to register the virtual lights. The package creates three
+`light.dh_aqara_lab_*` fixtures backed by independent input_booleans.
+See the [LAB Lovelace controls](examples/lovelace/dh_aqara_switch_app_lab_lights_ru.yaml).
+The LAB package contains no physical relay control and is independent of this App.
 
-```bash
-python -m compileall -q digitalhouses_aqara_switch_app/rootfs/app digitalhouses_aqara_switch_app/tests
+## Safety and release
+
+Product telemetry remains unadmitted (`telemetry_allowed=false`) while this is
+an experimental, source-only pilot. No release is claimed, and this is not
+installed in the user's home automatically. The live Aqara button and MQTT
+configuration must be inspected during on-site testing.
+
+Future milestones: reliable HA device binding, delete-with-confirmation in HA,
+binding assignment, safe Dispatcher on virtual lights, then Mode Keeper and
+Maintenance Mode with physically separate acceptance.
+
+See [DOCS.md](DOCS.md) for contract and [DigitalHouses standards](../docs/README.md).
+
+## Local verification
+
+```sh
+PYTHONPATH=digitalhouses_aqara_switch_app/rootfs/app \
 python -m unittest discover -s digitalhouses_aqara_switch_app/tests -v
+python -m compileall -q digitalhouses_aqara_switch_app/rootfs/app
 bash -n digitalhouses_aqara_switch_app/rootfs/run.sh
 python scripts/validate_repository.py
 ```

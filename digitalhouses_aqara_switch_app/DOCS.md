@@ -1,62 +1,62 @@
-# DigitalHouses Aqara Switch App — Design Contract
+# DigitalHouses Aqara Switch App — Design & Pilot Contract
 
-**Design specification, not yet implemented.** Version `0.1.0` establishes only a testable, inert scaffold.
+Version `0.1.1` is an **experimental manual-scan pilot**. It observes
+Zigbee2MQTT MQTT, reads Home Assistant Device/Area Registry through the
+Supervisor WebSocket proxy, and persists new devices into **own Supervisor
+App Options** only when Scan is explicitly pressed. No physical device writes.
 
-## Source boundaries
+## Sources of truth
 
-- Product ID: `digitalhouses_aqara_switch_app`; HA entity prefix: `dh_aqara_switch_app`.
-- Zigbee2MQTT MQTT: authoritative network/coordinator identity, device IEEE, model, available action capabilities and confirmed physical settings.
-- Home Assistant Device Registry + Area Registry: authoritative room membership at first import. An unknown Area is shown as **Unassigned** in App configuration; never create a fake HA Area.
-- Supervisor App Options: user-owned mapping `room -> device -> key / key-combination -> supported event -> action -> targets`, and saved desired physical modes.
-- No HA template passports, inferred areas from `friendly_name`, or site-specific hard-coded bindings.
+- Zigbee2MQTT MQTT retained `bridge/info` and `bridge/devices` + actual
+  MQTT state: verified network IEEE, devices, capabilities and actual settings.
+- Home Assistant Area and Device Registries: room for new devices only.
+- `configuration_yaml` in Supervisor App Options: one editable
+  `rooms → switches` tree containing modes, key bindings, logical identity
+  and optional `panel_relay` references to entities like
+  `switch.tongou_livingroom_lights`. Phases/circuit geometry belong to
+  a separate Tongou App.
+- Per-site physical entities are never hardcoded in public code.
 
-## Explicit scan
+## Manual Scan and replacement
 
-1. A user presses the future HA UI **Scan** control. It is a distinct foreground operation, not general Refresh and not invoked at startup or on a timer.
-2. Discover multiple Zigbee2MQTT instances, verifying the coordinator IEEE. Enumerate **Aqara input devices** with proven action capabilities, including wired and battery switches/panels.
-3. Resolve only *new* identity pairs (coordinator IEEE, device IEEE) against HA registries. Retrieve device capabilities/confirmed settings only from MQTT; never invent missing values.
-4. Re-read App Options immediately before writing; merge **new** identities only. For an existing entry, do not change the room, name, model, modes, targets or actions.
-5. Never remove missing devices. Preserve user edits on conflicts; if a safe merge is impossible, abort and report an explicit error.
-6. Publish real counts: scanned / newly added / skipped / errors. Button and operation-state sensors follow DigitalHouses Operation UI Standard.
+1. Start App manually. Listening to bridge snapshots is **not** importing.
+2. Home Assistant button `button.dh_aqara_switch_app_scan` sends one
+   non-retained MQTT SCAN request, never on startup or a timer.
+3. Confirm bridge coordinator from both retained `info` and `devices`.
+4. Collect device metadata, supported actions, writable physical mode keys
+   and only state values actually observed in device MQTT messages.
+5. Read HA Device/Area Registries via Supervisor proxy, matching exact Zigbee
+   IEEE connections or MQTT identifier. Unknown HA area => Unassigned.
+6. Re-read own App Options just before merging; **append only new** devices.
+   Do not change existing names, settings, key assignments or rooms.
+7. Publish accepted new names/skipped/errors and persist the last scan report
+   in `/data/last_scan.json`.
 
-## Dispatcher
+Logical identity is coordinator IEEE + Zigbee2MQTT friendly name.
+Physical IEEE may change during replacement. Compatible replacement
+requires an exact match of model, actions, exposed settings and relay channels.
+An incompatible replacement is a visible problem and blocks restoration.
+Runtime snapshots show `unverified`, `incompatible`, `replacement`, or
+`settings_mismatch`, not a fabricated OK state.
 
-- Consume configured MQTT button/action topics only.
-- Execute declaratively bound, allowlisted Home Assistant actions (lights, groups, fans, covers, switches, scripts, scenes); never provide generic conditional workflows.
-- Do not offer actions unsupported by the device. Command accepted is distinct from confirmed physical state.
-- Exactly one dispatcher must be active per device during legacy AQPM2 migration.
+## HA UI
 
-## Mode Keeper and Maintenance Mode
+- `sensor.dh_aqara_switch_app_card` is the foreground operation state.
+- `button.dh_aqara_switch_app_scan` is a dedicated command.
+- `sensor.dh_aqara_switch_app_scan_state` has `idle|updating|error`.
+- `sensor.dh_aqara_switch_app_scan_details` stores the latest report.
+- `sensor.dh_aqara_switch_app_devices_details` drives the Lovelace tree.
+- `sensor.dh_aqara_switch_app_problems` lists observed identity and
+  settings faults.
+- The default card is read-only apart from Scan and Supervisor Restart.
+  UI never performs device writes by templating.
 
-- In **Normal**, keep supported physical device settings aligned with **user-owned** configuration.
-- In **Maintenance**, eligible relay keys temporarily use physical relay control for servicing or lamp pairing; suspend conflicting button dispatch for those keys. Do **not** modify saved user settings.
-- On exit, **restore the exact per-key configured mode**, not blindly all keys to decoupled (a defect in legacy AQPM2).
-- Never invoke unsupported relay commands on battery-only devices.
-- Maintenance state and recovery across application/device restart must be persisted and validated before implementing physical writes.
-- If restoration is unconfirmed, surface a problem. Do not report success.
+## Strictly pending
 
-## UI and observability
+The Dispatcher planning module is pure and does not call HA.
+Mode Keeper, Maintenance Mode, user-confirmed deletion links, assign-binding
+UI and successful button → virtual-light end-to-end must be implemented later.
+Do not enable a second physical controller until QA and explicit cutover.
 
-Future HA UI: single product status card, explicit Scan action and result, grouped areas/devices and key bindings, maintenance controls where supported, diagnostics and problem sensor. Supervisor owns App install/restart; UI has no business logic or invented states. Adhere to repository Manual Refresh, Operation UI, Product Status Card, Contract Data and Events/Notifications standards. App emits machine events only; local HA decides notification text and delivery.
-
-## Release and safety gate
-
-This scaffold intentionally has **no active MQTT subscriptions or commands**. It is registered with `telemetry_allowed=false` and `release=null` until the release and privacy contracts are implemented. A source Docker build is for CI validation only; no published production GHCR image. Tests for the eventual runtime must cover idempotence, HA Areas, multi-Z2M identity, relay-mode restoration, failure recovery, event mapping and single-controller migration.
-
-## Current work in progress: first testable code
-
-This revision adds:
-- Pure `aqara_switch.catalog`: parse MQTT Zigbee2MQTT exposes, reject unknown
-  physical setting values rather than fabricate defaults, idempotent append-only
-  room/switch merge with HA Area lookup injected by caller.
-- Pure `resolve_hardware`: exact match of saved logical ID and structural
-  profile; unknown or incompatible replacements are surfaced, not applied.
-- Pure `aqara_switch.actions`: validated HA service call plans for virtual
-  lights, ordinary lights, switches, covers, fans, scripts and scenes.
-- HA LAB package containing three virtual template lights with persistent
-  input_boolean helpers; no live HA installation or hardware tests yet.
-
-**Not yet implemented**: MQTT runtime subscriptions, HA registry adapter,
-Supervisor options persistence/schema for nested rooms, HA UI Scan button,
-Mode Keeper, Maintenance, Dispatcher transport and actual button-to-light E2E.
-All remain out of scope until the foundation passes CI and the HA LAB works.
+Telemetry and immutable GHCR release are still blocked by the product
+privacy/release contracts. No telemetry is transmitted in this pilot.

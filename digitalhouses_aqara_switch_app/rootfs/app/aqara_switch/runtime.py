@@ -14,7 +14,8 @@ import re
 import threading
 import time
 
-from .catalog import CatalogError, decode_bridge_devices, validate_config
+from .catalog import (CatalogError, candidate_from_mqtt, decode_bridge_devices,
+                      resolve_hardware)
 from .configuration import parse_configuration
 from .ha_registry import HARegistryClient
 from .mqtt_ui import (
@@ -171,19 +172,55 @@ class Application:
         self._publish(ROOT + "/card", dict(self._card))
 
     def _publish_details(self):
+        """Publish device identity/fingerprint problems without relay writes."""
         with self._mutex:
             config = deepcopy(self.config)
             networks = verified_snapshots(self._networks)
+        problems = []
         for room in config["rooms"]:
             for switch in room["switches"]:
-                matches = [d for net in networks for d in decode_bridge_devices(net["devices"])
-                           if net["coordinator_ieee"] == switch["coordinator_ieee"]
-                           and d.get("friendly_name") == switch["logical_name"]]
-                switch["online_identity"] = (matches[0].get("ieee_address")
-                                              if len(matches) == 1 else None)
-                switch["status"] = "observed" if len(matches) == 1 else "unknown"
+                peers = []
+                unverified = []
+                for network in networks:
+                    if network["coordinator_ieee"] != switch["coordinator_ieee"]:
+                        continue
+                    for device in decode_bridge_devices(network["devices"]):
+                        if device.get("friendly_name") != switch["logical_name"]:
+                            continue
+                        try:
+                            candidate = candidate_from_mqtt(
+                                device,
+                                coordinator_ieee=network["coordinator_ieee"],
+                                base_topic=network["base_topic"],
+                                reported_state=network["states"].get(
+                                    device["friendly_name"]
+                                ),
+                            )
+                            if candidate is None:
+                                raise CatalogError("Unsupported Aqara input profile")
+                            peers.append(candidate)
+                        except (CatalogError, KeyError) as exc:
+                            unverified.append(str(exc))
+                if unverified:
+                    result = {"status": "unverified", "reason": "; ".join(unverified)}
+                else:
+                    result = resolve_hardware(switch, peers)
+                    if (result["status"] == "same" and peers
+                            and peers[0]["settings"] != switch["settings"]):
+                        result = {"status": "settings_mismatch",
+                                  "reason": "Physical settings differ from saved baseline",
+                                  "observed_ieee": peers[0]["ieee"]}
+                switch["runtime"] = result
+                if result["status"] not in ("same",):
+                    problems.append({
+                        "object_name": switch["logical_name"],
+                        "category": result["status"],
+                        "reason": result.get("reason"),
+                    })
         self._publish(ROOT + "/devices", {"state": "ready", "rooms": config["rooms"]})
-        self._publish(ROOT + "/problems", {"state": "ready", "active": []})
+        self._publish(ROOT + "/problems", {
+            "state": "ready", "active": problems[:100], "count": len(problems)
+        })
 
     def _on_connect(self, client, userdata, flags, rc):
         del client, userdata, flags
