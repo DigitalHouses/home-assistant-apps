@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.22
+
+- Make the zero effective MPM/RPM threshold an explicit traffic-FSM bypass. A confirmed online and inventoried battery-only Z2M must not transition to DEGRADED/CRITICAL solely because no MQTT device messages arrive, irrespective of elapsed time.
+- Clear any prior low-MPM incident timer as soon as AUTO computes zero (or MANUAL is set to zero); raising the threshold later starts a fresh five-minute observation window.
+- Keep independent bridge-offline, observer-loss and confirmed repeater-offline monitoring active. No change to Zigbee traffic sampling, learned baselines, Healer OFF, UI or Supervisor permissions.
+- Add network FSM and end-to-end regression tests for two silent battery endpoints over multiple days, zero-threshold recovery, and rearming a positive threshold.
+
+
 ## 0.1.21
 
 - Add one stable, Recorder-visible numeric `<network_id>_offline` sensor per discovered Zigbee2MQTT network. Counts come from the existing verified Zigbee availability snapshot, not ping or guessed presence; positive values remain lower bounds and zero is published only with complete per-network coverage.
