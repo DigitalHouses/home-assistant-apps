@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.23
+
+- Change AUTO threshold calculation to floor(50% of the observed per-network baseline). A result of 0 is valid and suppresses RPM-only problems; retain the independent zero-threshold FSM bypass from v0.1.22.
+- Do not fabricate a starting baseline after 30 seconds of silence. AUTO baseline and threshold remain unknown until the first actual non-retained Zigbee device message. Estimate initial frequency from counted messages over the real elapsed observation period after BOOTING, not just the last five minutes.
+- Preserve numeric observed MPM (including 0) for the recorder and live charts; preserve complete-HEALTHY-hour adaptation, manual overrides, and Healer OFF. Add regression coverage for sparse networks and unknown-to-zero transitions.
+
 ## 0.1.22
 
 - Make the zero effective MPM/RPM threshold an explicit traffic-FSM bypass. A confirmed online and inventoried battery-only Z2M must not transition to DEGRADED/CRITICAL solely because no MQTT device messages arrive, irrespective of elapsed time.
