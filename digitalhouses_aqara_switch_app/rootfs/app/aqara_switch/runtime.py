@@ -18,6 +18,7 @@ from .catalog import (CatalogError, candidate_from_mqtt, decode_bridge_devices,
                       resolve_hardware)
 from .configuration import parse_configuration
 from .ha_registry import HARegistryClient
+from .light_observer import GroupObserver, selection
 from .mqtt_ui import (
     AVAILABILITY, DISCOVERY_TOPIC, ROOT, SCAN_REQUEST, wire_payload,
 )
@@ -29,13 +30,13 @@ _IEEE = re.compile(r"^0x[0-9a-f]{16}$")
 _BASE_FORBIDDEN = {"homeassistant", "DigitalHouses", "$SYS"}
 _FILTERS = tuple(
     "/".join(["+"] * levels) + "/bridge/" + suffix
-    for levels in (1, 2, 3) for suffix in ("info", "devices")
+    for levels in (1, 2, 3) for suffix in ("info", "devices", "groups")
 )
 
 
 def bridge_path(topic: str) -> tuple[str, str] | None:
     base, sep, suffix = topic.rpartition("/bridge/")
-    if not sep or suffix not in ("info", "devices"):
+    if not sep or suffix not in ("info", "devices", "groups"):
         return None
     parts = base.split("/")
     if not 1 <= len(parts) <= 3 or parts[0] in _BASE_FORBIDDEN or any(
@@ -113,6 +114,7 @@ class Application:
         self.options = options or SupervisorOptions()
         self.registry = registry or HARegistryClient(os.environ.get("SUPERVISOR_TOKEN", ""))
         self.config = parse_configuration(self.options.read())
+        self.observer = GroupObserver(selection(self.config))
         self._previous = _load_previous(last_scan_path)
         self._previous_path = last_scan_path
         self._stop = threading.Event()
@@ -166,7 +168,11 @@ class Application:
         self._publish(ROOT + "/scan_details", {"state": "ready" if self._previous else "unknown",
                                                **(self._previous or {})})
         self._publish_details()
+        self._publish_group()
         self._publish_card()
+
+    def _publish_group(self):
+        self._publish(ROOT + "/light_group", self.observer.snapshot())
 
     def _publish_card(self):
         self._publish(ROOT + "/card", dict(self._card))
@@ -230,6 +236,7 @@ class Application:
         with self._mutex:
             self._subscribed.clear()
             self._networks.clear()
+            self.observer.reset_connection()
         for topic in (*_FILTERS, SCAN_REQUEST, "homeassistant/status"):
             self._subscribe(topic)
         self._publish(AVAILABILITY, "online")
@@ -242,6 +249,7 @@ class Application:
         with self._mutex:
             self._subscribed.clear()
             self._networks.clear()
+            self.observer.reset_connection()
 
     def _on_message(self, client, userdata, message):
         del client, userdata
@@ -270,8 +278,16 @@ class Application:
                         name = device.get("friendly_name")
                         if isinstance(name, str) and name and device.get("type") != "Coordinator":
                             self._subscribe(base + "/" + name)
+                if self.observer.selected and base == self.observer.selected[0]:
+                    for watch in self.observer.inventory(node.get("groups"), node.get("devices")):
+                        self._subscribe(watch)
             self._publish_details()
+            self._publish_group()
             return
+        # The light monitor reads only selected group/member MQTT publications.
+        if self.observer.accept(message.topic, bytes(message.payload),
+                                bool(getattr(message, "retain", False))):
+            self._publish_group()
         # Capturing observed device state does not import or rewrite options.
         with self._mutex:
             for base, net in self._networks.items():

@@ -1,5 +1,13 @@
 # Changelog — DigitalHouses Aqara Switch App
 
+## 0.1.2
+
+- Add optional, explicitly configured passive Zigbee2MQTT group monitor (one group per site) with live member expansion.
+- Record MQTT-observed light/group states and recent events to a bounded /data JSONL log.
+- Add HA MQTT Discovery diagnostic sensor for light group details and a Lovelace group tree.
+- Preserve honest OBSERVED_UNVERIFIED semantics with optimistic=true; no GET/SET or relay controls.
+- Keep manual-only scan and optional monitor disabled by default.
+
 ## 0.1.1
 
 - First executable manual-scan Home Assistant App pilot; boot remains manual.
