@@ -1,6 +1,6 @@
 # DigitalHouses Aqara Switch App
 
-**v0.1.4 — installable experimental Scan/Adopt + Mode Keeper + one-light toggle MVP.**
+**v0.1.5 — installable Scan/Adopt + readable Supervisor switch/assignment lists.**
 
 This Home Assistant App supports the commissioning flow for Aqara wired switches,
 battery buttons and key panels. It is not a general automation engine. This MVP scans and adopts Aqara
@@ -27,35 +27,54 @@ It never switches physical Aqara relay output states itself.
 3. Refresh the store, open **DigitalHouses Aqara Switch App** and install.
 4. App is set to **manual boot**. Start it manually and inspect the logs
    before attempting Scan or setting any bindings.
-5. Initially, `configuration_yaml` is only `rooms: []`.
+5. Initially, the `switches` and `bindings` lists are empty.
    Installation alone cannot toggle any light or change any adopted Aqara
    settings, because no devices have yet been adopted.
 
-Immutable image: `ghcr.io/digitalhouses/digitalhouses_aqara_switch_app:0.1.4`.
+Immutable image: `ghcr.io/digitalhouses/digitalhouses_aqara_switch_app:0.1.5`.
 
 ## Configure and scan
 
-The **only editable source of truth** is the App's Supervisor Options.
-`configuration_yaml` contains the nested tree `rooms → switches` in one
-YAML text field because Supervisor does not support deeper structured fields.
-Initially it is:
+The Supervisor **Parameters** form now has two separate lists:
+
+- **Выключатели / Switches**: automatically filled by Scan/Adopt with
+  `ieee`, `name` and `enabled`. Change `enabled` to `false` to
+  disable its button dispatch and Mode Keeper without deleting the
+  adoption. Never invent an IEEE; the App requires it to match an
+  internally adopted device.
+- **Назначения / Assignments**: operator-maintained list of
+  `ieee`, `press`, `light`. Each exact button action maps to one
+  HA `light.toggle` destination. For example:
 
 ```yaml
-rooms: []
+switches:
+  - ieee: "0x54ef441000dc08bb"
+    name: aqara_battery_button
+    enabled: true
+bindings:
+  - ieee: "0x54ef441000dc08bb"
+    press: single
+    light: light.dh_aqara_lab_chandelier
 ```
 
-The runtime only listens to MQTT upon startup. It does not import any device
-until `button.dh_aqara_switch_app_scan` is pressed in Home Assistant.
-Scan requires a verified coordinator and Zigbee2MQTT inventory and captures
-*confirmed* MQTT settings. Missing physical parameters cause a visible scan
-problem; this release does **not** ask Zigbee devices to change or report state.
+This is an **illustration only**; choose the real IEEE that Scan added.
+A user cannot assign arbitrary unadopted hardware or an action not
+declared in the device profile. Restart the App after editing Options.
 
-Only new logical devices are appended to Supervisor Options. Existing entries,
-bindings, room allocation and mode snapshots are **never overwritten** by Scan.
-A registered logical device is identified by coordinator IEEE and its configured
-Zigbee2MQTT friendly_name. New physical IEEE with the same name is compared
-against the saved structural fingerprint and flagged when incompatible.
-**No automatic relay restoration occurs in this pilot.**
+**Migration from v0.1.4:** On first App start after upgrade, existing
+nested `configuration_yaml` is read from the raw own-App Supervisor info,
+validated, backed up in `/data/legacy_configuration_yaml.txt`, and split
+into editable switch/assignment lists. The original captured Adopt
+profiles are separately persisted in `/data/adopted_switches.json`.
+If migration cannot preserve an existing configuration, App startup
+**fails closed** before subscribing to button actions; the original
+Supervisor configuration is not overwritten.
+
+Scan remains explicit and append-only. Use
+`button.dh_aqara_switch_app_scan` from HA to register newly discovered
+Aqara switches. Fingerprints and adopted physical settings are internal
+App state and restored by the normal Supervisor App backup. The App does
+not send Zigbee device requests during Scan.
 
 ## First working scenario (0.1.2 MVP)
 
@@ -63,16 +82,10 @@ against the saved structural fingerprint and flagged when incompatible.
 2. Press `button.dh_aqara_switch_app_scan` **once**. This is the initial
    Adopt: only newly discovered Aqara inputs are appended to the App Options
    `configuration_yaml`; captured physical setting values become the baseline.
-3. In Supervisor App Options edit the existing switch's `bindings`. Example
-   under the already imported room/switch (do not replace IEEE/fingerprint):
-
-```yaml
-bindings:
-  single:
-    action: toggle
-    targets:
-      - light.bedroom_spots
-```
+3. In Supervisor App Options → **Назначения** choose **Добавить**.
+   Copy the IEEE from the already scanned switch, enter its real press
+   (for example `single`) and the target `light.bedroom_spots`.
+   Each binding uses the built-in `light.toggle` action.
 
 The `single` key must exactly match this device's observed `action`
 from Zigbee2MQTT. For other models use their real action names (e.g.

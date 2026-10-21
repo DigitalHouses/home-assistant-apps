@@ -5,6 +5,7 @@ from collections.abc import Mapping
 
 from .catalog import CatalogError, candidate_from_mqtt, decode_bridge_devices, import_new
 from .configuration import parse_configuration, replace_configuration
+from .structured_options import STORE_PATH, store_scan
 from .ha_registry import areas_from_registries
 
 
@@ -64,5 +65,10 @@ def scan_once(snapshots: list[dict], options_client, ha_registry) -> tuple[dict,
     report["networks"] = ready
     report["completed_at"] = datetime.now(timezone.utc).isoformat()
     if report["added"]:
-        options_client.write(replace_configuration(options, merged))
+        if "switches" in options and "bindings" in options:
+            updated = store_scan(merged, options, STORE_PATH)
+            options_client.write(updated)
+            merged = parse_configuration(options_client.read(), profile_path=STORE_PATH)
+        else:
+            options_client.write(replace_configuration(options, merged))
     return merged, report

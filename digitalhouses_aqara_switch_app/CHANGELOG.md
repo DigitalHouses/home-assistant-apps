@@ -1,5 +1,22 @@
 # Changelog — DigitalHouses Aqara Switch App
 
+## 0.1.5
+
+- Replace the opaque, folded `configuration_yaml` text editor with two native
+  Supervisor lists: **Выключатели** (IEEE, Zigbee2MQTT friendly name,
+  enabled) and **Назначения** (switch IEEE, button press, light.*).
+- Explicitly typed UI lists support editing, adding and removing mappings;
+  one valid configured press executes only a single `light.toggle`.
+- Keep adopted hardware fingerprint, model, area and physical mode settings
+  as private persistent App data, not editable by the dashboard or Supervisor
+  UI. New Scan/Adopt appends newly discovered buttons to the structured list.
+- One-time startup migration of v0.1.4 nested room configuration using the
+  raw own-App Supervisor API: back up the original YAML, preserve complete
+  adopted profiles and existing valid light.toggle bindings before committing
+  the new options. Abort without starting MQTT control if migration is unsafe.
+- Never perform automatic Scan, edit physical relay state or trigger lights
+  on installation. Existing App version source and image tag remain immutable.
+
 ## 0.1.4
 
 - Fix Scan/Adopt failing with `HA WebSocket authorization failed` due to

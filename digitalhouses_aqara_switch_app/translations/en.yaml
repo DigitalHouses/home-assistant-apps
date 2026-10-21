@@ -1,7 +1,24 @@
 configuration:
   log_level:
-    name: Logging level
-    description: App runtime diagnostic verbosity.
-  configuration_yaml:
-    name: Rooms and switches (YAML)
-    description: "Single editable configuration: rooms -> switches. Only explicit Scan appends devices. Existing entries are never rewritten."
+    name: Log level
+    description: Application diagnostics verbosity.
+  switches:
+    name: Switches
+    description: Discovered on Scan/Adopt. Disable a switch to suspend its assignments.
+    fields:
+      ieee:
+        name: Zigbee IEEE
+      name:
+        name: Zigbee2MQTT friendly name
+      enabled:
+        name: Enabled
+  bindings:
+    name: Assignments
+    description: One button press mapped to one HA light entity. Press is the exact Z2M action value.
+    fields:
+      ieee:
+        name: Switch IEEE
+      press:
+        name: Press action
+      light:
+        name: Light entity (light.*)

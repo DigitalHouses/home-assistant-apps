@@ -39,5 +39,12 @@ class SupervisorOptions:
             raise CatalogError("Invalid own App Options")
         return obj
 
+    def read_raw(self) -> dict:
+        """Own App info retains deprecated options for safe schema migration."""
+        obj = self._request("/addons/self/info").get("data")
+        if not isinstance(obj, dict) or not isinstance(obj.get("options"), dict):
+            raise CatalogError("Own raw Supervisor App options unavailable")
+        return obj["options"]
+
     def write(self, options: Mapping) -> None:
         self._request("/addons/self/options", {"options": dict(options)})

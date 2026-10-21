@@ -1,7 +1,24 @@
 configuration:
   log_level:
     name: Уровень журнала
-    description: Подробность журнала приложения.
-  configuration_yaml:
-    name: Комнаты и выключатели (YAML)
-    description: "Единая конфигурация: комнаты -> выключатели. Только ручное «Сканировать» добавляет новые устройства; существующие записи не меняются."
+    description: Подробность диагностических записей приложения.
+  switches:
+    name: Выключатели
+    description: После Scan/Adopt появляются автоматически. Выключи «Активен», чтобы отключить управление с этой кнопки.
+    fields:
+      ieee:
+        name: IEEE
+      name:
+        name: Имя в Zigbee2MQTT
+      enabled:
+        name: Активен
+  bindings:
+    name: Назначения
+    description: Одна строка = одно нажатие → один светильник. IEEE из списка выключателей; press — точное событие Zigbee2MQTT; light — entity_id вида light.xxx.
+    fields:
+      ieee:
+        name: IEEE выключателя
+      press:
+        name: Нажатие (action)
+      light:
+        name: Светильник (light.*)

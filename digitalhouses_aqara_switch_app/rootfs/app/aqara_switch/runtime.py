@@ -26,6 +26,7 @@ from .mqtt_ui import (
 )
 from .scan import scan_once
 from .supervisor import SupervisorOptions
+from .structured_options import migrate as migrate_structured_options
 
 LOG = logging.getLogger(__name__)
 _IEEE = re.compile(r"^0x[0-9a-f]{16}$")
@@ -217,7 +218,9 @@ class Application:
                             peers.append(candidate)
                         except (CatalogError, KeyError) as exc:
                             unverified.append(str(exc))
-                if unverified:
+                if not switch.get("enabled", True):
+                    result = {"status": "disabled"}
+                elif unverified:
                     result = {"status": "unverified", "reason": "; ".join(unverified)}
                 else:
                     result = resolve_hardware(switch, peers)
@@ -227,7 +230,7 @@ class Application:
                                   "reason": "Physical settings differ from saved baseline",
                                   "observed_ieee": peers[0]["ieee"]}
                 switch["runtime"] = result
-                if result["status"] not in ("same",):
+                if result["status"] not in ("same", "disabled"):
                     problems.append({
                         "object_name": switch["logical_name"],
                         "category": result["status"],
@@ -336,6 +339,8 @@ class Application:
             return
         for room in self.config["rooms"]:
             for saved in room["switches"]:
+                if not saved.get("enabled", True):
+                    continue
                 if not verified_adopted_switch(saved, device, coordinator, base):
                     continue
                 name = saved["logical_name"]
@@ -449,6 +454,10 @@ class Application:
             self._scan_lock.release()
 
     def run(self) -> None:
+        # Fail closed until old profiles and bindings have migrated safely.
+        migrated = migrate_structured_options(self.options)
+        with self._mutex:
+            self.config = parse_configuration(migrated)
         host, port = os.environ["MQTT_HOST"], int(os.environ["MQTT_PORT"])
         LOG.info("Starting Aqara Adopt + Mode Keeper + light.toggle MVP %s", self.version)
         threading.Thread(target=self._run_actions, daemon=True,
