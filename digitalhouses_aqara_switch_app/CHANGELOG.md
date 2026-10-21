@@ -1,5 +1,24 @@
 # Changelog — DigitalHouses Aqara Switch App
 
+## 0.1.6
+
+- Clean-install experimental revision: drop v0.1.4/v0.1.5 migration and
+  separate flat bindings list. User will uninstall and reinstall first.
+- Short switch-keyed YAML mapping under App option `switches`, e.g.
+  `- switch.livingroom_switch: {enabled: true, actions: {single: [light.l1, light.l2]}}`.
+- Manual Scan reads HA Device, Area and Entity registries, resolving the
+  **existing** unique switch.* entity_id via confirmed Zigbee IEEE/device_id;
+  never invents an HA entity. No or ambiguous switch.* causes scan problem.
+- Keep actual coordinator, physical IEEE, captured model/modes internal to
+  /data; bind user assignments to stable HA switch entity_id.
+- Each supported press toggles 1..16 explicit light.* targets in **one**
+  light.toggle HA service request. No physical relay ON/OFF writes.
+- Explicit Scan may re-adopt a compatible replacement whose HA switch entity
+  ID remains the same, preserving existing actions.
+- No automatically created button, event or switch entities in Home Assistant.
+- Supervisor's native form cannot render dynamic multi-level YAML keys;
+  switch assignments are therefore a compact multiline YAML string field.
+
 ## 0.1.5
 
 - Replace the opaque, folded `configuration_yaml` text editor with two native

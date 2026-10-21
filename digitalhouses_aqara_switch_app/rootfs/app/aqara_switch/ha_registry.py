@@ -1,76 +1,102 @@
-"""Home Assistant Device/Area registry via authenticated Supervisor WS proxy.
-
-No fuzzy friendly-name based area lookup. No fake room on untrusted matches.
-"""
+"""Strict Aqara Zigbee IEEE -> existing HA device -> switch.* entity mapping."""
 from __future__ import annotations
 import json
 from collections.abc import Mapping
-
 from .catalog import CatalogError
 
 
-def areas_from_registries(
-    devices: object, areas: object, ieee_addresses: set[str]
-) -> dict[str, dict | None]:
-    """Return HA Area per IEEE; raise for duplicate/conflicting HA identities."""
-    if not isinstance(devices, list) or not isinstance(areas, list):
-        raise CatalogError("HA device and area registry results must be lists")
-    area_names = {}
-    for area in areas:
-        if not isinstance(area, Mapping) or not isinstance(area.get("area_id"), str) or not isinstance(area.get("name"), str):
-            raise CatalogError("Invalid Home Assistant Area Registry entry")
-        area_names[area["area_id"]] = area["name"]
-    owners = {ieee: [] for ieee in ieee_addresses}
-    for device in devices:
-        if not isinstance(device, Mapping):
-            raise CatalogError("Invalid Home Assistant Device Registry entry")
-        candidates = device.get("identifiers", [])
-        connections = device.get("connections", [])
-        if not isinstance(candidates, list) or not isinstance(connections, list):
-            raise CatalogError("Invalid HA device identifiers/connections")
+def _matched_devices(devices: object, ieees: set[str]) -> dict:
+    if not isinstance(devices, list):
+        raise CatalogError("Invalid HA Device Registry")
+    found = {ieee: [] for ieee in ieees}
+    for dev in devices:
+        if not isinstance(dev, Mapping):
+            raise CatalogError("Invalid HA Device Registry entry")
+        ids, connections = dev.get("identifiers", []), dev.get("connections", [])
+        if not isinstance(ids, list) or not isinstance(connections, list):
+            raise CatalogError("Invalid HA identity fields")
         matched = set()
-        for pair in candidates + connections:
-            if not isinstance(pair, (list, tuple)) or len(pair) != 2:
+        for item in ids + connections:
+            if not isinstance(item, (list, tuple)) or len(item) != 2:
                 continue
-            domain, value = pair
+            domain, value = item
             if not isinstance(domain, str) or not isinstance(value, str):
                 continue
-            identity = value.lower()
-            # Z2M MQTT device registry identifiers may be "zigbee2mqtt_0x<16hex>"
-            # or a Zigbee connection may store the plain IEEE.
-            if domain in ("mqtt", "zigbee", "zha"):
-                for ieee in owners:
-                    if identity == ieee or identity == "zigbee2mqtt_" + ieee:
+            if domain in ("zigbee", "zha", "mqtt"):
+                v = value.lower()
+                for ieee in ieees:
+                    if v == ieee or v == "zigbee2mqtt_" + ieee:
                         matched.add(ieee)
         for ieee in matched:
-            owners[ieee].append(device)
-    found = {}
-    for ieee, devices_for_ieee in owners.items():
-        if not devices_for_ieee:
-            found[ieee] = None
-            continue
-        if len(devices_for_ieee) != 1:
-            raise CatalogError(f"Ambiguous HA Device Registry identity for {ieee}")
-        device = devices_for_ieee[0]
-        area_id = device.get("area_id")
-        if area_id is None:
-            found[ieee] = None
-            continue
-        if not isinstance(area_id, str) or area_id not in area_names:
-            raise CatalogError(f"Invalid HA area for {ieee}: {area_id}")
-        found[ieee] = {"area_id": area_id, "name": area_names[area_id]}
+            found[ieee].append(dev)
     return found
 
 
+def areas_from_registries(devices: object, areas: object, ieees: set[str]) -> dict:
+    if not isinstance(areas, list):
+        raise CatalogError("Invalid HA Area Registry")
+    names = {}
+    for area in areas:
+        if not isinstance(area, Mapping) or not isinstance(area.get("area_id"), str):
+            raise CatalogError("Invalid HA Area Registry entry")
+        names[area["area_id"]] = area.get("name")
+    owners = _matched_devices(devices, ieees)
+    result = {}
+    for ieee, devs in owners.items():
+        if len(devs) > 1:
+            raise CatalogError("Ambiguous HA Device Registry identity for " + ieee)
+        if not devs:
+            result[ieee] = None
+            continue
+        area_id = devs[0].get("area_id")
+        if area_id is None:
+            result[ieee] = None
+        elif area_id not in names or not isinstance(names[area_id], str):
+            raise CatalogError("Invalid HA area for " + ieee)
+        else:
+            result[ieee] = {"area_id": area_id, "name": names[area_id]}
+    return result
+
+
+def switch_entities(devices: object, entities: object, ieees: set[str]) -> tuple[dict, dict]:
+    """Resolve exactly one existing switch.* for each physical HA device.
+
+    No guessed or generated entity IDs, no friendly-name matching or relay
+    selection. Ambiguous and missing switch entities are explicit scan problems.
+    """
+    owners = _matched_devices(devices, ieees)
+    if not isinstance(entities, list):
+        raise CatalogError("Invalid HA Entity Registry")
+    by_id = {}
+    for entity in entities:
+        if not isinstance(entity, Mapping):
+            raise CatalogError("Invalid HA Entity Registry entry")
+        device_id, entity_id = entity.get("device_id"), entity.get("entity_id")
+        if isinstance(device_id, str) and isinstance(entity_id, str) and entity_id.startswith("switch."):
+            if entity.get("disabled_by") is None:
+                by_id.setdefault(device_id, set()).add(entity_id)
+    resolved, errors = {}, {}
+    for ieee, devs in owners.items():
+        if len(devs) != 1 or not isinstance(devs[0].get("id"), str):
+            errors[ieee] = "HA device is missing or ambiguous"
+            continue
+        choices = sorted(by_id.get(devs[0]["id"], set()))
+        if len(choices) == 1:
+            resolved[ieee] = choices[0]
+        else:
+            errors[ieee] = ("No existing switch.* entity" if not choices
+                            else "Multiple switch.* entities: " + ", ".join(choices))
+    return resolved, errors
+
+
 class HARegistryClient:
-    """Synchronous bounded registry snapshot; imported lazily for unit tests."""
     def __init__(self, token: str, url: str = "ws://supervisor/core/websocket",
                  timeout: float = 8):
         if not token:
             raise CatalogError("SUPERVISOR_TOKEN is missing")
         self.token, self.url, self.timeout = token, url, timeout
 
-    def fetch(self) -> tuple[list, list]:
+    def fetch(self) -> tuple[list, list, list]:
         import websocket
         ws = websocket.create_connection(self.url, timeout=self.timeout,
                                          http_proxy_host=None)
@@ -83,17 +109,17 @@ class HARegistryClient:
             if authorized.get("type") != "auth_ok":
                 raise CatalogError("HA WebSocket authorization failed")
             result = []
-            for ident, command in enumerate(
-                ("config/device_registry/list", "config/area_registry/list"), 1
-            ):
+            for ident, command in enumerate((
+                "config/device_registry/list", "config/area_registry/list",
+                "config/entity_registry/list",
+            ), 1):
                 ws.send(json.dumps({"id": ident, "type": command}))
                 answer = json.loads(ws.recv())
                 if (answer.get("id") != ident or answer.get("type") != "result"
-                        or answer.get("success") is not True):
-                    raise CatalogError(f"HA Registry call failed: {command}")
-                if not isinstance(answer.get("result"), list):
-                    raise CatalogError(f"Invalid HA Registry response: {command}")
+                        or answer.get("success") is not True
+                        or not isinstance(answer.get("result"), list)):
+                    raise CatalogError("HA Registry call failed: " + command)
                 result.append(answer["result"])
-            return result[0], result[1]
+            return result[0], result[1], result[2]
         finally:
             ws.close()

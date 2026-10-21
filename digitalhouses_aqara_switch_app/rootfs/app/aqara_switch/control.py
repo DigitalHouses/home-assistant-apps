@@ -35,7 +35,7 @@ def verified_adopted_switch(saved: Mapping, device: Mapping,
 
 
 def light_action(saved: Mapping, reported_action: object) -> dict | None:
-    """Configured single light only; older broader planners are not exposed."""
+    """Only light.toggle with one to sixteen explicitly configured HA lights."""
     if not isinstance(reported_action, str) or not reported_action:
         return None
     call = plan_action(saved, reported_action)
@@ -43,9 +43,10 @@ def light_action(saved: Mapping, reported_action: object) -> dict | None:
         return None
     if (call.get("service") != "light.toggle" or
             not isinstance(call.get("target"), Mapping) or
-            len(call["target"].get("entity_id", [])) != 1 or
-            not call["target"]["entity_id"][0].startswith("light.")):
-        raise ActionError("MVP permits exactly one light.toggle target per action")
+            not 1 <= len(call["target"].get("entity_id", [])) <= 16 or
+            any(not light.startswith("light.")
+                for light in call["target"]["entity_id"])):
+        raise ActionError("MVP permits 1..16 light.toggle targets per action")
     return call
 
 
@@ -76,9 +77,16 @@ class HAClient:
         self.timeout = timeout
 
     def toggle(self, entity_id: str) -> None:
-        if not isinstance(entity_id, str) or not entity_id.startswith("light."):
-            raise ValueError("Only Home Assistant light entities can be toggled")
-        payload = json.dumps({"entity_id": entity_id}).encode("utf-8")
+        self.toggle_targets([entity_id])
+
+    def toggle_targets(self, entity_ids: list[str]) -> None:
+        if (not isinstance(entity_ids, list) or
+                not 1 <= len(entity_ids) <= 16 or
+                any(not isinstance(e, str) or not e.startswith("light.")
+                    for e in entity_ids) or
+                len(entity_ids) != len(set(entity_ids))):
+            raise ValueError("Only 1..16 unique Home Assistant light entities can be toggled")
+        payload = json.dumps({"entity_id": entity_ids}).encode("utf-8")
         req = urllib.request.Request(
             self.url + "/services/light/toggle", method="POST",
             data=payload,

@@ -23,7 +23,7 @@ class HAPermissionsTest(unittest.TestCase):
         self.assertEqual(conf["hassio_role"], "default", "Do not escalate Supervisor privileges")
         self.assertIn("mqtt:need", conf["services"])
         self.assertEqual(conf["boot"], "manual")
-        self.assertTrue(conf["version"].startswith("0.1."))
+        self.assertEqual(conf["version"], "0.1.6")
 
     def test_registry_handshake_uses_supervisor_token_and_reads_both_registries(self):
         class FakeSocket:
@@ -34,6 +34,7 @@ class HAPermissionsTest(unittest.TestCase):
                     {"type":"auth_ok", "ha_version":"2026.10.0"},
                     {"id":1,"type":"result","success":True,"result":[]},
                     {"id":2,"type":"result","success":True,"result":[]},
+                    {"id":3,"type":"result","success":True,"result":[]},
                 ])
                 self.closed = False
 
@@ -49,12 +50,13 @@ class HAPermissionsTest(unittest.TestCase):
         socket = FakeSocket()
         fake_websocket = types.SimpleNamespace(create_connection=lambda *args, **kwargs: socket)
         with patch.dict(sys.modules, {"websocket": fake_websocket}):
-            devices, areas = HARegistryClient("test-token").fetch()
-        self.assertEqual((devices, areas), ([], []))
+            devices, areas, entities = HARegistryClient("test-token").fetch()
+        self.assertEqual((devices, areas, entities), ([], [], []))
         self.assertEqual(socket.sent, [
             {"type":"auth","access_token":"test-token"},
             {"id":1,"type":"config/device_registry/list"},
             {"id":2,"type":"config/area_registry/list"},
+            {"id":3,"type":"config/entity_registry/list"},
         ])
         self.assertTrue(socket.closed)
 

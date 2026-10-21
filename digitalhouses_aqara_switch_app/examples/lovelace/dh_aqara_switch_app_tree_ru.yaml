@@ -17,7 +17,7 @@ content: |-
   {% set tab = '   ' if loop.last else '│  ' -%}
   {% for device in room.switches -%}
   {% set state = device.runtime.status if device.runtime is defined else 'unknown' -%}
-  {{ tab }}{{ '└─' if loop.last else '├─' }} {{ '🟢' if state == 'same' else '🟠' if state in ['unverified', 'replacement', 'settings_mismatch'] else '🔴' if state == 'incompatible' else '⚪' }} {{ device.logical_name | e }} · {{ state | e }}
+  {{ tab }}{{ '└─' if loop.last else '├─' }} {{ '🟢' if state == 'same' else '🟠' if state in ['unverified', 'replacement', 'settings_mismatch'] else '🔴' if state == 'incompatible' else '⚪' }} {{ (device.entity_id or device.logical_name) | e }} · {{ state | e }}
   {% set inner = tab ~ ('   ' if loop.last else '│  ') -%}
   {{ inner }}├─ ⚙️ Модель: {{ device.fingerprint.model | e }}
   {{ inner }}├─ 🔘 Нажатия: {{ (device.fingerprint.actions | join(', ')) | e }}

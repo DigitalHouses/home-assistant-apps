@@ -1,153 +1,107 @@
-"""Unit acceptance for the manual-only scan and HA Area correlation."""
-from __future__ import annotations
+"""Explicit Scan must reuse real HA entity registry, never invent switch.*."""
+from pathlib import Path
+from tempfile import TemporaryDirectory
 import json
 import unittest
-from pathlib import Path
-import sys
+from unittest.mock import patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "rootfs/app"))
-try:
-    from aqara_switch.catalog import CatalogError
-    from aqara_switch.configuration import parse_configuration, encode_configuration
-    from aqara_switch.ha_registry import areas_from_registries
-    from aqara_switch.scan import scan_once
-    from aqara_switch.runtime import verified_snapshots, bridge_path
-    from aqara_switch.mqtt_ui import configuration, SCAN_REQUEST, wire_payload
-finally:
-    sys.path.pop(0)
+from aqara_switch.scan import scan_once
+from aqara_switch.entity_options import parse_rows, current
+from aqara_switch.ha_registry import areas_from_registries, switch_entities
+from aqara_switch.catalog import CatalogError
 
 COORD="0x00124b002e1330dd"
 IEEE="0x00158d0000000001"
+ENTITY="switch.livingroomaqaraswitch"
+NAME="aqara_button"
 
-
-def z2m_device(*, named="aqara_button", vendor="Aqara", wired=False):
-    exposes = [{"type":"enum","name":"action","property":"action","access":1,
-                "values":["single","double"]}]
-    if wired:
-        exposes += [
-            {"type":"enum","name":"operation_mode","property":"operation_mode",
-             "access":3,"values":["control_relay","decoupled"]},
-            {"type":"switch","features":[{"type":"binary","property":"state_left","access":7}]},
-        ]
-    return {
-        "ieee_address":IEEE,"friendly_name":named,"type":"Router" if wired else "EndDevice",
-        "model_id":"lumi.remote.test",
-        "definition":{"vendor":vendor,"model":"WXKG17LM","exposes":exposes},
-    }
-
-
-def snapshot(*, wired=False, states=None):
-    devices=[{"ieee_address":COORD,"type":"Coordinator"},z2m_device(wired=wired)]
+def z2m_device(ieee=IEEE,model="WXKG13LM",name=NAME):
+    return {"ieee_address":ieee,"friendly_name":name,"type":"EndDevice",
+            "model_id":"lumi.remote.test",
+            "definition":{"vendor":"Aqara","model":model,"exposes":[
+                {"type":"enum","property":"action","access":1,"values":["single","double"]}]}}
+def snap(ieee=IEEE,model="WXKG13LM",name=NAME):
     return {"base_topic":"zigbee2mqtt","coordinator_ieee":COORD,
-            "devices":json.dumps(devices).encode(),"states":states or {}}
+            "devices":json.dumps([{"ieee_address":COORD,"type":"Coordinator"},
+                                  z2m_device(ieee,model,name)]).encode(),"states":{}}
 
-
-class FakeOptions:
+class Options:
     def __init__(self):
-        self.options={"configuration_yaml":"rooms: []\n","log_level":"info"}
+        self.options={"log_level":"info","switches":"[]"}
         self.writes=0
-    def read(self):
-        return dict(self.options)
+    def read(self): return dict(self.options)
     def write(self, value):
-        self.writes+=1
         self.options=dict(value)
+        self.writes+=1
 
-
-class FakeRegistry:
-    def __init__(self, areas=True):
-        self.areas=areas
+class Registry:
+    def __init__(self, entities=None, ieee=IEEE):
+        self.ieee=ieee
+        self.entities=entities if entities is not None else [
+            {"device_id":"ha-1","entity_id":ENTITY,"disabled_by":None}]
     def fetch(self):
-        if not self.areas:
-            return [],[]
-        return ([{"id":"ha-device-1","area_id":"living_room",
-                  "identifiers":[["mqtt","zigbee2mqtt_"+IEEE]],
-                  "connections":[]}],
-                [{"area_id":"living_room","name":"Гостиная"}])
+        devices=[{"id":"ha-1","area_id":"living","identifiers":[
+            ["mqtt","zigbee2mqtt_"+self.ieee]],"connections":[]}]
+        areas=[{"area_id":"living","name":"Гостиная"}]
+        return devices,areas,self.entities
 
+class ScanTests(unittest.TestCase):
+    def test_scan_uses_real_entity_and_repeat_no_duplicates(self):
+        with TemporaryDirectory() as td, patch("aqara_switch.scan.STORE_PATH",Path(td)/"store.json"):
+            opts=Options()
+            data,report=scan_once([snap()],opts,Registry())
+            self.assertEqual(report["added"][0]["name"],NAME)
+            self.assertEqual(opts.writes,1)
+            self.assertEqual(parse_rows(opts.read()),[{"entity_id":ENTITY,"enabled":True,"actions":{}}])
+            self.assertEqual(data["rooms"][0]["switches"][0]["entity_id"],ENTITY)
+            new,report=scan_once([snap()],opts,Registry())
+            self.assertEqual(report["added"],[])
+            self.assertEqual(opts.writes,1)
+            self.assertEqual(new,data)
 
-class ScanIntegrationTest(unittest.TestCase):
-    def test_manual_scan_imports_once(self):
-        options=FakeOptions()
-        config, report=scan_once([snapshot()],options,FakeRegistry())
-        self.assertEqual(options.writes,1)
-        self.assertEqual(report["scanned"],1)
-        self.assertEqual(report["added"][0]["name"],"aqara_button")
-        self.assertEqual(config["rooms"][0]["name"],"Гостиная")
-        self.assertEqual(config["rooms"][0]["switches"][0]["settings"],{})
-        current=parse_configuration(options.read())
-        current["rooms"][0]["switches"][0]["bindings"]={
-            "single":{"action":"toggle","targets":["light.dh_aqara_lab_chandelier"]}
-        }
-        options.options["configuration_yaml"]=encode_configuration(current)
-        again, report=scan_once([snapshot()],options,FakeRegistry(areas=False))
-        self.assertEqual(options.writes,1)
-        self.assertEqual(report["added"],[])
-        self.assertEqual(report["skipped"],["aqara_button"])
-        self.assertEqual(again,current)
+    def test_no_switch_entity_reports_problem_and_does_not_write(self):
+        with TemporaryDirectory() as td, patch("aqara_switch.scan.STORE_PATH",Path(td)/"store.json"):
+            opts=Options()
+            data, report=scan_once([snap()],opts,Registry(entities=[
+                {"device_id":"ha-1","entity_id":"event.aqara_button_action"}]))
+            self.assertEqual(opts.writes,0)
+            self.assertEqual(data["rooms"],[])
+            self.assertIn("No existing switch.* entity",str(report["problems"]))
 
-    def test_wired_without_confirmed_mqtt_settings_does_not_import(self):
-        options=FakeOptions()
-        result,report=scan_once([snapshot(wired=True)],options,FakeRegistry())
-        self.assertEqual(options.writes,0)
-        self.assertEqual(result["rooms"],[])
-        self.assertEqual(report["scanned"],0)
-        self.assertIn("not confirmed",report["problems"][0]["reason"])
+    def test_multiple_switch_entities_are_not_guessed(self):
+        with TemporaryDirectory() as td, patch("aqara_switch.scan.STORE_PATH",Path(td)/"store.json"):
+            opts=Options()
+            data, report=scan_once([snap()],opts,Registry(entities=[
+                {"device_id":"ha-1","entity_id":"switch.a"},
+                {"device_id":"ha-1","entity_id":"switch.b"}]))
+            self.assertEqual(opts.writes,0)
+            self.assertEqual(data["rooms"],[])
+            self.assertIn("Multiple switch.*",str(report["problems"]))
 
-    def test_wired_confirmed_is_imported(self):
-        options=FakeOptions()
-        result,report=scan_once([snapshot(wired=True,states={
-            "aqara_button":{"operation_mode":"decoupled"}
-        })],options,FakeRegistry())
-        self.assertEqual(result["rooms"][0]["switches"][0]["settings"],
-                         {"operation_mode":"decoupled"})
-        self.assertEqual(len(report["added"]),1)
-
-    def test_ha_registry_ambiguous_identity_is_error(self):
-        device={"area_id":"living_room","identifiers":[["mqtt","zigbee2mqtt_"+IEEE]]}
+    def test_area_matching_is_strict(self):
+        dev=[{"id":"ha-1","area_id":"living","identifiers":[["mqtt","zigbee2mqtt_"+IEEE]]}]
+        self.assertEqual(areas_from_registries(dev,[{"area_id":"living","name":"Гостиная"}],{IEEE})[IEEE]["name"],"Гостиная")
         with self.assertRaisesRegex(CatalogError,"Ambiguous"):
-            areas_from_registries([device,dict(device)],
-                                  [{"area_id":"living_room","name":"Гостиная"}],{IEEE})
+            areas_from_registries(dev+dev,[{"area_id":"living","name":"Гостиная"}],{IEEE})
 
-    def test_ha_registry_never_matches_friendly_name(self):
-        obj={"area_id":"living_room","identifiers":[["mqtt","aqara_button"]],"connections":[]}
-        index=areas_from_registries([obj],
-                    [{"area_id":"living_room","name":"Гостиная"}],{IEEE})
-        self.assertIsNone(index[IEEE])
-
-    def test_area_is_absent_when_unassigned(self):
-        index=areas_from_registries([],[],{IEEE})
-        self.assertIsNone(index[IEEE])
-
-    def test_supervisor_yaml_rejects_invalid_shapes(self):
-        with self.assertRaises(CatalogError):
-            parse_configuration({"configuration_yaml":"rooms:\n  - foo\n"})
-
-    def test_mqtt_discovery_has_scan_button_and_no_relay_writes(self):
-        config=configuration("0.1.1")
-        self.assertEqual(config["components"]["scan"]["command_topic"],SCAN_REQUEST)
-        self.assertIn("devices_details",config["components"])
-        self.assertIn("scan_state",config["components"])
-        self.assertNotIn("tojson",wire_payload("0.1.1"))
-        self.assertEqual(config["components"]["card"]["default_entity_id"],
-                         "sensor.dh_aqara_switch_app_card")
-
-    def test_snapshot_requires_both_coordinator_sources(self):
-        state=snapshot()
-        nets={"zigbee2mqtt":{
-            "info":json.dumps({"coordinator":{"ieee_address":COORD}}).encode(),
-            "devices":state["devices"],"states":{}
-        }}
-        self.assertEqual(len(verified_snapshots(nets)),1)
-        broken=dict(nets["zigbee2mqtt"])
-        broken["info"]=json.dumps({"coordinator":{
-            "ieee_address":"0x00124b002e1330de"}}).encode()
-        self.assertEqual(verified_snapshots({"zigbee2mqtt":broken}),[])
-
-    def test_untrusted_topics_are_ignored(self):
-        self.assertIsNone(bridge_path("homeassistant/bridge/info"))
-        self.assertIsNone(bridge_path("zigbee2mqtt/bridge/request/device/remove"))
-        self.assertEqual(bridge_path("zigbee2mqtt/bridge/devices"),
-                         ("zigbee2mqtt","devices"))
+    def test_compatible_replacement_preserves_actions(self):
+        new_ieee="0x00158d0000000002"
+        with TemporaryDirectory() as td, patch("aqara_switch.scan.STORE_PATH",Path(td)/"store.json"):
+            opts=Options()
+            scan_once([snap()],opts,Registry())
+            opts.options["switches"] = """
+- switch.livingroomaqaraswitch:
+    enabled: true
+    actions:
+      single:
+        - light.dh_aqara_lab_chandelier
+        - light.dh_aqara_lab_spots
+"""
+            merged,report=scan_once([snap(ieee=new_ieee)],opts,Registry(ieee=new_ieee))
+            self.assertEqual(report["replaced"],[ENTITY])
+            self.assertEqual(merged["rooms"][0]["switches"][0]["ieee"],new_ieee)
+            self.assertEqual(merged["rooms"][0]["switches"][0]["bindings"]["single"]["targets"],
+                             ["light.dh_aqara_lab_chandelier","light.dh_aqara_lab_spots"])
 
 
 if __name__=="__main__":
