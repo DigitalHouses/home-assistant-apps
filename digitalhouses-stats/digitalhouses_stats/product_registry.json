@@ -133,7 +133,11 @@
       "entity_prefix": "dh_aqara_switch_app",
       "display_name": "Aqara Switch App",
       "telemetry_allowed": false,
-      "release": null,
+      "release": {
+        "title": "DigitalHouses Aqara Switch App",
+        "version_source": "haos_config",
+        "policy_baseline": "0.1.2"
+      },
       "repository_directory": "digitalhouses_aqara_switch_app",
       "haos_slug": "digitalhouses_aqara_switch_app"
     }

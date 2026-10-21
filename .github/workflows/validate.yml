@@ -57,8 +57,12 @@ jobs:
       - name: Check launcher
         run: bash -n digitalhouses_aqara_switch_app/rootfs/run.sh
 
-      - name: Smoke build source-only scaffold
-        run: docker build --build-arg BUILD_VERSION=0.1.0 --build-arg BUILD_ARCH=amd64 --tag aqara-switch-scaffold:0.1.0 digitalhouses_aqara_switch_app
+      - name: Build installable Aqara Switch App image
+        run: |
+          APP_VERSION="$(awk '$1 == "version:" {print $2; exit}' digitalhouses_aqara_switch_app/config.yaml)"
+          test -n "$APP_VERSION"
+          docker build --build-arg BUILD_VERSION="$APP_VERSION" --build-arg BUILD_ARCH=amd64 --tag digitalhouses-aqara-switch-ci:"$APP_VERSION" digitalhouses_aqara_switch_app
+          docker run --rm --entrypoint python3 digitalhouses-aqara-switch-ci:"$APP_VERSION" -c 'import sys; sys.path.insert(0, "/app"); from aqara_switch.runtime import Application; import paho.mqtt.client; print("Aqara App MQTT runtime OK")'
 
   zigbee-monitor-app:
     name: Zigbee Monitor App

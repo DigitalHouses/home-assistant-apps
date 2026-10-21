@@ -1,6 +1,6 @@
 # DigitalHouses Aqara Switch App
 
-**v0.1.2 — experimental Scan/Adopt + Mode Keeper + one-light toggle MVP.**
+**v0.1.3 — installable experimental Scan/Adopt + Mode Keeper + one-light toggle MVP.**
 
 This Home Assistant App supports the commissioning flow for Aqara wired switches,
 battery buttons and key panels. It is not a general automation engine. This MVP scans and adopts Aqara
@@ -13,8 +13,23 @@ It never switches physical Aqara relay output states itself.
 - Home Assistant OS with Supervisor and MQTT service (e.g. Mosquitto).
 - Zigbee2MQTT on the same broker, publishing retained `bridge/info` and `bridge/devices`.
 - Home Assistant Device Registry + Area Registry for accurate room membership.
-- This is an **experimental source-built version** with **manual boot**; no
-  immutable released GHCR image yet. Keep AQPM2 as the only active controller.
+- This is an **experimental App Store installable release** using immutable GHCR
+  images. App boot remains manual for controlled commissioning. Do not assign
+  a button already controlled by AQPM2 or another automation until the legacy
+  handler for that exact action has been disabled.
+
+## Install through Home Assistant Apps
+
+1. Open **Settings → Apps → App Store → Repositories**.
+2. Add `https://github.com/DigitalHouses/home-assistant-apps` if absent.
+3. Refresh the store, open **DigitalHouses Aqara Switch App** and install.
+4. App is set to **manual boot**. Start it manually and inspect the logs
+   before attempting Scan or setting any bindings.
+5. Initially, `configuration_yaml` is only `rooms: []`.
+   Installation alone cannot toggle any light or change any adopted Aqara
+   settings, because no devices have yet been adopted.
+
+Immutable image: `ghcr.io/digitalhouses/digitalhouses_aqara_switch_app:0.1.3`.
 
 ## Configure and scan
 
@@ -42,7 +57,7 @@ against the saved structural fingerprint and flagged when incompatible.
 
 ## First working scenario (0.1.2 MVP)
 
-1. Start the experimental local App, wait until Zigbee2MQTT inventory arrives.
+1. Start the App installed from the DigitalHouses App Store, wait until Zigbee2MQTT inventory arrives.
 2. Press `button.dh_aqara_switch_app_scan` **once**. This is the initial
    Adopt: only newly discovered Aqara inputs are appended to the App Options
    `configuration_yaml`; captured physical setting values become the baseline.
@@ -140,18 +155,19 @@ The LAB package contains no physical relay control and is independent of this Ap
 
 ## Safety and release
 
-Product telemetry remains unadmitted (`telemetry_allowed=false`) while this is
-an experimental, source-only pilot. No release is claimed, and this is not
-installed in the user's home automatically. The live Aqara button and MQTT
+Product telemetry remains unadmitted (`telemetry_allowed=false`). This
+release provides an immutable GHCR image for installation through the
+DigitalHouses Home Assistant App Store. Installation/Scan does not imply
+physical actuator acceptance. The live Aqara button and MQTT
 configuration must be inspected during on-site testing.
 
-Future milestones: reliable HA device binding, delete-with-confirmation in HA,
-binding assignment, safe Dispatcher on virtual lights, then Mode Keeper and
-Maintenance Mode with physically separate acceptance.
+Future milestones: confirmed physical button-to-light E2E, HA binding editor,
+delete-with-confirmation, group member readback, safe startup/cascade recovery
+and Maintenance Mode after separate acceptance.
 
 ### Lessons learned on real installations
 
-**Do not lose field commissioning requirements.** The [field lessons and recovery design backlog](docs/field-lessons-and-recovery.md) records the user-agreed onboarding, device replacement, HA UI, physical load topology, hardware vs cascade power recovery and per-member smart-light startup requirements, including unresolved design decisions. These are **not yet implemented** in v0.1.1.
+**Do not lose field commissioning requirements.** The [field lessons and recovery design backlog](docs/field-lessons-and-recovery.md) records the user-agreed onboarding, device replacement, HA UI, physical load topology, hardware vs cascade power recovery and per-member smart-light startup requirements, including unresolved design decisions. These advanced field requirements remain pending beyond v0.1.3.
 
 For a minimal read-only pilot of real Z2M group and member states, follow [Zigbee group confirmation smoke test (RU)](examples/tests/z2m_group_state_smoke_ru.md). It deliberately avoids bulk readback or any automatic control.
 
