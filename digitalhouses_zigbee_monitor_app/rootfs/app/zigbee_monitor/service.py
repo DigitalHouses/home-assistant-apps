@@ -332,10 +332,12 @@ class MonitorService:
             self.subscribe(HA_STATUS)
             self.subscribe(f"{ROOT}/command/#")
             self._send(APP_AVAILABILITY, "online", force=True)
+            # Source reset must be evaluated before any network details or FSM
+            # are published; never briefly replay a stale HEALTHY at reconnect.
+            self._update_traffic(int(self.now()), allow_event=False)
             self._publish_networks()
             self._publish_incidents()
             self._publish_problem_settings()
-            self._update_traffic(int(self.now()), allow_event=False)
             self._publish_problems(allow_event=False)
 
     def disconnected(self) -> None:
@@ -644,7 +646,7 @@ class MonitorService:
         """10-second UI and diagnostic updates share the exact same RPM."""
         self._update_traffic(epoch, allow_event=allow_event)
         self._publish_networks()
-        self._publish_problems(allow_event=True)
+        self._publish_problems(allow_event=allow_event)
 
     def _update_traffic(self, epoch: int, *, allow_event: bool = True) -> None:
         """One rolling 300-second RPM for UI, detector, baseline and Recorder."""
