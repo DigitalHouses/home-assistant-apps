@@ -652,12 +652,11 @@ class MonitorService:
             observed_rpm = self._live_rpm(nid, epoch) if observed else None
             auto, manual = self.store.network_problem_settings(nid)
             baseline = self.store.rpm_baseline(nid)
-            # AUTO has no trustworthy RPM or threshold until a fresh device
-            # message is seen. Manual threshold keeps its existing behavior.
+            # Observed traffic (including zero) remains numeric for existing
+            # Recorder/UI charts. AUTO baseline/threshold are unknown until
+            # a fresh device message establishes an initial frequency.
             seen_messages = self._session_message_counts.get(nid, 0)
-            rpm = (observed_rpm if
-                   (not auto or baseline is not None or seen_messages > 0)
-                   else None)
+            rpm = observed_rpm
             fsm = self._network_fsm.setdefault(nid, NetworkFSM())
             threshold = auto_threshold(baseline) if auto else manual
             repeaters = self._network_repeaters(nid)
