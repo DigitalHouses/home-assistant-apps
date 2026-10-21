@@ -20,9 +20,9 @@ def parse_legacy(options: Mapping) -> dict:
     return validate_config(data)
 
 
-def parse_configuration(options: Mapping) -> dict:
-    from .structured_options import current
-    return current(options)
+def parse_configuration(options: Mapping, *, profile_path=None) -> dict:
+    from .structured_options import STORE_PATH, current
+    return current(options, STORE_PATH if profile_path is None else profile_path)
 
 
 def encode_configuration(data: Mapping) -> str:

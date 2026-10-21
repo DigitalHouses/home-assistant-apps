@@ -68,7 +68,7 @@ def scan_once(snapshots: list[dict], options_client, ha_registry) -> tuple[dict,
         if "switches" in options and "bindings" in options:
             updated = store_scan(merged, options, STORE_PATH)
             options_client.write(updated)
-            merged = parse_configuration(options_client.read())
+            merged = parse_configuration(options_client.read(), profile_path=STORE_PATH)
         else:
             options_client.write(replace_configuration(options, merged))
     return merged, report
