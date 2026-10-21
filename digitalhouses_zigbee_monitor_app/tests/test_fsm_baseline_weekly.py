@@ -137,7 +137,7 @@ class ZeroThresholdServiceTests(unittest.TestCase):
                 }])), store,
                 publish=lambda topic, payload, retain: (
                     sent.append((topic, payload, retain)) or True),
-                subscribe=lambda _: True, version="0.1.22",
+                subscribe=lambda _: True, version="0.1.23",
                 now=lambda: clock[0],
             )
             service.connected()
@@ -150,9 +150,16 @@ class ZeroThresholdServiceTests(unittest.TestCase):
             service.receive("z2m_battery/bridge/state", b"online", retain=True)
             clock[0] = 631.0  # BOOTING finished + 30 seconds
             service.tick()
-            self.assertEqual(store.rpm_baseline(net), 0)
-            self.assertEqual(service._traffic_metrics[net]["threshold"], 0)
+            # Without any fresh device message, AUTO is still unknown.
+            self.assertIsNone(store.rpm_baseline(net))
+            self.assertIsNone(service._traffic_metrics[net]["threshold"])
             self.assertEqual(service._network_fsm[net].state, "HEALTHY")
+            clock[0] = 700.0
+            service.receive("z2m_battery/Battery_A", b'{"temperature":21.0}')
+            service.tick()
+            # One message over 100 seconds: baseline 0.60, floor(0.3) = 0.
+            self.assertAlmostEqual(store.rpm_baseline(net), 0.60, places=2)
+            self.assertEqual(service._traffic_metrics[net]["threshold"], 0)
             # Bridge and inventory continue to be observed; device MQTT
             # activity may be zero for days, but that is not an alarm.
             for epoch in (961, 3601, 7201, 86401, 7 * 86400 + 631):
