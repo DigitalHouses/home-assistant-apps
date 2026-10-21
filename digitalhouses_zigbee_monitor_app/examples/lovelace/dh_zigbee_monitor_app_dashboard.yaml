@@ -341,7 +341,7 @@ sections:
           {% set unbound.items = unbound.items + [r] -%}
           {% endif -%}
           {% endfor -%}
-          {% for n in networks -%}
+          {% for n in networks | sort(attribute='name', case_sensitive=false) -%}
           {% set last_root = loop.last and unbound.items | count == 0 -%}
           {% set arm = '└─' if last_root else '├─' -%}
           {% set tab = '   ' if last_root else '│  ' -%}
