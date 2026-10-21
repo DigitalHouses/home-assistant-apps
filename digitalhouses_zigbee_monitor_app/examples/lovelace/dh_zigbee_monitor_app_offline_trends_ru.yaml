@@ -12,8 +12,6 @@ filter:
       options:
         name: ИТОГО
     - entity_id: sensor.dh_zigbee_monitor_app_*_offline
-  exclude:
-    - state: unavailable
 sort:
   method: name
 show_empty: false
