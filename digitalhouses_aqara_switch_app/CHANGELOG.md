@@ -1,5 +1,20 @@
 # Changelog — DigitalHouses Aqara Switch App
 
+## 0.1.3
+
+- First installable immutable Home Assistant App release, delivered through
+  GHCR as `ghcr.io/digitalhouses/digitalhouses_aqara_switch_app:0.1.3`
+  for amd64 and aarch64.
+- Enable installation through the DigitalHouses repository in
+  Home Assistant → Settings → Apps → App Store.
+- Preserve explicit user-driven Scan/Adopt, saved physical settings Mode Keeper,
+  and narrowly configured single-light `light.toggle` on Aqara button action.
+- Safe initial options: `rooms: []`, no targets bound, no lighting action
+  until the operator explicitly adds a binding. Manual App boot.
+- Operational limitation: real physical Aqara button-to-light E2E and hardware
+  light confirmation are still pending field acceptance. Existing automation
+  of the same physical press must be disabled before binding a light.
+
 ## 0.1.2
 
 - MVP: explicit Scan is Adopt of new Aqara switches and captures confirmed

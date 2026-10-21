@@ -14,6 +14,7 @@ Open-source applications and Linux agents by **DigitalHouses**, built to extend 
 | [DigitalHouses Recorder App](digitalhouses_recorder_app/README.md) | Home Assistant App | Home Assistant Recorder database size, depth, write activity, and database diagnostics |
 | [DigitalHouses Backblaze App](digitalhouses_backblaze_app/README.md) | Home Assistant App | Backblaze B2 account totals and per-bucket storage usage through MQTT Discovery |
 | [DigitalHouses Internet App](digitalhouses_internet_app/README.md) | Home Assistant App | Internet availability, outage history, and automatic ONT/router recovery |
+| [DigitalHouses Aqara Switch App](digitalhouses_aqara_switch_app/README.md) | Home Assistant App · **Experimental** | Aqara Scan/Adopt, mode settings restoration and bound HA light.toggle |
 | [DigitalHouses Speedtest App](digitalhouses_speedtest_app/README.md) | Home Assistant App · **Deprecated** | Legacy Internet/Speedtest monitoring; superseded by DigitalHouses Internet App |
 
 DigitalHouses uses two delivery models:
@@ -60,7 +61,6 @@ GitHub is the source of truth for reusable DigitalHouses application code and re
 
 ## Work in progress
 
-- [DigitalHouses Aqara Switch App](digitalhouses_aqara_switch_app/README.md) — **Experimental scaffold** for declarative Aqara switches and buttons; no device control yet.
 - [DigitalHouses Presence App](digitalhouses_presence_app/README.md) — **Experimental GPS pilot** for resident presence with MQTT Discovery. Installable through Home Assistant App Store from source; Wi-Fi detection and mobile registration are not yet operational.
 
 ## Development
