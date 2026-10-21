@@ -48,6 +48,40 @@ class FSMContractTests(unittest.TestCase):
             now=331, bridge_state="online", inventory_observed=True,
             rpm=11, threshold=10)[0], "HEALTHY")
 
+    def test_zero_threshold_keeps_quiet_network_healthy_for_days(self):
+        fsm = NetworkFSM()
+        common = {"bridge_state": "online", "inventory_observed": True,
+                  "rpm": 0}
+        self.assertEqual(fsm.observe(
+            now=100, threshold=10, **common), ("DEGRADED", "rpm_below_threshold"))
+        self.assertEqual(fsm.observe(
+            now=400, threshold=10, **common), ("CRITICAL", "rpm_low_5m"))
+        self.assertEqual(fsm.low_since, 100)
+        # AUTO learned a real zero: recover immediately and do not retain the
+        # previous five-minute RPM incident timer.
+        self.assertEqual(fsm.observe(
+            now=401, threshold=0, **common), ("HEALTHY", "ok"))
+        self.assertIsNone(fsm.low_since)
+        for epoch in (900, 3601, 86400, 7 * 86400):
+            self.assertEqual(fsm.observe(
+                now=epoch, threshold=0, **common), ("HEALTHY", "ok"))
+            self.assertIsNone(fsm.low_since)
+        # If user re-enables a positive threshold, a fresh five-minute timer
+        # must start; the old CRITICAL must not return immediately.
+        self.assertEqual(fsm.observe(
+            now=7 * 86400 + 1, threshold=10, **common),
+            ("DEGRADED", "rpm_below_threshold"))
+        self.assertEqual(fsm.observe(
+            now=7 * 86400 + 300, threshold=10, **common),
+            ("DEGRADED", "rpm_below_threshold"))
+        self.assertEqual(fsm.observe(
+            now=7 * 86400 + 301, threshold=10, **common),
+            ("CRITICAL", "rpm_low_5m"))
+        # MANUAL zero must also recover immediately.
+        self.assertEqual(fsm.observe(
+            now=7 * 86400 + 302, threshold=0, **common),
+            ("HEALTHY", "ok"))
+
     def test_true_zero_and_repeater_confirmation_and_observer_loss(self):
         fsm = NetworkFSM()
         common = {"bridge_state":"online","inventory_observed":True,
@@ -70,6 +104,51 @@ class FSMContractTests(unittest.TestCase):
             now=382, bridge_state="offline",inventory_observed=False,
             rpm=None,threshold=0)[0], "CRITICAL")
 
+
+class ZeroThresholdServiceTests(unittest.TestCase):
+    def test_auto_zero_no_rpm_alarm_or_healer_for_two_battery_devices(self):
+        with tempfile.TemporaryDirectory() as temp:
+            clock = [600.0]
+            sent = []
+            net = "battery_only"
+            store = ActivityStore(Path(temp) / "activity.sqlite")
+            self.addCleanup(store.close)
+            service = MonitorService(
+                ZigbeeMonitor(parse_networks([{
+                    "network_id": net, "base_topic": "z2m_battery",
+                    "name": "Battery-only network",
+                }])), store,
+                publish=lambda topic, payload, retain: (
+                    sent.append((topic, payload, retain)) or True),
+                subscribe=lambda _: True, version="0.1.22",
+                now=lambda: clock[0],
+            )
+            service.connected()
+            service.receive("z2m_battery/bridge/devices", json.dumps([
+                {"ieee_address":"0x00158d0000000001", "type":"EndDevice",
+                 "friendly_name":"Battery_A"},
+                {"ieee_address":"0x00158d0000000002", "type":"EndDevice",
+                 "friendly_name":"Battery_B"},
+            ]).encode(), retain=True)
+            service.receive("z2m_battery/bridge/state", b"online", retain=True)
+            clock[0] = 631.0  # BOOTING finished + 30 seconds
+            service.tick()
+            self.assertEqual(store.rpm_baseline(net), 0)
+            self.assertEqual(service._traffic_metrics[net]["threshold"], 0)
+            self.assertEqual(service._network_fsm[net].state, "HEALTHY")
+            # Bridge and inventory continue to be observed; device MQTT
+            # activity may be zero for days, but that is not an alarm.
+            for epoch in (961, 3601, 7201, 86401, 7 * 86400 + 631):
+                clock[0] = float(epoch)
+                service.tick()
+                self.assertEqual(service._network_fsm[net].state, "HEALTHY")
+                self.assertEqual(service._traffic_metrics[net]["traffic_problem"], False)
+                self.assertEqual(service._traffic_metrics[net]["threshold"], 0)
+            self.assertFalse(any(
+                topic == EVENT_TOPIC and
+                json.loads(payload).get("current_state") in ("DEGRADED", "CRITICAL")
+                for topic, payload, _ in sent
+            ))
 
 class StoreContractTests(unittest.TestCase):
     def setUp(self):
