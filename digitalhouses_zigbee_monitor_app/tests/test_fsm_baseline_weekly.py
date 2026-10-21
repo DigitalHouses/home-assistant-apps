@@ -251,7 +251,24 @@ class ServiceFSMTests(unittest.TestCase):
             self.assertEqual(stored[0],before)
             self.assertNotEqual(stored[0],after)
             self.assertEqual(stored[1],1)
-            self.assertEqual(stored[2],1)
+            # Initial synchronization occurred inside this minute: never
+            # mark an only-partially-healthy minute as a healthy-hour sample.
+            self.assertEqual(stored[2],0)
+            # A subsequent fully observed minute is eligible for baseline.
+            clock[0] = 690
+            for _ in range(40):
+                service.receive("z2m/Device",b'{"temperature":20}')
+            service.tick()
+            clock[0] = 719
+            service.tick()
+            clock[0] = 720
+            service.tick()
+            second = store.conn.execute(
+                "SELECT rpm,valid,healthy FROM network_rpm_minutes "
+                "WHERE network_id='site' AND minute_start=660"
+            ).fetchone()
+            self.assertIsNotNone(second)
+            self.assertEqual(second[1:],(1,1))
 
 
 if __name__ == "__main__":
