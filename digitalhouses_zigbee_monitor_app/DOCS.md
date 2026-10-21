@@ -1,3 +1,28 @@
+## MPM adaptive baseline and false-alarm tolerance (v0.1.24)
+
+- **AUTO:** learn a 24-hour rolling arithmetic mean from completed, valid,
+  HEALTHY one-minute MPM observations. Recompute every minute once at least
+  60 eligible minutes exist in the trailing window. Partial gaps and
+  DEGRADED/CRITICAL observations are excluded rather than counted as zeros.
+  The last trusted baseline is frozen whenever the live FSM is not HEALTHY.
+- **Threshold:** AUTO continues to expose `floor(baseline × 0.5)`.
+  Zero explicitly disables *only* the low-MPM check. MANUAL is unchanged
+  until the operator changes it, and the threshold entity shows the actual
+  unadjusted configuration.
+- **10% tolerance:** compare the live 300-second MPM against **90% of the
+  current positive threshold**, for both AUTO and MANUAL. At a displayed
+  threshold of 10, 9.41 and 9.00 are HEALTHY, whereas 8.99 starts the
+  normal five-minute DEGRADED → CRITICAL sequence. The tolerance is a
+  comparison margin, not a second user-configurable threshold or sensor.
+- **Cold start:** AUTO baseline stays unknown until first fresh device MQTT
+  activity; the current initial estimate from the elapsed observed session
+  is retained. A new average is not allowed to overwrite the persisted
+  baseline before 60 trusted HEALTHY minutes are available.
+- **Recovery:** the tolerance permits automatic recovery from a borderline
+  false incident. A severe sustained drop stays DEGRADED/CRITICAL and freezes
+  learning; the user can temporarily lower MANUAL to re-establish a verified
+  HEALTHY training window. Bridge and repeater failures remain independent.
+
 ## Offline histories by Zigbee2MQTT network (v0.1.21)
 
 The App publishes a stable Recorder-facing scalar

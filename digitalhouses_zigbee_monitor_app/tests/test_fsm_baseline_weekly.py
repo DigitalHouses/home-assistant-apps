@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 
 from zigbee_monitor import ActivityStore, ZigbeeMonitor, parse_networks
-from zigbee_monitor.fsm import NetworkFSM, aggregate_fsm, auto_threshold
+from zigbee_monitor.fsm import NetworkFSM, aggregate_fsm, auto_threshold, rpm_below_threshold
 from zigbee_monitor.discovery import EVENT_TOPIC, ROOT
 from zigbee_monitor.service import MonitorService
 
@@ -64,6 +64,27 @@ class FSMContractTests(unittest.TestCase):
         self.assertEqual(fsm.observe(
             now=331, bridge_state="online", inventory_observed=True,
             rpm=11, threshold=10)[0], "HEALTHY")
+
+    def test_ten_percent_tolerance_manual_and_auto(self):
+        self.assertFalse(rpm_below_threshold(9.41, 10))
+        self.assertFalse(rpm_below_threshold(9.0, 10))
+        self.assertTrue(rpm_below_threshold(8.99, 10))
+        self.assertFalse(rpm_below_threshold(0, 0))
+        self.assertFalse(rpm_below_threshold(0, None))
+        fsm = NetworkFSM()
+        normal = {"bridge_state": "online", "inventory_observed": True,
+                  "threshold": 10}
+        self.assertEqual(fsm.observe(now=0, rpm=9.41, **normal)[0], "HEALTHY")
+        self.assertEqual(fsm.observe(now=300, rpm=9.0, **normal)[0], "HEALTHY")
+        self.assertIsNone(fsm.low_since)
+        self.assertEqual(fsm.observe(
+            now=301, rpm=8.99, **normal), ("DEGRADED", "rpm_below_threshold"))
+        self.assertEqual(fsm.observe(
+            now=600, rpm=8.99, **normal), ("DEGRADED", "rpm_below_threshold"))
+        self.assertEqual(fsm.observe(
+            now=601, rpm=8.99, **normal), ("CRITICAL", "rpm_low_5m"))
+        self.assertEqual(fsm.observe(now=602, rpm=9.41, **normal)[0], "HEALTHY")
+        self.assertIsNone(fsm.low_since)
 
     def test_zero_threshold_keeps_quiet_network_healthy_for_days(self):
         fsm = NetworkFSM()
@@ -174,32 +195,110 @@ class ZeroThresholdServiceTests(unittest.TestCase):
                 for topic, payload, _ in sent
             ))
 
+class RollingBaselineServiceTests(unittest.TestCase):
+    def test_manual_tolerance_trains_24h_mean_and_auto_switches_to_new_threshold(self):
+        with tempfile.TemporaryDirectory() as temp:
+            clock = [600.0]
+            store = ActivityStore(Path(temp) / "activity.sqlite")
+            self.addCleanup(store.close)
+            service = MonitorService(
+                ZigbeeMonitor(parse_networks([{
+                    "network_id": "site", "base_topic": "z2m",
+                    "name": "zigbee2mqtt_2",
+                }])), store,
+                publish=lambda topic, payload, retain: True,
+                subscribe=lambda topic: True,
+                version="0.1.24", now=lambda: clock[0],
+            )
+            service.connected()
+            service.receive("z2m/bridge/devices", json.dumps([{
+                "ieee_address": "0x00158d0000000001",
+                "type": "Router", "friendly_name": "Test",
+            }]).encode(), retain=True)
+            service.receive("z2m/bridge/state", b"online", retain=True)
+            # Network once learned a too-high baseline; operator selected
+            # MANUAL 10. 9.41 MPM must now be HEALTHY, not DEGRADED.
+            store.save_rpm_baseline("site", 20.0, epoch=600)
+            store.update_network_problem_settings("site", auto=False, threshold=10)
+            rate = [9.41]
+            service._live_rpm = lambda nid, epoch: rate[0]
+            for minute in range(64):
+                clock[0] = float(600 + minute * 60)
+                service.tick()
+                self.assertEqual(service._network_fsm["site"].state, "HEALTHY")
+                self.assertEqual(service._traffic_metrics["site"]["threshold"], 10)
+                self.assertFalse(service._traffic_metrics["site"]["traffic_problem"])
+            self.assertAlmostEqual(store.rpm_baseline("site"), 9.41, places=2)
+            # A genuine drop below 90% of 10 remains abnormal. Ineligible
+            # minutes and a DEGRADED/CRITICAL interval must not retrain.
+            frozen = store.rpm_baseline("site")
+            rate[0] = 8.5
+            for minute in range(64, 71):
+                clock[0] = float(600 + minute * 60)
+                service.tick()
+            self.assertEqual(service._network_fsm["site"].state, "CRITICAL")
+            self.assertEqual(store.rpm_baseline("site"), frozen)
+            # Once operator returns to AUTO, the learned 24h baseline
+            # yields floor(9.41/2)=4, recovering the RPM-only incident.
+            store.update_network_problem_settings("site", auto=True)
+            clock[0] += 10
+            service._update_traffic(int(clock[0]))
+            self.assertEqual(service._traffic_metrics["site"]["threshold"], 4)
+            self.assertEqual(service._network_fsm["site"].state, "HEALTHY")
+
+
 class StoreContractTests(unittest.TestCase):
     def setUp(self):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
         self.path = Path(temp.name) / "activity.sqlite"
 
-    def test_baseline_uses_only_complete_healthy_hours(self):
+    def test_rolling_24h_mean_uses_only_healthy_minutes(self):
         with ActivityStore(self.path) as store:
-            for minute in range(60):
+            for minute in range(59):
                 store.record_rpm_minute(
-                    "network",minute_start=minute*60,rpm=10,healthy=True)
-            self.assertEqual(store.healthy_hour_baseline(
-                "network",until_epoch=3600),10)
-            for minute in range(60):
-                store.record_rpm_minute(
-                    "network",minute_start=3600+minute*60,rpm=2,
-                    healthy=minute != 30)
-            self.assertEqual(store.healthy_hour_baseline(
-                "network",until_epoch=7200),10)
+                    "network", minute_start=minute*60, rpm=10, healthy=True)
+            # Avoid updating a stable baseline from a few startup readings.
+            self.assertIsNone(store.healthy_rolling_baseline(
+                "network", until_epoch=59*60))
             store.record_rpm_minute(
-                "network",minute_start=3600+30*60,rpm=2,healthy=True)
-            self.assertEqual(store.healthy_hour_baseline(
-                "network",until_epoch=7200),2)
-            store.save_rpm_baseline("network",2,epoch=7200)
+                "network", minute_start=59*60, rpm=10, healthy=True)
+            self.assertEqual(store.healthy_rolling_baseline(
+                "network", until_epoch=3600), 10)
+            # 60 additional minutes: one fault minute must not train.
+            for minute in range(60, 120):
+                store.record_rpm_minute(
+                    "network", minute_start=minute*60, rpm=2,
+                    healthy=minute != 90)
+            self.assertEqual(store.healthy_rolling_baseline(
+                "network", until_epoch=7200), 6.03)
+            # An excluded fault sample is never allowed to push the average.
+            store.record_rpm_minute(
+                "network", minute_start=90*60, rpm=900, healthy=False)
+            self.assertEqual(store.healthy_rolling_baseline(
+                "network", until_epoch=7200), 6.03)
+            store.save_rpm_baseline("network", 6.03, epoch=7200)
         with ActivityStore(self.path) as store:
-            self.assertEqual(store.rpm_baseline("network"),2)
+            self.assertEqual(store.rpm_baseline("network"), 6.03)
+
+    def test_rolling_window_expires_old_data_and_keeps_gaps(self):
+        with ActivityStore(self.path) as store:
+            for minute in range(60):
+                store.record_rpm_minute(
+                    "network", minute_start=minute*60, rpm=50, healthy=True)
+            self.assertEqual(store.healthy_rolling_baseline(
+                "network", until_epoch=3600), 50)
+            for minute in range(60):
+                store.record_rpm_minute(
+                    "network", minute_start=86400+minute*60,
+                    rpm=8, healthy=True)
+            # Previous day's 50 MPM observations have left the rolling window.
+            self.assertEqual(store.healthy_rolling_baseline(
+                "network", until_epoch=90000), 8)
+            # At a later time no eligible samples: keep persisted baseline.
+            self.assertIsNone(store.healthy_rolling_baseline(
+                "network", until_epoch=180000))
+
 
     def test_weekly_includes_168_hours_seven_days_and_explicit_gaps(self):
         with ActivityStore(self.path) as store:
