@@ -37,7 +37,6 @@ def configuration(version: str) -> dict:
         }
         if attrs:
             data["json_attributes_topic"] = ROOT + "/" + state
-            data["json_attributes_template"] = "{{ value_json | tojson }}"
         return data
 
     components = {

@@ -1,7 +1,7 @@
 name: DigitalHouses Aqara Switch App
-version: 0.1.0
+version: 0.1.1
 slug: digitalhouses_aqara_switch_app
-description: Declarative Aqara wall switches, buttons, and panels. Inert scaffold only.
+description: Manual-only Aqara MQTT discovery and HA configuration pilot. No relay control.
 url: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_aqara_switch_app
 arch:
   - amd64
@@ -11,7 +11,14 @@ boot: manual
 init: false
 stage: experimental
 backup: cold
+hassio_api: true
+hassio_role: default
+services:
+  - mqtt:need
 options:
   log_level: info
+  configuration_yaml: |
+    rooms: []
 schema:
   log_level: list(debug|info|warning|error)
+  configuration_yaml: str
