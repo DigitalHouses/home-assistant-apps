@@ -63,10 +63,21 @@ class ZigbeeTreeRenderTests(unittest.TestCase):
             "management_ip": "", "ping": "not_configured", "power_switch": "",
         }
 
-    def render(self, networks, repeaters, network_state="ready"):
+    def render(self, networks, repeaters, network_state="ready",
+               fsm_by_id=None, global_fsm="HEALTHY"):
+        def states(entity):
+            if entity.endswith("networks_details"):
+                return network_state
+            if entity == "sensor.dh_zigbee_monitor_app_fsm":
+                return global_fsm
+            prefix = "sensor.dh_zigbee_monitor_app_"
+            if entity.startswith(prefix) and entity.endswith("_fsm"):
+                nid = entity[len(prefix):-len("_fsm")]
+                return (fsm_by_id or {}).get(nid, "unknown")
+            return "ready"
+
         return self.engine.from_string(self.template).render(
-            states=lambda entity: network_state if entity.endswith("networks_details")
-            else "ready",
+            states=states,
             state_attr=lambda entity, key: networks if key == "networks" else
             repeaters if key == "repeaters" else None,
         )
@@ -111,7 +122,7 @@ class ZigbeeTreeRenderTests(unittest.TestCase):
         self.assertIn("🔌 Status: online", rendered)
         self.assertIn("📦 Devices: 7 (6 online, 1 offline)", rendered)
         self.assertIn("💊 Healer: OFF", rendered)
-        self.assertEqual(len(lines), 10, "one root, one node, eight compact lines")
+        self.assertEqual(len(lines), 11, "one root, one node, FSM plus eight compact fields")
 
     def test_repeaters_alone_are_explicitly_unassigned(self):
         lines = self.tree_lines(self.render([], [
@@ -132,9 +143,9 @@ class ZigbeeTreeRenderTests(unittest.TestCase):
 
     def test_compact_card_has_seven_primary_fields_per_coordinator(self):
         lines = self.tree_lines(self.render([self.network("zigbee2mqtt")], []))
-        self.assertEqual(len(lines), 10)
+        self.assertEqual(len(lines), 11)
         labels = [
-            "🏷️ Тип:", "⚙️ Железо:", "🌐 IP:", "📦 Devices:",
+            "🧠 FSM:", "🏷️ Тип:", "⚙️ Железо:", "🌐 IP:", "📦 Devices:",
             "📡 Repeaters:", "💊 Healer:", "🔌 Status:", "💓 Pulse:",
         ]
         for item, label in zip(lines[2:], labels):
@@ -143,6 +154,26 @@ class ZigbeeTreeRenderTests(unittest.TestCase):
                           "Supervisor:", "Питание:", "Info:",
                           "network_id", "Причины:"):
             self.assertNotIn(forbidden, "\\n".join(lines))
+
+    def test_live_fsm_entity_overrides_stale_network_details(self):
+        network = self.network("zigbee2mqtt")
+        result = self.render(
+            [network], [], fsm_by_id={
+                network["network_id"]: "CRITICAL"
+            }, global_fsm="CRITICAL",
+        )
+        self.assertIn("Zigbee Networks · FSM: CRITICAL", result)
+        self.assertIn("🟥 zigbee2mqtt · CRITICAL", result)
+        self.assertIn("🧠 FSM: CRITICAL", result)
+        self.assertNotIn("🟩 zigbee2mqtt", result)
+
+    def test_fsm_reason_is_visible_on_degraded_network(self):
+        network = self.network("zigbee2mqtt")
+        network["fsm"] = "DEGRADED"
+        network["fsm_reason"] = "rpm_below_threshold"
+        rendered = self.render([network], [])
+        self.assertIn("🟨 zigbee2mqtt · DEGRADED", rendered)
+        self.assertIn("🧠 FSM: DEGRADED · rpm_below_threshold", rendered)
 
     def test_router_status_requires_zigbee_availability(self):
         n = self.network("zigbee2mqtt")
