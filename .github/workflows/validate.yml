@@ -30,6 +30,31 @@ jobs:
       - name: Validate repository contract
         run: python scripts/validate_repository.py
 
+  aqara-switch-app:
+    name: Aqara Switch App
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Compile Aqara Switch App
+        run: python -m compileall -q digitalhouses_aqara_switch_app/rootfs/app digitalhouses_aqara_switch_app/tests
+
+      - name: Run Aqara Switch App tests
+        run: python -m unittest discover -s digitalhouses_aqara_switch_app/tests -v
+
+      - name: Check launcher
+        run: bash -n digitalhouses_aqara_switch_app/rootfs/run.sh
+
+      - name: Smoke build source-only scaffold
+        run: docker build --build-arg BUILD_VERSION=0.1.0 --build-arg BUILD_ARCH=amd64 --tag aqara-switch-scaffold:0.1.0 digitalhouses_aqara_switch_app
+
   zigbee-monitor-app:
     name: Zigbee Monitor App
     runs-on: ubuntu-latest

@@ -60,6 +60,7 @@ GitHub is the source of truth for reusable DigitalHouses application code and re
 
 ## Work in progress
 
+- [DigitalHouses Aqara Switch App](digitalhouses_aqara_switch_app/README.md) — **Experimental scaffold** for declarative Aqara switches and buttons; no device control yet.
 - [DigitalHouses Presence App](digitalhouses_presence_app/README.md) — **Experimental GPS pilot** for resident presence with MQTT Discovery. Installable through Home Assistant App Store from source; Wi-Fi detection and mobile registration are not yet operational.
 
 ## Development
