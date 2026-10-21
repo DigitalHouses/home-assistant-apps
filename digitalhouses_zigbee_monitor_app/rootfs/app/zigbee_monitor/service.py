@@ -21,11 +21,12 @@ from .infrastructure import parse_bridge_infrastructure
 from .discovery import (
     APP_AVAILABILITY, DETAILS, DISCOVERY, EVENT_TOPIC, HA_STATUS, HISTORY, ROOT,
     build_discovery, network_rpm_topic, network_rpm_availability_topic,
-    network_rpm_smooth_topic, network_rpm_threshold_topic,
+    network_rpm_threshold_topic,
     network_rpm_threshold_availability_topic, state_topic, validity_topic,
 )
 from .problems import PROBLEM_TYPES, Problem, TrafficDetector, network_problems
 from .storage import ActivityStore
+from .fsm import NetworkFSM, aggregate_fsm, auto_threshold
 
 log = logging.getLogger(__name__)
 Publish = Callable[[str, str, bool], bool]
@@ -73,7 +74,12 @@ class MonitorService:
         self._event_bridge_state: dict[str, str] = {}
         self._event_device_state: dict[tuple[str, str], str] = {}
         self._problem_states: dict[tuple[str, str], bool | None] = {}
-        self._traffic_detectors: dict[str, TrafficDetector] = {}
+        self._traffic_detectors: dict[str, TrafficDetector] = {}  # legacy problem tests
+        self._network_fsm: dict[str, NetworkFSM] = {}
+        self._fsm_published: dict[str, str] = {}
+        self._global_fsm_published: str | None = None
+        self._minute_ineligible: set[tuple[str, int]] = set()
+        self._rpm_sample_minute: int | None = None
         self._traffic_started: dict[str, float] = {}
         self._traffic_metrics: dict[str, dict[str, object]] = {}
         # Preliminary per-network session RPM uses only fresh device MQTT.
@@ -287,6 +293,13 @@ class MonitorService:
             self._event_bridge_state.clear()
             self._event_device_state.clear()
             self._problem_states.clear()
+            self._fsm_published.clear()
+            self._global_fsm_published = None
+            self._rpm_sample_minute = None
+            self._minute_ineligible.clear()
+            for fsm in self._network_fsm.values():
+                fsm.low_since = None
+                fsm.missing_since = None
             self._traffic_started.clear()
             self._traffic_metrics.clear()
             self._live_started.clear()
@@ -322,6 +335,7 @@ class MonitorService:
             self._publish_networks()
             self._publish_incidents()
             self._publish_problem_settings()
+            self._update_traffic(int(self.now()), allow_event=False)
             self._publish_problems(allow_event=False)
 
     def disconnected(self) -> None:
@@ -514,6 +528,103 @@ class MonitorService:
         self._detail("repeaters_details", "repeaters", rows,
                      valid=bool(self.monitor.networks or rows))
 
+    def _network_repeaters(self, nid: str) -> dict[str, str]:
+        """Recognized or configured infrastructure repeaters, never every router."""
+        configured = {str(x["ieee"]) for x in self._agent_registry["repeaters"]}
+        result: dict[str, str] = {}
+        if not self.monitor.network_status(nid)["inventory_observed"]:
+            return result
+        for device in self.monitor.devices(nid):
+            if device.ieee_address in configured or is_recognized_repeater(device):
+                result[device.ieee_address] = self.monitor.availability(
+                    nid, device.ieee_address
+                )
+        return result
+
+    def _publish_fsm(self, *, allow_event: bool) -> None:
+        """Publish all retained states BEFORE any transient FSM machine events."""
+        transitions: list[tuple[str, dict[str, object]]] = []
+        for network in self.monitor.networks:
+            nid = network.network_id
+            fsm = self._network_fsm.setdefault(nid, NetworkFSM())
+            topic = f"{ROOT}/networks/{nid}/fsm/state"
+            previous = self._fsm_published.get(nid)
+            if not self._send(topic, fsm.state):
+                return
+            self._fsm_published[nid] = fsm.state
+            if (allow_event and previous is not None and
+                    previous != "BOOTING" and previous != fsm.state):
+                transitions.append(("network_fsm_changed", {
+                    "network_id":nid, "base_topic":network.base_topic,
+                    "previous_state":previous, "current_state":fsm.state,
+                    "reason":fsm.reason,
+                    "severity":"critical" if fsm.state == "CRITICAL"
+                    else "warning" if fsm.state == "DEGRADED" else "info",
+                }))
+        current = aggregate_fsm(
+            [self._network_fsm.setdefault(n.network_id, NetworkFSM()).state
+             for n in self.monitor.networks]
+        )
+        previous_global = self._global_fsm_published
+        if not self._send(f"{ROOT}/fsm/state", current):
+            return
+        self._global_fsm_published = current
+        if (allow_event and previous_global is not None and
+                previous_global != "BOOTING" and previous_global != current):
+            transitions.append(("global_fsm_changed", {
+                "previous_state":previous_global, "current_state":current,
+                "severity":"critical" if current == "CRITICAL"
+                else "warning" if current == "DEGRADED" else "info",
+            }))
+        for event_type, fields in transitions:
+            self._emit_event(event_type, **fields)
+
+    def _record_rpm_samples(self, epoch: int) -> None:
+        """At most one row per completed minute; skipped minutes remain gaps."""
+        minute = epoch // 60
+        previous = self._rpm_sample_minute
+        self._rpm_sample_minute = minute
+        if previous is None or previous != minute - 1:
+            self._minute_ineligible = {
+                item for item in self._minute_ineligible if item[1] >= minute
+            }
+            return
+        for network in self.monitor.networks:
+            nid = network.network_id
+            metrics = self._traffic_metrics.get(nid, {})
+            rpm = metrics.get("rpm")
+            valid = isinstance(rpm, (int, float)) and not isinstance(rpm, bool)
+            healthy = (valid and
+                       self._network_fsm[nid].state == "HEALTHY" and
+                       (nid, previous) not in self._minute_ineligible)
+            self.store.record_rpm_minute(
+                nid, minute_start=previous * 60,
+                rpm=float(rpm) if valid else None,
+                healthy=bool(healthy),
+            )
+            # An initial zero seed is temporary: replace it with a minimum
+            # of *complete* healthy hours whenever such observations exist.
+            hourly = self.store.healthy_hour_baseline(nid, until_epoch=epoch)
+            if hourly is not None:
+                current = self.store.rpm_baseline(nid)
+                if current != hourly:
+                    self.store.save_rpm_baseline(nid, hourly, epoch=epoch)
+        self._minute_ineligible = {
+            item for item in self._minute_ineligible if item[1] >= minute
+        }
+
+    def _publish_weekly(self, epoch: int) -> None:
+        for network in self.monitor.networks:
+            nid = network.network_id
+            key = f"{nid}_rpm_weekly_details"
+            payload = self.store.weekly_rpm_summary(nid, until_epoch=epoch)
+            serialized = _json(payload)
+            # MQTT Discovery/HA attribute payload must stay comfortably bounded.
+            if len(serialized.encode("utf-8")) > 16000:
+                log.warning("Weekly RPM details exceed 16 KB for %s", nid)
+                continue
+            self._send(state_topic(key), serialized)
+
     def _live_rpm(self, nid: str, epoch: int) -> float:
         """Fresh non-retained MQTT device traffic since this online session.
 
@@ -530,85 +641,52 @@ class MonitorService:
         return round(60 * sum(buckets.values()) / seconds, 2)
 
     def _publish_live_rpm(self, epoch: int) -> None:
-        """Refresh live display at most every 10 s, independent of RPM alarms."""
-        changed = False
-        for network in self.monitor.networks:
-            nid = network.network_id
-            if self.monitor.network_status(nid)["bridge_state"] != "online":
-                self._live_started.pop(nid, None)
-                self._live_counts.pop(nid, None)
-                continue
-            metrics = self._traffic_metrics.setdefault(nid, {})
-            if metrics.get("rpm_phase") == "measured":
-                continue
-            live = self._live_rpm(nid, epoch)
-            # The phase itself is part of the display contract: 0 while
-            # warming up MUST NOT be mistaken for confirmed traffic failure.
-            if metrics.get("rpm") != live or metrics.get("rpm_phase") != "warming_up":
-                metrics["rpm"] = live
-                metrics["rpm_phase"] = "warming_up"
-                changed = True
-        if changed:
-            self._publish_networks()
+        """10-second UI and diagnostic updates share the exact same RPM."""
+        self._update_traffic(epoch, allow_event=True)
+        self._publish_networks()
+        self._publish_problems(allow_event=True)
 
-    def _update_traffic(self, epoch: int) -> None:
-        """Evaluate complete SQLite minutes, never individual MQTT packets.
-
-        One network cannot affect the decision or publishing cadence of another.
-        A source reconnect restarts the warm-up, not the persisted history.
-        """
-        until = epoch - epoch % 60
+    def _update_traffic(self, epoch: int, *, allow_event: bool = True) -> None:
+        """One rolling 300-second RPM for UI, detector, baseline and Recorder."""
         for network in self.monitor.networks:
             nid = network.network_id
             status = self.monitor.network_status(nid)
-            if status["bridge_state"] != "online":
-                self._traffic_started.pop(nid, None)
-                self._traffic_detectors.setdefault(nid, TrafficDetector()).reset()
-                self._traffic_metrics.pop(nid, None)
-                self._live_started.pop(nid, None)
-                self._live_counts.pop(nid, None)
-                continue
-            started = self._traffic_started.setdefault(nid, float(epoch))
+            observed = (status["bridge_state"] == "online" and
+                        status["inventory_observed"])
+            rpm = self._live_rpm(nid, epoch) if observed else None
             auto, manual = self.store.network_problem_settings(nid)
-            values = self.store.network_message_minutes(
-                nid, from_epoch=max(0, until - 3900), until_epoch=until,
+            baseline = self.store.rpm_baseline(nid)
+            fsm = self._network_fsm.setdefault(nid, NetworkFSM())
+            threshold = auto_threshold(baseline) if auto else manual
+            repeaters = self._network_repeaters(nid)
+            fsm.observe(
+                now=float(epoch), bridge_state=str(status["bridge_state"]),
+                inventory_observed=bool(status["inventory_observed"]),
+                rpm=rpm, threshold=threshold, repeaters=repeaters,
             )
-            rpm = sum(values.get(until - 60 * n, 0) for n in range(1, 6)) / 5
-            detector = self._traffic_detectors.setdefault(nid, TrafficDetector())
-            baseline: float | None = None
-            threshold: float | None = float(manual) if not auto else None
-            if auto and epoch - started >= 3900:
-                historical = [
-                    values.get(t, 0) for t in
-                    range(until - 3900, until - 300, 60)
-                ]
-                if len(historical) == 60 and sum(v > 0 for v in historical) >= 20:
-                    baseline = round(sum(historical) / 60, 2)
-                    if baseline >= 4:
-                        threshold = max(1.0, round(baseline * 0.25, 2))
-            if auto and detector.current is True:
-                # Freeze the learned threshold throughout a diagnosed outage.
-                previous = self._traffic_metrics.get(nid, {})
-                threshold = previous.get("threshold") or threshold
-                baseline = previous.get("baseline") or baseline
-            trusted = (
-                status["inventory_observed"] and
-                epoch - started >= (3900 if auto else 600)
-                and threshold is not None
-            )
-            active = detector.observe(
-                now=float(epoch),
-                rpm=rpm if trusted else None,
-                threshold=float(threshold) if trusted else None,
-            )
+            if (baseline is None and fsm.boot_completed_at is not None and
+                    epoch - fsm.boot_completed_at >= 30 and rpm is not None):
+                # Snapshot of the real observed rate, including a valid zero.
+                baseline = float(rpm)
+                self.store.save_rpm_baseline(nid, baseline, epoch=epoch)
+                threshold = auto_threshold(baseline) if auto else manual
+                fsm.observe(
+                    now=float(epoch), bridge_state=str(status["bridge_state"]),
+                    inventory_observed=bool(status["inventory_observed"]),
+                    rpm=rpm, threshold=threshold, repeaters=repeaters,
+                )
+            low = (rpm is not None and threshold is not None and
+                   threshold > 0 and rpm < threshold)
             self._traffic_metrics[nid] = {
-                "rpm": round(rpm, 2) if trusted else self._live_rpm(nid, epoch),
-                "rpm_phase": "measured" if trusted else "warming_up",
-                "threshold": threshold, "baseline": baseline,
-                "rpm_auto": auto,
-                "traffic_problem": active,
-                "observed_at": _iso(epoch) if trusted else None,
+                "rpm":rpm, "rpm_phase":"measured" if observed else "unavailable",
+                "threshold":threshold, "baseline":baseline, "rpm_auto":auto,
+                "traffic_problem":bool(low) if rpm is not None and
+                threshold is not None else None,
+                "observed_at":_iso(epoch) if observed else None,
             }
+            if fsm.state != "HEALTHY" or low:
+                self._minute_ineligible.add((nid, epoch // 60))
+        self._publish_fsm(allow_event=allow_event)
 
     def _publish_problems(self, *, allow_event: bool) -> None:
         """Publish each known problem, then the coherent aggregate, then events."""
@@ -698,34 +776,20 @@ class MonitorService:
             self._send(availability, "online")
 
     def _publish_rpm_chart(self, row: dict[str, object]) -> None:
-        """Publish raw + graph-only EMA, sampled at most once per minute.
-
-        This smoother NEVER enters TrafficDetector, threshold learning or
-        Healer. No MQTT extra traffic per device message.
-        """
+        """Recorder-friendly one sample/minute of the canonical five-minute RPM."""
         nid = str(row["network_id"])
         self._publish_effective_threshold(row)
         available_topic = network_rpm_availability_topic(nid)
         rpm = row.get("rpm")
-        if row.get("status") != "online" or (
-            not isinstance(rpm, (int, float)) or isinstance(rpm, bool)
-        ):
+        if row.get("status") != "online" or not isinstance(rpm, (int, float)):
             self._rpm_chart_minute.pop(nid, None)
-            self._rpm_ema.pop(nid, None)
             self._send(available_topic, "offline")
             return
         minute = int(self.now()) // 60
         if (self._rpm_chart_minute.get(nid) == minute and
                 self._published.get(available_topic) == "online"):
             return
-        # EMA over 15 one-minute samples: alpha = 2/(15+1).
-        # New sessions seed with first observed value; no fabricated history.
-        raw = float(rpm)
-        previous = self._rpm_ema.get(nid)
-        smooth = raw if previous is None else previous + 0.125 * (raw - previous)
-        if (self._send(network_rpm_topic(nid), f"{raw:.2f}")
-                and self._send(network_rpm_smooth_topic(nid), f"{smooth:.2f}")):
-            self._rpm_ema[nid] = smooth
+        if self._send(network_rpm_topic(nid), f"{float(rpm):.2f}"):
             self._send(available_topic, "online")
             self._rpm_chart_minute[nid] = minute
 
@@ -789,6 +853,8 @@ class MonitorService:
                     "binding_verified": False,
                 },
                 "status": status["bridge_state"], "devices": status["devices"],
+                "fsm":self._network_fsm.get(config.network_id, NetworkFSM()).state,
+                "fsm_reason":self._network_fsm.get(config.network_id, NetworkFSM()).reason,
                 "infrastructure": saved["data"] if saved else None,
                 "infrastructure_received_at": saved["received_at"] if saved else None,
                 "infrastructure_seen": config.network_id in self._bridge_info_seen,
@@ -1048,6 +1114,8 @@ class MonitorService:
                         self._publish_inventory_and_availability()
                 self._publish_rankings(epoch=epoch)
                 self._update_traffic(epoch)
+                self._record_rpm_samples(epoch)
+                self._publish_weekly(epoch)
                 self._publish_problems(allow_event=True)
                 self._publish_networks()
                 if self._last_trim_day != epoch // 86400:
@@ -1185,9 +1253,6 @@ class MonitorService:
                     return "problem_setting_ignored"
                 self._publish_problem_settings()
                 # Re-evaluate from existing SQLite history; do not fake a probe.
-                self._traffic_detectors.setdefault(
-                    network_id, TrafficDetector(),
-                ).reset()
                 self._traffic_metrics.pop(network_id, None)
                 self._update_traffic(int(self.now()))
                 self._publish_problems(allow_event=False)
@@ -1238,6 +1303,7 @@ class MonitorService:
                         DISCOVERY, _json(build_discovery(self.version, self.monitor.networks))
                     )
                     self._publish_problem_settings()
+                    self._update_traffic(int(self.now()), allow_event=False)
                     self._publish_networks()
                     self._publish_inventory_and_availability()
                     self._publish_problems(allow_event=False)
@@ -1341,6 +1407,7 @@ class MonitorService:
                     device_ieee=sample.ieee_address,
                     live_event_type=event[0] if event is not None else None,
                 )
+                self._update_traffic(int(self.now()), allow_event=not retain and not dup)
                 self._publish_networks()
                 self._publish_inventory_and_availability()
                 self._publish_incidents()
