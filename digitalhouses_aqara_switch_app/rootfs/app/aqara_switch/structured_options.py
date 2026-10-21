@@ -134,13 +134,22 @@ def current(options: Mapping, path: Path = STORE_PATH) -> dict:
 def migrate(options_client, path: Path = STORE_PATH) -> dict:
     """Migrate existing installations at startup, without deleting legacy input.
 
-    Keeps legacy text as temporary rollback copy until a separate schema-removal
-    release. Writes profiles first and validates a round-trip before options.
+    Preserves legacy profile and raw YAML under /data before clearing text field.
+    Writes profiles first and validates a round-trip before options.
     """
     options = options_client.read()
-    if "switches" in options and "bindings" in options:
+    old_text = options.get("configuration_yaml")
+    raw_legacy = isinstance(old_text, str) and bool(old_text.strip())
+    has_structured = "switches" in options and "bindings" in options
+    must_import = raw_legacy and (not path.exists() or
+        (has_structured and not options["switches"] and not options["bindings"]))
+    if not must_import and has_structured:
         current(options, path)
         return options
+    if not raw_legacy:
+        if has_structured:
+            return options
+        raise CatalogError("No legacy configuration available for migration")
     from .configuration import parse_legacy
     legacy = parse_legacy(options)
     switches = switch_rows(legacy)
@@ -152,8 +161,12 @@ def migrate(options_client, path: Path = STORE_PATH) -> dict:
             raise CatalogError("Migration blocked: Adopt store conflicts with old YAML")
     else:
         _save_profiles(path, legacy)
-    updated = {**options, "switches": switches, "bindings": bindings}
-    # Retain old YAML verbatim for rollback; not a writable control source.
+    backup = path.with_name("legacy_configuration_yaml.txt")
+    if not backup.exists():
+        backup.write_text(old_text, encoding="utf-8")
+    updated = {**options, "switches": switches, "bindings": bindings,
+               "configuration_yaml": ""}
+    # Profile snapshot and legacy text remain under /data for rollback.
     projected = project(_read_profiles(path), updated)
     # Validate no lost hardware or bindings prior to writing Supervisor options.
     if len(switch_rows(projected)) != len(switches):
