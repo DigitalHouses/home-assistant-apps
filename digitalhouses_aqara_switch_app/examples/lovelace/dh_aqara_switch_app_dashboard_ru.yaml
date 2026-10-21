@@ -20,7 +20,7 @@ views:
 
           # Requires Mushroom and custom:button-card. Never invents a successful scan.
           # Check Releases/Install controls are not shown until real version checking is ready.
-          type: vertical-stack
+          - type: vertical-stack
           cards:
             - type: custom:button-card
               entity: sensor.dh_aqara_switch_app_card
@@ -95,7 +95,7 @@ views:
             heading_style: subtitle
             icon: mdi:gesture-tap-button
 
-          type: markdown
+          - type: markdown
           content: |-
             {% set entity = 'sensor.dh_aqara_switch_app_last_action' %}
             {% set status = states(entity) %}
@@ -137,7 +137,7 @@ views:
             heading_style: title
             icon: mdi:radar
 
-          type: markdown
+          - type: markdown
           content: |-
             {% set e = 'sensor.dh_aqara_switch_app_scan_details' %}
             {% set a = state_attr(e, 'added') or [] %}
@@ -167,7 +167,7 @@ views:
             heading_style: subtitle
             icon: mdi:alert-outline
 
-          type: markdown
+          - type: markdown
           content: |-
             {% set e = 'sensor.dh_aqara_switch_app_problems' %}
             {% set active = state_attr(e, 'active') or [] %}
@@ -191,7 +191,7 @@ views:
             icon: mdi:family-tree
 
           # Business logic is in Python; no UI-owned state or config writes.
-          type: markdown
+          - type: markdown
           content: |-
             {% set entity = 'sensor.dh_aqara_switch_app_devices_details' %}
             {% set rooms = state_attr(entity, 'rooms') or [] %}
