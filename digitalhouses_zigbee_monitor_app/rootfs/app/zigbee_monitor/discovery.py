@@ -141,14 +141,6 @@ def build_discovery(version: str, networks: tuple[Network, ...] = ()) -> dict[st
         icon="mdi:alert-network-outline",
         entity_category="diagnostic",
     )
-    # Fixed-path, read-only mount diagnostic; no Zigbee2MQTT secrets or raw YAML.
-    components["config_access"] = _component(
-        "sensor", "config_access", "HA configuration file access",
-        value_template="{{ value_json.state }}",
-        json_attributes_topic=state_topic("config_access"),
-        entity_category="diagnostic",
-        icon="mdi:folder-search-outline",
-    )
     components["refresh_state"] = _component(
         "sensor", "refresh_state", "Refresh state",
         value_template="{{ value_json.state }}",
