@@ -9,7 +9,7 @@ import yaml
 from .catalog import CatalogError, validate_config
 
 
-def parse_configuration(options: Mapping) -> dict:
+def parse_legacy(options: Mapping) -> dict:
     raw = options.get("configuration_yaml")
     if not isinstance(raw, str) or not raw.strip():
         raise CatalogError("Supervisor configuration_yaml must be nonempty YAML")
@@ -18,6 +18,11 @@ def parse_configuration(options: Mapping) -> dict:
     except yaml.YAMLError as exc:
         raise CatalogError("Invalid configuration_yaml syntax") from exc
     return validate_config(data)
+
+
+def parse_configuration(options: Mapping) -> dict:
+    from .structured_options import current
+    return current(options)
 
 
 def encode_configuration(data: Mapping) -> str:
