@@ -104,6 +104,19 @@ unknown relays during adoption.
 
 ## Home Assistant UI
 
+**Единый Dashboard (MVP):** [Aqara Switch — полная панель](examples/lovelace/dh_aqara_switch_app_dashboard_ru.yaml).
+Добавьте в Home Assistant новую панель (ручная конфигурация), откройте
+**Редактировать панель → Редактор конфигурации (Raw configuration)** и
+вставьте YAML целиком. Для строки состояния/чипов нужны установленные
+`custom:button-card` и Mushroom. Панель использует только реально
+опубликованные сущности `v0.1.3`: Scan, состояние и версия App,
+дерево устройств, результат последнего Scan, проблемы и последнее
+`light.toggle`-действие. Привязки клавиш редактируются в **параметрах App**,
+не в Lovelace. Панель не исполняет световые команды и не доказывает
+физическое переключение светильника.
+
+
+
 Examples under [examples/lovelace](examples/lovelace/):
 - [Status / Scan / Supervisor restart card](examples/lovelace/dh_aqara_switch_app_card_ru.yaml)
 - [Room → switch → actions/settings tree](examples/lovelace/dh_aqara_switch_app_tree_ru.yaml)
