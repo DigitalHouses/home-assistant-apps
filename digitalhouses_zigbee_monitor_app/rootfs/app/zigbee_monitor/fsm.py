@@ -19,6 +19,12 @@ def auto_threshold(baseline: float | None) -> int | None:
     return math.floor(baseline / 2)
 
 
+def rpm_below_threshold(rpm: float | None, threshold: int | None) -> bool:
+    """10% tolerance: trigger only below 90% of positive effective threshold."""
+    return (rpm is not None and threshold is not None and
+            threshold > 0 and rpm < threshold * 0.9)
+
+
 def aggregate_fsm(states: list[str]) -> str:
     """Worst confirmed infrastructure state; UNKNOWN is not an FSM value."""
     if any(state not in PRIORITY for state in states):
@@ -85,7 +91,7 @@ class NetworkFSM:
         if threshold == 0:
             self.low_since = None
             rpm_degraded = False
-        elif threshold is not None and rpm is not None and rpm < threshold:
+        elif rpm_below_threshold(rpm, threshold):
             if self.low_since is None:
                 self.low_since = now
             low_for = max(0.0, now - self.low_since)
