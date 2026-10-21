@@ -47,6 +47,20 @@ Examples under [examples/lovelace](examples/lovelace/):
 - [Last Scan report](examples/lovelace/dh_aqara_switch_app_last_scan_ru.yaml)
 - [Device problem overview](examples/lovelace/dh_aqara_switch_app_problems_ru.yaml)
 
+## Aqara button → light/group outcome contract (planned)
+
+Light targets and group-aware **per-member** startup configuration belong in
+**this Aqara Switch App**, not a separate lights App. A key may target one light
+or a Zigbee group; group members are discovered from Zigbee2MQTT `bridge/groups`
+rather than copied into each switch's config.
+
+The product must report the dispatched command, target, current group members,
+and individually observed/confirmed states with `partial` / `unknown`
+where appropriate. **Zigbee2MQTT optimistic group or member state is not proof**
+that all physical lamps switched; direct Zigbee Binding can bypass this App.
+See [field lessons: light ownership and command verification](docs/field-lessons-and-recovery.md).
+This is a **future requirement**, not a claim about v0.1.1.
+
 The pilot status card has working Scan and Supervisor Restart controls. Full
 DigitalHouses release check, Refresh and Install chips are deferred until
 their backends are available; no fake buttons are presented. The tree is
