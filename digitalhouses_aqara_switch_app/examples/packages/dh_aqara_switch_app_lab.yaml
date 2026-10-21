@@ -1,0 +1,50 @@
+# DigitalHouses Aqara Switch App LAB — virtual loads, not physical relays.
+# Example installation: /config/packages/Global/DH_APP/dh_aqara_switch_app_lab.yaml
+# Confirm site package layout before copying. No automations or real hardware writes.
+# Built on standard HA template light backed by persistent input_boolean helpers.
+input_boolean:
+  dh_aqara_lab_chandelier:
+    name: DH Aqara LAB · Люстра (состояние)
+    icon: mdi:ceiling-light
+  dh_aqara_lab_spots:
+    name: DH Aqara LAB · Споты (состояние)
+    icon: mdi:spotlight-beam
+  dh_aqara_lab_led_strip:
+    name: DH Aqara LAB · LED (состояние)
+    icon: mdi:led-strip-variant
+
+template:
+  - light:
+      - name: DH Aqara LAB · Люстра
+        unique_id: dh_aqara_lab_chandelier
+        state: "{{ is_state('input_boolean.dh_aqara_lab_chandelier', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.dh_aqara_lab_chandelier
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.dh_aqara_lab_chandelier
+      - name: DH Aqara LAB · Споты
+        unique_id: dh_aqara_lab_spots
+        state: "{{ is_state('input_boolean.dh_aqara_lab_spots', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.dh_aqara_lab_spots
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.dh_aqara_lab_spots
+      - name: DH Aqara LAB · LED-лента
+        unique_id: dh_aqara_lab_led_strip
+        state: "{{ is_state('input_boolean.dh_aqara_lab_led_strip', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.dh_aqara_lab_led_strip
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.dh_aqara_lab_led_strip

@@ -1,0 +1,11 @@
+# Local smoke-test panel for virtual Home Assistant lamps.
+# Entities are examples; HA may add _2 suffix if unique_ids collide.
+type: entities
+title: DH Aqara · LAB
+entities:
+  - entity: light.dh_aqara_lab_liustra
+    name: Люстра
+  - entity: light.dh_aqara_lab_spots
+    name: Споты
+  - entity: light.dh_aqara_lab_led_lenta
+    name: LED-лента
