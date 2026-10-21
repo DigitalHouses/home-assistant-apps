@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.24
+
+- Replace the old minimum full HEALTHY-hour RPM baseline with the **24-hour rolling mean of valid, HEALTHY one-minute MPM samples**, refreshed each minute when eligible observations are available. Require at least 60 valid HEALTHY minutes before changing the persisted baseline; missing or unhealthy minutes are excluded, never silently treated as zero. Retain the last trusted baseline during DEGRADED/CRITICAL or insufficient coverage.
+- Introduce a **10% tolerance** on the effective traffic threshold for both AUTO and MANUAL. A low-MPM incident starts only when observed MPM is **strictly below 90%** of the displayed threshold; for MANUAL threshold 10, 9.41 and 9.00 are HEALTHY, while 8.99 can enter DEGRADED and CRITICAL after five continuous minutes. Recovery clears the low-traffic timer. The displayed threshold remains the configured value.
+- Keep AUTO threshold `floor(rolling_baseline × 0.5)`, zero-threshold RPM exemption, preexisting startup baseline rules, separate bridge/repeater failures, and Healer OFF. No new settings or HA entities.
+- Add storage and FSM regression tests plus a simulated zigbee2mqtt_2 integration flow for MANUAL tolerance, rolling learning, freezing during incidents and subsequent AUTO recovery.
+
+
 ## 0.1.23
 
 - Change AUTO threshold calculation to floor(50% of the observed per-network baseline). A result of 0 is valid and suppresses RPM-only problems; retain the independent zero-threshold FSM bypass from v0.1.22.
