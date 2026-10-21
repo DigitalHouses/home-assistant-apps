@@ -624,11 +624,20 @@ sections:
           *Показаны первые 40 устройств из {{ state_attr(entity, 'total') }}.*
           {% endif %}
           {% endif %}
-      - type: history-graph
-        title: Offline — история
-        entities:
-          - entity: sensor.dh_zigbee_monitor_app_offline
-        hours_to_show: 72
+      - type: custom:auto-entities
+        card:
+          type: history-graph
+          title: Offline · все Z2M + ИТОГО · 72 часа
+          hours_to_show: 72
+        filter:
+          include:
+            - entity_id: sensor.dh_zigbee_monitor_app_offline
+              options:
+                name: ИТОГО
+            - entity_id: sensor.dh_zigbee_monitor_app_*_offline
+        sort:
+          method: name
+        show_empty: false
 
   - type: grid
     cards:
