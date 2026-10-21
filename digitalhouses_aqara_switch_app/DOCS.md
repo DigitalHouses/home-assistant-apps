@@ -60,3 +60,7 @@ Do not enable a second physical controller until QA and explicit cutover.
 
 Telemetry and immutable GHCR release are still blocked by the product
 privacy/release contracts. No telemetry is transmitted in this pilot.
+
+## Полевые уроки и аварийное восстановление
+
+[Отдельный обязательный документ требований](docs/field-lessons-and-recovery.md) фиксирует договорённости по UI, логическим и электрическим связям, замене устройств, двум моделям восстановления питания, Zigbee storm и startup-политикам участников Zigbee-групп. Новые фичи не должны противоречить ему без явного пересмотра решения. Каскад и Light Startup Keeper пока не реализованы.
