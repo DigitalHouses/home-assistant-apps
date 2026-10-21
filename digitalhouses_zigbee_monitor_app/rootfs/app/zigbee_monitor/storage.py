@@ -627,31 +627,25 @@ class ActivityStore:
                  int(healthy and rpm is not None)),
             )
 
-    def healthy_hour_baseline(
+    def healthy_rolling_baseline(
         self, network_id: str, *, until_epoch: int,
     ) -> float | None:
-        """Minimum *complete healthy* UTC hour in the last 24 finished hours."""
-        until = until_epoch - until_epoch % 3600
-        start = max(0, until - 24 * 3600)
-        rows = self.conn.execute(
-            "SELECT minute_start,rpm,valid,healthy FROM network_rpm_minutes "
+        """24-hour trailing mean of confirmed HEALTHY one-minute RPM samples.
+
+        Only completed minutes inside the window count. At least 60 eligible
+        samples are needed before replacing the persisted baseline; isolated
+        startup observations must not re-train the detector. Unhealthy gaps
+        are excluded rather than averaged as zeros.
+        """
+        end = until_epoch - until_epoch % 60
+        start = max(0, end - 24 * 3600)
+        count, average = self.conn.execute(
+            "SELECT COUNT(*), AVG(rpm) FROM network_rpm_minutes "
             "WHERE network_id=? AND minute_start>=? AND minute_start<? "
-            "ORDER BY minute_start", (network_id,start,until),
-        ).fetchall()
-        hours: dict[int,list[tuple[int,float | None,int,int]]] = {}
-        for minute,rpm,valid,healthy in rows:
-            hours.setdefault(int(minute)//3600, []).append(
-                (int(minute),rpm,int(valid),int(healthy))
-            )
-        candidates = []
-        for hour, samples in hours.items():
-            if (len(samples) == 60 and
-                    {m for m,_,_,_ in samples} ==
-                    set(range(hour*3600,(hour+1)*3600,60)) and
-                    all(valid and healthy and rpm is not None
-                        for _,rpm,valid,healthy in samples)):
-                candidates.append(sum(float(rpm) for _,rpm,_,_ in samples) / 60)
-        return round(min(candidates),2) if candidates else None
+            "AND valid=1 AND healthy=1",
+            (network_id, start, end),
+        ).fetchone()
+        return round(float(average), 2) if count >= 60 and average is not None else None
 
     def weekly_rpm_summary(
         self, network_id: str, *, until_epoch: int,
