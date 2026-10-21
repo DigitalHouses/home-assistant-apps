@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.21
+
+- Add one stable, Recorder-visible numeric `<network_id>_offline` sensor per discovered Zigbee2MQTT network. Counts come from the existing verified Zigbee availability snapshot, not ping or guessed presence; positive values remain lower bounds and zero is published only with complete per-network coverage.
+- Mark per-network offline series unavailable when bridge/inventory/device availability cannot establish a count, rather than publishing misleading zero. Retained MQTT state is refreshed before availability is restored.
+- Extend the sample Recorder allowlist and offline history graph to show each discovered network and the existing global offline total on the same chart. Network series appear automatically through `custom:auto-entities`.
+- No Zigbee writes, new Supervisor permissions, or changes to existing user thresholds and FSM logic.
+
+
 ## 0.1.20
 
 - Remove obsolete Zigbee2MQTT configuration-file probe and its `config_access`
