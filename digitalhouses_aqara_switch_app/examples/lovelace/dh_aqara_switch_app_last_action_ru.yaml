@@ -1,0 +1,35 @@
+# State from the Aqara App; HA accepted is not physical light confirmation.
+type: markdown
+content: |-
+  {% set entity = 'sensor.dh_aqara_switch_app_last_action' %}
+  {% set status = states(entity) %}
+  {% set a = states[entity].attributes if states[entity] is defined else {} %}
+  {% if status in ['unknown', 'unavailable'] %}
+  *Нет данных о нажатиях. Проверьте запуск Aqara Switch App.*
+  {% elif status == 'idle' %}
+  *Назначенные нажатия пока не выполнялись с момента запуска приложения.*
+  {% elif status in ['queued', 'accepted', 'error'] %}
+  {% if status == 'queued' %}
+  ⏳ Команда поставлена в очередь.
+  {% elif status == 'accepted' %}
+  ✅ Команда принята Home Assistant.
+  {% else %}
+  ⚠️ Ошибка выполнения команды.
+  {% endif %}
+
+  **Выключатель:** `{{ (a.switch or '—') | e }}`
+
+  **Нажатие:** `{{ (a.action or '—') | e }}`
+
+  **Светильник:** `{{ (a.target or '—') | e }}`
+
+  **Время:** {{ (a.at or '—') | e }}
+  {% if a.error %}
+
+  **Ошибка:** {{ a.error | e }}
+  {% endif %}
+
+  *Принятие команды HA не подтверждает фактическое состояние светильника.*
+  {% else %}
+  *Статус последнего действия: {{ status | e }}*
+  {% endif %}

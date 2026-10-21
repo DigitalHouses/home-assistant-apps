@@ -14,6 +14,8 @@ class UIContract(unittest.TestCase):
             "dh_aqara_switch_app_tree_ru.yaml",
             "dh_aqara_switch_app_last_scan_ru.yaml",
             "dh_aqara_switch_app_problems_ru.yaml",
+            "dh_aqara_switch_app_last_action_ru.yaml",
+            "dh_aqara_switch_app_dashboard_ru.yaml",
         ):
             text=(LOVE/name).read_text(encoding="utf-8")
             self.assertNotIn("tojson",text)
