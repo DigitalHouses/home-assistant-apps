@@ -3,7 +3,7 @@
 ## 0.1.22
 
 - Fix per-network AUTO threshold: `floor(baseline * 0.5)` instead of `ceil`. A calculated zero is valid and disables RPM-only DEGRADED/CRITICAL transitions; other bridge, observer and repeater faults stay active.
-- Until the first real, non-retained Zigbee-device message, new networks keep AUTO baseline, threshold and RPM unknown, rather than creating a false zero after 30 seconds or a silent HEALTHY hour. After the first message and 30-second post-BOOTING window, seed baseline from message count divided by actual observation duration (not the fixed 300-second chart window).
+- Until the first real, non-retained Zigbee-device message, new networks keep AUTO baseline and threshold unknown, rather than creating a false baseline after 30 seconds or a silent HEALTHY hour. Observed live RPM stays numeric (including zero) for compatible Recorder/UI charts. After the first message and 30-second post-BOOTING window, seed baseline from message count divided by actual observation duration (not the fixed 300-second chart window).
 - Keep the existing complete-HEALTHY-hour baseline refresh, manual thresholds, MQTT read-only posture and Healer disabled. Add regression tests for sparse networks, zero threshold and independent failures.
 
 ## 0.1.21
