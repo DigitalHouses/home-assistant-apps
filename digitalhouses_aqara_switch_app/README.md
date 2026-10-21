@@ -1,6 +1,6 @@
 # DigitalHouses Aqara Switch App
 
-**v0.1.3 — installable experimental Scan/Adopt + Mode Keeper + one-light toggle MVP.**
+**v0.1.4 — installable experimental Scan/Adopt + Mode Keeper + one-light toggle MVP.**
 
 This Home Assistant App supports the commissioning flow for Aqara wired switches,
 battery buttons and key panels. It is not a general automation engine. This MVP scans and adopts Aqara
@@ -13,6 +13,8 @@ It never switches physical Aqara relay output states itself.
 - Home Assistant OS with Supervisor and MQTT service (e.g. Mosquitto).
 - Zigbee2MQTT on the same broker, publishing retained `bridge/info` and `bridge/devices`.
 - Home Assistant Device Registry + Area Registry for accurate room membership.
+- `homeassistant_api: true` is now declared in the App manifest for authorized
+  Supervisor proxy WebSocket registry reads and HA `light.toggle` calls.
 - This is an **experimental App Store installable release** using immutable GHCR
   images. App boot remains manual for controlled commissioning. Do not assign
   a button already controlled by AQPM2 or another automation until the legacy
@@ -29,7 +31,7 @@ It never switches physical Aqara relay output states itself.
    Installation alone cannot toggle any light or change any adopted Aqara
    settings, because no devices have yet been adopted.
 
-Immutable image: `ghcr.io/digitalhouses/digitalhouses_aqara_switch_app:0.1.3`.
+Immutable image: `ghcr.io/digitalhouses/digitalhouses_aqara_switch_app:0.1.4`.
 
 ## Configure and scan
 

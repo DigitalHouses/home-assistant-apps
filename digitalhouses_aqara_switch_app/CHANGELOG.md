@@ -1,5 +1,17 @@
 # Changelog — DigitalHouses Aqara Switch App
 
+## 0.1.4
+
+- Fix Scan/Adopt failing with `HA WebSocket authorization failed` due to
+  missing Supervisor Home Assistant Core API access permission.
+- Declare `homeassistant_api: true` in the App manifest, required by
+  `ws://supervisor/core/websocket` Device/Area Registry lookup and by
+  `http://supervisor/core/api/services/light/toggle`.
+- Retain least-privilege `hassio_role: default` and existing MQTT access.
+  No changes to Zigbee device actions, saved adoption data or user bindings.
+- Updating the App reloads its Supervisor permissions; no user tokens,
+  MQTT secrets or Home Assistant configuration changes are necessary.
+
 ## 0.1.3
 
 - First installable immutable Home Assistant App release, delivered through
