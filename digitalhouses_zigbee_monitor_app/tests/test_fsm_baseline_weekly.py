@@ -174,5 +174,44 @@ class ServiceFSMTests(unittest.TestCase):
             self.assertFalse(sent[events[-1][0]][2])
 
 
+    def test_reconnect_does_not_publish_stale_healthy_or_transient_events(self):
+        with tempfile.TemporaryDirectory() as temp:
+            clock = [900.0]
+            sent = []
+            store = ActivityStore(Path(temp) / "activity.sqlite")
+            self.addCleanup(store.close)
+            service = MonitorService(
+                ZigbeeMonitor(parse_networks([{
+                    "network_id":"site","base_topic":"z2m","name":"Test",
+                }])),
+                store,publish=lambda topic,payload,retain: (
+                    sent.append((topic,payload,retain)) or True),
+                subscribe=lambda _:True,version="0.1.20",now=lambda:clock[0],
+            )
+            service.connected()
+            inventory = json.dumps([{
+                "ieee_address":"0x00158d0000000001",
+                "type":"Router","friendly_name":"Device",
+            }]).encode()
+            service.receive("z2m/bridge/devices", inventory, retain=True)
+            service.receive("z2m/bridge/state", b"online", retain=True)
+            self.assertEqual(service._network_fsm["site"].state, "HEALTHY")
+            service.disconnected()
+            sent.clear()
+            service.connected()
+            replayed_states = [
+                value for topic,value,_ in sent
+                if topic == f"{ROOT}/networks/site/fsm/state"
+            ]
+            self.assertEqual(replayed_states, ["DEGRADED"])
+            self.assertFalse([value for topic,value,_ in sent
+                              if topic == EVENT_TOPIC])
+            service.receive("z2m/bridge/devices", inventory, retain=True)
+            service.receive("z2m/bridge/state", b"online", retain=True)
+            self.assertEqual(service._network_fsm["site"].state, "HEALTHY")
+            self.assertFalse([value for topic,value,_ in sent
+                              if topic == EVENT_TOPIC])
+
+
 if __name__ == "__main__":
     unittest.main()
