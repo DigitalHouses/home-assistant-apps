@@ -14,6 +14,7 @@ from validators.common import (
     require_files,
     validate_common,
 )
+from validators.products.aqara_switch_app import validate_aqara_switch
 from validators.products.backblaze_app import validate_backblaze
 from validators.products.internet_app import validate_internet
 from validators.products.presence_app import validate_presence
@@ -38,6 +39,7 @@ PRODUCT_TYPE_TO_APPLICATION_TYPE = {
 }
 
 PRODUCT_VALIDATORS = {
+    "digitalhouses_aqara_switch_app": validate_aqara_switch,
     "digitalhouses_backblaze_app": validate_backblaze,
     "digitalhouses_internet_app": validate_internet,
     "digitalhouses_presence_app": validate_presence,

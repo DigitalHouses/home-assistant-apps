@@ -1,0 +1,4 @@
+configuration:
+  log_level:
+    name: Logging level
+    description: Diagnostics verbosity (initial scaffold has no device control).

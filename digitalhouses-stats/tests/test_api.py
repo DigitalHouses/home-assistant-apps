@@ -58,6 +58,7 @@ def test_empty_dashboard_products_lists_full_catalog() -> None:
         "digitalhouses_climate_app",
         "digitalhouses_presence_app",
         "digitalhouses_zigbee_monitor_app",
+        "digitalhouses_aqara_switch_app",
     ]
     assert all(row["observed_installations"] == 0 for row in rows)
     assert all(row["active_24h"] == 0 for row in rows)

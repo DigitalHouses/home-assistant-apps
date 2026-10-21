@@ -126,6 +126,16 @@
       },
       "repository_directory": "digitalhouses_zigbee_monitor_app",
       "haos_slug": "digitalhouses_zigbee_monitor_app"
+    },
+    {
+      "id": "digitalhouses_aqara_switch_app",
+      "type": "app",
+      "entity_prefix": "dh_aqara_switch_app",
+      "display_name": "Aqara Switch App",
+      "telemetry_allowed": false,
+      "release": null,
+      "repository_directory": "digitalhouses_aqara_switch_app",
+      "haos_slug": "digitalhouses_aqara_switch_app"
     }
   ]
 }
