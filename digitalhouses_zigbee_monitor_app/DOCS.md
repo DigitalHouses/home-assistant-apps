@@ -1,3 +1,20 @@
+## Offline histories by Zigbee2MQTT network (v0.1.21)
+
+The App publishes a stable Recorder-facing scalar
+`sensor.dh_zigbee_monitor_app_<network_id>_offline` for each detected Z2M,
+alongside the existing global `sensor.dh_zigbee_monitor_app_offline`.
+A positive count is confirmed even when other device availability is missing;
+zero requires an online bridge, observed inventory, and complete per-device
+availability. Otherwise that individual series is `unavailable`, never
+invented zero. This is independent of Ping and infrastructure FSM.
+
+Include `sensor.dh_zigbee_monitor_app_*_offline` in the site's Recorder
+allowlist (the sample package has been updated). Use
+`examples/lovelace/dh_zigbee_monitor_app_offline_trends_ru.yaml` to
+render per-network lines and a single "ИТОГО" total with
+`custom:auto-entities` and HA's `history-graph`.
+New series have no history before App v0.1.21 is installed.
+
 # DigitalHouses Zigbee Monitor App — installation and acceptance
 
 Version: **0.1.19 (experimental)**. Run only after the production GHCR image

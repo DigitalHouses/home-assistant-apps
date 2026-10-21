@@ -62,6 +62,14 @@ def network_rpm_availability_topic(network_id: str) -> str:
     return f"{ROOT}/networks/{network_id}/rpm/availability"
 
 
+def network_offline_topic(network_id: str) -> str:
+    return f"{ROOT}/networks/{network_id}/offline/state"
+
+
+def network_offline_availability_topic(network_id: str) -> str:
+    return f"{ROOT}/networks/{network_id}/offline/availability"
+
+
 def network_rpm_smooth_topic(network_id: str) -> str:
     return f"{ROOT}/networks/{network_id}/rpm_smooth/state"
 
@@ -203,6 +211,24 @@ def build_discovery(version: str, networks: tuple[Network, ...] = ()) -> dict[st
             "unit_of_measurement": "messages/min",
             "state_class": "measurement",
             "icon": "mdi:chart-line",
+        }
+        # Recorder-safe confirmed offline count; zero only with fully verified
+        # bridge, inventory and per-device availability. No dynamic attributes.
+        key = f"{nid}_offline"
+        components[key] = {
+            "platform": "sensor",
+            "name": f"{network.name}: offline devices",
+            "unique_id": f"{PREFIX}_{key}",
+            "default_entity_id": f"sensor.{PREFIX}_{key}",
+            "state_topic": network_offline_topic(nid),
+            "availability": _availability() + [{
+                "topic": network_offline_availability_topic(nid),
+                "payload_available": "online",
+                "payload_not_available": "offline",
+            }],
+            "availability_mode": "all",
+            "state_class": "measurement",
+            "icon": "mdi:zigbee",
         }
         components[f"{nid}_fsm"] = {
             "platform":"sensor",

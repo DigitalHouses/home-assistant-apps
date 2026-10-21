@@ -1,0 +1,17 @@
+# Dynamic Recorder history of confirmed offline Zigbee devices.
+# Requires HACS custom:auto-entities and per-network *_offline sensors (App >=0.1.21).
+# The global offline sensor already exists; never sum unknown data into fake zeros.
+type: custom:auto-entities
+card:
+  type: history-graph
+  title: Zigbee · offline по сетям и ИТОГО · 72 часа
+  hours_to_show: 72
+filter:
+  include:
+    - entity_id: sensor.dh_zigbee_monitor_app_offline
+      options:
+        name: ИТОГО
+    - entity_id: sensor.dh_zigbee_monitor_app_*_offline
+sort:
+  method: name
+show_empty: false
