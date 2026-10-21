@@ -99,6 +99,8 @@ Maintenance Mode with physically separate acceptance.
 
 **Do not lose field commissioning requirements.** The [field lessons and recovery design backlog](docs/field-lessons-and-recovery.md) records the user-agreed onboarding, device replacement, HA UI, physical load topology, hardware vs cascade power recovery and per-member smart-light startup requirements, including unresolved design decisions. These are **not yet implemented** in v0.1.1.
 
+For a minimal read-only pilot of real Z2M group and member states, follow [Zigbee group confirmation smoke test (RU)](examples/tests/z2m_group_state_smoke_ru.md). It deliberately avoids bulk readback or any automatic control.
+
 See [DOCS.md](DOCS.md) for contract and [DigitalHouses standards](../docs/README.md).
 
 ## Local verification
