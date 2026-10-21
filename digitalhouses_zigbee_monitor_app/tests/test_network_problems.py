@@ -132,31 +132,23 @@ class NetworkProblemsTests(unittest.TestCase):
 
     def test_traffic_low_is_confirmed_per_network_and_recovers(self):
         self.store.update_network_problem_settings("main", auto=False, threshold=10)
-        # Prepopulate complete minute buckets: a healthy MQTT rate of 20 RPM.
-        start = int(self.clock[0]) - int(self.clock[0]) % 60
-        counts = {
-            (minute, "main", IEEE1): 20
-            for minute in range(start-300, start, 60)
-        }
-        self.store.commit_counts(counts)
-        self.s._traffic_started["main"] = self.clock[0] - 1000
-        self.s.tick()
-        self.assertEqual(self.status("main", "mqtt_traffic_low"), "OFF")
-        for i in range(1, 12):
-            self.clock[0] = 10000.0 + 60 * i
-            self.s.tick()
+        self.s._update_traffic(int(self.clock[0]))
+        self.s._publish_problems(allow_event=True)
         self.assertEqual(self.status("main", "mqtt_traffic_low"), "ON")
+        self.assertEqual(self.s._network_fsm["main"].state, "DEGRADED")
         self.assertEqual(self.validity("second", "mqtt_traffic_low"), "offline")
-        self.assertIn("problem_started", [e["event_type"] for e in self.t.events()])
-        # Recovery requires sustained high RPM, not a single packet burst.
-        bucket = int(self.clock[0]) - int(self.clock[0]) % 60
-        self.store.commit_counts({
-            (minute, "main", IEEE1): 30
-            for minute in range(bucket, bucket+10*60, 60)
-        })
-        for i in range(1, 12):
-            self.clock[0] += 60
-            self.s.tick()
+        self.clock[0] += 300
+        self.s.tick()
+        self.assertEqual(self.s._network_fsm["main"].state, "CRITICAL")
+        self.assertIn("network_fsm_changed",
+                      [e["event_type"] for e in self.t.events()])
+        # No problem_started from a previously unknown diagnostic.
+        # Restore actual fresh MQTT traffic; never seed from persisted buckets.
+        for _ in range(60):
+            self.s.receive("z2m/plug", b'{"temperature":25}')
+        self.s._update_traffic(int(self.clock[0]))
+        self.s._publish_problems(allow_event=True)
+        self.assertEqual(self.s._network_fsm["main"].state, "HEALTHY")
         self.assertEqual(self.status("main", "mqtt_traffic_low"), "OFF")
         self.assertIn("problem_recovered", [e["event_type"] for e in self.t.events()])
 

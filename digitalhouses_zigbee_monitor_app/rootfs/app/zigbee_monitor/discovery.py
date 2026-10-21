@@ -21,6 +21,7 @@ EVENT_TYPES = (
     "device_offline", "device_online",
     "zigbee2mqtt_offline", "zigbee2mqtt_online",
     "problem_started", "problem_recovered",
+    "network_fsm_changed", "global_fsm_changed",
 )
 
 HISTORY: dict[str, tuple[str, str | None]] = {
@@ -124,6 +125,14 @@ def build_discovery(version: str, networks: tuple[Network, ...] = ()) -> dict[st
             entity_category="diagnostic",
             icon="mdi:format-list-bulleted",
         )
+    # Text FSM scalars belong in Recorder, unlike JSON details.
+    components["fsm"] = _component(
+        "sensor", "fsm", "Zigbee Networks FSM",
+        state_topic=f"{ROOT}/fsm/state",
+        device_class="enum",
+        options=["BOOTING", "HEALTHY", "DEGRADED", "CRITICAL"],
+        icon="mdi:state-machine",
+    )
     # Transient machine events: non-retained QoS 1 publications from App.
     # The MQTT Event entity itself is excluded from the HA Recorder policy.
     components["event"] = _component(
@@ -131,14 +140,6 @@ def build_discovery(version: str, networks: tuple[Network, ...] = ()) -> dict[st
         state_topic=EVENT_TOPIC, event_types=list(EVENT_TYPES),
         icon="mdi:alert-network-outline",
         entity_category="diagnostic",
-    )
-    # Fixed-path, read-only mount diagnostic; no Zigbee2MQTT secrets or raw YAML.
-    components["config_access"] = _component(
-        "sensor", "config_access", "HA configuration file access",
-        value_template="{{ value_json.state }}",
-        json_attributes_topic=state_topic("config_access"),
-        entity_category="diagnostic",
-        icon="mdi:folder-search-outline",
     )
     components["refresh_state"] = _component(
         "sensor", "refresh_state", "Refresh state",
@@ -203,24 +204,26 @@ def build_discovery(version: str, networks: tuple[Network, ...] = ()) -> dict[st
             "state_class": "measurement",
             "icon": "mdi:chart-line",
         }
-        # Chart-friendly EMA is visualization only. It does NOT replace
-        # raw RPM in the live tree or any traffic incident calculations.
-        components[f"{nid}_rpm_smooth"] = {
-            "platform": "sensor",
-            "name": f"{network.name}: MQTT RPM · EMA 15m",
-            "unique_id": f"{PREFIX}_{nid}_rpm_smooth",
-            "default_entity_id": f"sensor.{PREFIX}_{nid}_rpm_smooth",
-            "state_topic": network_rpm_smooth_topic(nid),
-            "availability": _availability() + [{
-                "topic": network_rpm_availability_topic(nid),
-                "payload_available": "online",
-                "payload_not_available": "offline",
-            }],
-            "availability_mode": "all",
-            "unit_of_measurement": "messages/min",
-            "state_class": "measurement",
-            "icon": "mdi:chart-bell-curve",
+        components[f"{nid}_fsm"] = {
+            "platform":"sensor",
+            "name":f"{network.name}: infrastructure FSM",
+            "unique_id":f"{PREFIX}_{nid}_fsm",
+            "default_entity_id":f"sensor.{PREFIX}_{nid}_fsm",
+            "state_topic":f"{ROOT}/networks/{nid}/fsm/state",
+            "availability":_availability(),
+            "device_class":"enum",
+            "options":["BOOTING","HEALTHY","DEGRADED","CRITICAL"],
+            "icon":"mdi:state-machine",
         }
+        # Weekly attributes are intentionally excluded from Recorder.
+        key = f"{nid}_rpm_weekly_details"
+        components[key] = _component(
+            "sensor", key, f"{network.name}: RPM weekly details",
+            value_template="{{ value_json.state }}",
+            json_attributes_topic=state_topic(key),
+            entity_category="diagnostic",
+            icon="mdi:calendar-week",
+        )
         # Effective read-only threshold, whichever mode is active:
         # manual value or currently learned automatic threshold.
         components[f"{nid}_rpm_threshold_effective"] = {
@@ -277,7 +280,7 @@ def build_discovery(version: str, networks: tuple[Network, ...] = ()) -> dict[st
             "default_entity_id": f"number.{PREFIX}_{nid}_rpm_threshold",
             "state_topic": f"{ROOT}/settings/{nid}/rpm_threshold/state",
             "command_topic": f"{ROOT}/command/settings/{nid}/rpm_threshold",
-            "min": 1, "max": 10000, "step": 1,
+            "min": 0, "max": 10000, "step": 1,
             "unit_of_measurement": "messages/min",
             "availability": _availability(),
             "entity_category": "config",

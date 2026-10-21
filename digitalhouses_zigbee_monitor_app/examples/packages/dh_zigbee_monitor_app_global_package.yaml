@@ -7,7 +7,7 @@
 # /config/packages/Global/DH_APP/dh_zigbee_monitor_app_global_package.yaml
 #
 # Source of truth:
-#   Four existing scalars + numeric per-Z2M raw, EMA and effective threshold.
+#   Five global scalars + per-network canonical 5-minute RPM, FSM and effective threshold.
 #   App SQLite owns per-device minute aggregates and historical MQTT rankings.
 #   Machine events are not historical state and are excluded from Recorder.
 #
@@ -29,9 +29,10 @@ dh_zigbee_monitor_app_global_package:
         - sensor.dh_zigbee_monitor_app_devices
         - sensor.dh_zigbee_monitor_app_offline
         - sensor.dh_zigbee_monitor_app_messages_rate_5m
+        - sensor.dh_zigbee_monitor_app_fsm
       entity_globs:
         - sensor.dh_zigbee_monitor_app_*_rpm
-        - sensor.dh_zigbee_monitor_app_*_rpm_smooth
+        - sensor.dh_zigbee_monitor_app_*_fsm
         - sensor.dh_zigbee_monitor_app_*_rpm_threshold_effective
 
     exclude:

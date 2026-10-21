@@ -60,7 +60,7 @@ class LiveRPMTests(unittest.TestCase):
     def test_boot_shows_numeric_zero_instead_of_unknown(self):
         self.start_online()
         self.assertEqual(self.row()["rpm"], 0.0)
-        self.assertEqual(self.row()["rpm_phase"], "warming_up")
+        self.assertEqual(self.row()["rpm_phase"], "measured")
         self.assertIn("mqtt_traffic_low", self.row()["problem_unknown"])
         self.assertNotIn("mqtt_traffic_low", self.row()["problem_active"])
         self.assertEqual(
@@ -74,7 +74,7 @@ class LiveRPMTests(unittest.TestCase):
         self.clock[0] = 615
         self.service.tick()
         self.assertEqual(self.row()["rpm"], 12.0)
-        self.assertEqual(self.row()["rpm_phase"], "warming_up")
+        self.assertEqual(self.row()["rpm_phase"], "measured")
         self.assertIsNone(self.row()["traffic_problem"])
         self.assertIn("mqtt_traffic_low", self.row()["problem_unknown"])
         self.assertEqual(
@@ -105,9 +105,10 @@ class LiveRPMTests(unittest.TestCase):
             self.clock[0] = float(minute)
             self.service.tick()
         self.assertEqual(self.row()["rpm"], 0)
-        self.assertEqual(self.row()["rpm_phase"], "warming_up")
-        self.assertIsNone(self.row()["traffic_problem"])
-        self.assertIn("mqtt_traffic_low", self.row()["problem_unknown"])
+        self.assertEqual(self.row()["rpm_phase"], "measured")
+        self.assertTrue(self.row()["traffic_problem"])
+        self.assertIn("mqtt_traffic_low", self.row()["problem_active"])
+        self.assertEqual(self.row()["fsm"], "DEGRADED")
 
     def test_preview_reset_after_disconnect_and_source_restart(self):
         self.start_online()
@@ -119,7 +120,7 @@ class LiveRPMTests(unittest.TestCase):
         self.service.connected()
         self.start_online()
         self.assertEqual(self.row()["rpm"], 0.0)
-        self.assertEqual(self.row()["rpm_phase"], "warming_up")
+        self.assertEqual(self.row()["rpm_phase"], "measured")
 
     def test_other_network_does_not_inherit_rate(self):
         second = "zigbee2mqtt_office"
@@ -137,7 +138,7 @@ class LiveRPMTests(unittest.TestCase):
         rows = json.loads(self.last(state_topic("networks_details")))["networks"]
         self.assertEqual(len(rows), 2)
         self.assertGreater(next(r["rpm"] for r in rows if r["network_id"] == NETWORK), 0)
-        self.assertEqual(next(r["rpm"] for r in rows if r["network_id"] != NETWORK), 0.0)
+        self.assertIsNone(next(r["rpm"] for r in rows if r["network_id"] != NETWORK))
 
 
 if __name__ == "__main__":

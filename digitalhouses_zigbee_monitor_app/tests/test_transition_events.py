@@ -35,7 +35,8 @@ class Transport:
 
     def events(self):
         return [json.loads(payload) for topic, payload, _ in self.sent
-                if topic == EVENT_TOPIC]
+                if topic == EVENT_TOPIC and json.loads(payload)["event_type"]
+                not in ("network_fsm_changed","global_fsm_changed")]
 
 
 class TransitionTests(unittest.TestCase):

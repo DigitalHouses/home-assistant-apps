@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.1.20
+
+- Remove obsolete Zigbee2MQTT configuration-file probe and its `config_access`
+  diagnostic entity. All Zigbee2MQTT data comes from MQTT; keep only the
+  independent read-only HA Device Registry lookup for verified device links.
+
+- Per-network and global four-state infrastructure FSM: BOOTING, HEALTHY,
+  DEGRADED, CRITICAL; preserved, recorder-visible entities and transient
+  machine events published after retained FSM states.
+- Replace graph-only EMA and separate delayed incident input with one 300s
+  rolling RPM for live tree, alarms and the recorder-facing numeric sensor.
+- MPM below the active threshold degrades immediately and escalates after
+  five continuous minutes. Repeater Zigbee offline needs 60 seconds;
+  bridge offline is immediately critical. End-device availability stays
+  independent of the infrastructure FSM.
+- Persist first observed baseline at 30 seconds after BOOTING; use the minimum
+  complete HEALTHY hourly rate from the trailing 24 hours thereafter.
+  AUTO threshold is integer ceil(baseline/2); MANUAL accepts zero to disable
+  the RPM alarm. Existing per-site manual settings are preserved by migration.
+- Store minute-level validity/health evidence (no per-MQTT-packet writes),
+  expose 168 hourly and seven 24-hour summaries in per-network
+  Recorder-excluded details, preserving the 30-day retention policy.
+- Update the existing dashboard, tree, trends and sample Recorder allowlist.
+  Healer remains OFF; HAOS site configuration is not modified.
+
+
 ## 0.1.19
 
 - Confirmed two TI `ti.router` Zigbee Router repeaters on Ruslan site

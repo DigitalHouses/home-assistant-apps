@@ -9,7 +9,7 @@ from pathlib import Path
 from zigbee_monitor import ActivityStore, ZigbeeMonitor, parse_networks
 from zigbee_monitor.discovery import (
     DISCOVERY, build_discovery, network_rpm_availability_topic, network_rpm_topic,
-    network_rpm_smooth_topic, network_rpm_threshold_topic,
+    network_rpm_threshold_topic,
     network_rpm_threshold_availability_topic,
 )
 from zigbee_monitor.service import MonitorService
@@ -86,43 +86,39 @@ class PerNetworkRPMTrendTests(unittest.TestCase):
         self.store.update_network_problem_settings(NID, auto=False, threshold=23)
         self.svc._publish_networks()
         self.assertEqual(self.read(avail), "online")
-        self.assertEqual(self.read(threshold), "23.00")
+        self.assertEqual(self.read(threshold), "23")
         self.store.update_network_problem_settings(NID, auto=True)
         self.svc._traffic_metrics.pop(NID, None)
         self.svc._publish_networks()
         self.assertEqual(self.read(avail), "offline")
         # A calculated value in auto mode is the effective threshold.
-        self.svc._traffic_metrics[NID] = {"threshold": 15.26}
+        self.svc._traffic_metrics[NID] = {"threshold": 16}
         self.svc._publish_networks()
         self.assertEqual(self.read(avail), "online")
-        self.assertEqual(self.read(threshold), "15.26")
+        self.assertEqual(self.read(threshold), "16")
 
-    def test_15_minute_ema_is_only_a_display_series(self):
+    def test_recorder_and_diagnosis_use_same_rolling_rate_without_ema(self):
         self.online()
         raw_topic = network_rpm_topic(NID)
-        smooth_topic = network_rpm_smooth_topic(NID)
-        self.assertEqual(self.read(smooth_topic), "0.00")
+        self.assertEqual(self.read(raw_topic), "0.00")
         for _ in range(12):
             self.msg("Test", b'{"temperature":24}')
         self.clock[0] = 661
         self.svc.tick()
-        raw = float(self.read(raw_topic))
-        smooth = float(self.read(smooth_topic))
-        self.assertGreater(raw, 0)
-        self.assertAlmostEqual(smooth, raw * 0.125, delta=0.02)
-        self.assertNotIn("mqtt_traffic_low",
-                         self.svc._problem_states.get(NID, {}))
-        self.clock[0] = 721
-        self.svc.tick()
-        self.assertGreater(float(self.read(smooth_topic)), smooth)
-        # Smoother cannot alter actual raw sample values.
-        self.assertGreaterEqual(float(self.read(raw_topic)), 0)
+        published = float(self.read(raw_topic))
+        runtime = json.loads(self.read(
+            "DigitalHouses/Global/dh_zigbee_monitor_app/state/networks_details"
+        ))["networks"][0]
+        self.assertGreater(published, 0)
+        self.assertAlmostEqual(published, runtime["rpm"], delta=0.01)
+        self.assertNotIn(NID + "_rpm_smooth",
+                         build_discovery("0.1.20",self.monitor.networks)["components"])
 
     def test_new_entities_have_numeric_state_without_dynamic_attributes(self):
         c = build_discovery("0.1.17", self.monitor.networks)["components"]
         self.assertNotIn("spammers", c)
         for suffix, topic in [
-            ("rpm_smooth", network_rpm_smooth_topic(NID)),
+            ("rpm", network_rpm_topic(NID)),
             ("rpm_threshold_effective", network_rpm_threshold_topic(NID)),
         ]:
             entity = c[NID + "_" + suffix]
@@ -177,6 +173,10 @@ class PerNetworkRPMTrendTests(unittest.TestCase):
         self.svc.connected()
         self.assertEqual(self.read(network_rpm_availability_topic(NID)), "offline")
         self.msg("bridge/state", b"online", retain=True)
+        self.msg("bridge/devices", json.dumps([{
+            "ieee_address": IEEE, "type": "Router",
+            "friendly_name": "Test"
+        }]).encode(), retain=True)
         self.assertEqual(self.read(network_rpm_availability_topic(NID)), "online")
 
     def test_multiple_networks_have_independent_stable_series(self):

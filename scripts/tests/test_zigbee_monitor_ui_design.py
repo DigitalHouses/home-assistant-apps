@@ -20,6 +20,7 @@ HISTORICAL = {
     "sensor.dh_zigbee_monitor_app_devices",
     "sensor.dh_zigbee_monitor_app_offline",
     "sensor.dh_zigbee_monitor_app_messages_rate_5m",
+    "sensor.dh_zigbee_monitor_app_fsm",
 }
 DETAILS = {
     "sensor.dh_zigbee_monitor_app_networks_details",
@@ -308,7 +309,7 @@ class ZigbeeMonitorUiDesignTests(unittest.TestCase):
                  if card.get("type") == "markdown"]
         templated_tables = [card["content"] for card in cards
                             if "<table>" in card["content"]]
-        self.assertEqual(len(templated_tables), 8)
+        self.assertEqual(len(templated_tables), 9)
         for content in templated_tables:
             with self.subTest(table=content[:60]):
                 self.assertEqual(content.count("<table>"), 1)
@@ -345,10 +346,10 @@ class ZigbeeMonitorUiDesignTests(unittest.TestCase):
         self.assertNotIn("sensor.dh_zigbee_monitor_app_refresh_state",
                          self.recorder["include"]["entities"])
 
-    def test_recorder_is_bounded_to_four_real_history_metrics(self):
+    def test_recorder_is_bounded_to_recorder_safe_history_metrics(self):
         historical = set(self.recorder["include"]["entities"])
         self.assertEqual(historical, HISTORICAL)
-        self.assertEqual(len(historical), 4)
+        self.assertEqual(len(historical), 5)
         self.assertNotIn("sensor.dh_zigbee_monitor_app_spammers", historical)
         self.assertNotIn("sensor.dh_zigbee_monitor_app_incidents", historical)
         self.assertNotIn("sensor.dh_zigbee_monitor_app_card", historical)
@@ -366,7 +367,7 @@ class ZigbeeMonitorUiDesignTests(unittest.TestCase):
         self.assertNotIn("domains", self.recorder["include"])
         self.assertEqual(self.recorder["include"]["entity_globs"], [
             "sensor.dh_zigbee_monitor_app_*_rpm",
-            "sensor.dh_zigbee_monitor_app_*_rpm_smooth",
+            "sensor.dh_zigbee_monitor_app_*_fsm",
             "sensor.dh_zigbee_monitor_app_*_rpm_threshold_effective",
         ])
 
@@ -378,7 +379,7 @@ class ZigbeeMonitorUiDesignTests(unittest.TestCase):
         allowed = [
             "sensor.dh_zigbee_monitor_app_z2m_00124b002e1330dd_rpm",
             "sensor.dh_zigbee_monitor_app_floor_1_rpm",
-            "sensor.dh_zigbee_monitor_app_floor_1_rpm_smooth",
+            "sensor.dh_zigbee_monitor_app_floor_1_fsm",
             "sensor.dh_zigbee_monitor_app_floor_1_rpm_threshold_effective",
         ]
         denied = [
@@ -417,7 +418,7 @@ class ZigbeeMonitorUiDesignTests(unittest.TestCase):
             self.assertIn("MPM", config["card"]["title"])
             self.assertIn("порог", config["card"]["title"])
             self.assertEqual(config["filter"]["include"],
-                             [{"entity_id": "sensor.dh_zigbee_monitor_app_*_rpm_smooth"},
+                             [{"entity_id": "sensor.dh_zigbee_monitor_app_*_rpm"},
                               {"entity_id": "sensor.dh_zigbee_monitor_app_*_rpm_threshold_effective"}])
             self.assertFalse(config["show_empty"])
             self.assertEqual(config["sort"]["method"], "name")
@@ -444,7 +445,7 @@ class ZigbeeMonitorUiDesignTests(unittest.TestCase):
         self.assertEqual((APP / "digitalhouses.app").read_text().strip(), "type = haos_addon")
         config = yaml.safe_load((APP / "config.yaml").read_text(encoding="utf-8"))
         self.assertEqual(config["slug"], "digitalhouses_zigbee_monitor_app")
-        self.assertEqual(config["version"], "0.1.19")
+        self.assertEqual(config["version"], "0.1.20")
         self.assertEqual(config["stage"], "experimental")
 
 
