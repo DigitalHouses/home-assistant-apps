@@ -534,11 +534,10 @@ sections:
         icon: mdi:calendar-week
       - type: markdown
         content: |-
-          {% set series = states.sensor | selectattr('entity_id', 'match', '^sensor\.dh_zigbee_monitor_app_.*_rpm_weekly_details$') | list %}
-          {% if series | count == 0 %}
-          *Недельная статистика ещё не обнаружена.*
-          {% else %}
-          {% for item in series if item.state == 'ready' %}
+          {% set view = namespace(count=0) %}
+          {% for item in states.sensor %}
+          {% if item.entity_id.startswith('sensor.dh_zigbee_monitor_app_') and item.entity_id.endswith('_rpm_weekly_details') and item.state == 'ready' %}
+          {% set view.count = view.count + 1 %}
           **{{ item.attributes.network_id | e }}** · {{ item.attributes.coverage_minutes }}/{{ item.attributes.expected_minutes }} мин наблюдений
 
           <table>
@@ -551,7 +550,10 @@ sections:
           </table>
 
           *168 часовых интервалов доступны в атрибуте hours; пропуски не подменяются нулём.*
+          {% endif %}
           {% endfor %}
+          {% if view.count == 0 %}
+          *Недельная статистика ещё не обнаружена.*
           {% endif %}
       - type: heading
         heading: Доступность устройств
