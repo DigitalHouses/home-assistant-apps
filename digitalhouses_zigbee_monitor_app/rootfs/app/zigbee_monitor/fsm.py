@@ -49,11 +49,13 @@ class NetworkFSM:
         if bridge_state == "offline":
             self.low_since = None
             self.missing_since = None
+            self.repeater_offline_since.clear()
             self.state, self.reason = "CRITICAL", "bridge_offline"
             return self.state, self.reason
 
         if bridge_state != "online" or not inventory_observed:
             self.low_since = None
+            self.repeater_offline_since.clear()
             if not self.initialized:
                 self.state, self.reason = "BOOTING", "initial_sync"
                 return self.state, self.reason
