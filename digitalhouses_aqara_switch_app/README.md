@@ -1,6 +1,6 @@
 # DigitalHouses Aqara Switch App
 
-**v0.1.5 — installable Scan/Adopt + readable Supervisor switch/assignment lists.**
+**v0.1.6 — clean-install, HA entity-keyed Scan/Adopt and multi-light toggle.**
 
 This Home Assistant App supports the commissioning flow for Aqara wired switches,
 battery buttons and key panels. It is not a general automation engine. This MVP scans and adopts Aqara
@@ -27,95 +27,70 @@ It never switches physical Aqara relay output states itself.
 3. Refresh the store, open **DigitalHouses Aqara Switch App** and install.
 4. App is set to **manual boot**. Start it manually and inspect the logs
    before attempting Scan or setting any bindings.
-5. Initially, the `switches` and `bindings` lists are empty.
+5. Initially, the `switches` YAML list is empty.
    Installation alone cannot toggle any light or change any adopted Aqara
    settings, because no devices have yet been adopted.
 
-Immutable image: `ghcr.io/digitalhouses/digitalhouses_aqara_switch_app:0.1.5`.
+Immutable image: `ghcr.io/digitalhouses/digitalhouses_aqara_switch_app:0.1.6`.
 
-## Configure and scan
+## Configure and Scan (fresh install only)
 
-The Supervisor **Parameters** form now has two separate lists:
+**Version 0.1.6 intentionally has no migration.** Uninstall v0.1.5 and
+reinstall this App if you want a clean Adopt. Do not restore a previous
+version's App backup into 0.1.6. This does not remove physical Zigbee2MQTT
+devices or unrelated Home Assistant lights.
 
-- **Выключатели / Switches**: automatically filled by Scan/Adopt with
-  `ieee`, `name` and `enabled`. Change `enabled` to `false` to
-  disable its button dispatch and Mode Keeper without deleting the
-  adoption. Never invent an IEEE; the App requires it to match an
-  internally adopted device.
-- **Назначения / Assignments**: operator-maintained list of
-  `ieee`, `press`, `light`. Each exact button action maps to one
-  HA `light.toggle` destination. For example:
+App Options has `log_level` plus **one short multiline YAML option
+`switches`** (initially `[]`). The Home Assistant Supervisor editor does
+not support arbitrary nested dynamic keys as native form controls.
+
+After pressing **Сканировать**, the App writes **existing, unique**
+Home Assistant switch.* entity_ids as logical keys. Example only
+(actual IDs must come from HA, not from the example):
 
 ```yaml
-switches:
-  - ieee: "0x54ef441000dc08bb"
-    name: aqara_battery_button
+- switch.livingroomaqaraswitch:
     enabled: true
-bindings:
-  - ieee: "0x54ef441000dc08bb"
-    press: single
-    light: light.dh_aqara_lab_chandelier
+    actions:
+      single:
+        - light.dh_aqara_lab_chandelier
+        - light.dh_aqara_lab_spots
+      double:
+        - light.dh_aqara_lab_sconce
+- switch.livingroomthermostat:
+    enabled: true
+    actions: {}
 ```
 
-This is an **illustration only**; choose the real IEEE that Scan added.
-A user cannot assign arbitrary unadopted hardware or an action not
-declared in the device profile. Restart the App after editing Options.
+In the App **YAML options view**, Supervisor stores this multiline text
+under the `switches: |` key. Edit only action names and light targets;
+the key `switch.*` was automatically resolved from HA. Do not paste
+these example `switch.*` IDs as if they had been discovered.
 
-**Migration from v0.1.4:** On first App start after upgrade, existing
-nested `configuration_yaml` is read from the raw own-App Supervisor info,
-validated, backed up in `/data/legacy_configuration_yaml.txt`, and split
-into editable switch/assignment lists. The original captured Adopt
-profiles are separately persisted in `/data/adopted_switches.json`.
-If migration cannot preserve an existing configuration, App startup
-**fails closed** before subscribing to button actions; the original
-Supervisor configuration is not overwritten.
+Aqara devices with no existing `switch.*` entity or more than one such
+entity are **not imported**; they are listed as scan problems. This
+is deliberate: an invented switch.* key would not be a real HA entity.
+In particular some battery remotes expose `event.*`/`sensor.*`,
+not `switch.*`. Existing entity domains can be inspected before
+choosing an alternative contract.
 
-Scan remains explicit and append-only. Use
-`button.dh_aqara_switch_app_scan` from HA to register newly discovered
-Aqara switches. Fingerprints and adopted physical settings are internal
-App state and restored by the normal Supervisor App backup. The App does
-not send Zigbee device requests during Scan.
+All physical metadata (IEEE, coordinator, Zigbee2MQTT base topic,
+fingerprint, adopted writable settings) lives inside
+`/data/adopted_switches.json`. No new Home Assistant entities are
+registered. The existing HA entity_id is used only as a **logical key**;
+the App never calls `switch.toggle` on it.
 
-## First working scenario (0.1.2 MVP)
+A fresh, non-retained, non-duplicated Aqara MQTT press matching an adopted
+action calls **one** `light.toggle` service with its configured list of
+1–16 existing light entities. Each target toggles its own previous state.
+An empty `actions: {}` is inert. The `enabled: false` setting also
+disables Mode Keeper for that switch. HA accepting a call is not proof
+of physical light operation.
 
-1. Start the App installed from the DigitalHouses App Store, wait until Zigbee2MQTT inventory arrives.
-2. Press `button.dh_aqara_switch_app_scan` **once**. This is the initial
-   Adopt: only newly discovered Aqara inputs are appended to the App Options
-   `configuration_yaml`; captured physical setting values become the baseline.
-3. In Supervisor App Options → **Назначения** choose **Добавить**.
-   Copy the IEEE from the already scanned switch, enter its real press
-   (for example `single`) and the target `light.bedroom_spots`.
-   Each binding uses the built-in `light.toggle` action.
-
-The `single` key must exactly match this device's observed `action`
-from Zigbee2MQTT. For other models use their real action names (e.g.
-`single_left`); do not guess. The only executable action in this MVP is
-one explicitly configured `light.toggle` target in HA (one `light.*`
-entity, which may itself represent a Zigbee group in HA). Restart App after
-editing Options to load changes.
-
-4. Press the physical Aqara key. On a fresh non-retained MQTT `action`
-from exactly the adopted model/IEEE/coordinator, the App calls
-`POST /api/services/light/toggle` via Supervisor Core proxy. An
-`accepted` event confirms HA accepted the service call, **not** that
-the bulbs physically turned on. Observe
-`sensor.dh_aqara_switch_app_last_action` for success/error.
-
-**Mode Keeper:** if fresh MQTT telemetry explicitly reports one of the
-writable physical settings as different from its adopted value, the App
-requests restoration through Zigbee2MQTT `.../set`, no more than once
-per 60 seconds per key. Relay `state` / `state_left` etc. are
-**never** captured as adopted modes or written back. At present this is
-best-effort settings restoration: a request is not a proven hardware
-acknowledgement. If the device doesn't report a setting, the App will
-not infer its value or issue a blind command.
-
-**Critical:** disable any legacy automation or old AQPM2 handler
-for exactly the same physical key before enabling a binding, or pressing
-once could toggle twice. Do not remove any unrelated legacy controls.
-If this device is connected to live electrical loads, commissioning its
-operation mode needs a physical safety check; this MVP does not change
-unknown relays during adoption.
+Explicit Scan can update a replaced physical IEEE only if HA's existing
+switch entity_id remains identical and the new hardware's verified
+fingerprint is compatible. If the HA entity ID changes, or there is
+ambiguity, Scan reports a problem; it never silently reassigns actions.
 
 ## Home Assistant UI
 

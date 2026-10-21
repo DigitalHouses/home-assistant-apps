@@ -1,24 +1,7 @@
 configuration:
   log_level:
     name: Log level
-    description: Application diagnostics verbosity.
+    description: Application log verbosity.
   switches:
-    name: Switches
-    description: Discovered on Scan/Adopt. Disable a switch to suspend its assignments.
-    fields:
-      ieee:
-        name: Zigbee IEEE
-      name:
-        name: Zigbee2MQTT friendly name
-      enabled:
-        name: Enabled
-  bindings:
-    name: Assignments
-    description: One button press mapped to one HA light entity. Press is the exact Z2M action value.
-    fields:
-      ieee:
-        name: Switch IEEE
-      press:
-        name: Press action
-      light:
-        name: Light entity (light.*)
+    name: Switches and assignments (YAML)
+    description: "Scan adds existing HA switch.* entities. Configure enabled and actions with one or more light.* targets. Hardware IEEE is stored privately."

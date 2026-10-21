@@ -1,5 +1,5 @@
 name: DigitalHouses Aqara Switch App
-version: 0.1.5
+version: 0.1.6
 slug: digitalhouses_aqara_switch_app
 description: Aqara Scan/Adopt, physical settings keeper and bound HA light.toggle MVP.
 url: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_aqara_switch_app
@@ -20,15 +20,8 @@ services:
   - mqtt:need
 options:
   log_level: info
-  switches: []
-  bindings: []
+  switches: |-
+    []
 schema:
   log_level: list(debug|info|warning|error)
-  switches:
-    - ieee: str
-      name: str
-      enabled: bool
-  bindings:
-    - ieee: str
-      press: str
-      light: str
+  switches: str
