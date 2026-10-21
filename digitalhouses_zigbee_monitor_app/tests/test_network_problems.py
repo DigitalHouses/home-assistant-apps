@@ -140,7 +140,9 @@ class NetworkProblemsTests(unittest.TestCase):
         self.clock[0] += 300
         self.s.tick()
         self.assertEqual(self.s._network_fsm["main"].state, "CRITICAL")
-        self.assertIn("problem_started", [e["event_type"] for e in self.t.events()])
+        self.assertIn("network_fsm_changed",
+                      [e["event_type"] for e in self.t.events()])
+        # No problem_started from a previously unknown diagnostic.
         # Restore actual fresh MQTT traffic; never seed from persisted buckets.
         for _ in range(60):
             self.s.receive("z2m/plug", b'{"temperature":25}')
