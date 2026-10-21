@@ -49,7 +49,7 @@ def scan_once(snapshots: list[dict], options_client, ha_registry) -> tuple[dict,
         problems.append({"name": name, "reason": reason})
 
     options = options_client.read()
-    previous = parse_configuration(options)
+    previous = parse_configuration(options, profile_path=STORE_PATH)
     # Preserve the logical HA entity across a physical replacement when
     # the actual HA registry still points to that same entity_id.
     replaced = []
@@ -95,5 +95,5 @@ def scan_once(snapshots: list[dict], options_client, ha_registry) -> tuple[dict,
     if report["added"] or replaced:
         changed = store_scan(merged, options, STORE_PATH)
         options_client.write(changed)
-        merged = parse_configuration(options_client.read())
+        merged = parse_configuration(options_client.read(), profile_path=STORE_PATH)
     return merged, report
