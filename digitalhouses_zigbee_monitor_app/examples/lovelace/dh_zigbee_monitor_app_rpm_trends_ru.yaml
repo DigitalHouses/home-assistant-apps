@@ -5,11 +5,11 @@ cards:
   - type: custom:auto-entities
     card:
       type: history-graph
-      title: MPM · EMA 15 мин + порог · все Z2M · 24 часа
+      title: MPM · среднее 5 мин + порог · все Z2M · 24 часа
       hours_to_show: 24
     filter:
       include:
-        - entity_id: "sensor.dh_zigbee_monitor_app_*_rpm_smooth"
+        - entity_id: "sensor.dh_zigbee_monitor_app_*_rpm"
         - entity_id: "sensor.dh_zigbee_monitor_app_*_rpm_threshold_effective"
     sort:
       method: name
@@ -17,11 +17,11 @@ cards:
   - type: custom:auto-entities
     card:
       type: history-graph
-      title: MPM · EMA 15 мин + порог · все Z2M · 7 дней
+      title: MPM · среднее 5 мин + порог · все Z2M · 7 дней
       hours_to_show: 168
     filter:
       include:
-        - entity_id: "sensor.dh_zigbee_monitor_app_*_rpm_smooth"
+        - entity_id: "sensor.dh_zigbee_monitor_app_*_rpm"
         - entity_id: "sensor.dh_zigbee_monitor_app_*_rpm_threshold_effective"
     sort:
       method: name
