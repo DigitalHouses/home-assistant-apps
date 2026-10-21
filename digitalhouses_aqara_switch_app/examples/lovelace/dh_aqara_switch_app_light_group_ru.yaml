@@ -1,0 +1,30 @@
+# Observed Zigbee group and members. Not confirmed (optimistic may be active).
+type: markdown
+content: |-
+  {% set entity = 'sensor.dh_aqara_switch_app_light_group_details' %}
+  {% set a = states[entity].attributes if states[entity] is defined else {} %}
+  {% set s = states(entity) %}
+  {% if s in ['unknown', 'unavailable'] %}
+  *Нет связи с Aqara Switch App.*
+  {% elif s == 'disabled' %}
+  *Наблюдение отключено. Укажите light_monitor в настройках приложения.*
+  {% else %}
+  **💡 {{ (a.group or 'Группа') | e }} · {{ s | e }}**
+
+  Сеть: {{ (a.base_topic or '—') | e }} · ID: {{ a.group_id if a.group_id is not none else '—' }}
+
+  *Только наблюдения MQTT. Аппаратного подтверждения пока нет.*
+
+  <pre>
+  ├─ Группа: {{ (a.group_state or 'unknown') | e }} · не подтверждено
+  ├─ Участники: {{ a.member_count or 0 }}
+  {% for m in (a.members or []) -%}
+  {{ '└─' if loop.last else '├─' }} {{ '🟠' if m.state not in ['unknown', none] else '⚪' }} {{ (m.name or m.ieee or 'Неизвестный') | e }}
+     └─ {{ (m.state or 'unknown') | e }} · {{ 'наблюдается' if m.confidence == 'unverified' else 'нет данных' }}
+  {% endfor -%}
+  </pre>
+  Событий с запуска: {{ a.event_count or 0 }}
+  {% for ev in (a.events or [])[:8] %}
+  - {{ (ev.at or '') | e }} · {{ (ev.name or '') | e }} · {{ (ev.state or '—') | e }}{% if ev.retained %} · retained{% endif %}
+  {% endfor %}
+  {% endif %}
