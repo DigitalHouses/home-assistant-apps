@@ -1,0 +1,26 @@
+# Place as ONE additional item under "sections:" in the existing Aqara view.
+# Each tile controls an independently simulated HA template light.
+type: grid
+column_span: 4
+cards:
+  - type: heading
+    heading: LAB · 6 виртуальных светильников
+    icon: mdi:lightbulb-group
+  - type: tile
+    entity: light.dh_aqara_lab_chandelier
+    name: Люстра
+  - type: tile
+    entity: light.dh_aqara_lab_spots
+    name: Споты
+  - type: tile
+    entity: light.dh_aqara_lab_led_strip
+    name: LED-лента
+  - type: tile
+    entity: light.dh_aqara_lab_sconce
+    name: Бра
+  - type: tile
+    entity: light.dh_aqara_lab_floor_lamp
+    name: Торшер
+  - type: tile
+    entity: light.dh_aqara_lab_night_light
+    name: Ночник

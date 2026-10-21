@@ -13,6 +13,16 @@ input_boolean:
     name: DH Aqara LAB · LED (состояние)
     icon: mdi:led-strip-variant
 
+  dh_aqara_lab_sconce:
+    name: DH Aqara LAB · Бра (состояние)
+    icon: mdi:wall-sconce-flat
+  dh_aqara_lab_floor_lamp:
+    name: DH Aqara LAB · Торшер (состояние)
+    icon: mdi:floor-lamp
+  dh_aqara_lab_night_light:
+    name: DH Aqara LAB · Ночник (состояние)
+    icon: mdi:lightbulb-night
+
 template:
   - light:
       - name: DH Aqara LAB · Люстра
@@ -51,3 +61,39 @@ template:
           action: input_boolean.turn_off
           target:
             entity_id: input_boolean.dh_aqara_lab_led_strip
+      - name: DH Aqara LAB · Бра
+        unique_id: dh_aqara_lab_sconce
+        default_entity_id: light.dh_aqara_lab_sconce
+        state: "{{ is_state('input_boolean.dh_aqara_lab_sconce', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.dh_aqara_lab_sconce
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.dh_aqara_lab_sconce
+      - name: DH Aqara LAB · Торшер
+        unique_id: dh_aqara_lab_floor_lamp
+        default_entity_id: light.dh_aqara_lab_floor_lamp
+        state: "{{ is_state('input_boolean.dh_aqara_lab_floor_lamp', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.dh_aqara_lab_floor_lamp
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.dh_aqara_lab_floor_lamp
+      - name: DH Aqara LAB · Ночник
+        unique_id: dh_aqara_lab_night_light
+        default_entity_id: light.dh_aqara_lab_night_light
+        state: "{{ is_state('input_boolean.dh_aqara_lab_night_light', 'on') }}"
+        turn_on:
+          action: input_boolean.turn_on
+          target:
+            entity_id: input_boolean.dh_aqara_lab_night_light
+        turn_off:
+          action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.dh_aqara_lab_night_light

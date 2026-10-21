@@ -9,3 +9,9 @@ entities:
     name: Споты
   - entity: light.dh_aqara_lab_led_strip
     name: LED-лента
+  - entity: light.dh_aqara_lab_sconce
+    name: Бра
+  - entity: light.dh_aqara_lab_floor_lamp
+    name: Торшер
+  - entity: light.dh_aqara_lab_night_light
+    name: Ночник
