@@ -1,5 +1,5 @@
 name: DigitalHouses Zigbee Monitor App
-version: 0.1.21
+version: 0.1.22
 slug: digitalhouses_zigbee_monitor_app
 description: Automatic Zigbee2MQTT discovery and read-only Zigbee inventory, availability and MQTT activity monitoring.
 url: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_zigbee_monitor_app
