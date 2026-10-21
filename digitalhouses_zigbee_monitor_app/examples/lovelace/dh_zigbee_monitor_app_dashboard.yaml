@@ -541,11 +541,14 @@ sections:
           {% for item in series if item.state == 'ready' %}
           **{{ item.attributes.network_id | e }}** · {{ item.attributes.coverage_minutes }}/{{ item.attributes.expected_minutes }} мин наблюдений
 
-          | 24-часовой интервал | Min | Avg | Max | Минут | Healthy часов |
-          |---|---:|---:|---:|---:|---:|
+          <table>
+          <thead><tr><th>24-часовой интервал</th><th>Min</th><th>Avg</th><th>Max</th><th>Минут</th><th>Healthy часов</th></tr></thead>
+          <tbody>
           {% for d in item.attributes.days | default([]) %}
-          | {{ d.t | timestamp_custom('%d.%m %H:%M') }} | {{ d.min if d.min is not none else '—' }} | {{ d.avg if d.avg is not none else '—' }} | {{ d.max if d.max is not none else '—' }} | {{ d.c }}/1440 | {{ d.healthy_hours }}/24 |
+          <tr><td>{{ d.t | timestamp_custom('%d.%m %H:%M') }}</td><td>{{ d.min if d.min is not none else '—' }}</td><td>{{ d.avg if d.avg is not none else '—' }}</td><td>{{ d.max if d.max is not none else '—' }}</td><td>{{ d.c }}/1440</td><td>{{ d.healthy_hours }}/24</td></tr>
           {% endfor %}
+          </tbody>
+          </table>
 
           *168 часовых интервалов доступны в атрибуте hours; пропуски не подменяются нулём.*
           {% endfor %}
