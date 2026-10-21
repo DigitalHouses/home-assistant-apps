@@ -640,9 +640,9 @@ class MonitorService:
         seconds = max(10.0, min(300.0, float(epoch) - started))
         return round(60 * sum(buckets.values()) / seconds, 2)
 
-    def _publish_live_rpm(self, epoch: int) -> None:
+    def _publish_live_rpm(self, epoch: int, *, allow_event: bool = True) -> None:
         """10-second UI and diagnostic updates share the exact same RPM."""
-        self._update_traffic(epoch, allow_event=True)
+        self._update_traffic(epoch, allow_event=allow_event)
         self._publish_networks()
         self._publish_problems(allow_event=True)
 
@@ -1349,7 +1349,7 @@ class MonitorService:
                 if current == "online":
                     # A valid bridge-state observation starts display sampling
                     # immediately, without waiting for five SQLite minutes.
-                    self._publish_live_rpm(int(self.now()))
+                    self._publish_live_rpm(int(self.now()), allow_event=not retain and not dup)
                 if current == "offline":
                     # Prevent a bridge restart from creating hundreds of
                     # synthetic device "recovered" transitions.
