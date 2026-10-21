@@ -54,6 +54,14 @@ Light targets and group-aware **per-member** startup configuration belong in
 or a Zigbee group; group members are discovered from Zigbee2MQTT `bridge/groups`
 rather than copied into each switch's config.
 
+The HA tree also needs **current W at switch level** with a truthful meter
+source and physical measurement scope (Aqara device power when exposed, or a
+selected external power sensor, e.g. Tongou). A fresh before/after ΔW can
+corroborate a load change on that circuit, but it cannot prove that every
+member of a decoupled Zigbee group responded. An unknown meter is not 0 W.
+Group targets must be expanded into every current Z2M member for individual
+status/confirmation, with no static member list in App Options.
+
 The product must report the dispatched command, target, current group members,
 and individually observed/confirmed states with `partial` / `unknown`
 where appropriate. **Zigbee2MQTT optimistic group or member state is not proof**
