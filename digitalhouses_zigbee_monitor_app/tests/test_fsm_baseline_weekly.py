@@ -17,7 +17,24 @@ class FSMContractTests(unittest.TestCase):
     def test_auto_threshold_exact_integer_contract_including_zero(self):
         self.assertIsNone(auto_threshold(None))
         self.assertEqual([auto_threshold(x) for x in (0, 0.5, 2, 3.9, 4, 5, 35)],
-                         [0, 1, 1, 2, 2, 3, 18])
+                         [0, 0, 1, 1, 2, 2, 17])
+
+    def test_auto_floor_zero_does_not_escalate_or_hide_independent_failures(self):
+        self.assertEqual(auto_threshold(0.067), 0)
+        self.assertEqual(auto_threshold(1.99), 0)
+        self.assertEqual(auto_threshold(2.0), 1)
+        fsm = NetworkFSM()
+        normal = {"bridge_state": "online", "inventory_observed": True,
+                  "rpm": 0, "repeaters": {}}
+        self.assertEqual(fsm.observe(now=0, threshold=None, **normal)[0], "HEALTHY")
+        self.assertEqual(fsm.observe(now=10, threshold=1, **normal)[0], "DEGRADED")
+        self.assertIsNotNone(fsm.low_since)
+        self.assertEqual(fsm.observe(now=350, threshold=0, **normal)[0], "HEALTHY")
+        self.assertIsNone(fsm.low_since)
+        self.assertEqual(fsm.observe(now=720, threshold=0, **normal)[0], "HEALTHY")
+        self.assertEqual(fsm.observe(
+            now=721, bridge_state="offline", inventory_observed=False,
+            rpm=None, threshold=0)[0], "CRITICAL")
 
     def test_no_unknown_and_global_worst_severity(self):
         self.assertEqual(aggregate_fsm([]), "BOOTING")
@@ -211,6 +228,44 @@ class StoreContractTests(unittest.TestCase):
 
 
 class ServiceFSMTests(unittest.TestCase):
+    def test_auto_waits_for_first_fresh_message_and_uses_elapsed_frequency(self):
+        with tempfile.TemporaryDirectory() as temp:
+            clock = [600.0]
+            store = ActivityStore(Path(temp) / "activity.sqlite")
+            self.addCleanup(store.close)
+            svc = MonitorService(
+                ZigbeeMonitor(parse_networks([{
+                    "network_id":"site","base_topic":"z2m","name":"Test",
+                }])), store, publish=lambda topic,payload,retain: True,
+                subscribe=lambda _: True, version="0.1.22",
+                now=lambda: clock[0],
+            )
+            svc.connected()
+            svc.receive("z2m/bridge/devices", json.dumps([{
+                "ieee_address":"0x00158d0000000001", "type":"Router",
+                "friendly_name":"Device",
+            }]).encode(), retain=True)
+            svc.receive("z2m/bridge/state", b"online", retain=True)
+            clock[0] = 631
+            svc.tick()
+            self.assertIsNone(store.rpm_baseline("site"))
+            self.assertIsNone(svc._traffic_metrics["site"]["threshold"])
+            self.assertEqual(svc._traffic_metrics["site"]["rpm"], 0.0)
+            self.assertEqual(svc._network_fsm["site"].state, "HEALTHY")
+            # A first message after 16 minutes must yield ~0.06 MPM, not 0.2.
+            clock[0] = 1600
+            svc.receive("z2m/Device", b'{"temperature":20}')
+            svc.tick()
+            baseline = store.rpm_baseline("site")
+            self.assertIsNotNone(baseline)
+            self.assertAlmostEqual(baseline, 0.06, places=2)
+            self.assertEqual(svc._traffic_metrics["site"]["threshold"], 0)
+            clock[0] = 2000
+            svc.tick()
+            self.assertEqual(svc._network_fsm["site"].state, "HEALTHY")
+            self.assertFalse(svc._traffic_metrics["site"]["traffic_problem"])
+            self.assertIsNone(svc._network_fsm["site"].low_since)
+
     def test_retained_fsm_before_events_and_no_initial_replay(self):
         with tempfile.TemporaryDirectory() as temp:
             clock = [600.0]
@@ -236,7 +291,8 @@ class ServiceFSMTests(unittest.TestCase):
             self.assertFalse([v for t,v,_ in sent if t == EVENT_TOPIC])
             clock[0] = 631
             svc.tick()
-            self.assertEqual(store.rpm_baseline(net),0)
+            self.assertIsNone(store.rpm_baseline(net))
+            self.assertIsNone(svc._traffic_metrics[net]["threshold"])
             self.assertEqual(svc._network_fsm[net].state,"HEALTHY")
             store.update_network_problem_settings(net,auto=False,threshold=10)
             svc._update_traffic(632,allow_event=True)
