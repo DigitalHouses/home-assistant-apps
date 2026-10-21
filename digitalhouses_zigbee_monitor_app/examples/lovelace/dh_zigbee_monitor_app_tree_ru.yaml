@@ -34,7 +34,7 @@ content: |-
   {% for r in repeaters if r.network_id == n.network_id -%}
   {% set members.count = members.count + 1 -%}
   {% endfor -%}
-  {{ arm }} {{ '🟥' if fsm == 'CRITICAL' else '🟨' if fsm == 'DEGRADED' else '⬜' if fsm == 'BOOTING' else '🟩' if fsm == 'HEALTHY' else '❔' }} {{ n.name | e }}
+  {{ arm }} {{ '🟥' if fsm == 'CRITICAL' else '🟨' if fsm == 'DEGRADED' else '⬜' if fsm == 'BOOTING' else '🟩' if fsm == 'HEALTHY' else '❔' }} {{ n.name | e }} · {{ fsm | e }}
   {{ tab }}├─ 🧠 FSM: {{ fsm | e }}{{ ' · ' ~ (n.fsm_reason | e) if n.fsm_reason and n.fsm_reason != 'ok' else '' }}
   {{ tab }}├─ 🏷️ Тип: 👑 Координатор
   {{ tab }}├─ ⚙️ Железо: {{ (policy.hardware_model or 'не указано') | e }}
