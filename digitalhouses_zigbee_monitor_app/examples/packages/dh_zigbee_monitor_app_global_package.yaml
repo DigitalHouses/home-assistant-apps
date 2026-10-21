@@ -7,14 +7,14 @@
 # /config/packages/Global/DH_APP/dh_zigbee_monitor_app_global_package.yaml
 #
 # Source of truth:
-#   Five global scalars + per-network canonical 5-minute RPM, FSM and effective threshold.
+#   Five global scalars + per-network RPM, confirmed offline counts, FSM and effective threshold.
 #   App SQLite owns per-device minute aggregates and historical MQTT rankings.
 #   Machine events are not historical state and are excluded from Recorder.
 #
 # IMPORTANT: Home Assistant Recorder filters give an explicit include.entities
 # priority over exclude.entity_globs (when no conflicting domain/glob includes).
-# Dynamic include globs allow ONLY numeric raw RPM, smoothed RPM, and
-# effective threshold per network. No JSON attributes in these MQTT sensors.
+# Dynamic include globs allow ONLY per-network RPM, confirmed offline,
+# FSM and effective threshold. No JSON attributes in these MQTT sensors.
 # These include globs outrank generic exclude globs. With a glob include, Home Assistant Recorder's official
 # filter precedence grants that matching scalar priority over a broad glob
 # exclude. Other diagnostic JSON/attributes remain excluded. Test the filter
@@ -32,6 +32,7 @@ dh_zigbee_monitor_app_global_package:
         - sensor.dh_zigbee_monitor_app_fsm
       entity_globs:
         - sensor.dh_zigbee_monitor_app_*_rpm
+        - sensor.dh_zigbee_monitor_app_*_offline
         - sensor.dh_zigbee_monitor_app_*_fsm
         - sensor.dh_zigbee_monitor_app_*_rpm_threshold_effective
 
