@@ -605,7 +605,7 @@ class MonitorService:
             # An initial zero seed is temporary: replace it with a minimum
             # of *complete* healthy hours whenever such observations exist.
             hourly = self.store.healthy_hour_baseline(nid, until_epoch=epoch)
-            if hourly is not None:
+            if hourly is not None and self._network_fsm[nid].state == "HEALTHY":
                 current = self.store.rpm_baseline(nid)
                 if current != hourly:
                     self.store.save_rpm_baseline(nid, hourly, epoch=epoch)
