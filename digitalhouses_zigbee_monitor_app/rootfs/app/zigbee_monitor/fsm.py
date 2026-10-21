@@ -11,12 +11,12 @@ PRIORITY = {"HEALTHY": 0, "BOOTING": 1, "DEGRADED": 2, "CRITICAL": 3}
 
 
 def auto_threshold(baseline: float | None) -> int | None:
-    """No implicit minimum: an actual zero baseline disables the RPM alarm."""
+    """AUTO uses floor(50% of baseline); zero disables only the RPM alarm."""
     if baseline is None:
         return None
     if not math.isfinite(baseline) or baseline < 0:
         raise ValueError("baseline must be a finite nonnegative number")
-    return math.ceil(baseline / 2)
+    return math.floor(baseline / 2)
 
 
 def aggregate_fsm(states: list[str]) -> str:
