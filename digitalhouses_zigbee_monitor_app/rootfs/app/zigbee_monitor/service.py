@@ -27,7 +27,7 @@ from .discovery import (
 )
 from .problems import PROBLEM_TYPES, Problem, TrafficDetector, network_problems
 from .storage import ActivityStore
-from .fsm import NetworkFSM, aggregate_fsm, auto_threshold
+from .fsm import NetworkFSM, aggregate_fsm, auto_threshold, rpm_below_threshold
 
 log = logging.getLogger(__name__)
 Publish = Callable[[str, str, bool], bool]
@@ -597,14 +597,15 @@ class MonitorService:
             )
             # The current FSM does not matter for historical samples.
             # Nevertheless, baseline is frozen while a current fault exists.
-            hourly = self.store.healthy_hour_baseline(nid, until_epoch=epoch)
+            rolling = self.store.healthy_rolling_baseline(nid, until_epoch=epoch)
             current = self.store.rpm_baseline(nid)
-            # Do not manufacture a zero baseline from an hour with no observed
-            # device messages. An initial baseline needs positive evidence first.
-            if (hourly is not None and current is not None and
+            # Initial AUTO baseline still needs real observed messages.
+            # Freeze adaptation while any infrastructure fault is active;
+            # avoid replacing the baseline with sparse startup minutes.
+            if (rolling is not None and current is not None and
                     self._network_fsm[nid].state == "HEALTHY" and
-                    current != hourly):
-                self.store.save_rpm_baseline(nid, hourly, epoch=epoch)
+                    current != rolling):
+                self.store.save_rpm_baseline(nid, rolling, epoch=epoch)
         self._minute_ineligible = {
             item for item in self._minute_ineligible if item[1] >= minute
         }
@@ -680,8 +681,7 @@ class MonitorService:
                     inventory_observed=bool(status["inventory_observed"]),
                     rpm=rpm, threshold=threshold, repeaters=repeaters,
                 )
-            low = (rpm is not None and threshold is not None and
-                   threshold > 0 and rpm < threshold)
+            low = rpm_below_threshold(rpm, threshold)
             self._traffic_metrics[nid] = {
                 "rpm":rpm, "rpm_phase":"measured" if observed else "unavailable",
                 "threshold":threshold, "baseline":baseline, "rpm_auto":auto,
