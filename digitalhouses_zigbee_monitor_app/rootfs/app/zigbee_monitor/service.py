@@ -91,6 +91,9 @@ class MonitorService:
         # Fixed 1-second buckets cap memory independent of message frequency.
         self._live_started: dict[str, float] = {}
         self._live_counts: dict[str, dict[int, int]] = {}
+        # Count actual device messages across the session, even beyond the 300s UI window.
+        # No auto baseline can be established before the first such message.
+        self._session_message_counts: dict[str, int] = {}
         self._last_live_slot: int | None = None
         # Recorder histories are 1/min; the live tree remains 10-second.
         self._rpm_chart_minute: dict[str, int] = {}
@@ -281,6 +284,7 @@ class MonitorService:
             self._traffic_metrics.clear()
             self._live_started.clear()
             self._live_counts.clear()
+            self._session_message_counts.clear()
             self._last_live_slot = None
             self._rpm_chart_minute.clear()
             self._rpm_ema.clear()
@@ -594,10 +598,13 @@ class MonitorService:
             # The current FSM does not matter for historical samples.
             # Nevertheless, baseline is frozen while a current fault exists.
             hourly = self.store.healthy_hour_baseline(nid, until_epoch=epoch)
-            if hourly is not None and self._network_fsm[nid].state == "HEALTHY":
-                current = self.store.rpm_baseline(nid)
-                if current != hourly:
-                    self.store.save_rpm_baseline(nid, hourly, epoch=epoch)
+            current = self.store.rpm_baseline(nid)
+            # Do not manufacture a zero baseline from an hour with no observed
+            # device messages. An initial baseline needs positive evidence first.
+            if (hourly is not None and current is not None and
+                    self._network_fsm[nid].state == "HEALTHY" and
+                    current != hourly):
+                self.store.save_rpm_baseline(nid, hourly, epoch=epoch)
         self._minute_ineligible = {
             item for item in self._minute_ineligible if item[1] >= minute
         }
@@ -642,9 +649,15 @@ class MonitorService:
             status = self.monitor.network_status(nid)
             observed = (status["bridge_state"] == "online" and
                         status["inventory_observed"])
-            rpm = self._live_rpm(nid, epoch) if observed else None
+            observed_rpm = self._live_rpm(nid, epoch) if observed else None
             auto, manual = self.store.network_problem_settings(nid)
             baseline = self.store.rpm_baseline(nid)
+            # AUTO has no trustworthy RPM or threshold until a fresh device
+            # message is seen. Manual threshold keeps its existing behavior.
+            seen_messages = self._session_message_counts.get(nid, 0)
+            rpm = (observed_rpm if
+                   (not auto or baseline is not None or seen_messages > 0)
+                   else None)
             fsm = self._network_fsm.setdefault(nid, NetworkFSM())
             threshold = auto_threshold(baseline) if auto else manual
             repeaters = self._network_repeaters(nid)
@@ -654,9 +667,13 @@ class MonitorService:
                 rpm=rpm, threshold=threshold, repeaters=repeaters,
             )
             if (baseline is None and fsm.boot_completed_at is not None and
-                    epoch - fsm.boot_completed_at >= 30 and rpm is not None):
-                # Snapshot of the real observed rate, including a valid zero.
-                baseline = float(rpm)
+                    epoch - fsm.boot_completed_at >= 30 and
+                    observed_rpm is not None and seen_messages > 0):
+                # Initial rate uses *all* observed device messages since the
+                # verified bridge/inventory snapshot. A first message after a
+                # long silence must not be treated as one per 5-minute window.
+                observed_seconds = max(30.0, float(epoch) - fsm.boot_completed_at)
+                baseline = round(60.0 * seen_messages / observed_seconds, 2)
                 self.store.save_rpm_baseline(nid, baseline, epoch=epoch)
                 threshold = auto_threshold(baseline) if auto else manual
                 fsm.observe(
@@ -1416,6 +1433,9 @@ class MonitorService:
                     instant = int(self.now())
                     seconds = self._live_counts.setdefault(sample.network_id, {})
                     seconds[instant] = seconds.get(instant, 0) + 1
+                    self._session_message_counts[sample.network_id] = (
+                        self._session_message_counts.get(sample.network_id, 0) + 1
+                    )
             if sample.kind in ("inventory", "bridge_state", "device_availability"):
                 # Reconcile and commit durable outage state first.
                 # Device availability may have arrived before retained inventory.
