@@ -132,48 +132,53 @@ def current(options: Mapping, path: Path = STORE_PATH) -> dict:
 
 
 def migrate(options_client, path: Path = STORE_PATH) -> dict:
-    """Migrate existing installations at startup, without deleting legacy input.
+    """Lossless one-time conversion from v0.1.4 to Supervisor form.
 
-    Preserves legacy profile and raw YAML under /data before clearing text field.
-    Writes profiles first and validates a round-trip before options.
+    The old raw key is read from own Supervisor App info, because the new
+    schema deliberately does not expose the obsolete text field.
     """
     options = options_client.read()
-    old_text = options.get("configuration_yaml")
-    raw_legacy = isinstance(old_text, str) and bool(old_text.strip())
     has_structured = "switches" in options and "bindings" in options
-    must_import = raw_legacy and (not path.exists() or
-        (has_structured and not options["switches"] and not options["bindings"]))
-    if not must_import and has_structured:
+    if not has_structured:
+        raise CatalogError("Supervisor structured options not loaded")
+    complete = path.with_name("structured_options_migrated")
+    if complete.exists():
         current(options, path)
         return options
-    if not raw_legacy:
-        if has_structured:
-            return options
-        raise CatalogError("No legacy configuration available for migration")
+
+    raw = options
+    # The validated options may omit v0.1.4's deprecated text key.
+    if hasattr(options_client, "read_raw"):
+        raw = options_client.read_raw()
+    old_text = raw.get("configuration_yaml")
+    has_legacy = isinstance(old_text, str) and bool(old_text.strip())
+
+    if not has_legacy:
+        # Fresh 0.1.5 installation or already migrated after an interrupted
+        # marker write. Never reinterpret a nonempty switch list without store.
+        current(options, path)
+        return options
+
     from .configuration import parse_legacy
-    legacy = parse_legacy(options)
-    switches = switch_rows(legacy)
+    legacy = parse_legacy({"configuration_yaml": old_text})
+    rows = switch_rows(legacy)
     bindings = binding_rows(legacy)
     if path.exists():
         stored = _read_profiles(path)
-        # Previously partially migrated state must match exactly; fail closed.
         if stored != validate_config(legacy):
-            raise CatalogError("Migration blocked: Adopt store conflicts with old YAML")
+            raise CatalogError("Migration blocked: Adopt store conflicts with legacy YAML")
     else:
         _save_profiles(path, legacy)
+
     backup = path.with_name("legacy_configuration_yaml.txt")
     if not backup.exists():
         backup.write_text(old_text, encoding="utf-8")
-    updated = {**options, "switches": switches, "bindings": bindings,
-               "configuration_yaml": ""}
-    # Profile snapshot and legacy text remain under /data for rollback.
-    projected = project(_read_profiles(path), updated)
-    # Validate no lost hardware or bindings prior to writing Supervisor options.
-    if len(switch_rows(projected)) != len(switches):
-        raise CatalogError("Migration lost an adopted switch")
+    updated = {**options, "switches": rows, "bindings": bindings}
+    project(_read_profiles(path), updated)  # preflight, no hardware side effects
     options_client.write(updated)
+    # Only after an accepted Supervisor transaction mark migration complete.
+    complete.write_text("0.1.5\n", encoding="utf-8")
     return updated
-
 
 def store_scan(merged: Mapping, options: Mapping, path: Path = STORE_PATH) -> dict:
     """Stage auto-adopted profiles and editable list, preserving user choices."""
