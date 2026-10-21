@@ -20,6 +20,7 @@ HISTORICAL = {
     "sensor.dh_zigbee_monitor_app_devices",
     "sensor.dh_zigbee_monitor_app_offline",
     "sensor.dh_zigbee_monitor_app_messages_rate_5m",
+    "sensor.dh_zigbee_monitor_app_fsm",
 }
 DETAILS = {
     "sensor.dh_zigbee_monitor_app_networks_details",
@@ -308,7 +309,7 @@ class ZigbeeMonitorUiDesignTests(unittest.TestCase):
                  if card.get("type") == "markdown"]
         templated_tables = [card["content"] for card in cards
                             if "<table>" in card["content"]]
-        self.assertEqual(len(templated_tables), 8)
+        self.assertEqual(len(templated_tables), 9)
         for content in templated_tables:
             with self.subTest(table=content[:60]):
                 self.assertEqual(content.count("<table>"), 1)
