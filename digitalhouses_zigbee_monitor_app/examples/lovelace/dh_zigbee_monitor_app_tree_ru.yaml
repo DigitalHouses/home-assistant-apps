@@ -8,7 +8,8 @@ content: |-
   {% elif networks | count == 0 and repeaters | count == 0 %}
   *Zigbee2MQTT и репитеры пока не обнаружены.*
   {% else %}
-  **Zigbee Networks · FSM: {{ states('sensor.dh_zigbee_monitor_app_fsm') }} · Z2M: {{ networks | count }} · Репитеры: {{ repeaters | count }}**
+  {% set global_fsm = states('sensor.dh_zigbee_monitor_app_fsm') %}
+  **Zigbee Networks · {{ '🔴' if global_fsm == 'CRITICAL' else '🟠' if global_fsm == 'DEGRADED' else '🟢' if global_fsm == 'HEALTHY' else '⚪' if global_fsm == 'BOOTING' else '❔' }} {{ global_fsm | e }} · Z2M: {{ networks | count }} · Репитеры: {{ repeaters | count }}**
 
   <pre>\
   {% set unbound = namespace(items=[]) -%}
@@ -34,8 +35,7 @@ content: |-
   {% for r in repeaters if r.network_id == n.network_id -%}
   {% set members.count = members.count + 1 -%}
   {% endfor -%}
-  {{ arm }} {{ '🟥' if fsm == 'CRITICAL' else '🟨' if fsm == 'DEGRADED' else '⬜' if fsm == 'BOOTING' else '🟩' if fsm == 'HEALTHY' else '❔' }} {{ n.name | e }} · {{ fsm | e }}
-  {{ tab }}├─ 🧠 FSM: {{ fsm | e }}{{ ' · ' ~ (n.fsm_reason | e) if n.fsm_reason and n.fsm_reason != 'ok' else '' }}
+  {{ arm }} {{ '🟥' if fsm == 'CRITICAL' else '🟨' if fsm == 'DEGRADED' else '⬜' if fsm == 'BOOTING' else '🟩' if fsm == 'HEALTHY' else '❔' }} {{ n.name | e }} · {{ '🔴' if fsm == 'CRITICAL' else '🟠' if fsm == 'DEGRADED' else '🟢' if fsm == 'HEALTHY' else '⚪' if fsm == 'BOOTING' else '❔' }} {{ fsm | e }}
   {{ tab }}├─ 🏷️ Тип: 👑 Координатор
   {{ tab }}├─ ⚙️ Железо: {{ (policy.hardware_model or 'не указано') | e }}
   {{ tab }}├─ 🌐 IP: {{ (n.management_ip or '—') | e }} {{ '✅' if n.ping == 'reachable' else '❓ нет ответа' if n.ping == 'no_response' else '❓' }}
