@@ -658,7 +658,7 @@ class ActivityStore:
     ) -> dict[str, object]:
         """168 hourly and seven contiguous 24h summaries with explicit coverage."""
         end = (until_epoch//3600 + 1) * 3600
-        start = max(0,end - 168*3600)
+        start = end - 168*3600
         raw = self.conn.execute(
             "SELECT minute_start,rpm,valid,healthy FROM network_rpm_minutes "
             "WHERE network_id=? AND minute_start>=? AND minute_start<? "
@@ -766,5 +766,9 @@ class ActivityStore:
         with self.conn:
             cursor = self.conn.execute(
                 "DELETE FROM message_minutes WHERE bucket_start < ?", (before_epoch,)
+            )
+            self.conn.execute(
+                "DELETE FROM network_rpm_minutes WHERE minute_start < ?",
+                (before_epoch,)
             )
         return cursor.rowcount
