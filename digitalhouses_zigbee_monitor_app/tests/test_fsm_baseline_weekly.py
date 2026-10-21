@@ -171,7 +171,7 @@ class ServiceFSMTests(unittest.TestCase):
             svc.tick()
             self.assertIsNone(store.rpm_baseline("site"))
             self.assertIsNone(svc._traffic_metrics["site"]["threshold"])
-            self.assertIsNone(svc._traffic_metrics["site"]["rpm"])
+            self.assertEqual(svc._traffic_metrics["site"]["rpm"], 0.0)
             self.assertEqual(svc._network_fsm["site"].state, "HEALTHY")
             # A first message after 16 minutes must yield ~0.06 MPM, not 0.2.
             clock[0] = 1600
