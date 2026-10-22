@@ -1,6 +1,6 @@
 # DigitalHouses Aqara Switch App
 
-**v0.1.8 — smart-light actions with brightness, Kelvin/RGB color and fade.**
+**v0.1.9 — individual optional smart-light parameters per target.**
 
 This Home Assistant App supports the commissioning flow for Aqara wired switches,
 battery buttons and key panels. It is not a general automation engine. This MVP scans and adopts Aqara
@@ -31,7 +31,7 @@ It never switches physical Aqara relay output states itself.
    Installation alone cannot toggle any light or change any adopted Aqara
    settings, because no devices have yet been adopted.
 
-Immutable image: `ghcr.io/digitalhouses/digitalhouses_aqara_switch_app:0.1.8`.
+Immutable image: `ghcr.io/digitalhouses/digitalhouses_aqara_switch_app:0.1.9`.
 
 ## Configure and Scan (fresh install only)
 
@@ -81,9 +81,9 @@ In the Supervisor YAML options view this is stored inside the multiline
 `switches: |` field. Edit only actions and light targets; keys are
 generated or resolved by Scan. Scan is manual, not periodic.
 
-## Smart-light action configuration (v0.1.8)
+## Smart-light action configuration (v0.1.9)
 
-Existing short assignments stay the same and continue to toggle all targets:
+Plain light lists remain valid and toggle the listed lamps:
 
 ```yaml
 single:
@@ -91,49 +91,44 @@ single:
   - light.dh_aqara_lab_spots
 ```
 
-A smart-light action accepts a rich mapping. Place it under the existing
-`actions:` of a switch, **without modifying the logical switch key**:
+Each individual lamp may have **its own optional brightness, Kelvin/RGB
+color or fade**. Service belongs to the button action, parameters to
+the lamp, not to the group:
 
 ```yaml
 double:
   service: light.turn_on
   targets:
-    - light.dh_aqara_lab_led_strip
-  brightness_pct: 65
-  color_temp_kelvin: 3000
-  transition: 2
-single_center:
-  service: light.turn_on
-  targets:
-    - light.dh_aqara_lab_night_light
-  brightness_pct: 40
-  rgb_color: [255, 80, 30]
-hold:
-  service: light.turn_on
-  targets:
-    - light.dh_aqara_lab_led_strip
-  brightness_step_pct: 10
+    - light.dh_aqara_lab_led_strip:
+        brightness_pct: 70
+        color_temp_kelvin: 3000
+        transition: 2
+    - light.dh_aqara_lab_sconce:
+        brightness_pct: 40
+        rgb_color: [255, 80, 30]
+    - light.dh_aqara_lab_spots
 ```
 
-Each press event must be among the scanned device's actual Zigbee2MQTT
-`fingerprint.actions`. There is no automatic long-press repetition or
-automatic direction reversal. An actual dimming step requires a new MQTT
-action to be emitted for every step.
+The third light receives **no explicit brightness/color** attributes;
+Home Assistant applies its normal turn_on behavior. Optional attributes:
+`brightness_pct` 0..100, `brightness_step_pct` -100..-1 or 1..100,
+`color_temp_kelvin` 1000..12000, `rgb_color` [r,g,b] each 0..255,
+`transition` 0..60 sec. Conflicting color modes, conflicting
+absolute/relative brightness and unsupported services are rejected.
+Only scanned Z2M actions in the device fingerprint may trigger a command.
+Do not assume a lamp supports dimming, RGB or Kelvin: verify the actual
+model before configuring these capabilities.
 
-Service allowlist: `light.toggle`, `light.turn_on`, `light.turn_off`.
-For turn_on and toggle, supported attributes are `brightness_pct` (0..100),
-`color_temp_kelvin` (1000..12000), `rgb_color` (three integers 0..255),
-`transition` (0..60 sec); `brightness_step_pct` (-100..-1 or 1..100)
-requires turn_on. For turn_off, only `transition` is supported. RGB and
-Kelvin, brightness percent and brightness step, and step with color are
-mutually exclusive. Invalid or unsupported combinations stop the action.
-The target light may ignore parameters it does not support (see HA
-`supported_color_modes`).
+If every target has identical parameters, the app sends a single
+`light.turn_on` request with all of those lights. With different per-light
+options, it sends multiple requests (one for each distinct parameter set),
+serially in one queued action batch. Failure midway reports an error;
+prior requests cannot be undone. This release **still uses HA REST for
+light commands**, not direct Z2M MQTT output.
 
-The App sends **one** Home Assistant light service call with all targets and
-attributes; there are no calls to `switch.*` and no Zigbee physical relay
-writes from light commands. A `light.toggle` rich mapping can also specify
-brightness/color attributes to apply on the ON transition.
+Compatibility: original short target lists and v0.1.8 shared attributes
+still parse, but shared attributes cannot be mixed with per-light options
+within the same action. For new configs use per-light options.
 
 All physical metadata (IEEE, coordinator, Zigbee2MQTT base topic,
 fingerprint, adopted writable settings) lives inside

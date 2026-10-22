@@ -1,5 +1,21 @@
 # Changelog — DigitalHouses Aqara Switch App
 
+## 0.1.9
+
+- Place optional brightness, color temperature, RGB and transition fields
+  **under each individual light target**, not globally for all lights.
+  YAML targets may now mix `- light.name` and `- light.name: {brightness_pct: ...}`.
+- Preserve the existing `service: light.turn_on` / `targets:` action wrapper;
+  `service` applies to the action, attributes apply only to the named lamp.
+- Dispatch separates different light parameters into independent HA calls and
+  coalesces ONLY targets with equal service and equal attribute payload.
+- Validate the full batch before enqueue; maintain MQTT action deduplication,
+  queue ordering, and never operate the Aqara physical relay.
+- Backwards-compatible with plain light target lists and legacy shared
+  v0.1.8 action parameters, but new configs should use per-target options.
+- Existing output is Home Assistant REST; direct Zigbee2MQTT MQTT output is a
+  separate proposed transport change and is **not** implied by this release.
+
 ## 0.1.8
 
 - Expand Aqara button actions with native HA smart-light commands:
