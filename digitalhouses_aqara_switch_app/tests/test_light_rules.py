@@ -7,7 +7,7 @@ import json
 
 from aqara_switch.catalog import CatalogError
 from aqara_switch.actions import ActionError, plan_action
-from aqara_switch.control import HAClient, light_action
+from aqara_switch.control import HAClient, light_action, light_commands
 from aqara_switch.entity_options import _save_profiles, current, parse_rows
 
 ID="switch.livingroomaqaraswitch"
@@ -110,6 +110,94 @@ class SmartLightTests(TestCase):
             self.assertIsNone(light_action(sw,"unknown"))
             self.assertIsNone(light_action(sw,"hold"))
             self.assertEqual(light_action(sw,"single")["data"]["rgb_color"],[2,3,4])
+
+    def test_distinct_per_light_options_dispatch_separate_commands(self):
+        rule={"service":"light.turn_on","targets":[
+            {LIGHT: {"brightness_pct":70,"color_temp_kelvin":3000}},
+            {L2: {"brightness_pct":40,"rgb_color":[255,80,30]}}]}
+        with TemporaryDirectory() as td:
+            path=Path(td)/"store.json"
+            _save_profiles(path,profiles())
+            sw=current({"switches":yaml_for(rule)},path)["rooms"][0]["switches"][0]
+            self.assertEqual(light_commands(sw,"single"),[
+                {"service":"light.turn_on","target":{"entity_id":[LIGHT]},
+                 "data":{"brightness_pct":70,"color_temp_kelvin":3000}},
+                {"service":"light.turn_on","target":{"entity_id":[L2]},
+                 "data":{"brightness_pct":40,"rgb_color":[255,80,30]}}
+            ])
+
+    def test_mixed_parameterized_and_plain_light_has_no_leak(self):
+        rule={"service":"light.turn_on","targets":[
+            {LIGHT:{"brightness_pct":55}}, L2]}
+        with TemporaryDirectory() as td:
+            path=Path(td)/"store.json"
+            _save_profiles(path,profiles())
+            sw=current({"switches":yaml_for(rule)},path)["rooms"][0]["switches"][0]
+            self.assertEqual(light_commands(sw,"single"),[
+                {"service":"light.turn_on","target":{"entity_id":[LIGHT]},
+                 "data":{"brightness_pct":55}},
+                {"service":"light.turn_on","target":{"entity_id":[L2]}}
+            ])
+
+    def test_identical_parameters_coalesce_into_one_call(self):
+        rule={"service":"light.turn_on","targets":[
+            {LIGHT: {"brightness_pct":70}}, {L2: {"brightness_pct":70}}]}
+        with TemporaryDirectory() as td:
+            path=Path(td)/"store.json"
+            _save_profiles(path,profiles())
+            sw=current({"switches":yaml_for(rule)},path)["rooms"][0]["switches"][0]
+            self.assertEqual(light_commands(sw,"single"),[
+                {"service":"light.turn_on","target":{"entity_id":[LIGHT,L2]},
+                 "data":{"brightness_pct":70}}
+            ])
+
+    def test_per_light_invalid_options_rejected_before_queue(self):
+        invalid=[
+            {"service":"light.turn_on","targets":[{LIGHT:{"brightness_pct":120}}]},
+            {"service":"light.turn_on","targets":[{LIGHT:{"color_temp_kelvin":3000,
+                                                            "rgb_color":[255,0,0]}}]},
+            {"service":"light.turn_off","targets":[{LIGHT:{"rgb_color":[1,2,3]}}]},
+            {"service":"light.turn_on","targets":[{LIGHT:{"unknown":10}}]},
+            {"service":"light.turn_on","targets":[{"switch.relay":{"brightness_pct":40}}]},
+            {"service":"light.turn_on","targets":[{LIGHT:{"brightness_pct":40}},LIGHT]},
+            {"service":"light.turn_on","targets":[{LIGHT:None}]},
+            {"service":"light.turn_on","targets":[{LIGHT:{"brightness_pct":40}}],
+             "brightness_pct":50},
+        ]
+        with TemporaryDirectory() as td:
+            path=Path(td)/"store.json"
+            _save_profiles(path,profiles())
+            for rule in invalid:
+                with self.subTest(rule=rule):
+                    with self.assertRaises(CatalogError):
+                        current({"switches":yaml_for(rule)},path)
+
+    def test_grouped_commands_send_distinct_payloads(self):
+        rule={"service":"light.turn_on","targets":[
+            {LIGHT: {"brightness_pct":70,"color_temp_kelvin":3000}},
+            {L2: {"brightness_pct":40,"rgb_color":[255,80,30]}}]}
+        requests=[]
+        class Response:
+            status=200
+            def __enter__(self): return self
+            def __exit__(self,*a): pass
+        def opener(request,timeout):
+            requests.append((request.full_url,json.loads(request.data)))
+            return Response()
+        with TemporaryDirectory() as td:
+            path=Path(td)/"store.json"
+            _save_profiles(path,profiles())
+            sw=current({"switches":yaml_for(rule)},path)["rooms"][0]["switches"][0]
+            commands=light_commands(sw,"single")
+            with patch("urllib.request.urlopen",side_effect=opener):
+                client=HAClient("dummy-token")
+                for cmd in commands: client.execute(cmd)
+        self.assertEqual(requests,[
+            ("http://supervisor/core/api/services/light/turn_on",
+             {"entity_id":[LIGHT],"brightness_pct":70,"color_temp_kelvin":3000}),
+            ("http://supervisor/core/api/services/light/turn_on",
+             {"entity_id":[L2],"brightness_pct":40,"rgb_color":[255,80,30]})
+        ])
 
     def test_one_allowlisted_ha_service_call_with_data_and_no_relay(self):
         requests=[]
