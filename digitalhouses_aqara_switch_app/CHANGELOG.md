@@ -1,5 +1,25 @@
 # Changelog — DigitalHouses Aqara Switch App
 
+## 0.1.7
+
+- Fix Scan ignoring Aqara battery buttons and climate sensors with press
+  events when HA does not expose a switch.* entity for those devices.
+- Keep all eligible Aqara devices under the same `switch.*` config keys:
+  first reuse the exact existing HA switch entity when unambiguous, otherwise
+  derive a stable **logical-only config key** from Zigbee2MQTT friendly_name.
+  Logical-only keys DO NOT create or claim to be HA entities.
+- Collision guard for multiple Zigbee2MQTT networks and similar friendly
+  names: qualify the logical-only key with a network name or deterministic
+  stable suffix, never a physical IEEE.
+- Manual Scan/Adopt retains exact coordinator, IEEE, model, capability and
+  captured physical mode baseline privately. No Zigbee writes on Scan.
+- Compatible hardware replacement retains logical key and existing action
+  bindings. Invalid replacement profiles fail closed.
+- Repeat Scan is idempotent and restores a config row when the operator
+  cleared the YAML while the device remained adopted.
+- No migration is added: experimental installation can be uninstalled
+  and reinstalled to reset hardware profiles.
+
 ## 0.1.6
 
 - Clean-install experimental revision: drop v0.1.4/v0.1.5 migration and

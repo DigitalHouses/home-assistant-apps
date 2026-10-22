@@ -4,4 +4,4 @@ configuration:
     description: Подробность журнала приложения.
   switches:
     name: Выключатели и назначения (YAML)
-    description: "Scan добавляет существующие switch.* из Home Assistant. Внутри каждого выключателя настройте enabled и actions с одним или несколькими light.*. Физические IEEE хранятся в App, не редактируются."
+    description: "Scan добавляет Aqara с событиями action под ключами switch.*. Для кнопок без сущности switch.* создаётся только логический ключ в YAML, не новая сущность HA. Внутри каждого выключателя настройте enabled и actions с одним или несколькими light.*. Физические IEEE хранятся в App, не редактируются."
