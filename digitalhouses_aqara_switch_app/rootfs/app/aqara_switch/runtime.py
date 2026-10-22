@@ -377,7 +377,7 @@ class Application:
                 targets = command["target"]["entity_id"]
                 target_label = ", ".join(targets)
                 try:
-                    self._jobs.put_nowait((name, action, targets))
+                    self._jobs.put_nowait((name, action, command))
                     self._publish_action(state="queued", switch=name, action=action,
                                          target=target_label)
                 except queue.Full:
@@ -390,17 +390,17 @@ class Application:
             self._ha_client = HAClient(os.environ.get("SUPERVISOR_TOKEN", ""))
         while not self._stop.is_set():
             try:
-                name, action, entities = self._jobs.get(timeout=1)
+                name, action, command = self._jobs.get(timeout=1)
             except queue.Empty:
                 continue
             try:
-                self._ha_client.toggle_targets(entities)
+                self._ha_client.execute(command)
                 self._publish_action(state="accepted", switch=name, action=action,
-                                     target=", ".join(entities))
-                LOG.info("Aqara %s / %s -> light.toggle %s accepted by HA",
-                         name, action, entities)
+                                     target=", ".join(command["target"]["entity_id"]))
+                LOG.info("Aqara %s / %s -> %s %s accepted by HA",
+                         name, action, command["service"], command["target"]["entity_id"])
             except Exception as exc:
-                LOG.exception("Home Assistant light.toggle failed")
+                LOG.exception("Home Assistant light service failed")
                 self._publish_action(state="error", switch=name, action=action,
                                      target=", ".join(entities), error=str(exc)[:300])
             finally:

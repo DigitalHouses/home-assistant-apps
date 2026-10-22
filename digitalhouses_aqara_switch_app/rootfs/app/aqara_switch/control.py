@@ -8,10 +8,12 @@ from __future__ import annotations
 from collections.abc import Mapping
 import json
 import logging
+import re
 import urllib.request
 
 from .actions import ActionError, plan_action
 from .catalog import CatalogError, candidate_from_mqtt
+from .light_rules import validate_data
 
 LOG = logging.getLogger(__name__)
 
@@ -35,18 +37,22 @@ def verified_adopted_switch(saved: Mapping, device: Mapping,
 
 
 def light_action(saved: Mapping, reported_action: object) -> dict | None:
-    """Only light.toggle with one to sixteen explicitly configured HA lights."""
+    """Allow only light.toggle, light.turn_on and light.turn_off with validated data."""
     if not isinstance(reported_action, str) or not reported_action:
         return None
     call = plan_action(saved, reported_action)
     if call is None:
         return None
-    if (call.get("service") != "light.toggle" or
+    if (call.get("service") not in ("light.toggle", "light.turn_on", "light.turn_off") or
             not isinstance(call.get("target"), Mapping) or
             not 1 <= len(call["target"].get("entity_id", [])) <= 16 or
             any(not light.startswith("light.")
                 for light in call["target"]["entity_id"])):
-        raise ActionError("MVP permits 1..16 light.toggle targets per action")
+        raise ActionError("MVP permits only 1..16 light.* targets per supported light service")
+    try:
+        validate_data(call["service"], call.get("data", {}))
+    except CatalogError as exc:
+        raise ActionError(str(exc)) from exc
     return call
 
 
@@ -80,19 +86,36 @@ class HAClient:
         self.toggle_targets([entity_id])
 
     def toggle_targets(self, entity_ids: list[str]) -> None:
-        if (not isinstance(entity_ids, list) or
-                not 1 <= len(entity_ids) <= 16 or
-                any(not isinstance(e, str) or not e.startswith("light.")
-                    for e in entity_ids) or
-                len(entity_ids) != len(set(entity_ids))):
-            raise ValueError("Only 1..16 unique Home Assistant light entities can be toggled")
-        payload = json.dumps({"entity_id": entity_ids}).encode("utf-8")
+        self.execute({"service": "light.toggle", "target": {"entity_id": entity_ids}})
+
+    def execute(self, command: Mapping) -> None:
+        """Call one allowlisted HA light service with validated light data."""
+        if not isinstance(command, Mapping):
+            raise ValueError("HA light command must be an object")
+        service = command.get("service")
+        if service not in ("light.toggle", "light.turn_on", "light.turn_off"):
+            raise ValueError("Only HA light.toggle/turn_on/turn_off permitted")
+        target = command.get("target")
+        ids = target.get("entity_id") if isinstance(target, Mapping) else None
+        if (not isinstance(ids, list) or not 1 <= len(ids) <= 16 or
+                any(not isinstance(e, str) or
+                    not re.fullmatch(r"light\.[a-z0-9_]+", e) for e in ids) or
+                len(ids) != len(set(ids))):
+            raise ValueError("Only 1..16 unique light.* targets are permitted")
+        try:
+            data = validate_data(service, command.get("data", {}))
+        except CatalogError as exc:
+            raise ValueError(str(exc)) from exc
+        payload = json.dumps({"entity_id": ids, **data}).encode("utf-8")
+        endpoint = {"light.toggle": "/services/light/toggle",
+                    "light.turn_on": "/services/light/turn_on",
+                    "light.turn_off": "/services/light/turn_off"}[service]
         req = urllib.request.Request(
-            self.url + "/services/light/toggle", method="POST",
-            data=payload,
+            self.url + endpoint, method="POST", data=payload,
             headers={"Authorization": "Bearer " + self.token,
                      "Content-Type": "application/json"},
         )
         with urllib.request.urlopen(req, timeout=self.timeout) as response:
             if response.status != 200:
-                raise RuntimeError("Home Assistant toggle was not accepted")
+                raise RuntimeError("Home Assistant light command was not accepted")
+

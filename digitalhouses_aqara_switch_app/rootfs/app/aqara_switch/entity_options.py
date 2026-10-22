@@ -11,6 +11,7 @@ import re
 import yaml
 
 from .catalog import CatalogError, validate_config
+from .light_rules import parse_rule
 from .structured_options import _read_profiles, _save_profiles
 
 STORE_PATH = Path("/data/adopted_switches.json")
@@ -43,16 +44,11 @@ def parse_rows(options: Mapping) -> list[dict]:
         if not isinstance(value["enabled"], bool) or not isinstance(value["actions"], Mapping):
             raise CatalogError("enabled must be boolean, actions must be mapping")
         actions = {}
-        for press, targets in value["actions"].items():
+        for press, rule in value["actions"].items():
             if not isinstance(press, str) or not press:
                 raise CatalogError("Invalid action name")
-            if not isinstance(targets, list) or not 1 <= len(targets) <= 16:
-                raise CatalogError("Each action needs between 1 and 16 lights")
-            if any(not isinstance(t, str) or not _LIGHT.fullmatch(t) for t in targets):
-                raise CatalogError("Action targets must be light.* entity IDs")
-            if len(targets) != len(set(targets)):
-                raise CatalogError("Duplicate light target")
-            actions[press] = list(targets)
+            parse_rule(rule)  # fail closed before persisting user configuration
+            actions[press] = list(rule) if isinstance(rule, list) else dict(rule)
         result.append({"entity_id": entity_id, "enabled": value["enabled"],
                        "actions": actions})
     return result
@@ -84,10 +80,10 @@ def project(profiles: Mapping, options: Mapping) -> dict:
             raise CatalogError("Unadopted or removed switch entity: " + row["entity_id"])
         item = index[row["entity_id"]]
         supported = item.get("fingerprint", {}).get("actions", [])
-        for press, targets in row["actions"].items():
+        for press, rule in row["actions"].items():
             if press not in supported:
                 raise CatalogError("Unsupported Aqara action " + press + " for " + row["entity_id"])
-            item["bindings"][press] = {"action": "toggle", "targets": targets}
+            item["bindings"][press] = parse_rule(rule)
         item["enabled"] = row["enabled"]
     return data
 

@@ -6,6 +6,8 @@ profile. A binding must reference a narrowly allowlisted HA service.
 from __future__ import annotations
 import re
 from collections.abc import Mapping
+from .catalog import CatalogError
+from .light_rules import validate_data
 
 _ENTITY_ID = re.compile(r"^[a-z_]+\.[a-z0-9_]+$")
 _SERVICE_MAP = {
@@ -75,4 +77,15 @@ def plan_action(saved: Mapping, mqtt_action: str) -> dict | None:
     service = _SERVICE_MAP.get(domain, {}).get(mode)
     if service is None:
         raise ActionError("Action is not permitted for selected target domain")
-    return {"service": service, "target": {"entity_id": list(targets)}}
+    result = {"service": service, "target": {"entity_id": list(targets)}}
+    data = binding.get("data", {})
+    if domain == "light":
+        try:
+            verified = validate_data(service, data)
+        except CatalogError as exc:
+            raise ActionError(str(exc)) from exc
+        if verified:
+            result["data"] = verified
+    elif data:
+        raise ActionError("Smart-light data is allowed only for light entities")
+    return result
