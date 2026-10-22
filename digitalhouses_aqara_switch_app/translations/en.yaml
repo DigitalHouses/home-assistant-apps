@@ -4,4 +4,4 @@ configuration:
     description: Application log verbosity.
   switches:
     name: Switches and assignments (YAML)
-    description: "Scan adds all supported Aqara action devices under switch.* config keys. If no HA switch entity exists, the key is logical-only (no new HA entity). Configure enabled and actions with one or more light.* targets. Hardware IEEE is stored privately."
+    description: "Scan adds all supported Aqara action devices under switch.* config keys. If no HA switch entity exists, the key is logical-only (no new HA entity). Configure enabled and actions with one or more light.* targets. Each action can be a short toggle list or an advanced service/targets/brightness_pct/brightness_step_pct/color_temp_kelvin/rgb_color/transition mapping. Hardware IEEE is stored privately."
