@@ -1,7 +1,7 @@
-"""Fresh v0.1.6-only switch configuration: HA entity key -> button actions.
+"""Compact YAML switch.* logical keys -> Aqara actions -> light targets.
 
-No migration. Only existing HA switch.* entity_ids are accepted. Hardware
-fingerprint/mode baseline is private App state, separate from user bindings.
+No migration. The switch.* key may name an existing HA switch entity or be
+logical-only for battery remotes. Never register a fake HA entity.
 """
 from __future__ import annotations
 from collections.abc import Mapping
@@ -34,7 +34,7 @@ def parse_rows(options: Mapping) -> list[dict]:
             raise CatalogError("Each switch row must have exactly one entity_id key")
         entity_id, value = next(iter(row.items()))
         if not isinstance(entity_id, str) or not _ENTITY.fullmatch(entity_id):
-            raise CatalogError("Switch key must be an existing switch.* entity_id")
+            raise CatalogError("Switch key must be switch.* (HA entity or logical config key)")
         if entity_id in unique:
             raise CatalogError("Duplicate logical switch entity_id")
         unique.add(entity_id)
@@ -73,9 +73,9 @@ def project(profiles: Mapping, options: Mapping) -> dict:
         for item in room["switches"]:
             entity_id = item.get("entity_id")
             if not isinstance(entity_id, str) or not _ENTITY.fullmatch(entity_id):
-                raise CatalogError("Adopted hardware lacks unique HA switch entity_id")
+                raise CatalogError("Adopted hardware lacks a unique logical switch key")
             if entity_id in index:
-                raise CatalogError("Duplicate adopted HA switch entity_id")
+                raise CatalogError("Duplicate adopted logical switch key")
             index[entity_id] = item
             item["bindings"] = {}
             item["enabled"] = False

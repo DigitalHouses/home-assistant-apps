@@ -1,16 +1,61 @@
-"""Explicit clean Scan/Adopt: no migration or invented HA entities."""
+"""Manual Zigbee2MQTT Scan/Adopt with stable switch.* configuration keys.
+
+Prefer a uniquely matched, existing HA switch.* entity. Aqara remotes often
+have only event/sensor entities: give them a stable logical switch.* key,
+without publishing HA Discovery for that key. Hardware is still verified by
+coordinator, IEEE and exact Zigbee2MQTT fingerprint.
+"""
 from __future__ import annotations
 from collections.abc import Mapping
-from datetime import datetime, timezone
 from copy import deepcopy
+from datetime import datetime, timezone
+from hashlib import sha256
+import re
 
 from .catalog import CatalogError, candidate_from_mqtt, decode_bridge_devices, import_new
 from .configuration import parse_configuration
-from .entity_options import STORE_PATH, store_scan
+from .entity_options import STORE_PATH, parse_rows, store_scan
 from .ha_registry import areas_from_registries, switch_entities
 
 
+def _slug(value: str) -> str:
+    """Only ASCII for HA-style keys; never transliterate device names."""
+    clean = re.sub(r"[^a-z0-9_]+", "_", value.casefold()).strip("_")
+    if not clean:
+        clean = "device_" + sha256(value.encode("utf-8")).hexdigest()[:10]
+    return clean[:64].rstrip("_")
+
+
+def _choose_key(candidate: dict, existing: dict, taken: dict,
+                preferred: str | None) -> tuple[str, str]:
+    """Choose deterministic, distinct logical key without device IEEE.
+
+    Existing key wins for known logical switches (including hardware replace).
+    A uniquely matched HA switch may be used as key; otherwise generate one
+    from the Z2M friendly name, with stable network-qualified collision fallback.
+    """
+    owner = (candidate["coordinator_ieee"], candidate["logical_name"])
+    remembered = existing.get(owner)
+    if remembered is not None:
+        return remembered["entity_id"], remembered.get("entity_source", "logical")
+    stem = "switch." + _slug(candidate["logical_name"])
+    choices = []
+    if preferred:
+        choices.append((preferred, "ha"))
+    choices.append((stem, "logical"))
+    net = _slug(candidate["base_topic"].replace("/", "_"))
+    choices.append(("switch." + net + "_" + _slug(candidate["logical_name"]), "logical"))
+    digest = sha256((":".join(map(str, owner)) + ":" +
+                     candidate["base_topic"]).encode("utf-8")).hexdigest()[:12]
+    choices.append((stem + "_" + digest, "logical"))
+    for key, source in choices:
+        if key not in taken or taken[key] == owner:
+            return key, source
+    raise CatalogError("Cannot allocate unique logical switch key for " + candidate["logical_name"])
+
+
 def scan_once(snapshots: list[dict], options_client, ha_registry) -> tuple[dict, dict]:
+    """Never send a Zigbee /set or trigger light.toggle; Adopt is explicit."""
     if not snapshots:
         raise CatalogError("No verified Zigbee2MQTT networks observed")
     candidates, problems = [], []
@@ -41,58 +86,86 @@ def scan_once(snapshots: list[dict], options_client, ha_registry) -> tuple[dict,
     ha_devices, ha_areas, ha_entities = ha_registry.fetch()
     ieees = {item["ieee"] for item in candidates}
     areas = areas_from_registries(ha_devices, ha_areas, ieees)
-    identities, errors = switch_entities(ha_devices, ha_entities, ieees)
-    candidates = [dict(item, entity_id=identities[item["ieee"]])
-                  for item in candidates if item["ieee"] in identities]
-    for ieee, reason in errors.items():
-        name = next((x["logical_name"] for x in candidates if x["ieee"] == ieee), ieee)
-        problems.append({"name": name, "reason": reason})
+    ha_switches, _ = switch_entities(ha_devices, ha_entities, ieees)
 
     options = options_client.read()
     previous = parse_configuration(options, profile_path=STORE_PATH)
-    # Preserve the logical HA entity across a physical replacement when
-    # the actual HA registry still points to that same entity_id.
-    replaced = []
-    by_entity = {s.get("entity_id"): s
-                 for room in previous["rooms"] for s in room["switches"]}
-    updated = deepcopy(previous)
-    for candidate in candidates:
-        prior = by_entity.get(candidate["entity_id"])
-        if prior is None or prior["ieee"] == candidate["ieee"]:
+    prior_switches = [s for room in previous["rooms"] for s in room["switches"]]
+    by_entity = {sw["entity_id"]: sw for sw in prior_switches}
+    by_logical = {(sw["coordinator_ieee"], sw["logical_name"]): sw
+                  for sw in prior_switches}
+    taken = {sw["entity_id"]: (sw["coordinator_ieee"], sw["logical_name"])
+             for sw in prior_switches}
+    enriched, logical_only = [], []
+    for item in sorted(candidates, key=lambda c: (
+            c["coordinator_ieee"], c["base_topic"], c["logical_name"], c["ieee"])):
+        owner = (item["coordinator_ieee"], item["logical_name"])
+        try:
+            key, source = _choose_key(item, by_logical, taken,
+                                      ha_switches.get(item["ieee"]))
+        except CatalogError as exc:
+            problems.append({"name": item["logical_name"], "reason": str(exc)})
             continue
-        if prior["fingerprint"] != candidate["fingerprint"]:
-            problems.append({"name": candidate["logical_name"],
-                             "reason": "Replacement fingerprint mismatch"})
+        if key in taken and taken[key] != owner:
+            problems.append({"name": item["logical_name"],
+                             "reason": "Logical switch key collision: " + key})
+            continue
+        # A duplicated Z2M identity across snapshots is not a second switch.
+        if any(x["entity_id"] == key for x in enriched):
+            problems.append({"name": item["logical_name"],
+                             "reason": "Duplicate logical switch identity: " + key})
+            continue
+        taken[key] = owner
+        item = {**item, "entity_id": key, "entity_source": source}
+        enriched.append(item)
+        if source == "logical":
+            logical_only.append({"name": item["logical_name"], "key": key})
+
+    replaced, rejected = [], set()
+    updated = deepcopy(previous)
+    for item in enriched:
+        prior = by_entity.get(item["entity_id"])
+        if prior is None or prior["ieee"] == item["ieee"]:
+            continue
+        if (prior["fingerprint"] != item["fingerprint"] or
+                prior["logical_name"] != item["logical_name"] or
+                prior["coordinator_ieee"] != item["coordinator_ieee"]):
+            problems.append({"name": item["logical_name"],
+                             "reason": "Replacement fingerprint or logical identity mismatch"})
+            rejected.add(item["entity_id"])
             continue
         for room in updated["rooms"]:
             for sw in room["switches"]:
-                if sw.get("entity_id") == candidate["entity_id"]:
-                    for key in ("coordinator_ieee", "base_topic", "logical_name",
-                                "ieee", "fingerprint", "settings"):
-                        sw[key] = deepcopy(candidate[key])
-                    replaced.append(candidate["entity_id"])
+                if sw.get("entity_id") == item["entity_id"]:
+                    for k in ("coordinator_ieee", "base_topic", "logical_name",
+                              "ieee", "fingerprint", "settings", "entity_source"):
+                        sw[k] = deepcopy(item[k])
+                    replaced.append(item["entity_id"])
 
-    # Only candidates without unsafe conflicts may reach the append-only import.
-    safe_candidates = [
-        item for item in candidates if
-        (by_entity.get(item["entity_id"]) is None or
-         by_entity[item["entity_id"]]["ieee"] == item["ieee"] or
-         item["entity_id"] in replaced)
-    ]
+    safe_candidates = [item for item in enriched
+                       if item["entity_id"] not in rejected]
     merged, report = import_new(updated, safe_candidates, areas)
-    ieee_to_entity = {c["ieee"]: c["entity_id"] for c in safe_candidates}
+    key_by_hardware = {(item["coordinator_ieee"], item["ieee"]): item
+                       for item in safe_candidates}
     for room in merged["rooms"]:
         for sw in room["switches"]:
             if not sw.get("entity_id"):
-                sw["entity_id"] = ieee_to_entity.get(sw["ieee"])
-                if not sw["entity_id"]:
-                    raise CatalogError("Adopted device lacks confirmed HA entity_id")
-
+                key = (sw["coordinator_ieee"], sw["ieee"])
+                item = key_by_hardware.get(key)
+                if item is None:
+                    raise CatalogError("Adopted device lacks logical switch key")
+                sw["entity_id"] = item["entity_id"]
+                sw["entity_source"] = item["entity_source"]
     report["replaced"] = replaced
+    report["logical_only"] = logical_only
     report["problems"].extend(problems)
     report["networks"] = ready
     report["completed_at"] = datetime.now(timezone.utc).isoformat()
-    if report["added"] or replaced:
+
+    configured = {row["entity_id"] for row in parse_rows(options)}
+    absent_rows = any(sw["entity_id"] not in configured
+                      for room in merged["rooms"] for sw in room["switches"])
+    if report["added"] or replaced or absent_rows:
         changed = store_scan(merged, options, STORE_PATH)
         options_client.write(changed)
         merged = parse_configuration(options_client.read(), profile_path=STORE_PATH)

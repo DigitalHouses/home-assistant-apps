@@ -1,4 +1,4 @@
-"""Strict Aqara Zigbee IEEE -> existing HA device -> switch.* entity mapping."""
+"""Aqara IEEE -> optional existing HA device/switch entity lookup."""
 from __future__ import annotations
 import json
 from collections.abc import Mapping
@@ -59,10 +59,10 @@ def areas_from_registries(devices: object, areas: object, ieees: set[str]) -> di
 
 
 def switch_entities(devices: object, entities: object, ieees: set[str]) -> tuple[dict, dict]:
-    """Resolve exactly one existing switch.* for each physical HA device.
+    """Return an unambiguous HA switch.* when present, otherwise a reason.
 
-    No guessed or generated entity IDs, no friendly-name matching or relay
-    selection. Ambiguous and missing switch entities are explicit scan problems.
+    Missing switch.* is normal for battery remotes, so the Scan caller may
+    allocate a logical-only key while still binding hardware strictly.
     """
     owners = _matched_devices(devices, ieees)
     if not isinstance(entities, list):

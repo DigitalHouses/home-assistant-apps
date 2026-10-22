@@ -1,11 +1,11 @@
 # DigitalHouses Aqara Switch App
 
-**v0.1.6 — clean-install, HA entity-keyed Scan/Adopt and multi-light toggle.**
+**v0.1.7 — Aqara button + switch Scan/Adopt, stable logical keys and multi-light toggle.**
 
 This Home Assistant App supports the commissioning flow for Aqara wired switches,
 battery buttons and key panels. It is not a general automation engine. This MVP scans and adopts Aqara
 inputs, preserves saved writable switch configuration, and dispatches an
-explicitly bound Aqara action to a single Home Assistant light.toggle target.
+explicitly bound Aqara action to one or more Home Assistant light.toggle targets.
 It never switches physical Aqara relay output states itself.
 
 ## Installation and prerequisites
@@ -31,7 +31,7 @@ It never switches physical Aqara relay output states itself.
    Installation alone cannot toggle any light or change any adopted Aqara
    settings, because no devices have yet been adopted.
 
-Immutable image: `ghcr.io/digitalhouses/digitalhouses_aqara_switch_app:0.1.6`.
+Immutable image: `ghcr.io/digitalhouses/digitalhouses_aqara_switch_app:0.1.7`.
 
 ## Configure and Scan (fresh install only)
 
@@ -44,12 +44,27 @@ App Options has `log_level` plus **one short multiline YAML option
 `switches`** (initially `[]`). The Home Assistant Supervisor editor does
 not support arbitrary nested dynamic keys as native form controls.
 
-After pressing **Сканировать**, the App writes **existing, unique**
-Home Assistant switch.* entity_ids as logical keys. Example only
-(actual IDs must come from HA, not from the example):
+After pressing **Сканировать**, the App detects all supported Aqara
+devices that advertise Zigbee2MQTT `action` values, including battery
+remotes and Aqara climate sensors with buttons. All are configured under a
+`switch.*` key, regardless of their Home Assistant entity domain:
+
+- When HA associates the Zigbee device with **exactly one existing**
+  `switch.*` entity, its actual entity_id is reused as config key.
+- Otherwise, Scan generates a unique **logical-only** `switch.*` YAML key
+  based on the device's Zigbee2MQTT friendly name (e.g.
+  `switch.aqara_battery_button`). This is **not** a new or existing
+  Home Assistant entity; the App does not publish it through MQTT Discovery.
+  Colliding names use a network-qualified stable key instead.
+- Scan stores the physical coordinator, IEEE, Zigbee2MQTT topic, model and
+  writable settings baseline privately in `/data`. These facts are not
+  editable through the switch YAML.
+
+The App's `switches` YAML option then looks like (example only;
+Scan determines the exact keys):
 
 ```yaml
-- switch.livingroomaqaraswitch:
+- switch.aqara_battery_button:
     enabled: true
     actions:
       single:
@@ -57,27 +72,19 @@ Home Assistant switch.* entity_ids as logical keys. Example only
         - light.dh_aqara_lab_spots
       double:
         - light.dh_aqara_lab_sconce
-- switch.livingroomthermostat:
+- switch.ths_livingroom:
     enabled: true
     actions: {}
 ```
 
-In the App **YAML options view**, Supervisor stores this multiline text
-under the `switches: |` key. Edit only action names and light targets;
-the key `switch.*` was automatically resolved from HA. Do not paste
-these example `switch.*` IDs as if they had been discovered.
-
-Aqara devices with no existing `switch.*` entity or more than one such
-entity are **not imported**; they are listed as scan problems. This
-is deliberate: an invented switch.* key would not be a real HA entity.
-In particular some battery remotes expose `event.*`/`sensor.*`,
-not `switch.*`. Existing entity domains can be inspected before
-choosing an alternative contract.
+In the Supervisor YAML options view this is stored inside the multiline
+`switches: |` field. Edit only actions and light targets; keys are
+generated or resolved by Scan. Scan is manual, not periodic.
 
 All physical metadata (IEEE, coordinator, Zigbee2MQTT base topic,
 fingerprint, adopted writable settings) lives inside
 `/data/adopted_switches.json`. No new Home Assistant entities are
-registered. The existing HA entity_id is used only as a **logical key**;
+registered. The existing or generated `switch.*` key is used only as a **logical key**;
 the App never calls `switch.toggle` on it.
 
 A fresh, non-retained, non-duplicated Aqara MQTT press matching an adopted
@@ -87,10 +94,10 @@ An empty `actions: {}` is inert. The `enabled: false` setting also
 disables Mode Keeper for that switch. HA accepting a call is not proof
 of physical light operation.
 
-Explicit Scan can update a replaced physical IEEE only if HA's existing
-switch entity_id remains identical and the new hardware's verified
-fingerprint is compatible. If the HA entity ID changes, or there is
-ambiguity, Scan reports a problem; it never silently reassigns actions.
+Explicit Scan can update a replaced physical IEEE when the Zigbee2MQTT
+friendly name and coordinator remain the same and its hardware capability
+fingerprint is compatible. The stable logical key retains action bindings.
+An incompatible replacement is rejected; no action is sent.
 
 ## Home Assistant UI
 
