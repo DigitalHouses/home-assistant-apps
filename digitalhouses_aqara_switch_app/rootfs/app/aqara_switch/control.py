@@ -56,6 +56,43 @@ def light_action(saved: Mapping, reported_action: object) -> dict | None:
     return call
 
 
+def light_commands(saved: Mapping, reported_action: object) -> list[dict] | None:
+    """Plan every light command before dispatch; coalesce only equal parameters.
+
+    A multi-light action may need separate calls for lights with distinct
+    brightness/color settings. One MQTT press becomes one queued batch.
+    """
+    base = light_action(saved, reported_action)
+    if base is None:
+        return None
+    binding = saved.get("bindings", {}).get(reported_action, {})
+    overrides = binding.get("target_data", {})
+    if not isinstance(overrides, Mapping):
+        raise ActionError("Invalid per-light options map")
+    ids = base["target"]["entity_id"]
+    if set(overrides) - set(ids):
+        raise ActionError("Per-light options reference unbound target")
+    shared = base.get("data", {})
+    if shared and overrides:
+        raise ActionError("Cannot mix shared and per-light attributes")
+    groups: dict[str, dict] = {}
+    for entity in ids:
+        try:
+            data = validate_data(base["service"], overrides.get(entity, shared))
+        except CatalogError as exc:
+            raise ActionError(str(exc)) from exc
+        # Same service and identical parameters can be sent as ONE HA call.
+        key = json.dumps(data, ensure_ascii=True, sort_keys=True)
+        if key not in groups:
+            groups[key] = {
+                "service": base["service"], "target": {"entity_id": []},
+            }
+            if data:
+                groups[key]["data"] = data
+        groups[key]["target"]["entity_id"].append(entity)
+    return list(groups.values())
+
+
 def settings_drift(saved: Mapping, observed: Mapping) -> dict:
     """Return explicitly observed differing settings from the adopted baseline.
 

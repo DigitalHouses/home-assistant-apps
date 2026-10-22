@@ -18,7 +18,7 @@ import time
 from .catalog import (CatalogError, candidate_from_mqtt, decode_bridge_devices,
                       resolve_hardware)
 from .actions import ActionError
-from .control import HAClient, light_action, settings_drift, verified_adopted_switch
+from .control import HAClient, light_commands, settings_drift, verified_adopted_switch
 from .configuration import parse_configuration
 from .ha_registry import HARegistryClient
 from .mqtt_ui import (
@@ -366,18 +366,18 @@ class Application:
                     continue
                 self._last_action_at[dedupe_key] = now
                 try:
-                    command = light_action(saved, action)
+                    commands = light_commands(saved, action)
                 except ActionError as exc:
                     LOG.error("Invalid binding %s / %s: %s", name, action, exc)
                     self._publish_action(state="error", switch=name, action=action,
                                          target=None, error=str(exc))
                     continue
-                if command is None:
+                if commands is None:
                     continue
-                targets = command["target"]["entity_id"]
+                targets = [eid for command in commands for eid in command["target"]["entity_id"]]
                 target_label = ", ".join(targets)
                 try:
-                    self._jobs.put_nowait((name, action, command))
+                    self._jobs.put_nowait((name, action, commands))
                     self._publish_action(state="queued", switch=name, action=action,
                                          target=target_label)
                 except queue.Full:
@@ -390,19 +390,21 @@ class Application:
             self._ha_client = HAClient(os.environ.get("SUPERVISOR_TOKEN", ""))
         while not self._stop.is_set():
             try:
-                name, action, command = self._jobs.get(timeout=1)
+                name, action, commands = self._jobs.get(timeout=1)
             except queue.Empty:
                 continue
+            targets = [eid for command in commands for eid in command["target"]["entity_id"]]
             try:
-                self._ha_client.execute(command)
+                for command in commands:
+                    self._ha_client.execute(command)
                 self._publish_action(state="accepted", switch=name, action=action,
-                                     target=", ".join(command["target"]["entity_id"]))
-                LOG.info("Aqara %s / %s -> %s %s accepted by HA",
-                         name, action, command["service"], command["target"]["entity_id"])
+                                     target=", ".join(targets))
+                LOG.info("Aqara %s / %s -> %s HA light calls accepted for %s",
+                         name, action, len(commands), targets)
             except Exception as exc:
-                LOG.exception("Home Assistant light service failed")
+                LOG.exception("Home Assistant light batch failed")
                 self._publish_action(state="error", switch=name, action=action,
-                                     target=", ".join(entities), error=str(exc)[:300])
+                                     target=", ".join(targets), error=str(exc)[:300])
             finally:
                 self._jobs.task_done()
 

@@ -62,26 +62,51 @@ def validate_data(service: str, data: object) -> dict:
 
 
 def parse_rule(value: object) -> dict:
-    """Produce a validated private action binding.
+    """Validate concise or rich action binding, with optional data PER target.
 
-    The user config keeps its original short or rich syntax verbatim.
+    Old forms stay valid:
+       [light.a, light.b]                  -> one light.toggle
+       {service, targets, brightness_pct} -> shared (v0.1.8 legacy) data
+    New form:
+       {service, targets: [{light.a: {brightness_pct: 70}}, light.b]}
+       gives each light independent attributes, without global inheritance.
     """
     if isinstance(value, list):
-        targets, service, data = value, "light.toggle", {}
+        entries, service, data = value, "light.toggle", {}
     elif isinstance(value, Mapping):
         if set(value) - ALL_FIELDS or not {"service", "targets"} <= set(value):
-            raise CatalogError("Smart light action requires service and targets only plus light fields")
-        service, targets = value["service"], value["targets"]
-        data = {k: v for k, v in value.items() if k not in ("service", "targets")}
+            raise CatalogError(
+                "Smart light action requires service, targets and optional light fields")
+        service, entries = value["service"], value["targets"]
+        data = {key: val for key, val in value.items()
+                if key not in ("service", "targets")}
     else:
-        raise CatalogError("Action must be a list of lights or a smart-light mapping")
+        raise CatalogError("Action must be a light list or a smart-light mapping")
     if not isinstance(service, str) or service not in SERVICES:
-        raise CatalogError("Only light.toggle, light.turn_on and light.turn_off are allowed")
-    if not isinstance(targets, list) or not 1 <= len(targets) <= 16:
+        raise CatalogError("Only light.toggle, light.turn_on, light.turn_off allowed")
+    if not isinstance(entries, list) or not 1 <= len(entries) <= 16:
         raise CatalogError("Each Aqara action needs 1..16 lights")
-    if any(not isinstance(t, str) or not LIGHT_ID.fullmatch(t) for t in targets):
-        raise CatalogError("Action targets must be light.* entity IDs")
-    if len(targets) != len(set(targets)):
-        raise CatalogError("Duplicate light target")
+
+    targets, target_data = [], {}
+    for entry in entries:
+        if isinstance(entry, str):
+            entity, opts = entry, {}
+        elif isinstance(entry, Mapping) and len(entry) == 1:
+            entity, opts = next(iter(entry.items()))
+            if not isinstance(opts, Mapping):
+                raise CatalogError("Per-light parameters must be a mapping")
+        else:
+            raise CatalogError("Each target must be light.* or a one-key light mapping")
+        if not isinstance(entity, str) or not LIGHT_ID.fullmatch(entity):
+            raise CatalogError("Action targets must be light.* entity IDs")
+        if entity in targets:
+            raise CatalogError("Duplicate light target")
+        targets.append(entity)
+        if isinstance(entry, Mapping):
+            target_data[entity] = validate_data(service, opts)
+
+    if data and target_data:
+        raise CatalogError("Do not combine shared and per-light parameters")
     verified = validate_data(service, data)
-    return {"action": SERVICES[service], "targets": list(targets), "data": verified}
+    return {"action": SERVICES[service], "targets": targets,
+            "data": verified, "target_data": target_data}
