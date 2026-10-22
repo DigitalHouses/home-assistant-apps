@@ -86,7 +86,7 @@ class ControlTests(TestCase):
             app._on_message(None,None,message(topic,{"action":"double"}))
             self.assertEqual(app._jobs.qsize(),0)
             app._on_message(None,None,message(topic,{"action":"single"}))
-            self.assertEqual(app._jobs.get_nowait(),(NAME,"single",TARGETS))
+            self.assertEqual(app._jobs.get_nowait(),(NAME,"single",{"service":"light.toggle","target":{"entity_id":TARGETS}}))
             app._on_message(None,None,message(topic,{"action":"single"}))
             self.assertTrue(app._jobs.empty())
             self.assertTrue(all(not t.endswith("/set") for t,_,_ in app.client.published))

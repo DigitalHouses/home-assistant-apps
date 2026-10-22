@@ -1,5 +1,5 @@
 name: DigitalHouses Aqara Switch App
-version: 0.1.7
+version: 0.1.8
 slug: digitalhouses_aqara_switch_app
 description: Aqara button/switch Scan/Adopt, mode keeper and multi-light toggle.
 url: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_aqara_switch_app

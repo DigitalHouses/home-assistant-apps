@@ -1,5 +1,21 @@
 # Changelog — DigitalHouses Aqara Switch App
 
+## 0.1.8
+
+- Expand Aqara button actions with native HA smart-light commands:
+  `light.toggle`, `light.turn_on`, `light.turn_off`.
+- Keep existing short YAML list syntax as identical `light.toggle` behavior.
+- Rich action syntax accepts `service`, `targets`, optional
+  `brightness_pct`, `brightness_step_pct`, `color_temp_kelvin`,
+  `rgb_color`, `transition`, validated before dispatch and again by HA
+  client; one allowed service call per press for 1–16 lights.
+- Reject conflicting RGB/Kelvin, combined absolute/step brightness, invalid
+  ranges, turn_off with color attributes, all other service domains,
+  unrecognized options, duplicate and non-light targets.
+- Keep existing manual Scan, hardware Adopt/Mode Keeper, Zigbee action
+  whitelisting, duplicate/replay filtering, and no physical relay switching.
+- Existing v0.1.7 App options remain valid; no options migration needed.
+
 ## 0.1.7
 
 - Fix Scan ignoring Aqara battery buttons and climate sensors with press
