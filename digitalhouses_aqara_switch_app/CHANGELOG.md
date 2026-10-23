@@ -1,5 +1,14 @@
 # Changelog — DigitalHouses Aqara Switch App
 
+### UI example update (no App version change)
+
+- Compact `<pre>` Aqara tree now displays each assigned light separately,
+  using live Home Assistant state: 💡 ON, outlined off bulb for OFF, and
+  ❔ for unavailable/unknown. The canonical single-card and full-dashboard
+  YAML stay identical. HA-reported state is not an individual Zigbee ACK.
+- Lovelace cards are user-owned; copy the changed Markdown card into
+  the existing HA dashboard. No new sensor, App image or configuration migration.
+
 ## 0.1.14
 
 - Fix v0.1.13 mixed virtual LAB + physical Z2M toggle regression
