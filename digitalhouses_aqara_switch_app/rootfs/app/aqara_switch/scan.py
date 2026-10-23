@@ -16,6 +16,7 @@ from .catalog import CatalogError, candidate_from_mqtt, decode_bridge_devices, i
 from .configuration import parse_configuration
 from .entity_options import STORE_PATH, parse_rows, store_scan
 from .ha_registry import areas_from_registries, switch_entities
+from .mode_keeper import capture_keep_mode
 
 
 def _slug(value: str) -> str:
@@ -59,6 +60,7 @@ def scan_once(snapshots: list[dict], options_client, ha_registry) -> tuple[dict,
     if not snapshots:
         raise CatalogError("No verified Zigbee2MQTT networks observed")
     candidates, problems = [], []
+    observed_devices = {}
     ready = 0
     for snapshot in snapshots:
         if not isinstance(snapshot, Mapping):
@@ -80,6 +82,8 @@ def scan_once(snapshots: list[dict], options_client, ha_registry) -> tuple[dict,
                     reported_state=states.get(device.get("friendly_name")))
                 if item is not None:
                     candidates.append(item)
+                    observed_devices[(item["coordinator_ieee"], item["ieee"])] = (
+                        device, states.get(device.get("friendly_name"), {}))
             except (CatalogError, TypeError) as exc:
                 problems.append({"name": device.get("friendly_name", "?"),
                                  "reason": str(exc)})
@@ -156,6 +160,24 @@ def scan_once(snapshots: list[dict], options_client, ha_registry) -> tuple[dict,
                     raise CatalogError("Adopted device lacks logical switch key")
                 sw["entity_id"] = item["entity_id"]
                 sw["entity_source"] = item["entity_source"]
+    initialized = []
+    for room in merged["rooms"]:
+        for sw in room["switches"]:
+            if sw.get("mode_policy_initialized", False):
+                continue
+            observed = observed_devices.get((sw["coordinator_ieee"], sw["ieee"]))
+            if observed is None:
+                continue
+            device, state = observed
+            if not isinstance(state, Mapping):
+                continue
+            keep, warnings = capture_keep_mode(device, state)
+            sw["mode_default"] = keep
+            sw["mode_policy_initialized"] = True
+            initialized.append(sw["entity_id"])
+            for warning in warnings:
+                problems.append({"name": sw["logical_name"], "reason": warning})
+    report["keep_mode_initialized"] = initialized
     report["replaced"] = replaced
     report["logical_only"] = logical_only
     report["problems"].extend(problems)
@@ -165,7 +187,7 @@ def scan_once(snapshots: list[dict], options_client, ha_registry) -> tuple[dict,
     configured = {row["entity_id"] for row in parse_rows(options)}
     absent_rows = any(sw["entity_id"] not in configured
                       for room in merged["rooms"] for sw in room["switches"])
-    if report["added"] or replaced or absent_rows:
+    if report["added"] or replaced or absent_rows or initialized:
         changed = store_scan(merged, options, STORE_PATH)
         options_client.write(changed)
         merged = parse_configuration(options_client.read(), profile_path=STORE_PATH)
