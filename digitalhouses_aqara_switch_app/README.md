@@ -1,6 +1,6 @@
 # DigitalHouses Aqara Switch App
 
-**v0.1.9 — individual optional smart-light parameters per target.**
+**v0.1.10 — per-key Aqara keep_mode and scoped Maintenance.**
 
 This Home Assistant App supports the commissioning flow for Aqara wired switches,
 battery buttons and key panels. It is not a general automation engine. This MVP scans and adopts Aqara
@@ -31,7 +31,7 @@ It never switches physical Aqara relay output states itself.
    Installation alone cannot toggle any light or change any adopted Aqara
    settings, because no devices have yet been adopted.
 
-Immutable image: `ghcr.io/digitalhouses/digitalhouses_aqara_switch_app:0.1.9`.
+Immutable image: `ghcr.io/digitalhouses/digitalhouses_aqara_switch_app:0.1.10`.
 
 ## Configure and Scan (fresh install only)
 
@@ -80,6 +80,66 @@ Scan determines the exact keys):
 In the Supervisor YAML options view this is stored inside the multiline
 `switches: |` field. Edit only actions and light targets; keys are
 generated or resolved by Scan. Scan is manual, not periodic.
+
+## Per-key Mode Keeper and Maintenance (v0.1.10)
+
+Aqara **wired** switches expose writable `operation_mode_left`,
+`operation_mode_right` or `operation_mode` for `decoupled/control_relay`.
+At explicit first Scan, the App captures only keys that are reported
+`decoupled` **and** have a confirmed writable ON/OFF relay field. For
+example, `left: decoupled/ON`. An ordinary `control_relay` key is left
+out of YAML entirely.
+
+Battery buttons (and other Aqara action devices without an operation mode)
+need no `keep_mode`: their normal MQTT action handling remains available.
+
+Supervisor App options (YAML view):
+
+```yaml
+log_level: info
+maintenance_mode: false
+restore_delay: 0.6
+switches: |-
+  - switch.aqara_switch_livingroom:
+      enabled: true
+      maintenance_mode: false
+      keep_mode:
+        left: decoupled/ON
+      actions:
+        single_left:
+          - light.livingroom_chandelier
+          - light.livingroom_spots
+  - switch.aqara_battery_button:
+      enabled: true
+      actions: {}
+```
+
+`maintenance_mode` is a boolean at App level and an optional boolean per
+switch. Effective Maintenance is `global OR local`. Enabling Maintenance
+blocks actions for all affected keys and requests only `control_relay` for
+wired keys included in `keep_mode`; it never forces a relay ON or OFF.
+For battery buttons it only suppresses software actions.
+
+In normal mode, App checks the Zigbee2MQTT-reported mode and relay state.
+If they drift from `decoupled/ON`, after `restore_delay` seconds
+(default 0.6) it requests mode `decoupled`, then physical relay `ON` after
+a reported mode confirmation. Every command is followed by observation; a
+publish return code does not prove a physical state. Retries are throttled
+to one per key/value per 60 seconds. After reconnect App requests fresh
+readable state via Z2M `/get`; retained-only messages cannot trigger
+physical writes. Non-reporting and unsupported hardware fail closed.
+
+Wired `*_left` actions require left managed and confirmed decoupled/ON;
+`*_right` requires right; `*_both` requires both. Unmanaged relay-mode
+keys do not have App bindings. Devices without mode support (battery
+buttons) do not inherit these restrictions.
+
+First Scan and later rescans do not change relays or modes. A later Scan
+does NOT overwrite a recorded `keep_mode`, and manually deleting a
+keep_mode is respected. App configuration changes normally require an
+App restart to apply new Maintenance settings. Remember that returning
+the relay to ON may restore power to smart bulbs; separately set their
+power-on behavior to avoid unexpected illumination.
 
 ## Smart-light action configuration (v0.1.9)
 

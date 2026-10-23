@@ -1,5 +1,33 @@
 # Changelog — DigitalHouses Aqara Switch App
 
+## 0.1.10
+
+- Automatically adopt `keep_mode` **only** for wired Aqara keys observed in
+  `decoupled` with a writable, reported relay channel; captured policy is
+  `left: decoupled/ON`, `right: decoupled/ON`, or `main: decoupled/ON`.
+  Unmanaged `control_relay` keys are absent; battery/remotes have NO
+  `keep_mode` and can use all their supported action events.
+- Global Supervisor App options `maintenance_mode: false` and
+  `restore_delay: 0.6` (seconds, 0.1–30), with per-switch optional
+  `maintenance_mode` inside the existing multiline `switches` YAML.
+- Global/local Maintenance blocks all App light actions (including battery
+  buttons), and changes only managed wired keys to `control_relay`.
+  Relay state is **never** changed when entering Maintenance.
+- On exiting Maintenance or detecting live drift, restore only explicit
+  `keep_mode` keys: first `decoupled`, then `ON` after reported mode
+  confirmation; delay and 60s per-key retry backoff avoid rapid writes.
+  Following MQTT reconnect, request readable mode/relay state via Z2M `/get`
+  and prohibit `/set` based solely on retained data.
+- A physical key can drive App actions only when its required key(s) are
+  confirmed `decoupled/ON`; `*_both` requires both. Unmanaged wired
+  control_relay never receives App action commands. No hardware mode support
+  means no mode gating, which is correct for battery buttons.
+- Initial Scan is non-actuating and captures a keeper policy once; subsequent
+  Scan never overwrites existing keep_mode or silently restores a manually
+  deleted policy. Existing light configuration/actions remain compatible.
+- Does NOT change the light output transport; bound lights continue using
+  Home Assistant REST until the separate MQTT/Zigbee2MQTT output migration.
+
 ## 0.1.9
 
 - Place optional brightness, color temperature, RGB and transition fields
