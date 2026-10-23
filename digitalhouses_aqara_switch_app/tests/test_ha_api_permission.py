@@ -23,7 +23,7 @@ class HAPermissionsTest(unittest.TestCase):
         self.assertEqual(conf["hassio_role"], "default", "Do not escalate Supervisor privileges")
         self.assertIn("mqtt:need", conf["services"])
         self.assertEqual(conf["boot"], "manual")
-        self.assertEqual(conf["version"], "0.1.13")
+        self.assertEqual(conf["version"], "0.1.14")
 
     def test_registry_handshake_uses_supervisor_token_and_reads_both_registries(self):
         class FakeSocket:

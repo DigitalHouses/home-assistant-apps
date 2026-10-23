@@ -1,6 +1,6 @@
 """MQTT runtime: Aqara button input, selective Mode Keeper and Z2M light output.
 
-No unverified relay writes, no individual blind toggles or HA Core light calls.
+No unverified relay writes or individual blind toggles; six LAB lights use HA REST.
 """
 from __future__ import annotations
 from collections.abc import Mapping
@@ -518,7 +518,7 @@ class Application:
                         per_network[base] = per_network.get(base, 0) + 1
 
     def _run_actions(self):
-        """Execute validated Z2M /set commands; never call HA light services."""
+        """Execute direct Z2M /set and allowlisted virtual LAB light commands."""
         while not self._stop.is_set():
             try:
                 base, coordinator, name, action, commands = self._jobs.get(timeout=1)
@@ -526,6 +526,33 @@ class Application:
                 continue
             targets = [eid for cmd in commands for eid in cmd["target"]["entity_id"]]
             try:
+                # Preflight LAB outside the MQTT lock, before ANY Z2M publish.
+                z2m_commands, lab_commands = partition_commands(
+                    commands, self.config.get("light_routes", {}))
+                mixed_toggle = bool(
+                    z2m_commands and lab_commands
+                    and all(cmd["service"] == "light.toggle" for cmd in commands))
+                original_z2m, original_lab = z2m_commands, lab_commands
+                lab_state_cache = {}
+                def read_lab_once(entity):
+                    if entity not in lab_state_cache:
+                        try:
+                            lab_state_cache[entity] = (
+                                True, self._ha_client.read_lab_state(entity))
+                        except Exception as exc:
+                            lab_state_cache[entity] = (False, exc)
+                    ok, result = lab_state_cache[entity]
+                    if not ok:
+                        raise result
+                    return result
+                lab_preview = []
+                if mixed_toggle:
+                    if self._ha_client is None:
+                        self._ha_client = HAClient(os.environ.get("SUPERVISOR_TOKEN", ""))
+                    lab_preview, _ = plan_lab(
+                        lab_commands, read_lab_once, self._lab_shadows,
+                        time.monotonic())
+
                 with self._mutex:
                     sw = next((x for room in self.config["rooms"]
                                for x in room["switches"]
@@ -546,13 +573,34 @@ class Application:
                             sw, action, net.get("states", {}).get(name, {}),
                             capabilities(device), False)):
                         raise ActionError("Aqara key not verified in decoupled/ON operating mode")
+                    # Repartition after a possible Scan; no guessed light routes.
                     z2m_commands, lab_commands = partition_commands(
                         commands, self.config.get("light_routes", {}))
+                    if (any(cmd["service"] == "light.toggle" for cmd in commands)
+                            and (z2m_commands != original_z2m
+                                 or lab_commands != original_lab)):
+                        raise ActionError("Light routes changed during toggle; retry")
+                    toggle_override = None
+                    if mixed_toggle:
+                        z2m_preview, _ = plan_batch(
+                            z2m_commands, self.config.get("light_routes", {}),
+                            self._networks, self._light_availability,
+                            self._fresh_fields, self._light_shadows,
+                            self._light_observed_at, time.monotonic())
+                        # Only eligible, state-known targets influence the decision.
+                        if z2m_preview or lab_preview:
+                            toggle_override = (
+                                "ON" if (
+                                    any(p["state"] == "ON" for p in z2m_preview)
+                                    or any(p["service"] == "light.turn_on"
+                                           for p in lab_preview)
+                                ) else "OFF")
                     plans, skipped = plan_batch(
                         z2m_commands, self.config.get("light_routes", {}),
                         self._networks, self._light_availability,
                         self._fresh_fields, self._light_shadows,
-                        self._light_observed_at, time.monotonic())
+                        self._light_observed_at, time.monotonic(),
+                        toggle_state_override=toggle_override)
                     sent = []
                     for plan in plans:
                         if self._publish(plan["topic"], plan["payload"],
@@ -570,8 +618,10 @@ class Application:
                     if self._ha_client is None:
                         self._ha_client = HAClient(os.environ.get("SUPERVISOR_TOKEN", ""))
                     lab_plans, lab_skipped = plan_lab(
-                        lab_commands, self._ha_client.read_lab_state,
-                        self._lab_shadows, time.monotonic())
+                        lab_commands,
+                        read_lab_once if mixed_toggle else self._ha_client.read_lab_state,
+                        self._lab_shadows, time.monotonic(),
+                        toggle_state_override=toggle_override)
                     skipped.extend(lab_skipped)
                     for call in lab_plans:
                         ids = call["target"]["entity_id"]

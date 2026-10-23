@@ -68,7 +68,9 @@ def _mqtt_data(data: Mapping, features: Mapping, observed: Mapping,
 
 def plan_batch(commands: list[dict], routes: Mapping, networks: Mapping,
                availability: Mapping, fresh_fields: set, shadows: Mapping,
-               observed_at: Mapping, now: float) -> tuple[list[dict],list[dict]]:
+               observed_at: Mapping, now: float,
+               toggle_state_override: str | None = None
+               ) -> tuple[list[dict],list[dict]]:
     """All targets share one toggle decision across available known lamps.
 
     A pending command shadows the previous observed state until acknowledged.
@@ -126,6 +128,10 @@ def plan_batch(commands: list[dict], routes: Mapping, networks: Mapping,
     toggles=[item for item in selected if item["service"]=="light.toggle"]
     toggle_state=("ON" if any(item["state"]=="OFF" for item in toggles)
                   else "OFF") if toggles else None
+    if toggles and toggle_state_override is not None:
+        if toggle_state_override not in ("ON", "OFF"):
+            raise ActionError("Invalid synchronized Z2M toggle state")
+        toggle_state = toggle_state_override
     plans=[]
     for item in selected:
         state=(toggle_state if item["service"]=="light.toggle"
