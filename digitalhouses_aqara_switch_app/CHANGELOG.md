@@ -1,5 +1,24 @@
 # Changelog — DigitalHouses Aqara Switch App
 
+## 0.1.14
+
+- Fix v0.1.13 mixed virtual LAB + physical Z2M toggle regression
+  (`ths_livingroom/single_minus`). Preflight eligible light states on both
+  transports before publishing any light command. If ANY participating lamp
+  is OFF, turn every available lamp ON; otherwise turn all available lamps OFF.
+  No per-light blind toggle; no "disco" for mixed starting states.
+- Cache LAB REST results (including failed reads) once per action outside the
+  MQTT mutex. Recheck adopted Aqara switch authorization, Z2M bridge,
+  hardware route, availability, fresh feedback and in-flight shadow.
+  Fail closed if a Scan changes any toggle routing during dispatch.
+- Actual Z2M lamps remain direct MQTT-only; absent/offline/unknown lamps
+  are skipped, with no HA REST fallback. LAB is restricted to six exact
+  virtual entity IDs. Never claim physical confirmation on MQTT publish.
+- Remove ON-only brightness/color attributes when the synchronized LAB
+  toggle resolves to OFF, preserving optional transition.
+- Add mixed five-light regression tests for both mixed-state directions,
+  all-ON, offline, unmapped and rapid repeat. No YAML migration or relay writes.
+
 ## 0.1.13
 
 - Hotfix for v0.1.12 regression: explicitly support the **six fixed virtual
