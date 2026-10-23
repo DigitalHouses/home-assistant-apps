@@ -12,7 +12,7 @@
 - Subscribe to Z2M bridge online-state, per-light availability and state.
   Never send a light command to known offline/unknown or unverified devices.
   Unmapped/multi-endpoint lights fail closed, including HA-only virtual lamps.
-  If Z2M device availability is disabled, no light writes are sent.
+  If Z2M device availability is disabled, no light writes are sent.\n  State-readable lamps are polled through rate-limited Z2M `/get` at startup\n  until an actual (non-retained) state report arrives.
 - Plain multi-light YAML uses a **single synchronized decision**: if any
   available target is OFF, turn all available targets ON; if all are ON,
   turn them OFF. Send explicit ON/OFF, never individual TOGGLE.

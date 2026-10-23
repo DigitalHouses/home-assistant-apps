@@ -20,6 +20,7 @@ from .catalog import (CatalogError, candidate_from_mqtt, decode_bridge_devices,
 from .actions import ActionError
 from .control import HAClient, light_commands, verified_adopted_switch
 from .mqtt_lights import plan_batch
+from .light_routes import current_route
 from .keeper_runtime import run_keeper
 from .mode_keeper import (capabilities, global_policy, maintained_switch,
                           mode_action_allowed)
@@ -137,6 +138,7 @@ class Application:
         self._light_availability = {}
         self._light_shadows = {}
         self._light_observed_at = {}
+        self._light_probe_at = {}
         self._mutex = threading.RLock()
         self._scan_lock = threading.Lock()
         self._networks: dict[str, dict] = {}
@@ -291,6 +293,7 @@ class Application:
             self._light_availability.clear()
             self._light_shadows.clear()
             self._light_observed_at.clear()
+            self._light_probe_at.clear()
         for topic in (*_FILTERS, SCAN_REQUEST, "homeassistant/status"):
             self._subscribe(topic)
         self._publish(AVAILABILITY, "online")
@@ -307,6 +310,7 @@ class Application:
             self._light_availability.clear()
             self._light_shadows.clear()
             self._light_observed_at.clear()
+            self._light_probe_at.clear()
 
     def _on_message(self, client, userdata, message):
         del client, userdata
@@ -481,6 +485,34 @@ class Application:
                     self._publish_action(state="error", switch=name, action=action,
                                          target=target_label, error="Action queue is full")
 
+    def _run_light_probes(self):
+        """Rate-limited Z2M state reads so restart never trusts retained state.
+
+        At most two GET requests per Zigbee network per second. Only mapped
+        online lights with a verified read capability may be queried.
+        """
+        while not self._stop.wait(1):
+            with self._mutex:
+                per_network = {}
+                now = time.monotonic()
+                for route in self.config.get("light_routes", {}).values():
+                    base, name = route["base_topic"], route["friendly_name"]
+                    ident = (base, name)
+                    if (per_network.get(base, 0) >= 2 or
+                            self._light_availability.get(ident) != "online" or
+                            (base, name, "state") in self._fresh_fields or
+                            not route.get("features", {}).get("state", {}).get("readable") or
+                            now - self._light_probe_at.get(ident, -1e9) < 30):
+                        continue
+                    net = self._networks.get(base, {})
+                    if (net.get("bridge_state") != "online" or
+                            not current_route(route, net)):
+                        continue
+                    self._light_probe_at[ident] = now
+                    if self._publish(base + "/" + name + "/get",
+                                     {"state": ""}, retain=False):
+                        per_network[base] = per_network.get(base, 0) + 1
+
     def _run_actions(self):
         """Execute validated Z2M /set commands; never call HA light services."""
         while not self._stop.is_set():
@@ -509,7 +541,7 @@ class Application:
                             sw, device, coordinator, base) or not mode_action_allowed(
                             sw, action, net.get("states", {}).get(name, {}),
                             capabilities(device), False)):
-                        raise ActionError("Aqara key not verified in operating mode")
+                        raise ActionError("Aqara key not verified in decoupled/ON operating mode")
                     plans, skipped = plan_batch(
                         commands, self.config.get("light_routes", {}),
                         self._networks, self._light_availability,
@@ -573,6 +605,7 @@ class Application:
                 self.globals = global_policy(self.options.read())
                 self._light_shadows.clear()
                 self._light_observed_at.clear()
+                self._light_probe_at.clear()
                 self._sync_light_topics()
                 self._previous = report
             self._publish_details()
@@ -602,5 +635,7 @@ class Application:
                          name="dh-aqara-action-worker").start()
         threading.Thread(target=run_keeper, args=(self,), daemon=True,
                          name="dh-aqara-mode-keeper").start()
+        threading.Thread(target=self._run_light_probes, daemon=True,
+                         name="dh-aqara-light-state-probes").start()
         self.client.connect(host, port, keepalive=60)
         self.client.loop_forever(retry_first_connection=True)

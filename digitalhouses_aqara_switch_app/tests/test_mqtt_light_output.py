@@ -68,7 +68,7 @@ def plan(cmds=None,available=None,states=None,shadows=None,at=None,now=10):
 class LightOutputTests(unittest.TestCase):
     def test_registry_mapping_persists_exact_network_ieee_and_name(self):
         rs=routes()
-        self.assertEqual(set(rs),(L1,L2))
+        self.assertEqual(set(rs),{L1,L2})
         self.assertEqual(rs[L1]["friendly_name"],"chandelier")
         self.assertEqual(rs[L1]["ieee"],A)
         self.assertEqual(rs[L1]["base_topic"],BASE)
@@ -138,10 +138,22 @@ class LightOutputTests(unittest.TestCase):
 
     def test_unknown_or_unsupported_attribute_is_skipped(self):
         rs=routes()
+        # Keep the verified hardware route unchanged, but model a lamp
+        # that really has no writable color_temp capability.
         rs[L1]["features"].pop("color_temp")
+        from copy import deepcopy
+        changed=deepcopy(DEV)
+        for device in changed:
+            if device.get("ieee_address")==A:
+                device["definition"]["exposes"][0]["features"]=[
+                    f for f in device["definition"]["exposes"][0]["features"]
+                    if f.get("property")!="color_temp"
+                ]
+        net=networks()
+        net[BASE]["devices"]=json.dumps(changed).encode()
         plans,skipped=plan_batch([
             {"service":"light.turn_on","target":{"entity_id":[L1]},
-             "data":{"color_temp_kelvin":3000}}],rs,networks(),{
+             "data":{"color_temp_kelvin":3000}}],rs,net,{
              (BASE,"chandelier"):"online"},
              {(BASE,"chandelier","state")},{},{},10)
         self.assertEqual(plans,[])

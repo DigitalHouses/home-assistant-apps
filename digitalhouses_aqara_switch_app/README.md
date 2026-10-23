@@ -122,7 +122,7 @@ are not automatically bound. Configure the group's individual physical
 light entities instead. Unsupported targets remain untouched.
 Retained Z2M state after reconnect alone does not authorize an
 ambiguous toggle; this can require a fresh device report or an explicit
-Z2M `/get` before the first group toggle.
+Z2M `/get` before the first group toggle. The App proactively\nqueries known readable lamps (at most 2 per Zigbee network per second),\nwithout trusting old retained data.
 
 ## Per-key Mode Keeper and Maintenance (v0.1.10)
 

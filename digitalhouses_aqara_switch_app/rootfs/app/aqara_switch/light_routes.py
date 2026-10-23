@@ -32,6 +32,8 @@ def _light_features(device: Mapping) -> dict | None:
                         val = feat.get(name)
                         if type(val) in (int, float):
                             numeric[name] = val
+                if key == "state":
+                    numeric["readable"] = bool(feat["access"] & 4)
                 features[key] = numeric
     if "state" not in features:
         return None
