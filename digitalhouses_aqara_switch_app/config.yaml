@@ -1,7 +1,7 @@
 name: DigitalHouses Aqara Switch App
-version: 0.1.12
+version: 0.1.13
 slug: digitalhouses_aqara_switch_app
-description: Aqara button/switch Scan/Adopt, mode keeper and synchronized direct-MQTT multi-light control.
+description: Aqara Scan/Adopt, Mode Keeper, direct MQTT lights and HA-only virtual LAB fallback.
 url: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_aqara_switch_app
 arch:
   - amd64

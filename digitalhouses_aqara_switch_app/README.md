@@ -1,12 +1,25 @@
 # DigitalHouses Aqara Switch App
 
-**v0.1.12 — synchronized Z2M direct-MQTT lighting with offline exclusion.**
+**v0.1.13 — synchronized Z2M direct-MQTT lighting with offline exclusion.**
 
 This Home Assistant App supports the commissioning flow for Aqara wired switches,
 battery buttons and key panels. It is not a general automation engine. This MVP scans and adopts Aqara
 inputs, preserves saved writable switch configuration, and dispatches an
 explicitly bound Aqara action to one or more Home Assistant light.toggle targets.
 It never switches physical Aqara relay output states itself.
+
+## v0.1.13 — virtual AQARA LAB compatibility
+
+Exactly six known `light.dh_aqara_lab_*` template lights are routed through
+Home Assistant Core REST as **virtual test lights only**, with state lookup,
+unavailable filtering, per-light attributes and synchronized grouped ON/OFF.
+They do not have Zigbee2MQTT device routes and cannot work during HA Core
+downtime. All real Zigbee2MQTT lamps retain the v0.1.12 MQTT-only transport,
+including offline guards; there is no HA fallback for unverified physical
+devices. Mixed virtual/physical `toggle` actions are not supported, to prevent
+lights from getting out of sync. This fixes skipped virtual LAB actions such as
+`double_plus` -> `light.dh_aqara_lab_night_light`. No new settings or Scan
+are required for these virtual test lights.
 
 ## Installation and prerequisites
 
@@ -31,7 +44,7 @@ It never switches physical Aqara relay output states itself.
    Installation alone cannot toggle any light or change any adopted Aqara
    settings, because no devices have yet been adopted.
 
-Immutable image: `ghcr.io/digitalhouses/digitalhouses_aqara_switch_app:0.1.12`.
+Immutable image: `ghcr.io/digitalhouses/digitalhouses_aqara_switch_app:0.1.13`.
 
 ## Configure and Scan (fresh install only)
 

@@ -20,6 +20,7 @@ from .catalog import (CatalogError, candidate_from_mqtt, decode_bridge_devices,
 from .actions import ActionError
 from .control import HAClient, light_commands, verified_adopted_switch
 from .mqtt_lights import plan_batch
+from .lab_lights import partition_commands, plan_lab
 from .light_routes import current_route
 from .keeper_runtime import run_keeper
 from .mode_keeper import (capabilities, global_policy, maintained_switch,
@@ -137,6 +138,7 @@ class Application:
         self._fresh_fields = set()
         self._light_availability = {}
         self._light_shadows = {}
+        self._lab_shadows = {}
         self._light_observed_at = {}
         self._light_probe_at = {}
         self._mutex = threading.RLock()
@@ -292,6 +294,7 @@ class Application:
             self._fresh_fields.clear()
             self._light_availability.clear()
             self._light_shadows.clear()
+            self._lab_shadows.clear()
             self._light_observed_at.clear()
             self._light_probe_at.clear()
         for topic in (*_FILTERS, SCAN_REQUEST, "homeassistant/status"):
@@ -309,6 +312,7 @@ class Application:
             self._fresh_fields.clear()
             self._light_availability.clear()
             self._light_shadows.clear()
+            self._lab_shadows.clear()
             self._light_observed_at.clear()
             self._light_probe_at.clear()
 
@@ -542,8 +546,10 @@ class Application:
                             sw, action, net.get("states", {}).get(name, {}),
                             capabilities(device), False)):
                         raise ActionError("Aqara key not verified in decoupled/ON operating mode")
+                    z2m_commands, lab_commands = partition_commands(
+                        commands, self.config.get("light_routes", {}))
                     plans, skipped = plan_batch(
-                        commands, self.config.get("light_routes", {}),
+                        z2m_commands, self.config.get("light_routes", {}),
                         self._networks, self._light_availability,
                         self._fresh_fields, self._light_shadows,
                         self._light_observed_at, time.monotonic())
@@ -558,17 +564,70 @@ class Application:
                         else:
                             skipped.append({"light":plan["light"],
                                             "reason":"MQTT publish rejected"})
-                    if skipped:
-                        LOG.warning("Aqara action %s %s skipped: %s",
-                                    name, action, skipped)
-                    note = "; ".join(x["light"]+": "+x["reason"] for x in skipped)
-                    state = ("partial" if sent and skipped else
-                             "sent" if sent else "skipped")
-                    self._publish_action(state=state, switch=name, action=action,
-                                         target=", ".join(sent),
-                                         error=note[:300] if note else None)
-                    LOG.info("Aqara %s/%s MQTT sent=%d skipped=%d",
-                             name, action, len(sent), len(skipped))
+                # The only HA-dependent path is the six named virtual LAB
+                # lamps. Leave the mutex free while reading HA REST states.
+                if lab_commands:
+                    if self._ha_client is None:
+                        self._ha_client = HAClient(os.environ.get("SUPERVISOR_TOKEN", ""))
+                    lab_plans, lab_skipped = plan_lab(
+                        lab_commands, self._ha_client.read_lab_state,
+                        self._lab_shadows, time.monotonic())
+                    skipped.extend(lab_skipped)
+                    for call in lab_plans:
+                        ids = call["target"]["entity_id"]
+                        with self._mutex:
+                            current_sw = next(
+                                (x for room in self.config["rooms"]
+                                 for x in room["switches"]
+                                 if x["logical_name"] == name and
+                                 x["base_topic"] == base and
+                                 x["coordinator_ieee"] == coordinator), None)
+                            net = self._networks.get(base, {})
+                            device = None
+                            if isinstance(net.get("devices"), bytes):
+                                device = next(
+                                    (d for d in decode_bridge_devices(net["devices"])
+                                     if d.get("friendly_name") == name), None)
+                            authorized = (
+                                current_sw is not None and device is not None
+                                and current_sw.get("enabled", False)
+                                and not maintained_switch(current_sw, self.globals)
+                                and verified_adopted_switch(
+                                    current_sw, device, coordinator, base)
+                                and mode_action_allowed(
+                                    current_sw, action,
+                                    net.get("states", {}).get(name, {}),
+                                    capabilities(device), False))
+                        if not authorized:
+                            skipped.extend({"light":eid,
+                                            "reason":"Aqara key or Maintenance changed"}
+                                           for eid in ids)
+                            continue
+                        try:
+                            self._ha_client.execute(call)
+                        except Exception as exc:
+                            LOG.warning("AQARA LAB HA call failed: %s", exc)
+                            skipped.extend({"light":eid,
+                                            "reason":"LAB HA service call failed"}
+                                           for eid in ids)
+                            continue
+                        value = "on" if call["service"] == "light.turn_on" else "off"
+                        with self._mutex:
+                            for eid in ids:
+                                self._lab_shadows[eid] = {
+                                    "state":value, "at": time.monotonic()}
+                        sent.extend(ids)
+                if skipped:
+                    LOG.warning("Aqara action %s %s skipped: %s", name, action, skipped)
+                note = "; ".join(x["light"]+": "+x["reason"] for x in skipped)
+                status = ("partial" if sent and skipped else
+                          "sent" if sent else "skipped")
+                self._publish_action(state=status, switch=name, action=action,
+                                     target=", ".join(sent),
+                                     error=note[:300] if note else None)
+                LOG.info("Aqara %s/%s delivered=%d skipped=%d "
+                         "(Z2M physical + HA-only virtual LAB)",
+                         name, action, len(sent), len(skipped))
             except Exception as exc:
                 LOG.exception("Aqara MQTT light action failed")
                 self._publish_action(state="error", switch=name, action=action,
@@ -604,6 +663,7 @@ class Application:
                 self.config = merged
                 self.globals = global_policy(self.options.read())
                 self._light_shadows.clear()
+                self._lab_shadows.clear()
                 self._light_observed_at.clear()
                 self._light_probe_at.clear()
                 self._sync_light_topics()
