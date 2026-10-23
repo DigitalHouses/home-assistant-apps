@@ -23,15 +23,15 @@ DEVICE={
     "definition":{"vendor":"Aqara","model":"TEST-PANEL",
         "exposes":[{"type":"enum","property":"action","access":1,
                     "values":["single","double"]},
-                   {"type":"enum","property":"operation_mode","access":3,
+                   {"type":"enum","property":"operation_mode_left","access":7,
                     "values":["control_relay","decoupled"]},
                    {"type":"switch","features":[
                     {"type":"binary","property":"state_left","access":7}]}]}}
 SAVED=candidate_from_mqtt(DEVICE,coordinator_ieee=COORD,base_topic=BASE,
-                          reported_state={"operation_mode":"decoupled"})
+                          reported_state={"operation_mode_left":"decoupled"})
 SAVED.update({"entity_id":ENTITY,
               "bindings":{"single":{"action":"toggle","targets":TARGETS}},
-              "panel_relay":None,"enabled":True})
+              "panel_relay":None,"enabled":True,"keep_mode":{"left":"decoupled/ON"}})
 PROFILES={"rooms":[{"area_id":"livingroom","name":"Гостиная","switches":[SAVED]}]}
 SNAPSHOT={"coordinator":{"ieee_address":COORD}}
 INVENTORY=[{"ieee_address":COORD,"type":"Coordinator"},DEVICE]
@@ -63,6 +63,8 @@ class ControlTests(TestCase):
         options.read.return_value={"switches":(
             "- switch.livingroomaqaraswitch:\n"
             f"    enabled: {str(enabled).lower()}\n"
+            "    keep_mode:\n"
+            "      left: decoupled/ON\n"
             "    actions:\n"
             "      single:\n"
             "        - light.dh_aqara_lab_chandelier\n"
@@ -74,6 +76,10 @@ class ControlTests(TestCase):
         app._on_connect(None,None,None,0)
         app._on_message(None,None,message(BASE+"/bridge/info",SNAPSHOT,True))
         app._on_message(None,None,message(BASE+"/bridge/devices",INVENTORY,True))
+        # Fresh observed mode/relay state is required before the wired key
+        # can dispatch actions (retained startup data alone is insufficient).
+        app._on_message(None,None,message(BASE+"/"+NAME,{
+            "operation_mode_left":"decoupled","state_left":"ON"}))
         return app
 
     def test_two_targets_one_queue_and_no_replay(self):
@@ -95,7 +101,7 @@ class ControlTests(TestCase):
         with TemporaryDirectory() as td:
             app=self.app(td,enabled=False)
             app._on_message(None,None,message(BASE+"/"+NAME,
-                {"action":"single","operation_mode":"control_relay"}))
+                {"action":"single","operation_mode_left":"control_relay"}))
             self.assertTrue(app._jobs.empty())
             self.assertFalse(any(t.endswith("/set") for t,_,_ in app.client.published))
 
@@ -106,8 +112,8 @@ class ControlTests(TestCase):
         with self.assertRaises(ValueError):
             light_action({**SAVED,"bindings":{"single":{
                 "action":"toggle","targets":["switch.actual_relay"]}}},"single")
-        self.assertEqual(settings_drift(SAVED,{"operation_mode":"control_relay"}),
-                         {"operation_mode":"decoupled"})
+        self.assertEqual(settings_drift(SAVED,{"operation_mode_left":"control_relay"}),
+                         {"operation_mode_left":"decoupled"})
 
     def test_one_ha_service_call_contains_all_lights(self):
         requests=[]
