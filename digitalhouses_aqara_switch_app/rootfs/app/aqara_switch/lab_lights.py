@@ -23,8 +23,8 @@ SHADOW_SECONDS = 5.0
 def partition_commands(commands: list[dict], z2m_routes: Mapping) -> tuple[list[dict], list[dict]]:
     """Split *validated* light commands into physical Z2M vs fixed LAB.
 
-    Reject mixed Z2M/LAB group-toggle rather than independently toggling two
-    overlapping groups (the 'disco' regression). Explicit ON/OFF may mix.
+    A shared toggle decision is made in the runtime, before either transport
+    sends a command. Splitting does not decide independent toggle states.
     """
     mqtt, lab = [], []
     for command in commands:
@@ -34,23 +34,18 @@ def partition_commands(commands: list[dict], z2m_routes: Mapping) -> tuple[list[
                 lab_ids.append(eid)
             else:
                 z_ids.append(eid)
-        if command["service"] == "light.toggle" and z_ids and lab_ids:
-            raise ActionError(
-                "A synchronized toggle cannot mix virtual HA LAB and Zigbee2MQTT lights")
         for ids, collection in ((z_ids, mqtt), (lab_ids, lab)):
             if ids:
                 copy = {"service":command["service"],"target":{"entity_id":ids}}
                 if command.get("data"):
                     copy["data"] = command["data"]
                 collection.append(copy)
-    if mqtt and lab and any(c["service"] == "light.toggle" for c in commands):
-        raise ActionError(
-            "A synchronized toggle cannot mix virtual HA LAB and Zigbee2MQTT lights")
     return mqtt, lab
 
 
 def plan_lab(commands: list[dict], read_state, shadows: Mapping,
-             now: float) -> tuple[list[dict], list[dict]]:
+             now: float, toggle_state_override: str | None = None
+             ) -> tuple[list[dict], list[dict]]:
     """Get authoritative LAB states; group-toggle coherently with explicit ON/OFF.
 
     Offline/unavailable/unknown lab lights are skipped. All commands sent to
@@ -81,11 +76,18 @@ def plan_lab(commands: list[dict], read_state, shadows: Mapping,
     toggles=[item for item in ready if item["service"] == "light.toggle"]
     group_state=("on" if any(item["state"] == "off" for item in toggles)
                  else "off") if toggles else None
+    if toggles and toggle_state_override is not None:
+        if toggle_state_override not in ("ON", "OFF"):
+            raise ActionError("Invalid synchronized LAB toggle state")
+        group_state = toggle_state_override.lower()
     groups = {}
     for item in ready:
         service = ("light.turn_"+group_state if item["service"] == "light.toggle"
                    else item["service"])
         data = item["data"]
+        # OFF must not pass ON-only brightness/color settings to Home Assistant.
+        if item["service"] == "light.toggle" and service == "light.turn_off":
+            data = {k: v for k, v in data.items() if k == "transition"}
         key = (service,json.dumps(data,sort_keys=True))
         if key not in groups:
             groups[key]={"service":service,"target":{"entity_id":[]},"data":data}
