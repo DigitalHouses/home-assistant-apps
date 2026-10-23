@@ -1,6 +1,6 @@
-"""MQTT runtime: explicit Scan/adopt, settings Mode Keeper, bound Aqara light toggle.
+"""MQTT runtime: Aqara button input, selective Mode Keeper and Z2M light output.
 
-No unbound device commands, physical relay ON/OFF or group changes.
+No unverified relay writes, no individual blind toggles or HA Core light calls.
 """
 from __future__ import annotations
 from collections.abc import Mapping
@@ -19,6 +19,7 @@ from .catalog import (CatalogError, candidate_from_mqtt, decode_bridge_devices,
                       resolve_hardware)
 from .actions import ActionError
 from .control import HAClient, light_commands, verified_adopted_switch
+from .mqtt_lights import plan_batch
 from .keeper_runtime import run_keeper
 from .mode_keeper import (capabilities, global_policy, maintained_switch,
                           mode_action_allowed)
@@ -35,13 +36,13 @@ _IEEE = re.compile(r"^0x[0-9a-f]{16}$")
 _BASE_FORBIDDEN = {"homeassistant", "DigitalHouses", "$SYS"}
 _FILTERS = tuple(
     "/".join(["+"] * levels) + "/bridge/" + suffix
-    for levels in (1, 2, 3) for suffix in ("info", "devices")
+    for levels in (1, 2, 3) for suffix in ("info", "devices", "state")
 )
 
 
 def bridge_path(topic: str) -> tuple[str, str] | None:
     base, sep, suffix = topic.rpartition("/bridge/")
-    if not sep or suffix not in ("info", "devices"):
+    if not sep or suffix not in ("info", "devices", "state"):
         return None
     parts = base.split("/")
     if not 1 <= len(parts) <= 3 or parts[0] in _BASE_FORBIDDEN or any(
@@ -133,6 +134,9 @@ class Application:
         self._mode_pending = {}
         self._mode_probes = {}
         self._fresh_fields = set()
+        self._light_availability = {}
+        self._light_shadows = {}
+        self._light_observed_at = {}
         self._mutex = threading.RLock()
         self._scan_lock = threading.Lock()
         self._networks: dict[str, dict] = {}
@@ -165,6 +169,8 @@ class Application:
         result = self.client.publish(path, payload, qos=1, retain=retain)
         if getattr(result, "rc", 1) != 0:
             LOG.error("MQTT publication failed: %s", path)
+            return False
+        return True
 
     def _subscribe(self, topic: str) -> None:
         with self._mutex:
@@ -175,6 +181,15 @@ class Application:
                 self._subscribed.add(topic)
             else:
                 LOG.error("MQTT subscription failed: %s", topic)
+
+    def _sync_light_topics(self):
+        """Subscribe to verified route availability and Z2M state topics."""
+        for route in self.config.get("light_routes", {}).values():
+            base, name = route["base_topic"], route["friendly_name"]
+            if base not in self._networks:
+                continue
+            self._subscribe(base + "/" + name)
+            self._subscribe(base + "/" + name + "/availability")
 
     def _publish_all(self):
         self._publish(DISCOVERY_TOPIC, wire_payload(self.version))
@@ -273,6 +288,9 @@ class Application:
             self._mode_pending.clear()
             self._mode_probes.clear()
             self._fresh_fields.clear()
+            self._light_availability.clear()
+            self._light_shadows.clear()
+            self._light_observed_at.clear()
         for topic in (*_FILTERS, SCAN_REQUEST, "homeassistant/status"):
             self._subscribe(topic)
         self._publish(AVAILABILITY, "online")
@@ -286,6 +304,9 @@ class Application:
             self._subscribed.clear()
             self._networks.clear()
             self._fresh_fields.clear()
+            self._light_availability.clear()
+            self._light_shadows.clear()
+            self._light_observed_at.clear()
 
     def _on_message(self, client, userdata, message):
         del client, userdata
@@ -298,11 +319,49 @@ class Application:
             if bytes(message.payload) == b"online":
                 self._publish_all()
             return
+        if message.topic.endswith("/availability"):
+            with self._mutex:
+                for route in self.config.get("light_routes", {}).values():
+                    base, name = route["base_topic"], route["friendly_name"]
+                    if message.topic != base + "/" + name + "/availability":
+                        continue
+                    try:
+                        payload = bytes(message.payload).decode("utf-8")
+                        status = payload.strip().lower()
+                        if status.startswith("{"):
+                            status = str(json.loads(payload).get("state", "")).lower()
+                        if status not in ("online", "offline"):
+                            status = "unknown"
+                    except (UnicodeDecodeError, ValueError, TypeError):
+                        status = "unknown"
+                    ident = (base, name)
+                    self._light_availability[ident] = status
+                    if status != "online":
+                        self._light_shadows.pop(ident, None)
+                        self._light_observed_at.pop(ident, None)
+                        self._fresh_fields.discard((base, name, "state"))
+            return
         parsed = bridge_path(message.topic)
         if parsed:
             base, suffix = parsed
             with self._mutex:
                 node = self._networks.setdefault(base, {"states": {}})
+                if suffix == "state":
+                    try:
+                        reported = json.loads(bytes(message.payload))
+                        node["bridge_state"] = (
+                            reported.get("state") if isinstance(reported, dict)
+                            else reported if isinstance(reported, str) else "unknown")
+                    except (TypeError, ValueError):
+                        node["bridge_state"] = "unknown"
+                    if node["bridge_state"] != "online":
+                        for route in self.config.get("light_routes", {}).values():
+                            if route["base_topic"] == base:
+                                ident = (base, route["friendly_name"])
+                                self._light_availability.pop(ident, None)
+                                self._light_shadows.pop(ident, None)
+                                self._fresh_fields.discard((base, ident[1], "state"))
+                    return
                 node[suffix] = bytes(message.payload)
                 if suffix == "devices":
                     try:
@@ -314,6 +373,7 @@ class Application:
                         name = device.get("friendly_name")
                         if isinstance(name, str) and name and device.get("type") != "Coordinator":
                             self._subscribe(base + "/" + name)
+                    self._sync_light_topics()
             self._publish_details()
             return
         # Only explicit fresh Zigbee2MQTT device actions can trigger a binding.
@@ -344,6 +404,12 @@ class Application:
                         for field in data:
                             if field != "action":
                                 self._fresh_fields.add((base, name, field))
+                        if data.get("state") in ("ON", "OFF"):
+                            ident = (base, name)
+                            self._light_observed_at[ident] = time.monotonic()
+                            shadow = self._light_shadows.get(ident)
+                            if shadow and shadow["value"] == data["state"]:
+                                self._light_shadows.pop(ident, None)
                     if not getattr(message, "retain", False) and not getattr(message, "dup", False):
                         self._process_adopted_event(base, net, device, data)
                 except (KeyError, CatalogError, ValueError, UnicodeDecodeError, TypeError) as exc:
@@ -416,45 +482,63 @@ class Application:
                                          target=target_label, error="Action queue is full")
 
     def _run_actions(self):
-        """Serial HA calls preserve toggle order and avoid blocking MQTT callbacks."""
-        if self._ha_client is None:
-            self._ha_client = HAClient(os.environ.get("SUPERVISOR_TOKEN", ""))
+        """Execute validated Z2M /set commands; never call HA light services."""
         while not self._stop.is_set():
             try:
                 base, coordinator, name, action, commands = self._jobs.get(timeout=1)
             except queue.Empty:
                 continue
-            targets = [eid for command in commands for eid in command["target"]["entity_id"]]
+            targets = [eid for cmd in commands for eid in cmd["target"]["entity_id"]]
             try:
                 with self._mutex:
                     sw = next((x for room in self.config["rooms"]
                                for x in room["switches"]
-                               if (x["logical_name"] == name
-                                   and x["base_topic"] == base
-                                   and x["coordinator_ieee"] == coordinator)), None)
-                    if sw is None or not sw.get("enabled", False) or maintained_switch(sw, self.globals):
-                        raise ActionError("Action blocked by disabled switch or Maintenance")
+                               if (x["logical_name"] == name and
+                                   x["base_topic"] == base and
+                                   x["coordinator_ieee"] == coordinator)), None)
+                    if (sw is None or not sw.get("enabled", False) or
+                            maintained_switch(sw, self.globals)):
+                        raise ActionError("Disabled switch or Maintenance active")
                     net = self._networks.get(base, {})
                     raw = net.get("devices")
                     if not isinstance(raw, bytes):
-                        raise ActionError("Zigbee2MQTT inventory unavailable")
+                        raise ActionError("Zigbee2MQTT input inventory unavailable")
                     device = next((d for d in decode_bridge_devices(raw)
                                    if d.get("friendly_name") == name), None)
-                    if device is None or not verified_adopted_switch(
-                            sw, device, coordinator, base):
-                        raise ActionError("Aqara hardware identity not confirmed")
-                    features = capabilities(device)
-                    state = net.get("states", {}).get(name, {})
-                    if not mode_action_allowed(sw, action, state, features, False):
-                        raise ActionError("Aqara key no longer in decoupled/ON")
-                for command in commands:
-                    self._ha_client.execute(command)
-                self._publish_action(state="accepted", switch=name, action=action,
-                                     target=", ".join(targets))
-                LOG.info("Aqara %s / %s -> %s HA light calls accepted for %s",
-                         name, action, len(commands), targets)
+                    if (device is None or not verified_adopted_switch(
+                            sw, device, coordinator, base) or not mode_action_allowed(
+                            sw, action, net.get("states", {}).get(name, {}),
+                            capabilities(device), False)):
+                        raise ActionError("Aqara key not verified in operating mode")
+                    plans, skipped = plan_batch(
+                        commands, self.config.get("light_routes", {}),
+                        self._networks, self._light_availability,
+                        self._fresh_fields, self._light_shadows,
+                        self._light_observed_at, time.monotonic())
+                    sent = []
+                    for plan in plans:
+                        if self._publish(plan["topic"], plan["payload"],
+                                         retain=False):
+                            ident = plan["ident"]
+                            self._light_shadows[ident] = {
+                                "value": plan["state"], "at": time.monotonic()}
+                            sent.append(plan["light"])
+                        else:
+                            skipped.append({"light":plan["light"],
+                                            "reason":"MQTT publish rejected"})
+                    if skipped:
+                        LOG.warning("Aqara action %s %s skipped: %s",
+                                    name, action, skipped)
+                    note = "; ".join(x["light"]+": "+x["reason"] for x in skipped)
+                    state = ("partial" if sent and skipped else
+                             "sent" if sent else "skipped")
+                    self._publish_action(state=state, switch=name, action=action,
+                                         target=", ".join(sent),
+                                         error=note[:300] if note else None)
+                    LOG.info("Aqara %s/%s MQTT sent=%d skipped=%d",
+                             name, action, len(sent), len(skipped))
             except Exception as exc:
-                LOG.exception("Home Assistant light batch failed")
+                LOG.exception("Aqara MQTT light action failed")
                 self._publish_action(state="error", switch=name, action=action,
                                      target=", ".join(targets), error=str(exc)[:300])
             finally:
@@ -487,6 +571,9 @@ class Application:
             with self._mutex:
                 self.config = merged
                 self.globals = global_policy(self.options.read())
+                self._light_shadows.clear()
+                self._light_observed_at.clear()
+                self._sync_light_topics()
                 self._previous = report
             self._publish_details()
             self._publish(ROOT + "/scan_details", {"state": "ready", **report})
@@ -510,7 +597,7 @@ class Application:
 
     def run(self) -> None:
         host, port = os.environ["MQTT_HOST"], int(os.environ["MQTT_PORT"])
-        LOG.info("Starting Aqara Adopt + Mode Keeper + light.toggle MVP %s", self.version)
+        LOG.info("Starting Aqara MQTT input, Mode Keeper and direct MQTT lights %s", self.version)
         threading.Thread(target=self._run_actions, daemon=True,
                          name="dh-aqara-action-worker").start()
         threading.Thread(target=run_keeper, args=(self,), daemon=True,
