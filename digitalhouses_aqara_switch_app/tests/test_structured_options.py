@@ -85,7 +85,7 @@ class EntityOptionTests(unittest.TestCase):
 
     def test_schema_contains_short_text_not_ieee_bindings(self):
         config=yaml.safe_load((Path(__file__).resolve().parents[1]/"config.yaml").read_text())
-        self.assertEqual(config["version"],"0.1.13")
+        self.assertEqual(config["version"],"0.1.14")
         self.assertEqual(config["schema"]["switches"],"str")
         self.assertNotIn("bindings",config["schema"])
         self.assertNotIn("configuration_yaml",config["schema"])
