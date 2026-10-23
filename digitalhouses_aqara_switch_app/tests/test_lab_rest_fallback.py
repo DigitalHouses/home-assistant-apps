@@ -241,9 +241,9 @@ class MixedTransportTests(unittest.TestCase):
             actions.append(kw)
             if len(actions)>=count:
                 app._stop.set()
-        app._publish_action=save
         app._on_message(None,None,packet(BASE+"/"+NAME,{"action":"single_minus"}))
         self.assertEqual(app._jobs.qsize(),1)
+        app._publish_action=save
         app._run_actions()
         pubs=[(topic,json.loads(payload),retain)
               for topic,payload,retain in app.client.published
