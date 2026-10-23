@@ -294,6 +294,17 @@ An incompatible replacement is rejected; no action is sent.
 Examples under [examples/lovelace](examples/lovelace/):
 - [Status / Scan / Supervisor restart card](examples/lovelace/dh_aqara_switch_app_card_ru.yaml)
 - [Room → switch → actions/settings tree](examples/lovelace/dh_aqara_switch_app_tree_ru.yaml)
+
+The Lovelace tree shows **one compact row per assigned light**. It reads each
+`light.*` state live from Home Assistant, displaying 💡 for `on`, the
+native HA `mdi:lightbulb-off-outline` icon for `off`, and ❔ for
+`unknown`/`unavailable` (with a different text label for each).
+This is an **observed HA entity state**, not hardware-level proof: Zigbee2MQTT
+or HA integrations may publish optimistic state before confirmation.
+The card re-renders when its referenced light entities change.
+The App does not create new entities or update an already pasted Lovelace
+Markdown card; replace the tree card with the updated example to adopt it.
+**No App version/image update is needed for this UI-only change.**
 - [Last Scan report](examples/lovelace/dh_aqara_switch_app_last_scan_ru.yaml)
 - [Device problem overview](examples/lovelace/dh_aqara_switch_app_problems_ru.yaml)
 
