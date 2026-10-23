@@ -12,7 +12,7 @@ import yaml
 
 from .catalog import CatalogError, validate_config
 from .light_rules import parse_rule
-from .mode_keeper import global_policy, validate_keep_mode
+from .mode_keeper import global_policy, validate_keep_mode, validate_action_policy
 from .structured_options import _read_profiles, _save_profiles
 
 STORE_PATH = Path("/data/adopted_switches.json")
@@ -104,6 +104,7 @@ def project(profiles: Mapping, options: Mapping) -> dict:
         for press, rule in row["actions"].items():
             if press not in supported:
                 raise CatalogError("Unsupported Aqara action " + press + " for " + row["entity_id"])
+            validate_action_policy(item["fingerprint"], item["keep_mode"], press)
             item["bindings"][press] = parse_rule(rule)
         item["enabled"] = row["enabled"]
     return data

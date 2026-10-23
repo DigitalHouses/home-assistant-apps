@@ -146,8 +146,9 @@ class KeeperTests(unittest.TestCase):
                              ["light.dh_aqara_lab_chandelier"])
             self.assertTrue(current(options_for(maintenance=True),path)
                             ["rooms"][0]["switches"][0]["maintenance_mode"])
-            self.assertEqual(current(options_for(keep=False),path)
-                             ["rooms"][0]["switches"][0]["keep_mode"],{})
+            # Without keep_mode, the wired single_left binding is unsafe.
+            with self.assertRaisesRegex(CatalogError, "requires decoupled/ON"):
+                current(options_for(keep=False),path)
         self.assertEqual(global_policy({}),{"maintenance_mode":False,"restore_delay":0.6})
         self.assertEqual(global_policy({"maintenance_mode":True,"restore_delay":0.6})
                          ["maintenance_mode"],True)
@@ -157,6 +158,19 @@ class KeeperTests(unittest.TestCase):
             with self.subTest(options=options):
                 with self.assertRaises(CatalogError):
                     global_policy(options)
+
+    def test_unmanaged_control_relay_action_cannot_be_configured(self):
+        with TemporaryDirectory() as td:
+            path=Path(td)/"store.json"
+            _save_profiles(path,profiles())
+            for action in ("single_right","double_both"):
+                with self.subTest(action=action):
+                    row={"enabled":True,"keep_mode":{"left":KEEP_VALUE},
+                         "actions":{action:["light.dh_aqara_lab_chandelier"]}}
+                    import yaml
+                    opts={"switches":yaml.safe_dump([{ENTITY:row}])}
+                    with self.assertRaisesRegex(CatalogError,"requires decoupled/ON"):
+                        current(opts,path)
 
     def test_delay_order_and_verification_without_forcing_right(self):
         app=SimpleApp()

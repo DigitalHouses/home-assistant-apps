@@ -231,11 +231,23 @@ class Application:
                     result = {"status": "unverified", "reason": "; ".join(unverified)}
                 else:
                     result = resolve_hardware(switch, peers)
-                    if (result["status"] == "same" and peers
-                            and peers[0]["settings"] != switch["settings"]):
-                        result = {"status": "settings_mismatch",
-                                  "reason": "Physical settings differ from saved baseline",
-                                  "observed_ieee": peers[0]["ieee"]}
+                    # Only explicit keep_mode is a contract. Captured
+                    # non-managed factory settings must never be compared
+                    # against the current state as an error.
+                    if (result["status"] == "same" and switch.get("keep_mode")
+                            and not maintained_switch(switch, self.globals)):
+                        current = next((n["states"].get(switch["logical_name"], {})
+                                        for n in networks
+                                        if n["coordinator_ieee"] == switch["coordinator_ieee"]
+                                        and n["base_topic"] == switch["base_topic"]), {})
+                        from .mode_keeper import MODE_TO_RELAY
+                        mismatches = [key for key in switch["keep_mode"]
+                                      if current.get(MODE_TO_RELAY[key][0]) not in
+                                         (None, "decoupled") or
+                                         current.get(MODE_TO_RELAY[key][1]) == "OFF"]
+                        if mismatches:
+                            result = {"status":"keep_mode_mismatch",
+                                      "reason":"Protected keys drifted: " + ", ".join(mismatches)}
                 switch["runtime"] = result
                 if result["status"] not in ("same", "disabled"):
                     problems.append({
@@ -396,7 +408,7 @@ class Application:
                 targets = [eid for command in commands for eid in command["target"]["entity_id"]]
                 target_label = ", ".join(targets)
                 try:
-                    self._jobs.put_nowait((name, action, commands))
+                    self._jobs.put_nowait((base, coordinator, name, action, commands))
                     self._publish_action(state="queued", switch=name, action=action,
                                          target=target_label)
                 except queue.Full:
@@ -409,7 +421,7 @@ class Application:
             self._ha_client = HAClient(os.environ.get("SUPERVISOR_TOKEN", ""))
         while not self._stop.is_set():
             try:
-                name, action, commands = self._jobs.get(timeout=1)
+                base, coordinator, name, action, commands = self._jobs.get(timeout=1)
             except queue.Empty:
                 continue
             targets = [eid for command in commands for eid in command["target"]["entity_id"]]
@@ -417,9 +429,24 @@ class Application:
                 with self._mutex:
                     sw = next((x for room in self.config["rooms"]
                                for x in room["switches"]
-                               if x["logical_name"] == name), None)
+                               if (x["logical_name"] == name
+                                   and x["base_topic"] == base
+                                   and x["coordinator_ieee"] == coordinator)), None)
                     if sw is None or not sw.get("enabled", False) or maintained_switch(sw, self.globals):
                         raise ActionError("Action blocked by disabled switch or Maintenance")
+                    net = self._networks.get(base, {})
+                    raw = net.get("devices")
+                    if not isinstance(raw, bytes):
+                        raise ActionError("Zigbee2MQTT inventory unavailable")
+                    device = next((d for d in decode_bridge_devices(raw)
+                                   if d.get("friendly_name") == name), None)
+                    if device is None or not verified_adopted_switch(
+                            sw, device, coordinator, base):
+                        raise ActionError("Aqara hardware identity not confirmed")
+                    features = capabilities(device)
+                    state = net.get("states", {}).get(name, {})
+                    if not mode_action_allowed(sw, action, state, features, False):
+                        raise ActionError("Aqara key no longer in decoupled/ON")
                 for command in commands:
                     self._ha_client.execute(command)
                 self._publish_action(state="accepted", switch=name, action=action,

@@ -92,10 +92,40 @@ class ControlTests(TestCase):
             app._on_message(None,None,message(topic,{"action":"double"}))
             self.assertEqual(app._jobs.qsize(),0)
             app._on_message(None,None,message(topic,{"action":"single"}))
-            self.assertEqual(app._jobs.get_nowait(),(NAME,"single",[{"service":"light.toggle","target":{"entity_id":TARGETS}}]))
+            self.assertEqual(app._jobs.get_nowait(),(BASE,COORD,NAME,"single",[{"service":"light.toggle","target":{"entity_id":TARGETS}}]))
             app._on_message(None,None,message(topic,{"action":"single"}))
             self.assertTrue(app._jobs.empty())
             self.assertTrue(all(not t.endswith("/set") for t,_,_ in app.client.published))
+
+    def test_queued_action_blocked_if_maintenance_activated(self):
+        with TemporaryDirectory() as td:
+            app=self.app(td)
+            app._on_message(None,None,message(BASE+"/"+NAME,{"action":"single"}))
+            app.globals["maintenance_mode"]=True
+            failures=[]
+            def capture(**kwargs):
+                failures.append(kwargs)
+                app._stop.set()
+            app._publish_action=capture
+            app._run_actions()
+            app._ha_client.execute.assert_not_called()
+            self.assertEqual(failures[0]["state"],"error")
+            self.assertIn("Maintenance",failures[0]["error"])
+
+    def test_queued_action_blocked_if_mode_drifted_before_dispatch(self):
+        with TemporaryDirectory() as td:
+            app=self.app(td)
+            app._on_message(None,None,message(BASE+"/"+NAME,{"action":"single"}))
+            app._networks[BASE]["states"][NAME]["operation_mode_left"]="control_relay"
+            failures=[]
+            def capture(**kwargs):
+                failures.append(kwargs)
+                app._stop.set()
+            app._publish_action=capture
+            app._run_actions()
+            app._ha_client.execute.assert_not_called()
+            self.assertEqual(failures[0]["state"],"error")
+            self.assertIn("decoupled",failures[0]["error"])
 
     def test_enabled_false_disables_action_and_keeper(self):
         with TemporaryDirectory() as td:
