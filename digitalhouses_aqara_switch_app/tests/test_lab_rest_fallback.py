@@ -155,7 +155,7 @@ class LabTests(unittest.TestCase):
             "aqara_switch.entity_options._read_profiles",
             return_value=PROFILE):
             app=Application(FakeMQTT,options=options,registry=Mock(),
-                last_scan_path=Path(td)/"scan.json",version="0.1.13",
+                last_scan_path=Path(td)/"scan.json",version="0.1.14",
                 ha_client=ha)
         app._on_connect(None,None,None,0)
         app._on_message(None,None,packet(BASE+"/bridge/info",
