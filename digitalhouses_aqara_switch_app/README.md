@@ -1,12 +1,25 @@
 # DigitalHouses Aqara Switch App
 
-**v0.1.13 — synchronized Z2M direct-MQTT lighting with offline exclusion.**
+**v0.1.14 — synchronized mixed LAB/Z2M toggles with MQTT-only physical control.**
 
 This Home Assistant App supports the commissioning flow for Aqara wired switches,
 battery buttons and key panels. It is not a general automation engine. This MVP scans and adopts Aqara
 inputs, preserves saved writable switch configuration, and dispatches an
 explicitly bound Aqara action to one or more Home Assistant light.toggle targets.
 It never switches physical Aqara relay output states itself.
+
+## v0.1.14 — mixed virtual LAB and physical Zigbee2MQTT toggles
+
+The existing `switches` YAML can combine the six fixed `light.dh_aqara_lab_*`
+entities with verified real Zigbee2MQTT `light.*` devices in a single
+`light.toggle` action. The App reads eligible current states from both
+transports first and makes ONE decision: **any OFF -> ON all**;
+**all ON -> OFF all**. HA-only LAB lights use HA REST; real Zigbee2MQTT
+lights always use direct MQTT. Missing routes, offline, unknown or
+unconfirmed physical lamps are skipped and never rerouted through HA.
+Repeated presses use existing pending-command shadows.
+A successful send is not proof of physical state change.
+No new YAML settings or Scan are needed for virtual LAB entities.
 
 ## v0.1.13 — virtual AQARA LAB compatibility
 
@@ -16,8 +29,8 @@ unavailable filtering, per-light attributes and synchronized grouped ON/OFF.
 They do not have Zigbee2MQTT device routes and cannot work during HA Core
 downtime. All real Zigbee2MQTT lamps retain the v0.1.12 MQTT-only transport,
 including offline guards; there is no HA fallback for unverified physical
-devices. Mixed virtual/physical `toggle` actions are not supported, to prevent
-lights from getting out of sync. This fixes skipped virtual LAB actions such as
+devices. Mixed virtual/physical `toggle` actions are supported starting v0.1.14.
+This fixes skipped virtual LAB actions such as
 `double_plus` -> `light.dh_aqara_lab_night_light`. No new settings or Scan
 are required for these virtual test lights.
 
@@ -44,7 +57,7 @@ are required for these virtual test lights.
    Installation alone cannot toggle any light or change any adopted Aqara
    settings, because no devices have yet been adopted.
 
-Immutable image: `ghcr.io/digitalhouses/digitalhouses_aqara_switch_app:0.1.13`.
+Immutable image: `ghcr.io/digitalhouses/digitalhouses_aqara_switch_app:0.1.14`.
 
 ## Configure and Scan (fresh install only)
 
