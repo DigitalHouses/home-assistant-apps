@@ -18,7 +18,10 @@ import time
 from .catalog import (CatalogError, candidate_from_mqtt, decode_bridge_devices,
                       resolve_hardware)
 from .actions import ActionError
-from .control import HAClient, light_commands, settings_drift, verified_adopted_switch
+from .control import HAClient, light_commands, verified_adopted_switch
+from .keeper_runtime import run_keeper
+from .mode_keeper import (capabilities, global_policy, maintained_switch,
+                          mode_action_allowed)
 from .configuration import parse_configuration
 from .ha_registry import HARegistryClient
 from .mqtt_ui import (
@@ -115,7 +118,9 @@ class Application:
         self.version = version if version is not None else os.environ["APP_VERSION"]
         self.options = options or SupervisorOptions()
         self.registry = registry or HARegistryClient(os.environ.get("SUPERVISOR_TOKEN", ""))
-        self.config = parse_configuration(self.options.read())
+        options_snapshot = self.options.read()
+        self.config = parse_configuration(options_snapshot)
+        self.globals = global_policy(options_snapshot)
         self._previous = _load_previous(last_scan_path)
         self._previous_path = last_scan_path
         self._stop = threading.Event()
@@ -125,6 +130,9 @@ class Application:
                              "action": None, "target": None, "error": None}
         self._last_action_at = {}
         self._last_mode_request = {}
+        self._mode_pending = {}
+        self._mode_probes = {}
+        self._fresh_fields = set()
         self._mutex = threading.RLock()
         self._scan_lock = threading.Lock()
         self._networks: dict[str, dict] = {}
@@ -250,6 +258,9 @@ class Application:
             self._networks.clear()
             self._last_action_at.clear()
             self._last_mode_request.clear()
+            self._mode_pending.clear()
+            self._mode_probes.clear()
+            self._fresh_fields.clear()
         for topic in (*_FILTERS, SCAN_REQUEST, "homeassistant/status"):
             self._subscribe(topic)
         self._publish(AVAILABILITY, "online")
@@ -262,6 +273,7 @@ class Application:
         with self._mutex:
             self._subscribed.clear()
             self._networks.clear()
+            self._fresh_fields.clear()
 
     def _on_message(self, client, userdata, message):
         del client, userdata
@@ -316,6 +328,10 @@ class Application:
                                                if k != "action"},
                                            **{k: v for k, v in data.items()
                                               if k != "action"}}
+                    if not getattr(message, "retain", False):
+                        for field in data:
+                            if field != "action":
+                                self._fresh_fields.add((base, name, field))
                     if not getattr(message, "retain", False) and not getattr(message, "dup", False):
                         self._process_adopted_event(base, net, device, data)
                 except (KeyError, CatalogError, ValueError, UnicodeDecodeError, TypeError) as exc:
@@ -343,23 +359,26 @@ class Application:
                 if not verified_adopted_switch(saved, device, coordinator, base):
                     continue
                 name = saved["logical_name"]
-                # Keep only the writable physical *configuration* captured at Adopt;
-                # never publish state / relay ON or OFF.
-                drift = settings_drift(saved, data)
+                # Old generic baseline restoration is intentionally disabled.
+                # Only keys explicitly present in user keep_mode are repaired.
                 now = time.monotonic()
-                if drift:
-                    requested = {key: value for key, value in drift.items()
-                                 if now - self._last_mode_request.get((base, name, key), -1e9) >= 60}
-                    if requested:
-                        for key in requested:
-                            self._last_mode_request[(base, name, key)] = now
-                        self._publish(base + "/" + name + "/set", requested, retain=False)
-                        LOG.warning("Mode Keeper restore requested: %s / %s keys=%s",
-                                    base, name, sorted(requested))
-                        self._publish_details()
                 action = data.get("action")
                 if not isinstance(action, str) or not action:
                     continue
+                maintenance = maintained_switch(saved, self.globals)
+                state = net.get("states", {}).get(name, {})
+                features = capabilities(device)
+                if not mode_action_allowed(saved, action, state, features, maintenance):
+                    continue
+                # Wired key mode must be freshly confirmed after reconnect.
+                if features:
+                    keys = (("left", "right") if action.endswith("_both")
+                            else (action.rsplit("_", 1)[-1],)
+                            if action.rsplit("_", 1)[-1] in features
+                            else tuple(features))
+                    if any((base, name, features[k][0]) not in self._fresh_fields
+                           for k in keys if k in features):
+                        continue
                 dedupe_key = (coordinator, name, action)
                 if now - self._last_action_at.get(dedupe_key, -1e9) < 0.35:
                     LOG.debug("Ignored duplicate action from %s: %s", name, action)
@@ -395,6 +414,12 @@ class Application:
                 continue
             targets = [eid for command in commands for eid in command["target"]["entity_id"]]
             try:
+                with self._mutex:
+                    sw = next((x for room in self.config["rooms"]
+                               for x in room["switches"]
+                               if x["logical_name"] == name), None)
+                    if sw is None or not sw.get("enabled", False) or maintained_switch(sw, self.globals):
+                        raise ActionError("Action blocked by disabled switch or Maintenance")
                 for command in commands:
                     self._ha_client.execute(command)
                 self._publish_action(state="accepted", switch=name, action=action,
@@ -434,6 +459,7 @@ class Application:
             _save_previous(self._previous_path, report)
             with self._mutex:
                 self.config = merged
+                self.globals = global_policy(self.options.read())
                 self._previous = report
             self._publish_details()
             self._publish(ROOT + "/scan_details", {"state": "ready", **report})
@@ -460,5 +486,7 @@ class Application:
         LOG.info("Starting Aqara Adopt + Mode Keeper + light.toggle MVP %s", self.version)
         threading.Thread(target=self._run_actions, daemon=True,
                          name="dh-aqara-action-worker").start()
+        threading.Thread(target=run_keeper, args=(self,), daemon=True,
+                         name="dh-aqara-mode-keeper").start()
         self.client.connect(host, port, keepalive=60)
         self.client.loop_forever(retry_first_connection=True)
