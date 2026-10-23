@@ -1,5 +1,24 @@
 # Changelog — DigitalHouses Aqara Switch App
 
+## 0.1.13
+
+- Hotfix for v0.1.12 regression: explicitly support the **six fixed virtual
+  `light.dh_aqara_lab_*` entities** using Home Assistant Core REST while
+  keeping real Zigbee2MQTT lights on direct MQTT.
+- Virtual LAB commands now first read the actual HA light state and skip
+  `unavailable`/`unknown` rather than issuing a blind command. The existing
+  per-light brightness, Kelvin, RGB and transition settings are preserved.
+- Plain multi-LAB-light toggle is synchronized: any OFF -> turn all ON,
+  all ON -> turn all OFF. A short-lived command shadow avoids rapid-press
+  inversion based on a stale reported state. Never use `light.toggle`
+  independently on individual LAB targets.
+- Physical Z2M targets without verified routes remain skipped and **never**
+  fall back to HA. Mixed virtual/physical group toggles are rejected rather
+  than producing unsynchronized behavior; explicit ON/OFF may mix.
+- Update tests for the reported `double_plus` -> virtual LAB night light
+  error, offline handling, rapid presses and fallback safety. No YAML
+  migration, relay writes, or modification to input/mode-keeper behavior.
+
 ## 0.1.12
 
 - Replace HA Core REST light output with verified **direct Zigbee2MQTT
