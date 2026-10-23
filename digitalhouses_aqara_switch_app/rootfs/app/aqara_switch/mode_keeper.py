@@ -103,8 +103,10 @@ def mode_action_allowed(sw: Mapping, action: str, state: Mapping,
     if maintenance:
         return False
     if not features:
-        # Real battery/remotes do not expose operation_mode: no keeper needed.
-        return True
+        # Battery/remotes have no operation_mode. Wired devices with mode
+        # support but an unverified relay capability fail closed.
+        modes = {f[0] for f in MODE_TO_RELAY.values()}
+        return not (modes & set(sw.get("fingerprint", {}).get("setting_keys", [])))
     keep = sw.get("keep_mode", {})
     if action.endswith("_both"):
         required = ("left", "right")
