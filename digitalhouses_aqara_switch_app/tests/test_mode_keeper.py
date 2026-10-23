@@ -146,8 +146,9 @@ class KeeperTests(unittest.TestCase):
                              ["light.dh_aqara_lab_chandelier"])
             self.assertTrue(current(options_for(maintenance=True),path)
                             ["rooms"][0]["switches"][0]["maintenance_mode"])
-            self.assertEqual(current(options_for(keep=False),path)
-                             ["rooms"][0]["switches"][0]["keep_mode"],{})
+            # Without keep_mode, the wired single_left binding is unsafe.
+            with self.assertRaisesRegex(CatalogError, "requires decoupled/ON"):
+                current(options_for(keep=False),path)
         self.assertEqual(global_policy({}),{"maintenance_mode":False,"restore_delay":0.6})
         self.assertEqual(global_policy({"maintenance_mode":True,"restore_delay":0.6})
                          ["maintenance_mode"],True)
