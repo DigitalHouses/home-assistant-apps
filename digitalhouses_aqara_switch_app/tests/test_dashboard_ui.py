@@ -36,6 +36,35 @@ class DashboardTests(unittest.TestCase):
             with self.subTest(card=key):
                 self.assertEqual(actual[key], yaml.safe_load((ROOT / filename).read_text()))
 
+    def test_tree_displays_individual_live_light_state_icons(self):
+        tree = yaml.safe_load(
+            (ROOT / "dh_aqara_switch_app_tree_ru.yaml").read_text()
+        )["content"]
+        dashboard = yaml.safe_load(
+            (ROOT / "dh_aqara_switch_app_dashboard_ru.yaml").read_text()
+        )
+        embedded = [
+            card["content"]
+            for section in dashboard["views"][0]["sections"]
+            for card in section["cards"]
+            if card["type"] == "markdown"
+            and "sensor.dh_aqara_switch_app_devices_details" in card["content"]
+        ]
+        self.assertEqual(embedded, [tree])
+        self.assertIn("{% for target in targets -%}", tree)
+        self.assertIn("{% set light_state = states(target) -%}", tree)
+        self.assertIn("light_state == 'on'", tree)
+        self.assertIn("light_state == 'off'", tree)
+        self.assertIn("mdi:lightbulb-off-outline", tree)
+        self.assertIn("💡", tree)
+        self.assertIn("❔", tree)
+        self.assertIn("недоступен", tree)
+        self.assertIn("<pre>", tree)
+        self.assertIn("| e }}", tree)
+        self.assertNotIn("tojson", tree)
+        self.assertNotIn("last_action", tree)
+        self.assertNotIn("shadow", tree)
+
     def test_only_supported_actions_and_no_fake_sensor(self):
         text = (ROOT / "dh_aqara_switch_app_dashboard_ru.yaml").read_text()
         self.assertNotIn("tojson", text)
