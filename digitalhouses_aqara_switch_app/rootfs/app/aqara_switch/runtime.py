@@ -663,7 +663,7 @@ class Application:
                 self.config = merged
                 self.globals = global_policy(self.options.read())
                 self._light_shadows.clear()
-            self._lab_shadows.clear()
+                self._lab_shadows.clear()
                 self._light_observed_at.clear()
                 self._light_probe_at.clear()
                 self._sync_light_topics()
