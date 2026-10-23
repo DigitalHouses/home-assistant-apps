@@ -117,6 +117,53 @@ class ScanTests(unittest.TestCase):
             self.assertIn("known_ieee_renamed",str(report["problems"]))
             self.assertEqual(opts.writes,1)
 
+    def test_scan_captures_only_decoupled_wired_key_and_not_battery(self):
+        from aqara_switch.entity_options import _read_profiles
+        wired={"ieee_address":"0x00158d0000000099","friendly_name":"aqara_wired",
+               "type":"Router",
+               "definition":{"vendor":"Aqara","model":"WS-EUK04",
+                 "exposes":[
+                  {"property":"action","type":"enum","access":1,
+                   "values":["single_left","single_right","double_both"]},
+                  {"property":"operation_mode_left","type":"enum","access":7,
+                   "values":["control_relay","decoupled"]},
+                  {"property":"operation_mode_right","type":"enum","access":7,
+                   "values":["control_relay","decoupled"]},
+                  {"type":"switch","features":[
+                   {"property":"state_left","type":"binary","access":7},
+                   {"property":"state_right","type":"binary","access":7}]}]}}
+        snapshot={"base_topic":"zigbee2mqtt","coordinator_ieee":COORD,
+          "devices":json.dumps([{"ieee_address":COORD,"type":"Coordinator"},
+                                wired,z2m_device()]).encode(),
+          "states":{"aqara_wired":{
+              "operation_mode_left":"decoupled",
+              "operation_mode_right":"control_relay",
+              "state_left":"ON","state_right":"OFF"}}}
+        class EmptyRegistry:
+            def fetch(self):return [],[],[]
+        with TemporaryDirectory() as td, patch("aqara_switch.scan.STORE_PATH",Path(td)/"store.json"):
+            opts=Options()
+            data,report=scan_once([snapshot],opts,EmptyRegistry())
+            rows={r["entity_id"]:r for r in parse_rows(opts.read())}
+            self.assertEqual(rows["switch.aqara_wired"]["keep_mode"],
+                             {"left":"decoupled/ON"})
+            self.assertNotIn("keep_mode",rows["switch.aqara_button"])
+            self.assertNotIn("right",rows["switch.aqara_wired"]["keep_mode"])
+            saved=_read_profiles(Path(td)/"store.json")
+            self.assertTrue(all(s.get("mode_policy_initialized") for room in
+                                saved["rooms"] for s in room["switches"]))
+            # Operator deletes the keep_mode intentionally; a later Scan
+            # must not recreate it, even when decoupled is still observed.
+            for row in rows.values():
+                row.pop("keep_mode",None)
+            from aqara_switch.entity_options import render_rows
+            opts.options["switches"]=render_rows(list(rows.values()))
+            before=opts.writes
+            scan_once([snapshot],opts,EmptyRegistry())
+            self.assertEqual(opts.writes,before)
+            self.assertNotIn("keep_mode",next(r for r in parse_rows(opts.read())
+                if r["entity_id"]=="switch.aqara_wired"))
+
     def test_area_matching_is_strict(self):
         dev=[{"id":"ha-1","area_id":"living","identifiers":[["mqtt","zigbee2mqtt_"+IEEE]]}]
         self.assertEqual(areas_from_registries(dev,[{"area_id":"living","name":"Гостиная"}],{IEEE})[IEEE]["name"],"Гостиная")
