@@ -1,6 +1,6 @@
 # DigitalHouses Aqara Switch App
 
-**v0.1.11 — protected Aqara keys, scoped Maintenance and safe queued actions.**
+**v0.1.12 — synchronized Z2M direct-MQTT lighting with offline exclusion.**
 
 This Home Assistant App supports the commissioning flow for Aqara wired switches,
 battery buttons and key panels. It is not a general automation engine. This MVP scans and adopts Aqara
@@ -31,7 +31,7 @@ It never switches physical Aqara relay output states itself.
    Installation alone cannot toggle any light or change any adopted Aqara
    settings, because no devices have yet been adopted.
 
-Immutable image: `ghcr.io/digitalhouses/digitalhouses_aqara_switch_app:0.1.11`.
+Immutable image: `ghcr.io/digitalhouses/digitalhouses_aqara_switch_app:0.1.12`.
 
 ## Configure and Scan (fresh install only)
 
@@ -80,6 +80,49 @@ Scan determines the exact keys):
 In the Supervisor YAML options view this is stored inside the multiline
 `switches: |` field. Edit only actions and light targets; keys are
 generated or resolved by Scan. Scan is manual, not periodic.
+
+## Direct Zigbee2MQTT light output (v0.1.12)
+
+Aqara key presses and outgoing lamp commands both use the existing MQTT
+connection. **HA Core is not called on a key press.** The public config
+continues using the same `switch.*` keys and `light.*` targets, with
+optional light-specific attributes.
+
+After installing, run **Scan once while HA Core is available**: the Scan
+reads the HA Device/Entity Registry and Z2M `bridge/devices` to store
+verified `light.* -> coordinator, IEEE, friendly_name` routes in the
+private Adopt profile. No additional YAML or user-managed routing map.
+A later HA Core restart does not block already mapped lights.
+
+For each light, **Zigbee2MQTT device availability must be enabled** and
+report `online` on `base/friendly_name/availability`. An offline,
+unknown, ambiguous or unmapped light is skipped. App also requires the
+bridge to report `online`. A plain multi-light assignment is no longer
+an individual `light.toggle`: one shared group decision uses the states
+of *available, freshly observed* lamps. Any OFF -> send ON to all;
+all ON -> send OFF to all. No blind TOGGLE, no replay to devices after
+they reconnect.
+
+Quick repeat presses use the last in-flight intended ON/OFF state to
+avoid toggling out of phase while Z2M is reporting. After 5 seconds
+without a fresh post-command report, the lamp is excluded from
+ambiguous toggles. Commands are published non-retained; a successful
+MQTT publication is **not** proof a lamp actually obeyed.
+
+For individual light parameters, App converts `brightness_pct` to Z2M
+brightness, Kelvin to mired, RGB to XY/HS, and checks the device exposes.
+Devices lacking the requested capability are skipped with diagnostic
+reasons instead of receiving an invalid request.
+
+**Limitations:** exact light route discovery currently supports one
+Z2M light channel and exactly one enabled HA MQTT `light.*` entity
+per physical device. Z2M light **groups**, multi-endpoint controllers,
+and HA-only virtual lights (including the six `dh_aqara_lab_*` entities)
+are not automatically bound. Configure the group's individual physical
+light entities instead. Unsupported targets remain untouched.
+Retained Z2M state after reconnect alone does not authorize an
+ambiguous toggle; this can require a fresh device report or an explicit
+Z2M `/get` before the first group toggle.
 
 ## Per-key Mode Keeper and Maintenance (v0.1.10)
 
@@ -183,8 +226,7 @@ If every target has identical parameters, the app sends a single
 `light.turn_on` request with all of those lights. With different per-light
 options, it sends multiple requests (one for each distinct parameter set),
 serially in one queued action batch. Failure midway reports an error;
-prior requests cannot be undone. This release **still uses HA REST for
-light commands**, not direct Z2M MQTT output.
+prior requests cannot be undone. As of v0.1.12, the light executor uses direct verified Zigbee2MQTT MQTT, not HA REST.
 
 Compatibility: original short target lists and v0.1.8 shared attributes
 still parse, but shared attributes cannot be mixed with per-light options

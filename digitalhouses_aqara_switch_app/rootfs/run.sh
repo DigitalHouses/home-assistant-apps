@@ -11,5 +11,5 @@ export MQTT_PASSWORD="$(bashio::services mqtt password)"
 : "${MQTT_PORT:?MQTT_PORT must be configured}"
 : "${SUPERVISOR_TOKEN:?SUPERVISOR_TOKEN must be configured}"
 mkdir -p /data
-bashio::log.info "Aqara Switch App v${APP_VERSION}: Scan/Adopt, Mode Keeper + Maintenance + HA light commands; relay ON only from explicit keep_mode"
+bashio::log.info "Aqara Switch App v${APP_VERSION}: Scan/Adopt, Mode Keeper + Maintenance + direct Z2M MQTT light commands; relay ON only from explicit keep_mode"
 exec python3 /app/app.py
