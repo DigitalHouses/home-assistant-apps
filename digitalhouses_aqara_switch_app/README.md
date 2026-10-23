@@ -1,6 +1,6 @@
 # DigitalHouses Aqara Switch App
 
-**v0.1.10 — per-key Aqara keep_mode and scoped Maintenance.**
+**v0.1.11 — protected Aqara keys, scoped Maintenance and safe queued actions.**
 
 This Home Assistant App supports the commissioning flow for Aqara wired switches,
 battery buttons and key panels. It is not a general automation engine. This MVP scans and adopts Aqara
@@ -31,7 +31,7 @@ It never switches physical Aqara relay output states itself.
    Installation alone cannot toggle any light or change any adopted Aqara
    settings, because no devices have yet been adopted.
 
-Immutable image: `ghcr.io/digitalhouses/digitalhouses_aqara_switch_app:0.1.10`.
+Immutable image: `ghcr.io/digitalhouses/digitalhouses_aqara_switch_app:0.1.11`.
 
 ## Configure and Scan (fresh install only)
 
@@ -132,7 +132,7 @@ physical writes. Non-reporting and unsupported hardware fail closed.
 Wired `*_left` actions require left managed and confirmed decoupled/ON;
 `*_right` requires right; `*_both` requires both. Unmanaged relay-mode
 keys do not have App bindings. Devices without mode support (battery
-buttons) do not inherit these restrictions.
+buttons) do not inherit these restrictions. The App validates these rules\nwhen loading the YAML configuration as well as when executing queued actions.
 
 First Scan and later rescans do not change relays or modes. A later Scan
 does NOT overwrite a recorded `keep_mode`, and manually deleting a

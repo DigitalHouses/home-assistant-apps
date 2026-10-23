@@ -1,5 +1,18 @@
 # Changelog — DigitalHouses Aqara Switch App
 
+## 0.1.11
+
+- Harden v0.1.10 Mode Keeper: bind queued light jobs to the exact Zigbee
+  base topic, coordinator IEEE and friendly name, then recheck adopted
+  hardware and actual per-key decoupled/ON right before dispatch.
+- Reject wired `*_both` and other button bindings in YAML when the required
+  key(s) are not explicitly declared as `decoupled/ON`. Battery remotes
+  remain exempt and work with action-only exposes.
+- Do not interpret generic baseline settings or intentional Maintenance
+  changes as a Mode Keeper diagnostic mismatch. No unmanaged key writes.
+- Preserve v0.1.10 Supervisor settings, one-time Scan semantics and the
+  read-only retained-state startup gate. Output light commands still use HA.
+
 ## 0.1.10
 
 - Automatically adopt `keep_mode` **only** for wired Aqara keys observed in

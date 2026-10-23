@@ -158,6 +158,19 @@ class KeeperTests(unittest.TestCase):
                 with self.assertRaises(CatalogError):
                     global_policy(options)
 
+    def test_unmanaged_control_relay_action_cannot_be_configured(self):
+        with TemporaryDirectory() as td:
+            path=Path(td)/"store.json"
+            _save_profiles(path,profiles())
+            for action in ("single_right","double_both"):
+                with self.subTest(action=action):
+                    row={"enabled":True,"keep_mode":{"left":KEEP_VALUE},
+                         "actions":{action:["light.dh_aqara_lab_chandelier"]}}
+                    import yaml
+                    opts={"switches":yaml.safe_dump([{ENTITY:row}])}
+                    with self.assertRaisesRegex(CatalogError,"requires decoupled/ON"):
+                        current(opts,path)
+
     def test_delay_order_and_verification_without_forcing_right(self):
         app=SimpleApp()
         app._networks[BASE]["states"][NAME]=state(left="control_relay",left_relay="OFF")
