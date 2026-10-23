@@ -309,6 +309,7 @@ class MixedTransportTests(unittest.TestCase):
         # Enqueue a second actual press without applying new physical/HA feedback.
         base,coord,name,action,cmds=app._jobs.queue[0]
         app._jobs.put_nowait((base,coord,name,action,cmds))
+        actions.clear()  # queued is not a dispatch result
         original=app._publish_action
         def save(**kw):
             original(**kw)
