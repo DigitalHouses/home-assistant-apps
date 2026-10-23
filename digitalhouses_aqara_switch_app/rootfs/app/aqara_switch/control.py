@@ -119,6 +119,25 @@ class HAClient:
         self.url = url.rstrip("/")
         self.timeout = timeout
 
+    def read_lab_state(self, entity_id: str) -> str:
+        """Read the state of ONLY an explicitly named virtual AQARA LAB lamp.
+
+        Never use this as fallback for an unmapped or offline physical light.
+        """
+        from .lab_lights import LAB_LIGHTS
+        if entity_id not in LAB_LIGHTS:
+            raise ValueError("Reading physical lights via HA fallback is prohibited")
+        req = urllib.request.Request(
+            self.url + "/states/" + entity_id,
+            method="GET", headers={"Authorization": "Bearer " + self.token,
+                                   "Accept":"application/json"})
+        with urllib.request.urlopen(req, timeout=self.timeout) as response:
+            if response.status != 200:
+                raise RuntimeError("HA LAB state query failed")
+            data = json.loads(response.read())
+        state = data.get("state") if isinstance(data, Mapping) else None
+        return state if state in ("on", "off") else "unavailable"
+
     def toggle(self, entity_id: str) -> None:
         self.toggle_targets([entity_id])
 
