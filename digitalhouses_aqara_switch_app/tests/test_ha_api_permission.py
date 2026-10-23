@@ -18,12 +18,12 @@ ROOT = Path(__file__).resolve().parents[1]
 class HAPermissionsTest(unittest.TestCase):
     def test_manifest_grants_minimum_ha_api_and_mqtt(self):
         conf = yaml.safe_load((ROOT / "config.yaml").read_text(encoding="utf-8"))
-        self.assertTrue(conf["homeassistant_api"], "Supervisor must permit Core WebSocket and REST API")
+        self.assertTrue(conf["homeassistant_api"], "Supervisor must permit Core WebSocket at explicit Scan")
         self.assertTrue(conf["hassio_api"], "Scan saves adopted switches to own App Options")
         self.assertEqual(conf["hassio_role"], "default", "Do not escalate Supervisor privileges")
         self.assertIn("mqtt:need", conf["services"])
         self.assertEqual(conf["boot"], "manual")
-        self.assertEqual(conf["version"], "0.1.11")
+        self.assertEqual(conf["version"], "0.1.12")
 
     def test_registry_handshake_uses_supervisor_token_and_reads_both_registries(self):
         class FakeSocket:

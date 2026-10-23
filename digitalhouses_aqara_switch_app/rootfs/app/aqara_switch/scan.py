@@ -16,6 +16,8 @@ from .catalog import CatalogError, candidate_from_mqtt, decode_bridge_devices, i
 from .configuration import parse_configuration
 from .entity_options import STORE_PATH, parse_rows, store_scan
 from .ha_registry import areas_from_registries, switch_entities
+from .light_routes import discover_routes
+from .structured_options import _save_profiles
 from .mode_keeper import capture_keep_mode
 
 
@@ -160,6 +162,12 @@ def scan_once(snapshots: list[dict], options_client, ha_registry) -> tuple[dict,
                     raise CatalogError("Adopted device lacks logical switch key")
                 sw["entity_id"] = item["entity_id"]
                 sw["entity_source"] = item["entity_source"]
+    # Exact HA light.* -> Zigbee2MQTT routes are frozen only at explicit Scan.
+    # This permits MQTT-only operation during Home Assistant Core restarts.
+    routes = discover_routes(snapshots, ha_devices, ha_entities)
+    routes_changed = merged.get("light_routes", {}) != routes
+    merged["light_routes"] = routes
+    report["mapped_lights"] = len(routes)
     initialized = []
     for room in merged["rooms"]:
         for sw in room["switches"]:
@@ -190,5 +198,9 @@ def scan_once(snapshots: list[dict], options_client, ha_registry) -> tuple[dict,
     if report["added"] or replaced or absent_rows or initialized:
         changed = store_scan(merged, options, STORE_PATH)
         options_client.write(changed)
+        merged = parse_configuration(options_client.read(), profile_path=STORE_PATH)
+    elif routes_changed:
+        # Route-only Scan has no reason to rewrite Supervisor YAML.
+        _save_profiles(STORE_PATH, merged)
         merged = parse_configuration(options_client.read(), profile_path=STORE_PATH)
     return merged, report

@@ -1,5 +1,35 @@
 # Changelog — DigitalHouses Aqara Switch App
 
+## 0.1.12
+
+- Replace HA Core REST light output with verified **direct Zigbee2MQTT
+  MQTT** `[base]/[friendly_name]/set` commands. Existing button YAML
+  syntax stays unchanged; HA Core is needed only for the explicit Scan
+  entity-registry association, not at press time.
+- Explicit Scan resolves `light.*` to Z2M IEEE/coordinator/topic via HA
+  Device/Entity registries and stores the verified routing map privately in
+  the existing Adopt profile. No guessed entity IDs, no new YAML fields.
+- Subscribe to Z2M bridge online-state, per-light availability and state.
+  Never send a light command to known offline/unknown or unverified devices.
+  Unmapped/multi-endpoint lights fail closed, including HA-only virtual lamps.
+  If Z2M device availability is disabled, no light writes are sent.\n  State-readable lamps are polled through rate-limited Z2M `/get` at startup\n  until an actual (non-retained) state report arrives.
+- Plain multi-light YAML uses a **single synchronized decision**: if any
+  available target is OFF, turn all available targets ON; if all are ON,
+  turn them OFF. Send explicit ON/OFF, never individual TOGGLE.
+- In-flight shadow tracks the intended target state for quick repeated
+  button presses; missing confirmation after 5 seconds blocks the next
+  ambiguous toggle rather than replaying stale states.
+- Support optional per-lamp brightness, Kelvin, RGB (to Z2M XY/HS) and
+  transition with capability/range validation. Never send to physical relay
+  or unsupported attributes. Record skipped lamps and publish MQTT status
+  `sent`, `partial`, or `skipped` without claiming physical confirmation.
+- Keep selective Mode Keeper, scoped Maintenance, and input hardware identity
+  checks; no changes to Aqara device control modes.
+- This version supports Z2M light devices with one unambiguous HA MQTT
+  `light.*` entity and single `state` endpoint. Device light groups and
+  HA-only virtual lights are deliberately not auto-resolved; no unsafe
+  fallback to HA when a Zigbee route cannot be confirmed.
+
 ## 0.1.11
 
 - Harden v0.1.10 Mode Keeper: bind queued light jobs to the exact Zigbee

@@ -1,7 +1,7 @@
 name: DigitalHouses Aqara Switch App
-version: 0.1.11
+version: 0.1.12
 slug: digitalhouses_aqara_switch_app
-description: Aqara button/switch Scan/Adopt, mode keeper and multi-light toggle.
+description: Aqara button/switch Scan/Adopt, mode keeper and synchronized direct-MQTT multi-light control.
 url: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_aqara_switch_app
 arch:
   - amd64
@@ -14,7 +14,7 @@ stage: experimental
 backup: cold
 hassio_api: true
 hassio_role: default
-# Required by Scan (HA Device/Area Registry WebSocket) and bound light.toggle REST.
+# Required only by operator-triggered Scan (HA Device/Area Registry WebSocket).
 homeassistant_api: true
 services:
   - mqtt:need
