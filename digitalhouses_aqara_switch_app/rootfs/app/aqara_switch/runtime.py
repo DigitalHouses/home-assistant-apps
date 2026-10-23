@@ -532,11 +532,19 @@ class Application:
                 mixed_toggle = bool(
                     z2m_commands and lab_commands
                     and all(cmd["service"] == "light.toggle" for cmd in commands))
+                original_z2m, original_lab = z2m_commands, lab_commands
                 lab_state_cache = {}
                 def read_lab_once(entity):
                     if entity not in lab_state_cache:
-                        lab_state_cache[entity] = self._ha_client.read_lab_state(entity)
-                    return lab_state_cache[entity]
+                        try:
+                            lab_state_cache[entity] = (
+                                True, self._ha_client.read_lab_state(entity))
+                        except Exception as exc:
+                            lab_state_cache[entity] = (False, exc)
+                    ok, result = lab_state_cache[entity]
+                    if not ok:
+                        raise result
+                    return result
                 lab_preview = []
                 if mixed_toggle:
                     if self._ha_client is None:
@@ -568,6 +576,10 @@ class Application:
                     # Repartition after a possible Scan; no guessed light routes.
                     z2m_commands, lab_commands = partition_commands(
                         commands, self.config.get("light_routes", {}))
+                    if (any(cmd["service"] == "light.toggle" for cmd in commands)
+                            and (z2m_commands != original_z2m
+                                 or lab_commands != original_lab)):
+                        raise ActionError("Light routes changed during toggle; retry")
                     toggle_override = None
                     if mixed_toggle:
                         z2m_preview, _ = plan_batch(
