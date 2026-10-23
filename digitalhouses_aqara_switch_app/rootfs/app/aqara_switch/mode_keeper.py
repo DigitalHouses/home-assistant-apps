@@ -106,7 +106,8 @@ def mode_action_allowed(sw: Mapping, action: str, state: Mapping,
         # Battery/remotes have no operation_mode. Wired devices with mode
         # support but an unverified relay capability fail closed.
         modes = {f[0] for f in MODE_TO_RELAY.values()}
-        return not (modes & set(sw.get("fingerprint", {}).get("setting_keys", [])))
+        return not ((modes & set(sw.get("fingerprint", {}).get("setting_keys", [])))
+                    or sw.get("fingerprint", {}).get("relay_channels"))
     keep = sw.get("keep_mode", {})
     if action.endswith("_both"):
         required = ("left", "right")
@@ -147,3 +148,28 @@ def next_repair(keep: Mapping, features: Mapping, state: Mapping,
         if not maintenance and state.get(relay) == "OFF":
             return relay, "ON"
     return None
+
+
+def validate_action_policy(fingerprint: Mapping, keep: Mapping, action: str) -> None:
+    """Reject wired key bindings for unmanaged control_relay channels.
+
+    Battery remotes have no operation_mode property and are exempt.
+    """
+    hardware = {key for key, (mode, _) in MODE_TO_RELAY.items()
+                if mode in fingerprint.get("setting_keys", [])}
+    if not hardware:
+        return
+    if action.endswith("_both"):
+        required = {"left", "right"}
+    else:
+        suffix = action.rsplit("_", 1)[-1]
+        if suffix in MODE_TO_RELAY:
+            required = {suffix}
+        elif len(hardware) == 1:
+            required = set(hardware)
+        else:
+            raise CatalogError("Ambiguous physical-key action " + action)
+    if not required <= hardware or not required <= set(keep):
+        raise CatalogError(
+            "Aqara action " + action + " requires decoupled/ON on " +
+            ", ".join(sorted(required)))
