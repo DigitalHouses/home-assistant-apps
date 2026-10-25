@@ -1,5 +1,17 @@
 # Changelog — DigitalHouses Aqara Switch App
 
+### PVE-style four-column dashboard layout (no App version change)
+
+- Ship a separate paste-ready `type: sections` Aqara view with four columns,
+  arranged **1 / 1 / 2**: problems/controls/actions, scan/lights,
+  and a wide verified switch→action→light tree.
+- Preserve the operator's `custom:auto-entities` light list, remove the
+  duplicate Scan button and empty headings, and retain working compact
+  `<pre>` Jinja whitespace mechanics.
+- Keep the full dashboard source in sync with the standalone view; document
+  which YAML editor accepts a view versus a full `views:` dashboard.
+- No App version bump, MQTT changes, new entities or Home Assistant restart.
+
 ### UI example update (no App version change)
 
 - Compact `<pre>` Aqara tree now displays each assigned light separately,
