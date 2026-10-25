@@ -19,8 +19,8 @@
 - Retain only supported controls: Scan, read-only Version, conditional
   Supervisor Install with backup, and Restart. Do not fabricate the
   unimplemented App Refresh or GitHub version check.
-- Fix stale last-action UI to distinguish \`sent\`, \`partial\`,
-  \`skipped\`, \`queued\` and \`error\`. Never treat MQTT publication
+- Fix stale last-action UI to distinguish `sent`, `partial`,
+  `skipped`, `queued` and `error`. Never treat MQTT publication
   as an individual physical Zigbee ACK.
 - Extend the compact switch→action→light tree with configured RGB,
   Kelvin, brightness and transition without new state entities or
