@@ -328,12 +328,24 @@ App's existing saved action bindings; the ON/OFF lamp symbol is the
 
 **Installation:** Lovelace is maintained by the Home Assistant operator,
 not by App versions. Updating the App does not change an already pasted
-dashboard. Copy the full
-[`dh_aqara_switch_app_dashboard_ru.yaml`](examples/lovelace/dh_aqara_switch_app_dashboard_ru.yaml)
-into the existing Aqara dashboard **Raw configuration editor**, or copy
-the canonical cards individually. Requires Mushroom and
-`custom:button-card >= 5.0`. No restart, MQTT rescan, or App version
-change is required for this UI-only update.
+dashboard. **Choose the correct YAML level:**
+
+- **Existing Aqara view:** replace that view in the YAML view editor with
+  [`dh_aqara_switch_app_view_ru.yaml`](examples/lovelace/dh_aqara_switch_app_view_ru.yaml).
+  It starts with `type: sections`, includes `title`, `path`, `icon`, and
+  uses `max_columns: 4` with sections spanning **1 / 1 / 2**.
+- **Entire raw dashboard:** use
+  [`dh_aqara_switch_app_dashboard_ru.yaml`](examples/lovelace/dh_aqara_switch_app_dashboard_ru.yaml)
+  with top-level `views:`. Do **not** paste this file into a view or section.
+- **Individual card:** use one of the standalone card YAMLs starting with
+  `type: vertical-stack`, `type: markdown` or `type: custom:*`.
+
+PVE-like layout: the first narrow column has the health card, App controls
+and last button press; the second has Scan results and the sorted light list;
+the remaining two columns form one wide compact switch/action/light tree.
+No duplicate Scan button, no empty headings or unnecessary root `cards: []`.
+Requires Mushroom, `custom:button-card >= 5.0`, and `custom:auto-entities`.
+No restart, MQTT rescan, or App version change is required.
 
 This is UI parity for already supported operations, not a claim of full
 feature parity: adding App-owned Check Release and canonical product Refresh

@@ -1,21 +1,65 @@
-# DigitalHouses Aqara Switch App · maintained standalone Lovelace dashboard.
-# This example is manually installed in HA; App upgrades do not modify user dashboards.
-# Requires Mushroom + custom:button-card >= 5.0.
+# DigitalHouses Aqara Switch · maintained dashboard
 title: DH Aqara Switch
 views:
-  - title: Aqara
-    path: aqara-switch
+  - type: sections
+    max_columns: 4
+    title: aqara
+    path: aqara
     icon: mdi:light-switch
-    type: sections
-    max_columns: 2
     sections:
       - type: grid
         column_span: 1
         cards:
           - type: heading
-            heading: Приложение
+            heading: Состояние Aqara
             heading_style: title
             icon: mdi:light-switch
+          - type: custom:mushroom-template-card
+            entity: sensor.dh_aqara_switch_app_problems
+            primary: |-
+              {% set n = state_attr(entity, 'count') %}
+              {% if states(entity) != 'ready' %}
+                Нет данных о проблемах
+              {% elif n == 0 %}
+                Проблем не обнаружено
+              {% else %}
+                Обнаружено проблем: {{ n if n is number else '—' }}
+              {% endif %}
+            secondary: |-
+              {% set active = state_attr(entity, 'active') or [] %}
+              {% if states(entity) != 'ready' %}
+                Состояние устройств недоступно.
+              {% elif active | count == 0 %}
+                Выключатели проверены приложением.
+              {% else %}
+                {% for item in active %}
+                  • {{ (item.object_name or 'Устройство') | e }} · {{ (item.category or 'unknown') | e }}{% if item.reason %} — {{ item.reason | e }}{% endif %}
+                  {% if not loop.last %}
+    
+                  {% endif %}
+                {% endfor %}
+              {% endif %}
+            icon: |-
+              {% if states(entity) != 'ready' %}
+                mdi:help-circle-outline
+              {% elif (state_attr(entity, 'count') or 0) > 0 %}
+                mdi:alert-circle
+              {% else %}
+                mdi:check-circle
+              {% endif %}
+            icon_color: |-
+              {% if states(entity) != 'ready' %}
+                grey
+              {% elif (state_attr(entity, 'count') or 0) > 0 %}
+                red
+              {% else %}
+                green
+              {% endif %}
+            multiline_secondary: true
+            tap_action:
+              action: more-info
+            grid_options:
+              columns: 12
           - type: vertical-stack
             cards:
               - type: custom:button-card
@@ -270,24 +314,22 @@ views:
               ⚠️ {{ (item.name or '?') | e }} · {{ (item.reason or 'неизвестная ошибка') | e }}
               {% endfor -%}
               {% endif %}
-          - type: heading
-            heading: Проблемы
-            heading_style: subtitle
-            icon: mdi:alert-outline
-          - type: markdown
-            content: |-
-              {% set e = 'sensor.dh_aqara_switch_app_problems' -%}
-              {% set active = state_attr(e,'active') or [] -%}
-              {% if states(e) != 'ready' -%}
-              ⚪ Нет подтверждённых данных диагностики.
-              {% elif (state_attr(e,'count') or 0) == 0 -%}
-              ✅ **Проблем не обнаружено** · Проверка соответствия устройств и Mode Keeper.
-              {% else -%}
-              ⚠️ **Активных проблем: {{ state_attr(e,'count') }}**
-              {% for item in active -%}
-              - **{{ (item.object_name or 'Устройство') | e }}** · {{ (item.category or 'unknown') | e }}{% if item.reason %} — {{ item.reason | e }}{% endif %}
-              {% endfor -%}
-              {% endif %}
+          - type: custom:auto-entities
+            card:
+              type: entities
+              title: Все светильники
+              show_header_toggle: false
+              state_color: true
+            filter:
+              include:
+                - domain: light
+            sort:
+              method: name
+              ignore_case: true
+              reverse: false
+            show_empty: false
+            grid_options:
+              columns: 12
       - type: grid
         column_span: 2
         cards:
