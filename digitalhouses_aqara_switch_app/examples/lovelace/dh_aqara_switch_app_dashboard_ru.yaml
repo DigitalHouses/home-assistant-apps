@@ -1,6 +1,6 @@
-# DigitalHouses Aqara Switch App · one complete Home Assistant Dashboard.
-# Paste entire file into Dashboard -> Raw configuration editor.
-# Optional frontend: custom:button-card and Mushroom.
+# DigitalHouses Aqara Switch App · maintained standalone Lovelace dashboard.
+# This example is manually installed in HA; App upgrades do not modify user dashboards.
+# Requires Mushroom + custom:button-card >= 5.0.
 title: DH Aqara Switch
 views:
   - title: Aqara
@@ -20,46 +20,136 @@ views:
             cards:
               - type: custom:button-card
                 entity: sensor.dh_aqara_switch_app_card
+                triggers_update:
+                  - sensor.dh_aqara_switch_app_card
+                  - sensor.dh_aqara_switch_app_version
+                  - sensor.dh_aqara_switch_app_problems
+                  - update.digitalhouses_aqara_switch_app_update
+                update_timer: |
+                  [[[
+                    const s = states['sensor.dh_aqara_switch_app_card']?.state;
+                    const installing = states['update.digitalhouses_aqara_switch_app_update']?.attributes?.in_progress === true;
+                    return s === 'running' || installing ? 1000 : 5000;
+                  ]]]
                 show_icon: true
                 show_name: true
                 show_label: true
-                tap_action:
-                  action: more-info
                 icon: |
                   [[[
-                    const s = states['sensor.dh_aqara_switch_app_card']?.state;
-                    return s === 'error' ? 'mdi:alert-circle'
-                      : s === 'running' ? 'mdi:progress-clock'
-                      : s === 'success' ? 'mdi:check-circle'
-                      : 'mdi:light-switch';
+                    const item = states['sensor.dh_aqara_switch_app_card'];
+                    const s = item?.state;
+                    const installing = states['update.digitalhouses_aqara_switch_app_update']?.attributes?.in_progress === true;
+                    const count = states['sensor.dh_aqara_switch_app_problems']?.attributes?.count;
+                    if (installing || s === 'running') return 'mdi:progress-clock';
+                    if (!s || ['unknown','unavailable'].includes(s)) return 'mdi:lan-disconnect';
+                    if (s === 'error') return 'mdi:alert-circle';
+                    if (typeof count === 'number' && count > 0) return 'mdi:alert-circle-outline';
+                    if (states['update.digitalhouses_aqara_switch_app_update']?.state === 'on') return 'mdi:package-up';
+                    return s === 'success' ? 'mdi:check-circle' : 'mdi:light-switch';
                   ]]]
                 name: |
                   [[[
                     const v = states['sensor.dh_aqara_switch_app_version']?.state;
-                    return 'DH Aqara Switch' + (v && !['unknown','unavailable'].includes(v) ? ' · v' + v : '');
+                    const upd = states['update.digitalhouses_aqara_switch_app_update'];
+                    const valid = value => typeof value === 'string' && /^\d+\.\d+\.\d+$/.test(value);
+                    const installed = valid(v) ? v : upd?.attributes?.installed_version;
+                    const latest = upd?.attributes?.latest_version;
+                    const greater = (a,b) => {
+                      const aa = a.split('.').map(Number), bb = b.split('.').map(Number);
+                      for (let i=0; i<3; i++) if (aa[i] !== bb[i]) return aa[i] > bb[i];
+                      return false;
+                    };
+                    const newer = upd?.state === 'on' && valid(installed) && valid(latest)
+                      && greater(latest,installed);
+                    return 'DH Aqara Switch' + (valid(installed)
+                      ? ' · v' + installed + (newer ? ' → v' + latest : '') : '');
                   ]]]
                 label: |
                   [[[
-                    const ent = states['sensor.dh_aqara_switch_app_card'];
-                    if (!ent || ['unknown','unavailable'].includes(ent.state)) return 'Нет связи с приложением';
-                    const a = ent.attributes || {};
-                    if (ent.state === 'running') return 'Сканирование…';
-                    if (ent.state === 'error') return 'Ошибка: ' + (a.error || 'операция не выполнена');
-                    if (ent.state === 'success') return 'Сканирование завершено';
-                    const problems = states['sensor.dh_aqara_switch_app_problems']?.attributes?.count;
-                    return typeof problems === 'number' && problems > 0
-                      ? 'Проблемы выключателей: ' + problems
-                      : 'Scan/Adopt · Mode Keeper · Light Toggle';
+                    const item = states['sensor.dh_aqara_switch_app_card'];
+                    const upd = states['update.digitalhouses_aqara_switch_app_update'];
+                    const problems = states['sensor.dh_aqara_switch_app_problems'];
+                    const count = problems?.attributes?.count;
+                    const elapsed = since => {
+                      const secs = Math.max(0, Math.floor((performance.now()-since)/1000));
+                      return String(Math.floor(secs/60)).padStart(2,'0') + ':' +
+                        String(secs%60).padStart(2,'0');
+                    };
+                    const duration = val => typeof val === 'number' && Number.isFinite(val)
+                      ? ' · ' + Math.round(Math.max(0,val)) + ' сек' : '';
+                    if (upd?.attributes?.in_progress === true) {
+                      if (this._dh_aqara_clock?.kind !== 'install')
+                        this._dh_aqara_clock = {kind:'install',since:performance.now()};
+                      const pct = upd.attributes.update_percentage;
+                      return 'Установка версии… ' + (typeof pct === 'number' && Number.isFinite(pct)
+                        ? Math.round(pct) + '% · ' : '') + elapsed(this._dh_aqara_clock.since);
+                    }
+                    if (!item || ['unknown','unavailable'].includes(item.state)) {
+                      this._dh_aqara_clock = null;
+                      return 'Нет связи с приложением';
+                    }
+                    const a = item.attributes || {};
+                    if (item.state === 'running') {
+                      const key = String(a.operation || '') + '|' + String(a.started_at || '');
+                      if (this._dh_aqara_clock?.key !== key)
+                        this._dh_aqara_clock = {kind:'scan',key,since:performance.now()};
+                      return 'Сканирование… ' + elapsed(this._dh_aqara_clock.since);
+                    }
+                    this._dh_aqara_clock = null;
+                    if (item.state === 'error') return 'Ошибка сканирования: ' + (a.error || 'операция не выполнена');
+                    if (typeof count === 'number' && count > 0) {
+                      return 'Проблемы выключателей: ' + count +
+                        (item.state === 'success' ? ' · Сканирование завершено' + duration(a.duration_seconds) : '');
+                    }
+                    if (item.state === 'success') return 'Сканирование завершено' + duration(a.duration_seconds);
+                    if (upd?.state === 'on') return 'Supervisor предлагает новую версию';
+                    if (problems?.state !== 'ready') return 'Ожидание диагностики';
+                    return 'Приложение работает · проблем не обнаружено';
                   ]]]
                 styles:
                   card:
-                    - padding: 14px
+                    - padding: 12px
+                    - text-align: left
+                  grid:
+                    - grid-template-areas: '"i n" "i l"'
+                    - grid-template-columns: 48px 1fr
+                    - grid-template-rows: min-content min-content
+                  img_cell:
+                    - width: 40px
+                    - justify-content: start
+                  icon:
+                    - width: 26px
+                    - color: |
+                        [[[
+                          const s = states['sensor.dh_aqara_switch_app_card']?.state;
+                          const upd = states['update.digitalhouses_aqara_switch_app_update'];
+                          const problems = states['sensor.dh_aqara_switch_app_problems'];
+                          const count = problems?.attributes?.count;
+                          if (upd?.attributes?.in_progress === true || s === 'running')
+                            return 'var(--info-color, var(--primary-color))';
+                          if (!s || ['unknown','unavailable'].includes(s))
+                            return 'var(--secondary-text-color)';
+                          if (s === 'error') return 'var(--error-color)';
+                          if (typeof count === 'number' && count > 0) return 'var(--warning-color, orange)';
+                          if (upd?.state === 'on') return 'var(--warning-color, orange)';
+                          return problems?.state === 'ready'
+                            ? 'var(--success-color, var(--primary-color))'
+                            : 'var(--secondary-text-color)';
+                        ]]]
                   name:
+                    - justify-self: start
+                    - font-size: 14px
                     - font-weight: 600
                   label:
+                    - justify-self: start
+                    - white-space: normal
+                    - text-align: left
+                    - font-size: 13px
                     - color: var(--secondary-text-color)
+                tap_action:
+                  action: none
               - type: custom:mushroom-chips-card
-                alignment: justify
+                alignment: center
                 chips:
                   - type: template
                     content: Сканировать
@@ -70,91 +160,115 @@ views:
                       target:
                         entity_id: button.dh_aqara_switch_app_scan
                   - type: template
+                    content: Версия
+                    icon: mdi:information-outline
+                    tap_action:
+                      action: more-info
+                      entity: sensor.dh_aqara_switch_app_version
+                  - type: conditional
+                    conditions:
+                      - entity: update.digitalhouses_aqara_switch_app_update
+                        state: "on"
+                    chip:
+                      type: template
+                      icon: mdi:package-down
+                      icon_color: orange
+                      content: Новая версия
+                      tap_action:
+                        action: perform-action
+                        perform_action: update.install
+                        target:
+                          entity_id: update.digitalhouses_aqara_switch_app_update
+                        data:
+                          backup: true
+                        confirmation:
+                          text: >-
+                            Обновить Aqara Switch App? Supervisor создаст резервную копию.
+                            Управление назначенными светильниками будет временно недоступно.
+                  - type: template
                     content: Перезапуск
                     icon: mdi:restart
                     tap_action:
                       action: perform-action
                       perform_action: hassio.app_restart
                       data:
-                        app: digitalhouses_aqara_switch_app
+                        app: 8133339d_digitalhouses_aqara_switch_app
                       confirmation:
-                        title: Перезапуск Aqara Switch App
-                        text: Перезапустить приложение? На время перезапуска мониторинг и сканирование будут недоступны.
-                  - type: entity
-                    entity: update.digitalhouses_aqara_switch_app_update
-                    name: Обновление
-                    icon: mdi:package-up
-                    tap_action:
-                      action: more-info
+                        text: >-
+                          Перезапустить Aqara Switch App?
+                          Обработка нажатий и Mode Keeper временно остановятся.
+                          Сам Home Assistant и Zigbee2MQTT не перезапускаются.
+            grid_options:
+              columns: 12
           - type: heading
             heading: Последнее нажатие
             heading_style: subtitle
             icon: mdi:gesture-tap-button
           - type: markdown
             content: |-
-              {% set entity = 'sensor.dh_aqara_switch_app_last_action' %}
-              {% set status = states(entity) %}
-              {% set a = states[entity].attributes if states[entity] is defined else {} %}
-              {% if status in ['unknown', 'unavailable'] %}
-              *Нет данных о нажатиях. Проверьте запуск Aqara Switch App.*
-              {% elif status == 'idle' %}
-              *Назначенные нажатия пока не выполнялись с момента запуска приложения.*
-              {% elif status in ['queued', 'accepted', 'error'] %}
-              {% if status == 'queued' %}
-              ⏳ Команда поставлена в очередь.
-              {% elif status == 'accepted' %}
-              ✅ Команда принята Home Assistant.
-              {% else %}
-              ⚠️ Ошибка выполнения команды.
+              {% set e = 'sensor.dh_aqara_switch_app_last_action' -%}
+              {% set status = states(e) -%}
+              {% set a = states[e].attributes if states[e] is defined else {} -%}
+              {% if status in ['unknown','unavailable'] -%}
+              ⚪ Нет связи с приложением или данных о последнем нажатии.
+              {% elif status == 'idle' -%}
+              *После запуска ещё не было назначенных нажатий.*
+              {% else -%}
+              {% if status == 'sent' -%}
+              ✅ **Отправлено** · Команда передана выбранным исполнителям.
+              {% elif status == 'partial' -%}
+              🟠 **Частично выполнено** · Некоторые светильники пропущены.
+              {% elif status == 'skipped' -%}
+              ⚠️ **Пропущено** · Команды светильникам не отправлены.
+              {% elif status == 'queued' -%}
+              ⏳ **В очереди** · Ожидается обработка.
+              {% elif status == 'error' -%}
+              🔴 **Ошибка выполнения**
+              {% elif status == 'accepted' -%}
+              ✅ **Команда принята** · Статус устаревшего исполнителя.
+              {% else -%}
+              **Состояние:** {{ status | e }}
               {% endif %}
-
+            
               **Выключатель:** `{{ (a.switch or '—') | e }}`
-
               **Нажатие:** `{{ (a.action or '—') | e }}`
-
-              **Светильник:** `{{ (a.target or '—') | e }}`
-
+              **Отправлено:** {{ (a.target or '—') | e }}
               **Время:** {{ (a.at or '—') | e }}
-              {% if a.error %}
-
-              **Ошибка:** {{ a.error | e }}
-              {% endif %}
-
-              *Принятие команды HA не подтверждает фактическое состояние светильника.*
-              {% else %}
-              *Статус последнего действия: {{ status | e }}*
+              {% if a.error -%}
+              **Причина:** {{ a.error | e }}
+              {% endif -%}
+            
+              *MQTT/HA подтвердили принятие к отправке, но не физическое переключение светильника.*
               {% endif %}
       - type: grid
         column_span: 1
         cards:
           - type: heading
-            heading: Сканирование и диагностика
+            heading: Сканирование
             heading_style: title
             icon: mdi:radar
           - type: markdown
             content: |-
-              {% set e = 'sensor.dh_aqara_switch_app_scan_details' %}
-              {% set a = state_attr(e, 'added') or [] %}
-              {% set skipped = state_attr(e, 'skipped') or [] %}
-              {% set p = state_attr(e, 'problems') or [] %}
-              {% if states(e) != 'ready' %}
-              *Сканирование ещё не выполнялось или нет данных.*
-              {% else %}
-              **Последнее сканирование**
-
-              Время: {{ state_attr(e, 'completed_at') or '—' }}
-
-              **Найдено: {{ state_attr(e, 'scanned') }} · Добавлено: {{ a | count }} · Пропущено: {{ skipped | count }} · Ошибок: {{ p | count }}**
-
-              {% for item in a %}
-              - ✅ {{ item.name | e }} · HA Area: {{ (item.area_id or 'не назначена') | e }}
-              {% endfor %}
-              {% for name in skipped %}
-              - ➖ {{ name | e }} · уже в конфигурации
-              {% endfor %}
-              {% for item in p %}
-              - ⚠️ {{ (item.name or '?') | e }} · {{ (item.reason or 'ошибка') | e }}
-              {% endfor %}
+              {% set e = 'sensor.dh_aqara_switch_app_scan_details' -%}
+              {% set scanned = state_attr(e,'scanned') -%}
+              {% set added = state_attr(e,'added') or [] -%}
+              {% set skipped = state_attr(e,'skipped') or [] -%}
+              {% set problems = state_attr(e,'problems') or [] -%}
+              {% set mapped = state_attr(e,'mapped_lights') -%}
+              {% if states(e) != 'ready' -%}
+              *Ещё нет результатов Scan. Выполните «Сканировать» в карточке приложения.*
+              {% else -%}
+              **Последнее сканирование:** {{ (state_attr(e,'completed_at') or '—') | e }}
+            
+              **Сетей:** {{ state_attr(e,'networks') if state_attr(e,'networks') is number else '—' }} · **Выключателей:** {{ scanned if scanned is number else '—' }} · **Маршрутов света:** {{ mapped if mapped is number else '—' }}
+            
+              **Добавлено:** {{ added | count }} · **Ранее найдено:** {{ skipped | count }} · **Проблем:** {{ problems | count }}
+              {% for item in added -%}
+              ✅ {{ (item.name or '?') | e }} · {{ (item.area_id or 'без HA Area') | e }}
+              {% endfor -%}
+              {% for item in problems -%}
+              ⚠️ {{ (item.name or '?') | e }} · {{ (item.reason or 'неизвестная ошибка') | e }}
+              {% endfor -%}
               {% endif %}
           - type: heading
             heading: Проблемы
@@ -162,18 +276,17 @@ views:
             icon: mdi:alert-outline
           - type: markdown
             content: |-
-              {% set e = 'sensor.dh_aqara_switch_app_problems' %}
-              {% set active = state_attr(e, 'active') or [] %}
-              {% if states(e) != 'ready' %}
-              *Нет подтверждённых данных о проблемах.*
-              {% elif state_attr(e, 'count') == 0 %}
-              ✅ Проблем не обнаружено
-              {% else %}
-              **⚠️ Проблемы: {{ state_attr(e, 'count') }}**
-
-              {% for item in active %}
-              - {{ item.object_name | e }} — {{ item.category | e }}{% if item.reason %}: {{ item.reason | e }}{% endif %}
-              {% endfor %}
+              {% set e = 'sensor.dh_aqara_switch_app_problems' -%}
+              {% set active = state_attr(e,'active') or [] -%}
+              {% if states(e) != 'ready' -%}
+              ⚪ Нет подтверждённых данных диагностики.
+              {% elif (state_attr(e,'count') or 0) == 0 -%}
+              ✅ **Проблем не обнаружено** · Проверка соответствия устройств и Mode Keeper.
+              {% else -%}
+              ⚠️ **Активных проблем: {{ state_attr(e,'count') }}**
+              {% for item in active -%}
+              - **{{ (item.object_name or 'Устройство') | e }}** · {{ (item.category or 'unknown') | e }}{% if item.reason %} — {{ item.reason | e }}{% endif %}
+              {% endfor -%}
               {% endif %}
       - type: grid
         column_span: 2
@@ -192,14 +305,14 @@ views:
               *Выключатели пока не импортированы. Нажмите «Сканировать».*
               {% else %}
               **Aqara · Комнат: {{ rooms | count }}**
-
+            
               <pre>
               {% for room in rooms -%}
               {{ '└─' if loop.last else '├─' }} 🏠 {{ room.name | e }} ({{ room.switches | count }})
               {% set tab = '   ' if loop.last else '│  ' -%}
               {% for device in room.switches -%}
               {% set state = device.runtime.status if device.runtime is defined else 'unknown' -%}
-              {{ tab }}{{ '└─' if loop.last else '├─' }} {{ '🟢' if state == 'same' else '🟠' if state in ['unverified', 'replacement', 'settings_mismatch'] else '🔴' if state == 'incompatible' else '⚪' }} {{ (device.entity_id or device.logical_name) | e }} · {{ state | e }}
+              {{ tab }}{{ '└─' if loop.last else '├─' }} {{ '🟢' if state == 'same' else '🟠' if state in ['unverified', 'replacement', 'settings_mismatch'] else '🔴' if state == 'incompatible' else '⚪' }} {{ (device.entity_id or device.logical_name) | e }} · {{ ('проверен' if state == 'same' else 'отключён' if state == 'disabled' else state) | e }}
               {% set inner = tab ~ ('   ' if loop.last else '│  ') -%}
               {{ inner }}├─ ⚙️ Модель: {{ device.fingerprint.model | e }}
               {{ inner }}├─ 🔘 Нажатия: {{ (device.fingerprint.actions | join(', ')) | e }}
@@ -216,7 +329,9 @@ views:
               {{ inner }}│  {{ '└─' if loop.last else '├─' }} {{ key | e }} → {{ (bind.action if bind.action is defined else 'не задано') | e }}
               {% for target in targets -%}
               {% set light_state = states(target) -%}
-              {{ target_prefix }}{{ '└─' if loop.last else '├─' }} {{ ('<ha-icon icon="mdi:lightbulb" style="color: #f5c542; --mdc-icon-size: 18px; vertical-align: middle;"></ha-icon>' if light_state == 'on' else '<ha-icon icon="mdi:lightbulb-outline" style="color: #9299a4; --mdc-icon-size: 18px; vertical-align: middle;"></ha-icon>' if light_state == 'off' else '❔') | safe }} {{ target | e }} · {{ 'ON' if light_state == 'on' else 'OFF' if light_state == 'off' else 'недоступен' if light_state == 'unavailable' else 'нет данных' }}
+              {% set per_target = bind.target_data.get(target, {}) if bind.target_data is defined else {} -%}
+              {% set settings = per_target if per_target else (bind.data if bind.data is defined else {}) -%}
+              {{ target_prefix }}{{ '└─' if loop.last else '├─' }} {{ ('<ha-icon icon="mdi:lightbulb" style="color: #f5c542; --mdc-icon-size: 18px; vertical-align: middle;"></ha-icon>' if light_state == 'on' else '<ha-icon icon="mdi:lightbulb-outline" style="color: #9299a4; --mdc-icon-size: 18px; vertical-align: middle;"></ha-icon>' if light_state == 'off' else '❔') | safe }} {{ target | e }} · {{ 'ON' if light_state == 'on' else 'OFF' if light_state == 'off' else 'недоступен' if light_state == 'unavailable' else 'нет данных' }}{% if settings.rgb_color is defined %} · RGB({{ settings.rgb_color | join(',') }}){% endif %}{% if settings.color_temp_kelvin is defined %} · {{ settings.color_temp_kelvin }} K{% endif %}{% if settings.brightness_pct is defined %} · {{ settings.brightness_pct }}%{% endif %}{% if settings.brightness_step_pct is defined %} · Δ{{ settings.brightness_step_pct }}%{% endif %}{% if settings.transition is defined %} · {{ settings.transition }} c{% endif %}
               {% else -%}
               {{ target_prefix }}└─ Светильники не назначены
               {% endfor -%}
