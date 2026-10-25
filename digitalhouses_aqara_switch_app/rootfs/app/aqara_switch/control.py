@@ -120,13 +120,16 @@ class HAClient:
         self.timeout = timeout
 
     def read_lab_state(self, entity_id: str) -> str:
-        """Read the state of ONLY an explicitly named virtual AQARA LAB lamp.
-
-        Never use this as fallback for an unmapped or offline physical light.
-        """
+        """Preserve the fixed six-lamp LAB exception."""
         from .lab_lights import LAB_LIGHTS
         if entity_id not in LAB_LIGHTS:
             raise ValueError("Reading physical lights via HA fallback is prohibited")
+        return self.read_light_state(entity_id)
+
+    def read_light_state(self, entity_id: str) -> str:
+        """Read one explicitly authorized HA-native light; caller verifies origin."""
+        if not isinstance(entity_id, str) or not re.fullmatch(r"light\.[a-z0-9_]+", entity_id):
+            raise ValueError("HA light entity_id must be a valid light.*")
         req = urllib.request.Request(
             self.url + "/states/" + entity_id,
             method="GET", headers={"Authorization": "Bearer " + self.token,
