@@ -17,7 +17,7 @@ content: |-
   {% set tab = '   ' if loop.last else '│  ' -%}
   {% for device in room.switches -%}
   {% set state = device.runtime.status if device.runtime is defined else 'unknown' -%}
-  {{ tab }}{{ '└─' if loop.last else '├─' }} {{ '🟢' if state == 'same' else '🟠' if state in ['unverified', 'replacement', 'settings_mismatch'] else '🔴' if state == 'incompatible' else '⚪' }} {{ (device.entity_id or device.logical_name) | e }} · {{ state | e }}
+  {{ tab }}{{ '└─' if loop.last else '├─' }} {{ '🟢' if state == 'same' else '🟠' if state in ['unverified', 'replacement', 'settings_mismatch'] else '🔴' if state == 'incompatible' else '⚪' }} {{ (device.entity_id or device.logical_name) | e }} · {{ ('проверен' if state == 'same' else 'отключён' if state == 'disabled' else state) | e }}
   {% set inner = tab ~ ('   ' if loop.last else '│  ') -%}
   {{ inner }}├─ ⚙️ Модель: {{ device.fingerprint.model | e }}
   {{ inner }}├─ 🔘 Нажатия: {{ (device.fingerprint.actions | join(', ')) | e }}
@@ -34,7 +34,9 @@ content: |-
   {{ inner }}│  {{ '└─' if loop.last else '├─' }} {{ key | e }} → {{ (bind.action if bind.action is defined else 'не задано') | e }}
   {% for target in targets -%}
   {% set light_state = states(target) -%}
-  {{ target_prefix }}{{ '└─' if loop.last else '├─' }} {{ ('<ha-icon icon="mdi:lightbulb" style="color: #f5c542; --mdc-icon-size: 18px; vertical-align: middle;"></ha-icon>' if light_state == 'on' else '<ha-icon icon="mdi:lightbulb-outline" style="color: #9299a4; --mdc-icon-size: 18px; vertical-align: middle;"></ha-icon>' if light_state == 'off' else '❔') | safe }} {{ target | e }} · {{ 'ON' if light_state == 'on' else 'OFF' if light_state == 'off' else 'недоступен' if light_state == 'unavailable' else 'нет данных' }}
+  {% set per_target = bind.target_data.get(target, {}) if bind.target_data is defined else {} -%}
+  {% set settings = per_target if per_target else (bind.data if bind.data is defined else {}) -%}
+  {{ target_prefix }}{{ '└─' if loop.last else '├─' }} {{ ('<ha-icon icon="mdi:lightbulb" style="color: #f5c542; --mdc-icon-size: 18px; vertical-align: middle;"></ha-icon>' if light_state == 'on' else '<ha-icon icon="mdi:lightbulb-outline" style="color: #9299a4; --mdc-icon-size: 18px; vertical-align: middle;"></ha-icon>' if light_state == 'off' else '❔') | safe }} {{ target | e }} · {{ 'ON' if light_state == 'on' else 'OFF' if light_state == 'off' else 'недоступен' if light_state == 'unavailable' else 'нет данных' }}{% if settings.rgb_color is defined %} · RGB({{ settings.rgb_color | join(',') }}){% endif %}{% if settings.color_temp_kelvin is defined %} · {{ settings.color_temp_kelvin }} K{% endif %}{% if settings.brightness_pct is defined %} · {{ settings.brightness_pct }}%{% endif %}{% if settings.brightness_step_pct is defined %} · Δ{{ settings.brightness_step_pct }}%{% endif %}{% if settings.transition is defined %} · {{ settings.transition }} c{% endif %}
   {% else -%}
   {{ target_prefix }}└─ Светильники не назначены
   {% endfor -%}
