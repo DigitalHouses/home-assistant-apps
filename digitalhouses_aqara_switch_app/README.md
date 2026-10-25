@@ -296,9 +296,10 @@ Examples under [examples/lovelace](examples/lovelace/):
 - [Room → switch → actions/settings tree](examples/lovelace/dh_aqara_switch_app_tree_ru.yaml)
 
 The Lovelace tree shows **one compact row per assigned light**. It reads each
-`light.*` state live from Home Assistant, displaying 💡 for `on`, the
-native HA `mdi:lightbulb-off-outline` icon for `off`, and ❔ for
-`unknown`/`unavailable` (with a different text label for each).
+`light.*` state live from Home Assistant, displaying a **yellow filled**
+`mdi:lightbulb` for `on`, a **gray unstruck outline** `mdi:lightbulb-outline`
+for `off`, and ❔ for `unknown`/`unavailable` (with a different text label
+for each).
 This is an **observed HA entity state**, not hardware-level proof: Zigbee2MQTT
 or HA integrations may publish optimistic state before confirmation.
 The card re-renders when its referenced light entities change.
