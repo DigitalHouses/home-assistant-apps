@@ -155,7 +155,7 @@ class LabTests(unittest.TestCase):
             "aqara_switch.entity_options._read_profiles",
             return_value=PROFILE):
             app=Application(FakeMQTT,options=options,registry=Mock(),
-                last_scan_path=Path(td)/"scan.json",version="0.1.14",
+                last_scan_path=Path(td)/"scan.json",version="0.1.15",
                 ha_client=ha)
         app._on_connect(None,None,None,0)
         app._on_message(None,None,packet(BASE+"/bridge/info",
@@ -220,7 +220,7 @@ class MixedTransportTests(unittest.TestCase):
                 "aqara_switch.entity_options._read_profiles",
                 return_value=profile):
             app=Application(FakeMQTT,options=options,registry=Mock(),
-                last_scan_path=Path(td)/"scan.json",version="0.1.14",
+                last_scan_path=Path(td)/"scan.json",version="0.1.15",
                 ha_client=ha)
         app._on_connect(None,None,None,0)
         app._on_message(None,None,packet(BASE+"/bridge/info",

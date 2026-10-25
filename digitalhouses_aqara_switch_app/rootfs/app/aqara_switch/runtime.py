@@ -20,7 +20,8 @@ from .catalog import (CatalogError, candidate_from_mqtt, decode_bridge_devices,
 from .actions import ActionError
 from .control import HAClient, light_commands, verified_adopted_switch
 from .mqtt_lights import plan_batch
-from .lab_lights import partition_commands, plan_lab
+from .lab_lights import (LAB_LIGHTS, authorized_ha_light_ids,
+                         partition_commands, plan_lab)
 from .light_routes import current_route
 from .keeper_runtime import run_keeper
 from .mode_keeper import (capabilities, global_policy, maintained_switch,
@@ -138,7 +139,9 @@ class Application:
         self._fresh_fields = set()
         self._light_availability = {}
         self._light_shadows = {}
-        self._lab_shadows = {}
+        self._ha_shadows = {}
+        self._ha_registry_snapshot = None
+        self._ha_registry_checked_at = -1e9
         self._light_observed_at = {}
         self._light_probe_at = {}
         self._mutex = threading.RLock()
@@ -294,7 +297,7 @@ class Application:
             self._fresh_fields.clear()
             self._light_availability.clear()
             self._light_shadows.clear()
-            self._lab_shadows.clear()
+            self._ha_shadows.clear()
             self._light_observed_at.clear()
             self._light_probe_at.clear()
         for topic in (*_FILTERS, SCAN_REQUEST, "homeassistant/status"):
@@ -312,7 +315,7 @@ class Application:
             self._fresh_fields.clear()
             self._light_availability.clear()
             self._light_shadows.clear()
-            self._lab_shadows.clear()
+            self._ha_shadows.clear()
             self._light_observed_at.clear()
             self._light_probe_at.clear()
 
@@ -517,8 +520,29 @@ class Application:
                                      {"state": ""}, retain=False):
                         per_network[base] = per_network.get(base, 0) + 1
 
+    def _ha_native_targets(self, requested: set[str]) -> set[str]:
+        """Registry-verifiable HA-native light candidates with bounded caching.
+
+        An inaccessible registry never grants the HA fallback path.
+        Zigbee2MQTT devices remain MQTT-only, even when offline/unmapped.
+        """
+        if not requested:
+            return set()
+        now = time.monotonic()
+        if now - self._ha_registry_checked_at >= 60:
+            try:
+                entities = self.registry.fetch_entities()
+                if not isinstance(entities, list):
+                    raise ValueError("HA entity registry is not a list")
+                self._ha_registry_snapshot = entities
+            except Exception as exc:
+                self._ha_registry_snapshot = None
+                LOG.warning("HA-native light registry unavailable: %s", exc)
+            self._ha_registry_checked_at = now
+        return authorized_ha_light_ids(self._ha_registry_snapshot, requested)
+
     def _run_actions(self):
-        """Execute direct Z2M /set and allowlisted virtual LAB light commands."""
+        """Dispatch verified Z2M lights via MQTT and HA-native lights via REST."""
         while not self._stop.is_set():
             try:
                 base, coordinator, name, action, commands = self._jobs.get(timeout=1)
@@ -526,9 +550,15 @@ class Application:
                 continue
             targets = [eid for cmd in commands for eid in cmd["target"]["entity_id"]]
             try:
-                # Preflight LAB outside the MQTT lock, before ANY Z2M publish.
+                # A missing route is NOT permission for HA fallback.
+                # HA registry platform must positively identify a native light.
+                with self._mutex:
+                    routes = dict(self.config.get("light_routes", {}))
+                candidates = set(targets) - set(routes) - LAB_LIGHTS
+                ha_approved = self._ha_native_targets(candidates)
+                # Read HA states outside the MQTT lock, before ANY Z2M publish.
                 z2m_commands, lab_commands = partition_commands(
-                    commands, self.config.get("light_routes", {}))
+                    commands, routes, ha_approved)
                 mixed_toggle = bool(
                     z2m_commands and lab_commands
                     and all(cmd["service"] == "light.toggle" for cmd in commands))
@@ -538,7 +568,9 @@ class Application:
                     if entity not in lab_state_cache:
                         try:
                             lab_state_cache[entity] = (
-                                True, self._ha_client.read_lab_state(entity))
+                                True, (self._ha_client.read_lab_state(entity)
+                                       if entity in LAB_LIGHTS else
+                                       self._ha_client.read_light_state(entity)))
                         except Exception as exc:
                             lab_state_cache[entity] = (False, exc)
                     ok, result = lab_state_cache[entity]
@@ -550,8 +582,8 @@ class Application:
                     if self._ha_client is None:
                         self._ha_client = HAClient(os.environ.get("SUPERVISOR_TOKEN", ""))
                     lab_preview, _ = plan_lab(
-                        lab_commands, read_lab_once, self._lab_shadows,
-                        time.monotonic())
+                        lab_commands, read_lab_once, self._ha_shadows,
+                        time.monotonic(), allowed_lights=ha_approved)
 
                 with self._mutex:
                     sw = next((x for room in self.config["rooms"]
@@ -575,7 +607,8 @@ class Application:
                         raise ActionError("Aqara key not verified in decoupled/ON operating mode")
                     # Repartition after a possible Scan; no guessed light routes.
                     z2m_commands, lab_commands = partition_commands(
-                        commands, self.config.get("light_routes", {}))
+                        commands, self.config.get("light_routes", {}),
+                        ha_approved)
                     if (any(cmd["service"] == "light.toggle" for cmd in commands)
                             and (z2m_commands != original_z2m
                                  or lab_commands != original_lab)):
@@ -612,16 +645,16 @@ class Application:
                         else:
                             skipped.append({"light":plan["light"],
                                             "reason":"MQTT publish rejected"})
-                # The only HA-dependent path is the six named virtual LAB
-                # lamps. Leave the mutex free while reading HA REST states.
+                # HA-native entities and six LAB lamps use HA REST only.
+                # Do not hold the MQTT lock during network requests.
                 if lab_commands:
                     if self._ha_client is None:
                         self._ha_client = HAClient(os.environ.get("SUPERVISOR_TOKEN", ""))
                     lab_plans, lab_skipped = plan_lab(
                         lab_commands,
-                        read_lab_once if mixed_toggle else self._ha_client.read_lab_state,
-                        self._lab_shadows, time.monotonic(),
-                        toggle_state_override=toggle_override)
+                        read_lab_once, self._ha_shadows, time.monotonic(),
+                        toggle_state_override=toggle_override,
+                        allowed_lights=ha_approved)
                     skipped.extend(lab_skipped)
                     for call in lab_plans:
                         ids = call["target"]["entity_id"]
@@ -656,15 +689,15 @@ class Application:
                         try:
                             self._ha_client.execute(call)
                         except Exception as exc:
-                            LOG.warning("AQARA LAB HA call failed: %s", exc)
+                            LOG.warning("Aqara HA-native light call failed: %s", exc)
                             skipped.extend({"light":eid,
-                                            "reason":"LAB HA service call failed"}
+                                            "reason":"HA light service call failed"}
                                            for eid in ids)
                             continue
                         value = "on" if call["service"] == "light.turn_on" else "off"
                         with self._mutex:
                             for eid in ids:
-                                self._lab_shadows[eid] = {
+                                self._ha_shadows[eid] = {
                                     "state":value, "at": time.monotonic()}
                         sent.extend(ids)
                 if skipped:
@@ -676,7 +709,7 @@ class Application:
                                      target=", ".join(sent),
                                      error=note[:300] if note else None)
                 LOG.info("Aqara %s/%s delivered=%d skipped=%d "
-                         "(Z2M physical + HA-only virtual LAB)",
+                         "(Z2M physical + authorized HA lights)",
                          name, action, len(sent), len(skipped))
             except Exception as exc:
                 LOG.exception("Aqara MQTT light action failed")
@@ -713,7 +746,9 @@ class Application:
                 self.config = merged
                 self.globals = global_policy(self.options.read())
                 self._light_shadows.clear()
-                self._lab_shadows.clear()
+                self._ha_shadows.clear()
+                self._ha_registry_snapshot = None
+                self._ha_registry_checked_at = -1e9
                 self._light_observed_at.clear()
                 self._light_probe_at.clear()
                 self._sync_light_topics()

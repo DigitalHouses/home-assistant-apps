@@ -96,7 +96,8 @@ class HARegistryClient:
             raise CatalogError("SUPERVISOR_TOKEN is missing")
         self.token, self.url, self.timeout = token, url, timeout
 
-    def fetch(self) -> tuple[list, list, list]:
+    def _fetch(self, commands: tuple[str, ...]) -> list[list]:
+        """Authenticate each read-only HA registry session; never perform writes."""
         import websocket
         ws = websocket.create_connection(self.url, timeout=self.timeout,
                                          http_proxy_host=None)
@@ -109,10 +110,7 @@ class HARegistryClient:
             if authorized.get("type") != "auth_ok":
                 raise CatalogError("HA WebSocket authorization failed")
             result = []
-            for ident, command in enumerate((
-                "config/device_registry/list", "config/area_registry/list",
-                "config/entity_registry/list",
-            ), 1):
+            for ident, command in enumerate(commands, 1):
                 ws.send(json.dumps({"id": ident, "type": command}))
                 answer = json.loads(ws.recv())
                 if (answer.get("id") != ident or answer.get("type") != "result"
@@ -120,6 +118,16 @@ class HARegistryClient:
                         or not isinstance(answer.get("result"), list)):
                     raise CatalogError("HA Registry call failed: " + command)
                 result.append(answer["result"])
-            return result[0], result[1], result[2]
+            return result
         finally:
             ws.close()
+
+    def fetch(self) -> tuple[list, list, list]:
+        devices, areas, entities = self._fetch((
+            "config/device_registry/list", "config/area_registry/list",
+            "config/entity_registry/list"))
+        return devices, areas, entities
+
+    def fetch_entities(self) -> list:
+        """Read HA entity registry for native-light transport classification."""
+        return self._fetch(("config/entity_registry/list",))[0]

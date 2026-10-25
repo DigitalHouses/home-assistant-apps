@@ -8,6 +8,24 @@ inputs, preserves saved writable switch configuration, and dispatches an
 explicitly bound Aqara action to one or more Home Assistant light.toggle targets.
 It never switches physical Aqara relay output states itself.
 
+## v0.1.15 — HA-native light fallback (e.g. Template Light TV)
+
+Any assigned `light.*` with a verified Zigbee2MQTT route remains **direct
+MQTT first priority**. For targets without a Z2M route, the App now verifies
+the entity's integration platform in the HA Entity Registry (lazy read on
+first use, 60-second cache). Only uniquely registered, enabled, non-MQTT
+light entities may use HA Core REST. Example: `light.tv_switch` with
+`platform: template` controlling `media_player.aumec_tv`. The App reads its
+HA state and issues explicit `light.turn_on`/`light.turn_off`.
+No additional YAML keys and no Scan are required to use native HA lights.
+
+A real MQTT/Z2M light **must not** be rerouted through HA when its Z2M
+route/bridge/device is missing or offline. Disabled, missing, ambiguous or
+unverified-platform entities are skipped. For mixed groups the **same** ON/OFF
+decision is used for Z2M, LAB and authorized HA-native lights; a rapid second
+press uses the pending target-state shadow. Commands accepted by HA/ MQTT
+are not per-device physical confirmations.
+
 ## v0.1.14 — mixed virtual LAB and physical Zigbee2MQTT toggles
 
 The existing `switches` YAML can combine the six fixed `light.dh_aqara_lab_*`

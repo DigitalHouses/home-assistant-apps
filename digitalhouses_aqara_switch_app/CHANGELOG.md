@@ -10,6 +10,24 @@
 - Lovelace cards are user-owned; copy the changed Markdown card into
   the existing HA dashboard. No new sensor, App image or configuration migration.
 
+## 0.1.15
+
+- Add second-priority **HA-native** light routing for verified non-MQTT `light.*`
+  entities such as `light.tv_switch` (Template Light). When no verified Z2M
+  route exists, read the HA Entity Registry and allow only explicitly enabled,
+  uniquely identified `light.*` entries with a non-MQTT integration platform.
+  No new user YAML fields or mandatory Scan: eligibility is verified lazily,
+  cached for at most 60 seconds, and invalidated on Scan.
+- Keep direct Zigbee2MQTT strictly first priority. Physical MQTT lights with
+  missing routes, offline state, no fresh feedback, or broken coordinators
+  **never** fall back to HA REST; unknown and disabled entries also fail closed.
+- Generalize existing HA LAB state reader and executor to authorized HA-native
+  lights, retaining one shared ON/OFF decision across Z2M + LAB + HA-native,
+  fast-press shadows, maintenance/identity gate and per-member skips.
+  HA command acceptance is not physical state confirmation.
+- Add transport classification, REST-read authorization, mixed group and rapid
+  press regression tests. Preserve all six LAB aliases.
+
 ## 0.1.14
 
 - Fix v0.1.13 mixed virtual LAB + physical Z2M toggle regression
