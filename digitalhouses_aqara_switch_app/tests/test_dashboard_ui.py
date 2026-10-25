@@ -24,7 +24,7 @@ class DashboardTests(unittest.TestCase):
             "heading", "custom:mushroom-template-card", "vertical-stack",
             "heading", "markdown"])
         self.assertEqual([c["type"] for c in scan], [
-            "heading", "markdown", "heading", "custom:auto-entities"])
+            "heading", "markdown", "custom:auto-entities"])
         self.assertEqual([c["type"] for c in tree], ["heading", "markdown"])
         self.assertEqual(status[1]["entity"], "sensor.dh_aqara_switch_app_problems")
         self.assertTrue(status[1]["multiline_secondary"])
