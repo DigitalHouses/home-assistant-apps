@@ -8,6 +8,16 @@ inputs, preserves saved writable switch configuration, and dispatches an
 explicitly bound Aqara action to one or more Home Assistant light.toggle targets.
 It never switches physical Aqara relay output states itself.
 
+## v0.1.16 — Zigbee2MQTT RGB capability detection
+
+The App now recognizes Zigbee2MQTT `color_xy` and `color_hs`
+composite exposes (`property: color`) by inspecting their writable
+nested fields. The existing `rgb_color: [255, 0, 0]` action syntax
+and direct MQTT `/set` output remain unchanged. After upgrading
+from v0.1.15, run an operator-triggered **Scan** to refresh saved
+light capability snapshots before testing RGB. Neither Scan nor
+this release alters physical relays.
+
 ## v0.1.15 — HA-native light fallback (e.g. Template Light TV)
 
 Any assigned `light.*` with a verified Zigbee2MQTT route remains **direct
@@ -75,7 +85,7 @@ are required for these virtual test lights.
    Installation alone cannot toggle any light or change any adopted Aqara
    settings, because no devices have yet been adopted.
 
-Immutable image: `ghcr.io/digitalhouses/digitalhouses_aqara_switch_app:0.1.14`.
+Immutable image: `ghcr.io/digitalhouses/digitalhouses_aqara_switch_app:0.1.16`.
 
 ## Configure and Scan (fresh install only)
 
