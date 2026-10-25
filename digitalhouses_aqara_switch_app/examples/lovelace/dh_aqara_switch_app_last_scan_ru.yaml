@@ -1,26 +1,24 @@
-# Last manual scan, persisted by Python in /data/last_scan.json.
+# Scan results are produced by the App, never computed from a dashboard click.
 type: markdown
 content: |-
-  {% set e = 'sensor.dh_aqara_switch_app_scan_details' %}
-  {% set a = state_attr(e, 'added') or [] %}
-  {% set skipped = state_attr(e, 'skipped') or [] %}
-  {% set p = state_attr(e, 'problems') or [] %}
-  {% if states(e) != 'ready' %}
-  *Сканирование ещё не выполнялось или нет данных.*
-  {% else %}
-  **Последнее сканирование**
+  {% set e = 'sensor.dh_aqara_switch_app_scan_details' -%}
+  {% set scanned = state_attr(e,'scanned') -%}
+  {% set added = state_attr(e,'added') or [] -%}
+  {% set skipped = state_attr(e,'skipped') or [] -%}
+  {% set problems = state_attr(e,'problems') or [] -%}
+  {% set mapped = state_attr(e,'mapped_lights') -%}
+  {% if states(e) != 'ready' -%}
+  *Ещё нет результатов Scan. Выполните «Сканировать» в карточке приложения.*
+  {% else -%}
+  **Последнее сканирование:** {{ (state_attr(e,'completed_at') or '—') | e }}
 
-  Время: {{ state_attr(e, 'completed_at') or '—' }}
+  **Сетей:** {{ state_attr(e,'networks') if state_attr(e,'networks') is number else '—' }} · **Выключателей:** {{ scanned if scanned is number else '—' }} · **Маршрутов света:** {{ mapped if mapped is number else '—' }}
 
-  **Найдено: {{ state_attr(e, 'scanned') }} · Добавлено: {{ a | count }} · Пропущено: {{ skipped | count }} · Ошибок: {{ p | count }}**
-
-  {% for item in a %}
-  - ✅ {{ item.name | e }} · HA Area: {{ (item.area_id or 'не назначена') | e }}
-  {% endfor %}
-  {% for name in skipped %}
-  - ➖ {{ name | e }} · уже в конфигурации
-  {% endfor %}
-  {% for item in p %}
-  - ⚠️ {{ (item.name or '?') | e }} · {{ (item.reason or 'ошибка') | e }}
-  {% endfor %}
+  **Добавлено:** {{ added | count }} · **Ранее найдено:** {{ skipped | count }} · **Проблем:** {{ problems | count }}
+  {% for item in added -%}
+  ✅ {{ (item.name or '?') | e }} · {{ (item.area_id or 'без HA Area') | e }}
+  {% endfor -%}
+  {% for item in problems -%}
+  ⚠️ {{ (item.name or '?') | e }} · {{ (item.reason or 'неизвестная ошибка') | e }}
+  {% endfor -%}
   {% endif %}
