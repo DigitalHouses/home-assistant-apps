@@ -1,35 +1,37 @@
-# State from the Aqara App; HA accepted is not physical light confirmation.
+# Last action is App-owned; sent != physical Zigbee acknowledgement.
 type: markdown
 content: |-
-  {% set entity = 'sensor.dh_aqara_switch_app_last_action' %}
-  {% set status = states(entity) %}
-  {% set a = states[entity].attributes if states[entity] is defined else {} %}
-  {% if status in ['unknown', 'unavailable'] %}
-  *Нет данных о нажатиях. Проверьте запуск Aqara Switch App.*
-  {% elif status == 'idle' %}
-  *Назначенные нажатия пока не выполнялись с момента запуска приложения.*
-  {% elif status in ['queued', 'accepted', 'error'] %}
-  {% if status == 'queued' %}
-  ⏳ Команда поставлена в очередь.
-  {% elif status == 'accepted' %}
-  ✅ Команда принята Home Assistant.
-  {% else %}
-  ⚠️ Ошибка выполнения команды.
+  {% set e = 'sensor.dh_aqara_switch_app_last_action' -%}
+  {% set status = states(e) -%}
+  {% set a = states[e].attributes if states[e] is defined else {} -%}
+  {% if status in ['unknown','unavailable'] -%}
+  ⚪ Нет связи с приложением или данных о последнем нажатии.
+  {% elif status == 'idle' -%}
+  *После запуска ещё не было назначенных нажатий.*
+  {% else -%}
+  {% if status == 'sent' -%}
+  ✅ **Отправлено** · Команда передана выбранным исполнителям.
+  {% elif status == 'partial' -%}
+  🟠 **Частично выполнено** · Некоторые светильники пропущены.
+  {% elif status == 'skipped' -%}
+  ⚠️ **Пропущено** · Команды светильникам не отправлены.
+  {% elif status == 'queued' -%}
+  ⏳ **В очереди** · Ожидается обработка.
+  {% elif status == 'error' -%}
+  🔴 **Ошибка выполнения**
+  {% elif status == 'accepted' -%}
+  ✅ **Команда принята** · Статус устаревшего исполнителя.
+  {% else -%}
+  **Состояние:** {{ status | e }}
   {% endif %}
 
-  **Выключатель:** `{{ (a.switch or '—') | e }}`
-
-  **Нажатие:** `{{ (a.action or '—') | e }}`
-
-  **Светильник:** `{{ (a.target or '—') | e }}`
-
+  **Выключатель:** \`{{ (a.switch or '—') | e }}\`
+  **Нажатие:** \`{{ (a.action or '—') | e }}\`
+  **Отправлено:** {{ (a.target or '—') | e }}
   **Время:** {{ (a.at or '—') | e }}
-  {% if a.error %}
+  {% if a.error -%}
+  **Причина:** {{ a.error | e }}
+  {% endif -%}
 
-  **Ошибка:** {{ a.error | e }}
-  {% endif %}
-
-  *Принятие команды HA не подтверждает фактическое состояние светильника.*
-  {% else %}
-  *Статус последнего действия: {{ status | e }}*
+  *MQTT/HA подтвердили принятие к отправке, но не физическое переключение светильника.*
   {% endif %}
