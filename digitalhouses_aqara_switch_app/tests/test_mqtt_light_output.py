@@ -29,7 +29,9 @@ def light(ieee,name):
                  "value_min":0,"value_max":254},
                 {"property":"color_temp","type":"numeric","access":7,
                  "value_min":150,"value_max":500},
-                {"property":"color_xy","type":"composite","access":7}]}]}}
+                {"name":"color_xy","property":"color","type":"composite",
+                 "features":[{"property":"x","type":"numeric","access":7},
+                             {"property":"y","type":"numeric","access":7}]}]}]}}
 def switch():
     return {"ieee_address":S,"friendly_name":SN,"type":"EndDevice",
         "definition":{"vendor":"Aqara","model":"WXKG13LM","exposes":[
@@ -135,6 +137,32 @@ class LightOutputTests(unittest.TestCase):
         self.assertEqual(plans[1]["payload"]["brightness"],178)
         self.assertIn("color",plans[1]["payload"])
         self.assertIn("x",plans[1]["payload"]["color"])
+
+    def test_real_z2m_color_exposes_xy_hs_and_read_only(self):
+        from aqara_switch.light_routes import _light_features
+        from aqara_switch.mqtt_lights import _mqtt_data
+
+        # Real Z2M schema: composite name=color_xy, property=color.
+        # Composite access is optional; nested x/y carry access rights.
+        xy = light(A, "strip")
+        self.assertIn("color_xy", _light_features(xy))
+        self.assertNotIn("color", _light_features(xy))
+        self.assertIn("x", _mqtt_data({"rgb_color":[255,0,0]},
+                                       _light_features(xy), {}, "ON")["color"])
+
+        hs = light(A, "strip")
+        hs["definition"]["exposes"][0]["features"][-1] = {
+            "name":"color_hs", "property":"color", "type":"composite",
+            "access":2, "features":[
+                {"property":"hue","type":"numeric","access":7},
+                {"property":"saturation","type":"numeric","access":7}]}
+        self.assertIn("color_hs", _light_features(hs))
+        self.assertIn("hue", _mqtt_data({"rgb_color":[255,0,0]},
+                                         _light_features(hs), {}, "ON")["color"])
+
+        # No writable X => no unsupported XY command sent.
+        xy["definition"]["exposes"][0]["features"][-1]["features"][0]["access"] = 1
+        self.assertNotIn("color_xy", _light_features(xy))
 
     def test_unknown_or_unsupported_attribute_is_skipped(self):
         rs=routes()

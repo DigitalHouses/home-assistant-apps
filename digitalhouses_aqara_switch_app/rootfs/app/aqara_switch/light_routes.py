@@ -23,6 +23,25 @@ def _light_features(device: Mapping) -> dict | None:
         return None
     features = {}
     for feat in _exposes(lights[0].get("features", [])):
+        # Z2M exposes color modes as composites named color_xy/color_hs,
+        # both with property="color". The composite may lack access; the
+        # nested attributes (x/y or hue/saturation) carry writable bits.
+        if feat.get("type") == "composite" and feat.get("property") == "color":
+            mode = feat.get("name")
+            required = {"color_xy": {"x", "y"},
+                        "color_hs": {"hue", "saturation"}}.get(mode)
+            access = feat.get("access")
+            if (required is not None and
+                    (access is None or (type(access) is int and access & 2))):
+                nested = feat.get("features")
+                if isinstance(nested, list):
+                    writable = {part.get("property") for part in nested
+                                if isinstance(part, Mapping)
+                                and type(part.get("access")) is int
+                                and part["access"] & 2}
+                    if required <= writable:
+                        features[mode] = {}
+            continue
         key = feat.get("property", feat.get("name"))
         if isinstance(key, str) and type(feat.get("access")) is int:
             if feat["access"] & 2:

@@ -10,6 +10,17 @@
 - Lovelace cards are user-owned; copy the changed Markdown card into
   the existing HA dashboard. No new sensor, App image or configuration migration.
 
+## 0.1.16
+
+- Fix native Zigbee2MQTT light RGB capability detection: Z2M exposes
+  `color_xy` and `color_hs` as composite names with `property: color`;
+  composites may not have their own `access` flag. Check writable
+  nested X/Y or hue/saturation components before permitting RGB output.
+- Replace synthetic test fixture with the actual Z2M composite schema and
+  add XY, HS and read-only capability regression tests.
+- Keep existing MQTT `/set`, switch bindings and safe offline behavior
+  unchanged. Run explicit Scan after upgrading to refresh saved light routes.
+
 ## 0.1.15
 
 - Add second-priority **HA-native** light routing for verified non-MQTT `light.*`
