@@ -311,10 +311,6 @@ sections:
           ⚠️ {{ (item.name or '?') | e }} · {{ (item.reason or 'неизвестная ошибка') | e }}
           {% endfor -%}
           {% endif %}
-      - type: heading
-        heading: Светильники
-        heading_style: subtitle
-        icon: mdi:lightbulb-group
       - type: custom:auto-entities
         card:
           type: entities
