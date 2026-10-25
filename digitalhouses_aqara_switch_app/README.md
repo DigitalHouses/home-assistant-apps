@@ -304,6 +304,43 @@ friendly name and coordinator remain the same and its hardware capability
 fingerprint is compatible. The stable logical key retains action bindings.
 An incompatible replacement is rejected; no action is sent.
 
+## UI parity with DigitalHouses PVE Agent (Lovelace-only update)
+
+The canonical status card and Dashboard use the common DigitalHouses
+layout: read-only product status with a browser-only one-second elapsed
+clock during App-owned **Scan**, and compact action chips. The supported
+actions are **Сканировать** (App MQTT button), **Версия** (read-only
+installed-version detail), **Новая версия** (only if Supervisor's update
+entity is \`on\`, with backup and confirmation) and **Перезапуск**
+(Supervisor's canonical installed App slug, with confirmation).
+
+Aqara App v0.1.16 does **not** implement an App-owned manual Refresh
+or stable-release Check operation, so these controls must not be
+imitated by calling Scan, refreshing a browser page, or inferring a
+release from a GitHub query in a Lovelace template. Supervisor alone
+owns installation/restart. A successful MQTT publish is not a Zigbee
+device ACK.
+
+The device tree retains compact \`<pre>\` structure and shows per-target
+RGB, brightness, color temperature and transition settings from the
+App's existing saved action bindings; the ON/OFF lamp symbol is the
+**Home Assistant reported** state, not physical confirmation.
+
+**Installation:** Lovelace is maintained by the Home Assistant operator,
+not by App versions. Updating the App does not change an already pasted
+dashboard. Copy the full
+[\`dh_aqara_switch_app_dashboard_ru.yaml\`](examples/lovelace/dh_aqara_switch_app_dashboard_ru.yaml)
+into the existing Aqara dashboard **Raw configuration editor**, or copy
+the canonical cards individually. Requires Mushroom and
+\`custom:button-card >= 5.0\`. No restart, MQTT rescan, or App version
+change is required for this UI-only update.
+
+This is UI parity for already supported operations, not a claim of full
+feature parity: adding App-owned Check Release and canonical product Refresh
+will require independent runtime work and tests. The aggregate card's
+success-to-idle lifecycle likewise remains App-owned, not simulated
+by dashboard timers.
+
 ## Home Assistant UI
 
 **Единый Dashboard (MVP):** [Aqara Switch — полная панель](examples/lovelace/dh_aqara_switch_app_dashboard_ru.yaml).
