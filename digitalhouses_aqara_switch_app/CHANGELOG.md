@@ -3,7 +3,8 @@
 ### UI example update (no App version change)
 
 - Compact `<pre>` Aqara tree now displays each assigned light separately,
-  using live Home Assistant state: 💡 ON, outlined off bulb for OFF, and
+  using live Home Assistant state. ON uses the yellow filled
+  `mdi:lightbulb`; OFF uses the gray `mdi:lightbulb-outline` (no slash);
   ❔ for unavailable/unknown. The canonical single-card and full-dashboard
   YAML stay identical. HA-reported state is not an individual Zigbee ACK.
 - Lovelace cards are user-owned; copy the changed Markdown card into
