@@ -28,8 +28,8 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual([c["type"] for c in tree], ["heading", "markdown"])
         self.assertEqual(status[1]["entity"], "sensor.dh_aqara_switch_app_problems")
         self.assertTrue(status[1]["multiline_secondary"])
-        self.assertEqual(scan[3]["filter"]["include"], [{"domain": "light"}])
-        self.assertEqual(scan[3]["sort"]["method"], "name")
+        self.assertEqual(scan[2]["filter"]["include"], [{"domain": "light"}])
+        self.assertEqual(scan[2]["sort"]["method"], "name")
         self.assertNotIn("cards", view)
         self.assertEqual(str(standalone).count("button.dh_aqara_switch_app_scan"), 1)
 
