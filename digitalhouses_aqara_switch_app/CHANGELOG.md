@@ -10,6 +10,25 @@
 - Lovelace cards are user-owned; copy the changed Markdown card into
   the existing HA dashboard. No new sensor, App image or configuration migration.
 
+### PVE-style Lovelace UI update (no App version change)
+
+- Rebuild the maintained Aqara status/control card with PVE Agent-like
+  alignment, a browser-only 1-second running timer, connectivity and
+  hardware-problem priority, Supervisor installation progress and
+  a confirmed Supervisor restart action.
+- Retain only supported controls: Scan, read-only Version, conditional
+  Supervisor Install with backup, and Restart. Do not fabricate the
+  unimplemented App Refresh or GitHub version check.
+- Fix stale last-action UI to distinguish \`sent\`, \`partial\`,
+  \`skipped\`, \`queued\` and \`error\`. Never treat MQTT publication
+  as an individual physical Zigbee ACK.
+- Extend the compact switch→action→light tree with configured RGB,
+  Kelvin, brightness and transition without new state entities or
+  large line spacing. Align canonical cards and embedded dashboard.
+- Lovelace cards are user-owned: paste the updated dashboard YAML into
+  HA manually. Existing v0.1.16 runtime, Supervisor options and
+  physical switch behavior are unchanged.
+
 ## 0.1.16
 
 - Fix native Zigbee2MQTT light RGB capability detection: Z2M exposes
