@@ -53,7 +53,7 @@ function sourcesForDisplay(id) {
 function mdnsServiceDisplay(id){
  const list=mdnsServices.filter(s=>s.device_id===id);
  if(!list.length)return '<small>—</small>';
- return list.map(s=>'<span class="tag source-tag" title="'+esc(s.instance+' · '+s.target)+'">'+esc(s.type.replace(/\\.local\\.?$/,''))+':'+esc(s.port)+'</span>').join('');
+ return list.map(s=>'<span class="tag source-tag" title="'+esc(s.instance+' · '+s.target)+'">'+esc(s.type.split('.local')[0])+':'+esc(s.port)+'</span>').join('');
 }
 function renderDevices(){
  filterArea.innerHTML='<input id="search" type="search" placeholder="Поиск по имени, MAC, IP, заметке…" value="'+esc(filter)+'">';
