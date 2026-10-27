@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.4
+
+- Introduced source-scoped positive IPv4 evidence rather than overwriting the current device IP with every router claim.
+- Fresh ARP-backed MAC ↔ IPv4 observations take precedence over conflicting Home Assistant tracker IPs.
+- Current IPv4 is withheld for stale or unresolved records, but UUID, MAC, Note, identity history and previous IPs remain unchanged.
+- Added conflict evidence, winning-source explanations and current IP summaries to diagnostic JSON; no duplicate MAC merging.
+- Display last ARP scan count separately from historically observed ARP clients, with visible IPv4 conflict count.
+- New regression tests for conflicting router/ARP MACs, address changes, stale claims, duplicate ARP claims and Note preservation.
+- No new privileges, raw network scan scope, mDNS/Bonjour or HA events in this release.
+
 ## 0.1.3
 
 - Added a **Save diagnostics (.json)** button in the Ingress Web UI for sharing reproducible app observations with support.

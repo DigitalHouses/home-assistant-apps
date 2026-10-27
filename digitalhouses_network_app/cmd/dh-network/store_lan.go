@@ -61,6 +61,9 @@ func (db *DB) importARPHosts(hosts []LANHost, now, interfaceName, prefix string)
         }
         if err:=db.storeIdentity(id,"mac",mac,now);err!=nil{return err}
         if err:=db.storeIdentity(id,"ipv4",ipv4,now);err!=nil{return err}
+        // One currently claimed ARP address per hardware identity.
+        if err:=db.run("UPDATE ipv4_evidence SET state='previous' WHERE device_id=? AND source='arp'",id);err!=nil{return err}
+        if err:=db.storeIPv4Evidence(id,"arp","",ipv4,"observed",now);err!=nil{return err}
         if err:=db.run("INSERT INTO lan_positive(device_id,last_seen) VALUES(?,?) ON CONFLICT(device_id) DO UPDATE SET last_seen=excluded.last_seen",
             id,now);err!=nil{return err}
         imported++
@@ -77,12 +80,15 @@ func (db *DB) importARPHosts(hosts []LANHost, now, interfaceName, prefix string)
       AND id IN (SELECT device_id FROM lan_positive WHERE last_seen < ?)
       AND NOT EXISTS (SELECT 1 FROM identities WHERE device_id=devices.id AND kind='ha_entity')`,
       cutoff);err!=nil{return err}
+    ipConflicts,err:=db.reconcileIPv4Locked(now)
+    if err!=nil{return err}
     status:="ok"
     if len(hosts)==0 {status="empty"}
     if collisions>0 {status="degraded"}
     details,_:=json.Marshal(map[string]any{
         "observations":len(hosts),"imported":imported,"ambiguous_proxy_arp":collisions,
         "interface":interfaceName,"subnet":prefix,"discovery":"active_arp",
+        "ipv4_conflicts":len(ipConflicts),"last_scan_hosts":imported,
     })
     if err:=db.run("INSERT INTO sources(id,kind,status,last_success,details_json) VALUES('LAN ARP','lan_arp',?,?,?) ON CONFLICT(id) DO UPDATE SET status=excluded.status,last_success=excluded.last_success,details_json=excluded.details_json",
         status,now,string(details));err!=nil{return err}

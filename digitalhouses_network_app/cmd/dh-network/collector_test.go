@@ -71,12 +71,14 @@ func TestImportPersistsNotesAndIdentityThroughRestart(t *testing.T) {
     records,err=db.devices()
     if err!=nil || len(records)!=1 {t.Fatalf("reopened %+v %v",records,err)}
     got:=records[0]
-    if got.ID!=id || got.IPv4!="192.168.1.99" || got.Presence!="not_observed" ||
+    if got.ID!=id || got.IPv4!="" || got.Presence!="not_observed" ||
         got.LastSeen!=now || got.Note!="UPS + Proxmox" || got.FirstSeen!=now {
         t.Fatalf("history/note not preserved %+v",got)
     }
     original,err:=db.lookupIdentity("ipv4","192.168.1.50")
     if err!=nil || original!=id {t.Fatalf("IP history lost %q %v",original,err)}
+    later,err:=db.lookupIdentity("ipv4","192.168.1.99")
+    if err!=nil || later!=id {t.Fatalf("new router-reported IP history lost %q %v",later,err)}
     sources,err:=db.sources()
     if err!=nil || len(sources)!=1 || sources[0].Status!="ok" {t.Fatalf("source health %+v %v",sources,err)}
     if err=db.recordSourceFailure(time.Now().UTC().Format(time.RFC3339),"HA Core offline");err!=nil {t.Fatal(err)}
