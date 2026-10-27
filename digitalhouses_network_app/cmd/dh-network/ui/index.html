@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DH Network</title>
+<style>
+:root{color-scheme:dark light}*{box-sizing:border-box}body{font:14px system-ui,sans-serif;margin:0;background:#121d2d;color:#e7f2f7}
+header{padding:22px 26px;border-bottom:1px solid #364557;display:flex;justify-content:space-between;align-items:center}
+h1{margin:0;font-size:22px}small{color:#a9b6c9}main{padding:25px;max-width:1140px;margin:auto}
+nav{display:flex;gap:12px;margin-bottom:20px}button{cursor:pointer;padding:10px 15px;background:#22354e;color:#e7f2f7;border:1px solid #567087;border-radius:8px}
+button.active{background:#197a78;border-color:#4bd0bb}.notice{padding:15px;border:1px solid #91763d;background:#3c3426;border-radius:10px;margin:18px 0}
+table{border-collapse:collapse;width:100%;margin-top:10px}th,td{text-align:left;padding:12px;border-bottom:1px solid #374659}
+input{padding:9px;border:1px solid #5c6b7a;border-radius:7px;background:#1b2c42;color:#fff;width:260px;max-width:100%}
+.pill{color:#d3e8df;background:#1d5950;padding:5px 10px;border-radius:30px}p{line-height:1.5}
+</style></head>
+<body><header><div><h1>DigitalHouses Network App</h1><small>Network inventory · Ingress</small></div><span id="health" class="pill">Connecting…</span></header>
+<main>
+<div class="notice">Версия 0.1.0 — каркас приложения. Сканирование, данные роутеров и события Home Assistant пока не подключены.</div>
+<nav><button class="active" data-page="devices">Устройства</button><button data-page="sources">Источники</button><button data-page="events">События</button></nav>
+<section id="body">Загрузка…</section>
+</main>
+<script>
+const body=document.getElementById('body'), health=document.getElementById('health');
+let current='devices',devices=[];
+function safe(t){return String(t??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+async function get(path){let response=await fetch('api/'+path,{cache:'no-store'});if(!response.ok)throw Error('HTTP '+response.status);return response.json()}
+async function load(){
+ try {
+  const status=await get('status');health.textContent='SQLite · '+status.database+' · '+status.devices+' devices';
+  if(current==='devices'){
+    devices=await get('devices');
+    if(!devices.length){body.innerHTML='<h2>Устройства</h2><p>Устройств пока нет. Сканирующий движок будет добавлен в следующей версии.</p>';return}
+    body.innerHTML='<h2>Устройства</h2><table><thead><tr><th>Название</th><th>IPv4 / IPv6</th><th>MAC</th><th>Presence</th><th>Note</th></tr></thead><tbody>'+devices.map((d,i)=>'<tr><td>'+safe(d.display_name||d.hostname||d.id)+'</td><td>'+safe(d.ipv4)+'<br>'+safe(d.ipv6)+'</td><td>'+safe(d.mac)+'</td><td>'+safe(d.presence)+'</td><td><button data-note="'+i+'">Заметка</button> '+safe(d.note)+'</td></tr>').join('')+'</tbody></table>';
+    body.querySelectorAll('[data-note]').forEach(button=>button.addEventListener('click',()=>edit(devices[Number(button.dataset.note)])));
+  } else if(current==='sources'){
+    const sources=await get('sources');
+    body.innerHTML='<h2>Источники</h2><table><tr><th>Источник</th><th>Статус</th></tr>'+sources.map(s=>'<tr><td>'+safe(s.name)+'</td><td>'+safe(s.status)+'</td></tr>').join('')+'</table>';
+  } else {
+    const events=await get('events');
+    body.innerHTML='<h2>События</h2>'+(events.length?'<table>'+events.map(e=>'<tr><td>'+safe(e.occurred_at)+'</td><td>'+safe(e.event_type)+'</td></tr>').join('')+'</table>':'<p>Событий пока нет. Публикация событий пока выключена.</p>');
+  }
+ }catch(error){health.textContent='API unavailable';body.textContent='Ошибка: '+error.message}
+}
+async function edit(d){
+ const note=prompt('Заметка для '+(d.display_name||d.id),d.note||'');
+ if(note===null)return;
+ try{
+   const response=await fetch('api/devices/'+encodeURIComponent(d.id)+'/note',{method:'PUT',headers:{'Content-Type':'application/json','X-DH-UI':'1'},body:JSON.stringify({note})});
+   if(!response.ok)throw Error('HTTP '+response.status);
+   await load();
+ }catch(error){alert('Не удалось сохранить: '+error.message)}
+}
+document.querySelectorAll('[data-page]').forEach(button=>button.addEventListener('click',()=>{
+ document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
+ button.classList.add('active');current=button.dataset.page;load();
+}));
+load();
+</script></body></html>

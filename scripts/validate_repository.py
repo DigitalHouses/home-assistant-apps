@@ -17,6 +17,7 @@ from validators.common import (
 from validators.products.aqara_switch_app import validate_aqara_switch
 from validators.products.backblaze_app import validate_backblaze
 from validators.products.internet_app import validate_internet
+from validators.products.network_app import validate_network
 from validators.products.presence_app import validate_presence
 from validators.products.plex_agent import validate_plex_agent
 from validators.products.pve_agent import validate_digitalhouses_pve_agent
@@ -42,6 +43,7 @@ PRODUCT_VALIDATORS = {
     "digitalhouses_aqara_switch_app": validate_aqara_switch,
     "digitalhouses_backblaze_app": validate_backblaze,
     "digitalhouses_internet_app": validate_internet,
+    "digitalhouses_network_app": validate_network,
     "digitalhouses_presence_app": validate_presence,
     "digitalhouses_plex_agent": validate_plex_agent,
     "digitalhouses_pve_agent": validate_digitalhouses_pve_agent,

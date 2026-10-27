@@ -61,6 +61,8 @@ GitHub is the source of truth for reusable DigitalHouses application code and re
 
 ## Work in progress
 
+- [DigitalHouses Network App](digitalhouses_network_app/README.md) — **Experimental Ingress/SQLite foundation** for an eventual LAN device registry, router-backed discovery and presence events. Install through the HA App Store; scanning not yet active.
+
 - [DigitalHouses Presence App](digitalhouses_presence_app/README.md) — **Experimental GPS pilot** for resident presence with MQTT Discovery. Installable through Home Assistant App Store from source; Wi-Fi detection and mobile registration are not yet operational.
 
 ## Development

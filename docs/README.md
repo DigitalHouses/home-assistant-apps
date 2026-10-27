@@ -21,6 +21,8 @@ This directory separates ecosystem-wide standards from product-specific engineer
 
 ## Product engineering records
 
+- [DigitalHouses Network App](../digitalhouses_network_app/DOCS.md) — Ingress runtime, device registry and planned discovery/presence/event contracts.
+
 - [DigitalHouses PVE Agent](digitalhouses_pve_agent/) — architecture specifications, implementation plans, audits, and technical debt for the PVE agent.
 - [DigitalHouses Plex Agent](digitalhouses_plex_agent/) — architecture specification and implementation plan for the Plex agent.
 
