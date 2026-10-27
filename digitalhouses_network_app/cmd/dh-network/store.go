@@ -181,6 +181,11 @@ func (db *DB) importRouterTrackers(trackers []RouterTracker,now string) error {
         if err=db.storeIdentity(id,"ha_entity",t.EntityID,now);err!=nil{return err}
         if err=db.storeIdentity(id,"mac",t.MAC,now);err!=nil{return err}
         if err=db.storeIdentity(id,"ipv4",t.IPv4,now);err!=nil{return err}
+        // Revoke a prior current claim from this exact router tracker before
+        // storing a new state/IP. Historical values remain in both tables.
+        if err=db.run("UPDATE ipv4_evidence SET state='previous' WHERE device_id=? AND source='ha_router' AND reference=?",
+            id,t.EntityID);err!=nil{return err}
+        if err=db.storeIPv4Evidence(id,"ha_router",t.EntityID,t.IPv4,t.State,now);err!=nil{return err}
         if err=db.storeIdentity(id,"ipv6",t.IPv6,now);err!=nil{return err}
         imported++
         switch t.State {
@@ -189,10 +194,12 @@ func (db *DB) importRouterTrackers(trackers []RouterTracker,now string) error {
         default:unknown++
         }
     }
-    details,_:=json.Marshal(map[string]int{"trackers":len(trackers),"imported":imported,"home":online,"not_home":notObserved,"unknown":unknown,"conflicts":conflicts})
+    ipConflicts,err:=db.reconcileIPv4Locked(now)
+    if err!=nil{return err}
+    details,_:=json.Marshal(map[string]int{"trackers":len(trackers),"imported":imported,"home":online,"not_home":notObserved,"unknown":unknown,"conflicts":conflicts,"ipv4_conflicts":len(ipConflicts)})
     status:="ok"
     if len(trackers)==0 {status="empty"}
-    if conflicts>0 {status="degraded"}
+    if conflicts>0 || len(ipConflicts)>0 {status="degraded"}
     if err:=db.run("INSERT INTO sources(id,kind,status,last_success,details_json) VALUES('Home Assistant router trackers','ha_device_tracker',?,?,?) ON CONFLICT(id) DO UPDATE SET status=excluded.status,last_success=excluded.last_success,details_json=excluded.details_json",
         status,now,string(details));err!=nil{return err}
     if err:=db.exec("COMMIT");err!=nil{return err}
