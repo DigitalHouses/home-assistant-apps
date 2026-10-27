@@ -12,7 +12,7 @@ import (
 )
 
 // IPv4Evidence holds a claim and its provenance, never conflating a router
-// reported IP with an on-link ARP response. Source is "ha_router" or "arp".
+// reported IP with on-link ARP or OS local-interface observations.
 type IPv4Evidence struct {
  DeviceID string `json:"device_id"`
  MAC string `json:"mac"`
@@ -63,6 +63,7 @@ func (db *DB) evidenceWindows() (time.Duration,time.Duration) {
  return arp,ha
 }
 func evidenceRank(item IPv4Evidence) int {
+ if item.Source=="local_interface" && item.State=="observed" {return 3}
  if item.Source=="arp" && item.State=="observed" {return 2}
  if item.Source=="ha_router" && item.State=="home" {return 1}
  return 0
@@ -74,7 +75,7 @@ func validEvidence(item IPv4Evidence,now time.Time,arpTTL,haTTL time.Duration) b
  if err!=nil {return false}
  age:=now.Sub(seen)
  if age<0 {return false}
- if rank==2 {return age<=arpTTL}
+ if rank>=2 {return age<=arpTTL}
  return age<=haTTL
 }
 func preferClaim(a,b IPv4Evidence) bool {
@@ -119,6 +120,7 @@ func resolveIPv4Evidence(evidence []IPv4Evidence,at string,arpTTL,haTTL time.Dur
        conflict.WinnerSource=best.Source
        if best.Source=="ha_router" {conflict.Resolution="newest_router_claim"}
        if best.Source=="arp" && evidenceRank(claims[1])==2 {conflict.Resolution="newest_arp_claim"}
+       if best.Source=="local_interface" {conflict.Resolution="local_interface_over_other"}
      } else {conflict.Resolution="ambiguous_equal_evidence"}
      output.Conflicts=append(output.Conflicts,conflict)
    }
