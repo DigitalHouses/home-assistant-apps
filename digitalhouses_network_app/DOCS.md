@@ -7,7 +7,7 @@
 - Compact namespace: `dh_network_app`
 - Web UI: Home Assistant Ingress (not a second externally exposed admin service)
 - Storage: SQLite `/data/network.sqlite3`
-- Current version: `0.1.8`, experimental, no GHCR artifact and no telemetry
+- Current version: `0.1.9`, experimental, no GHCR artifact and no telemetry
 
 This App deliberately follows the existing product-naming and HAOS packaging standards. Its **Ingress** UI is the accepted departure from the usual MQTT-discovered Lovelace control card: UI state, notes and inventory are App-owned instead of built from MQTT entities. Any future machine events must follow DigitalHouses Events & Notifications Standard; local alert delivery belongs to HA, not the public App.
 
@@ -102,6 +102,16 @@ Where a DigitalHouses application exposes a discoverable TCP service, publish DN
 - Notes render as **one compact clickable action** per row: `Добавить` when blank and the actual saved note text otherwise, both invoking the existing note editor. A long note is CSS-ellipsized inside a bounded cell but retains full original text on hover; saved notes and API contract remain unchanged.
 - Constrain every device row to a single line and use horizontal table scrolling at narrow Ingress widths. No new field editor, schema migration, runtime permission, scanner or HA API behavior.
 - Ingress JS regression suite verifies numbering, headers, MAC-only name hiding, meaningful name fallback, sort/filter, escaping and note actions.
+
+## Local Interface + WS-Discovery metadata pilot (0.1.9)
+
+- OS default-route LAN interface's `MAC`, `IPv4`, name and prefix are read from Linux network configuration (existing `localLANPlan`), independently of ARP replies. The app registers an exact MAC-backed device (or reuses the identical MAC) and maintains an authoritative `local_interface` IPv4 evidence claim and a separate `Local Interface` source. No IP-only identity join, no automatic hostname, no Notes modification. This correctly registers HAOS VM itself, previously omitted from the active ARP target list.
+- Evidence precedence: fresh `local_interface` (rank 3) > direct ARP (rank 2) > HA Router home (rank 1). Freshness for local evidence equals LAN ARP TTL; router wins only after local evidence genuinely expires. A local-interface versus router claim is an informational `source_disagreement`; preserve actual contradictory evidence in Events.
+- mDNS/SSDP matching now accepts fresh, unique `local_interface` or ARP direct evidence, but never an IP-only router assertion. The previous diagnostic rule remains in effect.
+- WS-Discovery (2005/04) sends an `s:Probe` to 239.255.255.250:3702, bound to the primary LAN IPv4 address via an ephemeral UDP port, every 300 seconds. The returned `ProbeMatches` is accepted only when SOAP 1.2 Action/RelatesTo match the sent message, source is local IPv4, EndpointReference is a bounded UUID, and payload is <=16 KiB. Only HTTP(S) XAddr URL origins whose literal IP matches the responding IP are retained. It **never HTTP-fetches the metadata** in this pilot and never treats Types/UUID as a human-readable name.
+- Additive SQLite schema v6 adds `wsd_endpoints` and `wsd_unmatched`; unmatched items expire after 24h; matched endpoints after 7 days. No automatic identities from Endpoint UUIDs, no Presence or Note mutation, no required Supervisor privileges, no impact on parallel NetAlertX.
+- Diagnostic JSON includes the WSD source, matched/unmatched endpoints, their origin (sanitized), and local-interface evidence. Ingress includes a compact WSD badge for matched devices; `GET /api/wsd-endpoints` exposes bounded matched records. Empty discovery is an expected successful response.
+- **Scope limitation:** the Windows File Explorer computer name `MEDIA-SERZHAN` may be conveyed by a separate WSD SOAP metadata Get; this version does not infer or assign the name absent that verified response. That stage requires its own URL safety review and real-world protocol capture.
 
 ## Release boundary
 
