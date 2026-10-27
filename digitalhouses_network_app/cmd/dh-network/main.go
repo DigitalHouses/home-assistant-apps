@@ -225,6 +225,7 @@ func (s *Service) routes() http.Handler {
         sources,err:=s.db.sources()
         if err!=nil {http.Error(w,"database unavailable",500);return}
         if len(sources)==0 {sources=append(sources,SourceInfo{Name:"Home Assistant router trackers",Kind:"ha_device_tracker",Status:"pending"})}
+        if !containsSource(sources,"Local Interface") {sources=append(sources,SourceInfo{Name:"Local Interface",Kind:"local_interface",Status:"pending"})}
         if !containsSource(sources,"LAN ARP") {sources=append(sources,SourceInfo{Name:"LAN ARP",Kind:"lan_arp",Status:"pending"})}
         if !containsSource(sources,"mDNS / Bonjour") {sources=append(sources,SourceInfo{Name:"mDNS / Bonjour",Kind:"mdns",Status:"pending"})}
         if !containsSource(sources,"SSDP") {sources=append(sources,SourceInfo{Name:"SSDP",Kind:"ssdp",Status:"pending"})}
