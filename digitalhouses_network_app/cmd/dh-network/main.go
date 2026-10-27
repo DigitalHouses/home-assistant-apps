@@ -55,6 +55,7 @@ type DB struct {
     mu sync.Mutex
     connection *C.sqlite3
     lanFreshness time.Duration
+    haFreshness time.Duration
 }
 
 func cstring(value string) (*C.char, func()) {
@@ -89,7 +90,9 @@ func openDB(path string) (*DB, error) {
         "CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY, event_type TEXT NOT NULL, device_id TEXT NOT NULL DEFAULT '', occurred_at TEXT NOT NULL, data_json TEXT NOT NULL DEFAULT '{}');",
         "CREATE INDEX IF NOT EXISTS event_order ON events(occurred_at);",
         "CREATE TABLE IF NOT EXISTS lan_positive (device_id TEXT PRIMARY KEY REFERENCES devices(id),last_seen TEXT NOT NULL);",
-        "UPDATE schema_version SET version=2;",
+        "CREATE TABLE IF NOT EXISTS ipv4_evidence (device_id TEXT NOT NULL REFERENCES devices(id),source TEXT NOT NULL,reference TEXT NOT NULL,ipv4 TEXT NOT NULL,state TEXT NOT NULL,first_seen TEXT NOT NULL,last_seen TEXT NOT NULL,PRIMARY KEY(device_id,source,reference,ipv4));",
+        "CREATE INDEX IF NOT EXISTS ipv4_evidence_ip ON ipv4_evidence(ipv4,last_seen);",
+        "UPDATE schema_version SET version=3;",
     }, "\n")
     if err := db.exec(schema); err != nil {
         db.Close()
@@ -272,6 +275,7 @@ func main() {
     scanSeconds,err:=strconv.Atoi(os.Getenv("DH_SCAN_INTERVAL"))
     if err!=nil || scanSeconds<60 || scanSeconds>3600 {log.Fatal("DH_SCAN_INTERVAL must be 60..3600")}
     db.lanFreshness=time.Duration(scanSeconds*2+30)*time.Second
+    db.haFreshness=time.Duration(intervalSeconds*3)*time.Second
     service:=&Service{db:db,version:os.Getenv("APP_VERSION"),started:time.Now().UTC(),intervalSeconds:intervalSeconds,scanIntervalSeconds:scanSeconds}
     go service.runRouterPolling(time.Duration(intervalSeconds)*time.Second)
     go service.runLANPolling(time.Duration(scanSeconds)*time.Second)
