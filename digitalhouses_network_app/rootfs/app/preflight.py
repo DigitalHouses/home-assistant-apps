@@ -12,6 +12,11 @@ def validate_environment(env: dict[str, str]) -> None:
     port = env.get("DH_PORT")
     if not port or not port.isdecimal() or not 0 < int(port) < 65536:
         raise ValueError("DH_PORT must be the port assigned by Home Assistant Ingress")
+    interval = env.get("DH_INTERVAL")
+    if not interval or not interval.isdecimal() or not 15 <= int(interval) <= 3600:
+        raise ValueError("DH_INTERVAL must be 15..3600 seconds")
+    if not env.get("SUPERVISOR_TOKEN"):
+        raise ValueError("SUPERVISOR_TOKEN required for HA Core API")
     if env.get("DH_DB") != "/data/network.sqlite3":
         raise ValueError("DH_DB must point to the persistent App data volume")
 

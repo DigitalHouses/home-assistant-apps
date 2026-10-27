@@ -25,12 +25,19 @@ def validate_network(root: Path, app: Path, context: dict) -> None:
             or config.get("privileged") or config.get("map")
             or config.get("ports") or config.get("ports_description")):
         fail("Foundation preview cannot request host privileges or expose ports")
-    if context["version"] != "0.1.0":
+    if context["version"] != "0.1.1":
         fail("Network App pilot security policy requires review for every new version")
+    if config.get("homeassistant_api") is not True:
+        fail("Network App requires HA Core API via Supervisor proxy")
+    if config.get("options", {}).get("poll_interval_seconds") != 60:
+        fail("Network App default polling interval must be 60 seconds")
     require_files(root, [
         app / "icon.png", app / "logo.png",
         app / "go.mod",
         app / "cmd/dh-network/main.go",
+        app / "cmd/dh-network/collector.go",
+        app / "cmd/dh-network/store.go",
+        app / "cmd/dh-network/collector_test.go",
         app / "cmd/dh-network/main_test.go",
         app / "cmd/dh-network/ui/index.html",
         app / "rootfs/app/preflight.py",

@@ -12,7 +12,7 @@ spec.loader.exec_module(module)
 
 class TestPreflight(unittest.TestCase):
     def setUp(self):
-        self.env = {"APP_VERSION": "0.1.0", "DH_PORT": "8099", "DH_DB": "/data/network.sqlite3"}
+        self.env = {"APP_VERSION": "0.1.1", "DH_PORT": "8099", "DH_DB": "/data/network.sqlite3", "DH_INTERVAL": "60", "SUPERVISOR_TOKEN": "test-token"}
 
     def test_valid_configuration(self):
         module.validate_environment(self.env)
@@ -24,6 +24,16 @@ class TestPreflight(unittest.TestCase):
 
     def test_invalid_port_is_contract_failure(self):
         self.env["DH_PORT"] = "unknown"
+        with self.assertRaises(ValueError):
+            module.validate_environment(self.env)
+
+    def test_missing_ha_access_is_contract_failure(self):
+        self.env.pop("SUPERVISOR_TOKEN")
+        with self.assertRaises(ValueError):
+            module.validate_environment(self.env)
+
+    def test_invalid_interval_is_contract_failure(self):
+        self.env["DH_INTERVAL"] = "10"
         with self.assertRaises(ValueError):
             module.validate_environment(self.env)
 

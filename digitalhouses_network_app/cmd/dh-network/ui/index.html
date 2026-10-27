@@ -1,56 +1,89 @@
 <!doctype html>
 <html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>DH Network</title>
-<style>
-:root{color-scheme:dark light}*{box-sizing:border-box}body{font:14px system-ui,sans-serif;margin:0;background:#121d2d;color:#e7f2f7}
-header{padding:22px 26px;border-bottom:1px solid #364557;display:flex;justify-content:space-between;align-items:center}
-h1{margin:0;font-size:22px}small{color:#a9b6c9}main{padding:25px;max-width:1140px;margin:auto}
-nav{display:flex;gap:12px;margin-bottom:20px}button{cursor:pointer;padding:10px 15px;background:#22354e;color:#e7f2f7;border:1px solid #567087;border-radius:8px}
-button.active{background:#197a78;border-color:#4bd0bb}.notice{padding:15px;border:1px solid #91763d;background:#3c3426;border-radius:10px;margin:18px 0}
-table{border-collapse:collapse;width:100%;margin-top:10px}th,td{text-align:left;padding:12px;border-bottom:1px solid #374659}
-input{padding:9px;border:1px solid #5c6b7a;border-radius:7px;background:#1b2c42;color:#fff;width:260px;max-width:100%}
-.pill{color:#d3e8df;background:#1d5950;padding:5px 10px;border-radius:30px}p{line-height:1.5}
+<title>DH Network App</title><style>
+:root{color-scheme:dark}*{box-sizing:border-box}body{font:14px system-ui,sans-serif;margin:0;background:#111b29;color:#e9f0f7}
+header{padding:20px 26px;background:#192b41;border-bottom:1px solid #32475f;display:flex;align-items:center;justify-content:space-between;gap:16px}
+h1{font-size:20px;margin:0 0 3px}h2{font-size:18px;margin:18px 0}
+small,.muted{color:#aebed1} main{padding:22px;max-width:1250px;margin:auto}
+nav{display:flex;gap:10px;margin:20px 0}button{cursor:pointer;padding:9px 13px;background:#284059;color:#f1f7fb;border:1px solid #536e83;border-radius:8px}
+button.active{background:#137b78;border-color:#26b6a5}button:hover{filter:brightness(1.16)}
+.notice{padding:12px 16px;border:1px solid #76673b;background:#34301f;border-radius:9px}
+.stats{display:flex;gap:12px;flex-wrap:wrap;margin:16px 0}.stat{background:#223349;border-radius:8px;padding:12px 18px;min-width:155px}
+.stat strong{display:block;font-size:24px}.stat span{font-size:12px;color:#b9c5d3}
+table{width:100%;border-collapse:collapse;margin:12px 0}th,td{border-bottom:1px solid #304154;padding:12px 10px;text-align:left;vertical-align:middle}
+th{color:#a9c1d1;font-size:12px}td{overflow-wrap:anywhere}
+input{font:inherit;padding:10px;color:#f0f4f9;background:#203147;border:1px solid #526d86;border-radius:8px;max-width:100%}
+.tag{font-size:12px;padding:4px 8px;border:1px solid #49647e;border-radius:16px;white-space:nowrap}
+.tag.online,.tag.ok{border-color:#3e997d;color:#82efc7}.tag.error,.tag.degraded{border-color:#d99259;color:#ffd094}
+.tag.empty,.tag.not_observed,.tag.unknown{border-color:#a0a1a8;color:#c7cbd2}
+.grid-scroll{overflow-x:auto}code{color:#a2c6f4}.description{margin-top:8px;color:#c0cad5}
+@media(max-width:650px){main{padding:13px}header{padding:17px}table{font-size:12px}}
 </style></head>
-<body><header><div><h1>DigitalHouses Network App</h1><small>Network inventory · Ingress</small></div><span id="health" class="pill">Connecting…</span></header>
+<body>
+<header><div><h1>DigitalHouses Network App</h1><small>Устройства и источники сети · v0.1.1</small></div><span id="health" class="tag">Подключение…</span></header>
 <main>
-<div class="notice">Версия 0.1.0 — каркас приложения. Сканирование, данные роутеров и события Home Assistant пока не подключены.</div>
+<div class="notice">Первый источник: Home Assistant <code>device_tracker</code> от интеграций роутеров. Это ещё не самостоятельный сканер LAN. Статус Online означает, что роутер сообщил <code>home</code>.</div>
+<div class="stats"><div class="stat"><strong id="known">—</strong><span>Устройств в реестре</span></div><div class="stat"><strong id="online">—</strong><span>Роутер сообщает Online</span></div><div class="stat"><strong id="interval">—</strong><span>Опрос, секунд</span></div></div>
 <nav><button class="active" data-page="devices">Устройства</button><button data-page="sources">Источники</button><button data-page="events">События</button></nav>
-<section id="body">Загрузка…</section>
+<div id="filterarea"></div><section id="body">Загрузка…</section>
 </main>
 <script>
-const body=document.getElementById('body'), health=document.getElementById('health');
-let current='devices',devices=[];
-function safe(t){return String(t??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-async function get(path){let response=await fetch('api/'+path,{cache:'no-store'});if(!response.ok)throw Error('HTTP '+response.status);return response.json()}
-async function load(){
- try {
-  const status=await get('status');health.textContent='SQLite · '+status.database+' · '+status.devices+' devices';
-  if(current==='devices'){
-    devices=await get('devices');
-    if(!devices.length){body.innerHTML='<h2>Устройства</h2><p>Устройств пока нет. Сканирующий движок будет добавлен в следующей версии.</p>';return}
-    body.innerHTML='<h2>Устройства</h2><table><thead><tr><th>Название</th><th>IPv4 / IPv6</th><th>MAC</th><th>Presence</th><th>Note</th></tr></thead><tbody>'+devices.map((d,i)=>'<tr><td>'+safe(d.display_name||d.hostname||d.id)+'</td><td>'+safe(d.ipv4)+'<br>'+safe(d.ipv6)+'</td><td>'+safe(d.mac)+'</td><td>'+safe(d.presence)+'</td><td><button data-note="'+i+'">Заметка</button> '+safe(d.note)+'</td></tr>').join('')+'</tbody></table>';
-    body.querySelectorAll('[data-note]').forEach(button=>button.addEventListener('click',()=>edit(devices[Number(button.dataset.note)])));
-  } else if(current==='sources'){
-    const sources=await get('sources');
-    body.innerHTML='<h2>Источники</h2><table><tr><th>Источник</th><th>Статус</th></tr>'+sources.map(s=>'<tr><td>'+safe(s.name)+'</td><td>'+safe(s.status)+'</td></tr>').join('')+'</table>';
-  } else {
-    const events=await get('events');
-    body.innerHTML='<h2>События</h2>'+(events.length?'<table>'+events.map(e=>'<tr><td>'+safe(e.occurred_at)+'</td><td>'+safe(e.event_type)+'</td></tr>').join('')+'</table>':'<p>Событий пока нет. Публикация событий пока выключена.</p>');
-  }
- }catch(error){health.textContent='API unavailable';body.textContent='Ошибка: '+error.message}
+const body=document.getElementById('body'),health=document.getElementById('health'),filterArea=document.getElementById('filterarea');
+let page='devices',devices=[],filter='';
+function esc(t){return String(t??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+async function read(kind){const r=await fetch('api/'+kind,{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);return r.json()}
+function noteTime(t){return t?new Date(t).toLocaleString('ru-RU'):'Нет данных'}
+function renderDevices(){
+ filterArea.innerHTML='<input id="search" type="search" placeholder="Поиск по имени, MAC, IP, заметке…" value="'+esc(filter)+'">';
+ filterArea.querySelector('input').addEventListener('input',e=>{filter=e.target.value;renderTable()});
+ renderTable();
 }
-async function edit(d){
- const note=prompt('Заметка для '+(d.display_name||d.id),d.note||'');
+function renderTable(){
+ const q=filter.toLowerCase();
+ const found=devices.filter(d=>[d.display_name,d.hostname,d.mac,d.ipv4,d.ipv6,d.note].some(s=>String(s||'').toLowerCase().includes(q)));
+ if(!devices.length){body.innerHTML='<h2>Устройства</h2><p>Устройств пока нет. Проверь вкладку «Источники». В Home Assistant могут отсутствовать доступные <code>device_tracker</code> от роутеров.</p>';return}
+ body.innerHTML='<h2>Устройства ('+found.length+')</h2><div class="grid-scroll"><table><thead><tr><th>Имя</th><th>MAC</th><th>IPv4 / IPv6</th><th>Источник presence</th><th>Последний Online</th><th>Note</th></tr></thead><tbody>'+
+ found.map((d,i)=>'<tr><td><strong>'+esc(d.display_name||d.hostname||d.id)+'</strong></td><td>'+esc(d.mac||'—')+'</td><td>'+esc(d.ipv4||'—')+'<br>'+esc(d.ipv6||'')+'</td><td><span class="tag '+esc(d.presence)+'">'+esc(d.presence)+'</span></td><td>'+esc(noteTime(d.last_seen))+'</td><td><button data-id="'+esc(d.id)+'">Редактировать</button><br><small>'+esc(d.note||'')+'</small></td></tr>').join('')+'</tbody></table></div>';
+ body.querySelectorAll('button[data-id]').forEach(b=>b.addEventListener('click',()=>edit(b.dataset.id)));
+}
+async function edit(id){
+ const d=devices.find(x=>x.id===id);if(!d)return;
+ const note=prompt('Note для '+(d.display_name||d.id),d.note||'');
  if(note===null)return;
  try{
-   const response=await fetch('api/devices/'+encodeURIComponent(d.id)+'/note',{method:'PUT',headers:{'Content-Type':'application/json','X-DH-UI':'1'},body:JSON.stringify({note})});
-   if(!response.ok)throw Error('HTTP '+response.status);
-   await load();
- }catch(error){alert('Не удалось сохранить: '+error.message)}
+  const r=await fetch('api/devices/'+encodeURIComponent(id)+'/note',{method:'PUT',headers:{'Content-Type':'application/json','X-DH-UI':'1'},body:JSON.stringify({note})});
+  if(!r.ok)throw new Error('HTTP '+r.status);
+  devices=await read('devices');renderTable();
+ }catch(e){alert('Не удалось сохранить: '+e.message)}
 }
-document.querySelectorAll('[data-page]').forEach(button=>button.addEventListener('click',()=>{
- document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
- button.classList.add('active');current=button.dataset.page;load();
+function sourceDescription(s){
+ if(!s.details_json)return '';
+ try{const v=JSON.parse(s.details_json);if(v.error)return 'Ошибка: '+esc(v.error);
+  return 'Всего: '+esc(v.trackers)+' · Home: '+esc(v.home)+' · Not home: '+esc(v.not_home)+' · Unknown: '+esc(v.unknown)+' · Конфликтов: '+esc(v.conflicts)
+ }catch(_){return 'Нет подробностей'}
+}
+async function load(){
+ try{
+  const status=await read('status');health.textContent='SQLite: '+status.database;
+  devices=await read('devices');
+  document.getElementById('known').textContent=devices.length;
+  document.getElementById('online').textContent=devices.filter(d=>d.presence==='online').length;
+  document.getElementById('interval').textContent=status.poll_interval_seconds||'—';
+  filterArea.innerHTML='';
+  if(page==='devices'){renderDevices();return}
+  if(page==='sources'){
+   const sources=await read('sources');
+   body.innerHTML='<h2>Источники</h2><div class="grid-scroll"><table><thead><tr><th>Источник</th><th>Статус</th><th>Последний успешный опрос</th><th>Детали</th></tr></thead><tbody>'+
+   sources.map(s=>'<tr><td>'+esc(s.name)+'</td><td><span class="tag '+esc(s.status)+'">'+esc(s.status)+'</span></td><td>'+esc(noteTime(s.last_success))+'</td><td>'+sourceDescription(s)+'</td></tr>').join('')+'</tbody></table></div>';return;
+  }
+  const events=await read('events');
+  body.innerHTML='<h2>События</h2>'+(events.length?'<div class="grid-scroll"><table>'+events.map(e=>'<tr><td>'+esc(noteTime(e.occurred_at))+'</td><td>'+esc(e.event_type)+'</td></tr>').join('')+'</table></div>':'<p>Журнал событий пуст. Публикация HA Events запланирована на следующем этапе.</p>');
+ }catch(e){health.textContent='API unavailable';body.textContent='Ошибка API: '+e.message}
+}
+document.querySelectorAll('[data-page]').forEach(b=>b.addEventListener('click',()=>{
+ document.querySelectorAll('nav button').forEach(a=>a.classList.remove('active'));
+ b.classList.add('active');page=b.dataset.page;filter='';load();
 }));
 load();
+setInterval(load,30000);
 </script></body></html>

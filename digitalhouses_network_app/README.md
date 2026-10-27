@@ -2,16 +2,19 @@
 
 Experimental native **Home Assistant OS App** for a durable LAN device inventory, presence history, and future device events. Internal/entity prefix: `dh_network_app`. Canonical product ID, App Store slug, and repository directory: `digitalhouses_network_app`.
 
-## Current state (0.1.0 foundation)
+## Current state (0.1.1 router-source pilot)
 
 Available now:
 - standard installation from the **DigitalHouses Home Assistant Apps repository** (no copying files into HAOS);
 - authenticated Home Assistant Ingress Web UI, optionally shown on the HA sidebar;
 - Go process, persistent SQLite at `/data/network.sqlite3`;
 - UI sections for Devices, Sources and Events, REST status/devices/sources/events endpoints and note updates for records that exist;
-- an empty inventory on first launch: no fabricated device, presence or event data.
+- periodic read-only import of Home Assistant `device_tracker` entities with `source_type: router` using the official Supervisor Core API proxy;
+- persistent MAC/HA tracker identities, IP address histories and last positive sighting;
+- source health, last successful poll and import counts. A working HA API with no router trackers is reported as `empty`, not a scan failure.
+- an empty inventory until Home Assistant exposes real router trackers; no fabricated device or presence data.
 
-**Not yet implemented:** IPv4/IPv6 scanning, router/device_tracker import from HA, mDNS/Bonjour/SSDP discovery, identity reconciliation, presence transitions or HA Event publication. The Web UI identifies these as planned.
+**Not yet implemented:** independent IPv4/IPv6 scanning, mDNS/Bonjour/SSDP, full device registry enrichment, reliable multi-source presence decisions or HA Event publication. `online` currently means the HA router tracker reports `home`, not that the device answered a direct probe. The Web UI identifies these as planned.
 
 ## Install / update (only through standard HA App Store)
 
@@ -21,11 +24,11 @@ Available now:
 4. Start it and use **Open Web UI**; optionally enable **Show in sidebar**.
 5. Future updates must also be installed by the Home Assistant App Store.
 
-Do **not** install using `/local_apps`, arbitrary `docker run`, a separate web port, or manual copying into HAOS. This early experimental build has no published GHCR image, so Supervisor builds it from the repository. Production immutable images will be added before the first stable release following the common DigitalHouses release policy.
+Do **not** install using `/local_apps`, arbitrary `docker run`, a separate web port, or manual copying into HAOS. This experimental build has no published GHCR image, so Supervisor builds it from the repository. Production immutable images will be added before the first stable release following the common DigitalHouses release policy.
 
 ## Security and compatibility
 
-Ingress serves the only public UI entry point. No host port mappings, `NET_RAW`, `full_access`, Docker socket or host network permission are requested in this foundation. Later LAN scanning will require explicit reviewed capabilities. Data survives App restart/upgrade in `/data`; generated code and images do not belong there. No dependency on Nmap, an MQTT broker, remote telemetry or a database server.
+Ingress serves the only public UI entry point. No host port mappings, `NET_RAW`, `full_access`, Docker socket or host network permission are requested in this pilot. Later LAN scanning will require explicit reviewed capabilities. Data survives App restart/upgrade in `/data`; generated code and images do not belong there. No dependency on Nmap, an MQTT broker, remote telemetry or a database server. `homeassistant_api: true` is necessary and carries administrator-level Core API access; the token is never exposed in the Web UI.
 
 No existing NetAlertX, Presence App, Internet App or HA entities are modified.
 

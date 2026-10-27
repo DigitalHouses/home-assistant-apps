@@ -1,1 +1,4 @@
-configuration: {}
+configuration:
+  poll_interval_seconds:
+    name: Router tracker poll interval (seconds)
+    description: Read existing Home Assistant router device_trackers periodically. No LAN scan is performed yet.
