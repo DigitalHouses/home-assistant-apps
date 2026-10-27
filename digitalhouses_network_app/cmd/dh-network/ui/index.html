@@ -5,7 +5,7 @@
 header{padding:20px 26px;background:#192b41;border-bottom:1px solid #32475f;display:flex;align-items:center;justify-content:space-between;gap:16px}
 h1{font-size:20px;margin:0 0 3px}h2{font-size:18px;margin:18px 0}
 small,.muted{color:#aebed1} main{padding:22px;max-width:1250px;margin:auto}
-nav{display:flex;gap:10px;margin:20px 0}button{cursor:pointer;padding:9px 13px;background:#284059;color:#f1f7fb;border:1px solid #536e83;border-radius:8px}
+nav{display:flex;gap:10px;margin:20px 0;flex-wrap:wrap}.toolbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:8px 0 20px}.export{background:#176761;border-color:#3aa99d}.source-tag{display:inline-block;margin:3px 4px 3px 0}button{cursor:pointer;padding:9px 13px;background:#284059;color:#f1f7fb;border:1px solid #536e83;border-radius:8px}
 button.active{background:#137b78;border-color:#26b6a5}button:hover{filter:brightness(1.16)}
 .notice{padding:12px 16px;border:1px solid #76673b;background:#34301f;border-radius:9px}
 .stats{display:flex;gap:12px;flex-wrap:wrap;margin:16px 0}.stat{background:#223349;border-radius:8px;padding:12px 18px;min-width:155px}
@@ -20,30 +20,47 @@ input{font:inherit;padding:10px;color:#f0f4f9;background:#203147;border:1px soli
 @media(max-width:650px){main{padding:13px}header{padding:17px}table{font-size:12px}}
 </style></head>
 <body>
-<header><div><h1>DigitalHouses Network App</h1><small>Устройства и источники сети · v0.1.2</small></div><span id="health" class="tag">Подключение…</span></header>
+<header><div><h1>DigitalHouses Network App</h1><small>Устройства и источники сети · v0.1.3</small></div><span id="health" class="tag">Подключение…</span></header>
 <main>
 <div class="notice">Источники: Home Assistant <code>device_tracker</code> и самостоятельный ARP-опрос локального IPv4. ARP обнаруживает ответившие сетевые интерфейсы; отсутствие ответа не доказывает Offline. IPv6/Bonjour добавим далее.</div>
 <div class="stats"><div class="stat"><strong id="known">—</strong><span>Устройств в реестре</span></div><div class="stat"><strong id="online">—</strong><span>Подтверждённый Online</span></div><div class="stat"><strong id="interval">—</strong><span>HA-опрос, секунд</span></div><div class="stat"><strong id="arp-interval">—</strong><span>ARP-опрос, секунд</span></div></div>
 <nav><button class="active" data-page="devices">Устройства</button><button data-page="sources">Источники</button><button data-page="events">События</button></nav>
-<div id="filterarea"></div><section id="body">Загрузка…</section>
+<div class="toolbar"><button id="export" class="export" type="button">Сохранить диагностику (.json)</button><small id="export-status">Файл содержит IP, MAC, имена и заметки. Он сохраняется только на твоём компьютере.</small></div><div id="filterarea"></div><section id="body">Загрузка…</section>
 </main>
 <script>
 const body=document.getElementById('body'),health=document.getElementById('health'),filterArea=document.getElementById('filterarea');
-let page='devices',devices=[],filter='';
+let page='devices',devices=[],origins=[],filter='';
 function esc(t){return String(t??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 async function read(kind){const r=await fetch('api/'+kind,{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);return r.json()}
 function noteTime(t){return t?new Date(t).toLocaleString('ru-RU'):'Нет данных'}
+function visibleDeviceIDs(){
+ const q=filter.toLowerCase();
+ return devices.filter(d=>[d.display_name,d.hostname,d.mac,d.ipv4,d.ipv6,d.note].some(s=>String(s||'').toLowerCase().includes(q))).map(d=>d.id);
+}
+function originsForDevice(id) {
+ return origins.filter(o=>o.device_id===id).sort((a,b)=>a.source.localeCompare(b.source));
+}
+function sourcesForDisplay(id) {
+ const candidates=originsForDevice(id);
+ if(!candidates.length)return '<small>—</small>';
+ const distinct=[...new Set(candidates.map(x=>x.source))];
+ return distinct.map(name=>{
+  const matching=candidates.filter(x=>x.source===name);
+  const hint=matching.map(x=>x.source+(x.reference?' ('+x.reference+')':'')+': '+(x.last_reported_at||'нет даты')).join('; ');
+  return '<span class="tag source-tag" title="'+esc(hint)+'">'+esc(name)+'</span>';
+ }).join('');
+}
 function renderDevices(){
  filterArea.innerHTML='<input id="search" type="search" placeholder="Поиск по имени, MAC, IP, заметке…" value="'+esc(filter)+'">';
  filterArea.querySelector('input').addEventListener('input',e=>{filter=e.target.value;renderTable()});
  renderTable();
 }
 function renderTable(){
- const q=filter.toLowerCase();
- const found=devices.filter(d=>[d.display_name,d.hostname,d.mac,d.ipv4,d.ipv6,d.note].some(s=>String(s||'').toLowerCase().includes(q)));
+ const ids=new Set(visibleDeviceIDs());
+ const found=devices.filter(d=>ids.has(d.id));
  if(!devices.length){body.innerHTML='<h2>Устройства</h2><p>Устройств пока нет. Проверь вкладку «Источники». В Home Assistant могут отсутствовать доступные <code>device_tracker</code> от роутеров.</p>';return}
- body.innerHTML='<h2>Устройства ('+found.length+')</h2><div class="grid-scroll"><table><thead><tr><th>Имя</th><th>MAC</th><th>IPv4 / IPv6</th><th>Источник presence</th><th>Последний Online</th><th>Note</th></tr></thead><tbody>'+
- found.map((d,i)=>'<tr><td><strong>'+esc(d.display_name||d.hostname||d.id)+'</strong></td><td>'+esc(d.mac||'—')+'</td><td>'+esc(d.ipv4||'—')+'<br>'+esc(d.ipv6||'')+'</td><td><span class="tag '+esc(d.presence)+'">'+esc(d.presence)+'</span></td><td>'+esc(noteTime(d.last_seen))+'</td><td><button data-id="'+esc(d.id)+'">Редактировать</button><br><small>'+esc(d.note||'')+'</small></td></tr>').join('')+'</tbody></table></div>';
+ body.innerHTML='<h2>Устройства ('+found.length+')</h2><div class="grid-scroll"><table><thead><tr><th>Имя</th><th>MAC</th><th>IPv4 / IPv6</th><th>Presence</th><th>Обнаружен через</th><th>Последний Online</th><th>Note</th></tr></thead><tbody>'+
+ found.map((d,i)=>'<tr><td><strong>'+esc(d.display_name||d.hostname||d.id)+'</strong></td><td>'+esc(d.mac||'—')+'</td><td>'+esc(d.ipv4||'—')+'<br>'+esc(d.ipv6||'')+'</td><td><span class="tag '+esc(d.presence)+'">'+esc(d.presence)+'</span></td><td>'+sourcesForDisplay(d.id)+'</td><td>'+esc(noteTime(d.last_seen))+'</td><td><button data-id="'+esc(d.id)+'">Редактировать</button><br><small>'+esc(d.note||'')+'</small></td></tr>').join('')+'</tbody></table></div>';
  body.querySelectorAll('button[data-id]').forEach(b=>b.addEventListener('click',()=>edit(b.dataset.id)));
 }
 async function edit(id){
@@ -67,6 +84,7 @@ async function load(){
  try{
   const status=await read('status');health.textContent='SQLite: '+status.database;
   devices=await read('devices');
+  origins=await read('device-sources');
   document.getElementById('known').textContent=devices.length;
   document.getElementById('online').textContent=devices.filter(d=>d.presence==='online').length;
   document.getElementById('interval').textContent=status.poll_interval_seconds||'—';
@@ -82,6 +100,46 @@ async function load(){
   body.innerHTML='<h2>События</h2>'+(events.length?'<div class="grid-scroll"><table>'+events.map(e=>'<tr><td>'+esc(noteTime(e.occurred_at))+'</td><td>'+esc(e.event_type)+'</td></tr>').join('')+'</table></div>':'<p>Журнал событий пуст. Публикация HA Events запланирована на следующем этапе.</p>');
  }catch(e){health.textContent='API unavailable';body.textContent='Ошибка API: '+e.message}
 }
+async function exportDiagnostic() {
+ const button=document.getElementById('export');
+ const message=document.getElementById('export-status');
+ if(button.disabled)return;
+ button.disabled=true;message.textContent='Формирование файла…';
+ try{
+  const selectedTab=page;
+  const selectedFilter=filter;
+  const shown=selectedTab==='devices'?visibleDeviceIDs():[];
+  const report=await read('diagnostics');
+  report.browser_view={
+   active_tab:selectedTab,
+   search_filter:selectedTab==='devices'?selectedFilter:null,
+   visible_device_ids:shown,
+   visible_device_count:shown.length,
+   displayed_columns:selectedTab==='devices'?['Имя','MAC','IPv4 / IPv6','Presence','Обнаружен через','Последний Online','Note']:[],
+   counters_as_displayed:{
+    devices:document.getElementById('known').textContent,
+    online:document.getElementById('online').textContent,
+    ha_poll_seconds:document.getElementById('interval').textContent,
+    arp_poll_seconds:document.getElementById('arp-interval').textContent
+   },
+   browser_exported_at:new Date().toISOString(),
+   browser_timezone:Intl.DateTimeFormat().resolvedOptions().timeZone,
+   detail:'Complete server inventory and sources, plus the exact selected tab, filter and displayed device IDs; not a pixel screenshot.'
+  };
+  const d=new Date();
+  const stamp=[d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('')+'-'+[d.getHours(),d.getMinutes(),d.getSeconds()].map(x=>String(x).padStart(2,'0')).join('');
+  const file='dh-network-diagnostic-'+stamp+'.json';
+  const blob=new Blob([JSON.stringify(report,null,2)],{type:'application/json;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download=file;a.style.display='none';
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1500);
+  message.textContent='Файл '+file+' сформирован. Пришли его в чат для анализа.';
+ }catch(e){message.textContent='Не удалось создать файл: '+e.message}
+ finally{button.disabled=false}
+}
+document.getElementById('export').addEventListener('click',exportDiagnostic);
 document.querySelectorAll('[data-page]').forEach(b=>b.addEventListener('click',()=>{
  document.querySelectorAll('nav button').forEach(a=>a.classList.remove('active'));
  b.classList.add('active');page=b.dataset.page;filter='';load();
