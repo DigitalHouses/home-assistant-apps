@@ -160,7 +160,27 @@ func (s *Service) pollWSD() {
  at:=time.Now().UTC().Format(time.RFC3339)
  linked,unmatched,err:=s.db.importWSD(items,at,packets,plan.iface.Name)
  if err!=nil{s.reportWSDError(err);return}
- log.Printf("WS-Discovery: %d responses, %d endpoints, %d ARP/local-interface-linked, %d unmatched",packets,len(items),linked,unmatched)
+ verified,attempted:=0,0
+ for _,item:=range items {
+  if attempted>=8 {break}
+  if !strings.Contains(" "+item.Types+" "," pub:Computer ") {continue}
+  if _,targetErr:=safeWSDMetadataTarget(item);targetErr!=nil {continue}
+  confirmed,checkErr:=s.db.wsdConfirmedEndpoint(item,at)
+  if checkErr!=nil {log.Printf("WSD endpoint validation: %v",checkErr);continue}
+  if !confirmed {continue}
+  attempted++
+  metaCtx,metaCancel:=context.WithTimeout(ctx,2*time.Second)
+  name,metaErr:=fetchWSDComputerName(metaCtx,item)
+  metaCancel()
+  if metaErr!=nil {log.Printf("WSD metadata Get %s: %v",item.IPv4,metaErr);continue}
+  if err:=s.db.persistWSDComputerName(item,name,time.Now().UTC().Format(time.RFC3339));err!=nil {
+   log.Printf("WSD verified name persistence error: %v",err);continue
+  }
+  verified++
+  log.Printf("WSD verified computer name: %s -> %s",item.IPv4,name)
+ }
+ log.Printf("WS-Discovery: %d responses, %d endpoints, %d ARP/local-interface-linked, %d unmatched, %d/%d verified computer names",
+  packets,len(items),linked,unmatched,verified,attempted)
 }
 func (s *Service) reportWSDError(err error) {
  log.Printf("WS-Discovery unavailable: %v",err)
