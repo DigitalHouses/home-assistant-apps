@@ -86,8 +86,7 @@ func openDB(path string) (*DB, error) {
         "CREATE TABLE IF NOT EXISTS sources (id TEXT PRIMARY KEY, kind TEXT NOT NULL, status TEXT NOT NULL, last_success TEXT, details_json TEXT NOT NULL DEFAULT '{}');",
         "CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY, event_type TEXT NOT NULL, device_id TEXT NOT NULL DEFAULT '', occurred_at TEXT NOT NULL, data_json TEXT NOT NULL DEFAULT '{}');",
         "CREATE INDEX IF NOT EXISTS event_order ON events(occurred_at);",
-    }, "
-")
+    }, "\n")
     if err := db.exec(schema); err != nil {
         db.Close()
         return nil, err
@@ -189,8 +188,7 @@ func (s *Service) routes() http.Handler {
         w.Header().Set("Content-Type","text/html; charset=utf-8")
         _,_=w.Write(page)
     })
-    mux.HandleFunc("GET /healthz",func(w http.ResponseWriter,r *http.Request){ _,_=io.WriteString(w,"ok
-") })
+    mux.HandleFunc("GET /healthz",func(w http.ResponseWriter,r *http.Request){ _,_=io.WriteString(w,"ok\n") })
     mux.HandleFunc("GET /api/status",func(w http.ResponseWriter,r *http.Request){
         devices,err:=s.db.devices()
         if err != nil { http.Error(w,"database unavailable",500); return }
