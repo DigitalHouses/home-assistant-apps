@@ -10,7 +10,16 @@ button.active{background:#137b78;border-color:#26b6a5}button:hover{filter:bright
 .notice{padding:12px 16px;border:1px solid #76673b;background:#34301f;border-radius:9px}
 .stats{display:flex;gap:12px;flex-wrap:wrap;margin:16px 0}.stat{background:#223349;border-radius:8px;padding:12px 18px;min-width:155px}
 .stat strong{display:block;font-size:24px}.stat span{font-size:12px;color:#b9c5d3}
-table{width:100%;border-collapse:collapse;margin:12px 0}th,td{border-bottom:1px solid #304154;padding:12px 10px;text-align:left;vertical-align:middle}
+table{width:100%;border-collapse:collapse;margin:12px 0}
+.devices-table{min-width:960px}
+.devices-table th button{background:transparent;border:0;color:#a9c1d1;font:inherit;font-weight:600;border-radius:4px;padding:4px;white-space:nowrap;text-align:left}
+.devices-table th button:hover,.devices-table th button:focus-visible{color:#fff;background:#294057;outline-offset:2px}
+.devices-table th[aria-sort="ascending"] button,.devices-table th[aria-sort="descending"] button{color:#82efc7}
+.devices-table td.ip-cell,.devices-table td.mac-cell,.devices-table td.time-cell{white-space:nowrap;overflow-wrap:normal}
+.devices-table td.source-cell{min-width:150px}
+.devices-table td.note-cell{min-width:125px}
+.devices-table td.note-cell button{white-space:nowrap;padding:7px 9px}
+.devices-table .sort-arrow{color:#96abc2;padding-left:3px}th,td{border-bottom:1px solid #304154;padding:12px 10px;text-align:left;vertical-align:middle}
 th{color:#a9c1d1;font-size:12px}td{overflow-wrap:anywhere}
 input{font:inherit;padding:10px;color:#f0f4f9;background:#203147;border:1px solid #526d86;border-radius:8px;max-width:100%}
 .tag{font-size:12px;padding:4px 8px;border:1px solid #49647e;border-radius:16px;white-space:nowrap}
@@ -20,7 +29,7 @@ input{font:inherit;padding:10px;color:#f0f4f9;background:#203147;border:1px soli
 @media(max-width:650px){main{padding:13px}header{padding:17px}table{font-size:12px}}
 </style></head>
 <body>
-<header><div><h1>DigitalHouses Network App</h1><small>Устройства и источники сети · v0.1.5</small></div><span id="health" class="tag">Подключение…</span></header>
+<header><div><h1>DigitalHouses Network App</h1><small>Устройства и источники сети · v0.1.6</small></div><span id="health" class="tag">Подключение…</span></header>
 <main>
 <div class="notice">Источники: Home Assistant <code>device_tracker</code> и самостоятельный ARP-опрос локального IPv4. ARP обнаруживает ответившие сетевые интерфейсы; отсутствие ответа не доказывает Offline. Bonjour дополняет имена и сервисы при свежем ARP-подтверждении IP. IPv6 NDP и SSDP добавим позже.</div>
 <div class="stats"><div class="stat"><strong id="known">—</strong><span>Устройств в реестре</span></div><div class="stat"><strong id="online">—</strong><span>Подтверждённый Online</span></div><div class="stat"><strong id="interval">—</strong><span>HA-опрос, секунд</span></div><div class="stat"><strong id="arp-interval">—</strong><span>ARP-опрос, секунд</span></div><div class="stat"><strong id="last-arp">—</strong><span>Последний ARP-скан</span></div><div class="stat"><strong id="known-arp">—</strong><span>Ранее найдено ARP</span></div><div class="stat"><strong id="ip-conflicts">—</strong><span>Спорных IPv4</span></div><div class="stat"><strong id="mdns-hosts">—</strong><span>Хостов с Bonjour</span></div><div class="stat"><strong id="mdns-services">—</strong><span>Bonjour сервисов</span></div></div>
@@ -30,15 +39,20 @@ input{font:inherit;padding:10px;color:#f0f4f9;background:#203147;border:1px soli
 <script>
 const body=document.getElementById('body'),health=document.getElementById('health'),filterArea=document.getElementById('filterarea');
 let page='devices',devices=[],origins=[],mdnsServices=[],filter='';
+let sortKey='ip',sortDirection='asc';
+const deviceColumns=[['ip','IP'],['name','Имя'],['mac','MAC'],['presence','Presence'],['sources','Обнаружен через'],['last_seen','Последний Online'],['note','Note']];
+const nameCollator=new Intl.Collator('ru',{numeric:true,sensitivity:'base'});
 function esc(t){return String(t??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 async function read(kind){const r=await fetch('api/'+kind,{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);return r.json()}
 function noteTime(t){return t?new Date(t).toLocaleString('ru-RU'):'Нет данных'}
-function visibleDeviceIDs(){
- const q=filter.toLowerCase();
- return devices.filter(d=>[d.display_name,d.hostname,d.mac,d.ipv4,d.ipv6,d.note,...mdnsServices.filter(s=>s.device_id===d.id).map(s=>s.instance+' '+s.type)].some(s=>String(s||'').toLowerCase().includes(q))).map(d=>d.id);
-}
 function originsForDevice(id) {
  return origins.filter(o=>o.device_id===id).sort((a,b)=>a.source.localeCompare(b.source));
+}
+function mdnsForDevice(id) {
+ return mdnsServices.filter(s=>s.device_id===id).sort((a,b)=>nameCollator.compare(a.type+' '+a.instance,b.type+' '+b.instance));
+}
+function sourcesForSort(id) {
+ return [...new Set(originsForDevice(id).map(o=>o.source))].sort((a,b)=>nameCollator.compare(a,b)).join(', ');
 }
 function sourcesForDisplay(id) {
  const candidates=originsForDevice(id);
@@ -46,14 +60,79 @@ function sourcesForDisplay(id) {
  const distinct=[...new Set(candidates.map(x=>x.source))];
  return distinct.map(name=>{
   const matching=candidates.filter(x=>x.source===name);
-  const hint=matching.map(x=>x.source+(x.reference?' ('+x.reference+')':'')+': '+(x.last_reported_at||'нет даты')).join('; ');
-  return '<span class="tag source-tag" title="'+esc(hint)+'">'+esc(name)+'</span>';
+  const services=name==='mDNS'?mdnsForDevice(id):[];
+  const evidence=matching.map(x=>x.source+(x.reference?' ('+x.reference+')':'')+': '+(x.last_reported_at||'нет даты')).join('; ');
+  const newline=String.fromCharCode(10);
+  const details=services.length?newline+'Bonjour-сервисы ('+services.length+'):'+newline+services.map(s=>s.instance+' — '+s.type+' :'+s.port+' ['+s.target+']').join(newline):'';
+  const hint=evidence+details;
+  const caption=name==='mDNS'&&services.length?'mDNS · '+services.length:name;
+  return '<span class="tag source-tag" tabindex="0" title="'+esc(hint)+'" aria-label="'+esc(hint)+'">'+esc(caption)+'</span>';
  }).join('');
 }
-function mdnsServiceDisplay(id){
- const list=mdnsServices.filter(s=>s.device_id===id);
- if(!list.length)return '<small>—</small>';
- return list.map(s=>'<span class="tag source-tag" title="'+esc(s.instance+' · '+s.target)+'">'+esc(s.type.split('.local')[0])+':'+esc(s.port)+'</span>').join('');
+function deviceValue(d,column){
+ switch(column){
+ case 'ip':return d.ipv4||d.ipv6||'';
+ case 'name':return d.display_name||d.hostname||d.id||'';
+ case 'mac':return d.mac||'';
+ case 'presence':return d.presence||'';
+ case 'sources':return sourcesForSort(d.id);
+ case 'last_seen':return d.last_seen||'';
+ case 'note':return d.note||'';
+ default:return '';
+ }
+}
+function ipSortKey(ip){
+ if(!ip)return null;
+ const parts=ip.split('.');
+ if(parts.length===4&&parts.every(part=>part.length>=1&&part.length<=3&&Number.isInteger(Number(part))&&Number(part)>=0&&Number(part)<=255)){
+  return [0,...parts.map(Number)];
+ }
+ return [1,ip.toLowerCase()];
+}
+function compareAddress(a,b){
+ const x=ipSortKey(a),y=ipSortKey(b);
+ if(x===null)return y===null?0:1;
+ if(y===null)return -1;
+ if(x[0]!==y[0])return x[0]-y[0];
+ if(x[0]===0){
+  for(let i=1;i<=4;i++){if(x[i]!==y[i])return x[i]-y[i]}
+  return 0;
+ }
+ return nameCollator.compare(x[1],y[1]);
+}
+function compareDevices(a,b){
+ const av=deviceValue(a,sortKey),bv=deviceValue(b,sortKey);
+ // Missing values remain at the bottom in both sorting directions.
+ if(!av||!bv){
+  if(!av&&!bv)return nameCollator.compare(a.id,b.id);
+  return !av?1:-1;
+ }
+ let comparison;
+ if(sortKey==='ip')comparison=compareAddress(av,bv);
+ else if(sortKey==='last_seen')comparison=new Date(av).getTime()-new Date(bv).getTime();
+ else comparison=nameCollator.compare(String(av),String(bv));
+ if(comparison!==0)return comparison*(sortDirection==='asc'?1:-1);
+ return nameCollator.compare(a.id,b.id);
+}
+function sortedDeviceRows(){
+ const q=filter.toLowerCase();
+ return devices.filter(d=>[d.display_name,d.hostname,d.mac,d.ipv4,d.ipv6,d.note,...mdnsForDevice(d.id).map(s=>s.instance+' '+s.type)].some(s=>String(s||'').toLowerCase().includes(q))).sort(compareDevices);
+}
+function visibleDeviceIDs(){return sortedDeviceRows().map(d=>d.id)}
+function changeSort(column){
+ if(!deviceColumns.some(([id])=>id===column))return;
+ if(sortKey===column)sortDirection=sortDirection==='asc'?'desc':'asc';
+ else{sortKey=column;sortDirection='asc'}
+ renderTable();
+}
+function sortedHeaders(){
+ return deviceColumns.map(([key,title])=>{
+  const active=sortKey===key;
+  const direction=active?(sortDirection==='asc'?'ascending':'descending'):'none';
+  const symbol=active?(sortDirection==='asc'?'↑':'↓'):'↕';
+  const action=active&&sortDirection==='asc'?'убывание':'возрастание';
+  return '<th scope="col" aria-sort="'+direction+'"><button type="button" data-sort="'+esc(key)+'" title="Сортировать: '+esc(action)+'">'+esc(title)+' <span class="sort-arrow" aria-hidden="true">'+symbol+'</span></button></th>';
+ }).join('');
 }
 function renderDevices(){
  filterArea.innerHTML='<input id="search" type="search" placeholder="Поиск по имени, MAC, IP, заметке…" value="'+esc(filter)+'">';
