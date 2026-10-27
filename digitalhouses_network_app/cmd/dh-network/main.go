@@ -20,6 +20,7 @@ import (
     "net/http"
     "os"
     "path/filepath"
+    "strconv"
     "strings"
     "sync"
     "time"
@@ -172,6 +173,7 @@ type Service struct {
     db *DB
     version string
     started time.Time
+    intervalSeconds int
 }
 
 func reply(w http.ResponseWriter, data any) {
@@ -192,7 +194,7 @@ func (s *Service) routes() http.Handler {
     mux.HandleFunc("GET /api/status",func(w http.ResponseWriter,r *http.Request){
         devices,err:=s.db.devices()
         if err != nil { http.Error(w,"database unavailable",500); return }
-        reply(w,map[string]any{"product":"digitalhouses_network_app","version":s.version,"started_at":s.started.Format(time.RFC3339),"database":"ready","discovery_running":false,"devices":len(devices),"phase":"foundation"})
+        reply(w,map[string]any{"product":"digitalhouses_network_app","version":s.version,"started_at":s.started.Format(time.RFC3339),"database":"ready","discovery_running":false,"ha_router_import_enabled":true,"poll_interval_seconds":s.intervalSeconds,"devices":len(devices),"phase":"ha_router_trackers"})
     })
     mux.HandleFunc("GET /api/devices",func(w http.ResponseWriter,r *http.Request){
         devices,err:=s.db.devices()
@@ -205,12 +207,13 @@ func (s *Service) routes() http.Handler {
         reply(w,events)
     })
     mux.HandleFunc("GET /api/sources",func(w http.ResponseWriter,r *http.Request){
-        reply(w,[]map[string]string{
-            {"name":"LAN IPv4/IPv6","status":"planned"},
-            {"name":"HA router integrations","status":"planned"},
-            {"name":"mDNS / Bonjour","status":"planned"},
-            {"name":"SSDP","status":"planned"},
-        })
+        sources,err:=s.db.sources()
+        if err!=nil {http.Error(w,"database unavailable",500);return}
+        if len(sources)==0 {sources=append(sources,SourceInfo{Name:"Home Assistant router trackers",Kind:"ha_device_tracker",Status:"pending"})}
+        sources=append(sources,SourceInfo{Name:"LAN IPv4/IPv6",Kind:"planned",Status:"planned"},
+            SourceInfo{Name:"mDNS / Bonjour",Kind:"planned",Status:"planned"},
+            SourceInfo{Name:"SSDP",Kind:"planned",Status:"planned"})
+        reply(w,sources)
     })
     mux.HandleFunc("PUT /api/devices/{id}/note",func(w http.ResponseWriter,r *http.Request){
         id:=r.PathValue("id")
@@ -248,7 +251,10 @@ func main() {
     db,err:=openDB(path)
     if err!=nil { log.Fatal(err) }
     defer db.Close()
-    service:=&Service{db:db,version:os.Getenv("APP_VERSION"),started:time.Now().UTC()}
+    intervalSeconds,err:=strconv.Atoi(os.Getenv("DH_INTERVAL"))
+    if err!=nil || intervalSeconds<15 || intervalSeconds>3600 {log.Fatal("DH_INTERVAL must be between 15 and 3600")}
+    service:=&Service{db:db,version:os.Getenv("APP_VERSION"),started:time.Now().UTC(),intervalSeconds:intervalSeconds}
+    go service.runRouterPolling(time.Duration(intervalSeconds)*time.Second)
     log.Printf("DigitalHouses Network App %s started; ingress=%s",service.version,port)
     server:=&http.Server{Addr:":"+port,Handler:service.routes(),ReadHeaderTimeout:10*time.Second,ReadTimeout:30*time.Second,WriteTimeout:30*time.Second}
     log.Fatal(server.ListenAndServe())
