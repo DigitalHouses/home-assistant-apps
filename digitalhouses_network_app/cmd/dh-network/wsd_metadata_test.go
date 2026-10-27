@@ -1,7 +1,6 @@
 package main
 
 import (
- "net/netip"
  "path/filepath"
  "strings"
  "testing"
@@ -9,14 +8,14 @@ import (
 )
 
 func sampleWindowsWSDGetResponse(id,endpoint,computer string) []byte {
- return []byte(<s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope"
+ return []byte(`<s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope"
  xmlns:a="http://schemas.xmlsoap.org/ws/2004/08/addressing"
  xmlns:x="http://schemas.xmlsoap.org/ws/2004/09/mex"
  xmlns:dp="http://schemas.xmlsoap.org/ws/2006/02/devprof"
  xmlns:pub="http://schemas.microsoft.com/windows/pub/2005/07">
  <s:Header>
  <a:Action>http://schemas.xmlsoap.org/ws/2004/09/transfer/GetResponse</a:Action>
- <a:RelatesTo>+id+</a:RelatesTo>
+ <a:RelatesTo>`+id+`</a:RelatesTo>
  </s:Header>
  <s:Body><x:Metadata>
  <x:MetadataSection Dialect="http://schemas.xmlsoap.org/ws/2006/02/devprof/ThisDevice">
@@ -24,10 +23,10 @@ func sampleWindowsWSDGetResponse(id,endpoint,computer string) []byte {
  </x:MetadataSection>
  <x:MetadataSection Dialect="http://schemas.xmlsoap.org/ws/2006/02/devprof/Relationship">
  <dp:Relationship Type="http://schemas.xmlsoap.org/ws/2006/02/devprof/host">
- <dp:Host><a:EndpointReference><a:Address>+endpoint+</a:Address></a:EndpointReference>
- <dp:Types>pub:Computer</dp:Types><pub:Computer>+computer+</pub:Computer></dp:Host></dp:Relationship>
+ <dp:Host><a:EndpointReference><a:Address>`+endpoint+`</a:Address></a:EndpointReference>
+ <dp:Types>pub:Computer</dp:Types><pub:Computer>`+computer+`</pub:Computer></dp:Host></dp:Relationship>
  </x:MetadataSection>
- </x:Metadata></s:Body></s:Envelope>)
+ </x:Metadata></s:Body></s:Envelope>`)
 }
 func TestWSDWindowsComputerNameOnlyFromVerifiedGetResponse(t *testing.T) {
  endpoint:="urn:uuid:e2bf7703-4b57-4ee5-bedd-ef9676b731f9"
@@ -107,5 +106,4 @@ func TestWSDComputerNameValidation(t *testing.T) {
  for _,x:=range []string{"","localhost","unknown","1-2-3","-host","host-","host/Workgroup:HOME","bad.name","44aa55bb66cc",strings.Repeat("a",70)} {
   if validWSDComputerName(x){t.Fatalf("unreliable computer label accepted: %s",x)}
  }
- _=netip.Addr{}
 }
