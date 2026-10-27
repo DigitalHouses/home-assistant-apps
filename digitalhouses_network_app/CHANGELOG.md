@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.8
+
+- First column is dynamic sequential row number (recomputed after active filtering and sorting); the second is the discovered device name, followed by IP, MAC, Presence, sources, last Online and Note.
+- The Name column shows **only a verified human-readable name from the existing inventory**: MAC-formatted names (colon-, dash-separated, or 12-hex without separators), UUID and IPv4 placeholders are represented as an em dash. The underlying MAC, hostname and identity values remain available in their own columns and diagnostic JSON.
+- Note cell is a compact, single-line action: `Добавить` for empty notes, or the actual note text (click to edit) for existing notes. Long notes are visually truncated with full text available in hover tooltip; the editable underlying note is never truncated.
+- Every row is visually constrained to one line, using tooltips/ellipsis and horizontal scroll if needed, to keep 30+ devices readable.
+- Preserve sorting of all seven data columns, search by MAC/notes, stable device UUIDs, Note editing and diagnostic export with display columns matching the new layout.
+- Browser JavaScript tests cover name placeholders, actual discovered names, sort/filter row indexes, compact Notes, and HTML injection escaping. No DB schema/permissions/scanner changes.
+
 ## 0.1.7
 
 - Persist event transitions for IPv4 source disagreements, especially HA Router Wi-Fi Media Bridge MAC/IP observations versus fresh direct ARP, without treating them as confirmed duplicate-IP faults or sending notifications.

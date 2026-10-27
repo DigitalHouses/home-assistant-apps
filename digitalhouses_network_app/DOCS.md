@@ -7,7 +7,7 @@
 - Compact namespace: `dh_network_app`
 - Web UI: Home Assistant Ingress (not a second externally exposed admin service)
 - Storage: SQLite `/data/network.sqlite3`
-- Current version: `0.1.7`, experimental, no GHCR artifact and no telemetry
+- Current version: `0.1.8`, experimental, no GHCR artifact and no telemetry
 
 This App deliberately follows the existing product-naming and HAOS packaging standards. Its **Ingress** UI is the accepted departure from the usual MQTT-discovered Lovelace control card: UI state, notes and inventory are App-owned instead of built from MQTT entities. Any future machine events must follow DigitalHouses Events & Notifications Standard; local alert delivery belongs to HA, not the public App.
 
@@ -94,6 +94,14 @@ Where a DigitalHouses application exposes a discoverable TCP service, publish DN
 - SSDP enriches a device **only** if an unambiguous, fresh, direct ARP claim matches its current IPv4; it does not create devices, rename hosts, alter Presence, overwrite notes, merge by IP, or trust a router-only entry. Unmatched SSDP records are kept for a maximum of 24 hours as non-device diagnostics.
 - Ingress shows a compact `SSDP · N` source badge with tooltip for ST, USN and SERVER, and counters for SSDP-linked hosts and services. Full records and unmatched are included in the diagnostic JSON, with new `GET /api/ssdp-services`.
 - Empty SSDP responses are acceptable (`status=empty`) and do not mean no SSDP-capable hosts exist. No new Supervisor permissions, no user-configurable extra network targets, no changes to NetAlertX.
+
+## Compact numbered device inventory (0.1.8)
+
+- Eight columns in the Ingress table, in this order: **№, Имя, IP, MAC, Presence, Обнаружен через, Последний Online, Note**. № is a local ordinal for the **current filtered/sorted view**, not a persistent device identifier and not a sortable database field. Seven real data columns remain clickable sort controls, with the default IP numeric ascending. Exported `browser_view.displayed_columns` includes № and the exported UUID order matches the current visual ordering.
+- The Name column includes only genuine non-MAC names already supplied by Home Assistant or verified Bonjour. Suppress colon/dash MAC and 12-digit raw hexadecimal (e.g. `54ef44a716c9.local`), unknown/unavailable, raw UUID and IPv4 placeholders. Fallback to meaningful hostname only if display_name is a placeholder. Show `—` when no discovered name. No inventing device labels, no backend data mutation, no using the user's note as a discovered name.
+- Notes render as **one compact clickable action** per row: `Добавить` when blank and the actual saved note text otherwise, both invoking the existing note editor. A long note is CSS-ellipsized inside a bounded cell but retains full original text on hover; saved notes and API contract remain unchanged.
+- Constrain every device row to a single line and use horizontal table scrolling at narrow Ingress widths. No new field editor, schema migration, runtime permission, scanner or HA API behavior.
+- Ingress JS regression suite verifies numbering, headers, MAC-only name hiding, meaningful name fallback, sort/filter, escaping and note actions.
 
 ## Release boundary
 

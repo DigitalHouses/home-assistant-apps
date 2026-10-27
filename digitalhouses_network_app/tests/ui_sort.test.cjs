@@ -46,7 +46,8 @@ test('numeric IPv4 descending, missing addresses still last', () => {
 });
 test('all seven headers allow sorting and keep selected ARIA direction', () => {
  const names=Array.from(vm.runInContext('deviceColumns.map(x=>x[0])',ctx));
- assert.deepEqual(names,['ip','name','mac','presence','sources','last_seen','note']);
+ assert.deepEqual(names,['name','ip','mac','presence','sources','last_seen','note']);
+ assert.match(vm.runInContext('sortedHeaders()',ctx),/^<th scope="col" class="index-col"[^>]*>№<\/th>/);
  for(const key of names){
   setSort(key,'asc');
   assert.equal(rows().length,4,key);
@@ -87,4 +88,58 @@ test('filter and export IDs follow the on-screen order', () => {
  assert.match(script,/visible_device_ids:shown/);
  assert.match(script,/sort_column:selectedTab==='devices'\?sortKey:null/);
  assert.match(script,/sort_direction:selectedTab==='devices'\?sortDirection:null/);
+});
+
+test('genuine discovered names only: all MAC forms and unknown placeholders are hidden', () => {
+ const functionCall=(value,mac)=>vm.runInContext('recognizableName('+JSON.stringify(value)+','+JSON.stringify(mac)+')',ctx);
+ assert.equal(functionCall('E8:FF:1E:D7:38:17','E8:FF:1E:D7:38:17'),'');
+ assert.equal(functionCall('04-92-26-53-9c-b4','04:92:26:53:9C:B4'),'');
+ assert.equal(functionCall('54ef44a716c9','18:C2:3C:7B:AF:41'),'');
+ assert.equal(functionCall('54ef44a716c9.local','18:C2:3C:7B:AF:41'),'');
+ assert.equal(functionCall('unknown','02:00:00:00:00:01'),'');
+ assert.equal(functionCall('Apple-TV-ZAL','C8:69:CD:34:9F:0A'),'Apple-TV-ZAL');
+ assert.equal(functionCall('xzg.local','24:DC:C3:E2:6E:17'),'xzg');
+ assert.equal(functionCall('13ProMAX-SKY','88:B9:45:80:A7:55'),'13ProMAX-SKY');
+});
+test('visible names drive name sorting, missing genuine names stay at the end', () => {
+ ctx.__devices=sample.concat([
+  {id:'mac-as-name',ipv4:'192.168.11.11',display_name:'02:11:22:33:44:55',mac:'02:11:22:33:44:55',hostname:'',presence:'online',last_seen:'',note:''},
+  {id:'bonjour-mac-only',ipv4:'192.168.11.12',display_name:'54ef44a716c9',mac:'18:C2:3C:7B:AF:41',hostname:'54ef44a716c9.local',presence:'online',last_seen:'',note:'sample'}
+ ]);
+ vm.runInContext("devices=__devices;filter='';sortKey='name';sortDirection='asc'",ctx);
+ assert.equal(rows().at(-2)==='mac-as-name'||rows().at(-2)==='bonjour-mac-only',true);
+ assert.deepEqual(rows().slice(0,4),['blank','ten','thirty','two']);
+ vm.runInContext('renderTable()',ctx);
+ assert.doesNotMatch(view.innerHTML,/class="name-value"[^>]*>02:11:22:33:44:55<\/strong>/);
+ assert.doesNotMatch(view.innerHTML,/class="name-value"[^>]*>54ef44a716c9<\/strong>/);
+ assert.match(view.innerHTML,/class="name-cell"><strong class="name-value" title="">—<\/strong>/);
+ ctx.__devices=sample;
+ vm.runInContext('devices=__devices',ctx);
+});
+test('row numbers are sequential and react to sorting and filtering', () => {
+ vm.runInContext("filter='';sortKey='ip';sortDirection='asc';renderTable()",ctx);
+ const htmlAsc=view.innerHTML;
+ const numbers=Array.from(htmlAsc.matchAll(/class="num-cell">(\d+)<\/td>/g),x=>Number(x[1]));
+ assert.deepEqual(numbers,[1,2,3,4]);
+ assert.match(htmlAsc,/class="num-cell">1<\/td><td class="name-cell">/);
+ assert.ok(htmlAsc.indexOf('>192.168.11.2<')<htmlAsc.indexOf('>192.168.11.10<'));
+ vm.runInContext("filter='192.168.11.30';renderTable()",ctx);
+ assert.deepEqual(Array.from(view.innerHTML.matchAll(/class="num-cell">(\d+)<\/td>/g),x=>Number(x[1])),[1]);
+ assert.match(script,/displayed_columns:selectedTab==='devices'\?\['№',\.\.\.deviceColumns/);
+ vm.runInContext("filter='';sortKey='ip';sortDirection='asc'",ctx);
+});
+test('Note is either a compact Add button or the note itself, with safe one-line tooltip', () => {
+ const filled=vm.runInContext("noteAction({id:'noted',note:'apple-ТВ'})",ctx);
+ assert.match(filled,/class="note-action note-filled"/);
+ assert.match(filled,/>apple-ТВ<\/button>/);
+ assert.doesNotMatch(filled,/>Изменить<\/button>/);
+ const empty=vm.runInContext("noteAction({id:'empty',note:''})",ctx);
+ assert.match(empty,/class="note-action note-empty"/);
+ assert.match(empty,/>Добавить<\/button>/);
+ const longNote=vm.runInContext("noteAction({id:'safe',note:'<script>bad</script> \"long\"'})",ctx);
+ assert.doesNotMatch(longNote,/<script>/);
+ assert.match(longNote,/&lt;script&gt;bad&lt;\/script&gt;/);
+ assert.match(longNote,/&quot;long&quot;/);
+ assert.match(longNote,/title="Редактировать заметку:/);
+ assert.match(html,/\.devices-table td\.note-cell \.note-action\{[^}]*text-overflow:ellipsis/);
 });
