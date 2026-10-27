@@ -1,7 +1,7 @@
 name: DigitalHouses Network App
-version: 0.1.1
+version: 0.1.2
 slug: digitalhouses_network_app
-description: Network inventory and device presence (experimental HA router discovery).
+description: Network inventory and device presence (experimental on-link ARP and HA router discovery).
 url: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_network_app
 arch:
   - amd64
@@ -12,12 +12,17 @@ init: false
 stage: experimental
 backup: cold
 ingress: true
-ingress_port: 8099
+ingress_port: 0
 panel_title: DH Network
 panel_icon: mdi:lan
 panel_admin: true
 homeassistant_api: true
+host_network: true
+privileged:
+  - NET_RAW
 options:
   poll_interval_seconds: 60
+  scan_interval_seconds: 180
 schema:
   poll_interval_seconds: int(15,3600)
+  scan_interval_seconds: int(60,3600)

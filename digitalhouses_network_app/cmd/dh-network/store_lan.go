@@ -55,12 +55,9 @@ func (db *DB) importARPHosts(hosts []LANHost, now, interfaceName, prefix string)
             if err:=db.run("INSERT INTO devices(id,display_name,hostname,mac,ipv4,ipv6,presence,first_seen,last_seen,note) VALUES(?,?, '',?,?,'','online',?,?,'')",
                 id,mac,mac,ipv4,now,now);err!=nil{return err}
         }else{
-            old,err:=db.readDevice(id)
-            if err!=nil{return err}
             // Never replace a user-visible router name or user Note.
             if err:=db.run("UPDATE devices SET mac=?,ipv4=?,presence='online',last_seen=? WHERE id=?",
                 mac,ipv4,now,id);err!=nil{return err}
-            _=old
         }
         if err:=db.storeIdentity(id,"mac",mac,now);err!=nil{return err}
         if err:=db.storeIdentity(id,"ipv4",ipv4,now);err!=nil{return err}
@@ -68,6 +65,18 @@ func (db *DB) importARPHosts(hosts []LANHost, now, interfaceName, prefix string)
             id,now);err!=nil{return err}
         imported++
     }
+    // Expire presence only for LAN-only hosts after two missed scan windows.
+    // HA router devices have their own independent source of positive evidence.
+    point,err:=time.Parse(time.RFC3339,now)
+    if err!=nil{return err}
+    expiry:=db.lanFreshness
+    if expiry==0 {expiry=420*time.Second}
+    cutoff:=point.Add(-expiry).Format(time.RFC3339)
+    if err:=db.run(`UPDATE devices SET presence='not_observed'
+      WHERE presence='online'
+      AND id IN (SELECT device_id FROM lan_positive WHERE last_seen < ?)
+      AND NOT EXISTS (SELECT 1 FROM identities WHERE device_id=devices.id AND kind='ha_entity')`,
+      cutoff);err!=nil{return err}
     status:="ok"
     if len(hosts)==0 {status="empty"}
     if collisions>0 {status="degraded"}

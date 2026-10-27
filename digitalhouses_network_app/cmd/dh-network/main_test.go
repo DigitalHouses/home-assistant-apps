@@ -19,6 +19,7 @@ func TestFreshStoreHasNoInventedDevicesOrEvents(t *testing.T) {
     if err != nil || len(events) != 0 { t.Fatalf("new database events=%v err=%v",events,err) }
     service := Service{db:db,version:"0.1.0",started:time.Now()}
     req := httptest.NewRequest(http.MethodGet,"/api/status",nil)
+    req.RemoteAddr = "172.30.32.2:40000"
     rec := httptest.NewRecorder()
     service.routes().ServeHTTP(rec,req)
     if rec.Code != 200 || !strings.Contains(rec.Body.String(),`"discovery_running":false`) {
@@ -34,6 +35,7 @@ func TestNoteMissingDeviceDoesNotCreateDevice(t *testing.T) {
     request:=httptest.NewRequest(http.MethodPut,"/api/devices/unknown/note",strings.NewReader(`{"note":"test"}`))
     request.Header.Set("Content-Type","application/json")
     request.Header.Set("X-DH-UI","1")
+    request.RemoteAddr = "172.30.32.2:40000"
     rec:=httptest.NewRecorder()
     service.routes().ServeHTTP(rec,request)
     if rec.Code!=404 { t.Fatalf("expected 404, got %d",rec.Code) }

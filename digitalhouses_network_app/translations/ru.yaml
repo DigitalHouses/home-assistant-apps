@@ -1,4 +1,7 @@
 configuration:
   poll_interval_seconds:
     name: Интервал опроса роутеров (секунды)
-    description: Периодически читать device_tracker интеграций роутеров из Home Assistant. Самостоятельное сканирование LAN пока не выполняется.
+    description: Периодически читать device_tracker интеграций роутеров из Home Assistant.
+  scan_interval_seconds:
+    name: Интервал сканирования LAN ARP (секунды)
+    description: Периодический ARP-опрос основной Ethernet-сети. Диапазоны больше /24 пока не сканируются.

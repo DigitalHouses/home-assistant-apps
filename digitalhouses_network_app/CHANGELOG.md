@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.2
+
+- Added bounded native Go ARP discovery of the primary on-link LAN (no Nmap, no external ARP command).
+- Enabled `host_network` and the minimal `NET_RAW` capability only; Ingress uses Supervisor-assigned dynamic port.
+- Restricted HTTP access to the authenticated Supervisor Ingress peer; direct LAN connections to the host-network port are rejected.
+- ARP observations merge into the persistent SQLite device registry by MAC; UUID, notes and IP history remain intact.
+- Ambiguous Proxy ARP MACs are reported as degraded and skipped; source failures never mark devices Offline.
+- New scan interval setting (180 seconds by default) and LAN ARP Source diagnostics. IPv6 NDP, mDNS/Bonjour and SSDP remain future stages.
+
 ## 0.1.1
 
 - Added read-only import of router-backed Home Assistant `device_tracker` entities through the Supervisor Core REST API.
