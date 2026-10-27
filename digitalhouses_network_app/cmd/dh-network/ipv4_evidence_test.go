@@ -10,14 +10,15 @@ func TestIPv4ConflictARPWinsAndNotesRemain(t *testing.T) {
  db,err:=openDB(filepath.Join(t.TempDir(),"network.sqlite3"))
  if err!=nil {t.Fatal(err)}
  defer db.Close()
- now:="2026-10-27T17:19:00Z"
+ base:=time.Now().UTC().Truncate(time.Second)
+ now:=base.Add(-60*time.Second).Format(time.RFC3339)
  ha:=RouterTracker{EntityID:"device_tracker.ha",MAC:"02:AA:BB:CC:DD:01",State:"home",Name:"HA Device",IPv4:"192.168.11.30"}
  if err=db.importRouterTrackers([]RouterTracker{ha},now);err!=nil {t.Fatal(err)}
  devices,_:=db.devices()
  if len(devices)!=1 {t.Fatalf("router import: %+v",devices)}
  originalID:=devices[0].ID
  if ok,err:=db.setNote(originalID,"test - HA");err!=nil||!ok {t.Fatal(err)}
- if err=db.importARPHosts([]LANHost{{MAC:"02:AA:BB:CC:DD:02",IPv4:"192.168.11.30"}},"2026-10-27T17:19:20Z","enp6s18","192.168.11.0/24");err!=nil{t.Fatal(err)}
+ if err=db.importARPHosts([]LANHost{{MAC:"02:AA:BB:CC:DD:02",IPv4:"192.168.11.30"}},base.Add(-30*time.Second).Format(time.RFC3339),"enp6s18","192.168.11.0/24");err!=nil{t.Fatal(err)}
  devices,_=db.devices()
  if len(devices)!=2 {t.Fatalf("dropped or merged separate MACs: %+v",devices)}
  var haGot,arpGot Device
@@ -45,7 +46,7 @@ func TestIPv4ConflictARPWinsAndNotesRemain(t *testing.T) {
  if status!="ok" { // ARP scan happened after the HA poll; HA status updates at its next poll.
    t.Fatalf("unexpected HA status before repoll: %s",status)
  }
- if err=db.importRouterTrackers([]RouterTracker{ha},"2026-10-27T17:20:00Z");err!=nil {t.Fatal(err)}
+ if err=db.importRouterTrackers([]RouterTracker{ha},base.Add(-10*time.Second).Format(time.RFC3339));err!=nil {t.Fatal(err)}
  sources,_=db.sources()
  for _,v:=range sources {
   if v.Kind=="ha_device_tracker" && v.Status!="degraded" {t.Fatalf("expected degraded conflicting claim: %+v",v)}
