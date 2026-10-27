@@ -129,6 +129,33 @@ jobs:
       - name: Check shell syntax
         run: bash -n digitalhouses_speedtest_app/rootfs/run.sh
 
+  network-app:
+    name: Network App
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.23"
+      - name: Validate Python source
+        run: python -m compileall -q digitalhouses_network_app/rootfs/app digitalhouses_network_app/tests
+      - name: Run Python unit tests
+        run: python -m unittest discover -s digitalhouses_network_app/tests -v
+      - name: Run Go/SQLite unit tests
+        working-directory: digitalhouses_network_app
+        run: go test ./...
+      - name: Check launcher
+        run: bash -n digitalhouses_network_app/rootfs/run.sh
+      - name: Build HAOS App image
+        run: |
+          docker build --build-arg BUILD_ARCH=amd64 --tag digitalhouses-network-ci:0.1.0 digitalhouses_network_app
+
   internet-app:
     name: Internet App
     runs-on: ubuntu-latest

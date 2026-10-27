@@ -140,6 +140,16 @@
       },
       "repository_directory": "digitalhouses_aqara_switch_app",
       "haos_slug": "digitalhouses_aqara_switch_app"
+    },
+    {
+      "id": "digitalhouses_network_app",
+      "type": "app",
+      "entity_prefix": "dh_network_app",
+      "display_name": "Network App",
+      "telemetry_allowed": false,
+      "release": null,
+      "repository_directory": "digitalhouses_network_app",
+      "haos_slug": "digitalhouses_network_app"
     }
   ]
 }
