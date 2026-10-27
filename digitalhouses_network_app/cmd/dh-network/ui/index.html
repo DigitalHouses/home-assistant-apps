@@ -11,14 +11,26 @@ button.active{background:#137b78;border-color:#26b6a5}button:hover{filter:bright
 .stats{display:flex;gap:12px;flex-wrap:wrap;margin:16px 0}.stat{background:#223349;border-radius:8px;padding:12px 18px;min-width:155px}
 .stat strong{display:block;font-size:24px}.stat span{font-size:12px;color:#b9c5d3}
 table{width:100%;border-collapse:collapse;margin:12px 0}
-.devices-table{min-width:960px}
+.devices-table{min-width:1090px;table-layout:auto}
+.devices-table th,.devices-table td{padding:8px 9px}
+.devices-table td{white-space:nowrap;overflow-wrap:normal}
+.devices-table .num-cell,.devices-table .index-col{width:42px;text-align:right;color:#aebed1;font-variant-numeric:tabular-nums}
+.devices-table td.name-cell{min-width:110px;max-width:185px}
+.devices-table .name-value{display:inline-block;max-width:170px;vertical-align:middle;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.devices-table td.source-cell{white-space:nowrap}
+.devices-table td.source-cell .source-tag{margin:0 4px 0 0}
+.devices-table td.note-cell{max-width:230px;min-width:110px}
+.devices-table td.note-cell .note-action{display:inline-block;max-width:210px;vertical-align:middle;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left;font:inherit}
+.devices-table .note-filled{background:transparent;color:#9bd1ff;border:0;padding:3px 2px}
+.devices-table .note-filled:hover,.devices-table .note-filled:focus-visible{text-decoration:underline}
+.devices-table .note-empty{background:transparent;border:1px dashed #62788e;color:#b5cce0;padding:4px 8px;border-radius:6px}
+.devices-table .note-empty:hover,.devices-table .note-empty:focus-visible{border-style:solid;color:#fff}
+.devices-table .note-action:focus-visible{outline:2px solid #9bd1ff;outline-offset:2px}
 .devices-table th button{background:transparent;border:0;color:#a9c1d1;font:inherit;font-weight:600;border-radius:4px;padding:4px;white-space:nowrap;text-align:left}
 .devices-table th button:hover,.devices-table th button:focus-visible{color:#fff;background:#294057;outline-offset:2px}
 .devices-table th[aria-sort="ascending"] button,.devices-table th[aria-sort="descending"] button{color:#82efc7}
 .devices-table td.ip-cell,.devices-table td.mac-cell,.devices-table td.time-cell{white-space:nowrap;overflow-wrap:normal}
 .devices-table td.source-cell{min-width:150px}
-.devices-table td.note-cell{min-width:125px}
-.devices-table td.note-cell button{white-space:nowrap;padding:7px 9px}
 .devices-table .sort-arrow{color:#96abc2;padding-left:3px}th,td{border-bottom:1px solid #304154;padding:12px 10px;text-align:left;vertical-align:middle}
 th{color:#a9c1d1;font-size:12px}td{overflow-wrap:anywhere}
 input{font:inherit;padding:10px;color:#f0f4f9;background:#203147;border:1px solid #526d86;border-radius:8px;max-width:100%}
@@ -29,7 +41,7 @@ input{font:inherit;padding:10px;color:#f0f4f9;background:#203147;border:1px soli
 @media(max-width:650px){main{padding:13px}header{padding:17px}table{font-size:12px}}
 </style></head>
 <body>
-<header><div><h1>DigitalHouses Network App</h1><small>Устройства и источники сети · v0.1.7</small></div><span id="health" class="tag">Подключение…</span></header>
+<header><div><h1>DigitalHouses Network App</h1><small>Устройства и источники сети · v0.1.8</small></div><span id="health" class="tag">Подключение…</span></header>
 <main>
 <div class="notice">Источники: Home Assistant <code>device_tracker</code> и самостоятельный ARP-опрос локального IPv4. ARP обнаруживает ответившие сетевые интерфейсы; отсутствие ответа не доказывает Offline. Bonjour и SSDP дополняют сведения о сервисах при свежем ARP-подтверждении IP. Противоречия между источниками фиксируются в журнале событий, но не означают доказанный конфликт адресов. IPv6 NDP добавим позже.</div>
 <div class="stats"><div class="stat"><strong id="known">—</strong><span>Устройств в реестре</span></div><div class="stat"><strong id="online">—</strong><span>Подтверждённый Online</span></div><div class="stat"><strong id="interval">—</strong><span>HA-опрос, секунд</span></div><div class="stat"><strong id="arp-interval">—</strong><span>ARP-опрос, секунд</span></div><div class="stat"><strong id="last-arp">—</strong><span>Последний ARP-скан</span></div><div class="stat"><strong id="known-arp">—</strong><span>Ранее найдено ARP</span></div><div class="stat"><strong id="ip-conflicts">—</strong><span>Расхождений IPv4</span></div><div class="stat"><strong id="mdns-hosts">—</strong><span>Хостов с Bonjour</span></div><div class="stat"><strong id="mdns-services">—</strong><span>Bonjour сервисов</span></div><div class="stat"><strong id="ssdp-hosts">—</strong><span>Хостов с SSDP</span></div><div class="stat"><strong id="ssdp-services">—</strong><span>SSDP сервисов</span></div></div>
@@ -40,7 +52,7 @@ input{font:inherit;padding:10px;color:#f0f4f9;background:#203147;border:1px soli
 const body=document.getElementById('body'),health=document.getElementById('health'),filterArea=document.getElementById('filterarea');
 let page='devices',devices=[],origins=[],mdnsServices=[],ssdpServices=[],filter='';
 let sortKey='ip',sortDirection='asc';
-const deviceColumns=[['ip','IP'],['name','Имя'],['mac','MAC'],['presence','Presence'],['sources','Обнаружен через'],['last_seen','Последний Online'],['note','Note']];
+const deviceColumns=[['name','Имя'],['ip','IP'],['mac','MAC'],['presence','Presence'],['sources','Обнаружен через'],['last_seen','Последний Online'],['note','Note']];
 const nameCollator=new Intl.Collator('ru',{numeric:true,sensitivity:'base'});
 function esc(t){return String(t??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 async function read(kind){const r=await fetch('api/'+kind,{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);return r.json()}
@@ -75,10 +87,33 @@ function sourcesForDisplay(id) {
   return '<span class="tag source-tag" tabindex="0" title="'+esc(hint)+'" aria-label="'+esc(hint)+'">'+esc(caption)+'</span>';
  }).join('');
 }
+// Display only discovered names; ignore MAC and UUID placeholders. This
+// changes only the UI projection, not the underlying stored identity.
+function recognizableName(raw,mac){
+ let value=String(raw||'').trim();
+ if(!value)return '';
+ value=value.replace(/\.local\.?$/i,'');
+ if(!value || /^(unknown|unavailable)$/i.test(value))return '';
+ const candidate=value.replace(/[:-]/g,'').toLowerCase();
+ const ownMac=String(mac||'').replace(/[:-]/g,'').toLowerCase();
+ if(/^[0-9a-f]{12}$/.test(candidate) || (ownMac && candidate===ownMac))return '';
+ return value;
+}
+function visibleDeviceName(d){
+ return recognizableName(d.display_name,d.mac) || recognizableName(d.hostname,d.mac);
+}
+function noteAction(d){
+ const note=String(d.note||'');
+ const hasNote=note.trim().length>0;
+ const label=hasNote?note:'Добавить';
+ const className=hasNote?'note-filled':'note-empty';
+ const tooltip=hasNote?'Редактировать заметку: '+note:'Добавить заметку';
+ return '<button type="button" class="note-action '+className+'" data-id="'+esc(d.id)+'" title="'+esc(tooltip)+'" aria-label="'+esc(tooltip)+'">'+esc(label)+'</button>';
+}
 function deviceValue(d,column){
  switch(column){
  case 'ip':return d.ipv4||d.ipv6||'';
- case 'name':return d.display_name||d.hostname||d.id||'';
+ case 'name':return visibleDeviceName(d);
  case 'mac':return d.mac||'';
  case 'presence':return d.presence||'';
  case 'sources':return sourcesForSort(d.id);
@@ -132,7 +167,7 @@ function changeSort(column){
  renderTable();
 }
 function sortedHeaders(){
- return deviceColumns.map(([key,title])=>{
+ return '<th scope="col" class="index-col" title="Порядковый номер в текущей сортировке">№</th>'+deviceColumns.map(([key,title])=>{
   const active=sortKey===key;
   const direction=active?(sortDirection==='asc'?'ascending':'descending'):'none';
   const symbol=active?(sortDirection==='asc'?'↑':'↓'):'↕';
@@ -149,13 +184,13 @@ function renderTable(){
  const found=sortedDeviceRows();
  if(!devices.length){body.innerHTML='<h2>Устройства</h2><p>Устройств пока нет. Проверь вкладку «Источники». В Home Assistant могут отсутствовать доступные <code>device_tracker</code> от роутеров.</p>';return}
  body.innerHTML='<h2>Устройства ('+found.length+')</h2><div class="grid-scroll"><table class="devices-table"><thead><tr>'+sortedHeaders()+'</tr></thead><tbody>'+
- found.map(d=>'<tr><td class="ip-cell">'+esc(d.ipv4||d.ipv6||'—')+(d.ipv4&&d.ipv6?'<small> / '+esc(d.ipv6)+'</small>':'')+'</td><td><strong>'+esc(d.display_name||d.hostname||d.id)+'</strong></td><td class="mac-cell">'+esc(d.mac||'—')+'</td><td><span class="tag '+esc(d.presence)+'">'+esc(d.presence)+'</span></td><td class="source-cell">'+sourcesForDisplay(d.id)+'</td><td class="time-cell">'+esc(noteTime(d.last_seen))+'</td><td class="note-cell"><button data-id="'+esc(d.id)+'">Изменить</button><small> '+esc(d.note||'')+'</small></td></tr>').join('')+'</tbody></table></div>';
+ found.map((d,index)=>'<tr><td class="num-cell">'+(index+1)+'</td><td class="name-cell"><strong class="name-value" title="'+esc(visibleDeviceName(d))+'">'+esc(visibleDeviceName(d)||'—')+'</strong></td><td class="ip-cell">'+esc(d.ipv4||d.ipv6||'—')+(d.ipv4&&d.ipv6?'<small> / '+esc(d.ipv6)+'</small>':'')+'</td><td class="mac-cell">'+esc(d.mac||'—')+'</td><td><span class="tag '+esc(d.presence)+'">'+esc(d.presence)+'</span></td><td class="source-cell">'+sourcesForDisplay(d.id)+'</td><td class="time-cell">'+esc(noteTime(d.last_seen))+'</td><td class="note-cell">'+noteAction(d)+'</td></tr>').join('')+'</tbody></table></div>';
  body.querySelectorAll('button[data-sort]').forEach(b=>b.addEventListener('click',()=>changeSort(b.dataset.sort)));
  body.querySelectorAll('button[data-id]').forEach(b=>b.addEventListener('click',()=>edit(b.dataset.id)));
 }
 async function edit(id){
  const d=devices.find(x=>x.id===id);if(!d)return;
- const note=prompt('Note для '+(d.display_name||d.id),d.note||'');
+ const note=prompt('Note для '+(visibleDeviceName(d)||d.ipv4||d.mac||d.id),d.note||'');
  if(note===null)return;
  try{
   const r=await fetch('api/devices/'+encodeURIComponent(id)+'/note',{method:'PUT',headers:{'Content-Type':'application/json','X-DH-UI':'1'},body:JSON.stringify({note})});
@@ -240,7 +275,7 @@ async function exportDiagnostic() {
    visible_device_count:shown.length,
    sort_column:selectedTab==='devices'?sortKey:null,
    sort_direction:selectedTab==='devices'?sortDirection:null,
-   displayed_columns:selectedTab==='devices'?deviceColumns.map(([key,title])=>title):[],
+   displayed_columns:selectedTab==='devices'?['№',...deviceColumns.map(([key,title])=>title)]:[],
    counters_as_displayed:{
     devices:document.getElementById('known').textContent,
     online:document.getElementById('online').textContent,
