@@ -56,9 +56,11 @@ func fillSourcePlaceholders(in []SourceInfo) []SourceInfo {
     if !containsSource(out,"LAN ARP") {
         out=append(out,SourceInfo{Name:"LAN ARP", Kind:"lan_arp", Status:"pending"})
     }
+    if !containsSource(out,"mDNS / Bonjour") {
+        out=append(out,SourceInfo{Name:"mDNS / Bonjour", Kind:"mdns", Status:"pending"})
+    }
     out=append(out,
         SourceInfo{Name:"IPv6 NDP", Kind:"planned", Status:"planned"},
-        SourceInfo{Name:"mDNS / Bonjour", Kind:"planned", Status:"planned"},
         SourceInfo{Name:"SSDP", Kind:"planned", Status:"planned"})
     return out
 }
