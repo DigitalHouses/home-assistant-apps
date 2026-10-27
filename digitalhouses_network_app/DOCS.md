@@ -7,7 +7,7 @@
 - Compact namespace: `dh_network_app`
 - Web UI: Home Assistant Ingress (not a second externally exposed admin service)
 - Storage: SQLite `/data/network.sqlite3`
-- Current version: `0.1.2`, experimental, no GHCR artifact and no telemetry
+- Current version: `0.1.3`, experimental, no GHCR artifact and no telemetry
 
 This App deliberately follows the existing product-naming and HAOS packaging standards. Its **Ingress** UI is the accepted departure from the usual MQTT-discovered Lovelace control card: UI state, notes and inventory are App-owned instead of built from MQTT entities. Any future machine events must follow DigitalHouses Events & Notifications Standard; local alert delivery belongs to HA, not the public App.
 
@@ -44,8 +44,18 @@ Where a DigitalHouses application exposes a discoverable TCP service, publish DN
 - A fresh ARP-positive observation wins over HA router `not_home` or `unavailable`; no ARP reply alone never causes confirmed Offline. LAN-only stale records may become `not_observed` after multiple missed cycles.
 - Supported raw-scanner platform in this pilot is Linux on amd64/aarch64. IPv6 NDP, mDNS, SSDP and machine events remain separate future milestones.
 
+## Diagnostic export and per-device source attribution in 0.1.3
+
+- New read-only Ingress API `GET /api/diagnostics` provides `digitalhouses.network.diagnostic.v1` with UTC capture timestamp, app version/start time/intervals, counters, all devices with Note, source health, up to 200 recent events, complete `identities` history and last-positive ARP timestamps.
+- SQLite tables are read under a **single read transaction** to prevent a partially updated inventory during live HA/ARP scans; reporting performs no database writes.
+- New `GET /api/device-sources` provides per-device source associations, derived from `identities.kind=ha_entity` and `lan_positive`, without modifying database schema.
+- The browser downloads a UTF-8 JSON file `dh-network-diagnostic-YYYYMMDD-HHMMSS.json` directly from the Ingress UI. It adds `browser_view` (active tab, exact search filter, visible device UUIDs, displayed counters, local timezone and capture time), distinguishing screen filters from the complete server inventory.
+- Both diagnostic APIs inherit the strict Supervisor Ingress peer check. The App does not export Supervisor credentials, raw environment variables or secret options; it does export user Note verbatim and may expose other sensitive LAN data. Show an explicit privacy notice in UI.
+- Source membership is **historical**, not active presence. The per-device sources column displays HA Router and ARP badges with last-reported evidence timestamps on hover.
+- `diagnostic.v1` format is versioned for future parsing; mDNS, IPv6 NDP and SSDP remain planned sources.
+
 ## Release boundary
 
-Version 0.1.0 proved HAOS install, Ingress, Web UI, data persistence, version and lifecycle. Version 0.1.2 adds bounded native ARP probing and still emits no machine events. It does not claim full IPv6 or cross-VLAN visibility. A genuine scan requires an explicit later version and tests for incomplete/invalid source data before any presence state or event is emitted.
+Version 0.1.0 proved HAOS install, Ingress, Web UI, data persistence, version and lifecycle. Version 0.1.2 added bounded native ARP probing; version 0.1.3 adds read-only diagnostics and source attribution. These versions emit no machine events. It does not claim full IPv6 or cross-VLAN visibility. A genuine scan requires an explicit later version and tests for incomplete/invalid source data before any presence state or event is emitted.
 
 When accepted, move from experimental Supervisor source build to the standard versioned immutable GHCR artifact. The install/update UI remains the **same Home Assistant App Store**, never a manual server-side copy.

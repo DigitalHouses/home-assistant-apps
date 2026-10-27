@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.3
+
+- Added a **Save diagnostics (.json)** button in the Ingress Web UI for sharing reproducible app observations with support.
+- Included complete device inventory and notes, MAC/IP identity histories, source health, current/previous observations and latest 200 events.
+- Added active UI tab, selected search filter, visible UUIDs and displayed counters to browser-downloaded snapshots; files are local and are not uploaded.
+- Added **Discovered via** badges for each device, showing historical HA Router and ARP source associations.
+- Added diagnostic schema v1, read-only API endpoints, privacy notice and automated export tests.
+- No new network privileges, changes to scanning or changes to device identity matching.
+
 ## 0.1.2
 
 - Added bounded native Go ARP discovery of the primary on-link LAN (no Nmap, no external ARP command).
