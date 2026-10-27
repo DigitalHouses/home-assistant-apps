@@ -89,13 +89,14 @@ func openDB(path string) (*DB, error) {
         "CREATE TABLE IF NOT EXISTS sources (id TEXT PRIMARY KEY, kind TEXT NOT NULL, status TEXT NOT NULL, last_success TEXT, details_json TEXT NOT NULL DEFAULT '{}');",
         "CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY, event_type TEXT NOT NULL, device_id TEXT NOT NULL DEFAULT '', occurred_at TEXT NOT NULL, data_json TEXT NOT NULL DEFAULT '{}');",
         "CREATE INDEX IF NOT EXISTS event_order ON events(occurred_at);",
+        "CREATE TABLE IF NOT EXISTS ipv4_disagreement_state (ipv4 TEXT PRIMARY KEY,classification TEXT NOT NULL,fingerprint TEXT NOT NULL,details_json TEXT NOT NULL,first_seen TEXT NOT NULL,last_seen TEXT NOT NULL);",
         "CREATE TABLE IF NOT EXISTS lan_positive (device_id TEXT PRIMARY KEY REFERENCES devices(id),last_seen TEXT NOT NULL);",
         "CREATE TABLE IF NOT EXISTS ipv4_evidence (device_id TEXT NOT NULL REFERENCES devices(id),source TEXT NOT NULL,reference TEXT NOT NULL,ipv4 TEXT NOT NULL,state TEXT NOT NULL,first_seen TEXT NOT NULL,last_seen TEXT NOT NULL,PRIMARY KEY(device_id,source,reference,ipv4));",
         "CREATE INDEX IF NOT EXISTS ipv4_evidence_ip ON ipv4_evidence(ipv4,last_seen);",
         "CREATE TABLE IF NOT EXISTS mdns_hosts (device_id TEXT PRIMARY KEY REFERENCES devices(id),hostname TEXT NOT NULL,ipv4 TEXT NOT NULL,first_seen TEXT NOT NULL,last_seen TEXT NOT NULL);",
         "CREATE TABLE IF NOT EXISTS mdns_services (device_id TEXT NOT NULL REFERENCES devices(id),instance TEXT NOT NULL,type TEXT NOT NULL,port INTEGER NOT NULL,target TEXT NOT NULL,first_seen TEXT NOT NULL,last_seen TEXT NOT NULL,PRIMARY KEY(device_id,instance,type,port));",
         "CREATE TABLE IF NOT EXISTS mdns_unmatched (hostname TEXT NOT NULL,ipv4 TEXT NOT NULL,last_seen TEXT NOT NULL,reason TEXT NOT NULL,PRIMARY KEY(hostname,ipv4));",
-        "UPDATE schema_version SET version=4;",
+        "UPDATE schema_version SET version=5;",
     }, "\n")
     if err := db.exec(schema); err != nil {
         db.Close()
