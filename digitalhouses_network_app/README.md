@@ -2,7 +2,7 @@
 
 Experimental native **Home Assistant OS App** for a durable LAN device inventory, presence history, and future device events. Internal/entity prefix: `dh_network_app`. Canonical product ID, App Store slug, and repository directory: `digitalhouses_network_app`.
 
-## Current state (0.1.3 diagnostics pilot)
+## Current state (0.1.4 IPv4 reconciliation pilot)
 
 Available now:
 - standard installation from the **DigitalHouses Home Assistant Apps repository** (no copying files into HAOS);
@@ -17,7 +17,9 @@ Available now:
 - source diagnostics distinguish errors, no responses and Proxy ARP ambiguities; no automatic Offline inference;
 - an empty inventory until real router trackers or ARP replies are observed; no fabricated devices or presence data;
 - **Download diagnostics (.json)** on every Ingress tab: version, time, all devices and notes, source status/counts, events (up to 200), MAC/IP identity history, latest ARP-positive timestamps, and the browser's active tab/search/visible row IDs.
-- **Обнаружен через / Discovered via** column: per-device HA Router and ARP associations, with hoverable last-reported timestamps. A source badge means historical association, not guaranteed current presence.
+- **Обнаружен через / Discovered via** column: per-device HA Router and ARP associations, with hoverable last-reported timestamps. A source badge means historical association, not guaranteed current presence;
+- additive source-scoped IPv4 evidence database: live ARP mapping outranks a conflicting HA router-reported IP, while historical DHCP/HA claims and notes remain intact;
+- current IPv4 is blank when neither source has fresh positive evidence. The diagnostic JSON exposes all IPv4 evidence and conflicts with timestamps/MACs; the Web UI shows conflict counts and separate last-ARP-scan versus historically seen ARP hosts.
 
 **Not yet implemented:** IPv6 NDP, mDNS/Bonjour/SSDP, full device registry enrichment, HA Event publication or verified Offline. `online` means either a router reports `home` or a device answers ARP. The Web UI identifies these as planned.
 

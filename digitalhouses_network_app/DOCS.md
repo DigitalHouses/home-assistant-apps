@@ -7,7 +7,7 @@
 - Compact namespace: `dh_network_app`
 - Web UI: Home Assistant Ingress (not a second externally exposed admin service)
 - Storage: SQLite `/data/network.sqlite3`
-- Current version: `0.1.3`, experimental, no GHCR artifact and no telemetry
+- Current version: `0.1.4`, experimental, no GHCR artifact and no telemetry
 
 This App deliberately follows the existing product-naming and HAOS packaging standards. Its **Ingress** UI is the accepted departure from the usual MQTT-discovered Lovelace control card: UI state, notes and inventory are App-owned instead of built from MQTT entities. Any future machine events must follow DigitalHouses Events & Notifications Standard; local alert delivery belongs to HA, not the public App.
 
@@ -54,8 +54,19 @@ Where a DigitalHouses application exposes a discoverable TCP service, publish DN
 - Source membership is **historical**, not active presence. The per-device sources column displays HA Router and ARP badges with last-reported evidence timestamps on hover.
 - `diagnostic.v1` format is versioned for future parsing; mDNS, IPv6 NDP and SSDP remain planned sources.
 
+## Source-aware IPv4 reconciliation (0.1.4)
+
+- SQLite **additive schema v3**: `ipv4_evidence(device_id, source, reference, ipv4, state, first_seen, last_seen)`. Existing `devices`, `identities`, UUIDs, MACs and Notes are never migrated destructively.
+- HA Router and ARP observations are separately recorded. Home Assistant `home` is a positive *router-reported* claim; `not_home` and `unavailable` are historical assertions, **not proof of current IPv4**. A subsequent claim by the same router entity marks the previous claim `previous` without deletion.
+- A new ARP reply is a stronger address↔MAC binding than HA Router. For each IPv4, only the strongest fresh claim can own the current address. Tied contradictory ARP evidence is marked ambiguous and leaves the IP unassigned.
+- A conflict is logged in read-only `diagnostic.v1` under `ipv4_conflicts[]`, with all surviving claims, current winner (if any), and reason. `inventory.ipv4_evidence[]` retains the source reference and timestamps. The HA Router Source is `degraded` while an active conflicting IPv4 claim exists, independently of MAC association conflicts.
+- ARP freshness uses at most 2 scan windows + 30 s; HA reports use 3 polling windows, with cautious test fallbacks. Expired evidence never overrides a fresh positive claim.
+- The reconciler operates **inside the source writer transaction** to avoid a half-updated current address. Only the `devices.ipv4` projection is recalculated; `identities` and user Notes are never edited or reset.
+- The Ingress page separates latest ARP scan host count from the number of historical ARP identities and displays address conflicts. This is not an IP conflict alarm system yet and emits no HA events.
+- Before each source has delivered at least one fresh post-upgrade observation, current IPv4 may be temporarily empty. No historical row is deleted. No need to reset or edit SQLite manually.
+
 ## Release boundary
 
-Version 0.1.0 proved HAOS install, Ingress, Web UI, data persistence, version and lifecycle. Version 0.1.2 added bounded native ARP probing; version 0.1.3 adds read-only diagnostics and source attribution. These versions emit no machine events. It does not claim full IPv6 or cross-VLAN visibility. A genuine scan requires an explicit later version and tests for incomplete/invalid source data before any presence state or event is emitted.
+Version 0.1.0 proved HAOS install, Ingress, Web UI, data persistence, version and lifecycle. Version 0.1.2 added bounded native ARP probing; 0.1.3 added read-only diagnostics and source attribution; 0.1.4 adds independent IPv4 evidence and conflict resolution. These versions emit no machine events. It does not claim full IPv6 or cross-VLAN visibility. A genuine scan requires an explicit later version and tests for incomplete/invalid source data before any presence state or event is emitted.
 
 When accepted, move from experimental Supervisor source build to the standard versioned immutable GHCR artifact. The install/update UI remains the **same Home Assistant App Store**, never a manual server-side copy.
