@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.7
+
+- Persist event transitions for IPv4 source disagreements, especially HA Router Wi-Fi Media Bridge MAC/IP observations versus fresh direct ARP, without treating them as confirmed duplicate-IP faults or sending notifications.
+- Suppress the attention-grabbing IPv4 warning for ARP-versus-router discrepancies while retaining a neutral count and detailed local Events history.
+- Native bounded SSDP M-SEARCH discovery on the primary local IPv4 network, with conservative fresh-ARP binding, read-only service metadata and unmatched diagnostics.
+- Never fetch LOCATION/XML or store sensitive URL path/query components. No SSDP-only device creation, name/presence mutation, new capabilities or changes to HAOS ingress policy.
+- Additive schema v5; previous UUIDs, notes, identity history and SQLite content persist.
+- UI: SSDP counters, source badges and helpful event descriptions. New regression tests for safe SSDP parsing, verified joins and deduplicated event transitions.
+
 ## 0.1.6
 
 - IP address is now the first column in the Ingress inventory; removed the wide Bonjour services column.

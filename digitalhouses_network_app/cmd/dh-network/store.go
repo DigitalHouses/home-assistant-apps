@@ -199,7 +199,8 @@ func (db *DB) importRouterTrackers(trackers []RouterTracker,now string) error {
     details,_:=json.Marshal(map[string]int{"trackers":len(trackers),"imported":imported,"home":online,"not_home":notObserved,"unknown":unknown,"conflicts":conflicts,"ipv4_conflicts":len(ipConflicts)})
     status:="ok"
     if len(trackers)==0 {status="empty"}
-    if conflicts>0 || len(ipConflicts)>0 {status="degraded"}
+    if conflicts>0 {status="degraded"}
+    for _,conflict:=range ipConflicts {if disagreementClassification(conflict)!="source_disagreement" {status="degraded"}}
     if err:=db.run("INSERT INTO sources(id,kind,status,last_success,details_json) VALUES('Home Assistant router trackers','ha_device_tracker',?,?,?) ON CONFLICT(id) DO UPDATE SET status=excluded.status,last_success=excluded.last_success,details_json=excluded.details_json",
         status,now,string(details));err!=nil{return err}
     if err:=db.exec("COMMIT");err!=nil{return err}

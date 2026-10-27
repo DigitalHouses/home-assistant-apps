@@ -12,7 +12,7 @@ spec.loader.exec_module(module)
 
 class TestPreflight(unittest.TestCase):
     def setUp(self):
-        self.env = {"APP_VERSION": "0.1.5", "DH_PORT": "8099", "DH_DB": "/data/network.sqlite3", "DH_INTERVAL": "60", "DH_SCAN_INTERVAL": "180", "DH_MDNS_INTERVAL": "300", "SUPERVISOR_TOKEN": "test-token"}
+        self.env = {"APP_VERSION": "0.1.5", "DH_PORT": "8099", "DH_DB": "/data/network.sqlite3", "DH_INTERVAL": "60", "DH_SCAN_INTERVAL": "180", "DH_MDNS_INTERVAL": "300", "DH_SSDP_INTERVAL": "300", "SUPERVISOR_TOKEN": "test-token"}
 
     def test_valid_configuration(self):
         module.validate_environment(self.env)
@@ -34,6 +34,11 @@ class TestPreflight(unittest.TestCase):
 
     def test_invalid_mdns_interval(self):
         self.env["DH_MDNS_INTERVAL"] = "10"
+        with self.assertRaises(ValueError):
+            module.validate_environment(self.env)
+
+    def test_invalid_ssdp_interval(self):
+        self.env["DH_SSDP_INTERVAL"] = "10"
         with self.assertRaises(ValueError):
             module.validate_environment(self.env)
 

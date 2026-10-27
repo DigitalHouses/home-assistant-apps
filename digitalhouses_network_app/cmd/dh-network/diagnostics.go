@@ -46,6 +46,8 @@ type DatabaseSnapshot struct {
     MDNSHosts []MDNSRecord `json:"mdns_hosts"`
     MDNSServices []MDNSServiceRecord `json:"mdns_services"`
     MDNSUnmatched []MDNSUnmatched `json:"mdns_unmatched"`
+    SSDPServices []SSDPServiceRecord `json:"ssdp_services"`
+    SSDPUnmatched []SSDPUnmatched `json:"ssdp_unmatched"`
 }
 
 func fillSourcePlaceholders(in []SourceInfo) []SourceInfo {
@@ -59,9 +61,8 @@ func fillSourcePlaceholders(in []SourceInfo) []SourceInfo {
     if !containsSource(out,"mDNS / Bonjour") {
         out=append(out,SourceInfo{Name:"mDNS / Bonjour", Kind:"mdns", Status:"pending"})
     }
-    out=append(out,
-        SourceInfo{Name:"IPv6 NDP", Kind:"planned", Status:"planned"},
-        SourceInfo{Name:"SSDP", Kind:"planned", Status:"planned"})
+    if !containsSource(out,"SSDP") {out=append(out,SourceInfo{Name:"SSDP",Kind:"ssdp",Status:"pending"})}
+    out=append(out,SourceInfo{Name:"IPv6 NDP", Kind:"planned", Status:"planned"})
     return out
 }
 
@@ -101,6 +102,8 @@ func (db *DB) snapshot() (DatabaseSnapshot,error) {
         MDNSHosts:make([]MDNSRecord,0),
         MDNSServices:make([]MDNSServiceRecord,0),
         MDNSUnmatched:make([]MDNSUnmatched,0),
+        SSDPServices:make([]SSDPServiceRecord,0),
+        SSDPUnmatched:make([]SSDPUnmatched,0),
     }
     if err:=db.exec("BEGIN");err!=nil{return result,err}
     committed:=false
@@ -154,12 +157,23 @@ func (db *DB) snapshot() (DatabaseSnapshot,error) {
     if err!=nil{return result,fmt.Errorf("diagnostics IPv4 evidence: %w",err)}
     result.MDNSHosts,result.MDNSServices,result.MDNSUnmatched,err=db.mdnsSourceRecordsLocked()
     if err!=nil{return result,fmt.Errorf("diagnostics mDNS: %w",err)}
+    result.SSDPServices,result.SSDPUnmatched,err=db.ssdpSourceRecordsLocked()
+    if err!=nil{return result,fmt.Errorf("diagnostics SSDP: %w",err)}
     if err:=db.exec("COMMIT");err!=nil{return result,err}
     committed=true
     result.DeviceSources=deriveDeviceSources(result.IdentityHistory,result.LANLastPositive)
     for _,item:=range result.MDNSHosts {
         result.DeviceSources=append(result.DeviceSources,DeviceOrigin{
             DeviceID:item.DeviceID,Source:"mDNS",Reference:item.Hostname,LastReportedAt:item.LastSeen,
+        })
+    }
+    lastSSDP:=map[string]string{}
+    for _,item:=range result.SSDPServices {
+        if lastSSDP[item.DeviceID]<item.LastSeen {lastSSDP[item.DeviceID]=item.LastSeen}
+    }
+    for id,seen:=range lastSSDP {
+        result.DeviceSources=append(result.DeviceSources,DeviceOrigin{
+            DeviceID:id,Source:"SSDP",LastReportedAt:seen,
         })
     }
     sort.Slice(result.DeviceSources,func(i,j int)bool{
@@ -209,6 +223,7 @@ func (s *Service) diagnosticReport() (map[string]any,error) {
             "ha_poll_interval_seconds":s.intervalSeconds,
             "arp_scan_interval_seconds":s.scanIntervalSeconds,
             "mdns_scan_interval_seconds":s.mdnsIntervalSeconds,
+            "ssdp_scan_interval_seconds":s.ssdpIntervalSeconds,
         },
         "counts":map[string]int{
             "devices":len(snapshot.Devices),"online":online,"not_observed":notObserved,
@@ -219,6 +234,9 @@ func (s *Service) diagnosticReport() (map[string]any,error) {
             "mdns_matched_devices":countSources(snapshot.DeviceSources,"mDNS"),
             "mdns_service_records":len(snapshot.MDNSServices),
             "mdns_unmatched_hosts":len(snapshot.MDNSUnmatched),
+            "ssdp_matched_devices":countSources(snapshot.DeviceSources,"SSDP"),
+            "ssdp_service_records":len(snapshot.SSDPServices),
+            "ssdp_unmatched_records":len(snapshot.SSDPUnmatched),
         },
         "inventory":snapshot,
         "ipv4_conflicts":resolved.Conflicts,
@@ -227,6 +245,8 @@ func (s *Service) diagnosticReport() (map[string]any,error) {
         "interpretation":map[string]string{
             "source_membership":"Historical association, not proof of current network presence.",
             "mdns":"Hostnames and service records complement ONLY uniquely ARP-confirmed hosts. A service is not an extra device; mDNS never changes Presence.",
+            "ssdp":"Metadata-only M-SEARCH on the local LAN; USN, ST, SERVER and sanitized LOCATION origin are retained only when fresh unique ARP confirms the address. No XML fetched, no device creation or Presence changes.",
+            "ipv4_disagreement":"A router versus ARP IP claim is recorded as a source disagreement in local Events; NOT proof of two hosts simultaneously owning an IP.",
             "online":"Last aggregated device presence from Home Assistant router or positive ARP evidence.",
             "not_observed":"No current positive evidence; NOT a confirmed disconnection.",
             "generated_at":"UTC server clock; the browser adds active view/filter metadata.",

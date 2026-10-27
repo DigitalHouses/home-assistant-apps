@@ -147,5 +147,6 @@ func (db *DB) reconcileIPv4Locked(now string) ([]IPv4Conflict,error) {
  for _,id:=range ids {
    if err:=db.run("UPDATE devices SET ipv4=? WHERE id=?",resolved.Addresses[id],id);err!=nil{return nil,err}
  }
+ if err:=db.recordDisagreementChangesLocked(resolved.Conflicts,now);err!=nil{return nil,err}
  return resolved.Conflicts,nil
 }
