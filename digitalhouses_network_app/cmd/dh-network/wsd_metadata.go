@@ -63,7 +63,12 @@ func wsdGetSOAP(endpoint,requestID string) []byte {
 }
 func validWSDComputerName(s string) bool {
  if len(s)<1||len(s)>63{return false}
- if s=="localhost"||strings.EqualFold(s,"unknown")||strings.EqualFold(s,"unavailable"){return false}
+ if strings.EqualFold(s,"localhost")||strings.EqualFold(s,"unknown")||strings.EqualFold(s,"unavailable"){return false}
+ if len(s)==12 {
+  hex:=true
+  for _,c:=range s {if !(c>='0'&&c<='9'||c>='a'&&c<='f'||c>='A'&&c<='F'){hex=false;break}}
+  if hex{return false}
+ }
  if s[0]=='-'||s[len(s)-1]=='-'{return false}
  hasLetter:=false
  for _,c:=range s {
