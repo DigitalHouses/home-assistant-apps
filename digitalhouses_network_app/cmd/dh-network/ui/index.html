@@ -129,7 +129,7 @@ async function exportDiagnostic() {
   const d=new Date();
   const stamp=[d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('')+'-'+[d.getHours(),d.getMinutes(),d.getSeconds()].map(x=>String(x).padStart(2,'0')).join('');
   const file='dh-network-diagnostic-'+stamp+'.json';
-  const blob=new Blob([JSON.stringify(report,null,2)+'\\n'],{type:'application/json;charset=utf-8'});
+  const blob=new Blob([JSON.stringify(report,null,2)],{type:'application/json;charset=utf-8'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
   a.href=url;a.download=file;a.style.display='none';
