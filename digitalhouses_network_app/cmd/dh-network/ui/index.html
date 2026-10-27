@@ -20,12 +20,12 @@ input{font:inherit;padding:10px;color:#f0f4f9;background:#203147;border:1px soli
 @media(max-width:650px){main{padding:13px}header{padding:17px}table{font-size:12px}}
 </style></head>
 <body>
-<header><div><h1>DigitalHouses Network App</h1><small>Устройства и источники сети · v0.1.3</small></div><span id="health" class="tag">Подключение…</span></header>
+<header><div><h1>DigitalHouses Network App</h1><small>Устройства и источники сети · v0.1.4</small></div><span id="health" class="tag">Подключение…</span></header>
 <main>
 <div class="notice">Источники: Home Assistant <code>device_tracker</code> и самостоятельный ARP-опрос локального IPv4. ARP обнаруживает ответившие сетевые интерфейсы; отсутствие ответа не доказывает Offline. IPv6/Bonjour добавим далее.</div>
-<div class="stats"><div class="stat"><strong id="known">—</strong><span>Устройств в реестре</span></div><div class="stat"><strong id="online">—</strong><span>Подтверждённый Online</span></div><div class="stat"><strong id="interval">—</strong><span>HA-опрос, секунд</span></div><div class="stat"><strong id="arp-interval">—</strong><span>ARP-опрос, секунд</span></div></div>
+<div class="stats"><div class="stat"><strong id="known">—</strong><span>Устройств в реестре</span></div><div class="stat"><strong id="online">—</strong><span>Подтверждённый Online</span></div><div class="stat"><strong id="interval">—</strong><span>HA-опрос, секунд</span></div><div class="stat"><strong id="arp-interval">—</strong><span>ARP-опрос, секунд</span></div><div class="stat"><strong id="last-arp">—</strong><span>Последний ARP-скан</span></div><div class="stat"><strong id="known-arp">—</strong><span>Ранее найдено ARP</span></div><div class="stat"><strong id="ip-conflicts">—</strong><span>Спорных IPv4</span></div></div>
 <nav><button class="active" data-page="devices">Устройства</button><button data-page="sources">Источники</button><button data-page="events">События</button></nav>
-<div class="toolbar"><button id="export" class="export" type="button">Сохранить диагностику (.json)</button><small id="export-status">Файл содержит IP, MAC, имена и заметки. Он сохраняется только на твоём компьютере.</small></div><div id="filterarea"></div><section id="body">Загрузка…</section>
+<div class="toolbar"><button id="export" class="export" type="button">Сохранить диагностику (.json)</button><small id="export-status">Файл содержит IP, MAC, имена и заметки. Он сохраняется только на твоём компьютере.</small></div><div id="ip-conflict-summary" class="notice" style="display:none"></div><div id="filterarea"></div><section id="body">Загрузка…</section>
 </main>
 <script>
 const body=document.getElementById('body'),health=document.getElementById('health'),filterArea=document.getElementById('filterarea');
@@ -76,8 +76,8 @@ async function edit(id){
 function sourceDescription(s){
  if(!s.details_json)return '';
  try{const v=JSON.parse(s.details_json);if(v.error)return 'Ошибка: '+esc(v.error);
-  if(s.kind==='lan_arp')return 'ARP: '+esc(v.observations)+' · Добавлено/обновлено: '+esc(v.imported)+' · Proxy ARP: '+esc(v.ambiguous_proxy_arp)+' · '+esc(v.interface)+' '+esc(v.subnet);
-  return 'Всего: '+esc(v.trackers)+' · Home: '+esc(v.home)+' · Not home: '+esc(v.not_home)+' · Unknown: '+esc(v.unknown)+' · Конфликтов: '+esc(v.conflicts)
+  if(s.kind==='lan_arp')return 'Последний ARP: '+esc(v.last_scan_hosts??v.observations)+' · Наблюдений: '+esc(v.observations)+' · Конфликтов IPv4: '+esc(v.ipv4_conflicts??0)+' · Proxy ARP: '+esc(v.ambiguous_proxy_arp)+' · '+esc(v.interface)+' '+esc(v.subnet);
+  return 'Всего: '+esc(v.trackers)+' · Home: '+esc(v.home)+' · Not home: '+esc(v.not_home)+' · Unknown: '+esc(v.unknown)+' · Конфликтов MAC: '+esc(v.conflicts)+' · Конфликтов IPv4: '+esc(v.ipv4_conflicts??0)
  }catch(_){return 'Нет подробностей'}
 }
 async function load(){
@@ -89,6 +89,17 @@ async function load(){
   document.getElementById('online').textContent=devices.filter(d=>d.presence==='online').length;
   document.getElementById('interval').textContent=status.poll_interval_seconds||'—';
   document.getElementById('arp-interval').textContent=status.scan_interval_seconds||'—';
+  const report=await read('diagnostics');
+  const conflicts=report.ipv4_conflicts||[];
+  document.getElementById('last-arp').textContent=report.counts?.arp_last_scan_hosts??'—';
+  document.getElementById('known-arp').textContent=report.counts?.arp_hosts??'—';
+  document.getElementById('ip-conflicts').textContent=conflicts.length;
+  const summary=document.getElementById('ip-conflict-summary');
+  summary.style.display=conflicts.length?'block':'none';
+  summary.textContent=conflicts.length
+   ?'Обнаружены противоречивые IPv4: '+conflicts.map(x=>x.ipv4+' ('+x.claims.map(c=>c.source+': '+c.mac).join(' / ')+')').join('; ')+'. Спорные адреса не присваиваются обоим устройствам. Подробности — в JSON-экспорте.'
+   :'';
+
   filterArea.innerHTML='';
   if(page==='devices'){renderDevices();return}
   if(page==='sources'){
