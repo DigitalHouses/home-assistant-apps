@@ -326,7 +326,7 @@ class MqttBridge(MqttEvents):
         } and getattr(message, "retain", False):
             self.log.warning("Отклонена retained MQTT-команда перезапуска агента")
             return
-        if (self.ups_topics is not None
+        if (getattr(self, "ups_topics", None) is not None
                 and message.topic == self.ups_topics.debug_set
                 and getattr(message, "retain", False)):
             self.log.warning("Rejected retained UPS debug command")
