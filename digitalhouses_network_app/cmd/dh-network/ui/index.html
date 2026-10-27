@@ -203,7 +203,8 @@ async function edit(id){
 function sourceDescription(s){
  if(!s.details_json)return '';
  try{const v=JSON.parse(s.details_json);if(v.error)return 'Ошибка: '+esc(v.error);
-  if(s.kind==='ssdp')return 'Ответов: '+esc(v.responses??0)+' · Записей: '+esc(v.valid_records??0)+' · Привязано: '+esc(v.matched_devices??0)+' · Без ARP: '+esc(v.unmatched_records??0)+' · Сервисов: '+esc(v.services??0)+' · '+esc(v.interface||'');
+  if(s.kind==='local_interface')return 'MAC: '+esc(v.mac||'')+' · IPv4: '+esc(v.ipv4||'')+' · Интерфейс: '+esc(v.interface||'')+' · Сеть: '+esc(v.subnet||'');
+   if(s.kind==='ssdp')return 'Ответов: '+esc(v.responses??0)+' · Записей: '+esc(v.valid_records??0)+' · Привязано: '+esc(v.matched_devices??0)+' · Без ARP: '+esc(v.unmatched_records??0)+' · Сервисов: '+esc(v.services??0)+' · '+esc(v.interface||'');
   if(s.kind==='mdns')return 'Хостов A: '+esc(v.hosts_with_a??0)+' · Привязано: '+esc(v.matched??0)+' · Без ARP: '+esc(v.unmatched??0)+' · Сервисов: '+esc(v.services??0)+' · Ответов: '+esc(v.response_packets??0)+' · '+esc(v.interface||'');
   if(s.kind==='lan_arp')return 'Последний ARP: '+esc(v.last_scan_hosts??v.observations)+' · Наблюдений: '+esc(v.observations)+' · Конфликтов IPv4: '+esc(v.ipv4_conflicts??0)+' · Proxy ARP: '+esc(v.ambiguous_proxy_arp)+' · '+esc(v.interface)+' '+esc(v.subnet);
   return 'Всего: '+esc(v.trackers)+' · Home: '+esc(v.home)+' · Not home: '+esc(v.not_home)+' · Unknown: '+esc(v.unknown)+' · Конфликтов MAC: '+esc(v.conflicts)+' · Конфликтов IPv4: '+esc(v.ipv4_conflicts??0)
@@ -231,7 +232,7 @@ async function load(){
   document.getElementById('ssdp-services').textContent=report.counts?.ssdp_service_records??0;
   const summary=document.getElementById('ip-conflict-summary');
   // ARP versus a Wi-Fi router tracker is a source disagreement, not an alarm.
-  const realConflicts=conflicts.filter(x=>x.resolution!=='arp_over_router');
+  const realConflicts=conflicts.filter(x=>x.resolution!=='arp_over_router'&&x.resolution!=='local_interface_over_other');
   summary.style.display=realConflicts.length?'block':'none';
   summary.textContent=realConflicts.length
    ?'Обнаружены противоречивые ARP/IPv4: '+realConflicts.map(x=>x.ipv4+' ('+x.claims.map(c=>c.source+': '+c.mac).join(' / ')+')').join('; ')+'. Спорные адреса не присваиваются обоим устройствам. Подробности — в JSON-экспорте.'
