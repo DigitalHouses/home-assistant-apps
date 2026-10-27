@@ -7,7 +7,7 @@
 - Compact namespace: `dh_network_app`
 - Web UI: Home Assistant Ingress (not a second externally exposed admin service)
 - Storage: SQLite `/data/network.sqlite3`
-- Current version: `0.1.6`, experimental, no GHCR artifact and no telemetry
+- Current version: `0.1.7`, experimental, no GHCR artifact and no telemetry
 
 This App deliberately follows the existing product-naming and HAOS packaging standards. Its **Ingress** UI is the accepted departure from the usual MQTT-discovered Lovelace control card: UI state, notes and inventory are App-owned instead of built from MQTT entities. Any future machine events must follow DigitalHouses Events & Notifications Standard; local alert delivery belongs to HA, not the public App.
 
@@ -83,6 +83,17 @@ Where a DigitalHouses application exposes a discoverable TCP service, publish DN
 - `browser_view` exports `sort_column`, `sort_direction` and visible device IDs **in the displayed order**. The complete server inventory remains available.
 - `node --test digitalhouses_network_app/tests/ui_sort.test.cjs` exercises IP ordering, each column, missing values, badge details, search and export-sort metadata.
 - Pure browser UI change: no SQLite schema migration or modified on-wire discovery, device UUIDs, Notes or Presence. Native HAOS App Store update only.
+
+## Local IPv4 source-disagreement journal and SSDP pilot (0.1.7)
+
+- Additive SQLite schema v5 adds `ipv4_disagreement_state` for deduplicating transitions, `ssdp_services` for ARP-confirmed SSDP services, and bounded `ssdp_unmatched` for source-only diagnostics. Existing UUIDs, MACs, Notes, IPv4 history and events remain intact. No manual migration.
+- Conflicting **HA Router vs fresh ARP** IP assertions are recorded as **informational source disagreements** (`source_disagreement`), not confirmed duplicate-IP faults. The UI keeps a neutral count and suppresses the intrusive warning for this class. Device IP projections retain their existing ARP-over-router preference.
+- The event journal stores `ipv4_disagreement_started`, `ipv4_disagreement_changed`, and `ipv4_disagreement_resolved` once per state transition, never each HA/ARP polling cycle. Each event includes IPv4, resolution, source, MAC, reference and device ID. Retention is bounded to 1000 event rows; latest 200 are exposed by Ingress API and JSON diagnostic. The App does **not** emit HA events or send notifications yet.
+- SSDP sends two rate-limited M-SEARCH requests with `ST: ssdp:all` from an ephemeral UDP port bound to the primary IPv4 LAN IP, to multicast `239.255.255.250:1900` every 300 seconds. Responses must be valid `HTTP/1.x 200 OK`, originate on the primary private LAN, and include bounded USN/ST/LOCATION. No passive SSDP listener or general multicast port bind is required.
+- The response URL must use an HTTP(S) IP host matching the UDP responder IP. Only the **origin**, not URL paths/queries/userinfo, is persisted; no device description XML is fetched, preventing credential leakage and SSRF.
+- SSDP enriches a device **only** if an unambiguous, fresh, direct ARP claim matches its current IPv4; it does not create devices, rename hosts, alter Presence, overwrite notes, merge by IP, or trust a router-only entry. Unmatched SSDP records are kept for a maximum of 24 hours as non-device diagnostics.
+- Ingress shows a compact `SSDP · N` source badge with tooltip for ST, USN and SERVER, and counters for SSDP-linked hosts and services. Full records and unmatched are included in the diagnostic JSON, with new `GET /api/ssdp-services`.
+- Empty SSDP responses are acceptable (`status=empty`) and do not mean no SSDP-capable hosts exist. No new Supervisor permissions, no user-configurable extra network targets, no changes to NetAlertX.
 
 ## Release boundary
 
