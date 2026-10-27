@@ -49,7 +49,7 @@ func TestIPv4ConflictARPWinsAndNotesRemain(t *testing.T) {
  if err=db.importRouterTrackers([]RouterTracker{ha},base.Add(-10*time.Second).Format(time.RFC3339));err!=nil {t.Fatal(err)}
  sources,_=db.sources()
  for _,v:=range sources {
-  if v.Kind=="ha_device_tracker" && v.Status!="degraded" {t.Fatalf("expected degraded conflicting claim: %+v",v)}
+  if v.Kind=="ha_device_tracker" && v.Status!="ok" {t.Fatalf("ARP-vs-router disagreement should be informational, not degraded: %+v",v)}
  }
  devices,_=db.devices()
  for _,dev:=range devices {
