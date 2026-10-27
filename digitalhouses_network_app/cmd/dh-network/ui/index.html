@@ -140,11 +140,11 @@ function renderDevices(){
  renderTable();
 }
 function renderTable(){
- const ids=new Set(visibleDeviceIDs());
- const found=devices.filter(d=>ids.has(d.id));
+ const found=sortedDeviceRows();
  if(!devices.length){body.innerHTML='<h2>Устройства</h2><p>Устройств пока нет. Проверь вкладку «Источники». В Home Assistant могут отсутствовать доступные <code>device_tracker</code> от роутеров.</p>';return}
- body.innerHTML='<h2>Устройства ('+found.length+')</h2><div class="grid-scroll"><table><thead><tr><th>Имя</th><th>MAC</th><th>IPv4 / IPv6</th><th>Presence</th><th>Обнаружен через</th><th>Bonjour сервисы</th><th>Последний Online</th><th>Note</th></tr></thead><tbody>'+
- found.map((d,i)=>'<tr><td><strong>'+esc(d.display_name||d.hostname||d.id)+'</strong></td><td>'+esc(d.mac||'—')+'</td><td>'+esc(d.ipv4||'—')+'<br>'+esc(d.ipv6||'')+'</td><td><span class="tag '+esc(d.presence)+'">'+esc(d.presence)+'</span></td><td>'+sourcesForDisplay(d.id)+'</td><td>'+mdnsServiceDisplay(d.id)+'</td><td>'+esc(noteTime(d.last_seen))+'</td><td><button data-id="'+esc(d.id)+'">Редактировать</button><br><small>'+esc(d.note||'')+'</small></td></tr>').join('')+'</tbody></table></div>';
+ body.innerHTML='<h2>Устройства ('+found.length+')</h2><div class="grid-scroll"><table class="devices-table"><thead><tr>'+sortedHeaders()+'</tr></thead><tbody>'+
+ found.map(d=>'<tr><td class="ip-cell">'+esc(d.ipv4||d.ipv6||'—')+(d.ipv4&&d.ipv6?'<small> / '+esc(d.ipv6)+'</small>':'')+'</td><td><strong>'+esc(d.display_name||d.hostname||d.id)+'</strong></td><td class="mac-cell">'+esc(d.mac||'—')+'</td><td><span class="tag '+esc(d.presence)+'">'+esc(d.presence)+'</span></td><td class="source-cell">'+sourcesForDisplay(d.id)+'</td><td class="time-cell">'+esc(noteTime(d.last_seen))+'</td><td class="note-cell"><button data-id="'+esc(d.id)+'">Изменить</button><small> '+esc(d.note||'')+'</small></td></tr>').join('')+'</tbody></table></div>';
+ body.querySelectorAll('button[data-sort]').forEach(b=>b.addEventListener('click',()=>changeSort(b.dataset.sort)));
  body.querySelectorAll('button[data-id]').forEach(b=>b.addEventListener('click',()=>edit(b.dataset.id)));
 }
 async function edit(id){
@@ -188,8 +188,13 @@ async function load(){
    ?'Обнаружены противоречивые IPv4: '+conflicts.map(x=>x.ipv4+' ('+x.claims.map(c=>c.source+': '+c.mac).join(' / ')+')').join('; ')+'. Спорные адреса не присваиваются обоим устройствам. Подробности — в JSON-экспорте.'
    :'';
 
+  if(page==='devices'){
+   // Preserve search focus and current sort during timed refreshes.
+   if(!filterArea.querySelector('#search'))renderDevices();
+   else renderTable();
+   return;
+  }
   filterArea.innerHTML='';
-  if(page==='devices'){renderDevices();return}
   if(page==='sources'){
    const sources=await read('sources');
    body.innerHTML='<h2>Источники</h2><div class="grid-scroll"><table><thead><tr><th>Источник</th><th>Статус</th><th>Последний успешный опрос</th><th>Детали</th></tr></thead><tbody>'+
@@ -214,7 +219,9 @@ async function exportDiagnostic() {
    search_filter:selectedTab==='devices'?selectedFilter:null,
    visible_device_ids:shown,
    visible_device_count:shown.length,
-   displayed_columns:selectedTab==='devices'?['Имя','MAC','IPv4 / IPv6','Presence','Обнаружен через','Bonjour сервисы','Последний Online','Note']:[],
+   sort_column:selectedTab==='devices'?sortKey:null,
+   sort_direction:selectedTab==='devices'?sortDirection:null,
+   displayed_columns:selectedTab==='devices'?deviceColumns.map(([key,title])=>title):[],
    counters_as_displayed:{
     devices:document.getElementById('known').textContent,
     online:document.getElementById('online').textContent,
@@ -225,7 +232,7 @@ async function exportDiagnostic() {
    },
    browser_exported_at:new Date().toISOString(),
    browser_timezone:Intl.DateTimeFormat().resolvedOptions().timeZone,
-   detail:'Complete server inventory and sources, plus the exact selected tab, filter and displayed device IDs; not a pixel screenshot.'
+   detail:'Complete server inventory and sources, plus the exact selected tab, search filter, column sort/direction and displayed device IDs in visual order; not a pixel screenshot.'
   };
   const d=new Date();
   const stamp=[d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('')+'-'+[d.getHours(),d.getMinutes(),d.getSeconds()].map(x=>String(x).padStart(2,'0')).join('');
