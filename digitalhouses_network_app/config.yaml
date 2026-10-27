@@ -1,7 +1,7 @@
 name: DigitalHouses Network App
-version: 0.1.5
+version: 0.1.6
 slug: digitalhouses_network_app
-description: Network inventory and device presence (Bonjour discovery and service inventory).
+description: Network inventory and device presence (IP-first sortable inventory and compact Bonjour details).
 url: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_network_app
 arch:
   - amd64

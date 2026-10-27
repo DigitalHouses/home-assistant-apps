@@ -7,7 +7,7 @@
 - Compact namespace: `dh_network_app`
 - Web UI: Home Assistant Ingress (not a second externally exposed admin service)
 - Storage: SQLite `/data/network.sqlite3`
-- Current version: `0.1.5`, experimental, no GHCR artifact and no telemetry
+- Current version: `0.1.6`, experimental, no GHCR artifact and no telemetry
 
 This App deliberately follows the existing product-naming and HAOS packaging standards. Its **Ingress** UI is the accepted departure from the usual MQTT-discovered Lovelace control card: UI state, notes and inventory are App-owned instead of built from MQTT entities. Any future machine events must follow DigitalHouses Events & Notifications Standard; local alert delivery belongs to HA, not the public App.
 
@@ -74,6 +74,15 @@ Where a DigitalHouses application exposes a discoverable TCP service, publish DN
 - Existing HA Router names, user notes, UUIDs, MACs and Presence are never overwritten by Bonjour. A raw MAC label may be improved to a verified Bonjour hostname. Several services on one host remain several services, not several devices.
 - mDNS reports counts of response packets, discovered hosts, linked and unmatched hosts, and services; the Web UI and exported diagnostic JSON show these details.
 - No new Supervisor capabilities, no native IPv6 NDP yet, no HA Event publication.
+
+## Sortable compact Ingress device table (0.1.6)
+
+- Column order: **IP, name, MAC, Presence, sources, last Online, Note**. The former Bonjour service column is removed; service descriptions, instance names and ports remain accessible on hovering/focusing the compact `mDNS · N` tag, as well as in the full diagnostic JSON.
+- Every device header is an interactive ascending/descending control with `aria-sort`; default IP sorting uses numerical IPv4 octets, and missing IPs remain last.
+- Search focus and selected sort persist through the 30-second UI refresh.
+- `browser_view` exports `sort_column`, `sort_direction` and visible device IDs **in the displayed order**. The complete server inventory remains available.
+- `node --test digitalhouses_network_app/tests/ui_sort.test.cjs` exercises IP ordering, each column, missing values, badge details, search and export-sort metadata.
+- Pure browser UI change: no SQLite schema migration or modified on-wire discovery, device UUIDs, Notes or Presence. Native HAOS App Store update only.
 
 ## Release boundary
 

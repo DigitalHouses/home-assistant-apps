@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.6
+
+- IP address is now the first column in the Ingress inventory; removed the wide Bonjour services column.
+- All published services, instances and ports appear on hover/focus of the compact `mDNS · N` badge.
+- Added clickable ascending/descending sorting for **every device column**: IP, name, MAC, Presence, sources, last Online, Note.
+- IPv4 ordering is numeric across octets; rows missing an IP remain last in either direction, default is ascending IP.
+- Active search/sort survives the regular browser refresh without losing text-input focus.
+- Diagnostic JSON `browser_view` includes selected sort column, direction and visible device UUIDs in the actual on-screen order.
+- Added a browser JavaScript regression suite; no backend, schema, scanner, credential, permission, UUID or Note changes.
+
 ## 0.1.5
 
 - Added native Go Bonjour/mDNS DNS-SD service discovery on the primary LAN, using legacy-unicast queries without Nmap or extra HAOS privileges.
