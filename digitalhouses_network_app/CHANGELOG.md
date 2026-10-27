@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.10
+
+- Extend WSD pilot with tightly scoped, read-only Windows WS-Transfer Metadata Get. Accept verified `pub:Computer` hostnames only; never use generic `FriendlyName` (often the Windows publication service title).
+- Correlate SOAP request/response IDs and endpoint UUID, enforce strict IP literal/port 5357, bound timeouts/payloads, disable proxy and HTTP redirects.
+- Preserve UUID/Notes/history and existing meaningful names, only upgrade an empty/MAC-placeholder display name; store verified provenance in additive SQLite v7 `wsd_names`.
+- WSD badge and diagnostic export include the observed computer name. Hide 32-char opaque mDNS IDs from Name without losing source records.
+
 ## 0.1.9
 
 - Register the host OS default-route LAN IPv4/MAC as direct positive `Local Interface` evidence; fixes HAOS own .33 being omitted from active ARP and wrongly assigned an ASUS Media Bridge Wi-Fi MAC via imported router trackers.
