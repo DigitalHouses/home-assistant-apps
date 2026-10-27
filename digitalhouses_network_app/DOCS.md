@@ -7,7 +7,7 @@
 - Compact namespace: `dh_network_app`
 - Web UI: Home Assistant Ingress (not a second externally exposed admin service)
 - Storage: SQLite `/data/network.sqlite3`
-- Current version: `0.1.9`, experimental, no GHCR artifact and no telemetry
+- Current version: `0.1.10`, experimental, no GHCR artifact and no telemetry
 
 This App deliberately follows the existing product-naming and HAOS packaging standards. Its **Ingress** UI is the accepted departure from the usual MQTT-discovered Lovelace control card: UI state, notes and inventory are App-owned instead of built from MQTT entities. Any future machine events must follow DigitalHouses Events & Notifications Standard; local alert delivery belongs to HA, not the public App.
 
@@ -112,6 +112,14 @@ Where a DigitalHouses application exposes a discoverable TCP service, publish DN
 - Additive SQLite schema v6 adds `wsd_endpoints` and `wsd_unmatched`; unmatched items expire after 24h; matched endpoints after 7 days. No automatic identities from Endpoint UUIDs, no Presence or Note mutation, no required Supervisor privileges, no impact on parallel NetAlertX.
 - Diagnostic JSON includes the WSD source, matched/unmatched endpoints, their origin (sanitized), and local-interface evidence. Ingress includes a compact WSD badge for matched devices; `GET /api/wsd-endpoints` exposes bounded matched records. Empty discovery is an expected successful response.
 - **Scope limitation:** the Windows File Explorer computer name `MEDIA-SERZHAN` may be conveyed by a separate WSD SOAP metadata Get; this version does not infer or assign the name absent that verified response. That stage requires its own URL safety review and real-world protocol capture.
+
+## Verified Windows WSD computer names (0.1.10)
+
+- Extends the WS-Discovery pilot using an optional HTTP SOAP WS-Transfer `Get` against the **same IPv4 host that emitted a WSD ProbeMatches response**, restricted to `http://<source-IP>:5357/<advertised UUID>`. No hostnames/DNS, arbitrary ports, URL paths or query arguments, proxies or redirects. Request sent only after fresh unique direct ARP confirms IP->MAC and a matching WSD endpoint is already in SQLite; at most 8 metadata requests per scan. Timeouts under 2 seconds, responses capped to 32KiB. No passwords, OS privileges or changes to Windows settings.
+- Only SOAP GetResponse with a matching `RelatesTo` request ID, actual WSD MetadataSection Relationship/Host endpoint UUID and explicit `pub:Computer` type is accepted as a **computer name**, e.g. `VIEW71/Workgroup:WORKGROUP` -> `VIEW71`. Generic `wsdp:ThisDevice/FriendlyName` is ignored (on Windows it may simply say `Microsoft Publication Service Device Host`); no fabricated labels from UUID, Domain/Workgroup, hardware vendor or service type.
+- Additive SQLite v7 `wsd_names` records verified computer names per device + endpoint and last observation. The existing `devices.display_name` is only enriched if empty or equals its own MAC; existing meaningful names, UUID, MAC, Note, IPv4 evidence and all prior source records remain unchanged. No automatic identity merge or device creation.
+- Diagnostic source metadata now includes verified names and per-device provenance. The Ingress WSD badge displays confirmed computer names when available. Technical 32-character hexadecimal mDNS host IDs are hidden only in the *Name* column, retained in the source and diagnostics.
+- Empty/rejected/unreachable metadata is nonfatal and creates **no name**. Actual `VIEW71` and `MEDIA-SERZHAN` must be independently observed in WSD GetResponse at runtime before displayed.
 
 ## Release boundary
 
