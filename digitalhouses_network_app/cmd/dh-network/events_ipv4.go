@@ -30,12 +30,12 @@ func disagreementClassification(c IPv4Conflict) string {
  arpDevices:=map[string]bool{}
  router:=false
  for _,claim:=range c.Claims {
-  if claim.Source=="arp" && claim.State=="observed" {arpDevices[claim.DeviceID]=true}
+  if (claim.Source=="arp"||claim.Source=="local_interface") && claim.State=="observed" {arpDevices[claim.DeviceID]=true}
   if claim.Source=="ha_router" {router=true}
  }
- if c.WinnerSource=="arp" && len(arpDevices)==1 && router {
+ if (c.WinnerSource=="arp"||c.WinnerSource=="local_interface") && len(arpDevices)==1 && router {
   allElseRouter:=true
-  for _,claim:=range c.Claims {if claim.Source!="arp" && claim.Source!="ha_router" {allElseRouter=false}}
+  for _,claim:=range c.Claims {if claim.Source!="arp" && claim.Source!="local_interface" && claim.Source!="ha_router" {allElseRouter=false}}
   if allElseRouter {return "source_disagreement"}
  }
  return "ipv4_conflict"
