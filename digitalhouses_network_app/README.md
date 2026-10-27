@@ -2,7 +2,7 @@
 
 Experimental native **Home Assistant OS App** for a durable LAN device inventory, presence history, and future device events. Internal/entity prefix: `dh_network_app`. Canonical product ID, App Store slug, and repository directory: `digitalhouses_network_app`.
 
-## Current state (0.1.7 SSDP and IPv4 event journal)
+## Current state (0.1.8 compact numbered inventory)
 
 Available now:
 - standard installation from the **DigitalHouses Home Assistant Apps repository** (no copying files into HAOS);
@@ -29,6 +29,9 @@ Available now:
 
 - Local source discrepancies (including Media Bridge router tracker vs direct ARP) are recorded **once per change** in the Events tab, not emitted as HA alerts. The current IPv4 continues to prefer fresh direct ARP evidence.
 - Experimental SSDP/M-SEARCH discovery on the primary LAN enriches only uniquely fresh ARP-confirmed devices, without fetching remote XML documents, creating fake hosts or altering Notes and Presence. SSDP service badges have details on hover and diagnostics export includes all matched/unmatched metadata.
+
+- A numbered, single-line device table (№, Name, IP, MAC, Presence, sources, last Online, Note) removes fallback MACs from the Name column. A missing discovered name is displayed as a dash without changing the stored identity.
+- Notes use a clickable inline label when present and a small `Добавить` action when absent. The complete text is retained in SQLite, shown on hover and editable with one click.
 
 **Not yet implemented:** IPv6 NDP, SSDP, full device registry enrichment, HA Event publication or verified Offline. `online` means either a router reports `home` or a device answers ARP. The Web UI identifies these as planned.
 
