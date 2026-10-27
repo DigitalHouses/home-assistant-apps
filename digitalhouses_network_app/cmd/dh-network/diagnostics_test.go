@@ -44,7 +44,12 @@ func TestDiagnosticReportPreservesNotesIdentityAndOrigins(t *testing.T) {
         len(data.DeviceSources)!=2 || len(data.IdentityHistory)<3 {
         t.Fatalf("broken snapshot %+v",data)
     }
-    if len(data.Sources)!=5 {t.Fatalf("planned and active sources missing: %+v",data.Sources)}
+    if len(data.Sources)!=7 {t.Fatalf("planned and active sources missing: %+v",data.Sources)}
+    for _,want:=range []string{"Home Assistant router trackers","LAN ARP","Local Interface","mDNS / Bonjour","SSDP","WS-Discovery","IPv6 NDP"} {
+        found:=false
+        for _,source:=range data.Sources {if source.Name==want {found=true}}
+        if !found {t.Fatalf("source %s missing from diagnostics",want)}
+    }
 }
 
 func TestDiagnosticIngressOnlyAndValidJSON(t *testing.T) {
