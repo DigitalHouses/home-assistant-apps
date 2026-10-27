@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.9
+
+- Register the host OS default-route LAN IPv4/MAC as direct positive `Local Interface` evidence; fixes HAOS own .33 being omitted from active ARP and wrongly assigned an ASUS Media Bridge Wi-Fi MAC via imported router trackers.
+- Protect names, UUIDs, IP histories, Notes, and existing devices; local source takes precedence over router IP assertions and records any discrepancy as a non-alarming local event.
+- Add active multicast **WS-Discovery** SOAP ProbeMatches collection, strict source/correlation/response bounds, no remote metadata GET, no fabricated computer name. Match device only through fresh unique ARP or Local Interface.
+- New source badge, diagnostics endpoint, and additive SQLite schema v6 for retained WS-Discovery metadata; no new device creation from WSD, no secrets read from arbitrary URLs, no new privileges.
+- Automated tests for local source identity, IPV4 precedence, preserved Notes and truthful WSD SOAP records.
+
 ## 0.1.8
 
 - First column is dynamic sequential row number (recomputed after active filtering and sorting); the second is the discovered device name, followed by IP, MAC, Presence, sources, last Online and Note.
