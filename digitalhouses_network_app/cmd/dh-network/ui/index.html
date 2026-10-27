@@ -41,7 +41,7 @@ input{font:inherit;padding:10px;color:#f0f4f9;background:#203147;border:1px soli
 @media(max-width:650px){main{padding:13px}header{padding:17px}table{font-size:12px}}
 </style></head>
 <body>
-<header><div><h1>DigitalHouses Network App</h1><small>Устройства и источники сети · v0.1.8</small></div><span id="health" class="tag">Подключение…</span></header>
+<header><div><h1>DigitalHouses Network App</h1><small>Устройства и источники сети · v0.1.9</small></div><span id="health" class="tag">Подключение…</span></header>
 <main>
 <div class="notice">Источники: Home Assistant <code>device_tracker</code> и самостоятельный ARP-опрос локального IPv4. ARP обнаруживает ответившие сетевые интерфейсы; отсутствие ответа не доказывает Offline. Bonjour и SSDP дополняют сведения о сервисах при свежем ARP-подтверждении IP. Противоречия между источниками фиксируются в журнале событий, но не означают доказанный конфликт адресов. IPv6 NDP добавим позже.</div>
 <div class="stats"><div class="stat"><strong id="known">—</strong><span>Устройств в реестре</span></div><div class="stat"><strong id="online">—</strong><span>Подтверждённый Online</span></div><div class="stat"><strong id="interval">—</strong><span>HA-опрос, секунд</span></div><div class="stat"><strong id="arp-interval">—</strong><span>ARP-опрос, секунд</span></div><div class="stat"><strong id="last-arp">—</strong><span>Последний ARP-скан</span></div><div class="stat"><strong id="known-arp">—</strong><span>Ранее найдено ARP</span></div><div class="stat"><strong id="ip-conflicts">—</strong><span>Расхождений IPv4</span></div><div class="stat"><strong id="mdns-hosts">—</strong><span>Хостов с Bonjour</span></div><div class="stat"><strong id="mdns-services">—</strong><span>Bonjour сервисов</span></div><div class="stat"><strong id="ssdp-hosts">—</strong><span>Хостов с SSDP</span></div><div class="stat"><strong id="ssdp-services">—</strong><span>SSDP сервисов</span></div></div>
@@ -50,7 +50,7 @@ input{font:inherit;padding:10px;color:#f0f4f9;background:#203147;border:1px soli
 </main>
 <script>
 const body=document.getElementById('body'),health=document.getElementById('health'),filterArea=document.getElementById('filterarea');
-let page='devices',devices=[],origins=[],mdnsServices=[],ssdpServices=[],filter='';
+let page='devices',devices=[],origins=[],mdnsServices=[],ssdpServices=[],wsdEndpoints=[],filter='';
 let sortKey='ip',sortDirection='asc';
 const deviceColumns=[['name','Имя'],['ip','IP'],['mac','MAC'],['presence','Presence'],['sources','Обнаружен через'],['last_seen','Последний Online'],['note','Note']];
 const nameCollator=new Intl.Collator('ru',{numeric:true,sensitivity:'base'});
@@ -69,6 +69,9 @@ function sourcesForSort(id) {
 function ssdpForDevice(id) {
  return ssdpServices.filter(s=>s.device_id===id).sort((a,b)=>nameCollator.compare(a.st+' '+a.usn,b.st+' '+b.usn));
 }
+function wsdForDevice(id) {
+ return wsdEndpoints.filter(x=>x.device_id===id).sort((a,b)=>nameCollator.compare(a.endpoint,b.endpoint));
+}
 function sourcesForDisplay(id) {
  const candidates=originsForDevice(id);
  if(!candidates.length)return '<small>—</small>';
@@ -77,13 +80,16 @@ function sourcesForDisplay(id) {
   const matching=candidates.filter(x=>x.source===name);
   const services=name==='mDNS'?mdnsForDevice(id):[];
   const ssdp=name==='SSDP'?ssdpForDevice(id):[];
+  const wsd=name==='WSD'?wsdForDevice(id):[];
   const evidence=matching.map(x=>x.source+(x.reference?' ('+x.reference+')':'')+': '+(x.last_reported_at||'нет даты')).join('; ');
   const newline=String.fromCharCode(10);
   const details=services.length?newline+'Bonjour-сервисы ('+services.length+'):'+newline+services.map(s=>s.instance+' — '+s.type+' :'+s.port+' ['+s.target+']').join(newline):'';
   const extra=ssdp.length?newline+'SSDP-сервисы ('+ssdp.length+'):'+newline+ssdp.map(s=>s.st+' · '+s.usn+' ['+s.server+']').join(newline):'';
-  const hint=evidence+details+extra;
+  const wsdDetails=wsd.length?newline+'WSD endpoints ('+wsd.length+'):'+newline+wsd.map(x=>x.endpoint+' ['+x.types+'] '+x.scopes).join(newline):'';
+  const hint=evidence+details+extra+wsdDetails;
   const caption=name==='mDNS'&&services.length?'mDNS · '+services.length:
-     name==='SSDP'&&ssdp.length?'SSDP · '+ssdp.length:name;
+     name==='SSDP'&&ssdp.length?'SSDP · '+ssdp.length:
+     name==='WSD'&&wsd.length?'WSD · '+wsd.length:name;
   return '<span class="tag source-tag" tabindex="0" title="'+esc(hint)+'" aria-label="'+esc(hint)+'">'+esc(caption)+'</span>';
  }).join('');
 }
@@ -159,7 +165,7 @@ function compareDevices(a,b){
 }
 function sortedDeviceRows(){
  const q=filter.toLowerCase();
- return devices.filter(d=>[d.display_name,d.hostname,d.mac,d.ipv4,d.ipv6,d.note,...mdnsForDevice(d.id).map(s=>s.instance+' '+s.type),...ssdpForDevice(d.id).map(s=>s.st+' '+s.usn+' '+s.server)].some(s=>String(s||'').toLowerCase().includes(q))).sort(compareDevices);
+ return devices.filter(d=>[d.display_name,d.hostname,d.mac,d.ipv4,d.ipv6,d.note,...mdnsForDevice(d.id).map(s=>s.instance+' '+s.type),...ssdpForDevice(d.id).map(s=>s.st+' '+s.usn+' '+s.server),...wsdForDevice(d.id).map(x=>x.endpoint+' '+x.types+' '+x.scopes)].some(s=>String(s||'').toLowerCase().includes(q))).sort(compareDevices);
 }
 function visibleDeviceIDs(){return sortedDeviceRows().map(d=>d.id)}
 function changeSort(column){
@@ -203,6 +209,7 @@ async function edit(id){
 function sourceDescription(s){
  if(!s.details_json)return '';
  try{const v=JSON.parse(s.details_json);if(v.error)return 'Ошибка: '+esc(v.error);
+  if(s.kind==='wsd')return 'Ответов: '+esc(v.responses??0)+' · Endpoints: '+esc(v.endpoints??0)+' · Привязано: '+esc(v.linked_devices??0)+' · Без прямого подтверждения: '+esc(v.unmatched??0)+' · '+esc(v.interface||'');
   if(s.kind==='local_interface')return 'MAC: '+esc(v.mac||'')+' · IPv4: '+esc(v.ipv4||'')+' · Интерфейс: '+esc(v.interface||'')+' · Сеть: '+esc(v.subnet||'');
    if(s.kind==='ssdp')return 'Ответов: '+esc(v.responses??0)+' · Записей: '+esc(v.valid_records??0)+' · Привязано: '+esc(v.matched_devices??0)+' · Без ARP: '+esc(v.unmatched_records??0)+' · Сервисов: '+esc(v.services??0)+' · '+esc(v.interface||'');
   if(s.kind==='mdns')return 'Хостов A: '+esc(v.hosts_with_a??0)+' · Привязано: '+esc(v.matched??0)+' · Без ARP: '+esc(v.unmatched??0)+' · Сервисов: '+esc(v.services??0)+' · Ответов: '+esc(v.response_packets??0)+' · '+esc(v.interface||'');
@@ -217,6 +224,7 @@ async function load(){
   origins=await read('device-sources');
   mdnsServices=await read('mdns-services');
   ssdpServices=await read('ssdp-services');
+  wsdEndpoints=await read('wsd-endpoints');
   document.getElementById('known').textContent=devices.length;
   document.getElementById('online').textContent=devices.filter(d=>d.presence==='online').length;
   document.getElementById('interval').textContent=status.poll_interval_seconds||'—';
