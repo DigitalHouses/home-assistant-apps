@@ -1,7 +1,7 @@
 name: DigitalHouses Network App
-version: 0.1.4
+version: 0.1.5
 slug: digitalhouses_network_app
-description: Network inventory and device presence (source-aware IPv4 reconciliation and diagnostics).
+description: Network inventory and device presence (Bonjour discovery and service inventory).
 url: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_network_app
 arch:
   - amd64
@@ -23,6 +23,8 @@ privileged:
 options:
   poll_interval_seconds: 60
   scan_interval_seconds: 180
+  mdns_interval_seconds: 300
 schema:
   poll_interval_seconds: int(15,3600)
   scan_interval_seconds: int(60,3600)
+  mdns_interval_seconds: int(120,3600)

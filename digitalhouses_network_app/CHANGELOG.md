@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.5
+
+- Added native Go Bonjour/mDNS DNS-SD service discovery on the primary LAN, using legacy-unicast queries without Nmap or extra HAOS privileges.
+- Hostnames and service types/ports are attached only to uniquely identified, fresh ARP-confirmed devices; no IP-only/hostname-only device merging.
+- Multiple Bonjour services remain under one host; unresolved mDNS observations are retained separately in diagnostics.
+- Source health and counters, device services in Ingress, and exported matched/unmatched mDNS records.
+- Existing UUIDs, notes, router-provided names and Presence remain unchanged by Bonjour.
+- No mDNS TXT collection; IPv6 NDP, SSDP and HA events remain future milestones.
+
 ## 0.1.4
 
 - Introduced source-scoped positive IPv4 evidence rather than overwriting the current device IP with every router claim.

@@ -154,7 +154,7 @@ jobs:
         run: bash -n digitalhouses_network_app/rootfs/run.sh
       - name: Build HAOS App image
         run: |
-          docker build --build-arg BUILD_ARCH=amd64 --tag digitalhouses-network-ci:0.1.4 digitalhouses_network_app
+          docker build --build-arg BUILD_ARCH=amd64 --tag digitalhouses-network-ci:0.1.5 digitalhouses_network_app
 
   internet-app:
     name: Internet App
