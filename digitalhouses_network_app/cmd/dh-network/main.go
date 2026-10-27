@@ -92,7 +92,10 @@ func openDB(path string) (*DB, error) {
         "CREATE TABLE IF NOT EXISTS lan_positive (device_id TEXT PRIMARY KEY REFERENCES devices(id),last_seen TEXT NOT NULL);",
         "CREATE TABLE IF NOT EXISTS ipv4_evidence (device_id TEXT NOT NULL REFERENCES devices(id),source TEXT NOT NULL,reference TEXT NOT NULL,ipv4 TEXT NOT NULL,state TEXT NOT NULL,first_seen TEXT NOT NULL,last_seen TEXT NOT NULL,PRIMARY KEY(device_id,source,reference,ipv4));",
         "CREATE INDEX IF NOT EXISTS ipv4_evidence_ip ON ipv4_evidence(ipv4,last_seen);",
-        "UPDATE schema_version SET version=3;",
+        "CREATE TABLE IF NOT EXISTS mdns_hosts (device_id TEXT PRIMARY KEY REFERENCES devices(id),hostname TEXT NOT NULL,ipv4 TEXT NOT NULL,first_seen TEXT NOT NULL,last_seen TEXT NOT NULL);",
+        "CREATE TABLE IF NOT EXISTS mdns_services (device_id TEXT NOT NULL REFERENCES devices(id),instance TEXT NOT NULL,type TEXT NOT NULL,port INTEGER NOT NULL,target TEXT NOT NULL,first_seen TEXT NOT NULL,last_seen TEXT NOT NULL,PRIMARY KEY(device_id,instance,type,port));",
+        "CREATE TABLE IF NOT EXISTS mdns_unmatched (hostname TEXT NOT NULL,ipv4 TEXT NOT NULL,last_seen TEXT NOT NULL,reason TEXT NOT NULL,PRIMARY KEY(hostname,ipv4));",
+        "UPDATE schema_version SET version=4;",
     }, "\n")
     if err := db.exec(schema); err != nil {
         db.Close()
@@ -181,6 +184,7 @@ type Service struct {
     started time.Time
     intervalSeconds int
     scanIntervalSeconds int
+    mdnsIntervalSeconds int
 }
 
 func reply(w http.ResponseWriter, data any) {
@@ -201,7 +205,7 @@ func (s *Service) routes() http.Handler {
     mux.HandleFunc("GET /api/status",func(w http.ResponseWriter,r *http.Request){
         devices,err:=s.db.devices()
         if err != nil { http.Error(w,"database unavailable",500); return }
-        reply(w,map[string]any{"product":"digitalhouses_network_app","version":s.version,"started_at":s.started.Format(time.RFC3339),"database":"ready","discovery_running":false,"ha_router_import_enabled":true,"poll_interval_seconds":s.intervalSeconds,"devices":len(devices),"scan_interval_seconds":s.scanIntervalSeconds,"phase":"lan_arp_and_ha_router"})
+        reply(w,map[string]any{"product":"digitalhouses_network_app","version":s.version,"started_at":s.started.Format(time.RFC3339),"database":"ready","discovery_running":false,"ha_router_import_enabled":true,"poll_interval_seconds":s.intervalSeconds,"devices":len(devices),"scan_interval_seconds":s.scanIntervalSeconds,"mdns_interval_seconds":s.mdnsIntervalSeconds,"phase":"lan_arp_ha_router_mdns"})
     })
     mux.HandleFunc("GET /api/devices",func(w http.ResponseWriter,r *http.Request){
         devices,err:=s.db.devices()
@@ -218,8 +222,8 @@ func (s *Service) routes() http.Handler {
         if err!=nil {http.Error(w,"database unavailable",500);return}
         if len(sources)==0 {sources=append(sources,SourceInfo{Name:"Home Assistant router trackers",Kind:"ha_device_tracker",Status:"pending"})}
         if !containsSource(sources,"LAN ARP") {sources=append(sources,SourceInfo{Name:"LAN ARP",Kind:"lan_arp",Status:"pending"})}
+        if !containsSource(sources,"mDNS / Bonjour") {sources=append(sources,SourceInfo{Name:"mDNS / Bonjour",Kind:"mdns",Status:"pending"})}
         sources=append(sources,SourceInfo{Name:"IPv6 NDP",Kind:"planned",Status:"planned"},
-            SourceInfo{Name:"mDNS / Bonjour",Kind:"planned",Status:"planned"},
             SourceInfo{Name:"SSDP",Kind:"planned",Status:"planned"})
         reply(w,sources)
     })
@@ -227,6 +231,11 @@ func (s *Service) routes() http.Handler {
         snapshot,err:=s.db.snapshot()
         if err!=nil {http.Error(w,"database unavailable",500);return}
         reply(w,snapshot.DeviceSources)
+    })
+    mux.HandleFunc("GET /api/mdns-services",func(w http.ResponseWriter,r *http.Request){
+        snapshot,err:=s.db.snapshot()
+        if err!=nil {http.Error(w,"database unavailable",500);return}
+        reply(w,snapshot.MDNSServices)
     })
     mux.HandleFunc("GET /api/diagnostics",func(w http.ResponseWriter,r *http.Request){
         report,err:=s.diagnosticReport()
@@ -276,9 +285,12 @@ func main() {
     if err!=nil || scanSeconds<60 || scanSeconds>3600 {log.Fatal("DH_SCAN_INTERVAL must be 60..3600")}
     db.lanFreshness=time.Duration(scanSeconds*2+30)*time.Second
     db.haFreshness=time.Duration(intervalSeconds*3)*time.Second
-    service:=&Service{db:db,version:os.Getenv("APP_VERSION"),started:time.Now().UTC(),intervalSeconds:intervalSeconds,scanIntervalSeconds:scanSeconds}
+    mdnsSeconds,err:=strconv.Atoi(os.Getenv("DH_MDNS_INTERVAL"))
+    if err!=nil || mdnsSeconds<120 || mdnsSeconds>3600 {log.Fatal("DH_MDNS_INTERVAL must be 120..3600")}
+    service:=&Service{db:db,version:os.Getenv("APP_VERSION"),started:time.Now().UTC(),intervalSeconds:intervalSeconds,scanIntervalSeconds:scanSeconds,mdnsIntervalSeconds:mdnsSeconds}
     go service.runRouterPolling(time.Duration(intervalSeconds)*time.Second)
     go service.runLANPolling(time.Duration(scanSeconds)*time.Second)
+    go service.runMDNSPolling(time.Duration(mdnsSeconds)*time.Second)
     log.Printf("DigitalHouses Network App %s started; ingress=%s",service.version,port)
     server:=&http.Server{Addr:":"+port,Handler:service.routes(),ReadHeaderTimeout:10*time.Second,ReadTimeout:30*time.Second,WriteTimeout:30*time.Second}
     log.Fatal(server.ListenAndServe())
