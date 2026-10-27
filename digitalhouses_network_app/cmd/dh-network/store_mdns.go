@@ -36,7 +36,7 @@ type MDNSUnmatched struct {
 
 // Called exclusively inside a writer transaction. Never merge a device by
 // hostname or by IP alone. Match a current IP only if it has an unequivocal
-// recent positive ARP mapping to an existing MAC-backed device.
+// recent positive ARP or local OS interface mapping to a MAC-backed device.
 func (db *DB) mdnsARPDevice(ip,at string) (string,error) {
  now,err:=time.Parse(time.RFC3339,at)
  if err!=nil{return "",err}
@@ -46,7 +46,7 @@ func (db *DB) mdnsARPDevice(ip,at string) (string,error) {
  var ids []string
  _,err=db.prepared(`SELECT DISTINCT e.device_id FROM ipv4_evidence e
  JOIN devices d ON d.id=e.device_id
- WHERE e.source='arp' AND e.state='observed' AND e.ipv4=?
+ WHERE e.source IN ('arp','local_interface') AND e.state='observed' AND e.ipv4=?
  AND d.ipv4=? AND e.last_seen>=? AND d.mac<>''
  ORDER BY e.device_id LIMIT 2`,[]string{ip,ip,cutoff},
  func(stmt *C.sqlite3_stmt){ids=append(ids,field(stmt,0))})
