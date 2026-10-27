@@ -2,7 +2,7 @@
 
 Experimental native **Home Assistant OS App** for a durable LAN device inventory, presence history, and future device events. Internal/entity prefix: `dh_network_app`. Canonical product ID, App Store slug, and repository directory: `digitalhouses_network_app`.
 
-## Current state (0.1.9 local interface and WSD metadata)
+## Current state (0.1.10 verified Windows WSD names)
 
 Available now:
 - standard installation from the **DigitalHouses Home Assistant Apps repository** (no copying files into HAOS);
@@ -35,6 +35,8 @@ Available now:
 
 - The primary Linux default-route LAN interface is **positive direct OS evidence** (MAC and IPv4, no invented name). Own HAOS address is registered even though an ARP scanner cannot query itself. Local-interface claims outrank router claims and are journaled on conflict.
 - WS-Discovery sends a bounded local UDP 3702 multicast Probe for DPWS devices and records ProbeMatches only when the reply references the unique sent MessageID. Response IPs are joined to existing devices **only** with fresh unique ARP or local interface identity; unmatched identifiers remain metadata. This pilot does **not** issue HTTP metadata Get or infer a device name from WSD UUID/Types/Scopes.
+
+- Verified Windows WSD machine names are obtained only from bounded HTTP SOAP GetResponse `pub:Computer` records, bound to the exact WSD endpoint and a fresh direct ARP/MAC identity. The system does not infer names from service categories or generic WSD FriendlyName. Existing meaningful labels and user Notes are preserved. A strict same-IPv4, local HTTP port 5357 policy blocks SSRF, proxies and redirects. The verified name and source are retained in SQLite schema v7.
 
 **Not yet implemented:** IPv6 NDP, SSDP, full device registry enrichment, HA Event publication or verified Offline. `online` means either a router reports `home` or a device answers ARP. The Web UI identifies these as planned.
 
