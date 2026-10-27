@@ -15,6 +15,9 @@ def validate_environment(env: dict[str, str]) -> None:
     interval = env.get("DH_INTERVAL")
     if not interval or not interval.isdecimal() or not 15 <= int(interval) <= 3600:
         raise ValueError("DH_INTERVAL must be 15..3600 seconds")
+    scan_interval = env.get("DH_SCAN_INTERVAL")
+    if not scan_interval or not scan_interval.isdecimal() or not 60 <= int(scan_interval) <= 3600:
+        raise ValueError("DH_SCAN_INTERVAL must be 60..3600 seconds")
     if not env.get("SUPERVISOR_TOKEN"):
         raise ValueError("SUPERVISOR_TOKEN required for HA Core API")
     if env.get("DH_DB") != "/data/network.sqlite3":

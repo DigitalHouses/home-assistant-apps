@@ -54,6 +54,7 @@ type Event struct {
 type DB struct {
     mu sync.Mutex
     connection *C.sqlite3
+    lanFreshness time.Duration
 }
 
 func cstring(value string) (*C.char, func()) {
@@ -87,6 +88,8 @@ func openDB(path string) (*DB, error) {
         "CREATE TABLE IF NOT EXISTS sources (id TEXT PRIMARY KEY, kind TEXT NOT NULL, status TEXT NOT NULL, last_success TEXT, details_json TEXT NOT NULL DEFAULT '{}');",
         "CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY, event_type TEXT NOT NULL, device_id TEXT NOT NULL DEFAULT '', occurred_at TEXT NOT NULL, data_json TEXT NOT NULL DEFAULT '{}');",
         "CREATE INDEX IF NOT EXISTS event_order ON events(occurred_at);",
+        "CREATE TABLE IF NOT EXISTS lan_positive (device_id TEXT PRIMARY KEY REFERENCES devices(id),last_seen TEXT NOT NULL);",
+        "UPDATE schema_version SET version=2;",
     }, "\n")
     if err := db.exec(schema); err != nil {
         db.Close()
@@ -174,6 +177,7 @@ type Service struct {
     version string
     started time.Time
     intervalSeconds int
+    scanIntervalSeconds int
 }
 
 func reply(w http.ResponseWriter, data any) {
@@ -194,7 +198,7 @@ func (s *Service) routes() http.Handler {
     mux.HandleFunc("GET /api/status",func(w http.ResponseWriter,r *http.Request){
         devices,err:=s.db.devices()
         if err != nil { http.Error(w,"database unavailable",500); return }
-        reply(w,map[string]any{"product":"digitalhouses_network_app","version":s.version,"started_at":s.started.Format(time.RFC3339),"database":"ready","discovery_running":false,"ha_router_import_enabled":true,"poll_interval_seconds":s.intervalSeconds,"devices":len(devices),"phase":"ha_router_trackers"})
+        reply(w,map[string]any{"product":"digitalhouses_network_app","version":s.version,"started_at":s.started.Format(time.RFC3339),"database":"ready","discovery_running":false,"ha_router_import_enabled":true,"poll_interval_seconds":s.intervalSeconds,"devices":len(devices),"scan_interval_seconds":s.scanIntervalSeconds,"phase":"lan_arp_and_ha_router"})
     })
     mux.HandleFunc("GET /api/devices",func(w http.ResponseWriter,r *http.Request){
         devices,err:=s.db.devices()
@@ -210,7 +214,8 @@ func (s *Service) routes() http.Handler {
         sources,err:=s.db.sources()
         if err!=nil {http.Error(w,"database unavailable",500);return}
         if len(sources)==0 {sources=append(sources,SourceInfo{Name:"Home Assistant router trackers",Kind:"ha_device_tracker",Status:"pending"})}
-        sources=append(sources,SourceInfo{Name:"LAN IPv4/IPv6",Kind:"planned",Status:"planned"},
+        if !containsSource(sources,"LAN ARP") {sources=append(sources,SourceInfo{Name:"LAN ARP",Kind:"lan_arp",Status:"pending"})}
+        sources=append(sources,SourceInfo{Name:"IPv6 NDP",Kind:"planned",Status:"planned"},
             SourceInfo{Name:"mDNS / Bonjour",Kind:"planned",Status:"planned"},
             SourceInfo{Name:"SSDP",Kind:"planned",Status:"planned"})
         reply(w,sources)
@@ -234,6 +239,7 @@ func (s *Service) routes() http.Handler {
         reply(w,map[string]bool{"updated":true})
     })
     return http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){
+        if !ingressPeerAllowed(r.RemoteAddr) {http.Error(w,"Ingress only",http.StatusForbidden);return}
         w.Header().Set("Cache-Control","no-store")
         w.Header().Set("X-Content-Type-Options","nosniff")
         w.Header().Set("Referrer-Policy","no-referrer")
@@ -253,8 +259,12 @@ func main() {
     defer db.Close()
     intervalSeconds,err:=strconv.Atoi(os.Getenv("DH_INTERVAL"))
     if err!=nil || intervalSeconds<15 || intervalSeconds>3600 {log.Fatal("DH_INTERVAL must be between 15 and 3600")}
-    service:=&Service{db:db,version:os.Getenv("APP_VERSION"),started:time.Now().UTC(),intervalSeconds:intervalSeconds}
+    scanSeconds,err:=strconv.Atoi(os.Getenv("DH_SCAN_INTERVAL"))
+    if err!=nil || scanSeconds<60 || scanSeconds>3600 {log.Fatal("DH_SCAN_INTERVAL must be 60..3600")}
+    db.lanFreshness=time.Duration(scanSeconds*2+30)*time.Second
+    service:=&Service{db:db,version:os.Getenv("APP_VERSION"),started:time.Now().UTC(),intervalSeconds:intervalSeconds,scanIntervalSeconds:scanSeconds}
     go service.runRouterPolling(time.Duration(intervalSeconds)*time.Second)
+    go service.runLANPolling(time.Duration(scanSeconds)*time.Second)
     log.Printf("DigitalHouses Network App %s started; ingress=%s",service.version,port)
     server:=&http.Server{Addr:":"+port,Handler:service.routes(),ReadHeaderTimeout:10*time.Second,ReadTimeout:30*time.Second,WriteTimeout:30*time.Second}
     log.Fatal(server.ListenAndServe())

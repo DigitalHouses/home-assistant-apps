@@ -1,4 +1,7 @@
 configuration:
   poll_interval_seconds:
     name: Router tracker poll interval (seconds)
-    description: Read existing Home Assistant router device_trackers periodically. No LAN scan is performed yet.
+    description: Read existing Home Assistant router device_trackers periodically.
+  scan_interval_seconds:
+    name: LAN ARP scan interval (seconds)
+    description: Periodic bounded ARP discovery on the primary Ethernet interface; networks larger than /24 are not scanned.

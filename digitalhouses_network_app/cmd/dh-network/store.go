@@ -158,6 +158,16 @@ func (db *DB) importRouterTrackers(trackers []RouterTracker,now string) error {
                 }
                 cycleRank[id]=rank
             }
+            // A fresh direct ARP response is stronger than a negative or
+            // unavailable router report, including the router's stale IP.
+            lanFresh,err:=db.lanRecentlySeen(id,now)
+            if err!=nil{return err}
+            if lanFresh && t.State!="home" {
+                status="online"
+                seen=old.LastSeen
+                t.IPv4=""
+                t.IPv6=""
+            }
             if err=db.run("UPDATE devices SET display_name=?,hostname=?,mac=?,ipv4=?,ipv6=?,presence=?,last_seen=? WHERE id=?",
                 keep(old.DisplayName,t.Name),keep(old.Hostname,t.Hostname),keep(old.MAC,t.MAC),
                 keep(old.IPv4,t.IPv4),keep(old.IPv6,t.IPv6),status,seen,id);err!=nil{return err}
