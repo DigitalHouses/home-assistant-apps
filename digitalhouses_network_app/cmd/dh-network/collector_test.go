@@ -117,3 +117,18 @@ func TestIdentityConflictDoesNotMergeHosts(t *testing.T) {
     devices,_:=db.devices(); sources,_:=db.sources()
     if len(devices)!=2 || sources[0].Status!="degraded" {t.Fatalf("identity conflict not contained %+v %+v",devices,sources)}
 }
+
+func TestSameSnapshotHomeWinsOverUnavailable(t *testing.T) {
+    db,err:=openDB(filepath.Join(t.TempDir(),"test.sqlite3"))
+    if err!=nil {t.Fatal(err)}
+    defer db.Close()
+    a:=RouterTracker{EntityID:"device_tracker.one",MAC:"02:01:02:03:04:05",State:"home"}
+    b:=RouterTracker{EntityID:"device_tracker.two",MAC:a.MAC,State:"unavailable"}
+    for _,batch:=range [][]RouterTracker{{a,b},{b,a}} {
+        if err=db.importRouterTrackers(batch,"2026-10-27T20:00:00Z");err!=nil{t.Fatal(err)}
+        devices,_:=db.devices()
+        if len(devices)!=1 || devices[0].Presence!="online" {
+            t.Fatalf("same-cycle positive presence lost %+v",devices)
+        }
+    }
+}

@@ -118,6 +118,7 @@ func (db *DB) importRouterTrackers(trackers []RouterTracker,now string) error {
     done:=false
     defer func(){if !done {_=db.exec("ROLLBACK")}}()
     imported,online,notObserved,unknown,conflicts:=0,0,0,0,0
+    cycleRank:=map[string]int{}
     for _,t:=range trackers {
         if t.EntityID=="" {return errors.New("router tracker entity_id missing")}
         byEntity,err:=db.lookupIdentity("ha_entity",t.EntityID)
@@ -146,14 +147,26 @@ func (db *DB) importRouterTrackers(trackers []RouterTracker,now string) error {
             if readErr!=nil{return readErr}
             status:=old.Presence
             seen:=old.LastSeen
-            switch t.State {
-            case "home": status="online";seen=now
-            case "not_home": status="not_observed"
-            case "unavailable","unknown": status="unknown"
+            rank:=1
+            if t.State=="not_home" {rank=2}
+            if t.State=="home" {rank=3}
+            if rank>=cycleRank[id] {
+                switch t.State {
+                case "home": status="online";seen=now
+                case "not_home": status="not_observed"
+                case "unavailable","unknown": status="unknown"
+                }
+                cycleRank[id]=rank
             }
             if err=db.run("UPDATE devices SET display_name=?,hostname=?,mac=?,ipv4=?,ipv6=?,presence=?,last_seen=? WHERE id=?",
                 keep(old.DisplayName,t.Name),keep(old.Hostname,t.Hostname),keep(old.MAC,t.MAC),
                 keep(old.IPv4,t.IPv4),keep(old.IPv6,t.IPv6),status,seen,id);err!=nil{return err}
+        }
+        if _,ok:=cycleRank[id]; !ok {
+            rank:=1
+            if t.State=="not_home" {rank=2}
+            if t.State=="home" {rank=3}
+            cycleRank[id]=rank
         }
         if err=db.storeIdentity(id,"ha_entity",t.EntityID,now);err!=nil{return err}
         if err=db.storeIdentity(id,"mac",t.MAC,now);err!=nil{return err}
