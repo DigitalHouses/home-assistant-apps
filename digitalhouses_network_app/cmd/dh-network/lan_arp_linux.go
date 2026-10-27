@@ -146,7 +146,7 @@ func scanARP(ctx context.Context, target lanTarget, rate int) ([]LANHost,error) 
             if err!=nil {return fmt.Errorf("ARP receive: %w",err)}
             if host,ok:=parseARPReply(buf[:n],target.network);ok {
                 if _,requested:=expected[host.IPv4];requested {
-                    observations[host.MAC]=host
+                    observations[host.IPv4]=host
                 }
             }
         }
