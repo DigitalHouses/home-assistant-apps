@@ -220,6 +220,16 @@ func (s *Service) routes() http.Handler {
             SourceInfo{Name:"SSDP",Kind:"planned",Status:"planned"})
         reply(w,sources)
     })
+    mux.HandleFunc("GET /api/device-sources",func(w http.ResponseWriter,r *http.Request){
+        snapshot,err:=s.db.snapshot()
+        if err!=nil {http.Error(w,"database unavailable",500);return}
+        reply(w,snapshot.DeviceSources)
+    })
+    mux.HandleFunc("GET /api/diagnostics",func(w http.ResponseWriter,r *http.Request){
+        report,err:=s.diagnosticReport()
+        if err!=nil {http.Error(w,"diagnostic unavailable",500);return}
+        reply(w,report)
+    })
     mux.HandleFunc("PUT /api/devices/{id}/note",func(w http.ResponseWriter,r *http.Request){
         id:=r.PathValue("id")
         if id=="" || len(id)>128 { http.Error(w,"invalid device ID",400);return }
