@@ -1,7 +1,7 @@
 name: DigitalHouses Network App
-version: 0.1.9
+version: 0.1.10
 slug: digitalhouses_network_app
-description: LAN identity verified by local OS interface and WS-Discovery metadata.
+description: Verified Windows computer names via WS-Discovery Metadata Get.
 url: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_network_app
 arch:
   - amd64
