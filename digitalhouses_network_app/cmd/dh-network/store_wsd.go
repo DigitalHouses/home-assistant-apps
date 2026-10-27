@@ -20,12 +20,46 @@ type WSDEndpoint struct {
  Scopes string `json:"scopes"`
  Origin string `json:"origin"`
  LastSeen string `json:"last_seen"`
+ ComputerName string `json:"computer_name,omitempty"`
 }
 type WSDUnmatched struct {
  IPv4 string `json:"ipv4"`
  Endpoint string `json:"endpoint"`
  LastSeen string `json:"last_seen"`
  Reason string `json:"reason"`
+}
+func (db *DB) wsdConfirmedEndpoint(item WSDAnnouncement,at string) (bool,error) {
+ db.mu.Lock()
+ defer db.mu.Unlock()
+ id,err:=db.mdnsARPDevice(item.IPv4,at)
+ if err!=nil||id==""{return false,err}
+ found:=false
+ _,err=db.prepared("SELECT 1 FROM wsd_endpoints WHERE device_id=? AND ipv4=? AND endpoint=? LIMIT 1",
+ []string{id,item.IPv4,item.Endpoint},func(s *C.sqlite3_stmt){found=true})
+ return found,err
+}
+func (db *DB) persistWSDComputerName(item WSDAnnouncement,name,at string) (err error) {
+ if !validWSDComputerName(name) {return errors.New("WSD metadata name invalid")}
+ db.mu.Lock()
+ defer db.mu.Unlock()
+ if err=db.exec("BEGIN IMMEDIATE");err!=nil{return err}
+ committed:=false
+ defer func(){if !committed {_=db.exec("ROLLBACK")}}()
+ id,err:=db.mdnsARPDevice(item.IPv4,at)
+ if err!=nil{return err}
+ if id==""{return errors.New("WSD metadata lost direct IP identity")}
+ exists:=false
+ _,err=db.prepared("SELECT 1 FROM wsd_endpoints WHERE device_id=? AND ipv4=? AND endpoint=? LIMIT 1",
+  []string{id,item.IPv4,item.Endpoint},func(s *C.sqlite3_stmt){exists=true})
+ if err!=nil{return err}
+ if !exists{return errors.New("WSD metadata endpoint no longer belongs to device")}
+ if err=db.run("INSERT INTO wsd_names(device_id,endpoint,computer_name,first_seen,last_seen) VALUES(?,?,?,?,?) ON CONFLICT(device_id,endpoint) DO UPDATE SET computer_name=excluded.computer_name,last_seen=excluded.last_seen",
+  id,item.Endpoint,name,at,at);err!=nil{return err}
+ if err=db.run("UPDATE devices SET display_name=? WHERE id=? AND (TRIM(display_name)='' OR LOWER(display_name)=LOWER(mac))",
+  name,id);err!=nil{return err}
+ if err=db.exec("COMMIT");err!=nil{return err}
+ committed=true
+ return nil
 }
 func (db *DB) importWSD(items []WSDAnnouncement,at string,packets int,iface string) (matched,unmatched int,err error) {
  db.mu.Lock()
@@ -52,10 +86,11 @@ func (db *DB) importWSD(items []WSDAnnouncement,at string,packets int,iface stri
  timestamp,_:=time.Parse(time.RFC3339,at)
  if err=db.run("DELETE FROM wsd_unmatched WHERE last_seen < ?",timestamp.Add(-24*time.Hour).Format(time.RFC3339));err!=nil{return}
  if err=db.run("DELETE FROM wsd_endpoints WHERE last_seen < ?",timestamp.Add(-7*24*time.Hour).Format(time.RFC3339));err!=nil{return}
+ if err=db.run("DELETE FROM wsd_names WHERE last_seen < ?",timestamp.Add(-7*24*time.Hour).Format(time.RFC3339));err!=nil{return}
  details,_:=json.Marshal(map[string]any{
   "responses":packets,"endpoints":len(items),"linked_devices":len(linked),
   "unmatched":unmatched,"interface":iface,"matching":"fresh_unique_arp_or_local_interface",
-  "metadata_get":"not_performed","name_assignment":"none",
+  "metadata_get":"verified_pub_computer_only","name_assignment":"mac_only_label_replacement",
  })
  status:="ok"
  if len(items)==0 {status="empty"}
@@ -77,8 +112,8 @@ func (db *DB) recordWSDFailure(at string,e error) error {
 func (db *DB) wsdRecordsLocked() ([]WSDEndpoint,[]WSDUnmatched,error) {
  endpoints:=make([]WSDEndpoint,0)
  missing:=make([]WSDUnmatched,0)
- _,err:=db.prepared("SELECT device_id,ipv4,endpoint,types,scopes,origin,last_seen FROM wsd_endpoints ORDER BY device_id,endpoint",nil,func(s *C.sqlite3_stmt){
-  endpoints=append(endpoints,WSDEndpoint{DeviceID:field(s,0),IPv4:field(s,1),Endpoint:field(s,2),Types:field(s,3),Scopes:field(s,4),Origin:field(s,5),LastSeen:field(s,6)})
+ _,err:=db.prepared("SELECT e.device_id,e.ipv4,e.endpoint,e.types,e.scopes,e.origin,e.last_seen,COALESCE(n.computer_name,'') FROM wsd_endpoints e LEFT JOIN wsd_names n ON n.device_id=e.device_id AND n.endpoint=e.endpoint ORDER BY e.device_id,e.endpoint",nil,func(s *C.sqlite3_stmt){
+  endpoints=append(endpoints,WSDEndpoint{DeviceID:field(s,0),IPv4:field(s,1),Endpoint:field(s,2),Types:field(s,3),Scopes:field(s,4),Origin:field(s,5),LastSeen:field(s,6),ComputerName:field(s,7)})
  })
  if err!=nil{return nil,nil,err}
  _,err=db.prepared("SELECT ipv4,endpoint,last_seen,reason FROM wsd_unmatched ORDER BY last_seen DESC LIMIT 100",nil,func(s *C.sqlite3_stmt){
