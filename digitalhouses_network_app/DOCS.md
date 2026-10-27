@@ -7,7 +7,7 @@
 - Compact namespace: `dh_network_app`
 - Web UI: Home Assistant Ingress (not a second externally exposed admin service)
 - Storage: SQLite `/data/network.sqlite3`
-- Current version: `0.1.4`, experimental, no GHCR artifact and no telemetry
+- Current version: `0.1.5`, experimental, no GHCR artifact and no telemetry
 
 This App deliberately follows the existing product-naming and HAOS packaging standards. Its **Ingress** UI is the accepted departure from the usual MQTT-discovered Lovelace control card: UI state, notes and inventory are App-owned instead of built from MQTT entities. Any future machine events must follow DigitalHouses Events & Notifications Standard; local alert delivery belongs to HA, not the public App.
 
@@ -65,8 +65,18 @@ Where a DigitalHouses application exposes a discoverable TCP service, publish DN
 - The Ingress page separates latest ARP scan host count from the number of historical ARP identities and displays address conflicts. This is not an IP conflict alarm system yet and emits no HA events.
 - Before each source has delivered at least one fresh post-upgrade observation, current IPv4 may be temporarily empty. No historical row is deleted. No need to reset or edit SQLite manually.
 
+## Bonjour/mDNS pilot (0.1.5)
+
+- Self-contained Go DNS-SD querying on the primary LAN using a private ephemeral UDP socket to multicast `224.0.0.251:5353`; this avoids competing for HAOS's existing 5353 listener. This is an active, legacy-unicast query strategy, not a complete passive multicast listener; some responders may not answer and source=empty must not imply zero devices.
+- Discovers DNS-SD service types, browses a bounded list (including `_digitalhouses._tcp.local.`), parses PTR/SRV/A/AAAA, and resolves service targets. All DNS decoding has limits against malformed records and compression loops.
+- Stores data in additive SQLite schema v4: `mdns_hosts`, `mdns_services`, and bounded `mdns_unmatched` (last 24h). TXT metadata is deliberately ignored because some services advertise pairing credentials.
+- A discovered host may enrich an existing device only when its IPv4 is uniquely assigned to a MAC by **fresh positive ARP evidence**. IP or hostname by itself is never used to merge device identities. Unmatched observations are retained as non-device diagnostics.
+- Existing HA Router names, user notes, UUIDs, MACs and Presence are never overwritten by Bonjour. A raw MAC label may be improved to a verified Bonjour hostname. Several services on one host remain several services, not several devices.
+- mDNS reports counts of response packets, discovered hosts, linked and unmatched hosts, and services; the Web UI and exported diagnostic JSON show these details.
+- No new Supervisor capabilities, no native IPv6 NDP yet, no HA Event publication.
+
 ## Release boundary
 
-Version 0.1.0 proved HAOS install, Ingress, Web UI, data persistence, version and lifecycle. Version 0.1.2 added bounded native ARP probing; 0.1.3 added read-only diagnostics and source attribution; 0.1.4 adds independent IPv4 evidence and conflict resolution. These versions emit no machine events. It does not claim full IPv6 or cross-VLAN visibility. A genuine scan requires an explicit later version and tests for incomplete/invalid source data before any presence state or event is emitted.
+Version 0.1.0 proved HAOS install, Ingress, Web UI, data persistence, version and lifecycle. Version 0.1.2 added bounded native ARP probing; 0.1.3 added read-only diagnostics and source attribution; 0.1.4 adds independent IPv4 evidence and conflict resolution; 0.1.5 adds conservative mDNS/Bonjour metadata enrichment. These versions emit no machine events. It does not claim full IPv6 or cross-VLAN visibility. A genuine scan requires an explicit later version and tests for incomplete/invalid source data before any presence state or event is emitted.
 
 When accepted, move from experimental Supervisor source build to the standard versioned immutable GHCR artifact. The install/update UI remains the **same Home Assistant App Store**, never a manual server-side copy.

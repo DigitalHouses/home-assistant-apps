@@ -2,7 +2,7 @@
 
 Experimental native **Home Assistant OS App** for a durable LAN device inventory, presence history, and future device events. Internal/entity prefix: `dh_network_app`. Canonical product ID, App Store slug, and repository directory: `digitalhouses_network_app`.
 
-## Current state (0.1.4 IPv4 reconciliation pilot)
+## Current state (0.1.5 Bonjour/mDNS pilot)
 
 Available now:
 - standard installation from the **DigitalHouses Home Assistant Apps repository** (no copying files into HAOS);
@@ -21,7 +21,10 @@ Available now:
 - additive source-scoped IPv4 evidence database: live ARP mapping outranks a conflicting HA router-reported IP, while historical DHCP/HA claims and notes remain intact;
 - current IPv4 is blank when neither source has fresh positive evidence. The diagnostic JSON exposes all IPv4 evidence and conflicts with timestamps/MACs; the Web UI shows conflict counts and separate last-ARP-scan versus historically seen ARP hosts.
 
-**Not yet implemented:** IPv6 NDP, mDNS/Bonjour/SSDP, full device registry enrichment, HA Event publication or verified Offline. `online` means either a router reports `home` or a device answers ARP. The Web UI identifies these as planned.
+- Bonjour/mDNS discovery from the App itself: published hostnames and DNS-SD service types/ports are stored only for devices with a fresh, unique ARP-verified address/MAC association.
+- Ingress displays detected service types, source attribution and counts. Exported JSON contains linked records plus unlinked announcements without inventing device identities.
+
+**Not yet implemented:** IPv6 NDP, SSDP, full device registry enrichment, HA Event publication or verified Offline. `online` means either a router reports `home` or a device answers ARP. The Web UI identifies these as planned.
 
 ## Install / update (only through standard HA App Store)
 

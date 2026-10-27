@@ -5,3 +5,6 @@ configuration:
   scan_interval_seconds:
     name: LAN ARP scan interval (seconds)
     description: Periodic bounded ARP discovery on the primary Ethernet interface; networks larger than /24 are not scanned.
+  mdns_interval_seconds:
+    name: Bonjour/mDNS poll interval (seconds)
+    description: LAN service discovery; names attach only through fresh ARP evidence.

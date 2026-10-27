@@ -5,3 +5,6 @@ configuration:
   scan_interval_seconds:
     name: Интервал сканирования LAN ARP (секунды)
     description: Периодический ARP-опрос основной Ethernet-сети. Диапазоны больше /24 пока не сканируются.
+  mdns_interval_seconds:
+    name: Интервал Bonjour/mDNS (секунды)
+    description: Поиск сервисов в LAN, привязка имён только по подтверждённому ARP.
