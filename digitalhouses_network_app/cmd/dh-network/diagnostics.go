@@ -43,6 +43,9 @@ type DatabaseSnapshot struct {
     IdentityHistory []IdentityHistory `json:"identity_history"`
     LANLastPositive []LANObservation `json:"lan_last_positive"`
     IPv4Evidence []IPv4Evidence `json:"ipv4_evidence"`
+    MDNSHosts []MDNSRecord `json:"mdns_hosts"`
+    MDNSServices []MDNSServiceRecord `json:"mdns_services"`
+    MDNSUnmatched []MDNSUnmatched `json:"mdns_unmatched"`
 }
 
 func fillSourcePlaceholders(in []SourceInfo) []SourceInfo {
@@ -93,6 +96,9 @@ func (db *DB) snapshot() (DatabaseSnapshot,error) {
         IdentityHistory:make([]IdentityHistory,0),
         LANLastPositive:make([]LANObservation,0),
         IPv4Evidence:make([]IPv4Evidence,0),
+        MDNSHosts:make([]MDNSRecord,0),
+        MDNSServices:make([]MDNSServiceRecord,0),
+        MDNSUnmatched:make([]MDNSUnmatched,0),
     }
     if err:=db.exec("BEGIN");err!=nil{return result,err}
     committed:=false
@@ -144,9 +150,22 @@ func (db *DB) snapshot() (DatabaseSnapshot,error) {
     if err!=nil{return result,fmt.Errorf("diagnostics LAN evidence: %w",err)}
     result.IPv4Evidence,err=db.ipv4EvidenceLocked()
     if err!=nil{return result,fmt.Errorf("diagnostics IPv4 evidence: %w",err)}
+    result.MDNSHosts,result.MDNSServices,result.MDNSUnmatched,err=db.mdnsSourceRecordsLocked()
+    if err!=nil{return result,fmt.Errorf("diagnostics mDNS: %w",err)}
     if err:=db.exec("COMMIT");err!=nil{return result,err}
     committed=true
     result.DeviceSources=deriveDeviceSources(result.IdentityHistory,result.LANLastPositive)
+    for _,item:=range result.MDNSHosts {
+        result.DeviceSources=append(result.DeviceSources,DeviceOrigin{
+            DeviceID:item.DeviceID,Source:"mDNS",Reference:item.Hostname,LastReportedAt:item.LastSeen,
+        })
+    }
+    sort.Slice(result.DeviceSources,func(i,j int)bool{
+        a,b:=result.DeviceSources[i],result.DeviceSources[j]
+        if a.DeviceID!=b.DeviceID{return a.DeviceID<b.DeviceID}
+        if a.Source!=b.Source{return a.Source<b.Source}
+        return a.Reference<b.Reference
+    })
     result.Sources=fillSourcePlaceholders(result.Sources)
     return result,nil
 }
@@ -187,6 +206,7 @@ func (s *Service) diagnosticReport() (map[string]any,error) {
             "started_at":s.started.UTC().Format(time.RFC3339),
             "ha_poll_interval_seconds":s.intervalSeconds,
             "arp_scan_interval_seconds":s.scanIntervalSeconds,
+            "mdns_scan_interval_seconds":s.mdnsIntervalSeconds,
         },
         "counts":map[string]int{
             "devices":len(snapshot.Devices),"online":online,"not_observed":notObserved,
@@ -194,6 +214,9 @@ func (s *Service) diagnosticReport() (map[string]any,error) {
             "arp_hosts":countSources(snapshot.DeviceSources,"ARP"),
             "arp_last_scan_hosts":lastScan,
             "ipv4_conflicts":len(resolved.Conflicts),
+            "mdns_matched_devices":countSources(snapshot.DeviceSources,"mDNS"),
+            "mdns_service_records":len(snapshot.MDNSServices),
+            "mdns_unmatched_hosts":len(snapshot.MDNSUnmatched),
         },
         "inventory":snapshot,
         "ipv4_conflicts":resolved.Conflicts,
@@ -201,6 +224,7 @@ func (s *Service) diagnosticReport() (map[string]any,error) {
         "source_diagnostics":diagnostics,
         "interpretation":map[string]string{
             "source_membership":"Historical association, not proof of current network presence.",
+            "mdns":"Hostnames and service records complement ONLY uniquely ARP-confirmed hosts. A service is not an extra device; mDNS never changes Presence.",
             "online":"Last aggregated device presence from Home Assistant router or positive ARP evidence.",
             "not_observed":"No current positive evidence; NOT a confirmed disconnection.",
             "generated_at":"UTC server clock; the browser adds active view/filter metadata.",
