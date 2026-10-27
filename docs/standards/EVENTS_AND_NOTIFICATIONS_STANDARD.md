@@ -6,6 +6,8 @@
 
 This standard complements [DigitalHouses Contract Data Policy](CONTRACT_DATA_POLICY.md).
 
+All HA YAML notification packages are also subject to [Home Assistant YAML Package Versioning Standard](HA_PACKAGE_VERSIONING_STANDARD.md): independent package version and release date must be present in the package file.
+
 ---
 
 ## 1. Principle
