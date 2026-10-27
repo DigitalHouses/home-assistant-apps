@@ -46,6 +46,7 @@ from .telemetry import (
 from .topics import build_topics, build_ups_topics
 from .update_manager import UpdateManager
 from .ups_battery_events import UpsBatteryEventTracker
+from .ups_debug import UpsDebugRecorder
 from .ups_policy_preflight import (
     PreflightCheck,
     UpsPolicyPreflight,
@@ -219,6 +220,7 @@ def build_ups_runtime(
     selected_name: str | None,
     state_dir: Path = DEFAULT_STATE_DIR,
     shutdown_history_tracker: ShutdownHistoryTracker | None = None,
+    ups_debug: UpsDebugRecorder | None = None,
 ) -> UpsRuntime | None:
     if not selected_name:
         return None
@@ -263,6 +265,7 @@ def build_ups_runtime(
         shutdown_policy_reader=observed_shutdown_policy,
         shutdown_history_tracker=tracker,
         shutdown_budget_reader=current_shutdown_budget,
+        ups_debug=ups_debug,
         software_shutdown_executor=execute_fixed_ups_shutdown,
         policy_reload_executor=FixedServiceReloadExecutor(),
     )
@@ -364,6 +367,11 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
 
     scanner = build_ups_scanner(config, state_dir=state_dir)
     selected_ups_name = scanner.selected_name()
+    ups_debug = UpsDebugRecorder(
+        state_dir,
+        replace(config.ups, enabled=True, name=selected_ups_name)
+        if selected_ups_name else None,
+    )
     bridge, runtime = build_runtime(
         config,
         state_dir=state_dir,
@@ -376,6 +384,7 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
         selected_name=selected_ups_name,
         state_dir=state_dir,
         shutdown_history_tracker=shutdown_history_tracker,
+        ups_debug=ups_debug,
     )
     telemetry_runner = TelemetryRunner(_telemetry_client(config, state_dir))
     update_manager = UpdateManager(state_dir, _version())
@@ -418,6 +427,7 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
     initialized = False
     ups_startup_attempted = False
     restart_requested = False
+    debug_last_published: bool | None = None
 
     def refresh_ups_after_pve() -> bool:
         nonlocal ups_startup_attempted
@@ -457,6 +467,15 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
 
     try:
         while not stop_event.is_set():
+            debug_reconnected = bridge.reconnect_requested.is_set()
+            while not bridge.ups_debug_updates.empty():
+                ups_debug.set_enabled(bridge.ups_debug_updates.get_nowait())
+            actual_debug = ups_debug.enabled()  # Also expires without HA/MQTT.
+            if bridge.connected.is_set() and ups_runtime is not None and (
+                actual_debug != debug_last_published or debug_reconnected
+            ):
+                if bridge.publish_ups_debug_state(actual_debug):
+                    debug_last_published = actual_debug
             if bridge.restart_requested.is_set():
                 bridge.restart_requested.clear()
                 denied = (
@@ -601,6 +620,9 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
                         log.info("Сканирование UPS: %s", outcome.result)
 
                         if outcome.selected_name is not None:
+                            ups_debug.set_config(replace(
+                                config.ups, enabled=True, name=outcome.selected_name
+                            ))
                             if not runtime.set_ups_configured(True):
                                 log.warning("Не удалось опубликовать факт настройки UPS")
                             if ups_runtime is None or outcome.selection_changed:
@@ -610,6 +632,7 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
                                     selected_name=outcome.selected_name,
                                     state_dir=state_dir,
                                     shutdown_history_tracker=shutdown_history_tracker,
+                                    ups_debug=ups_debug,
                                 )
                                 ups_startup_attempted = False
                             elif outcome.count == 1:
@@ -681,6 +704,7 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
         runtime.cancel_fan_calibration()
         runtime.wait_fan_calibration()
         telemetry_runner.stop()
+        ups_debug.close()
         bridge.stop()
         log.info("DigitalHouses PVE Agent остановлен")
 
