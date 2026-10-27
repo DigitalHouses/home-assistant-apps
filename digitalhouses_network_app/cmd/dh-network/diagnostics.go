@@ -160,6 +160,13 @@ func (s *Service) diagnosticReport() (map[string]any,error) {
         default:unknown++
         }
     }
+    diagnostics:=make([]map[string]any,0,len(snapshot.Sources))
+    for _,src:=range snapshot.Sources {
+        diagnostics=append(diagnostics,map[string]any{
+            "source":src.Name,"kind":src.Kind,"status":src.Status,
+            "last_success":src.LastSuccess,"details":normalizedSourceDetails(src),
+        })
+    }
     return map[string]any{
         "format":diagnosticFormat,
         "generated_at":time.Now().UTC().Format(time.RFC3339Nano),
@@ -176,13 +183,14 @@ func (s *Service) diagnosticReport() (map[string]any,error) {
             "arp_hosts":countSources(snapshot.DeviceSources,"ARP"),
         },
         "inventory":snapshot,
+        "source_diagnostics":diagnostics,
         "interpretation":map[string]string{
             "source_membership":"Historical association, not proof of current network presence.",
             "online":"Last aggregated device presence from Home Assistant router or positive ARP evidence.",
             "not_observed":"No current positive evidence; NOT a confirmed disconnection.",
             "generated_at":"UTC server clock; the browser adds active view/filter metadata.",
         },
-        "sensitive_fields":"This local diagnostic contains IP addresses, MAC addresses, hostnames and user notes. No tokens or passwords are exported.",
+        "sensitive_fields":"This local export contains IP/MAC addresses, hostnames and verbatim user notes. Supervisor credentials are never read for export; do not share if notes contain secrets.",
     },nil
 }
 
