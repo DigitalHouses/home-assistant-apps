@@ -55,6 +55,7 @@ func fillSourcePlaceholders(in []SourceInfo) []SourceInfo {
     if !containsSource(out,"Home Assistant router trackers") {
         out=append(out,SourceInfo{Name:"Home Assistant router trackers", Kind:"ha_device_tracker", Status:"pending"})
     }
+    if !containsSource(out,"Local Interface") {out=append(out,SourceInfo{Name:"Local Interface",Kind:"local_interface",Status:"pending"})}
     if !containsSource(out,"LAN ARP") {
         out=append(out,SourceInfo{Name:"LAN ARP", Kind:"lan_arp", Status:"pending"})
     }
@@ -162,6 +163,11 @@ func (db *DB) snapshot() (DatabaseSnapshot,error) {
     if err:=db.exec("COMMIT");err!=nil{return result,err}
     committed=true
     result.DeviceSources=deriveDeviceSources(result.IdentityHistory,result.LANLastPositive)
+    for _,claim:=range result.IPv4Evidence {
+        if claim.Source=="local_interface" {
+            result.DeviceSources=append(result.DeviceSources,DeviceOrigin{DeviceID:claim.DeviceID,Source:"Local Interface",Reference:claim.Reference,LastReportedAt:claim.LastSeen})
+        }
+    }
     for _,item:=range result.MDNSHosts {
         result.DeviceSources=append(result.DeviceSources,DeviceOrigin{
             DeviceID:item.DeviceID,Source:"mDNS",Reference:item.Hostname,LastReportedAt:item.LastSeen,
@@ -229,6 +235,7 @@ func (s *Service) diagnosticReport() (map[string]any,error) {
             "devices":len(snapshot.Devices),"online":online,"not_observed":notObserved,
             "unknown":unknown,"ha_router_entities":countSources(snapshot.DeviceSources,"HA Router"),
             "arp_hosts":countSources(snapshot.DeviceSources,"ARP"),
+            "local_interface_devices":countSources(snapshot.DeviceSources,"Local Interface"),
             "arp_last_scan_hosts":lastScan,
             "ipv4_conflicts":len(resolved.Conflicts),
             "mdns_matched_devices":countSources(snapshot.DeviceSources,"mDNS"),
@@ -245,6 +252,7 @@ func (s *Service) diagnosticReport() (map[string]any,error) {
         "interpretation":map[string]string{
             "source_membership":"Historical association, not proof of current network presence.",
             "mdns":"Hostnames and service records complement ONLY uniquely ARP-confirmed hosts. A service is not an extra device; mDNS never changes Presence.",
+            "local_interface":"OS default-route IPv4 interface MAC/IP is registered as direct positive evidence; router reports cannot claim its own address. No inferred hostname or arbitrary IP identity merge.",
             "ssdp":"Metadata-only M-SEARCH on the local LAN; USN, ST, SERVER and sanitized LOCATION origin are retained only when fresh unique ARP confirms the address. No XML fetched, no device creation or Presence changes.",
             "ipv4_disagreement":"A router versus ARP IP claim is recorded as a source disagreement in local Events; NOT proof of two hosts simultaneously owning an IP.",
             "online":"Last aggregated device presence from Home Assistant router or positive ARP evidence.",
