@@ -42,6 +42,7 @@ type DatabaseSnapshot struct {
     DeviceSources []DeviceOrigin `json:"device_sources"`
     IdentityHistory []IdentityHistory `json:"identity_history"`
     LANLastPositive []LANObservation `json:"lan_last_positive"`
+    IPv4Evidence []IPv4Evidence `json:"ipv4_evidence"`
 }
 
 func fillSourcePlaceholders(in []SourceInfo) []SourceInfo {
@@ -91,6 +92,7 @@ func (db *DB) snapshot() (DatabaseSnapshot,error) {
         DeviceSources:make([]DeviceOrigin,0),
         IdentityHistory:make([]IdentityHistory,0),
         LANLastPositive:make([]LANObservation,0),
+        IPv4Evidence:make([]IPv4Evidence,0),
     }
     if err:=db.exec("BEGIN");err!=nil{return result,err}
     committed:=false
@@ -140,6 +142,8 @@ func (db *DB) snapshot() (DatabaseSnapshot,error) {
             })
         })
     if err!=nil{return result,fmt.Errorf("diagnostics LAN evidence: %w",err)}
+    result.IPv4Evidence,err=db.ipv4EvidenceLocked()
+    if err!=nil{return result,fmt.Errorf("diagnostics IPv4 evidence: %w",err)}
     if err:=db.exec("COMMIT");err!=nil{return result,err}
     committed=true
     result.DeviceSources=deriveDeviceSources(result.IdentityHistory,result.LANLastPositive)
@@ -167,6 +171,13 @@ func (s *Service) diagnosticReport() (map[string]any,error) {
             "last_success":src.LastSuccess,"details":normalizedSourceDetails(src),
         })
     }
+    arpTTL,haTTL:=s.db.evidenceWindows()
+    resolved:=resolveIPv4Evidence(snapshot.IPv4Evidence,time.Now().UTC().Format(time.RFC3339),arpTTL,haTTL)
+    lastScan:=0
+    for _,source:=range snapshot.Sources {
+        if source.Kind!="lan_arp" {continue}
+        if n,ok:=normalizedSourceDetails(source)["last_scan_hosts"].(float64);ok {lastScan=int(n)}
+    }
     return map[string]any{
         "format":diagnosticFormat,
         "generated_at":time.Now().UTC().Format(time.RFC3339Nano),
@@ -181,8 +192,12 @@ func (s *Service) diagnosticReport() (map[string]any,error) {
             "devices":len(snapshot.Devices),"online":online,"not_observed":notObserved,
             "unknown":unknown,"ha_router_entities":countSources(snapshot.DeviceSources,"HA Router"),
             "arp_hosts":countSources(snapshot.DeviceSources,"ARP"),
+            "arp_last_scan_hosts":lastScan,
+            "ipv4_conflicts":len(resolved.Conflicts),
         },
         "inventory":snapshot,
+        "ipv4_conflicts":resolved.Conflicts,
+        "resolved_ipv4":resolved.Addresses,
         "source_diagnostics":diagnostics,
         "interpretation":map[string]string{
             "source_membership":"Historical association, not proof of current network presence.",
