@@ -41,7 +41,7 @@ input{font:inherit;padding:10px;color:#f0f4f9;background:#203147;border:1px soli
 @media(max-width:650px){main{padding:13px}header{padding:17px}table{font-size:12px}}
 </style></head>
 <body>
-<header><div><h1>DigitalHouses Network App</h1><small>Устройства и источники сети · v0.1.9</small></div><span id="health" class="tag">Подключение…</span></header>
+<header><div><h1>DigitalHouses Network App</h1><small>Устройства и источники сети · v0.1.10</small></div><span id="health" class="tag">Подключение…</span></header>
 <main>
 <div class="notice">Источники: Home Assistant <code>device_tracker</code> и самостоятельный ARP-опрос локального IPv4. ARP обнаруживает ответившие сетевые интерфейсы; отсутствие ответа не доказывает Offline. Bonjour и SSDP дополняют сведения о сервисах при свежем ARP-подтверждении IP. Противоречия между источниками фиксируются в журнале событий, но не означают доказанный конфликт адресов. IPv6 NDP добавим позже.</div>
 <div class="stats"><div class="stat"><strong id="known">—</strong><span>Устройств в реестре</span></div><div class="stat"><strong id="online">—</strong><span>Подтверждённый Online</span></div><div class="stat"><strong id="interval">—</strong><span>HA-опрос, секунд</span></div><div class="stat"><strong id="arp-interval">—</strong><span>ARP-опрос, секунд</span></div><div class="stat"><strong id="last-arp">—</strong><span>Последний ARP-скан</span></div><div class="stat"><strong id="known-arp">—</strong><span>Ранее найдено ARP</span></div><div class="stat"><strong id="ip-conflicts">—</strong><span>Расхождений IPv4</span></div><div class="stat"><strong id="mdns-hosts">—</strong><span>Хостов с Bonjour</span></div><div class="stat"><strong id="mdns-services">—</strong><span>Bonjour сервисов</span></div><div class="stat"><strong id="ssdp-hosts">—</strong><span>Хостов с SSDP</span></div><div class="stat"><strong id="ssdp-services">—</strong><span>SSDP сервисов</span></div></div>
@@ -85,7 +85,7 @@ function sourcesForDisplay(id) {
   const newline=String.fromCharCode(10);
   const details=services.length?newline+'Bonjour-сервисы ('+services.length+'):'+newline+services.map(s=>s.instance+' — '+s.type+' :'+s.port+' ['+s.target+']').join(newline):'';
   const extra=ssdp.length?newline+'SSDP-сервисы ('+ssdp.length+'):'+newline+ssdp.map(s=>s.st+' · '+s.usn+' ['+s.server+']').join(newline):'';
-  const wsdDetails=wsd.length?newline+'WSD endpoints ('+wsd.length+'):'+newline+wsd.map(x=>x.endpoint+' ['+x.types+'] '+x.scopes).join(newline):'';
+  const wsdDetails=wsd.length?newline+'WSD endpoints ('+wsd.length+'):'+newline+wsd.map(x=>x.endpoint+' ['+x.types+'] '+x.scopes+(x.computer_name?' · Подтвержденное имя: '+x.computer_name:'')).join(newline):'';
   const hint=evidence+details+extra+wsdDetails;
   const caption=name==='mDNS'&&services.length?'mDNS · '+services.length:
      name==='SSDP'&&ssdp.length?'SSDP · '+ssdp.length:
@@ -104,7 +104,7 @@ function recognizableName(raw,mac){
  if(/^(?:\d{1,3}\.){3}\d{1,3}$/.test(value))return '';
  const candidate=value.replace(/[:-]/g,'').toLowerCase();
  const ownMac=String(mac||'').replace(/[:-]/g,'').toLowerCase();
- if(/^[0-9a-f]{12}$/.test(candidate) || (ownMac && candidate===ownMac))return '';
+ if(/^(?:[0-9a-f]{12}|[0-9a-f]{32})$/.test(candidate) || (ownMac && candidate===ownMac))return '';
  return value;
 }
 function visibleDeviceName(d){
