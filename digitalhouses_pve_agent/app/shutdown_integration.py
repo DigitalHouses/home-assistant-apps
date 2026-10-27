@@ -22,6 +22,7 @@ from .ups_event_context import (
     ups_snapshot_event_context,
 )
 from .ups_nut import read_ups
+from .ups_debug import UpsDebugRecorder
 from .ups_policy import (
     PolicyValidationError,
     UpsPolicyDraft,
@@ -342,6 +343,7 @@ class ShutdownAwareUpsRuntime(AdaptiveUpsRuntime):
         reader=read_ups,
         shutdown_budget_reader: Callable[[], ShutdownBudgetResult] | None = None,
         software_shutdown_executor: Callable[[str], None] | None = None,
+        ups_debug: UpsDebugRecorder | None = None,
         policy_reload_executor: Callable[[], None] | None = None,
         line_power_statistics_tracker: LinePowerStatisticsTracker | None = None,
         **kwargs,
@@ -349,8 +351,23 @@ class ShutdownAwareUpsRuntime(AdaptiveUpsRuntime):
         self.shutdown_history_tracker = shutdown_history_tracker
         self.shutdown_budget_reader = shutdown_budget_reader
         self.policy_reload_executor = policy_reload_executor
+        self.ups_debug = ups_debug
+
+        def observed_shutdown_executor(reason: str) -> None:
+            # Log BEFORE invoking upsmon -c fsd. Any debug failure is non-fatal.
+            if self.ups_debug is not None:
+                try:
+                    self.ups_debug.record_software_fsd(
+                        reason, self.last_snapshot, self.policy_active,
+                        self.last_shutdown_budget,
+                    )
+                except Exception:
+                    _LOG.exception("UPS debug failed before FSD; continuing shutdown")
+            assert software_shutdown_executor is not None
+            software_shutdown_executor(reason)
+
         self.software_shutdown_controller = (
-            SoftwareShutdownController(software_shutdown_executor)
+            SoftwareShutdownController(observed_shutdown_executor)
             if software_shutdown_executor is not None
             else None
         )

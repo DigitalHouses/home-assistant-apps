@@ -81,6 +81,7 @@ class MqttEvents:
         self.ups_reconnect_requested = threading.Event()
         self.ups_policy_apply_requested = threading.Event()
         self.ups_beeper_updates: queue.SimpleQueue[bool] = queue.SimpleQueue()
+        self.ups_debug_updates: queue.SimpleQueue[bool] = queue.SimpleQueue()
         self.setting_updates: queue.SimpleQueue[SettingUpdate] = queue.SimpleQueue()
         self.ups_test_schedule_updates: queue.SimpleQueue[TestScheduleUpdate] = queue.SimpleQueue()
         self.ups_policy_updates: queue.SimpleQueue[PolicyDraftUpdate] = queue.SimpleQueue()
@@ -157,6 +158,11 @@ class MqttEvents:
         if self.ups_topics is not None and topic == self.ups_topics.test_stop:
             if text.upper() == "PRESS":
                 self.ups_test_stop_requested.set()
+                return True
+            return False
+        if self.ups_topics is not None and topic == self.ups_topics.debug_set:
+            if text.upper() in {"ON", "OFF"}:
+                self.ups_debug_updates.put(text.upper() == "ON")
                 return True
             return False
         if self.ups_topics is not None and topic == self.ups_topics.beeper_set:
@@ -276,6 +282,7 @@ class MqttBridge(MqttEvents):
         client.subscribe(self.topics.fan_calibrate, qos=1)
         client.subscribe(f"{self.topics.base}/ups/refresh", qos=1)
         client.subscribe(f"{self.topics.base}/ups/beeper/set", qos=1)
+        client.subscribe(f"{self.topics.base}/ups/debug/set", qos=1)
         client.subscribe(f"{self.topics.base}/ups/test/standard", qos=1)
         client.subscribe(f"{self.topics.base}/ups/test/quick", qos=1)
         client.subscribe(f"{self.topics.base}/ups/test/deep", qos=1)
@@ -318,6 +325,11 @@ class MqttBridge(MqttEvents):
             self.topics.restart_agent, self.topics.update_check, self.topics.update_install
         } and getattr(message, "retain", False):
             self.log.warning("Отклонена retained MQTT-команда перезапуска агента")
+            return
+        if (getattr(self, "ups_topics", None) is not None
+                and message.topic == self.ups_topics.debug_set
+                and getattr(message, "retain", False)):
+            self.log.warning("Rejected retained UPS debug command")
             return
         if message.topic == self.topics.ha_status and text.casefold() == "online":
             self.handle_ha_online()
@@ -573,6 +585,15 @@ class MqttBridge(MqttEvents):
         if self.ups_topics is None:
             return False
         return self._publish(self.ups_topics.state, "", retain=True)
+
+    def publish_ups_debug_state(self, enabled: bool) -> bool:
+        if self.ups_topics is None:
+            return False
+        return self._publish(
+            self.ups_topics.debug_state,
+            "ON" if enabled else "OFF",
+            retain=True,
+        )
 
     def publish_ups_state(self, payload: dict[str, object]) -> bool:
         if self.ups_topics is None:

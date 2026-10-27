@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.69
+
+- Add opt-in `switch.dh_pve_agent_ups_debug` via UPS MQTT Discovery. Disabled by default, with a persisted absolute 72-hour auto-off deadline (restarts do not renew it).
+- Record read-only raw NUT snapshots every 2 seconds in `/var/lib/digitalhouses_pve_agent/dh_ups_debug.log` (JSON Lines), rotating at 10 MiB with five backups and mode 0600. No additional Home Assistant packages or background systemd service.
+- Record a synchronous diagnostic snapshot before the software FSD helper, without changing existing UPS protection or shutdown decisions. Diagnostic read/write failures never gate FSD.
+
 ## 0.5.68
 
 - Expose the existing passive NFS incident status as a retained Home Assistant MQTT Discovery diagnostic sensor (`sensor.dh_pve_agent_nfs_problems`), without adding monitoring probes.
