@@ -15,6 +15,7 @@ func (s *Service) pollLAN() {
         s.reportLANError(at,err)
         return
     }
+    s.recordLocalInterface(plan)
     ctx,cancel:=context.WithTimeout(context.Background(),50*time.Second)
     defer cancel()
     hosts,err:=scanARP(ctx,plan,18)
