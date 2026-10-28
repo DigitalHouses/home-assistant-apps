@@ -563,11 +563,7 @@ function renderHelp(){
 let eventLogFilter='',eventLogStatus='all';
 function eventTemplate(item){
  const type=String(item.event_type||'');
- let d={};try{d=JSON.parse(item.payload_json||'{}')}catch(_){}
- const field=d.ip?'ip':d.mac?'mac':d.ipv4?'ipv4':'';
- const target=field?String(d[field]):'';
- const condition=field?' and trigger.to_state.attributes.'+field+' == '+JSON.stringify(target):'';
- return 'triggers:\n  - trigger: state\n    entity_id: event.dh_network_app_network\nconditions:\n  - condition: template\n    value_template: >-\n      {{ trigger.to_state is not none and trigger.to_state.attributes.event_type == '+JSON.stringify(type)+condition+' }}\nactions: []\n';
+ return 'triggers:\n  - trigger: event.received\n    target:\n      entity_id: event.dh_network_app_network\n    options:\n      event_type:\n        - '+type+'\nconditions: []\nactions: []\n';
 }
 function eventTitle(type){
  return ({device_discovered:'Новое устройство',tracked_device_reachable:'IP стал доступен',tracked_device_unreachable:'IP перестал обнаруживаться',
