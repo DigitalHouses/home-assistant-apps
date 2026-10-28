@@ -31,6 +31,33 @@ class TestMQTTEventContract(unittest.TestCase):
         for field in ("title","message","notification","telegram","severity","emoji"):
             self.assertNotIn(field, event)
 
+    def test_retries_keep_the_same_event_id(self):
+        conn = sqlite3.connect(":memory:")
+        conn.row_factory = sqlite3.Row
+        conn.execute("CREATE TABLE sample (device_id TEXT, first_positive_at TEXT, display_name TEXT, mac TEXT, ipv4 TEXT, detection_source TEXT)")
+        conn.execute("INSERT INTO sample VALUES ('device-1','2026-10-28T08:00:00+05:00','VIEW71','','','arp')")
+        row = conn.execute("SELECT * FROM sample").fetchone()
+        first = events.event_payload(row)
+        self.assertEqual(first["event_id"], events.event_payload(row)["event_id"])
+        self.assertEqual(first["detection_source"], "arp")
+        self.assertNotIn("mac", first)
+        self.assertNotIn("ipv4", first)
+
+    def test_incomplete_census_never_emits_pending_births(self):
+        conn = sqlite3.connect(":memory:")
+        conn.row_factory = sqlite3.Row
+        conn.executescript("""
+          CREATE TABLE network_event_policy (key TEXT PRIMARY KEY,value TEXT);
+          CREATE TABLE device_births (device_id TEXT PRIMARY KEY,publish_state TEXT);
+          INSERT INTO network_event_policy VALUES ('baseline_active','1');
+          INSERT INTO device_births VALUES ('uuid-census','pending');
+        """)
+        birth = {"device_id":"uuid-census","first_positive_at":"2026-10-28T08:00:00+05:00"}
+        self.assertEqual(events.suppress_initial_births(conn,[birth]),[])
+        self.assertEqual(conn.execute("SELECT publish_state FROM device_births").fetchone()[0],"pending")
+        conn.execute("UPDATE network_event_policy SET value='0'")
+        self.assertEqual(events.suppress_initial_births(conn,[birth]),[birth])
+
     def test_mac_like_device_name_does_not_become_guessed_name(self):
         conn = sqlite3.connect(":memory:")
         conn.row_factory = sqlite3.Row
