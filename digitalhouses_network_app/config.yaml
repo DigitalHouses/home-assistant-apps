@@ -1,7 +1,7 @@
 name: DigitalHouses Network App
-version: 0.1.15
+version: 0.1.16
 slug: digitalhouses_network_app
-description: Confirmed inventory reset with clear multiline confirmation.
+description: New-device 24-hour badges and MQTT machine discovery events.
 url: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_network_app
 arch:
   - amd64
@@ -17,6 +17,8 @@ panel_title: DH Network
 panel_icon: mdi:lan
 panel_admin: true
 homeassistant_api: true
+services:
+  - mqtt:want
 host_network: true
 privileged:
   - NET_RAW
