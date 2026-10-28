@@ -31,6 +31,7 @@ func (s *Service) pollLAN() {
             return
         }
         log.Printf("LAN ARP scan: %d observed IPv4 hosts on %s %s",len(hosts),plan.iface.Name,plan.network)
+        if finished,baselineErr:=s.db.finalizeDiscoveryBaseline();baselineErr!=nil {log.Printf("Network census finalization failed: %v",baselineErr)} else if finished {log.Print("Network initial census complete; new machine events enabled")}
     })
 }
 
