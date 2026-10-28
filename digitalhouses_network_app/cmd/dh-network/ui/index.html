@@ -766,6 +766,8 @@ async function resetInventoryFromUI(){
  finally{button.disabled=false}
 }
 document.getElementById('export').addEventListener('click',exportDiagnostic);
+document.getElementById('export-preview').addEventListener('click',showDiagnosticPreview);
+document.getElementById('export-copy').addEventListener('click',copyDiagnosticPreview);
 document.getElementById('reset').addEventListener('click',resetInventoryFromUI);
 let presenceRefreshBusy=false;
 async function refreshPresenceProgress(){
