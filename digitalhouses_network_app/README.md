@@ -2,12 +2,13 @@
 
 Experimental native **Home Assistant OS App** for a durable LAN device inventory, presence history, and future device events. Internal/entity prefix: `dh_network_app`. Canonical product ID, App Store slug, and repository directory: `digitalhouses_network_app`.
 
-## Current state (0.1.12 compact Ingress and verified network discovery)
+## Current state (0.1.13 compact Ingress with inline search)
 
 Available now:
 - standard installation from the **DigitalHouses Home Assistant Apps repository** (no copying files into HAOS);
 - authenticated Home Assistant Ingress Web UI, optionally shown on the HA sidebar;
 - Go process, persistent SQLite at `/data/network.sqlite3`;
+- Device list heading `Устройства (N)` and search field share one horizontal row (search immediately to the right of the count; wraps on narrow screens). Export confirmation no longer requests sharing the file in a chat. The metrics dropdown no longer contains the orange explanatory notice.
 - UI sections for Devices, Sources and Events in a single persistent Ingress header. A native keyboard-accessible `Показатели` disclosure keeps the 11 metric cards, source explanation and diagnostic JSON export hidden by default, but accessible in the top bar on demand; the device table and search are visible immediately. REST status/devices/sources/events endpoints and note updates for records that exist;
 - periodic read-only import of Home Assistant `device_tracker` entities with `source_type: router` using the official Supervisor Core API proxy;
 - persistent MAC/HA tracker identities, IP address histories and last positive sighting; **Online represents positive ARP/HA router tracker/local interface evidence, not successful ICMP ping**. ICMP availability is not implemented and is not inferred from the current Presence field;
