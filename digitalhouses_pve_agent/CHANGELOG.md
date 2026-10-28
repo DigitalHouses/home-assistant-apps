@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.70
+
+- Fix Intel GPU transcoding telemetry for PCI-passthrough guests (confirmed on Alder Lake-N UHD GPU in VM2238): decode completed `intel_gpu_top -J` samples when the external timeout leaves the surrounding JSON array unfinished, rather than dropping the whole reading.
+- Match exact Intel Video/VideoEnhance/Render/3D engine names as well as numbered `/0` variants. Do not silently report 0% when no Video engine is present.
+- Keep existing QEMU Guest Agent read-only collection, PCI topology, MQTT entity IDs, and host/guest safety unchanged; add focused regression tests.
+
 ## 0.5.69
 
 - Add opt-in `switch.dh_pve_agent_ups_debug` via UPS MQTT Discovery. Disabled by default, with a persisted absolute 72-hour auto-off deadline (restarts do not renew it).
