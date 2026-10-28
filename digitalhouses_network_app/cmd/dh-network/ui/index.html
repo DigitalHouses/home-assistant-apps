@@ -7,14 +7,6 @@
 .app-header nav{display:flex;align-items:center;gap:6px;margin:0;flex-wrap:wrap}
 .app-header nav button{background:transparent;border-color:transparent;padding:8px 11px}
 .app-header nav button.active{background:#137b78;border-color:#26b6a5}
-.overview{margin-left:auto;flex:0 0 auto}
-.overview summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:9px;padding:6px 9px;border:1px solid #536e83;border-radius:8px;color:#f1f7fb;background:#284059;white-space:nowrap}
-.overview summary::-webkit-details-marker{display:none}
-.overview summary:hover{filter:brightness(1.16)}
-.overview summary:focus-visible{outline:2px solid #82efc7;outline-offset:3px}
-.overview[open] summary{background:#137b78;border-color:#26b6a5}
-.overview-arrow{font-size:18px;line-height:1;transition:transform .15s ease}
-.overview[open] .overview-arrow{transform:rotate(180deg)}
 .overview-panel{position:absolute;top:calc(100% + 5px);right:16px;width:min(790px,calc(100vw - 32px));max-height:min(77vh,720px);overflow-y:auto;border:1px solid #49647e;border-radius:12px;background:#192b41;padding:18px;box-shadow:0 15px 42px #000b}
 .overview-panel .description{margin:0 0 12px}
 .overview-panel .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:9px;margin:10px 0 16px}
@@ -113,7 +105,7 @@ input{font:inherit;padding:10px;color:#f0f4f9;background:#203147;border:1px soli
 .tag.empty,.tag.not_observed,.tag.unknown{border-color:#a0a1a8;color:#c7cbd2}
 .tag.new-device{color:#96ffcb;border-color:#58c68f;background:#194d3b;font-size:10px;font-weight:700;margin-left:6px;padding:2px 6px}
 .monitor-editor{display:block;width:100%;min-height:290px;resize:vertical;white-space:pre;tab-size:2;font:13px ui-monospace,SFMono-Regular,Consolas,monospace;color:#e9f0f7;background:#203147;border:1px solid #526d86;border-radius:8px;padding:12px}.monitor-editor:focus-visible{outline:2px solid #82efc7}.monitor-tools{display:flex;align-items:center;gap:12px;margin-top:12px;flex-wrap:wrap}.grid-scroll{overflow-x:auto}code{color:#a2c6f4}.description{margin-top:8px;color:#c0cad5}
-@media(max-width:750px){main{padding:13px}.app-header{padding:12px;gap:10px}.brand{width:100%}.brand h1{font-size:18px}.app-header nav{flex:1 1 auto}.app-header nav button{padding:6px 9px}.overview-panel{right:8px;width:calc(100vw - 16px);padding:13px}.overview-panel .stats{grid-template-columns:repeat(auto-fit,minmax(136px,1fr))}table{font-size:12px}}
+@media(max-width:750px){main{padding:13px}.app-header{padding:12px;gap:10px}.brand{width:100%}.brand h1{font-size:18px}.app-header nav{flex:1 1 auto}.app-header nav button{padding:6px 9px}.settings-overview .overview-panel{padding:13px}.overview-panel .stats{grid-template-columns:repeat(auto-fit,minmax(136px,1fr))}table{font-size:12px}}
 
 /* The former top-right overview dropdown is now a persistent Settings section. */
 .settings-overview[hidden]{display:none}
