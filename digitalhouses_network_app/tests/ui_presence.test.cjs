@@ -44,7 +44,7 @@ test('new subscription displays Working, confirmation counts and exact positive 
  vm.runInContext('presenceSubscriptions=pending',ctx);
  const working=vm.runInContext("presenceCellAction('ip','192.168.2.30')",ctx);
  assert.match(working,/Working/);
- assert.match(working,/Выполняется внеочередное сканирование/);
+ assert.match(working,/выполняется внеочередное сканирование/);
  assert.match(working,/Нет подтверждений/);
  ctx.pending[0].state='confirming';ctx.pending[0].reason='confirmed_by_arp';
  ctx.pending[0].successes=1;
