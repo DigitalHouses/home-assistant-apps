@@ -194,3 +194,21 @@ test('search is immediately to the right of device count, in the same flex row',
  vm.runInContext("filter='';renderTable()",ctx);
  assert.equal(view.textContent,'Устройства (4)');
 });
+
+test('destructive inventory reset is hidden behind the metrics dropdown and requires typed confirmation', () => {
+ const header=html.slice(html.indexOf('<header class="app-header">'),html.indexOf('</header>'));
+ const overview=header.slice(header.indexOf('<details id="overview"'),header.indexOf('</details>'));
+ assert.match(overview,/id="reset" class="reset-danger"/);
+ assert.match(overview,/id="reset-status" role="status"/);
+ assert.match(overview,/UUID, Notes/);
+ assert.match(overview,/Безвозвратно/);
+ assert.match(overview,/id="export"/);
+ assert.match(script,/word!=='RESET'/);
+ assert.match(script,/if\(!confirm\(/);
+ assert.match(script,/method:'POST'/);
+ assert.match(script,/api\/inventory\/reset/);
+ assert.match(script,/confirmation:word/);
+ assert.match(script,/filter='';page='devices';sortKey='ip';sortDirection='asc'/);
+ assert.match(script,/await load\(\)/);
+ assert.match(html,/\.reset-area\{margin-top:/);
+});
