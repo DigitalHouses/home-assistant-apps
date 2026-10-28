@@ -378,11 +378,14 @@ class MonitorRunner:
                     payload["label"] = watch.label
                 payload["event_id"] = str(uuid5(NAMESPACE_URL,
                     f"dh_network_app:{watch.method}:{watch.watch_id}:{now}:{previous}:{new_state}"))
+                encoded = json.dumps(payload,ensure_ascii=False,separators=(",",":"))
                 conn.execute("""INSERT OR IGNORE INTO monitor_outbox
                     (event_id,method,watch_id,occurred_at,payload_json)
                     VALUES(?,?,?,?,?)""",
-                    (payload["event_id"],watch.method,watch.watch_id,now,
-                     json.dumps(payload,ensure_ascii=False,separators=(",",":"))))
+                    (payload["event_id"],watch.method,watch.watch_id,now,encoded))
+                conn.execute("INSERT INTO events(event_type,device_id,occurred_at,data_json) VALUES(?,'',?,?)",
+                             (payload["event_type"],now,encoded))
+                conn.execute("DELETE FROM events WHERE id NOT IN (SELECT id FROM events ORDER BY id DESC LIMIT 1000)")
 
     def publish(self, conn: sqlite3.Connection, mqtt_events: Any) -> None:
         if not mqtt_events.connected.is_set():
