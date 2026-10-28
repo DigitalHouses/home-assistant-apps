@@ -239,6 +239,7 @@ func (s *Service) diagnosticReport() (map[string]any,error) {
     }
     return map[string]any{
         "format":diagnosticFormat,
+        "debug":s.diagnosticDebug(),
         "generated_at":time.Now().UTC().Format(time.RFC3339Nano),
         "application":map[string]any{
             "id":"digitalhouses_network_app",

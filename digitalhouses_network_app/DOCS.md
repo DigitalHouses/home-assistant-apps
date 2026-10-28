@@ -179,6 +179,34 @@ Version 0.1.0 proved HAOS install, Ingress, Web UI, data persistence, version an
 When accepted, move from experimental Supervisor source build to the standard versioned immutable GHCR artifact. The install/update UI remains the **same Home Assistant App Store**, never a manual server-side copy.
 
 
+## Native diagnostic download and Journal copy fixes (0.1.23)
+
+The **Показатели → Сохранить диагностику (.json)** action is now a
+user-initiated native link to the Ingress-only HTTP attachment endpoint
+`GET /api/diagnostics/download`, with a timestamped filename. It no longer
+tries a blob: URL from JavaScript inside a Home Assistant Ingress iframe or
+reports success without evidence. Some clients may restrict downloads
+even from a real attachment. In that case, **Показать JSON** loads the
+same server diagnostic plus current browser-view metadata into a read-only,
+selectable textarea. **Скопировать весь JSON** uses the clipboard API with
+the established legacy fallback; if copying is denied, the JSON remains
+selectable for Ctrl+A / Ctrl+C. The server does not persist the export.
+
+While debugging this version, the report adds a bounded `debug` section:
+persisted global discovery/Presence settings, active watched IP/MAC and
+their current progress, legacy monitoring state, 150 most recent delivery
+events (with unmodified event_type, payload and status), pending Presence
+and legacy monitor outbox counts, new-device backlog and MQTT journal
+delivery counts. Existing inventory, source diagnostics, time stamps,
+IPv4 evidence, UUIDs and Notes are retained. No authentication or MQTT
+credentials are exported; IP/MAC, names, Notes and event payloads **are**
+included, so review the report before sharing it outside your installation.
+
+The event journal **Скопировать триггер HA** and **Скопировать JSON** controls
+now use explicit copy labels, instead of depending on an optional HTML title.
+The old handler crashed if title was absent. The journal's machine-event
+names and HA trigger output are unchanged.
+
 ## Immediate Presence baseline and Online hover (0.1.22)
 
 Enabling an IP or MAC Presence subscription via the three-dot address menu

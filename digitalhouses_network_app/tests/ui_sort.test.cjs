@@ -175,7 +175,9 @@ test('metrics dropdown is compact and does not contain orange notice or chat req
  assert.doesNotMatch(header,/<div class="notice">/);
  assert.match(header,/id="export"/);
  assert.doesNotMatch(html,/Пришли его в чат для анализа/);
- assert.match(script,/message.textContent='Файл '\+file\+' сформирован\.'/);
+ assert.match(html,/href="api\/diagnostics\/download"/);
+ assert.match(script,/download\s+link|Запрошен JSON-файл у сервера/);
+ assert.doesNotMatch(script,/URL\.createObjectURL\(/);
  assert.match(script,/ICMP ping не выполняется/);
  assert.equal(vm.runInContext('deviceColumns[3][1]',ctx),'Наблюдение');
 });
