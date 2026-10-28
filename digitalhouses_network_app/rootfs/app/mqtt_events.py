@@ -18,6 +18,7 @@ from uuid import NAMESPACE_URL, uuid5
 from typing import Any
 
 from monitoring import MonitorRunner
+from presence import PresenceRunner
 
 try:
     import paho.mqtt.client as mqtt
@@ -191,7 +192,23 @@ class MQTTEvents:
             return False
         payload = event_payload(row)
         body = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
-        if not self.publish_checked(EVENT_TOPIC, body, retain=False):
+        with conn:
+            conn.execute(
+                """INSERT OR IGNORE INTO event_delivery_log
+                (event_id,event_type,occurred_at,status,payload_json)
+                VALUES(?,'device_discovered',?,'queued',?)""",
+                (payload["event_id"], payload["observed_at"], body),
+            )
+        success = self.publish_checked(EVENT_TOPIC, body, retain=False)
+        with conn:
+            conn.execute(
+                """UPDATE event_delivery_log SET attempts=attempts+1,status=?,
+                published_at=CASE WHEN ? THEN ? ELSE published_at END
+                WHERE event_id=?""",
+                ("broker_acked" if success else "retrying", int(success),
+                 datetime.now(timezone.utc).isoformat() if success else "",payload["event_id"]),
+            )
+        if not success:
             return False
         # If Reset removed this UUID while MQTT was in-flight, do not restore it.
         with conn:
@@ -220,6 +237,7 @@ def run_forever() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     host = os.getenv("MQTT_HOST", "")
     monitor = MonitorRunner()
+    presence = PresenceRunner()
     if host:
         mqtt_events = MQTTEvents(host, int(os.environ["MQTT_PORT"]), os.getenv("MQTT_USER", ""),
                                  os.getenv("MQTT_PASSWORD", ""), os.environ["APP_VERSION"],
@@ -243,6 +261,7 @@ def run_forever() -> None:
                         if not mqtt_events.send_birth(conn, row):
                             break
                     monitor.cycle(conn, mqtt_events)
+                    presence.cycle(conn, mqtt_events)
             except (sqlite3.Error, OSError, ValueError) as exc:
                 LOG.warning("Event outbox unavailable; retrying: %s", exc)
             time.sleep(POLL_INTERVAL_SECONDS)
