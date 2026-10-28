@@ -66,16 +66,19 @@ class PresenceRunner:
             # completed before it was activated. This also makes the
             # requested first scan visibly 'working' until fresh evidence.
             if not existing["last_sample_at"]:
-                if not scan or utc(scan) <= utc(item["updated_at"]):
-                    error_after_enable = False
-                    if source is not None and source["status"] == "error":
-                        try:
-                            error_at = json.loads(source["details_json"] or "{}").get("observed_at", "")
-                            error_after_enable = bool(error_at) and utc(error_at) > utc(item["updated_at"])
-                        except (ValueError, TypeError):
-                            pass
-                    if not error_after_enable:
-                        continue
+                try:
+                    details = json.loads(source["details_json"] or "{}") if source else {}
+                    # Use the instant the scan STARTED, not its completion
+                    # rounded to seconds. A periodic scan already running at
+                    # subscription time cannot become its first sample.
+                    started = details.get("scan_started_at") or scan
+                    predates_subscription = not started or utc(started) < utc(item["updated_at"])
+                    error_at = details.get("observed_at", "")
+                    error_after_enable = bool(error_at) and utc(error_at) >= utc(item["updated_at"])
+                except (ValueError, TypeError, AttributeError):
+                    predates_subscription, error_after_enable = True, False
+                if predates_subscription and not error_after_enable:
+                    continue
             if not source_ok:
                 with conn:
                     conn.execute(
