@@ -86,7 +86,9 @@ func (db *DB) updatePresence(kind,target string,enabled,notifications bool)(bool
  if err!=nil{return false,err}
  if err:=db.run(`INSERT INTO presence_subscriptions(kind,target,enabled,notifications,updated_at)
  VALUES(?,?,?,?,?) ON CONFLICT(kind,target) DO UPDATE SET
- enabled=excluded.enabled,notifications=excluded.notifications,updated_at=excluded.updated_at`,
+ enabled=excluded.enabled,notifications=excluded.notifications,
+ updated_at=CASE WHEN presence_subscriptions.enabled=1 AND excluded.enabled=1
+   THEN presence_subscriptions.updated_at ELSE excluded.updated_at END`,
  kind,target,on,alert,now);err!=nil{return false,err}
  newlyEnabled:=enabled && before!="1"
  if !enabled || newlyEnabled {
