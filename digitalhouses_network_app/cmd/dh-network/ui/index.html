@@ -401,6 +401,70 @@ function isNewDevice(d, now=Date.now()){
 function newBadge(d){
  return isNewDevice(d)?'<span class="tag new-device" title="Впервые обнаружено за последние 24 часа">NEW</span>':'';
 }
+const eyeIcon='<svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>';
+function activePresence(kind,target){
+ return presenceSubscriptions.find(x=>x.kind===kind&&x.target===target&&x.enabled);
+}
+function presenceTooltip(w){
+ return 'Presence включён\nСостояние: '+w.state+'\nПроверено: '+noteTime(w.last_check)+
+  '\nПоследнее обнаружение: '+noteTime(w.last_positive)+'\nПоследняя смена: '+noteTime(w.last_changed)+'\nПричина: '+w.reason;
+}
+function presenceCellAction(kind,target){
+ if(!target||(kind==='ip'&&target.includes(':')))return '';
+ const watch=activePresence(kind,target);
+ return '<span class="presence-controls">'+
+  (watch?'<span class="presence-eye" tabindex="0" title="'+esc(presenceTooltip(watch))+'" aria-label="'+esc(presenceTooltip(watch))+'">'+eyeIcon+'</span>':'')+
+  '<button type="button" class="presence-trigger" data-presence-kind="'+esc(kind)+'" data-presence-target="'+esc(target)+'" title="Копирование и Presence" aria-label="Параметры '+esc(kind.toUpperCase())+' '+esc(target)+'">⋮</button></span>';
+}
+function closePresenceMenu(){
+ document.getElementById('presence-menu').hidden=true;
+ presenceSelection=null;
+}
+function openPresenceMenu(button,kind,target){
+ const el=document.getElementById('presence-menu'),watch=activePresence(kind,target);
+ presenceSelection={kind,target};
+ const check=watch?' checked':'',notify=watch&&watch.notifications?' checked':'';
+ const summary=watch?'Состояние: '+watch.state+'\nПроверено: '+noteTime(watch.last_check)+
+  '\nОбнаружен: '+noteTime(watch.last_positive)+'\nИзменение: '+noteTime(watch.last_changed):
+  'Наблюдение выключено';
+ el.innerHTML='<div class="menu-heading">'+(kind==='ip'?'IP Presence':'MAC Presence')+' · '+esc(target)+'</div>'+
+  '<button type="button" id="menu-copy">Скопировать '+kind.toUpperCase()+'</button>'+
+  '<label for="menu-presence">Отслеживать адрес<input id="menu-presence" type="checkbox"'+check+'></label>'+
+  '<label for="menu-notify">Уведомления DH<input id="menu-notify" type="checkbox"'+notify+(watch?'':' disabled')+'></label>'+
+  '<small>Для доставки уведомлений необходим локальный HA package; события работают независимо.</small>'+
+  '<div class="menu-info">'+esc(summary).replace(/\n/g,'<br>')+'</div>';
+ el.hidden=false;
+ const r=button.getBoundingClientRect();
+ el.style.left=Math.max(8,Math.min(r.right-300,window.innerWidth-328))+'px';
+ el.style.top=Math.max(8,Math.min(r.bottom+7,window.innerHeight-el.offsetHeight-8))+'px';
+ el.querySelector('#menu-copy').addEventListener('click',()=>copyText(target,kind.toUpperCase()));
+ el.querySelector('#menu-presence').addEventListener('change',e=>savePresence(kind,target,e.target.checked,!!watch&&!!watch.notifications));
+ el.querySelector('#menu-notify').addEventListener('change',e=>savePresence(kind,target,true,e.target.checked));
+}
+async function savePresence(kind,target,enabled,notifications){
+ const menu=document.getElementById('presence-menu');
+ menu.querySelectorAll('input').forEach(x=>x.disabled=true);
+ try{
+  const response=await fetch('api/presence',{method:'PUT',headers:{'Content-Type':'application/json','X-DH-UI':'1'},
+    body:JSON.stringify({kind,target,enabled,notifications:enabled&&notifications})});
+  if(!response.ok)throw Error((await response.text()).trim());
+  presenceSubscriptions=await read('presence');
+  renderTable();closePresenceMenu();
+  showCopyFeedback(enabled?'Presence включён':'Presence выключен');
+ }catch(err){
+  showCopyFeedback('Не сохранено: '+err.message);
+  menu.querySelectorAll('input').forEach(x=>x.disabled=false);
+ }
+}
+function connectPresenceMenus(){
+ body.querySelectorAll('[data-presence-kind]').forEach(button=>button.addEventListener('click',event=>{
+  event.stopPropagation();
+  if(presenceSelection&&presenceSelection.kind===button.dataset.presenceKind&&presenceSelection.target===button.dataset.presenceTarget){
+    closePresenceMenu();return;
+  }
+  openPresenceMenu(button,button.dataset.presenceKind,button.dataset.presenceTarget);
+ }));
+}
 function renderTable(){
  const found=sortedDeviceRows();
  devicesCount.textContent='Устройства ('+found.length+')';
@@ -413,8 +477,8 @@ function renderTable(){
   const from=sourcesForSort(d.id);
   return '<tr><td class="num-cell">'+(index+1)+'</td>'+
    '<td class="name-cell"><div class="name-content"><strong class="name-value" title="'+esc(name)+'">'+esc(name||'—')+'</strong>'+newBadge(d)+'</div>'+copyAction(name,'имя')+'</td>'+
-   '<td class="ip-cell">'+esc(d.ipv4||d.ipv6||'—')+(d.ipv4&&d.ipv6?'<small> / '+esc(d.ipv6)+'</small>':'')+copyAction(address,'IP')+'</td>'+
-   '<td class="mac-cell">'+esc(d.mac||'—')+copyAction(d.mac,'MAC')+'</td>'+
+   '<td class="ip-cell">'+esc(d.ipv4||d.ipv6||'—')+(d.ipv4&&d.ipv6?'<small> / '+esc(d.ipv6)+'</small>':'')+presenceCellAction('ip',d.ipv4)+'</td>'+
+   '<td class="mac-cell">'+esc(d.mac||'—')+presenceCellAction('mac',d.mac)+'</td>'+
    '<td><span class="tag '+esc(d.presence)+'" title="Online — обнаружено через ARP, HA Tracker или Local Interface; ICMP ping не выполняется">'+esc(d.presence)+'</span>'+copyAction(d.presence,'наблюдение')+'</td>'+
    '<td class="source-cell">'+sourcesForDisplay(d.id)+copyAction(from,'источники')+'</td>'+
    '<td class="time-cell">'+esc(noteTime(d.last_seen))+copyAction(time,'последний Online')+'</td>'+
@@ -424,6 +488,7 @@ function renderTable(){
  body.querySelectorAll('button[data-id]').forEach(b=>b.addEventListener('click',()=>edit(b.dataset.id)));
  enableColumnResize();
  enableCellCopy();
+ connectPresenceMenus();
 }
 async function edit(id){
  const d=devices.find(x=>x.id===id);if(!d)return;
