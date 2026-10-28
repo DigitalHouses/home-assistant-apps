@@ -196,6 +196,8 @@ type Service struct {
     // Reset gate protects the persisted generation against in-flight scans.
     resetGate sync.RWMutex
     resetGeneration uint64
+    // Optional test seam; the production path always invokes first discovery.
+    afterReset func()
 }
 
 func reply(w http.ResponseWriter, data any) {
@@ -282,7 +284,7 @@ func (s *Service) routes() http.Handler {
         if err!=nil {log.Printf("Network inventory reset failed: %v",err);http.Error(w,"inventory reset failed",http.StatusInternalServerError);return}
         reply(w,map[string]any{"reset":true,"previous_devices":removed,"discovery_started":true})
         // Schedule after releasing DB/generation locks, independent of browser.
-        s.startFreshDiscovery()
+        if s.afterReset!=nil {s.afterReset()} else {s.startFreshDiscovery()}
     })
     mux.HandleFunc("PUT /api/devices/{id}/note",func(w http.ResponseWriter,r *http.Request){
         id:=r.PathValue("id")
