@@ -54,6 +54,7 @@ func (db *DB) importLocalInterface(o LocalInterfaceObservation,now string) (err 
   if err=db.run("UPDATE devices SET mac=?,ipv4=?,presence='online',last_seen=? WHERE id=?",mac,ip,now,id);err!=nil{return err}
  }
  if err=db.storeIdentity(id,"mac",mac,now);err!=nil{return err}
+ if err=db.markDeviceBirthSource(id,"local_interface");err!=nil{return err}
  if err=db.storeIdentity(id,"ipv4",ip,now);err!=nil{return err}
  // Keep any historical interface IP while revoking only this source's
  // previous address assignments for the same MAC-backed device.

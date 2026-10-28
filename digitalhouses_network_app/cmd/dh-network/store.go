@@ -179,6 +179,7 @@ func (db *DB) importRouterTrackers(trackers []RouterTracker,now string) error {
             cycleRank[id]=rank
         }
         if err=db.storeIdentity(id,"ha_entity",t.EntityID,now);err!=nil{return err}
+        if t.State=="home" {if err=db.markDeviceBirthSource(id,"ha_device_tracker");err!=nil{return err}}
         if err=db.storeIdentity(id,"mac",t.MAC,now);err!=nil{return err}
         if err=db.storeIdentity(id,"ipv4",t.IPv4,now);err!=nil{return err}
         // Revoke a prior current claim from this exact router tracker before

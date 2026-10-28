@@ -53,8 +53,10 @@ func (db *DB) resetInventoryRows() (count int,err error) {
   if err=db.run("DELETE FROM "+table);err!=nil{return 0,fmt.Errorf("reset table %s: %w",table,err)}
  }
  // Reset is a deliberate new initial inventory. Suppress first-census alerts.
- until:=time.Now().UTC().Add(120*time.Second).Format(time.RFC3339Nano)
- if err=db.run("INSERT INTO network_event_policy(key,value) VALUES('baseline_until',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",until);err!=nil{return 0,err}
+ now:=time.Now().UTC().Format(time.RFC3339Nano)
+ if err=db.run("INSERT INTO network_event_policy(key,value) VALUES('baseline_active','1') ON CONFLICT(key) DO UPDATE SET value='1'");err!=nil{return 0,err}
+ if err=db.run("INSERT INTO network_event_policy(key,value) VALUES('baseline_started_at',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",now);err!=nil{return 0,err}
+ if err=db.run("DELETE FROM network_event_policy WHERE key='baseline_until'");err!=nil{return 0,err}
  if err=db.exec("COMMIT");err!=nil{return 0,err}
  committed=true
  return count,nil

@@ -48,3 +48,51 @@ func TestExistingRegistryIsSuppressedOnUpgradeAndResetClearsBirths(t *testing.T)
  if _,err:=db.resetInventoryRows();err!=nil{t.Fatal(err)}
  if n:=countResetTable(t,db,"device_births");n!=0{t.Fatalf("reset left %d births",n)}
 }
+
+func TestBaselineWaitsForBothSourceSnapshotsAndSurvivesRestart(t *testing.T) {
+ path:=filepath.Join(t.TempDir(),"census.sqlite3")
+ db,err:=openDB(path)
+ if err!=nil{t.Fatal(err)}
+ // The first successful ARP pass is NOT enough to close the baseline.
+ at:=time.Now().UTC().Add(time.Second).Format(time.RFC3339Nano)
+ if err:=db.importARPHosts([]LANHost{{MAC:"18:31:BF:2F:ED:37",IPv4:"192.168.11.71"}},at,"eth0","192.168.11.0/24");err!=nil{t.Fatal(err)}
+ if closed,err:=db.finalizeDiscoveryBaseline();err!=nil||closed{t.Fatalf("ARP-only baseline closed: %v %v",closed,err)}
+ births,err:=db.deviceBirthPublishStates()
+ if err!=nil||len(births)!=1{t.Fatalf("expected one pending birth: %+v %v",births,err)}
+ for _,v:=range births {if v!="pending"{t.Fatalf("premature suppression: %s",v)}}
+ // HA router import completes the second independent census source.
+ now:=time.Now().UTC().Add(2*time.Second).Format(time.RFC3339Nano)
+ if err:=db.importRouterTrackers([]RouterTracker{{EntityID:"device_tracker.view71",State:"home",MAC:"18:31:BF:2F:ED:37",Name:"VIEW71"}},now);err!=nil{t.Fatal(err)}
+ if closed,err:=db.finalizeDiscoveryBaseline();err!=nil||!closed{t.Fatalf("complete baseline was not closed: %v %v",closed,err)}
+ for _,v:=range births {
+  if v!="pending"{t.Fatal("test fixture must have pending births")}
+ }
+ births,err=db.deviceBirthPublishStates()
+ if err!=nil{t.Fatal(err)}
+ for _,v:=range births {if v!="suppressed"{t.Fatalf("census emitted a new-device event: %s",v)}}
+ db.Close()
+ db,err=openDB(path)
+ if err!=nil{t.Fatal(err)}
+ defer db.Close()
+ // Subsequent new MACs after baseline completion ARE genuine transitions.
+ if err:=db.importARPHosts([]LANHost{{MAC:"18:31:BF:2F:ED:37",IPv4:"192.168.11.71"},{MAC:"02:AA:BB:CC:DD:EE",IPv4:"192.168.11.72"}},time.Now().UTC().Add(3*time.Second).Format(time.RFC3339Nano),"eth0","192.168.11.0/24");err!=nil{t.Fatal(err)}
+ states,err:=db.deviceBirthPublishStates()
+ if err!=nil||len(states)!=2{t.Fatalf("new identity missing: %+v %v",states,err)}
+ pending,suppressed:=0,0
+ for _,state:=range states {if state=="pending"{pending++};if state=="suppressed"{suppressed++}}
+ if pending!=1||suppressed!=1{t.Fatalf("expected one post-baseline event and one suppressed census: %+v",states)}
+}
+
+func TestBirthDetectionSourceCannotBeRewrittenByLaterRouter(t *testing.T) {
+ db,err:=openDB(filepath.Join(t.TempDir(),"sources.sqlite3"))
+ if err!=nil{t.Fatal(err)}
+ defer db.Close()
+ at:=time.Now().UTC().Format(time.RFC3339Nano)
+ mac:="18:31:BF:2F:ED:37"
+ if err:=db.importARPHosts([]LANHost{{MAC:mac,IPv4:"192.168.11.71"}},at,"eth0","192.168.11.0/24");err!=nil{t.Fatal(err)}
+ if err:=db.importRouterTrackers([]RouterTracker{{EntityID:"device_tracker.view71",State:"home",MAC:mac,Name:"VIEW71"}},time.Now().UTC().Add(time.Second).Format(time.RFC3339Nano));err!=nil{t.Fatal(err)}
+ sources,err:=db.deviceBirthSources()
+ if err!=nil{t.Fatal(err)}
+ if len(sources)!=1{t.Fatalf("unexpected birth sources: %+v",sources)}
+ for _,source:=range sources{if source!="arp"{t.Fatalf("first evidence was overwritten: %q",source)}}
+}
