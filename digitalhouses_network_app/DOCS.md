@@ -7,7 +7,7 @@
 - Compact namespace: `dh_network_app`
 - Web UI: Home Assistant Ingress (not a second externally exposed admin service)
 - Storage: SQLite `/data/network.sqlite3`
-- Current version: `0.1.10`, experimental, no GHCR artifact and no telemetry
+- Current version: `0.1.11`, experimental, no GHCR artifact and no telemetry
 
 This App deliberately follows the existing product-naming and HAOS packaging standards. Its **Ingress** UI is the accepted departure from the usual MQTT-discovered Lovelace control card: UI state, notes and inventory are App-owned instead of built from MQTT entities. Any future machine events must follow DigitalHouses Events & Notifications Standard; local alert delivery belongs to HA, not the public App.
 
@@ -112,6 +112,12 @@ Where a DigitalHouses application exposes a discoverable TCP service, publish DN
 - Additive SQLite schema v6 adds `wsd_endpoints` and `wsd_unmatched`; unmatched items expire after 24h; matched endpoints after 7 days. No automatic identities from Endpoint UUIDs, no Presence or Note mutation, no required Supervisor privileges, no impact on parallel NetAlertX.
 - Diagnostic JSON includes the WSD source, matched/unmatched endpoints, their origin (sanitized), and local-interface evidence. Ingress includes a compact WSD badge for matched devices; `GET /api/wsd-endpoints` exposes bounded matched records. Empty discovery is an expected successful response.
 - **Scope limitation:** the Windows File Explorer computer name `MEDIA-SERZHAN` may be conveyed by a separate WSD SOAP metadata Get; this version does not infer or assign the name absent that verified response. That stage requires its own URL safety review and real-world protocol capture.
+
+## Windows `/NotJoined` WSD metadata compatibility (0.1.11)
+
+- Actual Windows workstation `192.168.11.71` HTTP SOAP Metadata Get returned `200 OK`, correlated `GetResponse` / `RelatesTo`, WSD endpoint UUID and explicit `pub:Computer=VIEW71/NotJoined`; generic `FriendlyName=Microsoft Publication Service Device Host` must never be selected.
+- Parse this exact `/NotJoined` suffix as Windows-provided computer name `VIEW71`; retain strict hostname validation and reject unknown/malformed suffixes. Keep support for `/Workgroup:` and `/Domain:`.
+- No hardcoded `VIEW71` in application code. No device identity merge. The Linux media VM is undergoing Ansible reprovisioning, so previous vs present MACs must not be conflated without post-install OS inspection.
 
 ## Verified Windows WSD computer names (0.1.10)
 

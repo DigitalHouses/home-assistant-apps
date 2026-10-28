@@ -31,7 +31,9 @@ func sampleWindowsWSDGetResponse(id,endpoint,computer string) []byte {
 func TestWSDWindowsComputerNameOnlyFromVerifiedGetResponse(t *testing.T) {
  endpoint:="urn:uuid:e2bf7703-4b57-4ee5-bedd-ef9676b731f9"
  correlation:="urn:uuid:99999999-aaaa-bbbb-cccc-111111111111"
- payload:=sampleWindowsWSDGetResponse(correlation,endpoint,"VIEW71/Workgroup:WORKGROUP")
+ // The actual field observed on VIEW71 (28 Oct 2026):
+ // pub:Computer=VIEW71/NotJoined; FriendlyName is generic Windows service.
+ payload:=sampleWindowsWSDGetResponse(correlation,endpoint,"VIEW71/NotJoined")
  got,ok:=parseWSDComputerMetadata(payload,correlation,endpoint)
  if !ok||got!="VIEW71"{t.Fatalf("wrong WSD Windows computer name: %q %v",got,ok)}
  for _,bad:=range [][]byte{
@@ -40,9 +42,16 @@ func TestWSDWindowsComputerNameOnlyFromVerifiedGetResponse(t *testing.T) {
   sampleWindowsWSDGetResponse(correlation,endpoint,"localhost/Workgroup:WORKGROUP"),
   sampleWindowsWSDGetResponse(correlation,endpoint,"?made-up?/Workgroup:WORKGROUP"),
   sampleWindowsWSDGetResponse(correlation,endpoint,"VIEW71"),
+  sampleWindowsWSDGetResponse(correlation,endpoint,"VIEW71/NotJoinedExtra"),
+  sampleWindowsWSDGetResponse(correlation,endpoint,"/NotJoined"),
+  sampleWindowsWSDGetResponse(correlation,endpoint,"localhost/NotJoined"),
+  sampleWindowsWSDGetResponse(correlation,endpoint,"VIEW71/NotJoined/Unexpected"),
   []byte(strings.Repeat("Z",40000)),
  } {
   if value,ok:=parseWSDComputerMetadata(bad,correlation,endpoint);ok {t.Fatalf("invalid WSD metadata used as computer name %q",value)}
+ }
+ if got,ok:=parseWSDComputerMetadata(sampleWindowsWSDGetResponse(correlation,endpoint,"VIEW71/Workgroup:WORKGROUP"),correlation,endpoint);!ok||got!="VIEW71"{
+  t.Fatalf("existing Windows Workgroup variant regressed: %s %v",got,ok)
  }
  if got,ok:=parseWSDComputerMetadata(sampleWindowsWSDGetResponse(correlation,endpoint,"MEDIA-SERZHAN/Domain:HOME"),correlation,endpoint);!ok||got!="MEDIA-SERZHAN" {
   t.Fatalf("domain Windows computer name refused: %s %v",got,ok)

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.11
+
+- Accept the explicitly observed Windows WSD `pub:Computer` suffix `/NotJoined` (example `VIEW71/NotJoined`), in addition to `/Workgroup:` and `/Domain:`; the result is a verified computer name, **never** the generic WSD `FriendlyName`.
+- Regression tests cover real `VIEW71/NotJoined` metadata, malformed suffixes, unrelated SOAP replies, endpoint mismatch, and the existing Workgroup/Domain forms.
+- No changes to WSD network access policy, IP/MAC matching, Notes, UUIDs, SQLite schema, or existing Samba settings. The media server is being reinstalled independently via Ansible: its changing MAC/device identity is **not** reconciled or merged automatically.
+
 ## 0.1.10
 
 - Extend WSD pilot with tightly scoped, read-only Windows WS-Transfer Metadata Get. Accept verified `pub:Computer` hostnames only; never use generic `FriendlyName` (often the Windows publication service title).
