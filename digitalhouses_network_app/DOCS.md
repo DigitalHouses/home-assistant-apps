@@ -179,7 +179,7 @@ Version 0.1.0 proved HAOS install, Ingress, Web UI, data persistence, version an
 When accepted, move from experimental Supervisor source build to the standard versioned immutable GHCR artifact. The install/update UI remains the **same Home Assistant App Store**, never a manual server-side copy.
 
 
-## Selected-device monitoring (0.1.18)
+## Selected-device monitoring (since 0.1.18)
 
 The **Мониторинг** Ingress tab lets an HA administrator edit the explicit
 `monitored_devices` YAML configuration. It is stored as UTF-8 in the App
