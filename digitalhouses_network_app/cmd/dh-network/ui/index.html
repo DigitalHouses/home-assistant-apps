@@ -114,13 +114,23 @@ input{font:inherit;padding:10px;color:#f0f4f9;background:#203147;border:1px soli
 .tag.new-device{color:#96ffcb;border-color:#58c68f;background:#194d3b;font-size:10px;font-weight:700;margin-left:6px;padding:2px 6px}
 .monitor-editor{display:block;width:100%;min-height:290px;resize:vertical;white-space:pre;tab-size:2;font:13px ui-monospace,SFMono-Regular,Consolas,monospace;color:#e9f0f7;background:#203147;border:1px solid #526d86;border-radius:8px;padding:12px}.monitor-editor:focus-visible{outline:2px solid #82efc7}.monitor-tools{display:flex;align-items:center;gap:12px;margin-top:12px;flex-wrap:wrap}.grid-scroll{overflow-x:auto}code{color:#a2c6f4}.description{margin-top:8px;color:#c0cad5}
 @media(max-width:750px){main{padding:13px}.app-header{padding:12px;gap:10px}.brand{width:100%}.brand h1{font-size:18px}.app-header nav{flex:1 1 auto}.app-header nav button{padding:6px 9px}.overview-panel{right:8px;width:calc(100vw - 16px);padding:13px}.overview-panel .stats{grid-template-columns:repeat(auto-fit,minmax(136px,1fr))}table{font-size:12px}}
+
+/* The former top-right overview dropdown is now a persistent Settings section. */
+.settings-overview[hidden]{display:none}
+.settings-overview{margin:8px 0 22px}
+.settings-overview h2{display:flex;align-items:center;gap:12px}
+.settings-overview .overview-panel{position:static;right:auto;top:auto;width:100%;max-height:none;overflow:visible;box-sizing:border-box;box-shadow:none;transform:none}
+.settings-overview .stats{grid-template-columns:repeat(auto-fit,minmax(145px,1fr))}
 </style></head>
 <body>
 <header class="app-header">
-  <div class="brand"><h1>DigitalHouses Network App</h1><small>Устройства и наблюдение за сетью · v0.1.23</small></div>
+  <div class="brand"><h1>DigitalHouses Network App</h1><small>Устройства и наблюдение за сетью · v0.1.24</small></div>
   <nav aria-label="Разделы приложения"><button class="active" data-page="devices">Устройства</button><button data-page="sources">Источники</button><button data-page="events">Журнал событий</button><button data-page="settings">Параметры</button><button data-page="help">Помощь</button></nav>
-  <details id="overview" class="overview">
-    <summary title="Раскрыть или скрыть показатели сети и диагностику"><span>Показатели</span><span id="health" class="tag">Подключение…</span><span class="overview-arrow" aria-hidden="true">⌄</span></summary>
+
+</header>
+<main>
+<section id="settings-overview" class="settings-overview" aria-label="Состояние сети и диагностика" hidden>
+    <h2>Состояние сети и диагностика <span id="health" class="tag">Подключение…</span></h2>
     <div class="overview-panel" role="region" aria-label="Показатели и диагностика">
       <p class="description">Сводка источников, диагностика и экспорт. Статус Online не означает ответ на ICMP ping.</p>
       <div class="stats"><div class="stat"><strong id="known">—</strong><span>Устройств в реестре</span></div><div class="stat"><strong id="online">—</strong><span>Online (ARP / HA, не ping)</span></div><div class="stat"><strong id="interval">—</strong><span>HA-опрос, секунд</span></div><div class="stat"><strong id="arp-interval">—</strong><span>ARP-опрос, секунд</span></div><div class="stat"><strong id="last-arp">—</strong><span>Последний ARP-скан</span></div><div class="stat"><strong id="known-arp">—</strong><span>Ранее найдено ARP</span></div><div class="stat"><strong id="ip-conflicts">—</strong><span>Расхождений IPv4 (включая источники)</span></div><div class="stat"><strong id="mdns-hosts">—</strong><span>Хостов с Bonjour</span></div><div class="stat"><strong id="mdns-services">—</strong><span>Bonjour сервисов</span></div><div class="stat"><strong id="ssdp-hosts">—</strong><span>Хостов с SSDP</span></div><div class="stat"><strong id="ssdp-services">—</strong><span>SSDP сервисов</span></div></div>
@@ -133,9 +143,7 @@ input{font:inherit;padding:10px;color:#f0f4f9;background:#203147;border:1px soli
         <small id="reset-status" role="status" aria-live="polite"></small>
       </div>
     </div>
-  </details>
-</header>
-<main>
+</section>
 <div id="ip-conflict-summary" class="notice" style="display:none"></div>
 <div id="devices-tools" class="devices-tools" hidden><h2 id="devices-count">Устройства (—)</h2><div id="filterarea"></div></div>
 <section id="body">Загрузка…</section>
@@ -143,6 +151,7 @@ input{font:inherit;padding:10px;color:#f0f4f9;background:#203147;border:1px soli
 </main>
 <script>
 const body=document.getElementById('body'),health=document.getElementById('health'),filterArea=document.getElementById('filterarea');
+const settingsOverview=document.getElementById('settings-overview');
 const devicesTools=document.getElementById('devices-tools'),devicesCount=document.getElementById('devices-count');
 let page='devices',devices=[],origins=[],mdnsServices=[],ssdpServices=[],wsdEndpoints=[],filter='',deviceBirths={};
 let presenceSubscriptions=[],presenceSelection=null,globalSettings=null;
@@ -529,6 +538,9 @@ async function edit(id){
   const r=await fetch('api/devices/'+encodeURIComponent(id)+'/note',{method:'PUT',headers:{'Content-Type':'application/json','X-DH-UI':'1'},body:JSON.stringify({note})});
   if(!r.ok)throw new Error('HTTP '+r.status);
   devices=await read('devices');
+  // Watches are persistent SQLite records; fetch them before each Devices render.
+  // Without this read all green eyes disappear after reload/navigation.
+  if(page==='devices')presenceSubscriptions=await read('presence');
   if(page==='devices')presenceSubscriptions=await read('presence');
   deviceBirths=await read('device-births');renderTable();
  }catch(e){alert('Не удалось сохранить: '+e.message)}
@@ -638,6 +650,7 @@ function showEventLog(){
 }
 async function load(){
  try{
+  settingsOverview.hidden=page!=='settings';
   const status=await read('status');health.textContent='SQLite: '+status.database;
   devices=await read('devices');
   origins=await read('device-sources');
