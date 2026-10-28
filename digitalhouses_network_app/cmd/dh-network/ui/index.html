@@ -267,7 +267,7 @@ function exactTime(t){
 function onlineTooltip(d){
  return 'Последнее положительное подтверждение Online: '+exactTime(d.last_seen)+
   '\nИсточник: ARP и/или Home Assistant (роутер)'+
-  '\nЭто время последнего принятого наблюдения, а не результат ICMP Ping.';
+  '\nICMP ping не выполняется; это время последнего принятого наблюдения.';
 }
 function originsForDevice(id) {
  return origins.filter(o=>o.device_id===id).sort((a,b)=>a.source.localeCompare(b.source));
