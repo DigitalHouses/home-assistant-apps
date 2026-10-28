@@ -94,13 +94,14 @@ func openDB(path string) (*DB, error) {
         "CREATE TABLE IF NOT EXISTS ssdp_unmatched (ipv4 TEXT NOT NULL,st TEXT NOT NULL,usn TEXT NOT NULL,last_seen TEXT NOT NULL,reason TEXT NOT NULL,PRIMARY KEY(ipv4,st,usn));",
         "CREATE TABLE IF NOT EXISTS wsd_endpoints (device_id TEXT NOT NULL REFERENCES devices(id),ipv4 TEXT NOT NULL,endpoint TEXT NOT NULL,types TEXT NOT NULL,scopes TEXT NOT NULL,origin TEXT NOT NULL,first_seen TEXT NOT NULL,last_seen TEXT NOT NULL,PRIMARY KEY(device_id,endpoint));",
         "CREATE TABLE IF NOT EXISTS wsd_unmatched (ipv4 TEXT NOT NULL,endpoint TEXT NOT NULL,last_seen TEXT NOT NULL,reason TEXT NOT NULL,PRIMARY KEY(ipv4,endpoint));",
+        "CREATE TABLE IF NOT EXISTS wsd_names (device_id TEXT NOT NULL REFERENCES devices(id),endpoint TEXT NOT NULL,computer_name TEXT NOT NULL,first_seen TEXT NOT NULL,last_seen TEXT NOT NULL,PRIMARY KEY(device_id,endpoint));",
         "CREATE TABLE IF NOT EXISTS lan_positive (device_id TEXT PRIMARY KEY REFERENCES devices(id),last_seen TEXT NOT NULL);",
         "CREATE TABLE IF NOT EXISTS ipv4_evidence (device_id TEXT NOT NULL REFERENCES devices(id),source TEXT NOT NULL,reference TEXT NOT NULL,ipv4 TEXT NOT NULL,state TEXT NOT NULL,first_seen TEXT NOT NULL,last_seen TEXT NOT NULL,PRIMARY KEY(device_id,source,reference,ipv4));",
         "CREATE INDEX IF NOT EXISTS ipv4_evidence_ip ON ipv4_evidence(ipv4,last_seen);",
         "CREATE TABLE IF NOT EXISTS mdns_hosts (device_id TEXT PRIMARY KEY REFERENCES devices(id),hostname TEXT NOT NULL,ipv4 TEXT NOT NULL,first_seen TEXT NOT NULL,last_seen TEXT NOT NULL);",
         "CREATE TABLE IF NOT EXISTS mdns_services (device_id TEXT NOT NULL REFERENCES devices(id),instance TEXT NOT NULL,type TEXT NOT NULL,port INTEGER NOT NULL,target TEXT NOT NULL,first_seen TEXT NOT NULL,last_seen TEXT NOT NULL,PRIMARY KEY(device_id,instance,type,port));",
         "CREATE TABLE IF NOT EXISTS mdns_unmatched (hostname TEXT NOT NULL,ipv4 TEXT NOT NULL,last_seen TEXT NOT NULL,reason TEXT NOT NULL,PRIMARY KEY(hostname,ipv4));",
-        "UPDATE schema_version SET version=6;",
+        "UPDATE schema_version SET version=7;",
     }, "\n")
     if err := db.exec(schema); err != nil {
         db.Close()

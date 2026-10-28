@@ -97,6 +97,8 @@ test('genuine discovered names only: all MAC forms and unknown placeholders are 
  assert.equal(functionCall('54ef44a716c9','18:C2:3C:7B:AF:41'),'');
  assert.equal(functionCall('54ef44a716c9.local','18:C2:3C:7B:AF:41'),'');
  assert.equal(functionCall('unknown','02:00:00:00:00:01'),'');
+ assert.equal(functionCall('ff5aa64b3dea4021acaea16660e7c6b9.local','02:7F:2F:27:4E:92'),'');
+ assert.equal(functionCall('VIEW71','18:31:BF:2F:ED:37'),'VIEW71');
  assert.equal(functionCall('Apple-TV-ZAL','C8:69:CD:34:9F:0A'),'Apple-TV-ZAL');
  assert.equal(functionCall('xzg.local','24:DC:C3:E2:6E:17'),'xzg');
  assert.equal(functionCall('13ProMAX-SKY','88:B9:45:80:A7:55'),'13ProMAX-SKY');

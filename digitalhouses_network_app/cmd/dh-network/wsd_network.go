@@ -51,14 +51,14 @@ func wsdProbe(messageID string) []byte {
  // WS-Discovery 2005/04 Probe for DPWS devices (Microsoft WSDAPI).
  return []byte(`<?xml version="1.0" encoding="UTF-8"?>
 <s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope"
- xmlns:a="http://schemas.xmlsoap.org/ws/2004/08/addressing"
- xmlns:d="http://schemas.xmlsoap.org/ws/2005/04/discovery"
- xmlns:dp="http://schemas.xmlsoap.org/ws/2006/02/devprof">
+ xmlns:wsa="http://schemas.xmlsoap.org/ws/2004/08/addressing"
+ xmlns:wsd="http://schemas.xmlsoap.org/ws/2005/04/discovery"
+ xmlns:wsdp="http://schemas.xmlsoap.org/ws/2006/02/devprof">
 <s:Header>
-<a:Action>http://schemas.xmlsoap.org/ws/2005/04/discovery/Probe</a:Action>
-<a:MessageID>`+messageID+`</a:MessageID>
-<a:To>urn:schemas-xmlsoap-org:ws:2005:04:discovery</a:To>
-</s:Header><s:Body><d:Probe><d:Types>dp:Device</d:Types></d:Probe></s:Body></s:Envelope>`)
+<wsa:Action>http://schemas.xmlsoap.org/ws/2005/04/discovery/Probe</wsa:Action>
+<wsa:MessageID>`+messageID+`</wsa:MessageID>
+<wsa:To>urn:schemas-xmlsoap-org:ws:2005:04:discovery</wsa:To>
+</s:Header><s:Body><wsd:Probe><wsd:Types>wsdp:Device</wsd:Types></wsd:Probe></s:Body></s:Envelope>`)
 }
 func boundedWSDString(s string,limit int) string {
  s=strings.TrimSpace(s)
@@ -160,7 +160,27 @@ func (s *Service) pollWSD() {
  at:=time.Now().UTC().Format(time.RFC3339)
  linked,unmatched,err:=s.db.importWSD(items,at,packets,plan.iface.Name)
  if err!=nil{s.reportWSDError(err);return}
- log.Printf("WS-Discovery: %d responses, %d endpoints, %d ARP/local-interface-linked, %d unmatched",packets,len(items),linked,unmatched)
+ verified,attempted:=0,0
+ for _,item:=range items {
+  if attempted>=8 {break}
+  if !strings.Contains(" "+item.Types+" "," pub:Computer ") {continue}
+  if _,targetErr:=safeWSDMetadataTarget(item);targetErr!=nil {continue}
+  confirmed,checkErr:=s.db.wsdConfirmedEndpoint(item,at)
+  if checkErr!=nil {log.Printf("WSD endpoint validation: %v",checkErr);continue}
+  if !confirmed {continue}
+  attempted++
+  metaCtx,metaCancel:=context.WithTimeout(ctx,2*time.Second)
+  name,metaErr:=fetchWSDComputerName(metaCtx,item)
+  metaCancel()
+  if metaErr!=nil {log.Printf("WSD metadata Get %s: %v",item.IPv4,metaErr);continue}
+  if err:=s.db.persistWSDComputerName(item,name,time.Now().UTC().Format(time.RFC3339));err!=nil {
+   log.Printf("WSD verified name persistence error: %v",err);continue
+  }
+  verified++
+  log.Printf("WSD verified computer name: %s -> %s",item.IPv4,name)
+ }
+ log.Printf("WS-Discovery: %d responses, %d endpoints, %d ARP/local-interface-linked, %d unmatched, %d/%d verified computer names",
+  packets,len(items),linked,unmatched,verified,attempted)
 }
 func (s *Service) reportWSDError(err error) {
  log.Printf("WS-Discovery unavailable: %v",err)

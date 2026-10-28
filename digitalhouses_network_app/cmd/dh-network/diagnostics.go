@@ -52,6 +52,12 @@ type DatabaseSnapshot struct {
     WSDUnmatched []WSDUnmatched `json:"wsd_unmatched"`
 }
 
+func countVerifiedWSDNames(items []WSDEndpoint) int {
+ seen:=map[string]bool{}
+ for _,item:=range items {if item.ComputerName!="" {seen[item.DeviceID]=true}}
+ return len(seen)
+}
+
 func fillSourcePlaceholders(in []SourceInfo) []SourceInfo {
     out:=append([]SourceInfo{},in...)
     if !containsSource(out,"Home Assistant router trackers") {
@@ -259,6 +265,7 @@ func (s *Service) diagnosticReport() (map[string]any,error) {
             "ssdp_unmatched_records":len(snapshot.SSDPUnmatched),
             "wsd_matched_devices":countSources(snapshot.DeviceSources,"WSD"),
             "wsd_endpoint_records":len(snapshot.WSDEndpoints),
+            "wsd_verified_computer_names":countVerifiedWSDNames(snapshot.WSDEndpoints),
             "wsd_unmatched_records":len(snapshot.WSDUnmatched),
         },
         "inventory":snapshot,
@@ -268,6 +275,7 @@ func (s *Service) diagnosticReport() (map[string]any,error) {
         "interpretation":map[string]string{
             "source_membership":"Historical association, not proof of current network presence.",
             "mdns":"Hostnames and service records complement ONLY uniquely ARP-confirmed hosts. A service is not an extra device; mDNS never changes Presence.",
+            "wsd_metadata":"Optional HTTP SOAP Get on verified local WSD endpoint only (port 5357). Accept only correlated, bounded pub:Computer inside GetResponse; generic FriendlyName, UUID and Types are not used as computer names.",
             "wsd":"Standards-based WS-Discovery ProbeMatches from local UDP 3702 multicast. Retain protocol endpoints only when fresh unique ARP or local-interface evidence proves the responder IP. No assumed friendly name; no HTTP metadata Get yet; no device creation.",
             "local_interface":"OS default-route IPv4 interface MAC/IP is registered as direct positive evidence; router reports cannot claim its own address. No inferred hostname or arbitrary IP identity merge.",
             "ssdp":"Metadata-only M-SEARCH on the local LAN; USN, ST, SERVER and sanitized LOCATION origin are retained only when fresh unique ARP confirms the address. No XML fetched, no device creation or Presence changes.",
