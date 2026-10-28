@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.18
+
+- Add separate monitored_devices YAML configuration editor under Ingress, preserving nested method-grouped scalar/mapping syntax and optional UTF-8 Russian labels; strict validation precedes atomic update of /data/monitored_devices.yaml. No monitored devices enabled by default.
+- Add independent ICMPv4, ARP, HA device_tracker and TCP monitoring, persistent per-method state and 2-success/3-failure transition debounce, unknown handling for source failures, and no changes to inventory Online/Not observed semantics.
+- Publish per-watch retained MQTT state/discovery and QoS 1 non-retained tracked-device machine transition events with event_id deduplication and local SQLite journal; optional MQTT failures do not stop monitoring.
+- Add monitoring-state Ingress table, regression tests and a backward-compatible SQLite schema v10; existing UUIDs and Notes are preserved.
+
+
 ## 0.1.17
 
 - End the first-install and post-Reset notification baseline only after successful HA router tracker AND LAN ARP source snapshots, not after an arbitrary two-minute timer. Pending initial-census births remain silent throughout delayed scans or MQTT reconnects.
