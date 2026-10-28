@@ -51,14 +51,14 @@ func wsdProbe(messageID string) []byte {
  // WS-Discovery 2005/04 Probe for DPWS devices (Microsoft WSDAPI).
  return []byte(`<?xml version="1.0" encoding="UTF-8"?>
 <s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope"
- xmlns:a="http://schemas.xmlsoap.org/ws/2004/08/addressing"
- xmlns:d="http://schemas.xmlsoap.org/ws/2005/04/discovery"
- xmlns:dp="http://schemas.xmlsoap.org/ws/2006/02/devprof">
+ xmlns:wsa="http://schemas.xmlsoap.org/ws/2004/08/addressing"
+ xmlns:wsd="http://schemas.xmlsoap.org/ws/2005/04/discovery"
+ xmlns:wsdp="http://schemas.xmlsoap.org/ws/2006/02/devprof">
 <s:Header>
-<a:Action>http://schemas.xmlsoap.org/ws/2005/04/discovery/Probe</a:Action>
-<a:MessageID>`+messageID+`</a:MessageID>
-<a:To>urn:schemas-xmlsoap-org:ws:2005:04:discovery</a:To>
-</s:Header><s:Body><d:Probe><d:Types>dp:Device</d:Types></d:Probe></s:Body></s:Envelope>`)
+<wsa:Action>http://schemas.xmlsoap.org/ws/2005/04/discovery/Probe</wsa:Action>
+<wsa:MessageID>`+messageID+`</wsa:MessageID>
+<wsa:To>urn:schemas-xmlsoap-org:ws:2005:04:discovery</wsa:To>
+</s:Header><s:Body><wsd:Probe><wsd:Types>wsdp:Device</wsd:Types></wsd:Probe></s:Body></s:Envelope>`)
 }
 func boundedWSDString(s string,limit int) string {
  s=strings.TrimSpace(s)
