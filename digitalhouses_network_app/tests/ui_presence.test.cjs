@@ -37,6 +37,16 @@ test('contextual address menus expose watches and copy, never per-target interva
  assert.match(script,/id="menu-notify"/);
  assert.doesNotMatch(script,/per-device-interval/);
 });
+test('friendly Presence name is exposed in menu, watch tooltip and event journal',()=>{
+ assert.match(script,/id="menu-name"/);
+ assert.match(script,/placeholder="Например, Мой ноутбук"/);
+ assert.match(script,/id="menu-save"/);
+ assert.match(script,/payload\.label=label/);
+ assert.match(script,/data-presence-kind/);
+ const tooltip=vm.runInContext("presenceTooltip({label:'Мой ноутбук',state:'reachable',last_check:'',last_positive:'',last_changed:''})",ctx);
+ assert.match(tooltip,/Название: Мой ноутбук/);
+ assert.match(script,/d\.label\?d\.label\+' · '\+target:target/);
+});
 test('new subscription displays Working, confirmation counts and exact positive timestamp',()=>{
  ctx.pending=[{kind:'ip',target:'192.168.2.30',enabled:true,state:'working',reason:'scan_requested',
    last_check:'',last_positive:'',last_changed:'',successes:0,failures:0,
