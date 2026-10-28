@@ -54,7 +54,7 @@ test('global settings forms include all five scanner intervals and shared hyster
  }
  assert.match(script,/api\/settings/);
  assert.match(script,/api\/presence/);
- assert.match(script,/api\/event-log/);
+ assert.match(script,/read\('event-log'\)/);
 });
 test('help explains green eye, first census and MQTT delivery limitations',()=>{
  vm.runInContext('renderHelp()',ctx);
