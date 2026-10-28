@@ -157,23 +157,29 @@ test('compact single header keeps navigation visible and all cards collapsed by 
  for (const tab of ['devices','sources','events']) {
   assert.match(header,new RegExp('data-page="'+tab+'"'));
  }
- assert.match(header, /<details id="overview" class="overview">/);
- assert.doesNotMatch(header, /<details[^>]*\sopen(?:\s|=|>)/);
- assert.match(header, /<summary[^>]*>.*?Показатели.*?<span id="health"/s);
- assert.equal((header.match(/class="stat"/g)||[]).length,11);
- assert.match(header, /id="export"/);
- assert.match(header, /id="export-status"/);
- assert.match(header, /Online \(ARP \/ HA, не ping\)/);
- assert.match(header, /Online не означает ответ на ICMP ping/);
- assert.doesNotMatch(html.slice(main,html.indexOf('<script>',main)),/class="stat"/);
- assert.match(html, /\.overview-panel\{position:absolute;/);
- assert.match(html, /\.overview summary:focus-visible\{/);
+ const settingSection=html.slice(html.indexOf('<section id="settings-overview"'),html.indexOf('</section>',html.indexOf('<section id="settings-overview"')));
+ assert.doesNotMatch(header, /<details id="overview"/);
+ assert.doesNotMatch(header, /id="export"|id="reset"|class="stat"|id="health"/);
+ for (const tab of ['settings','help']) assert.match(header,new RegExp('data-page="'+tab+'"'));
+ assert.match(settingSection,/class="settings-overview"[^>]*hidden/);
+ assert.match(settingSection,/id="health"/);
+ assert.equal((settingSection.match(/class="stat"/g)||[]).length,11);
+ assert.match(settingSection,/id="export"/);
+ assert.match(settingSection,/id="export-status"/);
+ assert.match(settingSection,/id="reset" class="reset-danger"/);
+ assert.match(settingSection,/id="reset-status" role="status"/);
+ assert.match(settingSection,/Online \(ARP \/ HA, не ping\)/);
+ assert.match(settingSection,/Online не означает ответ на ICMP ping/);
+ assert.match(html,/\.settings-overview\[hidden\]\{display:none\}/);
 });
-test('metrics dropdown is compact and does not contain orange notice or chat request', () => {
+test('metrics, download and destructive Reset are fully in Settings, never top dropdown', () => {
  const header=html.slice(html.indexOf('<header class="app-header">'),html.indexOf('</header>'));
- assert.match(header,/Online не означает ответ на ICMP ping/);
- assert.doesNotMatch(header,/<div class="notice">/);
- assert.match(header,/id="export"/);
+ const settings=html.slice(html.indexOf('<section id="settings-overview"'),html.indexOf('</section>',html.indexOf('<section id="settings-overview"')));
+ assert.doesNotMatch(header,/Показатели|Сохранить диагностику|Сброс|Reset|id="health"/);
+ assert.match(settings,/UUID, Notes/);
+ assert.match(settings,/Безвозвратно/);
+ assert.match(settings,/id="export-preview"/);
+ assert.match(settings,/id="export-copy"/);
  assert.doesNotMatch(html,/Пришли его в чат для анализа/);
  assert.match(html,/href="api\/diagnostics\/download"/);
  assert.match(script,/download\s+link|Запрошен JSON-файл у сервера/);
@@ -197,9 +203,9 @@ test('search is immediately to the right of device count, in the same flex row',
  assert.equal(view.textContent,'Устройства (4)');
 });
 
-test('destructive inventory reset is hidden behind the metrics dropdown and requires typed confirmation', () => {
- const header=html.slice(html.indexOf('<header class="app-header">'),html.indexOf('</header>'));
- const overview=header.slice(header.indexOf('<details id="overview"'),header.indexOf('</details>'));
+test('destructive inventory reset is within Settings and requires typed confirmation', () => {
+ const main=html.slice(html.indexOf('<main>'),html.indexOf('</main>'));
+ const overview=main.slice(main.indexOf('<section id="settings-overview"'),main.indexOf('</section>',main.indexOf('<section id="settings-overview"')));
  assert.match(overview,/id="reset" class="reset-danger"/);
  assert.match(overview,/id="reset-status" role="status"/);
  assert.match(overview,/UUID, Notes/);
