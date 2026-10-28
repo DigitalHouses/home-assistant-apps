@@ -48,8 +48,7 @@ func monitoredConfigPath() string {
 func readMonitorConfig(w http.ResponseWriter,r *http.Request) {
  content,err:=os.ReadFile(monitoredConfigPath())
  if errors.Is(err,os.ErrNotExist) {
-  reply(w,map[string]any{"yaml":"monitored_devices: {}
-","configured":false})
+  reply(w,map[string]any{"yaml":"monitored_devices: {}\n","configured":false})
   return
  }
  if err!=nil{http.Error(w,"monitor YAML unavailable",http.StatusInternalServerError);return}
