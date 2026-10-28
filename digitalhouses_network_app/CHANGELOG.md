@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.19
+
+- Count independent HA device_tracker observations only when the REST state carries a fresh, new `last_reported` revision; repeated REST reads of the same cached snapshot do not advance 2/3 debounce, and missing/aged reports become unknown, not a false absence.
+- ARP monitoring now accepts only explicit per-MAC `ipv4_evidence` from the ARP scanner. A local-interface / `lan_positive` row is not an ARP reply.
+- Track MQTT broker connection generations and republish retained watch Discovery/state even when disconnect and reconnect occur between monitor worker cycles.
+- Add regression coverage for duplicate/stale tracker snapshots, genuine ARP evidence and short MQTT reconnects. No monitoring targets are enabled by default; inventory UUIDs, Notes and Online rules remain unchanged.
+
+
 ## 0.1.18
 
 - Add separate monitored_devices YAML configuration editor under Ingress, preserving nested method-grouped scalar/mapping syntax and optional UTF-8 Russian labels; strict validation precedes atomic update of /data/monitored_devices.yaml. No monitored devices enabled by default.

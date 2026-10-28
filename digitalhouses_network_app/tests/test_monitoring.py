@@ -5,6 +5,8 @@ import sqlite3
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
+from unittest.mock import patch
 from pathlib import Path
 from threading import Event
 
@@ -17,7 +19,8 @@ class FakePublisher:
     def __init__(self):
         self.connected = Event()
         self.connected.set()
-        self.version = "0.1.18"
+        self.version = "0.1.19"
+        self.connection_epoch = 1
         self.messages = []
     def publish_checked(self, topic, data, retain):
         self.messages.append((topic, data, retain))
@@ -40,6 +43,7 @@ def database():
         CREATE TABLE sources(id TEXT PRIMARY KEY,status TEXT,last_success TEXT);
         CREATE TABLE identities(device_id TEXT,kind TEXT,value TEXT);
         CREATE TABLE lan_positive(device_id TEXT,last_seen TEXT);
+        CREATE TABLE ipv4_evidence(device_id TEXT,source TEXT,state TEXT,last_seen TEXT);
     """)
     return c
 
@@ -207,13 +211,112 @@ class TestARP(unittest.TestCase):
         self.assertEqual(mod.arp_probe(conn,watch,"")[0],"unknown")
         conn.execute("INSERT INTO sources VALUES ('LAN ARP','ok','2026-10-28T08:00:00Z')")
         conn.execute("INSERT INTO identities VALUES('uuid1','mac',?)",(watch.target,))
+        # local_interface positive evidence alone cannot prove an ARP reply.
         conn.execute("INSERT INTO lan_positive VALUES ('uuid1','2026-10-28T08:00:00Z')")
+        self.assertEqual(mod.arp_probe(conn,watch,"")[0],"negative")
+        conn.execute("INSERT INTO ipv4_evidence VALUES ('uuid1','arp','observed','2026-10-28T08:00:00Z')")
         result,reason,sample=mod.arp_probe(conn,watch,"")
         self.assertEqual((result,reason),("positive","arp_positive"))
         self.assertEqual(mod.arp_probe(conn,watch,sample)[0],"skip")
         conn.execute("UPDATE sources SET last_success='2026-10-28T08:03:00Z'")
         result,reason,_=mod.arp_probe(conn,watch,sample)
         self.assertEqual((result,reason),("negative","arp_not_observed"))
+
+
+
+class TestHAReportFreshness(unittest.TestCase):
+    class MockResponse:
+        def __init__(self, entity_id, state, timestamp):
+            self.body = json.dumps({"entity_id":entity_id,"state":state,"last_reported":timestamp}).encode()
+            self.status = 200
+        def __enter__(self):
+            return self
+        def __exit__(self,*args):
+            return None
+        def read(self,*args):
+            return self.body
+
+    def test_same_rest_snapshot_never_counts_twice(self):
+        conn=database()
+        runner=mod.MonitorRunner(Path("/not-real"))
+        watch=mod.Watch("ha_device_tracker","phone","device_tracker.phone",label="Телефон")
+        runner.watches=[watch]
+        runner.sync(conn)
+        reported=datetime.now(timezone.utc).isoformat()
+        response=self.MockResponse(watch.target,"home",reported)
+        with patch.dict("os.environ",{"SUPERVISOR_TOKEN":"test-token"}),patch.object(mod.urllib.request,"urlopen",return_value=response):
+            first=runner.sample(conn,watch,"")
+            self.assertEqual(first[:2],("positive","tracker_home"))
+            runner.observe(conn,watch,*first,datetime.now(timezone.utc).isoformat())
+            second=runner.sample(conn,watch,first[2])
+            self.assertEqual(second[0],"skip")
+            runner.observe(conn,watch,*second,datetime.now(timezone.utc).isoformat())
+            state=conn.execute("SELECT state,ok_count FROM monitor_states").fetchone()
+            self.assertEqual((state["state"],state["ok_count"]),("unknown",1))
+            new_report=(datetime.now(timezone.utc)+timedelta(seconds=1)).isoformat()
+            response.body=self.MockResponse(watch.target,"home",new_report).body
+            third=runner.sample(conn,watch,first[2])
+            self.assertEqual(third[0],"positive")
+            runner.observe(conn,watch,*third,datetime.now(timezone.utc).isoformat())
+        state=conn.execute("SELECT state,last_confirmed FROM monitor_states").fetchone()
+        self.assertEqual((state["state"],state["last_confirmed"]),("present","present"))
+        self.assertEqual(conn.execute("SELECT COUNT(*) FROM monitor_outbox").fetchone()[0],0)
+        conn.close()
+
+    def test_tracker_stale_or_missing_report_is_unknown(self):
+        entity="device_tracker.phone"
+        stale=(datetime.now(timezone.utc)-timedelta(minutes=5)).isoformat()
+        for report,expected in [(stale,"tracker_stale_report"),
+                                ("","tracker_report_timestamp_missing"),
+                                ("not-a-date","tracker_report_timestamp_invalid")]:
+            response=self.MockResponse(entity,"not_home",report)
+            with self.subTest(report=report),patch.dict("os.environ",{"SUPERVISOR_TOKEN":"test-token"}),patch.object(mod.urllib.request,"urlopen",return_value=response):
+                self.assertEqual(mod.tracker_probe(entity)[:2],("unknown",expected))
+        # Unsupported state remains unknown, even with a fresh timestamp.
+        response=self.MockResponse(entity,"unavailable",datetime.now(timezone.utc).isoformat())
+        with patch.dict("os.environ",{"SUPERVISOR_TOKEN":"test-token"}),patch.object(mod.urllib.request,"urlopen",return_value=response):
+            self.assertEqual(mod.tracker_probe(entity)[0],"unknown")
+
+    def test_three_independent_not_home_reports_are_required(self):
+        conn=database()
+        runner=mod.MonitorRunner(Path("/not-real"))
+        watch=mod.Watch("ha_device_tracker","phone","device_tracker.phone")
+        runner.watches=[watch]
+        runner.sync(conn)
+        response=self.MockResponse(watch.target,"not_home",datetime.now(timezone.utc).isoformat())
+        with patch.dict("os.environ",{"SUPERVISOR_TOKEN":"test-token"}),patch.object(mod.urllib.request,"urlopen",return_value=response):
+            last=""
+            for i in range(3):
+                response.body=self.MockResponse(watch.target,"not_home",
+                         (datetime.now(timezone.utc)+timedelta(seconds=i)).isoformat()).body
+                outcome,reason,sample=runner.sample(conn,watch,last)
+                self.assertEqual(outcome,"negative")
+                runner.observe(conn,watch,outcome,reason,sample,sample)
+                last=sample
+                state=conn.execute("SELECT state FROM monitor_states").fetchone()[0]
+                self.assertEqual(state,"absent" if i==2 else "unknown")
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM monitor_outbox").fetchone()[0],0)
+        conn.close()
+
+
+class TestMQTTReconnect(unittest.TestCase):
+    def test_very_short_disconnect_reconnect_republishes_all_retained(self):
+        conn=database()
+        runner=mod.MonitorRunner(Path("/not-real"))
+        runner.watches=[mod.Watch("icmp","node","192.168.11.30")]
+        runner.sync(conn)
+        fake=FakePublisher()
+        runner.publish(conn,fake)
+        initial=len(fake.messages)
+        self.assertGreater(initial,0)
+        runner.publish(conn,fake)
+        self.assertEqual(len(fake.messages),initial)
+        # Connected before and after: the worker never observed offline.
+        fake.connection_epoch += 1
+        runner.publish(conn,fake)
+        self.assertEqual(len(fake.messages),initial*2)
+        conn.close()
+
 
 
 if __name__=="__main__":

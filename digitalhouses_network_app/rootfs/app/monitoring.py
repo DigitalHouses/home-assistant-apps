@@ -199,10 +199,15 @@ def tcp_probe(ip: str, port: int) -> tuple[str, str]:
         return "negative", "tcp_connection_failed"
 
 
-def tracker_probe(entity_id: str) -> tuple[str, str]:
+def tracker_probe(entity_id: str) -> tuple[str, str, str]:
+    """Only a NEW HA last_reported revision is an independent observation.
+
+    REST GETs of an unchanged cached state cannot accumulate debounce counts.
+    An entity which has stopped reporting becomes unknown, never absent.
+    """
     token = os.getenv("SUPERVISOR_TOKEN", "")
     if not token:
-        return "unknown", "ha_token_missing"
+        return "unknown", "ha_token_missing", ""
     request = urllib.request.Request(
         "http://supervisor/core/api/states/" + entity_id,
         headers={"Authorization": "Bearer " + token, "Accept": "application/json"},
@@ -210,34 +215,51 @@ def tracker_probe(entity_id: str) -> tuple[str, str]:
     try:
         with urllib.request.urlopen(request, timeout=5) as response:
             if response.status != 200:
-                return "unknown", "ha_source_unavailable"
+                return "unknown", "ha_source_unavailable", ""
             body = json.load(response)
-        state = body.get("state") if isinstance(body, dict) else None
-        if state == "home":
-            return "positive", "tracker_home"
-        if state == "not_home":
-            return "negative", "tracker_not_home"
-        return "unknown", "tracker_unavailable"
+        if not isinstance(body, dict) or body.get("entity_id") != entity_id:
+            return "unknown", "ha_invalid_entity", ""
+        value = body.get("state")
+        if value not in ("home", "not_home"):
+            return "unknown", "tracker_unavailable", ""
+        reported = body.get("last_reported")
+        if not isinstance(reported, str) or not reported:
+            return "unknown", "tracker_report_timestamp_missing", ""
+        try:
+            timestamp = datetime.fromisoformat(reported.replace("Z", "+00:00"))
+            if timestamp.tzinfo is None:
+                return "unknown", "tracker_report_timestamp_invalid", ""
+            age = (datetime.now(timezone.utc) - timestamp.astimezone(timezone.utc)).total_seconds()
+            if age < -5 or age > 180:
+                return "unknown", "tracker_stale_report", ""
+        except ValueError:
+            return "unknown", "tracker_report_timestamp_invalid", ""
+        return ("positive" if value == "home" else "negative",
+                "tracker_home" if value == "home" else "tracker_not_home",
+                timestamp.astimezone(timezone.utc).isoformat())
     except (urllib.error.URLError, TimeoutError, ValueError, OSError):
-        return "unknown", "ha_source_unavailable"
+        return "unknown", "ha_source_unavailable", ""
 
 
 def arp_probe(conn: sqlite3.Connection, watch: Watch, last_sample: str) -> tuple[str, str, str]:
-    row = conn.execute("SELECT status,last_success FROM sources WHERE id='LAN ARP'").fetchone()
-    if not row or row["status"] not in ("ok", "degraded", "empty") or not row["last_success"]:
+    source = conn.execute("SELECT status,last_success FROM sources WHERE id='LAN ARP'").fetchone()
+    if not source or source["status"] not in ("ok", "degraded", "empty") or not source["last_success"]:
         return "unknown", "arp_source_unavailable", last_sample
-    scan = row["last_success"]
+    scan = source["last_success"]
     if scan == last_sample:
         return "skip", "arp_no_fresh_snapshot", last_sample
+    # Only a direct ARP observation can prove this ARP check. In particular,
+    # lan_positive includes local_interface and must not be treated as ARP.
     seen = conn.execute("""
-       SELECT p.last_seen FROM identities i JOIN lan_positive p ON p.device_id=i.device_id
-       WHERE i.kind='mac' AND i.value=? ORDER BY p.last_seen DESC LIMIT 1
+       SELECT e.last_seen FROM identities i JOIN ipv4_evidence e
+         ON e.device_id=i.device_id AND e.source='arp' AND e.state='observed'
+       WHERE i.kind='mac' AND i.value=? ORDER BY e.last_seen DESC LIMIT 1
     """, (watch.target,)).fetchone()
     if seen:
         try:
-            age = abs((datetime.fromisoformat(scan.replace("Z", "+00:00")) -
-                       datetime.fromisoformat(seen["last_seen"].replace("Z", "+00:00"))).total_seconds())
-            if age < 2:
+            age = (datetime.fromisoformat(scan.replace("Z", "+00:00")) -
+                   datetime.fromisoformat(seen["last_seen"].replace("Z", "+00:00"))).total_seconds()
+            if 0 <= age < 2:
                 return "positive", "arp_positive", scan
         except ValueError:
             return "unknown", "arp_invalid_timestamp", last_sample
@@ -276,6 +298,7 @@ class MonitorRunner:
         self.next_due: dict[tuple[str, str], float] = {}
         self.force_publish = True
         self.last_connect = False
+        self.last_connection_epoch: int | None = None
         self.published: dict[str, str] = {}
 
     def retained(self, mqtt_events: Any, topic: str, content: str) -> bool:
@@ -331,7 +354,10 @@ class MonitorRunner:
         if watch.method == "arp":
             return arp_probe(conn, watch, last_sample)
         if watch.method == "ha_device_tracker":
-            outcome, reason = tracker_probe(watch.target)
+            outcome, reason, reported = tracker_probe(watch.target)
+            if outcome in ("positive", "negative") and reported == last_sample:
+                return "skip", "tracker_no_new_report", last_sample
+            return outcome, reason, reported
         elif watch.method == "icmp":
             outcome, reason = icmp_probe(watch.target)
         else:
@@ -391,9 +417,13 @@ class MonitorRunner:
         if not mqtt_events.connected.is_set():
             self.last_connect = False
             return
-        if not self.last_connect:
+        # MQTT may disconnect and reconnect between two 4s worker cycles.
+        # A callback-maintained epoch catches even that short gap.
+        epoch = getattr(mqtt_events, "connection_epoch", None)
+        if not self.last_connect or (epoch is not None and epoch != self.last_connection_epoch):
             self.force_publish = True
             self.published.clear()
+        self.last_connection_epoch = epoch
         self.last_connect = True
         tombstones = conn.execute("SELECT method,watch_id FROM monitor_tombstones").fetchall()
         for gone in tombstones:

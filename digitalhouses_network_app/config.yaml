@@ -1,7 +1,7 @@
 name: DigitalHouses Network App
-version: 0.1.18
+version: 0.1.19
 slug: digitalhouses_network_app
-description: Network inventory, NEW alerts and configured four-method device monitoring.
+description: Network inventory and source-verified monitored device availability.
 url: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_network_app
 arch:
   - amd64
