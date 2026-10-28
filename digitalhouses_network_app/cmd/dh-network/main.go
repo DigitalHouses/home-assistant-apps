@@ -111,18 +111,19 @@ func openDB(path string) (*DB, error) {
         "CREATE TABLE IF NOT EXISTS monitor_outbox (event_id TEXT PRIMARY KEY,method TEXT NOT NULL,watch_id TEXT NOT NULL,occurred_at TEXT NOT NULL,payload_json TEXT NOT NULL,FOREIGN KEY(method,watch_id) REFERENCES monitor_states(method,watch_id));",
         "CREATE TABLE IF NOT EXISTS monitor_tombstones (method TEXT NOT NULL,watch_id TEXT NOT NULL,PRIMARY KEY(method,watch_id));",
         "CREATE TABLE IF NOT EXISTS discovery_settings (id INTEGER PRIMARY KEY CHECK(id=1),poll_interval_seconds INTEGER NOT NULL,scan_interval_seconds INTEGER NOT NULL,mdns_interval_seconds INTEGER NOT NULL,ssdp_interval_seconds INTEGER NOT NULL,wsd_interval_seconds INTEGER NOT NULL,confirm_successes INTEGER NOT NULL,confirm_failures INTEGER NOT NULL);",
-        "CREATE TABLE IF NOT EXISTS presence_subscriptions (kind TEXT NOT NULL CHECK(kind IN ('ip','mac')),target TEXT NOT NULL,enabled INTEGER NOT NULL DEFAULT 1,notifications INTEGER NOT NULL DEFAULT 0,updated_at TEXT NOT NULL,PRIMARY KEY(kind,target));",
+        "CREATE TABLE IF NOT EXISTS presence_subscriptions (kind TEXT NOT NULL CHECK(kind IN ('ip','mac')),target TEXT NOT NULL,enabled INTEGER NOT NULL DEFAULT 1,notifications INTEGER NOT NULL DEFAULT 0,updated_at TEXT NOT NULL,label TEXT NOT NULL DEFAULT '',PRIMARY KEY(kind,target));",
         "CREATE TABLE IF NOT EXISTS presence_states (kind TEXT NOT NULL,target TEXT NOT NULL,state TEXT NOT NULL DEFAULT 'unknown',last_confirmed TEXT NOT NULL DEFAULT '',last_sample_at TEXT NOT NULL DEFAULT '',last_check TEXT NOT NULL DEFAULT '',last_positive TEXT NOT NULL DEFAULT '',last_changed TEXT NOT NULL DEFAULT '',successes INTEGER NOT NULL DEFAULT 0,failures INTEGER NOT NULL DEFAULT 0,reason TEXT NOT NULL DEFAULT '',PRIMARY KEY(kind,target));",
         "CREATE TABLE IF NOT EXISTS presence_outbox (event_id TEXT PRIMARY KEY,kind TEXT NOT NULL,target TEXT NOT NULL,occurred_at TEXT NOT NULL,payload_json TEXT NOT NULL);",
         "CREATE TABLE IF NOT EXISTS event_delivery_log (event_id TEXT PRIMARY KEY,event_type TEXT NOT NULL,occurred_at TEXT NOT NULL,published_at TEXT NOT NULL DEFAULT '',status TEXT NOT NULL CHECK(status IN ('queued','broker_acked','retrying')),attempts INTEGER NOT NULL DEFAULT 0,payload_json TEXT NOT NULL);",
         "CREATE INDEX IF NOT EXISTS delivery_order ON event_delivery_log(occurred_at DESC);",
-        "UPDATE schema_version SET version=11;",
+        "UPDATE schema_version SET version=12;",
     }, "\n")
     if err := db.exec(schema); err != nil {
         db.Close()
         return nil, err
     }
     if err:=db.ensureDeviceBirthSourceColumn();err!=nil{db.Close();return nil,err}
+    if err:=db.ensurePresenceLabelColumn();err!=nil{db.Close();return nil,err}
     if err:=db.initializeDiscoveryBaseline(path);err!=nil{db.Close();return nil,err}
     return db, nil
 }
