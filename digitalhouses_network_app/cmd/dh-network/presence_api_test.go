@@ -115,7 +115,7 @@ func TestPresenceAPIStartsOneImmediateGlobalScanAndNotForNotificationChanges(t *
   t.Fatalf("first enable did not schedule scan: %d %s",first.Code,first.Body.String())
  }
  select {case <-signal:case <-time.After(2*time.Second):t.Fatal("out-of-cycle scan not started")}
- second:=request(`{"kind":"ip","target":"192.168.2.30","enabled":true,"notifications":true}`)
+ second:=request(`{"kind":"ip","target":"192.168.2.30","enabled":true,"notifications":true,"label":"Мой ноутбук"}`)
  if second.Code!=200||!strings.Contains(second.Body.String(),`"scan_requested":false`){
   t.Fatalf("changing notifications triggered duplicate scan: %d %s",second.Code,second.Body.String())
  }
@@ -123,6 +123,8 @@ func TestPresenceAPIStartsOneImmediateGlobalScanAndNotForNotificationChanges(t *
  if third.Code!=200||!strings.Contains(third.Body.String(),`"scan_requested":true`){
   t.Fatalf("MAC enable failed: %d %s",third.Code,third.Body.String())
  }
+ subs,err:=db.presenceSubscriptions();if err!=nil{t.Fatal(err)}
+ if subs[0].Label!="Мой ноутбук"{t.Fatalf("API label not persisted: %#v",subs)}
  if started.Load()!=1{t.Fatal("concurrent activations launched duplicate scans")}
  close(unblock)
  select {case <-signal:case <-time.After(2*time.Second):t.Fatal("second pass for mid-scan activation was not started")}
