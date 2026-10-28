@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.13
+
+- Remove the large orange explanatory notice from the collapsed-by-default `Показатели` menu, while retaining the concise neutral Online-vs-ping statement and independent real-conflict warning in the main view.
+- Simplify JSON diagnostic export confirmation: remove `Пришли его в чат для анализа.`.
+- Put `Устройства (N)` and the search field in one flexible row, with search immediately to the right of the device count; keep input focus across periodic refresh and filtering, and hide this row on other tabs.
+- Keep all eleven counters, export, existing source data and persistence unchanged.
+
 ## 0.1.12
 
 - Refactor Ingress to a persistent compact header with product name, always-visible Devices / Sources / Events navigation, and a keyboard-accessible `Показатели` disclosure. All 11 existing metric cards, explanatory source notice and JSON diagnostic export are collapsed in the header by default and shown when opened. A serious active conflict warning remains outside the collapsed panel.
