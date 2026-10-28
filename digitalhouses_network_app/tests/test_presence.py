@@ -25,13 +25,13 @@ def fixture():
     db=sqlite3.connect(":memory:")
     db.row_factory=sqlite3.Row
     db.executescript("""
-       CREATE TABLE sources(kind TEXT,status TEXT,last_success TEXT);
+       CREATE TABLE sources(kind TEXT,status TEXT,last_success TEXT,details_json TEXT DEFAULT '{}');
        CREATE TABLE devices(id TEXT,mac TEXT);
        CREATE TABLE lan_positive(device_id TEXT,last_seen TEXT);
        CREATE TABLE ipv4_evidence(ipv4 TEXT,source TEXT,state TEXT,last_seen TEXT);
        CREATE TABLE discovery_settings(id INTEGER,scan_interval_seconds INTEGER,confirm_successes INTEGER,confirm_failures INTEGER);
        INSERT INTO discovery_settings VALUES(1,60,2,3);
-       CREATE TABLE presence_subscriptions(kind TEXT,target TEXT,enabled INT,notifications INT);
+       CREATE TABLE presence_subscriptions(kind TEXT,target TEXT,enabled INT,notifications INT,updated_at TEXT);
        CREATE TABLE presence_states(kind TEXT,target TEXT,state TEXT DEFAULT 'unknown',
           last_confirmed TEXT DEFAULT '',last_sample_at TEXT DEFAULT '',
           last_check TEXT DEFAULT '',last_positive TEXT DEFAULT '',
@@ -40,10 +40,10 @@ def fixture():
        CREATE TABLE presence_outbox(event_id TEXT PRIMARY KEY,kind TEXT,target TEXT,occurred_at TEXT,payload_json TEXT);
        CREATE TABLE event_delivery_log(event_id TEXT PRIMARY KEY,event_type TEXT,occurred_at TEXT,
           published_at TEXT DEFAULT '',status TEXT,attempts INT DEFAULT 0,payload_json TEXT);
-       INSERT INTO sources VALUES('lan_arp','ok',NULL);
+       INSERT INTO sources(kind,status,last_success) VALUES('lan_arp','ok',NULL);
        INSERT INTO devices VALUES('device-a','E8:FF:1E:D7:3A:48');
-       INSERT INTO presence_subscriptions VALUES('ip','192.168.2.30',1,0);
-       INSERT INTO presence_subscriptions VALUES('mac','E8:FF:1E:D7:3A:48',1,1);
+       INSERT INTO presence_subscriptions VALUES('ip','192.168.2.30',1,0,'2000-01-01T00:00:00Z');
+       INSERT INTO presence_subscriptions VALUES('mac','E8:FF:1E:D7:3A:48',1,1,'2000-01-01T00:00:00Z');
     """)
     return db
 
@@ -72,6 +72,83 @@ class PresenceTests(unittest.TestCase):
         self.assertEqual(db.execute("SELECT COUNT(*) FROM presence_outbox").fetchone()[0],0)
         self.assertEqual(db.execute("SELECT COUNT(*) FROM event_delivery_log").fetchone()[0],0)
         self.assertEqual(db.execute("SELECT state FROM presence_states WHERE kind='ip'").fetchone()[0],"reachable")
+
+    def test_initial_activation_waits_for_new_scan_before_confirming(self):
+        db=fixture();engine=PresenceRunner();tx=Transport()
+        now=datetime.now(timezone.utc)
+        with db:
+            db.execute("UPDATE presence_subscriptions SET updated_at=?",
+                       ((now-timedelta(seconds=45)).isoformat(),))
+            db.execute("INSERT INTO presence_states(kind,target,state,reason) VALUES('ip','192.168.2.30','working','scan_requested')")
+            db.execute("INSERT INTO presence_states(kind,target,state,reason) VALUES('mac','E8:FF:1E:D7:3A:48','working','scan_requested')")
+        # Fresh at present, but it is a scan from BEFORE activation.
+        scan(db,now-timedelta(seconds=60),True)
+        engine.cycle(db,tx)
+        self.assertEqual(
+            {x['state'] for x in db.execute("SELECT state FROM presence_states")},
+            {'working'})
+        self.assertEqual(
+            {x['last_check'] for x in db.execute("SELECT last_check FROM presence_states")},
+            {''})
+        # The next shared scan provides one sample, not yet confirmation.
+        scan(db,now-timedelta(seconds=30),True)
+        engine.cycle(db,tx)
+        rows=db.execute("SELECT state,successes,last_check FROM presence_states").fetchall()
+        self.assertEqual({x['state'] for x in rows},{'confirming'})
+        self.assertEqual({x['successes'] for x in rows},{1})
+        self.assertTrue(all(x['last_check'] for x in rows))
+        # Re-reading the same scan doesn't count as another confirmation.
+        engine.cycle(db,tx)
+        self.assertEqual({x['successes'] for x in db.execute("SELECT successes FROM presence_states")},{1})
+        scan(db,now-timedelta(seconds=15),True)
+        engine.cycle(db,tx)
+        self.assertEqual({x['state'] for x in db.execute("SELECT state FROM presence_states")},
+                         {'reachable','present'})
+        self.assertEqual(len(tx.messages),0)  # initial baseline is quiet
+
+    def test_scan_already_running_at_activation_does_not_initialize_presence(self):
+        db=fixture();engine=PresenceRunner();tx=Transport()
+        now=datetime.now(timezone.utc)
+        activation=now-timedelta(seconds=8)
+        started=activation-timedelta(seconds=3)
+        finished=activation+timedelta(seconds=2)
+        with db:
+            db.execute("UPDATE presence_subscriptions SET updated_at=?",
+                       (activation.isoformat(),))
+            db.execute("INSERT INTO presence_states(kind,target,state,reason) VALUES('ip','192.168.2.30','working','scan_requested')")
+            db.execute("INSERT INTO presence_states(kind,target,state,reason) VALUES('mac','E8:FF:1E:D7:3A:48','working','scan_requested')")
+        scan(db,finished,True)
+        with db:
+            db.execute("UPDATE sources SET details_json=?",
+                       (json.dumps({'scan_started_at':started.isoformat()}),))
+        engine.cycle(db,tx)
+        self.assertEqual({x['state'] for x in db.execute("SELECT state FROM presence_states")},
+                         {'working'})
+        # A dedicated scan starts after activation, even if completed very quickly.
+        with db:
+            db.execute("UPDATE sources SET details_json=?",
+                       (json.dumps({'scan_started_at':(activation+timedelta(milliseconds=3)).isoformat()}),))
+        scan(db,finished+timedelta(seconds=1),True)
+        engine.cycle(db,tx)
+        self.assertEqual({x['state'] for x in db.execute("SELECT state FROM presence_states")},
+                         {'confirming'})
+        self.assertEqual({x['successes'] for x in db.execute("SELECT successes FROM presence_states")},{1})
+
+    def test_failed_new_scan_leaves_clear_unknown_without_fake_absence(self):
+        db=fixture();engine=PresenceRunner();tx=Transport()
+        now=datetime.now(timezone.utc)
+        with db:
+            db.execute("UPDATE presence_subscriptions SET updated_at=?",
+                       ((now-timedelta(seconds=45)).isoformat(),))
+            db.execute("INSERT INTO presence_states(kind,target,state,reason) VALUES('ip','192.168.2.30','working','scan_requested')")
+            db.execute("INSERT INTO presence_states(kind,target,state,reason) VALUES('mac','E8:FF:1E:D7:3A:48','working','scan_requested')")
+            db.execute("UPDATE sources SET status='error',last_success=NULL,details_json=?",
+                       (json.dumps({'observed_at':(now-timedelta(seconds=15)).isoformat()}),))
+        engine.cycle(db,tx)
+        states=db.execute("SELECT state,reason FROM presence_states").fetchall()
+        self.assertEqual({x['state'] for x in states},{'unknown'})
+        self.assertEqual({x['reason'] for x in states},{'source_unavailable'})
+        self.assertFalse(tx.messages)
 
     def test_confirmed_absence_yields_one_event_per_subscription_and_puback(self):
         db=fixture();engine=PresenceRunner();tx=Transport()

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.22
+
+- Enabling a new IP/MAC Presence subscription immediately schedules one out-of-cycle **global LAN ARP scan**. Concurrent activations coalesce, and periodic/on-demand scans serialize to avoid overlapping scanners. Changing notification settings alone never forces a scan.
+- New subscriptions enter visible **Working** state before the UI action is acknowledged. After the first completed qualifying scan, the interface shows the observation and confirmation progress (e.g. 1 of 2 positive observations) instead of misleading blank/unknown readings. The initial baseline remains quiet and does not emit a false transition event.
+- A scan that began before subscription activation is excluded even if it completed afterwards; true scan-start timestamps preserve sub-second ordering. Source failures become unknown rather than offline.
+- An active Presence eye exposes understandable status, scan time, last positive and last change; the interface refreshes active progress without waiting for the normal 30-second inventory refresh.
+- Hovering or focusing the Online state now shows an explicit date and time (with seconds) of the latest accepted positive ARP/HA router observation. The icon does not pretend that ICMP Ping was performed.
+- Regression tests for scan coalescing, working/confirming state, stale scan rejection, source failures and Online timestamps.
+
+
 ## 0.1.21
 
 - Ingress top navigation: Devices, Sources, Event Journal, Global Settings, and plain-language Help; the legacy YAML Monitor editor is removed from navigation while its files remain compatible.

@@ -37,6 +37,29 @@ test('contextual address menus expose watches and copy, never per-target interva
  assert.match(script,/id="menu-notify"/);
  assert.doesNotMatch(script,/per-device-interval/);
 });
+test('new subscription displays Working, confirmation counts and exact positive timestamp',()=>{
+ ctx.pending=[{kind:'ip',target:'192.168.2.30',enabled:true,state:'working',reason:'scan_requested',
+   last_check:'',last_positive:'',last_changed:'',successes:0,failures:0,
+   needed_successes:2,needed_failures:3}];
+ vm.runInContext('presenceSubscriptions=pending',ctx);
+ const working=vm.runInContext("presenceCellAction('ip','192.168.2.30')",ctx);
+ assert.match(working,/Working/);
+ assert.match(working,/выполняется внеочередное сканирование/);
+ assert.match(working,/Нет подтверждений/);
+ ctx.pending[0].state='confirming';ctx.pending[0].reason='confirmed_by_arp';
+ ctx.pending[0].successes=1;
+ ctx.pending[0].last_check='2026-10-29T12:00:01Z';
+ const pending=vm.runInContext("presenceCellAction('ip','192.168.2.30')",ctx);
+ assert.match(pending,/1 из 2/);
+ assert.match(pending,/Подтв\./);
+ assert.match(pending,/29\.10\.2026/);
+ ctx.device={presence:'online',last_seen:'2026-10-29T12:00:01Z'};
+ const online=vm.runInContext('onlineTooltip(device)',ctx);
+ assert.match(online,/Последнее положительное подтверждение Online/);
+ assert.match(online,/29\.10\.2026/);
+ assert.match(online,/12:00:01/);
+ assert.match(script,/onlineTooltip\(d\)/);
+});
 test('HA trigger includes exact registered type, correct entity and selected target',()=>{
  ctx.sample={event_type:'tracked_device_unreachable',
   payload_json:JSON.stringify({event_type:'tracked_device_unreachable',ip:'192.168.2.30'})};

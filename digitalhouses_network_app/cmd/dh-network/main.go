@@ -213,6 +213,12 @@ type Service struct {
     // Reset gate protects the persisted generation against in-flight scans.
     resetGate sync.RWMutex
     resetGeneration uint64
+    lanScanMu sync.Mutex
+    presenceScanMu sync.Mutex
+    presenceScanQueued bool
+    presenceScanRevision uint64
+    // Test-only seam: production always executes the shared LAN scanner.
+    presenceScanNow func()
     // Optional test seam; the production path always invokes first discovery.
     afterReset func()
 }

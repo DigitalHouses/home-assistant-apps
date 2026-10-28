@@ -9,8 +9,11 @@ import (
 // ARP discovery is independent from Home Assistant and does not use Nmap.
 // Failed scans preserve the device registry and its last-positive evidence.
 func (s *Service) pollLAN() {
+    // A newly enabled watch requests a full scan; serialize it with the periodic scanner.
+    s.lanScanMu.Lock()
+    defer s.lanScanMu.Unlock()
     generation:=s.currentScanGeneration()
-    at:=time.Now().UTC().Format(time.RFC3339)
+    at:=time.Now().UTC().Format(time.RFC3339Nano)
     plan,err:=localLANPlan()
     if err!=nil {
         s.withCurrentGeneration(generation,func(){s.reportLANError(at,err)})
@@ -26,7 +29,7 @@ func (s *Service) pollLAN() {
     }
     s.withCurrentGeneration(generation,func(){
         now:=time.Now().UTC().Format(time.RFC3339)
-        if err:=s.db.importARPHosts(hosts,now,plan.iface.Name,plan.network.String());err!=nil {
+        if err:=s.db.importARPHosts(hosts,now,plan.iface.Name,plan.network.String(),at);err!=nil {
             s.reportLANError(now,err)
             return
         }
@@ -44,4 +47,32 @@ func (s *Service) reportLANError(now string,err error) {
 
 func (s *Service) runLANPolling(interval time.Duration) {
     for {s.pollLAN();time.Sleep(s.intervalFor("arp",interval))}
+}
+
+ // requestPresenceScan coalesces concurrent activations into one out-of-cycle
+ // full LAN scan. It never launches a separate per-device ping process.
+func (s *Service) requestPresenceScan() {
+    s.presenceScanMu.Lock()
+    s.presenceScanRevision++
+    if s.presenceScanQueued {s.presenceScanMu.Unlock();return}
+    s.presenceScanQueued=true
+    s.presenceScanMu.Unlock()
+    go func(){
+        for {
+            // Requests queued before a scan starts share that scan.
+            // A newly enabled watch DURING a scan needs a later snapshot:
+            // coalesce those requests into one additional full LAN pass.
+            s.presenceScanMu.Lock()
+            revision:=s.presenceScanRevision
+            s.presenceScanMu.Unlock()
+            if s.presenceScanNow!=nil {s.presenceScanNow()} else {s.pollLAN()}
+            s.presenceScanMu.Lock()
+            if s.presenceScanRevision==revision {
+                s.presenceScanQueued=false
+                s.presenceScanMu.Unlock()
+                return
+            }
+            s.presenceScanMu.Unlock()
+        }
+    }()
 }

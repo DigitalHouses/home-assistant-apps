@@ -51,6 +51,7 @@ body.table-resizing,body.table-resizing *{cursor:col-resize!important;user-selec
 .devices-table .presence-trigger{height:22px;width:22px;display:grid;place-items:center;padding:1px;border:0;border-radius:4px;background:transparent;color:#a9c1d1;opacity:0}
 .devices-table td:hover .presence-trigger,.devices-table td:focus-within .presence-trigger{opacity:1}
 .devices-table .presence-trigger:hover,.devices-table .presence-trigger:focus-visible{background:#294057;color:#fff}
+.devices-table .presence-progress{font-size:9px;color:#b4d9ed;white-space:nowrap;max-width:58px;overflow:hidden;text-overflow:ellipsis}
 .devices-table .presence-eye{color:#82efc7;display:inline-grid;place-items:center;font-size:16px;line-height:1;cursor:help}
 @media(hover:none){.devices-table .presence-trigger{opacity:1}}
 .presence-menu{position:fixed;z-index:35;width:min(320px,calc(100vw - 24px));max-height:calc(100vh - 24px);overflow:auto;background:#192b41;border:1px solid #526d86;border-radius:11px;padding:14px;box-shadow:0 12px 34px #000b}
@@ -116,7 +117,7 @@ input{font:inherit;padding:10px;color:#f0f4f9;background:#203147;border:1px soli
 </style></head>
 <body>
 <header class="app-header">
-  <div class="brand"><h1>DigitalHouses Network App</h1><small>Устройства и наблюдение за сетью · v0.1.21</small></div>
+  <div class="brand"><h1>DigitalHouses Network App</h1><small>Устройства и наблюдение за сетью · v0.1.22</small></div>
   <nav aria-label="Разделы приложения"><button class="active" data-page="devices">Устройства</button><button data-page="sources">Источники</button><button data-page="events">Журнал событий</button><button data-page="settings">Параметры</button><button data-page="help">Помощь</button></nav>
   <details id="overview" class="overview">
     <summary title="Раскрыть или скрыть показатели сети и диагностику"><span>Показатели</span><span id="health" class="tag">Подключение…</span><span class="overview-arrow" aria-hidden="true">⌄</span></summary>
@@ -256,6 +257,18 @@ const nameCollator=new Intl.Collator('ru',{numeric:true,sensitivity:'base'});
 function esc(t){return String(t??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 async function read(kind){const r=await fetch('api/'+kind,{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);return r.json()}
 function noteTime(t){return t?new Date(t).toLocaleString('ru-RU'):'Нет данных'}
+function exactTime(t){
+ if(!t)return 'Нет подтверждений';
+ const date=new Date(t);
+ return Number.isFinite(date.getTime())
+  ?date.toLocaleString('ru-RU',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'})
+  :'Нет подтверждений';
+}
+function onlineTooltip(d){
+ return 'Последнее положительное подтверждение Online: '+exactTime(d.last_seen)+
+  '\nИсточник: ARP и/или Home Assistant (роутер)'+
+  '\nICMP ping не выполняется; это время последнего принятого наблюдения.';
+}
 function originsForDevice(id) {
  return origins.filter(o=>o.device_id===id).sort((a,b)=>a.source.localeCompare(b.source));
 }
@@ -405,15 +418,32 @@ const eyeIcon='<svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16
 function activePresence(kind,target){
  return presenceSubscriptions.find(x=>x.kind===kind&&x.target===target&&x.enabled);
 }
+function readablePresenceState(w){
+ if(w.state==='working')return 'Working — выполняется внеочередное сканирование';
+ if(w.state==='confirming'){
+  const found=w.reason==='confirmed_by_arp';
+  const count=found?w.successes:w.failures,needed=found?w.needed_successes:w.needed_failures;
+  return (found?'Обнаружен — подтверждение':'Не обнаружен — подтверждение')+
+   (needed?' ('+count+' из '+needed+')':'');
+ }
+ if(w.state==='reachable'||w.state==='present')return 'Обнаружен · подтверждено';
+ if(w.state==='unreachable'||w.state==='absent')return 'Не обнаружен · подтверждено';
+ if(w.reason==='source_unavailable')return 'Источник сканирования недоступен';
+ if(w.reason==='ambiguous_arp_scan')return 'Неоднозначный результат сканирования';
+ return 'Состояние неизвестно';
+}
 function presenceTooltip(w){
- return 'Presence включён\nСостояние: '+w.state+'\nПроверено: '+noteTime(w.last_check)+
-  '\nПоследнее обнаружение: '+noteTime(w.last_positive)+'\nПоследняя смена: '+noteTime(w.last_changed)+'\nПричина: '+w.reason;
+ return 'Presence включён\nСостояние: '+readablePresenceState(w)+
+  '\nПоследняя проверка: '+exactTime(w.last_check)+
+  '\nПоследнее обнаружение: '+exactTime(w.last_positive)+
+  '\nПоследняя смена: '+exactTime(w.last_changed);
 }
 function presenceCellAction(kind,target){
  if(!target||(kind==='ip'&&target.includes(':')))return '';
  const watch=activePresence(kind,target);
  return '<span class="presence-controls">'+
-  (watch?'<span class="presence-eye" tabindex="0" title="'+esc(presenceTooltip(watch))+'" aria-label="'+esc(presenceTooltip(watch))+'">'+eyeIcon+'</span>':'')+
+  (watch?'<span class="presence-eye" tabindex="0" title="'+esc(presenceTooltip(watch))+'" aria-label="'+esc(presenceTooltip(watch))+'">'+eyeIcon+'</span>'+
+    (watch.state==='working'||watch.state==='confirming'?'<span class="presence-progress" title="'+esc(readablePresenceState(watch))+'">'+(watch.state==='working'?'Working':'Подтв.')+'</span>':''):'')+
   '<button type="button" class="presence-trigger" data-presence-kind="'+esc(kind)+'" data-presence-target="'+esc(target)+'" title="Копирование и Presence" aria-label="Параметры '+esc(kind.toUpperCase())+' '+esc(target)+'">⋮</button></span>';
 }
 function closePresenceMenu(){
@@ -424,15 +454,13 @@ function openPresenceMenu(button,kind,target){
  const el=document.getElementById('presence-menu'),watch=activePresence(kind,target);
  presenceSelection={kind,target};
  const check=watch?' checked':'',notify=watch&&watch.notifications?' checked':'';
- const summary=watch?'Состояние: '+watch.state+'\nПроверено: '+noteTime(watch.last_check)+
-  '\nОбнаружен: '+noteTime(watch.last_positive)+'\nИзменение: '+noteTime(watch.last_changed):
-  'Наблюдение выключено';
+ const summary=watch?presenceTooltip(watch):'Наблюдение выключено';
  el.innerHTML='<div class="menu-heading">'+(kind==='ip'?'IP Presence':'MAC Presence')+' · '+esc(target)+'</div>'+
   '<button type="button" id="menu-copy">Скопировать '+kind.toUpperCase()+'</button>'+
   '<label for="menu-presence">Отслеживать адрес<input id="menu-presence" type="checkbox"'+check+'></label>'+
   '<label for="menu-notify">Уведомления DH<input id="menu-notify" type="checkbox"'+notify+(watch?'':' disabled')+'></label>'+
   '<small>Для доставки уведомлений необходим локальный HA package; события работают независимо.</small>'+
-  '<div class="menu-info">'+esc(summary).replace(/\n/g,'<br>')+'</div>';
+  '<div class="menu-info" id="presence-summary">'+esc(summary).replace(/\n/g,'<br>')+'</div>';
  el.hidden=false;
  const r=button.getBoundingClientRect();
  el.style.left=Math.max(8,Math.min(r.right-300,window.innerWidth-328))+'px';
@@ -448,9 +476,10 @@ async function savePresence(kind,target,enabled,notifications){
   const response=await fetch('api/presence',{method:'PUT',headers:{'Content-Type':'application/json','X-DH-UI':'1'},
     body:JSON.stringify({kind,target,enabled,notifications:enabled&&notifications})});
   if(!response.ok)throw Error((await response.text()).trim());
+  const outcome=await response.json();
   presenceSubscriptions=await read('presence');
   renderTable();closePresenceMenu();
-  showCopyFeedback(enabled?'Presence включён':'Presence выключен');
+  showCopyFeedback(!enabled?'Presence выключен':outcome.scan_requested?'Presence включён · внеочередное сканирование запущено':'Настройки Presence сохранены');
  }catch(err){
   showCopyFeedback('Не сохранено: '+err.message);
   menu.querySelectorAll('input').forEach(x=>x.disabled=false);
@@ -479,7 +508,7 @@ function renderTable(){
    '<td class="name-cell"><div class="name-content"><strong class="name-value" title="'+esc(name)+'">'+esc(name||'—')+'</strong>'+newBadge(d)+'</div>'+copyAction(name,'имя')+'</td>'+
    '<td class="ip-cell">'+esc(d.ipv4||d.ipv6||'—')+(d.ipv4&&d.ipv6?'<small> / '+esc(d.ipv6)+'</small>':'')+presenceCellAction('ip',d.ipv4)+'</td>'+
    '<td class="mac-cell">'+esc(d.mac||'—')+presenceCellAction('mac',d.mac)+'</td>'+
-   '<td><span class="tag '+esc(d.presence)+'" title="Online — обнаружено через ARP, HA Tracker или Local Interface; ICMP ping не выполняется">'+esc(d.presence)+'</span>'+copyAction(d.presence,'наблюдение')+'</td>'+
+   '<td><span class="tag '+esc(d.presence)+'" tabindex="0" title="'+esc(onlineTooltip(d))+'" aria-label="'+esc(d.presence+'. '+onlineTooltip(d))+'">'+esc(d.presence)+'</span>'+copyAction(d.presence,'наблюдение')+'</td>'+
    '<td class="source-cell">'+sourcesForDisplay(d.id)+copyAction(from,'источники')+'</td>'+
    '<td class="time-cell">'+esc(noteTime(d.last_seen))+copyAction(time,'последний Online')+'</td>'+
    '<td class="note-cell">'+noteAction(d)+copyAction(d.note,'Note')+'</td></tr>';
@@ -721,6 +750,26 @@ async function resetInventoryFromUI(){
 }
 document.getElementById('export').addEventListener('click',exportDiagnostic);
 document.getElementById('reset').addEventListener('click',resetInventoryFromUI);
+let presenceRefreshBusy=false;
+async function refreshPresenceProgress(){
+ if(page!=='devices'||presenceRefreshBusy||
+    !presenceSubscriptions.some(w=>w.state==='working'||w.state==='confirming'))return;
+ presenceRefreshBusy=true;
+ try{
+  const next=await read('presence');
+  if(JSON.stringify(next)!==JSON.stringify(presenceSubscriptions)){
+   presenceSubscriptions=next;
+   renderTable();
+   if(presenceSelection){
+    const active=activePresence(presenceSelection.kind,presenceSelection.target);
+    const summary=document.getElementById('presence-summary');
+    if(active&&summary)summary.textContent=presenceTooltip(active);
+   }
+  }
+ }catch(_){}
+ finally{presenceRefreshBusy=false}
+}
+setInterval(refreshPresenceProgress,4000);
 document.querySelectorAll('[data-page]').forEach(b=>b.addEventListener('click',()=>{
  document.querySelectorAll('nav button').forEach(a=>a.classList.remove('active'));
  b.classList.add('active');page=b.dataset.page;filter='';closePresenceMenu();load();

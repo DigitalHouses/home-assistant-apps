@@ -26,7 +26,7 @@ class PresenceRunner:
 
     def observe(self, conn: sqlite3.Connection) -> None:
         source = conn.execute(
-            "SELECT status,last_success FROM sources WHERE kind='lan_arp' LIMIT 1"
+            "SELECT status,last_success,details_json FROM sources WHERE kind='lan_arp' LIMIT 1"
         ).fetchone()
         config = conn.execute(
             "SELECT scan_interval_seconds,confirm_successes,confirm_failures FROM discovery_settings WHERE id=1"
@@ -45,7 +45,7 @@ class PresenceRunner:
             except ValueError:
                 source_ok = False
         active = conn.execute(
-            "SELECT kind,target,notifications FROM presence_subscriptions WHERE enabled=1"
+            "SELECT kind,target,notifications,updated_at FROM presence_subscriptions WHERE enabled=1"
         ).fetchall()
         for item in active:
             kind, target = item["kind"], item["target"]
@@ -62,6 +62,23 @@ class PresenceRunner:
                 existing = conn.execute(
                     "SELECT * FROM presence_states WHERE kind=? AND target=?", (kind, target)
                 ).fetchone()
+            # A newly enabled subscription must NEVER ingest a scan that
+            # completed before it was activated. This also makes the
+            # requested first scan visibly 'working' until fresh evidence.
+            if not existing["last_sample_at"]:
+                try:
+                    details = json.loads(source["details_json"] or "{}") if source else {}
+                    # Use the instant the scan STARTED, not its completion
+                    # rounded to seconds. A periodic scan already running at
+                    # subscription time cannot become its first sample.
+                    started = details.get("scan_started_at") or scan
+                    predates_subscription = not started or utc(started) < utc(item["updated_at"])
+                    error_at = details.get("observed_at", "")
+                    error_after_enable = bool(error_at) and utc(error_at) >= utc(item["updated_at"])
+                except (ValueError, TypeError, AttributeError):
+                    predates_subscription, error_after_enable = True, False
+                if predates_subscription and not error_after_enable:
+                    continue
             if not source_ok:
                 with conn:
                     conn.execute(
@@ -104,7 +121,7 @@ class PresenceRunner:
                 "absent" if kind == "mac" else "unreachable"
             )
             new_confirmed = current if accepted else previous
-            state = new_confirmed or "unknown"
+            state = new_confirmed or "confirming"
             reason = ("confirmed_by_arp" if found else "missing_from_successful_arp_scans")
             positive_at = scan if found else existing["last_positive"]
             changed = bool(accepted and previous and previous != current)

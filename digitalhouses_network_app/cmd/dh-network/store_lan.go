@@ -31,7 +31,7 @@ func (db *DB) lanRecentlySeen(id, now string) (bool, error) {
     return age>=0 && age<=ttl,nil
 }
 
-func (db *DB) importARPHosts(hosts []LANHost, now, interfaceName, prefix string) error {
+func (db *DB) importARPHosts(hosts []LANHost, now, interfaceName, prefix string, scanStart ...string) error {
     db.mu.Lock()
     defer db.mu.Unlock()
     if err:=db.exec("BEGIN IMMEDIATE");err!=nil{return err}
@@ -86,8 +86,10 @@ func (db *DB) importARPHosts(hosts []LANHost, now, interfaceName, prefix string)
     status:="ok"
     if len(hosts)==0 {status="empty"}
     if collisions>0 {status="degraded"}
+    began:=now
+    if len(scanStart)>0 && scanStart[0]!="" {began=scanStart[0]}
     details,_:=json.Marshal(map[string]any{
-        "observations":len(hosts),"imported":imported,"ambiguous_proxy_arp":collisions,
+        "scan_started_at":began,"observations":len(hosts),"imported":imported,"ambiguous_proxy_arp":collisions,
         "interface":interfaceName,"subnet":prefix,"discovery":"active_arp",
         "ipv4_conflicts":len(ipConflicts),"last_scan_hosts":imported,
     })
