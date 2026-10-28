@@ -542,10 +542,6 @@ async function edit(id){
   const r=await fetch('api/devices/'+encodeURIComponent(id)+'/note',{method:'PUT',headers:{'Content-Type':'application/json','X-DH-UI':'1'},body:JSON.stringify({note})});
   if(!r.ok)throw new Error('HTTP '+r.status);
   devices=await read('devices');
-  // Watches are persistent SQLite records; fetch them before each Devices render.
-  // Without this read all green eyes disappear after reload/navigation.
-  if(page==='devices')presenceSubscriptions=await read('presence');
-  if(page==='devices')presenceSubscriptions=await read('presence');
   deviceBirths=await read('device-births');renderTable();
  }catch(e){alert('Не удалось сохранить: '+e.message)}
 }
@@ -657,6 +653,9 @@ async function load(){
   settingsOverview.hidden=page!=='settings';
   const status=await read('status');health.textContent='SQLite: '+status.database;
   devices=await read('devices');
+  // Reload persisted watches before each Devices render. Without it, the
+  // green eyes disappear after navigation or the 30-second inventory refresh.
+  if(page==='devices')presenceSubscriptions=await read('presence');
   origins=await read('device-sources');
   mdnsServices=await read('mdns-services');
   ssdpServices=await read('ssdp-services');
