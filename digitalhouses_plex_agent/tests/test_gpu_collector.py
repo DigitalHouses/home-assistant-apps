@@ -46,6 +46,57 @@ def test_intel_gpu_top_parser_ignores_short_startup_sample():
     assert metrics["rc6_percent"] == 2.3
 
 
+
+
+def test_parser_accepts_debian_13_stream_without_closing_array():
+    # Current intel_gpu_top streams an open JSON array, cut short at sampling stop.
+    raw = """
+[
+{
+  "period": {"duration": 10.0, "unit": "ms"},
+  "engines": {"Render/3D": {"busy": 0.0}}
+},
+{
+  "period": {"duration": 1001.0, "unit": "ms"},
+  "frequency": {"actual": 747.267728},
+  "rc6": {"value": 0.0},
+  "engines": {
+    "Render/3D": {"busy": 88.498277},
+    "Video": {"busy": 28.286701},
+    "VideoEnhance": {"busy": 0.0}
+  }
+},
+{ "period":
+"""
+    metrics = parse_intel_gpu_top_json(raw)
+
+    assert metrics["status"] == "ok"
+    assert metrics["sample_count"] == 1
+    assert metrics["render_busy_percent"] == 88.5
+    assert metrics["video_busy_percent"] == 28.3
+    assert metrics["video_enhance_busy_percent"] == 0.0
+    assert metrics["frequency_mhz"] == 747.3
+    assert metrics["rc6_percent"] == 0.0
+
+
+def test_parser_accepts_closed_modern_json_array():
+    raw = """
+[
+  {
+    "period": {"duration": 1000.0},
+    "engines": {
+      "Render/3D": {"busy": 12.5},
+      "Video": {"busy": 3.75},
+      "VideoEnhance": {"busy": 1.25}
+    }
+  }
+]
+"""
+    metrics = parse_intel_gpu_top_json(raw)
+    assert metrics["render_busy_percent"] == 12.5
+    assert metrics["video_busy_percent"] == 3.8
+    assert metrics["video_enhance_busy_percent"] == 1.2
+
 def test_gpu_temperature_uses_hwmon_bound_to_same_pci_device():
     with TemporaryDirectory() as tmp:
         root = Path(tmp)
