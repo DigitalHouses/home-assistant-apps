@@ -65,12 +65,13 @@ input{font:inherit;padding:10px;color:#f0f4f9;background:#203147;border:1px soli
 .tag{font-size:12px;padding:4px 8px;border:1px solid #49647e;border-radius:16px;white-space:nowrap}
 .tag.online,.tag.ok{border-color:#3e997d;color:#82efc7}.tag.error,.tag.degraded{border-color:#d99259;color:#ffd094}
 .tag.empty,.tag.not_observed,.tag.unknown{border-color:#a0a1a8;color:#c7cbd2}
+.tag.new-device{color:#96ffcb;border-color:#58c68f;background:#194d3b;font-size:10px;font-weight:700;margin-left:6px;padding:2px 6px}
 .grid-scroll{overflow-x:auto}code{color:#a2c6f4}.description{margin-top:8px;color:#c0cad5}
 @media(max-width:750px){main{padding:13px}.app-header{padding:12px;gap:10px}.brand{width:100%}.brand h1{font-size:18px}.app-header nav{flex:1 1 auto}.app-header nav button{padding:6px 9px}.overview-panel{right:8px;width:calc(100vw - 16px);padding:13px}.overview-panel .stats{grid-template-columns:repeat(auto-fit,minmax(136px,1fr))}table{font-size:12px}}
 </style></head>
 <body>
 <header class="app-header">
-  <div class="brand"><h1>DigitalHouses Network App</h1><small>Устройства и источники сети · v0.1.15</small></div>
+  <div class="brand"><h1>DigitalHouses Network App</h1><small>Устройства и источники сети · v0.1.16</small></div>
   <nav aria-label="Разделы приложения"><button class="active" data-page="devices">Устройства</button><button data-page="sources">Источники</button><button data-page="events">События</button></nav>
   <details id="overview" class="overview">
     <summary title="Раскрыть или скрыть показатели сети и диагностику"><span>Показатели</span><span id="health" class="tag">Подключение…</span><span class="overview-arrow" aria-hidden="true">⌄</span></summary>
@@ -95,7 +96,7 @@ input{font:inherit;padding:10px;color:#f0f4f9;background:#203147;border:1px soli
 <script>
 const body=document.getElementById('body'),health=document.getElementById('health'),filterArea=document.getElementById('filterarea');
 const devicesTools=document.getElementById('devices-tools'),devicesCount=document.getElementById('devices-count');
-let page='devices',devices=[],origins=[],mdnsServices=[],ssdpServices=[],wsdEndpoints=[],filter='';
+let page='devices',devices=[],origins=[],mdnsServices=[],ssdpServices=[],wsdEndpoints=[],filter='',deviceBirths={};
 let sortKey='ip',sortDirection='asc';
 const deviceColumns=[['name','Имя'],['ip','IP'],['mac','MAC'],['presence','Наблюдение'],['sources','Обнаружен через'],['last_seen','Последний Online'],['note','Note']];
 const nameCollator=new Intl.Collator('ru',{numeric:true,sensitivity:'base'});
@@ -233,12 +234,21 @@ function renderDevices(){
  filterArea.querySelector('input').addEventListener('input',e=>{filter=e.target.value;renderTable()});
  renderTable();
 }
+function isNewDevice(d, now=Date.now()){
+ const first=deviceBirths[d.id];
+ if(!first)return false;
+ const at=Date.parse(first);
+ return Number.isFinite(at)&&now>=at&&now-at<24*60*60*1000;
+}
+function newBadge(d){
+ return isNewDevice(d)?'<span class="tag new-device" title="Впервые обнаружено за последние 24 часа">NEW</span>':'';
+}
 function renderTable(){
  const found=sortedDeviceRows();
  devicesCount.textContent='Устройства ('+found.length+')';
  if(!devices.length){body.innerHTML='<p>Устройств пока нет. Проверь вкладку «Источники». В Home Assistant могут отсутствовать доступные <code>device_tracker</code> от роутеров.</p>';return}
  body.innerHTML='<div class="grid-scroll"><table class="devices-table"><thead><tr>'+sortedHeaders()+'</tr></thead><tbody>'+
- found.map((d,index)=>'<tr><td class="num-cell">'+(index+1)+'</td><td class="name-cell"><strong class="name-value" title="'+esc(visibleDeviceName(d))+'">'+esc(visibleDeviceName(d)||'—')+'</strong></td><td class="ip-cell">'+esc(d.ipv4||d.ipv6||'—')+(d.ipv4&&d.ipv6?'<small> / '+esc(d.ipv6)+'</small>':'')+'</td><td class="mac-cell">'+esc(d.mac||'—')+'</td><td><span class="tag '+esc(d.presence)+'" title="Online — обнаружено через ARP, HA Tracker или Local Interface; ICMP ping не выполняется">'+esc(d.presence)+'</span></td><td class="source-cell">'+sourcesForDisplay(d.id)+'</td><td class="time-cell">'+esc(noteTime(d.last_seen))+'</td><td class="note-cell">'+noteAction(d)+'</td></tr>').join('')+'</tbody></table></div>';
+ found.map((d,index)=>'<tr><td class="num-cell">'+(index+1)+'</td><td class="name-cell"><strong class="name-value" title="'+esc(visibleDeviceName(d))+'">'+esc(visibleDeviceName(d)||'—')+'</strong>'+newBadge(d)+'</td><td class="ip-cell">'+esc(d.ipv4||d.ipv6||'—')+(d.ipv4&&d.ipv6?'<small> / '+esc(d.ipv6)+'</small>':'')+'</td><td class="mac-cell">'+esc(d.mac||'—')+'</td><td><span class="tag '+esc(d.presence)+'" title="Online — обнаружено через ARP, HA Tracker или Local Interface; ICMP ping не выполняется">'+esc(d.presence)+'</span></td><td class="source-cell">'+sourcesForDisplay(d.id)+'</td><td class="time-cell">'+esc(noteTime(d.last_seen))+'</td><td class="note-cell">'+noteAction(d)+'</td></tr>').join('')+'</tbody></table></div>';
  body.querySelectorAll('button[data-sort]').forEach(b=>b.addEventListener('click',()=>changeSort(b.dataset.sort)));
  body.querySelectorAll('button[data-id]').forEach(b=>b.addEventListener('click',()=>edit(b.dataset.id)));
 }
@@ -249,7 +259,8 @@ async function edit(id){
  try{
   const r=await fetch('api/devices/'+encodeURIComponent(id)+'/note',{method:'PUT',headers:{'Content-Type':'application/json','X-DH-UI':'1'},body:JSON.stringify({note})});
   if(!r.ok)throw new Error('HTTP '+r.status);
-  devices=await read('devices');renderTable();
+  devices=await read('devices');
+  deviceBirths=await read('device-births');renderTable();
  }catch(e){alert('Не удалось сохранить: '+e.message)}
 }
 function sourceDescription(s){
@@ -310,6 +321,9 @@ async function load(){
   body.innerHTML='<h2>События</h2><p class="description">Информационные изменения противоречивых IPv4-наблюдений. Запись не доказывает реальный конфликт адресов. Новые автоматизации и уведомления не создаются.</p>'+(events.length?'<div class="grid-scroll"><table><thead><tr><th>Время</th><th>Событие</th><th>Адрес и источники</th></tr></thead><tbody>'+events.map(e=>{
    let d={};try{d=JSON.parse(e.data_json||'{}')}catch(_){}
    const known=d.previous||d;
+   if(e.event_type==='device_discovered'){
+    return '<tr><td>'+esc(noteTime(e.occurred_at))+'</td><td>Новое устройство</td><td>'+esc(d.name||d.device_id||'—')+' · '+esc(d.ipv4||'—')+'<small> '+esc(d.mac||'')+'</small></td></tr>';
+   }
    const label=e.event_type==='ipv4_disagreement_started'?'Расхождение обнаружено':e.event_type==='ipv4_disagreement_changed'?'Источники изменились':e.event_type==='ipv4_disagreement_resolved'?'Расхождение разрешено':e.event_type;
    const parts=(known.claims||[]).map(c=>c.source+' / '+c.mac).join('; ');
    const kind=known.classification==='source_disagreement'?'Различие источников':'Конфликт подтверждений';
