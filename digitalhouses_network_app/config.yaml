@@ -1,7 +1,7 @@
 name: DigitalHouses Network App
-version: 0.1.10
+version: 0.1.11
 slug: digitalhouses_network_app
-description: Verified Windows computer names via WS-Discovery Metadata Get.
+description: Verified computer names from Windows and Linux WS-Discovery metadata.
 url: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_network_app
 arch:
   - amd64
