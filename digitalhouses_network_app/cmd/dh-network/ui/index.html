@@ -47,6 +47,35 @@ table{width:100%;border-collapse:collapse;margin:12px 0}
 .devices-table .col-resizer:focus-visible{outline:2px solid #82efc7;outline-offset:-2px}
 body.table-resizing,body.table-resizing *{cursor:col-resize!important;user-select:none!important}
 .devices-table td:not(.num-cell){position:relative;padding-right:29px;overflow:hidden;text-overflow:ellipsis}
+.devices-table .presence-controls{position:absolute;right:4px;top:50%;transform:translateY(-50%);display:flex;align-items:center;gap:1px;z-index:2}
+.devices-table .presence-trigger{height:22px;width:22px;display:grid;place-items:center;padding:1px;border:0;border-radius:4px;background:transparent;color:#a9c1d1;opacity:0}
+.devices-table td:hover .presence-trigger,.devices-table td:focus-within .presence-trigger{opacity:1}
+.devices-table .presence-trigger:hover,.devices-table .presence-trigger:focus-visible{background:#294057;color:#fff}
+.devices-table .presence-eye{color:#82efc7;display:inline-grid;place-items:center;font-size:16px;line-height:1;cursor:help}
+@media(hover:none){.devices-table .presence-trigger{opacity:1}}
+.presence-menu{position:fixed;z-index:35;width:min(320px,calc(100vw - 24px));max-height:calc(100vh - 24px);overflow:auto;background:#192b41;border:1px solid #526d86;border-radius:11px;padding:14px;box-shadow:0 12px 34px #000b}
+.presence-menu[hidden]{display:none}
+.presence-menu .menu-heading{font-weight:700;margin:0 0 10px;overflow-wrap:anywhere}
+.presence-menu label{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 0}
+.presence-menu input{width:19px;height:19px;accent-color:#16a899;flex:0 0 auto}
+.presence-menu .menu-info{border-top:1px solid #41536a;margin-top:8px;padding-top:8px;font-size:12px;line-height:1.5;color:#b9c5d3}
+.presence-menu button{padding:6px 10px}
+.settings-panel{max-width:770px;background:#192b41;border:1px solid #3e5369;padding:22px;border-radius:12px}
+.settings-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}
+.settings-grid label{display:flex;flex-direction:column;gap:7px;color:#ccd8e4;font-size:13px}
+.settings-grid input{width:100%;max-width:none}
+.settings-panel .toolbar{margin:22px 0 0}
+.help-section{max-width:830px;line-height:1.65}
+.help-section details{border:1px solid #41536a;background:#192b41;border-radius:9px;margin:10px 0;padding:14px}
+.help-section summary{cursor:pointer;font-weight:650}
+.help-section details p{margin:12px 0 0}
+.event-log td{white-space:normal;overflow-wrap:anywhere}
+.event-log code{overflow-wrap:anywhere}
+.small-copy{border:0;background:transparent;color:#9dcafa;padding:2px 5px;border-radius:4px}
+.event-log details{max-width:560px}
+.event-log pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;max-height:280px;overflow:auto}
+.event-tools{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.event-tools input,.event-tools select{max-width:250px;min-width:170px}
 .devices-table .copy-action{position:absolute;right:5px;top:50%;transform:translateY(-50%);height:21px;width:21px;display:grid;place-items:center;padding:2px;border:1px solid transparent;border-radius:4px;background:#23394e;color:#a9c1d1;opacity:0;z-index:1;transition:opacity .1s ease}
 .devices-table td:hover .copy-action,.devices-table td:focus-within .copy-action,.devices-table .copy-action:focus-visible{opacity:1}
 .devices-table .copy-action:hover,.devices-table .copy-action:focus-visible{color:#82efc7;border-color:#466b78;background:#2b465d;filter:none}
@@ -87,8 +116,8 @@ input{font:inherit;padding:10px;color:#f0f4f9;background:#203147;border:1px soli
 </style></head>
 <body>
 <header class="app-header">
-  <div class="brand"><h1>DigitalHouses Network App</h1><small>Устройства и источники сети · v0.1.20</small></div>
-  <nav aria-label="Разделы приложения"><button class="active" data-page="devices">Устройства</button><button data-page="sources">Источники</button><button data-page="events">События</button><button data-page="monitoring">Мониторинг</button></nav>
+  <div class="brand"><h1>DigitalHouses Network App</h1><small>Устройства и наблюдение за сетью · v0.1.21</small></div>
+  <nav aria-label="Разделы приложения"><button class="active" data-page="devices">Устройства</button><button data-page="sources">Источники</button><button data-page="events">Журнал событий</button><button data-page="settings">Параметры</button><button data-page="help">Помощь</button></nav>
   <details id="overview" class="overview">
     <summary title="Раскрыть или скрыть показатели сети и диагностику"><span>Показатели</span><span id="health" class="tag">Подключение…</span><span class="overview-arrow" aria-hidden="true">⌄</span></summary>
     <div class="overview-panel" role="region" aria-label="Показатели и диагностика">
@@ -108,12 +137,13 @@ input{font:inherit;padding:10px;color:#f0f4f9;background:#203147;border:1px soli
 <div id="ip-conflict-summary" class="notice" style="display:none"></div>
 <div id="devices-tools" class="devices-tools" hidden><h2 id="devices-count">Устройства (—)</h2><div id="filterarea"></div></div>
 <section id="body">Загрузка…</section>
-<div id="copy-feedback" class="copy-feedback" role="status" aria-live="polite" hidden></div>
+<div id="copy-feedback" class="copy-feedback" role="status" aria-live="polite" hidden></div><div id="presence-menu" class="presence-menu" role="dialog" aria-label="Параметры Presence" hidden></div>
 </main>
 <script>
 const body=document.getElementById('body'),health=document.getElementById('health'),filterArea=document.getElementById('filterarea');
 const devicesTools=document.getElementById('devices-tools'),devicesCount=document.getElementById('devices-count');
 let page='devices',devices=[],origins=[],mdnsServices=[],ssdpServices=[],wsdEndpoints=[],filter='',deviceBirths={};
+let presenceSubscriptions=[],presenceSelection=null,globalSettings=null;
 let sortKey='ip',sortDirection='asc';
 const deviceColumns=[['name','Имя'],['ip','IP'],['mac','MAC'],['presence','Наблюдение'],['sources','Обнаружен через'],['last_seen','Последний Online'],['note','Note']];
 const widthDefaults={index:42,name:230,ip:116,mac:148,presence:110,sources:272,last_seen:157,note:135};
