@@ -115,11 +115,13 @@ func fetchRouterTrackers(ctx context.Context, client *http.Client, token, url st
 }
 
 func (s *Service) pollRouterSource() {
+    generation:=s.currentScanGeneration()
     token := os.Getenv("SUPERVISOR_TOKEN")
     ctx,cancel := context.WithTimeout(context.Background(),15*time.Second)
     defer cancel()
     trackers,err := fetchRouterTrackers(ctx,&http.Client{Timeout:15*time.Second},token,haStatesURL)
     now := time.Now().UTC().Format(time.RFC3339)
+    s.withCurrentGeneration(generation,func(){
     if err == nil {
         err = s.db.importRouterTrackers(trackers,now)
     }
@@ -131,6 +133,7 @@ func (s *Service) pollRouterSource() {
         return
     }
     log.Printf("HA router tracker import complete: %d tracker entities",len(trackers))
+    })
 }
 
 func (s *Service) runRouterPolling(interval time.Duration) {
