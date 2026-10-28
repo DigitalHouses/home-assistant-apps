@@ -276,6 +276,15 @@ class MonitorRunner:
         self.next_due: dict[tuple[str, str], float] = {}
         self.force_publish = True
         self.last_connect = False
+        self.published: dict[str, str] = {}
+
+    def retained(self, mqtt_events: Any, topic: str, content: str) -> bool:
+        if self.published.get(topic) == content:
+            return True
+        if not mqtt_events.publish_checked(topic, content, True):
+            return False
+        self.published[topic] = content
+        return True
 
     def reload(self) -> None:
         try:
@@ -381,16 +390,17 @@ class MonitorRunner:
             return
         if not self.last_connect:
             self.force_publish = True
+            self.published.clear()
         self.last_connect = True
         tombstones = conn.execute("SELECT method,watch_id FROM monitor_tombstones").fetchall()
         for gone in tombstones:
             method, wid = gone["method"],gone["watch_id"]
             template = Watch(method,wid,"")
-            if not mqtt_events.publish_checked(template.discovery_topic(),"",True):
+            if not self.retained(mqtt_events,template.discovery_topic(),""):
                 return
-            if not mqtt_events.publish_checked(template.state_topic(),"",True):
+            if not self.retained(mqtt_events,template.state_topic(),""):
                 return
-            if not mqtt_events.publish_checked(template.attrs_topic(),"",True):
+            if not self.retained(mqtt_events,template.attrs_topic(),""):
                 return
             with conn:
                 conn.execute("DELETE FROM monitor_tombstones WHERE method=? AND watch_id=?",(method,wid))
@@ -398,7 +408,7 @@ class MonitorRunner:
             for watch in self.watches:
                 config = json.dumps(discovery_payload(watch,mqtt_events.version),
                                     ensure_ascii=False,separators=(",",":"))
-                if not mqtt_events.publish_checked(watch.discovery_topic(),config,True):
+                if not self.retained(mqtt_events,watch.discovery_topic(),config):
                     return
             self.force_publish = False
         # Retained authoritative states precede transient events.
@@ -410,9 +420,9 @@ class MonitorRunner:
                      "reason": row["reason"], "last_check": row["last_check"]}
             if watch.label is not None:
                 attrs["label"] = watch.label
-            if not mqtt_events.publish_checked(watch.state_topic(),row["state"],True):
+            if not self.retained(mqtt_events,watch.state_topic(),row["state"]):
                 return
-            if not mqtt_events.publish_checked(watch.attrs_topic(),json.dumps(attrs,ensure_ascii=False),True):
+            if not self.retained(mqtt_events,watch.attrs_topic(),json.dumps(attrs,ensure_ascii=False)):
                 return
         pending = conn.execute("""SELECT event_id,payload_json FROM monitor_outbox
                                   ORDER BY occurred_at,event_id LIMIT 32""").fetchall()
