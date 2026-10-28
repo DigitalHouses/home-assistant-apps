@@ -168,9 +168,9 @@ test('compact single header keeps navigation visible and all cards collapsed by 
  assert.match(settingSection,/id="export-status"/);
  assert.match(settingSection,/id="reset" class="reset-danger"/);
  assert.match(settingSection,/id="reset-status" role="status"/);
- assert.match(settingSection,/Online \\(ARP \\/ HA, не ping\\)/);
+ assert.match(settingSection,/Online \(ARP \/ HA, не ping\)/);
  assert.match(settingSection,/Online не означает ответ на ICMP ping/);
- assert.match(html,/\\.settings-overview\\[hidden\\]\\{display:none\\}/);
+ assert.match(html,/\.settings-overview\[hidden\]\{display:none\}/);
 });
 test('metrics, download and destructive Reset are fully in Settings, never top dropdown', () => {
  const header=html.slice(html.indexOf('<header class="app-header">'),html.indexOf('</header>'));
@@ -181,9 +181,9 @@ test('metrics, download and destructive Reset are fully in Settings, never top d
  assert.match(settings,/id="export-preview"/);
  assert.match(settings,/id="export-copy"/);
  assert.doesNotMatch(html,/Пришли его в чат для анализа/);
- assert.match(html,/href="api\\/diagnostics\\/download"/);
- assert.match(script,/download\\s+link|Запрошен JSON-файл у сервера/);
- assert.doesNotMatch(script,/URL\\.createObjectURL\\(/);
+ assert.match(html,/href="api\/diagnostics\/download"/);
+ assert.match(script,/download\s+link|Запрошен JSON-файл у сервера/);
+ assert.doesNotMatch(script,/URL\.createObjectURL\(/);
  assert.match(script,/ICMP ping не выполняется/);
  assert.equal(vm.runInContext('deviceColumns[3][1]',ctx),'Наблюдение');
 });
