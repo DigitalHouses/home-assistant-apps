@@ -138,8 +138,5 @@ func (s *Service) pollRouterSource() {
 }
 
 func (s *Service) runRouterPolling(interval time.Duration) {
-    s.pollRouterSource()
-    ticker := time.NewTicker(interval)
-    defer ticker.Stop()
-    for range ticker.C { s.pollRouterSource() }
+    for {s.pollRouterSource();time.Sleep(s.intervalFor("ha",interval))}
 }
