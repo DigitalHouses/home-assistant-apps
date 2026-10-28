@@ -73,7 +73,7 @@ func (db *DB) presenceSubscriptions()([]PresenceSubscription,error){
 func (db *DB) updatePresence(kind,target string,enabled,notifications bool)(bool,error){
  db.mu.Lock()
  defer db.mu.Unlock()
- now:=time.Now().UTC().Format(time.RFC3339)
+ now:=time.Now().UTC().Format(time.RFC3339Nano)
  on,alert:="0","0"
  if enabled {on="1";if notifications {alert="1"}}
  // Preserve last-known state for disabled entries; fresh starts explicitly reset
