@@ -33,7 +33,7 @@ h1{font-size:20px;margin:0 0 3px}h2{font-size:18px;margin:18px 0}
 .devices-tools #search{width:100%;min-width:0}
 .devices-tools+.grid-scroll{margin-top:0}
 small,.muted{color:#aebed1} main{padding:14px 22px 22px;max-width:1250px;margin:auto}
-nav{display:flex;gap:10px;margin:20px 0;flex-wrap:wrap}.toolbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:8px 0 20px}.export{background:#176761;border-color:#3aa99d}.source-tag{display:inline-block;margin:3px 4px 3px 0}button{cursor:pointer;padding:9px 13px;background:#284059;color:#f1f7fb;border:1px solid #536e83;border-radius:8px}
+nav{display:flex;gap:10px;margin:20px 0;flex-wrap:wrap}.toolbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:8px 0 20px}.export{background:#176761;border-color:#3aa99d}a.export{display:inline-block;color:#f1f7fb;text-decoration:none;padding:9px 13px;border:1px solid #3aa99d;border-radius:8px;cursor:pointer}a.export:hover{filter:brightness(1.16)}#diagnostic-json-preview[hidden]{display:none}#diagnostic-json-preview textarea{width:100%;max-width:100%;height:300px;box-sizing:border-box;font:12px/1.5 monospace;resize:vertical;background:#0d1e31;color:#eef7fb;border:1px solid #536e83;border-radius:7px;padding:10px}.source-tag{display:inline-block;margin:3px 4px 3px 0}button{cursor:pointer;padding:9px 13px;background:#284059;color:#f1f7fb;border:1px solid #536e83;border-radius:8px}
 button.active{background:#137b78;border-color:#26b6a5}button:hover{filter:brightness(1.16)}
 .notice{padding:12px 16px;border:1px solid #76673b;background:#34301f;border-radius:9px}
 .stats{display:flex;gap:12px;flex-wrap:wrap;margin:16px 0}.stat{background:#223349;border-radius:8px;padding:12px 18px;min-width:155px}
@@ -117,7 +117,7 @@ input{font:inherit;padding:10px;color:#f0f4f9;background:#203147;border:1px soli
 </style></head>
 <body>
 <header class="app-header">
-  <div class="brand"><h1>DigitalHouses Network App</h1><small>Устройства и наблюдение за сетью · v0.1.22</small></div>
+  <div class="brand"><h1>DigitalHouses Network App</h1><small>Устройства и наблюдение за сетью · v0.1.23</small></div>
   <nav aria-label="Разделы приложения"><button class="active" data-page="devices">Устройства</button><button data-page="sources">Источники</button><button data-page="events">Журнал событий</button><button data-page="settings">Параметры</button><button data-page="help">Помощь</button></nav>
   <details id="overview" class="overview">
     <summary title="Раскрыть или скрыть показатели сети и диагностику"><span>Показатели</span><span id="health" class="tag">Подключение…</span><span class="overview-arrow" aria-hidden="true">⌄</span></summary>
@@ -125,7 +125,8 @@ input{font:inherit;padding:10px;color:#f0f4f9;background:#203147;border:1px soli
       <p class="description">Сводка источников, диагностика и экспорт. Статус Online не означает ответ на ICMP ping.</p>
       <div class="stats"><div class="stat"><strong id="known">—</strong><span>Устройств в реестре</span></div><div class="stat"><strong id="online">—</strong><span>Online (ARP / HA, не ping)</span></div><div class="stat"><strong id="interval">—</strong><span>HA-опрос, секунд</span></div><div class="stat"><strong id="arp-interval">—</strong><span>ARP-опрос, секунд</span></div><div class="stat"><strong id="last-arp">—</strong><span>Последний ARP-скан</span></div><div class="stat"><strong id="known-arp">—</strong><span>Ранее найдено ARP</span></div><div class="stat"><strong id="ip-conflicts">—</strong><span>Расхождений IPv4 (включая источники)</span></div><div class="stat"><strong id="mdns-hosts">—</strong><span>Хостов с Bonjour</span></div><div class="stat"><strong id="mdns-services">—</strong><span>Bonjour сервисов</span></div><div class="stat"><strong id="ssdp-hosts">—</strong><span>Хостов с SSDP</span></div><div class="stat"><strong id="ssdp-services">—</strong><span>SSDP сервисов</span></div></div>
       
-      <div class="toolbar"><button id="export" class="export" type="button">Сохранить диагностику (.json)</button><small id="export-status">Файл содержит IP, MAC, имена и заметки. Он сохраняется только на твоём компьютере.</small></div>
+      <div class="toolbar"><a id="export" class="export" href="api/diagnostics/download" target="_blank" rel="noopener noreferrer">Сохранить диагностику (.json)</a><button id="export-preview" type="button">Показать JSON</button><small id="export-status" role="status" aria-live="polite">Расширенный отчёт: IP, MAC, Notes, Presence, очередь MQTT и последние события. Пароли и токены не экспортируются. Проверь данные перед отправкой.</small></div>
+      <div id="diagnostic-json-preview" hidden><p class="description">Если загрузка файла заблокирована браузером или Ingress, скопируй JSON ниже либо выдели текст вручную (Ctrl+A / Ctrl+C).</p><div class="toolbar"><button id="export-copy" type="button">Скопировать весь JSON</button><small id="export-copy-status" role="status" aria-live="polite"></small></div><textarea id="diagnostic-json-text" readonly spellcheck="false" aria-label="Полный диагностический JSON для копирования"></textarea></div>
       <div class="reset-area">
         <button id="reset" class="reset-danger" type="button">Reset — очистить инвентарь…</button>
         <small>Безвозвратно удаляет устройства, UUID, Notes, источники и историю. Настройки и схема БД сохраняются. После подтверждения обнаружение начинается с нуля.</small>
@@ -249,7 +250,8 @@ function enableCellCopy(){
  body.querySelectorAll('button[data-copy]').forEach(button=>{
   button.addEventListener('click',event=>{
    event.stopPropagation();
-   copyText(button.dataset.copy,button.getAttribute('title').replace(/^Скопировать /,''));
+   const label=button.dataset.copyLabel||(button.getAttribute('title')||button.getAttribute('aria-label')||'значение').replace(/^Скопировать\s+/,'');
+   copyText(button.dataset.copy,label);
   });
  });
 }
@@ -621,7 +623,7 @@ function showEventLog(){
    return '<tr><td>'+esc(noteTime(item.occurred_at))+'</td><td><strong>'+esc(eventTitle(item.event_type))+'</strong><small style="display:block">'+esc(target)+'</small>'+
     '<code>'+esc(item.event_type)+'</code><button class="small-copy" data-copy="'+esc(item.event_type)+'" type="button" title="Скопировать event_type" aria-label="Скопировать event_type">⧉</button></td>'+
     '<td><span class="tag '+(item.status==='broker_acked'?'ok':'unknown')+'">'+esc(statuses[item.status]||item.status)+'</span><small style="display:block">Попыток: '+esc(item.attempts)+'</small></td>'+
-    '<td><details><summary>Детали</summary><small>event_id: '+esc(item.event_id)+'</small><p><button type="button" class="small-copy" data-copy="'+esc(code)+'">Скопировать триггер HA</button> <button type="button" class="small-copy" data-copy="'+esc(JSON.stringify(d,null,2))+'">Скопировать JSON</button></p><pre>'+esc(JSON.stringify(d,null,2))+'</pre></details></td></tr>';
+    '<td><details><summary>Детали</summary><small>event_id: '+esc(item.event_id)+'</small><p><button type="button" class="small-copy" data-copy="'+esc(code)+'" data-copy-label="триггер HA" title="Скопировать триггер HA">Скопировать триггер HA</button> <button type="button" class="small-copy" data-copy="'+esc(JSON.stringify(d,null,2))+'" data-copy-label="JSON события" title="Скопировать JSON события">Скопировать JSON</button></p><pre>'+esc(JSON.stringify(d,null,2))+'</pre></details></td></tr>';
   }).join('')+'</tbody></table></div>':'<p>Подходящих событий пока нет.</p>');
  body.querySelector('#log-search').addEventListener('input',e=>{
   eventLogFilter=e.target.value;
@@ -682,17 +684,11 @@ async function load(){
   }
  }catch(e){health.textContent='API unavailable';body.textContent='Ошибка API: '+e.message}
 }
-async function exportDiagnostic() {
- const button=document.getElementById('export');
- const message=document.getElementById('export-status');
- if(button.disabled)return;
- button.disabled=true;message.textContent='Формирование файла…';
- try{
-  const selectedTab=page;
-  const selectedFilter=filter;
-  const shown=selectedTab==='devices'?visibleDeviceIDs():[];
-  const report=await read('diagnostics');
-  report.browser_view={
+async function diagnosticWithBrowserView(){
+ const selectedTab=page,selectedFilter=filter;
+ const shown=selectedTab==='devices'?visibleDeviceIDs():[];
+ const report=await read('diagnostics');
+ report.browser_view={
    active_tab:selectedTab,
    search_filter:selectedTab==='devices'?selectedFilter:null,
    visible_device_ids:shown,
@@ -704,28 +700,49 @@ async function exportDiagnostic() {
     devices:document.getElementById('known').textContent,
     online:document.getElementById('online').textContent,
     ha_poll_seconds:document.getElementById('interval').textContent,
+    arp_poll_seconds:document.getElementById('arp-interval').textContent,
     mdns_matched:document.getElementById('mdns-hosts').textContent,
     mdns_services:document.getElementById('mdns-services').textContent,
     ssdp_matched:document.getElementById('ssdp-hosts').textContent,
-    ssdp_services:document.getElementById('ssdp-services').textContent,
-    arp_poll_seconds:document.getElementById('arp-interval').textContent
+    ssdp_services:document.getElementById('ssdp-services').textContent
    },
    browser_exported_at:new Date().toISOString(),
    browser_timezone:Intl.DateTimeFormat().resolvedOptions().timeZone,
-   detail:'Complete server inventory and sources, plus the exact selected tab, search filter, column sort/direction and displayed device IDs in visual order; not a pixel screenshot.'
-  };
-  const d=new Date();
-  const stamp=[d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('')+'-'+[d.getHours(),d.getMinutes(),d.getSeconds()].map(x=>String(x).padStart(2,'0')).join('');
-  const file='dh-network-diagnostic-'+stamp+'.json';
-  const blob=new Blob([JSON.stringify(report,null,2)],{type:'application/json;charset=utf-8'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');
-  a.href=url;a.download=file;a.style.display='none';
-  document.body.appendChild(a);a.click();a.remove();
-  setTimeout(()=>URL.revokeObjectURL(url),1500);
-  message.textContent='Файл '+file+' сформирован.';
- }catch(e){message.textContent='Не удалось создать файл: '+e.message}
+   detail:'Live Ingress view plus extended server diagnostics. The server-downloaded attachment contains the full server report; browser view metadata is available in this copyable preview.'
+ };
+ return report;
+}
+// Native user-initiated HTML navigation, never a script-created blob: URL.
+// The browser may restrict downloads in the HA iframe; always offer JSON preview.
+function exportDiagnostic(){
+ document.getElementById('export-status').textContent=
+  'Запрошен JSON-файл у сервера. Если браузер или Ingress запретил загрузку, нажми «Показать JSON» и скопируй его вручную.';
+}
+async function showDiagnosticPreview(){
+ const button=document.getElementById('export-preview');
+ const container=document.getElementById('diagnostic-json-preview');
+ const status=document.getElementById('export-copy-status');
+ if(!container.hidden){container.hidden=true;button.textContent='Показать JSON';return}
+ button.disabled=true;
+ status.textContent='Чтение диагностических данных…';
+ try{
+  const report=await diagnosticWithBrowserView();
+  const text=JSON.stringify(report,null,2);
+  document.getElementById('diagnostic-json-text').value=text;
+  container.hidden=false;button.textContent='Скрыть JSON';
+  status.textContent='JSON готов ('+text.length+' символов). Можно выделить весь текст вручную.';
+ }catch(e){status.textContent='Не удалось получить JSON: '+e.message;container.hidden=false}
  finally{button.disabled=false}
+}
+async function copyDiagnosticPreview(){
+ const field=document.getElementById('diagnostic-json-text');
+ const label=document.getElementById('export-copy-status');
+ if(!field.value){label.textContent='Сначала нажми «Показать JSON».';return}
+ const ok=await copyText(field.value,'диагностика JSON');
+ if(!ok){
+  field.focus();field.select();
+  label.textContent='Копирование запрещено браузером. Текст выделен — нажми Ctrl+C.';
+ }else label.textContent='Диагностический JSON скопирован.';
 }
 async function resetInventoryFromUI(){
  const button=document.getElementById('reset'),message=document.getElementById('reset-status');
