@@ -203,9 +203,9 @@ test('search is immediately to the right of device count, in the same flex row',
  assert.equal(view.textContent,'Устройства (4)');
 });
 
-test('destructive inventory reset is hidden behind the metrics dropdown and requires typed confirmation', () => {
- const header=html.slice(html.indexOf('<header class="app-header">'),html.indexOf('</header>'));
- const overview=header.slice(header.indexOf('<details id="overview"'),header.indexOf('</details>'));
+test('destructive inventory reset is within Settings and requires typed confirmation', () => {
+ const main=html.slice(html.indexOf('<main>'),html.indexOf('</main>'));
+ const overview=main.slice(main.indexOf('<section id="settings-overview"'),main.indexOf('</section>',main.indexOf('<section id="settings-overview"')));
  assert.match(overview,/id="reset" class="reset-danger"/);
  assert.match(overview,/id="reset-status" role="status"/);
  assert.match(overview,/UUID, Notes/);
