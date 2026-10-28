@@ -51,6 +51,10 @@ body.table-resizing,body.table-resizing *{cursor:col-resize!important;user-selec
 .presence-menu .menu-heading{font-weight:700;margin:0 0 10px;overflow-wrap:anywhere}
 .presence-menu label{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 0}
 .presence-menu input{width:19px;height:19px;accent-color:#16a899;flex:0 0 auto}
+.presence-menu .menu-name-label{display:block;padding:9px 0 5px}
+.presence-menu #menu-name{display:block;width:100%;max-width:none;padding:9px 10px;border:1px solid #526d86;border-radius:7px;background:#0c1c2e;color:#eef6fb}
+.presence-menu #menu-save{background:#176761;border-color:#3aa99d}
+.presence-menu .toolbar{margin:12px 0 4px}
 .presence-menu .menu-info{border-top:1px solid #41536a;margin-top:8px;padding-top:8px;font-size:12px;line-height:1.5;color:#b9c5d3}
 .presence-menu button{padding:6px 10px}
 .settings-panel{max-width:770px;background:#192b41;border:1px solid #3e5369;padding:22px;border-radius:12px}
@@ -116,7 +120,7 @@ input{font:inherit;padding:10px;color:#f0f4f9;background:#203147;border:1px soli
 </style></head>
 <body>
 <header class="app-header">
-  <div class="brand"><h1>DigitalHouses Network App</h1><small>Устройства и наблюдение за сетью · v0.1.24</small></div>
+  <div class="brand"><h1>DigitalHouses Network App</h1><small>Устройства и наблюдение за сетью · v0.1.25</small></div>
   <nav aria-label="Разделы приложения"><button class="active" data-page="devices">Устройства</button><button data-page="sources">Источники</button><button data-page="events">Журнал событий</button><button data-page="settings">Параметры</button><button data-page="help">Помощь</button></nav>
 
 </header>
@@ -436,7 +440,7 @@ function readablePresenceState(w){
  return 'Состояние неизвестно';
 }
 function presenceTooltip(w){
- return 'Presence включён\nСостояние: '+readablePresenceState(w)+
+ return (w.label?'Название: '+w.label+'\n':'')+'Presence включён\nСостояние: '+readablePresenceState(w)+
   '\nПоследняя проверка: '+exactTime(w.last_check)+
   '\nПоследнее обнаружение: '+exactTime(w.last_positive)+
   '\nПоследняя смена: '+exactTime(w.last_changed);
@@ -461,23 +465,34 @@ function openPresenceMenu(button,kind,target){
  el.innerHTML='<div class="menu-heading">'+(kind==='ip'?'IP Presence':'MAC Presence')+' · '+esc(target)+'</div>'+
   '<button type="button" id="menu-copy">Скопировать '+kind.toUpperCase()+'</button>'+
   '<label for="menu-presence">Отслеживать адрес<input id="menu-presence" type="checkbox"'+check+'></label>'+
-  '<label for="menu-notify">Уведомления DH<input id="menu-notify" type="checkbox"'+notify+(watch?'':' disabled')+'></label>'+
-  '<small>Для доставки уведомлений необходим локальный HA package; события работают независимо.</small>'+
+  '<label for="menu-notify">Уведомления DH<input id="menu-notify" type="checkbox"'+notify+'></label>'+
+  '<label class="menu-name-label" for="menu-name">Название для уведомлений</label>'+
+  '<input id="menu-name" type="text" maxlength="80" placeholder="Например, Мой ноутбук" autocomplete="off" value="'+esc(watch?.label||'')+'">'+
+  '<small>Необязательно. Название привязано к этому IP/MAC Presence и попадёт в события HA. Для локальных уведомлений нужен HA package.</small>'+
+  '<div class="toolbar"><button id="menu-save" type="button">Сохранить</button></div>'+
   '<div class="menu-info" id="presence-summary">'+esc(summary).replace(/\n/g,'<br>')+'</div>';
  el.hidden=false;
  const r=button.getBoundingClientRect();
  el.style.left=Math.max(8,Math.min(r.right-300,window.innerWidth-328))+'px';
  el.style.top=Math.max(8,Math.min(r.bottom+7,window.innerHeight-el.offsetHeight-8))+'px';
  el.querySelector('#menu-copy').addEventListener('click',()=>copyText(target,kind.toUpperCase()));
- el.querySelector('#menu-presence').addEventListener('change',e=>savePresence(kind,target,e.target.checked,!!watch&&!!watch.notifications));
- el.querySelector('#menu-notify').addEventListener('change',e=>savePresence(kind,target,true,e.target.checked));
+ el.querySelector('#menu-save').addEventListener('click',()=>{
+  const enabled=el.querySelector('#menu-presence').checked;
+  const notifications=el.querySelector('#menu-notify').checked;
+  const name=el.querySelector('#menu-name').value.trim();
+  // Keep a previously saved name when turning a disabled watch back on.
+  // Explicitly permit clearing a name on an already active watch.
+  savePresence(kind,target,enabled,notifications,name,!!watch||!!name);
+ });
 }
-async function savePresence(kind,target,enabled,notifications){
+async function savePresence(kind,target,enabled,notifications,label='',includeLabel=false){
  const menu=document.getElementById('presence-menu');
- menu.querySelectorAll('input').forEach(x=>x.disabled=true);
+ menu.querySelectorAll('input,button#menu-save').forEach(x=>x.disabled=true);
  try{
+  const payload={kind,target,enabled,notifications:enabled&&notifications};
+  if(includeLabel)payload.label=label;
   const response=await fetch('api/presence',{method:'PUT',headers:{'Content-Type':'application/json','X-DH-UI':'1'},
-    body:JSON.stringify({kind,target,enabled,notifications:enabled&&notifications})});
+    body:JSON.stringify(payload)});
   if(!response.ok)throw Error((await response.text()).trim());
   const outcome=await response.json();
   presenceSubscriptions=await read('presence');
@@ -485,7 +500,7 @@ async function savePresence(kind,target,enabled,notifications){
   showCopyFeedback(!enabled?'Presence выключен':outcome.scan_requested?'Presence включён · внеочередное сканирование запущено':'Настройки Presence сохранены');
  }catch(err){
   showCopyFeedback('Не сохранено: '+err.message);
-  menu.querySelectorAll('input').forEach(x=>x.disabled=false);
+  menu.querySelectorAll('input,button#menu-save').forEach(x=>x.disabled=false);
  }
 }
 // Close the address popover on an outside click or Escape, matching native menus.
@@ -631,8 +646,9 @@ function showEventLog(){
   visible.map(item=>{
    let d={};try{d=JSON.parse(item.payload_json||'{}')}catch(_){}
    const target=d.ip||d.mac||d.ipv4||d.device_id||'—';
+   const friendly=d.label?d.label+' · '+target:target;
    const code=eventTemplate(item);
-   return '<tr><td>'+esc(noteTime(item.occurred_at))+'</td><td><strong>'+esc(eventTitle(item.event_type))+'</strong><small style="display:block">'+esc(target)+'</small>'+
+   return '<tr><td>'+esc(noteTime(item.occurred_at))+'</td><td><strong>'+esc(eventTitle(item.event_type))+'</strong><small style="display:block">'+esc(friendly)+'</small>'+
     '<code>'+esc(item.event_type)+'</code><button class="small-copy" data-copy="'+esc(item.event_type)+'" type="button" title="Скопировать event_type" aria-label="Скопировать event_type">⧉</button></td>'+
     '<td><span class="tag '+(item.status==='broker_acked'?'ok':'unknown')+'">'+esc(statuses[item.status]||item.status)+'</span><small style="display:block">Попыток: '+esc(item.attempts)+'</small></td>'+
     '<td><details><summary>Детали</summary><small>event_id: '+esc(item.event_id)+'</small><p><button type="button" class="small-copy" data-copy="'+esc(code)+'" data-copy-label="триггер HA" title="Скопировать триггер HA">Скопировать триггер HA</button> <button type="button" class="small-copy" data-copy="'+esc(JSON.stringify(d,null,2))+'" data-copy-label="JSON события" title="Скопировать JSON события">Скопировать JSON</button></p><pre>'+esc(JSON.stringify(d,null,2))+'</pre></details></td></tr>';
