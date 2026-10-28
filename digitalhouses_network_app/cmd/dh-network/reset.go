@@ -48,6 +48,11 @@ func (db *DB) resetInventoryRows() (count int,err error) {
  defer func(){if !committed {_=db.exec("ROLLBACK")}}()
  _,err=db.prepared("SELECT COUNT(*) FROM devices",nil,func(s *C.sqlite3_stmt){count=int(C.sqlite3_column_int64(s,0))})
  if err!=nil{return 0,err}
+ // Runtime subscription state and MQTT delivery history belong to the
+ // inventory reset, but are not legacy seeded inventory fixtures.
+ for _,table:=range []string{"presence_outbox","presence_states","event_delivery_log","monitor_outbox"} {
+  if err=db.run("DELETE FROM "+table);err!=nil{return 0,fmt.Errorf("reset table %s: %w",table,err)}
+ }
  for _,table:=range inventoryTables {
   // inventoryTables is a static, audited list, never client-controlled SQL.
   if err=db.run("DELETE FROM "+table);err!=nil{return 0,fmt.Errorf("reset table %s: %w",table,err)}

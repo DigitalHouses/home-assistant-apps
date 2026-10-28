@@ -179,6 +179,55 @@ Version 0.1.0 proved HAOS install, Ingress, Web UI, data persistence, version an
 When accepted, move from experimental Supervisor source build to the standard versioned immutable GHCR artifact. The install/update UI remains the **same Home Assistant App Store**, never a manual server-side copy.
 
 
+## Ingress Presence, settings, event journal and Help (0.1.21)
+
+**Top navigation:** Устройства, Источники, Журнал событий, Параметры, Помощь.
+The old YAML Monitoring tab is hidden; existing monitored_devices.yaml and its
+watch engine are preserved for compatibility, without automatic migration.
+
+**IP/MAC Presence:** Open the three-dot menu beside the exact IP or MAC in
+the Devices table. Copy the address, subscribe to Presence, or opt into local
+DigitalHouses notifications. A green eye means the subscription is active,
+NOT that the endpoint is online. The tooltip includes last check, last
+positive observation, last confirmed change, current state, and reason.
+IP watches a literal IPv4 address; MAC follows the physical address across
+DHCP changes. No per-target scan intervals exist.
+
+**Shared discovery:** New Presence subscriptions use completed global ARP
+discovery snapshots, never a new independent per-device ICMP or ARP scanner.
+Every successful scan contributes one sample. Defaults: two positives to
+confirm presence, three successful misses to confirm absence. Stale,
+unavailable or ambiguous sources cannot confirm disappearance. Initial
+subscription baselines are quiet, and events are generated only on later
+confirmed changes. Only on-link IPv4 addresses and locally observable MACs
+are supported by this engine; remote targets need another observation source.
+
+**Global settings:** Параметры persists the five discovery intervals and
+Presence confirmation thresholds in the app SQLite database. Existing HAOS
+App options are used as initial values on first startup; later changes take
+effect at the next scan cycle. Settings survive app restarts.
+
+**Event journal:** Dedicated SQLite event_delivery_log contains outbound
+machine event_type, event_id, target, original JSON, observed timestamp,
+delivery attempts, broker ACK timestamp and status. A broker_acked entry
+means MQTT QoS 1 PUBACK, NOT confirmed Home Assistant automation execution.
+The journal excludes internal IPv4 disagreement diagnostics. Copy exact
+event_type, JSON, and a valid Home Assistant event.received YAML trigger
+targeting event.dh_network_app_network from the event details.
+
+**Optional HA package:** examples/ha_packages/dh_network_notifications.yaml
+can be installed on the owner's Home Assistant. It turns opt-in Presence
+events into persistent notifications and includes a global NEW DEVICE
+notification toggle. This separate package is NOT installed by the app:
+selecting the UI preference records intent, but does not itself deliver
+notifications until HA installs the package. The local owner may implement
+other delivery channels independently.
+
+Reset clears pending runtime Presence events and the delivery journal
+alongside the inventory; it retains global settings and subscription
+configuration, restarting a quiet observation baseline. Existing device
+UUIDs, Notes and LAN evidence are preserved by normal upgrades.
+
 ## Inventory table usability (0.1.20)
 
 The **Устройства** table includes a drag handle at the right edge of each

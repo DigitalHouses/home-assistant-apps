@@ -43,8 +43,5 @@ func (s *Service) reportLANError(now string,err error) {
 }
 
 func (s *Service) runLANPolling(interval time.Duration) {
-    s.pollLAN()
-    ticker:=time.NewTicker(interval)
-    defer ticker.Stop()
-    for range ticker.C {s.pollLAN()}
+    for {s.pollLAN();time.Sleep(s.intervalFor("arp",interval))}
 }

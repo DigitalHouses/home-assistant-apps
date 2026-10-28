@@ -110,7 +110,13 @@ func openDB(path string) (*DB, error) {
         "CREATE TABLE IF NOT EXISTS monitor_states (method TEXT NOT NULL,watch_id TEXT NOT NULL,state TEXT NOT NULL,last_confirmed TEXT NOT NULL,ok_count INTEGER NOT NULL,bad_count INTEGER NOT NULL,last_sample TEXT NOT NULL,last_check TEXT NOT NULL,reason TEXT NOT NULL,target_json TEXT NOT NULL,label TEXT NOT NULL,PRIMARY KEY(method,watch_id));",
         "CREATE TABLE IF NOT EXISTS monitor_outbox (event_id TEXT PRIMARY KEY,method TEXT NOT NULL,watch_id TEXT NOT NULL,occurred_at TEXT NOT NULL,payload_json TEXT NOT NULL,FOREIGN KEY(method,watch_id) REFERENCES monitor_states(method,watch_id));",
         "CREATE TABLE IF NOT EXISTS monitor_tombstones (method TEXT NOT NULL,watch_id TEXT NOT NULL,PRIMARY KEY(method,watch_id));",
-        "UPDATE schema_version SET version=10;",
+        "CREATE TABLE IF NOT EXISTS discovery_settings (id INTEGER PRIMARY KEY CHECK(id=1),poll_interval_seconds INTEGER NOT NULL,scan_interval_seconds INTEGER NOT NULL,mdns_interval_seconds INTEGER NOT NULL,ssdp_interval_seconds INTEGER NOT NULL,wsd_interval_seconds INTEGER NOT NULL,confirm_successes INTEGER NOT NULL,confirm_failures INTEGER NOT NULL);",
+        "CREATE TABLE IF NOT EXISTS presence_subscriptions (kind TEXT NOT NULL CHECK(kind IN ('ip','mac')),target TEXT NOT NULL,enabled INTEGER NOT NULL DEFAULT 1,notifications INTEGER NOT NULL DEFAULT 0,updated_at TEXT NOT NULL,PRIMARY KEY(kind,target));",
+        "CREATE TABLE IF NOT EXISTS presence_states (kind TEXT NOT NULL,target TEXT NOT NULL,state TEXT NOT NULL DEFAULT 'unknown',last_confirmed TEXT NOT NULL DEFAULT '',last_sample_at TEXT NOT NULL DEFAULT '',last_check TEXT NOT NULL DEFAULT '',last_positive TEXT NOT NULL DEFAULT '',last_changed TEXT NOT NULL DEFAULT '',successes INTEGER NOT NULL DEFAULT 0,failures INTEGER NOT NULL DEFAULT 0,reason TEXT NOT NULL DEFAULT '',PRIMARY KEY(kind,target));",
+        "CREATE TABLE IF NOT EXISTS presence_outbox (event_id TEXT PRIMARY KEY,kind TEXT NOT NULL,target TEXT NOT NULL,occurred_at TEXT NOT NULL,payload_json TEXT NOT NULL);",
+        "CREATE TABLE IF NOT EXISTS event_delivery_log (event_id TEXT PRIMARY KEY,event_type TEXT NOT NULL,occurred_at TEXT NOT NULL,published_at TEXT NOT NULL DEFAULT '',status TEXT NOT NULL CHECK(status IN ('queued','broker_acked','retrying')),attempts INTEGER NOT NULL DEFAULT 0,payload_json TEXT NOT NULL);",
+        "CREATE INDEX IF NOT EXISTS delivery_order ON event_delivery_log(occurred_at DESC);",
+        "UPDATE schema_version SET version=11;",
     }, "\n")
     if err := db.exec(schema); err != nil {
         db.Close()
@@ -229,7 +235,17 @@ func (s *Service) routes() http.Handler {
     mux.HandleFunc("GET /api/status",func(w http.ResponseWriter,r *http.Request){
         devices,err:=s.db.devices()
         if err != nil { http.Error(w,"database unavailable",500); return }
-        reply(w,map[string]any{"product":"digitalhouses_network_app","version":s.version,"started_at":s.started.Format(time.RFC3339),"database":"ready","discovery_running":false,"ha_router_import_enabled":true,"poll_interval_seconds":s.intervalSeconds,"devices":len(devices),"scan_interval_seconds":s.scanIntervalSeconds,"mdns_interval_seconds":s.mdnsIntervalSeconds,"ssdp_interval_seconds":s.ssdpIntervalSeconds,"wsd_interval_seconds":s.wsdIntervalSeconds,"phase":"local_interface_lan_arp_ha_router_mdns_ssdp_wsd"})
+        settings,err:=s.db.readSettings();if err!=nil{http.Error(w,"settings unavailable",500);return}
+        reply(w,map[string]any{"product":"digitalhouses_network_app","version":s.version,"started_at":s.started.Format(time.RFC3339),"database":"ready","discovery_running":true,"ha_router_import_enabled":true,"poll_interval_seconds":settings.PollIntervalSeconds,"devices":len(devices),"scan_interval_seconds":settings.ScanIntervalSeconds,"mdns_interval_seconds":settings.MDNSIntervalSeconds,"ssdp_interval_seconds":settings.SSDPIntervalSeconds,"wsd_interval_seconds":settings.WSDIntervalSeconds,"phase":"local_interface_lan_arp_ha_router_mdns_ssdp_wsd"})
+    })
+    mux.HandleFunc("GET /api/settings",s.settingsAPI)
+    mux.HandleFunc("PUT /api/settings",s.settingsAPI)
+    mux.HandleFunc("GET /api/presence",s.presenceAPI)
+    mux.HandleFunc("PUT /api/presence",s.presenceAPI)
+    mux.HandleFunc("GET /api/event-log",func(w http.ResponseWriter,r *http.Request){
+        entries,err:=s.db.deliveryEvents()
+        if err!=nil{http.Error(w,"event journal unavailable",500);return}
+        reply(w,entries)
     })
     mux.HandleFunc("GET /api/monitored-config",readMonitorConfig)
     mux.HandleFunc("PUT /api/monitored-config",writeMonitorConfig)
@@ -359,6 +375,11 @@ func main() {
     wsdSeconds,err:=strconv.Atoi(os.Getenv("DH_WSD_INTERVAL"))
     if err!=nil || wsdSeconds<120 || wsdSeconds>3600 {log.Fatal("DH_WSD_INTERVAL must be 120..3600")}
     service:=&Service{db:db,version:os.Getenv("APP_VERSION"),started:time.Now().UTC(),intervalSeconds:intervalSeconds,scanIntervalSeconds:scanSeconds,mdnsIntervalSeconds:mdnsSeconds,ssdpIntervalSeconds:ssdpSeconds,wsdIntervalSeconds:wsdSeconds}
+    if err:=db.initializeSettings(DiscoverySettings{
+        PollIntervalSeconds:intervalSeconds,ScanIntervalSeconds:scanSeconds,
+        MDNSIntervalSeconds:mdnsSeconds,SSDPIntervalSeconds:ssdpSeconds,WSDIntervalSeconds:wsdSeconds,
+        ConfirmSuccesses:2,ConfirmFailures:3,
+    });err!=nil{log.Fatal(err)}
     go service.runRouterPolling(time.Duration(intervalSeconds)*time.Second)
     go service.runLANPolling(time.Duration(scanSeconds)*time.Second)
     go service.runMDNSPolling(time.Duration(mdnsSeconds)*time.Second)

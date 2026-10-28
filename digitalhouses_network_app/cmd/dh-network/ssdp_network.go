@@ -137,8 +137,5 @@ func (s *Service) recordSSDPError(at string,err error) {
 func (s *Service) runSSDPPolling(interval time.Duration) {
  // ARP has priority for association; leave time for initial LAN scan.
  select {case <-time.After(18*time.Second):}
- s.pollSSDP()
- ticker:=time.NewTicker(interval)
- defer ticker.Stop()
- for range ticker.C {s.pollSSDP()}
+ for {s.pollSSDP();time.Sleep(s.intervalFor("ssdp",interval))}
 }

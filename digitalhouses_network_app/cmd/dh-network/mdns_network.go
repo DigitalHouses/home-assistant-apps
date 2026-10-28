@@ -201,8 +201,5 @@ func (s *Service) runMDNSPolling(interval time.Duration) {
  // Give the LAN ARP scanner a chance to populate reliable mapping first.
  timer:=time.NewTimer(12*time.Second)
  <-timer.C
- s.pollMDNS()
- ticker:=time.NewTicker(interval)
- defer ticker.Stop()
- for range ticker.C {s.pollMDNS()}
+ for {s.pollMDNS();time.Sleep(s.intervalFor("mdns",interval))}
 }

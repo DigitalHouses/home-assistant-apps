@@ -152,8 +152,8 @@ jobs:
       - name: Run Go/SQLite unit tests
         working-directory: digitalhouses_network_app
         run: go test ./...
-      - name: Test Ingress JavaScript table, sorting, resizing and copy
-        run: node --test digitalhouses_network_app/tests/ui_sort.test.cjs digitalhouses_network_app/tests/ui_table.test.cjs
+      - name: Test Ingress JavaScript table, sorting, resizing, and Presence
+        run: node --test digitalhouses_network_app/tests/ui_sort.test.cjs digitalhouses_network_app/tests/ui_table.test.cjs digitalhouses_network_app/tests/ui_presence.test.cjs
       - name: Check launcher
         run: bash -n digitalhouses_network_app/rootfs/run.sh
       - name: Build HAOS App image

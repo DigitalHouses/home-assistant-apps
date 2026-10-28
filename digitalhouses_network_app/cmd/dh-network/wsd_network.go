@@ -192,8 +192,5 @@ func (s *Service) reportWSDError(err error) {
 func (s *Service) runWSDPolling(interval time.Duration) {
  // First local interface/ARP scan must have completed before joining WSD to IDs.
  time.Sleep(60*time.Second)
- s.pollWSD()
- ticker:=time.NewTicker(interval)
- defer ticker.Stop()
- for range ticker.C{s.pollWSD()}
+ for {s.pollWSD();time.Sleep(s.intervalFor("wsd",interval))}
 }

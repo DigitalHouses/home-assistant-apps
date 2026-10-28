@@ -1,0 +1,64 @@
+# Optional LOCAL Home Assistant package for DigitalHouses Network App.
+# Copy into the HA packages directory and include packages in configuration.yaml.
+# MQTT is consumed locally; no Telegram or external delivery service is required.
+#
+# The Network App never installs or updates this file automatically.
+
+input_boolean:
+  dh_network_notify_new_devices:
+    name: DH Network - notify about new devices
+    icon: mdi:lan-connect
+
+automation:
+  - id: dh_network_notifications_package_v1
+    alias: DH Network - local machine event notifications
+    description: >-
+      Optional notification adapter. Only selected Presence subscriptions
+      are notified; NEW DEVICE has a separate global switch.
+    mode: queued
+    max: 30
+    triggers:
+      - trigger: mqtt
+        topic: DigitalHouses/Global/dh_network_app/event
+    conditions:
+      - condition: template
+        value_template: >-
+          {% set p = trigger.payload_json if trigger.payload_json is mapping else {} %}
+          {% set kind = p.get('event_type', '') %}
+          {{ (kind == 'device_discovered' and is_state('input_boolean.dh_network_notify_new_devices', 'on'))
+             or (kind in ['tracked_device_reachable','tracked_device_unreachable',
+                            'tracked_device_present','tracked_device_absent']
+                 and p.get('notifications_requested', false) == true) }}
+    actions:
+      - variables:
+          payload: "{{ trigger.payload_json }}"
+          event_kind: "{{ trigger.payload_json.get('event_type', '') }}"
+          address: >-
+            {{ trigger.payload_json.get('ip')
+               or trigger.payload_json.get('mac')
+               or trigger.payload_json.get('ipv4')
+               or trigger.payload_json.get('name')
+               or trigger.payload_json.get('device_id')
+               or 'unknown' }}
+          event_identity: "{{ trigger.payload_json.get('event_id', '') }}"
+          description: >-
+            {% set names = {
+              'device_discovered': 'Обнаружено новое устройство',
+              'tracked_device_reachable': 'IP снова обнаруживается',
+              'tracked_device_unreachable': 'IP перестал обнаруживаться',
+              'tracked_device_present': 'MAC снова обнаруживается',
+              'tracked_device_absent': 'MAC перестал обнаруживаться'
+            } %}
+            {{ names.get(event_kind, event_kind) }}
+      - action: persistent_notification.create
+        data:
+          title: "DigitalHouses Network"
+          notification_id: "dh_network_{{ event_identity }}"
+          message: >-
+            {{ description }}: {{ address }}
+
+            Событие: {{ event_kind }}
+
+            Время наблюдения: {{ payload.get('observed_at', 'unknown') }}
+
+            Причина: {{ payload.get('reason', payload.get('detection_source', '—')) }}

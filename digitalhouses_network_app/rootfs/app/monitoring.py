@@ -411,6 +411,10 @@ class MonitorRunner:
                     (payload["event_id"],watch.method,watch.watch_id,now,encoded))
                 conn.execute("INSERT INTO events(event_type,device_id,occurred_at,data_json) VALUES(?,'',?,?)",
                              (payload["event_type"],now,encoded))
+                conn.execute("""INSERT OR IGNORE INTO event_delivery_log
+                   (event_id,event_type,occurred_at,status,payload_json)
+                   VALUES(?,?,?,'queued',?)""",
+                   (payload["event_id"],payload["event_type"],now,encoded))
                 conn.execute("DELETE FROM events WHERE id NOT IN (SELECT id FROM events ORDER BY id DESC LIMIT 1000)")
 
     def publish(self, conn: sqlite3.Connection, mqtt_events: Any) -> None:
@@ -460,10 +464,17 @@ class MonitorRunner:
         pending = conn.execute("""SELECT event_id,payload_json FROM monitor_outbox
                                   ORDER BY occurred_at,event_id LIMIT 32""").fetchall()
         for event in pending:
-            if not mqtt_events.publish_checked(ROOT+"/event",event["payload_json"],False):
-                return
+            ok=mqtt_events.publish_checked(ROOT+"/event",event["payload_json"],False)
             with conn:
-                conn.execute("DELETE FROM monitor_outbox WHERE event_id=?",(event["event_id"],))
+                conn.execute("""UPDATE event_delivery_log SET attempts=attempts+1,
+                    status=?,published_at=CASE WHEN ? THEN ? ELSE published_at END
+                    WHERE event_id=?""",
+                    ("broker_acked" if ok else "retrying",int(ok),
+                     datetime.now(timezone.utc).isoformat() if ok else "",event["event_id"]))
+                if ok:
+                    conn.execute("DELETE FROM monitor_outbox WHERE event_id=?",(event["event_id"],))
+            if not ok:
+                return
 
     def cycle(self, conn: sqlite3.Connection, mqtt_events: Any) -> None:
         conn.row_factory = sqlite3.Row

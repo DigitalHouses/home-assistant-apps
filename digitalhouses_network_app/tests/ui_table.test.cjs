@@ -81,14 +81,14 @@ test('duplicate whole-name echoes are collapsed only in UI projection',()=>{
  assert.equal(vm.runInContext("recognizableName('Living Livingroom', '')",ctx),'Living Livingroom');
  assert.equal(vm.runInContext("recognizableName('Home Assistant Prod Home Assistant Prod','')",ctx),'Home Assistant Prod');
 });
-test('copy buttons contain full escaped values for name, IP, MAC and Note',()=>{
+test('copy actions remain for name and Note while IP/MAC move into address menus',()=>{
  vm.runInContext('renderTable()',ctx);
  assert.match(body.innerHTML,/data-copy="U7 Pro 1 floor"/);
- assert.match(body.innerHTML,/data-copy="192.168.2.2"/);
- assert.match(body.innerHTML,/data-copy="8C:30:66:70:22:6C"/);
+ assert.match(body.innerHTML,/data-presence-target="192.168.2.2"/);
+ assert.match(body.innerHTML,/data-presence-target="8C:30:66:70:22:6C"/);
  assert.match(body.innerHTML,/data-copy="Отдельный этаж"/);
  assert.match(body.innerHTML,/class="copy-action"/);
- assert.match(body.innerHTML,/aria-label="Скопировать IP"/);
+ assert.match(body.innerHTML,/aria-label="Параметры IP 192.168.2.2"/);
  const malicious=vm.runInContext("copyAction('<script>\\\"&', 'IP')",ctx);
  assert.doesNotMatch(malicious,/<script>/);
  assert.match(malicious,/&lt;script&gt;/);
