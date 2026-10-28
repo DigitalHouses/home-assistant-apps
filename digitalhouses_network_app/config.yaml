@@ -1,7 +1,7 @@
 name: DigitalHouses Network App
-version: 0.1.17
+version: 0.1.18
 slug: digitalhouses_network_app
-description: Network inventory, 24-hour NEW badges and guarded MQTT discovery events.
+description: Network inventory, NEW alerts and configured four-method device monitoring.
 url: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_network_app
 arch:
   - amd64

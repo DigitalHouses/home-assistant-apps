@@ -107,7 +107,10 @@ func openDB(path string) (*DB, error) {
         "INSERT OR IGNORE INTO device_births(device_id,first_positive_at,publish_state) SELECT id,first_seen,'suppressed' FROM devices WHERE last_seen<>'';",
         "CREATE TRIGGER IF NOT EXISTS dh_birth_on_insert AFTER INSERT ON devices WHEN NEW.last_seen<>'' BEGIN INSERT OR IGNORE INTO device_births(device_id,first_positive_at,publish_state) VALUES(NEW.id,NEW.last_seen,'pending'); END;",
         "CREATE TRIGGER IF NOT EXISTS dh_birth_on_first_positive AFTER UPDATE OF last_seen ON devices WHEN NEW.last_seen<>'' BEGIN INSERT OR IGNORE INTO device_births(device_id,first_positive_at,publish_state) VALUES(NEW.id,NEW.last_seen,'pending'); END;",
-        "UPDATE schema_version SET version=9;",
+        "CREATE TABLE IF NOT EXISTS monitor_states (method TEXT NOT NULL,watch_id TEXT NOT NULL,state TEXT NOT NULL,last_confirmed TEXT NOT NULL,ok_count INTEGER NOT NULL,bad_count INTEGER NOT NULL,last_sample TEXT NOT NULL,last_check TEXT NOT NULL,reason TEXT NOT NULL,target_json TEXT NOT NULL,label TEXT NOT NULL,PRIMARY KEY(method,watch_id));",
+        "CREATE TABLE IF NOT EXISTS monitor_outbox (event_id TEXT PRIMARY KEY,method TEXT NOT NULL,watch_id TEXT NOT NULL,occurred_at TEXT NOT NULL,payload_json TEXT NOT NULL,FOREIGN KEY(method,watch_id) REFERENCES monitor_states(method,watch_id));",
+        "CREATE TABLE IF NOT EXISTS monitor_tombstones (method TEXT NOT NULL,watch_id TEXT NOT NULL,PRIMARY KEY(method,watch_id));",
+        "UPDATE schema_version SET version=10;",
     }, "\n")
     if err := db.exec(schema); err != nil {
         db.Close()
@@ -227,6 +230,13 @@ func (s *Service) routes() http.Handler {
         devices,err:=s.db.devices()
         if err != nil { http.Error(w,"database unavailable",500); return }
         reply(w,map[string]any{"product":"digitalhouses_network_app","version":s.version,"started_at":s.started.Format(time.RFC3339),"database":"ready","discovery_running":false,"ha_router_import_enabled":true,"poll_interval_seconds":s.intervalSeconds,"devices":len(devices),"scan_interval_seconds":s.scanIntervalSeconds,"mdns_interval_seconds":s.mdnsIntervalSeconds,"ssdp_interval_seconds":s.ssdpIntervalSeconds,"wsd_interval_seconds":s.wsdIntervalSeconds,"phase":"local_interface_lan_arp_ha_router_mdns_ssdp_wsd"})
+    })
+    mux.HandleFunc("GET /api/monitored-config",readMonitorConfig)
+    mux.HandleFunc("PUT /api/monitored-config",writeMonitorConfig)
+    mux.HandleFunc("GET /api/monitored-state",func(w http.ResponseWriter,r *http.Request){
+        values,err:=s.db.monitoredStates()
+        if err!=nil{http.Error(w,"monitor state unavailable",500);return}
+        reply(w,values)
     })
     mux.HandleFunc("GET /api/device-births",func(w http.ResponseWriter,r *http.Request){
         births,err:=s.db.deviceBirths()

@@ -17,6 +17,8 @@ from pathlib import Path
 from uuid import NAMESPACE_URL, uuid5
 from typing import Any
 
+from monitoring import MonitorRunner
+
 try:
     import paho.mqtt.client as mqtt
 except ImportError:
@@ -71,7 +73,8 @@ def discovery_payloads(version: str, started: str) -> dict[str, dict[str, Any]]:
             "default_entity_id": "event.dh_network_app_network",
             "name": "Network events",
             "state_topic": EVENT_TOPIC,
-            "event_types": ["device_discovered"],
+            "event_types": ["device_discovered", "tracked_device_reachable", "tracked_device_unreachable",
+                            "tracked_device_present", "tracked_device_absent"],
         },
         "homeassistant/sensor/dh_network_app_version/config": {
             **common,
@@ -201,15 +204,27 @@ class MQTTEvents:
                 )
         return True
 
+class OfflinePublisher:
+    """Monitoring remains functional when the optional MQTT service is absent."""
+    def __init__(self, version: str) -> None:
+        self.connected = threading.Event()
+        self.version = version
+
+    def publish_checked(self, topic: str, content: str, retain: bool) -> bool:
+        return False
+
+
 def run_forever() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     host = os.getenv("MQTT_HOST", "")
-    if not host:
-        LOG.warning("MQTT service not connected; network inventory continues but HA event publishing is unavailable")
-        return
-    mqtt_events = MQTTEvents(host, int(os.environ["MQTT_PORT"]), os.getenv("MQTT_USER", ""),
-                             os.getenv("MQTT_PASSWORD", ""), os.environ["APP_VERSION"],
-                             os.environ["DH_STARTED_AT"])
+    monitor = MonitorRunner()
+    if host:
+        mqtt_events = MQTTEvents(host, int(os.environ["MQTT_PORT"]), os.getenv("MQTT_USER", ""),
+                                 os.getenv("MQTT_PASSWORD", ""), os.environ["APP_VERSION"],
+                                 os.environ["DH_STARTED_AT"])
+    else:
+        LOG.warning("MQTT service absent; monitoring continues locally without HA publishing")
+        mqtt_events = OfflinePublisher(os.environ["APP_VERSION"])
     try:
         while True:
             try:
@@ -225,13 +240,15 @@ def run_forever() -> None:
                             continue
                         if not mqtt_events.send_birth(conn, row):
                             break
+                    monitor.cycle(conn, mqtt_events)
             except (sqlite3.Error, OSError, ValueError) as exc:
                 LOG.warning("Event outbox unavailable; retrying: %s", exc)
             time.sleep(POLL_INTERVAL_SECONDS)
     finally:
-        mqtt_events.client.publish(AVAILABILITY, "offline", qos=1, retain=True)
-        mqtt_events.client.loop_stop()
-        mqtt_events.client.disconnect()
+        if isinstance(mqtt_events, MQTTEvents):
+            mqtt_events.client.publish(AVAILABILITY, "offline", qos=1, retain=True)
+            mqtt_events.client.loop_stop()
+            mqtt_events.client.disconnect()
 
 if __name__ == "__main__":
     run_forever()
