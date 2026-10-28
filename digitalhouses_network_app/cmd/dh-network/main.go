@@ -231,6 +231,13 @@ func (s *Service) routes() http.Handler {
         if err != nil { http.Error(w,"database unavailable",500); return }
         reply(w,map[string]any{"product":"digitalhouses_network_app","version":s.version,"started_at":s.started.Format(time.RFC3339),"database":"ready","discovery_running":false,"ha_router_import_enabled":true,"poll_interval_seconds":s.intervalSeconds,"devices":len(devices),"scan_interval_seconds":s.scanIntervalSeconds,"mdns_interval_seconds":s.mdnsIntervalSeconds,"ssdp_interval_seconds":s.ssdpIntervalSeconds,"wsd_interval_seconds":s.wsdIntervalSeconds,"phase":"local_interface_lan_arp_ha_router_mdns_ssdp_wsd"})
     })
+    mux.HandleFunc("GET /api/monitored-config",readMonitorConfig)
+    mux.HandleFunc("PUT /api/monitored-config",writeMonitorConfig)
+    mux.HandleFunc("GET /api/monitored-state",func(w http.ResponseWriter,r *http.Request){
+        values,err:=s.db.monitoredStates()
+        if err!=nil{http.Error(w,"monitor state unavailable",500);return}
+        reply(w,values)
+    })
     mux.HandleFunc("GET /api/device-births",func(w http.ResponseWriter,r *http.Request){
         births,err:=s.db.deviceBirths()
         if err!=nil{http.Error(w,"database unavailable",500);return}
