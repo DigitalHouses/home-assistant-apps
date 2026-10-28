@@ -3,12 +3,14 @@ from __future__ import annotations
 
 import importlib.util
 import sqlite3
+import sys
 import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1] / "rootfs/app/mqtt_events.py"
+sys.path.insert(0, str(ROOT.parent))
 SPEC = importlib.util.spec_from_file_location("dh_network_mqtt_events", ROOT)
 assert SPEC and SPEC.loader
 events = importlib.util.module_from_spec(SPEC)
@@ -71,7 +73,7 @@ class TestMQTTEventContract(unittest.TestCase):
     def test_event_discovery_only_accepts_machine_event_type(self):
         config = events.discovery_payloads("0.1.16", "2026-10-28T08:00:00Z")
         event = config["homeassistant/event/dh_network_app_network/config"]
-        self.assertEqual(event["event_types"], ["device_discovered"])
+        self.assertEqual(event["event_types"], ["device_discovered","tracked_device_reachable","tracked_device_unreachable","tracked_device_present","tracked_device_absent"])
         self.assertEqual(event["state_topic"], events.EVENT_TOPIC)
         self.assertEqual(event["qos"], 1)
         self.assertEqual(event["default_entity_id"], "event.dh_network_app_network")
