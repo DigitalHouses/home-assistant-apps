@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.20
+
+- **Ingress inventory table:** resize any of the seven data columns by dragging its header edge; keyboard arrows resize, Home or double click resets individual column widths. Widths are bounded, stored only in browser localStorage, survive refresh and stay independent for different browsers.
+- **Copy full cell value:** a small copy icon appears on hover or keyboard focus for name, IP, MAC, observation, source list, last Online, and nonempty Note; copies full original text rather than truncated display, with clipboard API and legacy fallback, plus accessible success/failure feedback.
+- UI-only deduplication of accidentally repeated whole-name labels from some router trackers (e.g. `Express 7 Express 7`), preserving actual names, UUIDs and SQLite history.
+- New Node regression tests for width controls, persistence, safe escaping, copy feedback and clipboard fallback. No server state, HAOS or scan behavior changed.
+
+
 ## 0.1.19
 
 - Count independent HA device_tracker observations only when the REST state carries a fresh, new `last_reported` revision; repeated REST reads of the same cached snapshot do not advance 2/3 debounce, and missing/aged reports become unknown, not a false absence.
