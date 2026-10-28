@@ -52,10 +52,23 @@ func TestWSDMetadataURLRestrictedToVerifiedWindowsPort(t *testing.T) {
  good:=WSDAnnouncement{IPv4:"192.168.11.71",Endpoint:"urn:uuid:e2bf7703-4b57-4ee5-bedd-ef9676b731f9",Origin:"http://192.168.11.71:5357"}
  target,err:=safeWSDMetadataTarget(good)
  if err!=nil||target!="http://192.168.11.71:5357/e2bf7703-4b57-4ee5-bedd-ef9676b731f9" {t.Fatalf("valid WSD target missing: %s %v",target,err)}
+ linux:=good
+ linux.Origin="http://192.168.11.71:3702"
+ linuxTarget,linuxErr:=safeWSDMetadataTarget(linux)
+ if linuxErr!=nil||linuxTarget!="http://192.168.11.71:3702/e2bf7703-4b57-4ee5-bedd-ef9676b731f9"{
+  t.Fatalf("legitimate wsdd2 TCP 3702 target rejected: %s %v",linuxTarget,linuxErr)
+ }
+ getXML:=string(wsdGetSOAP(good.Endpoint,"urn:uuid:01234567-89ab-cdef-0123-456789abcdef"))
+ if !strings.Contains(getXML,"<wsa:Action>")||!strings.Contains(getXML,"<wsa:MessageID>")||!strings.Contains(getXML,"<wsa:To>"+good.Endpoint+"</wsa:To>") {
+  t.Fatalf("WSD Metadata Get headers are not wsdd2 interoperable: %s",getXML)
+ }
  for _,origin:=range []string{
   "http://192.168.11.1:5357",
   "http://192.168.11.71:22",
   "http://192.168.11.71:80",
+  "http://192.168.11.71:5355",
+  "http://192.168.11.1:3702",
+  "http://192.168.11.71:3702/private",
   "https://192.168.11.71:5357",
   "http://user:password@192.168.11.71:5357",
   "http://192.168.11.71:5357/private",
