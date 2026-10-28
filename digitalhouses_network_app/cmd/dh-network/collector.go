@@ -133,6 +133,7 @@ func (s *Service) pollRouterSource() {
         return
     }
     log.Printf("HA router tracker import complete: %d tracker entities",len(trackers))
+    if finished,baselineErr:=s.db.finalizeDiscoveryBaseline();baselineErr!=nil {log.Printf("Network census finalization failed: %v",baselineErr)} else if finished {log.Print("Network initial census complete; new machine events enabled")}
     })
 }
 
