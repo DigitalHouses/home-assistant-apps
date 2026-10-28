@@ -115,11 +115,18 @@ Where a DigitalHouses application exposes a discoverable TCP service, publish DN
 
 ## Verified Windows WSD computer names (0.1.10)
 
-- Extends the WS-Discovery pilot using an optional HTTP SOAP WS-Transfer `Get` against the **same IPv4 host that emitted a WSD ProbeMatches response**, restricted to `http://<source-IP>:5357/<advertised UUID>`. No hostnames/DNS, arbitrary ports, URL paths or query arguments, proxies or redirects. Request sent only after fresh unique direct ARP confirms IP->MAC and a matching WSD endpoint is already in SQLite; at most 8 metadata requests per scan. Timeouts under 2 seconds, responses capped to 32KiB. No passwords, OS privileges or changes to Windows settings.
+- Extends the WS-Discovery pilot using an optional HTTP SOAP WS-Transfer `Get` against the **same IPv4 host that emitted a WSD ProbeMatches response**, restricted to `http://<source-IP>:5357/<advertised UUID>` (Windows) or `http://<source-IP>:3702/<advertised UUID>` (Linux `wsdd2`). No hostnames/DNS, arbitrary ports, URL paths or query arguments, proxies or redirects. Request sent only after fresh unique direct ARP confirms IP->MAC and a matching WSD endpoint is already in SQLite; at most 8 metadata requests per scan. Timeouts under 2 seconds, responses capped to 32KiB. No passwords, OS privileges or changes to Windows settings.
 - Only SOAP GetResponse with a matching `RelatesTo` request ID, actual WSD MetadataSection Relationship/Host endpoint UUID and explicit `pub:Computer` type is accepted as a **computer name**, e.g. `VIEW71/Workgroup:WORKGROUP` -> `VIEW71`. Generic `wsdp:ThisDevice/FriendlyName` is ignored (on Windows it may simply say `Microsoft Publication Service Device Host`); no fabricated labels from UUID, Domain/Workgroup, hardware vendor or service type.
 - Additive SQLite v7 `wsd_names` records verified computer names per device + endpoint and last observation. The existing `devices.display_name` is only enriched if empty or equals its own MAC; existing meaningful names, UUID, MAC, Note, IPv4 evidence and all prior source records remain unchanged. No automatic identity merge or device creation.
 - Diagnostic source metadata now includes verified names and per-device provenance. The Ingress WSD badge displays confirmed computer names when available. Technical 32-character hexadecimal mDNS host IDs are hidden only in the *Name* column, retained in the source and diagnostics.
 - Empty/rejected/unreachable metadata is nonfatal and creates **no name**. Actual `VIEW71` and `MEDIA-SERZHAN` must be independently observed in WSD GetResponse at runtime before displayed.
+
+### wsdd2 interoperability correction
+
+- On a real Linux Samba media server running `wsdd2 1.8.7`, WSD multicast and HTTP use port 3702; Windows WSDAPI metadata uses port 5357. Both are allowed **only as an XAddr-origin already reported from a correlated WSD ProbeMatches message** and only for the exact UDP responder IPv4 and UUID path.
+- `wsdd2` has a non-namespace-aware string parser for SOAP headers: requests must serialize the Action and MessageID with the canonical literal `wsa:` prefix; the former `a:` alias was XML-equivalent but skipped by `wsdd2`. The WSD Probe and Metadata Get now use `wsa:`, plus `wsdp:Device` in Probe types.
+- `wsdd2` also expects an exact `Content-Type: application/soap+xml` on HTTP Metadata Get (no `charset` parameter). Adapt request header without broadening accepted response types or weakening correlation checks.
+- No change to Samba, `wsdd2`, privileges, Windows, or NetAlertX.
 
 ## Release boundary
 
