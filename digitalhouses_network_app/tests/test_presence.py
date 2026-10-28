@@ -40,7 +40,7 @@ def fixture():
        CREATE TABLE presence_outbox(event_id TEXT PRIMARY KEY,kind TEXT,target TEXT,occurred_at TEXT,payload_json TEXT);
        CREATE TABLE event_delivery_log(event_id TEXT PRIMARY KEY,event_type TEXT,occurred_at TEXT,
           published_at TEXT DEFAULT '',status TEXT,attempts INT DEFAULT 0,payload_json TEXT);
-       INSERT INTO sources VALUES('lan_arp','ok',NULL);
+       INSERT INTO sources(kind,status,last_success) VALUES('lan_arp','ok',NULL);
        INSERT INTO devices VALUES('device-a','E8:FF:1E:D7:3A:48');
        INSERT INTO presence_subscriptions VALUES('ip','192.168.2.30',1,0,'2000-01-01T00:00:00Z');
        INSERT INTO presence_subscriptions VALUES('mac','E8:FF:1E:D7:3A:48',1,1,'2000-01-01T00:00:00Z');
