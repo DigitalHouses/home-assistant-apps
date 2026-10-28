@@ -2,15 +2,15 @@
 
 Experimental native **Home Assistant OS App** for a durable LAN device inventory, presence history, and future device events. Internal/entity prefix: `dh_network_app`. Canonical product ID, App Store slug, and repository directory: `digitalhouses_network_app`.
 
-## Current state (0.1.11 verified WSD names including Windows NotJoined)
+## Current state (0.1.12 compact Ingress and verified network discovery)
 
 Available now:
 - standard installation from the **DigitalHouses Home Assistant Apps repository** (no copying files into HAOS);
 - authenticated Home Assistant Ingress Web UI, optionally shown on the HA sidebar;
 - Go process, persistent SQLite at `/data/network.sqlite3`;
-- UI sections for Devices, Sources and Events, REST status/devices/sources/events endpoints and note updates for records that exist;
+- UI sections for Devices, Sources and Events in a single persistent Ingress header. A native keyboard-accessible `Показатели` disclosure keeps the 11 metric cards, source explanation and diagnostic JSON export hidden by default, but accessible in the top bar on demand; the device table and search are visible immediately. REST status/devices/sources/events endpoints and note updates for records that exist;
 - periodic read-only import of Home Assistant `device_tracker` entities with `source_type: router` using the official Supervisor Core API proxy;
-- persistent MAC/HA tracker identities, IP address histories and last positive sighting;
+- persistent MAC/HA tracker identities, IP address histories and last positive sighting; **Online represents positive ARP/HA router tracker/local interface evidence, not successful ICMP ping**. ICMP availability is not implemented and is not inferred from the current Presence field;
 - source health, last successful poll and import counts. A working HA API with no router trackers is reported as `empty`, not a scan failure.
 - independent bounded ARP probing of the **primary LAN Ethernet interface** at a configurable interval (default 180 s), without Nmap or installing tools into HAOS;
 - reconciliation of ARP-positive MACs with router-discovered MACs; stable UUIDs, notes and IP address histories are preserved;
