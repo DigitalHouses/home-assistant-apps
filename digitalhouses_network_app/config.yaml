@@ -1,7 +1,7 @@
 name: DigitalHouses Network App
-version: 0.1.13
+version: 0.1.14
 slug: digitalhouses_network_app
-description: Compact Ingress metrics and inline device search.
+description: Confirmed inventory reset with fresh network discovery.
 url: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_network_app
 arch:
   - amd64
