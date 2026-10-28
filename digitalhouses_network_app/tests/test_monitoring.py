@@ -40,6 +40,7 @@ def database():
           FOREIGN KEY(method,watch_id) REFERENCES monitor_states(method,watch_id));
         CREATE TABLE monitor_tombstones(method TEXT,watch_id TEXT,PRIMARY KEY(method,watch_id));
         CREATE TABLE events(id INTEGER PRIMARY KEY,event_type TEXT,device_id TEXT,occurred_at TEXT,data_json TEXT);
+        CREATE TABLE event_delivery_log(event_id TEXT PRIMARY KEY,event_type TEXT,occurred_at TEXT,published_at TEXT DEFAULT '',status TEXT,attempts INTEGER DEFAULT 0,payload_json TEXT);
         CREATE TABLE sources(id TEXT PRIMARY KEY,status TEXT,last_success TEXT);
         CREATE TABLE identities(device_id TEXT,kind TEXT,value TEXT);
         CREATE TABLE lan_positive(device_id TEXT,last_seen TEXT);
