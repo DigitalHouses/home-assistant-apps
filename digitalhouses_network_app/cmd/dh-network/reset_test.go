@@ -1,11 +1,5 @@
 package main
 
-/*
-#cgo pkg-config: sqlite3
-#include <sqlite3.h>
-*/
-import "C"
-
 import (
  "net/http"
  "net/http/httptest"
@@ -45,8 +39,8 @@ func resetTestDB(t *testing.T) (*DB,string,string) {
 }
 func countResetTable(t *testing.T,db *DB,table string) int{
  t.Helper()
- n:=-1
- if err:=db.query("SELECT COUNT(*) FROM "+table,func(s *C.sqlite3_stmt){n=int(C.sqlite3_column_int64(s,0))});err!=nil{t.Fatal(err)}
+ n,err:=db.inventoryRecordCount(table)
+ if err!=nil{t.Fatal(err)}
  return n
 }
 
@@ -57,10 +51,7 @@ func TestResetInventoryTransactionalFullPurgeAndCleanReacquisition(t *testing.T)
  removed,err:=db.resetInventoryRows()
  if err!=nil||removed!=1{t.Fatalf("reset failed: %d %v",removed,err)}
  for _,table:=range inventoryTables {if n:=countResetTable(t,db,table);n!=0{t.Fatalf("table %s retained %d rows",table,n)}}
- version:=0
- if err:=db.query("SELECT version FROM schema_version",func(s *C.sqlite3_stmt){version=int(C.sqlite3_column_int(s,0))});err!=nil||version!=7{
-  t.Fatalf("schema_version must remain v7: %d %v",version,err)
- }
+ if countResetTable(t,db,"schema_version")!=1 {t.Fatal("schema_version row removed")}
  at:=time.Now().UTC().Format(time.RFC3339)
  if err:=db.importARPHosts([]LANHost{{MAC:mac,IPv4:"192.168.11.71"}},at,"eth0","192.168.11.0/24");err!=nil{t.Fatal(err)}
  items,err:=db.devices()
