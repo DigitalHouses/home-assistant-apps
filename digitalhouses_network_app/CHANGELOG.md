@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.12
+
+- Refactor Ingress to a persistent compact header with product name, always-visible Devices / Sources / Events navigation, and a keyboard-accessible `Показатели` disclosure. All 11 existing metric cards, explanatory source notice and JSON diagnostic export are collapsed in the header by default and shown when opened. A serious active conflict warning remains outside the collapsed panel.
+- Clarify `Online` as presence observed via ARP, HA router tracker or Local Interface, **not** successful ICMP ping. Retain backend status values and history semantics without inventing ICMP results.
+- Preserve notes, JSON export, table sorting/filtering, API, polling cadence, source/UUID/identity models and database schema.
+- Add Ingress markup regression tests for visible navigation, closed-by-default metrics, accessible disclosure and absence of invented ping claims.
+
 ## 0.1.11
 
 - Accept the explicitly observed Windows WSD `pub:Computer` suffix `/NotJoined` (example `VIEW71/NotJoined`), in addition to `/Workgroup:` and `/Domain:`; the result is a verified computer name, **never** the generic WSD `FriendlyName`.
