@@ -668,7 +668,7 @@ dh_pve_agent_notification_local_package:
               sequence:
                 - action: persistent_notification.create
                   data:
-                    title: "💾⚠️ PVE: unexpected disk shutdown · {{ trigger.to_state.attributes.object_name | default('Диск', true) }}"
+                    title: "💾⚠️ PVE: unexpected disk shutdown · {{ trigger.to_state.attributes.object_name | default('Disk', true) }}"
                     message: >-
                       SMART unsafe shutdowns: {{ trigger.to_state.attributes.previous_value }} → {{ trigger.to_state.attributes.current_value }} (+{{ trigger.to_state.attributes.delta }}).
                       Device: {{ trigger.to_state.attributes.device_path | default('—', true) }}.
