@@ -179,6 +179,33 @@ Version 0.1.0 proved HAOS install, Ingress, Web UI, data persistence, version an
 When accepted, move from experimental Supervisor source build to the standard versioned immutable GHCR artifact. The install/update UI remains the **same Home Assistant App Store**, never a manual server-side copy.
 
 
+## Settings relocation and Presence eye restoration (0.1.24)
+
+The Ingress header now contains only the application identity and its five
+navigation tabs. There is no **Показатели** dropdown in the header. Its
+previous full contents (SQLite status; all 11 inventory/scan/source counters;
+export/download and selectable diagnostic JSON; the destructive inventory
+Reset control and its confirmation text) are preserved in an always-visible
+**Состояние сети и диагностика** section of the **Параметры** tab, alongside
+the original global scan interval and confirmation threshold form. Other
+tabs do not display these admin controls.
+
+After page reload, returning to **Устройства**, or the automatic device
+table refresh, the browser fetches `GET /api/presence` before drawing IP/MAC
+cells. Green eyes therefore reflect SQLite-persisted subscriptions rather
+than empty local browser state. An eye indicates active monitoring only; its
+hover shows the latest observed times and presence state.
+
+Clicking anywhere outside the IP/MAC three-dot menu closes it. Clicks inside
+remain interactive; Escape also closes it; the same trigger may toggle it
+open/closed without a close-and-reopen race.
+
+A real 0.1.23 diagnostic bundle demonstrated five active confirmed IP/MAC
+subscriptions and zero undelivered presence events; no migration of these
+records is necessary to restore the UI eyes. An independent unrelated issue
+in the internal IPv4 source-disagreement event log is being evaluated
+separately; it is not a Presence delivery failure.
+
 ## Native diagnostic download and Journal copy fixes (0.1.23)
 
 The **Показатели → Сохранить диагностику (.json)** action is now a
