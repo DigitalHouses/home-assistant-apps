@@ -25,6 +25,18 @@ var inventoryTables=[]string{
  "identities","events","sources","devices",
 }
 
+// Useful for asserting a complete reset without exposing arbitrary SQL in the API.
+func (db *DB) inventoryRecordCount(table string) (int,error) {
+ allowed:=table=="schema_version"
+ for _,name:=range inventoryTables {if name==table{allowed=true;break}}
+ if !allowed {return 0,errors.New("unrecognized inventory table")}
+ db.mu.Lock()
+ defer db.mu.Unlock()
+ count:=0
+ _,err:=db.prepared("SELECT COUNT(*) FROM "+table,nil,func(stmt *C.sqlite3_stmt){count=int(C.sqlite3_column_int64(stmt,0))})
+ return count,err
+}
+
 // resetInventoryRows returns the previous device count. Failed deletes roll
 // back *everything*; it never drops schema_version or recreates SQLite files.
 func (db *DB) resetInventoryRows() (count int,err error) {
