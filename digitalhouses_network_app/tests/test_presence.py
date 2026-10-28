@@ -106,6 +106,34 @@ class PresenceTests(unittest.TestCase):
                          {'reachable','present'})
         self.assertEqual(len(tx.messages),0)  # initial baseline is quiet
 
+    def test_scan_already_running_at_activation_does_not_initialize_presence(self):
+        db=fixture();engine=PresenceRunner();tx=Transport()
+        now=datetime.now(timezone.utc)
+        activation=now-timedelta(seconds=8)
+        started=activation-timedelta(seconds=3)
+        finished=activation+timedelta(seconds=2)
+        with db:
+            db.execute("UPDATE presence_subscriptions SET updated_at=?",
+                       (activation.isoformat(),))
+            db.execute("INSERT INTO presence_states(kind,target,state,reason) VALUES('ip','192.168.2.30','working','scan_requested')")
+            db.execute("INSERT INTO presence_states(kind,target,state,reason) VALUES('mac','E8:FF:1E:D7:3A:48','working','scan_requested')")
+        scan(db,finished,True)
+        with db:
+            db.execute("UPDATE sources SET details_json=?",
+                       (json.dumps({'scan_started_at':started.isoformat()}),))
+        engine.cycle(db,tx)
+        self.assertEqual({x['state'] for x in db.execute("SELECT state FROM presence_states")},
+                         {'working'})
+        # A dedicated scan starts after activation, even if completed very quickly.
+        with db:
+            db.execute("UPDATE sources SET details_json=?",
+                       (json.dumps({'scan_started_at':(activation+timedelta(milliseconds=3)).isoformat()}),))
+        scan(db,finished+timedelta(seconds=1),True)
+        engine.cycle(db,tx)
+        self.assertEqual({x['state'] for x in db.execute("SELECT state FROM presence_states")},
+                         {'confirming'})
+        self.assertEqual({x['successes'] for x in db.execute("SELECT successes FROM presence_states")},{1})
+
     def test_failed_new_scan_leaves_clear_unknown_without_fake_absence(self):
         db=fixture();engine=PresenceRunner();tx=Transport()
         now=datetime.now(timezone.utc)
