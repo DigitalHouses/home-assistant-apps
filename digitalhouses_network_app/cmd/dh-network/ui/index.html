@@ -39,16 +39,32 @@ button.active{background:#137b78;border-color:#26b6a5}button:hover{filter:bright
 .stats{display:flex;gap:12px;flex-wrap:wrap;margin:16px 0}.stat{background:#223349;border-radius:8px;padding:12px 18px;min-width:155px}
 .stat strong{display:block;font-size:24px}.stat span{font-size:12px;color:#b9c5d3}
 table{width:100%;border-collapse:collapse;margin:12px 0}
-.devices-table{min-width:1090px;table-layout:auto}
+.devices-table{table-layout:fixed;width:1160px;min-width:0}
+.devices-table th{position:relative;padding-right:13px}
+.devices-table .col-resizer{position:absolute;right:0;top:0;bottom:0;width:10px;cursor:col-resize;touch-action:none;z-index:1}
+.devices-table .col-resizer::after{content:"";position:absolute;left:4px;top:25%;bottom:25%;width:2px;background:transparent;border-radius:2px}
+.devices-table .col-resizer:hover::after,.devices-table .col-resizer:focus-visible::after,body.table-resizing .col-resizer::after{background:#82efc7}
+.devices-table .col-resizer:focus-visible{outline:2px solid #82efc7;outline-offset:-2px}
+body.table-resizing,body.table-resizing *{cursor:col-resize!important;user-select:none!important}
+.devices-table td:not(.num-cell){position:relative;padding-right:29px;overflow:hidden;text-overflow:ellipsis}
+.devices-table .copy-action{position:absolute;right:5px;top:50%;transform:translateY(-50%);height:21px;width:21px;display:grid;place-items:center;padding:2px;border:1px solid transparent;border-radius:4px;background:#23394e;color:#a9c1d1;opacity:0;z-index:1;transition:opacity .1s ease}
+.devices-table td:hover .copy-action,.devices-table td:focus-within .copy-action,.devices-table .copy-action:focus-visible{opacity:1}
+.devices-table .copy-action:hover,.devices-table .copy-action:focus-visible{color:#82efc7;border-color:#466b78;background:#2b465d;filter:none}
+.copy-feedback{position:fixed;bottom:18px;right:18px;background:#284059;color:#e9f0f7;border:1px solid #3e997d;border-radius:7px;padding:9px 13px;box-shadow:0 7px 25px #0007;z-index:10;max-width:min(360px,calc(100vw - 36px))}
+.copy-feedback[hidden]{display:none}
+@media(hover:none){.devices-table .copy-action{opacity:1}}
+@media(prefers-reduced-motion:reduce){.devices-table .copy-action{transition:none}}
 .devices-table th,.devices-table td{padding:8px 9px}
 .devices-table td{white-space:nowrap;overflow-wrap:normal}
 .devices-table .num-cell,.devices-table .index-col{width:42px;text-align:right;color:#aebed1;font-variant-numeric:tabular-nums}
-.devices-table td.name-cell{min-width:110px;max-width:185px}
-.devices-table .name-value{display:inline-block;max-width:170px;vertical-align:middle;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.devices-table td.name-cell{min-width:0;max-width:none}
+.devices-table .name-value{display:inline-block;max-width:100%;vertical-align:middle;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.devices-table .name-content{display:flex;align-items:center;min-width:0;gap:4px}
+.devices-table .name-content .new-device{flex:0 0 auto;margin-left:0}
 .devices-table td.source-cell{white-space:nowrap}
 .devices-table td.source-cell .source-tag{margin:0 4px 0 0}
-.devices-table td.note-cell{max-width:230px;min-width:110px}
-.devices-table td.note-cell .note-action{display:inline-block;max-width:210px;vertical-align:middle;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left;font:inherit}
+.devices-table td.note-cell{max-width:none;min-width:0}
+.devices-table td.note-cell .note-action{display:inline-block;max-width:100%;vertical-align:middle;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left;font:inherit}
 .devices-table .note-filled{background:transparent;color:#9bd1ff;border:0;padding:3px 2px}
 .devices-table .note-filled:hover,.devices-table .note-filled:focus-visible{text-decoration:underline}
 .devices-table .note-empty{background:transparent;border:1px dashed #62788e;color:#b5cce0;padding:4px 8px;border-radius:6px}
@@ -58,7 +74,7 @@ table{width:100%;border-collapse:collapse;margin:12px 0}
 .devices-table th button:hover,.devices-table th button:focus-visible{color:#fff;background:#294057;outline-offset:2px}
 .devices-table th[aria-sort="ascending"] button,.devices-table th[aria-sort="descending"] button{color:#82efc7}
 .devices-table td.ip-cell,.devices-table td.mac-cell,.devices-table td.time-cell{white-space:nowrap;overflow-wrap:normal}
-.devices-table td.source-cell{min-width:150px}
+.devices-table td.source-cell{min-width:0;overflow:hidden;white-space:nowrap}
 .devices-table .sort-arrow{color:#96abc2;padding-left:3px}th,td{border-bottom:1px solid #304154;padding:12px 10px;text-align:left;vertical-align:middle}
 th{color:#a9c1d1;font-size:12px}td{overflow-wrap:anywhere}
 input{font:inherit;padding:10px;color:#f0f4f9;background:#203147;border:1px solid #526d86;border-radius:8px;max-width:100%}
@@ -71,7 +87,7 @@ input{font:inherit;padding:10px;color:#f0f4f9;background:#203147;border:1px soli
 </style></head>
 <body>
 <header class="app-header">
-  <div class="brand"><h1>DigitalHouses Network App</h1><small>Устройства и источники сети · v0.1.19</small></div>
+  <div class="brand"><h1>DigitalHouses Network App</h1><small>Устройства и источники сети · v0.1.20</small></div>
   <nav aria-label="Разделы приложения"><button class="active" data-page="devices">Устройства</button><button data-page="sources">Источники</button><button data-page="events">События</button><button data-page="monitoring">Мониторинг</button></nav>
   <details id="overview" class="overview">
     <summary title="Раскрыть или скрыть показатели сети и диагностику"><span>Показатели</span><span id="health" class="tag">Подключение…</span><span class="overview-arrow" aria-hidden="true">⌄</span></summary>
@@ -92,6 +108,7 @@ input{font:inherit;padding:10px;color:#f0f4f9;background:#203147;border:1px soli
 <div id="ip-conflict-summary" class="notice" style="display:none"></div>
 <div id="devices-tools" class="devices-tools" hidden><h2 id="devices-count">Устройства (—)</h2><div id="filterarea"></div></div>
 <section id="body">Загрузка…</section>
+<div id="copy-feedback" class="copy-feedback" role="status" aria-live="polite" hidden></div>
 </main>
 <script>
 const body=document.getElementById('body'),health=document.getElementById('health'),filterArea=document.getElementById('filterarea');
@@ -99,6 +116,112 @@ const devicesTools=document.getElementById('devices-tools'),devicesCount=documen
 let page='devices',devices=[],origins=[],mdnsServices=[],ssdpServices=[],wsdEndpoints=[],filter='',deviceBirths={};
 let sortKey='ip',sortDirection='asc';
 const deviceColumns=[['name','Имя'],['ip','IP'],['mac','MAC'],['presence','Наблюдение'],['sources','Обнаружен через'],['last_seen','Последний Online'],['note','Note']];
+const widthDefaults={index:42,name:230,ip:116,mac:148,presence:110,sources:272,last_seen:157,note:135};
+const widthMinimums={name:110,ip:92,mac:120,presence:105,sources:115,last_seen:125,note:90};
+const widthStorageKey='dh-network-device-column-widths-v1';
+const widthKeys=deviceColumns.map(x=>x[0]);
+function clampWidth(key,value){
+ const number=Number(value);
+ if(!Number.isFinite(number))return widthDefaults[key];
+ return Math.round(Math.max(widthMinimums[key],Math.min(1000,number)));
+}
+function loadColumnWidths(){
+ let saved={};
+ try{saved=JSON.parse(localStorage.getItem(widthStorageKey)||'{}')||{}}catch(_){}
+ return Object.fromEntries(widthKeys.map(key=>[key,clampWidth(key,saved[key]??widthDefaults[key])]));
+}
+let columnWidths=loadColumnWidths();
+function storeColumnWidths(){
+ try{localStorage.setItem(widthStorageKey,JSON.stringify(columnWidths))}catch(_){}
+}
+function columnTotalWidth(){return widthDefaults.index+widthKeys.reduce((sum,key)=>sum+columnWidths[key],0)}
+function columnGroup(){
+ return '<colgroup><col style="width:'+widthDefaults.index+'px">'+widthKeys.map(key=>'<col data-column="'+esc(key)+'" style="width:'+columnWidths[key]+'px">').join('')+'</colgroup>';
+}
+function updateColumnWidth(key,value,save=true){
+ if(!widthKeys.includes(key))return;
+ columnWidths[key]=clampWidth(key,value);
+ const table=body.querySelector('.devices-table');
+ if(table){
+  const col=table.querySelector('col[data-column="'+key+'"]');
+  if(col)col.style.width=columnWidths[key]+'px';
+  table.style.width=columnTotalWidth()+'px';
+  const handle=table.querySelector('[data-resize="'+key+'"]');
+  if(handle)handle.setAttribute('aria-valuenow',String(columnWidths[key]));
+ }
+ if(save)storeColumnWidths();
+}
+function enableColumnResize(){
+ body.querySelectorAll('[data-resize]').forEach(handle=>{
+  const key=handle.dataset.resize;
+  handle.addEventListener('pointerdown',event=>{
+   if(event.button!==0)return;
+   event.preventDefault();
+   event.stopPropagation();
+   const origin=event.clientX,initial=columnWidths[key],pointer=event.pointerId;
+   document.body.classList.add('table-resizing');
+   const move=e=>{if(e.pointerId===pointer)updateColumnWidth(key,initial+e.clientX-origin,false)};
+   const end=e=>{
+    if(e.pointerId!==pointer)return;
+    window.removeEventListener('pointermove',move);
+    window.removeEventListener('pointerup',end);
+    window.removeEventListener('pointercancel',end);
+    document.body.classList.remove('table-resizing');
+    storeColumnWidths();
+   };
+   window.addEventListener('pointermove',move);
+   window.addEventListener('pointerup',end);
+   window.addEventListener('pointercancel',end);
+  });
+  handle.addEventListener('keydown',event=>{
+   if(event.key==='ArrowLeft'||event.key==='ArrowRight'){
+    event.preventDefault();
+    updateColumnWidth(key,columnWidths[key]+(event.key==='ArrowRight'?16:-16));
+   }else if(event.key==='Home'){
+    event.preventDefault();
+    updateColumnWidth(key,widthDefaults[key]);
+   }
+  });
+  handle.addEventListener('dblclick',event=>{event.stopPropagation();updateColumnWidth(key,widthDefaults[key])});
+ });
+}
+const copyIcon='<svg aria-hidden="true" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2"></rect><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"></path></svg>';
+function copyAction(value,label){
+ const text=String(value??'');
+ if(!text||text==='—')return '';
+ return '<button class="copy-action" type="button" data-copy="'+esc(text)+'" title="Скопировать '+esc(label)+'" aria-label="Скопировать '+esc(label)+'">'+copyIcon+'</button>';
+}
+function legacyClipboardCopy(text){
+ const node=document.createElement('textarea');
+ node.value=text;node.readOnly=true;node.style.position='fixed';node.style.opacity='0';
+ document.body.appendChild(node);node.focus();node.select();
+ let ok=false;try{ok=document.execCommand('copy')}finally{node.remove()}
+ return ok;
+}
+let copyFeedbackTimeout;
+function showCopyFeedback(message){
+ const el=document.getElementById('copy-feedback');
+ el.textContent=message;el.hidden=false;
+ clearTimeout(copyFeedbackTimeout);
+ copyFeedbackTimeout=setTimeout(()=>{el.hidden=true},1800);
+}
+async function copyText(text,label){
+ let copied=false;
+ if(navigator.clipboard&&navigator.clipboard.writeText){
+  try{await navigator.clipboard.writeText(text);copied=true}catch(_){}
+ }
+ if(!copied){try{copied=legacyClipboardCopy(text)}catch(_){}}
+ showCopyFeedback(copied?'Скопировано: '+label:'Не удалось скопировать '+label);
+ return copied;
+}
+function enableCellCopy(){
+ body.querySelectorAll('button[data-copy]').forEach(button=>{
+  button.addEventListener('click',event=>{
+   event.stopPropagation();
+   copyText(button.dataset.copy,button.getAttribute('title').replace(/^Скопировать /,''));
+  });
+ });
+}
 const nameCollator=new Intl.Collator('ru',{numeric:true,sensitivity:'base'});
 function esc(t){return String(t??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 async function read(kind){const r=await fetch('api/'+kind,{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);return r.json()}
@@ -151,6 +274,11 @@ function recognizableName(raw,mac){
  const candidate=value.replace(/[:-]/g,'').toLowerCase();
  const ownMac=String(mac||'').replace(/[:-]/g,'').toLowerCase();
  if(/^(?:[0-9a-f]{12}|[0-9a-f]{32})$/.test(candidate) || (ownMac && candidate===ownMac))return '';
+ const words=value.split(/\s+/);
+ if(words.length>=2&&words.length%2===0){
+  const mid=words.length/2;
+  if(words.slice(0,mid).join(' ').toLocaleLowerCase('ru')===words.slice(mid).join(' ').toLocaleLowerCase('ru'))value=words.slice(0,mid).join(' ');
+ }
  return value;
 }
 function visibleDeviceName(d){
@@ -226,7 +354,7 @@ function sortedHeaders(){
   const direction=active?(sortDirection==='asc'?'ascending':'descending'):'none';
   const symbol=active?(sortDirection==='asc'?'↑':'↓'):'↕';
   const action=active&&sortDirection==='asc'?'убывание':'возрастание';
-  return '<th scope="col" aria-sort="'+direction+'"><button type="button" data-sort="'+esc(key)+'" title="Сортировать: '+esc(action)+'">'+esc(title)+' <span class="sort-arrow" aria-hidden="true">'+symbol+'</span></button></th>';
+  return '<th scope="col" aria-sort="'+direction+'"><button type="button" data-sort="'+esc(key)+'" title="Сортировать: '+esc(action)+'">'+esc(title)+' <span class="sort-arrow" aria-hidden="true">'+symbol+'</span></button><span class="col-resizer" role="separator" aria-orientation="vertical" tabindex="0" data-resize="'+esc(key)+'" aria-label="Ширина колонки '+esc(title)+'" aria-valuemin="'+widthMinimums[key]+'" aria-valuemax="1000" aria-valuenow="'+columnWidths[key]+'" title="Потяните для изменения ширины; двойной щелчок — сброс; стрелки ← → — изменение с клавиатуры"></span></th>';
  }).join('');
 }
 function renderDevices(){
@@ -247,10 +375,25 @@ function renderTable(){
  const found=sortedDeviceRows();
  devicesCount.textContent='Устройства ('+found.length+')';
  if(!devices.length){body.innerHTML='<p>Устройств пока нет. Проверь вкладку «Источники». В Home Assistant могут отсутствовать доступные <code>device_tracker</code> от роутеров.</p>';return}
- body.innerHTML='<div class="grid-scroll"><table class="devices-table"><thead><tr>'+sortedHeaders()+'</tr></thead><tbody>'+
- found.map((d,index)=>'<tr><td class="num-cell">'+(index+1)+'</td><td class="name-cell"><strong class="name-value" title="'+esc(visibleDeviceName(d))+'">'+esc(visibleDeviceName(d)||'—')+'</strong>'+newBadge(d)+'</td><td class="ip-cell">'+esc(d.ipv4||d.ipv6||'—')+(d.ipv4&&d.ipv6?'<small> / '+esc(d.ipv6)+'</small>':'')+'</td><td class="mac-cell">'+esc(d.mac||'—')+'</td><td><span class="tag '+esc(d.presence)+'" title="Online — обнаружено через ARP, HA Tracker или Local Interface; ICMP ping не выполняется">'+esc(d.presence)+'</span></td><td class="source-cell">'+sourcesForDisplay(d.id)+'</td><td class="time-cell">'+esc(noteTime(d.last_seen))+'</td><td class="note-cell">'+noteAction(d)+'</td></tr>').join('')+'</tbody></table></div>';
+ body.innerHTML='<div class="grid-scroll"><table class="devices-table" style="width:'+columnTotalWidth()+'px">'+columnGroup()+'<thead><tr>'+sortedHeaders()+'</tr></thead><tbody>'+
+ found.map((d,index)=>{
+  const name=visibleDeviceName(d);
+  const address=[d.ipv4,d.ipv6].filter(Boolean).join(' / ');
+  const time=d.last_seen?noteTime(d.last_seen):'';
+  const from=sourcesForSort(d.id);
+  return '<tr><td class="num-cell">'+(index+1)+'</td>'+
+   '<td class="name-cell"><div class="name-content"><strong class="name-value" title="'+esc(name)+'">'+esc(name||'—')+'</strong>'+newBadge(d)+'</div>'+copyAction(name,'имя')+'</td>'+
+   '<td class="ip-cell">'+esc(d.ipv4||d.ipv6||'—')+(d.ipv4&&d.ipv6?'<small> / '+esc(d.ipv6)+'</small>':'')+copyAction(address,'IP')+'</td>'+
+   '<td class="mac-cell">'+esc(d.mac||'—')+copyAction(d.mac,'MAC')+'</td>'+
+   '<td><span class="tag '+esc(d.presence)+'" title="Online — обнаружено через ARP, HA Tracker или Local Interface; ICMP ping не выполняется">'+esc(d.presence)+'</span>'+copyAction(d.presence,'наблюдение')+'</td>'+
+   '<td class="source-cell">'+sourcesForDisplay(d.id)+copyAction(from,'источники')+'</td>'+
+   '<td class="time-cell">'+esc(noteTime(d.last_seen))+copyAction(time,'последний Online')+'</td>'+
+   '<td class="note-cell">'+noteAction(d)+copyAction(d.note,'Note')+'</td></tr>';
+ }).join('')+'</tbody></table></div>';
  body.querySelectorAll('button[data-sort]').forEach(b=>b.addEventListener('click',()=>changeSort(b.dataset.sort)));
  body.querySelectorAll('button[data-id]').forEach(b=>b.addEventListener('click',()=>edit(b.dataset.id)));
+ enableColumnResize();
+ enableCellCopy();
 }
 async function edit(id){
  const d=devices.find(x=>x.id===id);if(!d)return;

@@ -114,7 +114,7 @@ test('visible names drive name sorting, missing genuine names stay at the end', 
  vm.runInContext('renderTable()',ctx);
  assert.doesNotMatch(view.innerHTML,/class="name-value"[^>]*>02:11:22:33:44:55<\/strong>/);
  assert.doesNotMatch(view.innerHTML,/class="name-value"[^>]*>54ef44a716c9<\/strong>/);
- assert.match(view.innerHTML,/class="name-cell"><strong class="name-value" title="">—<\/strong>/);
+ assert.match(view.innerHTML,/class="name-cell"><div class="name-content"><strong class="name-value" title="">—<\/strong>/);
  ctx.__devices=sample;
  vm.runInContext('devices=__devices',ctx);
 });
