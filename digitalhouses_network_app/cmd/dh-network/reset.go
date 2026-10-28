@@ -23,6 +23,7 @@ var inventoryTables=[]string{
  "ssdp_services","ssdp_unmatched",
  "wsd_names","wsd_endpoints","wsd_unmatched",
  "ipv4_evidence","ipv4_disagreement_state","lan_positive",
+ "presence_outbox","presence_states","event_delivery_log","monitor_outbox",
  "identities","events","sources","device_births","devices",
 }
 
