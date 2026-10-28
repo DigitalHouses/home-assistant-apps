@@ -177,3 +177,78 @@ Where a DigitalHouses application exposes a discoverable TCP service, publish DN
 Version 0.1.0 proved HAOS install, Ingress, Web UI, data persistence, version and lifecycle. Version 0.1.2 added bounded native ARP probing; 0.1.3 added read-only diagnostics and source attribution; 0.1.4 adds independent IPv4 evidence and conflict resolution; 0.1.5 adds conservative mDNS/Bonjour metadata enrichment. These versions emit no machine events. It does not claim full IPv6 or cross-VLAN visibility. A genuine scan requires an explicit later version and tests for incomplete/invalid source data before any presence state or event is emitted.
 
 When accepted, move from experimental Supervisor source build to the standard versioned immutable GHCR artifact. The install/update UI remains the **same Home Assistant App Store**, never a manual server-side copy.
+
+
+## Selected-device monitoring (0.1.18)
+
+The **Мониторинг** Ingress tab lets an HA administrator edit the explicit
+`monitored_devices` YAML configuration. It is stored as UTF-8 in the App
+persistent volume at `/data/monitored_devices.yaml`. The editor validates the
+file before replacing it atomically. The previous valid file is retained when
+validation fails. The monitoring worker picks up changes automatically.
+
+**No watches are configured by default.** The addresses below illustrate
+the format only; they are not automatically added or enabled:
+
+```yaml
+monitored_devices:
+  icmp:
+    media_server:
+      ip: 192.168.11.238
+      label: "Медиасервер"
+    web_server: 192.168.11.240
+  arp:
+    workstation:
+      mac: "18:31:BF:2F:ED:37"
+      label: "Рабочий компьютер"
+  ha_device_tracker:
+    phone:
+      entity_id: device_tracker.phone
+      label: "Телефон"
+  tcp:
+    plex:
+      ip: 192.168.11.238
+      port: 32400
+      label: "Plex"
+```
+
+Grouping is by check method. The stable technical `watch_id` belongs to
+the YAML key, not to a discovered inventory UUID. Scalar form is supported
+for ICMP IP, ARP MAC and HA tracker entity_id; TCP requires both IP and port.
+Optional `label` is user-owned and is not overwritten by HA/Bonjour/WSD.
+The same watch_id may be used in different methods; states remain independent.
+
+- **icmp** checks IPv4 Echo Replies using a raw socket (NET_RAW); filtered
+  ICMP is only ICMP-unreachable, not proof the machine is powered off.
+- **tcp** tests the configured IP:port; failure indicates that service is
+  unreachable, not necessarily that the host is off.
+- **arp** uses completed independent LAN ARP scan observations (by validated
+  MAC); a missing observation means absence in this source, not physical off.
+  Its independent evidence cadence follows the LAN ARP scanner (default 180s),
+  rather than treating a cached scan as a new 30s sample.
+- **ha_device_tracker** checks the explicitly configured entity using HA Core
+  API. `home` and `not_home` are positive/negative; unknown/unavailable,
+  missing entities and source errors are unknown.
+
+Default ICMP/TCP cadence is 30 seconds and HA tracker cadence is 60 seconds.
+A transition is confirmed by 2 consecutive positive or 3 consecutive
+negative **independent** observations. On initial startup a baseline state is
+learned without emitting a transition; source errors result in unknown and
+must not manufacture a negative transition. State survives worker restart.
+Inventory Online/Not observed is **unaffected by this separate monitoring**.
+
+Each watch has retained Home Assistant MQTT sensor Discovery/state under
+`DigitalHouses/Global/dh_network_app/monitor/<method>/<watch_id>/`.
+Confirmed transitions publish machine events with `schema_version: 2`,
+`event_id`, `event_type` (tracked_device_reachable/unreachable/present/
+absent), `observed_at`, `check_method`, `watch_id`, previous/current state,
+source-specific target, and optional `label`. QoS 1, no retain for events;
+outbox uses stable event IDs for downstream deduplication on retries.
+The App owns no language-specific notification delivery; consumers configure
+their own Home Assistant event automations. MQTT is optional: the local
+monitor state still updates when the broker is disconnected, and events are
+queued for later delivery.
+
+Validation errors identify bad paths; malformed YAML is not silently accepted.
+The editor is an administrator-only Ingress operation and does not change
+HAOS, router, Proxmox, endpoint network configuration or inventory records.
