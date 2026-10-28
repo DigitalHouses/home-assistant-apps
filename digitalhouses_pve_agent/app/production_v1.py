@@ -19,6 +19,53 @@ from .collectors.cooling import collect_fans
 from .publish_policy import MetricValue
 
 MISSING_CONFIRMATIONS = 3
+PENDING_DISK_EVENTS_KEY = "pending_unsafe_shutdown_events"
+
+
+def unsafe_shutdown_growth_event(
+    disk_id: str,
+    snapshot: SmartSnapshot,
+    previous: Mapping[str, object] | None,
+    *,
+    source: Mapping[str, object] | None = None,
+    observed_at: str | None = None,
+) -> dict[str, object] | None:
+    """Describe a SMART counter increase without assuming its physical cause.
+
+    The persisted counter is authoritative. Initial discovery, unreadable values
+    and counter resets only establish a baseline; they emit no event.
+    """
+    old = previous.get("unsafe_shutdowns") if isinstance(previous, Mapping) else None
+    new = snapshot.unsafe_shutdowns
+    if (
+        not isinstance(old, int) or isinstance(old, bool)
+        or not isinstance(new, int) or isinstance(new, bool)
+        or old < 0 or new <= old
+    ):
+        return None
+    result: dict[str, object] = {
+        "schema_version": 2,
+        "event_type": "disk_unsafe_shutdowns_increased",
+        "event_id": f"disk:{disk_id}:unsafe_shutdowns:{new}",
+        "observed_at": observed_at or datetime.now(timezone.utc).isoformat(),
+        "category": "disk",
+        "severity": "warning",
+        "object_id": disk_id,
+        "object_name": snapshot.model or snapshot.device_path or disk_id,
+        "metric": "unsafe_shutdowns",
+        "previous_value": old,
+        "current_value": new,
+        "delta": new - old,
+        "disk_type": snapshot.disk_type,
+        "device_path": snapshot.device_path,
+        "cause": "unknown",
+    }
+    if isinstance(source, Mapping):
+        for key in ("source_type", "source_guest_id", "source_guest_name"):
+            if source.get(key) is not None:
+                result[key] = source[key]
+    return result
+
 
 
 def boot_time_iso(epoch: int | float | None) -> str | None:
@@ -362,6 +409,9 @@ class ResilientProductionCollectors(ProductionCollectors):
         last_data = dict(last_data_raw) if isinstance(last_data_raw, Mapping) else {}
         missing_counts = dict(missing_raw) if isinstance(missing_raw, Mapping) else {}
 
+        pending_raw = persisted.get(PENDING_DISK_EVENTS_KEY, [])
+        pending_events = list(pending_raw) if isinstance(pending_raw, list) else []
+
         output: dict[str, dict[str, object]] = {}
         metrics: dict[str, MetricValue] = {}
         scan_paths: set[str] = set()
@@ -407,6 +457,11 @@ class ResilientProductionCollectors(ProductionCollectors):
                 "path": source_key,
                 **({"source_type": source_attrs.get("source_type")} if source_attrs else {}),
             }
+            event = unsafe_shutdown_growth_event(
+                disk_id, snapshot, prior, source=source_attrs
+            )
+            if event is not None:
+                pending_events.append(event)
             last_data[disk_id] = dict(item)
             missing_counts[disk_id] = 0
             present_ids.add(disk_id)
@@ -527,6 +582,7 @@ class ResilientProductionCollectors(ProductionCollectors):
                 "inventory": inventory,
                 "last_data": last_data,
                 "missing_counts": missing_counts,
+                PENDING_DISK_EVENTS_KEY: pending_events,
             }
         )
         return CollectorSample(data=output, metrics=metrics)

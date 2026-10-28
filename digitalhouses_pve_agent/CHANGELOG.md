@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.71
+
+- Emit `disk_unsafe_shutdowns_increased` as a non-retained, QoS1 PVE Diagnostic event whenever an existing SMART `unsafe_shutdowns` counter increases. Include disk identity, old/new values, delta, detection time and unknown cause; this works with or without UPS/NUT.
+- Persist each new event **in the same atomic StateStore save as its SMART baseline**, and retry delivery through a disk event outbox on startup/reconnect; do not create events on initial discovery, missing counter or resets. Delivery is at-least-once; an `event_id` supports consumer deduplication.
+- Advertise the event in Home Assistant MQTT Discovery and document handlers in the English, Russian and Russian `write2admins` example packages. Existing HA installations must add the new handler separately; no existing notification package is overwritten.
+- Add regression tests for baseline, counter growth, unchanged/reset cases, MQTT failure, restart replay and event drain. UPS shutdown policy and monitoring remain unchanged.
+
 ## 0.5.70
 
 - Fix Intel GPU transcoding telemetry for PCI-passthrough guests (confirmed on Alder Lake-N UHD GPU in VM2238): decode completed `intel_gpu_top -J` samples when the external timeout leaves the surrounding JSON array unfinished, rather than dropping the whole reading.

@@ -10,7 +10,7 @@ Native Linux agent for **Proxmox VE 8.x** that publishes host, CPU, memory, stor
 
 The canonical product and runtime identity is **DigitalHouses PVE Agent** / `digitalhouses_pve_agent`: systemd service `digitalhouses_pve_agent.service`, filesystem roots under `/opt/digitalhouses/digitalhouses_pve_agent`, `/etc/digitalhouses_pve_agent` and `/var/lib/digitalhouses_pve_agent`, MQTT base `DigitalHouses/Global/digitalhouses_pve_agent/<instance>`, and Home Assistant entity prefix `dh_pve_agent_*`. Version 0.5.30 performs the corrected one-time controlled migration from the former `dh_pve_app` / `dh_app_pve_*` runtime, including deterministic cleanup of retained data owned by the legacy MQTT instance namespace.
 
-Current source release: `VERSION` is `0.5.70`.
+Current source release: `VERSION` is `0.5.71`.
 
 UPS Debug logging: `switch.dh_pve_agent_ups_debug` (MQTT Discovery, default OFF)
 records raw NUT observations every 2 seconds when enabled. It disables itself
@@ -214,7 +214,9 @@ Native MQTT Event entities are used for diagnostic transitions:
 - `event.dh_pve_agent_diagnostic`;
 - `event.dh_pve_agent_ups_diagnostic`.
 
-PVE problem events are semantic: CPU temperature high/normal, CPU throttling started/cleared, storage usage high/normal, disk/GPU temperature high/normal, fan-control restore failed/restored and disk SMART failed/restored. Changes while a problem remains active are reflected immediately in retained problem/telemetry state; no generic transient `problem_updated` Event is published. UPS Event Discovery uses explicit user-semantic events: NUT unavailable/restored, power-state unknown/restored, line-power lost/restored, enter/clear events for low/high battery, replace-battery, bypass, calibration, output-off, overload, AVR Trim/Boost, Forced Shutdown and alarm, plus `battery_discharge_level_crossed`, `battery_fully_charged`, `shutdown_committed` and `config_changed`.
+PVE problem events are semantic: CPU temperature high/normal, CPU throttling started/cleared, storage usage high/normal, disk/GPU temperature high/normal, fan-control restore failed/restored and disk SMART failed/restored.
+The independent `disk_unsafe_shutdowns_increased` Event is emitted when SMART detects a positive increase in the existing `unsafe_shutdowns` baseline, regardless of UPS/NUT presence. It includes `event_id`, `object_id`, `previous_value`, `current_value`, `delta` and `observed_at` (detection time, **not** necessarily the shutdown time). An unknown or reset counter does not fire an event. The pending Event is committed in `disks.json` alongside the new baseline and retried after MQTT reconnection or Agent restart. Delivery is **at least once**; duplicate deliveries are possible if a crash occurs between broker acknowledgement and outbox checkpoint, and receivers may deduplicate using `event_id`. No power-loss cause is inferred.
+ Changes while a problem remains active are reflected immediately in retained problem/telemetry state; no generic transient `problem_updated` Event is published. UPS Event Discovery uses explicit user-semantic events: NUT unavailable/restored, power-state unknown/restored, line-power lost/restored, enter/clear events for low/high battery, replace-battery, bypass, calibration, output-off, overload, AVR Trim/Boost, Forced Shutdown and alarm, plus `battery_discharge_level_crossed`, `battery_fully_charged`, `shutdown_committed` and `config_changed`.
 
 New public App events use `schema_version: 2` and contain machine semantics only: IDs/enums, previous/current state, numeric values, thresholds, timestamps and reason codes. Events also carry an event-time assessment snapshot when relevant. For example, an UPS line-power event carries charge/runtime/load/voltage facts captured with that event, while a PVE temperature or storage event carries the current value plus threshold and useful capacity/CPU context. Home Assistant therefore does not reread mutable telemetry sensors to explain an old event. App event payloads do not generate notification `title`, `message`, `summary`, `details`, localized labels, emoji or `status_ru`. Runtime Event messages are non-retained, published with MQTT QoS 1 after the synchronized retained current-state bundle, and Home Assistant subscribes to the Event topics at QoS 1 through MQTT Discovery.
 
@@ -271,7 +273,7 @@ The PVE HA examples are:
 
 Install the base package and **exactly one** local notification package. The portable examples and the `write2admins` variant share the same package key and automation ID; never install them together. The admin-chat variant requires an existing Home Assistant `script.write2admins` accepting `title` and `message`. The script adds the home identifier itself, so the notification package must not hardcode a site name. The local package gives every user-visible situation its own `event.received` trigger and matching `trigger.id`, routes it through `choose`, and calls the delivery service directly. For example, `line_power_lost` is the exact place to edit the text shown when the UPS switches to battery, `line_power_restored` is the restore event, `boost_started` is the exact place for AVR Boost, and `cpu_throttling_started` or `storage_usage_high` are the exact places for those PVE alerts. The bundled text demonstrates the event-time context fields, such as UPS charge/runtime/load/input voltage or PVE temperature/frequency/threshold/free space.
 
-The two portable notification examples use `persistent_notification.create`. The additional Russian admin-chat variant routes all 48 PVE/UPS notifications, including NFS failure and restoration, to `script.write2admins` without changing trigger IDs, title/message fields or the PVE Agent. A user may also replace the direct action in a portable example with any local `notify.*`, script or other Home Assistant service.
+The two portable notification examples use `persistent_notification.create`. The additional Russian admin-chat variant routes PVE/UPS notifications, including NFS failure and restoration, to `script.write2admins` without changing trigger IDs, title/message fields or the PVE Agent. A user may also replace the direct action in a portable example with any local `notify.*`, script or other Home Assistant service.
 
 Event data is read directly from `trigger.to_state.attributes`. The notification automation does not create another Home Assistant notification event and does not repeat the producer's machine-event schema validation.
 
@@ -435,7 +437,7 @@ Production install/update is release-tag only. Version 0.5.30 is the corrected c
 For the canonical runtime, install/update/reinstall never clears the current canonical MQTT namespace. Canonical retained MQTT cleanup is owned exclusively by the supported uninstaller.
 
 ```bash
-TAG=digitalhouses_pve_agent-v0.5.70
+TAG=digitalhouses_pve_agent-v0.5.71
 DIGITALHOUSES_SOURCE_REF="$TAG" \
   bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$TAG/digitalhouses_pve_agent/install.sh")
 ```

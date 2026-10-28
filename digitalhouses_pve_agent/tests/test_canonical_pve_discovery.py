@@ -220,6 +220,7 @@ def test_problem_aggregate_and_native_mqtt_event_are_canonical():
         "fan_control_restored",
         "disk_smart_failed",
         "disk_smart_restored",
+        "disk_unsafe_shutdowns_increased",
     ]
     assert event["qos"] == 1
     assert event["entity_category"] == "diagnostic"

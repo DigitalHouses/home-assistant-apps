@@ -4,6 +4,7 @@ import queue
 from collections.abc import Mapping
 
 from .problems import PveProblemEngine, ProblemState, ProblemTransition
+from .production_v1 import PENDING_DISK_EVENTS_KEY
 from .pve_problem_events import (
     PveProblemEventDebouncer,
     pve_problem_context,
@@ -34,7 +35,10 @@ class ProblemAwareRuntime(DynamicDiscoveryRuntime):
         problem_event_debounce_seconds = float(
             kwargs.pop("problem_event_debounce_seconds", 0.0)
         )
+        disk_event_store = kwargs.pop("disk_event_store", None)
         super().__init__(*args, **kwargs)
+        self.disk_event_store = disk_event_store
+        self._next_disk_event_retry = 0.0
         self.problem_engine = _RuntimeProblemEngine()
         self.problem_event_debouncer = PveProblemEventDebouncer(
             delay_seconds=problem_event_debounce_seconds
@@ -190,6 +194,34 @@ class ProblemAwareRuntime(DynamicDiscoveryRuntime):
             result[name] = self._jsonable(state.data)
         return result
 
+    def _flush_disk_events(self) -> bool:
+        """At-least-once delivery from the disk checkpoint/outbox transaction.
+
+        Never remove a queued event before QoS1 publish reports success. A
+        process crash after publication but before saving may replay an event;
+        its persistent event_id allows notification handlers to deduplicate.
+        """
+        store = self.disk_event_store
+        if store is None:
+            return True
+        try:
+            saved = store.load()
+            pending = saved.get(PENDING_DISK_EVENTS_KEY, [])
+            if not isinstance(pending, list):
+                return False
+            while pending:
+                event = pending[0]
+                if not isinstance(event, dict):
+                    return False
+                if not self.bridge.publish_diagnostic_event(event):
+                    return False
+                pending = pending[1:]
+                saved[PENDING_DISK_EVENTS_KEY] = pending
+                store.save(saved)
+            return True
+        except Exception:
+            return False
+
     def run_collection(
         self,
         names: tuple[str, ...] | list[str] | None = None,
@@ -223,10 +255,14 @@ class ProblemAwareRuntime(DynamicDiscoveryRuntime):
         transitions_ok = self._flush_pending_transitions()
         events_ok = self._flush_due_problem_events()
         snapshot_ok = self._sync_current_problem_states()
-        return state_ok and transitions_ok and events_ok and snapshot_ok
+        disk_events_ok = self._flush_disk_events() if "smart" in selected else True
+        return state_ok and transitions_ok and events_ok and snapshot_ok and disk_events_ok
 
 
     def tick(self, now_monotonic: float) -> bool:
+        if now_monotonic >= self._next_disk_event_retry:
+            self._next_disk_event_retry = now_monotonic + 5.0
+            self._flush_disk_events()
         if not self._flush_pending_transitions():
             return False
         if not self._flush_due_problem_events(now_monotonic):

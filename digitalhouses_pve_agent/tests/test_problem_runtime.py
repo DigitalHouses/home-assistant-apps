@@ -319,3 +319,50 @@ def test_active_problem_detail_update_stays_in_retained_state_without_transient_
     assert ("setting", "cpu_temperature_threshold", 92.0) in calls
     assert ("problem_state", "cpu_temperature", True) in calls
     assert not any(call[0] == "diagnostic_event" for call in calls)
+
+
+
+def test_disk_counter_events_wait_for_broker_and_drain_after_restart():
+    runtime, bridge, _store, _scheduler, _clock, _cpu = make_runtime()
+    disk_store = FakeStore()
+    event = {
+        "schema_version": 2,
+        "event_type": "disk_unsafe_shutdowns_increased",
+        "event_id": "disk:nvme:unsafe_shutdowns:12",
+        "object_id": "nvme",
+        "previous_value": 11,
+        "current_value": 12,
+        "delta": 1,
+    }
+    disk_store.save({
+        "checkpoints": {"nvme": {"unsafe_shutdowns": 12}},
+        "pending_unsafe_shutdown_events": [event],
+    })
+    runtime.disk_event_store = disk_store
+    bridge.fail_once.add("diagnostic_event")
+
+    assert runtime._flush_disk_events() is False
+    assert disk_store.load()["pending_unsafe_shutdown_events"] == [event]
+
+    # Simulate a fresh process pointing at the same checkpoint and outbox.
+    restarted, recovered_bridge, *_ = make_runtime()
+    restarted.disk_event_store = disk_store
+    assert restarted._flush_disk_events() is True
+    assert recovered_bridge.calls[-1] == ("diagnostic_event", event)
+    saved = disk_store.load()
+    assert saved["checkpoints"] == {"nvme": {"unsafe_shutdowns": 12}}
+    assert saved["pending_unsafe_shutdown_events"] == []
+    assert restarted._flush_disk_events() is True
+    assert [x for x in recovered_bridge.calls if x[0] == "diagnostic_event"] == [("diagnostic_event", event)]
+
+
+def test_disk_event_outbox_is_drained_by_tick_without_new_smart_scan():
+    runtime, bridge, _store, _scheduler, clock, _cpu = make_runtime(temperature=70.0)
+    disk_store = FakeStore()
+    event = {"event_type": "disk_unsafe_shutdowns_increased", "event_id": "disk:test:2"}
+    disk_store.save({"pending_unsafe_shutdown_events": [event]})
+    runtime.disk_event_store = disk_store
+    clock["now"] = 1.0
+    runtime.tick(1.0)
+    assert ("diagnostic_event", event) in bridge.calls
+    assert disk_store.load()["pending_unsafe_shutdown_events"] == []

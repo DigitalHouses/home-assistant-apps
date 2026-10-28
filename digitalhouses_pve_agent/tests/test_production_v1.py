@@ -228,3 +228,66 @@ def test_stopped_vm_marks_guest_disk_unavailable_without_removing_local_disk(tmp
     second = collector.smart()
     assert _find_serial(second, "S2PWNX0H603177N")["available"] is False
     assert _find_serial(second, "S7M3NL0Y413841D")["available"] is True
+
+
+
+def test_unsafe_shutdown_growth_is_queued_atomically_once_per_observation(tmp_path, monkeypatch):
+    collector = _collector(tmp_path)
+    scan = json.loads((FIX / "nvme_samsung_990_evo.json").read_text())
+    counter = scan["nvme_smart_health_information_log"]
+    monkeypatch.setattr(collector, "_smart_scan", lambda: (("/dev/nvme0", "-d", "nvme"),))
+    monkeypatch.setattr(collector, "_smart_read", lambda entry: json.dumps(scan))
+    store = collector.disk_state_store
+
+    first = collector.smart()
+    disk_id = next(iter(first.data))
+    assert store.load()["pending_unsafe_shutdown_events"] == []
+
+    counter["unsafe_shutdowns"] = 27
+    second = collector.smart()
+    assert second.data[disk_id]["health_state"] == "WARNING"
+    queued = store.load()["pending_unsafe_shutdown_events"]
+    assert len(queued) == 1
+    event = queued[0]
+    assert event["event_type"] == "disk_unsafe_shutdowns_increased"
+    assert event["object_id"] == disk_id
+    assert event["metric"] == "unsafe_shutdowns"
+    assert event["previous_value"] == 25
+    assert event["current_value"] == 27
+    assert event["delta"] == 2
+    assert event["cause"] == "unknown"
+    assert event["event_id"]
+    assert event["observed_at"]
+
+    collector.smart()
+    assert len(store.load()["pending_unsafe_shutdown_events"]) == 1
+
+    # Replacement/firmware reset of an accumulating counter is a new baseline.
+    counter["unsafe_shutdowns"] = 1
+    collector.smart()
+    assert len(store.load()["pending_unsafe_shutdown_events"]) == 1
+
+    counter["unsafe_shutdowns"] = 2
+    collector.smart()
+    queued = store.load()["pending_unsafe_shutdown_events"]
+    assert len(queued) == 2
+    assert queued[-1]["previous_value"] == 1
+    assert queued[-1]["current_value"] == 2
+
+
+def test_unsafe_shutdown_growth_requires_existing_numeric_baseline(tmp_path):
+    from dataclasses import replace
+    from app.collectors.smart import parse_smart_json
+    from app.production_v1 import unsafe_shutdown_growth_event
+
+    snapshot = parse_smart_json(
+        json.loads((FIX / "nvme_samsung_990_evo.json").read_text()),
+        "/dev/nvme0",
+    )
+    assert unsafe_shutdown_growth_event("nvme", snapshot, None) is None
+    assert unsafe_shutdown_growth_event("nvme", snapshot, {}) is None
+    assert unsafe_shutdown_growth_event("nvme", snapshot, {"unsafe_shutdowns": True}) is None
+    assert unsafe_shutdown_growth_event("nvme", replace(snapshot, unsafe_shutdowns=None), {"unsafe_shutdowns": 24}) is None
+    assert unsafe_shutdown_growth_event("nvme", snapshot, {"unsafe_shutdowns": 26}) is None
+    assert unsafe_shutdown_growth_event("nvme", snapshot, {"unsafe_shutdowns": 25}) is None
+    assert unsafe_shutdown_growth_event("nvme", snapshot, {"unsafe_shutdowns": 24})["delta"] == 1
