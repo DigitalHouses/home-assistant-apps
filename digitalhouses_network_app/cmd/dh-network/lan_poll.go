@@ -9,6 +9,9 @@ import (
 // ARP discovery is independent from Home Assistant and does not use Nmap.
 // Failed scans preserve the device registry and its last-positive evidence.
 func (s *Service) pollLAN() {
+    // A newly enabled watch requests a full scan; serialize it with the periodic scanner.
+    s.lanScanMu.Lock()
+    defer s.lanScanMu.Unlock()
     generation:=s.currentScanGeneration()
     at:=time.Now().UTC().Format(time.RFC3339)
     plan,err:=localLANPlan()
@@ -44,4 +47,22 @@ func (s *Service) reportLANError(now string,err error) {
 
 func (s *Service) runLANPolling(interval time.Duration) {
     for {s.pollLAN();time.Sleep(s.intervalFor("arp",interval))}
+}
+
+ // requestPresenceScan coalesces concurrent activations into one out-of-cycle
+ // full LAN scan. It never launches a separate per-device ping process.
+func (s *Service) requestPresenceScan() {
+    s.presenceScanMu.Lock()
+    if s.presenceScanQueued {s.presenceScanMu.Unlock();return}
+    s.presenceScanQueued=true
+    s.presenceScanMu.Unlock()
+    go func(){
+        defer func(){
+            s.presenceScanMu.Lock()
+            s.presenceScanQueued=false
+            s.presenceScanMu.Unlock()
+        }()
+        if s.presenceScanNow!=nil {s.presenceScanNow();return}
+        s.pollLAN()
+    }()
 }
