@@ -53,12 +53,12 @@ type wsdGetEnvelope struct {
 func wsdGetSOAP(endpoint,requestID string) []byte {
  return []byte(`<?xml version="1.0" encoding="utf-8"?>
 <s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope"
- xmlns:a="http://schemas.xmlsoap.org/ws/2004/08/addressing">
+ xmlns:wsa="http://schemas.xmlsoap.org/ws/2004/08/addressing">
 <s:Header>
-<a:To>`+endpoint+`</a:To>
-<a:Action>http://schemas.xmlsoap.org/ws/2004/09/transfer/Get</a:Action>
-<a:MessageID>`+requestID+`</a:MessageID>
-<a:ReplyTo><a:Address>http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous</a:Address></a:ReplyTo>
+<wsa:To>`+endpoint+`</wsa:To>
+<wsa:Action>http://schemas.xmlsoap.org/ws/2004/09/transfer/Get</wsa:Action>
+<wsa:MessageID>`+requestID+`</wsa:MessageID>
+<wsa:ReplyTo><wsa:Address>http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous</wsa:Address></wsa:ReplyTo>
 </s:Header><s:Body/></s:Envelope>`)
 }
 func validWSDComputerName(s string) bool {
@@ -103,7 +103,7 @@ func safeWSDMetadataTarget(item WSDAnnouncement) (string,error) {
  ip,err:=netip.ParseAddr(item.IPv4)
  if err!=nil||!ip.Is4()||!ip.IsPrivate(){return "",errors.New("WSD target must be a private IPv4")}
  u,err:=url.Parse(item.Origin)
- if err!=nil||u.Scheme!="http"||u.User!=nil||u.Host==""||u.Port()!="5357" || u.Path!=""||u.RawQuery!=""||u.Fragment!="" {
+ if err!=nil||u.Scheme!="http"||u.User!=nil||u.Host==""||(u.Port()!="5357"&&u.Port()!="3702") || u.Path!=""||u.RawQuery!=""||u.Fragment!="" {
   return "",errors.New("WSD metadata target is not a sanitized Windows WSD origin")
  }
  resolved,err:=netip.ParseAddr(u.Hostname())
@@ -124,7 +124,8 @@ func fetchWSDComputerName(ctx context.Context,item WSDAnnouncement) (string,erro
  requestID:="urn:uuid:"+id
  req,err:=http.NewRequestWithContext(ctx,http.MethodPost,target,bytes.NewReader(wsdGetSOAP(item.Endpoint,requestID)))
  if err!=nil{return "",err}
- req.Header.Set("Content-Type","application/soap+xml; charset=utf-8")
+ // wsdd2 uses literal Content-Type comparison and rejects charset parameters.
+ req.Header.Set("Content-Type","application/soap+xml")
  req.Header.Set("User-Agent","DigitalHouses-Network-WSD/0.1.10")
  client:=&http.Client{
   Timeout:1800*time.Millisecond,
