@@ -13,7 +13,7 @@ func (s *Service) pollLAN() {
     s.lanScanMu.Lock()
     defer s.lanScanMu.Unlock()
     generation:=s.currentScanGeneration()
-    at:=time.Now().UTC().Format(time.RFC3339)
+    at:=time.Now().UTC().Format(time.RFC3339Nano)
     plan,err:=localLANPlan()
     if err!=nil {
         s.withCurrentGeneration(generation,func(){s.reportLANError(at,err)})
@@ -29,7 +29,7 @@ func (s *Service) pollLAN() {
     }
     s.withCurrentGeneration(generation,func(){
         now:=time.Now().UTC().Format(time.RFC3339)
-        if err:=s.db.importARPHosts(hosts,now,plan.iface.Name,plan.network.String());err!=nil {
+        if err:=s.db.importARPHosts(hosts,now,plan.iface.Name,plan.network.String(),at);err!=nil {
             s.reportLANError(now,err)
             return
         }
