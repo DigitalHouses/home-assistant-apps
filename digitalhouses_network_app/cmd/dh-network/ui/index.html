@@ -498,6 +498,7 @@ async function edit(id){
   const r=await fetch('api/devices/'+encodeURIComponent(id)+'/note',{method:'PUT',headers:{'Content-Type':'application/json','X-DH-UI':'1'},body:JSON.stringify({note})});
   if(!r.ok)throw new Error('HTTP '+r.status);
   devices=await read('devices');
+  if(page==='devices')presenceSubscriptions=await read('presence');
   deviceBirths=await read('device-births');renderTable();
  }catch(e){alert('Не удалось сохранить: '+e.message)}
 }
@@ -513,35 +514,89 @@ function sourceDescription(s){
  }catch(_){return 'Нет подробностей'}
 }
 
-async function renderMonitoring(){
- let editor=body.querySelector('#monitor-yaml');
- if(!editor){
-  const cfg=await read('monitored-config');
-  body.innerHTML='<h2>Мониторинг устройств</h2><p class="description">Независимые проверки: ICMP, ARP, HA device_tracker и TCP. Они не меняют инвентарный Online. По умолчанию отслеживаемых устройств нет.</p>'+
-   '<textarea id="monitor-yaml" class="monitor-editor" aria-label="YAML monitored_devices" spellcheck="false"></textarea>'+
-   '<div class="monitor-tools"><button type="button" id="monitor-save">Проверить и сохранить YAML</button><small id="monitor-feedback" role="status" aria-live="polite"></small></div>'+
-   '<h2>Состояния проверок</h2><div id="monitor-table"></div>';
-  editor=body.querySelector('#monitor-yaml');
-  editor.value=cfg.yaml;
-  body.querySelector('#monitor-save').addEventListener('click',async()=>{
-   const button=body.querySelector('#monitor-save'),status=body.querySelector('#monitor-feedback');
-   button.disabled=true;status.textContent='Проверка YAML…';
-   try{
-    const result=await fetch('api/monitored-config',{method:'PUT',headers:{'Content-Type':'application/json','X-DH-UI':'1'},body:JSON.stringify({yaml:editor.value})});
-    if(!result.ok)throw new Error((await result.text()).trim());
-    status.textContent='YAML сохранён. Проверки обновятся автоматически.';
-   }catch(e){status.textContent='Ошибка: '+e.message}
-   finally{button.disabled=false}
-  });
- }
- const data=await read('monitored-state'),output=body.querySelector('#monitor-table');
- if(!output)return;
- if(!data.length){output.innerHTML='<p class="description">Активных проверок пока нет.</p>';return}
- output.innerHTML='<div class="grid-scroll"><table><thead><tr><th>Метод</th><th>watch_id</th><th>Подпись</th><th>Проверяемый адрес</th><th>Статус</th><th>Причина</th><th>Проверено</th></tr></thead><tbody>'+
-  data.map(x=>{
-   let target='';try{const spec=JSON.parse(x.target_json||'{}');target=(spec.target||'')+(spec.port?':'+spec.port:'')}catch(_){}
-   return '<tr><td>'+esc(x.method)+'</td><td><code>'+esc(x.watch_id)+'</code></td><td>'+esc(x.label||'—')+'</td><td>'+esc(target)+'</td><td><span class="tag '+esc(x.state)+'">'+esc(x.state)+'</span></td><td>'+esc(x.reason||'—')+'</td><td>'+esc(noteTime(x.last_check))+'</td></tr>';
-  }).join('')+'</tbody></table></div>';
+async function renderSettings(){
+ if(!globalSettings)globalSettings=await read('settings');
+ if(body.querySelector('#global-settings'))return;
+ const fields=[
+  ['poll_interval_seconds','Home Assistant / роутеры',15,3600,'Частота обновления данных от интеграций HA'],
+  ['scan_interval_seconds','ARP · локальная сеть',60,3600,'Общий цикл IP/MAC Presence и обнаружения'],
+  ['mdns_interval_seconds','Bonjour / mDNS',120,3600,'Поиск имён и сервисов'],
+  ['ssdp_interval_seconds','SSDP',120,3600,'Обнаружение UPnP-сервисов'],
+  ['wsd_interval_seconds','WSD',120,3600,'Обнаружение устройств через WS-Discovery'],
+  ['confirm_successes','Подтвердить появление',1,5,'Количество успешных ARP-сканов'],
+  ['confirm_failures','Подтвердить отсутствие',1,8,'Количество успешных сканов без обнаружения']
+ ];
+ body.innerHTML='<div class="settings-panel"><h2>Глобальные параметры</h2><p class="description">Единые интервалы для всей сети. Настройки действуют после сохранения и сохраняются при перезапуске приложения. Никаких индивидуальных интервалов.</p>'+
+  '<form id="global-settings"><div class="settings-grid">'+
+  fields.map(([key,title,min,max,help])=>'<label>'+esc(title)+'<input type="number" required step="1" name="'+key+'" min="'+min+'" max="'+max+'" value="'+globalSettings[key]+'" title="'+esc(help)+'"><small>'+esc(help)+'</small></label>').join('')+
+  '</div><div class="toolbar"><button type="submit" id="settings-save">Сохранить параметры</button><span id="settings-status" role="status" aria-live="polite"></span></div></form>'+
+  '<p class="description">Проверки выполняются глобально в фоне. Presence использует результаты завершённых ARP-сканов. Недоступность сканера не считается отсутствием устройства.</p></div>';
+ body.querySelector('#global-settings').addEventListener('submit',async event=>{
+  event.preventDefault();
+  const form=event.currentTarget,button=form.querySelector('button'),status=form.querySelector('#settings-status');
+  const input={};
+  for(const [key] of fields)input[key]=Number(form.elements.namedItem(key).value);
+  button.disabled=true;status.textContent='Сохранение…';
+  try{
+   const result=await fetch('api/settings',{method:'PUT',headers:{'Content-Type':'application/json','X-DH-UI':'1'},body:JSON.stringify(input)});
+   if(!result.ok)throw Error((await result.text()).trim());
+   globalSettings=await read('settings');status.textContent='Глобальные параметры сохранены.';
+  }catch(error){status.textContent='Ошибка: '+error.message}
+  finally{button.disabled=false}
+ });
+}
+function renderHelp(){
+ body.innerHTML='<section class="help-section"><h2>Помощь · Network App</h2>'+
+  '<p>Приложение автоматически обнаруживает устройства в локальной сети и показывает адреса, имена и историю. Для просмотра устройств ничего настраивать не нужно.</p>'+
+  '<details open><summary>Что означает Online?</summary><p>Это состояние по последним данным ARP или подключённой интеграции роутера. Оно не гарантирует, что устройство прямо сейчас отвечает на Ping. Если источник недоступен, отсутствие ответа нельзя считать отключением устройства.</p></details>'+
+  '<details><summary>Как включить IP Presence?</summary><p>В разделе «Устройства» нажми ⋮ рядом с IP и включи «Отслеживать адрес». Приложение будет наблюдать за этим адресом на основе фонового обнаружения и генерировать события при подтверждённом изменении. Для IP вне локального сегмента ARP-наблюдение не подходит.</p></details>'+
+  '<details><summary>Как включить MAC Presence?</summary><p>Нажми ⋮ рядом с MAC. MAC Presence следит за оборудованием по физическому адресу, даже если IP изменился. Для некоторых телефонов со случайным MAC наблюдение может быть нестабильным.</p></details>'+
+  '<details><summary>Что означает зелёный глаз?</summary><p>Подписка Presence включена. Наведи курсор или поставь фокус на значок: увидишь время проверки, последнее обнаружение и изменение состояния. Зелёный глаз не означает Online.</p></details>'+
+  '<details><summary>Где менять интервалы?</summary><p>Все интервалы общие. Открой верхнюю вкладку «Параметры» и настрой частоту обнаружения и пороги подтверждения. Сканирование происходит независимо от числа подписок.</p></details>'+
+  '<details><summary>Что такое NEW DEVICE?</summary><p>Ранее неизвестное устройство впервые обнаружено в сети. Отметка NEW видна 24 часа. Первый запуск не отправляет лавину уведомлений о всех существующих устройствах.</p></details>'+
+  '<details><summary>Как написать автоматизацию Home Assistant?</summary><p>В «Журнале событий» найди нужное событие. Скопируй точный event_type или шаблон триггера HA и при необходимости настрой реакцию. Технические события передаются через MQTT Event entity event.dh_network_app_network.</p></details>'+
+  '<details><summary>Что означают статусы доставки?</summary><p>«Передано MQTT» означает подтверждение от брокера (PUBACK), но не подтверждение запуска автоматизации или доставки сообщения. При отсутствии связи события сохраняются в очереди.</p></details>'+
+  '<details><summary>Как работают уведомления DH?</summary><p>Это опция для локального пакета Home Assistant, устанавливаемого отдельно. Сам Network App не отправляет сообщения в Telegram и не выдаёт публикацию MQTT за доставленное уведомление.</p></details>'+
+  '<details><summary>Как скопировать значения?</summary><p>В меню ⋮ рядом с IP/MAC есть «Скопировать». Для имени, Note и других заполненных ячеек иконка копирования появляется при наведении.</p></details>'+
+  '</section>';
+}
+let eventLogFilter='',eventLogStatus='all';
+function eventTemplate(item){
+ const type=String(item.event_type||'');
+ let d={};try{d=JSON.parse(item.payload_json||'{}')}catch(_){}
+ const field=d.ip?'ip':d.mac?'mac':d.ipv4?'ipv4':'';
+ const target=field?String(d[field]):'';
+ const condition=field?' and trigger.to_state.attributes.'+field+' == '+JSON.stringify(target):'';
+ return 'triggers:\n  - trigger: state\n    entity_id: event.dh_network_app_network\nconditions:\n  - condition: template\n    value_template: >-\n      {{ trigger.to_state is not none and trigger.to_state.attributes.event_type == '+JSON.stringify(type)+condition+' }}\nactions: []\n';
+}
+function eventTitle(type){
+ return ({device_discovered:'Новое устройство',tracked_device_reachable:'IP стал доступен',tracked_device_unreachable:'IP перестал обнаруживаться',
+ tracked_device_present:'MAC появился',tracked_device_absent:'MAC перестал обнаруживаться'})[type]||type;
+}
+async function renderEventLog(){
+ const events=await read('event-log');
+ const statuses={queued:'В очереди',retrying:'Повторная попытка',broker_acked:'Передано MQTT'};
+ const visible=events.filter(item=>{
+  const text=[item.event_type,item.payload_json,item.event_id].join(' ').toLowerCase();
+  return text.includes(eventLogFilter.toLowerCase())&&(eventLogStatus==='all'||item.status===eventLogStatus);
+ });
+ body.innerHTML='<h2>Журнал событий</h2><p class="description">Только события, предназначенные Home Assistant. Имя event_type можно скопировать для собственного обработчика. Статус «Передано MQTT» означает подтверждение брокера, но не обработку Home Assistant.</p>'+
+  '<div class="event-tools"><input id="log-search" placeholder="IP, MAC или имя события…" value="'+esc(eventLogFilter)+'" aria-label="Поиск по журналу">'+
+  '<select id="log-status" aria-label="Статус доставки"><option value="all">Все статусы</option><option value="broker_acked">Передано MQTT</option><option value="queued">В очереди</option><option value="retrying">Повторная попытка</option></select></div>'+
+  (visible.length?'<div class="grid-scroll"><table class="event-log"><thead><tr><th>Время</th><th>Событие / адрес</th><th>Доставка</th><th>Детали</th></tr></thead><tbody>'+
+  visible.map(item=>{
+   let d={};try{d=JSON.parse(item.payload_json||'{}')}catch(_){}
+   const target=d.ip||d.mac||d.ipv4||d.device_id||'—';
+   const code=eventTemplate(item);
+   return '<tr><td>'+esc(noteTime(item.occurred_at))+'</td><td><strong>'+esc(eventTitle(item.event_type))+'</strong><small style="display:block">'+esc(target)+'</small>'+
+    '<code>'+esc(item.event_type)+'</code><button class="small-copy" data-copy="'+esc(item.event_type)+'" type="button" title="Скопировать event_type" aria-label="Скопировать event_type">⧉</button></td>'+
+    '<td><span class="tag '+(item.status==='broker_acked'?'ok':'unknown')+'">'+esc(statuses[item.status]||item.status)+'</span><small style="display:block">Попыток: '+esc(item.attempts)+'</small></td>'+
+    '<td><details><summary>Детали</summary><small>event_id: '+esc(item.event_id)+'</small><p><button type="button" class="small-copy" data-copy="'+esc(code)+'">Скопировать триггер HA</button> <button type="button" class="small-copy" data-copy="'+esc(JSON.stringify(d,null,2))+'">Скопировать JSON</button></p><pre>'+esc(JSON.stringify(d,null,2))+'</pre></details></td></tr>';
+  }).join('')+'</tbody></table></div>':'<p>Подходящих событий пока нет.</p>');
+ body.querySelector('#log-search').addEventListener('input',e=>{eventLogFilter=e.target.value;renderEventLog()});
+ const status=body.querySelector('#log-status');status.value=eventLogStatus;
+ status.addEventListener('change',e=>{eventLogStatus=e.target.value;renderEventLog()});
+ enableCellCopy();
 }
 async function load(){
  try{
@@ -581,24 +636,14 @@ async function load(){
   }
   devicesTools.hidden=true;
   filterArea.innerHTML='';
-  if(page==='monitoring'){await renderMonitoring();return;}
+  if(page==='settings'){await renderSettings();return;}
+  if(page==='help'){renderHelp();return;}
+  if(page==='events'){await renderEventLog();return;}
   if(page==='sources'){
    const sources=await read('sources');
    body.innerHTML='<h2>Источники</h2><div class="grid-scroll"><table><thead><tr><th>Источник</th><th>Статус</th><th>Последний успешный опрос</th><th>Детали</th></tr></thead><tbody>'+
    sources.map(s=>'<tr><td>'+esc(s.name)+'</td><td><span class="tag '+esc(s.status)+'">'+esc(s.status)+'</span></td><td>'+esc(noteTime(s.last_success))+'</td><td>'+sourceDescription(s)+'</td></tr>').join('')+'</tbody></table></div>';return;
   }
-  const events=await read('events');
-  body.innerHTML='<h2>События</h2><p class="description">Информационные изменения противоречивых IPv4-наблюдений. Запись не доказывает реальный конфликт адресов. Новые автоматизации и уведомления не создаются.</p>'+(events.length?'<div class="grid-scroll"><table><thead><tr><th>Время</th><th>Событие</th><th>Адрес и источники</th></tr></thead><tbody>'+events.map(e=>{
-   let d={};try{d=JSON.parse(e.data_json||'{}')}catch(_){}
-   const known=d.previous||d;
-   if(e.event_type==='device_discovered'){
-    return '<tr><td>'+esc(noteTime(e.occurred_at))+'</td><td>Новое устройство</td><td>'+esc(d.name||d.device_id||'—')+' · '+esc(d.ipv4||'—')+'<small> '+esc(d.mac||'')+'</small></td></tr>';
-   }
-   const label=e.event_type==='ipv4_disagreement_started'?'Расхождение обнаружено':e.event_type==='ipv4_disagreement_changed'?'Источники изменились':e.event_type==='ipv4_disagreement_resolved'?'Расхождение разрешено':e.event_type;
-   const parts=(known.claims||[]).map(c=>c.source+' / '+c.mac).join('; ');
-   const kind=known.classification==='source_disagreement'?'Различие источников':'Конфликт подтверждений';
-   return '<tr><td>'+esc(noteTime(e.occurred_at))+'</td><td>'+esc(label)+'</td><td>'+esc(known.ipv4||'')+' · '+esc(kind)+'<small> '+esc(parts)+'</small></td></tr>';
-  }).join('')+'</tbody></table></div>':'<p>Журнал событий пока пуст.</p>');
  }catch(e){health.textContent='API unavailable';body.textContent='Ошибка API: '+e.message}
 }
 async function exportDiagnostic() {
@@ -671,7 +716,7 @@ document.getElementById('export').addEventListener('click',exportDiagnostic);
 document.getElementById('reset').addEventListener('click',resetInventoryFromUI);
 document.querySelectorAll('[data-page]').forEach(b=>b.addEventListener('click',()=>{
  document.querySelectorAll('nav button').forEach(a=>a.classList.remove('active'));
- b.classList.add('active');page=b.dataset.page;filter='';load();
+ b.classList.add('active');page=b.dataset.page;filter='';closePresenceMenu();load();
 }));
 load();
 setInterval(load,30000);
