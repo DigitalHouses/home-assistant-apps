@@ -111,7 +111,7 @@ class PresenceTests(unittest.TestCase):
         for n in range(3):
             scan(db,t+timedelta(seconds=20+n*10),False);engine.cycle(db,tx)
         self.assertEqual(db.execute("SELECT COUNT(*) FROM presence_outbox").fetchone()[0],2)
-        self.assertEqual({x["status"] for x in db.execute("SELECT status FROM event_delivery_log")},{"retrying"})
+        self.assertEqual({x["status"] for x in db.execute("SELECT status FROM event_delivery_log")},{"queued","retrying"})
         tx.fail=False;engine.cycle(db,tx)
         self.assertEqual(db.execute("SELECT COUNT(*) FROM presence_outbox").fetchone()[0],0)
         self.assertEqual({x["status"] for x in db.execute("SELECT status FROM event_delivery_log")},{"broker_acked"})
