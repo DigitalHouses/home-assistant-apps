@@ -2,9 +2,28 @@
 <html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>DH Network App</title><style>
 :root{color-scheme:dark}*{box-sizing:border-box}body{font:14px system-ui,sans-serif;margin:0;background:#111b29;color:#e9f0f7}
-header{padding:20px 26px;background:#192b41;border-bottom:1px solid #32475f;display:flex;align-items:center;justify-content:space-between;gap:16px}
+.app-header{position:relative;z-index:2;padding:12px 24px;background:#192b41;border-bottom:1px solid #32475f;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.brand{flex:0 0 auto}.brand h1{white-space:nowrap}
+.app-header nav{display:flex;align-items:center;gap:6px;margin:0;flex-wrap:wrap}
+.app-header nav button{background:transparent;border-color:transparent;padding:8px 11px}
+.app-header nav button.active{background:#137b78;border-color:#26b6a5}
+.overview{margin-left:auto;flex:0 0 auto}
+.overview summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:9px;padding:6px 9px;border:1px solid #536e83;border-radius:8px;color:#f1f7fb;background:#284059;white-space:nowrap}
+.overview summary::-webkit-details-marker{display:none}
+.overview summary:hover{filter:brightness(1.16)}
+.overview summary:focus-visible{outline:2px solid #82efc7;outline-offset:3px}
+.overview[open] summary{background:#137b78;border-color:#26b6a5}
+.overview-arrow{font-size:18px;line-height:1;transition:transform .15s ease}
+.overview[open] .overview-arrow{transform:rotate(180deg)}
+.overview-panel{position:absolute;top:calc(100% + 5px);right:16px;width:min(790px,calc(100vw - 32px));max-height:min(77vh,720px);overflow-y:auto;border:1px solid #49647e;border-radius:12px;background:#192b41;padding:18px;box-shadow:0 15px 42px #000b}
+.overview-panel .description{margin:0 0 12px}
+.overview-panel .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:9px;margin:10px 0 16px}
+.overview-panel .stat{min-width:0;padding:10px 12px}
+.overview-panel .stat strong{font-size:21px}
+.overview-panel .notice{margin:12px 0}
+.overview-panel .toolbar{margin:14px 0 0}
 h1{font-size:20px;margin:0 0 3px}h2{font-size:18px;margin:18px 0}
-small,.muted{color:#aebed1} main{padding:22px;max-width:1250px;margin:auto}
+small,.muted{color:#aebed1} main{padding:14px 22px 22px;max-width:1250px;margin:auto}
 nav{display:flex;gap:10px;margin:20px 0;flex-wrap:wrap}.toolbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:8px 0 20px}.export{background:#176761;border-color:#3aa99d}.source-tag{display:inline-block;margin:3px 4px 3px 0}button{cursor:pointer;padding:9px 13px;background:#284059;color:#f1f7fb;border:1px solid #536e83;border-radius:8px}
 button.active{background:#137b78;border-color:#26b6a5}button:hover{filter:brightness(1.16)}
 .notice{padding:12px 16px;border:1px solid #76673b;background:#34301f;border-radius:9px}
@@ -38,21 +57,30 @@ input{font:inherit;padding:10px;color:#f0f4f9;background:#203147;border:1px soli
 .tag.online,.tag.ok{border-color:#3e997d;color:#82efc7}.tag.error,.tag.degraded{border-color:#d99259;color:#ffd094}
 .tag.empty,.tag.not_observed,.tag.unknown{border-color:#a0a1a8;color:#c7cbd2}
 .grid-scroll{overflow-x:auto}code{color:#a2c6f4}.description{margin-top:8px;color:#c0cad5}
-@media(max-width:650px){main{padding:13px}header{padding:17px}table{font-size:12px}}
+@media(max-width:750px){main{padding:13px}.app-header{padding:12px;gap:10px}.brand{width:100%}.brand h1{font-size:18px}.app-header nav{flex:1 1 auto}.app-header nav button{padding:6px 9px}.overview-panel{right:8px;width:calc(100vw - 16px);padding:13px}.overview-panel .stats{grid-template-columns:repeat(auto-fit,minmax(136px,1fr))}table{font-size:12px}}
 </style></head>
 <body>
-<header><div><h1>DigitalHouses Network App</h1><small>Устройства и источники сети · v0.1.11</small></div><span id="health" class="tag">Подключение…</span></header>
+<header class="app-header">
+  <div class="brand"><h1>DigitalHouses Network App</h1><small>Устройства и источники сети · v0.1.12</small></div>
+  <nav aria-label="Разделы приложения"><button class="active" data-page="devices">Устройства</button><button data-page="sources">Источники</button><button data-page="events">События</button></nav>
+  <details id="overview" class="overview">
+    <summary title="Раскрыть или скрыть показатели сети и диагностику"><span>Показатели</span><span id="health" class="tag">Подключение…</span><span class="overview-arrow" aria-hidden="true">⌄</span></summary>
+    <div class="overview-panel" role="region" aria-label="Показатели и диагностика">
+      <p class="description">Сводка источников, диагностика и экспорт. Статус Online не означает ответ на ICMP ping.</p>
+      <div class="stats"><div class="stat"><strong id="known">—</strong><span>Устройств в реестре</span></div><div class="stat"><strong id="online">—</strong><span>Online (ARP / HA, не ping)</span></div><div class="stat"><strong id="interval">—</strong><span>HA-опрос, секунд</span></div><div class="stat"><strong id="arp-interval">—</strong><span>ARP-опрос, секунд</span></div><div class="stat"><strong id="last-arp">—</strong><span>Последний ARP-скан</span></div><div class="stat"><strong id="known-arp">—</strong><span>Ранее найдено ARP</span></div><div class="stat"><strong id="ip-conflicts">—</strong><span>Расхождений IPv4 (включая источники)</span></div><div class="stat"><strong id="mdns-hosts">—</strong><span>Хостов с Bonjour</span></div><div class="stat"><strong id="mdns-services">—</strong><span>Bonjour сервисов</span></div><div class="stat"><strong id="ssdp-hosts">—</strong><span>Хостов с SSDP</span></div><div class="stat"><strong id="ssdp-services">—</strong><span>SSDP сервисов</span></div></div>
+      <div class="notice">Статус Online означает положительное наблюдение от ARP, трекера роутера Home Assistant или собственного сетевого интерфейса. Это НЕ проверка ICMP ping. Отсутствие нового наблюдения не является доказательством выключения устройства. Источники: Home Assistant <code>device_tracker</code> и самостоятельный ARP-опрос локального IPv4. ARP обнаруживает ответившие сетевые интерфейсы; отсутствие ответа не доказывает Offline. Bonjour и SSDP дополняют сведения о сервисах при свежем ARP-подтверждении IP. Противоречия между источниками фиксируются в журнале событий, но не означают доказанный конфликт адресов. IPv6 NDP добавим позже.</div>
+      <div class="toolbar"><button id="export" class="export" type="button">Сохранить диагностику (.json)</button><small id="export-status">Файл содержит IP, MAC, имена и заметки. Он сохраняется только на твоём компьютере.</small></div>
+    </div>
+  </details>
+</header>
 <main>
-<div class="notice">Источники: Home Assistant <code>device_tracker</code> и самостоятельный ARP-опрос локального IPv4. ARP обнаруживает ответившие сетевые интерфейсы; отсутствие ответа не доказывает Offline. Bonjour и SSDP дополняют сведения о сервисах при свежем ARP-подтверждении IP. Противоречия между источниками фиксируются в журнале событий, но не означают доказанный конфликт адресов. IPv6 NDP добавим позже.</div>
-<div class="stats"><div class="stat"><strong id="known">—</strong><span>Устройств в реестре</span></div><div class="stat"><strong id="online">—</strong><span>Подтверждённый Online</span></div><div class="stat"><strong id="interval">—</strong><span>HA-опрос, секунд</span></div><div class="stat"><strong id="arp-interval">—</strong><span>ARP-опрос, секунд</span></div><div class="stat"><strong id="last-arp">—</strong><span>Последний ARP-скан</span></div><div class="stat"><strong id="known-arp">—</strong><span>Ранее найдено ARP</span></div><div class="stat"><strong id="ip-conflicts">—</strong><span>Расхождений IPv4</span></div><div class="stat"><strong id="mdns-hosts">—</strong><span>Хостов с Bonjour</span></div><div class="stat"><strong id="mdns-services">—</strong><span>Bonjour сервисов</span></div><div class="stat"><strong id="ssdp-hosts">—</strong><span>Хостов с SSDP</span></div><div class="stat"><strong id="ssdp-services">—</strong><span>SSDP сервисов</span></div></div>
-<nav><button class="active" data-page="devices">Устройства</button><button data-page="sources">Источники</button><button data-page="events">События</button></nav>
-<div class="toolbar"><button id="export" class="export" type="button">Сохранить диагностику (.json)</button><small id="export-status">Файл содержит IP, MAC, имена и заметки. Он сохраняется только на твоём компьютере.</small></div><div id="ip-conflict-summary" class="notice" style="display:none"></div><div id="filterarea"></div><section id="body">Загрузка…</section>
+<div id="ip-conflict-summary" class="notice" style="display:none"></div><div id="filterarea"></div><section id="body">Загрузка…</section>
 </main>
 <script>
 const body=document.getElementById('body'),health=document.getElementById('health'),filterArea=document.getElementById('filterarea');
 let page='devices',devices=[],origins=[],mdnsServices=[],ssdpServices=[],wsdEndpoints=[],filter='';
 let sortKey='ip',sortDirection='asc';
-const deviceColumns=[['name','Имя'],['ip','IP'],['mac','MAC'],['presence','Presence'],['sources','Обнаружен через'],['last_seen','Последний Online'],['note','Note']];
+const deviceColumns=[['name','Имя'],['ip','IP'],['mac','MAC'],['presence','Наблюдение'],['sources','Обнаружен через'],['last_seen','Последний Online'],['note','Note']];
 const nameCollator=new Intl.Collator('ru',{numeric:true,sensitivity:'base'});
 function esc(t){return String(t??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 async function read(kind){const r=await fetch('api/'+kind,{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);return r.json()}
@@ -192,7 +220,7 @@ function renderTable(){
  const found=sortedDeviceRows();
  if(!devices.length){body.innerHTML='<h2>Устройства</h2><p>Устройств пока нет. Проверь вкладку «Источники». В Home Assistant могут отсутствовать доступные <code>device_tracker</code> от роутеров.</p>';return}
  body.innerHTML='<h2>Устройства ('+found.length+')</h2><div class="grid-scroll"><table class="devices-table"><thead><tr>'+sortedHeaders()+'</tr></thead><tbody>'+
- found.map((d,index)=>'<tr><td class="num-cell">'+(index+1)+'</td><td class="name-cell"><strong class="name-value" title="'+esc(visibleDeviceName(d))+'">'+esc(visibleDeviceName(d)||'—')+'</strong></td><td class="ip-cell">'+esc(d.ipv4||d.ipv6||'—')+(d.ipv4&&d.ipv6?'<small> / '+esc(d.ipv6)+'</small>':'')+'</td><td class="mac-cell">'+esc(d.mac||'—')+'</td><td><span class="tag '+esc(d.presence)+'">'+esc(d.presence)+'</span></td><td class="source-cell">'+sourcesForDisplay(d.id)+'</td><td class="time-cell">'+esc(noteTime(d.last_seen))+'</td><td class="note-cell">'+noteAction(d)+'</td></tr>').join('')+'</tbody></table></div>';
+ found.map((d,index)=>'<tr><td class="num-cell">'+(index+1)+'</td><td class="name-cell"><strong class="name-value" title="'+esc(visibleDeviceName(d))+'">'+esc(visibleDeviceName(d)||'—')+'</strong></td><td class="ip-cell">'+esc(d.ipv4||d.ipv6||'—')+(d.ipv4&&d.ipv6?'<small> / '+esc(d.ipv6)+'</small>':'')+'</td><td class="mac-cell">'+esc(d.mac||'—')+'</td><td><span class="tag '+esc(d.presence)+'" title="Online — обнаружено через ARP, HA Tracker или Local Interface; ICMP ping не выполняется">'+esc(d.presence)+'</span></td><td class="source-cell">'+sourcesForDisplay(d.id)+'</td><td class="time-cell">'+esc(noteTime(d.last_seen))+'</td><td class="note-cell">'+noteAction(d)+'</td></tr>').join('')+'</tbody></table></div>';
  body.querySelectorAll('button[data-sort]').forEach(b=>b.addEventListener('click',()=>changeSort(b.dataset.sort)));
  body.querySelectorAll('button[data-id]').forEach(b=>b.addEventListener('click',()=>edit(b.dataset.id)));
 }
