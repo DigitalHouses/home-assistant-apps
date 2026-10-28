@@ -7,7 +7,7 @@
 - Compact namespace: `dh_network_app`
 - Web UI: Home Assistant Ingress (not a second externally exposed admin service)
 - Storage: SQLite `/data/network.sqlite3`
-- Current version: `0.1.14`, experimental, no GHCR artifact and no telemetry
+- Current version: `0.1.15`, experimental, no GHCR artifact and no telemetry
 
 This App deliberately follows the existing product-naming and HAOS packaging standards. Its **Ingress** UI is the accepted departure from the usual MQTT-discovered Lovelace control card: UI state, notes and inventory are App-owned instead of built from MQTT entities. Any future machine events must follow DigitalHouses Events & Notifications Standard; local alert delivery belongs to HA, not the public App.
 
@@ -24,6 +24,12 @@ This App deliberately follows the existing product-naming and HAOS packaging sta
 - The `Показатели` disclosure is a native `<details>` / `<summary>` in the top bar. Closed by default, opening overlays a scrollable responsive panel containing all 11 existing metric cards, the source/accuracy notice and diagnostic JSON export. No loss of export functionality or telemetry. A real unresolved ARP-vs-ARP IPv4 conflict stays visible separately and is not hidden in the panel.
 - User-facing `Online` means observed presence from positive on-link ARP, HA router tracker `home`, or Local Interface; the app **does not perform ICMP echo or test TCP port reachability**. `Not observed` does not assert true offline. No new ICMP access or privilege is introduced in this UI release.
 - Keep 30-second refresh, live source health, sort/search/note edits, stable device records and diagnostic JSON export. SQLite schema stays v7.
+
+## Reset confirmation display fix (0.1.15)
+
+- Replace double-escaped `\\n` with the JavaScript newline escape `\n` in the destructive Reset prompt. User sees a genuine two-line confirmation, not literal backslash and `n` characters.
+- Browser regression test executes the Reset handler, intercepts the prompt, and verifies the rendered string contains the newline and that cancelling the dialog makes no API call.
+- No change to SQLite tables, reset permissions, scan-generation logic, notes, or existing network observations.
 
 ## Confirmed inventory reset (0.1.14)
 
