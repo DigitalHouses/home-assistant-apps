@@ -44,6 +44,40 @@ func TestPresenceSubscriptionAndGlobalSettingsPersistence(t *testing.T){
  if len(subs)!=1||subs[0].Kind!="mac"{t.Fatalf("disabled subscription remained active: %#v",subs)}
 }
 
+
+func TestPresenceLabelsMigrationValidationAndRenameWithoutReset(t *testing.T){
+ path:=filepath.Join(t.TempDir(),"migration.sqlite3")
+ db,err:=openDB(path);if err!=nil{t.Fatal(err)}
+ if err=db.run("DROP TABLE presence_subscriptions");err!=nil{t.Fatal(err)}
+ if err=db.run(`CREATE TABLE presence_subscriptions(
+  kind TEXT NOT NULL,target TEXT NOT NULL,enabled INTEGER NOT NULL,
+  notifications INTEGER NOT NULL,updated_at TEXT NOT NULL,PRIMARY KEY(kind,target))`);err!=nil{t.Fatal(err)}
+ if err=db.run(`INSERT INTO presence_subscriptions VALUES('ip','192.168.2.30',1,1,'2026-10-29T00:00:00Z')`);err!=nil{t.Fatal(err)}
+ db.Close()
+ db,err=openDB(path);if err!=nil{t.Fatalf("migration failed: %v",err)}
+ defer db.Close()
+ if err=db.initializeSettings(DiscoverySettings{60,180,300,300,300,2,3});err!=nil{t.Fatal(err)}
+ subs,err:=db.presenceSubscriptions();if err!=nil{t.Fatal(err)}
+ if len(subs)!=1||subs[0].Label!=""||!subs[0].Notifications{t.Fatalf("existing subscription changed: %#v",subs)}
+ if err=db.run(`CREATE TRIGGER preserve_presence_activation BEFORE UPDATE ON presence_subscriptions
+  WHEN NEW.updated_at<>OLD.updated_at BEGIN SELECT RAISE(ABORT,'activation changed'); END`);err!=nil{t.Fatal(err)}
+ label:="  Мой ноутбук  "
+ newly,err:=db.updatePresenceLabeled("ip","192.168.2.30",true,true,&label)
+ if err!=nil||newly{t.Fatalf("rename should not rescan: %v %v",newly,err)}
+ subs,err=db.presenceSubscriptions();if err!=nil{t.Fatal(err)}
+ if len(subs)!=1||subs[0].Label!="Мой ноутбук"{t.Fatalf("label not saved: %#v",subs)}
+
+ if _,err=db.updatePresence("ip","192.168.2.30",true,false);err!=nil{t.Fatal(err)}
+ subs,err=db.presenceSubscriptions();if err!=nil{t.Fatal(err)}
+ if len(subs)!=1||subs[0].Label!="Мой ноутбук"{t.Fatalf("name lost when notification toggled: %#v",subs)}
+ for _,bad:=range []string{"ab\ncd","ab\tcd",strings.Repeat("ж",81)}{
+  if _,err=db.updatePresenceLabeled("ip","192.168.2.30",true,false,&bad);err==nil{t.Fatalf("bad label accepted: %q",bad)}
+ }
+ empty:=" "
+ if _,err=db.updatePresenceLabeled("ip","192.168.2.30",true,false,&empty);err!=nil{t.Fatal(err)}
+ subs,_=db.presenceSubscriptions()
+ if subs[0].Label!=""{t.Fatal("explicit clearing of the label failed")}
+}
 func TestResetClearsDeliveryHistoryAndRuntimeStatesButNotSettings(t *testing.T){
  db,err:=openDB(filepath.Join(t.TempDir(),"network.sqlite3"));if err!=nil{t.Fatal(err)}
  defer db.Close()
