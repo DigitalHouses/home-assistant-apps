@@ -83,6 +83,60 @@ def test_intel_gpu_top_ignores_short_first_sample_and_uses_peak_video_busy():
     assert metrics["sample_count"] == 2
 
 
+
+def test_alder_lake_n_qga_stream_survives_incomplete_intel_gpu_top_array():
+    import json
+
+    # Real VM2238 outputs an opening '[' but timeout removes the closing ']'.
+    # Engines are "Video"/"VideoEnhance" rather than "Video/0".
+    def sample(duration, video, enhancement):
+        return {
+            "period": {"duration": duration},
+            "engines": {
+                "Video": {"busy": video},
+                "VideoEnhance": {"busy": enhancement},
+                "Render/3D": {"busy": 4.6},
+            },
+            "rc6": {"value": 25.0},
+        }
+
+    chunks = [
+        sample(17.5, 88.8, 10.0),  # first partial / warmup sample
+        sample(1014.2, 47.3, 12.5),
+        sample(1016.9, 23.7, 7.0),
+    ]
+    raw = "[\\n" + ",\\n".join(json.dumps(x) for x in chunks)
+    metrics = parse_intel_gpu_top_json(raw)
+    assert metrics["sample_count"] == 2
+    assert metrics["transcoding_load_percent"] == 47.3
+    assert metrics["video_enhance_busy_percent"] == 12.5
+    assert metrics["render_busy_percent"] == 4.6
+    outer = json.dumps({"exitcode": 0, "out-data": raw, "exited": 1})
+    assert parse_qemu_guest_exec_transcoding(outer, "2238")["transcoding_load_percent"] == 47.3
+
+
+def test_intel_gpu_top_ignores_incomplete_last_object_after_valid_sample():
+    import json
+
+    sample = {
+        "period": {"duration": 1000},
+        "engines": {"Video": {"busy": 64.0}},
+    }
+    raw = "[\\n" + json.dumps(sample) + ',\\n{"period": {"duration":'
+    metrics = parse_intel_gpu_top_json(raw)
+    assert metrics["sample_count"] == 1
+    assert metrics["transcoding_load_percent"] == 64.0
+
+
+def test_intel_gpu_top_does_not_invent_zero_without_video_engine():
+    import json
+    import pytest
+
+    sample = {"period": {"duration": 1000}, "engines": {"Render/3D": {"busy": 10.0}}}
+    with pytest.raises(ValueError, match="Video engine"):
+        parse_intel_gpu_top_json(json.dumps(sample))
+
+
 def test_gpu_temperature_uses_max_sensor_bound_to_same_pci_device(tmp_path: Path):
     pci = "0000:01:00.0"
     pci_dir = tmp_path / "sys" / "bus" / "pci" / "devices" / pci
