@@ -105,7 +105,7 @@ def test_alder_lake_n_qga_stream_survives_incomplete_intel_gpu_top_array():
         sample(1014.2, 47.3, 12.5),
         sample(1016.9, 23.7, 7.0),
     ]
-    raw = "[\\n" + ",\\n".join(json.dumps(x) for x in chunks)
+    raw = "[" + chr(10) + ("," + chr(10)).join(json.dumps(x) for x in chunks)
     metrics = parse_intel_gpu_top_json(raw)
     assert metrics["sample_count"] == 2
     assert metrics["transcoding_load_percent"] == 47.3
@@ -122,7 +122,7 @@ def test_intel_gpu_top_ignores_incomplete_last_object_after_valid_sample():
         "period": {"duration": 1000},
         "engines": {"Video": {"busy": 64.0}},
     }
-    raw = "[\\n" + json.dumps(sample) + ',\\n{"period": {"duration":'
+    raw = "[" + chr(10) + json.dumps(sample) + ',' + chr(10) + '{"period": {"duration":'
     metrics = parse_intel_gpu_top_json(raw)
     assert metrics["sample_count"] == 1
     assert metrics["transcoding_load_percent"] == 64.0
