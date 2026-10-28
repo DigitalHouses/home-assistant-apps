@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.23
+
+- Fix event journal **Copy HA trigger**, **Copy JSON** and event_type buttons. An absent HTML title no longer throws before calling the clipboard; buttons have explicit accessible copy labels. Add DOM click tests with multiline JSON and YAML.
+- Replace Ingress sandbox-sensitive JavaScript Blob download with a **native, user-clicked server attachment** (GET /api/diagnostics/download). No file is written to disk; attachment has a timestamped JSON filename, no-cache headers, and remains restricted to the authenticated Ingress path.
+- Add **Показать JSON** fallback preview and **Скопировать весь JSON**; the read-only JSON is selectable even when the browser disallows downloads or clipboard access. Do not claim a download succeeded when the app cannot confirm it.
+- Expand the diagnostic report with temporary bounded debug data: global scan and Presence settings, all opted-in watches and states, legacy monitoring states, recent 150 MQTT delivery entries, outgoing queue counts, event status counts, and scan/source evidence. No credentials or passwords.
+- Keep device UUID, Notes and prior monitoring config intact; no live HAOS deployment.
+
+
 ## 0.1.22
 
 - Enabling a new IP/MAC Presence subscription immediately schedules one out-of-cycle **global LAN ARP scan**. Concurrent activations coalesce, and periodic/on-demand scans serialize to avoid overlapping scanners. Changing notification settings alone never forces a scan.
