@@ -222,13 +222,18 @@ The same watch_id may be used in different methods; states remain independent.
   ICMP is only ICMP-unreachable, not proof the machine is powered off.
 - **tcp** tests the configured IP:port; failure indicates that service is
   unreachable, not necessarily that the host is off.
-- **arp** uses completed independent LAN ARP scan observations (by validated
-  MAC); a missing observation means absence in this source, not physical off.
-  Its independent evidence cadence follows the LAN ARP scanner (default 180s),
-  rather than treating a cached scan as a new 30s sample.
-- **ha_device_tracker** checks the explicitly configured entity using HA Core
-  API. `home` and `not_home` are positive/negative; unknown/unavailable,
-  missing entities and source errors are unknown.
+- **arp** uses fresh direct ARP evidence for the configured MAC, never
+  the wider `lan_positive` registry (which also includes local interface
+  observations). An absent MAC means only "not observed in that ARP scan".
+  Each completed ARP scan counts once; default scan interval is 180 seconds.
+- **ha_device_tracker** uses the explicitly configured HA entity, with
+  `home` and `not_home` as positive/negative. Debounce counts advance
+  only on distinct, fresh `last_reported` revisions supplied by the Home
+  Assistant REST state object. Repeated reads of the same cached report do
+  not count as new observations. When there is no timestamp or the last
+  report is older than 180 seconds, the result is unknown, not absent.
+  An integration that does not periodically report unchanged state will
+  therefore remain unknown until enough independent reports arrive.
 
 Default ICMP/TCP cadence is 30 seconds and HA tracker cadence is 60 seconds.
 A transition is confirmed by 2 consecutive positive or 3 consecutive
@@ -247,7 +252,9 @@ outbox uses stable event IDs for downstream deduplication on retries.
 The App owns no language-specific notification delivery; consumers configure
 their own Home Assistant event automations. MQTT is optional: the local
 monitor state still updates when the broker is disconnected, and events are
-queued for later delivery.
+queued for later delivery. Retained Discovery and state are republished
+after every broker reconnect, including a short disconnect between worker
+poll cycles.
 
 Validation errors identify bad paths; malformed YAML is not silently accepted.
 The editor is an administrator-only Ingress operation and does not change
