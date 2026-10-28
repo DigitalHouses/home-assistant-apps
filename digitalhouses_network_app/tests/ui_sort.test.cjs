@@ -227,3 +227,16 @@ test('Reset confirmation displays a real newline, not a literal backslash-n', as
  assert.ok(!displayed.includes('\\n'));
  assert.equal(fetchCalled, false);
 });
+
+test('NEW badge lasts exactly 24h from first positive evidence and never renews on IP change', () => {
+ const now = Date.parse('2026-10-28T08:00:00Z');
+ ctx.__births = {'two': '2026-10-27T08:00:01Z', 'ten':'2026-10-27T08:00:00Z', 'blank':'2026-10-28T09:00:00Z'};
+ vm.runInContext('deviceBirths=__births',ctx);
+ assert.equal(vm.runInContext('isNewDevice(__devices[2],'+now+')',ctx),true);
+ assert.equal(vm.runInContext('isNewDevice(__devices[0],'+now+')',ctx),false);
+ assert.equal(vm.runInContext('isNewDevice(__devices[1],'+now+')',ctx),false);
+ assert.match(vm.runInContext('newBadge(__devices[2])',ctx),/NEW|^$/);
+ assert.match(html,/class="tag new-device"/);
+ assert.match(script,/deviceBirths=await read\('device-births'\)/);
+ vm.runInContext('deviceBirths={}',ctx);
+});
