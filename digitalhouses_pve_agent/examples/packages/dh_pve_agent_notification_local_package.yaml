@@ -143,6 +143,15 @@ dh_pve_agent_notification_local_package:
               - disk_smart_restored
           id: disk_smart_restored
 
+        # SMART unsafe shutdown counter increased
+        - trigger: event.received
+          target:
+            entity_id: event.dh_pve_agent_diagnostic
+          options:
+            event_type:
+              - disk_unsafe_shutdowns_increased
+          id: disk_unsafe_shutdowns_increased
+
         # NFS storage unavailable
         - trigger: event.received
           target:
@@ -650,6 +659,20 @@ dh_pve_agent_notification_local_package:
                     title: "💾✅ PVE: SMART {{ trigger.to_state.attributes.object_name }} normal"
                     message: >-
                       SMART is normal again · temperature: {{ trigger.to_state.attributes.temperature_c | default('—', true) }} °C · wear: {{ trigger.to_state.attributes.wear_used_percent | default('—', true) }}%.
+
+            # Unsafe disk shutdown counter increased
+            - conditions:
+                - condition: trigger
+                  id:
+                    - disk_unsafe_shutdowns_increased
+              sequence:
+                - action: persistent_notification.create
+                  data:
+                    title: "💾⚠️ PVE: unexpected disk shutdown · {{ trigger.to_state.attributes.object_name | default('Диск', true) }}"
+                    message: >-
+                      SMART unsafe shutdowns: {{ trigger.to_state.attributes.previous_value }} → {{ trigger.to_state.attributes.current_value }} (+{{ trigger.to_state.attributes.delta }}).
+                      Device: {{ trigger.to_state.attributes.device_path | default('—', true) }}.
+                      Cause unknown; check power supply and whether PVE shut down cleanly.
 
             # NUT unavailable
             - conditions:
