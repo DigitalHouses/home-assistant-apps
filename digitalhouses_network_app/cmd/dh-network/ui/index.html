@@ -496,6 +496,18 @@ async function savePresence(kind,target,enabled,notifications){
   menu.querySelectorAll('input').forEach(x=>x.disabled=false);
  }
 }
+// Close the address popover on an outside click or Escape, matching native menus.
+function handlePresenceOutsideClick(event){
+ const menu=document.getElementById('presence-menu');
+ if(!menu||menu.hidden)return;
+ if(menu.contains(event.target))return;
+ // Address triggers already stop propagation, but avoid a close/reopen race.
+ if(event.target.closest&&event.target.closest('[data-presence-kind]'))return;
+ closePresenceMenu();
+}
+function handlePresenceKeydown(event){
+ if(event.key==='Escape')closePresenceMenu();
+}
 function connectPresenceMenus(){
  body.querySelectorAll('[data-presence-kind]').forEach(button=>button.addEventListener('click',event=>{
   event.stopPropagation();
@@ -802,6 +814,8 @@ async function refreshPresenceProgress(){
  finally{presenceRefreshBusy=false}
 }
 setInterval(refreshPresenceProgress,4000);
+document.addEventListener('click',handlePresenceOutsideClick);
+document.addEventListener('keydown',handlePresenceKeydown);
 document.querySelectorAll('[data-page]').forEach(b=>b.addEventListener('click',()=>{
  document.querySelectorAll('nav button').forEach(a=>a.classList.remove('active'));
  b.classList.add('active');page=b.dataset.page;filter='';closePresenceMenu();load();
