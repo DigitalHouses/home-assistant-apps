@@ -83,6 +83,15 @@ class PresenceRunner:
                        WHERE ipv4=? AND source='arp' AND state='observed'
                        AND last_seen>=? LIMIT 1""", (target, scan)
                 ).fetchone() is not None
+            # A proxy-ARP collision makes negative observation ambiguous.
+            if not found and source["status"] == "degraded":
+                with conn:
+                    conn.execute(
+                        """UPDATE presence_states SET state='unknown',last_sample_at=?,
+                        last_check=?,reason='ambiguous_arp_scan' WHERE kind=? AND target=?""",
+                        (scan, scan, kind, target),
+                    )
+                continue
             successes = (int(existing["successes"]) + 1) if found else 0
             failures = (int(existing["failures"]) + 1) if not found else 0
             successes = min(successes, needed_up)
