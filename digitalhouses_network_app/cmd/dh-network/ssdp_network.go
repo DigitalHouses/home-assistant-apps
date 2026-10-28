@@ -112,19 +112,23 @@ func ssdpScan(ctx context.Context,plan lanTarget) ([]SSDPRecord,int,error) {
  return records,received,nil
 }
 func (s *Service) pollSSDP() {
+ generation:=s.currentScanGeneration()
  at:=time.Now().UTC().Format(time.RFC3339)
  plan,err:=localLANPlan()
- if err!=nil {s.recordSSDPError(at,err);return}
+ if err!=nil {s.withCurrentGeneration(generation,func(){s.recordSSDPError(at,err)});return}
  ctx,cancel:=context.WithTimeout(context.Background(),9*time.Second)
  defer cancel()
  records,packets,err:=ssdpScan(ctx,plan)
- if err!=nil {s.recordSSDPError(at,err);return}
- at=time.Now().UTC().Format(time.RFC3339)
- matched,unmatched,services,err:=s.db.importSSDPRecords(records,at,packets,plan.iface.Name)
- if err!=nil {s.recordSSDPError(at,err);return}
- log.Printf("SSDP discovery: %d responses, %d unique records, %d ARP-linked hosts, %d unmatched, %d services",
+ if err!=nil {s.withCurrentGeneration(generation,func(){s.recordSSDPError(at,err)});return}
+ s.withCurrentGeneration(generation,func(){
+  at=time.Now().UTC().Format(time.RFC3339)
+  matched,unmatched,services,importErr:=s.db.importSSDPRecords(records,at,packets,plan.iface.Name)
+  if importErr!=nil {s.recordSSDPError(at,importErr);return}
+  log.Printf("SSDP discovery: %d responses, %d unique records, %d ARP-linked hosts, %d unmatched, %d services",
    packets,len(records),matched,unmatched,services)
+ })
 }
+
 func (s *Service) recordSSDPError(at string,err error) {
  if errors.Is(err,context.Canceled) {return}
  log.Printf("SSDP discovery unavailable: %v",err)

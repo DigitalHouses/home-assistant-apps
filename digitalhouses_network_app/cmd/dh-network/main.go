@@ -193,6 +193,11 @@ type Service struct {
     mdnsIntervalSeconds int
     ssdpIntervalSeconds int
     wsdIntervalSeconds int
+    // Reset gate protects the persisted generation against in-flight scans.
+    resetGate sync.RWMutex
+    resetGeneration uint64
+    // Optional test seam; the production path always invokes first discovery.
+    afterReset func()
 }
 
 func reply(w http.ResponseWriter, data any) {
@@ -261,6 +266,25 @@ func (s *Service) routes() http.Handler {
         report,err:=s.diagnosticReport()
         if err!=nil {http.Error(w,"diagnostic unavailable",500);return}
         reply(w,report)
+    })
+    mux.HandleFunc("POST /api/inventory/reset",func(w http.ResponseWriter,r *http.Request){
+        // The Ingress proxy enforces HA admin access. A JSON-only custom-header
+        // endpoint is not callable by plain cross-site HTML forms.
+        if r.Header.Get("X-DH-UI")!="1" || r.Header.Get("Content-Type")!="application/json" {
+            http.Error(w,"reset requires Ingress JSON request",http.StatusUnsupportedMediaType);return
+        }
+        var input struct{Confirmation string `json:"confirmation"`}
+        decoder:=json.NewDecoder(http.MaxBytesReader(w,r.Body,256))
+        decoder.DisallowUnknownFields()
+        if err:=decoder.Decode(&input);err!=nil {http.Error(w,"invalid reset request",http.StatusBadRequest);return}
+        var extra any
+        if err:=decoder.Decode(&extra);err!=io.EOF {http.Error(w,"unexpected reset request body",http.StatusBadRequest);return}
+        if err:=confirmReset(input.Confirmation);err!=nil {http.Error(w,"confirmation must be RESET",http.StatusBadRequest);return}
+        removed,err:=s.resetInventory()
+        if err!=nil {log.Printf("Network inventory reset failed: %v",err);http.Error(w,"inventory reset failed",http.StatusInternalServerError);return}
+        reply(w,map[string]any{"reset":true,"previous_devices":removed,"discovery_started":true})
+        // Schedule after releasing DB/generation locks, independent of browser.
+        if s.afterReset!=nil {s.afterReset()} else {s.startFreshDiscovery()}
     })
     mux.HandleFunc("PUT /api/devices/{id}/note",func(w http.ResponseWriter,r *http.Request){
         id:=r.PathValue("id")

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.14
+
+- Add guarded Reset button to the Ingress `Показатели` panel; requires typing `RESET` and final explicit confirmation.
+- Atomic SQLite reset of all 16 inventory, Notes, identity, discovery, source and event tables. Preserve schema version, addon config and hardware settings; errors roll back.
+- Reject in-flight scan results begun before reset using an epoch gate, then immediately restart discovery (router, ARP, mDNS/SSDP/WSD). Maintain normal background pollers.
+- Ingress-only JSON API with exact request challenge, custom header and bounded body. Unit tests cover permission/confirmation, fresh UUID/Notes after reset, rollback, and stale results; Ingress JS tests cover UX.
+
 ## 0.1.13
 
 - Remove the large orange explanatory notice from the collapsed-by-default `Показатели` menu, while retaining the concise neutral Online-vs-ping statement and independent real-conflict warning in the main view.

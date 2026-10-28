@@ -151,12 +151,14 @@ func scanWSD(ctx context.Context,plan lanTarget) ([]WSDAnnouncement,int,error) {
  return result,received,nil
 }
 func (s *Service) pollWSD() {
+ generation:=s.currentScanGeneration()
  plan,err:=localLANPlan()
- if err!=nil {s.reportWSDError(err);return}
+ if err!=nil {s.withCurrentGeneration(generation,func(){s.reportWSDError(err)});return}
  ctx,cancel:=context.WithTimeout(context.Background(),8*time.Second)
  defer cancel()
  items,packets,err:=scanWSD(ctx,plan)
  if err!=nil {s.reportWSDError(err);return}
+ s.withCurrentGeneration(generation,func(){
  at:=time.Now().UTC().Format(time.RFC3339)
  linked,unmatched,err:=s.db.importWSD(items,at,packets,plan.iface.Name)
  if err!=nil{s.reportWSDError(err);return}
@@ -181,6 +183,7 @@ func (s *Service) pollWSD() {
  }
  log.Printf("WS-Discovery: %d responses, %d endpoints, %d ARP/local-interface-linked, %d unmatched, %d/%d verified computer names",
   packets,len(items),linked,unmatched,verified,attempted)
+ })
 }
 func (s *Service) reportWSDError(err error) {
  log.Printf("WS-Discovery unavailable: %v",err)

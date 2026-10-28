@@ -7,7 +7,7 @@
 - Compact namespace: `dh_network_app`
 - Web UI: Home Assistant Ingress (not a second externally exposed admin service)
 - Storage: SQLite `/data/network.sqlite3`
-- Current version: `0.1.13`, experimental, no GHCR artifact and no telemetry
+- Current version: `0.1.14`, experimental, no GHCR artifact and no telemetry
 
 This App deliberately follows the existing product-naming and HAOS packaging standards. Its **Ingress** UI is the accepted departure from the usual MQTT-discovered Lovelace control card: UI state, notes and inventory are App-owned instead of built from MQTT entities. Any future machine events must follow DigitalHouses Events & Notifications Standard; local alert delivery belongs to HA, not the public App.
 
@@ -24,6 +24,14 @@ This App deliberately follows the existing product-naming and HAOS packaging sta
 - The `Показатели` disclosure is a native `<details>` / `<summary>` in the top bar. Closed by default, opening overlays a scrollable responsive panel containing all 11 existing metric cards, the source/accuracy notice and diagnostic JSON export. No loss of export functionality or telemetry. A real unresolved ARP-vs-ARP IPv4 conflict stays visible separately and is not hidden in the panel.
 - User-facing `Online` means observed presence from positive on-link ARP, HA router tracker `home`, or Local Interface; the app **does not perform ICMP echo or test TCP port reachability**. `Not observed` does not assert true offline. No new ICMP access or privilege is introduced in this UI release.
 - Keep 30-second refresh, live source health, sort/search/note edits, stable device records and diagnostic JSON export. SQLite schema stays v7.
+
+## Confirmed inventory reset (0.1.14)
+
+- Admin-only Supervisor Ingress exposes `POST /api/inventory/reset` with `Content-Type: application/json`, custom `X-DH-UI: 1` header, and exact JSON `{"confirmation":"RESET"}`. The Ingress peer is independently restricted to the Supervisor proxy address. Cross-origin HTML forms cannot invoke this JSON-only action.
+- The destructive button is visible only in the expanded `Показатели` panel. The user must first type `RESET`, then approve a final dialog explaining the irreversible loss of devices/UUIDs, Notes, source history, WSD/mDNS/SSDP evidence, conflicts and events. UI sends nothing when either confirmation fails.
+- Reset takes a generation-write lock and deletes all 16 persisted inventory/source/history tables inside **one SQLite transaction**. Failure rolls back without partial deletion. `schema_version`, existing schema/migrations, Supervisor options and network/HA settings remain unchanged. The App does not create an automatic backup; users can export diagnostic JSON beforehand. This is logical SQLite row deletion, not a promise of forensic secure erase.
+- Each scanner captures an epoch before network IO and rechecks it under a read-lock before persisting: any result begun before Reset is discarded. A fresh cycle starts router import, then ARP/local interface, then mDNS/SSDP/WSD enrichment; regular intervals continue independently. No manual service restart required.
+- Reset may intentionally change all generated device UUIDs, and previous Notes are **not recovered**. No IP-based merging, direct hardware reconfiguration, or old-media-server reconciliation is attempted.
 
 ## 1.0 agreed scope
 
