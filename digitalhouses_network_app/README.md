@@ -2,9 +2,10 @@
 
 Experimental native **Home Assistant OS App** for a durable LAN device inventory, presence history, and future device events. Internal/entity prefix: `dh_network_app`. Canonical product ID, App Store slug, and repository directory: `digitalhouses_network_app`.
 
-## Current state (0.1.14 safe inventory reset and rediscovery)
+## Current state (0.1.15 Reset confirmation display correction)
 
 Available now:
+- The Reset confirmation dialog uses a real line break between the irreversible-data-loss warning and the `RESET` instruction, not a literal `\n`.
 - In the expandable `Показатели` panel, a destructive **Reset — очистить инвентарь…** button. A typed `RESET` challenge **and** final confirmation are required. Only the authenticated Home Assistant Ingress (admin-only panel) can use the JSON API endpoint `POST /api/inventory/reset`. It deletes all 16 discovery and inventory table contents in a single SQLite transaction, including device identities/UUIDs, Notes, events and protocol records. The SQLite schema, `schema_version`, Supervisor options, and host settings stay intact. There is no data backup or undo inside the App; download the diagnostic JSON before Reset if history is needed.
 - Reset invalidates responses from scans started earlier (generation gate), then starts a new ordered discovery pass (HA Router, primary LAN interface/ARP, then mDNS/SSDP/WSD). Ordinary poll cycles continue. The App never edits router, HA or other devices as part of Reset.
 - standard installation from the **DigitalHouses Home Assistant Apps repository** (no copying files into HAOS);
