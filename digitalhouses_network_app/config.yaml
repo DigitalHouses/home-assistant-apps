@@ -1,7 +1,7 @@
 name: DigitalHouses Network App
-version: 0.1.12
+version: 0.1.13
 slug: digitalhouses_network_app
-description: Compact Ingress header with expandable network metrics and precise presence semantics.
+description: Compact Ingress metrics and inline device search.
 url: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_network_app
 arch:
   - amd64
