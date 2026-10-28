@@ -307,6 +307,7 @@ func (s *Service) routes() http.Handler {
         if err!=nil {http.Error(w,"database unavailable",500);return}
         reply(w,snapshot.MDNSServices)
     })
+    mux.HandleFunc("GET /api/diagnostics/download",s.downloadDiagnostics)
     mux.HandleFunc("GET /api/diagnostics",func(w http.ResponseWriter,r *http.Request){
         report,err:=s.diagnosticReport()
         if err!=nil {http.Error(w,"diagnostic unavailable",500);return}
