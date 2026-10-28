@@ -138,6 +138,7 @@ class MQTTEvents:
         if mqtt is None:
             raise RuntimeError("py3-paho-mqtt must be installed")
         self.connected = threading.Event()
+        self.connection_epoch = 0
         self.version = version
         self.started = started
         try:
@@ -172,6 +173,7 @@ class MQTTEvents:
             self.connected.clear()
             LOG.warning("MQTT rejected connection: %s", reason_code)
             return
+        self.connection_epoch += 1
         self.connected.set()
         client.subscribe("homeassistant/status", qos=1)
         self.publish_discovery()
