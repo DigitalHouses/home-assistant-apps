@@ -254,11 +254,18 @@ def run_forever() -> None:
                 with sqlite3.connect(f"file:{DB}?mode=rw", uri=True, timeout=8) as conn:
                     births = suppress_initial_births(conn, pending_births(conn))
                     for row in births:
-                        if not mqtt_events.connected.is_set():
-                            break
                         if (datetime.now(timezone.utc) - parse_utc(row["first_positive_at"])).total_seconds() < ENRICHMENT_DELAY_SECONDS:
                             continue
-                        if not mqtt_events.send_birth(conn, row):
+                        payload = event_payload(row)
+                        with conn:
+                            conn.execute(
+                                """INSERT OR IGNORE INTO event_delivery_log
+                                (event_id,event_type,occurred_at,status,payload_json)
+                                VALUES(?,'device_discovered',?,'queued',?)""",
+                                (payload["event_id"],payload["observed_at"],
+                                 json.dumps(payload,ensure_ascii=False,separators=(",",":"))),
+                            )
+                        if mqtt_events.connected.is_set() and not mqtt_events.send_birth(conn, row):
                             break
                     monitor.cycle(conn, mqtt_events)
                     presence.cycle(conn, mqtt_events)
