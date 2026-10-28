@@ -41,6 +41,8 @@ def validate_network(root: Path, app: Path, context: dict) -> None:
         fail("SSDP interval must default to 300 seconds")
     if config.get("options", {}).get("wsd_interval_seconds") != 300:
         fail("WSD interval must default to 300 seconds")
+    if config.get("services") != ["mqtt:want"]:
+        fail("Network App MQTT event publisher must remain optional")
     require_files(root, [
         app / "icon.png", app / "logo.png",
         app / "go.mod",
@@ -59,6 +61,8 @@ def validate_network(root: Path, app: Path, context: dict) -> None:
         app / "cmd/dh-network/wsd_test.go",
         app / "cmd/dh-network/wsd_metadata.go",
         app / "cmd/dh-network/wsd_metadata_test.go",
+        app / "cmd/dh-network/device_births.go",
+        app / "cmd/dh-network/device_births_test.go",
         app / "cmd/dh-network/reset.go",
         app / "cmd/dh-network/reset_test.go",
         app / "cmd/dh-network/diagnostics.go",
@@ -76,7 +80,9 @@ def validate_network(root: Path, app: Path, context: dict) -> None:
         app / "cmd/dh-network/main_test.go",
         app / "cmd/dh-network/ui/index.html",
         app / "tests/ui_sort.test.cjs",
+        app / "rootfs/app/mqtt_events.py",
         app / "rootfs/app/preflight.py",
+        app / "tests/test_mqtt_events.py",
         app / "tests/test_preflight.py",
     ])
     for filename, dims in (("icon.png", (128,128)), ("logo.png", (250,100))):
