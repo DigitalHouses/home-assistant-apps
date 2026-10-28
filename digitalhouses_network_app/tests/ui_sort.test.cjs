@@ -169,9 +169,28 @@ test('compact single header keeps navigation visible and all cards collapsed by 
  assert.match(html, /\.overview-panel\{position:absolute;/);
  assert.match(html, /\.overview summary:focus-visible\{/);
 });
-test('Online status never claims ICMP reachability', () => {
- assert.match(html, /Online означает положительное наблюдение от ARP/);
- assert.match(html, /Это НЕ проверка ICMP ping/);
- assert.match(script, /ICMP ping не выполняется/);
+test('metrics dropdown is compact and does not contain orange notice or chat request', () => {
+ const header=html.slice(html.indexOf('<header class="app-header">'),html.indexOf('</header>'));
+ assert.match(header,/Online не означает ответ на ICMP ping/);
+ assert.doesNotMatch(header,/<div class="notice">/);
+ assert.match(header,/id="export"/);
+ assert.doesNotMatch(html,/Пришли его в чат для анализа/);
+ assert.match(script,/message.textContent='Файл '\+file\+' сформирован\.'/);
+ assert.match(script,/ICMP ping не выполняется/);
  assert.equal(vm.runInContext('deviceColumns[3][1]',ctx),'Наблюдение');
+});
+test('search is immediately to the right of device count, in the same flex row', () => {
+ const main=html.slice(html.indexOf('<main>'),html.indexOf('</main>'));
+ assert.match(main,/<div id="devices-tools" class="devices-tools" hidden><h2 id="devices-count">Устройства \(—\)<\/h2><div id="filterarea"><\/div><\/div>/);
+ assert.match(html,/\.devices-tools\{display:flex;align-items:center;/);
+ assert.match(html,/\.devices-tools\[hidden\]\{display:none\}/);
+ assert.match(script,/devicesCount.textContent='Устройства \('\+found.length\+'\)'/);
+ assert.match(script,/devicesTools.hidden=false/);
+ assert.match(script,/devicesTools.hidden=true/);
+ assert.doesNotMatch(script,/body.innerHTML='<h2>Устройства/);
+ vm.runInContext("filter='192.168.11.30';renderTable()",ctx);
+ assert.equal(view.textContent,'Устройства (1)');
+ assert.match(view.innerHTML,/192.168.11.30/);
+ vm.runInContext("filter='';renderTable()",ctx);
+ assert.equal(view.textContent,'Устройства (4)');
 });
