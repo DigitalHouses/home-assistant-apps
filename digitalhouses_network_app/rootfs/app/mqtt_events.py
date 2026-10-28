@@ -14,6 +14,7 @@ import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from uuid import NAMESPACE_URL, uuid5
 from typing import Any
 
 try:
@@ -37,6 +38,8 @@ def event_payload(row: sqlite3.Row) -> dict[str, Any]:
     result: dict[str, Any] = {
         "schema_version": 2,
         "event_type": "device_discovered",
+        # QoS1 can redeliver on crash after PUBACK; consumers deduplicate by this ID.
+        "event_id": str(uuid5(NAMESPACE_URL, f"dh_network_app:device_discovered:{row['device_id']}:{row['first_positive_at']}")),
         "observed_at": row["first_positive_at"],
         "device_id": row["device_id"],
         "detection_source": row["detection_source"],
@@ -93,7 +96,7 @@ def pending_births(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     conn.row_factory = sqlite3.Row
     return conn.execute("""
         SELECT b.device_id,b.first_positive_at,d.display_name,d.mac,d.ipv4,
-          CASE
+          CASE WHEN b.detection_source<>'' THEN b.detection_source
             WHEN EXISTS(SELECT 1 FROM ipv4_evidence i
                         WHERE i.device_id=b.device_id AND i.source='arp' AND i.state='observed')
               THEN 'arp'
@@ -111,6 +114,11 @@ def pending_births(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     """).fetchall()
 
 def suppress_initial_births(conn: sqlite3.Connection, births: list[sqlite3.Row]) -> list[sqlite3.Row]:
+    state = conn.execute("SELECT value FROM network_event_policy WHERE key='baseline_active'").fetchone()
+    # A census ends only after BOTH source snapshots succeed, not after 120 s.
+    if state is not None:
+        return [] if state[0] == "1" else births
+    # Compatibility with pre-0.1.17 SQLite tests/data before Go migration.
     record = conn.execute("SELECT value FROM network_event_policy WHERE key='baseline_until'").fetchone()
     baseline = parse_utc(record[0]) if record else None
     ready = []
