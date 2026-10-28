@@ -43,7 +43,7 @@ function fixture(){
 test('actual Devices load fetches persisted Presence and draws green eyes after navigation/reload',async()=>{
  const f=fixture();
  await vm.runInContext('load()',f.ctx);
- assert.ok(f.requested.includes('api/presence'),'Presence state was not fetched');
+ assert.ok(f.requested.includes('api/presence'),'Presence not fetched; requests='+JSON.stringify(f.requested)+'; health='+f.all.get('health').textContent+'; body='+f.body.textContent);
  assert.equal((f.body.innerHTML.match(/class="presence-eye"/g)||[]).length,2);
  assert.match(f.body.innerHTML,/192\.168\.11\.1/);
  assert.match(f.body.innerHTML,/AA:BB:CC:DD:EE:02/);
