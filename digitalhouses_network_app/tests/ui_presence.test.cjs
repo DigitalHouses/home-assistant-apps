@@ -41,10 +41,11 @@ test('HA trigger includes exact registered type, correct entity and selected tar
  ctx.sample={event_type:'tracked_device_unreachable',
   payload_json:JSON.stringify({event_type:'tracked_device_unreachable',ip:'192.168.2.30'})};
  const snippet=vm.runInContext('eventTemplate(sample)',ctx);
- assert.match(snippet,/trigger: state/);
+ assert.match(snippet,/trigger: event\.received/);
  assert.match(snippet,/entity_id: event\.dh_network_app_network/);
  assert.match(snippet,/tracked_device_unreachable/);
- assert.match(snippet,/192\.168\.2\.30/);
+ assert.match(snippet,/options:/);
+ assert.match(snippet,/event_type:/);
 });
 test('global settings forms include all five scanner intervals and shared hysteresis',()=>{
  for(const key of ['poll_interval_seconds','scan_interval_seconds','mdns_interval_seconds',
