@@ -171,12 +171,33 @@ def parse_intel_gpu_top_json(text: str) -> dict[str, float | int | bool | str | 
     raw = text.strip().rstrip(",")
     if not raw:
         raise ValueError("empty intel_gpu_top output")
-    # intel_gpu_top -J emits a stream of JSON objects separated by commas.
+    # intel_gpu_top -J prints a JSON array while running, but timeout can
+    # terminate it before the final closing bracket. A complete sample remains
+    # trustworthy: decode each finished object and ignore an incomplete tail.
     try:
         parsed = json.loads(raw)
         samples = parsed if isinstance(parsed, list) else [parsed]
     except json.JSONDecodeError:
-        samples = json.loads("[" + raw + "]")
+        decoder = json.JSONDecoder()
+        samples = []
+        offset = 0
+        if raw.startswith("["):
+            offset = 1
+        while offset < len(raw):
+            while offset < len(raw) and (
+                raw[offset].isspace() or raw[offset] in ",]"
+            ):
+                offset += 1
+            if offset >= len(raw):
+                break
+            try:
+                sample, offset = decoder.raw_decode(raw, offset)
+            except json.JSONDecodeError:
+                break
+            if isinstance(sample, dict):
+                samples.append(sample)
+        if not samples:
+            raise ValueError("no complete intel_gpu_top samples")
     full = [
         sample
         for sample in samples
@@ -186,19 +207,21 @@ def parse_intel_gpu_top_json(text: str) -> dict[str, float | int | bool | str | 
     if not full:
         raise ValueError("no full intel_gpu_top samples")
 
-    def peak(prefix: str) -> float:
+    def peak(engine: str) -> float | None:
         values: list[float] = []
         for sample in full:
             engines = sample.get("engines", {})
             if not isinstance(engines, dict):
                 continue
             for name, data in engines.items():
-                if not str(name).startswith(prefix) or not isinstance(data, dict):
+                # Intel GPU generations can report "Video" or "Video/0".
+                # Never confuse e.g. Video and VideoEnhance engines.
+                if (name != engine and not str(name).startswith(engine + "/")) or not isinstance(data, dict):
                     continue
                 busy = data.get("busy")
                 if isinstance(busy, (int, float)) and not isinstance(busy, bool):
                     values.append(max(0.0, min(100.0, float(busy))))
-        return round(max(values, default=0.0), 1)
+        return round(max(values), 1) if values else None
 
     rc6 = full[-1].get("rc6", {}).get("value")
     rc6_value = (
@@ -206,14 +229,16 @@ def parse_intel_gpu_top_json(text: str) -> dict[str, float | int | bool | str | 
         if isinstance(rc6, (int, float)) and not isinstance(rc6, bool)
         else None
     )
-    video = peak("Video/")
+    video = peak("Video")
+    if video is None:
+        raise ValueError("no Video engine in intel_gpu_top samples")
     return {
         "supported": True,
         "available": True,
         "transcoding_load_percent": video,
         "video_busy_percent": video,
-        "render_busy_percent": peak("Render/3D/"),
-        "video_enhance_busy_percent": peak("VideoEnhance/"),
+        "render_busy_percent": peak("Render/3D"),
+        "video_enhance_busy_percent": peak("VideoEnhance"),
         "rc6_percent": rc6_value,
         "sample_count": len(full),
         "source": "intel_gpu_top",
