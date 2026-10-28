@@ -1,7 +1,7 @@
 name: DigitalHouses Network App
-version: 0.1.11
+version: 0.1.12
 slug: digitalhouses_network_app
-description: Verified computer names from Windows and Linux WS-Discovery metadata.
+description: Compact Ingress header with expandable network metrics and precise presence semantics.
 url: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_network_app
 arch:
   - amd64

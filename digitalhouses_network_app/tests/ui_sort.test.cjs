@@ -145,3 +145,33 @@ test('Note is either a compact Add button or the note itself, with safe one-line
  assert.match(longNote,/title="Редактировать заметку:/);
  assert.match(html,/\.devices-table td\.note-cell \.note-action\{[^}]*text-overflow:ellipsis/);
 });
+
+test('compact single header keeps navigation visible and all cards collapsed by default', () => {
+ const headerStart=html.indexOf('<header class="app-header">');
+ const headerEnd=html.indexOf('</header>',headerStart);
+ const main=html.indexOf('<main>',headerEnd);
+ assert.ok(headerStart>0 && headerEnd>headerStart && main>headerEnd);
+ const header=html.slice(headerStart,headerEnd);
+ assert.match(header, /<h1>DigitalHouses Network App<\/h1>/);
+ assert.match(header, /<nav aria-label="Разделы приложения">/);
+ for (const tab of ['devices','sources','events']) {
+  assert.match(header,new RegExp('data-page="'+tab+'"'));
+ }
+ assert.match(header, /<details id="overview" class="overview">/);
+ assert.doesNotMatch(header, /<details[^>]*\sopen(?:\s|=|>)/);
+ assert.match(header, /<summary[^>]*>.*?Показатели.*?<span id="health"/s);
+ assert.equal((header.match(/class="stat"/g)||[]).length,11);
+ assert.match(header, /id="export"/);
+ assert.match(header, /id="export-status"/);
+ assert.match(header, /Online \(ARP \/ HA, не ping\)/);
+ assert.match(header, /Online не означает ответ на ICMP ping/);
+ assert.doesNotMatch(html.slice(main,html.indexOf('<script>',main)),/class="stat"/);
+ assert.match(html, /\.overview-panel\{position:absolute;/);
+ assert.match(html, /\.overview summary:focus-visible\{/);
+});
+test('Online status never claims ICMP reachability', () => {
+ assert.match(html, /Online означает положительное наблюдение от ARP/);
+ assert.match(html, /Это НЕ проверка ICMP ping/);
+ assert.match(script, /ICMP ping не выполняется/);
+ assert.equal(vm.runInContext('deviceColumns[3][1]',ctx),'Наблюдение');
+});

@@ -7,9 +7,16 @@
 - Compact namespace: `dh_network_app`
 - Web UI: Home Assistant Ingress (not a second externally exposed admin service)
 - Storage: SQLite `/data/network.sqlite3`
-- Current version: `0.1.11`, experimental, no GHCR artifact and no telemetry
+- Current version: `0.1.12`, experimental, no GHCR artifact and no telemetry
 
 This App deliberately follows the existing product-naming and HAOS packaging standards. Its **Ingress** UI is the accepted departure from the usual MQTT-discovered Lovelace control card: UI state, notes and inventory are App-owned instead of built from MQTT entities. Any future machine events must follow DigitalHouses Events & Notifications Standard; local alert delivery belongs to HA, not the public App.
+
+## Compact Ingress header and presence labeling (0.1.12)
+
+- Preserve the DigitalHouses Network App title in the top bar. Devices / Sources / Events navigation lives beside it and remains visible on each tab.
+- The `Показатели` disclosure is a native `<details>` / `<summary>` in the top bar. Closed by default, opening overlays a scrollable responsive panel containing all 11 existing metric cards, the source/accuracy notice and diagnostic JSON export. No loss of export functionality or telemetry. A real unresolved ARP-vs-ARP IPv4 conflict stays visible separately and is not hidden in the panel.
+- User-facing `Online` means observed presence from positive on-link ARP, HA router tracker `home`, or Local Interface; the app **does not perform ICMP echo or test TCP port reachability**. `Not observed` does not assert true offline. No new ICMP access or privilege is introduced in this UI release.
+- Keep 30-second refresh, live source health, sort/search/note edits, stable device records and diagnostic JSON export. SQLite schema stays v7.
 
 ## 1.0 agreed scope
 
