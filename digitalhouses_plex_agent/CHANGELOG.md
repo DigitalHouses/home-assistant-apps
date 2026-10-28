@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.8.1
+
+- Restore GPU telemetry on Debian 13 and recent `intel_gpu_top` versions by parsing streamed bracketed JSON, including incomplete trailing samples.
+- Support modern GPU engine names (`Video`, `Render/3D`, `VideoEnhance`) alongside the legacy `/0` names, without confusing Video with Video Enhance.
+
 ## 0.8.0
 
 - Add the unified DigitalHouses Agent control card, mirroring the production PVE Agent UI with one-second elapsed time (no tenths), app-owned operation states and collection freshness.
