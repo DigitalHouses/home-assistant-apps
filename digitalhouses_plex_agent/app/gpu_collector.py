@@ -45,7 +45,7 @@ def parse_intel_gpu_top_json(text: str) -> dict[str, object]:
         position = 0
         while position < len(raw):
             while position < len(raw) and (
-                raw[position].isspace() or raw[position] == ","
+                raw[position].isspace() or raw[position] in ",[]"
             ):
                 position += 1
             if position >= len(raw):
@@ -74,7 +74,7 @@ def parse_intel_gpu_top_json(text: str) -> dict[str, object]:
             if not isinstance(engines, dict):
                 continue
             for name, data in engines.items():
-                if not str(name).startswith(prefix) or not isinstance(data, dict):
+                if not (str(name) == prefix or str(name).startswith(prefix + "/")) or not isinstance(data, dict):
                     continue
                 busy = data.get("busy")
                 if isinstance(busy, (int, float)) and not isinstance(busy, bool):
@@ -92,9 +92,9 @@ def parse_intel_gpu_top_json(text: str) -> dict[str, object]:
         "available": True,
         "status": "ok",
         "source": "intel_gpu_top",
-        "video_busy_percent": peak("Video/"),
-        "render_busy_percent": peak("Render/3D/"),
-        "video_enhance_busy_percent": peak("VideoEnhance/"),
+        "video_busy_percent": peak("Video"),
+        "render_busy_percent": peak("Render/3D"),
+        "video_enhance_busy_percent": peak("VideoEnhance"),
         "frequency_mhz": _round_or_none(actual_frequency),
         "rc6_percent": _round_or_none(rc6_value),
         "sample_count": len(full),
