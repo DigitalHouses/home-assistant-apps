@@ -11,6 +11,7 @@ import (
  "fmt"
  "log"
  "sync"
+ "time"
 )
 
 // No SQLite schema or Supervisor settings are deleted by an inventory reset.
@@ -22,7 +23,7 @@ var inventoryTables=[]string{
  "ssdp_services","ssdp_unmatched",
  "wsd_names","wsd_endpoints","wsd_unmatched",
  "ipv4_evidence","ipv4_disagreement_state","lan_positive",
- "identities","events","sources","devices",
+ "identities","events","sources","device_births","devices",
 }
 
 // Useful for asserting a complete reset without exposing arbitrary SQL in the API.
@@ -51,6 +52,9 @@ func (db *DB) resetInventoryRows() (count int,err error) {
   // inventoryTables is a static, audited list, never client-controlled SQL.
   if err=db.run("DELETE FROM "+table);err!=nil{return 0,fmt.Errorf("reset table %s: %w",table,err)}
  }
+ // Reset is a deliberate new initial inventory. Suppress first-census alerts.
+ until:=time.Now().UTC().Add(120*time.Second).Format(time.RFC3339Nano)
+ if err=db.run("INSERT INTO network_event_policy(key,value) VALUES('baseline_until',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",until);err!=nil{return 0,err}
  if err=db.exec("COMMIT");err!=nil{return 0,err}
  committed=true
  return count,nil

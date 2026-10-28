@@ -2,9 +2,13 @@
 
 Experimental native **Home Assistant OS App** for a durable LAN device inventory, presence history, and future device events. Internal/entity prefix: `dh_network_app`. Canonical product ID, App Store slug, and repository directory: `digitalhouses_network_app`.
 
-## Current state (0.1.15 Reset confirmation display correction)
+## Current state (0.1.16 NEW badges and machine events)
 
 Available now:
+- `NEW` badge appears beside a device name for 24 hours after the first positive ARP/HA/local-interface evidence (not merely a router's `not_home` entry). Repeat observations, IP changes and name enrichments do not renew the badge.
+- After the quiet first-census window (120 seconds on initial database initialization and after confirmed Reset), each newly positively discovered UUID produces **one** `device_discovered` MQTT Event (QoS 1, non-retained), with `device_id`, `observed_at`, `detection_source` and any known MAC/IP/name. Discovery config is retained for HA startup; event delivery retries from a SQLite outbox after MQTT failure.
+- Machine event entity `event.dh_network_app_network`, diagnostic `sensor.dh_network_app_version` and `sensor.dh_network_app_started_at`. MQTT broker service is optional; network discovery works without MQTT and pending events are not falsely marked delivered.
+- Custom method-grouped `monitored_devices` with multilingual optional `label` is the **approved next phase**, not yet active in version 0.1.16; arbitrary nested keys require Supervisor config UI compatibility verification.
 - The Reset confirmation dialog uses a real line break between the irreversible-data-loss warning and the `RESET` instruction, not a literal `\n`.
 - In the expandable `Показатели` panel, a destructive **Reset — очистить инвентарь…** button. A typed `RESET` challenge **and** final confirmation are required. Only the authenticated Home Assistant Ingress (admin-only panel) can use the JSON API endpoint `POST /api/inventory/reset`. It deletes all 16 discovery and inventory table contents in a single SQLite transaction, including device identities/UUIDs, Notes, events and protocol records. The SQLite schema, `schema_version`, Supervisor options, and host settings stay intact. There is no data backup or undo inside the App; download the diagnostic JSON before Reset if history is needed.
 - Reset invalidates responses from scans started earlier (generation gate), then starts a new ordered discovery pass (HA Router, primary LAN interface/ARP, then mDNS/SSDP/WSD). Ordinary poll cycles continue. The App never edits router, HA or other devices as part of Reset.

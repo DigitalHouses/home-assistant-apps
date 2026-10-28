@@ -101,12 +101,19 @@ func openDB(path string) (*DB, error) {
         "CREATE TABLE IF NOT EXISTS mdns_hosts (device_id TEXT PRIMARY KEY REFERENCES devices(id),hostname TEXT NOT NULL,ipv4 TEXT NOT NULL,first_seen TEXT NOT NULL,last_seen TEXT NOT NULL);",
         "CREATE TABLE IF NOT EXISTS mdns_services (device_id TEXT NOT NULL REFERENCES devices(id),instance TEXT NOT NULL,type TEXT NOT NULL,port INTEGER NOT NULL,target TEXT NOT NULL,first_seen TEXT NOT NULL,last_seen TEXT NOT NULL,PRIMARY KEY(device_id,instance,type,port));",
         "CREATE TABLE IF NOT EXISTS mdns_unmatched (hostname TEXT NOT NULL,ipv4 TEXT NOT NULL,last_seen TEXT NOT NULL,reason TEXT NOT NULL,PRIMARY KEY(hostname,ipv4));",
-        "UPDATE schema_version SET version=7;",
+        // Existing records are an established baseline: never notify them on upgrade.
+        "CREATE TABLE IF NOT EXISTS device_births (device_id TEXT PRIMARY KEY REFERENCES devices(id),first_positive_at TEXT NOT NULL,publish_state TEXT NOT NULL CHECK(publish_state IN ('pending','suppressed','published')));",
+        "CREATE TABLE IF NOT EXISTS network_event_policy (key TEXT PRIMARY KEY,value TEXT NOT NULL);",
+        "INSERT OR IGNORE INTO device_births(device_id,first_positive_at,publish_state) SELECT id,first_seen,'suppressed' FROM devices WHERE last_seen<>'';",
+        "CREATE TRIGGER IF NOT EXISTS dh_birth_on_insert AFTER INSERT ON devices WHEN NEW.last_seen<>'' BEGIN INSERT OR IGNORE INTO device_births(device_id,first_positive_at,publish_state) VALUES(NEW.id,NEW.last_seen,'pending'); END;",
+        "CREATE TRIGGER IF NOT EXISTS dh_birth_on_first_positive AFTER UPDATE OF last_seen ON devices WHEN NEW.last_seen<>'' BEGIN INSERT OR IGNORE INTO device_births(device_id,first_positive_at,publish_state) VALUES(NEW.id,NEW.last_seen,'pending'); END;",
+        "UPDATE schema_version SET version=8;",
     }, "\n")
     if err := db.exec(schema); err != nil {
         db.Close()
         return nil, err
     }
+    if err:=db.initializeDiscoveryBaseline(path);err!=nil{db.Close();return nil,err}
     return db, nil
 }
 
@@ -219,6 +226,11 @@ func (s *Service) routes() http.Handler {
         devices,err:=s.db.devices()
         if err != nil { http.Error(w,"database unavailable",500); return }
         reply(w,map[string]any{"product":"digitalhouses_network_app","version":s.version,"started_at":s.started.Format(time.RFC3339),"database":"ready","discovery_running":false,"ha_router_import_enabled":true,"poll_interval_seconds":s.intervalSeconds,"devices":len(devices),"scan_interval_seconds":s.scanIntervalSeconds,"mdns_interval_seconds":s.mdnsIntervalSeconds,"ssdp_interval_seconds":s.ssdpIntervalSeconds,"wsd_interval_seconds":s.wsdIntervalSeconds,"phase":"local_interface_lan_arp_ha_router_mdns_ssdp_wsd"})
+    })
+    mux.HandleFunc("GET /api/device-births",func(w http.ResponseWriter,r *http.Request){
+        births,err:=s.db.deviceBirths()
+        if err!=nil{http.Error(w,"database unavailable",500);return}
+        reply(w,births)
     })
     mux.HandleFunc("GET /api/devices",func(w http.ResponseWriter,r *http.Request){
         devices,err:=s.db.devices()

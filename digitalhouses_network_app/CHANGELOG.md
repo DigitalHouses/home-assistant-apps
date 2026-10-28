@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.16
+
+- Add a 24-hour NEW badge driven by persistent first-positive evidence; not-home/unknown sources do not count as newly online.
+- Add MQTT Event Discovery and durable QoS1 `device_discovered` publisher (non-retained event, retained discovery, optional MQTT service); existing inventory and initial/reset census are suppressed from event notifications.
+- Persist event outbox in SQLite schema v8 and expose first-positive timestamps for Ingress.
+- Retain previous UUIDs/Notes, all scanners and current Online/Not observed semantics.
+- Grouped monitored_devices configuration is deliberately not enabled until native HAOS configuration schema compatibility is verified.
+
 ## 0.1.15
 
 - Fix Reset confirmation prompt displaying literal `\n` instead of an actual line break.

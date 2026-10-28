@@ -7,9 +7,19 @@
 - Compact namespace: `dh_network_app`
 - Web UI: Home Assistant Ingress (not a second externally exposed admin service)
 - Storage: SQLite `/data/network.sqlite3`
-- Current version: `0.1.15`, experimental, no GHCR artifact and no telemetry
+- Current version: `0.1.16`, experimental, no GHCR artifact and no telemetry
 
 This App deliberately follows the existing product-naming and HAOS packaging standards. Its **Ingress** UI is the accepted departure from the usual MQTT-discovered Lovelace control card: UI state, notes and inventory are App-owned instead of built from MQTT entities. Any future machine events must follow DigitalHouses Events & Notifications Standard; local alert delivery belongs to HA, not the public App.
+
+## New device first-positive evidence and MQTT machine events (0.1.16)
+
+- Add schema v8 `device_births` table (one row per UUID) with `first_positive_at` and `publish_state`. SQLite triggers capture the initial confirmed positive (`online` with nonempty `last_seen`), not a router's `not_home` or `unknown` entry. Existing installed devices are seeded as `suppressed`, retaining UUID/Notes; no legacy notification flood.
+- Devices display a `NEW` badge during the first 24h following `first_positive_at`; no periodic database mutation or time-based watcher is needed, with a 30-second UI refresh. Restart/renaming/IP rotation does not renew NEW.
+- On a brand-new database and after explicit Reset, first census is quiet for 120s: initial observations are shown as NEW but not published as notifications. Normal first-positive inserts after this period have `pending` event state.
+- Separate Python MQTT worker uses Supervisor `mqtt:want` service, Paho MQTT and SQLite WAL; the Go collector stays independent. HA MQTT Event Discovery is retained, `device_discovered` payloads are QoS 1 / `retain:false`, and the outbox marks `published` only after PUBACK. A reconnect may resend an event if interrupted after broker ACK but before commit: consumers should deduplicate using `device_id` if exactly-once notification is required.
+- Event contract: required `schema_version:2`, `event_type:device_discovered`, `observed_at`, `device_id`, `detection_source`; optional verified `mac`, `ipv4`, `name`. No localized message/title or delivery settings. The local HAOS notification package consumes `event.received` and owns language and delivery.
+- `event.dh_network_app_network`, `sensor.dh_network_app_version`, `sensor.dh_network_app_started_at` have stable discovery IDs and runtime MQTT availability. Initial events are not replayed after Reset. Reset clears `device_births` and sets a fresh quiet-census threshold.
+- The method-grouped `monitored_devices` YAML with optional UTF-8 `label` is separately approved but **not configured or enabled** here. HAOS Supervisor's nested YAML editor/schema limits require live compatibility verification; inventing a different configuration format is intentionally avoided.
 
 ## Small Ingress layout refinements (0.1.13)
 
