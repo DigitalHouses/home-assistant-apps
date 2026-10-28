@@ -113,8 +113,7 @@ func TestResetIngressRequiresCustomHeaderAndExplicitConfirmation(t *testing.T){
 }
 func TestResetConfirmationExactMatch(t *testing.T){
  if confirmReset("RESET")!=nil{t.Fatal("correct confirmation rejected")}
- for _,word:=range []string{"","reset"," RESET","RESET ","СБРОС","RESET
-"}{
+ for _,word:=range []string{"","reset"," RESET","RESET ","СБРОС","RESET\n"}{
   if confirmReset(word)==nil{t.Fatalf("invalid reset confirmation accepted %q",word)}
  }
 }
