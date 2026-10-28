@@ -95,6 +95,10 @@ func parseWSDComputerMetadata(packet []byte,requestID,endpoint string) (string,b
   var name string
   if i:=strings.Index(raw,"/Workgroup:");i>0 {name=raw[:i]}
   if i:=strings.Index(raw,"/Domain:");i>0 {name=raw[:i]}
+  // Windows publishes <pub:Computer>VIEW71/NotJoined</pub:Computer>
+  // when the machine is not joined to a Windows domain or workgroup.
+  // This is a protocol-observed name, not a guessed hostname.
+  if strings.HasSuffix(raw,"/NotJoined") {name=strings.TrimSuffix(raw,"/NotJoined")}
   if validWSDComputerName(name) {return name,true}
  }
  return "",false
@@ -126,7 +130,7 @@ func fetchWSDComputerName(ctx context.Context,item WSDAnnouncement) (string,erro
  if err!=nil{return "",err}
  // wsdd2 uses literal Content-Type comparison and rejects charset parameters.
  req.Header.Set("Content-Type","application/soap+xml")
- req.Header.Set("User-Agent","DigitalHouses-Network-WSD/0.1.10")
+ req.Header.Set("User-Agent","DigitalHouses-Network-WSD/0.1.11")
  client:=&http.Client{
   Timeout:1800*time.Millisecond,
   CheckRedirect:func(req *http.Request,via []*http.Request)error{return http.ErrUseLastResponse},
