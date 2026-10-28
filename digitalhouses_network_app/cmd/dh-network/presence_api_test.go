@@ -91,6 +91,6 @@ func TestPresenceAPIStartsOneImmediateGlobalScanAndNotForNotificationChanges(t *
  }
  if started.Load()!=1{t.Fatal("concurrent activations launched duplicate scans")}
  close(unblock)
- time.Sleep(15*time.Millisecond)
- if started.Load()!=1{t.Fatal("coalesced scan unexpectedly repeated")}
+ select {case <-signal:case <-time.After(2*time.Second):t.Fatal("second pass for mid-scan activation was not started")}
+ if started.Load()!=2{t.Fatalf("expected one follow-up scan for MAC enabled during IP scan; got %d",started.Load())}
 }
