@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.24
+
+- Fix missing green **Presence eyes** after reopening Devices or a periodic refresh: the UI now reloads persisted IP/MAC subscriptions from the Ingress Presence API before rendering device rows. Existing SQLite subscriptions and event history remain untouched.
+- The IP/MAC three-dot menu now closes on clicking outside or pressing Escape; clicking inside or using another address trigger retains correct interaction.
+- Remove the top-header **Показатели** dropdown completely. Move every item of its content to the **Параметры** tab: device/source/scan counters, health status, IP disagreement count, the native diagnostic JSON download and fallback preview/copy, plus destructive inventory Reset.
+- Keep all five navigation tabs in the header, and globally configurable scan intervals in the same Settings tab.
+- Include regression tests for repeated Devices reloads restoring stored subscriptions, outside-click/Escape semantics, and complete relocation of metrics, diagnostics and Reset.
+- User-supplied diagnostic JSON (0.1.23) verified 5 active confirmed subscriptions (3 IP + 2 MAC), 4 broker-acknowledged outbound events, and no queued/retrying events: eye disappearance was a UI state-loading regression, not lost monitoring data.
+
+
 ## 0.1.23
 
 - Fix event journal **Copy HA trigger**, **Copy JSON** and event_type buttons. An absent HTML title no longer throws before calling the clipboard; buttons have explicit accessible copy labels. Add DOM click tests with multiline JSON and YAML.
