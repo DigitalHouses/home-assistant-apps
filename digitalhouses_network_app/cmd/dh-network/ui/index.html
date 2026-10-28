@@ -20,9 +20,14 @@
 .overview-panel .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:9px;margin:10px 0 16px}
 .overview-panel .stat{min-width:0;padding:10px 12px}
 .overview-panel .stat strong{font-size:21px}
-.overview-panel .notice{margin:12px 0}
 .overview-panel .toolbar{margin:14px 0 0}
 h1{font-size:20px;margin:0 0 3px}h2{font-size:18px;margin:18px 0}
+.devices-tools{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin:12px 0 8px}
+.devices-tools[hidden]{display:none}
+.devices-tools h2{margin:0;white-space:nowrap}
+.devices-tools #filterarea{flex:0 1 380px;min-width:160px}
+.devices-tools #search{width:100%;min-width:0}
+.devices-tools+.grid-scroll{margin-top:0}
 small,.muted{color:#aebed1} main{padding:14px 22px 22px;max-width:1250px;margin:auto}
 nav{display:flex;gap:10px;margin:20px 0;flex-wrap:wrap}.toolbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:8px 0 20px}.export{background:#176761;border-color:#3aa99d}.source-tag{display:inline-block;margin:3px 4px 3px 0}button{cursor:pointer;padding:9px 13px;background:#284059;color:#f1f7fb;border:1px solid #536e83;border-radius:8px}
 button.active{background:#137b78;border-color:#26b6a5}button:hover{filter:brightness(1.16)}
@@ -61,23 +66,26 @@ input{font:inherit;padding:10px;color:#f0f4f9;background:#203147;border:1px soli
 </style></head>
 <body>
 <header class="app-header">
-  <div class="brand"><h1>DigitalHouses Network App</h1><small>Устройства и источники сети · v0.1.12</small></div>
+  <div class="brand"><h1>DigitalHouses Network App</h1><small>Устройства и источники сети · v0.1.13</small></div>
   <nav aria-label="Разделы приложения"><button class="active" data-page="devices">Устройства</button><button data-page="sources">Источники</button><button data-page="events">События</button></nav>
   <details id="overview" class="overview">
     <summary title="Раскрыть или скрыть показатели сети и диагностику"><span>Показатели</span><span id="health" class="tag">Подключение…</span><span class="overview-arrow" aria-hidden="true">⌄</span></summary>
     <div class="overview-panel" role="region" aria-label="Показатели и диагностика">
       <p class="description">Сводка источников, диагностика и экспорт. Статус Online не означает ответ на ICMP ping.</p>
       <div class="stats"><div class="stat"><strong id="known">—</strong><span>Устройств в реестре</span></div><div class="stat"><strong id="online">—</strong><span>Online (ARP / HA, не ping)</span></div><div class="stat"><strong id="interval">—</strong><span>HA-опрос, секунд</span></div><div class="stat"><strong id="arp-interval">—</strong><span>ARP-опрос, секунд</span></div><div class="stat"><strong id="last-arp">—</strong><span>Последний ARP-скан</span></div><div class="stat"><strong id="known-arp">—</strong><span>Ранее найдено ARP</span></div><div class="stat"><strong id="ip-conflicts">—</strong><span>Расхождений IPv4 (включая источники)</span></div><div class="stat"><strong id="mdns-hosts">—</strong><span>Хостов с Bonjour</span></div><div class="stat"><strong id="mdns-services">—</strong><span>Bonjour сервисов</span></div><div class="stat"><strong id="ssdp-hosts">—</strong><span>Хостов с SSDP</span></div><div class="stat"><strong id="ssdp-services">—</strong><span>SSDP сервисов</span></div></div>
-      <div class="notice">Статус Online означает положительное наблюдение от ARP, трекера роутера Home Assistant или собственного сетевого интерфейса. Это НЕ проверка ICMP ping. Отсутствие нового наблюдения не является доказательством выключения устройства. Источники: Home Assistant <code>device_tracker</code> и самостоятельный ARP-опрос локального IPv4. ARP обнаруживает ответившие сетевые интерфейсы; отсутствие ответа не доказывает Offline. Bonjour и SSDP дополняют сведения о сервисах при свежем ARP-подтверждении IP. Противоречия между источниками фиксируются в журнале событий, но не означают доказанный конфликт адресов. IPv6 NDP добавим позже.</div>
+      
       <div class="toolbar"><button id="export" class="export" type="button">Сохранить диагностику (.json)</button><small id="export-status">Файл содержит IP, MAC, имена и заметки. Он сохраняется только на твоём компьютере.</small></div>
     </div>
   </details>
 </header>
 <main>
-<div id="ip-conflict-summary" class="notice" style="display:none"></div><div id="filterarea"></div><section id="body">Загрузка…</section>
+<div id="ip-conflict-summary" class="notice" style="display:none"></div>
+<div id="devices-tools" class="devices-tools" hidden><h2 id="devices-count">Устройства (—)</h2><div id="filterarea"></div></div>
+<section id="body">Загрузка…</section>
 </main>
 <script>
 const body=document.getElementById('body'),health=document.getElementById('health'),filterArea=document.getElementById('filterarea');
+const devicesTools=document.getElementById('devices-tools'),devicesCount=document.getElementById('devices-count');
 let page='devices',devices=[],origins=[],mdnsServices=[],ssdpServices=[],wsdEndpoints=[],filter='';
 let sortKey='ip',sortDirection='asc';
 const deviceColumns=[['name','Имя'],['ip','IP'],['mac','MAC'],['presence','Наблюдение'],['sources','Обнаружен через'],['last_seen','Последний Online'],['note','Note']];
@@ -218,8 +226,9 @@ function renderDevices(){
 }
 function renderTable(){
  const found=sortedDeviceRows();
- if(!devices.length){body.innerHTML='<h2>Устройства</h2><p>Устройств пока нет. Проверь вкладку «Источники». В Home Assistant могут отсутствовать доступные <code>device_tracker</code> от роутеров.</p>';return}
- body.innerHTML='<h2>Устройства ('+found.length+')</h2><div class="grid-scroll"><table class="devices-table"><thead><tr>'+sortedHeaders()+'</tr></thead><tbody>'+
+ devicesCount.textContent='Устройства ('+found.length+')';
+ if(!devices.length){body.innerHTML='<p>Устройств пока нет. Проверь вкладку «Источники». В Home Assistant могут отсутствовать доступные <code>device_tracker</code> от роутеров.</p>';return}
+ body.innerHTML='<div class="grid-scroll"><table class="devices-table"><thead><tr>'+sortedHeaders()+'</tr></thead><tbody>'+
  found.map((d,index)=>'<tr><td class="num-cell">'+(index+1)+'</td><td class="name-cell"><strong class="name-value" title="'+esc(visibleDeviceName(d))+'">'+esc(visibleDeviceName(d)||'—')+'</strong></td><td class="ip-cell">'+esc(d.ipv4||d.ipv6||'—')+(d.ipv4&&d.ipv6?'<small> / '+esc(d.ipv6)+'</small>':'')+'</td><td class="mac-cell">'+esc(d.mac||'—')+'</td><td><span class="tag '+esc(d.presence)+'" title="Online — обнаружено через ARP, HA Tracker или Local Interface; ICMP ping не выполняется">'+esc(d.presence)+'</span></td><td class="source-cell">'+sourcesForDisplay(d.id)+'</td><td class="time-cell">'+esc(noteTime(d.last_seen))+'</td><td class="note-cell">'+noteAction(d)+'</td></tr>').join('')+'</tbody></table></div>';
  body.querySelectorAll('button[data-sort]').forEach(b=>b.addEventListener('click',()=>changeSort(b.dataset.sort)));
  body.querySelectorAll('button[data-id]').forEach(b=>b.addEventListener('click',()=>edit(b.dataset.id)));
@@ -275,11 +284,13 @@ async function load(){
    :'';
 
   if(page==='devices'){
+   devicesTools.hidden=false;
    // Preserve search focus and current sort during timed refreshes.
    if(!filterArea.querySelector('#search'))renderDevices();
    else renderTable();
    return;
   }
+  devicesTools.hidden=true;
   filterArea.innerHTML='';
   if(page==='sources'){
    const sources=await read('sources');
@@ -338,7 +349,7 @@ async function exportDiagnostic() {
   a.href=url;a.download=file;a.style.display='none';
   document.body.appendChild(a);a.click();a.remove();
   setTimeout(()=>URL.revokeObjectURL(url),1500);
-  message.textContent='Файл '+file+' сформирован. Пришли его в чат для анализа.';
+  message.textContent='Файл '+file+' сформирован.';
  }catch(e){message.textContent='Не удалось создать файл: '+e.message}
  finally{button.disabled=false}
 }
