@@ -174,24 +174,21 @@ func mdnsScan(ctx context.Context, plan lanTarget) ([]MDNSHost,int,error) {
 }
 
 func (s *Service) pollMDNS() {
+ generation:=s.currentScanGeneration()
  at:=time.Now().UTC().Format(time.RFC3339)
  plan,err:=localLANPlan()
- if err!=nil {
-  s.recordMDNSError(at,err)
-  return
- }
+ if err!=nil {s.withCurrentGeneration(generation,func(){s.recordMDNSError(at,err)});return}
  ctx,cancel:=context.WithTimeout(context.Background(),14*time.Second)
  defer cancel()
  hosts,packets,err:=mdnsScan(ctx,plan)
- if err!=nil {
-  s.recordMDNSError(at,err)
-  return
- }
- at=time.Now().UTC().Format(time.RFC3339)
- matched,unmatched,services,err:=s.db.importMDNSHosts(hosts,at,packets,plan.iface.Name)
- if err!=nil {s.recordMDNSError(at,err);return}
- log.Printf("mDNS discovery: %d hosts with A records, %d linked to fresh ARP, %d unmatched, %d services, %d response packets",
+ if err!=nil {s.withCurrentGeneration(generation,func(){s.recordMDNSError(at,err)});return}
+ s.withCurrentGeneration(generation,func(){
+  at=time.Now().UTC().Format(time.RFC3339)
+  matched,unmatched,services,importErr:=s.db.importMDNSHosts(hosts,at,packets,plan.iface.Name)
+  if importErr!=nil {s.recordMDNSError(at,importErr);return}
+  log.Printf("mDNS discovery: %d hosts with A records, %d linked to fresh ARP, %d unmatched, %d services, %d response packets",
    len(hosts),matched,unmatched,services,packets)
+ })
 }
 
 func (s *Service) recordMDNSError(at string,err error) {
