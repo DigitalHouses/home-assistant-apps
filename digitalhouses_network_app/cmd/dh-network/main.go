@@ -102,17 +102,18 @@ func openDB(path string) (*DB, error) {
         "CREATE TABLE IF NOT EXISTS mdns_services (device_id TEXT NOT NULL REFERENCES devices(id),instance TEXT NOT NULL,type TEXT NOT NULL,port INTEGER NOT NULL,target TEXT NOT NULL,first_seen TEXT NOT NULL,last_seen TEXT NOT NULL,PRIMARY KEY(device_id,instance,type,port));",
         "CREATE TABLE IF NOT EXISTS mdns_unmatched (hostname TEXT NOT NULL,ipv4 TEXT NOT NULL,last_seen TEXT NOT NULL,reason TEXT NOT NULL,PRIMARY KEY(hostname,ipv4));",
         // Existing records are an established baseline: never notify them on upgrade.
-        "CREATE TABLE IF NOT EXISTS device_births (device_id TEXT PRIMARY KEY REFERENCES devices(id),first_positive_at TEXT NOT NULL,publish_state TEXT NOT NULL CHECK(publish_state IN ('pending','suppressed','published')));",
+        "CREATE TABLE IF NOT EXISTS device_births (device_id TEXT PRIMARY KEY REFERENCES devices(id),first_positive_at TEXT NOT NULL,publish_state TEXT NOT NULL CHECK(publish_state IN ('pending','suppressed','published')),detection_source TEXT NOT NULL DEFAULT '');",
         "CREATE TABLE IF NOT EXISTS network_event_policy (key TEXT PRIMARY KEY,value TEXT NOT NULL);",
         "INSERT OR IGNORE INTO device_births(device_id,first_positive_at,publish_state) SELECT id,first_seen,'suppressed' FROM devices WHERE last_seen<>'';",
         "CREATE TRIGGER IF NOT EXISTS dh_birth_on_insert AFTER INSERT ON devices WHEN NEW.last_seen<>'' BEGIN INSERT OR IGNORE INTO device_births(device_id,first_positive_at,publish_state) VALUES(NEW.id,NEW.last_seen,'pending'); END;",
         "CREATE TRIGGER IF NOT EXISTS dh_birth_on_first_positive AFTER UPDATE OF last_seen ON devices WHEN NEW.last_seen<>'' BEGIN INSERT OR IGNORE INTO device_births(device_id,first_positive_at,publish_state) VALUES(NEW.id,NEW.last_seen,'pending'); END;",
-        "UPDATE schema_version SET version=8;",
+        "UPDATE schema_version SET version=9;",
     }, "\n")
     if err := db.exec(schema); err != nil {
         db.Close()
         return nil, err
     }
+    if err:=db.ensureDeviceBirthSourceColumn();err!=nil{db.Close();return nil,err}
     if err:=db.initializeDiscoveryBaseline(path);err!=nil{db.Close();return nil,err}
     return db, nil
 }
