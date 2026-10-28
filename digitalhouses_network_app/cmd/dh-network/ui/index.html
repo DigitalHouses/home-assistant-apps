@@ -569,8 +569,13 @@ function eventTitle(type){
  return ({device_discovered:'Новое устройство',tracked_device_reachable:'IP стал доступен',tracked_device_unreachable:'IP перестал обнаруживаться',
  tracked_device_present:'MAC появился',tracked_device_absent:'MAC перестал обнаруживаться'})[type]||type;
 }
+let eventLogRows=[];
 async function renderEventLog(){
- const events=await read('event-log');
+ eventLogRows=await read('event-log');
+ showEventLog();
+}
+function showEventLog(){
+ const events=eventLogRows;
  const statuses={queued:'В очереди',retrying:'Повторная попытка',broker_acked:'Передано MQTT'};
  const visible=events.filter(item=>{
   const text=[item.event_type,item.payload_json,item.event_id].join(' ').toLowerCase();
@@ -589,9 +594,15 @@ async function renderEventLog(){
     '<td><span class="tag '+(item.status==='broker_acked'?'ok':'unknown')+'">'+esc(statuses[item.status]||item.status)+'</span><small style="display:block">Попыток: '+esc(item.attempts)+'</small></td>'+
     '<td><details><summary>Детали</summary><small>event_id: '+esc(item.event_id)+'</small><p><button type="button" class="small-copy" data-copy="'+esc(code)+'">Скопировать триггер HA</button> <button type="button" class="small-copy" data-copy="'+esc(JSON.stringify(d,null,2))+'">Скопировать JSON</button></p><pre>'+esc(JSON.stringify(d,null,2))+'</pre></details></td></tr>';
   }).join('')+'</tbody></table></div>':'<p>Подходящих событий пока нет.</p>');
- body.querySelector('#log-search').addEventListener('input',e=>{eventLogFilter=e.target.value;renderEventLog()});
+ body.querySelector('#log-search').addEventListener('input',e=>{
+  eventLogFilter=e.target.value;
+  const cursor=e.target.selectionStart;
+  showEventLog();
+  const field=body.querySelector('#log-search');
+  field.focus();field.setSelectionRange(cursor,cursor);
+ });
  const status=body.querySelector('#log-status');status.value=eventLogStatus;
- status.addEventListener('change',e=>{eventLogStatus=e.target.value;renderEventLog()});
+ status.addEventListener('change',e=>{eventLogStatus=e.target.value;showEventLog()});
  enableCellCopy();
 }
 async function load(){
