@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.21
+
+- Ingress top navigation: Devices, Sources, Event Journal, Global Settings, and plain-language Help; the legacy YAML Monitor editor is removed from navigation while its files remain compatible.
+- IP/MAC three-dot menu: copy address, subscribe to IP Presence or MAC Presence, and record an opt-in for an external DigitalHouses HA notification package. Active subscriptions show a green eye with status/last-check/last-seen/transition hover details.
+- Global scan intervals and presence confirmation thresholds persist in SQLite; the shared scanner schedules re-read intervals without restarting the App.
+- New Presence engine reads completed global LAN ARP scans, counts each successful scan once, distinguishes unknown on source failures, and publishes presence transitions with stable machine event IDs and durable QoS 1 outbox. No new per-device scanner.
+- New MQTT delivery journal includes exact event_type, event_id, JSON, broker acknowledgements, copyable Home Assistant trigger snippets, and search/filter controls. Internal IPv4 disagreement diagnostics are excluded.
+- Retains existing device UUIDs, Notes, IPv4 evidence and old YAML monitoring configuration; does not modify the client's running instance.
+- The HA notification delivery package remains an external opt-in; enabling that preference only sets metadata until installed.
+
+
 ## 0.1.20
 
 - **Ingress inventory table:** resize any of the seven data columns by dragging its header edge; keyboard arrows resize, Home or double click resets individual column widths. Widths are bounded, stored only in browser localStorage, survive refresh and stay independent for different browsers.
