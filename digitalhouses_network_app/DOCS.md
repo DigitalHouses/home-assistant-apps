@@ -179,6 +179,40 @@ Version 0.1.0 proved HAOS install, Ingress, Web UI, data persistence, version an
 When accepted, move from experimental Supervisor source build to the standard versioned immutable GHCR artifact. The install/update UI remains the **same Home Assistant App Store**, never a manual server-side copy.
 
 
+## Human-friendly IP/MAC Presence names (0.1.25)
+
+In Devices, open the three-dot menu adjacent to the watched IP or MAC.
+The **Название для уведомлений** field can contain an optional name like
+**Мой ноутбук** (maximum 80 Unicode characters, no control characters).
+Choose tracking and local notification preferences, then click **Сохранить**.
+The address remains the stable watch key; the user name is never used to
+identify, merge, or scan a device, and is independent of inventory Notes.
+
+The UI reads/writes `presence_subscriptions.label` and restores the label
+after browser reload or server restart. Existing installations are migrated
+in-place with an idempotent SQLite ALTER TABLE. Existing subscriptions,
+event logs, settings, Notes and confirmed states are not deleted.
+Editing an enabled watch label alone does **not** rescan the network or
+reinitialize confirmation counters, and clients omitting the optional API
+field continue preserving prior labels. Passing an empty `label` explicitly
+clears it.
+
+Subsequent confirmed IP/MAC state transitions carry the **optional**
+`label` in the original MQTT event JSON, alongside unchanged
+`watch_id`, `ip` or `mac`, `event_type`, `previous`, `current`,
+`check_method`, and timestamps. The delivery journal displays the
+human-friendly name plus the technical address; historical records keep
+their original event data as evidence. The green eye tooltip also shows
+the name.
+
+The optional `examples/ha_packages/dh_network_notifications.yaml`
+template builds messages like **Мой ноутбук — снова обнаружен в сети** and
+shows the address on another line. It falls back to address when there is
+no label. If the user already has a custom HA notification automation
+(e.g. a title like **Сеть · Проверка доступна**), that automation must be
+changed to read the new `label` field; Network App does not overwrite HA
+user packages or custom scripts.
+
 ## Settings relocation and Presence eye restoration (0.1.24)
 
 The Ingress header now contains only the application identity and its five
