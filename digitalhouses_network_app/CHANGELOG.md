@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.17
+
+- End the first-install and post-Reset notification baseline only after successful HA router tracker AND LAN ARP source snapshots, not after an arbitrary two-minute timer. Pending initial-census births remain silent throughout delayed scans or MQTT reconnects.
+- Persist the detection source at the first positive observation (ARP, HA router tracker or local interface); later source enrichment cannot rewrite the original event provenance.
+- Add deterministic `event_id` to transient `device_discovered` events so MQTT QoS 1 retries can be deduplicated after a crash between PUBACK and SQLite outbox acknowledgement.
+- Add backward-compatible SQLite schema v9 migration without touching established device IDs, Notes, first-positive times or prior outbox state; explicit Reset restarts the census gate.
+- Add regression coverage for baseline completion, restart, first evidence, MQTT event idempotency and active-census event suppression.
+
+
 ## 0.1.16
 
 - Add a 24-hour NEW badge driven by persistent first-positive evidence; not-home/unknown sources do not count as newly online.
