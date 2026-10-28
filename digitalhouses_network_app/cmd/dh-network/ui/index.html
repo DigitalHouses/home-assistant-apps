@@ -21,6 +21,10 @@
 .overview-panel .stat{min-width:0;padding:10px 12px}
 .overview-panel .stat strong{font-size:21px}
 .overview-panel .toolbar{margin:14px 0 0}
+.reset-area{margin-top:15px;padding-top:14px;border-top:1px solid #49647e;display:flex;flex-direction:column;align-items:flex-start;gap:8px}
+.reset-area small{line-height:1.45}
+button.reset-danger{color:#ffd5d1;background:#5a2830;border-color:#b26a71}
+button.reset-danger:focus-visible{outline:2px solid #ffb4ac;outline-offset:2px}
 h1{font-size:20px;margin:0 0 3px}h2{font-size:18px;margin:18px 0}
 .devices-tools{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin:12px 0 8px}
 .devices-tools[hidden]{display:none}
@@ -66,7 +70,7 @@ input{font:inherit;padding:10px;color:#f0f4f9;background:#203147;border:1px soli
 </style></head>
 <body>
 <header class="app-header">
-  <div class="brand"><h1>DigitalHouses Network App</h1><small>Устройства и источники сети · v0.1.13</small></div>
+  <div class="brand"><h1>DigitalHouses Network App</h1><small>Устройства и источники сети · v0.1.14</small></div>
   <nav aria-label="Разделы приложения"><button class="active" data-page="devices">Устройства</button><button data-page="sources">Источники</button><button data-page="events">События</button></nav>
   <details id="overview" class="overview">
     <summary title="Раскрыть или скрыть показатели сети и диагностику"><span>Показатели</span><span id="health" class="tag">Подключение…</span><span class="overview-arrow" aria-hidden="true">⌄</span></summary>
@@ -75,6 +79,11 @@ input{font:inherit;padding:10px;color:#f0f4f9;background:#203147;border:1px soli
       <div class="stats"><div class="stat"><strong id="known">—</strong><span>Устройств в реестре</span></div><div class="stat"><strong id="online">—</strong><span>Online (ARP / HA, не ping)</span></div><div class="stat"><strong id="interval">—</strong><span>HA-опрос, секунд</span></div><div class="stat"><strong id="arp-interval">—</strong><span>ARP-опрос, секунд</span></div><div class="stat"><strong id="last-arp">—</strong><span>Последний ARP-скан</span></div><div class="stat"><strong id="known-arp">—</strong><span>Ранее найдено ARP</span></div><div class="stat"><strong id="ip-conflicts">—</strong><span>Расхождений IPv4 (включая источники)</span></div><div class="stat"><strong id="mdns-hosts">—</strong><span>Хостов с Bonjour</span></div><div class="stat"><strong id="mdns-services">—</strong><span>Bonjour сервисов</span></div><div class="stat"><strong id="ssdp-hosts">—</strong><span>Хостов с SSDP</span></div><div class="stat"><strong id="ssdp-services">—</strong><span>SSDP сервисов</span></div></div>
       
       <div class="toolbar"><button id="export" class="export" type="button">Сохранить диагностику (.json)</button><small id="export-status">Файл содержит IP, MAC, имена и заметки. Он сохраняется только на твоём компьютере.</small></div>
+      <div class="reset-area">
+        <button id="reset" class="reset-danger" type="button">Reset — очистить инвентарь…</button>
+        <small>Безвозвратно удаляет устройства, UUID, Notes, источники и историю. Настройки и схема БД сохраняются. После подтверждения обнаружение начинается с нуля.</small>
+        <small id="reset-status" role="status" aria-live="polite"></small>
+      </div>
     </div>
   </details>
 </header>
@@ -353,7 +362,29 @@ async function exportDiagnostic() {
  }catch(e){message.textContent='Не удалось создать файл: '+e.message}
  finally{button.disabled=false}
 }
+async function resetInventoryFromUI(){
+ const button=document.getElementById('reset'),message=document.getElementById('reset-status');
+ if(button.disabled)return;
+ const word=prompt('Сброс удалит ВСЕ устройства, UUID, Notes, историю и события без возможности восстановления.\\nДля подтверждения введи RESET:');
+ if(word===null)return;
+ if(word!=='RESET'){alert('Сброс отменён: нужно ввести RESET без изменений.');return}
+ if(!confirm('Окончательно очистить весь сетевой инвентарь и немедленно начать новое обнаружение?'))return;
+ button.disabled=true;message.textContent='Очистка инвентаря…';
+ try{
+  const r=await fetch('api/inventory/reset',{method:'POST',headers:{'Content-Type':'application/json','X-DH-UI':'1'},body:JSON.stringify({confirmation:word}),cache:'no-store'});
+  if(!r.ok)throw new Error('HTTP '+r.status);
+  const result=await r.json();
+  if(!result.reset)throw new Error('сервер не подтвердил сброс');
+  filter='';page='devices';sortKey='ip';sortDirection='asc';
+  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active',b.dataset.page==='devices'));
+  filterArea.innerHTML='';
+  message.textContent='Инвентарь очищен ('+Number(result.previous_devices||0)+' устройств). Новое обнаружение запущено.';
+  await load();
+ }catch(e){message.textContent='Ошибка сброса: '+e.message}
+ finally{button.disabled=false}
+}
 document.getElementById('export').addEventListener('click',exportDiagnostic);
+document.getElementById('reset').addEventListener('click',resetInventoryFromUI);
 document.querySelectorAll('[data-page]').forEach(b=>b.addEventListener('click',()=>{
  document.querySelectorAll('nav button').forEach(a=>a.classList.remove('active'));
  b.classList.add('active');page=b.dataset.page;filter='';load();
