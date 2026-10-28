@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.15
+
+- Fix Reset confirmation prompt displaying literal `\n` instead of an actual line break.
+- Add a browser test for the rendered prompt and cancellation without an API call.
+- No changes to Reset semantics or database schema.
+
 ## 0.1.14
 
 - Add guarded Reset button to the Ingress `Показатели` panel; requires typing `RESET` and final explicit confirmation.
