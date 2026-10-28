@@ -41,13 +41,17 @@ automation:
                or trigger.payload_json.get('device_id')
                or 'unknown' }}
           event_identity: "{{ trigger.payload_json.get('event_id', '') }}"
+          display_label: >-
+            {{ trigger.payload_json.get('label')
+               or trigger.payload_json.get('name')
+               or address }}
           description: >-
             {% set names = {
               'device_discovered': 'Обнаружено новое устройство',
-              'tracked_device_reachable': 'IP снова обнаруживается',
-              'tracked_device_unreachable': 'IP перестал обнаруживаться',
-              'tracked_device_present': 'MAC снова обнаруживается',
-              'tracked_device_absent': 'MAC перестал обнаруживаться'
+              'tracked_device_reachable': 'снова обнаружен в сети',
+              'tracked_device_unreachable': 'не обнаружен при сканировании',
+              'tracked_device_present': 'снова обнаружен в сети',
+              'tracked_device_absent': 'не обнаружен при сканировании'
             } %}
             {{ names.get(event_kind, event_kind) }}
       - action: persistent_notification.create
@@ -55,7 +59,9 @@ automation:
           title: "DigitalHouses Network"
           notification_id: "dh_network_{{ event_identity }}"
           message: >-
-            {{ description }}: {{ address }}
+            {{ display_label }} — {{ description }}.
+
+            Адрес: {{ address }}
 
             Событие: {{ event_kind }}
 
