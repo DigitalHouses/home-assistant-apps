@@ -117,5 +117,21 @@ class PresenceTests(unittest.TestCase):
         self.assertEqual({x["status"] for x in db.execute("SELECT status FROM event_delivery_log")},{"broker_acked"})
         self.assertEqual(db.execute("SELECT COUNT(*) FROM event_delivery_log").fetchone()[0],2)
 
+class NotificationPackageContract(unittest.TestCase):
+    def test_local_ha_package_is_opt_in_and_filters_notification_requested(self):
+        import yaml
+        path=Path(__file__).resolve().parents[1]/"examples"/"ha_packages"/"dh_network_notifications.yaml"
+        data=yaml.safe_load(path.read_text(encoding="utf-8"))
+        self.assertIn("input_boolean",data)
+        self.assertIn("automation",data)
+        spec=data["automation"][0]
+        self.assertEqual(spec["triggers"][0]["trigger"],"mqtt")
+        self.assertEqual(spec["triggers"][0]["topic"],"DigitalHouses/Global/dh_network_app/event")
+        condition=spec["conditions"][0]["value_template"]
+        self.assertIn("notifications_requested",condition)
+        self.assertIn("device_discovered",condition)
+        self.assertIn("persistent_notification.create",spec["actions"][-1]["action"])
+        self.assertIn("event_identity",spec["actions"][-1]["data"]["notification_id"])
+
 if __name__=="__main__":
     unittest.main()
