@@ -60,6 +60,7 @@ func (db *DB) importARPHosts(hosts []LANHost, now, interfaceName, prefix string)
                 mac,ipv4,now,id);err!=nil{return err}
         }
         if err:=db.storeIdentity(id,"mac",mac,now);err!=nil{return err}
+        if err:=db.markDeviceBirthSource(id,"arp");err!=nil{return err}
         if err:=db.storeIdentity(id,"ipv4",ipv4,now);err!=nil{return err}
         // One currently claimed ARP address per hardware identity.
         if err:=db.run("UPDATE ipv4_evidence SET state='previous' WHERE device_id=? AND source='arp'",id);err!=nil{return err}
