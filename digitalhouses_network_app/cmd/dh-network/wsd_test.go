@@ -83,7 +83,7 @@ func wsdExample(relatesTo,xaddr string) []byte {
 func TestWSDProbeMatchesValidationAndNoInventedName(t *testing.T) {
  ip:=netip.MustParseAddr("192.168.11.238")
  msg:="urn:uuid:aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
- if got:=string(wsdProbe(msg));!strings.Contains(got,"wsdp")&& !strings.Contains(got,"dp:Device") {t.Fatalf("WSD probe missing type: %s",got)}
+ if got:=string(wsdProbe(msg));!strings.Contains(got,"<wsa:Action>")||!strings.Contains(got,"<wsa:MessageID>"+msg+"</wsa:MessageID>")||!strings.Contains(got,"<wsd:Types>wsdp:Device</wsd:Types>"){t.Fatalf("Probe must use wsdd2-compatible WSA prefixes and type: %s",got)}
  matched:=parseWSDProbeMatches(wsdExample(msg,"http://192.168.11.238:5357/uuid?token=do-not-store"),ip,msg)
  if len(matched)!=1{t.Fatalf("legitimate ProbeMatch rejected: %+v",matched)}
  if matched[0].Origin!="http://192.168.11.238:5357"||matched[0].Endpoint!="urn:uuid:12345678-1234-1234-1234-123456789abc"||
