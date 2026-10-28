@@ -179,7 +179,27 @@ Version 0.1.0 proved HAOS install, Ingress, Web UI, data persistence, version an
 When accepted, move from experimental Supervisor source build to the standard versioned immutable GHCR artifact. The install/update UI remains the **same Home Assistant App Store**, never a manual server-side copy.
 
 
-## Selected-device monitoring (since 0.1.18)
+## Inventory table usability (0.1.20)
+
+The **Устройства** table includes a drag handle at the right edge of each
+of its seven data column headers. Drag to adjust the width; use keyboard
+Left/Right arrows on a focused handle for 16px increments, Home or double
+click to reset that column to its default width. The table scrolls
+horizontally if needed. Width preferences are stored only in the local
+browser and are not synchronized between users. Reloads and periodic
+30-second refreshes preserve the selected widths.
+
+Hover over a populated cell or focus it via keyboard to reveal the small
+copy icon. This copies the **complete** value, even when the cell is
+visually truncated, for name, IP (both addresses if present), MAC,
+observation, source names, last Online and saved Note. Notes retain their
+separate edit action. Clipboard failures show an explicit message; the UI
+attempts the legacy browser copy method for restricted Ingress contexts.
+A compact status message confirms success. Names that contain an exact
+duplicate phrase from an HA router are collapsed for UI display only;
+stored inventory names are not modified.
+
+Selected-device monitoring (since 0.1.18)
 
 The **Мониторинг** Ingress tab lets an HA administrator edit the explicit
 `monitored_devices` YAML configuration. It is stored as UTF-8 in the App
