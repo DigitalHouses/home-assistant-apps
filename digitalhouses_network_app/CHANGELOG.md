@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.25
+
+- The IP/MAC Presence three-dot menu now has an **optional user-defined label** such as **Мой ноутбук** and an explicit Save button. Save subscribes to the selected IP/MAC and stores label + notification preference atomically.
+- Persist aliases in SQLite `presence_subscriptions.label`, with a safe idempotent migration from 0.1.24 that retains all existing subscriptions, monitoring state, names and Notes. The label is keyed to the watched address rather than a mutable inventory device identity.
+- Renaming a live subscription does not change its activation timestamp, start any discovery scan, reset the Presence confirmation baseline or generate a spurious transition event. Existing clients that omit `label` preserve its previous value.
+- Outgoing Presence MQTT machine events optionally carry `label` without altering event_type, watch_id, address, event ID rules, or existing HA automations. The Ingress event journal shows a human-friendly name plus the target address, while retaining copyable raw JSON and HA trigger.
+- Example local Home Assistant notification package now prioritizes label, then detected device name, then the IP/MAC address. It uses intelligible Russian messages, not raw `discovery_arp` jargon.
+- Labels are optional, trimmed, limited to 80 Unicode characters and reject control characters. Empty label uses the original address fallback.
+- Note: existing custom Home Assistant notification automations may still need to be adjusted to read `label`; this app does not overwrite user-installed HA automations.
+
+
 ## 0.1.24
 
 - Fix missing green **Presence eyes** after reopening Devices or a periodic refresh: the UI now reloads persisted IP/MAC subscriptions from the Ingress Presence API before rendering device rows. Existing SQLite subscriptions and event history remain untouched.
