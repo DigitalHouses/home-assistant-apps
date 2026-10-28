@@ -66,13 +66,13 @@ input{font:inherit;padding:10px;color:#f0f4f9;background:#203147;border:1px soli
 .tag.online,.tag.ok{border-color:#3e997d;color:#82efc7}.tag.error,.tag.degraded{border-color:#d99259;color:#ffd094}
 .tag.empty,.tag.not_observed,.tag.unknown{border-color:#a0a1a8;color:#c7cbd2}
 .tag.new-device{color:#96ffcb;border-color:#58c68f;background:#194d3b;font-size:10px;font-weight:700;margin-left:6px;padding:2px 6px}
-.grid-scroll{overflow-x:auto}code{color:#a2c6f4}.description{margin-top:8px;color:#c0cad5}
+.monitor-editor{display:block;width:100%;min-height:290px;resize:vertical;white-space:pre;tab-size:2;font:13px ui-monospace,SFMono-Regular,Consolas,monospace;color:#e9f0f7;background:#203147;border:1px solid #526d86;border-radius:8px;padding:12px}.monitor-editor:focus-visible{outline:2px solid #82efc7}.monitor-tools{display:flex;align-items:center;gap:12px;margin-top:12px;flex-wrap:wrap}.grid-scroll{overflow-x:auto}code{color:#a2c6f4}.description{margin-top:8px;color:#c0cad5}
 @media(max-width:750px){main{padding:13px}.app-header{padding:12px;gap:10px}.brand{width:100%}.brand h1{font-size:18px}.app-header nav{flex:1 1 auto}.app-header nav button{padding:6px 9px}.overview-panel{right:8px;width:calc(100vw - 16px);padding:13px}.overview-panel .stats{grid-template-columns:repeat(auto-fit,minmax(136px,1fr))}table{font-size:12px}}
 </style></head>
 <body>
 <header class="app-header">
-  <div class="brand"><h1>DigitalHouses Network App</h1><small>Устройства и источники сети · v0.1.16</small></div>
-  <nav aria-label="Разделы приложения"><button class="active" data-page="devices">Устройства</button><button data-page="sources">Источники</button><button data-page="events">События</button></nav>
+  <div class="brand"><h1>DigitalHouses Network App</h1><small>Устройства и источники сети · v0.1.18</small></div>
+  <nav aria-label="Разделы приложения"><button class="active" data-page="devices">Устройства</button><button data-page="sources">Источники</button><button data-page="events">События</button><button data-page="monitoring">Мониторинг</button></nav>
   <details id="overview" class="overview">
     <summary title="Раскрыть или скрыть показатели сети и диагностику"><span>Показатели</span><span id="health" class="tag">Подключение…</span><span class="overview-arrow" aria-hidden="true">⌄</span></summary>
     <div class="overview-panel" role="region" aria-label="Показатели и диагностика">
@@ -274,6 +274,37 @@ function sourceDescription(s){
   return 'Всего: '+esc(v.trackers)+' · Home: '+esc(v.home)+' · Not home: '+esc(v.not_home)+' · Unknown: '+esc(v.unknown)+' · Конфликтов MAC: '+esc(v.conflicts)+' · Конфликтов IPv4: '+esc(v.ipv4_conflicts??0)
  }catch(_){return 'Нет подробностей'}
 }
+
+async function renderMonitoring(){
+ let editor=body.querySelector('#monitor-yaml');
+ if(!editor){
+  const cfg=await read('monitored-config');
+  body.innerHTML='<h2>Мониторинг устройств</h2><p class="description">Независимые проверки: ICMP, ARP, HA device_tracker и TCP. Они не меняют инвентарный Online. По умолчанию отслеживаемых устройств нет.</p>'+
+   '<textarea id="monitor-yaml" class="monitor-editor" aria-label="YAML monitored_devices" spellcheck="false"></textarea>'+
+   '<div class="monitor-tools"><button type="button" id="monitor-save">Проверить и сохранить YAML</button><small id="monitor-feedback" role="status" aria-live="polite"></small></div>'+
+   '<h2>Состояния проверок</h2><div id="monitor-table"></div>';
+  editor=body.querySelector('#monitor-yaml');
+  editor.value=cfg.yaml;
+  body.querySelector('#monitor-save').addEventListener('click',async()=>{
+   const button=body.querySelector('#monitor-save'),status=body.querySelector('#monitor-feedback');
+   button.disabled=true;status.textContent='Проверка YAML…';
+   try{
+    const result=await fetch('api/monitored-config',{method:'PUT',headers:{'Content-Type':'application/json','X-DH-UI':'1'},body:JSON.stringify({yaml:editor.value})});
+    if(!result.ok)throw new Error((await result.text()).trim());
+    status.textContent='YAML сохранён. Проверки обновятся автоматически.';
+   }catch(e){status.textContent='Ошибка: '+e.message}
+   finally{button.disabled=false}
+  });
+ }
+ const data=await read('monitored-state'),output=body.querySelector('#monitor-table');
+ if(!output)return;
+ if(!data.length){output.innerHTML='<p class="description">Активных проверок пока нет.</p>';return}
+ output.innerHTML='<div class="grid-scroll"><table><thead><tr><th>Метод</th><th>watch_id</th><th>Подпись</th><th>Проверяемый адрес</th><th>Статус</th><th>Причина</th><th>Проверено</th></tr></thead><tbody>'+
+  data.map(x=>{
+   let target='';try{const spec=JSON.parse(x.target_json||'{}');target=(spec.target||'')+(spec.port?':'+spec.port:'')}catch(_){}
+   return '<tr><td>'+esc(x.method)+'</td><td><code>'+esc(x.watch_id)+'</code></td><td>'+esc(x.label||'—')+'</td><td>'+esc(target)+'</td><td><span class="tag '+esc(x.state)+'">'+esc(x.state)+'</span></td><td>'+esc(x.reason||'—')+'</td><td>'+esc(noteTime(x.last_check))+'</td></tr>';
+  }).join('')+'</tbody></table></div>';
+}
 async function load(){
  try{
   const status=await read('status');health.textContent='SQLite: '+status.database;
@@ -312,6 +343,7 @@ async function load(){
   }
   devicesTools.hidden=true;
   filterArea.innerHTML='';
+  if(page==='monitoring'){await renderMonitoring();return;}
   if(page==='sources'){
    const sources=await read('sources');
    body.innerHTML='<h2>Источники</h2><div class="grid-scroll"><table><thead><tr><th>Источник</th><th>Статус</th><th>Последний успешный опрос</th><th>Детали</th></tr></thead><tbody>'+
