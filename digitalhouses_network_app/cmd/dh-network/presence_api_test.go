@@ -44,6 +44,40 @@ func TestPresenceSubscriptionAndGlobalSettingsPersistence(t *testing.T){
  if len(subs)!=1||subs[0].Kind!="mac"{t.Fatalf("disabled subscription remained active: %#v",subs)}
 }
 
+
+func TestPresenceLabelsMigrationValidationAndRenameWithoutReset(t *testing.T){
+ path:=filepath.Join(t.TempDir(),"migration.sqlite3")
+ db,err:=openDB(path);if err!=nil{t.Fatal(err)}
+ if err=db.run("DROP TABLE presence_subscriptions");err!=nil{t.Fatal(err)}
+ if err=db.run(`CREATE TABLE presence_subscriptions(
+  kind TEXT NOT NULL,target TEXT NOT NULL,enabled INTEGER NOT NULL,
+  notifications INTEGER NOT NULL,updated_at TEXT NOT NULL,PRIMARY KEY(kind,target))`);err!=nil{t.Fatal(err)}
+ if err=db.run(`INSERT INTO presence_subscriptions VALUES('ip','192.168.2.30',1,1,'2026-10-29T00:00:00Z')`);err!=nil{t.Fatal(err)}
+ db.Close()
+ db,err=openDB(path);if err!=nil{t.Fatalf("migration failed: %v",err)}
+ defer db.Close()
+ if err=db.initializeSettings(DiscoverySettings{60,180,300,300,300,2,3});err!=nil{t.Fatal(err)}
+ subs,err:=db.presenceSubscriptions();if err!=nil{t.Fatal(err)}
+ if len(subs)!=1||subs[0].Label!=""||!subs[0].Notifications{t.Fatalf("existing subscription changed: %#v",subs)}
+ if err=db.run(`CREATE TRIGGER preserve_presence_activation BEFORE UPDATE ON presence_subscriptions
+  WHEN NEW.updated_at<>OLD.updated_at BEGIN SELECT RAISE(ABORT,'activation changed'); END`);err!=nil{t.Fatal(err)}
+ label:="  Мой ноутбук  "
+ newly,err:=db.updatePresenceLabeled("ip","192.168.2.30",true,true,&label)
+ if err!=nil||newly{t.Fatalf("rename should not rescan: %v %v",newly,err)}
+ subs,err=db.presenceSubscriptions();if err!=nil{t.Fatal(err)}
+ if len(subs)!=1||subs[0].Label!="Мой ноутбук"{t.Fatalf("label not saved: %#v",subs)}
+
+ if _,err=db.updatePresence("ip","192.168.2.30",true,false);err!=nil{t.Fatal(err)}
+ subs,err=db.presenceSubscriptions();if err!=nil{t.Fatal(err)}
+ if len(subs)!=1||subs[0].Label!="Мой ноутбук"{t.Fatalf("name lost when notification toggled: %#v",subs)}
+ for _,bad:=range []string{"ab\ncd","ab\tcd",strings.Repeat("ж",81)}{
+  if _,err=db.updatePresenceLabeled("ip","192.168.2.30",true,false,&bad);err==nil{t.Fatalf("bad label accepted: %q",bad)}
+ }
+ empty:=" "
+ if _,err=db.updatePresenceLabeled("ip","192.168.2.30",true,false,&empty);err!=nil{t.Fatal(err)}
+ subs,_=db.presenceSubscriptions()
+ if subs[0].Label!=""{t.Fatal("explicit clearing of the label failed")}
+}
 func TestResetClearsDeliveryHistoryAndRuntimeStatesButNotSettings(t *testing.T){
  db,err:=openDB(filepath.Join(t.TempDir(),"network.sqlite3"));if err!=nil{t.Fatal(err)}
  defer db.Close()
@@ -81,7 +115,7 @@ func TestPresenceAPIStartsOneImmediateGlobalScanAndNotForNotificationChanges(t *
   t.Fatalf("first enable did not schedule scan: %d %s",first.Code,first.Body.String())
  }
  select {case <-signal:case <-time.After(2*time.Second):t.Fatal("out-of-cycle scan not started")}
- second:=request(`{"kind":"ip","target":"192.168.2.30","enabled":true,"notifications":true}`)
+ second:=request(`{"kind":"ip","target":"192.168.2.30","enabled":true,"notifications":true,"label":"Мой ноутбук"}`)
  if second.Code!=200||!strings.Contains(second.Body.String(),`"scan_requested":false`){
   t.Fatalf("changing notifications triggered duplicate scan: %d %s",second.Code,second.Body.String())
  }
@@ -89,6 +123,8 @@ func TestPresenceAPIStartsOneImmediateGlobalScanAndNotForNotificationChanges(t *
  if third.Code!=200||!strings.Contains(third.Body.String(),`"scan_requested":true`){
   t.Fatalf("MAC enable failed: %d %s",third.Code,third.Body.String())
  }
+ subs,err:=db.presenceSubscriptions();if err!=nil{t.Fatal(err)}
+ if subs[0].Label!="Мой ноутбук"{t.Fatalf("API label not persisted: %#v",subs)}
  if started.Load()!=1{t.Fatal("concurrent activations launched duplicate scans")}
  close(unblock)
  select {case <-signal:case <-time.After(2*time.Second):t.Fatal("second pass for mid-scan activation was not started")}

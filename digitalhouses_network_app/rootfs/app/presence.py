@@ -45,7 +45,7 @@ class PresenceRunner:
             except ValueError:
                 source_ok = False
         active = conn.execute(
-            "SELECT kind,target,notifications,updated_at FROM presence_subscriptions WHERE enabled=1"
+            "SELECT kind,target,notifications,updated_at,label FROM presence_subscriptions WHERE enabled=1"
         ).fetchall()
         for item in active:
             kind, target = item["kind"], item["target"]
@@ -158,6 +158,10 @@ class PresenceRunner:
                         "notifications_requested": bool(item["notifications"]),
                         kind: target,
                     }
+                    # Optional user-facing alias travels alongside immutable watch_id,
+                    # kind and address. Existing automation consumers stay compatible.
+                    if item["label"].strip():
+                        event["label"] = item["label"].strip()
                     payload = json.dumps(event, ensure_ascii=False, separators=(",", ":"))
                     conn.execute(
                         """INSERT OR IGNORE INTO presence_outbox

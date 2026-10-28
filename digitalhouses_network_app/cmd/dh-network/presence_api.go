@@ -14,6 +14,7 @@ import (
  "net/netip"
  "strings"
  "time"
+ "unicode"
 )
 
 type PresenceSubscription struct {
@@ -21,6 +22,7 @@ type PresenceSubscription struct {
  Target string `json:"target"`
  Enabled bool `json:"enabled"`
  Notifications bool `json:"notifications"`
+ Label string `json:"label"`
  State string `json:"state"`
  LastCheck string `json:"last_check"`
  LastPositive string `json:"last_positive"`
@@ -53,14 +55,14 @@ func (db *DB) presenceSubscriptions()([]PresenceSubscription,error){
    COALESCE(s.state,'unknown'),COALESCE(s.last_check,''),COALESCE(s.last_positive,''),
    COALESCE(s.last_changed,''),COALESCE(s.reason,'not_checked'),
    COALESCE(s.successes,0),COALESCE(s.failures,0),
-   c.confirm_successes,c.confirm_failures
+   c.confirm_successes,c.confirm_failures,COALESCE(p.label,'')
    FROM presence_subscriptions p
    JOIN discovery_settings c ON c.id=1
    LEFT JOIN presence_states s ON s.kind=p.kind AND s.target=p.target WHERE p.enabled=1
    ORDER BY p.kind,p.target`,func(stmt *C.sqlite3_stmt){
     values=append(values,PresenceSubscription{
       Kind:field(stmt,0),Target:field(stmt,1),
-      Enabled:field(stmt,2)=="1",Notifications:field(stmt,3)=="1",
+      Enabled:field(stmt,2)=="1",Notifications:field(stmt,3)=="1",Label:field(stmt,13),
       State:field(stmt,4),LastCheck:field(stmt,5),LastPositive:field(stmt,6),
       LastChanged:field(stmt,7),Reason:field(stmt,8),
       Successes:int(C.sqlite3_column_int(stmt,9)),Failures:int(C.sqlite3_column_int(stmt,10)),
@@ -70,7 +72,32 @@ func (db *DB) presenceSubscriptions()([]PresenceSubscription,error){
  return values,err
 }
 
+// Old call sites preserve the existing label when changing checkboxes.
 func (db *DB) updatePresence(kind,target string,enabled,notifications bool)(bool,error){
+ return db.updatePresenceLabeled(kind,target,enabled,notifications,nil)
+}
+
+func validatedPresenceLabel(raw string)(string,error){
+ name:=strings.TrimSpace(raw)
+ if len([]rune(name))>80{return "",errors.New("label must be at most 80 characters")}
+ for _,r:=range name {if unicode.IsControl(r){return "",errors.New("label must not contain control characters")}}
+ return name,nil
+}
+
+func validatedPresenceLabelValue(label *string)(string,error){
+ if label==nil{return "",nil}
+ return validatedPresenceLabel(*label)
+}
+
+// The label belongs to the watched address, not the mutable device inventory.
+func (db *DB) updatePresenceLabeled(kind,target string,enabled,notifications bool,label *string)(bool,error){
+ labelValue,labelProvided:="","0"
+ if label!=nil {
+  validated,err:=validatedPresenceLabel(*label)
+  if err!=nil{return false,err}
+  labelValue=validated
+  labelProvided="1"
+ }
  db.mu.Lock()
  defer db.mu.Unlock()
  now:=time.Now().UTC().Format(time.RFC3339Nano)
@@ -84,12 +111,13 @@ func (db *DB) updatePresence(kind,target string,enabled,notifications bool)(bool
  var before string
  _,err:=db.prepared("SELECT enabled FROM presence_subscriptions WHERE kind=? AND target=?",[]string{kind,target},func(stmt *C.sqlite3_stmt){before=field(stmt,0)})
  if err!=nil{return false,err}
- if err:=db.run(`INSERT INTO presence_subscriptions(kind,target,enabled,notifications,updated_at)
- VALUES(?,?,?,?,?) ON CONFLICT(kind,target) DO UPDATE SET
+ if err:=db.run(`INSERT INTO presence_subscriptions(kind,target,enabled,notifications,updated_at,label)
+ VALUES(?,?,?,?,?,?) ON CONFLICT(kind,target) DO UPDATE SET
  enabled=excluded.enabled,notifications=excluded.notifications,
  updated_at=CASE WHEN presence_subscriptions.enabled=1 AND excluded.enabled=1
-   THEN presence_subscriptions.updated_at ELSE excluded.updated_at END`,
- kind,target,on,alert,now);err!=nil{return false,err}
+   THEN presence_subscriptions.updated_at ELSE excluded.updated_at END,
+ label=CASE WHEN ?='1' THEN excluded.label ELSE presence_subscriptions.label END`,
+ kind,target,on,alert,now,labelValue,labelProvided);err!=nil{return false,err}
  newlyEnabled:=enabled && before!="1"
  if !enabled || newlyEnabled {
   // Cancel any stale deliveries before removing their outbox entries.
@@ -126,6 +154,7 @@ func (s *Service) presenceAPI(w http.ResponseWriter,r *http.Request){
   Target string `json:"target"`
   Enabled bool `json:"enabled"`
   Notifications bool `json:"notifications"`
+  Label *string `json:"label"`
  }
  dec:=json.NewDecoder(http.MaxBytesReader(w,r.Body,4096))
  dec.DisallowUnknownFields()
@@ -134,8 +163,9 @@ func (s *Service) presenceAPI(w http.ResponseWriter,r *http.Request){
  if err:=dec.Decode(&extra);err!=io.EOF {http.Error(w,"unexpected JSON",400);return}
  target,err:=presenceTarget(input.Kind,input.Target)
  if err!=nil {http.Error(w,err.Error(),400);return}
- newlyEnabled,err:=s.db.updatePresence(input.Kind,target,input.Enabled,input.Notifications)
+ newlyEnabled,err:=s.db.updatePresenceLabeled(input.Kind,target,input.Enabled,input.Notifications,input.Label)
  if err!=nil{
+  if _,validationErr:=validatedPresenceLabelValue(input.Label);validationErr!=nil {http.Error(w,validationErr.Error(),400);return}
   http.Error(w,"presence save unavailable",500);return
  }
  if newlyEnabled {s.requestPresenceScan()}
@@ -160,4 +190,15 @@ func(db *DB)deliveryEvents()([]DeliveryEvent,error){
   field(stmt,0),field(stmt,1),field(stmt,2),field(stmt,3),field(stmt,4),field(stmt,5),field(stmt,6),
  })})
  return values,err
+}
+
+// Add the optional label column idempotently when upgrading existing 0.1.24
+// SQLite inventories. This migration never deletes subscriptions or states.
+func (db *DB) ensurePresenceLabelColumn()error {
+ found:=false
+ if err:=db.query("PRAGMA table_info(presence_subscriptions)",func(stmt *C.sqlite3_stmt){
+  if field(stmt,1)=="label" {found=true}
+ });err!=nil{return err}
+ if found{return nil}
+ return db.exec("ALTER TABLE presence_subscriptions ADD COLUMN label TEXT NOT NULL DEFAULT ''")
 }

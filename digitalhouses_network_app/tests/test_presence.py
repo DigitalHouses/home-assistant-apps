@@ -31,7 +31,7 @@ def fixture():
        CREATE TABLE ipv4_evidence(ipv4 TEXT,source TEXT,state TEXT,last_seen TEXT);
        CREATE TABLE discovery_settings(id INTEGER,scan_interval_seconds INTEGER,confirm_successes INTEGER,confirm_failures INTEGER);
        INSERT INTO discovery_settings VALUES(1,60,2,3);
-       CREATE TABLE presence_subscriptions(kind TEXT,target TEXT,enabled INT,notifications INT,updated_at TEXT);
+       CREATE TABLE presence_subscriptions(kind TEXT,target TEXT,enabled INT,notifications INT,updated_at TEXT,label TEXT NOT NULL DEFAULT '');
        CREATE TABLE presence_states(kind TEXT,target TEXT,state TEXT DEFAULT 'unknown',
           last_confirmed TEXT DEFAULT '',last_sample_at TEXT DEFAULT '',
           last_check TEXT DEFAULT '',last_positive TEXT DEFAULT '',
@@ -42,8 +42,8 @@ def fixture():
           published_at TEXT DEFAULT '',status TEXT,attempts INT DEFAULT 0,payload_json TEXT);
        INSERT INTO sources(kind,status,last_success) VALUES('lan_arp','ok',NULL);
        INSERT INTO devices VALUES('device-a','E8:FF:1E:D7:3A:48');
-       INSERT INTO presence_subscriptions VALUES('ip','192.168.2.30',1,0,'2000-01-01T00:00:00Z');
-       INSERT INTO presence_subscriptions VALUES('mac','E8:FF:1E:D7:3A:48',1,1,'2000-01-01T00:00:00Z');
+       INSERT INTO presence_subscriptions VALUES('ip','192.168.2.30',1,0,'2000-01-01T00:00:00Z','Мой ноутбук');
+       INSERT INTO presence_subscriptions VALUES('mac','E8:FF:1E:D7:3A:48',1,1,'2000-01-01T00:00:00Z','');
     """)
     return db
 
@@ -72,6 +72,28 @@ class PresenceTests(unittest.TestCase):
         self.assertEqual(db.execute("SELECT COUNT(*) FROM presence_outbox").fetchone()[0],0)
         self.assertEqual(db.execute("SELECT COUNT(*) FROM event_delivery_log").fetchone()[0],0)
         self.assertEqual(db.execute("SELECT state FROM presence_states WHERE kind='ip'").fetchone()[0],"reachable")
+
+    def test_user_label_is_in_new_event_but_address_and_event_type_are_unchanged(self):
+        db=fixture();engine=PresenceRunner();tx=Transport()
+        t=datetime.now(timezone.utc)-timedelta(seconds=80)
+        scan(db,t,True);engine.cycle(db,tx)
+        scan(db,t+timedelta(seconds=15),True);engine.cycle(db,tx)
+        scan(db,t+timedelta(seconds=30),False)
+        # A non-observed scan must remove prior positive evidence.
+        with db:
+            db.execute("DELETE FROM ipv4_evidence")
+            db.execute("DELETE FROM lan_positive")
+        engine.cycle(db,tx)
+        scan(db,t+timedelta(seconds=45),False);engine.cycle(db,tx)
+        scan(db,t+timedelta(seconds=60),False);engine.cycle(db,tx)
+        msg=next(x[1] for x in tx.messages if x[1].get("watch_id")=="ip:192.168.2.30")
+        self.assertEqual(msg["label"],"Мой ноутбук")
+        self.assertEqual(msg["ip"],"192.168.2.30")
+        self.assertEqual(msg["event_type"],"tracked_device_unreachable")
+        self.assertEqual(msg["previous"],"reachable")
+        self.assertEqual(msg["current"],"unreachable")
+        self.assertEqual(msg["check_method"],"discovery_arp")
+        self.assertEqual(len([x for x in tx.messages if x[1].get("watch_id")=="ip:192.168.2.30"]),1)
 
     def test_initial_activation_waits_for_new_scan_before_confirming(self):
         db=fixture();engine=PresenceRunner();tx=Transport()
