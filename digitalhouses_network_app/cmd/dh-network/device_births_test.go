@@ -1,11 +1,5 @@
 package main
 
-/*
-#cgo pkg-config: sqlite3
-#include <sqlite3.h>
-*/
-import "C"
-
 import (
  "path/filepath"
  "testing"
@@ -97,7 +91,8 @@ func TestBirthDetectionSourceCannotBeRewrittenByLaterRouter(t *testing.T) {
  mac:="18:31:BF:2F:ED:37"
  if err:=db.importARPHosts([]LANHost{{MAC:mac,IPv4:"192.168.11.71"}},at,"eth0","192.168.11.0/24");err!=nil{t.Fatal(err)}
  if err:=db.importRouterTrackers([]RouterTracker{{EntityID:"device_tracker.view71",State:"home",MAC:mac,Name:"VIEW71"}},time.Now().UTC().Add(time.Second).Format(time.RFC3339Nano));err!=nil{t.Fatal(err)}
- source:=""
- if err:=db.query("SELECT detection_source FROM device_births",func(stmt *C.sqlite3_stmt){source=field(stmt,0)});err!=nil{t.Fatal(err)}
- if source!="arp"{t.Fatalf("first evidence was overwritten: %q",source)}
+ sources,err:=db.deviceBirthSources()
+ if err!=nil{t.Fatal(err)}
+ if len(sources)!=1{t.Fatalf("unexpected birth sources: %+v",sources)}
+ for _,source:=range sources{if source!="arp"{t.Fatalf("first evidence was overwritten: %q",source)}}
 }
