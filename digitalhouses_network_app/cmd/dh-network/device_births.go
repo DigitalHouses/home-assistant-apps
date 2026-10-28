@@ -26,6 +26,15 @@ func (db *DB) deviceBirthPublishStates() (map[string]string,error) {
  return result,err
 }
 
+// Test/diagnostic inspection of persisted original positive-evidence source.
+func (db *DB) deviceBirthSources() (map[string]string,error) {
+ result:=map[string]string{}
+ err:=db.query("SELECT device_id,detection_source FROM device_births ORDER BY device_id",func(stmt *C.sqlite3_stmt){
+  result[field(stmt,0)]=field(stmt,1)
+ })
+ return result,err
+}
+
 // The 0.1.16 database lacked this column. Preserve existing UUIDs, notes,
 // birth timestamps and outbox states when migrating, including on restart.
 func (db *DB) ensureDeviceBirthSourceColumn() error {
