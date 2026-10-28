@@ -53,16 +53,26 @@ func (s *Service) runLANPolling(interval time.Duration) {
  // full LAN scan. It never launches a separate per-device ping process.
 func (s *Service) requestPresenceScan() {
     s.presenceScanMu.Lock()
+    s.presenceScanRevision++
     if s.presenceScanQueued {s.presenceScanMu.Unlock();return}
     s.presenceScanQueued=true
     s.presenceScanMu.Unlock()
     go func(){
-        defer func(){
+        for {
+            // Requests queued before a scan starts share that scan.
+            // A newly enabled watch DURING a scan needs a later snapshot:
+            // coalesce those requests into one additional full LAN pass.
             s.presenceScanMu.Lock()
-            s.presenceScanQueued=false
+            revision:=s.presenceScanRevision
             s.presenceScanMu.Unlock()
-        }()
-        if s.presenceScanNow!=nil {s.presenceScanNow();return}
-        s.pollLAN()
+            if s.presenceScanNow!=nil {s.presenceScanNow()} else {s.pollLAN()}
+            s.presenceScanMu.Lock()
+            if s.presenceScanRevision==revision {
+                s.presenceScanQueued=false
+                s.presenceScanMu.Unlock()
+                return
+            }
+            s.presenceScanMu.Unlock()
+        }
     }()
 }
