@@ -150,9 +150,10 @@ def build_runtime(
         StateStore(state_dir / "fan_calibration.json")
     )
     fan_adapter = BeelinkIt8613FanAdapter()
+    disk_state_store = StateStore(state_dir / "disks.json")
     production = ShutdownAwareProductionCollectors(
         node_name=identity.hostname,
-        disk_state_store=StateStore(state_dir / "disks.json"),
+        disk_state_store=disk_state_store,
         fan_state_store=fan_presence_store,
         fan_calibration_registry=fan_calibration_registry,
         fan_calibration_adapters=(fan_adapter,),
@@ -206,6 +207,7 @@ def build_runtime(
         agent_started_at=PROCESS_STARTED_AT,
         ups_configured=ups_configured,
         problem_event_debounce_seconds=config.events.pve_problem_debounce_seconds,
+        disk_event_store=disk_state_store,
         fan_calibration_manager=fan_calibration_manager,
         fan_source=lambda: collect_fans(production.sys_root / "class" / "hwmon"),
         fan_presence_state_store=fan_presence_store,
