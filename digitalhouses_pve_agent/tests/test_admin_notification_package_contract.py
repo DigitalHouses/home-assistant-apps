@@ -27,14 +27,14 @@ def test_admin_notifications_have_one_direct_action_per_machine_event() -> None:
         r"(?m)^                    - ([a-z][a-z0-9_]*)$", action_section
     )
 
-    assert len(trigger_ids) == len(branch_ids) == 48
+    assert len(trigger_ids) == len(branch_ids) == 49
     assert len(trigger_ids) == len(set(trigger_ids))
     assert trigger_ids == branch_ids
-    assert source.count("trigger: event.received") == 48
-    assert source.count("condition: trigger") == 48
-    assert source.count("action: script.write2admins") == 48
-    assert source.count("title:") == 48
-    assert source.count("message:") == 48
+    assert source.count("trigger: event.received") == 49
+    assert source.count("condition: trigger") == 49
+    assert source.count("action: script.write2admins") == 49
+    assert source.count("title:") == 49
+    assert source.count("message:") == 49
     assert "script.write2log" not in source
     assert "persistent_notification.create" not in source
     assert "id: storage_nfs_unavailable" in source
