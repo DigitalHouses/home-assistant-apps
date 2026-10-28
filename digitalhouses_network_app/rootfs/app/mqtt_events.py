@@ -204,16 +204,27 @@ class MQTTEvents:
                 )
         return True
 
+class OfflinePublisher:
+    """Monitoring remains functional when the optional MQTT service is absent."""
+    def __init__(self, version: str) -> None:
+        self.connected = threading.Event()
+        self.version = version
+
+    def publish_checked(self, topic: str, content: str, retain: bool) -> bool:
+        return False
+
+
 def run_forever() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     host = os.getenv("MQTT_HOST", "")
-    if not host:
-        LOG.warning("MQTT service not connected; network inventory continues but HA event publishing is unavailable")
-        return
     monitor = MonitorRunner()
-    mqtt_events = MQTTEvents(host, int(os.environ["MQTT_PORT"]), os.getenv("MQTT_USER", ""),
-                             os.getenv("MQTT_PASSWORD", ""), os.environ["APP_VERSION"],
-                             os.environ["DH_STARTED_AT"])
+    if host:
+        mqtt_events = MQTTEvents(host, int(os.environ["MQTT_PORT"]), os.getenv("MQTT_USER", ""),
+                                 os.getenv("MQTT_PASSWORD", ""), os.environ["APP_VERSION"],
+                                 os.environ["DH_STARTED_AT"])
+    else:
+        LOG.warning("MQTT service absent; monitoring continues locally without HA publishing")
+        mqtt_events = OfflinePublisher(os.environ["APP_VERSION"])
     try:
         while True:
             try:
@@ -234,9 +245,10 @@ def run_forever() -> None:
                 LOG.warning("Event outbox unavailable; retrying: %s", exc)
             time.sleep(POLL_INTERVAL_SECONDS)
     finally:
-        mqtt_events.client.publish(AVAILABILITY, "offline", qos=1, retain=True)
-        mqtt_events.client.loop_stop()
-        mqtt_events.client.disconnect()
+        if isinstance(mqtt_events, MQTTEvents):
+            mqtt_events.client.publish(AVAILABILITY, "offline", qos=1, retain=True)
+            mqtt_events.client.loop_stop()
+            mqtt_events.client.disconnect()
 
 if __name__ == "__main__":
     run_forever()
