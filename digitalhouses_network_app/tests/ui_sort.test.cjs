@@ -212,3 +212,18 @@ test('destructive inventory reset is hidden behind the metrics dropdown and requ
  assert.match(script,/await load\(\)/);
  assert.match(html,/\.reset-area\{margin-top:/);
 });
+
+test('Reset confirmation displays a real newline, not a literal backslash-n', async () => {
+ let displayed;
+ let fetchCalled = false;
+ ctx.prompt = message => { displayed = message; return null; };
+ ctx.fetch = () => { fetchCalled = true; throw Error('Reset must not be sent after cancel'); };
+ await vm.runInContext('resetInventoryFromUI()', ctx);
+ assert.equal(
+   displayed,
+   'Сброс удалит ВСЕ устройства, UUID, Notes, историю и события без возможности восстановления.\nДля подтверждения введи RESET:'
+ );
+ assert.ok(displayed.includes('\n'));
+ assert.ok(!displayed.includes('\\n'));
+ assert.equal(fetchCalled, false);
+});
