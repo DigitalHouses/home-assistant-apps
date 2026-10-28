@@ -179,6 +179,33 @@ Version 0.1.0 proved HAOS install, Ingress, Web UI, data persistence, version an
 When accepted, move from experimental Supervisor source build to the standard versioned immutable GHCR artifact. The install/update UI remains the **same Home Assistant App Store**, never a manual server-side copy.
 
 
+## Immediate Presence baseline and Online hover (0.1.22)
+
+Enabling an IP or MAC Presence subscription via the three-dot address menu
+automatically schedules an out-of-cycle **shared LAN ARP scan**. The request
+does not launch a per-device ping or block the Ingress HTTP request. A single
+global scanner serializes periodic and on-demand scans, and coalesces
+simultaneous enable actions. Editing notifications alone does not scan.
+
+The newly enabled subscription immediately shows **Working**. Until a
+successful scan that **started after activation** completes, the UI does not
+reuse stale earlier results. ARP source failure yields an explicit unknown
+state, not a false absence. After the first successful scan, progress is
+shown as **confirming** with the number of positive/negative observations
+out of the global thresholds (default 2 positives, 3 negatives).
+The accepted state becomes "Обнаружен" or "Не обнаружен" only after enough
+independent global scans; the first confirmation is an event-free baseline.
+
+The green eye hover shows human-readable status, last scan time, last
+positive observation and last state transition. While confirmation is
+in progress, the UI refreshes it every four seconds.
+
+The Online tag hover and keyboard focus show the **exact date and time with
+seconds** of the last accepted positive observation, as recorded by the
+inventory. Its evidence comes from ARP and/or the Home Assistant router
+integration, NOT from an ICMP ping. A router-reported "home" may reflect
+the router integration's state rather than an independent fresh response.
+
 ## Ingress Presence, settings, event journal and Help (0.1.21)
 
 **Top navigation:** Устройства, Источники, Журнал событий, Параметры, Помощь.
