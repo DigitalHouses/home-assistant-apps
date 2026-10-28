@@ -7,9 +7,16 @@
 - Compact namespace: `dh_network_app`
 - Web UI: Home Assistant Ingress (not a second externally exposed admin service)
 - Storage: SQLite `/data/network.sqlite3`
-- Current version: `0.1.12`, experimental, no GHCR artifact and no telemetry
+- Current version: `0.1.13`, experimental, no GHCR artifact and no telemetry
 
 This App deliberately follows the existing product-naming and HAOS packaging standards. Its **Ingress** UI is the accepted departure from the usual MQTT-discovered Lovelace control card: UI state, notes and inventory are App-owned instead of built from MQTT entities. Any future machine events must follow DigitalHouses Events & Notifications Standard; local alert delivery belongs to HA, not the public App.
+
+## Small Ingress layout refinements (0.1.13)
+
+- Preserve the `Показатели` disclosure with all eleven counters and authenticated diagnostic JSON export. Remove the large orange introductory information/notice block from **inside the disclosure**. Keep the concise neutral Online vs ICMP statement and retain critical, active IPv4 conflict warnings outside the menu.
+- The export completion message is now just `Файл <filename> сформирован.` without instructions to send data to a chat.
+- The device count and search input share a responsive flex row: `Устройства (N)` immediately followed by a bounded-width search box. The row remains separate from the table body so 30-second refreshes and filter changes don't destroy search focus. Search and count are hidden on Sources/Events.
+- No changes to scanners, APIs, SQLite, MAC/UUID identity, Notes, WSD or presence status semantics.
 
 ## Compact Ingress header and presence labeling (0.1.12)
 
