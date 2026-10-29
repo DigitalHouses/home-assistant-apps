@@ -52,29 +52,6 @@ func (db *DB) maintainRetention(now time.Time) (historyRows,devicesRemoved int,e
     if err=db.exec("BEGIN IMMEDIATE");err!=nil{return 0,0,err}
     committed:=false
     defer func(){if !committed {_=db.exec("ROLLBACK")}}()
-    // All identifiers below are hardcoded SQL; neither setting supplies a table name.
-    for _,job:=range []struct{table,condition string}{
-        {"observations","observed_at < ?"},
-        {"events","occurred_at < ?"},
-        {"event_delivery_log","occurred_at < ? AND status='broker_acked'"},
-        {"identities","last_seen < ? AND kind IN ('ipv4','ipv6')"},
-        {"ipv4_evidence","last_seen < ?"},
-        {"ipv4_disagreement_state","last_seen < ?"},
-        {"mdns_hosts","last_seen < ?"},
-        {"mdns_services","last_seen < ?"},
-        {"mdns_unmatched","last_seen < ?"},
-        {"ssdp_services","last_seen < ?"},
-        {"ssdp_unmatched","last_seen < ?"},
-        {"wsd_names","last_seen < ?"},
-        {"wsd_endpoints","last_seen < ?"},
-        {"wsd_unmatched","last_seen < ?"},
-    } {
-        if err=db.run("DELETE FROM "+job.table+" WHERE "+job.condition,historyCutoff);err!=nil {
-            return 0,0,fmt.Errorf("retention history %s: %w",job.table,err)
-        }
-        historyRows+=int(C.sqlite3_changes(db.connection))
-    }
-
     // Never purge inventory while its source cannot confirm absence.
     // HA-linked devices additionally require a healthy HA source; LAN-only
     // devices remain eligible if the independent ARP source is healthy.
@@ -121,6 +98,29 @@ func (db *DB) maintainRetention(now time.Time) (historyRows,devicesRemoved int,e
             devicesRemoved+=int(C.sqlite3_changes(db.connection))
         }
     }
+    // All identifiers below are hardcoded SQL; neither setting supplies a table name.
+    for _,job:=range []struct{table,condition string}{
+        {"observations","observed_at < ?"},
+        {"events","occurred_at < ?"},
+        {"event_delivery_log","occurred_at < ? AND status='broker_acked'"},
+        {"identities","last_seen < ? AND kind IN ('ipv4','ipv6')"},
+        {"ipv4_evidence","last_seen < ?"},
+        {"ipv4_disagreement_state","last_seen < ?"},
+        {"mdns_hosts","last_seen < ?"},
+        {"mdns_services","last_seen < ?"},
+        {"mdns_unmatched","last_seen < ?"},
+        {"ssdp_services","last_seen < ?"},
+        {"ssdp_unmatched","last_seen < ?"},
+        {"wsd_names","last_seen < ?"},
+        {"wsd_endpoints","last_seen < ?"},
+        {"wsd_unmatched","last_seen < ?"},
+    } {
+        if err=db.run("DELETE FROM "+job.table+" WHERE "+job.condition,historyCutoff);err!=nil {
+            return 0,0,fmt.Errorf("retention history %s: %w",job.table,err)
+        }
+        historyRows+=int(C.sqlite3_changes(db.connection))
+    }
+
     if err=db.exec("COMMIT");err!=nil{return 0,0,err}
     committed=true
     return historyRows,devicesRemoved,nil
