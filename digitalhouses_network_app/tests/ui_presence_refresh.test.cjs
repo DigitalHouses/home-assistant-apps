@@ -32,6 +32,10 @@ function fixture(){
     last_positive:'2026-10-28T22:32:35Z',last_changed:'',reason:'confirmed_by_arp'}
   ]
  };
+ response['ui-inventory']={
+  devices:response.devices,device_sources:[],mdns_services:[],ssdp_services:[],
+  wsd_endpoints:[],ipv4_conflicts:[],counts:{arp_last_scan_hosts:24,arp_hosts:27}
+ };
  const requested=[];
  const ctx=vm.createContext({document,Intl,Date,navigator:{},window:{},
   localStorage:{getItem:()=>null,setItem(){}},setTimeout:()=>1,clearTimeout:()=>{},
@@ -43,6 +47,8 @@ function fixture(){
 test('actual Devices load fetches persisted Presence and draws green eyes after navigation/reload',async()=>{
  const f=fixture();
  await vm.runInContext('load()',f.ctx);
+ assert.ok(f.requested.includes('api/ui-inventory'));
+ assert.ok(!f.requested.includes('api/diagnostics'), 'ordinary refresh must not request full diagnostics');
  assert.ok(f.requested.includes('api/presence'),'Presence not fetched; requests='+JSON.stringify(f.requested)+'; health='+f.all.get('health').textContent+'; body='+f.body.textContent);
  assert.equal((f.body.innerHTML.match(/class="presence-eye"/g)||[]).length,2);
  assert.match(f.body.innerHTML,/192\.168\.11\.1/);
