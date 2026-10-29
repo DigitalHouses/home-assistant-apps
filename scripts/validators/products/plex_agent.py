@@ -34,6 +34,10 @@ EXPECTED_ENTITY_IDS = {
     "playback_active": "binary_sensor.dh_plex_agent_playback_active",
     "video_playback_active": "binary_sensor.dh_plex_agent_video_playback_active",
     "audio_playback_active": "binary_sensor.dh_plex_agent_audio_playback_active",
+    "video_transcoding": "sensor.dh_plex_agent_video_transcoding",
+    "audio_transcoding": "sensor.dh_plex_agent_audio_transcoding",
+    "video_transcoding_active": "binary_sensor.dh_plex_agent_video_transcoding_active",
+    "audio_transcoding_active": "binary_sensor.dh_plex_agent_audio_transcoding_active",
     "hardware_transcode_active": "binary_sensor.dh_plex_agent_hardware_transcode_active",
     "libraries": "sensor.dh_plex_agent_libraries",
     "gpu_video": "sensor.dh_plex_agent_gpu_video",
@@ -220,6 +224,12 @@ def validate_plex_agent(
             "Plex Agent discovery component set changed: "
             f"missing={missing}, extra={extra}"
         )
+
+    # Recorder-friendly binary transcoding flags never expose per-session attributes.
+    for key in ("video_transcoding_active", "audio_transcoding_active"):
+        component = components[key]
+        if "json_attributes_topic" in component or "json_attributes_template" in component:
+            fail(f"Plex Agent transcoding binary must be attribute-free: {key}")
 
     for key, expected_entity_id in EXPECTED_ENTITY_IDS.items():
         component = components.get(key)
