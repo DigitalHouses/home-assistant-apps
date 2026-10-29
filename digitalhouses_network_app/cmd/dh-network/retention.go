@@ -103,7 +103,11 @@ func (db *DB) maintainRetention(now time.Time) (historyRows,devicesRemoved int,e
         {"observations","observed_at < ?"},
         {"events","occurred_at < ?"},
         {"event_delivery_log","occurred_at < ? AND status='broker_acked'"},
-        {"identities","last_seen < ? AND kind IN ('ipv4','ipv6')"},
+        {"identities",`last_seen < ? AND kind IN ('ipv4','ipv6') AND NOT (
+            kind='ipv4' AND EXISTS (
+              SELECT 1 FROM presence_subscriptions p
+              WHERE p.enabled=1 AND p.kind='ip' AND p.target=identities.value
+            ))`},
         {"ipv4_evidence","last_seen < ?"},
         {"ipv4_disagreement_state","last_seen < ?"},
         {"mdns_hosts","last_seen < ?"},
