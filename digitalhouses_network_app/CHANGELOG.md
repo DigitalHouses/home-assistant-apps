@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.26
+
+- Add two independent persisted global settings: **History depth (days)** and **Remove absent devices after (days)**, both defaulting to 30 (range 1–3650), with in-place migration and preservation of existing inventory, notes, subscriptions and confirmation state.
+- Daily transactional cleanup removes old events, acknowledged delivery records, metadata and stale address history; pending MQTT events, device-birth deduplication records, and active monitor state remain untouched. Historical limits by row count no longer silently override the 30-day policy.
+- Absent-device cleanup only considers `not_observed` hosts past the positive observation threshold, with healthy fresh ARP evidence and (for HA-linked hosts) fresh HA source status. Notes and enabled MAC/IP Presence subscriptions, including historically associated IPs, protect devices from deletion. Related foreign-key rows are deleted atomically. Negative-only router trackers no longer recreate purged records on every poll.
+- Optimize IPv4 reconciliation to update only changed mappings rather than blanking and rewriting all device IPs on every scan; retain the identical winner/ambiguity rules.
+- Replace five full snapshots on every Ingress refresh with a single inventory endpoint; full diagnostic exports remain explicitly available.
+- Suppress purely informational router-vs-ARP disagreement events in the local journal while retaining live diagnostic state, reducing noise caused by bridges with unstable client-address claims.
+- Remove recurring SQL history cap/delete work from scan and MQTT workers. Scanning intervals and Presence confirmation thresholds are unchanged.
+
+
 ## 0.1.25
 
 - The IP/MAC Presence three-dot menu now has an **optional user-defined label** such as **Мой ноутбук** and an explicit Save button. Save subscribes to the selected IP/MAC and stores label + notification preference atomically.
