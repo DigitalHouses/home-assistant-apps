@@ -14,12 +14,14 @@ func TestDeviceBirthOnlyAfterPositiveAndExactlyOnce(t *testing.T) {
  tkr:=RouterTracker{EntityID:"device_tracker.view71",State:"not_home",Name:"VIEW71",MAC:"18:31:BF:2F:ED:37",IPv4:"192.168.11.71"}
  if err:=db.importRouterTrackers([]RouterTracker{tkr},at);err!=nil{t.Fatal(err)}
  first,err:=db.devices()
- if err!=nil||len(first)!=1{t.Fatalf("router import: %+v %v",first,err)}
+ if err!=nil||len(first)!=0{t.Fatalf("negative-only router import: %+v %v",first,err)}
  births,err:=db.deviceBirths()
  if err!=nil||len(births)!=0{t.Fatalf("not_home cannot count as new: %+v %v",births,err)}
  tkr.State="home"
  next:=time.Now().UTC().Add(time.Second).Format(time.RFC3339)
  if err:=db.importRouterTrackers([]RouterTracker{tkr},next);err!=nil{t.Fatal(err)}
+ first,err=db.devices()
+ if err!=nil||len(first)!=1{t.Fatalf("positive device missing: %+v %v",first,err)}
  births,err=db.deviceBirths()
  if err!=nil||len(births)!=1||births[first[0].ID]!=next{t.Fatalf("first positive timestamp: %+v %v",births,err)}
  if err:=db.importRouterTrackers([]RouterTracker{tkr},time.Now().UTC().Add(time.Minute).Format(time.RFC3339));err!=nil{t.Fatal(err)}

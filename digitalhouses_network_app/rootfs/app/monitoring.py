@@ -415,7 +415,7 @@ class MonitorRunner:
                    (event_id,event_type,occurred_at,status,payload_json)
                    VALUES(?,?,?,'queued',?)""",
                    (payload["event_id"],payload["event_type"],now,encoded))
-                conn.execute("DELETE FROM events WHERE id NOT IN (SELECT id FROM events ORDER BY id DESC LIMIT 1000)")
+                # Historical events are pruned by the daily retention task.
 
     def publish(self, conn: sqlite3.Connection, mqtt_events: Any) -> None:
         if not mqtt_events.connected.is_set():

@@ -133,6 +133,13 @@ func (db *DB) importRouterTrackers(trackers []RouterTracker,now string) error {
         id:=byEntity
         if id=="" {id=byMAC}
         if id=="" {
+            // An absent or unavailable router tracker is not a discovered host.
+            // Otherwise an aged-out device would be recreated on every poll.
+            if t.State!="home" {
+                imported++
+                if t.State=="not_home" {notObserved++} else {unknown++}
+                continue
+            }
             id,err=freshDeviceID()
             if err!=nil{return err}
             firstLast:=""

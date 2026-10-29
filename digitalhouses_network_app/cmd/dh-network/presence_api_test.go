@@ -13,7 +13,7 @@ import (
 func TestPresenceSubscriptionAndGlobalSettingsPersistence(t *testing.T){
  path:=filepath.Join(t.TempDir(),"network.sqlite3")
  db,err:=openDB(path);if err!=nil{t.Fatal(err)}
- if err=db.initializeSettings(DiscoverySettings{60,180,300,300,300,2,3});err!=nil{t.Fatal(err)}
+ if err=db.initializeSettings(DiscoverySettings{60,180,300,300,300,2,3,30,30});err!=nil{t.Fatal(err)}
  if _,err=presenceTarget("ip","192.168.2.30");err!=nil{t.Fatal(err)}
  if _,err=presenceTarget("mac","E8:FF:1E:D7:3A:48");err!=nil{t.Fatal(err)}
  for _,target:=range []string{"127.0.0.1","2001:db8::1","999.168.2.1"}{
@@ -28,13 +28,13 @@ func TestPresenceSubscriptionAndGlobalSettingsPersistence(t *testing.T){
  if _,err=db.updatePresence("mac","E8:FF:1E:D7:3A:48",true,false);err!=nil{t.Fatal(err)}
  subs,err:=db.presenceSubscriptions();if err!=nil{t.Fatal(err)}
  if len(subs)!=2||!subs[0].Notifications{t.Fatalf("unexpected subscriptions %#v",subs)}
- settings:=DiscoverySettings{30,120,600,480,360,3,4}
+ settings:=DiscoverySettings{30,120,600,480,360,3,4,45,90}
  if err=db.writeSettings(settings);err!=nil{t.Fatal(err)}
  if err=db.writeSettings(DiscoverySettings{});err==nil{t.Fatal("zero intervals accepted")}
  db.Close()
  db,err=openDB(path);if err!=nil{t.Fatal(err)}
  defer db.Close()
- if err=db.initializeSettings(DiscoverySettings{60,180,300,300,300,2,3});err!=nil{t.Fatal(err)}
+ if err=db.initializeSettings(DiscoverySettings{60,180,300,300,300,2,3,30,30});err!=nil{t.Fatal(err)}
  got,err:=db.readSettings();if err!=nil{t.Fatal(err)}
  if got!=settings{t.Fatalf("settings lost on restart got %#v expected %#v",got,settings)}
  subs,err=db.presenceSubscriptions();if err!=nil{t.Fatal(err)}
@@ -56,7 +56,7 @@ func TestPresenceLabelsMigrationValidationAndRenameWithoutReset(t *testing.T){
  db.Close()
  db,err=openDB(path);if err!=nil{t.Fatalf("migration failed: %v",err)}
  defer db.Close()
- if err=db.initializeSettings(DiscoverySettings{60,180,300,300,300,2,3});err!=nil{t.Fatal(err)}
+ if err=db.initializeSettings(DiscoverySettings{60,180,300,300,300,2,3,30,30});err!=nil{t.Fatal(err)}
  subs,err:=db.presenceSubscriptions();if err!=nil{t.Fatal(err)}
  if len(subs)!=1||subs[0].Label!=""||!subs[0].Notifications{t.Fatalf("existing subscription changed: %#v",subs)}
  if err=db.run(`CREATE TRIGGER preserve_presence_activation BEFORE UPDATE ON presence_subscriptions
@@ -81,7 +81,7 @@ func TestPresenceLabelsMigrationValidationAndRenameWithoutReset(t *testing.T){
 func TestResetClearsDeliveryHistoryAndRuntimeStatesButNotSettings(t *testing.T){
  db,err:=openDB(filepath.Join(t.TempDir(),"network.sqlite3"));if err!=nil{t.Fatal(err)}
  defer db.Close()
- if err=db.initializeSettings(DiscoverySettings{60,180,300,300,300,2,3});err!=nil{t.Fatal(err)}
+ if err=db.initializeSettings(DiscoverySettings{60,180,300,300,300,2,3,30,30});err!=nil{t.Fatal(err)}
  if _,err=db.updatePresence("ip","192.168.2.30",true,false);err!=nil{t.Fatal(err)}
  if err=db.run("INSERT INTO event_delivery_log(event_id,event_type,occurred_at,status,payload_json) VALUES('id','tracked_device_reachable','2026-10-29T00:00:00Z','queued','{}')");err!=nil{t.Fatal(err)}
  if _,err=db.resetInventoryRows();err!=nil{t.Fatal(err)}
@@ -94,7 +94,7 @@ func TestResetClearsDeliveryHistoryAndRuntimeStatesButNotSettings(t *testing.T){
 func TestPresenceAPIStartsOneImmediateGlobalScanAndNotForNotificationChanges(t *testing.T){
  db,err:=openDB(filepath.Join(t.TempDir(),"presence.sqlite3"));if err!=nil{t.Fatal(err)}
  defer db.Close()
- if err=db.initializeSettings(DiscoverySettings{60,180,300,300,300,2,3});err!=nil{t.Fatal(err)}
+ if err=db.initializeSettings(DiscoverySettings{60,180,300,300,300,2,3,30,30});err!=nil{t.Fatal(err)}
  var started atomic.Int32
  signal:=make(chan struct{},1)
  unblock:=make(chan struct{})

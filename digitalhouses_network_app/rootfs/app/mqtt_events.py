@@ -6,6 +6,7 @@ inventory after initial install / Reset is suppressed, not replayed as alerts.
 """
 from __future__ import annotations
 
+from contextlib import closing
 import json
 import logging
 import os
@@ -251,7 +252,9 @@ def run_forever() -> None:
                 if not DB.exists():
                     time.sleep(POLL_INTERVAL_SECONDS)
                     continue
-                with sqlite3.connect(f"file:{DB}?mode=rw", uri=True, timeout=8) as conn:
+                # sqlite3.Connection's context manager commits but does NOT close.
+                # close explicitly so 4-second polling never accumulates handles.
+                with closing(sqlite3.connect(f"file:{DB}?mode=rw", uri=True, timeout=8)) as conn, conn:
                     births = suppress_initial_births(conn, pending_births(conn))
                     for row in births:
                         if (datetime.now(timezone.utc) - parse_utc(row["first_positive_at"])).total_seconds() < ENRICHMENT_DELAY_SECONDS:
@@ -269,9 +272,7 @@ def run_forever() -> None:
                             break
                     monitor.cycle(conn, mqtt_events)
                     presence.cycle(conn, mqtt_events)
-                    with conn:
-                        conn.execute("""DELETE FROM event_delivery_log WHERE event_id NOT IN
-                          (SELECT event_id FROM event_delivery_log ORDER BY occurred_at DESC LIMIT 3000)""")
+                    # A daily retention task performs bounded historical cleanup.
             except (sqlite3.Error, OSError, ValueError) as exc:
                 LOG.warning("Event outbox unavailable; retrying: %s", exc)
             time.sleep(POLL_INTERVAL_SECONDS)

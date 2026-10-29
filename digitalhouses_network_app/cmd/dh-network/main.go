@@ -110,13 +110,13 @@ func openDB(path string) (*DB, error) {
         "CREATE TABLE IF NOT EXISTS monitor_states (method TEXT NOT NULL,watch_id TEXT NOT NULL,state TEXT NOT NULL,last_confirmed TEXT NOT NULL,ok_count INTEGER NOT NULL,bad_count INTEGER NOT NULL,last_sample TEXT NOT NULL,last_check TEXT NOT NULL,reason TEXT NOT NULL,target_json TEXT NOT NULL,label TEXT NOT NULL,PRIMARY KEY(method,watch_id));",
         "CREATE TABLE IF NOT EXISTS monitor_outbox (event_id TEXT PRIMARY KEY,method TEXT NOT NULL,watch_id TEXT NOT NULL,occurred_at TEXT NOT NULL,payload_json TEXT NOT NULL,FOREIGN KEY(method,watch_id) REFERENCES monitor_states(method,watch_id));",
         "CREATE TABLE IF NOT EXISTS monitor_tombstones (method TEXT NOT NULL,watch_id TEXT NOT NULL,PRIMARY KEY(method,watch_id));",
-        "CREATE TABLE IF NOT EXISTS discovery_settings (id INTEGER PRIMARY KEY CHECK(id=1),poll_interval_seconds INTEGER NOT NULL,scan_interval_seconds INTEGER NOT NULL,mdns_interval_seconds INTEGER NOT NULL,ssdp_interval_seconds INTEGER NOT NULL,wsd_interval_seconds INTEGER NOT NULL,confirm_successes INTEGER NOT NULL,confirm_failures INTEGER NOT NULL);",
+        "CREATE TABLE IF NOT EXISTS discovery_settings (id INTEGER PRIMARY KEY CHECK(id=1),poll_interval_seconds INTEGER NOT NULL,scan_interval_seconds INTEGER NOT NULL,mdns_interval_seconds INTEGER NOT NULL,ssdp_interval_seconds INTEGER NOT NULL,wsd_interval_seconds INTEGER NOT NULL,confirm_successes INTEGER NOT NULL,confirm_failures INTEGER NOT NULL,history_days INTEGER NOT NULL DEFAULT 30,absent_device_days INTEGER NOT NULL DEFAULT 30);",
         "CREATE TABLE IF NOT EXISTS presence_subscriptions (kind TEXT NOT NULL CHECK(kind IN ('ip','mac')),target TEXT NOT NULL,enabled INTEGER NOT NULL DEFAULT 1,notifications INTEGER NOT NULL DEFAULT 0,updated_at TEXT NOT NULL,label TEXT NOT NULL DEFAULT '',PRIMARY KEY(kind,target));",
         "CREATE TABLE IF NOT EXISTS presence_states (kind TEXT NOT NULL,target TEXT NOT NULL,state TEXT NOT NULL DEFAULT 'unknown',last_confirmed TEXT NOT NULL DEFAULT '',last_sample_at TEXT NOT NULL DEFAULT '',last_check TEXT NOT NULL DEFAULT '',last_positive TEXT NOT NULL DEFAULT '',last_changed TEXT NOT NULL DEFAULT '',successes INTEGER NOT NULL DEFAULT 0,failures INTEGER NOT NULL DEFAULT 0,reason TEXT NOT NULL DEFAULT '',PRIMARY KEY(kind,target));",
         "CREATE TABLE IF NOT EXISTS presence_outbox (event_id TEXT PRIMARY KEY,kind TEXT NOT NULL,target TEXT NOT NULL,occurred_at TEXT NOT NULL,payload_json TEXT NOT NULL);",
         "CREATE TABLE IF NOT EXISTS event_delivery_log (event_id TEXT PRIMARY KEY,event_type TEXT NOT NULL,occurred_at TEXT NOT NULL,published_at TEXT NOT NULL DEFAULT '',status TEXT NOT NULL CHECK(status IN ('queued','broker_acked','retrying')),attempts INTEGER NOT NULL DEFAULT 0,payload_json TEXT NOT NULL);",
         "CREATE INDEX IF NOT EXISTS delivery_order ON event_delivery_log(occurred_at DESC);",
-        "UPDATE schema_version SET version=12;",
+        "UPDATE schema_version SET version=13;",
     }, "\n")
     if err := db.exec(schema); err != nil {
         db.Close()
@@ -124,6 +124,7 @@ func openDB(path string) (*DB, error) {
     }
     if err:=db.ensureDeviceBirthSourceColumn();err!=nil{db.Close();return nil,err}
     if err:=db.ensurePresenceLabelColumn();err!=nil{db.Close();return nil,err}
+    if err:=db.ensureRetentionColumns();err!=nil{db.Close();return nil,err}
     if err:=db.initializeDiscoveryBaseline(path);err!=nil{db.Close();return nil,err}
     return db, nil
 }
@@ -288,6 +289,33 @@ func (s *Service) routes() http.Handler {
         sources=append(sources,SourceInfo{Name:"IPv6 NDP",Kind:"planned",Status:"planned"})
         reply(w,sources)
     })
+    // The Ingress inventory uses one consistent snapshot, not five separate
+    // full database reads followed by an expensive diagnostic export.
+    mux.HandleFunc("GET /api/ui-inventory",func(w http.ResponseWriter,r *http.Request){
+        snap,err:=s.db.snapshot()
+        if err!=nil{http.Error(w,"inventory unavailable",500);return}
+        arp,ha:=s.db.evidenceWindows()
+        ip:=resolveIPv4Evidence(snap.IPv4Evidence,time.Now().UTC().Format(time.RFC3339),arp,ha)
+        lastARP:=0
+        for _,src:=range snap.Sources {
+            if src.Kind!="lan_arp"{continue}
+            if n,ok:=normalizedSourceDetails(src)["last_scan_hosts"].(float64);ok{lastARP=int(n)}
+        }
+        reply(w,map[string]any{
+            "devices":snap.Devices,"device_sources":snap.DeviceSources,
+            "mdns_services":snap.MDNSServices,"ssdp_services":snap.SSDPServices,
+            "wsd_endpoints":snap.WSDEndpoints,
+            "ipv4_conflicts":ip.Conflicts,
+            "counts":map[string]int{
+                "arp_hosts":countSources(snap.DeviceSources,"ARP"),
+                "arp_last_scan_hosts":lastARP,
+                "mdns_matched_devices":countSources(snap.DeviceSources,"mDNS"),
+                "mdns_service_records":len(snap.MDNSServices),
+                "ssdp_matched_devices":countSources(snap.DeviceSources,"SSDP"),
+                "ssdp_service_records":len(snap.SSDPServices),
+            },
+        })
+    })
     mux.HandleFunc("GET /api/device-sources",func(w http.ResponseWriter,r *http.Request){
         snapshot,err:=s.db.snapshot()
         if err!=nil {http.Error(w,"database unavailable",500);return}
@@ -386,13 +414,14 @@ func main() {
     if err:=db.initializeSettings(DiscoverySettings{
         PollIntervalSeconds:intervalSeconds,ScanIntervalSeconds:scanSeconds,
         MDNSIntervalSeconds:mdnsSeconds,SSDPIntervalSeconds:ssdpSeconds,WSDIntervalSeconds:wsdSeconds,
-        ConfirmSuccesses:2,ConfirmFailures:3,
+        ConfirmSuccesses:2,ConfirmFailures:3,HistoryDays:30,AbsentDeviceDays:30,
     });err!=nil{log.Fatal(err)}
     go service.runRouterPolling(time.Duration(intervalSeconds)*time.Second)
     go service.runLANPolling(time.Duration(scanSeconds)*time.Second)
     go service.runMDNSPolling(time.Duration(mdnsSeconds)*time.Second)
     go service.runSSDPPolling(time.Duration(ssdpSeconds)*time.Second)
     go service.runWSDPolling(time.Duration(wsdSeconds)*time.Second)
+    go service.runRetention()
     log.Printf("DigitalHouses Network App %s started; ingress=%s",service.version,port)
     server:=&http.Server{Addr:":"+port,Handler:service.routes(),ReadHeaderTimeout:10*time.Second,ReadTimeout:30*time.Second,WriteTimeout:30*time.Second}
     log.Fatal(server.ListenAndServe())

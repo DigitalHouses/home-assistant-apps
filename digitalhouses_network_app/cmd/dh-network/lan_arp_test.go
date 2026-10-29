@@ -51,7 +51,7 @@ func TestLANMergesWithRouterNoteAndIPHistory(t *testing.T) {
     defer db.Close()
     start:="2026-10-27T15:30:00Z"
     address:="02:AA:BB:CC:DD:11"
-    router:=RouterTracker{EntityID:"device_tracker.test_router",MAC:address,State:"not_home",Name:"Router-provided name",IPv4:"192.168.11.70"}
+    router:=RouterTracker{EntityID:"device_tracker.test_router",MAC:address,State:"home",Name:"Router-provided name",IPv4:"192.168.11.70"}
     if err:=db.importRouterTrackers([]RouterTracker{router},start);err!=nil {t.Fatal(err)}
     devices,_:=db.devices()
     id:=devices[0].ID
@@ -68,6 +68,7 @@ func TestLANMergesWithRouterNoteAndIPHistory(t *testing.T) {
     if err!=nil || oldIP!=id {t.Fatalf("lost historical IP: %v %v",oldIP,err)}
     // A negative HA router report after the ARP observation must not erase
     // more recent positive link-layer evidence.
+    router.State="not_home"
     if err:=db.importRouterTrackers([]RouterTracker{router},"2026-10-27T15:32:00Z");err!=nil {t.Fatal(err)}
     devices,_=db.devices()
     if devices[0].Presence!="online" {t.Fatalf("router not_home hid ARP online: %+v",devices)}

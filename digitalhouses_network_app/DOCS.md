@@ -1,5 +1,21 @@
 # DH Network App — architecture and implementation notes
 
+## 0.1.26 — resource efficiency and retention
+
+The default discovery intervals are unchanged (HA 60s, ARP 180s, Bonjour/SSDP/WSD 300s); IP/MAC Presence is still based on completed independent ARP scans.
+
+Two SQLite-backed Ingress settings, migrated in place with defaults of 30 days each:
+- `history_days`: how long to retain observation detail, inventory events, acknowledged MQTT delivery log, historical IPv4/IPv6 identities, IPv4 evidence, stale metadata/service records, and old disagreement state.
+- `absent_device_days`: how long a device must be absent from all positive observations before it can be removed from the registry. Only `not_observed` is eligible (never `online` or `unknown`). Device rows with Notes, enabled MAC Presence, or enabled IP Presence associated with current/historical addresses are retained. A fresh healthy ARP source is required, and HA-linked devices additionally require healthy HA source observations; interrupted source polling does not cause bulk removal.
+
+Cleanup runs once a day after an initial 5-minute settling period, within a transaction. Foreign-key dependent rows are purged before device rows. Maximum 1000 absent devices per daily sweep bounds the deletion workload; remaining eligible hosts are considered on the next pass. Pending/unacknowledged MQTT delivery and one-time new-device deduplication rows are retained. Missing devices from a negative-only HA router tracker are no longer recreated, avoiding repeated removal/recreation. User Notes, current Presence state, and active subscriptions are not reset on upgrade.
+
+Performance:
+- IPv4 reconciliation changes only device rows with an actual address change; no more blank-all/restore-all SQL writes.
+- Regular Ingress updates use one `/api/ui-inventory` snapshot in place of five per-section full snapshots and an unconditional diagnostic export. Dedicated `/api/diagnostics` remains available on demand.
+- Old numeric event caps and per-scan/per-4s journal cleanup are removed; time-based retention is the canonical history policy.
+- Router/ARP source disagreements retain existing event behavior; historical cleanup is separated from scan-time reconciliation.
+
 ## Product identity
 
 - Public product: DigitalHouses Network App
@@ -7,7 +23,7 @@
 - Compact namespace: `dh_network_app`
 - Web UI: Home Assistant Ingress (not a second externally exposed admin service)
 - Storage: SQLite `/data/network.sqlite3`
-- Current version: `0.1.16`, experimental, no GHCR artifact and no telemetry
+- Current version: `0.1.26`, experimental, no GHCR artifact and no telemetry
 
 This App deliberately follows the existing product-naming and HAOS packaging standards. Its **Ingress** UI is the accepted departure from the usual MQTT-discovered Lovelace control card: UI state, notes and inventory are App-owned instead of built from MQTT entities. Any future machine events must follow DigitalHouses Events & Notifications Standard; local alert delivery belongs to HA, not the public App.
 

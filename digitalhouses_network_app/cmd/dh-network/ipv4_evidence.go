@@ -142,12 +142,25 @@ func (db *DB) reconcileIPv4Locked(now string) ([]IPv4Conflict,error) {
  if err!=nil{return nil,err}
  arp,ha:=db.evidenceWindows()
  resolved:=resolveIPv4Evidence(evidence,now,arp,ha)
- if err:=db.run("UPDATE devices SET ipv4='' WHERE ipv4<>''");err!=nil{return nil,err}
- ids:=make([]string,0,len(resolved.Addresses))
- for id:=range resolved.Addresses {ids=append(ids,id)}
+ // Only modify changed mappings. The previous implementation blanked every
+ // address then rewrote them all at every HA poll and ARP scan.
+ existing:=map[string]string{}
+ _,err=db.prepared("SELECT id,ipv4 FROM devices WHERE ipv4<>''",nil,func(s *C.sqlite3_stmt){
+   existing[field(s,0)]=field(s,1)
+ })
+ if err!=nil{return nil,err}
+ changed:=map[string]string{}
+ for id,old:=range existing {
+   if next:=resolved.Addresses[id];next!=old{changed[id]=next}
+ }
+ for id,next:=range resolved.Addresses {
+   if existing[id]!=next{changed[id]=next}
+ }
+ ids:=make([]string,0,len(changed))
+ for id:=range changed {ids=append(ids,id)}
  sort.Strings(ids)
  for _,id:=range ids {
-   if err:=db.run("UPDATE devices SET ipv4=? WHERE id=?",resolved.Addresses[id],id);err!=nil{return nil,err}
+   if err:=db.run("UPDATE devices SET ipv4=? WHERE id=? AND ipv4<>?",changed[id],id,changed[id]);err!=nil{return nil,err}
  }
  if err:=db.recordDisagreementChangesLocked(resolved.Conflicts,now);err!=nil{return nil,err}
  return resolved.Conflicts,nil
