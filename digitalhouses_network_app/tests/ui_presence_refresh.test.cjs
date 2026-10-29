@@ -18,7 +18,7 @@ function fixture(){
  };
  const copied=[];
  const response={
-  status:{database:'ready',poll_interval_seconds:60,scan_interval_seconds:180},
+  status:{database:'ready',version:'0.1.26',poll_interval_seconds:60,scan_interval_seconds:180},
   devices:[
    {id:'a',display_name:'Router',ipv4:'192.168.11.1',mac:'AA:BB:CC:DD:EE:01',presence:'online',last_seen:'2026-10-28T22:32:35Z',note:''},
    {id:'b',display_name:'Phone',ipv4:'192.168.11.58',mac:'AA:BB:CC:DD:EE:02',presence:'online',last_seen:'2026-10-28T22:32:35Z',note:''}
@@ -83,7 +83,7 @@ test('entire old overview with counters, export, diagnostics and Reset now belon
  const main=html.slice(html.indexOf('<main>'),html.indexOf('</main>'));
  assert.doesNotMatch(header,/class="overview"|id="overview"|id="health"|id="export"|id="reset"/);
  assert.match(main,/<section id="settings-overview" class="settings-overview"[^>]*hidden/);
- for(const id of ['known','online','interval','last-arp','known-arp','ip-conflicts','mdns-hosts',
+ for(const id of ['known','online','last-arp','known-arp','ip-conflicts','mdns-hosts',
   'ssdp-hosts','export','export-preview','diagnostic-json-preview','diagnostic-json-text','export-copy',
   'reset','reset-status']){
   assert.match(main,new RegExp('id="'+id+'"'));
@@ -91,4 +91,23 @@ test('entire old overview with counters, export, diagnostics and Reset now belon
  assert.match(code,/settingsOverview\.hidden=page!=='settings'/);
  assert.match(code,/document\.addEventListener\('click',handlePresenceOutsideClick\)/);
  assert.match(code,/document\.addEventListener\('keydown',handlePresenceKeydown\)/);
+});
+
+test('Ingress version follows runtime status, not a hard-coded release string',async()=>{
+ const f=fixture();
+ assert.match(html,/<span id="app-version">v…<\/span>/);
+ assert.doesNotMatch(html,/Устройства и наблюдение за сетью · v0\.1\.\d+/);
+ await vm.runInContext('load()',f.ctx);
+ assert.equal(f.all.get('app-version').textContent,'v0.1.26');
+ f.response.status.version='0.1.27';
+ await vm.runInContext('load()',f.ctx);
+ assert.equal(f.all.get('app-version').textContent,'v0.1.27');
+});
+test('Settings summary has diagnostics but no duplicate polling interval cards',()=>{
+ const main=html.slice(html.indexOf('<main>'),html.indexOf('</main>'));
+ assert.doesNotMatch(main,/id="interval"|id="arp-interval"/);
+ assert.match(main,/id="export"/);
+ assert.match(main,/id="reset"/);
+ assert.match(html,/\['poll_interval_seconds','Home Assistant \/ роутеры'/);
+ assert.match(html,/\['scan_interval_seconds','ARP · локальная сеть'/);
 });
