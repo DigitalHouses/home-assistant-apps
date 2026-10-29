@@ -269,9 +269,7 @@ def run_forever() -> None:
                             break
                     monitor.cycle(conn, mqtt_events)
                     presence.cycle(conn, mqtt_events)
-                    with conn:
-                        conn.execute("""DELETE FROM event_delivery_log WHERE event_id NOT IN
-                          (SELECT event_id FROM event_delivery_log ORDER BY occurred_at DESC LIMIT 3000)""")
+                    # A daily retention task performs bounded historical cleanup.
             except (sqlite3.Error, OSError, ValueError) as exc:
                 LOG.warning("Event outbox unavailable; retrying: %s", exc)
             time.sleep(POLL_INTERVAL_SECONDS)
