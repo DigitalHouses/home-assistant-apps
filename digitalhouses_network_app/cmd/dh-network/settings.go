@@ -24,6 +24,8 @@ type DiscoverySettings struct {
  WSDIntervalSeconds int `json:"wsd_interval_seconds"`
  ConfirmSuccesses int `json:"confirm_successes"`
  ConfirmFailures int `json:"confirm_failures"`
+ HistoryDays int `json:"history_days"`
+ AbsentDeviceDays int `json:"absent_device_days"`
 }
 
 func(defaults DiscoverySettings)validate()error{
@@ -35,6 +37,8 @@ func(defaults DiscoverySettings)validate()error{
   {"wsd_interval_seconds",defaults.WSDIntervalSeconds,120,3600},
   {"confirm_successes",defaults.ConfirmSuccesses,1,5},
   {"confirm_failures",defaults.ConfirmFailures,1,8},
+  {"history_days",defaults.HistoryDays,1,3650},
+  {"absent_device_days",defaults.AbsentDeviceDays,1,3650},
  }
  for _,f:=range boundaries{if f.value<f.min||f.value>f.max{return fmt.Errorf("%s must be %d..%d",f.name,f.min,f.max)}}
  return nil
@@ -45,11 +49,12 @@ func(db *DB)initializeSettings(defaults DiscoverySettings)error{
  db.mu.Lock()
  defer db.mu.Unlock()
  if err:=db.run(`INSERT OR IGNORE INTO discovery_settings
- (id,poll_interval_seconds,scan_interval_seconds,mdns_interval_seconds,ssdp_interval_seconds,wsd_interval_seconds,confirm_successes,confirm_failures)
- VALUES(1,?,?,?,?,?,?,?)`,
+ (id,poll_interval_seconds,scan_interval_seconds,mdns_interval_seconds,ssdp_interval_seconds,wsd_interval_seconds,confirm_successes,confirm_failures,history_days,absent_device_days)
+ VALUES(1,?,?,?,?,?,?,?,?,?)`,
  fmt.Sprint(defaults.PollIntervalSeconds),fmt.Sprint(defaults.ScanIntervalSeconds),
  fmt.Sprint(defaults.MDNSIntervalSeconds),fmt.Sprint(defaults.SSDPIntervalSeconds),
- fmt.Sprint(defaults.WSDIntervalSeconds),fmt.Sprint(defaults.ConfirmSuccesses),fmt.Sprint(defaults.ConfirmFailures));err!=nil{return err}
+ fmt.Sprint(defaults.WSDIntervalSeconds),fmt.Sprint(defaults.ConfirmSuccesses),fmt.Sprint(defaults.ConfirmFailures),
+ fmt.Sprint(defaults.HistoryDays),fmt.Sprint(defaults.AbsentDeviceDays));err!=nil{return err}
  values,err:=db.readSettingsLocked()
  if err==nil {db.lanFreshness=time.Duration(values.ScanIntervalSeconds*2+30)*time.Second;db.haFreshness=time.Duration(values.PollIntervalSeconds*3)*time.Second}
  return err
@@ -57,13 +62,14 @@ func(db *DB)initializeSettings(defaults DiscoverySettings)error{
 func(db *DB)readSettingsLocked()(DiscoverySettings,error){
  var values DiscoverySettings
  count,err:=db.prepared(`SELECT poll_interval_seconds,scan_interval_seconds,mdns_interval_seconds,
- ssdp_interval_seconds,wsd_interval_seconds,confirm_successes,confirm_failures FROM discovery_settings WHERE id=1`,
+ ssdp_interval_seconds,wsd_interval_seconds,confirm_successes,confirm_failures,history_days,absent_device_days FROM discovery_settings WHERE id=1`,
  nil,func(stmt *C.sqlite3_stmt){
   values=DiscoverySettings{
    int(C.sqlite3_column_int(stmt,0)),int(C.sqlite3_column_int(stmt,1)),
    int(C.sqlite3_column_int(stmt,2)),int(C.sqlite3_column_int(stmt,3)),
    int(C.sqlite3_column_int(stmt,4)),int(C.sqlite3_column_int(stmt,5)),
-   int(C.sqlite3_column_int(stmt,6)),
+   int(C.sqlite3_column_int(stmt,6)),int(C.sqlite3_column_int(stmt,7)),
+   int(C.sqlite3_column_int(stmt,8)),
   }
  })
  if err!=nil{return values,err}
@@ -79,10 +85,11 @@ func(db *DB)writeSettings(v DiscoverySettings)error{
  db.mu.Lock();defer db.mu.Unlock()
  err:=db.run(`UPDATE discovery_settings SET poll_interval_seconds=?,scan_interval_seconds=?,
  mdns_interval_seconds=?,ssdp_interval_seconds=?,wsd_interval_seconds=?,
- confirm_successes=?,confirm_failures=? WHERE id=1`,
+ confirm_successes=?,confirm_failures=?,history_days=?,absent_device_days=? WHERE id=1`,
  fmt.Sprint(v.PollIntervalSeconds),fmt.Sprint(v.ScanIntervalSeconds),
  fmt.Sprint(v.MDNSIntervalSeconds),fmt.Sprint(v.SSDPIntervalSeconds),
- fmt.Sprint(v.WSDIntervalSeconds),fmt.Sprint(v.ConfirmSuccesses),fmt.Sprint(v.ConfirmFailures))
+ fmt.Sprint(v.WSDIntervalSeconds),fmt.Sprint(v.ConfirmSuccesses),fmt.Sprint(v.ConfirmFailures),
+ fmt.Sprint(v.HistoryDays),fmt.Sprint(v.AbsentDeviceDays))
  if err==nil {
   db.lanFreshness=time.Duration(v.ScanIntervalSeconds*2+30)*time.Second
   db.haFreshness=time.Duration(v.PollIntervalSeconds*3)*time.Second
