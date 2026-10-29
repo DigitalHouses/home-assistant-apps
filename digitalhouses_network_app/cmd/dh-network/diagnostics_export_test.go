@@ -15,7 +15,7 @@ func TestDownloadDiagnosticsIsRealAttachmentAndCarriesBoundedDebug(t *testing.T)
     db,err:=openDB(filepath.Join(t.TempDir(),"network.sqlite3"))
     if err!=nil {t.Fatal(err)}
     defer db.Close()
-    if err:=db.initializeSettings(DiscoverySettings{60,180,300,300,300,2,3});err!=nil{t.Fatal(err)}
+    if err:=db.initializeSettings(DiscoverySettings{60,180,300,300,300,2,3,30,30});err!=nil{t.Fatal(err)}
     if _,err:=db.updatePresence("ip","192.168.2.30",true,false);err!=nil{t.Fatal(err)}
     if err:=db.run("INSERT INTO event_delivery_log(event_id,event_type,occurred_at,status,payload_json) VALUES('testid','tracked_device_unreachable','2026-10-29T00:00:00Z','queued','{}')");err!=nil{t.Fatal(err)}
     if err:=os.Setenv("MQTT_PASSWORD","test-export-secret-never-include");err!=nil{t.Fatal(err)}
