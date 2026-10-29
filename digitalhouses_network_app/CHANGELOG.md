@@ -9,6 +9,7 @@
 - Replace five full snapshots on every Ingress refresh with a single inventory endpoint; full diagnostic exports remain explicitly available.
 - Preserve existing IP disagreement event semantics; the journal is now governed by retention days rather than a per-scan cap.
 - Remove recurring SQL history cap/delete work from scan and MQTT workers. Scanning intervals and Presence confirmation thresholds are unchanged.
+- Explicitly close the Python worker's SQLite connection after each cycle; a connection context manager alone commits/rolls back but does not close the handle.
 
 
 ## 0.1.25
