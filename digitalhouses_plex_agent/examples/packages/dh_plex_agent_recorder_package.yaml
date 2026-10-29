@@ -1,0 +1,19 @@
+# Home Assistant package example for DH Plex Agent transcoding telemetry.
+# Copy/merge these Recorder entries into the site's existing Recorder package.
+# Do not replace its current include/exclude lists.
+#
+# Binary entities: minimal ON/OFF, no MQTT JSON attributes, Recorder history.
+# UI sensors: rich per-session details, explicitly excluded from Recorder.
+#
+# For homeassistant: packages: !include_dir_named packages, the outer key
+# is the package name; adapt to your site's package-loading strategy.
+dh_plex_agent_recorder_package:
+  recorder:
+    include:
+      entities:
+        - binary_sensor.dh_plex_agent_video_transcoding_active
+        - binary_sensor.dh_plex_agent_audio_transcoding_active
+    exclude:
+      entities:
+        - sensor.dh_plex_agent_video_transcoding
+        - sensor.dh_plex_agent_audio_transcoding
