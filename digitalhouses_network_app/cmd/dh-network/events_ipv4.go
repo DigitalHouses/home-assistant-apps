@@ -72,7 +72,8 @@ func (db *DB) recordDisagreementChangesLocked(conflicts []IPv4Conflict,at string
  current:=currentDisagreementStates(conflicts)
  for _,item:=range current {
   old,wasPresent:=prior[item.IP]
-  if !wasPresent || old.Classification!=item.Classification || old.Fingerprint!=item.Fingerprint {
+  if item.Classification!="source_disagreement" &&
+     (!wasPresent || old.Classification!=item.Classification || old.Fingerprint!=item.Fingerprint) {
    action:="ipv4_disagreement_started"
    if wasPresent {action="ipv4_disagreement_changed"}
    if err=db.run("INSERT INTO events(event_type,device_id,occurred_at,data_json) VALUES(?,'',?,?)",
@@ -91,8 +92,10 @@ func (db *DB) recordDisagreementChangesLocked(conflicts []IPv4Conflict,at string
    "ipv4":ip,"classification":old.Classification,
    "previous":json.RawMessage(old.DataJSON),
   })
-  if err=db.run("INSERT INTO events(event_type,device_id,occurred_at,data_json) VALUES('ipv4_disagreement_resolved','',?,?)",
+  if old.Classification!="source_disagreement" {
+   if err=db.run("INSERT INTO events(event_type,device_id,occurred_at,data_json) VALUES('ipv4_disagreement_resolved','',?,?)",
     at,string(payload));err!=nil{return err}
+  }
   if err=db.run("DELETE FROM ipv4_disagreement_state WHERE ipv4=?",ip);err!=nil{return err}
  }
  return nil
