@@ -43,6 +43,8 @@ class PlaybackSession:
     subtitle_decision: str | None = None
     video_codec: str | None = None
     audio_codec: str | None = None
+    video_output_codec: str | None = None
+    audio_output_codec: str | None = None
     video_resolution: str | None = None
     audio_channels: int | None = None
     bit_depth: int | None = None
@@ -282,6 +284,12 @@ def parse_sessions_xml(xml_text: str | bytes) -> tuple[PlaybackSession, ...]:
                     if audio_stream is not None
                     else (media.get("audioCodec") if media is not None else None)
                 ),
+                video_output_codec=(
+                    transcode.get("videoCodec") if transcode is not None else None
+                ),
+                audio_output_codec=(
+                    transcode.get("audioCodec") if transcode is not None else None
+                ),
                 video_resolution=(media.get("videoResolution") if media is not None else None),
                 audio_channels=(
                     _int_or_none(audio_stream.get("channels"))
@@ -349,6 +357,8 @@ def playback_fingerprint(sessions: tuple[PlaybackSession, ...]) -> tuple[tuple[o
                 s.subtitle_decision,
                 s.video_codec,
                 s.audio_codec,
+                s.video_output_codec,
+                s.audio_output_codec,
                 s.video_resolution,
                 s.hardware_transcode,
                 s.hw_decode,
@@ -381,6 +391,78 @@ def library_fingerprint(libraries: tuple[LibraryInfo, ...]) -> tuple[tuple[objec
     )
 
 
+def _stream_status(session: PlaybackSession, kind: str) -> str:
+    """The Plex stream decision, not whether an ffmpeg process or GPU is busy."""
+    if kind == "video":
+        if session.video_decision == "transcode" or session.subtitle_decision == "burn":
+            return "Transcoding"
+        decision = session.video_decision
+    else:
+        if session.audio_decision == "transcode":
+            return "Transcoding"
+        # Audio-only Plex sessions can report the decision on Part only.
+        if session.content_type == "audio" and session.mode == "Transcode":
+            return "Transcoding"
+        decision = session.audio_decision
+
+    if decision in {"copy", "directstream", "direct_stream"}:
+        return "Direct Stream"
+    if session.mode == "Direct Stream":
+        return "Direct Stream"
+    if decision in {"direct", "directplay"} or session.mode == "Direct Play":
+        return "Direct Play"
+    return "Unknown"
+
+
+def _stream_payload(
+    sessions: tuple[PlaybackSession, ...], kind: str
+) -> tuple[str, bool, list[dict[str, object]]]:
+    """A small UI-oriented summary; Recorder stores only separate binary flags."""
+    selected = [
+        session for session in sessions
+        if kind == "audio"
+        and (
+            session.content_type == "audio"
+            or session.audio_codec is not None
+            or session.audio_decision is not None
+        )
+        or kind == "video" and session.content_type == "video"
+    ]
+    details: list[dict[str, object]] = []
+    statuses: list[str] = []
+    for session in selected:
+        mode = _stream_status(session, kind)
+        statuses.append(mode)
+        details.append({
+            key: value for key, value in {
+                "title": session.title,
+                "user": session.user,
+                "mode": mode,
+                "decision": (
+                    session.video_decision if kind == "video"
+                    else session.audio_decision
+                ),
+                "source_codec": (
+                    session.video_codec if kind == "video" else session.audio_codec
+                ),
+                "target_codec": (
+                    session.video_output_codec if kind == "video"
+                    else session.audio_output_codec
+                ),
+                "resolution": (
+                    session.video_resolution if kind == "video" else None
+                ),
+                "channels": session.audio_channels if kind == "audio" else None,
+            }.items() if value is not None
+        })
+    summary = next(
+        (state for state in ("Transcoding", "Unknown", "Direct Stream", "Direct Play")
+         if state in statuses),
+        "Idle",
+    )
+    return summary, "Transcoding" in statuses, details
+
+
 def build_plex_api_payload(
     sessions: tuple[PlaybackSession, ...],
     libraries: tuple[LibraryInfo, ...],
@@ -389,6 +471,8 @@ def build_plex_api_payload(
     video_count = sum(1 for session in sessions if session.content_type == "video")
     audio_count = sum(1 for session in sessions if session.content_type == "audio")
     serialized_libraries = [_compact_dict(library) for library in libraries]
+    video_state, video_active, video_details = _stream_payload(sessions, "video")
+    audio_state, audio_active, audio_details = _stream_payload(sessions, "audio")
     return {
         "plex_api_status": status,
         "playback_count": len(sessions),
@@ -400,6 +484,12 @@ def build_plex_api_payload(
         "audio_playback_count": audio_count,
         "video_playback_active": video_count > 0,
         "audio_playback_active": audio_count > 0,
+        "video_transcoding_active": video_active,
+        "audio_transcoding_active": audio_active,
+        "video_transcoding_state": video_state,
+        "audio_transcoding_state": audio_state,
+        "video_transcoding_sessions": video_details,
+        "audio_transcoding_sessions": audio_details,
         "hardware_transcode_active": any(
             session.hardware_transcode for session in sessions
         ),

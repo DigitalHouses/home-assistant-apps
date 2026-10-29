@@ -129,6 +129,82 @@ class PlexApiTests(unittest.TestCase):
         session = parse_sessions_xml(xml)[0]
         self.assertEqual(session.mode, "Direct Stream")
 
+    def test_audio_only_transcode_leaves_video_binary_off(self):
+        xml = """<MediaContainer size="1">
+          <Video title="The Last Samurai" type="movie" sessionKey="11">
+            <Media videoCodec="h264" audioCodec="ac3" videoResolution="1080" selected="1">
+              <Part decision="transcode" selected="1">
+                <Stream streamType="1" codec="h264" decision="copy" selected="1" />
+                <Stream streamType="2" codec="ac3" decision="transcode" selected="1" />
+              </Part>
+            </Media>
+            <User title="Beybars" />
+            <Player playbackSessionId="direct-stream-session" state="playing" />
+            <TranscodeSession videoDecision="copy" audioDecision="transcode" audioCodec="aac" />
+          </Video>
+        </MediaContainer>"""
+        payload = build_plex_api_payload(parse_sessions_xml(xml), (), "ok")
+        self.assertFalse(payload["video_transcoding_active"])
+        self.assertTrue(payload["audio_transcoding_active"])
+        self.assertEqual(payload["video_transcoding_state"], "Direct Stream")
+        self.assertEqual(payload["audio_transcoding_state"], "Transcoding")
+        self.assertEqual(payload["video_transcoding_sessions"][0]["source_codec"], "h264")
+        audio = payload["audio_transcoding_sessions"][0]
+        self.assertEqual(audio["source_codec"], "ac3")
+        self.assertEqual(audio["target_codec"], "aac")
+        self.assertEqual(audio["user"], "Beybars")
+
+    def test_direct_play_has_no_transcoding_and_idle_clears_flags(self):
+        direct = build_plex_api_payload(parse_sessions_xml(DIRECT_PLAY_XML), (), "ok")
+        self.assertFalse(direct["video_transcoding_active"])
+        self.assertFalse(direct["audio_transcoding_active"])
+        self.assertEqual(direct["video_transcoding_state"], "Direct Play")
+        self.assertEqual(direct["audio_transcoding_state"], "Direct Play")
+
+        idle = build_plex_api_payload((), (), "ok")
+        self.assertFalse(idle["video_transcoding_active"])
+        self.assertFalse(idle["audio_transcoding_active"])
+        self.assertEqual(idle["video_transcoding_state"], "Idle")
+        self.assertEqual(idle["audio_transcoding_state"], "Idle")
+        self.assertEqual(idle["video_transcoding_sessions"], [])
+        self.assertEqual(idle["audio_transcoding_sessions"], [])
+
+    def test_video_and_audio_transcode_and_multiple_sessions(self):
+        transcoding = parse_sessions_xml(TRANSCODE_XML)
+        payload = build_plex_api_payload(transcoding, (), "ok")
+        self.assertTrue(payload["video_transcoding_active"])
+        self.assertTrue(payload["audio_transcoding_active"])
+        self.assertEqual(payload["video_transcoding_state"], "Transcoding")
+        self.assertEqual(payload["audio_transcoding_state"], "Transcoding")
+
+        combined = build_plex_api_payload(
+            parse_sessions_xml(DIRECT_PLAY_XML) + transcoding, (), "ok"
+        )
+        self.assertTrue(combined["video_transcoding_active"])
+        self.assertTrue(combined["audio_transcoding_active"])
+        self.assertEqual(len(combined["video_transcoding_sessions"]), 2)
+        self.assertEqual(len(combined["audio_transcoding_sessions"]), 3)
+
+    def test_subtitle_burn_is_video_transcoding_even_if_decision_is_copy(self):
+        session = PlaybackSession(
+            session_id="burn", content_type="video", media_type="movie",
+            title="Burn", video_decision="copy", subtitle_decision="burn",
+            audio_decision="direct", audio_codec="aac",
+        )
+        payload = build_plex_api_payload((session,), (), "ok")
+        self.assertTrue(payload["video_transcoding_active"])
+        self.assertFalse(payload["audio_transcoding_active"])
+
+    def test_audio_track_transcode_fallback_uses_session_mode(self):
+        session = PlaybackSession(
+            session_id="track", content_type="audio", media_type="track",
+            title="Music", mode="Transcode", audio_codec="flac",
+        )
+        payload = build_plex_api_payload((session,), (), "ok")
+        self.assertTrue(payload["audio_transcoding_active"])
+        self.assertFalse(payload["video_transcoding_active"])
+        self.assertEqual(payload["video_transcoding_state"], "Idle")
+
     def test_payload_counts_video_audio_and_sessions(self):
         sessions = parse_sessions_xml(DIRECT_PLAY_XML)
         libraries = (
