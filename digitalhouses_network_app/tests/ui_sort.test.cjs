@@ -163,7 +163,8 @@ test('compact single header keeps navigation visible and all cards collapsed by 
  for (const tab of ['settings','help']) assert.match(header,new RegExp('data-page="'+tab+'"'));
  assert.match(settingSection,/class="settings-overview"[^>]*hidden/);
  assert.match(settingSection,/id="health"/);
- assert.equal((settingSection.match(/class="stat"/g)||[]).length,11);
+ // HA/ARP intervals are editable below; only nine independent status metrics remain.
+ assert.equal((settingSection.match(/class="stat"/g)||[]).length,9);
  assert.match(settingSection,/id="export"/);
  assert.match(settingSection,/id="export-status"/);
  assert.match(settingSection,/id="reset" class="reset-danger"/);

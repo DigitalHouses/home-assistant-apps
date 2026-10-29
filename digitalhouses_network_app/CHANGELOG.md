@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.27
+
+- The Ingress header now displays the **running application version** returned by the existing `/api/status` endpoint instead of a hardcoded version string. This prevents the header showing an older release after an update.
+- Remove the duplicated HA and ARP polling interval cards from the upper Settings overview: these values are already editable in the Global Settings form below.
+- Preserve the rest of the Settings overview, source/discovery counters, diagnostic JSON export, Reset action and all saved settings.
+- Add a UI regression test for dynamic runtime version display and the absence of duplicate interval cards.
+
+
 ## 0.1.26
 
 - Add two independent persisted global settings: **History depth (days)** and **Remove absent devices after (days)**, both defaulting to 30 (range 1–3650), with in-place migration and preservation of existing inventory, notes, subscriptions and confirmation state.

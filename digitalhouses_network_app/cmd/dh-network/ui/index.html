@@ -120,7 +120,7 @@ input{font:inherit;padding:10px;color:#f0f4f9;background:#203147;border:1px soli
 </style></head>
 <body>
 <header class="app-header">
-  <div class="brand"><h1>DigitalHouses Network App</h1><small>Устройства и наблюдение за сетью · v0.1.25</small></div>
+  <div class="brand"><h1>DigitalHouses Network App</h1><small>Устройства и наблюдение за сетью · <span id="app-version">v…</span></small></div>
   <nav aria-label="Разделы приложения"><button class="active" data-page="devices">Устройства</button><button data-page="sources">Источники</button><button data-page="events">Журнал событий</button><button data-page="settings">Параметры</button><button data-page="help">Помощь</button></nav>
 
 </header>
@@ -129,7 +129,7 @@ input{font:inherit;padding:10px;color:#f0f4f9;background:#203147;border:1px soli
     <h2>Состояние сети и диагностика <span id="health" class="tag">Подключение…</span></h2>
     <div class="overview-panel" role="region" aria-label="Показатели и диагностика">
       <p class="description">Сводка источников, диагностика и экспорт. Статус Online не означает ответ на ICMP ping.</p>
-      <div class="stats"><div class="stat"><strong id="known">—</strong><span>Устройств в реестре</span></div><div class="stat"><strong id="online">—</strong><span>Online (ARP / HA, не ping)</span></div><div class="stat"><strong id="interval">—</strong><span>HA-опрос, секунд</span></div><div class="stat"><strong id="arp-interval">—</strong><span>ARP-опрос, секунд</span></div><div class="stat"><strong id="last-arp">—</strong><span>Последний ARP-скан</span></div><div class="stat"><strong id="known-arp">—</strong><span>Ранее найдено ARP</span></div><div class="stat"><strong id="ip-conflicts">—</strong><span>Расхождений IPv4 (включая источники)</span></div><div class="stat"><strong id="mdns-hosts">—</strong><span>Хостов с Bonjour</span></div><div class="stat"><strong id="mdns-services">—</strong><span>Bonjour сервисов</span></div><div class="stat"><strong id="ssdp-hosts">—</strong><span>Хостов с SSDP</span></div><div class="stat"><strong id="ssdp-services">—</strong><span>SSDP сервисов</span></div></div>
+      <div class="stats"><div class="stat"><strong id="known">—</strong><span>Устройств в реестре</span></div><div class="stat"><strong id="online">—</strong><span>Online (ARP / HA, не ping)</span></div><div class="stat"><strong id="last-arp">—</strong><span>Последний ARP-скан</span></div><div class="stat"><strong id="known-arp">—</strong><span>Ранее найдено ARP</span></div><div class="stat"><strong id="ip-conflicts">—</strong><span>Расхождений IPv4 (включая источники)</span></div><div class="stat"><strong id="mdns-hosts">—</strong><span>Хостов с Bonjour</span></div><div class="stat"><strong id="mdns-services">—</strong><span>Bonjour сервисов</span></div><div class="stat"><strong id="ssdp-hosts">—</strong><span>Хостов с SSDP</span></div><div class="stat"><strong id="ssdp-services">—</strong><span>SSDP сервисов</span></div></div>
       
       <div class="toolbar"><a id="export" class="export" href="api/diagnostics/download" target="_blank" rel="noopener noreferrer">Сохранить диагностику (.json)</a><button id="export-preview" type="button">Показать JSON</button><small id="export-status" role="status" aria-live="polite">Расширенный отчёт: IP, MAC, Notes, Presence, очередь MQTT и последние события. Пароли и токены не экспортируются. Проверь данные перед отправкой.</small></div>
       <div id="diagnostic-json-preview" hidden><p class="description">Если загрузка файла заблокирована браузером или Ingress, скопируй JSON ниже либо выдели текст вручную (Ctrl+A / Ctrl+C).</p><div class="toolbar"><button id="export-copy" type="button">Скопировать весь JSON</button><small id="export-copy-status" role="status" aria-live="polite"></small></div><textarea id="diagnostic-json-text" readonly spellcheck="false" aria-label="Полный диагностический JSON для копирования"></textarea></div>
@@ -670,6 +670,7 @@ async function load(){
  try{
   settingsOverview.hidden=page!=='settings';
   const status=await read('status');health.textContent='SQLite: '+status.database;
+  document.getElementById('app-version').textContent=status.version?'v'+status.version:'версия недоступна';
   // One inventory snapshot per refresh; full diagnostics are export-only.
   const view=await read('ui-inventory');
   devices=view.devices||[];
@@ -681,8 +682,6 @@ async function load(){
   if(page==='devices')presenceSubscriptions=await read('presence');
   document.getElementById('known').textContent=devices.length;
   document.getElementById('online').textContent=devices.filter(d=>d.presence==='online').length;
-  document.getElementById('interval').textContent=status.poll_interval_seconds||'—';
-  document.getElementById('arp-interval').textContent=status.scan_interval_seconds||'—';
   const conflicts=view.ipv4_conflicts||[];
   document.getElementById('last-arp').textContent=view.counts?.arp_last_scan_hosts??'—';
   document.getElementById('known-arp').textContent=view.counts?.arp_hosts??'—';
