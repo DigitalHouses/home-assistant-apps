@@ -95,5 +95,5 @@ func (db *DB) recordDisagreementChangesLocked(conflicts []IPv4Conflict,at string
     at,string(payload));err!=nil{return err}
   if err=db.run("DELETE FROM ipv4_disagreement_state WHERE ipv4=?",ip);err!=nil{return err}
  }
- return db.run("DELETE FROM events WHERE id NOT IN (SELECT id FROM events ORDER BY id DESC LIMIT 1000)")
+ return nil
 }
