@@ -582,7 +582,9 @@ async function renderSettings(){
   ['ssdp_interval_seconds','SSDP',120,3600,'Обнаружение UPnP-сервисов'],
   ['wsd_interval_seconds','WSD',120,3600,'Обнаружение устройств через WS-Discovery'],
   ['confirm_successes','Подтвердить появление',1,5,'Количество успешных ARP-сканов'],
-  ['confirm_failures','Подтвердить отсутствие',1,8,'Количество успешных сканов без обнаружения']
+  ['confirm_failures','Подтвердить отсутствие',1,8,'Количество успешных сканов без обнаружения'],
+  ['history_days','Глубина истории в днях',1,3650,'Срок хранения событий, наблюдений и старых адресов; по умолчанию 30 дней'],
+  ['absent_device_days','Удалять отсутствующие устройства через, дней',1,3650,'Не удаляются записи с Notes или активным Presence; по умолчанию 30 дней']
  ];
  body.innerHTML='<div class="settings-panel"><h2>Глобальные параметры</h2><p class="description">Единые интервалы для всей сети. Настройки действуют после сохранения и сохраняются при перезапуске приложения. Никаких индивидуальных интервалов.</p>'+
   '<form id="global-settings"><div class="settings-grid">'+
@@ -668,27 +670,27 @@ async function load(){
  try{
   settingsOverview.hidden=page!=='settings';
   const status=await read('status');health.textContent='SQLite: '+status.database;
-  devices=await read('devices');
-  // Reload persisted watches before each Devices render. Without it, the
-  // green eyes disappear after navigation or the 30-second inventory refresh.
+  // One inventory snapshot per refresh; full diagnostics are export-only.
+  const view=await read('ui-inventory');
+  devices=view.devices||[];
+  origins=view.device_sources||[];
+  mdnsServices=view.mdns_services||[];
+  ssdpServices=view.ssdp_services||[];
+  wsdEndpoints=view.wsd_endpoints||[];
+  // Reload persisted watches so green eyes survive navigation/refresh.
   if(page==='devices')presenceSubscriptions=await read('presence');
-  origins=await read('device-sources');
-  mdnsServices=await read('mdns-services');
-  ssdpServices=await read('ssdp-services');
-  wsdEndpoints=await read('wsd-endpoints');
   document.getElementById('known').textContent=devices.length;
   document.getElementById('online').textContent=devices.filter(d=>d.presence==='online').length;
   document.getElementById('interval').textContent=status.poll_interval_seconds||'—';
   document.getElementById('arp-interval').textContent=status.scan_interval_seconds||'—';
-  const report=await read('diagnostics');
-  const conflicts=report.ipv4_conflicts||[];
-  document.getElementById('last-arp').textContent=report.counts?.arp_last_scan_hosts??'—';
-  document.getElementById('known-arp').textContent=report.counts?.arp_hosts??'—';
+  const conflicts=view.ipv4_conflicts||[];
+  document.getElementById('last-arp').textContent=view.counts?.arp_last_scan_hosts??'—';
+  document.getElementById('known-arp').textContent=view.counts?.arp_hosts??'—';
   document.getElementById('ip-conflicts').textContent=conflicts.length;
-  document.getElementById('mdns-hosts').textContent=report.counts?.mdns_matched_devices??0;
-  document.getElementById('mdns-services').textContent=report.counts?.mdns_service_records??0;
-  document.getElementById('ssdp-hosts').textContent=report.counts?.ssdp_matched_devices??0;
-  document.getElementById('ssdp-services').textContent=report.counts?.ssdp_service_records??0;
+  document.getElementById('mdns-hosts').textContent=view.counts?.mdns_matched_devices??0;
+  document.getElementById('mdns-services').textContent=view.counts?.mdns_service_records??0;
+  document.getElementById('ssdp-hosts').textContent=view.counts?.ssdp_matched_devices??0;
+  document.getElementById('ssdp-services').textContent=view.counts?.ssdp_service_records??0;
   const summary=document.getElementById('ip-conflict-summary');
   // ARP versus a Wi-Fi router tracker is a source disagreement, not an alarm.
   const realConflicts=conflicts.filter(x=>x.resolution!=='arp_over_router'&&x.resolution!=='local_interface_over_other');
