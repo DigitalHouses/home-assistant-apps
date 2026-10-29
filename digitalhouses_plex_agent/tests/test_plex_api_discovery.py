@@ -47,6 +47,34 @@ class PlexApiDiscoveryTests(unittest.TestCase):
         status_topics = [item["topic"] for item in components["api_status"]["availability"]]
         self.assertNotIn(api_topic, status_topics)
 
+    def test_transcoding_ui_sensors_and_recorder_binaries(self):
+        config = self.config()
+        topics = build_topics(config)
+        components = build_discovery_payload(
+            config, BuildInfo("0.8.1", "test", "abcdef")
+        )["components"]
+        for kind in ("video", "audio"):
+            rich = components[f"{kind}_transcoding"]
+            binary = components[f"{kind}_transcoding_active"]
+            self.assertEqual(
+                rich["default_entity_id"],
+                f"sensor.dh_plex_agent_{kind}_transcoding",
+            )
+            self.assertEqual(
+                binary["default_entity_id"],
+                f"binary_sensor.dh_plex_agent_{kind}_transcoding_active",
+            )
+            self.assertIn("json_attributes_template", rich)
+            self.assertEqual(
+                rich["json_attributes_topic"],
+                topics.state + "/playback",
+            )
+            self.assertNotIn("json_attributes_topic", binary)
+            self.assertNotIn("json_attributes_template", binary)
+            self.assertIn("plex_api_availability", binary["availability"][1]["topic"])
+            self.assertIn("ON", binary["value_template"])
+            self.assertIn("OFF", binary["value_template"])
+
     def test_dynamic_library_entity_uses_section_id(self):
         libraries = (
             LibraryInfo("1", "Фильмы", "movie", "video", 15, "/movies", movies=15),
