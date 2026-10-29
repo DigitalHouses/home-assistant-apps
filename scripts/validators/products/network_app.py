@@ -25,14 +25,14 @@ def validate_network(root: Path, app: Path, context: dict) -> None:
             or config.get("map")
             or config.get("ports") or config.get("ports_description")):
         fail("Foundation preview cannot request host privileges or expose ports")
-    if context["version"] != "0.1.25":
+    if context["version"] != "0.1.26":
         fail("Network App pilot security policy requires review for every new version")
     if config.get("homeassistant_api") is not True:
         fail("Network App requires HA Core API via Supervisor proxy")
     if config.get("options", {}).get("poll_interval_seconds") != 60:
         fail("Network App default polling interval must be 60 seconds")
     if config.get("host_network") is not True or config.get("privileged") != ["NET_RAW"]:
-        fail("Network App 0.1.25 permits only host networking and NET_RAW for on-link ARP")
+        fail("Network App 0.1.26 permits only host networking and NET_RAW for on-link ARP")
     if config.get("options", {}).get("scan_interval_seconds") != 180:
         fail("LAN ARP interval must default to 180 seconds")
     if config.get("options", {}).get("mdns_interval_seconds") != 300:
@@ -68,6 +68,8 @@ def validate_network(root: Path, app: Path, context: dict) -> None:
         app / "cmd/dh-network/reset_test.go",
         app / "cmd/dh-network/diagnostics.go",
         app / "cmd/dh-network/ipv4_evidence.go",
+        app / "cmd/dh-network/retention.go",
+        app / "cmd/dh-network/retention_test.go",
         app / "cmd/dh-network/ipv4_evidence_test.go",
         app / "cmd/dh-network/diagnostics_test.go",
         app / "cmd/dh-network/lan_arp_linux.go",
