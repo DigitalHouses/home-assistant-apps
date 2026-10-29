@@ -18,7 +18,7 @@ func TestFreshStoreHasNoInventedDevicesOrEvents(t *testing.T) {
     events, err := db.events()
     if err != nil || len(events) != 0 { t.Fatalf("new database events=%v err=%v",events,err) }
     service := Service{db:db,version:"0.1.0",started:time.Now()}
-    if err:=db.initializeSettings(DiscoverySettings{60,180,300,300,300,2,3});err!=nil{t.Fatal(err)}
+    if err:=db.initializeSettings(DiscoverySettings{60,180,300,300,300,2,3,30,30});err!=nil{t.Fatal(err)}
     req := httptest.NewRequest(http.MethodGet,"/api/status",nil)
     req.RemoteAddr = "172.30.32.2:40000"
     rec := httptest.NewRecorder()
