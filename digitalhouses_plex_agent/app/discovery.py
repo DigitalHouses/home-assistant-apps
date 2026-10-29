@@ -133,6 +133,10 @@ def _route_grouped_components(
         "video_playback_active": "playback",
         "audio_playback_active": "playback",
         "hardware_transcode_active": "playback",
+        "video_transcoding": "playback",
+        "audio_transcoding": "playback",
+        "video_transcoding_active": "playback",
+        "audio_transcoding_active": "playback",
         "libraries": "libraries",
         "gpu_video": "gpu",
         "gpu_render": "gpu",
@@ -349,6 +353,35 @@ def build_discovery_payload(
         "audio_playback_active": binary(
             "audio_playback_active", "Plex audio playback active",
             "audio_playback_active", "mdi:music-circle",
+            collector=False, plex_api=True,
+        ),
+        "video_transcoding": sensor(
+            "video_transcoding", "Plex video transcoding",
+            "video_transcoding_state", collector=False, plex_api=True,
+            icon="mdi:video",
+            json_attributes_topic=topics.state,
+            json_attributes_template=(
+                "{{ dict(sessions=value_json.video_transcoding_sessions) | tojson }}"
+            ),
+        ),
+        "audio_transcoding": sensor(
+            "audio_transcoding", "Plex audio transcoding",
+            "audio_transcoding_state", collector=False, plex_api=True,
+            icon="mdi:waveform",
+            json_attributes_topic=topics.state,
+            json_attributes_template=(
+                "{{ dict(sessions=value_json.audio_transcoding_sessions) | tojson }}"
+            ),
+        ),
+        # Recorder-friendly: ON/OFF with no JSON attributes.
+        "video_transcoding_active": binary(
+            "video_transcoding_active", "Plex video transcoding active",
+            "video_transcoding_active", "mdi:video-check",
+            collector=False, plex_api=True,
+        ),
+        "audio_transcoding_active": binary(
+            "audio_transcoding_active", "Plex audio transcoding active",
+            "audio_transcoding_active", "mdi:music-note-eighth",
             collector=False, plex_api=True,
         ),
         "hardware_transcode_active": binary(
