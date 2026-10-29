@@ -6,6 +6,7 @@ inventory after initial install / Reset is suppressed, not replayed as alerts.
 """
 from __future__ import annotations
 
+from contextlib import closing
 import json
 import logging
 import os
@@ -251,7 +252,9 @@ def run_forever() -> None:
                 if not DB.exists():
                     time.sleep(POLL_INTERVAL_SECONDS)
                     continue
-                with sqlite3.connect(f"file:{DB}?mode=rw", uri=True, timeout=8) as conn:
+                # sqlite3.Connection's context manager commits but does NOT close.
+                # close explicitly so 4-second polling never accumulates handles.
+                with closing(sqlite3.connect(f"file:{DB}?mode=rw", uri=True, timeout=8)) as conn, conn:
                     births = suppress_initial_births(conn, pending_births(conn))
                     for row in births:
                         if (datetime.now(timezone.utc) - parse_utc(row["first_positive_at"])).total_seconds() < ENRICHMENT_DELAY_SECONDS:
