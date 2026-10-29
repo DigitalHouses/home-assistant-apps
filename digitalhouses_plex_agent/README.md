@@ -239,6 +239,10 @@ sensor.dh_plex_agent_playback_sessions
 binary_sensor.dh_plex_agent_playback_active
 binary_sensor.dh_plex_agent_video_playback_active
 binary_sensor.dh_plex_agent_audio_playback_active
+sensor.dh_plex_agent_video_transcoding
+sensor.dh_plex_agent_audio_transcoding
+binary_sensor.dh_plex_agent_video_transcoding_active
+binary_sensor.dh_plex_agent_audio_transcoding_active
 sensor.dh_plex_agent_playback_started_at
 sensor.dh_plex_agent_libraries
 sensor.dh_plex_agent_library_<section_id>
@@ -278,6 +282,10 @@ button.dh_plex_agent_refresh
 Plex Agent collects Intel GPU engine telemetry locally on the same Linux host/VM as Plex. It does not require DH PVE or the Proxmox API. On supported Intel DRM/i915 systems it exposes Video, Render/3D, Video Enhance, actual GPU frequency and RC6 residency from `intel_gpu_top`.
 
 GPU temperature is published only when Linux exposes a real hwmon sensor attached to the GPU. CPU/SoC temperature is never relabeled as GPU temperature. On systems such as the current Alder Lake-N Plex VM, GPU load can be available while GPU temperature remains unavailable.
+
+The separate video/audio transcoding entities use Plex session stream decisions, not the existence of a transcoder process or GPU activity. Video subtitle burn-in counts as video transcoding; an audio-only AC3-to-AAC conversion leaves the video flag OFF even when Plex uses a Direct Stream session. Flags are ON if any session transcodes the respective stream. When Plex API is unavailable, both binaries become unavailable, not OFF.
+
+`sensor.dh_plex_agent_video_transcoding` and `sensor.dh_plex_agent_audio_transcoding` provide UI-oriented mode states (Idle / Direct Play / Direct Stream / Transcoding / Unknown) and per-session details (title, user, source/target codec where reported by Plex). **Do not record these rich UI sensors**. The corresponding `binary_sensor.dh_plex_agent_{video,audio}_transcoding_active` entities carry only ON/OFF, with no JSON attributes, and are suitable for Recorder history. An example HA package is at `examples/packages/dh_plex_agent_recorder_package.yaml`; merge its Recorder include/exclude rules with the site's existing policy instead of replacing other Recorder settings.
 
 `binary_sensor.dh_plex_agent_hardware_transcode_active` comes from Plex playback-session semantics; the GPU sensors independently show measured hardware activity.
 
