@@ -14,7 +14,7 @@ Performance:
 - IPv4 reconciliation changes only device rows with an actual address change; no more blank-all/restore-all SQL writes.
 - Regular Ingress updates use one `/api/ui-inventory` snapshot in place of five per-section full snapshots and an unconditional diagnostic export. Dedicated `/api/diagnostics` remains available on demand.
 - Old numeric event caps and per-scan/per-4s journal cleanup are removed; time-based retention is the canonical history policy.
-- Pure router/ARP source disagreements remain in current diagnostics but no longer fill the event journal; genuine conflicting IP evidence remains reportable.
+- Router/ARP source disagreements retain existing event behavior; historical cleanup is separated from scan-time reconciliation.
 
 ## Product identity
 
