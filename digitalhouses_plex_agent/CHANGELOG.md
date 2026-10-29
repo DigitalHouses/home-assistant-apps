@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.8.2
+
+- Add separate audio and video transcoding status sensors for Home Assistant UI, using Plex per-stream decisions and compact per-session details; distinguish Direct Play, Direct Stream, and Transcoding.
+- Add attribute-free audio/video transcoding binary sensors (ON/OFF) for clean Recorder history. Preserve unavailable state on Plex API failure instead of reporting false OFF.
+- Correctly classify audio-only transcodes without marking the video stream as transcoding, count subtitle burn-in as video transcoding, and aggregate across concurrent sessions.
+- Provide an optional HAOS Recorder package example that records only the two binary flags and excludes the rich UI sensors; merge it with the site's existing Recorder configuration.
+- Keep existing MQTT identifiers, dashboards, playback summaries, GPU metrics, and installation paths unchanged. No migration required.
+
 ## 0.8.1
 
 - Restore GPU telemetry on Debian 13 and recent `intel_gpu_top` versions by parsing streamed bracketed JSON, including incomplete trailing samples.
