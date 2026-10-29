@@ -1,11 +1,5 @@
 package main
 
-/*
-#cgo pkg-config: sqlite3
-#include <sqlite3.h>
-*/
-import "C"
-
 import (
     "path/filepath"
     "testing"
@@ -74,16 +68,20 @@ func TestRetentionPrunesOldHistoryAndUnprotectedAbsentDevices(t *testing.T) {
     if present["purge"]||!present["note"]||!present["watch_mac"]||!present["watch_ip"]||!present["ha_guard"] {
         t.Fatalf("unsafe device purge: %+v",present)
     }
-    for _,table:=range []string{"identities","device_births","observations"} {
-        n:=0
-        _,err=db.prepared("SELECT COUNT(*) FROM "+table+" WHERE device_id='purge'",nil,
-            func(s *C.sqlite3_stmt){n=int(C.sqlite3_column_int(s,0))})
-        if err!=nil||n!=0{t.Fatalf("orphan %s rows=%d err=%v",table,n,err)}
+    snapshot,err:=db.snapshot()
+    if err!=nil{t.Fatal(err)}
+    for _,record:=range snapshot.IdentityHistory{
+        if record.DeviceID=="purge"{t.Fatal("orphan retained identity")}
     }
-    n:=0
-    _,err=db.prepared("SELECT COUNT(*) FROM event_delivery_log WHERE event_id IN ('pending','old-acked')",nil,
-        func(s *C.sqlite3_stmt){n=int(C.sqlite3_column_int(s,0))})
-    if err!=nil||n!=1{t.Fatalf("retention of pending MQTT failed %d %v",n,err)}
+    for _,record:=range snapshot.Events{
+        if record.EventType=="old"{t.Fatal("old history not pruned")}
+    }
+    obs,err:=db.inventoryRecordCount("observations")
+    if err!=nil||obs!=0{t.Fatalf("old observations retained %d %v",obs,err)}
+    deliveries,err:=db.deliveryEvents()
+    if err!=nil||len(deliveries)!=1||deliveries[0].EventID!="pending"{
+        t.Fatalf("pending delivery must survive: %+v %v",deliveries,err)
+    }
     // With HA healthy, the old HA-linked device becomes eligible too.
     if err=db.run("INSERT INTO sources(id,kind,status,last_success) VALUES('HA','ha_device_tracker','ok',?)",fresh);err!=nil{t.Fatal(err)}
     _,removed,err=db.maintainRetention(now)
@@ -107,15 +105,11 @@ func TestReconcileIPv4NoUnchangedDeviceWrites(t *testing.T){
     defer db.Close()
     at:="2026-10-29T18:00:00Z"
     if err=db.importARPHosts([]LANHost{{MAC:"02:AA:BB:CC:DD:77",IPv4:"192.168.11.77"}},at,"enp6s18","192.168.11.0/24");err!=nil{t.Fatal(err)}
-    if err=db.exec(`CREATE TABLE ipv4_write_count(n INTEGER NOT NULL);
-        INSERT INTO ipv4_write_count VALUES(0);
-        CREATE TRIGGER count_ip_updates AFTER UPDATE OF ipv4 ON devices
-        BEGIN UPDATE ipv4_write_count SET n=n+1; END;`);err!=nil{t.Fatal(err)}
+    if err=db.exec(`CREATE TRIGGER abort_redundant_ip BEFORE UPDATE OF ipv4 ON devices
+      WHEN NEW.ipv4=OLD.ipv4 BEGIN SELECT RAISE(ABORT,'redundant IPv4 write'); END;`);err!=nil{t.Fatal(err)}
     db.mu.Lock()
     _,err=db.reconcileIPv4Locked(at)
     db.mu.Unlock()
-    if err!=nil{t.Fatal(err)}
-    writes:=0
-    err=db.query("SELECT n FROM ipv4_write_count",func(s *C.sqlite3_stmt){writes=int(C.sqlite3_column_int(s,0))})
-    if err!=nil||writes!=0{t.Fatalf("unchanged mapping rewrote %d rows: %v",writes,err)}
+    if err!=nil{t.Fatalf("unchanged IPv4 mapping caused redundant write: %v",err)}
+
 }
