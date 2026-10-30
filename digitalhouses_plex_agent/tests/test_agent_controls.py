@@ -215,3 +215,23 @@ def test_problem_card_ui_has_gpu_fault_without_losing_update_controls():
         assert "button.dh_plex_agent_restart_agent" in content
     assert "sensor.dh_plex_agent_gpu_driver_status" in dashboard
     assert "Драйвер" in dashboard
+
+
+def test_approved_pve_style_problem_card_precedes_controls_in_both_examples():
+    root = Path(__file__).resolve().parents[1]
+    dashboard = (root / "examples/lovelace/plex-dashboard.yaml").read_text()
+    standalone = (root / "examples/lovelace/plex_agent_card_ru.yaml").read_text()
+    for yaml in (dashboard, standalone):
+        problem = yaml.index("entity: sensor.dh_plex_agent_card")
+        button = yaml.index("type: custom:button-card")
+        assert problem < button, "PVE-style problem card must appear before controls"
+        assert "Обнаружено проблем: 1" in yaml
+        assert "Проблем не обнаружено" in yaml
+        assert "state_attr(entity, 'problem_message')" in yaml
+        assert "mdi:alert-circle" in yaml
+        assert "mdi:check-circle" in yaml
+    assert "title: Intel GPU · Диагностика" in dashboard
+    assert "type: entities" in dashboard
+    assert "entity: sensor.dh_plex_agent_gpu_driver_status" in dashboard
+    assert "entity: sensor.dh_plex_agent_gpu_status" in dashboard
+    assert "primary: Intel GPU · состояние" not in dashboard
