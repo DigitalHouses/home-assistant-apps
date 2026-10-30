@@ -89,8 +89,16 @@ def _transition(previous: Mapping[str, object] | None,
 
 def _event(event_type: str, previous: Mapping[str, object] | None,
            current: Mapping[str, object], observed_at: str) -> dict[str, object]:
-    is_recovery = event_type in {"gpu_restored", "gpu_driver_restored"}
+    is_recovery = event_type in {"gpu_restored", "gpu_driver_restored", "gpu_driver_changed"}
+    messages = {
+        "gpu_unavailable": "Intel GPU: ошибка работы",
+        "gpu_restored": "Intel GPU: работа восстановлена",
+        "gpu_driver_unbound": "Intel GPU: драйвер отключён",
+        "gpu_driver_restored": "Intel GPU: драйвер снова подключён",
+        "gpu_driver_changed": "Intel GPU: драйвер изменён",
+    }
     return {
+        "summary": messages[event_type],
         "schema_version": 2,
         "event_id": str(uuid4()),
         "event_type": event_type,
