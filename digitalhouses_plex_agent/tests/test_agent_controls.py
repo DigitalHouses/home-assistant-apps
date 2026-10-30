@@ -230,8 +230,8 @@ def test_approved_pve_style_problem_card_precedes_controls_in_both_examples():
         assert "state_attr(entity, 'problem_message')" in yaml
         assert "mdi:alert-circle" in yaml
         assert "mdi:check-circle" in yaml
-    assert "title: Intel GPU · Диагностика" in dashboard
-    assert "type: entities" in dashboard
+    assert "primary: Intel GPU · Драйвер" in dashboard
+    assert "primary: Intel GPU · Работа" in dashboard
     assert "entity: sensor.dh_plex_agent_gpu_driver_status" in dashboard
     assert "entity: sensor.dh_plex_agent_gpu_status" in dashboard
-    assert "primary: Intel GPU · состояние" not in dashboard
+    assert "type: custom:mushroom-template-card" in dashboard

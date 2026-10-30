@@ -609,30 +609,74 @@ sections:
               - type: trend-graph
                 hours_to_show: 3
                 detail: true
-      - type: entities
-        title: Intel GPU · Диагностика
-        show_header_toggle: false
-        state_color: true
-        entities:
-          - type: attribute
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: custom:mushroom-template-card
             entity: sensor.dh_plex_agent_gpu_driver_status
-            attribute: pci_address
-            name: Устройство · PCI
-            icon: mdi:expansion-card
-          - type: attribute
-            entity: sensor.dh_plex_agent_gpu_driver_status
-            attribute: driver_name
-            name: Драйвер ядра
+            primary: Intel GPU · Драйвер
+            secondary: >-
+              {% set status = states(entity) %}
+              {% set driver = state_attr(entity, 'driver_name') %}
+              {% set pci = state_attr(entity, 'pci_address') %}
+              {% if status == 'bound' %}
+                {{ driver or 'Драйвер неизвестен' }} · подключён{% if pci %} · PCI {{ pci }}{% endif %}
+              {% elif status == 'not_bound' %}
+                Не подключён{% if pci %} · PCI {{ pci }}{% endif %}
+              {% elif status == 'not_detected' %}
+                Intel GPU не обнаружен
+              {% else %}
+                Нет данных о драйвере
+              {% endif %}
             icon: mdi:chip
-          - entity: sensor.dh_plex_agent_gpu_driver_status
-            name: Привязка драйвера
-          - entity: sensor.dh_plex_agent_gpu_status
-            name: Работа GPU
-          - type: attribute
+            icon_color: >-
+              {% set status = states(entity) %}
+              {% if status == 'bound' %}
+                green
+              {% elif status == 'not_bound' %}
+                red
+              {% else %}
+                grey
+              {% endif %}
+            multiline_secondary: true
+            tap_action:
+              action: more-info
+          - type: custom:mushroom-template-card
             entity: sensor.dh_plex_agent_gpu_status
-            attribute: available
-            name: GPU-метрики доступны
-            icon: mdi:chart-line
+            primary: Intel GPU · Работа
+            secondary: >-
+              {% set status = states(entity) %}
+              {% set available = state_attr(entity, 'available') %}
+              {% set labels = {
+                'ok': 'Работает',
+                'error': 'Ошибка работы',
+                'tool_missing': 'Отсутствует intel_gpu_top',
+                'helper_unavailable': 'GPU Helper недоступен',
+                'helper_error': 'Ошибка GPU Helper',
+                'stale': 'Данные устарели',
+                'starting': 'Инициализация',
+                'unsupported': 'Не поддерживается'
+              } %}
+              {{ labels.get(status, 'Нет данных') }}
+              {% if available is sameas true %} · метрики доступны
+              {% elif available is sameas false and status != 'unsupported' %} · метрики недоступны
+              {% endif %}
+            icon: mdi:expansion-card
+            icon_color: >-
+              {% set status = states(entity) %}
+              {% if status == 'ok' %}
+                green
+              {% elif status in ['error', 'helper_error'] %}
+                red
+              {% elif status in ['tool_missing', 'helper_unavailable', 'stale'] %}
+                orange
+              {% else %}
+                grey
+              {% endif %}
+            multiline_secondary: true
+            tap_action:
+              action: more-info
         grid_options:
           columns: 12
       - type: logbook
