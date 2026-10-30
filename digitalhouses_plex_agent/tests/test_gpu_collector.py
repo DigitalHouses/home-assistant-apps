@@ -4,6 +4,8 @@ from unittest.mock import patch
 
 from app.gpu_collector import (
     GpuStateReader,
+    gpu_driver_info,
+    gpu_operational_problem,
     IntelGpuCollector,
     parse_intel_gpu_top_json,
     read_gpu_temperature,
@@ -235,3 +237,38 @@ def test_gpu_reader_rejects_missing_available_or_status():
         assert payload["status"] == "helper_error"
         assert payload["supported"] is True
         assert payload["available"] is False
+
+
+def test_driver_bound_is_not_equivalent_to_gpu_operational():
+    with TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        pci = root / "bus/pci/devices/0000:01:00.0"
+        pci.mkdir(parents=True)
+        driver = root / "bus/pci/drivers/i915"
+        driver.mkdir(parents=True)
+        (pci / "driver").symlink_to(driver)
+
+        info = gpu_driver_info("0000:01:00.0", sys_root=root)
+        assert info == {"driver_status": "bound", "driver_name": "i915"}
+        broken = {"supported": True, "available": False, "status": "error", **info}
+        assert gpu_operational_problem(broken) == (
+            "gpu_error", "Intel GPU: ошибка работы"
+        )
+        recovered = {**broken, "available": True, "status": "ok"}
+        assert gpu_operational_problem(recovered) == (None, None)
+
+        (pci / "driver").unlink()
+        assert gpu_driver_info("0000:01:00.0", sys_root=root)["driver_status"] == "not_bound"
+        unbound = {**broken, "driver_status": "not_bound"}
+        assert gpu_operational_problem(unbound)[0] == "gpu_driver_unbound"
+
+
+def test_missing_intel_gpu_does_not_create_a_card_problem():
+    assert gpu_driver_info(None)["driver_status"] == "not_detected"
+    assert gpu_operational_problem(
+        {"supported": False, "available": False, "status": "unsupported"}
+    ) == (None, None)
+    assert gpu_operational_problem(
+        {"supported": True, "available": False, "status": "tool_missing",
+         "driver_status": "bound"}
+    ) == ("gpu_tool_missing", "Intel GPU: отсутствует intel_gpu_top")
