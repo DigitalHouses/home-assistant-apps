@@ -614,10 +614,25 @@ sections:
         show_header_toggle: false
         state_color: true
         entities:
+          - type: attribute
+            entity: sensor.dh_plex_agent_gpu_driver_status
+            attribute: pci_address
+            name: Устройство · PCI
+            icon: mdi:expansion-card
+          - type: attribute
+            entity: sensor.dh_plex_agent_gpu_driver_status
+            attribute: driver_name
+            name: Драйвер ядра
+            icon: mdi:chip
           - entity: sensor.dh_plex_agent_gpu_driver_status
-            name: Драйвер GPU
+            name: Привязка драйвера
           - entity: sensor.dh_plex_agent_gpu_status
-            name: Состояние GPU
+            name: Работа GPU
+          - type: attribute
+            entity: sensor.dh_plex_agent_gpu_status
+            attribute: available
+            name: GPU-метрики доступны
+            icon: mdi:chart-line
         grid_options:
           columns: 12
       - type: logbook
