@@ -25,19 +25,29 @@ class DashboardPlexApiContractTests(unittest.TestCase):
         self.assertIn("s.get('video_codec')", DASHBOARD)
 
 
-    def test_intel_gpu_diagnostics_use_native_entities_and_report_driver_details(self):
-        section = DASHBOARD.split("title: Intel GPU · Диагностика", 1)[1].split(
+    def test_gpu_diagnostics_use_approved_mushroom_templates(self):
+        section = DASHBOARD.split("primary: Intel GPU · Драйвер", 1)[1].split(
             "      - type: logbook", 1
         )[0]
-        self.assertIn("type: entities", DASHBOARD.split(
-            "title: Intel GPU · Диагностика", 1
-        )[0][-40:])
-        self.assertIn("attribute: pci_address", section)
-        self.assertIn("attribute: driver_name", section)
-        self.assertIn("attribute: available", section)
-        self.assertIn("sensor.dh_plex_agent_gpu_driver_status", section)
-        self.assertIn("sensor.dh_plex_agent_gpu_status", section)
-        self.assertNotIn("custom:mushroom-template-card", section)
+        # Two independent Mushroom cards retain Plex Agent's canonical
+        # stream of truth: bound kernel driver != operational GPU.
+        self.assertEqual(section.count("type: custom:mushroom-template-card"), 1)
+        self.assertIn("primary: Intel GPU · Работа", section)
+        self.assertIn("entity: sensor.dh_plex_agent_gpu_status", section)
+        self.assertIn("driver_name", section)
+        self.assertIn("pci_address", section)
+        self.assertIn("state_attr(entity, 'available')", section)
+        self.assertIn("status == 'bound'", section)
+        self.assertIn("status == 'ok'", section)
+        self.assertIn("status in ['error', 'helper_error']", section)
+        self.assertIn("multiline_secondary: true", section)
+        self.assertNotIn("type: attribute", section)
+        self.assertNotIn("type: entities", section)
+        self.assertIn(
+            "type: custom:mushroom-template-card\n"
+            "            entity: sensor.dh_plex_agent_gpu_driver_status",
+            DASHBOARD,
+        )
 
 
 if __name__ == "__main__":
