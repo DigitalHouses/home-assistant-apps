@@ -10,6 +10,51 @@ sections:
         heading: Plex Media Server
         heading_style: title
         icon: mdi:plex
+      - type: custom:mushroom-template-card
+        entity: sensor.dh_plex_agent_card
+        primary: |-
+          {% set s = states(entity) %}
+          {% set issue = state_attr(entity, 'problem_code') %}
+          {% if s in ['unknown', 'unavailable', 'none', ''] or 'problem_code' not in states[entity].attributes %}
+            Нет данных о проблемах
+          {% elif issue %}
+            Обнаружено проблем: 1
+          {% else %}
+            Проблем не обнаружено
+          {% endif %}
+        secondary: |-
+          {% set s = states(entity) %}
+          {% set issue = state_attr(entity, 'problem_code') %}
+          {% if s in ['unknown', 'unavailable', 'none', ''] or 'problem_code' not in states[entity].attributes %}
+            Состояние мониторинга недоступно.
+          {% elif issue %}
+            • {{ state_attr(entity, 'problem_message') or 'Intel GPU — требуется диагностика' }}
+          {% else %}
+            Система работает штатно.
+          {% endif %}
+        icon: |-
+          {% set s = states(entity) %}
+          {% if s in ['unknown', 'unavailable', 'none', ''] or 'problem_code' not in states[entity].attributes %}
+            mdi:help-circle-outline
+          {% elif state_attr(entity, 'problem_code') %}
+            mdi:alert-circle
+          {% else %}
+            mdi:check-circle
+          {% endif %}
+        icon_color: |-
+          {% set s = states(entity) %}
+          {% if s in ['unknown', 'unavailable', 'none', ''] or 'problem_code' not in states[entity].attributes %}
+            grey
+          {% elif state_attr(entity, 'problem_code') %}
+            red
+          {% else %}
+            green
+          {% endif %}
+        multiline_secondary: true
+        tap_action:
+          action: more-info
+        grid_options:
+          columns: 12
       - type: vertical-stack
         cards:
           - type: custom:button-card
@@ -38,7 +83,7 @@ sections:
                   && this._dh_plex_timer?.operation === 'restart';
                 return s === 'running' || awaitingRestart ? 'mdi:progress-clock'
                   : s === 'error' ? 'mdi:alert-circle'
-          : s === 'problem' ? 'mdi:alert-circle-outline'
+                  : s === 'problem' ? 'mdi:alert-circle-outline'
                   : s === 'success' ? 'mdi:check-circle'
                   : upgrade ? 'mdi:package-up'
                   : 'mdi:robot-outline';
@@ -564,47 +609,17 @@ sections:
               - type: trend-graph
                 hours_to_show: 3
                 detail: true
-      - type: custom:mushroom-template-card
-        entity: sensor.dh_plex_agent_gpu_driver_status
-        primary: Intel GPU · состояние
-        secondary: >-
-          {% set driver = state_attr('sensor.dh_plex_agent_gpu_driver_status', 'driver_name') %}
-          {% set binding = states('sensor.dh_plex_agent_gpu_driver_status') %}
-          {% set gpu = states('sensor.dh_plex_agent_gpu_status') %}
-          {% set names = {
-            'ok': 'работает',
-            'error': 'ошибка работы',
-            'tool_missing': 'нет intel_gpu_top',
-            'helper_unavailable': 'GPU Helper недоступен',
-            'helper_error': 'ошибка GPU Helper',
-            'stale': 'данные устарели',
-            'unsupported': 'не обнаружен'
-          } %}
-          {% if binding == 'bound' %}
-            Драйвер {{ driver or 'неизвестен' }}: подключён · GPU: {{ names.get(gpu, 'нет данных') }}
-          {% elif binding == 'not_bound' %}
-            Драйвер не подключён · GPU: недоступен
-          {% elif binding == 'not_detected' %}
-            Intel GPU не обнаружен
-          {% else %}
-            Драйвер: неизвестно · GPU: {{ names.get(gpu, 'нет данных') }}
-          {% endif %}
-        icon: mdi:chip
-        icon_color: >-
-          {% set binding = states('sensor.dh_plex_agent_gpu_driver_status') %}
-          {% set gpu = states('sensor.dh_plex_agent_gpu_status') %}
-          {% if binding == 'bound' and gpu == 'ok' %}
-            green
-          {% elif binding == 'not_detected' %}
-            grey
-          {% else %}
-            orange
-          {% endif %}
-        tap_action:
-          action: more-info
+      - type: entities
+        title: Intel GPU · Диагностика
+        show_header_toggle: false
+        state_color: true
+        entities:
+          - entity: sensor.dh_plex_agent_gpu_driver_status
+            name: Драйвер GPU
+          - entity: sensor.dh_plex_agent_gpu_status
+            name: Состояние GPU
         grid_options:
           columns: 12
-          rows: 1
       - type: logbook
         title: Plex Activity History (24 hr)
         hours_to_show: 24
