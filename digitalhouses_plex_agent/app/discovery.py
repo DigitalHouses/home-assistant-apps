@@ -145,6 +145,7 @@ def _route_grouped_components(
         "gpu_temperature": "gpu",
         "gpu_rc6": "gpu",
         "gpu_status": "gpu",
+        "gpu_driver_status": "gpu",
         "process_count": "diagnostics",
         "collector_status": "diagnostics",
         "api_status": "diagnostics",
@@ -523,6 +524,23 @@ def build_discovery_payload(
         ),
     )
 
+    components["gpu_driver_status"] = _component(
+        platform="sensor",
+        name="GPU driver status",
+        key=uid("gpu_driver_status"),
+        entity_id=f"sensor.{prefix}_gpu_driver_status",
+        state_topic=gpu_topic,
+        value_template="{{ value_json.driver_status | default('unknown') }}",
+        app_availability=topics.app_availability,
+        diagnostic=True,
+        icon="mdi:chip",
+        json_attributes_topic=gpu_topic,
+        json_attributes_template=(
+            "{{ dict(driver_name=value_json.driver_name | default(none), "
+            "pci_address=value_json.pci_address | default(none)) | tojson }}"
+        ),
+    )
+
     components["last_boot"] = _component(
         platform="sensor",
         name="Last boot",
@@ -637,6 +655,8 @@ def build_discovery_payload(
             "{{ dict(operation=value_json.operation, "
             "started_at=value_json.started_at, finished_at=value_json.finished_at, "
             "duration_seconds=value_json.duration_seconds, error=value_json.error, "
+            "problem_code=value_json.problem_code | default(none), "
+            "problem_message=value_json.problem_message | default(none), "
             "last_collection_at=value_json.last_collection_at) | tojson }}"
         ),
         "availability": [_availability(topics.app_availability)],
