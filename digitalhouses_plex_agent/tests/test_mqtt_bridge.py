@@ -121,5 +121,41 @@ class MqttBridgeControlTests(unittest.TestCase):
             event.clear()
 
 
+
+class GpuDiagnosticMqttEventTests(unittest.TestCase):
+    def test_nonretained_qos1_event_published_only_when_connected(self):
+        bridge = MqttBridge.__new__(MqttBridge)
+        bridge.client = FakeClient()
+        bridge.topics = SimpleNamespace(diagnostic_event="plex/events/diagnostic")
+        bridge.connected = threading.Event()
+        payload = {
+            "schema_version": 2,
+            "event_type": "gpu_unavailable",
+            "gpu_status": "error",
+            "driver_name": "i915",
+        }
+        self.assertFalse(bridge.publish_diagnostic_event(payload))
+        self.assertEqual(bridge.client.calls, [])
+        bridge.connected.set()
+        self.assertTrue(bridge.publish_diagnostic_event(payload))
+        topic, raw, qos, retained = bridge.client.calls[-1]
+        self.assertEqual(topic, "plex/events/diagnostic")
+        self.assertEqual(qos, 1)
+        self.assertFalse(retained)
+        self.assertEqual(__import__("json").loads(raw), payload)
+
+    def test_mqtt_error_does_not_acknowledge_diagnostic_event(self):
+        bridge = MqttBridge.__new__(MqttBridge)
+        bridge.topics = SimpleNamespace(diagnostic_event="plex/events/diagnostic")
+        bridge.connected = threading.Event()
+        bridge.connected.set()
+        client = FakeClient()
+        client.publish = lambda *args, **kwargs: SimpleNamespace(rc=4)
+        bridge.client = client
+        self.assertFalse(bridge.publish_diagnostic_event({
+            "event_type": "gpu_unavailable"
+        }))
+
+
 if __name__ == "__main__":
     unittest.main()
