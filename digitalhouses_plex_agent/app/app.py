@@ -18,7 +18,7 @@ from .api_runtime import PlexApiRuntime
 from .build_info import load_build_info
 from .config import AppConfig, load_config
 from .discovery import build_discovery_payload, build_topics
-from .gpu_collector import GpuStateReader
+from .gpu_collector import GpuStateReader, gpu_driver_info, gpu_operational_problem
 from .metrics import RollingCpuMetrics, group_current_cpu
 from .migration_cleanup import cleanup_legacy_mqtt_namespace
 from .models import (
@@ -352,6 +352,9 @@ def run(config: AppConfig) -> int:
                     )
 
                 gpu_payload = gpu_collector.collect()
+                gpu_payload.update(gpu_driver_info(gpu_payload.get("pci_address")))
+                problem_code, problem_message = gpu_operational_problem(gpu_payload)
+                card.set_problem(problem_code, problem_message)
 
                 scanner_finished = bool(
                     previous_scanner_running
