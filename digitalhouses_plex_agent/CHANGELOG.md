@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.8.4
+
+- Add a standalone Intel GPU diagnostic card showing the PCI-bound driver (for example i915) separately from whether GPU telemetry and hardware engines actually work. A bound driver no longer falsely implies a healthy GPU.
+- Expose `sensor.dh_plex_agent_gpu_driver_status` with binding state and driver name via the existing GPU MQTT group, preserving the existing `sensor.dh_plex_agent_gpu_status` telemetry.
+- Show persistent `problem` on the unified Plex Agent card when an expected Intel GPU is unavailable, with the reason. Foreground update/refresh/restart controls continue to take priority; automatically recover to idle when GPU telemetry works.
+- Machines without Intel GPU do not trigger the problem state. No GPU driver, VM, video playback, or Recorder settings are changed.
+- Add tests for a bound-but-failed GPU, missing driver, recovery, card lifecycle, grouped GPU MQTT publication, and canonical Home Assistant UI examples.
+
 ## 0.8.3
 
 - Fix the 0.8.2 regression where MQTT Discovery exposed separate Audio/Video Transcoding sensors but the grouped playback publisher omitted their values, leaving Home Assistant tiles blank.
