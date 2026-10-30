@@ -1,8 +1,53 @@
 # DigitalHouses Plex Agent · compact unified card
 # Requires Mushroom and custom:button-card >= 5.0 for update_timer.
-# Place at the top of the Plex dashboard.
+# Place at the top of the Plex dashboard; matches PVE problems-before-controls layout.
 type: vertical-stack
 cards:
+  - type: custom:mushroom-template-card
+    entity: sensor.dh_plex_agent_card
+    primary: |-
+      {% set s = states(entity) %}
+      {% set issue = state_attr(entity, 'problem_code') %}
+      {% if s in ['unknown', 'unavailable', 'none', ''] %}
+        Нет данных о проблемах
+      {% elif issue %}
+        Обнаружено проблем: 1
+      {% else %}
+        Проблем не обнаружено
+      {% endif %}
+    secondary: |-
+      {% set s = states(entity) %}
+      {% set issue = state_attr(entity, 'problem_code') %}
+      {% if s in ['unknown', 'unavailable', 'none', ''] %}
+        Состояние мониторинга недоступно.
+      {% elif issue %}
+        • {{ state_attr(entity, 'problem_message') or 'Intel GPU — требуется диагностика' }}
+      {% else %}
+        Система работает штатно.
+      {% endif %}
+    icon: |-
+      {% set s = states(entity) %}
+      {% if s in ['unknown', 'unavailable', 'none', ''] %}
+        mdi:help-circle-outline
+      {% elif state_attr(entity, 'problem_code') %}
+        mdi:alert-circle
+      {% else %}
+        mdi:check-circle
+      {% endif %}
+    icon_color: |-
+      {% set s = states(entity) %}
+      {% if s in ['unknown', 'unavailable', 'none', ''] %}
+        grey
+      {% elif state_attr(entity, 'problem_code') %}
+        red
+      {% else %}
+        green
+      {% endif %}
+    multiline_secondary: true
+    tap_action:
+      action: more-info
+    grid_options:
+      columns: 12
   - type: custom:button-card
     entity: sensor.dh_plex_agent_card
     triggers_update:
