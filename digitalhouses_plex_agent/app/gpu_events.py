@@ -44,10 +44,12 @@ def _classification(payload: Mapping[str, object]) -> dict[str, object] | None:
     status = payload.get("status")
     if status in {"starting", "unknown", "unsupported", None}:
         return None
-    if status == "ok" and payload.get("available") is True:
+    if driver == "not_bound":
+        health = "fault"
+    elif status == "ok" and payload.get("available") is True:
         health = "ok"
     elif status in {"error", "stale", "tool_missing", "helper_unavailable",
-                    "helper_error"} or driver == "not_bound":
+                    "helper_error"}:
         health = "fault"
     else:
         return None
