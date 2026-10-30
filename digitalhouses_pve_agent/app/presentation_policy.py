@@ -154,7 +154,6 @@ def gpu_profile_selector() -> ResourceProfileSelector:
     return ResourceProfileSelector(
         (
             ThresholdRule("temperature", 300.0, 75.0),
-            ThresholdRule("load", 300.0, 20.0),
         )
     )
 

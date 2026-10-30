@@ -64,7 +64,6 @@ def _inventory():
                 "pci_address": "0000:00:02.0",
                 "owner": "VM 501",
                 "temperature_c": 52.0,
-                "transcoding_load_percent": 25.0,
             }
         },
         "fans": {

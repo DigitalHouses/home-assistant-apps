@@ -51,7 +51,7 @@ def _inventory():
                 "kernel_driver": "vfio-pci", "owner": "VM 501",
                 "connection": "passthrough_pci", "source_type": "vm",
                 "source_id": "501", "source_name": "plex-vm",
-                "temperature_c": None, "transcoding_load_percent": 33.2,
+                "temperature_c": None,
             }
         },
         "fans": {
@@ -185,7 +185,7 @@ def test_nvme_entities_are_compact_and_history_friendly():
 def test_dynamic_gpu_and_fan_entities_are_stable():
     c = build_full_discovery_payload(_config(), _identity(), version="0.1.0", inventory=_inventory())["components"]
     assert c["gpu_pci_0000_00_02_0_owner"]["default_entity_id"] == "sensor.dh_pve_agent_gpu_pci_0000_00_02_0_owner"
-    assert c["gpu_pci_0000_00_02_0_transcoding"]["unit_of_measurement"] == "%"
+    assert "gpu_pci_0000_00_02_0_transcoding" not in c
     assert c["fan_nct6798_isa_0290_fan1_rpm"]["unit_of_measurement"] == "rpm"
 
 

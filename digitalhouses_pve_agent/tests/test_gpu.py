@@ -4,10 +4,8 @@ from app.collectors.gpu import (
     GpuOwner,
     GuestInfo,
     build_gpu_snapshots,
-    parse_intel_gpu_top_json,
     parse_lspci_gpus,
     parse_lxc_gpu_owners,
-    parse_qemu_guest_exec_transcoding,
     parse_vm_gpu_owners,
     read_dri_pci_map,
     read_gpu_temperature,
@@ -71,72 +69,6 @@ def test_no_gpu_is_valid_empty_inventory():
     assert parse_lspci_gpus((FIX / "no_gpu_lspci.txt").read_text()) == ()
 
 
-def test_intel_gpu_top_ignores_short_first_sample_and_uses_peak_video_busy():
-    metrics = parse_intel_gpu_top_json((FIX / "intel_gpu_top.jsonstream").read_text())
-    assert metrics["supported"] is True
-    assert metrics["available"] is True
-    assert metrics["transcoding_load_percent"] == 71.3
-    assert metrics["video_busy_percent"] == 71.3
-    assert metrics["render_busy_percent"] == 18.0
-    assert metrics["video_enhance_busy_percent"] == 10.0
-    assert metrics["rc6_percent"] == 25.6
-    assert metrics["sample_count"] == 2
-
-
-
-def test_alder_lake_n_qga_stream_survives_incomplete_intel_gpu_top_array():
-    import json
-
-    # Real VM2238 outputs an opening '[' but timeout removes the closing ']'.
-    # Engines are "Video"/"VideoEnhance" rather than "Video/0".
-    def sample(duration, video, enhancement):
-        return {
-            "period": {"duration": duration},
-            "engines": {
-                "Video": {"busy": video},
-                "VideoEnhance": {"busy": enhancement},
-                "Render/3D": {"busy": 4.6},
-            },
-            "rc6": {"value": 25.0},
-        }
-
-    chunks = [
-        sample(17.5, 88.8, 10.0),  # first partial / warmup sample
-        sample(1014.2, 47.3, 12.5),
-        sample(1016.9, 23.7, 7.0),
-    ]
-    raw = "[" + chr(10) + ("," + chr(10)).join(json.dumps(x) for x in chunks)
-    metrics = parse_intel_gpu_top_json(raw)
-    assert metrics["sample_count"] == 2
-    assert metrics["transcoding_load_percent"] == 47.3
-    assert metrics["video_enhance_busy_percent"] == 12.5
-    assert metrics["render_busy_percent"] == 4.6
-    outer = json.dumps({"exitcode": 0, "out-data": raw, "exited": 1})
-    assert parse_qemu_guest_exec_transcoding(outer, "2238")["transcoding_load_percent"] == 47.3
-
-
-def test_intel_gpu_top_ignores_incomplete_last_object_after_valid_sample():
-    import json
-
-    sample = {
-        "period": {"duration": 1000},
-        "engines": {"Video": {"busy": 64.0}},
-    }
-    raw = "[" + chr(10) + json.dumps(sample) + ',' + chr(10) + '{"period": {"duration":'
-    metrics = parse_intel_gpu_top_json(raw)
-    assert metrics["sample_count"] == 1
-    assert metrics["transcoding_load_percent"] == 64.0
-
-
-def test_intel_gpu_top_does_not_invent_zero_without_video_engine():
-    import json
-    import pytest
-
-    sample = {"period": {"duration": 1000}, "engines": {"Render/3D": {"busy": 10.0}}}
-    with pytest.raises(ValueError, match="Video engine"):
-        parse_intel_gpu_top_json(json.dumps(sample))
-
-
 def test_gpu_temperature_uses_max_sensor_bound_to_same_pci_device(tmp_path: Path):
     pci = "0000:01:00.0"
     pci_dir = tmp_path / "sys" / "bus" / "pci" / "devices" / pci
@@ -149,26 +81,21 @@ def test_gpu_temperature_uses_max_sensor_bound_to_same_pci_device(tmp_path: Path
     assert read_gpu_temperature(pci, sys_root=tmp_path / "sys") == 41.0
 
 
-def test_snapshot_marks_known_vm_passthrough_and_transcoding():
+def test_snapshot_marks_known_vm_passthrough_without_media_telemetry():
     lspci = (FIX / "shahristan_lspci.txt").read_text()
     vm_owners = parse_vm_gpu_owners(
         {"501": "hostpci0: 0000:00:02.0\n"},
         {"501": GuestInfo("501", "plex-vm", "running")},
     )
-    tr = parse_intel_gpu_top_json((FIX / "intel_gpu_top.jsonstream").read_text())
     snaps = build_gpu_snapshots(
         lspci,
         vm_owners=vm_owners,
-        transcoding={"0000:00:02.0": tr},
     )
     gpu = snaps[0]
     assert gpu.gpu_id == "pci_0000_00_02_0"
     assert gpu.owner == "VM 501"
     assert gpu.connection == "passthrough_pci"
-    assert gpu.transcoding_supported is True
-    assert gpu.transcoding_available is True
-    assert gpu.transcoding_load_percent == 71.3
-    assert gpu.transcoding_source == "intel_gpu_top"
+    assert not hasattr(gpu, "transcoding_load_percent")
     assert gpu.config == "hostpci0: 0000:00:02.0"
 
 
@@ -177,17 +104,6 @@ def test_unclaimed_vfio_gpu_is_reserved_unknown_owner():
     assert gpu.owner == "VFIO"
     assert gpu.connection == "passthrough_or_reserved"
     assert gpu.source_type == "unknown"
-
-
-def test_qemu_guest_exec_wrapper_adds_source_and_vm_id():
-    raw = (FIX / "intel_gpu_top.jsonstream").read_text()
-    import json
-
-    outer = json.dumps({"exitcode": 0, "out-data": raw})
-    metrics = parse_qemu_guest_exec_transcoding(outer, "501")
-    assert metrics["transcoding_load_percent"] == 71.3
-    assert metrics["source"] == "qemu_guest_agent_intel_gpu_top"
-    assert metrics["vm_id"] == "501"
 
 
 def test_dri_to_pci_mapping_uses_sysfs_device_symlink(tmp_path: Path):
@@ -240,7 +156,7 @@ class CachedGpuTopology:
         return (FIX / "intel_gpu_top.jsonstream").read_text()
 
 
-def test_gpu_slow_path_uses_static_catalog_and_only_real_utilization_probe(tmp_path, monkeypatch):
+def test_gpu_slow_path_uses_static_catalog_without_media_probing(tmp_path, monkeypatch):
     import app.production as production
 
     topology = CachedGpuTopology()
@@ -265,8 +181,8 @@ def test_gpu_slow_path_uses_static_catalog_and_only_real_utilization_probe(tmp_p
 
     assert gpu["owner"] == "VM 501"
     assert gpu["source_name"] == "plex-vm"
-    assert gpu["transcoding_load_percent"] == 71.3
-    assert topology.guest_exec_calls == 2
+    assert "transcoding_load_percent" not in gpu
+    assert topology.guest_exec_calls == 0
     assert topology.qga_state_calls == 0
     assert calls == []
     assert second.data["pci_0000_00_02_0"]["owner"] == "VM 501"

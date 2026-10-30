@@ -419,10 +419,9 @@ class PvePresentationRouter:
             gpu = _mapping(gpu_raw)
             segment = _slug(gpu_id)
             temperature = _number(gpu.get("temperature_c"))
-            load = _number(gpu.get("transcoding_load_percent"))
             selector = self._gpu_selectors.setdefault(str(gpu_id), gpu_profile_selector())
             choice = selector.observe(
-                now=now, metrics={"temperature": temperature, "load": load}
+                now=now, metrics={"temperature": temperature}
             )
             profile_key = f"gpu:{gpu_id}"
             self._profiles[profile_key] = choice.profile
@@ -440,7 +439,6 @@ class PvePresentationRouter:
                 now=now,
                 continuous={
                     "temperature_c": temperature,
-                    "transcoding_load_percent": load,
                 },
                 discrete={"available": state.available, "error": state.error, **stable},
                 requested_profile=choice.profile,
@@ -449,7 +447,7 @@ class PvePresentationRouter:
             )
             if telemetry_decision.publish:
                 telemetry_data = {**stable}
-                for key in ("temperature_c", "transcoding_load_percent"):
+                for key in ("temperature_c",):
                     if key in telemetry_decision.values:
                         telemetry_data[key] = telemetry_decision.values[key]
                 publication = self._publication(
@@ -467,7 +465,7 @@ class PvePresentationRouter:
             status_data = {
                 key: value
                 for key, value in gpu.items()
-                if key not in {"temperature_c", "transcoding_load_percent"}
+                if key != "temperature_c"
             }
             status_publication = self._change_only(
                 group_name=f"gpu/{segment}/status",

@@ -94,7 +94,6 @@ def _component_groups(inventory: Mapping[str, object]) -> dict[str, str]:
         runtime = _state_slug(gpu_id)
         groups[f"gpu_{entity}_owner"] = f"gpu/{runtime}/status"
         groups[f"gpu_{entity}_temperature"] = f"gpu/{runtime}/telemetry"
-        groups[f"gpu_{entity}_transcoding"] = f"gpu/{runtime}/telemetry"
 
     for fan_id, raw in _mapping(inventory.get("fans")).items():
         if not isinstance(raw, Mapping):

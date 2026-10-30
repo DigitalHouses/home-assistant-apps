@@ -1325,6 +1325,43 @@ sections:
         heading: Графика
         heading_style: subtitle
         icon: mdi:expansion-card
+      # Optional UI-only Plex metrics. Recorder uses the original Plex binary
+      # sensors; DH PVE does not publish or calculate media transcoding.
+      - type: custom:auto-entities
+        show_empty: false
+        card:
+          type: grid
+          columns: 2
+          square: false
+        card_param: cards
+        filter:
+          template: |-
+            {% set video = 'binary_sensor.dh_plex_agent_video_transcoding_active' %}
+            {% set audio = 'binary_sensor.dh_plex_agent_audio_transcoding_active' %}
+            {% if is_state('binary_sensor.dh_plex_agent_server_running', 'on')
+                  and states(video) in ['on', 'off']
+                  and states(audio) in ['on', 'off'] %}
+              {{ [
+                {
+                  'type': 'custom:mushroom-template-card',
+                  'entity': video,
+                  'primary': 'Video transcoding',
+                  'secondary': 'Активно' if is_state(video, 'on') else '',
+                  'icon': 'mdi:video',
+                  'icon_color': 'orange' if is_state(video, 'on') else 'grey'
+                },
+                {
+                  'type': 'custom:mushroom-template-card',
+                  'entity': audio,
+                  'primary': 'Audio transcoding',
+                  'secondary': 'Активно' if is_state(audio, 'on') else '',
+                  'icon': 'mdi:audio-lines',
+                  'icon_color': 'orange' if is_state(audio, 'on') else 'grey'
+                }
+              ] }}
+            {% else %}
+              {{ [] }}
+            {% endif %}
       - type: custom:auto-entities
         show_empty: false
         unique: true
@@ -1394,35 +1431,6 @@ sections:
                     'secondary': secondary,
                     'icon': icon,
                     'icon_color': color,
-                    'tap_action': {
-                      'action': 'more-info'
-                    }
-                  }] %}
-
-                {% elif metric == 'transcoding' %}
-
-                  {% if e.state | is_number %}
-                    {% set load = e.state | float %}
-                    {% set color = 'blue' %}
-                    {% set secondary = ('%.1f' | format(load)) ~ '%' %}
-                    {% set percent = '%.1f' | format(load) %}
-                  {% else %}
-                    {% set load = 0 %}
-                    {% set color = 'grey' %}
-                    {% set secondary = 'Нагрузка недоступна' %}
-                    {% set percent = '0' %}
-                  {% endif %}
-
-                  {% set ns.items = ns.items + [{
-                    'type': 'custom:entity-progress-card-template',
-                    'entity': e.entity_id,
-                    'name': 'Transcoding · ' ~ name,
-                    'secondary': secondary,
-                    'percent': percent,
-                    'icon': 'mdi:video',
-                    'color': color,
-                    'bar_color': color,
-                    'bar_size': 'small',
                     'tap_action': {
                       'action': 'more-info'
                     }

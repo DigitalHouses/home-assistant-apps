@@ -211,7 +211,6 @@ def pve_problem_context(
             "source_id",
             "source_name",
             "temperature_c",
-            "transcoding_load_percent",
         ):
             if item.get(key) is not None:
                 context[key] = item.get(key)

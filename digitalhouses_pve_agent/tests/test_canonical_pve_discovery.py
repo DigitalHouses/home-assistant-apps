@@ -59,7 +59,6 @@ def _inventory():
                 "vendor_id": "0x8086",
                 "pci_address": "0000:00:02.0",
                 "temperature_c": 52.0,
-                "transcoding_load_percent": 25.0,
             }
         },
         "fans": {
@@ -125,9 +124,7 @@ def test_canonical_pve_telemetry_ids_and_percent_used_naming():
     assert c["gpu_pci_0000_00_02_0_temperature"]["default_entity_id"] == (
         "sensor.dh_pve_agent_gpu_pci_0000_00_02_0_temperature"
     )
-    assert c["gpu_pci_0000_00_02_0_transcoding"]["default_entity_id"] == (
-        "sensor.dh_pve_agent_gpu_pci_0000_00_02_0_transcoding"
-    )
+    assert "gpu_pci_0000_00_02_0_transcoding" not in c
     assert c["fan_cpu_fan_rpm"]["default_entity_id"] == "sensor.dh_pve_agent_fan_cpu_fan_rpm"
 
     for component in c.values():

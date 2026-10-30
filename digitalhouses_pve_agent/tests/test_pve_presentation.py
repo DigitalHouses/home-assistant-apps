@@ -140,7 +140,6 @@ def test_cpu_detail_does_not_change_gpu_or_storage_profile():
                 "gpu0": {
                     "gpu_id": "gpu0",
                     "temperature_c": 55.0,
-                    "transcoding_load_percent": 0.0,
                     "model": "iGPU",
                 }
             }

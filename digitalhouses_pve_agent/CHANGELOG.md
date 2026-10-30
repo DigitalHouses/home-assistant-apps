@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.72
+
+- Remove PVE-owned transcoding instrumentation: stop running intel_gpu_top in guests/host, remove QGA transcoding probes, state fields and the GPU transcoding MQTT Discovery sensor. Existing dynamic discovery removes the retired component and its retained telemetry.
+- Preserve PCI GPU inventory, ownership and PCI-bound GPU temperature; keep normal QGA usage for unrelated PVE device inventory.
+- The Russian PVE Lovelace dashboard optionally shows the original video/audio transcoding binary sensors from an available, running DH Plex Agent. No Plex dependency or new PVE entities; no media-specific monitoring is added to DH PVE Agent.
+- Audio loudness analysis with no active Plex session is not misclassified as audio transcoding. Recorder uses Plex-owned binary sensors without duplicate PVE states.
+
 ## 0.5.71
 
 - Emit `disk_unsafe_shutdowns_increased` as a non-retained, QoS1 PVE Diagnostic event whenever an existing SMART `unsafe_shutdowns` counter increases. Include disk identity, old/new values, delta, detection time and unknown cause; this works with or without UPS/NUT.
