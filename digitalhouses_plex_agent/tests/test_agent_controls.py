@@ -166,3 +166,52 @@ def test_install_waits_for_first_worker_heartbeat(tmp_path):
     manager.version = "0.8.0"
     assert manager.install_outcome(started_at=started) == (True, None)
 
+
+
+def test_gpu_problem_is_persistent_but_never_hijacks_control_operation(tmp_path):
+    clock = Clock()
+    events = []
+    path = tmp_path / "card.json"
+    card = AgentCard(path, lambda v: events.append(v.copy()) or True,
+                     clock=clock.mono, now=clock.iso, boot_id=lambda: "boot")
+    card.set_problem("gpu_error", "Intel GPU: ошибка работы")
+    assert card.state == "idle"
+    assert card.payload()["state"] == "problem"
+    assert card.payload()["problem_message"] == "Intel GPU: ошибка работы"
+    before = len(events)
+    card.set_problem("gpu_error", "Intel GPU: ошибка работы")
+    assert len(events) == before, "unchanged fault must not flood MQTT"
+
+    assert card.begin("refresh")
+    assert card.payload()["state"] == "running"
+    clock.t += 2
+    assert card.finish("refresh")
+    assert card.payload()["state"] == "success"
+    clock.t += 6
+    card.tick()
+    assert card.payload()["state"] == "problem"
+
+    restored = AgentCard(path, lambda _: True, clock=clock.mono,
+                         now=clock.iso, boot_id=lambda: "boot")
+    assert restored.payload()["state"] == "problem"
+    restored.set_problem(None, None)
+    assert restored.payload()["state"] == "idle"
+    assert restored.payload()["problem_message"] is None
+
+
+def test_problem_card_ui_has_gpu_fault_without_losing_update_controls():
+    card = (
+        Path(__file__).resolve().parents[1]
+        / "examples/lovelace/plex_agent_card_ru.yaml"
+    ).read_text()
+    dashboard = (
+        Path(__file__).resolve().parents[1]
+        / "examples/lovelace/plex-dashboard.yaml"
+    ).read_text()
+    for content in (card, dashboard):
+        assert "item.state === 'problem'" in content
+        assert "Обнаружена проблема:" in content
+        assert "s === 'problem'" in content
+        assert "button.dh_plex_agent_restart_agent" in content
+    assert "sensor.dh_plex_agent_gpu_driver_status" in dashboard
+    assert "Драйвер" in dashboard
