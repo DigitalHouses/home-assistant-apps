@@ -120,6 +120,41 @@ def detect_intel_gpu_pci(sys_root: Path = Path("/sys")) -> str | None:
     return None
 
 
+def gpu_driver_info(
+    pci_address: str | None, *, sys_root: Path = Path("/sys")
+) -> dict[str, object]:
+    """Report PCI driver binding, not whether GPU rendering actually works."""
+    if not isinstance(pci_address, str) or not _PCI_RE.fullmatch(pci_address.lower()):
+        return {"driver_status": "not_detected", "driver_name": None}
+    driver_link = sys_root / "bus" / "pci" / "devices" / pci_address.lower() / "driver"
+    try:
+        driver_name = driver_link.resolve(strict=True).name
+    except OSError:
+        return {"driver_status": "not_bound", "driver_name": None}
+    return {"driver_status": "bound", "driver_name": driver_name}
+
+
+def gpu_operational_problem(payload: Mapping[str, object]) -> tuple[str | None, str | None]:
+    """Expected Intel GPU failures are problems; unsupported machines are not."""
+    if payload.get("supported") is not True:
+        return None, None
+    status = str(payload.get("status") or "unknown")
+    if payload.get("driver_status") == "not_bound":
+        return "gpu_driver_unbound", "Intel GPU: драйвер не подключён"
+    if payload.get("available") is True and status == "ok":
+        return None, None
+    if status in {"starting", "unsupported"}:
+        return None, None
+    messages = {
+        "tool_missing": "Intel GPU: отсутствует intel_gpu_top",
+        "helper_unavailable": "Intel GPU: GPU Helper недоступен",
+        "helper_error": "Intel GPU: ошибка GPU Helper",
+        "stale": "Intel GPU: нет актуальных данных",
+        "error": "Intel GPU: ошибка работы",
+    }
+    return f"gpu_{status}", messages.get(status, "Intel GPU: недоступен")
+
+
 def read_gpu_temperature(
     pci_address: str,
     *,

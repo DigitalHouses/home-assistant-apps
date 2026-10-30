@@ -258,6 +258,7 @@ sensor.dh_plex_agent_gpu_frequency
 sensor.dh_plex_agent_gpu_temperature
 sensor.dh_plex_agent_gpu_rc6
 sensor.dh_plex_agent_gpu_status
+sensor.dh_plex_agent_gpu_driver_status
 binary_sensor.dh_plex_agent_hardware_transcode_active
 
 sensor.dh_plex_agent_transcoder_count
@@ -280,6 +281,10 @@ button.dh_plex_agent_refresh
 ## Standalone Intel GPU telemetry
 
 Plex Agent collects Intel GPU engine telemetry locally on the same Linux host/VM as Plex. It does not require DH PVE or the Proxmox API. On supported Intel DRM/i915 systems it exposes Video, Render/3D, Video Enhance, actual GPU frequency and RC6 residency from `intel_gpu_top`.
+
+Intel GPU diagnostics distinguish the PCI-bound kernel driver from actual GPU operation. `sensor.dh_plex_agent_gpu_driver_status` reports whether a driver is bound (`bound`, including the `driver_name` attribute), not whether video engines work. The existing `sensor.dh_plex_agent_gpu_status` reports `ok` or the concrete data-collection failure. The dashboard displays a separate `Intel GPU · состояние` block with both facts.
+
+When an Intel GPU is present but telemetry indicates a failure, the agent control card reports a persistent background `problem` with the relevant reason, rather than remaining green. Active Refresh / Check / Update / Restart operations retain their existing foreground status and finish messages; the problem reappears when they finish until GPU metrics recover. An unsupported machine without Intel GPU is not treated as faulty. The card does not claim the driver itself failed merely because GPU telemetry failed.
 
 GPU temperature is published only when Linux exposes a real hwmon sensor attached to the GPU. CPU/SoC temperature is never relabeled as GPU temperature. On systems such as the current Alder Lake-N Plex VM, GPU load can be available while GPU temperature remains unavailable.
 

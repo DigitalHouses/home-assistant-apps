@@ -57,6 +57,8 @@ class AgentCard:
         self.finished_at = saved.get("finished_at")
         self.duration_seconds = saved.get("duration_seconds")
         self.error = saved.get("error")
+        self.problem_code = saved.get("problem_code") if isinstance(saved.get("problem_code"), str) else None
+        self.problem_message = saved.get("problem_message") if isinstance(saved.get("problem_message"), str) else None
         if self.state == "running" and self.operation in {"restart", "install"}:
             persisted_boot = saved.get("_start_boot_id")
             persisted_mono = saved.get("_started_monotonic")
@@ -103,12 +105,14 @@ class AgentCard:
 
     def payload(self) -> dict[str, object]:
         return {
-            "state": self.state,
+            "state": "problem" if self.state == "idle" and self.problem_code else self.state,
             "operation": self.operation,
             "started_at": self.started_at,
             "finished_at": self.finished_at,
             "duration_seconds": self.duration_seconds,
             "error": self.error,
+            "problem_code": self.problem_code,
+            "problem_message": self.problem_message,
             "last_collection_at": self.last_collection_at,
         }
 
@@ -155,6 +159,17 @@ class AgentCard:
         self._persist()
         self.publish()
         return True
+
+    def set_problem(self, code: str | None, message: str | None) -> None:
+        """Background condition overlays idle but never hijacks foreground commands."""
+        code = code or None
+        message = message if code else None
+        if code == self.problem_code and message == self.problem_message:
+            return
+        self.problem_code = code
+        self.problem_message = message
+        self._persist()
+        self.publish()
 
     def collected(self, timestamp: str) -> None:
         self.last_collection_at = timestamp

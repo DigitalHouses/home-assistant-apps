@@ -47,6 +47,7 @@ EXPECTED_ENTITY_IDS = {
     "gpu_temperature": "sensor.dh_plex_agent_gpu_temperature",
     "gpu_rc6": "sensor.dh_plex_agent_gpu_rc6",
     "gpu_status": "sensor.dh_plex_agent_gpu_status",
+    "gpu_driver_status": "sensor.dh_plex_agent_gpu_driver_status",
     "api_status": "sensor.dh_plex_agent_api_status",
     "agent_version": "sensor.dh_plex_agent_version",
     "agent_uptime": "sensor.dh_plex_agent_uptime",

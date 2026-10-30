@@ -70,6 +70,7 @@ def test_discovery_exposes_standalone_gpu_and_server_boot_entities():
         "gpu_temperature": ("sensor.dh_plex_agent_gpu_temperature", "°C"),
         "gpu_rc6": ("sensor.dh_plex_agent_gpu_rc6", "%"),
         "gpu_status": ("sensor.dh_plex_agent_gpu_status", None),
+        "gpu_driver_status": ("sensor.dh_plex_agent_gpu_driver_status", None),
     }
     for key, (entity_id, unit) in expected.items():
         assert components[key]["default_entity_id"] == entity_id
@@ -177,3 +178,25 @@ def test_installer_prepares_optional_intel_gpu_telemetry():
     assert "intel-gpu-tools" in INSTALLER
     assert "render" in INSTALLER
     assert "video" in INSTALLER
+
+
+def test_driver_state_published_in_existing_gpu_group():
+    from app.presentation_plex import PlexPresentationRouter
+
+    router = PlexPresentationRouter(source_interval_seconds=10.0)
+    source = {
+        "supported": True, "available": False, "status": "error",
+        "driver_status": "bound", "driver_name": "i915",
+        "pci_address": "0000:01:00.0",
+    }
+    api = {
+        "plex_api_status": "ok",
+        "playback_active": False,
+        "playback_count": 0,
+        "playback_sessions": [],
+    }
+    published = router.route(snapshot(), api, source, now=0, force=True)
+    gpu = {p.group: p.payload for p in published}["gpu"]
+    assert gpu["driver_status"] == "bound"
+    assert gpu["driver_name"] == "i915"
+    assert gpu["status"] == "error"

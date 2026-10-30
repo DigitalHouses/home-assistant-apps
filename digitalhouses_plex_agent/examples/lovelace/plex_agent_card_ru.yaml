@@ -29,6 +29,7 @@ cards:
           && this._dh_plex_timer?.operation === 'restart';
         return s === 'running' || awaitingRestart ? 'mdi:progress-clock'
           : s === 'error' ? 'mdi:alert-circle'
+          : s === 'problem' ? 'mdi:alert-circle-outline'
           : s === 'success' ? 'mdi:check-circle'
           : upgrade ? 'mdi:package-up'
           : 'mdi:robot-outline';
@@ -94,6 +95,9 @@ cards:
         if (item.state === 'error') {
           return 'Ошибка: ' + (a.error || 'операция не выполнена');
         }
+        if (item.state === 'problem') {
+          return 'Обнаружена проблема: ' + (a.problem_message || 'требуется диагностика');
+        }
         if (item.state === 'success') {
           let message = {
             refresh: 'Обновлено',
@@ -144,6 +148,7 @@ cards:
               const awaitingRestart = ['unavailable', 'unknown'].includes(s)
                 && this._dh_plex_timer?.operation === 'restart';
               return s === 'error' ? 'var(--error-color)'
+                : s === 'problem' ? 'var(--warning-color, orange)'
                 : s === 'running' || awaitingRestart
                   ? 'var(--info-color, var(--primary-color))'
                 : s === 'success' ? 'var(--success-color, var(--primary-color))'

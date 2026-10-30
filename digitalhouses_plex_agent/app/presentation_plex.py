@@ -305,6 +305,8 @@ class PlexPresentationRouter:
                 "status": str(gpu_source.get("status") or "unsupported"),
                 "source": gpu_source.get("source"),
                 "pci_address": gpu_source.get("pci_address"),
+                "driver_status": gpu_source.get("driver_status"),
+                "driver_name": gpu_source.get("driver_name"),
             },
             requested_profile=choice.profile,
             force=force,
