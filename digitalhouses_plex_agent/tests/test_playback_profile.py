@@ -225,3 +225,74 @@ def test_router_leaves_playback_immediately_and_keeps_collection_cadence():
     assert by_group["gpu"].profile is PublicationProfile.NORMAL
     assert by_group["gpu"].reason == "profile_transition"
     assert router.source_interval_seconds == 10.0
+
+
+def test_playback_mqtt_publishes_video_audio_transcoding_states_and_flags():
+    """Regression: API values must reach the real grouped MQTT publication layer."""
+    from app.models import BuildInfo
+    from app.plex_api import PlaybackSession, build_plex_api_payload
+    from app.presentation_runtime import PlexPublicationRuntime
+
+    class Bridge:
+        def __init__(self):
+            self.groups = []
+
+        def publish_state_group(self, group, payload):
+            self.groups.append((group, payload))
+            return True
+
+    bridge = Bridge()
+    clock = [0.0]
+    runtime = PlexPublicationRuntime(
+        bridge=bridge,
+        build=BuildInfo("0.8.3", "test", "abcdef"),
+        source_interval_seconds=10.0,
+        agent_started_at="2026-10-30T00:00:00+00:00",
+        now_monotonic=lambda: clock[0],
+    )
+    session = PlaybackSession(
+        session_id="audio-only", content_type="video", media_type="movie",
+        title="The Last Samurai", user="Beybars", mode="Direct Stream",
+        video_decision="copy", audio_decision="transcode",
+        video_codec="h264", audio_codec="ac3", audio_output_codec="aac",
+        video_resolution="1080",
+    )
+    api = build_plex_api_payload((session,), (), "ok")
+    assert runtime.publish_snapshot(snapshot(), api, force=True)
+    published = dict(bridge.groups)["playback"]
+    assert published["video_transcoding_state"] == "Direct Stream"
+    assert published["audio_transcoding_state"] == "Transcoding"
+    assert published["video_transcoding_active"] is False
+    assert published["audio_transcoding_active"] is True
+    assert published["audio_transcoding_sessions"][0]["target_codec"] == "aac"
+    assert published["video_transcoding_sessions"][0]["source_codec"] == "h264"
+
+    # No forced publishing: the stream-decision change itself must trigger MQTT.
+    clock[0] = 10.0
+    video_session = PlaybackSession(
+        **{
+            **session.__dict__,
+            "mode": "Transcode",
+            "video_decision": "transcode",
+        }
+    )
+    assert runtime.publish_snapshot(
+        snapshot(), build_plex_api_payload((video_session,), (), "ok")
+    )
+    changed = dict(bridge.groups)["playback"]
+    assert changed["video_transcoding_active"] is True
+    assert changed["audio_transcoding_active"] is True
+    assert changed["video_transcoding_state"] == "Transcoding"
+
+    # Stopping playback clears both histories and sets UI to Idle.
+    clock[0] = 20.0
+    assert runtime.publish_snapshot(
+        snapshot(), build_plex_api_payload((), (), "ok")
+    )
+    idle = dict(bridge.groups)["playback"]
+    assert idle["video_transcoding_state"] == "Idle"
+    assert idle["audio_transcoding_state"] == "Idle"
+    assert idle["video_transcoding_active"] is False
+    assert idle["audio_transcoding_active"] is False
+    assert idle["video_transcoding_sessions"] == []
+    assert idle["audio_transcoding_sessions"] == []
