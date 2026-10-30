@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.8.5
+
+- Add the Home Assistant MQTT event entity `event.dh_plex_agent_gpu_diagnostic` for confirmed Intel GPU availability and PCI kernel-driver binding transitions.
+- Publish `gpu_unavailable`, `gpu_restored`, `gpu_driver_unbound`, `gpu_driver_restored` and `gpu_driver_changed` events with PVE-compatible schema v2, severity, timestamp, PCI address, driver and previous/current state.
+- Debounce over two consecutive polls, coalesce simultaneous driver and GPU failures, and suppress repeats during continuous faults or normal agent restarts.
+- Persist confirmed GPU health and a pending-event outbox through temporary MQTT outages; publish events QoS 1 without MQTT retain. No built-in notifications or HAOS recipient changes.
+- Keep the existing GPU metrics, main problem card, API, MQTT identities and agent resource profile unchanged.
+
 ## 0.8.4
 
 - Add a standalone Intel GPU diagnostic card showing the PCI-bound driver (for example i915) separately from whether GPU telemetry and hardware engines actually work. A bound driver no longer falsely implies a healthy GPU.
