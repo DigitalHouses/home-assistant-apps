@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.8.3
+
+- Fix the 0.8.2 regression where MQTT Discovery exposed separate Audio/Video Transcoding sensors but the grouped playback publisher omitted their values, leaving Home Assistant tiles blank.
+- Forward audio/video stream mode, ON/OFF flags and per-session UI details through the existing playback MQTT group, and include them in change detection so updates and Idle transitions are published reliably.
+- Add a regression test covering the full Plex API → publication router → MQTT bridge contract, including audio-only transcoding, video transcoding and idle.
+- No changes to entity IDs, Recorder policy, other GPU telemetry or Media Server configuration.
+
 ## 0.8.2
 
 - Add separate audio and video transcoding status sensors for Home Assistant UI, using Plex per-stream decisions and compact per-session details; distinguish Direct Play, Direct Stream, and Transcoding.
