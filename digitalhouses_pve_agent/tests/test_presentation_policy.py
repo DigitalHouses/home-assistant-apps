@@ -66,18 +66,16 @@ def test_disk_profile_uses_slow_five_minute_window_and_is_isolated_per_disk():
     assert cool_decision.profile is PublicationProfile.NORMAL
 
 
-def test_gpu_profile_uses_slow_five_minute_window():
-    active = gpu_profile_selector()
-    idle = gpu_profile_selector()
-
-    active.observe(now=0.0, metrics={"temperature": 60.0, "load": 0.0})
-    idle.observe(now=0.0, metrics={"temperature": 60.0, "load": 0.0})
-
-    assert active.observe(
-        now=300.1, metrics={"temperature": 60.0, "load": 30.0}
+def test_gpu_profile_uses_temperature_only_window():
+    hot = gpu_profile_selector()
+    cool = gpu_profile_selector()
+    hot.observe(now=0.0, metrics={"temperature": 60.0})
+    cool.observe(now=0.0, metrics={"temperature": 60.0})
+    assert hot.observe(
+        now=300.1, metrics={"temperature": 80.0}
     ).profile is PublicationProfile.DETAIL
-    assert idle.observe(
-        now=300.1, metrics={"temperature": 60.0, "load": 0.0}
+    assert cool.observe(
+        now=300.1, metrics={"temperature": 60.0}
     ).profile is PublicationProfile.NORMAL
 
 

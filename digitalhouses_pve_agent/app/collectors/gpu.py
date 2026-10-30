@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -47,16 +46,6 @@ class GpuSnapshot:
     config: str | None
     dri_devices: tuple[str, ...]
     temperature_c: float | None
-    transcoding_supported: bool
-    transcoding_available: bool
-    transcoding_load_percent: float | None
-    video_busy_percent: float | None
-    render_busy_percent: float | None
-    video_enhance_busy_percent: float | None
-    rc6_percent: float | None
-    transcoding_sample_count: int
-    transcoding_source: str | None
-    transcoding_vm_id: str | None
 
 
 def normalize_pci(value: str) -> str:
@@ -167,84 +156,6 @@ def parse_lxc_gpu_owners(
     return result
 
 
-def parse_intel_gpu_top_json(text: str) -> dict[str, float | int | bool | str | None]:
-    raw = text.strip().rstrip(",")
-    if not raw:
-        raise ValueError("empty intel_gpu_top output")
-    # intel_gpu_top -J prints a JSON array while running, but timeout can
-    # terminate it before the final closing bracket. A complete sample remains
-    # trustworthy: decode each finished object and ignore an incomplete tail.
-    try:
-        parsed = json.loads(raw)
-        samples = parsed if isinstance(parsed, list) else [parsed]
-    except json.JSONDecodeError:
-        decoder = json.JSONDecoder()
-        samples = []
-        offset = 0
-        if raw.startswith("["):
-            offset = 1
-        while offset < len(raw):
-            while offset < len(raw) and (
-                raw[offset].isspace() or raw[offset] in ",]"
-            ):
-                offset += 1
-            if offset >= len(raw):
-                break
-            try:
-                sample, offset = decoder.raw_decode(raw, offset)
-            except json.JSONDecodeError:
-                break
-            if isinstance(sample, dict):
-                samples.append(sample)
-        if not samples:
-            raise ValueError("no complete intel_gpu_top samples")
-    full = [
-        sample
-        for sample in samples
-        if isinstance(sample, dict)
-        and float(sample.get("period", {}).get("duration", 0) or 0) >= 500
-    ]
-    if not full:
-        raise ValueError("no full intel_gpu_top samples")
-
-    def peak(engine: str) -> float | None:
-        values: list[float] = []
-        for sample in full:
-            engines = sample.get("engines", {})
-            if not isinstance(engines, dict):
-                continue
-            for name, data in engines.items():
-                # Intel GPU generations can report "Video" or "Video/0".
-                # Never confuse e.g. Video and VideoEnhance engines.
-                if (name != engine and not str(name).startswith(engine + "/")) or not isinstance(data, dict):
-                    continue
-                busy = data.get("busy")
-                if isinstance(busy, (int, float)) and not isinstance(busy, bool):
-                    values.append(max(0.0, min(100.0, float(busy))))
-        return round(max(values), 1) if values else None
-
-    rc6 = full[-1].get("rc6", {}).get("value")
-    rc6_value = (
-        round(max(0.0, min(100.0, float(rc6))), 1)
-        if isinstance(rc6, (int, float)) and not isinstance(rc6, bool)
-        else None
-    )
-    video = peak("Video")
-    if video is None:
-        raise ValueError("no Video engine in intel_gpu_top samples")
-    return {
-        "supported": True,
-        "available": True,
-        "transcoding_load_percent": video,
-        "video_busy_percent": video,
-        "render_busy_percent": peak("Render/3D"),
-        "video_enhance_busy_percent": peak("VideoEnhance"),
-        "rc6_percent": rc6_value,
-        "sample_count": len(full),
-        "source": "intel_gpu_top",
-    }
-
-
 def read_dri_pci_map(sys_root: Path = Path("/sys")) -> dict[str, str]:
     """Map DRM node names (card0/renderD128) to canonical PCI BDFs."""
     result: dict[str, str] = {}
@@ -266,26 +177,6 @@ def read_dri_pci_map(sys_root: Path = Path("/sys")) -> dict[str, str]:
             result[node_path.name] = pci
             break
     return result
-
-
-def parse_qemu_guest_exec_transcoding(text: str, vmid: str) -> dict[str, object]:
-    """Parse `qm guest exec` JSON and normalize intel_gpu_top telemetry."""
-    try:
-        outer = json.loads(text)
-    except json.JSONDecodeError as exc:
-        raise ValueError("invalid qemu guest exec JSON") from exc
-    if not isinstance(outer, dict):
-        raise ValueError("qemu guest exec result must be an object")
-    exitcode = outer.get("exitcode")
-    if not isinstance(exitcode, int) or isinstance(exitcode, bool) or exitcode != 0:
-        raise ValueError(f"guest intel_gpu_top failed: exitcode={exitcode!r}")
-    raw = outer.get("out-data")
-    if not isinstance(raw, str) or not raw.strip():
-        raise ValueError("guest intel_gpu_top returned no data")
-    metrics: dict[str, object] = dict(parse_intel_gpu_top_json(raw))
-    metrics["source"] = "qemu_guest_agent_intel_gpu_top"
-    metrics["vm_id"] = str(vmid)
-    return metrics
 
 
 def read_gpu_temperature(
@@ -339,13 +230,11 @@ def build_gpu_snapshots(
     vm_owners: Mapping[str, GpuOwner] | None = None,
     lxc_owners: Mapping[str, GpuOwner] | None = None,
     temperatures: Mapping[str, float] | None = None,
-    transcoding: Mapping[str, Mapping[str, object]] | None = None,
     hostname: str = "pve",
 ) -> tuple[GpuSnapshot, ...]:
     vm_owners = vm_owners or {}
     lxc_owners = lxc_owners or {}
     temperatures = temperatures or {}
-    transcoding = transcoding or {}
     snapshots: list[GpuSnapshot] = []
     for item in parse_lspci_gpus(lspci_text):
         pci = item["pci_address"]
@@ -384,7 +273,6 @@ def build_gpu_snapshots(
             connection = owner_info.connection
             nodes = owner_info.dri_devices
             owner = ("VM " if source_type == "vm" else "LXC ") + (source_id or "")
-        tr = transcoding.get(pci, {})
         snapshots.append(
             GpuSnapshot(
                 gpu_id="pci_" + pci.replace(":", "_").replace(".", "_"),
@@ -403,26 +291,6 @@ def build_gpu_snapshots(
                 config=owner_info.config if owner_info is not None else None,
                 dri_devices=tuple(nodes),
                 temperature_c=temperatures.get(pci),
-                transcoding_supported=bool(tr.get("supported", False)),
-                transcoding_available=bool(tr.get("available", False)),
-                transcoding_load_percent=_float_or_none(tr.get("transcoding_load_percent")),
-                video_busy_percent=_float_or_none(tr.get("video_busy_percent")),
-                render_busy_percent=_float_or_none(tr.get("render_busy_percent")),
-                video_enhance_busy_percent=_float_or_none(tr.get("video_enhance_busy_percent")),
-                rc6_percent=_float_or_none(tr.get("rc6_percent")),
-                transcoding_sample_count=int(tr.get("sample_count", 0) or 0),
-                transcoding_source=str(tr.get("source")) if tr.get("source") else None,
-                transcoding_vm_id=(
-                    str(tr.get("vm_id")) if tr.get("vm_id") is not None else None
-                ),
             )
         )
     return tuple(snapshots)
-
-
-def _float_or_none(value: object) -> float | None:
-    return (
-        float(value)
-        if isinstance(value, (int, float)) and not isinstance(value, bool)
-        else None
-    )

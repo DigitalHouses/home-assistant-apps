@@ -433,18 +433,6 @@ def build_full_discovery_payload(
                     icon="mdi:thermometer", extra_attrs=attrs,
                 )
                 components[key] = item
-            if str(raw.get("vendor_id", "")).lower() == "0x8086":
-                key, item = _sensor(
-                    uid=uid, state_topic=topics.state, app_topic=topics.availability,
-                    key=f"gpu_{slug}_transcoding", name=f"GPU transcoding - {display}",
-                    entity_id=f"sensor.dh_pve_agent_gpu_{slug}_transcoding",
-                    expression=obj + ".transcoding_load_percent | default(none)",
-                    subsystem="gpu", section="graphics", subject="gpu", metric="transcoding",
-                    object_id=gpu_id, display_name=display, sort_key=f"500_{index:03d}_02",
-                    unit="%", state_class="measurement", entity_category="diagnostic",
-                    icon="mdi:video", extra_attrs=attrs,
-                )
-                components[key] = item
 
     fans = inventory.get("fans")
     if isinstance(fans, Mapping):
