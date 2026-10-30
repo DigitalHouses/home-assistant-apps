@@ -34,8 +34,8 @@ class CanonicalPlexPackageTests(unittest.TestCase):
         self.assertEqual(len(included), len(set(included)))
         self.assertEqual(len(excluded), len(set(excluded)))
         self.assertFalse(set(included) & set(excluded))
-        self.assertTrue(all("_dh_plex_agent_" in entity for entity in included))
-        self.assertTrue(all("_dh_plex_agent_" in entity for entity in excluded))
+        self.assertTrue(all(".dh_plex_agent_" in entity for entity in included))
+        self.assertTrue(all(".dh_plex_agent_" in entity for entity in excluded))
         for kind in ("video", "audio"):
             self.assertIn(f"binary_sensor.dh_plex_agent_{kind}_transcoding_active", included)
             self.assertIn(f"sensor.dh_plex_agent_{kind}_transcoding", excluded)
