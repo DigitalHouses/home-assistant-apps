@@ -22,6 +22,7 @@ class Topics:
     update_state: str
     restart_agent: str
     agent_card_state: str
+    diagnostic_event: str
     discovery: str
     ha_status: str
     device_id: str
@@ -57,6 +58,7 @@ def build_topics(config: AppConfig) -> Topics:
         update_state=f"{base}/update/state",
         restart_agent=f"{base}/restart",
         agent_card_state=f"{base}/agent/card",
+        diagnostic_event=f"{base}/events/diagnostic",
         discovery=(
             f"{config.mqtt.discovery_prefix.strip('/')}/device/{device_id}/config"
         ),
@@ -540,6 +542,28 @@ def build_discovery_payload(
             "pci_address=value_json.pci_address | default(none)) | tojson }}"
         ),
     )
+
+    # Same diagnostic-event contract as DH PVE Agent.  Events carry only
+    # state transitions; never retain and never publish each polling tick.
+    components["diagnostic_event"] = {
+        "platform": "event",
+        "name": "GPU diagnostic",
+        "unique_id": uid("diagnostic_event"),
+        "default_entity_id": f"event.{prefix}_gpu_diagnostic",
+        "state_topic": topics.diagnostic_event,
+        "event_types": [
+            "gpu_unavailable",
+            "gpu_restored",
+            "gpu_driver_unbound",
+            "gpu_driver_restored",
+            "gpu_driver_changed",
+        ],
+        "qos": 1,
+        "availability": [_availability(topics.app_availability)],
+        "availability_mode": "all",
+        "entity_category": "diagnostic",
+        "icon": "mdi:alert-decagram-outline",
+    }
 
     components["last_boot"] = _component(
         platform="sensor",

@@ -19,6 +19,7 @@ from .build_info import load_build_info
 from .config import AppConfig, load_config
 from .discovery import build_discovery_payload, build_topics
 from .gpu_collector import GpuStateReader, gpu_driver_info, gpu_operational_problem
+from .gpu_events import GpuEventTracker
 from .metrics import RollingCpuMetrics, group_current_cpu
 from .migration_cleanup import cleanup_legacy_mqtt_namespace
 from .models import (
@@ -135,6 +136,7 @@ def run(config: AppConfig) -> int:
         playback_state_path=PLAYBACK_STATE_PATH,
     )
     gpu_collector = GpuStateReader()
+    gpu_events = GpuEventTracker()
     server_boot_time = datetime.fromtimestamp(
         psutil.boot_time(),
         timezone.utc,
@@ -273,6 +275,7 @@ def run(config: AppConfig) -> int:
                         force=True,
                     )
                     card.publish()
+                    gpu_events.flush(mqtt.publish_diagnostic_event)
                     updates.publish_if_changed(mqtt.publish_update_state, force=True)
                     if publication.has_cache and publication.republish_cached():
                         next_uptime_heartbeat = (
@@ -355,6 +358,9 @@ def run(config: AppConfig) -> int:
                 gpu_payload.update(gpu_driver_info(gpu_payload.get("pci_address")))
                 problem_code, problem_message = gpu_operational_problem(gpu_payload)
                 card.set_problem(problem_code, problem_message)
+                gpu_events.observe(gpu_payload)
+                if mqtt.connected.is_set():
+                    gpu_events.flush(mqtt.publish_diagnostic_event)
 
                 scanner_finished = bool(
                     previous_scanner_running

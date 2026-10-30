@@ -161,6 +161,20 @@ class MqttBridge:
     def publish_discovery(self) -> bool:
         return self._publish_json(self.topics.discovery, self.discovery_payload)
 
+    def publish_diagnostic_event(self, payload: dict[str, object]) -> bool:
+        """PVE-compatible HA event, non-retained and QoS 1."""
+        if not self.connected.is_set():
+            return False
+        info = self.client.publish(
+            self.topics.diagnostic_event,
+            payload=json.dumps(
+                payload, ensure_ascii=False, separators=(",", ":")
+            ),
+            qos=1,
+            retain=False,
+        )
+        return info.rc == mqtt.MQTT_ERR_SUCCESS
+
     def publish_agent_card(self, payload: dict[str, object]) -> bool:
         if not self.connected.is_set():
             return False

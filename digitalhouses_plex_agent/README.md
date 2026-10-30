@@ -282,6 +282,45 @@ button.dh_plex_agent_refresh
 
 Plex Agent collects Intel GPU engine telemetry locally on the same Linux host/VM as Plex. It does not require DH PVE or the Proxmox API. On supported Intel DRM/i915 systems it exposes Video, Render/3D, Video Enhance, actual GPU frequency and RC6 residency from `intel_gpu_top`.
 
+### GPU and kernel-driver events for Home Assistant
+
+The optional Home Assistant notification source is
+`event.dh_plex_agent_gpu_diagnostic` (MQTT Discovery, attached to the existing
+Plex Agent device). The agent **only emits events**, not push notifications or
+Home Assistant notification automations. Configure message routing/recipients
+on the HAOS side.
+
+The event stream uses the existing PVE Agent diagnostic convention:
+`schema_version: 2`, `event_type`, `event_id`, `observed_at`,
+`category: gpu`, `severity`, `object_id`, `object_name`,
+`problem_id`, `previous`, `current`, `gpu_status`, `driver_status`,
+`driver_name`, `pci_address`, and `gpu_available`.
+
+| Event type | Meaning |
+| --- | --- |
+| `gpu_unavailable` | Intel GPU was expected but became unusable |
+| `gpu_restored` | Video GPU telemetry is functional again |
+| `gpu_driver_unbound` | PCI Intel GPU lost its kernel driver binding |
+| `gpu_driver_restored` | The driver bound again |
+| `gpu_driver_changed` | Bound kernel driver changed (for example i915 → xe) |
+
+Events are transition-only: two consecutive matching sampling cycles are
+required, no repeats every tick, and **no startup healthy event**. An initial
+broken GPU does emit an event after confirmation; no GPU installed at initial
+startup is not an error. Driver disconnect and GPU unavailability in the same
+snapshot are coalesced into one event. The last confirmed state and a small
+pending-event outbox are persisted in
+`/var/lib/digitalhouses_plex_agent/gpu_events.json`, so restarts and
+temporary MQTT outages do not cause duplicate notifications. Events publish
+QoS 1, `retain: false` (unlike the retained status sensors).
+
+For HA automation, use a **state trigger** on
+`event.dh_plex_agent_gpu_diagnostic` (the state changes to an event timestamp).
+Read the `event_type` attribute to distinguish alert and recovery. Existing
+Plex Agent state sensors remain the current source of truth. Event delivery
+does not guarantee receipt when Home Assistant was offline; do not treat this
+diagnostic event as a safety interlock.
+
 Intel GPU diagnostics distinguish the PCI-bound kernel driver from actual GPU operation. `sensor.dh_plex_agent_gpu_driver_status` reports whether a driver is bound (`bound`, including the `driver_name` attribute), not whether video engines work. The existing `sensor.dh_plex_agent_gpu_status` reports `ok` or the concrete data-collection failure. The dashboard displays a separate `Intel GPU · состояние` block with both facts.
 
 When an Intel GPU is present but telemetry indicates a failure, the agent control card reports a persistent background `problem` with the relevant reason, rather than remaining green. Active Refresh / Check / Update / Restart operations retain their existing foreground status and finish messages; the problem reappears when they finish until GPU metrics recover. An unsupported machine without Intel GPU is not treated as faulty. The card does not claim the driver itself failed merely because GPU telemetry failed.
