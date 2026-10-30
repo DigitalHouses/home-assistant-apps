@@ -1,0 +1,66 @@
+# =============================================================================
+# DigitalHouses Plex Agent — Home Assistant Recorder package
+# =============================================================================
+# Replacement for the legacy dh_plex_app_package.yaml (dh_plex_* IDs).
+#
+# Copy this file over the old package; do not enable it alongside
+# dh_plex_agent_recorder_package.yaml (both define Recorder configuration).
+#
+# What gets recorded: small scalar states and numeric CPU/GPU history.
+# What does NOT: per-session UI details, GPU troubleshooting attributes
+# and MQTT Event entities (these are for HA notifications, not Recorder).
+#
+# The existing package key is intentionally kept for drop-in compatibility.
+# =============================================================================
+
+dh_app_plex_monitoring_package:
+  recorder:
+    include:
+      entities:
+        # Playback — compact facts.
+        - sensor.dh_plex_agent_playback_count
+        - binary_sensor.dh_plex_agent_playback_active
+        - binary_sensor.dh_plex_agent_video_playback_active
+        - binary_sensor.dh_plex_agent_audio_playback_active
+        - binary_sensor.dh_plex_agent_video_transcoding_active
+        - binary_sensor.dh_plex_agent_audio_transcoding_active
+        - binary_sensor.dh_plex_agent_hardware_transcode_active
+
+        # Workload / activity.
+        - sensor.dh_plex_agent_activity
+        - sensor.dh_plex_agent_current_item
+        - sensor.dh_plex_agent_scanner_actions
+        - sensor.dh_plex_agent_process_count
+        - sensor.dh_plex_agent_transcoder_count
+
+        # CPU — current sensors are numeric; history provides avg / max.
+        - sensor.dh_plex_agent_cpu
+        - sensor.dh_plex_agent_scanner_cpu
+        - sensor.dh_plex_agent_transcoder_cpu
+
+        # Intel GPU — numeric utilization only.
+        - sensor.dh_plex_agent_gpu_video
+        - sensor.dh_plex_agent_gpu_render
+        - sensor.dh_plex_agent_gpu_video_enhance
+
+        # Service and process state.
+        - binary_sensor.dh_plex_agent_server_running
+        - binary_sensor.dh_plex_agent_scanner_running
+        - binary_sensor.dh_plex_agent_credits_detection
+        - binary_sensor.dh_plex_agent_intro_detection
+        - binary_sensor.dh_plex_agent_thumbnail_generation
+        - binary_sensor.dh_plex_agent_transcoder_running
+
+    exclude:
+      entities:
+        # Rich UI state: attributes change with individual sessions.
+        - sensor.dh_plex_agent_playback_sessions
+        - sensor.dh_plex_agent_video_transcoding
+        - sensor.dh_plex_agent_audio_transcoding
+
+        # Current GPU diagnostics are exposed in the UI, not Recorder.
+        - sensor.dh_plex_agent_gpu_status
+        - sensor.dh_plex_agent_gpu_driver_status
+
+        # The HA Event entity feeds notification automations; no history here.
+        - event.dh_plex_agent_gpu_diagnostic
