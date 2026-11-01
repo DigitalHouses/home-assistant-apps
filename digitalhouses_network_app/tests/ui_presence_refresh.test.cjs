@@ -24,6 +24,7 @@ function fixture(){
    {id:'b',display_name:'Phone',ipv4:'192.168.11.58',mac:'AA:BB:CC:DD:EE:02',presence:'online',last_seen:'2026-10-28T22:32:35Z',note:''}
   ],
   'device-sources':[],'mdns-services':[],'ssdp-services':[],'wsd-endpoints':[],
+  'device-births':{},
   diagnostics:{counts:{arp_last_scan_hosts:24,arp_hosts:27},ipv4_conflicts:[]},
   presence:[
    {kind:'ip',target:'192.168.11.1',enabled:true,state:'reachable',last_check:'2026-10-28T22:32:35Z',
@@ -57,6 +58,17 @@ test('actual Devices load fetches persisted Presence and draws green eyes after 
  await vm.runInContext('load()',f.ctx); // normal 30-second refresh
  assert.equal((f.body.innerHTML.match(/class="presence-eye"/g)||[]).length,2);
  assert.ok(f.requested.filter(x=>x==='api/presence').length>=2);
+});
+test('normal inventory load renders NEW from first-positive evidence and clears it after 24h',async()=>{
+  const f=fixture();
+  f.response['device-births']={b:new Date(Date.now()-60*60*1000).toISOString()};
+  await vm.runInContext('load()',f.ctx);
+  assert.ok(f.requested.includes('api/device-births'), 'device-births must be fetched during normal load');
+  assert.equal((f.body.innerHTML.match(/class="tag new-device"/g)||[]).length,1);
+  assert.match(f.body.innerHTML,/Phone<\/strong><span class="tag new-device"/);
+  f.response['device-births']={b:new Date(Date.now()-25*60*60*1000).toISOString()};
+  await vm.runInContext('load()',f.ctx);
+  assert.doesNotMatch(f.body.innerHTML,/class="tag new-device"/);
 });
 test('IP/MAC popover closes on outside click, stays open on inside click, and closes on Escape',()=>{
  const f=fixture();

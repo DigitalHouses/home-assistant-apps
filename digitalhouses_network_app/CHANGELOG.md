@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.28
+
+- Fix Ingress `NEW` badge: load persisted first-positive device timestamps during every normal inventory refresh (including initial page load and 30-second polling), not only after editing a Note.
+- Keep the existing 24-hour visibility rule, first-census notification suppression and device identities unchanged.
+- Add a regression test exercising normal page load, badge visibility and expiry.
+
 ## 0.1.27
 
 - The Ingress header now displays the **running application version** returned by the existing `/api/status` endpoint instead of a hardcoded version string. This prevents the header showing an older release after an update.
