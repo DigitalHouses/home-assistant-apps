@@ -606,6 +606,45 @@ class MonitorService:
                     self._network_fsm[nid].state == "HEALTHY" and
                     current != rolling):
                 self.store.save_rpm_baseline(nid, rolling, epoch=epoch)
+            # An RPM-only CRITICAL/DEGRADED must not freeze AUTO forever after
+            # a deliberate change in device reporting frequency. Retrain only
+            # after six continuous hours of corroborated, stable, *positive*
+            # activity from multiple devices. This is an explicit exception to
+            # ordinary HEALTHY-only training, never an unconditional decay.
+            fsm = self._network_fsm[nid]
+            auto, _ = self.store.network_problem_settings(nid)
+            status = self.monitor.network_status(nid)
+            threshold = self._traffic_metrics.get(nid, {}).get("threshold")
+            if (auto and current is not None and isinstance(threshold, int)
+                    and threshold > 0 and fsm.reason in
+                    ("rpm_below_threshold", "rpm_low_5m")
+                    and status["bridge_state"] == "online"
+                    and status["inventory_observed"]
+                    and self._session_message_counts.get(nid, 0) > 0):
+                # Retained online without actual peer availability is not RF
+                # proof, so decline automatic relearning if any peer's status
+                # is unknown/offline or any infrastructure repeater is suspect.
+                peers = [self._availability_diagnostic(nid, d.ieee_address)
+                         for d in self.monitor.devices(nid)]
+                repeaters = self._network_repeaters(nid)
+                if (peers and all(a == "online" and reason is None
+                                  for a, reason in peers)
+                        and all(a == "online" for a in repeaters.values())):
+                    candidate = self.store.stable_low_traffic_baseline(
+                        nid, until_epoch=epoch, threshold=threshold)
+                    if (candidate is not None and
+                            not rpm_below_threshold(
+                                self._traffic_metrics[nid].get("rpm"),
+                                auto_threshold(candidate))):
+                        self.store.adopt_stable_low_baseline(
+                            nid, candidate, epoch=epoch)
+                        log.info(
+                            "Auto-relearned %s MPM baseline from %.2f to %.4f "
+                            "after 6h of independently confirmed low traffic",
+                            nid, current, candidate,
+                        )
+                        # FSM and MQTT presentation will pick up the newly
+                        # persisted threshold on the next 10-second tick.
         self._minute_ineligible = {
             item for item in self._minute_ineligible if item[1] >= minute
         }
