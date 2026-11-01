@@ -643,54 +643,84 @@ class ActivityStore:
                 (network_id, boundary),
             )
 
-    def stable_low_traffic_baseline(
-        self, network_id: str, *, until_epoch: int, threshold: int,
-    ) -> float | None:
-        """Six continuous hours of independently corroborated, lower activity.
+    def recent_device_message_count(
+        self, network_id: str, *, until_epoch: int, minutes: int = 30,
+    ) -> int:
+        """Actual recorded, non-retained device MQTT, never bridge chatter."""
+        end = until_epoch - until_epoch % 60
+        start = max(0, end - minutes * 60)
+        row = self.conn.execute(
+            "SELECT COALESCE(SUM(messages),0) FROM message_minutes "
+            "WHERE network_id=? AND bucket_start>=? AND bucket_start<?",
+            (network_id, start, end),
+        ).fetchone()
+        return int(row[0])
 
-        A candidate is separate from normal HEALTHY training. This escape hatch
-        is strictly for an AUTO RPM-only fault: it requires uninterrupted,
-        valid minute observations, actual non-retained MQTT from >=2 Zigbee
-        devices spanning several hours (including the latest hour), a stable
-        distribution, and a mean below the old incident boundary. Complete
-        silence or a transient reconnect must never become a new normal.
+    def stable_low_traffic_baseline(
+        self, network_id: str, *, until_epoch: int,
+        threshold: int, old_baseline: float,
+    ) -> tuple[float, int] | None:
+        """Trend-triggered self-learning based on aggregate MQTT, not devices.
+
+        Windows of 15, 30, then 60 minutes are tried in that order. Accept
+        only an observed low plateau, not the falling edge of a fault:
+        every minute has a valid observation, >=80% are below the old alarm
+        boundary, current actual MQTT activity spans both window halves,
+        and the halves have comparable aggregate message rates. The historic
+        healthy baseline acts as the pre-change trend reference; this also
+        allows a change observed days ago to recover automatically on upgrade.
+        Complete silence cannot be accepted as a new normal.
         """
-        if threshold <= 0:
+        import math
+        if (threshold <= 0 or not math.isfinite(old_baseline)
+                or old_baseline <= 0):
             return None
         end = until_epoch - until_epoch % 60
-        start = end - 6 * 3600
-        if start < 0:
-            return None
-        count, first, last, valid, below = self.conn.execute(
-            "SELECT COUNT(*),MIN(minute_start),MAX(minute_start),"
-            "SUM(CASE WHEN valid=1 THEN 1 ELSE 0 END),"
-            "SUM(CASE WHEN valid=1 AND rpm < ? THEN 1 ELSE 0 END) "
-            "FROM network_rpm_minutes WHERE network_id=? "
-            "AND minute_start>=? AND minute_start<?",
-            (threshold * 0.9, network_id, start, end),
-        ).fetchone()
-        # Require six *contiguous* observed hours and >=90% samples in the
-        # low regime. An outage/restart creates a gap and restarts the proof.
-        if (count != 360 or first != start or last != end - 60
-                or valid != 360 or below < 324):
-            return None
-        messages, senders, active_hours, early, late, recent = self.conn.execute(
-            "SELECT COALESCE(SUM(messages),0), COUNT(DISTINCT ieee_address),"
-            "COUNT(DISTINCT bucket_start / 3600),"
-            "COALESCE(SUM(CASE WHEN bucket_start<? THEN messages ELSE 0 END),0),"
-            "COALESCE(SUM(CASE WHEN bucket_start>=? THEN messages ELSE 0 END),0),"
-            "COALESCE(SUM(CASE WHEN bucket_start>=? THEN messages ELSE 0 END),0) "
-            "FROM message_minutes WHERE network_id=? "
-            "AND bucket_start>=? AND bucket_start<?",
-            (start + 3*3600, start + 3*3600, end - 3600, network_id, start, end),
-        ).fetchone()
-        if messages < 6 or senders < 2 or active_hours < 3 or recent == 0:
-            return None
-        # Avoid accepting a network that is still collapsing or rebounding.
-        if early == 0 or late == 0 or not (0.5 <= late / early <= 2.0):
-            return None
-        result = round(messages / 360.0, 4)
-        return result if result > 0 and result < threshold * 0.9 else None
+        for window, minimum_messages in ((15, 8), (30, 4), (60, 2)):
+            start = end - window * 60
+            if start < 0:
+                continue
+            count, first_min, last_min, valid, low = self.conn.execute(
+                "SELECT COUNT(*), MIN(minute_start), MAX(minute_start), "
+                "SUM(CASE WHEN valid=1 THEN 1 ELSE 0 END), "
+                "SUM(CASE WHEN valid=1 AND rpm < ? THEN 1 ELSE 0 END) "
+                "FROM network_rpm_minutes WHERE network_id=? "
+                "AND minute_start>=? AND minute_start<?",
+                (threshold * 0.9, network_id, start, end),
+            ).fetchone()
+            if (count != window or first_min != start or
+                    last_min != end-60 or valid != window or
+                    low < math.ceil(window * 0.8)):
+                continue
+            midpoint = start + (window // 2) * 60
+            total, first, second, last_seen, buckets = self.conn.execute(
+                "SELECT COALESCE(SUM(messages),0), "
+                "COALESCE(SUM(CASE WHEN bucket_start<? "
+                "THEN messages ELSE 0 END),0), "
+                "COALESCE(SUM(CASE WHEN bucket_start>=? "
+                "THEN messages ELSE 0 END),0), "
+                "MAX(bucket_start), COUNT(DISTINCT bucket_start) "
+                "FROM message_minutes WHERE network_id=? "
+                "AND bucket_start>=? AND bucket_start<?",
+                (midpoint, midpoint, network_id, start, end),
+            ).fetchone()
+            if (total < minimum_messages or first < 1 or second < 1
+                    or buckets < 2 or last_seen is None
+                    or last_seen < end - min(900, window * 30)):
+                continue
+            # Integer counts are noisy on sparse battery-only networks.
+            # The comparison tolerates that quantization but rejects a
+            # monotonically collapsing rate (or a temporary burst).
+            stable = (
+                (0.65 <= second / first <= 1.5) if total >= 8
+                else 0.5 <= second / first <= 2.0
+            )
+            if not stable:
+                continue
+            candidate = round(total / float(window), 4)
+            if 0 < candidate < threshold * 0.9 and candidate <= old_baseline * 0.5:
+                return candidate, window
+        return None
 
     def record_rpm_minute(
         self, network_id: str, *, minute_start: int,

@@ -606,18 +606,17 @@ class MonitorService:
                     self._network_fsm[nid].state == "HEALTHY" and
                     current != rolling):
                 self.store.save_rpm_baseline(nid, rolling, epoch=epoch)
-            # An RPM-only CRITICAL/DEGRADED must not freeze AUTO forever after
-            # a deliberate change in device reporting frequency. Retrain only
-            # after six continuous hours of corroborated, stable, *positive*
-            # activity from multiple devices. This is an explicit exception to
-            # ordinary HEALTHY-only training, never an unconditional decay.
+            # The AUTO-only trend detector can adopt a new reporting regime
+            # after 15/30/60 minutes of verified, positive and stable aggregate
+            # traffic. Normal baseline training above still requires HEALTHY.
+            # The independent trend exception cannot accept complete silence.
             fsm = self._network_fsm[nid]
             auto, _ = self.store.network_problem_settings(nid)
             status = self.monitor.network_status(nid)
             threshold = self._traffic_metrics.get(nid, {}).get("threshold")
             if (auto and current is not None and isinstance(threshold, int)
                     and threshold > 0 and fsm.reason in
-                    ("rpm_below_threshold", "rpm_low_5m")
+                    ("rpm_below_threshold", "rpm_relearn_observing", "rpm_low_5m")
                     and status["bridge_state"] == "online"
                     and status["inventory_observed"]
                     and self._session_message_counts.get(nid, 0) > 0):
@@ -630,19 +629,22 @@ class MonitorService:
                 if (peers and all(a == "online" and reason is None
                                   for a, reason in peers)
                         and all(a == "online" for a in repeaters.values())):
-                    candidate = self.store.stable_low_traffic_baseline(
-                        nid, until_epoch=epoch, threshold=threshold)
-                    if (candidate is not None and
-                            not rpm_below_threshold(
-                                self._traffic_metrics[nid].get("rpm"),
-                                auto_threshold(candidate))):
-                        self.store.adopt_stable_low_baseline(
-                            nid, candidate, epoch=epoch)
-                        log.info(
-                            "Auto-relearned %s MPM baseline from %.2f to %.4f "
-                            "after 6h of independently confirmed low traffic",
-                            nid, current, candidate,
-                        )
+                    match = self.store.stable_low_traffic_baseline(
+                        nid, until_epoch=epoch, threshold=threshold,
+                        old_baseline=current)
+                    if match is not None:
+                        candidate, observed_minutes = match
+                        if not rpm_below_threshold(
+                            self._traffic_metrics[nid].get("rpm"),
+                            auto_threshold(candidate)
+                        ):
+                            self.store.adopt_stable_low_baseline(
+                                nid, candidate, epoch=epoch)
+                            log.info(
+                                "Auto-relearned %s MPM baseline from %.2f to %.4f "
+                                "after %dm of corroborated stable traffic",
+                                nid, current, candidate, observed_minutes,
+                            )
                         # FSM and MQTT presentation will pick up the newly
                         # persisted threshold on the next 10-second tick.
         self._minute_ineligible = {
@@ -682,6 +684,30 @@ class MonitorService:
         self._publish_networks()
         self._publish_problems(allow_event=allow_event)
 
+    def _rpm_relearn_is_observing(self, nid: str, epoch: int) -> bool:
+        """Admit a bounded RPM-only DEGRADED grace only with live evidence.
+
+        The trend model uses only network-wide message counts. We do not
+        enumerate per-device traffic or wait for a fixed six-hour interval.
+        Availability checks are separate safety guards, not trend inputs.
+        """
+        status = self.monitor.network_status(nid)
+        if (status["bridge_state"] != "online" or
+                not status["inventory_observed"] or
+                self._session_message_counts.get(nid, 0) == 0):
+            return False
+        if self.store.recent_device_message_count(
+                nid, until_epoch=epoch, minutes=30) < 2:
+            return False
+        peers = [self._availability_diagnostic(nid, d.ieee_address)
+                 for d in self.monitor.devices(nid)]
+        if not peers or any(a != "online" or reason is not None
+                            for a, reason in peers):
+            return False
+        if any(a != "online" for a in self._network_repeaters(nid).values()):
+            return False
+        return True
+
     def _update_traffic(self, epoch: int, *, allow_event: bool = True) -> None:
         """One rolling 300-second RPM for UI, detector, baseline and Recorder."""
         for network in self.monitor.networks:
@@ -700,10 +726,15 @@ class MonitorService:
             fsm = self._network_fsm.setdefault(nid, NetworkFSM())
             threshold = auto_threshold(baseline) if auto else manual
             repeaters = self._network_repeaters(nid)
+            relearn_pending = (
+                auto and rpm_below_threshold(rpm, threshold) and
+                self._rpm_relearn_is_observing(nid, epoch)
+            )
             fsm.observe(
                 now=float(epoch), bridge_state=str(status["bridge_state"]),
                 inventory_observed=bool(status["inventory_observed"]),
                 rpm=rpm, threshold=threshold, repeaters=repeaters,
+                relearn_pending=relearn_pending,
             )
             if (baseline is None and fsm.boot_completed_at is not None and
                     epoch - fsm.boot_completed_at >= 30 and
@@ -719,6 +750,7 @@ class MonitorService:
                     now=float(epoch), bridge_state=str(status["bridge_state"]),
                     inventory_observed=bool(status["inventory_observed"]),
                     rpm=rpm, threshold=threshold, repeaters=repeaters,
+                    relearn_pending=relearn_pending,
                 )
             low = rpm_below_threshold(rpm, threshold)
             self._traffic_metrics[nid] = {

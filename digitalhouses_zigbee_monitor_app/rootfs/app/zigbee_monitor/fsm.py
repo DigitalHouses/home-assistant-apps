@@ -51,6 +51,7 @@ class NetworkFSM:
         self, *, now: float, bridge_state: str, inventory_observed: bool,
         rpm: float | None, threshold: int | None,
         repeaters: Mapping[str, str] | None = None,
+        relearn_pending: bool = False,
     ) -> tuple[str, str]:
         if bridge_state == "offline":
             self.low_since = None
@@ -95,7 +96,12 @@ class NetworkFSM:
             if self.low_since is None:
                 self.low_since = now
             low_for = max(0.0, now - self.low_since)
-            if low_for >= 300:
+            # Relearn is a bounded sub-process, not an FSM state: while
+            # corroborated MQTT activity continues, allow the trend detector
+            # up to 60 minutes to establish a new plateau without escalating
+            # an RPM-only DEGRADED into CRITICAL. Bridge/peer faults are never
+            # suppressed by this exception.
+            if low_for >= 300 and not (relearn_pending and low_for <= 3600):
                 self.state, self.reason = "CRITICAL", "rpm_low_5m"
                 return self.state, self.reason
             rpm_degraded = True
@@ -117,7 +123,10 @@ class NetworkFSM:
         if confirmed_repeaters:
             self.state, self.reason = "DEGRADED", "repeater_offline"
         elif rpm_degraded:
-            self.state, self.reason = "DEGRADED", "rpm_below_threshold"
+            self.state, self.reason = (
+                "DEGRADED",
+                "rpm_relearn_observing" if relearn_pending else "rpm_below_threshold",
+            )
         else:
             self.state, self.reason = "HEALTHY", "ok"
         return self.state, self.reason

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.26
+
+- Replace the hard six-hour AUTO baseline-relearning wait with **trend-driven 15/30/60-minute windows**, selected automatically by aggregate fresh Zigbee device MQTT volume. Falling activity below the prior 24h learned baseline initiates a candidate; confirm a stable lower plateau from uninterrupted valid MPM minute observations and actual non-retained traffic in both halves of the window. No per-device traffic analysis or manual reset.
+- Keep the affected network DEGRADED (reason `rpm_relearn_observing`) rather than escalating an RPM-only fault to CRITICAL while recent message activity and independent Zigbee availability attest to a plausible new reporting regime, for **up to one hour**. Complete silence, missing devices, bridge offline or a failed repeater are **not** masked; after one hour without confirmation the existing CRITICAL rule applies.
+- Require stability and positive messages, reject a continuing downward collapse, and keep all bridge, device and repeater problem signals independent. The existing SQLite training-generation boundary prevents old spammy HEALTHY history from reviving obsolete thresholds.
+- Preserve standard HEALTHY-only 24h rolling mean, AUTO floor(50%), 10% tolerance, MANUAL policies and Healer OFF. Add trend windows, FSM timeout/outage and end-to-end tests. No new HA controls or Supervisor privileges.
+
+
 ## 0.1.25
 
 - Automatically recover from a stale, persistently high AUTO MPM baseline after a deliberate reporting-frequency change, without operator-set MANUAL thresholds or a reset button. Normal 24h baseline training still uses only HEALTHY minutes.
