@@ -1,3 +1,45 @@
+## Trend-driven MPM adaptation (v0.1.26)
+
+A low MPM relative to the learned 24h HEALTHY baseline is a **trigger
+to analyze a trend**, not an instruction to immediately replace the
+baseline or restart Zigbee2MQTT. The App looks for a **lower stable
+plateau** in aggregated, actual non-retained Zigbee device MQTT activity.
+
+- Try 15 minutes first (at least 8 real messages), then 30 minutes
+  (at least 4) and 60 minutes (at least 2). This is one adaptive
+  detection process, not three independent alarms. A candidate requires
+  a valid MPM observation for every minute, at least 80% of those minutes
+  below the previous alarm boundary, positive messages in **both**
+  halves, reasonably similar aggregate message rates in both halves,
+  and a recent final message. The new rate must be materially below the
+  historical baseline. A continued decline or complete silence cannot
+  be confirmed as a new normal.
+- The evidence considers **aggregate network MQTT counts**, not
+  a per-device traffic analysis. Independent guards still require
+  Bridge online, known inventory, each device Zigbee availability
+  online and repeaters online; a non-retained device message must have
+  arrived since App startup. Ping and unchanged device inventory alone
+  cannot prove network health.
+- When there is convincing *ongoing* message activity but confirmation
+  has not finished, FSM stays **DEGRADED**, with reason
+  `rpm_relearn_observing`, for **up to 60 minutes** from the original
+  low-MPM onset. If proof disappears or the deadline expires, the
+  original CRITICAL escalation applies. Confirmed independent bridge
+  and repeater faults continue to take precedence.
+- When the plateau is confirmed and the resulting threshold would
+  consider the live MPM normal, the App atomically adopts the new
+  baseline and persists a generation boundary. Old historical HEALTHY
+  samples cannot immediately retrain back to the spammy rate.
+- Normal AUTO learning still uses only valid HEALTHY minute samples over
+  24 hours. MANUAL never gets silently rewritten. AUTO floor(50%)
+  rounding, 10% MPM margin and threshold-zero exemption remain.
+  Healer is still OFF. Nothing actively restarts any device.
+
+**Detection limitation:** Even a stable lower MQTT rate with reported
+online devices does not prove full Zigbee radio health. The trend
+detector reduces avoidable false alerts but is not a replacement for
+independent device-availability, bridge, and repeater faults.
+
 ## Automatic MPM baseline regime change (v0.1.25)
 
 Normal AUTO remains the rolling 24-hour mean of completed, verified HEALTHY
