@@ -713,7 +713,7 @@ class ActivityStore:
             # monotonically collapsing rate (or a temporary burst).
             stable = (
                 (0.65 <= second / first <= 1.5) if total >= 8
-                else abs(first - second) <= 2
+                else 0.5 <= second / first <= 2.0
             )
             if not stable:
                 continue
