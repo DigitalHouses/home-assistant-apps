@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.25
+
+- Automatically recover from a stale, persistently high AUTO MPM baseline after a deliberate reporting-frequency change, without operator-set MANUAL thresholds or a reset button. Normal 24h baseline training still uses only HEALTHY minutes.
+- An RPM-only DEGRADED/CRITICAL is eligible for autonomous regime change after six consecutive hours of valid, low MPM observations, with actual non-retained messages from at least two independent devices across three or more hours, including the last hour, and reasonably stable activity in both halves of the window. Current bridge, device Zigbee availability and recognized repeaters must all be online; a fresh message since App startup is mandatory.
+- Complete silence, a bridge or device failure, unknown availability, a missing observation minute, or an unstable downward collapse never authorizes this recalibration. During confirmation, the original fault remains active; auto-adoption occurs only when the candidate threshold makes current MPM normal.
+- On confirmed regime change, atomically persist the new baseline and an SQLite training-generation boundary. Historical HEALTHY data preceding the boundary cannot immediately overwrite the new baseline on future 24h healthy-average recalculations or App restart.
+- Keep manual policy intact, floor(50% AUTO threshold), 10% MPM margin, zero-threshold exemption, independent incidents and Healer OFF. Add SQLite and integration tests for automatic recovery and safety gates; no new HA controls or elevated permissions.
+
+
 ## 0.1.24
 
 - Replace the old minimum full HEALTHY-hour RPM baseline with the **24-hour rolling mean of valid, HEALTHY one-minute MPM samples**, refreshed each minute when eligible observations are available. Require at least 60 valid HEALTHY minutes before changing the persisted baseline; missing or unhealthy minutes are excluded, never silently treated as zero. Retain the last trusted baseline during DEGRADED/CRITICAL or insufficient coverage.

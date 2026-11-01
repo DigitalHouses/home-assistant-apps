@@ -100,6 +100,13 @@ CREATE TABLE IF NOT EXISTS network_rpm_baselines (
     baseline REAL NOT NULL CHECK(baseline >= 0),
     updated_at INTEGER NOT NULL CHECK(updated_at >= 0)
 );
+-- Automatic regime changes start a fresh HEALTHY training generation.
+-- Persist the boundary so pre-relearn (potentially spammy) HEALTHY minutes
+-- cannot immediately restore a stale elevated threshold after app restart.
+CREATE TABLE IF NOT EXISTS network_rpm_relearning (
+    network_id TEXT PRIMARY KEY NOT NULL,
+    since_epoch INTEGER NOT NULL CHECK(since_epoch >= 0)
+);
 CREATE UNIQUE INDEX IF NOT EXISTS incidents_one_open_per_object
     ON incidents(kind, network_id, object_id) WHERE resolved_at IS NULL;
 CREATE INDEX IF NOT EXISTS incidents_recent_closed
@@ -607,6 +614,84 @@ class ActivityStore:
                 (network_id, baseline, epoch),
             )
 
+    def rpm_relearned_since(self, network_id: str) -> int:
+        row = self.conn.execute(
+            "SELECT since_epoch FROM network_rpm_relearning WHERE network_id=?",
+            (network_id,),
+        ).fetchone()
+        return int(row[0]) if row else 0
+
+    def adopt_stable_low_baseline(
+        self, network_id: str, baseline: float, *, epoch: int,
+    ) -> None:
+        """Atomically establish a new trusted regime and training boundary."""
+        import math
+        if not math.isfinite(baseline) or baseline <= 0 or epoch < 0:
+            raise ValueError("invalid confirmed positive baseline")
+        boundary = epoch - epoch % 60
+        with self.conn:
+            self.conn.execute(
+                "INSERT INTO network_rpm_baselines(network_id,baseline,updated_at) "
+                "VALUES (?,?,?) ON CONFLICT(network_id) DO UPDATE SET "
+                "baseline=excluded.baseline,updated_at=excluded.updated_at",
+                (network_id, round(baseline, 4), epoch),
+            )
+            self.conn.execute(
+                "INSERT INTO network_rpm_relearning(network_id,since_epoch) "
+                "VALUES (?,?) ON CONFLICT(network_id) DO UPDATE SET "
+                "since_epoch=excluded.since_epoch",
+                (network_id, boundary),
+            )
+
+    def stable_low_traffic_baseline(
+        self, network_id: str, *, until_epoch: int, threshold: int,
+    ) -> float | None:
+        """Six continuous hours of independently corroborated, lower activity.
+
+        A candidate is separate from normal HEALTHY training. This escape hatch
+        is strictly for an AUTO RPM-only fault: it requires uninterrupted,
+        valid minute observations, actual non-retained MQTT from >=2 Zigbee
+        devices spanning several hours (including the latest hour), a stable
+        distribution, and a mean below the old incident boundary. Complete
+        silence or a transient reconnect must never become a new normal.
+        """
+        if threshold <= 0:
+            return None
+        end = until_epoch - until_epoch % 60
+        start = end - 6 * 3600
+        if start < 0:
+            return None
+        count, first, last, valid, below = self.conn.execute(
+            "SELECT COUNT(*),MIN(minute_start),MAX(minute_start),"
+            "SUM(CASE WHEN valid=1 THEN 1 ELSE 0 END),"
+            "SUM(CASE WHEN valid=1 AND rpm < ? THEN 1 ELSE 0 END) "
+            "FROM network_rpm_minutes WHERE network_id=? "
+            "AND minute_start>=? AND minute_start<?",
+            (threshold * 0.9, network_id, start, end),
+        ).fetchone()
+        # Require six *contiguous* observed hours and >=90% samples in the
+        # low regime. An outage/restart creates a gap and restarts the proof.
+        if (count != 360 or first != start or last != end - 60
+                or valid != 360 or below < 324):
+            return None
+        messages, senders, active_hours, early, late, recent = self.conn.execute(
+            "SELECT COALESCE(SUM(messages),0), COUNT(DISTINCT ieee_address),"
+            "COUNT(DISTINCT bucket_start / 3600),"
+            "COALESCE(SUM(CASE WHEN bucket_start<? THEN messages ELSE 0 END),0),"
+            "COALESCE(SUM(CASE WHEN bucket_start>=? THEN messages ELSE 0 END),0),"
+            "COALESCE(SUM(CASE WHEN bucket_start>=? THEN messages ELSE 0 END),0) "
+            "FROM message_minutes WHERE network_id=? "
+            "AND bucket_start>=? AND bucket_start<?",
+            (start + 3*3600, start + 3*3600, end - 3600, network_id, start, end),
+        ).fetchone()
+        if messages < 6 or senders < 2 or active_hours < 3 or recent == 0:
+            return None
+        # Avoid accepting a network that is still collapsing or rebounding.
+        if early == 0 or late == 0 or not (0.5 <= late / early <= 2.0):
+            return None
+        result = round(messages / 360.0, 4)
+        return result if result > 0 and result < threshold * 0.9 else None
+
     def record_rpm_minute(
         self, network_id: str, *, minute_start: int,
         rpm: float | None, healthy: bool,
@@ -638,7 +723,7 @@ class ActivityStore:
         are excluded rather than averaged as zeros.
         """
         end = until_epoch - until_epoch % 60
-        start = max(0, end - 24 * 3600)
+        start = max(0, end - 24 * 3600, self.rpm_relearned_since(network_id))
         count, average = self.conn.execute(
             "SELECT COUNT(*), AVG(rpm) FROM network_rpm_minutes "
             "WHERE network_id=? AND minute_start>=? AND minute_start<? "
