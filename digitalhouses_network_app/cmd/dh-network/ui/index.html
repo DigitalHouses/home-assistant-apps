@@ -673,6 +673,7 @@ async function load(){
   document.getElementById('app-version').textContent=status.version?'v'+status.version:'версия недоступна';
   // One inventory snapshot per refresh; full diagnostics are export-only.
   const view=await read('ui-inventory');
+  deviceBirths=await read('device-births');
   devices=view.devices||[];
   origins=view.device_sources||[];
   mdnsServices=view.mdns_services||[];
