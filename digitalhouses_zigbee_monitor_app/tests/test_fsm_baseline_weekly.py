@@ -8,20 +8,37 @@ import unittest
 from pathlib import Path
 
 from zigbee_monitor import ActivityStore, ZigbeeMonitor, parse_networks
-from zigbee_monitor.fsm import NetworkFSM, aggregate_fsm, auto_threshold, rpm_below_threshold
+from zigbee_monitor.fsm import (
+    NetworkFSM, aggregate_fsm, auto_threshold, auto_rpm_window_minutes,
+    rpm_below_threshold,
+)
 from zigbee_monitor.discovery import EVENT_TOPIC, ROOT
 from zigbee_monitor.service import MonitorService
 
 
 class FSMContractTests(unittest.TestCase):
-    def test_auto_threshold_exact_integer_contract_including_zero(self):
+    def test_auto_threshold_fractional_two_decimal_contract_including_zero(self):
         self.assertIsNone(auto_threshold(None))
         self.assertEqual([auto_threshold(x) for x in (0, 0.5, 2, 3.9, 4, 5, 35)],
-                         [0, 0, 1, 1, 2, 2, 17])
+                         [0, 0.25, 1, 1.95, 2, 2.5, 17.5])
+        self.assertEqual(auto_threshold(0.5389), 0.27)
+        self.assertEqual(auto_rpm_window_minutes(None), 5)
+        self.assertEqual(auto_rpm_window_minutes(2), 5)
+        self.assertEqual(auto_rpm_window_minutes(1.99), 30)
+        self.assertEqual(auto_rpm_window_minutes(0.5), 30)
+        self.assertEqual(auto_rpm_window_minutes(0.499), 60)
+        self.assertEqual(auto_rpm_window_minutes(0), 60)
+        with self.assertRaises(ValueError):
+            auto_threshold(float("nan"))
+        with self.assertRaises(ValueError):
+            NetworkFSM().observe(
+                now=0, bridge_state="online", inventory_observed=True,
+                rpm=1, threshold=float("nan"))
 
-    def test_auto_floor_zero_does_not_escalate_or_hide_independent_failures(self):
-        self.assertEqual(auto_threshold(0.067), 0)
-        self.assertEqual(auto_threshold(1.99), 0)
+    def test_auto_true_zero_does_not_escalate_or_hide_independent_failures(self):
+        self.assertEqual(auto_threshold(0), 0)
+        self.assertEqual(auto_threshold(0.067), 0.03)
+        self.assertEqual(auto_threshold(1.99), 1)
         self.assertEqual(auto_threshold(2.0), 1)
         fsm = NetworkFSM()
         normal = {"bridge_state": "online", "inventory_observed": True,
@@ -178,17 +195,21 @@ class ZeroThresholdServiceTests(unittest.TestCase):
             clock[0] = 700.0
             service.receive("z2m_battery/Battery_A", b'{"temperature":21.0}')
             service.tick()
-            # One message over 100 seconds: baseline 0.60, floor(0.3) = 0.
+            # One message over 100 seconds: baseline 0.60, AUTO 0.30.
+            # The 30-minute alarm window cannot be evaluated yet, and must
+            # not manufacture a low-MPM fault from an empty 5-minute slot.
             self.assertAlmostEqual(store.rpm_baseline(net), 0.60, places=2)
-            self.assertEqual(service._traffic_metrics[net]["threshold"], 0)
+            self.assertEqual(service._traffic_metrics[net]["threshold"], 0.3)
+            self.assertIsNone(service._traffic_metrics[net]["rpm_alarm"])
+            self.assertEqual(service._traffic_metrics[net]["rpm_alarm_window_minutes"], 30)
             # Bridge and inventory continue to be observed; device MQTT
             # activity may be zero for days, but that is not an alarm.
             for epoch in (961, 3601, 7201, 86401, 7 * 86400 + 631):
                 clock[0] = float(epoch)
                 service.tick()
                 self.assertEqual(service._network_fsm[net].state, "HEALTHY")
-                self.assertEqual(service._traffic_metrics[net]["traffic_problem"], False)
-                self.assertEqual(service._traffic_metrics[net]["threshold"], 0)
+                self.assertIsNone(service._traffic_metrics[net]["traffic_problem"])
+                self.assertEqual(service._traffic_metrics[net]["threshold"], 0.3)
             self.assertFalse(any(
                 topic == EVENT_TOPIC and
                 json.loads(payload).get("current_state") in ("DEGRADED", "CRITICAL")
@@ -239,11 +260,11 @@ class RollingBaselineServiceTests(unittest.TestCase):
             self.assertEqual(service._network_fsm["site"].state, "CRITICAL")
             self.assertEqual(store.rpm_baseline("site"), frozen)
             # Once operator returns to AUTO, the learned 24h baseline
-            # yields floor(9.41/2)=4, recovering the RPM-only incident.
+            # yields 9.41/2=4.71, recovering the RPM-only incident.
             store.update_network_problem_settings("site", auto=True)
             clock[0] += 10
             service._update_traffic(int(clock[0]))
-            self.assertEqual(service._traffic_metrics["site"]["threshold"], 4)
+            self.assertEqual(service._traffic_metrics["site"]["threshold"], 4.71)
             self.assertEqual(service._network_fsm["site"].state, "HEALTHY")
 
 
@@ -365,7 +386,7 @@ class ServiceFSMTests(unittest.TestCase):
             baseline = store.rpm_baseline("site")
             self.assertIsNotNone(baseline)
             self.assertAlmostEqual(baseline, 0.06, places=2)
-            self.assertEqual(svc._traffic_metrics["site"]["threshold"], 0)
+            self.assertEqual(svc._traffic_metrics["site"]["threshold"], 0.03)
             clock[0] = 2000
             svc.tick()
             self.assertEqual(svc._network_fsm["site"].state, "HEALTHY")

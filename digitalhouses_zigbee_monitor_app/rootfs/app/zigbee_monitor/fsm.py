@@ -10,16 +10,29 @@ STATES = ("BOOTING", "HEALTHY", "DEGRADED", "CRITICAL")
 PRIORITY = {"HEALTHY": 0, "BOOTING": 1, "DEGRADED": 2, "CRITICAL": 3}
 
 
-def auto_threshold(baseline: float | None) -> int | None:
-    """AUTO uses floor(50% of baseline); zero disables only the RPM alarm."""
+def auto_threshold(baseline: float | None) -> float | None:
+    """AUTO uses half the trusted baseline, at two decimal places.
+
+    A true zero means no RPM alarm. Rates under 0.01 cannot be represented
+    as a nonzero two-decimal HA sensor and also retain this exemption.
+    """
     if baseline is None:
         return None
     if not math.isfinite(baseline) or baseline < 0:
         raise ValueError("baseline must be a finite nonnegative number")
-    return math.floor(baseline / 2)
+    return math.floor(baseline * 50 + 0.5) / 100
 
 
-def rpm_below_threshold(rpm: float | None, threshold: int | None) -> bool:
+def auto_rpm_window_minutes(baseline: float | None) -> int:
+    """Select a sufficiently long observation window for a sparse network."""
+    if baseline is None or baseline >= 2:
+        return 5
+    if baseline >= 0.5:
+        return 30
+    return 60
+
+
+def rpm_below_threshold(rpm: float | None, threshold: float | None) -> bool:
     """10% tolerance: trigger only below 90% of positive effective threshold."""
     return (rpm is not None and threshold is not None and
             threshold > 0 and rpm < threshold * 0.9)
@@ -49,7 +62,7 @@ class NetworkFSM:
 
     def observe(
         self, *, now: float, bridge_state: str, inventory_observed: bool,
-        rpm: float | None, threshold: int | None,
+        rpm: float | None, threshold: float | None,
         repeaters: Mapping[str, str] | None = None,
         relearn_pending: bool = False,
     ) -> tuple[str, str]:
@@ -81,8 +94,10 @@ class NetworkFSM:
         if (rpm is not None and
                 (not math.isfinite(rpm) or rpm < 0)):
             raise ValueError("RPM must be a finite nonnegative number")
-        if threshold is not None and (type(threshold) is not int or threshold < 0):
-            raise ValueError("threshold must be a nonnegative integer")
+        if threshold is not None and (
+                type(threshold) not in (int, float) or
+                not math.isfinite(threshold) or threshold < 0):
+            raise ValueError("threshold must be a finite nonnegative number")
 
         # A confirmed *zero* threshold explicitly disables the traffic
         # detector. Quiet battery-only networks must remain HEALTHY even after

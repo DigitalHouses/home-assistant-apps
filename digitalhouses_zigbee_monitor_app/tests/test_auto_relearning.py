@@ -184,7 +184,7 @@ class ServiceAutoRelearnTests(unittest.TestCase):
         self.assertEqual(self.store.rpm_baseline(NETWORK), 0.2)
         self.service._update_traffic(int(self.clock[0]) + 10)
         self.assertEqual(self.service._network_fsm[NETWORK].state, "HEALTHY")
-        self.assertEqual(self.service._traffic_metrics[NETWORK]["threshold"], 0)
+        self.assertEqual(self.service._traffic_metrics[NETWORK]["threshold"], 0.1)
         self.assertEqual(self.store.rpm_relearned_since(NETWORK),
                          int(self.clock[0]))
         self.assertEqual(self.store.network_problem_settings(NETWORK), (True, 10))
