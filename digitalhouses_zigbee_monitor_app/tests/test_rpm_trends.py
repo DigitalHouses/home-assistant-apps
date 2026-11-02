@@ -95,7 +95,7 @@ class PerNetworkRPMTrendTests(unittest.TestCase):
         self.svc._traffic_metrics[NID] = {"threshold": 16}
         self.svc._publish_networks()
         self.assertEqual(self.read(avail), "online")
-        self.assertEqual(self.read(threshold), "16")
+        self.assertEqual(self.read(threshold), "16.00")
 
     def test_recorder_and_diagnosis_use_same_rolling_rate_without_ema(self):
         self.online()
