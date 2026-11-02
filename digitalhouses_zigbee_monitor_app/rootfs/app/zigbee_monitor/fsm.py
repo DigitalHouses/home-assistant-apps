@@ -20,7 +20,7 @@ def auto_threshold(baseline: float | None) -> float | None:
         return None
     if not math.isfinite(baseline) or baseline < 0:
         raise ValueError("baseline must be a finite nonnegative number")
-    return round(baseline * 0.5, 2)
+    return math.floor(baseline * 50 + 0.5) / 100
 
 
 def auto_rpm_window_minutes(baseline: float | None) -> int:
