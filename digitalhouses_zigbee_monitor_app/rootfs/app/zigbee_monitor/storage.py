@@ -643,6 +643,36 @@ class ActivityStore:
                 (network_id, boundary),
             )
 
+    def observed_mpm_window(
+        self, network_id: str, *, until_epoch: int, minutes: int,
+    ) -> float | None:
+        """Rate from completed, continuously observed minutes.
+
+        Counts come from real non-retained device MQTT, not averaged 5-minute
+        samples. Missing observation minutes are not interpreted as zero.
+        """
+        if minutes <= 0:
+            raise ValueError("minutes must be positive")
+        end = until_epoch - until_epoch % 60
+        start = end - minutes * 60
+        if start < 0:
+            return None
+        count, first, last, valid = self.conn.execute(
+            "SELECT COUNT(*), MIN(minute_start), MAX(minute_start), "
+            "SUM(valid) FROM network_rpm_minutes "
+            "WHERE network_id=? AND minute_start>=? AND minute_start<?",
+            (network_id, start, end),
+        ).fetchone()
+        if (count != minutes or first != start or last != end-60
+                or valid != minutes):
+            return None
+        messages = self.conn.execute(
+            "SELECT COALESCE(SUM(messages),0) FROM message_minutes "
+            "WHERE network_id=? AND bucket_start>=? AND bucket_start<?",
+            (network_id, start, end),
+        ).fetchone()[0]
+        return round(float(messages) / minutes, 4)
+
     def recent_device_message_count(
         self, network_id: str, *, until_epoch: int, minutes: int = 30,
     ) -> int:
@@ -658,7 +688,7 @@ class ActivityStore:
 
     def stable_low_traffic_baseline(
         self, network_id: str, *, until_epoch: int,
-        threshold: int, old_baseline: float,
+        threshold: float, old_baseline: float,
     ) -> tuple[float, int] | None:
         """Trend-triggered self-learning based on aggregate MQTT, not devices.
 
