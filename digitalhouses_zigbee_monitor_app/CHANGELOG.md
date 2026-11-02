@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.27
+
+- Replace floor-rounded integer AUTO RPM thresholds with **half the trusted baseline rounded to 0.01 messages/min (half-up)**. Publish the numeric effective threshold with two decimals, including historical HA Recorder measurements. A zero threshold still disables only the RPM alarm. The user-controlled MANUAL threshold remains an integer and is never rewritten.
+- Decouple the 5-minute live/Recorder MPM from the alarm comparator. AUTO selects a **5-minute window for baseline >=2 MPM, 30 minutes for baseline 0.5–2 MPM, or 60 minutes below 0.5 MPM**. MANUAL continues using the original 5-minute window. The 30/60-minute rates are calculated from actual recorded non-retained Zigbee device MQTT counts, and require every minute to have a verified observation; missing minutes are not silently filled with zeros.
+- Never use pre-reconnect SQLite history as live evidence for the longer alarm windows. Until a complete current-session monitoring window exists, mark the traffic alarm as unknown rather than reporting a confirmed drop. The live 5-minute chart remains unchanged; the network details include `rpm_alarm`, `rpm_alarm_window_minutes` and `rpm_alarm_phase` to aid diagnosis.
+- Preserve the 10% alarm tolerance, 24-hour HEALTHY-only training, 15/30/60-minute trend Relearn and per-network FSM, independent bridge/device/repeater failures, and Healer OFF. Add coverage for sparse traffic, true silence, missing observations, reconnection, published precision and MANUAL invariance.
+
+
 ## 0.1.26
 
 - Replace the hard six-hour AUTO baseline-relearning wait with **trend-driven 15/30/60-minute windows**, selected automatically by aggregate fresh Zigbee device MQTT volume. Falling activity below the prior 24h learned baseline initiates a candidate; confirm a stable lower plateau from uninterrupted valid MPM minute observations and actual non-retained traffic in both halves of the window. No per-device traffic analysis or manual reset.
