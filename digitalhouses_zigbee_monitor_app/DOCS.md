@@ -1,3 +1,44 @@
+## Fractional AUTO threshold and quiet-network monitoring (v0.1.27)
+
+AUTO no longer rounds half the trusted MPM baseline *down to an integer*.
+Instead, it computes `threshold = round_half_up(0.5 × baseline, 2)` in
+messages/min. For example, a confirmed baseline of 0.5389 MPM yields a
+read-only effective threshold of **0.27**, not zero. MANUAL remains an
+integer 0–10000. An exactly zero threshold still explicitly disables the
+low-traffic alarm only; ultra-small baselines rounding to 0.00 have the
+same safety exemption.
+
+The alarm measurement has a **separate, adaptive observation window**:
+- Baseline >=2 MPM: the existing rolling 5-minute device MQTT activity.
+- Baseline >=0.5 and <2 MPM: completed, continuously observed 30 minutes.
+- Baseline <0.5 MPM: completed, continuously observed 60 minutes.
+- MANUAL always uses the existing 5-minute window, whatever the baseline.
+
+The 30/60-minute comparator uses *actual, non-retained* MQTT device-message
+counts in SQLite, not an average of overlapping 5-minute samples. It
+requires valid observations in **every** minute of the chosen window,
+so an unobserved interval never becomes a fabricated zero. Following
+restart or MQTT reconnection, the App waits for an entire **new**
+observation window rather than treating pre-disconnect history as current
+health evidence. Until the window is ready, the MPM alarm decision is
+unknown (not a confirmed problem), while bridge and device availability
+checks remain independent. The 5-minute MPM graph and Recorder series
+are unchanged and may show a transient zero even when the 30/60-minute
+alarm comparator is safely positive.
+
+`networks_details` now reports `rpm_alarm`,
+`rpm_alarm_window_minutes` and `rpm_alarm_phase` alongside the unchanged
+live `rpm`, `baseline`, `threshold` and `fsm_reason`. These are
+diagnostic attributes, not new Home Assistant entities or user settings.
+
+Existing AUTO trend-driven Relearn stays active with 15/30/60-minute
+candidate windows; its confirmation compares the candidate's threshold
+against the same adaptive alarm metric. The 10% fault tolerance,
+HEALTHY-only normal training, MANUAL behavior and Healer OFF remain.
+Very sparse battery-only networks cannot be reliably assessed from
+message counts alone; bridge, device and repeater problems are monitored
+independently.
+
 ## Trend-driven MPM adaptation (v0.1.26)
 
 A low MPM relative to the learned 24h HEALTHY baseline is a **trigger
