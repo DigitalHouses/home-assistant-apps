@@ -208,7 +208,7 @@ class ZeroThresholdServiceTests(unittest.TestCase):
                 clock[0] = float(epoch)
                 service.tick()
                 self.assertEqual(service._network_fsm[net].state, "HEALTHY")
-                self.assertEqual(service._traffic_metrics[net]["traffic_problem"], False)
+                self.assertIsNone(service._traffic_metrics[net]["traffic_problem"])
                 self.assertEqual(service._traffic_metrics[net]["threshold"], 0.3)
             self.assertFalse(any(
                 topic == EVENT_TOPIC and
