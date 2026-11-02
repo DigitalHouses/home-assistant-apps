@@ -27,7 +27,10 @@ from .discovery import (
 )
 from .problems import PROBLEM_TYPES, Problem, TrafficDetector, network_problems
 from .storage import ActivityStore
-from .fsm import NetworkFSM, aggregate_fsm, auto_threshold, rpm_below_threshold
+from .fsm import (
+    NetworkFSM, aggregate_fsm, auto_threshold, auto_rpm_window_minutes,
+    rpm_below_threshold,
+)
 
 log = logging.getLogger(__name__)
 Publish = Callable[[str, str, bool], bool]
@@ -614,7 +617,7 @@ class MonitorService:
             auto, _ = self.store.network_problem_settings(nid)
             status = self.monitor.network_status(nid)
             threshold = self._traffic_metrics.get(nid, {}).get("threshold")
-            if (auto and current is not None and isinstance(threshold, int)
+            if (auto and current is not None and isinstance(threshold, (int, float))
                     and threshold > 0 and fsm.reason in
                     ("rpm_below_threshold", "rpm_relearn_observing", "rpm_low_5m")
                     and status["bridge_state"] == "online"
@@ -635,7 +638,7 @@ class MonitorService:
                     if match is not None:
                         candidate, observed_minutes = match
                         if not rpm_below_threshold(
-                            self._traffic_metrics[nid].get("rpm"),
+                            self._traffic_metrics[nid].get("rpm_alarm"),
                             auto_threshold(candidate)
                         ):
                             self.store.adopt_stable_low_baseline(
@@ -708,8 +711,29 @@ class MonitorService:
             return False
         return True
 
+    def _rpm_alarm_sample(
+        self, nid: str, epoch: int, *, window: int,
+        observed_rpm: float | None,
+    ) -> float | None:
+        """Alarm measurement independent from the UI's five-minute RPM.
+
+        For quiet AUTO networks, count actual device MQTT over complete,
+        contiguous 30/60 minute observed windows, not recorded MPM samples.
+        A reconnection cannot reuse preceding stored activity as evidence.
+        """
+        if observed_rpm is None:
+            return None
+        if window == 5:
+            return observed_rpm
+        session_start = self._live_started.get(nid, float(epoch))
+        if epoch - session_start < window * 60:
+            return None
+        return self.store.observed_mpm_window(
+            nid, until_epoch=epoch, minutes=window,
+        )
+
     def _update_traffic(self, epoch: int, *, allow_event: bool = True) -> None:
-        """One rolling 300-second RPM for UI, detector, baseline and Recorder."""
+        """Five-minute UI RPM, adaptive AUTO alarm window and 24h baseline."""
         for network in self.monitor.networks:
             nid = network.network_id
             status = self.monitor.network_status(nid)
@@ -725,15 +749,19 @@ class MonitorService:
             rpm = observed_rpm
             fsm = self._network_fsm.setdefault(nid, NetworkFSM())
             threshold = auto_threshold(baseline) if auto else manual
+            window = auto_rpm_window_minutes(baseline) if auto else 5
+            alarm_rpm = self._rpm_alarm_sample(
+                nid, epoch, window=window, observed_rpm=rpm,
+            )
             repeaters = self._network_repeaters(nid)
             relearn_pending = (
-                auto and rpm_below_threshold(rpm, threshold) and
+                auto and rpm_below_threshold(alarm_rpm, threshold) and
                 self._rpm_relearn_is_observing(nid, epoch)
             )
             fsm.observe(
                 now=float(epoch), bridge_state=str(status["bridge_state"]),
                 inventory_observed=bool(status["inventory_observed"]),
-                rpm=rpm, threshold=threshold, repeaters=repeaters,
+                rpm=alarm_rpm, threshold=threshold, repeaters=repeaters,
                 relearn_pending=relearn_pending,
             )
             if (baseline is None and fsm.boot_completed_at is not None and
@@ -746,17 +774,28 @@ class MonitorService:
                 baseline = round(60.0 * seen_messages / observed_seconds, 2)
                 self.store.save_rpm_baseline(nid, baseline, epoch=epoch)
                 threshold = auto_threshold(baseline) if auto else manual
+                window = auto_rpm_window_minutes(baseline) if auto else 5
+                alarm_rpm = self._rpm_alarm_sample(
+                    nid, epoch, window=window, observed_rpm=rpm,
+                )
+                relearn_pending = (
+                    auto and rpm_below_threshold(alarm_rpm, threshold) and
+                    self._rpm_relearn_is_observing(nid, epoch)
+                )
                 fsm.observe(
                     now=float(epoch), bridge_state=str(status["bridge_state"]),
                     inventory_observed=bool(status["inventory_observed"]),
-                    rpm=rpm, threshold=threshold, repeaters=repeaters,
+                    rpm=alarm_rpm, threshold=threshold, repeaters=repeaters,
                     relearn_pending=relearn_pending,
                 )
-            low = rpm_below_threshold(rpm, threshold)
+            low = rpm_below_threshold(alarm_rpm, threshold)
             self._traffic_metrics[nid] = {
                 "rpm":rpm, "rpm_phase":"measured" if observed else "unavailable",
+                "rpm_alarm":alarm_rpm, "rpm_alarm_window_minutes":window,
+                "rpm_alarm_phase":"measured" if alarm_rpm is not None else
+                "warming_up" if observed else "unavailable",
                 "threshold":threshold, "baseline":baseline, "rpm_auto":auto,
-                "traffic_problem":bool(low) if rpm is not None and
+                "traffic_problem":bool(low) if alarm_rpm is not None and
                 threshold is not None else None,
                 "observed_at":_iso(epoch) if observed else None,
             }
@@ -858,7 +897,8 @@ class MonitorService:
         if not isinstance(value, (int, float)) or isinstance(value, bool):
             self._send(availability, "offline")
             return
-        if self._send(network_rpm_threshold_topic(nid), str(int(value))):
+        payload = f"{float(value):.2f}" if auto else str(int(value))
+        if self._send(network_rpm_threshold_topic(nid), payload):
             self._send(availability, "online")
 
     def _publish_rpm_chart(self, row: dict[str, object]) -> None:
