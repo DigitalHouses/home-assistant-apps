@@ -77,8 +77,8 @@ func (db *DB) importMDNSHosts(hosts []MDNSHost,at string,packets int,iface strin
   }
   matched++
   // Read the previous mDNS name before upserting. Legacy installations have
-  // no stored name source; a match to the previous Bonjour value is the only
-  // safe way to migrate their old label without resetting the inventory.
+  // no stored name source; use the previous Bonjour value, or infer Bonjour
+  // only for devices that never had a competing known naming source.
   var label,currentHost,mac,labelSource,hostSource,previousMDNS string
   _,err=db.prepared(`SELECT d.display_name,d.hostname,d.mac,d.display_name_source,
       d.hostname_source,COALESCE(m.hostname,'')
@@ -88,6 +88,20 @@ func (db *DB) importMDNSHosts(hosts []MDNSHost,at string,packets int,iface strin
     labelSource,hostSource,previousMDNS=field(s,3),field(s,4),field(s,5)
    })
   if err!=nil{return}
+  // Older releases updated mdns_hosts but left the original display name
+  // unchanged. After upgrade the old Bonjour name can no longer be compared
+  // with the overwritten mdns_hosts value. Backfill only if this device has
+  // no HA-router identity or WSD name/endpoint to account for its label.
+  // ARP and local-interface discovery do not assign descriptive names.
+  legacyBonjourOnly:=false
+  if previousMDNS!="" && labelSource=="" && hostSource=="" {
+   _,err=db.prepared(`SELECT 1 WHERE NOT EXISTS(
+      SELECT 1 FROM identities WHERE device_id=? AND kind='ha_entity')
+      AND NOT EXISTS(SELECT 1 FROM wsd_names WHERE device_id=?)
+      AND NOT EXISTS(SELECT 1 FROM wsd_endpoints WHERE device_id=?)`,
+      []string{id,id,id},func(_ *C.sqlite3_stmt){legacyBonjourOnly=true})
+   if err!=nil{return}
+  }
   if err=db.run(`INSERT INTO mdns_hosts(device_id,hostname,ipv4,first_seen,last_seen)
      VALUES(?,?,?,?,?) ON CONFLICT(device_id) DO UPDATE
      SET hostname=excluded.hostname,ipv4=excluded.ipv4,last_seen=excluded.last_seen`,
@@ -97,10 +111,10 @@ func (db *DB) importMDNSHosts(hosts []MDNSHost,at string,packets int,iface strin
    priorName:=friendlyMDNSHost(previousMDNS)
    updateLabel:=labelSource=="mdns" || (labelSource=="" &&
        (strings.TrimSpace(label)=="" || sameNonemptyName(label,mac) ||
-        sameNonemptyName(label,priorName)))
+        sameNonemptyName(label,priorName) || legacyBonjourOnly))
    updateHostname:=hostSource=="mdns" || (hostSource=="" &&
        (strings.TrimSpace(currentHost)=="" || sameNonemptyName(currentHost,mac) ||
-        sameNonemptyName(currentHost,previousMDNS)))
+        sameNonemptyName(currentHost,previousMDNS) || legacyBonjourOnly))
    if updateLabel {label,labelSource=name,"mdns"}
    if updateHostname {currentHost,hostSource=hostname,"mdns"}
    if err=db.run(`UPDATE devices SET display_name=?,hostname=?,

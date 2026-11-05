@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.30
+
+- Repair pre-0.1.29 inventories where an earlier Bonjour poll already updated `mdns_hosts.hostname` but left `devices.display_name` stale. On uniquely ARP-confirmed mDNS observations, infer the legacy name is Bonjour-derived only when the device has no HA router identity and no WSD name/endpoint; preserve UUID, MAC, Notes, Presence and timestamps.
+- Keep legacy labels with any evidence of an authoritative router or WSD origin untouched. Add regression coverage for both the stale-source-row recovery and the source-precedence guard.
+
 ## 0.1.29
 
 - Refresh a device's Bonjour-derived name and hostname after a verified mDNS hostname change (for example, `pve-2.local` to `pve-serzhan-home.local`). Keep the same UUID, MAC, identity history, Notes, Presence and observation timestamps; no inventory reset is needed.
