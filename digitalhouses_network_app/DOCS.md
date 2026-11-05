@@ -461,9 +461,10 @@ Validation errors identify bad paths; malformed YAML is not silently accepted.
 The editor is an administrator-only Ingress operation and does not change
 HAOS, router, Proxmox, endpoint network configuration or inventory records.
 
-## Bonjour hostname refresh and source precedence (0.1.29)
+## Bonjour hostname refresh and source precedence (0.1.29, corrected in 0.1.30)
 
 - `devices.display_name_source` and `devices.hostname_source` identify labels established by `mdns`, `ha_router` or confirmed `wsd`. In-place additive migration leaves older names unclaimed instead of guessing their origin.
-- When the same fresh, uniquely ARP-verified MAC/IP advertises a changed Bonjour hostname, update only the name fields that are already mDNS-owned. For an older record with no source, update only when its current name equals the **previously stored** mDNS name (or is an empty/MAC placeholder).
+- When the same fresh, uniquely ARP-verified MAC/IP advertises a changed Bonjour hostname, update only the name fields that are already mDNS-owned. For an older record with no source, also allow an empty/MAC placeholder, a match to the **previously stored** mDNS name, or the narrowly guarded legacy inference described below.
 - A meaningful name/hostname from a Home Assistant router tracker takes precedence even if its text happens to match the old Bonjour hostname. Router MAC and entity-ID placeholders do not erase a discovered name. WSD-claimed labels and unrelated legacy names are preserved.
+- A legacy 0.1.28 or earlier scan may already have advanced `mdns_hosts` to the new hostname while leaving `devices.display_name` stale. Since no original label history survives in that row, 0.1.30 infers Bonjour ownership only for devices without any stored HA router identity, WSD name, or WSD endpoint. If those sources exist, the unknown legacy label is preserved rather than guessed.
 - An unverified, unmatched or stale-ARP mDNS response never renames a device. A verified rename does not create an inventory record, change UUID/MAC, Note, Presence, first/last online timestamps or notification history; no Reset is needed.
