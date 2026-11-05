@@ -83,7 +83,7 @@ func openDB(path string) (*DB, error) {
         "PRAGMA foreign_keys=ON;",
         "CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);",
         "INSERT INTO schema_version(version) SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM schema_version);",
-        "CREATE TABLE IF NOT EXISTS devices (id TEXT PRIMARY KEY, display_name TEXT NOT NULL DEFAULT '', hostname TEXT NOT NULL DEFAULT '', mac TEXT NOT NULL DEFAULT '', ipv4 TEXT NOT NULL DEFAULT '', ipv6 TEXT NOT NULL DEFAULT '', presence TEXT NOT NULL DEFAULT 'unknown', first_seen TEXT NOT NULL, last_seen TEXT NOT NULL, note TEXT NOT NULL DEFAULT '');",
+        "CREATE TABLE IF NOT EXISTS devices (id TEXT PRIMARY KEY, display_name TEXT NOT NULL DEFAULT '', hostname TEXT NOT NULL DEFAULT '', display_name_source TEXT NOT NULL DEFAULT '', hostname_source TEXT NOT NULL DEFAULT '', mac TEXT NOT NULL DEFAULT '', ipv4 TEXT NOT NULL DEFAULT '', ipv6 TEXT NOT NULL DEFAULT '', presence TEXT NOT NULL DEFAULT 'unknown', first_seen TEXT NOT NULL, last_seen TEXT NOT NULL, note TEXT NOT NULL DEFAULT '');",
         "CREATE TABLE IF NOT EXISTS identities (device_id TEXT NOT NULL REFERENCES devices(id), kind TEXT NOT NULL, value TEXT NOT NULL, first_seen TEXT NOT NULL, last_seen TEXT NOT NULL, PRIMARY KEY(device_id,kind,value));",
         "CREATE TABLE IF NOT EXISTS observations (id INTEGER PRIMARY KEY, device_id TEXT NOT NULL REFERENCES devices(id), source TEXT NOT NULL, observed_at TEXT NOT NULL, details_json TEXT NOT NULL DEFAULT '{}');",
         "CREATE TABLE IF NOT EXISTS sources (id TEXT PRIMARY KEY, kind TEXT NOT NULL, status TEXT NOT NULL, last_success TEXT, details_json TEXT NOT NULL DEFAULT '{}');",
@@ -116,7 +116,7 @@ func openDB(path string) (*DB, error) {
         "CREATE TABLE IF NOT EXISTS presence_outbox (event_id TEXT PRIMARY KEY,kind TEXT NOT NULL,target TEXT NOT NULL,occurred_at TEXT NOT NULL,payload_json TEXT NOT NULL);",
         "CREATE TABLE IF NOT EXISTS event_delivery_log (event_id TEXT PRIMARY KEY,event_type TEXT NOT NULL,occurred_at TEXT NOT NULL,published_at TEXT NOT NULL DEFAULT '',status TEXT NOT NULL CHECK(status IN ('queued','broker_acked','retrying')),attempts INTEGER NOT NULL DEFAULT 0,payload_json TEXT NOT NULL);",
         "CREATE INDEX IF NOT EXISTS delivery_order ON event_delivery_log(occurred_at DESC);",
-        "UPDATE schema_version SET version=13;",
+        "UPDATE schema_version SET version=14;",
     }, "\n")
     if err := db.exec(schema); err != nil {
         db.Close()
@@ -125,6 +125,7 @@ func openDB(path string) (*DB, error) {
     if err:=db.ensureDeviceBirthSourceColumn();err!=nil{db.Close();return nil,err}
     if err:=db.ensurePresenceLabelColumn();err!=nil{db.Close();return nil,err}
     if err:=db.ensureRetentionColumns();err!=nil{db.Close();return nil,err}
+    if err:=db.ensureDeviceNameSourceColumns();err!=nil{db.Close();return nil,err}
     if err:=db.initializeDiscoveryBaseline(path);err!=nil{db.Close();return nil,err}
     return db, nil
 }

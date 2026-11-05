@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.29
+
+- Refresh a device's Bonjour-derived name and hostname after a verified mDNS hostname change (for example, `pve-2.local` to `pve-serzhan-home.local`). Keep the same UUID, MAC, identity history, Notes, Presence and observation timestamps; no inventory reset is needed.
+- Persist separate sources for the visible name and hostname. Meaningful Home Assistant router labels take precedence; verified WSD and unrelated legacy labels are not replaced by Bonjour. Router MAC/entity-ID placeholders no longer overwrite discovered names.
+- Upgrade existing SQLite inventories in place. For pre-upgrade names without provenance, only replace a legacy name if it matches the previously saved Bonjour hostname. Cover rename, source precedence, restart and schema migration with Go regressions.
+
 ## 0.1.28
 
 - Fix Ingress `NEW` badge: load persisted first-positive device timestamps during every normal inventory refresh (including initial page load and 30-second polling), not only after editing a Note.
