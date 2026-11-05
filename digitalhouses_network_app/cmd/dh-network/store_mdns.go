@@ -76,20 +76,36 @@ func (db *DB) importMDNSHosts(hosts []MDNSHost,at string,packets int,iface strin
    continue
   }
   matched++
+  // Read the previous mDNS name before upserting. Legacy installations have
+  // no stored name source; a match to the previous Bonjour value is the only
+  // safe way to migrate their old label without resetting the inventory.
+  var label,currentHost,mac,labelSource,hostSource,previousMDNS string
+  _,err=db.prepared(`SELECT d.display_name,d.hostname,d.mac,d.display_name_source,
+      d.hostname_source,COALESCE(m.hostname,'')
+      FROM devices d LEFT JOIN mdns_hosts m ON m.device_id=d.id WHERE d.id=?`,
+   []string{id},func(s *C.sqlite3_stmt){
+    label,currentHost,mac=field(s,0),field(s,1),field(s,2)
+    labelSource,hostSource,previousMDNS=field(s,3),field(s,4),field(s,5)
+   })
+  if err!=nil{return}
   if err=db.run(`INSERT INTO mdns_hosts(device_id,hostname,ipv4,first_seen,last_seen)
      VALUES(?,?,?,?,?) ON CONFLICT(device_id) DO UPDATE
      SET hostname=excluded.hostname,ipv4=excluded.ipv4,last_seen=excluded.last_seen`,
     id,hostname,ip,at,at);err!=nil{return}
   name:=friendlyMDNSHost(hostname)
   if name!="" {
-   // Device names obtained from router integrations take precedence.
-   // MAC-only placeholders can be improved with a verified mDNS hostname.
-   if err=db.run(`UPDATE devices SET
-      display_name=CASE WHEN display_name='' OR LOWER(display_name)=LOWER(mac)
-       THEN ? ELSE display_name END,
-      hostname=CASE WHEN hostname='' OR LOWER(hostname)=LOWER(mac)
-       THEN ? ELSE hostname END
-      WHERE id=?`,name,hostname,id);err!=nil{return}
+   priorName:=friendlyMDNSHost(previousMDNS)
+   updateLabel:=labelSource=="mdns" || (labelSource=="" &&
+       (strings.TrimSpace(label)=="" || sameNonemptyName(label,mac) ||
+        sameNonemptyName(label,priorName)))
+   updateHostname:=hostSource=="mdns" || (hostSource=="" &&
+       (strings.TrimSpace(currentHost)=="" || sameNonemptyName(currentHost,mac) ||
+        sameNonemptyName(currentHost,previousMDNS)))
+   if updateLabel {label,labelSource=name,"mdns"}
+   if updateHostname {currentHost,hostSource=hostname,"mdns"}
+   if err=db.run(`UPDATE devices SET display_name=?,hostname=?,
+       display_name_source=?,hostname_source=? WHERE id=?`,
+       label,currentHost,labelSource,hostSource,id);err!=nil{return}
   }
   for _,srv:=range host.Services {
    if srv.Port==0 || len(srv.Instance)>120 || len(srv.Type)>150 || len(srv.Target)>200 {continue}

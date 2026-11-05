@@ -29,7 +29,7 @@ Available now:
 - additive source-scoped IPv4 evidence database: live ARP mapping outranks a conflicting HA router-reported IP, while historical DHCP/HA claims and notes remain intact;
 - current IPv4 is blank when neither source has fresh positive evidence. The diagnostic JSON exposes all IPv4 evidence and conflicts with timestamps/MACs; the Web UI shows conflict counts and separate last-ARP-scan versus historically seen ARP hosts.
 
-- Bonjour/mDNS discovery from the App itself: published hostnames and DNS-SD service types/ports are stored only for devices with a fresh, unique ARP-verified address/MAC association.
+- Bonjour/mDNS discovery from the App itself: published hostnames and DNS-SD service types/ports are stored only for devices with a fresh, unique ARP-verified address/MAC association. A verified change to a Bonjour-sourced hostname automatically refreshes that device's displayed name without replacing UUID, MAC, Notes or Presence. Meaningful router and verified WSD labels take priority.
 - Ingress displays detected service types, source attribution and counts. Exported JSON contains linked records plus unlinked announcements without inventing device identities.
 
 - Compact **IP-first device table** with sortable column headers; numeric IPv4 ordering and unknown addresses always last. Bonjour services appear on hovering/focusing a compact `mDNS · N` discovery badge rather than in a wide column.

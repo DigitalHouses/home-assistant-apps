@@ -147,8 +147,11 @@ func (db *DB) importRouterTrackers(trackers []RouterTracker,now string) error {
             initial:="unknown"
             if t.State=="home" {initial="online"}
             if t.State=="not_home" {initial="not_observed"}
-            if err=db.run("INSERT INTO devices(id,display_name,hostname,mac,ipv4,ipv6,presence,first_seen,last_seen,note) VALUES(?,?,?,?,?,?,?,?,?,'')",
-                id,t.Name,t.Hostname,t.MAC,t.IPv4,t.IPv6,initial,now,firstLast);err!=nil{return err}
+            nameSource,hostnameSource:="",""
+            if meaningfulSourceLabel(t.Name,t.MAC){nameSource="ha_router"}
+            if meaningfulSourceLabel(t.Hostname,t.MAC){hostnameSource="ha_router"}
+            if err=db.run("INSERT INTO devices(id,display_name,hostname,display_name_source,hostname_source,mac,ipv4,ipv6,presence,first_seen,last_seen,note) VALUES(?,?,?,?,?,?,?,?,?,?,?,'')",
+                id,t.Name,t.Hostname,nameSource,hostnameSource,t.MAC,t.IPv4,t.IPv6,initial,now,firstLast);err!=nil{return err}
         } else {
             old,readErr:=db.readDevice(id)
             if readErr!=nil{return readErr}
@@ -175,8 +178,23 @@ func (db *DB) importRouterTrackers(trackers []RouterTracker,now string) error {
                 t.IPv4=""
                 t.IPv6=""
             }
-            if err=db.run("UPDATE devices SET display_name=?,hostname=?,mac=?,ipv4=?,ipv6=?,presence=?,last_seen=? WHERE id=?",
-                keep(old.DisplayName,t.Name),keep(old.Hostname,t.Hostname),keep(old.MAC,t.MAC),
+            // A verified, meaningful router label wins. A MAC or entity ID
+            // fallback must not erase a name previously learned via Bonjour.
+            nameIsRouter,hostnameIsRouter:="0","0"
+            if meaningfulSourceLabel(t.Name,t.MAC){nameIsRouter="1"}
+            if meaningfulSourceLabel(t.Hostname,t.MAC){hostnameIsRouter="1"}
+            if err=db.run(`UPDATE devices SET
+                display_name=CASE WHEN ?='1' THEN ?
+                    WHEN TRIM(display_name)='' OR LOWER(display_name)=LOWER(mac)
+                    THEN ? ELSE display_name END,
+                hostname=CASE WHEN ?='1' THEN ?
+                    WHEN TRIM(hostname)='' OR LOWER(hostname)=LOWER(mac)
+                    THEN ? ELSE hostname END,
+                display_name_source=CASE WHEN ?='1' THEN 'ha_router' ELSE display_name_source END,
+                hostname_source=CASE WHEN ?='1' THEN 'ha_router' ELSE hostname_source END,
+                mac=?,ipv4=?,ipv6=?,presence=?,last_seen=? WHERE id=?`,
+                nameIsRouter,t.Name,t.Name,hostnameIsRouter,t.Hostname,t.Hostname,
+                nameIsRouter,hostnameIsRouter,keep(old.MAC,t.MAC),
                 keep(old.IPv4,t.IPv4),keep(old.IPv6,t.IPv6),status,seen,id);err!=nil{return err}
         }
         if _,ok:=cycleRank[id]; !ok {

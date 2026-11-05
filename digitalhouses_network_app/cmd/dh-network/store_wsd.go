@@ -55,7 +55,7 @@ func (db *DB) persistWSDComputerName(item WSDAnnouncement,name,at string) (err e
  if !exists{return errors.New("WSD metadata endpoint no longer belongs to device")}
  if err=db.run("INSERT INTO wsd_names(device_id,endpoint,computer_name,first_seen,last_seen) VALUES(?,?,?,?,?) ON CONFLICT(device_id,endpoint) DO UPDATE SET computer_name=excluded.computer_name,last_seen=excluded.last_seen",
   id,item.Endpoint,name,at,at);err!=nil{return err}
- if err=db.run("UPDATE devices SET display_name=? WHERE id=? AND (TRIM(display_name)='' OR LOWER(display_name)=LOWER(mac))",
+ if err=db.run("UPDATE devices SET display_name=?,display_name_source='wsd' WHERE id=? AND (TRIM(display_name)='' OR LOWER(display_name)=LOWER(mac))",
   name,id);err!=nil{return err}
  if err=db.exec("COMMIT");err!=nil{return err}
  committed=true
