@@ -68,7 +68,7 @@ case "${INSTALL_MODE}" in
 esac
 
 need_apt=0
-for command_name in git curl tar python3 smartctl lspci dmidecode; do
+for command_name in git curl tar python3 smartctl ipmitool lspci dmidecode; do
     command -v "${command_name}" >/dev/null 2>&1 || need_apt=1
 done
 if ! dpkg-query -W -f='${Status}\n' python3-venv 2>/dev/null \
@@ -86,6 +86,7 @@ if [[ "${need_apt}" -eq 1 ]]; then
         python3 \
         python3-venv \
         smartmontools \
+        ipmitool \
         pciutils \
         dmidecode
 fi
