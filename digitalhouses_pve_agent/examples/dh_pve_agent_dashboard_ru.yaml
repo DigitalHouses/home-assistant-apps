@@ -1281,10 +1281,10 @@ sections:
             {% if ns.count == 0 %}
               {% set ns.items = ns.items + [{
                 'type': 'custom:mushroom-template-card',
-                'primary': 'Fan: Not detected',
-                'secondary': 'Вентиляторы не обнаружены',
+                'primary': 'Нет данных RPM',
+                'secondary': 'Проверьте MQTT-сущности вентиляторов в HA',
                 'icon': 'mdi:fan-alert',
-                'icon_color': 'red',
+                'icon_color': 'grey',
                 'layout': 'horizontal',
                 'fill_container': true
               }] %}
@@ -1751,36 +1751,78 @@ sections:
         grid_options:
           columns: 12
       - type: heading
-        heading: CPU / RAM / Swap · 24 часа
+        heading: CPU / RAM / Swap / Fans · 24 часа
         heading_style: subtitle
         icon: mdi:chart-areaspline
-      - type: custom:mini-graph-card
-        name: CPU / RAM / Swap
-        icon: mdi:chart-areaspline
+      - type: custom:auto-entities
+        show_empty: false
+        unique: true
+        card:
+          type: custom:mini-graph-card
+          name: CPU / RAM / Swap / Fans
+          icon: mdi:chart-areaspline
+          hours_to_show: 24
+          points_per_hour: 2
+          line_width: 2
+          height: 120
+          decimals: 1
+          lower_bound: 0
+          upper_bound: 100
+          lower_bound_secondary: 0
+          show:
+            name: true
+            icon: true
+            state: false
+            graph: line
+            fill: false
+            points: false
+            labels: false
+            legend: true
+            extrema: false
         entities:
           - entity: sensor.dh_pve_agent_cpu_usage
             name: CPU
+            show_legend_state: false
           - entity: sensor.dh_pve_agent_memory_usage
             name: RAM
+            show_legend_state: false
           - entity: sensor.dh_pve_agent_swap_usage
             name: Swap
-        hours_to_show: 24
-        points_per_hour: 2
-        line_width: 2
-        height: 120
-        decimals: 1
-        lower_bound: 0
-        upper_bound: 100
-        show:
-          name: true
-          icon: true
-          state: false
-          graph: line
-          fill: false
-          points: false
-          labels: false
-          legend: true
-          extrema: false
+            show_legend_state: false
+        filter:
+          template: |-
+            {% set ns = namespace(items=[]) %}
+            {% for fan in states.sensor | sort(attribute='entity_id') %}
+              {% if
+                state_attr(fan.entity_id, 'proxmox_integration') == 'digitalhouses_pve_agent'
+                and state_attr(fan.entity_id, 'proxmox_section') == 'cooling'
+                and state_attr(fan.entity_id, 'proxmox_metric') == 'rpm'
+                and fan.state | is_number
+              %}
+                {% set name = state_attr(fan.entity_id, 'proxmox_display_name')
+                  or state_attr(fan.entity_id, 'label')
+                  or 'Fan' %}
+                {% set speed_id = fan.entity_id | replace('_rpm', '_speed') %}
+                {% if states(speed_id) | is_number %}
+                  {% set ns.items = ns.items + [{
+                    'entity': speed_id,
+                    'name': name ~ ' %',
+                    'show_legend_state': false
+                  }] %}
+                {% else %}
+                  {% set ns.items = ns.items + [{
+                    'entity': fan.entity_id,
+                    'name': name ~ ' RPM',
+                    'y_axis': 'secondary',
+                    'show_legend_state': false
+                  }] %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+            {{- ns.items -}}
+        sort:
+          method: entity_id
+        card_param: entities
         grid_options:
           columns: 12
       - type: heading
