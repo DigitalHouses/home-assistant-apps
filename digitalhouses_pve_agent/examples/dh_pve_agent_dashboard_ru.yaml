@@ -1864,7 +1864,6 @@ sections:
           decimals: 1
           lower_bound: 0
           upper_bound: 100
-          lower_bound_secondary: 0
           show:
             name: true
             icon: true
@@ -1875,49 +1874,26 @@ sections:
             labels: false
             legend: true
             extrema: false
-        entities:
-          - entity: sensor.dh_pve_agent_cpu_usage
-            name: CPU
-            show_legend_state: false
-          - entity: sensor.dh_pve_agent_memory_usage
-            name: RAM
-            show_legend_state: false
-          - entity: sensor.dh_pve_agent_swap_usage
-            name: Swap
-            show_legend_state: false
         filter:
           template: |-
-            {% set ns = namespace(items=[]) %}
+            {# Always render the three base percentage metrics. #}
+            {% set ns = namespace(items=[
+              {'entity': 'sensor.dh_pve_agent_cpu_usage', 'name': 'CPU'},
+              {'entity': 'sensor.dh_pve_agent_memory_usage', 'name': 'RAM'},
+              {'entity': 'sensor.dh_pve_agent_swap_usage', 'name': 'Swap'}
+            ]) %}
+            {# Only include actual calibrated percentages, never RPM. #}
             {% for fan in states.sensor | sort(attribute='entity_id') %}
-              {% if
-                state_attr(fan.entity_id, 'proxmox_integration') == 'digitalhouses_pve_agent'
-                and state_attr(fan.entity_id, 'proxmox_section') == 'cooling'
-                and state_attr(fan.entity_id, 'proxmox_metric') == 'rpm'
-                and fan.state | is_number
-              %}
+              {% if state_attr(fan.entity_id, 'proxmox_integration') == 'digitalhouses_pve_agent'
+                    and state_attr(fan.entity_id, 'proxmox_section') == 'cooling'
+                    and state_attr(fan.entity_id, 'proxmox_metric') == 'speed_percent'
+                    and fan.state | is_number %}
                 {% set name = state_attr(fan.entity_id, 'proxmox_display_name')
-                  or state_attr(fan.entity_id, 'label')
-                  or 'Fan' %}
-                {% set speed_id = fan.entity_id | replace('_rpm', '_speed') %}
-                {% if states(speed_id) | is_number %}
-                  {% set ns.items = ns.items + [{
-                    'entity': speed_id,
-                    'name': name ~ ' %',
-                    'show_legend_state': false
-                  }] %}
-                {% else %}
-                  {% set ns.items = ns.items + [{
-                    'entity': fan.entity_id,
-                    'name': name ~ ' RPM',
-                    'y_axis': 'secondary',
-                    'show_legend_state': false
-                  }] %}
-                {% endif %}
+                  or state_attr(fan.entity_id, 'label') or fan.name %}
+                {% set ns.items = ns.items + [{'entity': fan.entity_id, 'name': name}] %}
               {% endif %}
             {% endfor %}
-            {{- ns.items -}}
-        sort:
-          method: entity_id
+            {{ ns.items }}
         card_param: entities
         grid_options:
           columns: 12
