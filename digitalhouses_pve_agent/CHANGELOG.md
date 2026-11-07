@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.73
+
+- Detect real server-board fans through the local BMC/IPMI tachometer interface when Linux hwmon exposes no `fan*_input` files. Read `ipmitool -I open sdr type Fan` only; never send fan-speed control commands or use IPMI network credentials.
+- Ignore absent `No Reading` headers and non-RPM records; retain stable fan names, the existing two-positive-samples confirmation, MQTT Discovery and fan calibration safeguards. On ASRock Rack X570D4U-2L2T this exposes FAN1 and FAN3, while empty headers remain absent.
+- Install `ipmitool` as a required packaged dependency. Fail closed if OpenIPMI is unavailable, the tool fails or exceeds the timeout. Add hardware-output fixture regression tests.
+
 ## 0.5.72
 
 - Remove PVE-owned transcoding instrumentation: stop running intel_gpu_top in guests/host, remove QGA transcoding probes, state fields and the GPU transcoding MQTT Discovery sensor. Existing dynamic discovery removes the retired component and its retained telemetry.

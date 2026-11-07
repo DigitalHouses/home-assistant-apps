@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -31,6 +32,64 @@ def _chip_display(chip: str) -> str:
     if chip == "nouveau":
         return "Nouveau GPU"
     return chip
+
+
+
+def parse_ipmi_fan_sdr(output: str) -> tuple[FanSnapshot, ...]:
+    """Read only live BMC tachometers, never absent or non-reading headers."""
+    fans: list[FanSnapshot] = []
+    seen: set[str] = set()
+    for line in output.splitlines():
+        fields = [part.strip() for part in line.split("|")]
+        if len(fields) != 5 or fields[2].lower() != "ok":
+            continue
+        label = fields[0]
+        reading = re.fullmatch(r"([0-9]+)\s+RPM", fields[4], re.IGNORECASE)
+        if not label or reading is None:
+            continue
+        fan_name = _sanitize(label)
+        if not fan_name or fan_name in seen:
+            continue
+        seen.add(fan_name)
+        index = re.search(r"[0-9]+", label)
+        rpm = int(reading.group(1))
+        fans.append(
+            FanSnapshot(
+                fan_id=_sanitize(f"ipmi_ipmi0_{fan_name}"),
+                chip="ipmi",
+                chip_display_name="BMC IPMI",
+                source_device="ipmi0",
+                fan_name=fan_name,
+                fan_index=int(index.group(0)) if index else len(fans) + 1,
+                label=label,
+                display_name=f"{label} RPM - BMC IPMI",
+                rpm=rpm,
+                available=True,
+                input_path=f"ipmi:sdr:{label}",
+            )
+        )
+    return tuple(fans)
+
+
+def collect_ipmi_fans(ipmi_device: Path = Path("/dev/ipmi0")) -> tuple[FanSnapshot, ...]:
+    """Local, read-only IPMI fallback for boards without hwmon fan inputs.
+
+    Explicitly use the local OpenIPMI interface: no BMC network credentials
+    and no OEM fan-control (raw IPMI) commands.
+    """
+    if not ipmi_device.exists():
+        return ()
+    try:
+        result = subprocess.run(
+            ["ipmitool", "-I", "open", "sdr", "type", "Fan"],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=6,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return ()
+    return parse_ipmi_fan_sdr(result.stdout)
 
 
 def collect_fans(hwmon_root: Path = Path("/sys/class/hwmon")) -> tuple[FanSnapshot, ...]:
@@ -90,4 +149,6 @@ def collect_fans(hwmon_root: Path = Path("/sys/class/hwmon")) -> tuple[FanSnapsh
                     input_path=str(input_path),
                 )
             )
+    if not result and hwmon_root == Path("/sys/class/hwmon"):
+        return collect_ipmi_fans()
     return tuple(result)
