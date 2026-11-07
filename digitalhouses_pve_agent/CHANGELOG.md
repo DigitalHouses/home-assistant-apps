@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.74
+
+- Preserve IPMI fan RPM values when the BMC flags a sensor as non-critical, critical, or non-recoverable. A confirmed stalled fan must remain visible with `0 RPM` instead of disappearing from MQTT discovery; missing or non-numeric readings remain excluded.
+- Use the physical BMC header labels in MQTT Discovery (`FAN1`, `FAN3`) instead of renumbering them by discovery order. No fan-control commands or calibration behavior changed.
+
 ## 0.5.73
 
 - Detect real server-board fans through the local BMC/IPMI tachometer interface when Linux hwmon exposes no `fan*_input` files. Read `ipmitool -I open sdr type Fan` only; never send fan-speed control commands or use IPMI network credentials.

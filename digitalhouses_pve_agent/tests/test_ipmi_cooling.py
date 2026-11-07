@@ -50,13 +50,29 @@ class TestBmcIpmiFanDiscovery(TestCase):
         self.assertEqual(fan.rpm, 0)
         self.assertTrue(fan.available)
 
+    def test_alarm_rpm_keeps_confirmed_fan_visible(self):
+        tracker = FanPresenceTracker()
+        healthy = cooling.parse_ipmi_fan_sdr(
+            "FAN1 | 60h | ok | 7.0 | 1700 RPM"
+        )
+        tracker.observe(healthy)
+        self.assertEqual(tracker.observe(healthy).confirmed_count, 1)
+        for status, rpm in (("nc", 800), ("cr", 0), ("nr", 0)):
+            with self.subTest(status=status):
+                alarm = cooling.parse_ipmi_fan_sdr(
+                    f"FAN1 | 60h | {status} | 7.0 | {rpm} RPM"
+                )
+                snapshot = tracker.observe(alarm)
+                self.assertEqual(snapshot.confirmed_count, 1)
+                self.assertEqual(snapshot.confirmed_fans[0].rpm, rpm)
+
     def test_ignore_missing_invalid_and_duplicate_readings(self):
         output = (
             "FAN1 | 60h | ns | 7.0 | No Reading\n"
             "FAN2 | 61h | ok | 7.0 | 900 RPM\n"
             "FAN2 | 61h | ok | 7.0 | 800 RPM\n"
             "FAN3 | 62h | ok | 7.0 | 150 C\n"
-            "FAN4 | 63h | cr | 7.0 | 200 RPM\n"
+            "FAN4 | 63h | ns | 7.0 | 200 RPM\n"
             "FAN5 | 64h | ok | 7.0 | -1 RPM\n"
             "PSU1 Fan | 78h | ok | 7.0 | 250 RPM\n"
         )
