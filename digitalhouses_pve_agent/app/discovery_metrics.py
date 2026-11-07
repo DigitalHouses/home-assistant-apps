@@ -319,6 +319,7 @@ def build_full_discovery_payload(
                 "serial": obj + ".serial | default(none)",
                 "disk_type": obj + ".disk_type | default(none)",
                 "device_path": obj + ".device_path | default(none)",
+                "capacity_bytes": obj + ".capacity_bytes | default(none)",
             }
             key, item = _sensor(
                 uid=uid, state_topic=topics.state, app_topic=topics.availability,
@@ -447,8 +448,11 @@ def build_full_discovery_payload(
             slug = _slug(fan_id)
             obj = _path("fans", fan_id)
             user_display = str(raw.get("label") or fan_id)
-            # IPMI labels are physical header IDs: FAN3 must not become Fan 2.
-            fan_name = user_display if raw.get("chip") == "ipmi" else f"Fan {index}"
+            # Preserve the physical channel number, not enumeration order.
+            # Humanize bare lowercase 'fan2'; keep BMC 'FAN3', 'SYS_FAN3'
+            # and motherboard labels exactly as exported.
+            bare = re.fullmatch(r"fan([0-9]+)", user_display)
+            fan_name = f"Fan {bare.group(1)}" if bare else user_display
             calibratable = calibratable or raw.get("calibration_supported") is True
             common_attrs = {
                 "chip": obj + ".chip | default(none)",

@@ -76,6 +76,19 @@ def parse_lspci_gpus(text: str) -> tuple[dict[str, str], ...]:
             if match.group("class").lower() not in {"0300", "0302", "0380"}:
                 current = None
                 continue
+            # Hide service BMC console VGA and common *virtual* VGA adapters
+            # from the user-facing physical GPU inventory. Classification
+            # uses PCI IDs, not translated model strings or motherboard names.
+            pci_id = (match.group("vendor").lower(), match.group("device").lower())
+            if pci_id in {
+                ("1a03", "2000"),  # ASPEED BMC console
+                ("1234", "1111"),  # Bochs/QEMU virtual display
+                ("1b36", "0100"),  # QXL
+                ("15ad", "0405"),  # VMware SVGA
+                ("80ee", "beef"),  # VirtualBox VGA
+            }:
+                current = None
+                continue
             current = {
                 "pci_address": match.group("pci").lower(),
                 "model": match.group("model").strip(),
