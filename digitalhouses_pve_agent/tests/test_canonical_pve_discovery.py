@@ -262,20 +262,20 @@ def test_fan_discovery_uses_short_sequential_friendly_names():
         _config(), _identity(), version="0.5.8", inventory=inventory
     )["components"]
 
-    assert components["fan_it8613_it87_2608_fan2_speed"]["name"] == "Fan 1"
-    assert components["fan_it8613_it87_2608_fan2_rpm"]["name"] == "Fan 1 RPM"
-    assert components["fan_it8613_it87_2608_fan2_max_rpm"]["name"] == "Fan 1 Max RPM"
+    assert components["fan_it8613_it87_2608_fan2_speed"]["name"] == "Fan 2"
+    assert components["fan_it8613_it87_2608_fan2_rpm"]["name"] == "Fan 2 RPM"
+    assert components["fan_it8613_it87_2608_fan2_max_rpm"]["name"] == "Fan 2 Max RPM"
     assert (
         components["fan_it8613_it87_2608_fan2_calibration_status"]["name"]
-        == "Fan 1 Calibration status"
+        == "Fan 2 Calibration status"
     )
     assert (
         components["fan_it8613_it87_2608_fan2_calibrated_at"]["name"]
-        == "Fan 1 Calibrated at"
+        == "Fan 2 Calibrated at"
     )
 
-    assert components["fan_it8613_it87_2608_fan3_speed"]["name"] == "Fan 2"
-    assert components["fan_it8613_it87_2608_fan3_rpm"]["name"] == "Fan 2 RPM"
+    assert components["fan_it8613_it87_2608_fan3_speed"]["name"] == "Fan 3"
+    assert components["fan_it8613_it87_2608_fan3_rpm"]["name"] == "Fan 3 RPM"
 
     assert components["fan_it8613_it87_2608_fan2_speed"]["default_entity_id"] == (
         "sensor.dh_pve_agent_fan_it8613_it87_2608_fan2_speed"

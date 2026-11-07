@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.76
+
+- Normalize CPU temperature into the existing MQTT entity across Intel `coretemp` packages and AMD `k10temp`/`zenpower` (`Tdie` preferred, `Tctl` fallback). Ignore unrelated GPU/NVMe sensors and invalid values.
+- Preserve motherboard `hwmon` fan channel numbers and OEM labels in MQTT Discovery, with local BMC/IPMI as a read-only fallback when board hwmon exposes no operating chassis tachometer. Retain separate GPU hwmon fans, avoiding guessed IPMI↔hwmon merging.
+- Exclude ASPEED BMC service consoles and known virtual VGA PCI devices from user-facing physical GPU inventory; retain physical Intel Arc and GPU ownership without manufacturing unavailable temperatures.
+- Expose physical disk `capacity_bytes` through SMART health MQTT sensor attributes; display real capacity in the Russian dashboard. No fictitious HDD wear percentage.
+- Show fan RPM in Cooling and 24h graphs before percentage calibration; add supported UPS battery-test buttons (standard, quick, deep, stop) with confirmations and last result, using existing NUT/MQTT controls. Bundled dashboard YAML updated; automatically updating manually managed HA dashboards is out of scope.
+
 ## 0.5.75
 
 - Add capability-based Linux `hwmon/PWM` fan calibration adapter, using readable same-index tachometer and PWM control attributes rather than motherboard-model checks. Retain the tested Beelink IT8613 adapter as the first-priority profile and preserve its saved calibration.

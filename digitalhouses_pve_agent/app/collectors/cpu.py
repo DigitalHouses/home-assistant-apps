@@ -104,21 +104,42 @@ def _read_int(path: Path) -> int | None:
 
 
 def read_cpu_temperature(sys_root: Path = Path("/sys")) -> float | None:
+    """One CPU temperature for Intel/AMD; never confuse disk/GPU sensors.
+
+    Intel: hottest CPU package (coretemp); AMD: Tdie, falling back to Tctl
+    (k10temp/zenpower). Driver selection is entirely internal to the agent.
+    """
+    readings: dict[str, list[float]] = {
+        "intel": [], "amd_tdie": [], "amd_tctl": [],
+    }
     for hwmon in sorted((sys_root / "class" / "hwmon").glob("hwmon*")):
-        if _read_text(hwmon / "name") != "coretemp":
+        driver = _read_text(hwmon / "name")
+        if driver not in {"coretemp", "k10temp", "zenpower"}:
             continue
         for input_path in sorted(hwmon.glob("temp*_input")):
-            label_path = input_path.with_name(input_path.name.replace("_input", "_label"))
-            if _read_text(label_path) != "Package id 0":
-                continue
+            label = _read_text(
+                input_path.with_name(input_path.name.replace("_input", "_label"))
+            )
             raw = _read_int(input_path)
-            if raw is not None:
-                return round(raw / 1000.0, 1)
+            if raw is None or not -40000 <= raw <= 150000:
+                continue
+            value = raw / 1000.0
+            if driver == "coretemp" and label and label.startswith("Package id "):
+                readings["intel"].append(value)
+            elif driver in {"k10temp", "zenpower"}:
+                if label == "Tdie":
+                    readings["amd_tdie"].append(value)
+                elif label == "Tctl":
+                    readings["amd_tctl"].append(value)
+    for key in ("intel", "amd_tdie", "amd_tctl"):
+        if readings[key]:
+            return round(max(readings[key]), 1)
+
     for zone in sorted((sys_root / "class" / "thermal").glob("thermal_zone*")):
         if _read_text(zone / "type") != "x86_pkg_temp":
             continue
         raw = _read_int(zone / "temp")
-        if raw is not None:
+        if raw is not None and -40000 <= raw <= 150000:
             return round(raw / 1000.0, 1)
     return None
 

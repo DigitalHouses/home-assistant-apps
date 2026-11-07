@@ -94,9 +94,28 @@ def collect_ipmi_fans(ipmi_device: Path = Path("/dev/ipmi0")) -> tuple[FanSnapsh
     return parse_ipmi_fan_sdr(result.stdout)
 
 
+GPU_HWMON_CHIPS = {"i915", "xe", "amdgpu", "radeon", "nouveau", "nvidia"}
+
+
+def select_fan_sources(
+    hwmon: tuple[FanSnapshot, ...],
+    ipmi: tuple[FanSnapshot, ...],
+) -> tuple[FanSnapshot, ...]:
+    """Prefer working board hwmon, then BMC, while retaining separate GPU fans.
+
+    Never concatenate board hwmon and BMC tachometers: they may describe
+    the same physical headers and no generic reliable mapping exists.
+    """
+    if any(f.chip not in GPU_HWMON_CHIPS and (f.rpm or 0) > 0 for f in hwmon):
+        return hwmon
+    if any((f.rpm or 0) > 0 for f in ipmi):
+        return tuple(f for f in hwmon if f.chip in GPU_HWMON_CHIPS) + ipmi
+    return hwmon
+
+
 def collect_fans(hwmon_root: Path = Path("/sys/class/hwmon")) -> tuple[FanSnapshot, ...]:
     if not hwmon_root.exists():
-        return ()
+        return collect_ipmi_fans() if hwmon_root == Path("/sys/class/hwmon") else ()
     result: list[FanSnapshot] = []
     for hwmon in sorted(hwmon_root.glob("hwmon*")):
         if not hwmon.is_dir():
@@ -129,6 +148,8 @@ def collect_fans(hwmon_root: Path = Path("/sys/class/hwmon")) -> tuple[FanSnapsh
             except OSError:
                 raw_label = ""
             label = raw_label if raw_label and raw_label != fan_name else f"Fan {index}"
+            if chip in GPU_HWMON_CHIPS and not raw_label:
+                label = f"GPU Fan {index}"
             display_name = f"{label} RPM - {chip_display}"
             try:
                 raw = input_path.read_text(encoding="utf-8").strip()
@@ -151,6 +172,12 @@ def collect_fans(hwmon_root: Path = Path("/sys/class/hwmon")) -> tuple[FanSnapsh
                     input_path=str(input_path),
                 )
             )
-    if not result and hwmon_root == Path("/sys/class/hwmon"):
-        return collect_ipmi_fans()
+    # Valid motherboard hwmon tachometers take precedence. A GPU fan or
+    # zero-only unused hwmon headers must not hide BMC chassis fans. Do not
+    # merge motherboard hwmon and IPMI channels without proven correlation.
+    if hwmon_root == Path("/sys/class/hwmon") and not any(
+        fan.chip not in GPU_HWMON_CHIPS and (fan.rpm or 0) > 0
+        for fan in result
+    ):
+        return select_fan_sources(tuple(result), collect_ipmi_fans())
     return tuple(result)
