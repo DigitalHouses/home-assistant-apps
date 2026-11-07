@@ -125,7 +125,7 @@ def _discovery(inventory):
         instance_id="node_a", hostname="pve", node_name="PVE",
     )
     return build_shutdown_aware_pve_discovery_payload(
-        config, identity, version="0.5.76", inventory=inventory
+        config, identity, version="0.5.77", inventory=inventory
     )["components"]
 
 
@@ -136,6 +136,26 @@ def test_fan_discovery_uses_physical_label_from_hwmon_and_ipmi():
     }})
     assert components["fan_nct6798_board_fan3_rpm"]["name"] == "SYS_FAN3 RPM"
     assert components["fan_ipmi_ipmi0_fan1_rpm"]["name"] == "FAN1 RPM"
+
+
+def test_passive_bmc_fans_offer_percentage_but_no_active_calibration_button():
+    components = _discovery({"fans": {
+        "ipmi_ipmi0_fan1": {
+            "label": "FAN1",
+            "chip": "ipmi",
+            "rpm": 1700,
+            "calibration_supported": True,
+            "calibration_read_only": True,
+            "calibration_status": "waiting_for_full_pwm",
+            "speed_percent": None,
+        },
+    }})
+    assert "calibrate_fans" not in components
+    assert "fan_ipmi_ipmi0_fan1_rpm" in components
+    assert components["fan_ipmi_ipmi0_fan1_speed"]["unit_of_measurement"] == "%"
+    assert "calibration_read_only" in (
+        components["fan_ipmi_ipmi0_fan1_rpm"]["json_attributes_template"]
+    )
 
 
 def test_disk_capacity_is_published_on_existing_health_entity():

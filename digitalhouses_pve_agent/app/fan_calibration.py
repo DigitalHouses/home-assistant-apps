@@ -111,6 +111,15 @@ class FanCalibrationRegistry:
         if not adapter.supports(fan):
             return False
         record = self._matching_record(fan, adapter)
+        if getattr(adapter, "read_only_calibration", False):
+            # Passive measurement can only occur at a verified natural 100%
+            # BMC duty. Never attempt to drive the fan to maximum.
+            ready = getattr(adapter, "ready_to_calibrate", None)
+            if not callable(ready) or not ready(fan):
+                return False
+            return record.get("calibration_status") != "calibrated" and (
+                record.get("calibration_status") != "restore_failed"
+            )
         if not record:
             return True
         return record.get("calibration_status") == "not_calibrated"
@@ -150,7 +159,11 @@ class FanCalibrationRegistry:
                     "max_rpm": int(max_rpm),
                     "calibrated_at": calibrated_at,
                     "max_rpm_updated_at": calibrated_at,
-                    "max_rpm_source": "calibration",
+                    "max_rpm_source": (
+                        "passive_full_duty"
+                        if getattr(adapter, "read_only_calibration", False)
+                        else "calibration"
+                    ),
                     "calibration_status": "calibrated",
                     "error": None,
                     "pending_restore": None,
@@ -299,9 +312,17 @@ class FanCalibrationRegistry:
             raw = min(100.0, max(0.0, fan.rpm / max_rpm * 100.0))
             speed_percent = int(raw + 0.5)
 
+        passive = bool(getattr(adapter, "read_only_calibration", False))
+        status = str(record.get("calibration_status") or "not_calibrated")
+        if passive and status in {"not_calibrated", "failed"}:
+            ready = getattr(adapter, "ready_to_calibrate", None)
+            if not callable(ready) or not ready(fan):
+                status = "waiting_for_full_pwm"
+
         return {
             "calibration_supported": True,
-            "calibration_status": str(record.get("calibration_status") or "not_calibrated"),
+            "calibration_read_only": passive,
+            "calibration_status": status,
             "max_rpm": max_rpm if isinstance(max_rpm, int) else None,
             "calibrated_at": record.get("calibrated_at"),
             "max_rpm_updated_at": record.get("max_rpm_updated_at"),

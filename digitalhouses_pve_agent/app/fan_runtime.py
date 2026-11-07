@@ -65,7 +65,10 @@ class FanAwareRuntime(ProblemAwareRuntime):
             return tuple(
                 fan
                 for fan in fans
-                if self.fan_calibration_manager.adapter_for(fan) is not None
+                if (
+                    (adapter := self.fan_calibration_manager.adapter_for(fan)) is not None
+                    and not getattr(adapter, "read_only_calibration", False)
+                )
             )
 
         result = []

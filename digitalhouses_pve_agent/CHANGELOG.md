@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.77
+
+- Add **strictly read-only, capability-gated passive fan maximum RPM detection** for the verified ASRock Rack X570D4U-2L2T BMC 1.20 profile. Read current 16-byte fan duty using the ASRock AST2500 OEM `0x3a 0xda` getter. Only when a fan's matching physical channel is independently at 100% duty, collect a stable RPM plateau and save the denominator for the existing fan speed percentage sensor.
+- Never switch the BMC to manual mode or write duty: the BMC firmware's documented mode getter `0x3a 0xd7` fails with IPMI completion `0xcc` and cannot prove original mode/restoration. Passive calibration runs only when the BMC naturally reaches 100%, not forcibly at agent startup. No `0xd6` or `0xd8` control commands. Unsupported boards/firmware and malformed readbacks fail closed.
+- Before a verified full-duty observation, preserve RPM and `waiting_for_full_pwm` state, with no guessed percentages. Keep passive profiles out of the manual "Calibrate fans" control button. Existing Beelink/hwmon safe calibration is unchanged.
+
 ## 0.5.76
 
 - Normalize CPU temperature into the existing MQTT entity across Intel `coretemp` packages and AMD `k10temp`/`zenpower` (`Tdie` preferred, `Tctl` fallback). Ignore unrelated GPU/NVMe sensors and invalid values.
