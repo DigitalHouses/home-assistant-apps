@@ -2,9 +2,10 @@ from __future__ import annotations
 
 """Capability-based driver for the standard Linux hwmon PWM sysfs ABI.
 
-Only an input tachometer accompanied by its same-index, readable/writeable
-PWM channel is eligible. Mode 0 is read-only full-speed measurement;
-write-enabled modes 1 (manual) and 2 (automatic) use verified restoration.
+Only an input tachometer accompanied by its same-index PWM channel can be
+considered. Mode 0 is read-only full-speed measurement. Modes 1 and 2
+require an independently verified channel map, which is deliberately empty
+in production; matching fanN/pwmN numbering alone is not sufficient.
 Other vendor-defined automatic modes require a dedicated driver.
 """
 
@@ -19,8 +20,17 @@ from .collectors.cooling import FanSnapshot
 class HwmonPwmFanAdapter:
     profile_name = "hwmon_pwm_sysfs_v1"
 
-    def __init__(self, *, machine_id_path: Path = Path("/etc/machine-id")) -> None:
+    def __init__(
+        self,
+        *,
+        machine_id_path: Path = Path("/etc/machine-id"),
+        verified_active_channels: frozenset[str] = frozenset(),
+    ) -> None:
         self.machine_id_path = machine_id_path
+        # Never infer a fan/PWM electrical connection from matching numbers.
+        # The runtime passes no verified channels until a trusted driver or
+        # an independently validated capability probe establishes a mapping.
+        self.verified_active_channels = frozenset(verified_active_channels)
 
     @staticmethod
     def _paths(fan: FanSnapshot) -> tuple[Path, Path, Path]:
@@ -59,11 +69,15 @@ class HwmonPwmFanAdapter:
             if not self._read(source).isdecimal():
                 return False
             controls = self._read_controls(pwm, enable)
-            # ABI mode 0 already means full speed; no writes are needed.
-            if controls["pwm_enable"] != "0" and not all(
-                path.stat().st_mode & stat.S_IWUSR for path in (pwm, enable)
-            ):
-                return False
+            # Mode 0 allows read-only full-speed measurement. Active PWM
+            # control requires independent verification of channel wiring.
+            if controls["pwm_enable"] != "0":
+                if fan.fan_id not in self.verified_active_channels:
+                    return False
+                if not all(
+                    path.stat().st_mode & stat.S_IWUSR for path in (pwm, enable)
+                ):
+                    return False
         except (OSError, ValueError, UnicodeError):
             return False
         return True
@@ -85,8 +99,12 @@ class HwmonPwmFanAdapter:
         return self._read_controls(pwm, enable)
 
     def enter_max(self, fan: FanSnapshot) -> None:
+        # Guard the write boundary too: calibration manager capability checks
+        # are not sufficient protection against a caller invoking us directly.
+        if not self.supports(fan):
+            raise RuntimeError("unverified fan/PWM mapping: refusing control")
         _source, pwm, enable = self._paths(fan)
-        # A disabled PWM controller (mode 0) already drives full speed.
+        # Standard sysfs mode 0 already means full speed (no writes).
         if self._read(enable) == "0":
             return
         self._write(enable, "1")

@@ -16,7 +16,10 @@ def setup_hwmon(tmp_path: Path, *, mode="2", duty="95", index=1):
     (chip / f"pwm{index}_enable").write_text(mode + "\n")
     machine = tmp_path / "machine-id"
     machine.write_text("machine-A\n")
-    adapter = HwmonPwmFanAdapter(machine_id_path=machine)
+    adapter = HwmonPwmFanAdapter(
+        machine_id_path=machine,
+        verified_active_channels=frozenset({f"nct6798_isa_0290_fan{index}"}),
+    )
     fan = FanSnapshot(
         fan_id=f"nct6798_isa_0290_fan{index}",
         chip="nct6798",
@@ -31,6 +34,55 @@ def setup_hwmon(tmp_path: Path, *, mode="2", duty="95", index=1):
         input_path=str(chip / f"fan{index}_input"),
     )
     return adapter, fan, chip
+
+
+def test_unverified_pwm_mapping_must_never_write_or_autocalibrate(tmp_path):
+    verified, fan, chip = setup_hwmon(tmp_path)
+    unverified = HwmonPwmFanAdapter(
+        machine_id_path=tmp_path / "machine-id"
+    )
+    assert verified.supports(fan)
+    assert unverified.supports(fan) is False
+    registry = FanCalibrationRegistry(StateStore(tmp_path / "calibration.json"))
+    manager = FanCalibrationManager(
+        registry=registry, adapters=(unverified,),
+        now_iso=lambda: "2026-11-08T00:00:00Z", sleep=lambda _: None,
+    )
+    with patch.object(unverified, "_write", side_effect=AssertionError("NO WRITES")):
+        assert manager.calibrate((fan,), automatic=True) == {}
+        assert registry.presentation(fan, unverified)["calibration_supported"] is False
+        try:
+            unverified.enter_max(fan)
+        except RuntimeError as exc:
+            assert "unverified" in str(exc)
+        else:
+            raise AssertionError("unverified PWM unexpectedly allowed to write")
+    assert (chip / "pwm1_enable").read_text().strip() == "2"
+    assert (chip / "pwm1").read_text().strip() == "95"
+
+
+def test_explicit_mapping_must_match_exact_fan_identity(tmp_path):
+    _, fan, chip = setup_hwmon(tmp_path)
+    incorrect = HwmonPwmFanAdapter(
+        machine_id_path=tmp_path / "machine-id",
+        verified_active_channels=frozenset({"some_other_fan"}),
+    )
+    assert incorrect.supports(fan) is False
+    assert (chip / "pwm1").read_text().strip() == "95"
+
+
+def test_passive_mode_zero_is_supported_without_trusted_mapping(tmp_path):
+    _verified, fan, chip = setup_hwmon(tmp_path, mode="0", duty="0")
+    passive = HwmonPwmFanAdapter(
+        machine_id_path=tmp_path / "machine-id"
+    )
+    assert passive.supports(fan)
+    original = passive.capture(fan)
+    with patch.object(passive, "_write", side_effect=AssertionError("NO WRITES")):
+        passive.enter_max(fan)
+        passive.restore(fan, original)
+    assert passive.verify_restored(fan, original)
+    assert (chip / "pwm1_enable").read_text().strip() == "0"
 
 
 def test_hwmon_pwm_capability_is_not_motherboard_specific(tmp_path):
@@ -222,7 +274,10 @@ def test_existing_beelink_profile_precedes_generic_hwmon(tmp_path):
         input_path=str(chip / "fan2_input"),
     )
     beelink = BeelinkIt8613FanAdapter(dmi_root=dmi)
-    generic = HwmonPwmFanAdapter(machine_id_path=tmp_path / "machine-id")
+    generic = HwmonPwmFanAdapter(
+        machine_id_path=tmp_path / "machine-id",
+        verified_active_channels=frozenset({fan.fan_id}),
+    )
     assert beelink.supports(fan)
     assert generic.supports(fan)
     registry = FanCalibrationRegistry(StateStore(tmp_path / "calibration.json"))
