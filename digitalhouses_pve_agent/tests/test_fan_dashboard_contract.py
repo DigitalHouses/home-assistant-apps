@@ -13,12 +13,33 @@ def test_ru_dashboard_presents_fan_percent_as_primary_metric_with_rpm_fallback()
 
 
 def test_ru_dashboard_graph_percent_only_and_always_has_base_entities():
+    from importlib.util import find_spec
     from types import SimpleNamespace
 
+    text = DASHBOARD.read_text(encoding="utf-8")
+    graph_text = text.split("heading: CPU / RAM / Swap / Fans · 24 часа", 1)[1]
+    graph_text = graph_text.split("heading: Частота CPU · 24 часа", 1)[0]
+    # Always exercise the zero-dependency contract in the production CI.
+    assert "proxmox_metric') == 'speed_percent'" in graph_text
+    assert "proxmox_metric') == 'rpm'" not in graph_text
+    assert "y_axis" not in graph_text
+    assert "lower_bound_secondary" not in graph_text
+    assert "{{ ns.items }}" in graph_text
+    for entity in (
+        "sensor.dh_pve_agent_cpu_usage",
+        "sensor.dh_pve_agent_memory_usage",
+        "sensor.dh_pve_agent_swap_usage",
+    ):
+        assert entity in graph_text
+
+    # The agent itself does not depend on Home Assistant's Jinja/YAML libs.
+    # When available in DEV, additionally execute the complete template.
+    if find_spec("jinja2") is None or find_spec("yaml") is None:
+        return
     import jinja2
     import yaml
 
-    sections = yaml.safe_load(DASHBOARD.read_text(encoding="utf-8"))["sections"]
+    sections = yaml.safe_load(text)["sections"]
     graphs = [
         card
         for section in sections
