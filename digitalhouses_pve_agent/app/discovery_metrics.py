@@ -447,7 +447,8 @@ def build_full_discovery_payload(
             slug = _slug(fan_id)
             obj = _path("fans", fan_id)
             user_display = str(raw.get("label") or fan_id)
-            fan_name = f"Fan {index}"
+            # IPMI labels are physical header IDs: FAN3 must not become Fan 2.
+            fan_name = user_display if raw.get("chip") == "ipmi" else f"Fan {index}"
             calibratable = calibratable or raw.get("calibration_supported") is True
             common_attrs = {
                 "chip": obj + ".chip | default(none)",

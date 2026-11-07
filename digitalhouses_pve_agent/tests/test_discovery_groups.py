@@ -361,6 +361,27 @@ def test_calibrated_fan_discovery_exposes_speed_primary_and_rpm_diagnostics():
     assert button["command_topic"] == topics.fan_calibrate
 
 
+def test_ipmi_fan_discovery_uses_physical_header_labels():
+    inventory = _inventory()
+    inventory["fans"] = {
+        "ipmi_ipmi0_fan1": {
+            "label": "FAN1", "chip": "ipmi", "rpm": 1700,
+            "calibration_supported": False,
+        },
+        "ipmi_ipmi0_fan3": {
+            "label": "FAN3", "chip": "ipmi", "rpm": 900,
+            "calibration_supported": False,
+        },
+    }
+    components = build_shutdown_aware_pve_discovery_payload(
+        _config(), _identity(), version="0.5.74", inventory=inventory
+    )["components"]
+    assert components["fan_ipmi_ipmi0_fan1_rpm"]["name"] == "FAN1 RPM"
+    assert components["fan_ipmi_ipmi0_fan3_rpm"]["name"] == "FAN3 RPM"
+    assert components["fan_ipmi_ipmi0_fan3_speed"]["name"] == "FAN3"
+    assert "calibrate_fans" not in components
+
+
 def test_unsupported_fan_keeps_rpm_but_hides_calibration_button():
     inventory = _inventory()
     inventory["fans"]["nct6798_fan1"].update(

@@ -41,7 +41,9 @@ def parse_ipmi_fan_sdr(output: str) -> tuple[FanSnapshot, ...]:
     seen: set[str] = set()
     for line in output.splitlines():
         fields = [part.strip() for part in line.split("|")]
-        if len(fields) != 5 or fields[2].lower() != "ok":
+        # Alarm states still carry valid tachometer readings. A stalled fan
+        # must remain visible instead of disappearing when BMC reports CR/NR.
+        if len(fields) != 5 or fields[2].lower() not in {"ok", "nc", "cr", "nr"}:
             continue
         label = fields[0]
         reading = re.fullmatch(r"([0-9]+)\s+RPM", fields[4], re.IGNORECASE)
