@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.75
+
+- Add capability-based Linux `hwmon/PWM` fan calibration adapter, using readable same-index tachometer and PWM control attributes rather than motherboard-model checks. Retain the tested Beelink IT8613 adapter as the first-priority profile and preserve its saved calibration.
+- Handle standard PWM mode 0 as read-only full-speed calibration with no writes. In modes 1 (manual) or 2 (automatic), capture the initial mode/duty, drive 100% briefly, record a stable maximum RPM and restore the original mode/duty with failure recovery. Unusual modes and BMC/IPMI fans remain RPM-only.
+- Add isolated success, failure, interrupted-restoration, unsupported-control and profile-priority regression tests. No IPMI fan-control writes have been introduced.
+
 ## 0.5.74
 
 - Preserve IPMI fan RPM values when the BMC flags a sensor as non-critical, critical, or non-recoverable. A confirmed stalled fan must remain visible with `0 RPM` instead of disappearing from MQTT discovery; missing or non-numeric readings remain excluded.

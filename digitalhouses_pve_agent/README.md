@@ -10,7 +10,7 @@ Native Linux agent for **Proxmox VE 8.x** that publishes host, CPU, memory, stor
 
 The canonical product and runtime identity is **DigitalHouses PVE Agent** / `digitalhouses_pve_agent`: systemd service `digitalhouses_pve_agent.service`, filesystem roots under `/opt/digitalhouses/digitalhouses_pve_agent`, `/etc/digitalhouses_pve_agent` and `/var/lib/digitalhouses_pve_agent`, MQTT base `DigitalHouses/Global/digitalhouses_pve_agent/<instance>`, and Home Assistant entity prefix `dh_pve_agent_*`. Version 0.5.30 performs the corrected one-time controlled migration from the former `dh_pve_app` / `dh_app_pve_*` runtime, including deterministic cleanup of retained data owned by the legacy MQTT instance namespace.
 
-Current source release: `VERSION` is `0.5.74`.
+Current source release: `VERSION` is `0.5.75`.
 
 UPS Debug logging: `switch.dh_pve_agent_ups_debug` (MQTT Discovery, default OFF)
 records raw NUT observations every 2 seconds when enabled. It disables itself
@@ -153,7 +153,7 @@ This mechanism is intentionally scoped to the Linux agent and does not replace t
 
 ## Fan monitoring and calibration
 
-Fan RPM acquisition reads Linux hwmon directly from `/sys/class/hwmon/hwmon*/fan*_input`; it does not add a `sensors`/vendor subprocess to the FAST loop.
+Fan RPM acquisition reads Linux hwmon directly from `/sys/class/hwmon/hwmon*/fan*_input`, with read-only local OpenIPMI fallback when hwmon exposes no tachometers. No sensor-reading command writes fan-control settings.
 
 Every exported tachometer input starts as a candidate channel. A physical fan is confirmed after two consecutive valid `RPM > 0` FAST observations. Confirmed IDs are persisted separately so a real fan remains exposed after an App restart even when it is currently stopped at `0 RPM`. Unconfirmed zero-RPM channels remain internal candidates and do not create Home Assistant RPM entities.
 
@@ -163,11 +163,11 @@ Unconfirmed fan candidates are omitted from normal MQTT Discovery. They are neve
 
 `pwm*` and `/sys/class/thermal/cooling_device*` are not used as proof of a physical fan or as RPM sources. The installed `/root/digitalhouses_pve_agent.txt` guide contains generic read-only fan troubleshooting. Beelink/AZW driver installation, verification and rollback are documented separately in `hardware/beelink/README.md`.
 
-For an explicitly supported write-capable hardware profile, the App can calibrate each confirmed physical fan against its measured maximum RPM. Calibration state is persisted separately from fan-presence state. The user-facing sensor is `Fan speed % = current RPM / calibrated max RPM × 100`, rounded to the nearest integer and clamped to 0..100%; the raw RPM sensor remains diagnostic.
+When a supported fan-control **interface** is detected, the App can calibrate each confirmed physical fan against its measured maximum RPM. The existing Beelink IT8613 driver takes precedence; a generic driver now probes standard Linux `hwmon` channels with matching `fanN_input`, `pwmN` and `pwmN_enable` sysfs attributes, readable control state and writable mode/duty. The generic driver accepts standard mode `0` (fan already at full speed; no writes), `1` (manual) or `2` (automatic); vendor-specific modes and BMC/IPMI read-only tachometers are not enabled for control. The user-facing sensor is `Fan speed % = current RPM / calibrated max RPM × 100`, rounded and clamped to 0..100%; raw RPM always remains available.
 
 Calibration is a guarded transaction: capture the original PWM/control state, persist a pending restore record, drive only the matched supported channel to maximum, detect a stable RPM plateau, and restore/verify the original control state in all normal failure paths. An interrupted transaction is recovered on the next App start. A restore failure becomes a serious App-owned problem rather than being hidden.
 
-The first write-capable profile is the tested Beelink/AZW IT8613 `it87.2608 fan2 ↔ pwm2` path. The measured ~5400 RPM value from the test machine is a reference only and is never hardcoded as a production maximum. Unsupported fans remain read-only: RPM stays available, Fan Speed % is unavailable, and no calibration button is exposed.
+The existing Beelink/AZW IT8613 `it87.2608 fan2 ↔ pwm2` profile and saved calibration identities remain intact. The generic `hwmon/PWM` adapter is selected by verified Linux control capabilities, not motherboard model. A generic PWM calibration still needs a matched fan/PWM channel; unrelated or incomplete sysfs controls must not trigger writes. On unsupported BMC/IPMI fan-control protocols (including ASRock Rack AST2500 firmware 1.20), only RPM is exposed; no unsafe OEM/IPMI write commands or invented percentages. Neither adapter hardcodes a production maximum RPM.
 
 A calibrated maximum may increase automatically if ordinary operation produces three stable RPM samples more than the tolerance above the stored ceiling. A single spike never changes calibration, and the automatic learning path never decreases `max_rpm`. Manual recalibration uses the same backend use-case as first-run calibration.
 
@@ -437,7 +437,7 @@ Production install/update is release-tag only. Version 0.5.30 is the corrected c
 For the canonical runtime, install/update/reinstall never clears the current canonical MQTT namespace. Canonical retained MQTT cleanup is owned exclusively by the supported uninstaller.
 
 ```bash
-TAG=digitalhouses_pve_agent-v0.5.74
+TAG=digitalhouses_pve_agent-v0.5.75
 DIGITALHOUSES_SOURCE_REF="$TAG" \
   bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$TAG/digitalhouses_pve_agent/install.sh")
 ```

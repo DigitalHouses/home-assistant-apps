@@ -16,6 +16,7 @@ from .collectors.cooling import collect_fans
 from .config import AppConfig, UpsConfig, load_config
 from .fan_calibration import FanCalibrationManager, FanCalibrationRegistry
 from .fan_hardware_beelink import BeelinkIt8613FanAdapter
+from .fan_hardware_hwmon import HwmonPwmFanAdapter
 from .fan_runtime import FanAwareRuntime as ProblemAwareRuntime
 from .identity import resolve_identity
 from .migration_cleanup import cleanup_legacy_mqtt_namespace
@@ -149,14 +150,15 @@ def build_runtime(
     fan_calibration_registry = FanCalibrationRegistry(
         StateStore(state_dir / "fan_calibration.json")
     )
-    fan_adapter = BeelinkIt8613FanAdapter()
+    # Existing calibrated Beelink profile takes precedence over generic sysfs.
+    fan_adapters = (BeelinkIt8613FanAdapter(), HwmonPwmFanAdapter())
     disk_state_store = StateStore(state_dir / "disks.json")
     production = ShutdownAwareProductionCollectors(
         node_name=identity.hostname,
         disk_state_store=disk_state_store,
         fan_state_store=fan_presence_store,
         fan_calibration_registry=fan_calibration_registry,
-        fan_calibration_adapters=(fan_adapter,),
+        fan_calibration_adapters=fan_adapters,
         topology=topology,
         shutdown_history_tracker=tracker,
     )
@@ -175,7 +177,7 @@ def build_runtime(
 
     fan_calibration_manager = FanCalibrationManager(
         registry=fan_calibration_registry,
-        adapters=(fan_adapter,),
+        adapters=fan_adapters,
         now_iso=_now_iso,
     )
 
