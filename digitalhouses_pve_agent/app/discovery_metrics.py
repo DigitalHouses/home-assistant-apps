@@ -453,13 +453,17 @@ def build_full_discovery_payload(
             # and motherboard labels exactly as exported.
             bare = re.fullmatch(r"fan([0-9]+)", user_display)
             fan_name = f"Fan {bare.group(1)}" if bare else user_display
-            calibratable = calibratable or raw.get("calibration_supported") is True
+            calibratable = calibratable or (
+                raw.get("calibration_supported") is True
+                and raw.get("calibration_read_only") is not True
+            )
             common_attrs = {
                 "chip": obj + ".chip | default(none)",
                 "label": obj + ".label | default(none)",
                 "source_device": obj + ".source_device | default(none)",
                 "max_rpm": obj + ".max_rpm | default(none)",
                 "calibration_status": obj + ".calibration_status | default('unsupported')",
+                "calibration_read_only": obj + ".calibration_read_only | default(false)",
                 "max_rpm_source": obj + ".max_rpm_source | default(none)",
             }
 

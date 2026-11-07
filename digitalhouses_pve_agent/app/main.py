@@ -15,6 +15,7 @@ from pathlib import Path
 from .collectors.cooling import collect_fans
 from .config import AppConfig, UpsConfig, load_config
 from .fan_calibration import FanCalibrationManager, FanCalibrationRegistry
+from .fan_hardware_ipmi_passive import AsrockAst2500PassiveFanAdapter
 from .fan_hardware_beelink import BeelinkIt8613FanAdapter
 from .fan_hardware_hwmon import HwmonPwmFanAdapter
 from .fan_runtime import FanAwareRuntime as ProblemAwareRuntime
@@ -151,7 +152,11 @@ def build_runtime(
         StateStore(state_dir / "fan_calibration.json")
     )
     # Existing calibrated Beelink profile takes precedence over generic sysfs.
-    fan_adapters = (BeelinkIt8613FanAdapter(), HwmonPwmFanAdapter())
+    fan_adapters = (
+        BeelinkIt8613FanAdapter(),
+        HwmonPwmFanAdapter(),
+        AsrockAst2500PassiveFanAdapter(),
+    )
     disk_state_store = StateStore(state_dir / "disks.json")
     production = ShutdownAwareProductionCollectors(
         node_name=identity.hostname,
