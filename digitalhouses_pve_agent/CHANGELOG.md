@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.78
+
+- Keep the existing physical SMART disk-health entity online and discoverable during intermittent QEMU Guest Agent timeouts, failed guest `smartctl` calls, or transient guest storage-inventory errors. A retained passthrough disk no longer vanishes from HA because its individual SMART telemetry is unavailable.
+- Report `TELEMETRY_UNAVAILABLE` instead of stale `HEALTHY`/SMART values on the disk-health entity while collection is interrupted. Include `telemetry_available`, `telemetry_error`, `last_success_at`, `last_known_health`, and guest source attributes for diagnostics. Other SMART measurements keep strict individual availability, so stale temperatures, wear and counters are not presented as fresh.
+- Preserve disk identities, previous successful SMART records, baseline/event state, and automatic recovery when QGA resumes. A temporarily failing guest PCI inventory no longer counts as repeated authoritative disk removal; genuine confirmed removals retain the existing three-scan retirement policy.
+- Improve the Russian PVE Dashboard disk card to explicitly report temporary SMART telemetry loss without marking the HDD healthy or physically missing. No changes to VM, ZFS, passthrough, or guest-agent configuration.
+
 ## 0.5.77
 
 - Add **strictly read-only, capability-gated passive fan maximum RPM detection** for the verified ASRock Rack X570D4U-2L2T BMC 1.20 profile. Read current 16-byte fan duty using the ASRock AST2500 OEM `0x3a 0xda` getter. Only when a fan's matching physical channel is independently at 100% duty, collect a stable RPM plateau and save the denominator for the existing fan speed percentage sensor.

@@ -442,6 +442,7 @@ class ResilientProductionCollectors(ProductionCollectors):
                 "available": True,
                 "error": None,
                 "health_state": health.state.value,
+                "last_success_at": datetime.now(timezone.utc).isoformat(),
                 "health_reasons": list(health.reasons),
                 "recommendation": health.recommendation,
                 "daily": asdict(daily_stats),
@@ -499,7 +500,13 @@ class ResilientProductionCollectors(ProductionCollectors):
             try:
                 guest_sources = tuple(self.topology.vm_storage_sources())
             except Exception:
+                # Discovery failure is not evidence that a passthrough disk
+                # was disconnected or its PCI assignment removed.
                 guest_sources = ()
+                for prior_key in tuple(path_map):
+                    if isinstance(prior_key, str) and prior_key.startswith("guest:"):
+                        scan_paths.add(prior_key)
+                        mark_unavailable(prior_key, "guest storage inventory temporarily unavailable")
             for source in guest_sources:
                 source_key = f"guest:{source.guest_id}:{source.device_path}"
                 scan_paths.add(source_key)

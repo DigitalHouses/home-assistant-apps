@@ -10,7 +10,7 @@ Native Linux agent for **Proxmox VE 8.x** that publishes host, CPU, memory, stor
 
 The canonical product and runtime identity is **DigitalHouses PVE Agent** / `digitalhouses_pve_agent`: systemd service `digitalhouses_pve_agent.service`, filesystem roots under `/opt/digitalhouses/digitalhouses_pve_agent`, `/etc/digitalhouses_pve_agent` and `/var/lib/digitalhouses_pve_agent`, MQTT base `DigitalHouses/Global/digitalhouses_pve_agent/<instance>`, and Home Assistant entity prefix `dh_pve_agent_*`. Version 0.5.30 performs the corrected one-time controlled migration from the former `dh_pve_app` / `dh_app_pve_*` runtime, including deterministic cleanup of retained data owned by the legacy MQTT instance namespace.
 
-Current source release: `VERSION` is `0.5.77`.
+Current source release: `VERSION` is `0.5.78`.
 
 UPS Debug logging: `switch.dh_pve_agent_ups_debug` (MQTT Discovery, default OFF)
 records raw NUT observations every 2 seconds when enabled. It disables itself
@@ -156,6 +156,10 @@ This mechanism is intentionally scoped to the Linux agent and does not replace t
 The public CPU temperature entity is always `sensor.dh_pve_agent_cpu_temperature`. The collector chooses Intel `coretemp` package readings or AMD `k10temp`/`zenpower` (`Tdie` first, then `Tctl`) internally. Raw disk and GPU hwmon temperature channels are never substituted for CPU temperature.
 
 Only physical, user-relevant PCI GPUs appear in the GPU inventory. BMC service VGA (ASPEED) and common emulated VGA devices are omitted; a real passed-through GPU remains visible with its VM owner. GPU temperature is reported only when available to the Proxmox host, never estimated across PCI passthrough.
+
+## SMART disk visibility across temporary QEMU Guest Agent errors
+
+A physical SATA/HDD disk assigned to a VM using PCI passthrough is monitored by running `smartctl` inside the guest via QEMU Guest Agent. A transient QGA timeout does **not** mean that the disk or ZFS pool disappeared. The existing `sensor.dh_pve_agent_disk_*_health` remains discoverable with state `TELEMETRY_UNAVAILABLE` and attributes `telemetry_available=false`, `telemetry_error`, `last_success_at`, and `last_known_health`. Other SMART measurement entities remain unavailable until fresh measurements resume; old values are not reported as current. Stable disk identity and history are retained. Authoritative permanent inventory removal is still handled independently.
 
 ## Fan monitoring and calibration
 
@@ -445,7 +449,7 @@ Production install/update is release-tag only. Version 0.5.30 is the corrected c
 For the canonical runtime, install/update/reinstall never clears the current canonical MQTT namespace. Canonical retained MQTT cleanup is owned exclusively by the supported uninstaller.
 
 ```bash
-TAG=digitalhouses_pve_agent-v0.5.77
+TAG=digitalhouses_pve_agent-v0.5.78
 DIGITALHOUSES_SOURCE_REF="$TAG" \
   bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$TAG/digitalhouses_pve_agent/install.sh")
 ```
