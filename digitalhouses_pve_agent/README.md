@@ -65,61 +65,34 @@ Passive, read-only memory diagnostics sample the host and running LXC guests eve
 
 The agent retains 30 days of events **and every PSI interval delta, including zero and small delays**, at `/var/lib/digitalhouses_pve_agent/memory_diagnostics.json`. Raw PSI samples are local-only and never published to Home Assistant. Pressure events recorded before 0.5.57 remain in local 30-day history but are excluded from the new HA incident table because their severity was not verified against an elapsed observation window. `sensor.dh_pve_agent_memory_history` publishes the newest 60 events, the full count and a truncation indicator to avoid oversized Home Assistant attributes; an unreadable source is marked unknown rather than treated as healthy. Example dashboard card: [Memory events](examples/dh_pve_agent_memory_diagnostics_card.yaml). No guest commands, memory tuning, alerts or restart actions are performed.
 
-## Compact Agent control card (UI v2)
+## Agent status cards (UI v3)
 
-The single app-owned diagnostic entity `sensor.dh_pve_agent_card` is the
-source of truth for the compact card in
-[`examples/dh_pve_agent_card_ru.yaml`](examples/dh_pve_agent_card_ru.yaml).
-Use the included card directly or the updated Russian dashboard. The card is
-placed immediately after the unchanged PVE problem summary. The obsolete
-standalone Refresh action is removed from the Russian example.
+The Russian Dashboard uses four independent Mushroom status cards:
+**Problems**, **Updates**, **Refresh**, and **Restart**. The first card
+remains visible and lists numbered PVE and UPS/NUT problems with suggested
+actions, including an offline/unavailable agent. The other three cards are
+conditionally visible only while their task is active (or, for Updates,
+while a newer stable release is available). Existing control chips remain
+separate, with confirmation on Update and Restart.
 
-The four controls are **Обновить**, **Версия**, conditional **Новая версия**,
-**Перезапуск**. Install and Restart require an HA confirmation. The card declares
-entity and triggers_update for the authoritative agent-card state and
-version entities, so Home Assistant updates the UI on new MQTT state without
-waiting for the idle timer. The main loop checks incoming version/install
-commands before potentially slow PVE/UPS background work, but does not
-interrupt a collection already in progress. The card never optimistically
-claims a command has started before PVE acknowledges it. A foreground
-operation announces `running` before work, publishes an app-measured final
-duration, shows `success` for five seconds, and returns to `idle`.
-Installation completion is correlated with the exact persisted updater
-request and its terminal worker status, not the generic GitHub update-status
-sensor, which may already show idle after a newer release check. A pending
-install is reconciled even if the agent restarted during verification.
-Failures stay visible until another user action. Restart records intent before
-exit and only reports success after the new agent starts and publishes via
-MQTT; UPS safety gates still apply.
+The [drop-in cards fragment](examples/dh_pve_agent_status_cards_ru.yaml)
+contains the five sibling items (four status cards and the controls).
+The [standalone card](examples/dh_pve_agent_card_ru.yaml) wraps those items
+in a vertical stack; the [full Russian Dashboard](examples/dh_pve_agent_dashboard_ru.yaml)
+contains the exact same cards under its first section.
 
-While an operation runs, the card starts a local monotonic stopwatch when
-the browser first receives the app-owned `running` state. This avoids
-assuming that PVE and browser UTC clocks are synchronized. The server's
-measured final duration remains authoritative, and the countdown continues
-to show "Ожидание запуска агента…" across a temporary MQTT availability
-gap during Restart. No 100 ms MQTT traffic is generated. Restart/Install
-start-monotonic checkpoints are persisted across Linux process restarts on
-the same PVE boot. For this active-timer presentation the example needs
-[`custom:button-card`](https://github.com/custom-cards/button-card) with
-`update_timer` support plus Mushroom chips. The agent stores the final
-measured elapsed time and remains authoritative.
+Only existing MQTT entities are used: the operation state, `started_at`,
+stable versions, shutdown readiness, UPS state, and PVE problems. No extra
+MQTT traffic, JS polling, `button-card`, timers, or release publication
+date. Relative timestamps use HA's native `time_since()` template,
+which refreshes approximately once per minute (not every second). A short
+MQTT availability gap during Restart can momentarily hide its conditional
+status; Problems then indicates the agent is offline. No operation is
+reported as successful until the agent confirms completion.
 
-When a verified new stable release exists, the idle card instead shows
-`PVE Agent · v<installed> → v<latest>` and `Доступна новая версия` with
-a warning-colored icon, until installation or a later successful version
-check clears the update flag. A running operation and its five-second
-completion status take precedence; unknown GitHub availability must never
-be presented as a verified new release.
-
-The idle **Обновлено N времени назад** comes from `last_collection_at` in
-the same agent-card sensor, set by successful automatic *or* manual sampling
-and published at most once per 30 seconds. This is collection freshness,
-not the time of the last MQTT state change and not a claim that every heavy
-collector just ran. Collector FAST/SLOW/HEALTH schedules remain unchanged.
-The canonical `sensor.dh_pve_agent_last_refresh` still means a completed
-explicit full Refresh, preserving the existing Manual Refresh Standard.
-Automatic GitHub checks retain the same accurate check duration/metadata but
-do not interrupt the foreground user operation.
+The app-side operation contract still publishes a five-second success
+result and persists errors for Problems to display; update and restart
+safety preflights are unchanged.
 
 ## Update from Home Assistant
 

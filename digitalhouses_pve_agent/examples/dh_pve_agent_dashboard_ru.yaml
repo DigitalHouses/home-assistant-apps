@@ -11,263 +11,285 @@ sections:
         heading_style: title
         icon: phu:proxmox
       - type: custom:mushroom-template-card
-        entity: sensor.dh_pve_agent_problems
-        primary: |-
-          {% set active = state_attr(entity, 'active') or [] %}
-          {% if states(entity) in ['unknown', 'unavailable', 'none', ''] %}
-            Нет данных о проблемах
-          {% elif active | count == 0 %}
+        entity: sensor.dh_pve_agent_card
+        primary: Problems
+        secondary: |-
+          {% set agent = states(entity) %}
+          {% set ns = namespace(lines=[]) %}
+          {% if agent in ['unknown', 'unavailable', 'none', ''] %}
+            {% set ns.lines = ns.lines + ['PVE Agent offline — проверьте службу digitalhouses_pve_agent на Proxmox и MQTT.'] %}
+          {% else %}
+            {% set pve_state = states('sensor.dh_pve_agent_problems') %}
+            {% if pve_state in ['unknown', 'unavailable', 'none', ''] %}
+              {% set ns.lines = ns.lines + ['Диагностика PVE недоступна — проверьте сборщики и журнал агента.'] %}
+            {% else %}
+              {% for item in (state_attr('sensor.dh_pve_agent_problems', 'active') or []) %}
+                {% set category = item.get('category', '') %}
+                {% set metric = item.get('metric', '') %}
+                {% set summary = item.get('summary') or 'Обнаружена проблема' %}
+                {% set object_name = item.get('object_name') or 'PVE' %}
+                {% if category == 'disk' or metric in ['smart', 'health'] %}
+                  {% set action = 'Проверьте SMART и состояние диска.' %}
+                {% elif category == 'storage' %}
+                  {% set action = 'Проверьте доступность хранилища.' %}
+                {% elif metric in ['temperature', 'throttling'] %}
+                  {% set action = 'Проверьте охлаждение и нагрузку.' %}
+                {% elif category == 'memory' %}
+                  {% set action = 'Проверьте потребление RAM и процессы.' %}
+                {% else %}
+                  {% set action = 'Откройте диагностику компонента.' %}
+                {% endif %}
+                {% set ns.lines = ns.lines + [object_name ~ ': ' ~ summary ~ ' — ' ~ action] %}
+              {% endfor %}
+            {% endif %}
+            {% set readiness = states('sensor.dh_pve_agent_ups_shutdown_readiness') %}
+            {% set issues = state_attr('sensor.dh_pve_agent_ups_shutdown_readiness', 'issues') or [] %}
+            {% if readiness == 'warning' %}
+              {% set actions = {
+                'nut_unavailable': 'проверьте NUT и связь с UPS',
+                'shutdown_policy_unavailable': 'проверьте конфигурацию shutdown',
+                'shutdown_policy_not_enabled': 'настройте автоматический shutdown PVE',
+                'nut_role_not_primary': 'назначьте PVE сервером NUT PRIMARY',
+                'nut_monitor_not_active': 'включите и запустите nut-monitor',
+                'shutdown_disabled': 'активируйте команду shutdown PVE',
+                'power_restore_delay_unreadable': 'проверьте задержку включения UPS',
+                'shutdown_budget_unavailable': 'проверьте таймауты остановки гостей',
+                'previous_host_shutdown_unclean': 'проверьте журнал предыдущего shutdown',
+                'previous_host_shutdown_unknown': 'проверьте результат предыдущего shutdown'
+              } %}
+              {% for issue in issues %}
+                {% set action = actions.get(issue, 'проверьте диагностику shutdown: ' ~ issue) %}
+                {% set ns.lines = ns.lines + ['Защита PVE — ' ~ action ~ '.'] %}
+              {% endfor %}
+              {% if issues | count == 0 %}
+                {% set ns.lines = ns.lines + ['Защита PVE не готова — проверьте настройки NUT/shutdown.'] %}
+              {% endif %}
+            {% endif %}
+            {% set ups = states('sensor.dh_pve_agent_ups_status') %}
+            {% if ups == 'on_battery' %}
+              {% set ns.lines = ns.lines + ['UPS работает от батареи — проверьте городское питание.'] %}
+            {% elif ups == 'low_battery' %}
+              {% set ns.lines = ns.lines + ['UPS: низкий заряд — проверьте питание и готовность shutdown.'] %}
+            {% elif ups == 'replace_battery' %}
+              {% set ns.lines = ns.lines + ['UPS: требуется замена батарей — проверьте батарейный блок.'] %}
+            {% elif ups == 'overload' %}
+              {% set ns.lines = ns.lines + ['UPS: перегрузка — уменьшите подключённую нагрузку.'] %}
+            {% elif ups in ['alarm', 'forced_shutdown', 'output_off', 'bypass'] %}
+              {% set ns.lines = ns.lines + ['UPS: ' ~ ups ~ ' — проверьте состояние ИБП и NUT.'] %}
+            {% endif %}
+            {% if states('binary_sensor.dh_pve_agent_ups_available') == 'off'
+                  and readiness != 'skip' and 'nut_unavailable' not in issues %}
+              {% set ns.lines = ns.lines + ['Драйвер/NUT не отвечает — проверьте драйвер UPS.'] %}
+            {% endif %}
+            {% if states('binary_sensor.dh_pve_agent_smart_collector') == 'off' %}
+              {% set ns.lines = ns.lines + ['SMART сборщик недоступен — проверьте smartctl и доступ к дискам.'] %}
+            {% endif %}
+            {% if states('sensor.dh_pve_agent_ups_problems') | int(0) > 0
+                  and ups in ['online', 'unknown', 'unavailable', 'none', '']
+                  and readiness != 'warning' %}
+              {% set ns.lines = ns.lines + ['Диагностика UPS обнаружила проблему — откройте состояние UPS.'] %}
+            {% endif %}
+            {% if agent == 'error' %}
+              {% set operation = state_attr(entity, 'operation') or 'agent' %}
+              {% set error = state_attr(entity, 'error') or 'неизвестная ошибка' %}
+              {% set ns.lines = ns.lines + [operation ~ ': ' ~ error ~ ' — проверьте журнал PVE Agent.'] %}
+            {% elif states('sensor.dh_pve_agent_update_status') == 'error' %}
+              {% set error = state_attr('sensor.dh_pve_agent_update_status', 'error') or 'не удалось проверить обновление' %}
+              {% set ns.lines = ns.lines + ['Updates: ' ~ error ~ ' — повторите проверку версии.'] %}
+            {% elif states('sensor.dh_pve_agent_refresh_state') == 'error' %}
+              {% set error = state_attr('sensor.dh_pve_agent_refresh_state', 'error') or 'обновление не выполнено' %}
+              {% set ns.lines = ns.lines + ['Refresh: ' ~ error ~ ' — проверьте журнал агента.'] %}
+            {% endif %}
+          {% endif %}
+          {% if ns.lines | count == 0 %}
             Проблем не обнаружено
           {% else %}
-            Обнаружено проблем: {{ active | count }}
-          {% endif %}
-        secondary: |-
-          {% set active = state_attr(entity, 'active') or [] %}
-          {% if states(entity) in ['unknown', 'unavailable', 'none', ''] %}
-            Состояние проблем недоступно.
-          {% elif active | count == 0 %}
-            Система работает штатно.
-          {% else %}
-            {% for item in active %}
-              {% set object_name = item.get('object_name', 'Объект') %}
-              {% set summary = item.get('summary', 'Проблема') %}
-              {% set details = item.get('details', '') %}
-              • {{ object_name }} — {{ summary }}{% if details %} · {{ details }}{% endif %}
-              {% if not loop.last %}
-
-              {% endif %}
+            {% for line in ns.lines %}
+              {{ loop.index }}. {{ line }}
             {% endfor %}
           {% endif %}
-        icon: |-
-          {% set active = state_attr(entity, 'active') or [] %}
+        icon: >-
           {% if states(entity) in ['unknown', 'unavailable', 'none', ''] %}
-            mdi:help-circle-outline
-          {% elif active | count > 0 %}
             mdi:alert-circle
+          {% elif states('sensor.dh_pve_agent_problems') | int(0) > 0
+               or states('sensor.dh_pve_agent_ups_shutdown_readiness') == 'warning'
+               or states('sensor.dh_pve_agent_ups_problems') | int(0) > 0
+               or states(entity) == 'error'
+               or states('sensor.dh_pve_agent_update_status') == 'error'
+               or states('sensor.dh_pve_agent_refresh_state') == 'error' %}
+            mdi:alert-circle-outline
           {% else %}
-            mdi:check-circle
+            mdi:check-circle-outline
           {% endif %}
-        icon_color: |-
+        icon_color: >-
+          {% set ups = states('sensor.dh_pve_agent_ups_status') %}
+          {% set readiness = states('sensor.dh_pve_agent_ups_shutdown_readiness') %}
           {% if states(entity) in ['unknown', 'unavailable', 'none', ''] %}
-            grey
-          {% elif (state_attr(entity, 'active') or []) | count > 0 %}
             red
+          {% elif ups in ['forced_shutdown', 'alarm', 'overload', 'replace_battery',
+                         'low_battery', 'output_off'] or (ups == 'on_battery' and readiness == 'warning')
+                or state_attr('sensor.dh_pve_agent_problems', 'severity') == 'critical' %}
+            red
+          {% elif states('sensor.dh_pve_agent_problems') | int(0) > 0
+               or readiness == 'warning'
+               or states('sensor.dh_pve_agent_ups_problems') | int(0) > 0
+               or ups in ['on_battery', 'bypass']
+               or states('binary_sensor.dh_pve_agent_smart_collector') == 'off'
+               or states(entity) == 'error'
+               or states('sensor.dh_pve_agent_update_status') == 'error'
+               or states('sensor.dh_pve_agent_refresh_state') == 'error' %}
+            orange
+          {% elif states('sensor.dh_pve_agent_problems') in ['unknown', 'unavailable', 'none', ''] %}
+            grey
           {% else %}
             green
           {% endif %}
         multiline_secondary: true
         tap_action:
           action: more-info
+
         grid_options:
           columns: 12
-      - type: vertical-stack
-        cards:
-          - type: custom:button-card
-            entity: sensor.dh_pve_agent_card
-            triggers_update:
-              - sensor.dh_pve_agent_card
-              - sensor.dh_pve_agent_version
-              - sensor.dh_pve_agent_latest_version
-              - binary_sensor.dh_pve_agent_update_available
-            update_timer: |
-              [[[
-                const s = states['sensor.dh_pve_agent_card']?.state;
-                const awaitingRestart = ['unavailable', 'unknown'].includes(s)
-                  && this._dh_pve_timer?.operation === 'restart';
-                return s === 'running' || awaitingRestart ? 100 : 5000;
-              ]]]
-            show_icon: true
-            show_name: true
-            show_label: true
-            icon: |
-              [[[
-                const s = states['sensor.dh_pve_agent_card']?.state;
-                const upgrade = states['binary_sensor.dh_pve_agent_update_available']?.state === 'on';
-                const awaitingRestart = ['unavailable', 'unknown'].includes(s)
-                  && this._dh_pve_timer?.operation === 'restart';
-                return s === 'running' || awaitingRestart ? 'mdi:progress-clock'
-                  : s === 'error' ? 'mdi:alert-circle'
-                  : s === 'success' ? 'mdi:check-circle'
-                  : upgrade ? 'mdi:package-up'
-                  : 'mdi:server';
-              ]]]
-            name: |
-              [[[
-                const installed = states['sensor.dh_pve_agent_version']?.state;
-                const latest = states['sensor.dh_pve_agent_latest_version']?.state;
-                const available = states['binary_sensor.dh_pve_agent_update_available']?.state === 'on';
-                const valid = (v) =>
-                  typeof v === 'string' && !['unknown', 'unavailable', 'none', ''].includes(v);
-                const upgrade = available && valid(installed) && valid(latest) && latest !== installed;
-                return 'PVE Agent' + (valid(installed)
-                  ? ' · v' + installed + (upgrade ? ' → v' + latest : '')
-                  : '');
-              ]]]
-            label: |
-              [[[
-                const item = states['sensor.dh_pve_agent_card'];
-                // The foreground timer starts when this browser first observes
-                // running, using its own monotonic clock. Never subtract the PVE
-                // server UTC timestamp from the browser wall clock: these clocks
-                // may differ by seconds.
-                const elapsedText = (since) => {
-                  const tenths = Math.max(0, Math.floor((performance.now() - since) / 100));
-                  const mm = String(Math.floor(tenths / 600)).padStart(2, '0');
-                  const ss = String(Math.floor((tenths % 600) / 10)).padStart(2, '0');
-                  return mm + ':' + ss + ',' + tenths % 10;
-                };
-                if (!item || ['unknown','unavailable'].includes(item.state)) {
-                  const pending = this._dh_pve_timer;
-                  if (pending?.operation === 'restart') {
-                    return 'Ожидание запуска агента… ' + elapsedText(pending.since);
-                  }
-                  return 'Нет связи с агентом';
-                }
-                const a = item.attributes || {};
-                const operation = a.operation;
-                const names = {
-                  refresh: 'Обновление данных',
-                  check: 'Проверка версии',
-                  install: 'Установка версии',
-                  restart: 'Перезапуск агента'
-                };
-                const duration = (value) =>
-                  typeof value === 'number'
-                  ? value.toFixed(1).replace('.', ',') + ' сек'
-                  : '—';
-                if (item.state === 'running') {
-                  const key = String(operation) + '|' + String(a.started_at || '');
-                  if (this._dh_pve_timer?.key !== key) {
-                    this._dh_pve_timer = {
-                      key: key, operation: operation, since: performance.now()
-                    };
-                  }
-                  return (names[operation] || 'Операция') + '… '
-                    + elapsedText(this._dh_pve_timer.since);
-                }
-                if (item.state === 'error') {
-                  return 'Ошибка: ' + (a.error || 'операция не выполнена');
-                }
-                if (item.state === 'success') {
-                  let message = {
-                    refresh: 'Обновлено',
-                    check: 'Версия проверена',
-                    install: 'Версия установлена',
-                    restart: 'Агент перезапущен'
-                  }[operation] || 'Готово';
-                  if (operation === 'check') {
-                    const available = states['binary_sensor.dh_pve_agent_update_available']?.state;
-                    message = available === 'on' ? 'Доступна новая версия'
-                      : available === 'off' ? 'Версия актуальна' : 'Проверка завершена';
-                  }
-                  return message + ' · ' + duration(a.duration_seconds);
-                }
-                // A verified new release stays visible after the five-second result.
-                if (states['binary_sensor.dh_pve_agent_update_available']?.state === 'on') {
-                  return 'Доступна новая версия';
-                }
-                const ts = Date.parse(a.last_collection_at || '');
-                if (!Number.isFinite(ts)) return 'Ожидание данных';
-                const sec = Math.max(0, Math.floor((Date.now() - ts) / 1000));
-                if (sec < 60) return 'Обновлено ' + sec + ' сек назад';
-                const min = Math.floor(sec / 60);
-                if (min < 60) return 'Обновлено ' + min + ' мин назад';
-                const hr = Math.floor(min / 60);
-                if (hr < 24) return 'Обновлено ' + hr + ' ч назад';
-                return 'Обновлено ' + Math.floor(hr / 24) + ' д назад';
-              ]]]
-            styles:
-              card:
-                - padding: 12px
-                - text-align: left
-              grid:
-                - grid-template-areas: '"i n" "i l"'
-                - grid-template-columns: 48px 1fr
-                - grid-template-rows: min-content min-content
-              img_cell:
-                - width: 40px
-                - justify-content: start
-              icon:
-                - width: 26px
-                - color: |
-                    [[[
-                      const s = states['sensor.dh_pve_agent_card']?.state;
-                      const upgrade = states['binary_sensor.dh_pve_agent_update_available']?.state === 'on';
-                      const awaitingRestart = ['unavailable', 'unknown'].includes(s)
-                        && this._dh_pve_timer?.operation === 'restart';
-                      return s === 'error' ? 'var(--error-color)'
-                        : s === 'running' || awaitingRestart
-                          ? 'var(--info-color, var(--primary-color))'
-                        : s === 'success' ? 'var(--success-color, var(--primary-color))'
-                        : upgrade ? 'var(--warning-color, orange)'
-                        : 'var(--success-color, var(--primary-color))';
-                    ]]]
-              name:
-                - justify-self: start
-                - font-size: 14px
-                - font-weight: 600
-              label:
-                - justify-self: start
-                - white-space: normal
-                - text-align: left
-                - font-size: 13px
-                - color: var(--secondary-text-color)
-            tap_action:
-              action: none
 
-          - type: custom:mushroom-chips-card
-            alignment: center
-            chips:
-              - type: template
-                icon: mdi:refresh
-                content: Обновить
-                tap_action:
-                  action: perform-action
-                  perform_action: button.press
-                  target:
-                    entity_id: button.dh_pve_agent_refresh
-
-              - type: template
-                icon: mdi:cloud-search
-                content: Версия
-                tap_action:
-                  action: perform-action
-                  perform_action: button.press
-                  target:
-                    entity_id: button.dh_pve_agent_check_updates
-
-              - type: conditional
+      - type: conditional
+        conditions:
+          - condition: or
+            conditions:
+              - condition: state
+                entity: binary_sensor.dh_pve_agent_update_available
+                state: 'on'
+              - condition: and
                 conditions:
-                  - entity: binary_sensor.dh_pve_agent_update_available
-                    state: "on"
-                chip:
-                  type: template
-                  icon: mdi:package-down
-                  icon_color: orange
-                  content: Новая версия
-                  tap_action:
-                    action: perform-action
-                    perform_action: button.press
-                    target:
-                      entity_id: button.dh_pve_agent_update
-                    confirmation:
-                      text: >-
-                        Установить новую версию PVE Agent?
-                        Мониторинг и логика UPS временно прервутся.
+                  - condition: state
+                    entity: sensor.dh_pve_agent_card
+                    state: running
+                  - condition: state
+                    entity: sensor.dh_pve_agent_card
+                    attribute: operation
+                    state: [install, check]
+        card:
+          type: custom:mushroom-template-card
+          entity: sensor.dh_pve_agent_card
+          primary: Updates
+          secondary: >-
+            {% set operation = state_attr(entity, 'operation') %}
+            {% if states(entity) == 'running' and operation in ['install', 'check'] %}
+              {% set start = state_attr(entity, 'started_at') %}
+              {% if operation == 'check' %}Проверка версии{% else %}Обновление версии{% endif %} ·
+              {% if start %}начато {{ time_since(as_datetime(start)) }} назад{% else %}выполняется{% endif %}
+            {% else %}
+              v{{ states('sensor.dh_pve_agent_version') }}
+              → v{{ states('sensor.dh_pve_agent_latest_version') }}
+            {% endif %}
+          icon: mdi:package-up
+          icon_color: orange
+          tap_action:
+            action: none
 
-              - type: template
-                icon: mdi:restart
-                content: Перезапуск
-                tap_action:
-                  action: perform-action
-                  perform_action: button.press
-                  target:
-                    entity_id: button.dh_pve_agent_restart_agent
-                  confirmation:
-                    text: >-
-                      Перезапустить PVE Agent?
-                      Мониторинг и логика UPS временно прервутся.
-                      Сам Proxmox и его гости не перезапускаются.
+        grid_options:
+          columns: 12
+
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: sensor.dh_pve_agent_card
+            state: running
+          - condition: state
+            entity: sensor.dh_pve_agent_card
+            attribute: operation
+            state: refresh
+        card:
+          type: custom:mushroom-template-card
+          entity: sensor.dh_pve_agent_card
+          primary: Refresh
+          secondary: >-
+            {% set start = state_attr(entity, 'started_at') %}
+            Обновление данных ·
+            {% if start %}начато {{ time_since(as_datetime(start)) }} назад{% else %}выполняется{% endif %}
+          icon: mdi:refresh
+          icon_color: blue
+          tap_action:
+            action: none
+
+        grid_options:
+          columns: 12
+
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: sensor.dh_pve_agent_card
+            state: running
+          - condition: state
+            entity: sensor.dh_pve_agent_card
+            attribute: operation
+            state: restart
+        card:
+          type: custom:mushroom-template-card
+          entity: sensor.dh_pve_agent_card
+          primary: Restart
+          secondary: >-
+            {% set start = state_attr(entity, 'started_at') %}
+            Перезапуск агента ·
+            {% if start %}начато {{ time_since(as_datetime(start)) }} назад{% else %}выполняется{% endif %}
+          icon: mdi:restart
+          icon_color: blue
+          tap_action:
+            action: none
+
+      # Controls are actions only. No custom JS/timers in cards.
+        grid_options:
+          columns: 12
+
+      - type: custom:mushroom-chips-card
+        alignment: center
+        chips:
+          - type: template
+            icon: mdi:refresh
+            content: Обновить
+            tap_action:
+              action: perform-action
+              perform_action: button.press
+              target:
+                entity_id: button.dh_pve_agent_refresh
+          - type: template
+            icon: mdi:cloud-search
+            content: Версия
+            tap_action:
+              action: perform-action
+              perform_action: button.press
+              target:
+                entity_id: button.dh_pve_agent_check_updates
+          - type: conditional
+            conditions:
+              - entity: binary_sensor.dh_pve_agent_update_available
+                state: 'on'
+            chip:
+              type: template
+              icon: mdi:package-down
+              icon_color: orange
+              content: Новая версия
+              tap_action:
+                action: perform-action
+                perform_action: button.press
+                target:
+                  entity_id: button.dh_pve_agent_update
+                confirmation:
+                  text: >-
+                    Установить новую версию PVE Agent?
+                    Мониторинг и логика UPS временно прервутся.
+          - type: template
+            icon: mdi:restart
+            content: Перезапуск
+            tap_action:
+              action: perform-action
+              perform_action: button.press
+              target:
+                entity_id: button.dh_pve_agent_restart_agent
+              confirmation:
+                text: >-
+                  Перезапустить PVE Agent?
+                  Мониторинг и логика UPS временно прервутся.
+                  Сам Proxmox и его гости не перезапускаются.
         grid_options:
           columns: 12
       - type: heading

@@ -118,14 +118,14 @@ def test_discovery_card_is_same_mqtt_device():
     assert "last_collection_at" in card["json_attributes_template"]
 
 
-def test_ru_dashboard_has_problem_card_then_unified_agent_card():
+def test_ru_dashboard_has_problems_and_four_lightweight_status_cards():
     from pathlib import Path
     yaml = (Path(__file__).parents[1] / "examples" /
             "dh_pve_agent_dashboard_ru.yaml").read_text()
-    problems = yaml.index("entity: sensor.dh_pve_agent_problems")
-    agent = yaml.index("type: custom:button-card")
-    assert problems < agent
-    assert yaml.count("heading: Приложение") == 0
+    assert "primary: Problems" in yaml
+    for name in ("Updates", "Refresh", "Restart"):
+        assert f"primary: {name}" in yaml
+    assert "type: custom:button-card" not in yaml.split("heading: Хост", 1)[0]
     assert "content: Новая версия" in yaml
     assert "content: Обновить" in yaml
     assert "content: Версия" in yaml
@@ -159,30 +159,21 @@ def test_github_check_duration_is_product_owned_and_persisted(tmp_path, monkeypa
     assert cached['check_duration_seconds'] == payload['check_duration_seconds']
 
 
-def test_compact_card_keeps_verified_update_visible_after_operation_result():
-    """Update alert is persistent only for verified availability, not guessed."""
+def test_updates_card_visible_for_verified_new_release_or_active_install():
     from pathlib import Path
     root = Path(__file__).parents[1]
-    standalone = (root / "examples/dh_pve_agent_card_ru.yaml").read_text()
-    dashboard = (root / "examples/dh_pve_agent_dashboard_ru.yaml").read_text()
-
-    for yaml in (standalone, dashboard):
-        assert "states['binary_sensor.dh_pve_agent_update_available']?.state === 'on'" in yaml
-        assert "states['sensor.dh_pve_agent_latest_version']?.state" in yaml
-        assert "' → v' + latest" in yaml
-        assert "'Доступна новая версия'" in yaml
-        assert "upgrade ? 'mdi:package-up'" in yaml
-        assert "upgrade ? 'var(--warning-color, orange)'" in yaml
-        assert "content: Новая версия" in yaml
-        # Running, error and five-second result always win over persistent alert.
-        assert yaml.index("if (item.state === 'running')") < yaml.index("if (item.state === 'error')")
-        assert yaml.index("if (item.state === 'error')") < yaml.index("if (item.state === 'success')")
-        assert yaml.index("if (item.state === 'success')") < yaml.index(
-            "// A verified new release stays visible after the five-second result."
-        )
-        assert yaml.index("// A verified new release stays visible") < yaml.index(
-            "const ts = Date.parse(a.last_collection_at || '');"
-        )
+    for path in (root / "examples/dh_pve_agent_card_ru.yaml",
+                 root / "examples/dh_pve_agent_dashboard_ru.yaml"):
+        source = path.read_text()
+        assert "binary_sensor.dh_pve_agent_update_available" in source
+        assert "primary: Updates" in source
+        assert "state: [install, check]" in source
+        assert "attribute: operation" in source
+        assert "v{{ states('sensor.dh_pve_agent_version') }}" in source
+        assert "v{{ states('sensor.dh_pve_agent_latest_version') }}" in source
+        assert "Обновление версии" in source
+        assert "content: Новая версия" in source
+        assert "performance.now()" not in source
 
 
 def test_restart_duration_ignores_wall_clock_skew_between_processes(tmp_path):
@@ -226,19 +217,17 @@ def test_install_cross_process_uses_monotonic_and_falls_back_across_host_reboot(
     assert new_boot.duration_seconds == 8.0
 
 
-def test_compact_timer_uses_local_browser_monotonic_clock_not_pve_wall_clock():
+def test_status_cards_use_native_ha_relative_time_without_javascript_timer():
     from pathlib import Path
     root = Path(__file__).parents[1]
-    for path in [
-        root / "examples/dh_pve_agent_card_ru.yaml",
-        root / "examples/dh_pve_agent_dashboard_ru.yaml",
-    ]:
+    for path in (root / "examples/dh_pve_agent_card_ru.yaml",
+                 root / "examples/dh_pve_agent_dashboard_ru.yaml"):
         source = path.read_text()
-        assert "performance.now()" in source
-        assert "this._dh_pve_timer" in source
-        assert "Date.now() - start" not in source
-        assert "Math.floor((performance.now() - since) / 100)" in source
-        assert "Ожидание запуска агента…" in source
+        assert "time_since(as_datetime(start))" in source
+        assert "performance.now()" not in source
+        assert "this._dh_pve_timer" not in source
+        assert "update_timer" not in source
+
 
 def test_installer_finishes_after_new_agent_started_and_automatic_check(tmp_path):
     """A newer successful GitHub check must not conceal worker completion."""
@@ -368,34 +357,18 @@ def test_user_commands_are_acknowledged_before_blocking_background_work():
     assert "bridge.refresh_requested.clear()" in loop
 
 
-def test_compact_card_subscribes_to_agent_state_and_version_changes():
-    """button-card must redraw on MQTT update, not wait five seconds."""
+def test_status_cards_are_reused_in_dashboard_and_controls_preserved():
     from pathlib import Path
-
     root = Path(__file__).parents[1]
-    source = (root / "examples/dh_pve_agent_card_ru.yaml").read_text()
+    fragment = (root / "examples/dh_pve_agent_status_cards_ru.yaml").read_text()
+    standalone = (root / "examples/dh_pve_agent_card_ru.yaml").read_text()
     dashboard = (root / "examples/dh_pve_agent_dashboard_ru.yaml").read_text()
-    # The standalone YAML is embedded in the full dashboard, with the root
-    # stack indented eight columns. No PyYAML dependency in agent CI.
-    lines = [line for line in source.splitlines() if not line.startswith("#")]
-    assert lines[0] == "type: vertical-stack"
-    embedded = "      - type: vertical-stack\n" + "\n".join(
-        ("        " + line) if line else "" for line in lines[1:]
-    ) + "\n"
-    assert dashboard.count(embedded) == 1
-
-    card = source.split("    tap_action:", 1)[0]
-    assert "entity: sensor.dh_pve_agent_card" in card
-    assert "triggers_update:\n" in card
-    for required in (
-        "sensor.dh_pve_agent_card",
-        "sensor.dh_pve_agent_version",
-        "sensor.dh_pve_agent_latest_version",
-        "binary_sensor.dh_pve_agent_update_available",
-    ):
-        assert ("      - " + required + "\n") in card
-    assert "? 100 : 5000;" in card
-    assert "content: Обновить" in source
-    assert "content: Версия" in source
-    assert "content: Новая версия" in source
-    assert "content: Перезапуск" in source
+    assert "type: vertical-stack\ncards:\n" in standalone
+    assert standalone.endswith(fragment.split("cards:\n", 1)[1])
+    assert "primary: Problems" in dashboard
+    for title in ("Updates", "Refresh", "Restart"):
+        assert f"primary: {title}" in dashboard
+    assert dashboard.count("entity_id: button.dh_pve_agent_refresh") == 1
+    assert "content: Версия" in dashboard
+    assert "content: Новая версия" in dashboard
+    assert "content: Перезапуск" in dashboard
