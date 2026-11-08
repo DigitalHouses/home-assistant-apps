@@ -251,6 +251,8 @@ UPS monitoring is optional. The always-present PVE device exposes `binary_sensor
 - `on` + `binary_sensor.dh_pve_agent_ups_available = off` — a UPS is provisioned but NUT cannot currently read it; this is a real availability problem and must remain visible;
 - `on` + UPS available — show the full UPS dashboard.
 
+**UPS overview card:** the top-left status must summarize both the UPS physical state and PVE shutdown readiness. Use the drop-in [UPS protection status card](examples/dh_pve_agent_ups_protection_status_card.yaml) instead of a green "ИБП работает нормально" card derived solely from `sensor.dh_pve_agent_ups_status`. The green state is reserved for `ups_status=online`, `ups_shutdown_readiness=ok/ready`, and zero UPS problems. An online UPS with missing NUT PRIMARY/monitor/shutdown configuration is orange; loss of mains with shutdown unready is red. This changes only Home Assistant rendering, not the equipment or the UPS state sensor.
+
 UPS controls that depend on hardware capabilities have stable diagnostic facts: `binary_sensor.dh_pve_agent_ups_standard_test_supported`, `binary_sensor.dh_pve_agent_ups_quick_test_supported`, `binary_sensor.dh_pve_agent_ups_deep_test_supported`, `binary_sensor.dh_pve_agent_ups_stop_test_supported`, and `binary_sensor.dh_pve_agent_ups_beeper_control_supported`. UI cards may use these facts for visibility instead of referencing an entity that the UPS does not support. The beeper binary is `on` only when both enable/disable commands are permitted and `ups.beeper.status` supplies feedback, exactly matching creation of `switch.dh_pve_agent_ups_beeper`; command inventory support alone does not imply an HA switch exists.
 
 ## UPS status, charger and battery semantics

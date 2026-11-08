@@ -1,0 +1,78 @@
+# Upper-left UPS summary: UPS health and *PVE shutdown readiness* are distinct.
+# Replace the current "ИБП работает нормально" card with this whole block.
+type: custom:mushroom-template-card
+entity: sensor.dh_pve_agent_ups_shutdown_readiness
+primary: >-
+  {% set ups = states('sensor.dh_pve_agent_ups_status') %}
+  {% set readiness = states(entity) %}
+  {% set problems = states('sensor.dh_pve_agent_ups_problems') | int(-1) %}
+  {% if ups in ['unknown', 'unavailable', 'none', ''] %}
+    Нет данных от UPS
+  {% elif ups in ['forced_shutdown', 'alarm', 'overload', 'replace_battery',
+                   'low_battery', 'output_off'] %}
+    Аварийное состояние UPS
+  {% elif ups == 'on_battery' and readiness not in ['ok', 'ready'] %}
+    Риск аварийного отключения PVE
+  {% elif ups == 'on_battery' %}
+    Питание от батареи UPS
+  {% elif ups != 'online' or problems > 0 %}
+    UPS требует внимания
+  {% elif readiness == 'warning' %}
+    Защита PVE не готова
+  {% elif readiness not in ['ok', 'ready'] or problems < 0 %}
+    Готовность защиты неизвестна
+  {% else %}
+    Защита питания в норме
+  {% endif %}
+secondary: >-
+  {% set ups = states('sensor.dh_pve_agent_ups_status') %}
+  {% set readiness = states(entity) %}
+  {% set issues = state_attr(entity, 'issues') or [] %}
+  {% if ups in ['unknown', 'unavailable', 'none', ''] %}
+    Нет связи с UPS через NUT
+  {% elif readiness == 'warning' %}
+    UPS: {{ ups }} · Замечаний по shutdown: {{ issues | count }}
+  {% elif readiness in ['ok', 'ready'] %}
+    UPS: {{ ups }} · Shutdown: готов
+  {% else %}
+    UPS: {{ ups }} · Готовность shutdown не подтверждена
+  {% endif %}
+icon: >-
+  {% set ups = states('sensor.dh_pve_agent_ups_status') %}
+  {% set readiness = states(entity) %}
+  {% set problems = states('sensor.dh_pve_agent_ups_problems') | int(-1) %}
+  {% if ups in ['unknown', 'unavailable', 'none', ''] %}
+    mdi:help-circle-outline
+  {% elif ups in ['forced_shutdown', 'alarm', 'overload', 'replace_battery',
+                   'low_battery', 'output_off']
+          or (ups == 'on_battery' and readiness not in ['ok', 'ready']) %}
+    mdi:shield-alert
+  {% elif ups == 'on_battery' %}
+    mdi:battery-alert
+  {% elif ups != 'online' or readiness == 'warning' or problems > 0 %}
+    mdi:shield-alert-outline
+  {% elif readiness not in ['ok', 'ready'] or problems < 0 %}
+    mdi:help-circle-outline
+  {% else %}
+    mdi:shield-check
+  {% endif %}
+icon_color: >-
+  {% set ups = states('sensor.dh_pve_agent_ups_status') %}
+  {% set readiness = states(entity) %}
+  {% set problems = states('sensor.dh_pve_agent_ups_problems') | int(-1) %}
+  {% if ups in ['unknown', 'unavailable', 'none', ''] %}
+    grey
+  {% elif ups in ['forced_shutdown', 'alarm', 'overload', 'replace_battery',
+                   'low_battery', 'output_off']
+          or (ups == 'on_battery' and readiness not in ['ok', 'ready']) %}
+    red
+  {% elif ups != 'online' or readiness == 'warning' or problems > 0 %}
+    orange
+  {% elif readiness not in ['ok', 'ready'] or problems < 0 %}
+    grey
+  {% else %}
+    green
+  {% endif %}
+multiline_secondary: true
+tap_action:
+  action: more-info
