@@ -325,14 +325,34 @@ def build_full_discovery_payload(
                 uid=uid, state_topic=topics.state, app_topic=topics.availability,
                 key=f"disk_{slug}_health", name=f"Disk health - {display}",
                 entity_id=f"sensor.dh_pve_agent_disk_{slug}_health",
-                expression=obj + ".health_state | default('UNKNOWN')",
+                expression=(
+                    "'TELEMETRY_UNAVAILABLE' if "
+                    + obj + ".available | default(false) == false else "
+                    + obj + ".health_state | default('UNKNOWN')"
+                ),
                 subsystem="smart", section="disk", subject="disk", metric="health",
                 object_id=disk_id, display_name=display, sort_key=f"400_{index:03d}_00",
-                icon="mdi:harddisk", object_availability=object_online,
+                # The inventory/identity sensor must remain online during a
+                # temporary QGA or SMART failure. Other measurements retain
+                # their per-disk availability gates so stale values never
+                # masquerade as current telemetry.
+                icon="mdi:harddisk",
                 extra_attrs={
                     **ident,
-                    "recommendation": obj + ".recommendation | default(none)",
-                    "health_reasons": obj + ".health_reasons | default([])",
+                    "telemetry_available": obj + ".available | default(false)",
+                    "telemetry_error": obj + ".error | default(none)",
+                    "last_success_at": obj + ".last_success_at | default(none)",
+                    "source_type": obj + ".source_type | default(none)",
+                    "source_guest_id": obj + ".source_guest_id | default(none)",
+                    "last_known_health": obj + ".health_state | default('UNKNOWN')",
+                    "recommendation": (
+                        "none if " + obj + ".available | default(false) == false else "
+                        + obj + ".recommendation | default(none)"
+                    ),
+                    "health_reasons": (
+                        "[] if " + obj + ".available | default(false) == false else "
+                        + obj + ".health_reasons | default([])"
+                    ),
                 },
             )
             components[key] = item

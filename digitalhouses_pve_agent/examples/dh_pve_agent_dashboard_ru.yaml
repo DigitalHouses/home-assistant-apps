@@ -759,7 +759,7 @@ sections:
                     ~ ' '
                     ~ (state_attr(temp, 'unit_of_measurement') or '°C')
                   ] %}
-                {% else %}
+                {% elif states(health) != 'TELEMETRY_UNAVAILABLE' %}
                   {% set parts.items = parts.items + ['Температура недоступна'] %}
                 {% endif %}
 
@@ -769,7 +769,9 @@ sections:
                   ] %}
                 {% endif %}
 
-                {% if is_state(smart_problem, 'on') %}
+                {% if states(health) == 'TELEMETRY_UNAVAILABLE' %}
+                  {% set parts.items = parts.items + ['SMART: телеметрия временно недоступна'] %}
+                {% elif is_state(smart_problem, 'on') %}
                   {% set parts.items = parts.items + ['SMART: ERROR'] %}
                 {% elif is_state(smart_problem, 'off') %}
                   {% set parts.items = parts.items + ['SMART: OK'] %}

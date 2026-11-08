@@ -179,7 +179,11 @@ def test_nvme_entities_are_compact_and_history_friendly():
     assert c[prefix + "_daily_max_temperature"]["device_class"] == "temperature"
     assert c[prefix + "_unsafe_shutdowns"]["state_class"] == "total_increasing"
     assert "recommendation" in c[prefix + "_health"]["json_attributes_template"]
-    assert len(c[prefix + "_health"]["availability"]) == 3
+    # Health/identity stays available when QGA SMART telemetry times out.
+    # Numerical measurements still require fresh per-disk telemetry.
+    assert len(c[prefix + "_health"]["availability"]) == 2
+    assert "TELEMETRY_UNAVAILABLE" in c[prefix + "_health"]["value_template"]
+    assert len(c[prefix + "_temperature"]["availability"]) == 3
 
 
 def test_dynamic_gpu_and_fan_entities_are_stable():

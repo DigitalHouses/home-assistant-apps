@@ -125,7 +125,7 @@ def _discovery(inventory):
         instance_id="node_a", hostname="pve", node_name="PVE",
     )
     return build_shutdown_aware_pve_discovery_payload(
-        config, identity, version="0.5.77", inventory=inventory
+        config, identity, version="0.5.78", inventory=inventory
     )["components"]
 
 
