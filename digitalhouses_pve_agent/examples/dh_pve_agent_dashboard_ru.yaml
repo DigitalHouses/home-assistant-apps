@@ -1899,6 +1899,64 @@ sections:
         card_param: entities
         grid_options:
           columns: 12
+      # RPM-only fallback: no invented fan %, no secondary axis mixing.
+      # Create the graph only if at least one fan has valid RPM but no %.
+      - type: custom:auto-entities
+        show_empty: false
+        unique: true
+        card:
+          type: grid
+          columns: 1
+          square: false
+        card_param: cards
+        filter:
+          template: |-
+            {% set ns = namespace(items=[]) %}
+            {% for fan in states.sensor | sort(attribute='entity_id') %}
+              {% if state_attr(fan.entity_id, 'proxmox_integration') == 'digitalhouses_pve_agent'
+                    and state_attr(fan.entity_id, 'proxmox_section') == 'cooling'
+                    and state_attr(fan.entity_id, 'proxmox_metric') == 'rpm'
+                    and fan.state | is_number %}
+                {% set percent_id = fan.entity_id | replace('_rpm', '_speed') %}
+                {% if not (states(percent_id) | is_number) %}
+                  {% set name = state_attr(fan.entity_id, 'proxmox_display_name')
+                    or state_attr(fan.entity_id, 'label') or fan.name %}
+                  {% set ns.items = ns.items + [{
+                    'entity': fan.entity_id,
+                    'name': name
+                  }] %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+            {% if ns.items | count > 0 %}
+              {{ [{
+                'type': 'custom:mini-graph-card',
+                'name': 'Вентиляторы · RPM (без калибровки)',
+                'icon': 'mdi:fan',
+                'entities': ns.items,
+                'hours_to_show': 24,
+                'points_per_hour': 2,
+                'line_width': 2,
+                'height': 120,
+                'decimals': 0,
+                'lower_bound': 0,
+                'show': {
+                  'name': true,
+                  'icon': true,
+                  'state': false,
+                  'graph': 'line',
+                  'fill': false,
+                  'points': false,
+                  'labels': false,
+                  'legend': true,
+                  'extrema': false
+                }
+              }] | tojson }}
+            {% else %}
+              {{ [] }}
+            {% endif %}
+        grid_options:
+          columns: 12
       - type: heading
         heading: Частота CPU · 24 часа
         heading_style: subtitle
