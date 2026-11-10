@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.80
+
+- Fix Beelink/AZW IT8613 fan2 disappearing from MQTT Discovery after removing automatic fan calibration: the verified physical `it87.2608/fan2` tachometer is now confirmed even when it first reports 0 RPM (fan-stop). No PWM write or calibration is triggered.
+- Keep the unused `fan3` channel subject to the standard two-positive-samples confirmation; do not create a fan when the tachometer channel itself is absent.
+- Preserve existing RPM and manual 100%-RPM entities and fan identity, including persistence after restart. Add cold-start and unverified-channel regression tests.
+
+
 ## 0.5.79
 
 - Replace fan automatic/active/passive maximum-RPM calibration with a per-fan Home Assistant MQTT `number` input (`mode: box`, 0..30000 RPM, 0 = unset). Store manual 100%-RPM values by stable fan ID in the App state and compute speed % only from that user-provided value; physical RPM remains available.

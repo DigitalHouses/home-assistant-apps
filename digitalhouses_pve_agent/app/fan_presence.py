@@ -70,6 +70,21 @@ class FanPresenceTracker:
         for fan in current:
             if fan.fan_id in self._confirmed:
                 continue
+            # Beelink/AZW IT8613 fan2 is a verified physical fan channel.
+            # With no automatic PWM calibration, it can be at 0 RPM during
+            # startup; do not confuse fan-stop with an unconnected tach input.
+            # The unused fan3 channel still follows the normal debounce.
+            if (
+                fan.fan_id == "it8613_it87_2608_fan2"
+                and fan.chip == "it8613"
+                and fan.source_device == "it87.2608"
+                and fan.fan_name == "fan2"
+                and fan.rpm == 0
+            ):
+                self._confirmed.add(fan.fan_id)
+                self._positive_streaks.pop(fan.fan_id, None)
+                changed = True
+                continue
             if fan.rpm is not None and fan.rpm > 0:
                 streak = self._positive_streaks.get(fan.fan_id, 0) + 1
                 if streak >= 2:

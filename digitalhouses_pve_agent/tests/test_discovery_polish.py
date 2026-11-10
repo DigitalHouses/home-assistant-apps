@@ -156,6 +156,24 @@ def test_beelink_second_positive_sample_confirms_only_rotating_fan(tmp_path: Pat
     assert fans["it8613_it87_2608_fan2"]["rpm"] == 3792
 
 
+def test_beelink_fan_stop_is_discovered_on_cold_start_without_pwm(tmp_path: Path):
+    _write_beelink_fans(tmp_path, fan2="0", fan3="0")
+    state = StateStore(tmp_path / "fans.json")
+    collectors = _collectors(tmp_path, fan_state_store=state)
+
+    sample = collectors.fans()
+
+    assert sample.data["detected"] is True
+    assert sample.data["confirmed_count"] == 1
+    assert sample.data["candidate_count"] == 2
+    assert set(_fan_items(sample)) == {"it8613_it87_2608_fan2"}
+    assert sample.data["it8613_it87_2608_fan2"]["rpm"] == 0
+    assert sample.data["it8613_it87_2608_fan2"]["speed_percent"] is None
+    assert state.load()["confirmed"] == ["it8613_it87_2608_fan2"]
+    restarted = _collectors(tmp_path, fan_state_store=state)
+    assert restarted.fans().data["confirmed_count"] == 1
+
+
 def test_confirmed_fan_remains_exposed_when_rpm_later_becomes_zero(tmp_path: Path):
     hwmon = _write_beelink_fans(tmp_path, fan2="3792", fan3="0")
     collectors = _collectors(tmp_path)
@@ -174,21 +192,21 @@ def test_confirmed_fan_remains_exposed_when_rpm_later_becomes_zero(tmp_path: Pat
     assert fans["it8613_it87_2608_fan2"]["rpm"] == 0
 
 
-def test_zero_between_positive_samples_resets_fan_confirmation_debounce(tmp_path: Path):
-    hwmon = _write_beelink_fans(tmp_path, fan2="3792", fan3="0")
+def test_unverified_channel_still_requires_two_positive_readings(tmp_path: Path):
+    hwmon = _write_beelink_fans(tmp_path, fan2="0", fan3="3792")
     collectors = _collectors(tmp_path)
 
-    assert collectors.fans().data["confirmed_count"] == 0
+    assert collectors.fans().data["confirmed_count"] == 1
 
-    (hwmon / "fan2_input").write_text("0\n", encoding="utf-8")
-    assert collectors.fans().data["confirmed_count"] == 0
+    (hwmon / "fan3_input").write_text("0\n", encoding="utf-8")
+    assert collectors.fans().data["confirmed_count"] == 1
 
-    (hwmon / "fan2_input").write_text("3813\n", encoding="utf-8")
-    assert collectors.fans().data["confirmed_count"] == 0
+    (hwmon / "fan3_input").write_text("3813\n", encoding="utf-8")
+    assert collectors.fans().data["confirmed_count"] == 1
 
     sample = collectors.fans()
-    assert sample.data["confirmed_count"] == 1
-    assert set(_fan_items(sample)) == {"it8613_it87_2608_fan2"}
+    assert sample.data["confirmed_count"] == 2
+
 
 
 def test_confirmed_fan_survives_collector_restart_with_persistent_store(tmp_path: Path):
