@@ -19,7 +19,11 @@ class FanMaxRpmRegistry:
 
     def get(self, fan_id: str) -> int:
         with self._lock:
-            values = self.state_store.load().get("fans", {})
+            try:
+                values = self.state_store.load().get("fans", {})
+            except Exception:
+                # A damaged preference must not hide read-only RPM monitoring.
+                return 0
             if not isinstance(values, dict):
                 return 0
             value = values.get(fan_id, 0)

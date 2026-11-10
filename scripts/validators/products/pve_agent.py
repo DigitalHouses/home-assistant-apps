@@ -6,7 +6,7 @@ from typing import Any
 
 from validators.common import fail, require_files
 
-EXPECTED_VERSION = "0.5.78"
+EXPECTED_VERSION = "0.5.79"
 EXPECTED_TOPIC_PREFIX = "DigitalHouses/Global/digitalhouses_pve_agent"
 EXPECTED_DEVICE_NAME = "DH PVE"
 EXPECTED_REFRESH_ENTITY = "button.dh_pve_agent_refresh"
@@ -59,6 +59,7 @@ def validate_digitalhouses_pve_agent(
             app / "app/pve_cache.py",
             app / "app/disk_temperature.py",
             app / "app/fan_presence.py",
+            app / "app/fan_max_rpm.py",
             app / "app/fan_calibration.py",
             app / "app/fan_hardware_beelink.py",
             app / "app/fan_runtime.py",

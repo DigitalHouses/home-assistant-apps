@@ -64,6 +64,11 @@ class TestManualFanMaxRpm(unittest.TestCase):
         self.assertIsNone(restarted.presentation(fan())["speed_percent"])
         self.assertEqual(self.registry.get(self.id), 0)
 
+    def test_corrupt_preferences_preserve_rpm_only(self):
+        (self.root / "fan_max_rpm.json").write_text("{invalid", encoding="utf-8")
+        self.assertEqual(self.registry.get(self.id), 0)
+        self.assertIsNone(self.registry.presentation(fan())["speed_percent"])
+
     def test_invalid_limits_and_ids_never_saved(self):
         for bad in (-1, 30001, 1.5, True, "1700"):
             with self.assertRaises(ValueError):
