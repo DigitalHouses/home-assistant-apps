@@ -54,4 +54,4 @@ def test_build_topics_is_exact():
     assert topics.device_id == "dh_pve_agent_shahristan"
     assert topics.discovery == "homeassistant/device/dh_pve_agent_shahristan/config"
     assert topics.ha_status == "homeassistant/status"
-    assert topics.fan_calibrate == topics.base + "/fans/calibrate"
+    assert topics.fan_max_rpm_prefix == topics.base + "/fans"

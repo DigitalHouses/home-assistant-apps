@@ -12,7 +12,7 @@ from .collectors.smart import SmartSnapshot, parse_smart_json
 from .daily_disk_stats import DailyDiskStats, update_daily_stats
 from .disk_health import evaluate_disk_health
 from .disk_temperature import DiskTemperatureReader, parse_smart_temperature
-from .fan_calibration import FanCalibrationAdapter, FanCalibrationRegistry
+from .fan_max_rpm import FanMaxRpmRegistry
 from .fan_presence import FanPresenceTracker
 from .production import ProductionCollectors, _checkpoint, _run
 from .collectors.cooling import collect_fans
@@ -117,8 +117,7 @@ class ResilientProductionCollectors(ProductionCollectors):
         disk_state_store,
         topology=None,
         fan_state_store=None,
-        fan_calibration_registry: FanCalibrationRegistry | None = None,
-        fan_calibration_adapters: tuple[FanCalibrationAdapter, ...] = (),
+        fan_max_rpm_registry: FanMaxRpmRegistry | None = None,
         **kwargs,
     ) -> None:
         super().__init__(
@@ -129,8 +128,7 @@ class ResilientProductionCollectors(ProductionCollectors):
         self.topology = topology
         self._disk_temperature_reader = DiskTemperatureReader(sys_root=self.sys_root)
         self._fan_presence = FanPresenceTracker(state_store=fan_state_store)
-        self._fan_calibration_registry = fan_calibration_registry
-        self._fan_calibration_adapters = tuple(fan_calibration_adapters)
+        self._fan_max_rpm_registry = fan_max_rpm_registry
 
     def host(self) -> CollectorSample:
         sample = super().host()
@@ -161,22 +159,11 @@ class ResilientProductionCollectors(ProductionCollectors):
         fan_items: dict[str, dict[str, object]] = {}
         for fan in presence.confirmed_fans:
             item: dict[str, object] = asdict(fan)
-            if self._fan_calibration_registry is not None:
-                adapter = next(
-                    (
-                        candidate
-                        for candidate in self._fan_calibration_adapters
-                        if candidate.supports(fan)
-                    ),
-                    None,
-                )
-                item.update(
-                    self._fan_calibration_registry.presentation(
-                        fan,
-                        adapter,
-                        observed_at=datetime.now(timezone.utc).isoformat(),
-                    )
-                )
+            item.update(
+                self._fan_max_rpm_registry.presentation(fan)
+                if self._fan_max_rpm_registry is not None
+                else {"max_rpm": 0, "speed_percent": None}
+            )
             fan_items[fan.fan_id] = item
         detected = presence.confirmed_count > 0
         data: dict[str, object] = {

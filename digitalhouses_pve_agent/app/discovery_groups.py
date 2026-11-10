@@ -51,7 +51,6 @@ def _component_groups(inventory: Mapping[str, object]) -> dict[str, str]:
         "memory_usage": "memory",
         "swap_usage": "memory",
         "fans_status": "fans",
-        "calibrate_fans": "fans",
         "last_refresh": "diagnostics",
         "refresh": "diagnostics",
         "vms_summary": "guest/summary",
@@ -103,9 +102,7 @@ def _component_groups(inventory: Mapping[str, object]) -> dict[str, str]:
         for suffix in (
             "speed",
             "rpm",
-            "max_rpm",
-            "calibration_status",
-            "calibrated_at",
+            "max_rpm_input",
         ):
             groups[f"fan_{entity}_{suffix}"] = group
 

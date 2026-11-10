@@ -24,7 +24,7 @@ class Topics:
     ups_scan: str
     ups_scan_state: str
     ups_scan_operation: str
-    fan_calibrate: str
+    fan_max_rpm_prefix: str
     update_check: str = ""
     update_install: str = ""
     update_state: str = ""
@@ -107,7 +107,7 @@ def build_topics(mqtt: MqttConfig, identity: HostIdentity) -> Topics:
         ups_scan=f"{base}/ups/scan",
         ups_scan_state=f"{base}/ups/scan/state",
         ups_scan_operation=f"{base}/ups/scan/operation",
-        fan_calibrate=f"{base}/fans/calibrate",
+        fan_max_rpm_prefix=f"{base}/fans",
         update_check=f"{base}/update/check",
         update_install=f"{base}/update/install",
         update_state=f"{base}/update/state",

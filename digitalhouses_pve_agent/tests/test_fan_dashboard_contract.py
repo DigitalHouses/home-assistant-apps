@@ -170,10 +170,8 @@ def test_ru_dashboard_empty_fan_state_is_not_false_hardware_alarm():
     assert "'primary': 'Нет данных RPM'" in text
 
 
-def test_ru_dashboard_requires_confirmation_before_manual_fan_calibration():
+def test_ru_dashboard_shows_manual_max_rpm_number_box():
     text = _text()
-    assert "button.dh_pve_agent_calibrate_fans" in text
-    assert "confirmation:" in text
-    assert "максимальную скорость" in text
-    assert "автоматическое" in text
-    assert "button.press" in text
+    assert "fan.entity_id | replace('sensor.', 'number.')" in text
+    assert "'name': '100% RPM'" in text
+    assert "button.dh_pve_agent_calibrate_fans" not in text

@@ -264,14 +264,11 @@ def test_fan_discovery_uses_short_sequential_friendly_names():
 
     assert components["fan_it8613_it87_2608_fan2_speed"]["name"] == "Fan 2"
     assert components["fan_it8613_it87_2608_fan2_rpm"]["name"] == "Fan 2 RPM"
-    assert components["fan_it8613_it87_2608_fan2_max_rpm"]["name"] == "Fan 2 Max RPM"
-    assert (
-        components["fan_it8613_it87_2608_fan2_calibration_status"]["name"]
-        == "Fan 2 Calibration status"
-    )
-    assert (
-        components["fan_it8613_it87_2608_fan2_calibrated_at"]["name"]
-        == "Fan 2 Calibrated at"
+    setting = components["fan_it8613_it87_2608_fan2_max_rpm_input"]
+    assert setting["name"] == "Fan 2 100% RPM"
+    assert setting["mode"] == "box"
+    assert setting["default_entity_id"] == (
+        "number.dh_pve_agent_fan_it8613_it87_2608_fan2_max_rpm"
     )
 
     assert components["fan_it8613_it87_2608_fan3_speed"]["name"] == "Fan 3"

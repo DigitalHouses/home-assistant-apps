@@ -42,6 +42,12 @@ class SettingUpdate:
 
 
 @dataclass(frozen=True)
+class FanMaxRpmUpdate:
+    fan_id: str
+    max_rpm: int
+
+
+@dataclass(frozen=True)
 class TestScheduleUpdate:
     test_type: str
     field: str
@@ -71,7 +77,7 @@ class MqttEvents:
         self.reconnect_requested = threading.Event()
         self.ups_scan_requested = threading.Event()
         self.ups_scan_in_progress = threading.Event()
-        self.fan_calibration_requested = threading.Event()
+        self.fan_max_rpm_updates: queue.SimpleQueue[FanMaxRpmUpdate] = queue.SimpleQueue()
         self.ups_refresh_requested = threading.Event()
         self.ups_refresh_in_progress = threading.Event()
         self.ups_test_standard_requested = threading.Event()
@@ -125,11 +131,22 @@ class MqttEvents:
                 self.ups_scan_requested.set()
                 return True
             return False
-        if topic == self.topics.fan_calibrate:
-            if text.upper() == "PRESS":
-                self.fan_calibration_requested.set()
-                return True
-            return False
+        fan_prefix = f"{self.topics.fan_max_rpm_prefix}/"
+        fan_suffix = "/max_rpm/set"
+        if topic.startswith(fan_prefix) and topic.endswith(fan_suffix):
+            fan_id = topic[len(fan_prefix):-len(fan_suffix)]
+            if _PROBLEM_ID.fullmatch(fan_id) is None:
+                return False
+            # HA MQTT number may serialize an integral box value as "1700.0".
+            if len(text) > 32 or re.fullmatch(
+                r"(?:0|[1-9][0-9]{0,4})(?:\.0+)?", text
+            ) is None:
+                return False
+            max_rpm = int(text.split(".", 1)[0])
+            if max_rpm > 30000:
+                return False
+            self.fan_max_rpm_updates.put(FanMaxRpmUpdate(fan_id, max_rpm))
+            return True
         if self.ups_topics is not None and topic == self.ups_topics.refresh:
             if text.upper() == "PRESS":
                 if (
@@ -279,7 +296,7 @@ class MqttBridge(MqttEvents):
         client.subscribe(self.topics.update_check, qos=1)
         client.subscribe(self.topics.update_install, qos=1)
         client.subscribe(self.topics.ups_scan, qos=1)
-        client.subscribe(self.topics.fan_calibrate, qos=1)
+        client.subscribe(f"{self.topics.fan_max_rpm_prefix}/+/max_rpm/set", qos=1)
         client.subscribe(f"{self.topics.base}/ups/refresh", qos=1)
         client.subscribe(f"{self.topics.base}/ups/beeper/set", qos=1)
         client.subscribe(f"{self.topics.base}/ups/debug/set", qos=1)
@@ -330,6 +347,11 @@ class MqttBridge(MqttEvents):
                 and message.topic == self.ups_topics.debug_set
                 and getattr(message, "retain", False)):
             self.log.warning("Rejected retained UPS debug command")
+            return
+        if (message.topic.startswith(f"{self.topics.fan_max_rpm_prefix}/")
+                and message.topic.endswith("/max_rpm/set")
+                and getattr(message, "retain", False)):
+            self.log.warning("Rejected retained fan max RPM command")
             return
         if message.topic == self.topics.ha_status and text.casefold() == "online":
             self.handle_ha_online()

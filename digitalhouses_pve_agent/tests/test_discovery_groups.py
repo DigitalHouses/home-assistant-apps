@@ -317,20 +317,10 @@ def test_continuous_sensor_attributes_do_not_duplicate_volatile_values():
     assert "storage_type" in storage_attrs
 
 
-def test_calibrated_fan_discovery_exposes_speed_primary_and_rpm_diagnostics():
+def test_manual_fan_max_rpm_discovery_exposes_box_and_rpm_fallback():
     inventory = _inventory()
     inventory["fans"]["nct6798_fan1"].update(
-        {
-            "speed_percent": 69,
-            "max_rpm": 5400,
-            "calibrated_at": "2026-09-22T01:00:00+05:00",
-            "max_rpm_updated_at": "2026-09-22T01:00:00+05:00",
-            "max_rpm_source": "calibration",
-            "calibration_status": "calibrated",
-            "calibration_supported": True,
-            "calibration_error": None,
-            "source_device": "nct6775.656",
-        }
+        {"speed_percent": 69, "max_rpm": 1700, "source_device": "nct6775.656"}
     )
     payload = build_shutdown_aware_pve_discovery_payload(
         _config(), _identity(), version="0.5.7", inventory=inventory
@@ -343,7 +333,6 @@ def test_calibrated_fan_discovery_exposes_speed_primary_and_rpm_diagnostics():
     assert speed["default_entity_id"] == "sensor.dh_pve_agent_fan_nct6798_fan1_speed"
     assert speed["state_topic"] == fan_topic
     assert speed["unit_of_measurement"] == "%"
-    assert speed["state_class"] == "measurement"
     assert "entity_category" not in speed
     assert "speed_percent" in speed["value_template"]
 
@@ -351,14 +340,19 @@ def test_calibrated_fan_discovery_exposes_speed_primary_and_rpm_diagnostics():
     assert rpm["default_entity_id"] == "sensor.dh_pve_agent_fan_nct6798_fan1_rpm"
     assert rpm["entity_category"] == "diagnostic"
 
-    assert c["fan_nct6798_fan1_max_rpm"]["entity_category"] == "diagnostic"
-    assert c["fan_nct6798_fan1_calibration_status"]["entity_category"] == "diagnostic"
-    assert c["fan_nct6798_fan1_calibrated_at"]["device_class"] == "timestamp"
-
-    button = c["calibrate_fans"]
-    assert button["platform"] == "button"
-    assert button["default_entity_id"] == "button.dh_pve_agent_calibrate_fans"
-    assert button["command_topic"] == topics.fan_calibrate
+    setting = c["fan_nct6798_fan1_max_rpm_input"]
+    assert setting["platform"] == "number"
+    assert setting["mode"] == "box"
+    assert setting["min"] == 0
+    assert setting["max"] == 30000
+    assert setting["step"] == 1
+    assert setting["entity_category"] == "config"
+    assert setting["state_topic"] == fan_topic
+    assert setting["value_template"] == "{{ value_json.subsystems.fans.data.nct6798_fan1.max_rpm | default(0) }}"
+    assert setting["command_topic"] == topics.fan_max_rpm_prefix + "/nct6798_fan1/max_rpm/set"
+    assert setting["default_entity_id"] == "number.dh_pve_agent_fan_nct6798_fan1_max_rpm"
+    assert "calibrate_fans" not in c
+    assert "fan_nct6798_fan1_calibration_status" not in c
 
 
 def test_ipmi_fan_discovery_uses_physical_header_labels():
