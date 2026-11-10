@@ -67,6 +67,34 @@ def test_positive_debounce_is_session_only_and_is_not_persisted():
     assert store.save_calls == 1
 
 
+def test_known_beelink_fan2_stopped_without_calibration_is_confirmed():
+    store = MemoryStore()
+    tracker = FanPresenceTracker(state_store=store)
+    known = _fan(0)
+    ghost = FanSnapshot(
+        **{
+            **known.__dict__,
+            "fan_id": "it8613_it87_2608_fan3",
+            "fan_name": "fan3",
+            "fan_index": 3,
+        }
+    )
+
+    observed = tracker.observe((known, ghost))
+
+    assert observed.confirmed_count == 1
+    assert observed.unconfirmed_count == 1
+    assert [fan.fan_id for fan in observed.confirmed_fans] == [
+        "it8613_it87_2608_fan2"
+    ]
+    assert store.state["confirmed"] == ["it8613_it87_2608_fan2"]
+
+
+def test_known_beelink_fan_requires_a_readable_tachometer():
+    tracker = FanPresenceTracker(state_store=MemoryStore())
+    assert tracker.observe((_fan(None),)).confirmed_count == 0
+
+
 def test_persisted_confirmation_does_not_synthesize_an_absent_hwmon_channel():
     store = MemoryStore()
     tracker = FanPresenceTracker(state_store=store)
