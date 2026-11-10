@@ -50,7 +50,7 @@ class TestManualFanMaxRpm(unittest.TestCase):
         self.id = fan().fan_id
 
     def test_manual_value_survives_restart_and_isolated_per_fan(self):
-        self.assertEqual(self.registry.presentation(fan())["speed_percent"], None)
+        self.assertEqual(self.registry.presentation(fan())["speed_percent"], 0)
         self.assertEqual(self.registry.get(self.id), 0)
         self.assertTrue(self.registry.set(self.id, 1700))
         self.assertEqual(self.registry.presentation(fan())["speed_percent"], 50)
@@ -61,13 +61,30 @@ class TestManualFanMaxRpm(unittest.TestCase):
         self.assertEqual(restarted.get(self.id), 1700)
         self.assertFalse(restarted.set(self.id, 1700))
         self.assertTrue(restarted.set(self.id, 0))
-        self.assertIsNone(restarted.presentation(fan())["speed_percent"])
+        self.assertEqual(restarted.presentation(fan())["speed_percent"], 0)
         self.assertEqual(self.registry.get(self.id), 0)
 
     def test_corrupt_preferences_preserve_rpm_only(self):
         (self.root / "fan_max_rpm.json").write_text("{invalid", encoding="utf-8")
         self.assertEqual(self.registry.get(self.id), 0)
-        self.assertIsNone(self.registry.presentation(fan())["speed_percent"])
+        self.assertEqual(self.registry.presentation(fan())["speed_percent"], 0)
+
+    def test_unconfigured_fan_is_numeric_zero_but_missing_tach_is_unknown(self):
+        unset = self.registry.presentation(fan(rpm=4317))
+        self.assertEqual(unset, {"max_rpm": 0, "speed_percent": 0})
+        self.assertEqual(
+            self.registry.presentation(fan(rpm=0)),
+            {"max_rpm": 0, "speed_percent": 0},
+        )
+        self.assertEqual(
+            self.registry.presentation(fan(rpm=None)),
+            {"max_rpm": 0, "speed_percent": None},
+        )
+        self.registry.set(self.id, 5443)
+        self.assertEqual(self.registry.presentation(fan(rpm=4317))["speed_percent"], 79)
+        self.assertEqual(
+            self.registry.presentation(fan(rpm=None))["speed_percent"], None
+        )
 
     def test_invalid_limits_and_ids_never_saved(self):
         for bad in (-1, 30001, 1.5, True, "1700"):

@@ -162,7 +162,7 @@ class ResilientProductionCollectors(ProductionCollectors):
             item.update(
                 self._fan_max_rpm_registry.presentation(fan)
                 if self._fan_max_rpm_registry is not None
-                else {"max_rpm": 0, "speed_percent": None}
+                else {"max_rpm": 0, "speed_percent": 0 if fan.rpm is not None else None}
             )
             fan_items[fan.fan_id] = item
         detected = presence.confirmed_count > 0

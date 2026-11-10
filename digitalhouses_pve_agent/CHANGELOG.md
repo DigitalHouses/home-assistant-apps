@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.82
+
+- Publish 0% as the numeric fan RPM-percent placeholder whenever a confirmed fan has a readable RPM but Max RPM is unconfigured (0). Actual raw RPM remains unaffected; missing tachometer readings are still unknown. When Max RPM is configured, the agent calculates the true percentage.
+- Remove percent/state predicates from Auto-Entities fan-percent chart. It now simply includes every detected `sensor.dh_pve_agent_fan_*_rpm_percent` by entity-ID wildcard, independent of the setting. Add tests for unconfigured, stalled and calibrated fans.
+
 ## 0.5.81
 
 - Expose agent-computed `rpm` and `rpm_percent` (plus configured `max_rpm`) as attributes of the established `fan_*_speed` entity while retaining its percent state and stable unique ID.

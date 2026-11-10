@@ -168,7 +168,7 @@ def test_beelink_fan_stop_is_discovered_on_cold_start_without_pwm(tmp_path: Path
     assert sample.data["candidate_count"] == 2
     assert set(_fan_items(sample)) == {"it8613_it87_2608_fan2"}
     assert sample.data["it8613_it87_2608_fan2"]["rpm"] == 0
-    assert sample.data["it8613_it87_2608_fan2"]["speed_percent"] is None
+    assert sample.data["it8613_it87_2608_fan2"]["speed_percent"] == 0
     assert state.load()["confirmed"] == ["it8613_it87_2608_fan2"]
     restarted = _collectors(tmp_path, fan_state_store=state)
     assert restarted.fans().data["confirmed_count"] == 1

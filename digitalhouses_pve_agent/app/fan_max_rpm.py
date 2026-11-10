@@ -51,7 +51,10 @@ class FanMaxRpmRegistry:
 
     def presentation(self, fan: FanSnapshot) -> dict[str, int | None]:
         maximum = self.get(fan.fan_id)
-        percent = None
+        # A readable fan is always a numeric time series for HA/Recorder.
+        # 0% with max_rpm=0 is an unconfigured reference, not a measured
+        # percentage. The separate raw-RPM sensor remains authoritative.
+        percent = 0 if fan.rpm is not None else None
         if maximum and fan.rpm is not None:
             percent = min(100, max(0, int(fan.rpm / maximum * 100 + 0.5)))
         return {"max_rpm": maximum, "speed_percent": percent}
