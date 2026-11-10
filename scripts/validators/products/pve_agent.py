@@ -545,7 +545,8 @@ def validate_digitalhouses_pve_agent(
         (
             "sensor.dh_pve_agent_cpu_usage",
             "sensor.dh_pve_agent_storage_*_percent_used",
-            "sensor.dh_pve_agent_fan_*_speed",
+            "sensor.dh_pve_agent_fan_*_rpm",
+            "sensor.dh_pve_agent_fan_*_rpm_percent",
             "sensor.dh_pve_agent_ups_status",
             "logbook:",
         ),

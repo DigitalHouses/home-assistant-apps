@@ -10,20 +10,10 @@ def _text():
 
 
 def _chart_blocks():
-    import yaml
-    dashboard = yaml.safe_load(_text())
-    charts = {
-        card["card"]["name"]: card
-        for section in dashboard["sections"]
-        for card in section["cards"]
-        if card.get("type") == "custom:auto-entities"
-        and card.get("card", {}).get("type") == "custom:mini-graph-card"
-        and card["card"].get("name") in (
-            "CPU / RAM / Swap / Fans", "Вентиляторы · RPM"
-        )
-    }
-    assert set(charts) == {"CPU / RAM / Swap / Fans", "Вентиляторы · RPM"}
-    return charts
+    text = _text().split("heading: CPU / RAM / Swap / Fans · 24 часа", 1)[1]
+    text = text.split("heading: Частота CPU · 24 часа", 1)[0]
+    percent, raw_rpm = text.split("# Raw RPM is always a separate history chart", 1)
+    return percent, raw_rpm
 
 
 def test_ru_dashboard_presents_fan_percent_as_primary_metric_with_rpm_fallback():
@@ -34,32 +24,30 @@ def test_ru_dashboard_presents_fan_percent_as_primary_metric_with_rpm_fallback()
 
 
 def test_percent_graph_filters_only_numeric_rpm_percent_and_includes_cpu_ram_swap():
-    chart = _chart_blocks()["CPU / RAM / Swap / Fans"]
-    assert chart["card_param"] == "entities"
-    assert chart["card"]["lower_bound"] == 0
-    assert chart["card"]["upper_bound"] == 100
-    assert chart["entities"] == [
-        {"entity": "sensor.dh_pve_agent_cpu_usage", "name": "CPU"},
-        {"entity": "sensor.dh_pve_agent_memory_usage", "name": "RAM"},
-        {"entity": "sensor.dh_pve_agent_swap_usage", "name": "Swap"},
-    ]
-    assert chart["filter"] == {"include": [
-        {"entity_id": "sensor.dh_pve_agent_fan_*_rpm_percent",
-         "state": ">= 0"}
-    ]}
-    assert "template" not in chart["filter"]
+    percent, _ = _chart_blocks()
+    assert "card_param: entities" in percent
+    assert "lower_bound: 0" in percent
+    assert "upper_bound: 100" in percent
+    for entity in ("sensor.dh_pve_agent_cpu_usage",
+                   "sensor.dh_pve_agent_memory_usage",
+                   "sensor.dh_pve_agent_swap_usage"):
+        assert entity in percent
+    assert 'entity_id: "sensor.dh_pve_agent_fan_*_rpm_percent"' in percent
+    assert 'state: ">= 0"' in percent
+    assert "filter:\n          include:" in percent
+    assert "template:" not in percent
 
 
 def test_rpm_graph_always_uses_raw_rpm_without_percent_dependency():
-    chart = _chart_blocks()["Вентиляторы · RPM"]
-    assert chart["card_param"] == "entities"
-    assert chart["card"]["lower_bound"] == 0
-    assert "upper_bound" not in chart["card"]
-    assert chart["filter"] == {"include": [
-        {"entity_id": "sensor.dh_pve_agent_fan_*_rpm",
-         "state": ">= 0"}
-    ]}
-    assert "template" not in chart["filter"]
+    _, raw_rpm = _chart_blocks()
+    assert "name: Вентиляторы · RPM" in raw_rpm
+    assert "card_param: entities" in raw_rpm
+    assert "lower_bound: 0" in raw_rpm
+    assert "upper_bound: 100" not in raw_rpm
+    assert 'entity_id: "sensor.dh_pve_agent_fan_*_rpm"' in raw_rpm
+    assert 'state: ">= 0"' in raw_rpm
+    assert "template:" not in raw_rpm
+    assert "percent_id" not in raw_rpm
 
 
 def test_ru_dashboard_empty_fan_state_is_not_false_hardware_alarm():
