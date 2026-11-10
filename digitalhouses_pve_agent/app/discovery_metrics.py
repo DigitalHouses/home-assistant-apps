@@ -485,19 +485,10 @@ def build_full_discovery_payload(
                 subsystem="fans", section="cooling", subject="fan", metric="speed_percent",
                 object_id=fan_id, display_name=user_display, sort_key=f"600_{index:03d}_00",
                 unit="%", state_class="measurement", icon="mdi:fan",
-                extra_attrs=common_attrs,
-            )
-            item["availability"].append(
-                {
-                    "topic": topics.state,
-                    "value_template": (
-                        "{{ 'online' if "
-                        + obj
-                        + ".speed_percent | default(none) is not none else 'offline' }}"
-                    ),
-                    "payload_available": "online",
-                    "payload_not_available": "offline",
-                }
+                extra_attrs={**common_attrs,
+                    "rpm": obj + ".rpm | default(none)",
+                    "rpm_percent": obj + ".speed_percent | default(none)",
+                },
             )
             components[key] = item
 
@@ -510,6 +501,21 @@ def build_full_discovery_payload(
                 object_id=fan_id, display_name=user_display, sort_key=f"600_{index:03d}_01",
                 unit="rpm", state_class="measurement", entity_category="diagnostic",
                 icon="mdi:fan", extra_attrs=common_attrs,
+            )
+            components[key] = item
+
+            # Explicit numeric percent series for HA Recorder / mini-graph.
+            # Keep the existing _speed entity as a backward-compatible UI sensor.
+            key, item = _sensor(
+                uid=uid, state_topic=topics.state, app_topic=topics.availability,
+                key=f"fan_{slug}_rpm_percent", name=f"{fan_name} RPM %",
+                entity_id=f"sensor.dh_pve_agent_fan_{slug}_rpm_percent",
+                expression=obj + ".speed_percent | default(none)",
+                subsystem="fans", section="cooling", subject="fan",
+                metric="rpm_percent", object_id=fan_id,
+                display_name=user_display, sort_key=f"600_{index:03d}_03",
+                unit="%", state_class="measurement", icon="mdi:fan",
+                extra_attrs=common_attrs,
             )
             components[key] = item
 

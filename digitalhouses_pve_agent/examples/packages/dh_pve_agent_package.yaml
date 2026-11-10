@@ -36,7 +36,8 @@ dh_pve_agent_package:
         - sensor.dh_pve_agent_ups_input_frequency
         - sensor.dh_pve_agent_ups_output_frequency
       entity_globs:
-        - sensor.dh_pve_agent_fan_*_speed
+        - sensor.dh_pve_agent_fan_*_rpm
+        - sensor.dh_pve_agent_fan_*_rpm_percent
         - sensor.dh_pve_agent_disk_*_temperature
         - sensor.dh_pve_agent_disk_*_wear
         - sensor.dh_pve_agent_storage_*_percent_used
