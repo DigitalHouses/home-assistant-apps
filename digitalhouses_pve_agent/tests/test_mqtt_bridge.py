@@ -67,13 +67,28 @@ def test_duplicate_refresh_presses_are_ignored_while_pending_or_running():
     assert not events.refresh_requested.is_set()
 
 
-def test_fan_calibration_press_sets_dedicated_event():
+def test_fan_max_rpm_message_queues_manual_limit():
     topics = _topics()
     events = MqttEvents(topics, RuntimeSettings())
+    topic = f"{topics.fan_max_rpm_prefix}/it8613_it87_2608_fan2/max_rpm/set"
 
-    assert events.handle_message(topics.fan_calibrate, b"PRESS") is True
-    assert events.fan_calibration_requested.is_set()
+    assert events.handle_message(topic, b"1700.0") is True
+    update = events.fan_max_rpm_updates.get_nowait()
+    assert (update.fan_id, update.max_rpm) == ("it8613_it87_2608_fan2", 1700)
     assert not events.refresh_requested.is_set()
+
+
+def test_fan_max_rpm_rejects_invalid_or_legacy_commands():
+    topics = _topics()
+    events = MqttEvents(topics, RuntimeSettings())
+    topic = f"{topics.fan_max_rpm_prefix}/fan2/max_rpm/set"
+
+    for raw in (b"-1", b"1.5", b"1700.5", b"30001", b"abc", b"01", b"", b"999999"):
+        assert events.handle_message(topic, raw) is False
+    assert events.handle_message(f"{topics.fan_max_rpm_prefix}/calibrate", b"PRESS") is False
+    assert events.fan_max_rpm_updates.empty()
+    assert events.handle_message(topic, b"0") is True
+    assert events.fan_max_rpm_updates.get_nowait().max_rpm == 0
 
 
 def test_retired_poll_setting_command_is_not_accepted():

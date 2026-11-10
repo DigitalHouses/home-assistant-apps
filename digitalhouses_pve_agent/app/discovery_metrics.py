@@ -457,7 +457,6 @@ def build_full_discovery_payload(
 
     fans = inventory.get("fans")
     if isinstance(fans, Mapping):
-        calibratable = False
         fan_items = [
             (fan_id, raw)
             for fan_id, raw in sorted(fans.items())
@@ -468,23 +467,14 @@ def build_full_discovery_payload(
             slug = _slug(fan_id)
             obj = _path("fans", fan_id)
             user_display = str(raw.get("label") or fan_id)
-            # Preserve the physical channel number, not enumeration order.
-            # Humanize bare lowercase 'fan2'; keep BMC 'FAN3', 'SYS_FAN3'
-            # and motherboard labels exactly as exported.
+            # Preserve the physical BMC/header label or the fan channel index.
             bare = re.fullmatch(r"fan([0-9]+)", user_display)
             fan_name = f"Fan {bare.group(1)}" if bare else user_display
-            calibratable = calibratable or (
-                raw.get("calibration_supported") is True
-                and raw.get("calibration_read_only") is not True
-            )
             common_attrs = {
                 "chip": obj + ".chip | default(none)",
                 "label": obj + ".label | default(none)",
                 "source_device": obj + ".source_device | default(none)",
-                "max_rpm": obj + ".max_rpm | default(none)",
-                "calibration_status": obj + ".calibration_status | default('unsupported')",
-                "calibration_read_only": obj + ".calibration_read_only | default(false)",
-                "max_rpm_source": obj + ".max_rpm_source | default(none)",
+                "max_rpm": obj + ".max_rpm | default(0)",
             }
 
             key, item = _sensor(
@@ -523,75 +513,27 @@ def build_full_discovery_payload(
             )
             components[key] = item
 
-            key, item = _sensor(
-                uid=uid, state_topic=topics.state, app_topic=topics.availability,
-                key=f"fan_{slug}_max_rpm", name=f"{fan_name} Max RPM",
-                entity_id=f"sensor.dh_pve_agent_fan_{slug}_max_rpm",
-                expression=obj + ".max_rpm | default(none)",
-                subsystem="fans", section="cooling", subject="fan", metric="max_rpm",
-                object_id=fan_id, display_name=user_display, sort_key=f"600_{index:03d}_02",
-                unit="rpm", entity_category="diagnostic", icon="mdi:speedometer",
-                extra_attrs=common_attrs,
-            )
-            components[key] = item
-
-            key, item = _sensor(
-                uid=uid, state_topic=topics.state, app_topic=topics.availability,
-                key=f"fan_{slug}_calibration_status",
-                name=f"{fan_name} Calibration status",
-                entity_id=f"sensor.dh_pve_agent_fan_{slug}_calibration_status",
-                expression=obj + ".calibration_status | default('unsupported')",
-                subsystem="fans", section="cooling", subject="fan",
-                metric="calibration_status", object_id=fan_id,
-                display_name=user_display, sort_key=f"600_{index:03d}_03",
-                entity_category="diagnostic", icon="mdi:tune-variant",
-                extra_attrs={
-                    **common_attrs,
-                    "calibration_error": obj + ".calibration_error | default(none)",
-                },
-            )
-            components[key] = item
-
-            key, item = _sensor(
-                uid=uid, state_topic=topics.state, app_topic=topics.availability,
-                key=f"fan_{slug}_calibrated_at",
-                name=f"{fan_name} Calibrated at",
-                entity_id=f"sensor.dh_pve_agent_fan_{slug}_calibrated_at",
-                expression=obj + ".calibrated_at | default(none)",
-                subsystem="fans", section="cooling", subject="fan",
-                metric="calibrated_at", object_id=fan_id,
-                display_name=user_display, sort_key=f"600_{index:03d}_04",
-                device_class="timestamp", entity_category="diagnostic",
-                icon="mdi:clock-check-outline", extra_attrs=common_attrs,
-            )
-            components[key] = item
-
-        if calibratable:
-            components["calibrate_fans"] = {
-                "platform": "button",
-                "name": "Calibrate fans",
-                "unique_id": uid("calibrate_fans"),
-                "default_entity_id": "button.dh_pve_agent_calibrate_fans",
-                "command_topic": topics.fan_calibrate,
-                "payload_press": "PRESS",
-                "availability": [
-                    {
-                        "topic": topics.availability,
-                        "payload_available": "online",
-                        "payload_not_available": "offline",
-                    }
-                ],
-                "availability_mode": "all",
+            components[f"fan_{slug}_max_rpm_input"] = {
+                "platform": "number",
+                "name": f"{fan_name} 100% RPM",
+                "unique_id": uid(f"fan_{slug}_max_rpm_input"),
+                "default_entity_id": f"number.dh_pve_agent_fan_{slug}_max_rpm",
+                "command_topic": f"{topics.fan_max_rpm_prefix}/{fan_id}/max_rpm/set",
+                "state_topic": topics.state,
+                "value_template": "{{ " + obj + ".max_rpm | default(0) }}",
+                "min": 0,
+                "max": 30000,
+                "step": 1,
+                "mode": "box",
+                "unit_of_measurement": "rpm",
                 "entity_category": "config",
-                "icon": "mdi:fan-chevron-up",
+                "icon": "mdi:speedometer",
+                "availability": _availability(topics.state, topics.availability, "fans"),
+                "availability_mode": "all",
                 "json_attributes_topic": topics.state,
                 "json_attributes_template": _attrs(
-                    "cooling",
-                    "fan",
-                    "calibration",
-                    "all",
-                    "Fans",
-                    "600_999",
+                    "cooling", "fan", "max_rpm", fan_id, user_display,
+                    f"600_{index:03d}_02", common_attrs,
                 ),
             }
 

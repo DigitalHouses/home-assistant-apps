@@ -540,13 +540,7 @@ class PvePresentationRouter:
                     "source",
                     "chip",
                     "source_device",
-                    "calibration_supported",
-                    "calibration_status",
                     "max_rpm",
-                    "calibrated_at",
-                    "max_rpm_updated_at",
-                    "max_rpm_source",
-                    "calibration_error",
                 )
                 if fan.get(key) is not None
             }

@@ -6,7 +6,7 @@ from typing import Any
 
 from validators.common import fail, require_files
 
-EXPECTED_VERSION = "0.5.78"
+EXPECTED_VERSION = "0.5.79"
 EXPECTED_TOPIC_PREFIX = "DigitalHouses/Global/digitalhouses_pve_agent"
 EXPECTED_DEVICE_NAME = "DH PVE"
 EXPECTED_REFRESH_ENTITY = "button.dh_pve_agent_refresh"
@@ -59,6 +59,7 @@ def validate_digitalhouses_pve_agent(
             app / "app/pve_cache.py",
             app / "app/disk_temperature.py",
             app / "app/fan_presence.py",
+            app / "app/fan_max_rpm.py",
             app / "app/fan_calibration.py",
             app / "app/fan_hardware_beelink.py",
             app / "app/fan_runtime.py",
@@ -851,7 +852,7 @@ def validate_digitalhouses_pve_agent(
             'slow_tasks=("guests", "storage", "gpu", "disk_temperature")',
             "read_pve_version(",
             'fan_presence_store = StateStore(state_dir / "fans.json")',
-            'StateStore(state_dir / "fan_calibration.json")',
+            'StateStore(state_dir / "fan_max_rpm.json")',
             "DEFAULT_TELEMETRY_STATE_FILE",
             "_telemetry_state_file(state_dir)",
             "BeelinkIt8613FanAdapter()",
@@ -860,8 +861,8 @@ def validate_digitalhouses_pve_agent(
             "TelemetryRunner(",
             "telemetry_runner.start()",
             "telemetry_runner.stop()",
-            "runtime.recover_fan_control()",
-            "runtime.wait_fan_calibration()",
+            ".recover_pending(collect_fans())",
+            "fan_max_rpm_registry=fan_max_rpm_registry",
             "app_version=version",
             "ups_configured=selected_ups_name is not None",
             "runtime.set_ups_configured(True)",

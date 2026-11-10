@@ -1295,18 +1295,30 @@ sections:
                   {% set icon = 'mdi:fan' %}
                 {% endif %}
 
+                {% set max_id =
+                  fan.entity_id | replace('sensor.', 'number.')
+                  | replace('_rpm', '_max_rpm')
+                %}
                 {% set ns.items = ns.items + [{
-                  'type': 'custom:mushroom-template-card',
-                  'entity': speed_id if speed is not none else fan.entity_id,
-                  'primary': name,
-                  'secondary': secondary,
-                  'icon': icon,
-                  'icon_color': color,
-                  'layout': 'horizontal',
-                  'fill_container': true,
-                  'tap_action': {
-                    'action': 'more-info'
-                  }
+                  'type': 'vertical-stack',
+                  'cards': [
+                    {
+                      'type': 'custom:mushroom-template-card',
+                      'entity': speed_id if speed is not none else fan.entity_id,
+                      'primary': name,
+                      'secondary': secondary,
+                      'icon': icon,
+                      'icon_color': color,
+                      'layout': 'horizontal',
+                      'fill_container': true,
+                      'tap_action': {'action': 'more-info'}
+                    },
+                    {
+                      'type': 'entities',
+                      'show_header_toggle': false,
+                      'entities': [{'entity': max_id, 'name': '100% RPM'}]
+                    }
+                  ]
                 }] %}
 
               {% endif %}
@@ -1323,34 +1335,6 @@ sections:
               }] %}
             {% endif %}
             {{- ns.items -}}
-        grid_options:
-          columns: 12
-          rows: auto
-      - type: custom:auto-entities
-        show_empty: false
-        card:
-          type: vertical-stack
-        card_param: cards
-        filter:
-          include:
-            - entity_id: button.dh_pve_agent_calibrate_fans
-              options:
-                type: custom:mushroom-template-card
-                entity: button.dh_pve_agent_calibrate_fans
-                primary: Калибровать вентиляторы
-                secondary: Кратковременно включает максимальную скорость
-                icon: mdi:fan-chevron-up
-                icon_color: blue
-                tap_action:
-                  action: perform-action
-                  perform_action: button.press
-                  target:
-                    entity_id: button.dh_pve_agent_calibrate_fans
-                  confirmation:
-                    text: >-
-                      Вентилятор на несколько секунд будет переведён на
-                      максимальную скорость. После измерения автоматическое
-                      управление будет восстановлено. Запустить калибровку?
         grid_options:
           columns: 12
           rows: auto

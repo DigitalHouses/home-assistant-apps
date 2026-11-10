@@ -153,9 +153,11 @@ def test_passive_bmc_fans_offer_percentage_but_no_active_calibration_button():
     assert "calibrate_fans" not in components
     assert "fan_ipmi_ipmi0_fan1_rpm" in components
     assert components["fan_ipmi_ipmi0_fan1_speed"]["unit_of_measurement"] == "%"
-    assert "calibration_read_only" in (
-        components["fan_ipmi_ipmi0_fan1_rpm"]["json_attributes_template"]
-    )
+    manual = components["fan_ipmi_ipmi0_fan1_max_rpm_input"]
+    assert manual["mode"] == "box"
+    assert manual["min"] == 0
+    assert manual["default_entity_id"] == "number.dh_pve_agent_fan_ipmi_ipmi0_fan1_max_rpm"
+    assert "calibration_read_only" not in components["fan_ipmi_ipmi0_fan1_rpm"]["json_attributes_template"]
 
 
 def test_disk_capacity_is_published_on_existing_health_entity():

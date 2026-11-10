@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.79
+
+- Replace fan automatic/active/passive maximum-RPM calibration with a per-fan Home Assistant MQTT `number` input (`mode: box`, 0..30000 RPM, 0 = unset). Store manual 100%-RPM values by stable fan ID in the App state and compute speed % only from that user-provided value; physical RPM remains available.
+- Remove the calibration button, status and timestamp entities from Discovery and the Russian PVE dashboard. Keep legacy pending PWM-state recovery from interrupted old calibrations as a one-time safety measure; no new calibration or fan-control writes are triggered.
+- Republish the individual fan state after a valid command, reject malformed/unknown/retained fan commands, and cover persistence, percent clamping, MQTT commands and grouped Discovery with regression tests.
+
+
 ## 0.5.78
 
 - Keep the existing physical SMART disk-health entity online and discoverable during intermittent QEMU Guest Agent timeouts, failed guest `smartctl` calls, or transient guest storage-inventory errors. A retained passthrough disk no longer vanishes from HA because its individual SMART telemetry is unavailable.

@@ -10,7 +10,7 @@ Native Linux agent for **Proxmox VE 8.x** that publishes host, CPU, memory, stor
 
 The canonical product and runtime identity is **DigitalHouses PVE Agent** / `digitalhouses_pve_agent`: systemd service `digitalhouses_pve_agent.service`, filesystem roots under `/opt/digitalhouses/digitalhouses_pve_agent`, `/etc/digitalhouses_pve_agent` and `/var/lib/digitalhouses_pve_agent`, MQTT base `DigitalHouses/Global/digitalhouses_pve_agent/<instance>`, and Home Assistant entity prefix `dh_pve_agent_*`. Version 0.5.30 performs the corrected one-time controlled migration from the former `dh_pve_app` / `dh_app_pve_*` runtime, including deterministic cleanup of retained data owned by the legacy MQTT instance namespace.
 
-Current source release: `VERSION` is `0.5.78`.
+Current source release: `VERSION` is `0.5.79`.
 
 UPS Debug logging: `switch.dh_pve_agent_ups_debug` (MQTT Discovery, default OFF)
 records raw NUT observations every 2 seconds when enabled. It disables itself
@@ -134,7 +134,7 @@ Only physical, user-relevant PCI GPUs appear in the GPU inventory. BMC service V
 
 A physical SATA/HDD disk assigned to a VM using PCI passthrough is monitored by running `smartctl` inside the guest via QEMU Guest Agent. A transient QGA timeout does **not** mean that the disk or ZFS pool disappeared. The existing `sensor.dh_pve_agent_disk_*_health` remains discoverable with state `TELEMETRY_UNAVAILABLE` and attributes `telemetry_available=false`, `telemetry_error`, `last_success_at`, and `last_known_health`. Other SMART measurement entities remain unavailable until fresh measurements resume; old values are not reported as current. Stable disk identity and history are retained. Authoritative permanent inventory removal is still handled independently.
 
-## Fan monitoring and calibration
+## Fan monitoring and manual RPM reference
 
 Fan RPM acquisition reads Linux hwmon directly from `/sys/class/hwmon/hwmon*/fan*_input`, with read-only local OpenIPMI fallback when hwmon exposes no tachometers. No sensor-reading command writes fan-control settings.
 
@@ -146,15 +146,11 @@ Unconfirmed fan candidates are omitted from normal MQTT Discovery. They are neve
 
 `pwm*` and `/sys/class/thermal/cooling_device*` are not used as proof of a physical fan or as RPM sources. The installed `/root/digitalhouses_pve_agent.txt` guide contains generic read-only fan troubleshooting. Beelink/AZW driver installation, verification and rollback are documented separately in `hardware/beelink/README.md`.
 
-When a supported fan-control **interface** is detected, the App can calibrate each confirmed physical fan against its measured maximum RPM. The existing Beelink IT8613 driver takes precedence; a generic driver now probes standard Linux `hwmon` channels with matching `fanN_input`, `pwmN` and `pwmN_enable` sysfs attributes, readable control state and writable mode/duty. The generic driver accepts standard mode `0` as a **passive** full-speed reading without writes. Modes `1` (manual) and `2` (automatic) are implemented but fail closed unless a trusted, independently verified fan-to-PWM mapping is supplied. The production runtime supplies **no verified writable channels**, because matching `fanN_input` and `pwmN` numbers cannot prove physical wiring. Vendor-specific modes and BMC/IPMI tachometers are not enabled for generic control. The user-facing sensor is `Fan speed % = current RPM / calibrated max RPM × 100`, rounded and clamped to 0..100%; raw RPM always remains available.
+Each confirmed fan exposes a Home Assistant MQTT `number` entity named `Fan N 100% RPM`, with an ordinary numeric input box (0..30000 RPM). Enter the known physical maximum for that specific fan. The App persists the value by stable fan ID in `/var/lib/digitalhouses_pve_agent/fan_max_rpm.json` and reports `Fan speed % = current RPM / user-entered max RPM × 100` (rounded, capped at 100%). For example, 850 RPM with 1700 configured means 50%.
 
-Calibration is a guarded transaction: capture the original PWM/control state, persist a pending restore record, drive only the matched supported channel to maximum, detect a stable RPM plateau, and restore/verify the original control state in all normal failure paths. An interrupted transaction is recovered on the next App start. A restore failure becomes a serious App-owned problem rather than being hidden.
+**0 means not configured**: only the measured RPM is shown and the speed-% sensor is unavailable. No automatic learning, forced full-speed runs, calibration button, PWM duty changes, or BMC/IPMI fan-control writes are performed by the running App. Changing the number changes only the monitoring denominator and does not change the physical fan speed.
 
-The existing Beelink/AZW IT8613 `it87.2608 fan2 ↔ pwm2` profile and saved calibration identities remain intact. The generic `hwmon/PWM` adapter is selected by verified Linux control capabilities, not motherboard model. A generic PWM calibration still needs a matched fan/PWM channel; unrelated or incomplete sysfs controls must not trigger writes. On unsupported BMC/IPMI fan-control protocols, only RPM is exposed; no unsafe OEM/IPMI write commands or invented percentages. Neither writable adapter hardcodes a production maximum RPM.
-
-The verified **ASRock Rack X570D4U-2L2T, BMC 1.20** has one special **read-only** fallback: `ipmitool -I open raw 0x3a 0xda` returns 16 fan duty bytes, indexed by physical FAN header. When an independently observed FAN channel reaches 100% duty, the agent measures its stable RPM plateau and stores it as `max_rpm` for the existing percentage entity. The agent never forces the BMC to maximum or changes its mode (`0xd6`/`0xd8` are never called); the firmware's `0xd7` original-mode getter returns `0xcc`, so an active reversible 100%-speed test cannot be guaranteed. Before the BMC naturally reaches full duty, fans remain **RPM-only** with `waiting_for_full_pwm` status. This passive method requires no restore because it never writes any fan control state.
-
-A calibrated maximum may increase automatically if ordinary operation produces three stable RPM samples more than the tolerance above the stored ceiling. A single spike never changes calibration, and the automatic learning path never decreases `max_rpm`. Manual recalibration uses the same backend use-case as first-run calibration.
+Legacy automatically calibrated maxima from `fan_calibration.json` are intentionally **not imported** into the manual values. For safety when upgrading from previous releases, the startup path can still restore fan control that was left pending by an interrupted **old** calibration. It never initiates a new one. Obsolete calibration diagnostics and button are retired via MQTT Discovery cleanup.
 
 ### Beelink / AZW IT8613E host profile
 
@@ -424,7 +420,7 @@ Production install/update is release-tag only. Version 0.5.30 is the corrected c
 For the canonical runtime, install/update/reinstall never clears the current canonical MQTT namespace. Canonical retained MQTT cleanup is owned exclusively by the supported uninstaller.
 
 ```bash
-TAG=digitalhouses_pve_agent-v0.5.78
+TAG=digitalhouses_pve_agent-v0.5.79
 DIGITALHOUSES_SOURCE_REF="$TAG" \
   bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$TAG/digitalhouses_pve_agent/install.sh")
 ```

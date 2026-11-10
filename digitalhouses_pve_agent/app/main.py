@@ -15,6 +15,7 @@ from pathlib import Path
 from .collectors.cooling import collect_fans
 from .config import AppConfig, UpsConfig, load_config
 from .fan_calibration import FanCalibrationManager, FanCalibrationRegistry
+from .fan_max_rpm import FanMaxRpmRegistry
 from .fan_hardware_ipmi_passive import AsrockAst2500PassiveFanAdapter
 from .fan_hardware_beelink import BeelinkIt8613FanAdapter
 from .fan_hardware_hwmon import HwmonPwmFanAdapter
@@ -148,22 +149,15 @@ def build_runtime(
 
     topology = ShutdownAwareTopologyManager(runner=_run)
     fan_presence_store = StateStore(state_dir / "fans.json")
-    fan_calibration_registry = FanCalibrationRegistry(
-        StateStore(state_dir / "fan_calibration.json")
-    )
-    # Existing calibrated Beelink profile takes precedence over generic sysfs.
-    fan_adapters = (
-        BeelinkIt8613FanAdapter(),
-        HwmonPwmFanAdapter(),
-        AsrockAst2500PassiveFanAdapter(),
+    fan_max_rpm_registry = FanMaxRpmRegistry(
+        StateStore(state_dir / "fan_max_rpm.json")
     )
     disk_state_store = StateStore(state_dir / "disks.json")
     production = ShutdownAwareProductionCollectors(
         node_name=identity.hostname,
         disk_state_store=disk_state_store,
         fan_state_store=fan_presence_store,
-        fan_calibration_registry=fan_calibration_registry,
-        fan_calibration_adapters=fan_adapters,
+        fan_max_rpm_registry=fan_max_rpm_registry,
         topology=topology,
         shutdown_history_tracker=tracker,
     )
@@ -179,12 +173,6 @@ def build_runtime(
 
     def pve_version_fingerprint() -> str:
         return read_pve_version(topology.pve_root / ".version").fingerprint
-
-    fan_calibration_manager = FanCalibrationManager(
-        registry=fan_calibration_registry,
-        adapters=fan_adapters,
-        now_iso=_now_iso,
-    )
 
     runtime = ProblemAwareRuntime(
         collectors=collectors,
@@ -215,7 +203,7 @@ def build_runtime(
         ups_configured=ups_configured,
         problem_event_debounce_seconds=config.events.pve_problem_debounce_seconds,
         disk_event_store=disk_state_store,
-        fan_calibration_manager=fan_calibration_manager,
+        fan_max_rpm_registry=fan_max_rpm_registry,
         fan_source=lambda: collect_fans(production.sys_root / "class" / "hwmon"),
         fan_presence_state_store=fan_presence_store,
     )
@@ -427,7 +415,17 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
     nfs_worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix="dh-pve-nfs")
     nfs_pending = None
     nfs_last_check: float | None = None
-    recovery = runtime.recover_fan_control()
+    # One-time safety recovery for an interrupted calibration from older releases.
+    # Never starts calibration or probes for maximum RPM.
+    recovery = FanCalibrationManager(
+        registry=FanCalibrationRegistry(StateStore(state_dir / "fan_calibration.json")),
+        adapters=(
+            BeelinkIt8613FanAdapter(),
+            HwmonPwmFanAdapter(),
+            AsrockAst2500PassiveFanAdapter(),
+        ),
+        now_iso=_now_iso,
+    ).recover_pending(collect_fans())
     if recovery:
         log.warning("Fan control recovery: %s", recovery)
 
@@ -457,7 +455,6 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
     def stop(signum: int, frame: object) -> None:
         log.info("Получен сигнал остановки %s", signum)
         stop_event.set()
-        runtime.cancel_fan_calibration()
         bridge.wake_requested.set()
 
     def reload_policy(signum: int, frame: object) -> None:
@@ -710,8 +707,6 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
     finally:
         memory_worker.shutdown(wait=False, cancel_futures=True)
         nfs_worker.shutdown(wait=False, cancel_futures=True)
-        runtime.cancel_fan_calibration()
-        runtime.wait_fan_calibration()
         telemetry_runner.stop()
         ups_debug.close()
         bridge.stop()
