@@ -1893,24 +1893,18 @@ sections:
             extrema: false
         card_param: entities
         filter:
-          template: |-
-            {% for fan in states.sensor | sort(attribute='entity_id') %}
-              {% if state_attr(fan.entity_id, 'proxmox_integration') == 'digitalhouses_pve_agent'
-                    and state_attr(fan.entity_id, 'proxmox_section') == 'cooling'
-                    and state_attr(fan.entity_id, 'proxmox_metric') == 'speed_percent'
-                    and fan.state | is_number %}
-                {{ fan.entity_id }},
-              {% endif %}
-            {% endfor %}
+          include:
+            - entity_id: "sensor.dh_pve_agent_fan_*_rpm_percent"
+              state: ">= 0"
         grid_options:
           columns: 12
-      # Separate RPM-only chart, never mixed into the 0-100% chart.
+      # Raw RPM is always a separate history chart, independent of Max RPM.
       - type: custom:auto-entities
         show_empty: false
         unique: true
         card:
           type: custom:mini-graph-card
-          name: Вентиляторы · RPM (без калибровки)
+          name: Вентиляторы · RPM
           icon: mdi:fan
           hours_to_show: 24
           points_per_hour: 2
@@ -1930,18 +1924,9 @@ sections:
             extrema: false
         card_param: entities
         filter:
-          template: |-
-            {% for fan in states.sensor | sort(attribute='entity_id') %}
-              {% if state_attr(fan.entity_id, 'proxmox_integration') == 'digitalhouses_pve_agent'
-                    and state_attr(fan.entity_id, 'proxmox_section') == 'cooling'
-                    and state_attr(fan.entity_id, 'proxmox_metric') == 'rpm'
-                    and fan.state | is_number %}
-                {% set percent_id = fan.entity_id | replace('_rpm', '_speed') %}
-                {% if not (states(percent_id) | is_number) %}
-                  {{ fan.entity_id }},
-                {% endif %}
-              {% endif %}
-            {% endfor %}
+          include:
+            - entity_id: "sensor.dh_pve_agent_fan_*_rpm"
+              state: ">= 0"
         grid_options:
           columns: 12
       - type: heading

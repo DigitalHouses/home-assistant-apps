@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.81
+
+- Expose agent-computed `rpm` and `rpm_percent` (plus configured `max_rpm`) as attributes of the established `fan_*_speed` entity while retaining its percent state and stable unique ID.
+- Add independent numeric `fan_*_rpm_percent` sensors alongside existing `fan_*_rpm`, using the same grouped MQTT sample and no extra hardware reads. The default Recorder whitelist now stores raw RPM and RPM percent instead of duplicating percent history through `_speed`.
+- Replace both fan chart Jinja scans with Auto-Entities wildcard filters for numeric `rpm_percent` and raw RPM sensors, preserve fan visibility when Max RPM is unset, and add Discovery/Recorder regressions. UI templates can read one fan entity's attributes rather than derive percent in HA.
+
 ## 0.5.80
 
 - Fix Beelink/AZW IT8613 fan2 disappearing from MQTT Discovery after removing automatic fan calibration: the verified physical `it87.2608/fan2` tachometer is now confirmed even when it first reports 0 RPM (fan-stop). No PWM write or calibration is triggered.

@@ -34,7 +34,8 @@ def test_package_records_only_explicit_canonical_time_series():
         assert entity_id in text
 
     for entity_glob in (
-        "sensor.dh_pve_agent_fan_*_speed",
+        "sensor.dh_pve_agent_fan_*_rpm",
+        "sensor.dh_pve_agent_fan_*_rpm_percent",
         "sensor.dh_pve_agent_disk_*_temperature",
         "sensor.dh_pve_agent_disk_*_wear",
         "sensor.dh_pve_agent_storage_*_percent_used",
@@ -44,6 +45,7 @@ def test_package_records_only_explicit_canonical_time_series():
         assert entity_glob in text
 
     recorder = text.split("  logbook:", 1)[0]
+    assert "sensor.dh_pve_agent_fan_*_speed" not in recorder
     assert "sensor.dh_pve_agent_*" not in recorder
     assert "binary_sensor.dh_pve_agent_*" not in recorder
     assert "event.dh_pve_agent_" not in recorder

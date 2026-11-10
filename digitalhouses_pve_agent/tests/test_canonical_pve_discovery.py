@@ -264,6 +264,20 @@ def test_fan_discovery_uses_short_sequential_friendly_names():
 
     assert components["fan_it8613_it87_2608_fan2_speed"]["name"] == "Fan 2"
     assert components["fan_it8613_it87_2608_fan2_rpm"]["name"] == "Fan 2 RPM"
+    speed = components["fan_it8613_it87_2608_fan2_speed"]
+    assert "'rpm_percent':" in speed["json_attributes_template"] or '"rpm_percent":' in speed["json_attributes_template"]
+    assert '"rpm":' in speed["json_attributes_template"]
+    assert "max_rpm" in speed["json_attributes_template"]
+    assert len(speed["availability"]) == 2
+    percent = components["fan_it8613_it87_2608_fan2_rpm_percent"]
+    assert percent["default_entity_id"] == (
+        "sensor.dh_pve_agent_fan_it8613_it87_2608_fan2_rpm_percent"
+    )
+    assert percent["unit_of_measurement"] == "%"
+    assert percent["state_class"] == "measurement"
+    assert "speed_percent" in percent["value_template"]
+    assert percent["state_topic"] == speed["state_topic"]
+    assert "fan_it8613_it87_2608_fan3_rpm_percent" in components
     setting = components["fan_it8613_it87_2608_fan2_max_rpm_input"]
     assert setting["name"] == "Fan 2 100% RPM"
     assert setting["mode"] == "box"

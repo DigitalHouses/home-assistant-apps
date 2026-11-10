@@ -10,7 +10,7 @@ Native Linux agent for **Proxmox VE 8.x** that publishes host, CPU, memory, stor
 
 The canonical product and runtime identity is **DigitalHouses PVE Agent** / `digitalhouses_pve_agent`: systemd service `digitalhouses_pve_agent.service`, filesystem roots under `/opt/digitalhouses/digitalhouses_pve_agent`, `/etc/digitalhouses_pve_agent` and `/var/lib/digitalhouses_pve_agent`, MQTT base `DigitalHouses/Global/digitalhouses_pve_agent/<instance>`, and Home Assistant entity prefix `dh_pve_agent_*`. Version 0.5.30 performs the corrected one-time controlled migration from the former `dh_pve_app` / `dh_app_pve_*` runtime, including deterministic cleanup of retained data owned by the legacy MQTT instance namespace.
 
-Current source release: `VERSION` is `0.5.80`.
+Current source release: `VERSION` is `0.5.81`.
 
 UPS Debug logging: `switch.dh_pve_agent_ups_debug` (MQTT Discovery, default OFF)
 records raw NUT observations every 2 seconds when enabled. It disables itself
@@ -150,7 +150,9 @@ Unconfirmed fan candidates are omitted from normal MQTT Discovery. They are neve
 
 Each confirmed fan exposes a Home Assistant MQTT `number` entity named `Fan N 100% RPM`, with an ordinary numeric input box (0..30000 RPM). Enter the known physical maximum for that specific fan. The App persists the value by stable fan ID in `/var/lib/digitalhouses_pve_agent/fan_max_rpm.json` and reports `Fan speed % = current RPM / user-entered max RPM × 100` (rounded, capped at 100%). For example, 850 RPM with 1700 configured means 50%.
 
-**0 means not configured**: only the measured RPM is shown and the speed-% sensor is unavailable. No automatic learning, forced full-speed runs, calibration button, PWM duty changes, or BMC/IPMI fan-control writes are performed by the running App. Changing the number changes only the monitoring denominator and does not change the physical fan speed.
+The existing `sensor.dh_pve_agent_fan_*_speed` remains as the compatibility/UI sensor: its state is the agent-calculated percent, and its `rpm`, `rpm_percent` and `max_rpm` attributes come from the **same MQTT sample**. Separate numeric `sensor.dh_pve_agent_fan_*_rpm` and `sensor.dh_pve_agent_fan_*_rpm_percent` entities are intended for Recorder and history graphs (only these two are in the package's fan Recorder whitelist). An unset limit does not hide RPM; percent is unknown, not 0%.
+
+**0 means not configured**: only the measured RPM is shown and the speed-% sensor state is unknown. No automatic learning, forced full-speed runs, calibration button, PWM duty changes, or BMC/IPMI fan-control writes are performed by the running App. Changing the number changes only the monitoring denominator and does not change the physical fan speed.
 
 Legacy automatically calibrated maxima from `fan_calibration.json` are intentionally **not imported** into the manual values. For safety when upgrading from previous releases, the startup path can still restore fan control that was left pending by an interrupted **old** calibration. It never initiates a new one. Obsolete calibration diagnostics and button are retired via MQTT Discovery cleanup.
 
@@ -291,7 +293,7 @@ PYTHONPATH=/opt/digitalhouses/digitalhouses_pve_agent \
 
 ## Recorder
 
-Recorder configuration is an explicit whitelist. Continuous history is kept only for useful metrics such as CPU, RAM/Swap, fan speed %, storage usage, disk temperature/wear, GPU temperature and selected UPS telemetry/status.
+Recorder configuration is an explicit whitelist. Continuous history is kept only for useful metrics such as CPU, RAM/Swap, fan raw RPM and RPM %, storage usage, disk temperature/wear, GPU temperature and selected UPS telemetry/status.
 
 Rich presentation, debug diagnostics, the static `sensor.dh_pve_agent_version` and `sensor.dh_pve_agent_started` metadata entities, and MQTT Event entities are intentionally not Recorder history.
 
@@ -422,7 +424,7 @@ Production install/update is release-tag only. Version 0.5.30 is the corrected c
 For the canonical runtime, install/update/reinstall never clears the current canonical MQTT namespace. Canonical retained MQTT cleanup is owned exclusively by the supported uninstaller.
 
 ```bash
-TAG=digitalhouses_pve_agent-v0.5.80
+TAG=digitalhouses_pve_agent-v0.5.81
 DIGITALHOUSES_SOURCE_REF="$TAG" \
   bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$TAG/digitalhouses_pve_agent/install.sh")
 ```
