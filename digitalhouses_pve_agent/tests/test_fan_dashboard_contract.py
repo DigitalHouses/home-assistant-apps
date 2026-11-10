@@ -33,7 +33,7 @@ def test_percent_graph_filters_only_numeric_rpm_percent_and_includes_cpu_ram_swa
                    "sensor.dh_pve_agent_swap_usage"):
         assert entity in percent
     assert 'entity_id: "sensor.dh_pve_agent_fan_*_rpm_percent"' in percent
-    assert 'state: ">= 0"' in percent
+    assert 'state: ">= 0"' not in percent
     assert "filter:\n          include:" in percent
     assert "template:" not in percent
 

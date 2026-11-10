@@ -1895,7 +1895,6 @@ sections:
         filter:
           include:
             - entity_id: "sensor.dh_pve_agent_fan_*_rpm_percent"
-              state: ">= 0"
         grid_options:
           columns: 12
       # Raw RPM is always a separate history chart, independent of Max RPM.
