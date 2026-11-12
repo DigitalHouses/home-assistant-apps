@@ -1,6 +1,7 @@
 import sys
 from pathlib import Path
 from types import SimpleNamespace
+import stat
 import unittest
 from unittest.mock import patch
 
@@ -15,7 +16,7 @@ def library(path, title='Movies'):
 
 class StorageTests(unittest.TestCase):
     def setUp(self):
-        self.patches = [patch('app.library_storage.os.path.isdir', return_value=True),
+        self.patches = [patch('app.library_storage._library_path_is_directory', return_value=True),
                         patch('app.library_storage.os.path.ismount', side_effect=lambda p: p in ('/', '/media', '/other')),
                         patch('app.library_storage.os.statvfs', return_value=SimpleNamespace(f_blocks=100, f_bfree=30, f_bavail=20, f_frsize=1024**3))]
         for p in self.patches:
@@ -43,7 +44,7 @@ class StorageTests(unittest.TestCase):
         r = LibraryStorageRuntime()
         libs = (library('/media/movies'),)
         r.collect(libs, now=0)
-        for target, kwargs in [('os.path.isdir', {'return_value': False}),
+        for target, kwargs in [('_library_path_is_directory', {'side_effect': FileNotFoundError('library path missing')}),
                                ('os.path.ismount', {'side_effect': lambda p: p == '/'}),
                                ('os.statvfs', {'side_effect': OSError('denied')}),
                                ('os.statvfs', {'return_value': SimpleNamespace(f_blocks=0, f_bfree=0, f_bavail=0, f_frsize=1)})]:
@@ -51,6 +52,22 @@ class StorageTests(unittest.TestCase):
                 r.collect(libs, now=60, force=True)
                 self.assertEqual(r.mounts, ('/media',))
                 self.assertIsNone(r.payload[storage_id('/media')]['percent'])
+
+    def test_no_media_read_permission_still_reports_shared_mount(self):
+        # Production VM: /serzhan-pool/media mode 2770, agent not in media_group.
+        # Its child libraries raise EACCES, but statvfs on the mount succeeds.
+        libs = (library('/media/movies'), library('/media/tvshows', 'TV'),
+                library('/media/music', 'Music'))
+        from app.library_storage import _library_path_is_directory
+        with patch('app.library_storage.os.stat', side_effect=PermissionError('EACCES')):
+            self.assertTrue(_library_path_is_directory('/media/movies'))
+        r = LibraryStorageRuntime()
+        self.assertTrue(r.collect(libs, now=0))
+        self.assertEqual(r.mounts, ('/media',))
+        entry = r.payload[storage_id('/media')]
+        self.assertAlmostEqual(entry['percent'], 70 / 90 * 100)
+        self.assertEqual(entry['library_names'], ['Movies', 'Music', 'TV'])
+        self.assertEqual(entry['available_gib'], 20)
 
     def test_retry_and_reconnect_use_fresh_state(self):
         r = LibraryStorageRuntime()
@@ -74,7 +91,7 @@ class StorageTests(unittest.TestCase):
     def test_missing_path_can_recover_and_removed_mounts_drop(self):
         r = LibraryStorageRuntime()
         libs = (library('/media/movies'),)
-        with patch('app.library_storage.os.path.isdir', return_value=False):
+        with patch('app.library_storage._library_path_is_directory', side_effect=FileNotFoundError('library path missing')):
             r.collect(libs, now=0)
             self.assertIsNone(next(iter(r.payload.values()))['percent'])
         r.collect(libs, now=60)

@@ -6,7 +6,7 @@
 
 Native Linux agent for Plex Media Server workload, playback, transcoding and library observability in Home Assistant through MQTT Discovery.
 
-Version **0.8.8** distinguishes background loudnorm audio analysis from playback transcoding and shows active scanners/audio analysis in one compact Mushroom card. Version 0.8.7 adds media-library filesystem capacity monitoring and progress bars. Version 0.8.6 introduced the native root/admin CLI, Linux host diagnostics and an event-blocked `MQTT_PAUSED` failure mode. It follows the [DigitalHouses Linux Agent Management Standard](../docs/standards/DH_LINUX_AGENT_MANAGEMENT_STANDARD.md); live VM acceptance and release publication remain separate release checks.
+Version **0.8.9** fixes library storage visibility for restricted media folders without expanding agent permissions. Version 0.8.8 distinguishes background loudnorm audio analysis from playback transcoding and shows active scanners/audio analysis in one compact Mushroom card. Version 0.8.7 adds media-library filesystem capacity monitoring and progress bars. Version 0.8.6 introduced the native root/admin CLI, Linux host diagnostics and an event-blocked `MQTT_PAUSED` failure mode. It follows the [DigitalHouses Linux Agent Management Standard](../docs/standards/DH_LINUX_AGENT_MANAGEMENT_STANDARD.md); live VM acceptance and release publication remain separate release checks.
 
 [Install / update](#install--update) · [Changelog](CHANGELOG.md) · [Engineering docs](../docs/digitalhouses_plex_agent/) · [Issues](https://github.com/DigitalHouses/home-assistant-apps/issues)
 
@@ -48,7 +48,9 @@ reconnect, and pauses with MQTT. Failed publications retry the latest snapshot.
 Missing paths, changed/unmounted previous mounts, permission errors and zero
 capacity show unavailable, never 0% used. Paths resolving only to `/` are
 conservatively unavailable to avoid substituting the root disk for a missing
-media mount. Mount identity is remembered for the lifetime of the agent.
+media mount. Mount identity is remembered for the lifetime of the agent. An inaccessible
+library subdirectory (EACCES) does not invalidate an otherwise measurable,
+mounted dataset; no media-group membership or file access is required.
 
 
 ## Install / update

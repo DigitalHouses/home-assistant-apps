@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.8.9
+
+- Fix library storage capacity detection when the unprivileged Plex Agent cannot traverse protected media-library folders. Permission denial on child directory metadata no longer masks a healthy mounted filesystem; the agent checks the actual mount and reads statvfs without gaining access to media files.
+- Keep missing/unmounted media locations unavailable, preserve existing storage entity IDs and 0.8.8 Audio Analysis / Playback behavior. No Plex/Jellyfin/ZFS changes or new permissions.
+
 ## 0.8.8
 
 - Recognize Plex Transcoder audio loudness analysis from audio loudnorm filters and null output, separately from playback transcoding. Keep legacy transcoder process diagnostics and API playback sensors unchanged.
