@@ -108,3 +108,26 @@ def test_no_selected_ups_requires_no_nut_process(tmp_path):
     values, scope, paths = sandbox(tmp_path)
     scope["run"] = lambda cmd, **kw: pytest.fail("No NUT call for unconfigured host")
     values["guard_ups"]()
+
+
+def test_updater_allows_missing_nut_for_diagnostics(tmp_path, capsys):
+    values, scope, paths = sandbox(tmp_path)
+    write(paths["STATE"] / "ups_selection.json", json.dumps({"selected_name": "ups"}))
+    write(paths["CONFIG"], "[ups]\nhost = 192.0.2.222\nport = 3493\n")
+    calls = []
+    def unavailable(cmd, **kw):
+        calls.append(cmd)
+        raise subprocess.CalledProcessError(1, cmd, stderr="Connection refused")
+    scope["run"] = unavailable
+    values["guard_ups"]()
+    assert calls == [["upsc", "ups@192.0.2.222:3493"]]
+    assert "NUT/UPS unavailable" in capsys.readouterr().err
+
+
+def test_updater_preserves_fsd_block_when_nut_is_unavailable(tmp_path):
+    values, scope, paths = sandbox(tmp_path)
+    write(paths["STATE"] / "ups_selection.json", json.dumps({"selected_name": "ups"}))
+    write(paths["STATE"] / "shutdown_history.json", json.dumps({"current_boot": {"fsd_at": "now"}}))
+    scope["run"] = lambda *args, **kwargs: pytest.fail("NUT query must not run after FSD")
+    with pytest.raises(RuntimeError, match="UPS shutdown committed"):
+        values["guard_ups"]()

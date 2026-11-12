@@ -188,11 +188,11 @@ PYTHONPATH="${SOURCE_APP}" python3 -m app.install_config \
 
 if [[ -f "${CONFIG_FILE}" ]]; then
     PYTHONPATH="${SOURCE_APP}" python3 -c \
-        'import sys; from pathlib import Path; from app.config import load_config; from app.restart_safety import guard_restart; guard_restart(load_config(Path(sys.argv[1])), state_dir=Path(sys.argv[2]))' \
+        'import sys; from pathlib import Path; from app.config import load_config; from app.restart_safety import guard_restart; guard_restart(load_config(Path(sys.argv[1])), state_dir=Path(sys.argv[2]), allow_nut_unavailable=True)' \
         "${CONFIG_FILE}" "${STATE_DIR}"
 elif [[ -f "${LEGACY_CONFIG_FILE}" ]]; then
     PYTHONPATH="${SOURCE_APP}" python3 -c \
-        'import sys; from pathlib import Path; from app.config import load_config; from app.restart_safety import guard_restart; guard_restart(load_config(Path(sys.argv[1])), state_dir=Path(sys.argv[2]))' \
+        'import sys; from pathlib import Path; from app.config import load_config; from app.restart_safety import guard_restart; guard_restart(load_config(Path(sys.argv[1])), state_dir=Path(sys.argv[2]), allow_nut_unavailable=True)' \
         "${LEGACY_CONFIG_FILE}" "${LEGACY_STATE_DIR}"
 fi
 
@@ -346,7 +346,7 @@ install -o root -g root -m 0644 \
     "${UNIT_FILE}"
 
 PYTHONPATH="${APP_DIR}" "${APP_DIR}/.venv/bin/python" -c \
-    'from app.config import load_config; from app.restart_safety import guard_restart; from app.main import DEFAULT_CONFIG; guard_restart(load_config(DEFAULT_CONFIG))'
+    'from app.config import load_config; from app.restart_safety import guard_restart; from app.main import DEFAULT_CONFIG; guard_restart(load_config(DEFAULT_CONFIG), allow_nut_unavailable=True)'
 systemctl daemon-reload
 systemctl enable "${SERVICE_NAME}" >/dev/null
 systemctl restart "${SERVICE_NAME}"

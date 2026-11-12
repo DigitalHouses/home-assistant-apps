@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.84
+
+- Permit first-time installation and updates with NUT/UPS unreachable or not yet selected, so the PVE Agent can diagnose and commission UPS monitoring. Emit an explicit warning rather than reject the entire installation.
+- Continue rejecting installation/restart whenever a fresh UPS status confirms battery/low-battery/FSD/discharging, or a shutdown was committed; leave the interactive CLI restart fail-closed when NUT is unavailable.
+- Apply the same missing-NUT behavior to the independent Home Assistant update runner; retain invalid configuration/shutdown evidence validation and test both paths.
+
 ## 0.5.83
 
 - Clear stale MQTT errors after reconnection or a confirmed PUBACK; distinguish NUT sampling failure from a temporarily incomplete MQTT publication at UPS startup.
