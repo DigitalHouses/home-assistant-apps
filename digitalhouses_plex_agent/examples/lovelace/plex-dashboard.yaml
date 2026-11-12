@@ -754,35 +754,29 @@ sections:
           template: |-
             {% set ns = namespace(items=[]) %}
             {% for storage in states.sensor | sort(attribute='entity_id') %}
-              {% if (state_attr(storage.entity_id, 'plex_integration') == 'digitalhouses_plex_agent'
-                      and state_attr(storage.entity_id, 'plex_section') == 'library_storage')
-                    or (storage.entity_id.startswith('sensor.dh_plex_agent_library_storage_')
-                        and storage.entity_id.endswith('_percent_used')) %}
-                {% set available = storage.state | is_number %}
-                {% set total = state_attr(storage.entity_id, 'total_gib') %}
-                {% set used = state_attr(storage.entity_id, 'used_gib') %}
-                {% set free = state_attr(storage.entity_id, 'available_gib') %}
-                {% set name = state_attr(storage.entity_id, 'storage_display_name') or storage.name %}
-                {% if available and total is number and used is number and free is number %}
-                  {% set percent = '%.2f' | format(storage.state | float) %}
-                  {% set card_name = name ~ ' · занято ' ~ ('%.1f' | format(storage.state | float)) ~ '%' %}
-                  {% set secondary = 'Занято ' ~ ('%.2f' | format(used)) ~ ' / ' ~ ('%.2f' | format(total)) ~ ' GiB · Доступно ' ~ ('%.2f' | format(free)) ~ ' GiB' %}
-                  {% set color = 'green' %}
-                {% else %}
-                  {% set card_name = name %}
-                  {% set secondary = 'Данные недоступны' %}
-                  {% set percent = '0' %}
-                  {% set color = 'grey' %}
-                {% endif %}
+              {% set entity_id = storage.entity_id %}
+              {% set mount = state_attr(entity_id, 'mountpoint') %}
+              {% set total = state_attr(entity_id, 'total_gib') %}
+              {% set free = state_attr(entity_id, 'available_gib') %}
+              {% if state_attr(entity_id, 'plex_integration') == 'digitalhouses_plex_agent'
+                    and state_attr(entity_id, 'plex_section') == 'library_storage'
+                    and is_number(storage.state) and total is number and free is number
+                    and total > 0 %}
+                {% set name = 'System' if mount == '/' else (state_attr(entity_id, 'storage_display_name') or mount or 'Media') %}
+                {% set unit = 'TiB' if total >= 1024 else 'GiB' %}
+                {% set divisor = 1024 if total >= 1024 else 1 %}
+                {% set digits = 2 if total >= 1024 else 0 %}
+                {% set free_text = ('%.*f' | format(digits, free / divisor)) %}
+                {% set total_text = ('%.*f' | format(digits, total / divisor)) %}
                 {% set ns.items = ns.items + [{
                   'type': 'custom:entity-progress-card-template',
-                  'entity': storage.entity_id,
-                  'name': card_name,
-                  'secondary': secondary,
-                  'percent': percent,
-                  'icon': 'mdi:database',
-                  'color': color,
-                  'bar_color': color,
+                  'entity': entity_id,
+                  'name': name ~ ' · ' ~ ('%.1f' | format(storage.state | float)) ~ '%',
+                  'secondary': 'Свободно ' ~ free_text ~ ' / ' ~ total_text ~ ' ' ~ unit,
+                  'percent': storage.state | float,
+                  'icon': 'mdi:harddisk',
+                  'color': 'green',
+                  'bar_color': 'green',
                   'bar_size': 'medium',
                   'tap_action': {'action': 'more-info'}
                 }] %}
