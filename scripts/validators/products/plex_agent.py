@@ -401,15 +401,26 @@ def validate_plex_agent(
     if "LoadCredential=" in installer:
         fail("Plex Agent installer must not install a systemd credential drop-in")
 
-    readme = (app / "README.md").read_text(encoding="utf-8")
-    release_tag = f"digitalhouses_plex_agent-v{context['version']}"
+    # The public install entry is versionless, but MUST resolve an actual
+    # published Plex release and delegate to the immutable tag installer.
+    bootstrap = (app / "install-latest.sh").read_text(encoding="utf-8")
     for expected in (
-        f'RELEASE_TAG="{release_tag}"',
-        (
-            "raw.githubusercontent.com/DigitalHouses/home-assistant-apps/"
-            "${RELEASE_TAG}/digitalhouses_plex_agent/install.sh"
-        ),
-        'DIGITALHOUSES_SOURCE_REF="${RELEASE_TAG}"',
+        "https://api.github.com/repos/DigitalHouses/home-assistant-apps/releases",
+        "digitalhouses_plex_agent-v",
+        'release.get("draft")',
+        'release.get("prerelease")',
+        'release.get("published_at")',
+        '/${RELEASE_TAG}/digitalhouses_plex_agent/install.sh',
+        'DIGITALHOUSES_SOURCE_REF="${RELEASE_TAG}" bash "${installer}"',
+    ):
+        if expected not in bootstrap:
+            fail(f"Plex Agent latest stable bootstrap contract changed: {expected}")
+
+    readme = (app / "README.md").read_text(encoding="utf-8")
+    for expected in (
+        "raw.githubusercontent.com/DigitalHouses/home-assistant-apps/main/"
+        "digitalhouses_plex_agent/install-latest.sh",
+        "qm guest exec",
         "digitalhouses_plex_agent/BUILD_INFO",
     ):
         if expected not in readme:
