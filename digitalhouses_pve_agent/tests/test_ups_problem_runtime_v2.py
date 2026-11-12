@@ -335,7 +335,7 @@ def test_failed_status_event_is_retried_before_new_observation(tmp_path):
     assert calls["count"] == reads_before_retry + 1
 
 
-def test_reconnect_republishes_problem_snapshot_without_event_or_nut_read(tmp_path):
+def test_reconnect_refreshes_nut_and_republishes_problem_snapshot_without_duplicate_event(tmp_path):
     current = {"snapshot": _on_battery()}
     clock = {"iso": "2026-09-15T20:00:00+05:00", "mono": 0.0}
     calls = {"count": 0}
@@ -346,7 +346,7 @@ def test_reconnect_republishes_problem_snapshot_without_event_or_nut_read(tmp_pa
 
     assert runtime.republish_after_reconnect() is True
 
-    assert calls["count"] == before
+    assert calls["count"] == before + 1
     state_calls = [call for call in bridge.problem_calls if call[0] == "state"]
     assert {call[1] for call in state_calls} == PROBLEM_IDS
     assert dict((call[1], call[2]) for call in state_calls)["on_battery"] is True

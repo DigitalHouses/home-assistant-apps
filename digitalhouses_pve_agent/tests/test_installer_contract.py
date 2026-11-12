@@ -24,7 +24,7 @@ def test_installer_preserves_config_and_migrates_legacy_runtime():
     assert 'STATE_DIR="/var/lib/${PRODUCT_ID}"' in text
     assert 'LEGACY_SERVICE_NAME="${LEGACY_APP_NAME}.service"' in text
     assert 'LEGACY_APP_NAME="dh_pve_app"' in text
-    assert 'if [[ ! -f "${CONFIG_FILE}" ]]; then' in text
+    assert 'cp -p "${CONFIG_FILE}" "${PREPARED_CONFIG}"' in text
     assert "nano /etc/digitalhouses_pve_agent/digitalhouses_pve_agent.conf" in text
     assert "/etc/machine-id" in text
     for token in (
@@ -45,10 +45,9 @@ def test_installer_uses_canonical_product_identity_and_explicit_legacy_bridge():
 
 def test_installer_does_not_echo_mqtt_password_after_entry():
     text = (ROOT / "install.sh").read_text()
-    assert 'read -r -s mqtt_password' in text
-    tail = text.split('read -r -s mqtt_password', 1)[1]
-    assert 'echo "${mqtt_password}"' not in tail
-    assert 'printf "%s\\n" "${mqtt_password}"' not in tail
+    assert 'CONFIG_SETTINGS+=("mqtt_password=-")' in text
+    assert 'mqtt_password="' not in text
+    assert 'echo "${mqtt_password}"' not in text
 
 
 def test_installer_validates_proxmox_and_configuration_before_service_restart():

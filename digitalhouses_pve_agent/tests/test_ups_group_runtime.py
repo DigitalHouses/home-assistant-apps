@@ -190,7 +190,7 @@ def test_manual_refresh_publishes_all_groups_and_updates_last_refresh(tmp_path):
     assert grouped["diagnostics"]["last_publication"]["group_count"] == 4
 
 
-def test_reconnect_replays_group_cache_without_new_nut_read(tmp_path):
+def test_reconnect_publishes_fresh_nut_sample(tmp_path):
     calls = {"count": 0}
     snapshot = parse_upsc_output("ups.status: OL\nbattery.charge: 100\n")
 
@@ -208,6 +208,6 @@ def test_reconnect_replays_group_cache_without_new_nut_read(tmp_path):
 
     assert runtime.republish_after_reconnect() is True
 
-    assert calls["count"] == before
+    assert calls["count"] == before + 1
     assert {group for group, _payload in bridge.groups} == cached
     assert bridge.states == []

@@ -1,0 +1,17 @@
+#!/bin/sh
+if [ "$(/usr/bin/id -u)" -ne 0 ]; then
+    echo "ERROR: run as root or through sudo" >&2
+    exit 1
+fi
+# Root-owned installation paths; do not import modules from the caller's cwd.
+APP_DIR=/opt/digitalhouses/digitalhouses_pve_agent
+export PYTHONPATH="$APP_DIR"
+if ! cd "$APP_DIR"; then
+    echo "ERROR: installed PVE Agent directory is unavailable" >&2
+    exit 1
+fi
+if [ ! -x "$APP_DIR/.venv/bin/python" ] || [ ! -r "$APP_DIR/app/cli.py" ]; then
+    echo "ERROR: installed CLI runtime is unavailable; check installation or update rollback" >&2
+    exit 1
+fi
+exec "$APP_DIR/.venv/bin/python" -m app.cli "$@"

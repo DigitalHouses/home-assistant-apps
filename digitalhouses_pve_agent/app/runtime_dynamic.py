@@ -347,17 +347,17 @@ class DynamicDiscoveryRuntime(DhPveRuntime):
     def republish_after_reconnect(self) -> bool:
         discovery_ok = self.sync_discovery(force=True)
         settings_ok = self.publish_settings()
-        if self._group_capable():
-            state_ok = self._republish_group_cache()
-            return discovery_ok and settings_ok and state_ok
+        self._pending_groups.clear()
         if not self._subsystems:
             state_ok = self.run_collection(force=True)
-            return discovery_ok and settings_ok and state_ok
-
-        collected_at = self.now_iso()
-        metrics = self._policy_metrics()
-        payload = self._state_payload(collected_at=collected_at)
-        state_ok = self.bridge.publish_state(payload)
-        if state_ok:
-            self.publish_policy.mark_published(metrics)
+        elif self._group_capable():
+            state_ok = self._run_group_publication(
+                selected=tuple(self._subsystems), collected_at=self.now_iso(),
+                candidate_refresh=self.last_refresh, force=True, manual_refresh=False,
+            )
+        else:
+            state_ok = self._run_legacy_publication(
+                collected_at=self.now_iso(), candidate_refresh=self.last_refresh,
+                force=True, manual_refresh=False,
+            )
         return discovery_ok and settings_ok and state_ok

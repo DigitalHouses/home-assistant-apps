@@ -67,7 +67,20 @@ def build_discovery_payload(
     def uid(component: str) -> str:
         return f"{topics.device_id}_{component}"
 
+    host_components = {
+        field: {
+            'platform': 'sensor', 'name': 'Linux hostname' if field == 'hostname' else 'Linux IPv4',
+            'unique_id': uid(field), 'default_entity_id': f'sensor.dh_pve_agent_{field}',
+            'state_topic': f'{topics.base}/host_identity',
+            'value_template': '{{ value_json.' + field + " | default('unknown') }}",
+            'availability': [_availability(topics.availability)],
+            'entity_category': 'diagnostic', 'entity_registry_enabled_default': True,
+            'entity_registry_visible_default': True,
+        }
+        for field in ('hostname', 'ip')
+    }
     components: dict[str, Any] = {
+        **host_components,
         "last_refresh": {
             "platform": "sensor",
             "name": "Last refresh",

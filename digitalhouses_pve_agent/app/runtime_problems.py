@@ -232,10 +232,8 @@ class ProblemAwareRuntime(DynamicDiscoveryRuntime):
         # An Event for an earlier transition must never be overtaken by a new
         # observation. Retry its retained bundle first.
         pending_ok = self._flush_pending_transitions()
-        if not pending_ok:
-            return False
-        if not self._flush_due_problem_events():
-            return False
+        if pending_ok:
+            pending_ok = self._flush_due_problem_events()
 
         selected = tuple(self.collectors) if names is None else tuple(names)
         state_ok = super().run_collection(
@@ -244,6 +242,11 @@ class ProblemAwareRuntime(DynamicDiscoveryRuntime):
             manual_refresh=manual_refresh,
         )
 
+        if not pending_ok:
+            # Sampling is independent; defer semantic transitions until the
+            # earlier event bundle is delivered, preserving its ordering.
+            return False
+        self.last_problem_sample_at = self.now_iso()
         inputs = self._problem_inputs(selected)
         transitions = self.problem_engine.observe(
             self.now_monotonic(),
@@ -263,10 +266,8 @@ class ProblemAwareRuntime(DynamicDiscoveryRuntime):
         if now_monotonic >= self._next_disk_event_retry:
             self._next_disk_event_retry = now_monotonic + 5.0
             self._flush_disk_events()
-        if not self._flush_pending_transitions():
-            return False
-        if not self._flush_due_problem_events(now_monotonic):
-            return False
+        self._flush_pending_transitions()
+        self._flush_due_problem_events(now_monotonic)
         published = super().tick(now_monotonic)
         if not self._flush_due_problem_events(now_monotonic):
             return False

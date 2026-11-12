@@ -1,0 +1,12 @@
+DIGITALHOUSES PVE AGENT
+/usr/local/bin/dh-pve-agent status
+/usr/local/bin/dh-pve-agent restart
+/usr/local/bin/dh-pve-agent help
+WARNING: config may contain secrets; do not paste its contents into logs or tickets.
+cat /etc/digitalhouses_pve_agent/digitalhouses_pve_agent.conf
+/usr/local/bin/dh-pve-agent set mqtt_ip=192.168.11.242
+/usr/local/bin/dh-pve-agent set mqtt_port=1883
+/usr/local/bin/dh-pve-agent set log_level=info
+/usr/local/bin/dh-pve-agent set mqtt_host=broker.example mqtt_port=1883
+/usr/local/bin/dh-pve-agent set mqtt_password
+Full reference: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_pve_agent

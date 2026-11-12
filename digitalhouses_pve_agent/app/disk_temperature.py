@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 import subprocess
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -103,8 +104,9 @@ class DiskTemperatureReader:
             )
         )
 
-        if name.startswith("nvme") and "n" in name:
-            controller = name.split("n", 1)[0]
+        match = re.fullmatch(r"(nvme[0-9]+)n[0-9]+(?:p[0-9]+)?", name)
+        if match:
+            controller = match.group(1)
             candidates.extend(
                 (self.sys_root / "class" / "nvme" / controller / "device" / "hwmon").glob(
                     "hwmon*/temp*_input"

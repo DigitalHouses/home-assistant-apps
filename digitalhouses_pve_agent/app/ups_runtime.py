@@ -619,6 +619,8 @@ class UpsRuntime:
 
         self.nut_available = True
         self.last_snapshot = snapshot
+        self.last_sample_at = collected_at
+        self.local_problem_fields = self._problem_fields(snapshot, nut_available=True)
         history_changed = self._update_open_test_history(snapshot)
         if manual_refresh:
             self.last_refresh = collected_at
