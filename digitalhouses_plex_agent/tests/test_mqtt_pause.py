@@ -28,7 +28,7 @@ def import_runtime():
 
 
 class PauseTests(unittest.TestCase):
-    def exercise(self, *, initially_online, fail_first_collection=False, disconnect_during_flush=False):
+    def exercise(self, *, initially_online, fail_first_collection=False, disconnect_during_flush=False, poll_interval=10):
         app = import_runtime()
         clock = [0.0]
         bridge = MagicMock()
@@ -87,7 +87,7 @@ class PauseTests(unittest.TestCase):
         updates = MagicMock()
         updates.poll.return_value = None
         cfg = SimpleNamespace(
-            general=SimpleNamespace(instance_id='plex',poll_interval_seconds=10,cpu_window_seconds=60),
+            general=SimpleNamespace(instance_id='plex',poll_interval_seconds=poll_interval,cpu_window_seconds=3600),
             telemetry=SimpleNamespace(high_load_threshold=80),plex_api=SimpleNamespace(enabled=False),
             mqtt=SimpleNamespace(host='mqtt',port=1883))
         def raw():
@@ -119,6 +119,7 @@ class PauseTests(unittest.TestCase):
         publication.republish_cached.assert_not_called()
         self.assertTrue(publication.publish_snapshot.call_args.kwargs['force'])
         self.assertIn(30.0, waits)
+        self.assertLessEqual(max(waits), 30.0)
         return bridge
 
     def test_loss_of_mqtt_past_heartbeat_blocks_then_collects_fresh(self):
@@ -129,6 +130,9 @@ class PauseTests(unittest.TestCase):
 
     def test_disconnect_during_outbox_ack_wait_skips_process_collection(self):
         self.exercise(initially_online=True, disconnect_during_flush=True)
+
+    def test_long_poll_interval_still_wakes_for_local_status_cadence(self):
+        self.exercise(initially_online=True, poll_interval=300)
 
     def test_initial_broker_offline_waits_before_any_collection(self):
         self.exercise(initially_online=False)

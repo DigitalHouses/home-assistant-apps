@@ -3,8 +3,6 @@ from __future__ import annotations
 import json
 import logging
 import threading
-import time
-from collections import OrderedDict
 from datetime import datetime, timezone
 from typing import Any
 
@@ -44,10 +42,6 @@ class MqttBridge:
         # Keep timed-out QoS1 receipts: Paho retransmits the same packet on
         # reconnect. A later foreground flush must not enqueue a duplicate.
         self._pending_events: dict[str, Any] = {}
-        self._qos1_mids: dict[int, float] = {}
-        self._qos1_acks: dict[int, str] = {}
-        # A very fast PUBACK can precede publish() returning its receipt.
-        self._recent_completions: OrderedDict[int, tuple[float, str]] = OrderedDict()
         self._collector_available: bool | None = None
         self._plex_api_available: bool | None = None
 
@@ -136,22 +130,12 @@ class MqttBridge:
         self._connection_failed("MQTT connection attempt failed")
 
     def _on_publish(self, client, userdata, mid, reason_code, properties) -> None:
-        # VERSION2: QoS0 means bytes were sent, never broker acknowledgement.
-        # A registered QoS1 MID is a broker PUBACK; its completion is retained
-        # independently of MQTTMessageInfo.rc for reconnect/send-loss races.
+        # VERSION2 does not identify QoS here. QoS0 can reuse a pending QoS1 MID
+        # after wrap, so only the foreground MQTTMessageInfo receipt proves ACK.
         if reason_code.is_failure:
             return
-        completed_at = self._now()
         with self._lock:
-            self._diagnostics["last_publish"] = completed_at
-            if mid in self._qos1_mids:
-                self._qos1_acks[mid] = completed_at
-                self._diagnostics["last_ack"] = completed_at
-            else:
-                self._recent_completions[mid] = (time.monotonic(), completed_at)
-                self._recent_completions.move_to_end(mid)
-                while len(self._recent_completions) > 32:
-                    self._recent_completions.popitem(last=False)
+            self._diagnostics["last_publish"] = self._now()
 
     def _on_message(
         self,
@@ -214,29 +198,22 @@ class MqttBridge:
         # holds its outgoing-message mutex and need _lock for diagnostics.
         if not self.connected.is_set():
             return None
-        started = time.monotonic()
         try:
             info = self.client.publish(topic, payload=payload, qos=qos, retain=retain)
         except (OSError, ValueError, RuntimeError):
             info = None
+        # In Paho 2.1 QoS1 NO_CONN means the packet is already retained in
+        # _out_messages for reconnect replay. Its receipt keeps rc=NO_CONN even
+        # after PUBACK, which otherwise makes wait/is_published raise forever.
+        # Normalize only this known queued case to local pending SUCCESS; this
+        # never means delivered. Only info.is_published() may acknowledge it.
+        if info is not None and qos == 1 and info.rc == mqtt.MQTT_ERR_NO_CONN:
+            info.rc = mqtt.MQTT_ERR_SUCCESS
         with self._lock:
-            # Paho 2.1 retains QoS1 in _out_messages when socket loss causes
-            # NO_CONN during send. Keep that exact receipt for reconnect replay;
-            # treating it as discarded would enqueue the durable event twice.
-            queued = info is not None and (
-                info.rc == mqtt.MQTT_ERR_SUCCESS
-                or (qos == 1 and info.rc == mqtt.MQTT_ERR_NO_CONN)
-            )
-            if not queued:
+            if info is None or info.rc != mqtt.MQTT_ERR_SUCCESS:
                 self._diagnostics.update(publication_state="failed",
                                          last_error="MQTT publication failed")
                 return None
-            if qos == 1:
-                self._qos1_mids[info.mid] = started
-                completed = self._recent_completions.pop(info.mid, None)
-                if completed is not None and completed[0] >= started:
-                    self._qos1_acks[info.mid] = completed[1]
-                    self._diagnostics["last_ack"] = completed[1]
             if self.connected.is_set():
                 self._diagnostics["publication_state"] = (
                     "qos1_pending_ack" if qos else "qos0_local_accept"
@@ -274,7 +251,6 @@ class MqttBridge:
                 done = self._receipt_acknowledged(receipt)
                 if done:
                     del self._pending_events[pending_key]
-                    self._forget_receipt(receipt)
                     with self._lock:
                         self._diagnostics["last_ack"] = self._now()
             info = self._pending_events.get(key)
@@ -293,26 +269,16 @@ class MqttBridge:
             if not self._receipt_acknowledged(info):
                 return False
             self._pending_events.pop(key, None)
-            self._forget_receipt(info)
             with self._lock:
                 self._diagnostics.update(last_ack=self._now(), publication_state="qos1_acked")
             return True
 
-    def _receipt_acknowledged(self, info) -> bool:
-        with self._lock:
-            if info.mid in self._qos1_acks:
-                return True
-        # Receipts with rc=NO_CONN raise even after reconnect PUBACK; use the
-        # VERSION2 callback completion above in that case, without rewriting rc.
+    @staticmethod
+    def _receipt_acknowledged(info) -> bool:
         try:
             return info.is_published()
         except (RuntimeError, ValueError):
             return False
-
-    def _forget_receipt(self, info) -> None:
-        with self._lock:
-            self._qos1_mids.pop(info.mid, None)
-            self._qos1_acks.pop(info.mid, None)
 
     def publish_agent_card(self, payload: dict[str, object]) -> bool:
         if not self.connected.is_set():

@@ -101,7 +101,7 @@ class HostDiscoveryTests(unittest.TestCase):
 
 class FreshPublicationTests(unittest.TestCase):
     def test_forced_snapshot_replaces_pending_values_before_retry(self):
-        from test_grouped_runtime_contract import make_runtime, snapshot, api_payload
+        from digitalhouses_plex_agent.tests.test_grouped_runtime_contract import make_runtime, snapshot, api_payload
         runtime, bridge = make_runtime([0, 1, 2])
         bridge.failed_group = 'activity'
         runtime.publish_snapshot(snapshot(activity='old'), api_payload())

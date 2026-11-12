@@ -37,7 +37,7 @@ from .process_collector import (
     collect_raw_processes,
     verify_proc_visibility,
 )
-from .runtime_status import HostIdentity, RuntimeStatus
+from .runtime_status import HostIdentity, RuntimeStatus, STATUS_INTERVAL
 from .state_store import StateStore
 from .telemetry import (
     DEFAULT_TELEMETRY_STATE_FILE,
@@ -228,7 +228,7 @@ def run(config: AppConfig) -> int:
                 paused = True
                 # Ignore overdue deadlines entirely while offline. Paho's own
                 # network thread reconnects; the helper service is independent.
-                mqtt.wake_requested.wait(30.0)
+                mqtt.wake_requested.wait(STATUS_INTERVAL)
                 continue
             if paused:
                 log.info("MQTT connected: resuming foreground Plex monitoring")
@@ -284,6 +284,7 @@ def run(config: AppConfig) -> int:
                     max(0.0, next_poll - now),
                     max(0.0, next_uptime_heartbeat - now),
                     config.general.poll_interval_seconds,
+                    STATUS_INTERVAL,
                 )
                 mqtt.wake_requested.wait(wait_for)
                 mqtt.wake_requested.clear()

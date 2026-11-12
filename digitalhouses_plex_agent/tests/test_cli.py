@@ -136,13 +136,14 @@ class CliTests(unittest.TestCase):
     def test_status_live_paused_and_stale_pid_or_start(self):
         runtime = self.path.parent / 'runtime_status.json'
         now, mono = time.time(), time.monotonic()
+        elapsed = min(5.0, mono / 2)
         runtime.write_text(json.dumps({
             'pid': 123, 'updated_at': datetime.fromtimestamp(now, timezone.utc).isoformat(),
             'mqtt': {'state': 'MQTT_PAUSED', 'last_ack': 'ack-time'}, 'plex_api_status': 'ok',
         }))
         service = {'ActiveState': 'active', 'SubState': 'running', 'MainPID': '123',
-                   'ActiveEnterTimestampMonotonic': str(int((mono - 30) * 1e6)),
-                   'ExecMainStartTimestampMonotonic': str(int((mono - 30) * 1e6))}
+                   'ActiveEnterTimestampMonotonic': str(int((mono - elapsed) * 1e6)),
+                   'ExecMainStartTimestampMonotonic': str(int((mono - elapsed) * 1e6))}
         with patch('app.runtime_status.host_identity', return_value={'hostname': 'linux', 'ip': '192.0.2.2'}), patch.object(cli, 'service_info', return_value=service), contextlib.redirect_stdout(io.StringIO()) as output:
             cli.print_status(self.path, runtime)
         self.assertIn('MQTT: MQTT_PAUSED', output.getvalue())

@@ -63,9 +63,6 @@ def initialize(bridge, connected=True):
                            "last_ack": None, "publication_state": "idle",
                            "reconnect_seconds": 60}
     bridge._pending_events = {}
-    bridge._qos1_mids = {}
-    bridge._qos1_acks = {}
-    bridge._recent_completions = __import__("collections").OrderedDict()
     bridge.log = Mock()
 
 
@@ -146,9 +143,11 @@ class MqttReliabilityTests(unittest.TestCase):
         from tempfile import TemporaryDirectory
         from app.gpu_events import GpuEventTracker
         b = self.bridge()
-        info = Mock(rc=4, mid=77)
-        info.wait_for_publish.side_effect = RuntimeError("Message publish failed: not connected")
-        info.is_published.side_effect = RuntimeError("Message publish failed: not connected")
+        info = PublishInfo()
+        info.rc = 4
+        info.mid = 77
+        info.acknowledged = False
+        info.is_published = lambda: info.acknowledged
         b.client.publish = Mock(return_value=info)
         with TemporaryDirectory() as tmp:
             path = Path(tmp) / "events.json"
@@ -160,7 +159,12 @@ class MqttReliabilityTests(unittest.TestCase):
             self.assertIsNone(b.diagnostics()["last_ack"])
             self.assertEqual(tracker.flush(b.publish_diagnostic_event), 0)
             self.assertEqual(b.client.publish.call_count, 1)
+            self.assertEqual(info.rc, 0)  # normalized local pending, never delivery
             b._on_publish(b.client, None, 77, SimpleNamespace(is_failure=False), None)
+            # QoS0 can reuse the same MID after wrap; callback alone is no ACK.
+            self.assertEqual(tracker.flush(b.publish_diagnostic_event), 0)
+            self.assertIsNone(b.diagnostics()["last_ack"])
+            info.acknowledged = True  # Paho receipt marked published by QoS1 PUBACK
             self.assertEqual(tracker.flush(b.publish_diagnostic_event), 1)
             self.assertEqual(b.client.publish.call_count, 1)
             self.assertEqual(GpuEventTracker(path).outbox, [])
@@ -168,14 +172,29 @@ class MqttReliabilityTests(unittest.TestCase):
 
     def test_puback_arriving_before_publish_returns_is_not_lost(self):
         b = self.bridge()
-        info = Mock(rc=4, mid=77)
-        info.wait_for_publish.side_effect = RuntimeError("not connected")
-        info.is_published.side_effect = RuntimeError("not connected")
+        info = PublishInfo()
+        info.rc = 4
+        info.mid = 77
+        info.acknowledged = False
+        info.is_published = lambda: info.acknowledged
         def publish(*args, **kwargs):
             b._on_publish(b.client, None, 77, SimpleNamespace(is_failure=False), None)
+            info.acknowledged = True
             return info
         b.client.publish = publish
         self.assertTrue(b.publish_diagnostic_event({"event_id": "fast-ack"}))
+
+    def test_qos0_mid_reuse_callback_cannot_acknowledge_qos1_receipt(self):
+        b = self.bridge()
+        info = PublishInfo()
+        info.is_published = lambda: False
+        b.client.publish = Mock(return_value=info)
+        event = {"event_id": "qos1-still-pending"}
+        self.assertFalse(b.publish_diagnostic_event(event))
+        b._on_publish(b.client, None, info.mid, SimpleNamespace(is_failure=False), None)
+        self.assertFalse(b.publish_diagnostic_event(event))
+        self.assertIsNone(b.diagnostics()["last_ack"])
+        self.assertEqual(b.client.publish.call_count, 1)
 
     def test_qos1_queue_full_error_is_not_kept_for_replay(self):
         b = self.bridge()

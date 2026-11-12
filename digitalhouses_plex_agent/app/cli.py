@@ -131,9 +131,9 @@ def _atomic_write(path: Path, content: bytes, metadata: os.stat_result) -> None:
     temporary = Path(filename)
     try:
         with os.fdopen(fd, 'wb') as handle:
-            os.fchmod(handle.fileno(), stat.S_IMODE(metadata.st_mode))
             if (os.geteuid() == 0 or (metadata.st_uid, metadata.st_gid) != (os.geteuid(), os.getegid())):
                 os.fchown(handle.fileno(), metadata.st_uid, metadata.st_gid)
+            os.fchmod(handle.fileno(), stat.S_IMODE(metadata.st_mode))
             handle.write(content)
             handle.flush()
             os.fsync(handle.fileno())
@@ -284,7 +284,7 @@ def print_status(path: Path, runtime_path: Path = RUNTIME_STATUS) -> None:
     print(f'MQTT: {mqtt.get("state", "UNKNOWN")} | reconnect: 60s delay + up to 5s connect timeout')
     print(f'Last successful connect: {mqtt.get("last_connected") or "unknown"}')
     print(f'Publication: {mqtt.get("publication_state") or "unknown"}')
-    print(f'Last successful publish (QoS0 local send, not broker ACK): {mqtt.get("last_publish") or "unknown"}')
+    print(f'Last publish completion (QoS0 is local send, not broker ACK): {mqtt.get("last_publish") or "unknown"}')
     print(f'Last broker PUBACK (QoS1): {mqtt.get("last_ack") or "unknown"}')
     print(f'Last MQTT error: {mqtt.get("last_error") or "none known"}')
     print(f'Plex API: {runtime.get("plex_api_status", "unknown") if live else "unknown (stale or unavailable)"}')
