@@ -341,7 +341,16 @@ sections:
           {% elif api != 'ok' %}
             Данные Plex API недоступны
           {% elif playing %}
-            Воспроизведение
+            {% set sessions = state_attr('sensor.dh_plex_agent_playback_sessions', 'sessions') or [] %}
+            {% set ns = namespace(modes=[]) %}
+            {% for session in sessions %}
+              {% set raw = session.get('mode', 'Unknown') %}
+              {% set mode = 'Transcoding' if raw == 'Transcode' else raw %}
+              {% if mode not in ns.modes %}
+                {% set ns.modes = ns.modes + [mode] %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.modes | join(' · ') if ns.modes else 'Воспроизведение' }}
           {% elif is_state('binary_sensor.dh_plex_agent_audio_analysis_running', 'on') %}
             Анализ аудио
           {% elif states('sensor.dh_plex_agent_background_processes') | int(0) > 0 %}
@@ -380,6 +389,9 @@ sections:
           {% endif %}
         tap_action:
           action: more-info
+        grid_options:
+          columns: 12
+          rows: 1
       - type: grid
         columns: 2
         square: false

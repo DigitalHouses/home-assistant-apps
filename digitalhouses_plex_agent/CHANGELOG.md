@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.8.14
+
+- Make the Plex Work Mushroom card span the entire first dashboard column (`grid_options.columns: 12`) and show the actual Plex API playback session mode: Direct Play, Direct Stream or Transcoding. Concurrent different modes are listed without guessing; no session falls back to general playback, and idle/background states remain unchanged.
+- Keep separate Video and Audio Transcoding cards side by side, and preserve all existing sensor IDs, background-task widths, graphs and media capacity bars. Dashboard YAML only; no service/agent installation needed.
+
 ## 0.8.13
 
 - Split the Dashboard transcoding status into independent Video Transcoding and Audio Transcoding Mushroom cards. Each reads its existing Plex API binary sensor, shows Active/Idle or unavailable, and handles audio-only Direct Stream.
