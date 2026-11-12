@@ -30,6 +30,8 @@ The CLI reads the single existing INI at `/etc/digitalhouses_pve_agent/digitalho
   --set mqtt_port=1883 --set mqtt_username=mqttuser --mqtt-password-stdin
 ```
 
+The UPS battery-test and beeper controls use bounded native NUT protocol messages, not upscmd -p arguments, to avoid exposing the NUT command password via the process list. Only previously allowed actions remain available.
+
 The installed `/root/dh-pve-agent.txt` guide is mode `0600`. The existing MQTT Discovery device adds `sensor.dh_pve_agent_hostname` and `sensor.dh_pve_agent_ip` without renaming existing entities. If MQTT is unavailable, local PVE collectors and UPS/NUT protection continue; Paho retries every 60 seconds, with a 5-second connection timeout. Local `status` uses an atomic volatile snapshot under `/run/digitalhouses_pve_agent`, never launches QGA/SMART reads, and visibly marks unavailable or stale values. An agent release is not ready until live Proxmox/NUT acceptance checks pass.
 
 [Installation / update](#installation--update) · [Changelog](CHANGELOG.md) · [Engineering docs](../docs/digitalhouses_pve_agent/) · [Issues](https://github.com/DigitalHouses/home-assistant-apps/issues)

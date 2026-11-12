@@ -232,44 +232,58 @@ def _sanitize_detail(detail: str, config: UpsConfig) -> str:
     return sanitized
 
 
+def _nut_atom(value: str) -> str:
+    """Quote one NUT protocol token, excluding line/control injection."""
+    if not isinstance(value, str) or not value or any(ord(c) < 32 or ord(c) == 127 for c in value):
+        raise NutControlError("Некорректный параметр NUT")
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def _run_instant_command(
+    config: UpsConfig,
+    command_name: str,
+    *,
+    connector: Callable[..., object] = socket.create_connection,
+) -> None:
+    """Use NUT's native socket protocol; never expose passwords in process argv."""
+    if not config.command_username or not config.command_password:
+        raise NutControlError("Не настроены учётные данные NUT для команд UPS")
+    # Only local code-specified, allowlisted actions reach this entry point.
+    if not config.name or not config.name.replace("_", "").replace("-", "").replace(".", "").isalnum():
+        raise NutControlError("Некорректное имя UPS")
+    user = _nut_atom(config.command_username)
+    secret = _nut_atom(config.command_password)
+    try:
+        with connector((config.host, config.port), config.command_timeout_seconds) as connection:
+            stream = connection.makefile("rwb")
+
+            def send(line: str, step: str) -> None:
+                stream.write(line.encode("utf-8"))
+                stream.flush()
+                answer = stream.readline(1024)
+                # Do not include server messages: they may echo credentials.
+                if not answer or not (answer == b"OK\n" or answer.startswith(b"OK TRACKING ")):
+                    raise NutControlError(f"NUT отклонил запрос {step}")
+
+            send(f"USERNAME {user}\n", "USERNAME")
+            send(f"PASSWORD {secret}\n", "PASSWORD")
+            send(f"INSTCMD {config.name} {command_name}\n", "INSTCMD")
+    except NutControlError:
+        raise
+    except (OSError, TimeoutError, socket.timeout, ValueError) as exc:
+        raise NutControlError("Ошибка связи с NUT при выполнении команды UPS") from exc
+
+
 def run_ups_battery_test(
     config: UpsConfig,
     action: str,
     *,
-    runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+    connector: Callable[..., object] = socket.create_connection,
 ) -> None:
-    nut_command = _BATTERY_TEST_COMMANDS.get(action)
-    if nut_command is None:
+    command = _BATTERY_TEST_COMMANDS.get(action)
+    if command is None:
         raise ValueError(f"Неподдерживаемое действие теста UPS: {action}")
-    if not config.command_username or not config.command_password:
-        raise NutControlError("Не настроены учётные данные NUT для команд UPS")
-
-    command = [
-        "upscmd",
-        "-u",
-        config.command_username,
-        "-p",
-        config.command_password,
-        f"{config.name}@{config.host}:{config.port}",
-        nut_command,
-    ]
-    try:
-        runner(
-            command,
-            capture_output=True,
-            text=True,
-            timeout=config.command_timeout_seconds,
-            check=True,
-        )
-    except FileNotFoundError as exc:
-        raise NutControlError("Команда upscmd не найдена") from exc
-    except subprocess.TimeoutExpired as exc:
-        raise NutControlError("Истекло время ожидания команды NUT") from exc
-    except subprocess.CalledProcessError as exc:
-        detail = _sanitize_detail((exc.stderr or "").strip(), config)
-        raise NutControlError(detail or "NUT отклонил команду теста UPS") from exc
-    except OSError as exc:
-        raise NutControlError(f"Не удалось запустить upscmd: {exc}") from exc
+    _run_instant_command(config, command, connector=connector)
 
 
 _BEEPER_COMMANDS = {
@@ -284,36 +298,8 @@ def run_ups_beeper_command(
     config: UpsConfig,
     command_name: str,
     *,
-    runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+    connector: Callable[..., object] = socket.create_connection,
 ) -> None:
     if command_name not in _BEEPER_COMMANDS:
         raise ValueError(f"Неподдерживаемая команда пищалки UPS: {command_name}")
-    if not config.command_username or not config.command_password:
-        raise NutControlError("Не настроены учётные данные NUT для команд UPS")
-
-    command = [
-        "upscmd",
-        "-u",
-        config.command_username,
-        "-p",
-        config.command_password,
-        f"{config.name}@{config.host}:{config.port}",
-        command_name,
-    ]
-    try:
-        runner(
-            command,
-            capture_output=True,
-            text=True,
-            timeout=config.command_timeout_seconds,
-            check=True,
-        )
-    except FileNotFoundError as exc:
-        raise NutControlError("Команда upscmd не найдена") from exc
-    except subprocess.TimeoutExpired as exc:
-        raise NutControlError("Истекло время ожидания команды NUT") from exc
-    except subprocess.CalledProcessError as exc:
-        detail = _sanitize_detail((exc.stderr or "").strip(), config)
-        raise NutControlError(detail or "NUT отклонил команду пищалки UPS") from exc
-    except OSError as exc:
-        raise NutControlError(f"Не удалось запустить upscmd: {exc}") from exc
+    _run_instant_command(config, command_name, connector=connector)
