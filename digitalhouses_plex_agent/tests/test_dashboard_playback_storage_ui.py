@@ -42,12 +42,15 @@ class PlaybackAndStorageDashboardTests(unittest.TestCase):
         self.assertNotIn("sensor.dh_plex_agent_activity", section)
         self.assertNotIn("binary_sensor.dh_plex_agent_transcoder_running", section)
 
-    def test_storage_progress_bars_below_full_width_text(self):
+    def test_storage_progress_bars_compact_like_pve_agent(self):
         section = DASHBOARD.split("'plex_section') == 'library_storage'", 1)[1].split(
             "      - type: custom:auto-entities", 1
         )[0]
-        self.assertIn("'bar_position': 'below'", section)
-        self.assertIn("'secondary': 'Свободно '", section)
+        self.assertNotIn("'bar_position': 'below'", section)
+        self.assertIn("'secondary': 'Занято '", section)
+        self.assertIn("'name': name ~ ' · занято '", section)
+        self.assertIn("total_gib", DASHBOARD)
+        self.assertIn("used_gib", DASHBOARD)
         self.assertIn("'bar_size': 'medium'", section)
         self.assertIn("'storage_display_name'", section)
 
