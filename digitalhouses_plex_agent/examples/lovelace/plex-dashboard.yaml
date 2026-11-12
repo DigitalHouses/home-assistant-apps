@@ -331,57 +331,64 @@ sections:
         tap_action:
           action: more-info
       - type: custom:mushroom-template-card
-        entity: sensor.dh_plex_agent_activity
+        entity: binary_sensor.dh_plex_agent_playback_active
         primary: Работа Plex
-        secondary: |-
-          {% set s = states('sensor.dh_plex_agent_activity') %}
-          {% set names = {
-            'idle': 'Ожидание',
-            'scanner': 'Сканирование',
-            'credits_detection': 'Поиск титров',
-            'intro_detection': 'Поиск заставок',
-            'thumbnail_generation': 'Создание миниатюр',
-            'transcoding': 'Транскодирование',
-            'audio_analysis': 'Анализ аудио',
-            'multiple': 'Несколько задач',
-            'plex_not_running': 'Plex не запущен'
-          } %}
-          {{ names.get(s, s) }}
-        icon: |-
-          {% set s = states('sensor.dh_plex_agent_activity') %}
-          {% if s == 'idle' %}
-            mdi:sleep
-          {% elif s == 'scanner' %}
-            mdi:magnify-scan
-          {% elif s == 'credits_detection' %}
-            mdi:movie-open-outline
-          {% elif s == 'intro_detection' %}
-            mdi:movie-filter
-          {% elif s == 'thumbnail_generation' %}
-            mdi:image-multiple
-          {% elif s == 'audio_analysis' %}
-            mdi:waveform
-          {% elif s == 'transcoding' %}
+        secondary: >-
+          {% set api = states('sensor.dh_plex_agent_api_status') %}
+          {% set playing = is_state('binary_sensor.dh_plex_agent_playback_active', 'on') %}
+          {% set transcode = is_state('binary_sensor.dh_plex_agent_video_transcoding_active', 'on')
+             or is_state('binary_sensor.dh_plex_agent_audio_transcoding_active', 'on') %}
+          {% if is_state('binary_sensor.dh_plex_agent_server_running', 'off') %}
+            Остановлен
+          {% elif api != 'ok' %}
+            Данные Plex API недоступны
+          {% elif playing and transcode %}
+            Транскодирование
+          {% elif playing %}
+            Воспроизведение
+          {% elif is_state('binary_sensor.dh_plex_agent_audio_analysis_running', 'on') %}
+            Анализ аудио
+          {% elif states('sensor.dh_plex_agent_background_processes') | int(0) > 0 %}
+            Фоновые задачи
+          {% else %}
+            Ожидание
+          {% endif %}
+        icon: >-
+          {% set playing = is_state('binary_sensor.dh_plex_agent_playback_active', 'on') %}
+          {% set transcode = is_state('binary_sensor.dh_plex_agent_video_transcoding_active', 'on')
+             or is_state('binary_sensor.dh_plex_agent_audio_transcoding_active', 'on') %}
+          {% if is_state('binary_sensor.dh_plex_agent_server_running', 'off') %}
+            mdi:plex
+          {% elif states('sensor.dh_plex_agent_api_status') != 'ok' %}
+            mdi:help-circle-outline
+          {% elif playing and transcode %}
             mdi:movie-cog
-          {% elif s == 'multiple' %}
+          {% elif playing %}
+            mdi:play-circle
+          {% elif is_state('binary_sensor.dh_plex_agent_audio_analysis_running', 'on') %}
+            mdi:waveform
+          {% elif states('sensor.dh_plex_agent_background_processes') | int(0) > 0 %}
             mdi:cog-sync
           {% else %}
-            mdi:plex
+            mdi:sleep
           {% endif %}
         icon_color: >-
-          {% set s = states('sensor.dh_plex_agent_activity') %}
-
-          {% if s == 'idle' %}
-            green
-          {% elif s in ['scanner', 'credits_detection', 'intro_detection',
-          'thumbnail_generation', 'audio_analysis'] %}
-            blue
-          {% elif s == 'transcoding' %}
-            orange
-          {% elif s == 'multiple' %}
+          {% set playing = is_state('binary_sensor.dh_plex_agent_playback_active', 'on') %}
+          {% set transcode = is_state('binary_sensor.dh_plex_agent_video_transcoding_active', 'on')
+             or is_state('binary_sensor.dh_plex_agent_audio_transcoding_active', 'on') %}
+          {% if is_state('binary_sensor.dh_plex_agent_server_running', 'off') %}
             red
-          {% else %}
+          {% elif states('sensor.dh_plex_agent_api_status') != 'ok' %}
             grey
+          {% elif playing and transcode %}
+            orange
+          {% elif playing %}
+            green
+          {% elif is_state('binary_sensor.dh_plex_agent_audio_analysis_running', 'on')
+             or states('sensor.dh_plex_agent_background_processes') | int(0) > 0 %}
+            blue
+          {% else %}
+            green
           {% endif %}
         tap_action:
           action: more-info
@@ -778,6 +785,7 @@ sections:
                   'color': 'green',
                   'bar_color': 'green',
                   'bar_size': 'medium',
+                  'bar_position': 'below',
                   'tap_action': {'action': 'more-info'}
                 }] %}
               {% endif %}
