@@ -6,7 +6,7 @@ from typing import Any
 
 from validators.common import fail, require_files
 
-EXPECTED_VERSION = "0.5.82"
+EXPECTED_VERSION = "0.5.83"
 EXPECTED_TOPIC_PREFIX = "DigitalHouses/Global/digitalhouses_pve_agent"
 EXPECTED_DEVICE_NAME = "DH PVE"
 EXPECTED_REFRESH_ENTITY = "button.dh_pve_agent_refresh"
@@ -358,7 +358,8 @@ def validate_digitalhouses_pve_agent(
             "def _flush_pending_problem_transitions(self) -> bool:",
             "def _republish_problem_snapshot(self) -> bool:",
             "self.bridge.publish_ups_diagnostic_event(event.as_payload())",
-            "if not self._flush_pending_problem_transitions():",
+            "delivery_ok = self._flush_pending_problem_transitions()",
+            "delivery_ok = self._flush_machine_event_outbox()",
             "self._observe_problem_snapshot(None, nut_available=False)",
         ),
         "UPS problem runtime",
@@ -1040,13 +1041,16 @@ def validate_digitalhouses_pve_agent(
         'SOURCE_REF="${DIGITALHOUSES_SOURCE_REF:-}"',
         'EXPECTED_SOURCE_REF="${PRODUCT_ID}-v${SOURCE_VERSION}"',
         "--migration-mqtt-cleanup",
-        'if [[ ! -f "${CONFIG_FILE}" ]]; then',
+        'PREPARED_CONFIG="${tmp_dir}/native.conf"',
+        "--non-interactive",
+        "--mqtt-password-stdin",
+        '-m app.install_config',
+        'install -o root -g root -m 0750 "${APP_DIR}/bin/dh-pve-agent" /usr/local/bin/dh-pve-agent',
+        'install -o root -g root -m 0600 "${APP_DIR}/dh-pve-agent.txt" "${CLI_GUIDE}"',
         "nano /etc/digitalhouses_pve_agent/digitalhouses_pve_agent.conf",
         "--check-config",
         'chmod 0755 "${APP_DIR}/uninstall.sh"',
         'cat "${APP_DIR}/digitalhouses_pve_agent.txt"',
-        '"[events]"',
-        '"pve_problem_debounce_seconds = 30"',
     ):
         if expected not in installer:
             fail(f"DH PVE installer contract changed: {expected}")
@@ -1147,7 +1151,7 @@ def validate_digitalhouses_pve_agent(
 
     readme = (app / "README.md").read_text(encoding="utf-8")
     for required in (
-        f"Current source release: `VERSION` is `{EXPECTED_VERSION}`.",
+        f"Current source version: `VERSION` is `{EXPECTED_VERSION}`.",
         f"TAG=digitalhouses_pve_agent-v{EXPECTED_VERSION}",
         "digitalhouses_pve_agent/digitalhouses_pve_agent.txt",
     ):

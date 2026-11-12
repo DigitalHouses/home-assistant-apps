@@ -83,46 +83,22 @@ def test_beeper_capability_selects_safe_on_off_commands():
 
 
 def test_beeper_executor_allows_only_beeper_on_off_family_and_hides_password():
-    executor = getattr(ups_control, "run_ups_beeper_command", None)
-    assert callable(executor)
+    from nut_socket_fixture import connection_factory
+    executor = ups_control.run_ups_beeper_command
     config = _ups_config()
-    calls = []
-
-    def ok_runner(command, **kwargs):
-        calls.append((command, kwargs))
-        return subprocess.CompletedProcess(command, 0, stdout="OK\n", stderr="")
-
-    for command_name in (
-        "beeper.on",
-        "beeper.off",
-        "beeper.enable",
-        "beeper.disable",
-    ):
-        executor(config, command_name, runner=ok_runner)
-        assert calls[-1][0][-1] == command_name
-        assert calls[-1][0][:5] == [
-            "upscmd",
-            "-u",
-            "digitalhouses_pve_agent",
-            "-p",
-            "super-secret",
-        ]
-        assert calls[-1][1]["timeout"] == 3.0
-        assert calls[-1][1]["check"] is True
-
+    connector, connections, addresses = connection_factory()
+    for command in ("beeper.on", "beeper.off", "beeper.enable", "beeper.disable"):
+        executor(config, command, connector=connector)
+        assert connections[-1].writes[-1] == f"INSTCMD ups {command}\n".encode()
+        assert addresses[-1] == (("127.0.0.1", 3493), 3.0)
     with pytest.raises(ValueError):
-        executor(config, "load.off", runner=ok_runner)
+        executor(config, "load.off", connector=connector)
 
-    def failing_runner(command, **kwargs):
-        raise subprocess.CalledProcessError(
-            1,
-            command,
-            stderr="authentication failed for super-secret",
-        )
+    failing, _, _ = connection_factory((b"OK\n", b"ERR super-secret\n"))
+    with pytest.raises(Exception) as error:
+        executor(config, "beeper.off", connector=failing)
+    assert "super-secret" not in str(error.value)
 
-    with pytest.raises(Exception) as exc_info:
-        executor(config, "beeper.off", runner=failing_runner)
-    assert "super-secret" not in str(exc_info.value)
 
 
 def test_mqtt_switch_topic_accepts_only_on_off_payloads():

@@ -32,6 +32,7 @@ from .production import _run
 from .publish_policy import PublishPolicy
 from .pve_cache import read_pve_version
 from .runtime_settings import RuntimeSettings
+from .runtime_status import HostIdentity, RuntimeStatus, STATUS_PATH, load_build_info
 from .scheduler import Scheduler
 from .shutdown_discovery import build_shutdown_aware_pve_discovery_payload
 from .shutdown_history import ShutdownHistoryTracker
@@ -432,6 +433,8 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
     stop_event = threading.Event()
     reload_event = threading.Event()
     initialized = False
+    host_identity = HostIdentity(config.mqtt.host, config.mqtt.port)
+    local_status = RuntimeStatus(STATUS_PATH, load_build_info(APP_ROOT))
     ups_startup_attempted = False
     restart_requested = False
     debug_last_published: bool | None = None
@@ -501,22 +504,6 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
                     restart_requested = True
                     log.warning("Ручной перезапуск агента через MQTT")
                     break
-            if bridge.connected.is_set() and not initialized:
-                bridge.reconnect_requested.clear()
-                initialized = runtime.startup()
-                if initialized:
-                    bridge.publish_ups_scan_operation(operation_payload("idle"))
-                    update_manager.publish(bridge)
-                    if card.state == "running" and card.operation == "restart":
-                        card.finish("restart")
-                    card.publish()
-                    log.info("Первичная публикация MQTT завершена")
-                else:
-                    log.warning(
-                        "Первичная публикация MQTT выполнена не полностью; "
-                        "будет повторена после следующего MQTT reconnect"
-                    )
-
             # Handle incoming user actions before background PVE/UPS diagnostics,
             # which can take seconds and otherwise delay the first card ACK.
             # The MQTT callback sets events and wakes this loop immediately.
@@ -558,6 +545,56 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
                             error=None if success else (error or "Update failed"),
                         )
             card.tick()
+
+            if ups_runtime is not None and not ups_startup_attempted:
+                bridge.ups_reconnect_requested.clear()
+                bridge.clear_legacy_ups_discovery()
+                ups_ok = ups_runtime.startup()
+                ups_startup_attempted = True
+                if ups_ok:
+                    log.info("Первичная публикация DH PVE UPS завершена")
+                elif getattr(ups_runtime, "nut_available", False):
+                    log.warning(
+                        "Первичная MQTT-публикация UPS не завершена; "
+                        "локальный контроль NUT продолжает работать"
+                    )
+                else:
+                    log.warning(
+                        "UPS через NUT пока недоступен; мониторинг PVE продолжает работать"
+                    )
+
+            if ups_runtime is not None and ups_startup_attempted:
+                ups_runtime.process_events()
+                if reload_event.is_set():
+                    reload_event.clear()
+                    if ups_runtime.complete_policy_reload():
+                        log.info("Reload UPS Trigger Policy успешно подтвержден")
+                    else:
+                        log.debug("SIGHUP обработан без ожидающей UPS policy transaction")
+                ups_runtime.tick(time.monotonic())
+            elif reload_event.is_set():
+                reload_event.clear()
+                log.debug("SIGHUP обработан до инициализации UPS runtime")
+
+            if not initialized:
+                if bridge.connected.is_set():
+                    bridge.reconnect_requested.clear()
+                published = runtime.startup()
+                # startup collects locally regardless of publication success.
+                # Never repeat expensive full scans in a disconnected loop.
+                initialized = True
+                if published:
+                    bridge.publish_ups_scan_operation(operation_payload("idle"))
+                    update_manager.publish(bridge)
+                    if card.state == "running" and card.operation == "restart":
+                        card.finish("restart")
+                    card.publish()
+                    log.info("Первичная публикация MQTT завершена")
+                else:
+                    log.warning(
+                        "Первичная публикация MQTT выполнена не полностью; "
+                        "будет повторена после следующего MQTT reconnect"
+                    )
 
             if initialized:
                 if bridge.reconnect_requested.is_set():
@@ -659,31 +696,6 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
                     finally:
                         bridge.ups_scan_in_progress.clear()
 
-                if ups_runtime is not None and not ups_startup_attempted:
-                    bridge.ups_reconnect_requested.clear()
-                    bridge.clear_legacy_ups_discovery()
-                    ups_ok = ups_runtime.startup()
-                    ups_startup_attempted = True
-                    if ups_ok:
-                        log.info("Первичная публикация DH PVE UPS завершена")
-                    else:
-                        log.warning(
-                            "UPS через NUT пока недоступен; мониторинг PVE продолжает работать"
-                        )
-
-                if ups_runtime is not None and ups_startup_attempted:
-                    ups_runtime.process_events()
-                    if reload_event.is_set():
-                        reload_event.clear()
-                        if ups_runtime.complete_policy_reload():
-                            log.info("Reload UPS Trigger Policy успешно подтвержден")
-                        else:
-                            log.debug("SIGHUP обработан без ожидающей UPS policy transaction")
-                    ups_runtime.tick(time.monotonic())
-                elif reload_event.is_set():
-                    reload_event.clear()
-                    log.debug("SIGHUP обработан до инициализации UPS runtime")
-
             # Independent of HA/MQTT initialization: an outage must still be
             # recorded locally when the broker is unavailable.
             if nfs_pending is not None and nfs_pending.done():
@@ -702,6 +714,10 @@ def run(config: AppConfig, *, state_dir: Path = DEFAULT_STATE_DIR) -> int:
                 nfs_last_check = nfs_now
                 nfs_pending = nfs_worker.submit(nfs_monitor.scan)
 
+            identity_reconnect = debug_reconnected and bridge.connected.is_set()
+            if host_identity.refresh(now=time.monotonic(), force=identity_reconnect) or identity_reconnect:
+                bridge.publish_host_identity(host_identity.value)
+            local_status.update(bridge.diagnostics(), host_identity.value, runtime, ups_runtime)
             bridge.wake_requested.wait(1.0)
             bridge.wake_requested.clear()
     finally:

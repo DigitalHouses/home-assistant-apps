@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import re
+from pathlib import Path
 from collections.abc import Callable, Mapping
 
 from .app import CollectorSample
@@ -364,6 +365,16 @@ class ShutdownAwareUpsRuntime(AdaptiveUpsRuntime):
                 except Exception:
                     _LOG.exception("UPS debug failed before FSD; continuing shutdown")
             assert software_shutdown_executor is not None
+            # Persist intent before FSD so a local CLI cannot interrupt a
+            # committed shutdown after a crash and before the next heartbeat.
+            # Evidence failure must never bypass the shutdown executor.
+            try:
+                StateStore(self.state_store.path.with_name('ups_shutdown_commit.json')).save({
+                    'committed': True,
+                    'boot_id': Path('/proc/sys/kernel/random/boot_id').read_text().strip(),
+                })
+            except Exception:
+                _LOG.exception('Unable to persist UPS shutdown intent; continuing shutdown')
             software_shutdown_executor(reason)
 
         self.software_shutdown_controller = (

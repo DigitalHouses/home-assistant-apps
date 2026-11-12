@@ -6,21 +6,39 @@
 
 Native Linux agent for **Proxmox VE 8.x** that publishes host, CPU, memory, storage, disk/SMART, GPU, fan, VM/LXC and optional NUT/UPS observability to Home Assistant through MQTT Discovery.
 
-## Mandatory Linux Agent Management Standard (implementation requirement)
+## Native CLI and unattended installation (development source)
 
-**REQUIRED for this agent and all future Linux DH agents:** [DigitalHouses Linux Agent Management Standard](../docs/standards/DH_LINUX_AGENT_MANAGEMENT_STANDARD.md). This is an implementation/release acceptance requirement, **not a claim that the current installed release already supports it**.
+The source tree implements the [DigitalHouses Linux Agent Management Standard](../docs/standards/DH_LINUX_AGENT_MANAGEMENT_STANDARD.md). Version 0.5.83 adds these changes; production installation requires the canonical released tag.
 
-The PVE Agent MUST implement the canonical CLI `/usr/local/bin/dh-pve-agent status|restart|help` and batch `set key=value [key=value ...]`, supporting all native config keys with atomic validation, idempotent edits and one systemd restart only when a running service's config changes. Its existing `/etc/digitalhouses_pve_agent/digitalhouses_pve_agent.conf` remains the single config source; direct INI editing and CLI `set` are equally supported (including Ansible). Secrets must use a safe non-argument input method; no extra management daemon or installer-only config interface.
+Root/admin commands after installing a release that includes the feature:
 
-Every install/update MUST place a short copy/paste reference at `/root/dh-pve-agent.txt` with absolute command paths, a `cat` config command, a few key `set` examples and a link back to this GitHub README. Its existing Home Assistant MQTT Discovery device MUST expose the real hosting Linux server as diagnostic `sensor.dh_pve_agent_hostname` and `sensor.dh_pve_agent_ip`, also shown in `status`. Preserve existing HA device identity and entity IDs. **Release is not compliant until the linked standard's tests pass.**
+```bash
+/usr/local/bin/dh-pve-agent status
+/usr/local/bin/dh-pve-agent restart
+/usr/local/bin/dh-pve-agent set mqtt_ip=192.168.11.242 mqtt_port=1883
+/usr/local/bin/dh-pve-agent set mqtt_password  # hidden terminal prompt
+/usr/local/bin/dh-pve-agent help
+cat /root/dh-pve-agent.txt
+```
 
+The CLI reads the single existing INI at `/etc/digitalhouses_pve_agent/digitalhouses_pve_agent.conf`. Batch updates validate the entire effective config, preserve unrelated settings and metadata, and restart an active agent at most once. UPS safety denies unsafe restarts. The password value must not appear in process arguments. To send it from automation, use `mqtt_password=-` with redirected stdin and Ansible `no_log: true`.
 
+`install.sh` accepts `--non-interactive`, repeated `--set key=value`, and `--mqtt-password-stdin` / `--ups-command-password-stdin` to read secret lines. It also supports an already provisioned native INI with no extra installer-specific schema. For example (secrets supplied by protected stdin, not an argument):
+
+```bash
+./install.sh --non-interactive --set mqtt_ip=192.168.11.242 \
+  --set mqtt_port=1883 --set mqtt_username=mqttuser --mqtt-password-stdin
+```
+
+The UPS battery-test and beeper controls use bounded native NUT protocol messages, not upscmd -p arguments, to avoid exposing the NUT command password via the process list. Only previously allowed actions remain available.
+
+The installed `/root/dh-pve-agent.txt` guide is mode `0600`. The existing MQTT Discovery device adds `sensor.dh_pve_agent_hostname` and `sensor.dh_pve_agent_ip` without renaming existing entities. If MQTT is unavailable, local PVE collectors and UPS/NUT protection continue; Paho retries every 60 seconds, with a 5-second connection timeout. Local `status` uses an atomic volatile snapshot under `/run/digitalhouses_pve_agent`, never launches QGA/SMART reads, and visibly marks unavailable or stale values. An agent release is not ready until live Proxmox/NUT acceptance checks pass.
 
 [Installation / update](#installation--update) · [Changelog](CHANGELOG.md) · [Engineering docs](../docs/digitalhouses_pve_agent/) · [Issues](https://github.com/DigitalHouses/home-assistant-apps/issues)
 
 The canonical product and runtime identity is **DigitalHouses PVE Agent** / `digitalhouses_pve_agent`: systemd service `digitalhouses_pve_agent.service`, filesystem roots under `/opt/digitalhouses/digitalhouses_pve_agent`, `/etc/digitalhouses_pve_agent` and `/var/lib/digitalhouses_pve_agent`, MQTT base `DigitalHouses/Global/digitalhouses_pve_agent/<instance>`, and Home Assistant entity prefix `dh_pve_agent_*`. Version 0.5.30 performs the corrected one-time controlled migration from the former `dh_pve_app` / `dh_app_pve_*` runtime, including deterministic cleanup of retained data owned by the legacy MQTT instance namespace.
 
-Current source release: `VERSION` is `0.5.82`.
+Current source version: `VERSION` is `0.5.83`.
 
 UPS Debug logging: `switch.dh_pve_agent_ups_debug` (MQTT Discovery, default OFF)
 records raw NUT observations every 2 seconds when enabled. It disables itself
@@ -434,7 +452,7 @@ Production install/update is release-tag only. Version 0.5.30 is the corrected c
 For the canonical runtime, install/update/reinstall never clears the current canonical MQTT namespace. Canonical retained MQTT cleanup is owned exclusively by the supported uninstaller.
 
 ```bash
-TAG=digitalhouses_pve_agent-v0.5.82
+TAG=digitalhouses_pve_agent-v0.5.83
 DIGITALHOUSES_SOURCE_REF="$TAG" \
   bash <(curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/$TAG/digitalhouses_pve_agent/install.sh")
 ```

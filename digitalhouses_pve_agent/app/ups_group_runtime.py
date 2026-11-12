@@ -356,13 +356,11 @@ class AdaptiveUpsRuntime(UpsRuntime):
         # A pending semantic Event is older than any NUT sample we could read
         # now. Deliver it first so tracker state cannot advance past undelivered
         # machine semantics.
-        if not self._flush_machine_event_outbox():
-            return False
-
-        # Complete an earlier retained problem/Event transaction before a new
-        # NUT observation can create a later transition.
-        if not self._flush_pending_problem_transitions():
-            return False
+        delivery_ok = self._flush_machine_event_outbox()
+        # Preserve event order, but never make delivery a prerequisite for a
+        # fresh NUT read and the software shutdown safety evaluation.
+        if delivery_ok:
+            delivery_ok = self._flush_pending_problem_transitions()
 
         collected_at = self.now_iso()
         now = self.now_monotonic()
@@ -386,6 +384,8 @@ class AdaptiveUpsRuntime(UpsRuntime):
 
         self.nut_available = True
         self.last_snapshot = snapshot
+        self.last_sample_at = collected_at
+        self.local_problem_fields = self._problem_fields(snapshot, nut_available=True)
         history_changed = self._update_open_test_history(snapshot)
         previous_refresh = self.last_refresh
         if manual_refresh:
@@ -409,14 +409,14 @@ class AdaptiveUpsRuntime(UpsRuntime):
         )
 
         problem_ok = True
-        if state_ok:
+        if state_ok and delivery_ok:
             problem_ok = self._observe_problem_snapshot(
                 snapshot,
                 nut_available=True,
             )
 
         semantic_ok = True
-        if state_ok and problem_ok:
+        if state_ok and problem_ok and delivery_ok:
             semantic_ok = self._enqueue_semantic_events(
                 snapshot,
                 observed_at=collected_at,
@@ -431,7 +431,7 @@ class AdaptiveUpsRuntime(UpsRuntime):
         elif manual_refresh:
             self.last_refresh = previous_refresh
 
-        return bool(discovery_ok and state_ok and problem_ok and semantic_ok)
+        return bool(delivery_ok and discovery_ok and state_ok and problem_ok and semantic_ok)
 
     def startup(self) -> bool:
         if not self._group_capable():
@@ -440,31 +440,17 @@ class AdaptiveUpsRuntime(UpsRuntime):
         cleaner = getattr(self.bridge, "clear_legacy_ups_state", None)
         if callable(cleaner):
             cleanup_ok = bool(cleaner())
-        return bool(cleanup_ok and super().startup())
+        startup_ok = super().startup()
+        return bool(cleanup_ok and startup_ok)
 
     def republish_after_reconnect(self) -> bool:
         if not self._group_capable():
             return super().republish_after_reconnect()
 
         availability_ok = self.bridge.publish_ups_availability(True)
-        if not self._last_group_payloads:
-            self._refresh_auxiliary()
-            self._refresh_policy_validation()
-            return bool(availability_ok and self._collect(force=True))
-
         discovery_ok = self.sync_discovery(force=True)
-        state_ok = True
-        publish = getattr(self.bridge, "publish_ups_state_group")
-        for group, payload in self._last_group_payloads.items():
-            state_ok = bool(publish(group, payload)) and state_ok
-
-        pending_ok = self._flush_pending_problem_transitions()
-        problem_ok = pending_ok and self._republish_problem_snapshot()
-        semantic_ok = self._flush_machine_event_outbox()
-        return bool(
-            availability_ok
-            and discovery_ok
-            and state_ok
-            and problem_ok
-            and semantic_ok
-        )
+        # Refresh NUT first and force the current sample into all groups.
+        self._last_group_payloads.clear()
+        state_ok = self._collect(force=True)
+        problem_ok = self._republish_problem_snapshot()
+        return bool(availability_ok and discovery_ok and state_ok and problem_ok)

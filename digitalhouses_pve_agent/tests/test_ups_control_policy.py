@@ -112,46 +112,53 @@ def test_upscmd_capability_query_is_read_only_and_bounded():
 
 
 def test_battery_test_executor_maps_only_allowlisted_actions_and_hides_password():
+    from nut_socket_fixture import connection_factory
     executor = _require("run_ups_battery_test")
-    calls = []
     config = SimpleNamespace(
-        name="ups",
-        host="127.0.0.1",
-        port=3493,
-        command_timeout_seconds=3.0,
-        command_username="digitalhouses_pve_agent",
-        command_password="super-secret",
+        name="ups", host="127.0.0.1", port=3493, command_timeout_seconds=3.0,
+        command_username="digitalhouses_pve_agent", command_password="super-secret",
     )
-
-    def ok_runner(command, **kwargs):
-        calls.append((command, kwargs))
-        return subprocess.CompletedProcess(command, 0, stdout="OK\n", stderr="")
-
-    for action, nut_command in (
-        ("standard", "test.battery.start"),
-        ("quick", "test.battery.start.quick"),
-        ("deep", "test.battery.start.deep"),
-        ("stop", "test.battery.stop"),
+    connector, connections, addresses = connection_factory()
+    for action, command in (
+        ("standard", "test.battery.start"), ("quick", "test.battery.start.quick"),
+        ("deep", "test.battery.start.deep"), ("stop", "test.battery.stop"),
     ):
-        executor(config, action, runner=ok_runner)
-        assert calls[-1][0][-1] == nut_command
-        assert calls[-1][0][:5] == ["upscmd", "-u", "digitalhouses_pve_agent", "-p", "super-secret"]
-        assert calls[-1][1]["timeout"] == 3.0
-        assert calls[-1][1]["check"] is True
+        executor(config, action, connector=connector)
+        written = connections[-1].writes
+        assert written == [
+            b'USERNAME "digitalhouses_pve_agent"\n',
+            b'PASSWORD "super-secret"\n',
+            f"INSTCMD ups {command}\n".encode(),
+        ]
+        assert addresses[-1] == (("127.0.0.1", 3493), 3.0)
 
     with pytest.raises(ValueError):
-        executor(config, "shutdown.return", runner=ok_runner)
+        executor(config, "shutdown.return", connector=connector)
 
-    def failing_runner(command, **kwargs):
-        raise subprocess.CalledProcessError(
-            1,
-            command,
-            stderr="authentication failed for super-secret",
-        )
+    failing, _, _ = connection_factory((b"OK\n", b"ERR super-secret\n"))
+    with pytest.raises(Exception) as error:
+        executor(config, "quick", connector=failing)
+    assert "super-secret" not in str(error.value)
 
-    with pytest.raises(Exception) as exc_info:
-        executor(config, "quick", runner=failing_runner)
-    assert "super-secret" not in str(exc_info.value)
+
+
+def test_nut_instant_command_rejects_injection_and_malformed_responses():
+    from nut_socket_fixture import connection_factory
+    from app.ups_control import NutControlError, run_ups_battery_test
+    config = SimpleNamespace(
+        name="ups", host="127.0.0.1", port=3493,
+        command_username="operator", command_password="secret",
+        command_timeout_seconds=3,
+    )
+    connect, connections, _ = connection_factory()
+    for unsafe in ("secret\nINSTCMD ups load.off", "secret\r\n", ""):
+        with pytest.raises(NutControlError):
+            run_ups_battery_test(SimpleNamespace(**(vars(config) | {"command_password": unsafe})), "quick", connector=connect)
+    assert connections == []
+    failing, _, _ = connection_factory((b"OK\n", b"OK\n", b"ERR password secret\n"))
+    with pytest.raises(NutControlError) as error:
+        run_ups_battery_test(config, "quick", connector=failing)
+    assert "secret" not in str(error.value)
 
 
 def test_ups_command_credentials_are_optional_private_config(tmp_path: Path):

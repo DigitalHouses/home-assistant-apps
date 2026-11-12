@@ -30,12 +30,14 @@ UPDATE_SERVICE = PRODUCT + "-update.service"
 UPDATE_UNIT = Path("/etc/systemd/system") / UPDATE_SERVICE
 RECOVERY_UNIT = Path("/etc/systemd/system") / (PRODUCT + "-update-recover.service")
 RUNNER = Path("/usr/local/libexec") / "digitalhouses-pve-agent-update-runner"
-ROOT_GUIDE = Path("/root/digitalhouses_pve_agent.txt")
+ROOT_GUIDE = Path("/root/dh-pve-agent.txt")
+LEGACY_GUIDE = Path("/root/digitalhouses_pve_agent.txt")
+CLI = Path("/usr/local/bin/dh-pve-agent")
 BACKUP = STATE / "update-backup"
 LOCK = STATE / "update.lock"
 TAG_RE = re.compile(r"^digitalhouses_pve_agent-v(\d+)\.(\d+)\.(\d+)$")
 FILES = {"config": CONFIG, "service": UNIT, "update_unit": UPDATE_UNIT, "recovery_unit": RECOVERY_UNIT,
-         "runner": RUNNER, "guide": ROOT_GUIDE}
+         "runner": RUNNER, "guide": ROOT_GUIDE, "legacy_guide": LEGACY_GUIDE, "cli": CLI}
 
 
 def write_json(path: Path, payload: dict) -> None:
@@ -75,6 +77,17 @@ def read_json(path: Path) -> dict:
 
 def guard_ups() -> None:
     """Recheck NUT directly; unknown/battery power fails closed."""
+    for filename in ('shutdown_history.json', 'ups_shutdown_commit.json'):
+        path = STATE / filename
+        if path.exists():
+            evidence = read_json(path)
+            evidence = evidence.get('current_boot', {}) if filename == 'shutdown_history.json' else evidence
+            if not isinstance(evidence, dict):
+                raise RuntimeError('Invalid UPS shutdown evidence')
+            if evidence.get('fsd_at') or evidence.get('committed'):
+                boot_id = Path('/proc/sys/kernel/random/boot_id').read_text().strip()
+                if not evidence.get('boot_id') or evidence['boot_id'] == boot_id:
+                    raise RuntimeError('UPS shutdown committed; update denied')
     selection = STATE / "ups_selection.json"
     if not selection.exists():
         return  # A host that never selected an UPS is unconfigured.

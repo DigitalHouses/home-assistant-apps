@@ -31,23 +31,25 @@ def test_installer_uses_codeload_for_exact_commit_without_git_clone():
     assert 'tar -xzf "${archive}" --strip-components=1 -C "${tmp_dir}/repo"' in text
     assert 'SOURCE_SHA="${SOURCE_REF}"' in text
 
-def test_installer_confirms_mqtt_settings_before_writing_config():
+def test_installer_prepares_native_configuration_before_services():
     text = _installer_text()
-
-    assert 'Проверьте параметры:' in text
-    assert 'Всё верно? [y/N]:' in text
-    assert 'Password: задан' in text
-    assert 'Password: не задан' in text
-    assert 'case "${confirm,,}" in' in text
-    assert 'y|yes)' in text
-    assert text.index('Всё верно? [y/N]:') < text.index('} >"${CONFIG_FILE}"')
+    assert '-m app.install_config' in text
+    assert text.index('-m app.install_config') < text.index('systemctl stop')
+    assert '--commit "${PREPARED_CONFIG}" "${CONFIG_FILE}"' in text
 
 
-def test_installer_validates_mqtt_port_range_and_reprompts():
-    text = _installer_text()
-
-    assert 'Некорректный MQTT port. Допустимый диапазон: 1-65535.' in text
-    assert '[[ "${mqtt_port}" =~ ^[0-9]+$ ]]' in text
-    assert 'mqtt_port >= 1 && mqtt_port <= 65535' in text
-    assert 'Повторите ввод MQTT-параметров.' in text
-
+def test_installer_uses_native_port_validation():
+    from app.config import ConfigError
+    from app.install_config import prepare
+    import tempfile
+    with tempfile.TemporaryDirectory() as directory:
+        path = Path(directory) / 'config'
+        path.write_text('[mqtt]\nhost=broker\n')
+        for port in ('0', '65536', 'text'):
+            try:
+                prepare(path, ['mqtt_port=' + port], non_interactive=True)
+            except ConfigError:
+                pass
+            else:
+                raise AssertionError('invalid port accepted')
+        assert path.read_text() == '[mqtt]\nhost=broker\n'

@@ -5,6 +5,7 @@ import logging
 import queue
 import re
 import threading
+from datetime import datetime, timezone
 from dataclasses import dataclass
 from typing import Any
 
@@ -274,6 +275,22 @@ class MqttBridge(MqttEvents):
             import paho.mqtt.client as mqtt
             client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=topics.device_id)
         self.client = client
+        # Paho owns retry timing; never create a second reconnect loop.
+        if hasattr(client, 'reconnect_delay_set'):
+            client.reconnect_delay_set(60, 60)
+        client.connect_timeout = 5
+        if hasattr(client, 'max_queued_messages_set'):
+            client.max_queued_messages_set(64)
+        if hasattr(client, 'max_inflight_messages_set'):
+            client.max_inflight_messages_set(20)
+        self._diagnostic_lock = threading.Lock()
+        self._pending_ack: dict[int, bool] = {}
+        self._rejected_ack: set[int] = set()
+        self._diagnostic = {
+            'state': 'DISCONNECTED', 'last_connected': None, 'last_reconnect': None,
+            'last_ack': None, 'last_error': None, 'publication_state': 'idle',
+            'reconnect_delay_seconds': 60, 'connect_timeout_seconds': 5,
+        }
         if config.username:
             self.client.username_pw_set(config.username, config.password)
         will = build_lwt(topics)
@@ -281,14 +298,23 @@ class MqttBridge(MqttEvents):
         self.client.on_connect = self._on_connect
         self.client.on_disconnect = self._on_disconnect
         self.client.on_message = self._on_message
+        self.client.on_publish = self._on_publish
+        self.client.on_connect_fail = self._on_connect_fail
 
     def configure_ups(self, topics: UpsTopics) -> None:
         super().configure_ups(topics)
 
     def _on_connect(self, client, userdata, flags, reason_code, properties) -> None:
         if getattr(reason_code, "is_failure", False):
-            self.log.error("MQTT connection rejected: %s", reason_code)
+            self.connected.clear()
+            self._connection_error('connection rejected')
             return
+        stamp = datetime.now(timezone.utc).isoformat()
+        with self._diagnostic_lock:
+            if self._diagnostic['last_connected']:
+                self._diagnostic['last_reconnect'] = stamp
+            self._diagnostic.update(state='CONNECTED', last_connected=stamp, last_error=None)
+        self.log.info('MQTT connected')
         self.connected.set()
         client.subscribe(self.topics.ha_status, qos=1)
         client.subscribe(self.topics.refresh, qos=1)
@@ -326,7 +352,35 @@ class MqttBridge(MqttEvents):
 
     def _on_disconnect(self, client, userdata, disconnect_flags, reason_code, properties) -> None:
         self.connected.clear()
+        self._connection_error('connection lost')
         self.wake_requested.set()
+
+    def diagnostics(self) -> dict:
+        with self._diagnostic_lock:
+            return dict(self._diagnostic)
+
+    def _connection_error(self, error: str) -> None:
+        with self._diagnostic_lock:
+            changed = self._diagnostic['state'] != 'DISCONNECTED' or self._diagnostic['last_error'] != error
+            self._diagnostic.update(state='DISCONNECTED', last_error=error, publication_state='offline')
+        if changed:
+            self.log.warning('MQTT %s; retry delay 60s, connect timeout 5s', error)
+
+    def _on_connect_fail(self, client, userdata) -> None:
+        self.connected.clear()
+        self._connection_error('connection failed')
+
+    def _on_publish(self, client, userdata, mid, reason_code=None, properties=None) -> None:
+        with self._diagnostic_lock:
+            if self._pending_ack.pop(mid, None) is None:
+                return
+            if getattr(reason_code, 'is_failure', False):
+                if len(self._rejected_ack) >= 64:
+                    self._rejected_ack.pop()
+                self._rejected_ack.add(mid)
+                self._diagnostic.update(publication_state='failed', last_error='PUBACK rejected')
+                return
+            self._diagnostic.update(last_ack=datetime.now(timezone.utc).isoformat(), publication_state='acknowledged', last_error=None)
 
     def _setting_key(self, topic: str) -> str | None:
         prefix = f"{self.topics.settings_prefix}/"
@@ -378,6 +432,8 @@ class MqttBridge(MqttEvents):
             self.wake_requested.set()
 
     def start(self) -> None:
+        with self._diagnostic_lock:
+            self._diagnostic['state'] = 'CONNECTING'
         self.client.connect_async(self.config.host, self.config.port, self.config.keepalive_seconds)
         self.client.loop_start()
 
@@ -402,14 +458,39 @@ class MqttBridge(MqttEvents):
         if not self.connected.is_set():
             return False
         try:
-            info = self.client.publish(topic, payload=payload, qos=1, retain=retain)
-            if getattr(info, "rc", 1) != 0:
-                return False
+            # Serialize publish/MID registration against the network callback:
+            # a fast broker must not ACK before its QoS1 MID is registered.
+            with self._diagnostic_lock:
+                info = self.client.publish(topic, payload=payload, qos=1, retain=retain)
+                if getattr(info, 'rc', 1) != 0:
+                    self._diagnostic.update(publication_state='failed', last_error='publish rejected locally')
+                    return False
+                mid = getattr(info, 'mid', None)
+                if isinstance(mid, int):
+                    self._rejected_ack.discard(mid)
+                    if len(self._pending_ack) >= 64:
+                        self._pending_ack.pop(next(iter(self._pending_ack)))
+                    self._pending_ack[mid] = True
+                self._diagnostic['publication_state'] = 'awaiting PUBACK'
             info.wait_for_publish(timeout=self.publish_timeout_seconds)
-            is_published = getattr(info, "is_published", None)
-            return bool(is_published()) if callable(is_published) else True
+            is_published = getattr(info, 'is_published', None)
+            complete = bool(is_published()) if callable(is_published) else False
+            if complete:
+                # All publications here are QoS1: Paho marks completion only
+                # after PUBACK. Queue admission/timeout is never an ACK.
+                with self._diagnostic_lock:
+                    if mid in self._rejected_ack:
+                        self._rejected_ack.discard(mid)
+                        return False
+                    self._pending_ack.pop(mid, None)
+                    self._diagnostic.update(last_ack=datetime.now(timezone.utc).isoformat(), publication_state='acknowledged', last_error=None)
+            else:
+                with self._diagnostic_lock:
+                    self._diagnostic.update(publication_state='awaiting PUBACK', last_error='PUBACK timeout')
+            return complete
         except Exception:
-            self.log.exception("MQTT publish failed: %s", topic)
+            with self._diagnostic_lock:
+                self._diagnostic.update(publication_state='failed', last_error='publish failed')
             return False
 
     @staticmethod
@@ -450,6 +531,9 @@ class MqttBridge(MqttEvents):
             json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
             retain=True,
         )
+
+    def publish_host_identity(self, payload: dict[str, str]) -> bool:
+        return self._publish(f'{self.topics.base}/host_identity', json.dumps(payload), retain=True)
 
     def publish_state(self, payload: dict[str, object]) -> bool:
         return self._publish(

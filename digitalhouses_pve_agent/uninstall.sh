@@ -102,7 +102,7 @@ rm -f -- /etc/systemd/system/digitalhouses_pve_agent-update.service
 rm -f -- /etc/systemd/system/digitalhouses_pve_agent-update-recover.service
 rm -f -- /usr/local/libexec/digitalhouses-pve-agent-update-runner
 rm -f -- "${UNIT_FILE}"
-rm -f -- "${ROOT_GUIDE}"
+rm -f -- "${ROOT_GUIDE}" /root/dh-pve-agent.txt /usr/local/bin/dh-pve-agent
 rm -rf -- "${APP_DIR}"
 
 if [[ "${purge}" -eq 1 ]]; then

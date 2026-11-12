@@ -190,15 +190,12 @@ def test_restart_retained_command_is_ignored_but_live_press_is_accepted():
 
 def test_mqtt_connection_subscribes_to_restart_command():
     topics = _topics()
-    bridge = object.__new__(MqttBridge)
-    MqttEvents.__init__(bridge, topics, RuntimeSettings())
-    bridge.connected = threading.Event()
-    bridge.wake_requested = threading.Event()
-    bridge.log = logging.getLogger(__name__)
-
     class Client:
         def __init__(self):
             self.subscriptions = []
+
+        def will_set(self, *args, **kwargs):
+            pass
 
         def subscribe(self, topic, qos=0):
             self.subscriptions.append((topic, qos))
@@ -207,6 +204,10 @@ def test_mqtt_connection_subscribes_to_restart_command():
             return None
 
     client = Client()
+    bridge = MqttBridge(_mqtt(), topics, RuntimeSettings(), {}, client=client)
+    bridge._connection_error("connection failed")
+    assert bridge.diagnostics()["last_error"] == "connection failed"
     bridge._on_connect(client, None, None, SimpleNamespace(is_failure=False), None)
 
+    assert bridge.diagnostics()["last_error"] is None
     assert (topics.restart_agent, 1) in client.subscriptions

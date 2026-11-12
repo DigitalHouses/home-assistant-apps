@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.83
+
+- Clear stale MQTT errors after reconnection or a confirmed PUBACK; distinguish NUT sampling failure from a temporarily incomplete MQTT publication at UPS startup.
+
+- Replace NUT UPS test/beeper `upscmd -p PASSWORD` command execution with bounded native NUT socket requests; credentials no longer appear in process arguments, and hardware-changing calls remain restricted to existing allowed actions.
+- Add root-only DH PVE Agent CLI with fast offline status (CPU, memory, disks/SMART, fans RPM, GPU if available, UPS and MQTT), native batch INI editing, strict secret input, idempotent changes, and UPS-gated service restarts.
+- Add unattended installer flags and preprovisioned-INI bootstrap with shared config validation, guarded updates, local root quick reference, and updater backup/rollback of CLI and guide.
+- Continue local PVE/UPS polling and shutdown protection even when MQTT is unavailable at startup or reconnect; bound Paho retries/queue size and distinguish QoS1 PUBACK from local acceptance.
+- Add hostname and route-selected IPv4 as diagnostics in the existing MQTT Discovery device, and a volatile atomic local status snapshot with per-sample freshness.
+- Fix NVMe sysfs controller path derivation. This source change has not been published to a tagged release or deployed to a production host.
+
 ## 0.5.82
 
 - Publish 0% as the numeric fan RPM-percent placeholder whenever a confirmed fan has a readable RPM but Max RPM is unconfigured (0). Actual raw RPM remains unaffected; missing tachometer readings are still unknown. When Max RPM is configured, the agent calculates the true percentage.

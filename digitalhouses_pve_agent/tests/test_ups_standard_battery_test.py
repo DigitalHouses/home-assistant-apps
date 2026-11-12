@@ -89,18 +89,13 @@ def test_standard_button_requires_nut_credentials():
 
 
 def test_executor_uses_only_allowlisted_standard_command():
-    observed = []
-
-    def runner(cmd, **kwargs):
-        observed.append((cmd, kwargs))
-        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
-
+    from nut_socket_fixture import connection_factory
+    connector, connections, addresses = connection_factory()
     config = SimpleNamespace(
         name="ups", host="127.0.0.1", port=3493,
         command_username="operator", command_password="hidden",
         command_timeout_seconds=3,
     )
-    run_ups_battery_test(config, "standard", runner=runner)
-    assert observed[0][0][-1] == "test.battery.start"
-    assert observed[0][1]["check"] is True
-    assert observed[0][1]["timeout"] == 3
+    run_ups_battery_test(config, "standard", connector=connector)
+    assert connections[0].writes[-1] == b"INSTCMD ups test.battery.start\n"
+    assert addresses == [(("127.0.0.1", 3493), 3)]

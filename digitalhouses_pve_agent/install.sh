@@ -16,6 +16,7 @@ STATE_DIR="/var/lib/${PRODUCT_ID}"
 TELEMETRY_STATE_DIR="/var/lib/digitalhouses/${PRODUCT_ID}"
 UNIT_FILE="/etc/systemd/system/${SERVICE_NAME}"
 ROOT_GUIDE="/root/digitalhouses_pve_agent.txt"
+CLI_GUIDE="/root/dh-pve-agent.txt"
 CANONICAL_TOPIC_PREFIX="DigitalHouses/Global/digitalhouses_pve_agent"
 
 LEGACY_APP_NAME="dh_pve_app"
@@ -27,6 +28,26 @@ LEGACY_STATE_DIR="/var/lib/${LEGACY_APP_NAME}"
 LEGACY_UNIT_FILE="/etc/systemd/system/${LEGACY_SERVICE_NAME}"
 LEGACY_ROOT_GUIDE="/root/dh_app_pve.txt"
 LEGACY_TOPIC_PREFIX="DigitalHouses/Global/dh_pve_app"
+
+# Values stay in the native INI. Password flags add stdin sentinels, never
+# password contents to argv. Both secrets are read in flag/--set order.
+NON_INTERACTIVE=0
+CONFIG_SETTINGS=()
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --non-interactive) NON_INTERACTIVE=1; shift ;;
+        --set)
+            if [[ $# -lt 2 ]]; then echo "ERROR: --set requires key=value" >&2; exit 2; fi
+            CONFIG_SETTINGS+=("$2"); shift 2 ;;
+        --mqtt-password-stdin) CONFIG_SETTINGS+=("mqtt_password=-"); shift ;;
+        --ups-command-password-stdin) CONFIG_SETTINGS+=("ups_command_password=-"); shift ;;
+        --help|-h)
+            echo 'Usage: install.sh [--non-interactive] [--set key=value ...] [--mqtt-password-stdin] [--ups-command-password-stdin]'
+            echo 'Secrets: one stdin line per password flag, in argument order. Native INI keys/aliases: /usr/local/bin/dh-pve-agent help'
+            exit 0 ;;
+        *) echo "ERROR: unknown installer argument" >&2; exit 2 ;;
+    esac
+done
 
 if [[ "${EUID}" -ne 0 ]]; then
     echo "Установщик должен быть запущен от root."
@@ -146,6 +167,35 @@ if [[ "${INSTALL_MODE}" == "production" ]]; then
     fi
 fi
 
+# Preflight before replacing the installed app, native config or services.
+PREPARED_CONFIG="${tmp_dir}/native.conf"
+CONFIG_BASE_SHA="-"
+if [[ -f "${CONFIG_FILE}" ]]; then
+    CONFIG_BASE_SHA="$(sha256sum "${CONFIG_FILE}" | cut -d ' ' -f1)"
+    cp -p "${CONFIG_FILE}" "${PREPARED_CONFIG}"
+elif [[ -f "${LEGACY_CONFIG_FILE}" ]]; then
+    cp -p "${LEGACY_CONFIG_FILE}" "${PREPARED_CONFIG}"
+    sed -i -E \
+        "s|^([[:space:]]*topic_prefix[[:space:]]*=[[:space:]]*)${LEGACY_TOPIC_PREFIX}([[:space:]]*)$|\\1${CANONICAL_TOPIC_PREFIX}\\2|" \
+        "${PREPARED_CONFIG}"
+else
+    (umask 0077; printf '[general]\ninstance_id =\nnode_name = PVE\nlog_level = info\n\n[mqtt]\nhost =\n' >"${PREPARED_CONFIG}")
+fi
+PREPARE_FLAGS=()
+[[ "${NON_INTERACTIVE}" -eq 1 ]] && PREPARE_FLAGS+=(--non-interactive)
+PYTHONPATH="${SOURCE_APP}" python3 -m app.install_config \
+    "${PREPARED_CONFIG}" "${PREPARE_FLAGS[@]}" "${CONFIG_SETTINGS[@]}"
+
+if [[ -f "${CONFIG_FILE}" ]]; then
+    PYTHONPATH="${SOURCE_APP}" python3 -c \
+        'import sys; from pathlib import Path; from app.config import load_config; from app.restart_safety import guard_restart; guard_restart(load_config(Path(sys.argv[1])), state_dir=Path(sys.argv[2]))' \
+        "${CONFIG_FILE}" "${STATE_DIR}"
+elif [[ -f "${LEGACY_CONFIG_FILE}" ]]; then
+    PYTHONPATH="${SOURCE_APP}" python3 -c \
+        'import sys; from pathlib import Path; from app.config import load_config; from app.restart_safety import guard_restart; guard_restart(load_config(Path(sys.argv[1])), state_dir=Path(sys.argv[2]))' \
+        "${LEGACY_CONFIG_FILE}" "${LEGACY_STATE_DIR}"
+fi
+
 legacy_runtime_detected=0
 legacy_was_active=0
 legacy_was_enabled=0
@@ -233,96 +283,8 @@ fi
     --disable-pip-version-check \
     -r "${APP_DIR}/requirements.txt"
 
-if [[ ! -f "${CONFIG_FILE}" ]]; then
-    if [[ ! -r /dev/tty ]]; then
-        echo "Первая установка требует терминал для ввода MQTT-параметров."
-        exit 1
-    fi
-
-    while true; do
-        mqtt_host=""
-        mqtt_port="1883"
-        mqtt_user=""
-        mqtt_password=""
-        confirm=""
-
-        while [[ -z "${mqtt_host}" ]]; do
-            printf "MQTT host: " >/dev/tty
-            IFS= read -r mqtt_host </dev/tty
-        done
-
-        printf "MQTT port [1883]: " >/dev/tty
-        IFS= read -r answer </dev/tty
-        [[ -n "${answer}" ]] && mqtt_port="${answer}"
-
-        if ! [[ "${mqtt_port}" =~ ^[0-9]+$ ]] \
-            || ! (( mqtt_port >= 1 && mqtt_port <= 65535 )); then
-            printf "Некорректный MQTT port. Допустимый диапазон: 1-65535.\n" >/dev/tty
-            printf "Повторите ввод MQTT-параметров.\n\n" >/dev/tty
-            continue
-        fi
-
-        printf "MQTT username [optional]: " >/dev/tty
-        IFS= read -r mqtt_user </dev/tty
-
-        printf "MQTT password [optional]: " >/dev/tty
-        IFS= read -r -s mqtt_password </dev/tty
-        printf "\n" >/dev/tty
-
-        printf "\nПроверьте параметры:\n" >/dev/tty
-        printf "  Host:     %s\n" "${mqtt_host}" >/dev/tty
-        printf "  Port:     %s\n" "${mqtt_port}" >/dev/tty
-        printf "  Username: %s\n" "${mqtt_user:-не задан}" >/dev/tty
-        if [[ -n "${mqtt_password}" ]]; then
-            printf "  Password: задан\n" >/dev/tty
-        else
-            printf "  Password: не задан\n" >/dev/tty
-        fi
-
-        printf "\nВсё верно? [y/N]: " >/dev/tty
-        IFS= read -r confirm </dev/tty
-
-        case "${confirm,,}" in
-            y|yes)
-                break
-                ;;
-            *)
-                printf "Повторите ввод MQTT-параметров.\n\n" >/dev/tty
-                ;;
-        esac
-    done
-
-    previous_umask="$(umask)"
-    umask 0077
-    {
-        printf '%s\n' "[general]"
-        printf '%s\n' "instance_id ="
-        printf '%s\n' "node_name = PVE"
-        printf '%s\n' "log_level = info"
-        printf '\n'
-        printf '%s\n' "[mqtt]"
-        printf 'host = %s\n' "${mqtt_host}"
-        printf 'port = %s\n' "${mqtt_port}"
-        printf 'username = %s\n' "${mqtt_user}"
-        printf 'password = %s\n' "${mqtt_password}"
-        printf '%s\n' "topic_prefix = ${CANONICAL_TOPIC_PREFIX}"
-        printf '%s\n' "discovery_prefix = homeassistant"
-        printf '%s\n' "keepalive_seconds = 60"
-        printf '\n'
-        printf '%s\n' "[telemetry]"
-        printf '%s\n' "# Voluntary product telemetry. Default is OFF."
-        printf '%s\n' "# Policy: https://github.com/DigitalHouses/home-assistant-apps/blob/main/docs/standards/PRODUCT_TELEMETRY_POLICY.md"
-        printf '%s\n' "enabled = false"
-        printf '\n'
-        printf '%s\n' "[events]"
-        printf '%s\n' "# PVE problem/recovery notification debounce. 0 disables debounce."
-        printf '%s\n' "pve_problem_debounce_seconds = 30"
-    } >"${CONFIG_FILE}"
-    umask "${previous_umask}"
-fi
-
-chown root:root "${CONFIG_FILE}"
-chmod 0600 "${CONFIG_FILE}"
+PYTHONPATH="${APP_DIR}" "${APP_DIR}/.venv/bin/python" -m app.install_config \
+    --commit "${PREPARED_CONFIG}" "${CONFIG_FILE}" "${CONFIG_BASE_SHA}"
 
 if ! PYTHONPATH="${APP_DIR}" "${APP_DIR}/.venv/bin/python" -m app.main \
     --config "${CONFIG_FILE}" \
@@ -364,6 +326,10 @@ if [[ "${legacy_runtime_detected}" -eq 1 ]]; then
     fi
 fi
 
+install -d -o root -g root -m 0755 /usr/local/bin
+install -o root -g root -m 0750 "${APP_DIR}/bin/dh-pve-agent" /usr/local/bin/dh-pve-agent
+install -o root -g root -m 0600 "${APP_DIR}/dh-pve-agent.txt" "${CLI_GUIDE}"
+
 install -d -o root -g root -m 0755 /usr/local/libexec
 install -o root -g root -m 0755 \
     "${APP_DIR}/bin/digitalhouses-pve-agent-update-runner" \
@@ -379,6 +345,8 @@ install -o root -g root -m 0644 \
     "${APP_DIR}/systemd/${SERVICE_NAME}" \
     "${UNIT_FILE}"
 
+PYTHONPATH="${APP_DIR}" "${APP_DIR}/.venv/bin/python" -c \
+    'from app.config import load_config; from app.restart_safety import guard_restart; from app.main import DEFAULT_CONFIG; guard_restart(load_config(DEFAULT_CONFIG))'
 systemctl daemon-reload
 systemctl enable "${SERVICE_NAME}" >/dev/null
 systemctl restart "${SERVICE_NAME}"
@@ -424,7 +392,7 @@ fi
     cat "${APP_DIR}/digitalhouses_pve_agent.txt"
 } >"${ROOT_GUIDE}"
 chown root:root "${ROOT_GUIDE}"
-chmod 0644 "${ROOT_GUIDE}"
+chmod 0600 "${ROOT_GUIDE}"
 
 echo
 echo "DigitalHouses PVE Agent установлен."
