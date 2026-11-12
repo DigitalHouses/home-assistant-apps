@@ -73,19 +73,24 @@ class ReleaseDeploymentContractTests(unittest.TestCase):
         self.assertIn("--migration-mqtt-cleanup", installer)
         self.assertIn(".ha_mqtt_identity_migrated_v1", installer)
 
-    def test_readme_production_install_uses_current_release_tag(self):
-        version = VERSION.read_text(encoding="utf-8").strip()
-        expected_tag = f"digitalhouses_plex_agent-v{version}"
+    def test_readme_production_install_selects_latest_stable_release(self):
         readme = README.read_text(encoding="utf-8")
-
-        self.assertIn(f'RELEASE_TAG="{expected_tag}"', readme)
+        bootstrap = (APP_ROOT / "install-latest.sh").read_text(encoding="utf-8")
         self.assertIn(
-            "raw.githubusercontent.com/DigitalHouses/home-assistant-apps/"
-            "${RELEASE_TAG}/digitalhouses_plex_agent/install.sh",
+            "raw.githubusercontent.com/DigitalHouses/home-assistant-apps/main/"
+            "digitalhouses_plex_agent/install-latest.sh",
             readme,
         )
+        self.assertIn("qm guest exec", readme)
+        self.assertIn("digitalhouses_plex_agent/BUILD_INFO", readme)
+        self.assertIn("digitalhouses_plex_agent-v", bootstrap)
         self.assertIn(
-            'DIGITALHOUSES_SOURCE_REF="${RELEASE_TAG}"',
+            'DIGITALHOUSES_SOURCE_REF="${RELEASE_TAG}" bash "${installer}"',
+            bootstrap,
+        )
+        self.assertNotIn(
+            "raw.githubusercontent.com/DigitalHouses/home-assistant-apps/main/"
+            "digitalhouses_plex_agent/install.sh",
             readme,
         )
 

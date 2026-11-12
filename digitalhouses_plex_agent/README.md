@@ -30,29 +30,31 @@ Lovelace example: [plex-dashboard.yaml](examples/lovelace/plex-dashboard.yaml)
 
 ## Install / update
 
-Production install/update is pinned to a published canonical release tag. The 0.8.6 source uses the following tag in install examples; these commands become available after that release is published:
+**Recommended: install or update to the latest published stable Plex Agent release.** Users do not need to know the version or tag. The small bootstrap hosted on `main` finds the highest stable **Plex Agent** GitHub Release, excluding other products, drafts and prereleases, then downloads the actual installer from that release's canonical tag. The production installer still validates and records the exact tag and commit; `main` is a bootstrap entry point, **not** a production source ref.
 
-```text
-digitalhouses_plex_agent-v0.8.6
-```
-
-From a root shell:
+From a root shell **inside the Linux media server**:
 
 ```bash
-RELEASE_TAG="digitalhouses_plex_agent-v0.8.6"
-curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/${RELEASE_TAG}/digitalhouses_plex_agent/install.sh" \
-  | DIGITALHOUSES_SOURCE_REF="${RELEASE_TAG}" bash
+set -o pipefail
+curl -fsSL https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/main/digitalhouses_plex_agent/install-latest.sh | bash
 ```
 
-From a sudo-capable user:
+From a sudo-capable shell **inside the Linux media server**:
 
 ```bash
-RELEASE_TAG="digitalhouses_plex_agent-v0.8.6"
-curl -fsSL "https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/${RELEASE_TAG}/digitalhouses_plex_agent/install.sh" \
-  | sudo env DIGITALHOUSES_SOURCE_REF="${RELEASE_TAG}" bash
+set -o pipefail
+curl -fsSL https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/main/digitalhouses_plex_agent/install-latest.sh | sudo bash
 ```
 
-Run the same release-tag command to reinstall that exact release. To update, change `RELEASE_TAG` to a newer published DigitalHouses Plex Agent release. Existing configuration is preserved.
+When working from the **Proxmox root console**, execute the installer **inside the media VM**, not on PVE. For example, VM 2250 is `mediaserver-serzhan` (replace the VM ID for other installations):
+
+```bash
+qm guest exec 2250 --timeout 0 -- /bin/bash -lc 'set -o pipefail; curl -fsSL https://raw.githubusercontent.com/DigitalHouses/home-assistant-apps/main/digitalhouses_plex_agent/install-latest.sh | bash'
+```
+
+The guest must have QEMU Guest Agent, Python 3 and curl for the bootstrap. Unattended `qm guest exec` also needs an existing native config because it cannot answer first-install prompts. The installer preserves existing settings.
+
+**For deliberate rollback or reproducible installs only**, an administrator can still choose a previously published, exact release tag through the original `install.sh` interface. Normal installs do not require it.
 
 For unattended first installation, provision the **native INI** at `/etc/digitalhouses_plex_agent/digitalhouses_plex_agent.conf` before running the same installer. Use the complete [example INI](examples/digitalhouses_plex_agent.conf.example), set `[mqtt] host` to your broker, and protect credentials (root owner, mode `0600` before installation). Ansible can manage that same file with `become: true`, `mode: "0600"`, and **`no_log: true`** for tasks carrying secrets. The installer grants the existing service group read access and validates the INI before activating the agent. No installer-specific MQTT variable schema is needed. Existing config is preserved, including on unattended updates. Without an existing native config or a terminal for first-time prompts, installation fails before changing services; it never starts an unconfigured agent.
 
