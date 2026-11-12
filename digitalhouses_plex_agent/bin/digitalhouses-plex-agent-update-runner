@@ -35,6 +35,8 @@ BACKUP = PRIVATE / "update-backup"
 LOCK = PRIVATE / "update.lock"
 TAG_RE = re.compile(r"^digitalhouses_plex_agent-v(\d+)\.(\d+)\.(\d+)$")
 FILES = {
+    "cli": Path("/usr/local/bin/dh-plex-agent"),
+    "root_reference": Path("/root/dh-plex-agent.txt"),
     "config": CONFIG, "service": UNIT, "runner": RUNNER,
     "gpu_unit": Path("/etc/systemd/system/digitalhouses_plex_agent_gpu_helper.service"),
     "token": Path("/etc/digitalhouses_plex_agent/plex_local_admin_token"),

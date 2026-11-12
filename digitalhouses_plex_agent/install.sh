@@ -86,6 +86,16 @@ if [[ "${EUID}" -ne 0 ]]; then
     exit 1
 fi
 
+# Native configuration preflight: unattended provisioning uses the existing INI,
+# not an installer-specific MQTT settings interface. Fail before changing services.
+if [[ ! -f "${CONFIG_FILE}" && ! -f "${LEGACY_CONFIG_FILE}" ]] && \
+    ! ( : </dev/tty ) 2>/dev/null; then
+    echo "Unattended installation requires the native INI at ${CONFIG_FILE}."
+    echo "Provision it first (for example with Ansible); existing configuration is preserved."
+    echo "No unconfigured agent will be started. See the product README."
+    exit 1
+fi
+
 need_apt=0
 command -v git >/dev/null 2>&1 || need_apt=1
 command -v python3 >/dev/null 2>&1 || need_apt=1
@@ -321,8 +331,8 @@ chown -R root:root "${APP_DIR}"
 
 config_created=0
 if [[ ! -f "${CONFIG_FILE}" ]]; then
-    if [[ ! -r /dev/tty ]]; then
-        echo "First installation requires an interactive terminal for MQTT settings."
+    if ! ( : </dev/tty ) 2>/dev/null; then
+        echo "Provision the native INI at ${CONFIG_FILE} before unattended installation."
         if [[ "${rollback_needed}" -eq 1 ]]; then
             restore_legacy_runtime "migrated configuration is unavailable"
             rollback_needed=0
@@ -453,6 +463,27 @@ VERSION="${SOURCE_VERSION}"
 chown root:root "${APP_DIR}/BUILD_INFO"
 chmod 0644 "${APP_DIR}/BUILD_INFO"
 
+install -d -o root -g root -m 0755 /usr/local/bin
+install -o root -g root -m 0750 \
+    "${APP_DIR}/bin/dh-plex-agent" \
+    "/usr/local/bin/dh-plex-agent"
+# Compact operator reference; the INI itself may contain credentials.
+cat >"/root/dh-plex-agent.txt" <<'DH_PLEX_REFERENCE'
+DIGITALHOUSES PLEX AGENT
+/usr/local/bin/dh-plex-agent status
+/usr/local/bin/dh-plex-agent restart
+/usr/local/bin/dh-plex-agent help
+# Config may contain secrets; do not share its output.
+cat /etc/digitalhouses_plex_agent/digitalhouses_plex_agent.conf
+/usr/local/bin/dh-plex-agent set mqtt_ip=192.0.2.10
+/usr/local/bin/dh-plex-agent set mqtt_port=1883
+/usr/local/bin/dh-plex-agent set log_level=info
+/usr/local/bin/dh-plex-agent set mqtt_ip=192.0.2.10 mqtt_port=1883
+Full reference: https://github.com/DigitalHouses/home-assistant-apps/tree/main/digitalhouses_plex_agent
+DH_PLEX_REFERENCE
+chown root:root "/root/dh-plex-agent.txt"
+chmod 0600 "/root/dh-plex-agent.txt"
+
 install -o root -g root -m 0644 \
     "${APP_DIR}/systemd/${SERVICE_NAME}" \
     "${UNIT_FILE}"
@@ -570,7 +601,8 @@ echo "Version: ${VERSION}"
 echo "Source: ${SOURCE_REF}"
 echo "Commit: ${SOURCE_SHA}"
 echo "Config: ${CONFIG_FILE}"
-echo "Status: systemctl status ${APP_NAME}"
+echo "Status: /usr/local/bin/dh-plex-agent status"
+echo "Quick reference: /root/dh-plex-agent.txt"
 if [[ "${migration_performed}" -eq 1 ]]; then
     echo "Legacy runtime retained for rollback: ${LEGACY_CONFIG_DIR}, ${LEGACY_STATE_DIR}"
 fi

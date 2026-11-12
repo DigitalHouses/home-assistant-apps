@@ -110,6 +110,21 @@ class GpuEventTests(unittest.TestCase):
         self.assertIsNone(self.observe_twice(tracker, failed))
         self.assertEqual(tracker.outbox, [])
 
+    def test_oversized_persisted_outbox_is_trimmed_on_load(self):
+        self.state.write_text(json.dumps({"outbox": [{"event_id": str(i)} for i in range(40)]}))
+        tracker = self.tracker()
+        self.assertEqual(len(tracker.outbox), 32)
+        self.assertEqual(len(json.loads(self.state.read_text())["outbox"]), 32)
+        self.assertEqual(tracker.outbox[0]["event_id"], "8")
+
+    def test_outbox_is_bounded_and_keeps_latest_events_after_reload(self):
+        tracker = self.tracker()
+        for i in range(40):
+            self.observe_twice(tracker, gpu(name=f"driver_{i}"))
+        self.assertEqual(len(tracker.outbox), 32)
+        self.assertEqual(tracker.outbox[0]["driver_name"], "driver_8")
+        self.assertEqual(self.tracker().outbox, tracker.outbox)
+
     def test_mqtt_discovery_event_is_same_device_and_diagnostic_nonretained(self):
         config_file = Path(self.tmp.name) / "app.conf"
         config_file.write_text("[mqtt]\nhost = mqtt\n")

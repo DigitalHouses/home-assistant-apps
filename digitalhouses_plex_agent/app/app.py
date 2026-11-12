@@ -37,6 +37,7 @@ from .process_collector import (
     collect_raw_processes,
     verify_proc_visibility,
 )
+from .runtime_status import HostIdentity, RuntimeStatus, STATUS_INTERVAL
 from .state_store import StateStore
 from .telemetry import (
     DEFAULT_TELEMETRY_STATE_FILE,
@@ -202,9 +203,37 @@ def run(config: AppConfig) -> int:
         "temperature_c": None,
     }
 
+    runtime_status = RuntimeStatus(CONTROL_STATE_DIR / "runtime_status.json", build)
+    identity = HostIdentity(config.mqtt.host, config.mqtt.port)
+    paused = False
+    has_connected = False
+    host_pending = True
+
+    def write_status(*, force: bool = False) -> None:
+        runtime_status.update(mqtt.diagnostics(), api_runtime.status, identity.value, force=force)
+
     try:
         while not stop_event.is_set():
+            # Clear before testing connectivity, so a subsequent callback wake
+            # cannot be lost between the condition check and blocking wait.
+            mqtt.wake_requested.clear()
             now = time.monotonic()
+            online = mqtt.connected.is_set()
+            resumed = online and (paused or not has_connected)
+            host_pending = identity.refresh(now=now, force=resumed) or host_pending
+            write_status()
+            if not online:
+                if not paused:
+                    log.info("MQTT_PAUSED: foreground Plex monitoring suspended")
+                paused = True
+                # Ignore overdue deadlines entirely while offline. Paho's own
+                # network thread reconnects; the helper service is independent.
+                mqtt.wake_requested.wait(STATUS_INTERVAL)
+                continue
+            if paused:
+                log.info("MQTT connected: resuming foreground Plex monitoring")
+            paused = False
+            has_connected = True
             card.tick()
             # Foreground user operations are acknowledged before the collector.
             if mqtt.check_updates_requested.is_set():
@@ -246,8 +275,8 @@ def run(config: AppConfig) -> int:
                 # A new Refresh command never takes over an active operation.
                 mqtt.refresh_requested.clear()
                 refresh = False
-            republish = mqtt.republish_requested.is_set()
-            due = now >= next_poll
+            republish = mqtt.republish_requested.is_set() or resumed
+            due = now >= next_poll or resumed
             uptime_due = now >= next_uptime_heartbeat
 
             if not (refresh or republish or due or uptime_due):
@@ -255,6 +284,7 @@ def run(config: AppConfig) -> int:
                     max(0.0, next_poll - now),
                     max(0.0, next_uptime_heartbeat - now),
                     config.general.poll_interval_seconds,
+                    STATUS_INTERVAL,
                 )
                 mqtt.wake_requested.wait(wait_for)
                 mqtt.wake_requested.clear()
@@ -277,14 +307,14 @@ def run(config: AppConfig) -> int:
                     card.publish()
                     gpu_events.flush(mqtt.publish_diagnostic_event)
                     updates.publish_if_changed(mqtt.publish_update_state, force=True)
-                    if publication.has_cache and publication.republish_cached():
-                        next_uptime_heartbeat = (
-                            time.monotonic() + UPTIME_HEARTBEAT_SECONDS
-                        )
+                    host_pending = True
 
-            should_collect = due or refresh or last_snapshot is None
+            should_collect = due or refresh or republish or last_snapshot is None
 
             if should_collect:
+                # Outbox PUBACK waits above can outlive the connection.
+                if not mqtt.connected.is_set():
+                    continue
                 previous_scanner_running = (
                     last_snapshot.activity.scanner_running
                     if last_snapshot is not None
@@ -354,6 +384,8 @@ def run(config: AppConfig) -> int:
                         + config.general.poll_interval_seconds
                     )
 
+                if not mqtt.connected.is_set():
+                    continue
                 gpu_payload = gpu_collector.collect()
                 gpu_payload.update(gpu_driver_info(gpu_payload.get("pci_address")))
                 problem_code, problem_message = gpu_operational_problem(gpu_payload)
@@ -368,9 +400,11 @@ def run(config: AppConfig) -> int:
                     and last_snapshot is not None
                     and not last_snapshot.activity.scanner_running
                 )
+                if not mqtt.connected.is_set():
+                    continue
                 api_result = api_runtime.collect(
                     now=time.monotonic(),
-                    refresh=refresh,
+                    refresh=refresh or resumed,
                     scanner_finished=scanner_finished,
                 )
 
@@ -402,6 +436,10 @@ def run(config: AppConfig) -> int:
                     if mqtt.connected.is_set():
                         mqtt.publish_discovery()
 
+            if host_pending and mqtt.connected.is_set():
+                if mqtt.publish_state_group("host", identity.value):
+                    host_pending = False
+
             if refresh:
                 mqtt.refresh_requested.clear()
 
@@ -421,6 +459,7 @@ def run(config: AppConfig) -> int:
                     api_runtime.payload(),
                     gpu_payload=gpu_payload,
                     manual_refresh=refresh,
+                    force=republish or resumed,
                 )
                 if published:
                     next_uptime_heartbeat = (
@@ -441,15 +480,16 @@ def run(config: AppConfig) -> int:
                 mqtt.connected.is_set()
                 and time.monotonic() >= next_uptime_heartbeat
             ):
-                if publication.publish_uptime_heartbeat():
-                    next_uptime_heartbeat = (
-                        time.monotonic() + UPTIME_HEARTBEAT_SECONDS
-                    )
+                publication.publish_uptime_heartbeat()
+                # A failed heartbeat is retried at a bounded cadence too.
+                next_uptime_heartbeat = time.monotonic() + UPTIME_HEARTBEAT_SECONDS
+            write_status()
 
     finally:
         if telemetry_runner is not None:
             telemetry_runner.stop()
         mqtt.stop()
+        write_status(force=True)
         log.info("DigitalHouses Plex Agent stopped")
 
     return 0

@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.8.6
+
+- Fix the MQTT-offline overdue-heartbeat busy loop. Suspend foreground process, GPU and Plex API collection in `MQTT_PAUSED`, keep the existing systemd service alive, and collect a fresh snapshot when the broker reconnects.
+- Bound MQTT reconnects (60-second delay, 5-second connection timeout) and pending QoS 1 messages; never enqueue new publications while disconnected. Keep GPU diagnostic events until broker PUBACK, with a durable 32-event outbox that drops the oldest event on overflow.
+- Add the root/admin native `/usr/local/bin/dh-plex-agent` CLI: offline-capable status, restart, help and atomic batch configuration for all 21 native settings, with safe password input and idempotent service restarts.
+- Write a compact root quick reference during install/update; support unattended first installation with a preprovisioned native INI and refuse to start unconfigured.
+- Add Linux hostname and route-selected local IPv4 diagnostic sensors to the existing MQTT Discovery device, plus local atomic runtime status without secrets.
+- Preserve installed runtime identity, existing MQTT/HA identifiers, updater and separate GPU helper. No production deployment or published-release acceptance is implied by this source change.
+
 ## 0.8.5
 
 - Add the Home Assistant MQTT event entity `event.dh_plex_agent_gpu_diagnostic` for confirmed Intel GPU availability and PCI kernel-driver binding transitions.

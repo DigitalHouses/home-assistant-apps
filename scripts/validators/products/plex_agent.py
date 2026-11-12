@@ -12,6 +12,8 @@ EXPECTED_INSTANCE_ID = "plex"
 EXPECTED_DEVICE_ID = "digitalhouses_plex_agent_plex"
 
 EXPECTED_ENTITY_IDS = {
+    "hostname": "sensor.dh_plex_agent_hostname",
+    "ip": "sensor.dh_plex_agent_ip",
     "activity": "sensor.dh_plex_agent_activity",
     "current_item": "sensor.dh_plex_agent_current_item",
     "server_running": "binary_sensor.dh_plex_agent_server_running",
@@ -119,6 +121,9 @@ def validate_plex_agent(
         [
             app / "requirements.txt",
             app / "app/config.py",
+            app / "app/cli.py",
+            app / "app/runtime_status.py",
+            app / "bin/dh-plex-agent",
             app / "app/models.py",
             app / "app/gpu_collector.py",
             app / "app/gpu_events.py",
@@ -263,6 +268,8 @@ def validate_plex_agent(
             fail(f"Plex Agent command must be non-retained: {key}")
 
     grouped = {
+        "hostname": "host",
+        "ip": "host",
         "activity": "activity",
         "cpu": "cpu",
         "playback_count": "playback",

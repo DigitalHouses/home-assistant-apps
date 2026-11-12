@@ -21,6 +21,7 @@ GPU_EVENT_TYPES = (
     "gpu_driver_restored",
     "gpu_driver_changed",
 )
+MAX_OUTBOX_EVENTS = 32
 DEFAULT_GPU_EVENT_STATE = Path("/var/lib/digitalhouses_plex_agent/gpu_events.json")
 
 
@@ -121,9 +122,10 @@ def _event(event_type: str, previous: Mapping[str, object] | None,
 class GpuEventTracker:
     """Two-sample stable transitions; persist previous confirmed state/outbox.
 
-    Publish is non-retained QoS 1. MQTT rc success only acknowledges local queueing,
-    not Home Assistant's consumption. On reconnect, already queued events are not
-    replayed; failed publishes remain on disk for the next attempt.
+    Publish is non-retained QoS 1. The publisher returns success only after
+    broker PUBACK (not Home Assistant consumption). Unacknowledged events remain
+    on disk for retry. At most 32 events are retained; overflow drops the oldest
+    event, preserving the most recent operational history.
     """
 
     def __init__(
@@ -146,11 +148,13 @@ class GpuEventTracker:
         )
         pending = saved.get("outbox")
         self.outbox: list[dict[str, object]] = (
-            [dict(x) for x in pending if isinstance(x, dict)]
+            [dict(x) for x in pending if isinstance(x, dict)][-MAX_OUTBOX_EVENTS:]
             if isinstance(pending, list) else []
         )
         self._candidate: dict[str, object] | None = None
         self._candidate_count = 0
+        if isinstance(pending, list) and len(pending) > MAX_OUTBOX_EVENTS:
+            self._save()
 
     def _save(self) -> None:
         self.store.save({"confirmed": self.confirmed, "outbox": self.outbox})
@@ -181,6 +185,9 @@ class GpuEventTracker:
         event_type = _transition(previous, current)
         if event_type:
             self.outbox.append(_event(event_type, previous, current, self.now()))
+            if len(self.outbox) > MAX_OUTBOX_EVENTS:
+                self.outbox = self.outbox[-MAX_OUTBOX_EVENTS:]
+                self.log.warning("GPU event outbox full; dropped oldest event")
         self._save()
         return event_type
 
