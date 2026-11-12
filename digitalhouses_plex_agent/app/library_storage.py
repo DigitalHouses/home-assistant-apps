@@ -4,12 +4,21 @@ from __future__ import annotations
 from copy import deepcopy
 import hashlib
 import os
+import stat
 
 from .plex_api import LibraryInfo
 
 
 def storage_id(mountpoint: str) -> str:
     return hashlib.sha256(mountpoint.encode()).hexdigest()[:12]
+
+
+def _library_path_is_directory(path: str) -> bool:
+    try:
+        return stat.S_ISDIR(os.stat(path).st_mode)
+    except PermissionError:
+        # A restricted library child does not mean its dataset is unavailable.
+        return True
 
 
 class LibraryStorageRuntime:
@@ -41,8 +50,10 @@ class LibraryStorageRuntime:
             valid = False
             try:
                 real = os.path.realpath(path)
-                if not os.path.isdir(real):
-                    raise OSError('library directory missing')
+                # The agent need not traverse the media directories. EACCES
+                # on a child path does not prevent measuring its dataset.
+                if not _library_path_is_directory(real):
+                    raise OSError('library path is not a directory')
                 candidate = real
                 while not os.path.ismount(candidate):
                     parent = os.path.dirname(candidate)
