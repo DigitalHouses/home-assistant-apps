@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased (development)
+## 0.5.83
 
 - Clear stale MQTT errors after reconnection or a confirmed PUBACK; distinguish NUT sampling failure from a temporarily incomplete MQTT publication at UPS startup.
 
