@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.8.16
+
+- Add a compact full-width Mushroom card directly under the Plex heading to display the Linux media server hostname and IPv4 from existing MQTT host sensors. Show clear unavailable fallbacks instead of raw unknown states. No new entities or backend changes.
+- Keep the approved playback/transcoding layout, background tasks, CPU/GPU graphs and compact System/Media bars unchanged. Manually configured Lovelace panels require updating the dashboard YAML.
+
 ## 0.8.15
 
 - Restore compact Plex System/Media storage progress cards matching the approved DH PVE Agent layout: progress bar to the right, not in a dedicated row below the text.
