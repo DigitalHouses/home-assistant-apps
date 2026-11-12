@@ -275,6 +275,73 @@ def ups_connection_details(
     return target, None
 
 
+def physical_disk_vm_assignments(
+    config_dir: Path = Path('/etc/pve/qemu-server'),
+) -> dict[str, tuple[str, str]]:
+    """Resolve only explicit physical block disk mappings in VM configs.
+
+    Returns canonical physical host device path -> (VMID, by-id/config path).
+    A single host device assigned to multiple VMs is ambiguous and omitted.
+    This is only a read of local Proxmox configuration; no hardware probing.
+    """
+    candidates: dict[str, list[tuple[str, str]]] = {}
+    try:
+        configs = sorted(config_dir.glob('*.conf'))
+    except OSError:
+        return {}
+    for conf in configs:
+        if not re.fullmatch(r'[0-9]+\.conf', conf.name):
+            continue
+        try:
+            lines = conf.read_text(encoding='utf-8').splitlines()
+        except (OSError, UnicodeError):
+            continue
+        for line in lines:
+            match = re.match(r'^(?:scsi|sata|virtio|ide)[0-9]+:\s*(/dev/[^,\s]+)', line)
+            if not match:
+                continue
+            disk_path = match.group(1)
+            if not (
+                disk_path.startswith(('/dev/disk/by-id/', '/dev/disk/by-path/'))
+                or re.fullmatch(r'/dev/(?:sd[a-z]+|vd[a-z]+|nvme[0-9]+n[0-9]+)', disk_path)
+            ):
+                continue
+            try:
+                actual = str(Path(disk_path).resolve(strict=True))
+            except (OSError, RuntimeError):
+                continue
+            candidates.setdefault(actual, []).append((conf.stem, disk_path))
+    return {path: matches[0] for path, matches in candidates.items() if len(matches) == 1}
+
+
+def disk_vm_passthrough(info: Mapping[str, object], direct: Mapping[str, tuple[str, str]]) -> str | None:
+    """Describe a proven physical disk assignment, not an inferred owner."""
+    source = info.get('source_type')
+    if source == 'guest':
+        vmid = info.get('source_guest_id')
+        if not isinstance(vmid, str) or not vmid.isdigit():
+            return None
+        pci = info.get('passthrough_pci_address')
+        if isinstance(pci, str) and re.fullmatch(r'[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}\.[0-7]', pci):
+            return f'PCI Passthrough (controller) | {pci} | VM {vmid}'
+        # Multiple controllers cannot be mapped to an individual disk.
+        hostpci = info.get('passthrough_hostpci')
+        if isinstance(hostpci, str) and hostpci:
+            return f'PCI Passthrough (controller) | VM {vmid} | address unresolved'
+        return f'Guest SMART | VM {vmid} | passthrough type unknown'
+    device = info.get('device_path')
+    if not isinstance(device, str) or not device.startswith('/dev/'):
+        return None
+    try:
+        canonical = str(Path(device).resolve(strict=True))
+    except (OSError, RuntimeError):
+        return None
+    assigned = direct.get(canonical)
+    if assigned is None:
+        return None
+    return f'Disk Passthrough | {assigned[1]} | VM {assigned[0]}'
+
+
 def print_status(path: Path, runtime_path: Path = RUNTIME_STATUS) -> None:
     """Compact human-readable local summary, never a live hardware probe."""
     from .runtime_status import host_identity, read_status, sample_live, timestamp
@@ -351,7 +418,21 @@ def print_status(path: Path, runtime_path: Path = RUNTIME_STATUS) -> None:
             if not isinstance(gpu_info, dict):
                 continue
             name = str(gpu_info.get('name') or gpu_info.get('model') or gpu_id)
-            print(f'  GPU {name}: {temperature(gpu_info.get("temperature_c"))}')
+            connection = gpu_info.get('connection')
+            source_id = gpu_info.get('source_id')
+            pci = gpu_info.get('pci_address')
+            valid_pci = pci if isinstance(pci, str) and re.fullmatch(r'[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}[.][0-7]', pci) else None
+            temp = gpu_info.get('temperature_c')
+            temp_suffix = f' | {temperature(temp)}' if temp is not None else ''
+            if connection == 'passthrough_pci' and gpu_info.get('source_type') == 'vm' and str(source_id).isdigit():
+                print(f'  GPU {name}: PCI Passthrough | {valid_pci or "PCI unknown"} | VM {source_id}{temp_suffix}')
+            elif connection == 'passthrough_or_reserved':
+                print(f'  GPU {name}: {temperature(temp)} | {valid_pci or "PCI unknown"} | VFIO (VM unknown)')
+            elif connection == 'shared_dri' and gpu_info.get('source_type') == 'lxc':
+                print(f'  GPU {name}: {temperature(temp)} | Shared DRI | {valid_pci or "PCI unknown"} | LXC {source_id}')
+            else:
+                identifier = f' | PCI {valid_pci}' if valid_pci else ''
+                print(f'  GPU {name}: {temperature(temp)}{identifier}')
 
     disk, disk_ok = sample('disk_temperature')
     smart, smart_ok = sample('smart')
@@ -360,6 +441,7 @@ def print_status(path: Path, runtime_path: Path = RUNTIME_STATUS) -> None:
     smart_data = smart.get('data') if smart_ok else {}
     smart_data = smart_data if isinstance(smart_data, dict) else {}
     print('DISKS')
+    direct_disk_map = physical_disk_vm_assignments() if disk_ok else {}
     if not disk_data:
         print('  STALE/UNAVAILABLE' if not disk_ok else '  No detected disks')
     else:
@@ -372,8 +454,10 @@ def print_status(path: Path, runtime_path: Path = RUNTIME_STATUS) -> None:
             health = smart_data.get(disk_id) if smart_ok else None
             health = health if isinstance(health, dict) else {}
             health_str = str(health.get('health_state')) if health.get('fresh') is not False and health.get('health_state') else 'unknown'
-            via_guest = f' | VM {info.get("source_guest_id")}' if info.get('source_type') == 'guest' else ''
-            print(f'  {name}: {label} | SMART {health_str}{via_guest}')
+            print(f'  {name}: {label} | SMART {health_str}')
+            attachment = disk_vm_passthrough(info, direct_disk_map)
+            if attachment:
+                print(f'    {attachment}')
 
     fans, fan_ok = sample('fans')
     fan_data = fans.get('data') if fan_ok else {}

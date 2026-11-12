@@ -1,5 +1,6 @@
 DIGITALHOUSES PVE AGENT
 /usr/local/bin/dh-pve-agent status
+# GPU/DISKS sections show verified PCI/disk passthrough identifiers and owner VMIDs.
 # UPS section includes NUT endpoint, selected SNMP UPS address, status, runtime and load.
 /usr/local/bin/dh-pve-agent restart
 /usr/local/bin/dh-pve-agent update

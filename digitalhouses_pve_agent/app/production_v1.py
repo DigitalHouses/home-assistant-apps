@@ -368,8 +368,25 @@ class ResilientProductionCollectors(ProductionCollectors):
                         "source_guest_id": previous.get("source_guest_id"),
                         "source_guest_name": previous.get("source_guest_name"),
                         "source_device_path": previous.get("source_device_path"),
+                        "passthrough_hostpci": previous.get("passthrough_hostpci"),
                     }
                 )
+                # A QGA disk is known to live behind one or more PCI storage
+                # controllers. Assert its physical PCI address only when the
+                # native PVE topology identifies exactly one such controller.
+                topology_snapshot = getattr(self.topology, "snapshot", None)
+                matched = set()
+                if topology_snapshot is not None:
+                    keys = set(str(previous.get("passthrough_hostpci") or "").split(","))
+                    for pci_address, assignment in topology_snapshot.pci.items():
+                        if (
+                            str(assignment.owner_id) == str(previous.get("source_guest_id"))
+                            and assignment.device.config_key in keys
+                            and assignment.device.pci_class.startswith("01")
+                        ):
+                            matched.add(pci_address)
+                if len(matched) == 1:
+                    data["passthrough_pci_address"] = matched.pop()
             output[disk_id] = data
             if temperature is not None:
                 metrics[f"{disk_id}.temperature_c"] = _metric(

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.87
+
+- Extend the local read-only dh-pve-agent status with PCI passthrough ownership for GPUs: physical PCI BDF, VMID, and connection type from the existing native PVE topology. A GPU passed to a VM no longer appears simply as unavailable because the PVE host cannot read its temperature.
+- Show VM disk attachment type separately from SMART health: a uniquely verified PCI storage controller BDF and VMID for SMART disks read via QGA, or the actual /dev/disk/by-id path and VMID for explicitly mapped physical block disks. Never guess an individual PCI controller if multiple assignments match.
+- Reuse existing topology and persisted SMART metadata; no new collectors, guest commands, MQTT discovery entities, or configuration changes. Only the local CLI runtime-status whitelist and output are extended.
+
 ## 0.5.86
 
 - Expand offline dh-pve-agent status UPS section with the configured NUT target, read-only SNMP protocol/version and physical UPS address from the locally selected NUT ups.conf, and live manufacturer/model when provided by the existing UPS sample.
