@@ -6,7 +6,7 @@
 
 Native Linux agent for Plex Media Server workload, playback, transcoding and library observability in Home Assistant through MQTT Discovery.
 
-Version **0.8.9** fixes library storage visibility for restricted media folders without expanding agent permissions. Version 0.8.8 distinguishes background loudnorm audio analysis from playback transcoding and shows active scanners/audio analysis in one compact Mushroom card. Version 0.8.7 adds media-library filesystem capacity monitoring and progress bars. Version 0.8.6 introduced the native root/admin CLI, Linux host diagnostics and an event-blocked `MQTT_PAUSED` failure mode. It follows the [DigitalHouses Linux Agent Management Standard](../docs/standards/DH_LINUX_AGENT_MANAGEMENT_STANDARD.md); live VM acceptance and release publication remain separate release checks.
+Version **0.8.10** adds the VM system volume to the library storage progress bars and hides obsolete unavailable capacity entities. Version 0.8.9 fixes library storage visibility for restricted media folders without expanding agent permissions. Version 0.8.8 distinguishes background loudnorm audio analysis from playback transcoding and shows active scanners/audio analysis in one compact Mushroom card. Version 0.8.7 adds media-library filesystem capacity monitoring and progress bars. Version 0.8.6 introduced the native root/admin CLI, Linux host diagnostics and an event-blocked `MQTT_PAUSED` failure mode. It follows the [DigitalHouses Linux Agent Management Standard](../docs/standards/DH_LINUX_AGENT_MANAGEMENT_STANDARD.md); live VM acceptance and release publication remain separate release checks.
 
 [Install / update](#install--update) · [Changelog](CHANGELOG.md) · [Engineering docs](../docs/digitalhouses_plex_agent/) · [Issues](https://github.com/DigitalHouses/home-assistant-apps/issues)
 
@@ -36,7 +36,7 @@ Lovelace example: [plex-dashboard.yaml](examples/lovelace/plex-dashboard.yaml)
 ### Library filesystem capacity (0.8.7)
 
 The «Библиотеки» dashboard uses `auto-entities` and `entity-progress-card-template`
-for one bar per media mount, grouping Plex API library paths that share it.
+for one system root bar plus one bar per real library mount, grouping Plex API library paths that share it.
 `sensor.dh_plex_agent_library_storage_<stablehash>_percent_used` exposes percent,
 available/used/total GiB, mountpoint, library names and Plex storage provenance
 on the existing device; retained JSON uses `state/library_storage`.

@@ -23,11 +23,25 @@ class StorageTests(unittest.TestCase):
             p.start()
             self.addCleanup(p.stop)
 
+    def test_system_root_is_explicit_and_not_media_fallback(self):
+        root = storage_id('/')
+        r = LibraryStorageRuntime()
+        r.collect((library('/media/movies'), library('/media/music', 'Music')), now=0)
+        self.assertEqual(len(r.payload), 2)  # System and one shared media mount.
+        self.assertEqual(r.payload[root]['storage_display_name'], 'System')
+        self.assertEqual(r.payload[root]['mountpoint'], '/')
+        self.assertEqual(r.payload[root]['library_names'], [])
+        self.assertEqual(r.payload[root]['available_gib'], 20)
+        with patch('app.library_storage.os.path.ismount', side_effect=lambda p: p == '/'):
+            r.collect((library('/media/movies'),), now=60, force=True)
+        self.assertIsNone(r.payload[storage_id('/media')]['percent'])
+        self.assertIsNotNone(r.payload[root]['percent'])
+
     def test_grouping_df_capacity_and_cadence(self):
         r = LibraryStorageRuntime()
         libs = (library('/media/movies'), library('/media/music', 'Music'))
         self.assertTrue(r.collect(libs, now=0))
-        self.assertEqual(r.mounts, ('/media',))
+        self.assertEqual(r.mounts, ('/', '/media'))
         v = r.payload[storage_id('/media')]
         self.assertEqual(v['library_names'], ['Movies', 'Music'])
         self.assertAlmostEqual(v['percent'], 70 / 90 * 100)
@@ -38,7 +52,7 @@ class StorageTests(unittest.TestCase):
             r.collect(libs, now=10, online=False, force=True)
             stat.assert_not_called()
         r.collect(libs + (library('/other/tv'),), now=11)
-        self.assertEqual(r.mounts, ('/media', '/other'))
+        self.assertEqual(r.mounts, ('/', '/media', '/other'))
 
     def test_missing_unmounted_error_and_zero(self):
         r = LibraryStorageRuntime()
@@ -50,7 +64,7 @@ class StorageTests(unittest.TestCase):
                                ('os.statvfs', {'return_value': SimpleNamespace(f_blocks=0, f_bfree=0, f_bavail=0, f_frsize=1)})]:
             with patch('app.library_storage.' + target, **kwargs):
                 r.collect(libs, now=60, force=True)
-                self.assertEqual(r.mounts, ('/media',))
+                self.assertEqual(r.mounts, ('/', '/media'))
                 self.assertIsNone(r.payload[storage_id('/media')]['percent'])
 
     def test_no_media_read_permission_still_reports_shared_mount(self):
@@ -63,7 +77,7 @@ class StorageTests(unittest.TestCase):
             self.assertTrue(_library_path_is_directory('/media/movies'))
         r = LibraryStorageRuntime()
         self.assertTrue(r.collect(libs, now=0))
-        self.assertEqual(r.mounts, ('/media',))
+        self.assertEqual(r.mounts, ('/', '/media'))
         entry = r.payload[storage_id('/media')]
         self.assertAlmostEqual(entry['percent'], 70 / 90 * 100)
         self.assertEqual(entry['library_names'], ['Movies', 'Music', 'TV'])
@@ -93,11 +107,11 @@ class StorageTests(unittest.TestCase):
         libs = (library('/media/movies'),)
         with patch('app.library_storage._library_path_is_directory', side_effect=FileNotFoundError('library path missing')):
             r.collect(libs, now=0)
-            self.assertIsNone(next(iter(r.payload.values()))['percent'])
+            self.assertIsNone(r.payload[storage_id('/media/movies')]['percent'])
         r.collect(libs, now=60)
-        self.assertEqual(r.mounts, ('/media',))
+        self.assertEqual(r.mounts, ('/', '/media'))
         r.collect((), now=61)
-        self.assertEqual(r.payload, {})
+        self.assertEqual(set(r.payload), {storage_id('/')})
 
     def test_discovery_metadata_and_legacy_preservation(self):
         from tempfile import TemporaryDirectory
@@ -131,11 +145,11 @@ class StorageTests(unittest.TestCase):
                                ('os.path.realpath', {'side_effect': OSError('denied')})]:
             with self.subTest(target=target), patch('app.library_storage.' + target, **kwargs):
                 r = LibraryStorageRuntime()
-                with patch('app.library_storage.os.statvfs') as stat:
+                with patch('app.library_storage.os.statvfs', return_value=SimpleNamespace(f_blocks=100, f_bfree=30, f_bavail=20, f_frsize=1024**3)) as statvfs:
                     r.collect((library('/missing/movie'),), now=0)
-                    stat.assert_not_called()
-                self.assertNotIn('/', r.mounts)
-                self.assertIsNone(next(iter(r.payload.values()))['percent'])
+                    statvfs.assert_called_once_with('/')
+                self.assertIn('/', r.mounts)  # Explicit System volume, not media fallback.
+                self.assertIsNone(r.payload[storage_id('/missing/movie')]['percent'])
 
     def test_unchanged_reconnect_failure_is_retried_and_manual_refresh_collects(self):
         r = LibraryStorageRuntime()
@@ -152,7 +166,9 @@ class StorageTests(unittest.TestCase):
         with patch('app.library_storage.os.statvfs', return_value=SimpleNamespace(
                 f_blocks=100, f_bfree=50, f_bavail=40, f_frsize=1024**3)) as stat:
             r.collect(libs, now=1, force=True)
-            stat.assert_called_once_with('/media')
+            self.assertEqual(stat.call_count, 2)
+            stat.assert_any_call('/')
+            stat.assert_any_call('/media')
         self.assertTrue(r.publish(publish))
         self.assertEqual(publish.call_args.args[1][storage_id('/media')]['used_gib'], 50)
         before = r.payload.copy()

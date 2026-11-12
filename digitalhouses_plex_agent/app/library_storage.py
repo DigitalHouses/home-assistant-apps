@@ -1,4 +1,4 @@
-"""Cheap local filesystem capacity for Plex libraries; no directory traversal."""
+"""Cheap capacity of the system filesystem and Plex library mounts."""
 from __future__ import annotations
 
 from copy import deepcopy
@@ -40,7 +40,8 @@ class LibraryStorageRuntime:
             return False
         self._libraries = signature
         self._next_collect = now + 60.0
-        groups: dict[str, dict] = {}
+        # Root is a real VM filesystem, not a fallback for unavailable media.
+        groups: dict[str, dict] = {'/': {'names': set(), 'valid': True}}
         paths = {}
         for path, name in signature:
             if not path:
@@ -79,7 +80,7 @@ class LibraryStorageRuntime:
                          library_names=sorted(group['names']),
                          plex_integration='digitalhouses_plex_agent',
                          plex_section='library_storage',
-                         storage_display_name=os.path.basename(mount).replace('_', ' ').title(),
+                         storage_display_name=('System' if mount == '/' else os.path.basename(mount).replace('_', ' ').title()),
                          source='plex_library_storage_statvfs')
             if group['valid']:
                 try:

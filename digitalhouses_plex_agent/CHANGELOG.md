@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.8.10
+
+- Add the Linux system root filesystem to the existing media capacity sensors, so the dashboard shows both independent VM system and media storage. Never use root filesystem statistics to disguise an unmounted media library.
+- Compact storage progress card titles to System / Media and short free-versus-total capacity labels; ignore obsolete unavailable storage sensors left in Home Assistant by old Discovery revisions. Existing MQTT and library identities are preserved.
+
 ## 0.8.9
 
 - Fix library storage capacity detection when the unprivileged Plex Agent cannot traverse protected media-library folders. Permission denial on child directory metadata no longer masks a healthy mounted filesystem; the agent checks the actual mount and reads statvfs without gaining access to media files.
