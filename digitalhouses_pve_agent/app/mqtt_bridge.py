@@ -535,6 +535,13 @@ class MqttBridge(MqttEvents):
     def publish_host_identity(self, payload: dict[str, str]) -> bool:
         return self._publish(f'{self.topics.base}/host_identity', json.dumps(payload), retain=True)
 
+    def publish_agent_process_cpu(self, payload: dict[str, object]) -> bool:
+        return self._publish(
+            f"{self.topics.base}/agent/process_cpu/state",
+            json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+            retain=True,
+        )
+
     def publish_state(self, payload: dict[str, object]) -> bool:
         return self._publish(
             self.topics.state,

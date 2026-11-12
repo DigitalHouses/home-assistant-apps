@@ -269,6 +269,19 @@ class PveProblemEngine:
         )
         return self._commit(state)
 
+    def observe_agent_cpu(self, usage_percent: float, overloaded: bool) -> ProblemTransition | None:
+        """The dedicated process monitor handles the 300/120-second hysteresis."""
+        return self._observe_discrete(
+            problem_id="agent_cpu_overload",
+            category="agent",
+            severity="warning",
+            object_id="agent",
+            object_name="DH PVE Agent",
+            metric="process_cpu_usage_percent",
+            active=overloaded,
+            value=usage_percent,
+        )
+
     def observe(
         self,
         now: float,

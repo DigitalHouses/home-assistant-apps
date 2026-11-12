@@ -7,6 +7,8 @@ from .problems import ProblemState, ProblemTransition
 
 
 PVE_USER_EVENT_TYPES = (
+    "agent_cpu_overload_started",
+    "agent_cpu_overload_cleared",
     "cpu_temperature_high",
     "cpu_temperature_normal",
     "cpu_throttling_started",
@@ -31,6 +33,8 @@ def _event_type(transition: ProblemTransition) -> str | None:
     if not (started or recovered):
         return None
 
+    if state.problem_id == "agent_cpu_overload":
+        return "agent_cpu_overload_started" if started else "agent_cpu_overload_cleared"
     if state.problem_id == "cpu_temperature":
         return "cpu_temperature_high" if started else "cpu_temperature_normal"
     if state.problem_id == "cpu_throttling":
@@ -151,7 +155,9 @@ def pve_problem_context(
 
     context: dict[str, object] = {}
 
-    if state.problem_id.startswith("cpu_"):
+    if state.problem_id == "agent_cpu_overload":
+        context["agent_process_cpu_usage_percent"] = state.value
+    elif state.problem_id.startswith("cpu_"):
         cpu = _mapping(subsystem_states.get("cpu"))
         frequency = _mapping(cpu.get("frequency"))
         context.update(

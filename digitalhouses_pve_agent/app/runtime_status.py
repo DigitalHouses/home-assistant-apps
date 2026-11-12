@@ -172,7 +172,8 @@ class RuntimeStatus:
         self._next_write = 0.0
         self._failed = False
 
-    def update(self, mqtt: dict, identity: dict, runtime, ups_runtime, *, force: bool = False):
+    def update(self, mqtt: dict, identity: dict, runtime, ups_runtime, *,
+               agent_process_cpu: dict[str, object] | None = None, force: bool = False):
         now = time.monotonic()
         if not force and now < self._next_write:
             return
@@ -184,7 +185,8 @@ class RuntimeStatus:
                        'version': self.build.version, 'commit': self.build.commit,
                        'hostname': identity.get('hostname'), 'ip': identity.get('ip'),
                        'mqtt': mqtt, 'ups_configured': ups_runtime is not None,
-                       'samples': local_samples(runtime, ups_runtime)}
+                       'samples': local_samples(runtime, ups_runtime),
+                       'agent_process_cpu': agent_process_cpu or {}}
             raw = json.dumps(payload, ensure_ascii=False, allow_nan=False).encode()
             if len(raw) > MAX_STATUS_BYTES:
                 raise ValueError('status too large')

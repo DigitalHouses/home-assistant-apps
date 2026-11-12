@@ -46,6 +46,8 @@ def test_event_config_accepts_explicit_zero_and_custom_delay(tmp_path):
 
 def test_pve_semantic_event_types_cover_current_problem_catalog():
     assert PVE_USER_EVENT_TYPES == (
+        "agent_cpu_overload_started",
+        "agent_cpu_overload_cleared",
         "cpu_temperature_high",
         "cpu_temperature_normal",
         "cpu_throttling_started",
